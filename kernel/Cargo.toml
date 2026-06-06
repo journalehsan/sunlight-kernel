@@ -1,0 +1,14 @@
+[package]
+name = "sunlight-kernel"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sunlight-kernel"
+path = "src/main.rs"
+
+[dependencies]
+x86_64 = { version = "0.15", default-features = false, features = ["instructions"] }
+uart_16550 = "0.3"
+limine = "0.6"
+spin = "0.9"
