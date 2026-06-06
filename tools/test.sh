@@ -9,8 +9,15 @@ LIMINE_BRANCH="v8.x"
 LIMINE_DIR="target/limine"
 
 EXPECTED=(
-    "[SunlightOS] Kernel booting..."
-    "[SunlightOS] Phase 0 OK"
+    "[PMM]"
+    "[VMM]"
+    "[IDT]"
+    "[HEAP] Test alloc OK"
+    "[thread-alpha] tick 0"
+    "[thread-beta]  tick 0"
+    "[thread-alpha] done"
+    "[thread-beta]  done"
+    "[SunlightOS] Phase 1 OK"
 )
 
 # --- Step 1: Build kernel ---
@@ -84,7 +91,7 @@ for ((i=0; i<TIMEOUT; i++)); do
         break
     fi
     # Check if expected output is already present (early exit on success)
-    if grep -Fq "Phase 0 OK" "$QEMU_OUTPUT" 2>/dev/null; then
+    if grep -Fq "Phase 1 OK" "$QEMU_OUTPUT" 2>/dev/null; then
         sleep 1
         break
     fi
@@ -120,9 +127,9 @@ for expected in "${EXPECTED[@]}"; do
 done
 
 if [[ "$ALL_FOUND" == true ]]; then
-    echo "[test] ✓ Phase 0 gate PASSED"
+    echo "[test] ✓ Phase 1 gate PASSED"
     exit 0
 else
-    echo "[test] ✗ Phase 0 gate FAILED"
+    echo "[test] ✗ Phase 1 gate FAILED"
     exit 1
 fi
