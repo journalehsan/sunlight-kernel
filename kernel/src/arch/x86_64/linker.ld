@@ -12,6 +12,8 @@ SECTIONS
 {
     . = 0xFFFFFFFF80000000;
 
+    __kernel_start = .;
+
     .text : {
         *(.text .text.*)
     } :text
@@ -34,6 +36,8 @@ SECTIONS
         *(.bss .bss.*)
         *(COMMON)
     } :data
+
+    __kernel_end = .;
 
     /DISCARD/ : {
         *(.comment)
