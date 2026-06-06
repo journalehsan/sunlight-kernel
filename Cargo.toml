@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+    "kernel",
+    "ipc",
+    "drivers",
+    "compat-linux",
+]
+
+[workspace.dependencies]
+# shared versions across all crates
+
+[profile.dev]
+panic = "abort"
+opt-level = 1        # some optimization needed even in dev for correctness
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
