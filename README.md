@@ -52,6 +52,7 @@ sunlightos/
 ├── ipc/             # sunlight-ipc — IPC message types (no_std + std)
 ├── drivers/         # sunlight-drivers — user-space driver framework (std)
 ├── compat-linux/    # sunlight-compat-linux — Helios Linux compatibility (std)
+├── docs/            # project documentation and phase summaries
 └── tools/           # build scripts, test harness, disk tools
 ```
 
