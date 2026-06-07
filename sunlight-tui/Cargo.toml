@@ -1,0 +1,12 @@
+[package]
+name = "sunlight-tui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# NO external dependencies — pure no_std, no heap
+
+[features]
+default = []
+# Compile-time mode selection (can be overridden by runtime flag too)
+shutup-mode = []   # enables silent mode as default
