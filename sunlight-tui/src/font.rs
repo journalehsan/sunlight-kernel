@@ -1,11 +1,15 @@
 //! 8×16 bitmap font — no heap, complete ASCII + special glyphs
+//!
+//! font8x16.bin: raw glyph data for ASCII 0x20–0x7E (95 glyphs × 16 bytes = 1520 bytes).
+//! Sourced from cp866-8x16 PSF2 console font (standard VGA 8×16, public domain).
+//! Bit order: MSB (bit 7) = leftmost pixel of each row.
+//! Offset formula: glyph_start = (char_code − 0x20) × 16.
 
 #![allow(dead_code)]
 
 use crate::framebuffer::Framebuffer;
 
-/// 8×16 bitmap font data for ASCII 0x20–0x7E
-/// Each character is 16 bytes (one byte per row, MSB = leftmost pixel)
+/// Raw glyph data: 95 chars × 16 bytes, ASCII 0x20–0x7E, MSB = leftmost pixel.
 static FONT_DATA: &[u8] = include_bytes!("font8x16.bin");
 
 /// Special Unicode glyphs mapped to indices beyond ASCII
@@ -14,30 +18,61 @@ const GLYPH_CROSS: u8 = 0x81;    // ✗
 const GLYPH_SPINNER: u8 = 0x82;  // ⟳
 const GLYPH_SUN: u8 = 0x83;      // ☀
 
-/// Draw a single character at pixel position (x, y)
+/// Draw a single character at pixel position (x, y).
+///
+/// Bit steering: `byte & (0x80 >> col)` — bit 7 (MSB) drives col 0 (leftmost pixel).
+/// This is correct for the MSB-first encoding used in font8x16.bin.
 pub fn draw_char(fb: &mut Framebuffer, x: u32, y: u32, c: u8, color: u32, scale: u32) {
     let glyph_idx = match c {
         0x20..=0x7E => (c - 0x20) as usize,
-        b'\n' | b'\r' => return,  // ignore control chars
+        b'\n' | b'\r' => return,
         _ => 0,  // fallback to space
     };
-    
+
     if glyph_idx * 16 + 16 > FONT_DATA.len() {
         return;
     }
-    
+
     let glyph = &FONT_DATA[glyph_idx * 16..(glyph_idx * 16 + 16)];
-    
+
     for (row, &byte) in glyph.iter().enumerate() {
-        for col in 0..8 {
-            if (byte & (0x80 >> col)) != 0 {
-                // Draw scaled pixel
+        for col in 0u32..8 {
+            // 0x80 >> col: col=0 checks bit7 (MSB) = leftmost pixel ✓
+            if (byte & (0x80u8 >> col)) != 0 {
                 for sy in 0..scale {
                     for sx in 0..scale {
                         fb.put_pixel(
                             x + col * scale + sx,
                             y + (row as u32) * scale + sy,
-                            color
+                            color,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Diagnostic: render a hardcoded reference 'A' glyph (cp866/VGA standard).
+/// Use this to verify the renderer independently of font8x16.bin.
+/// If this renders correctly but file-based characters don't, the issue is
+/// the font binary's offset or content, not the rendering loop.
+#[allow(dead_code)]
+pub fn draw_char_diagnostic_a(fb: &mut Framebuffer, x: u32, y: u32, color: u32, scale: u32) {
+    // Standard cp866/VGA 8×16 bitmap for 'A' (0x41)
+    const A_GLYPH: [u8; 16] = [
+        0x00, 0x00, 0x10, 0x38, 0x6C, 0xC6, 0xC6, 0xFE,
+        0xC6, 0xC6, 0xC6, 0xC6, 0x00, 0x00, 0x00, 0x00,
+    ];
+    for (row, &byte) in A_GLYPH.iter().enumerate() {
+        for col in 0u32..8 {
+            if (byte & (0x80u8 >> col)) != 0 {
+                for sy in 0..scale {
+                    for sx in 0..scale {
+                        fb.put_pixel(
+                            x + col * scale + sx,
+                            y + (row as u32) * scale + sy,
+                            color,
                         );
                     }
                 }

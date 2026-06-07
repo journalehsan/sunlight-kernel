@@ -297,6 +297,11 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
 
     if crate::sched::check_reschedule() {
         let current = sched.current;
+        // Guard: processes may be empty during early boot (interrupts enabled before
+        // any process is loaded). Skip reschedule until the scheduler has entries.
+        if current >= sched.processes.len() {
+            return 0;
+        }
         // Save current context.
         sched.processes[current].context_rsp = saved_rsp;
         if sched.processes[current].state == crate::process::ProcessState::Running {
