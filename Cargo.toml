@@ -7,6 +7,7 @@ members = [
     "compat-linux",
     "services/init",
     "services/timer_server",
+    "sunlight-tui",
 ]
 
 [workspace.dependencies]
