@@ -8,12 +8,18 @@ KERNEL_ELF="target/x86_64-unknown-none/debug/sunlight-kernel"
 ISO_PATH="target/sunlightos.iso"
 LIMINE_BRANCH="v8.x"
 LIMINE_DIR="target/limine"
+SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
 
-# --- Step 1: Build the kernel ELF ---
+# --- Step 1: Build service binaries first (embedded via include_bytes!) ---
+echo "[build] Building user-space services..."
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release
+
+# --- Step 2: Build the kernel ELF ---
 echo "[build] Building kernel..."
 cargo build --package sunlight-kernel
 
-# --- Step 2: Download Limine if not cached ---
+# --- Step 3: Download Limine if not cached ---
 if [[ ! -d "$LIMINE_DIR" ]]; then
     echo "[build] Downloading Limine..."
     git clone --branch="$LIMINE_BRANCH" --depth=1 https://github.com/limine-bootloader/limine.git "$LIMINE_DIR"
@@ -26,19 +32,19 @@ else
     echo "[build] Limine already cached."
 fi
 
-# --- Step 3: Create ISO layout ---
+# --- Step 4: Create ISO layout ---
 ISO_ROOT="target/iso_root"
 rm -rf "$ISO_ROOT"
 mkdir -p "$ISO_ROOT/boot/limine"
 mkdir -p "$ISO_ROOT/boot"
 
 cp "$KERNEL_ELF" "$ISO_ROOT/boot/sunlight-kernel.elf"
-cp limine.cfg "$ISO_ROOT/boot/limine/"
+cp limine.conf "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/limine-bios.sys" "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/BOOTX64.EFI" "$ISO_ROOT/boot/limine/"
 
-# --- Step 4: Build ISO with xorriso ---
+# --- Step 5: Build ISO with xorriso ---
 echo "[build] Building ISO..."
 xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
     -no-emul-boot -boot-load-size 4 -boot-info-table \
@@ -46,10 +52,10 @@ xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
     -efi-boot-part --efi-boot-image --protective-msdos-label \
     "$ISO_ROOT" -o "$ISO_PATH"
 
-# --- Step 5: Install Limine bootloader into ISO ---
+# --- Step 6: Install Limine bootloader into ISO ---
 "$LIMINE_DIR/bin/limine" bios-install "$ISO_PATH"
 
-# --- Step 6: Launch QEMU ---
+# --- Step 7: Launch QEMU ---
 echo "[build] Launching QEMU..."
 
 KVM_FLAGS=""

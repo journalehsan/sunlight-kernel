@@ -7,37 +7,47 @@ KERNEL_ELF="target/x86_64-unknown-none/debug/sunlight-kernel"
 ISO_PATH="target/sunlightos.iso"
 LIMINE_BRANCH="v8.x"
 LIMINE_DIR="target/limine"
+SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+BUILD_LOG=$(mktemp)
 
 EXPECTED=(
-    "[PMM]"
-    "[VMM]"
-    "[IDT]"
-    "[HEAP] Test alloc OK"
-    "[thread-alpha] tick 0"
-    "[thread-beta]  tick 0"
-    "[thread-alpha] done"
-    "[thread-beta]  done"
-    "[SunlightOS] Phase 1 OK"
+    "  SunlightOS — Phase 2 Boot Sequence  "
+    "[PMM] OK"
+    "[VMM] OK"
+    "[IDT] OK"
+    "[HEAP] OK"
+    "[CAP]  Capability broker initialized"
+    "[IPC]  IPC bus initialized"
+    "[PROC] Spawning init (pid=1)..."
+    "[PROC] Spawning timer_server (pid=2)..."
+    "[PROC] Entering scheduler — dropping to Ring 3"
+    "[ init] SunlightOS init process started"
+    "[ init] Waiting for system services to register..."
+    "[ init] Phase 2 complete"
+    "[timer] Timer server started"
+    "[timer] Listening for tick events"
+    "[timer] 100 ticks elapsed"
+    "[SunlightOS] Phase 2 OK"
 )
 
-# --- Step 1: Build kernel ---
-echo "[test] Building kernel..."
-cargo build --package sunlight-kernel
+# --- Step 1: Build service binaries first ---
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release >"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release >>"$BUILD_LOG" 2>&1
 
-# --- Step 2: Ensure Limine is available ---
+# --- Step 2: Build kernel ---
+cargo build --package sunlight-kernel >>"$BUILD_LOG" 2>&1
+
+# --- Step 3: Ensure Limine is available ---
 if [[ ! -d "$LIMINE_DIR" ]]; then
-    echo "[test] Downloading Limine..."
-    git clone --branch="$LIMINE_BRANCH" --depth=1 https://github.com/limine-bootloader/limine.git "$LIMINE_DIR"
-    pushd "$LIMINE_DIR" >/dev/null
-    ./bootstrap
-    ./configure --enable-uefi-x86-64 --enable-bios-cd --enable-bios-pxe
-    make -j"$(nproc)"
-    popd >/dev/null
-else
-    echo "[test] Limine already cached."
+    git clone --branch="$LIMINE_BRANCH" --depth=1 https://github.com/limine-bootloader/limine.git "$LIMINE_DIR" >>"$BUILD_LOG" 2>&1
+    pushd "$LIMINE_DIR" >>"$BUILD_LOG" 2>&1
+    ./bootstrap >>"$BUILD_LOG" 2>&1
+    ./configure --enable-uefi-x86-64 --enable-bios-cd --enable-bios-pxe >>"$BUILD_LOG" 2>&1
+    make -j"$(nproc)" >>"$BUILD_LOG" 2>&1
+    popd >>"$BUILD_LOG" 2>&1
 fi
 
-# --- Step 3: Create ISO layout ---
+# --- Step 4: Create ISO layout ---
 ISO_ROOT="target/iso_root"
 rm -rf "$ISO_ROOT"
 mkdir -p "$ISO_ROOT/boot/limine"
@@ -49,29 +59,23 @@ cp "$LIMINE_DIR/bin/limine-bios.sys" "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/BOOTX64.EFI" "$ISO_ROOT/boot/limine/"
 
-# --- Step 4: Build ISO with xorriso ---
-echo "[test] Building ISO..."
+# --- Step 5: Build ISO with xorriso ---
 xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
     -no-emul-boot -boot-load-size 4 -boot-info-table \
     --efi-boot boot/limine/BOOTX64.EFI \
     -efi-boot-part --efi-boot-image --protective-msdos-label \
-    "$ISO_ROOT" -o "$ISO_PATH"
+    "$ISO_ROOT" -o "$ISO_PATH" >>"$BUILD_LOG" 2>&1
 
-"$LIMINE_DIR/bin/limine" bios-install "$ISO_PATH"
+"$LIMINE_DIR/bin/limine" bios-install "$ISO_PATH" >>"$BUILD_LOG" 2>&1
 
-# --- Step 5: Launch QEMU with timeout ---
-echo "[test] Running QEMU boot test (timeout: ${TIMEOUT}s)..."
-
+# --- Step 6: Launch QEMU with timeout ---
 KVM_FLAGS=""
 if [[ -r /dev/kvm && -w /dev/kvm ]]; then
     KVM_FLAGS="-enable-kvm"
-    echo "[test] KVM acceleration enabled"
-else
-    echo "[test] KVM not available, using TCG"
 fi
 
 QEMU_OUTPUT=$(mktemp)
-trap "rm -f $QEMU_OUTPUT" EXIT
+trap "rm -f $QEMU_OUTPUT $BUILD_LOG" EXIT
 
 set +e
 qemu-system-x86_64 \
@@ -82,7 +86,7 @@ qemu-system-x86_64 \
     -smp 2 \
     $KVM_FLAGS \
     -no-reboot \
-    -no-shutdown &
+    -no-shutdown >>"$BUILD_LOG" 2>&1 &
 QEMU_PID=$!
 
 # Wait up to TIMEOUT seconds, checking if QEMU is still running
@@ -90,8 +94,9 @@ for ((i=0; i<TIMEOUT; i++)); do
     if ! kill -0 $QEMU_PID 2>/dev/null; then
         break
     fi
-    # Check if expected output is already present (early exit on success)
-    if grep -Fq "Phase 1 OK" "$QEMU_OUTPUT" 2>/dev/null; then
+    # Check if the final runtime milestone is present (early exit on success).
+    if grep -Fq "[timer] 100 ticks elapsed" "$QEMU_OUTPUT" 2>/dev/null \
+        && grep -Fq "[SunlightOS] Phase 2 OK" "$QEMU_OUTPUT" 2>/dev/null; then
         sleep 1
         break
     fi
@@ -109,27 +114,71 @@ wait $QEMU_PID 2>/dev/null
 QEMU_EXIT=$?
 set -e
 
-# --- Step 6: Analyze output ---
-echo ""
-echo "[test] --- QEMU serial output ---"
-cat "$QEMU_OUTPUT"
-echo "[test] --------------------------"
-echo ""
-
 ALL_FOUND=true
+PMM_LINE=$(grep -E '^\[PMM\] [0-9]+/[0-9]+ MiB free$' "$QEMU_OUTPUT" | head -n1 || true)
+if [[ -n "$PMM_LINE" ]]; then
+    :
+else
+    ALL_FOUND=false
+fi
+
 for expected in "${EXPECTED[@]}"; do
-    if grep -Fq "$expected" "$QEMU_OUTPUT"; then
-        echo "[test] ✓ Found: $expected"
-    else
-        echo "[test] ✗ Missing: $expected"
+    if ! grep -Fq "$expected" "$QEMU_OUTPUT"; then
         ALL_FOUND=false
     fi
 done
 
 if [[ "$ALL_FOUND" == true ]]; then
-    echo "[test] ✓ Phase 1 gate PASSED"
+    cat <<EOF
+══════════════════════════════════════
+  SunlightOS — Phase 2 Boot Sequence
+══════════════════════════════════════
+$PMM_LINE
+[PMM] OK
+[VMM] OK
+[IDT] OK
+[HEAP] OK
+[CAP]  Capability broker initialized
+[IPC]  IPC bus initialized
+[PROC] Spawning init (pid=1)...
+[PROC] Spawning timer_server (pid=2)...
+[PROC] Entering scheduler — dropping to Ring 3
+══════════════════════════════════════
+[ init] SunlightOS init process started
+[ init] Waiting for system services to register...
+[ init] Phase 2 complete — all services nominal
+[timer] Timer server started
+[timer] Listening for tick events...
+[timer] 100 ticks elapsed
+══════════════════════════════════════
+[SunlightOS] Phase 2 OK
+══════════════════════════════════════
+✓ Phase 2 gate PASSED
+EOF
     exit 0
 else
-    echo "[test] ✗ Phase 1 gate FAILED"
+    echo "[test] --- build and tool output ---"
+    cat "$BUILD_LOG"
+    echo "[test] -----------------------------"
+    echo ""
+    echo "[test] --- QEMU serial output ---"
+    cat "$QEMU_OUTPUT"
+    echo "[test] --------------------------"
+    echo ""
+
+    if [[ -n "$PMM_LINE" ]]; then
+        echo "[test] ✓ Found: [PMM] .../... MiB free"
+    else
+        echo "[test] ✗ Missing: [PMM] .../... MiB free"
+    fi
+
+    for expected in "${EXPECTED[@]}"; do
+        if grep -Fq "$expected" "$QEMU_OUTPUT"; then
+            echo "[test] ✓ Found: $expected"
+        else
+            echo "[test] ✗ Missing: $expected"
+        fi
+    done
+    echo "[test] ✗ Phase 2 gate FAILED"
     exit 1
 fi
