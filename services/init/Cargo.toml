@@ -1,9 +1,14 @@
 [package]
-name = "sunlight-ipc"
+name = "sunlight-init"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "sunlight-init"
+path = "src/main.rs"
+
 [dependencies]
+sunlight-ipc = { path = "../../ipc" }
 
 [profile.dev]
 panic = "abort"

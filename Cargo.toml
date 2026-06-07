@@ -5,6 +5,8 @@ members = [
     "ipc",
     "drivers",
     "compat-linux",
+    "services/init",
+    "services/timer_server",
 ]
 
 [workspace.dependencies]

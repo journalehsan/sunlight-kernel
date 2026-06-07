@@ -1,9 +1,14 @@
 [package]
-name = "sunlight-ipc"
+name = "sunlight-timer-server"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "sunlight-timer-server"
+path = "src/main.rs"
+
 [dependencies]
+sunlight-ipc = { path = "../../ipc" }
 
 [profile.dev]
 panic = "abort"

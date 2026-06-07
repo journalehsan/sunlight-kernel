@@ -98,6 +98,13 @@ name = "sunlight-drivers"
 version = "0.1.0"
 
 [[package]]
+name = "sunlight-init"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ipc",
+]
+
+[[package]]
 name = "sunlight-ipc"
 version = "0.1.0"
 
@@ -110,6 +117,13 @@ dependencies = [
  "spin",
  "uart_16550",
  "x86_64",
+]
+
+[[package]]
+name = "sunlight-timer-server"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ipc",
 ]
 
 [[package]]
