@@ -1,42 +1,24 @@
-use super::thread::CpuContext;
+use crate::process::Process;
 
-/// Switch from `old` context to `new` context.
-/// Saves callee-saved registers on old stack, restores from new stack.
-/// SAFETY: Both contexts must belong to valid threads with properly initialized stacks.
-/// Must not be called while holding any locks that could deadlock.
-#[unsafe(naked)]
-pub unsafe extern "C" fn switch_to(_old: &mut CpuContext, _new: &CpuContext) {
-    core::arch::naked_asm!(
-        "push rbp",
-        "push rbx",
-        "push r12",
-        "push r13",
-        "push r14",
-        "push r15",
-        "mov [rdi], rsp",       // save old RSP to old->rsp
-        "mov rsp, [rsi]",       // load new RSP from new->rsp
-        "pop r15",
-        "pop r14",
-        "pop r13",
-        "pop r12",
-        "pop rbx",
-        "pop rbp",
-        "ret",                  // jumps to new thread's saved RIP
+/// Switch to a process context by loading its saved_rsp and doing iretq.
+/// `context_rsp` points to the start of the saved register frame (15 GPRs).
+/// We pop all 15 GPRs, then point to the IRETQ frame (RIP, CS, RFLAGS, RSP, SS).
+/// SAFETY: `context_rsp` must point to a valid saved frame on a kernel stack.
+pub unsafe fn iretq_to_context(context_rsp: u64) -> ! {
+    core::arch::asm!(
+        "mov rsp, rax",
+        "pop r15", "pop r14", "pop r13", "pop r12", "pop rbp", "pop rbx",
+        "pop r11", "pop r10", "pop r9", "pop r8",
+        "pop rdi", "pop rsi", "pop rdx", "pop rcx", "pop rax",
+        "iretq",
+        in("rax") context_rsp,
+        options(noreturn)
     );
 }
 
-/// Switch from a thread that is exiting (no saving) to `new` context.
-/// SAFETY: `new` context must be valid. Never returns.
-#[unsafe(naked)]
-pub unsafe extern "C" fn switch_to_exit(_new: &CpuContext) -> ! {
-    core::arch::naked_asm!(
-        "mov rsp, [rdi]",       // load new RSP from new->rsp
-        "pop r15",
-        "pop r14",
-        "pop r13",
-        "pop r12",
-        "pop rbx",
-        "pop rbp",
-        "ret",
-    );
+/// Save the current interrupt context into a process.
+/// `current_rsp` points to the saved registers (15 GPRs) pushed by the timer handler.
+/// SAFETY: Must be called from the timer handler with a valid stack.
+pub unsafe fn save_current_context(current_rsp: u64, process: &mut Process) {
+    process.context_rsp = current_rsp;
 }
