@@ -35,9 +35,10 @@ static TIMER_SERVER_ELF_BYTES: &[u8] =
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    // Enable interrupts early; the timer will fire and the handler will
-    // only save context when a user process is actually running.
-    unsafe { core::arch::asm!("sti"); }
+    // Keep interrupts disabled during boot. The PIT is programmed when the IDT
+    // is initialized, but timer IRQs must not preempt early boot while kernel
+    // locks and scheduler state are still being initialized.
+    x86_64::instructions::interrupts::disable();
 
     serial::init();
 
