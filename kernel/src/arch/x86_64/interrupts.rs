@@ -1,3 +1,4 @@
+use crate::arch::x86_64::keyboard;
 use crate::serial_println;
 use x86_64::structures::idt::{
     InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode,
@@ -83,6 +84,9 @@ pub fn init() {
         idt[0x20].set_handler_addr(x86_64::VirtAddr::new(timer_entry as *const () as usize as u64));
     }
 
+    // Keyboard IRQ1 handler (vector 0x21)
+    idt[0x21].set_handler_fn(keyboard_entry);
+
     idt.load();
 
     remap_pic();
@@ -91,7 +95,7 @@ pub fn init() {
     let mut pic1_data: Port<u8> = Port::new(0x21);
     let mut pic2_data: Port<u8> = Port::new(0xA1);
     unsafe {
-        pic1_data.write(0xFE);
+        pic1_data.write(0xFC); // enable IRQ0 (timer) and IRQ1 (keyboard)
         pic2_data.write(0xFF);
     }
 
@@ -273,6 +277,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     let _t = *ticks;
     drop(ticks);
 
+    // Poll key injection buffer for test automation (no IRQ1 needed)
+    keyboard::poll_inject_buffer();
+
     let mut sched = crate::sched::SCHEDULER.lock();
     sched.tick();
 
@@ -333,4 +340,18 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
 #[allow(dead_code)]
 pub fn ticks() -> u64 {
     *TICKS.lock()
+}
+
+// ---------------------------------------------------------------------------
+// Keyboard IRQ1 handler
+// ---------------------------------------------------------------------------
+
+extern "x86-interrupt" fn keyboard_entry(_stack_frame: InterruptStackFrame) {
+    keyboard::handle_irq1();
+
+    // Send EOI to PIC
+    unsafe {
+        let mut cmd1: Port<u8> = Port::new(0x20);
+        cmd1.write(0x20);
+    }
 }

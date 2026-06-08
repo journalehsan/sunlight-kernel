@@ -106,6 +106,12 @@ impl IpcBus {
         self.queue_for(endpoint_id).push_back(msg);
         sched.wake_pid(server_pid);
     }
+
+    pub fn send_keyboard_event(&mut self, endpoint_id: u32, event_val: u64, sched: &mut Scheduler, server_pid: usize) {
+        let msg = IpcMsg::with_label(0x1).word(0, event_val);
+        self.queue_for(endpoint_id).push_back(msg);
+        sched.wake_pid(server_pid);
+    }
 }
 
 pub fn handle_ipc_call(
@@ -189,6 +195,22 @@ pub fn handle_ipc_reply_wait(
     sched: &mut Scheduler,
     bus: &mut IpcBus,
 ) -> Result<IpcMsg, IpcError> {
+    let already_waiting = sched
+        .processes
+        .iter()
+        .find(|p| p.pid == server_pid)
+        .is_some_and(|p| p.pending_reply_wait.is_some());
+
+    if !already_waiting {
+        if let Some(client_pid) = bus.reply_waiter_pop_front(endpoint_id) {
+            if let Some(client) = sched.process_mut_by_pid(client_pid) {
+                client.ipc_reply = Some(reply);
+                client.pending_call = None;
+                client.state = ProcessState::Ready;
+            }
+        }
+    }
+
     if let Some(server) = sched.process_mut_by_pid(server_pid) {
         if let Some(msg) = bus.pop_pending(endpoint_id) {
             server.ipc_endpoint = Some(endpoint_id);
@@ -198,13 +220,6 @@ pub fn handle_ipc_reply_wait(
 
         if server.pending_reply_wait.is_none() {
             server.pending_reply_wait = Some((endpoint_id, reply));
-            if let Some(client_pid) = bus.reply_waiter_pop_front(endpoint_id) {
-                if let Some(client) = sched.process_mut_by_pid(client_pid) {
-                    client.ipc_reply = Some(reply);
-                    client.pending_call = None;
-                    client.state = ProcessState::Ready;
-                }
-            }
         }
     }
 

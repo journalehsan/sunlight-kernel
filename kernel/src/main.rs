@@ -15,7 +15,7 @@ mod panic;
 mod process;
 mod sched;
 
-use arch::x86_64::{interrupts, serial, syscall};
+use arch::x86_64::{interrupts, serial, syscall, keyboard};
 use memory::{heap, pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
 use process::{layout, Process};
 use x86_64::{
@@ -37,6 +37,8 @@ static TIMER_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
 static VFS_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
+static TTY_SERVER_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -65,7 +67,7 @@ pub extern "C" fn _start() -> ! {
     };
 
     serial_println!("══════════════════════════════════════");
-    serial_println!("  SunlightOS — Phase 2 Boot Sequence  ");
+    serial_println!("  SunlightOS — Phase 3 Boot Sequence  ");
     serial_println!("══════════════════════════════════════");
 
     // 1. PMM
@@ -164,6 +166,20 @@ pub extern "C" fn _start() -> ! {
     splash.log("[IPC] IPC bus initialized");
     splash.set_progress(700);  // 70%
     splash.redraw();
+
+    // KBD — initialize PS/2 keyboard
+    serial_println!("[KBD]  Initializing PS/2 keyboard...");
+    splash.set_status("Initializing PS/2 keyboard");
+    splash.log("[KBD] Initializing PS/2 keyboard...");
+    splash.redraw();
+    keyboard::init();
+    splash.log("[KBD] OK");
+    splash.set_progress(750);  // 75%
+    splash.redraw();
+
+    // Set up key injection for test automation (when feature is enabled)
+    #[cfg(feature = "key_inject")]
+    setup_key_injection();
 
     // 9. Spawn init (pid=1)
     splash.set_status("Loading init process");
@@ -293,10 +309,51 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    splash.set_progress(950);  // 95%
+    splash.redraw();
+
+    // 12. Spawn tty_server (pid=4)
+    serial_println!("[PROC] Spawning tty_server (pid=4)...");
+    splash.set_status("Loading tty_server");
+    splash.log("[PROC] Spawning tty_server (pid=4)...");
+    splash.redraw();
+    {
+        let mut pmm = PMM.lock();
+        // SAFETY: hhdm_offset was provided by Limine and initialized before user process creation.
+        let mut tty = unsafe {
+            Process::new(4, "tty_server", &mut pmm, hhdm_offset)
+        };
+        let entry = process::elf_loader::load_elf(TTY_SERVER_ELF_BYTES, &mut tty, &mut pmm, hhdm_offset);
+        if let Some(entry) = entry {
+            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
+            for i in 0..stack_pages {
+                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
+                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
+                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
+                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+                    | x86_64::structures::paging::PageTableFlags::WRITABLE
+                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                // SAFETY: page and frame are valid user-stack mappings for this process address space.
+                unsafe {
+                    tty.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                }
+            }
+            tty.init_context(entry, layout::USER_STACK_TOP);
+            sched::with_scheduler(|s| { s.add_process(tty); });
+            splash.log("[PROC] tty_server pid=4");
+        } else {
+            serial_println!("[PROC] Failed to load tty_server ELF");
+            splash.log("[PROC] Failed to load tty_server ELF");
+        }
+    }
+
     splash.set_progress(1000);  // 100%
-    splash.set_status("SunlightOS ready");
+    splash.set_phase("Phase 3");
+    splash.set_status("SunlightOS ready — login");
     splash.set_kernel_status("OK");
-    splash.log("[SunlightOS] Phase 2 OK");
+    splash.log("[SunlightOS] Phase 3 OK");
     splash.redraw();
 
     serial_println!("[PROC] Entering scheduler — dropping to Ring 3");
@@ -438,4 +495,52 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     share.magic = sunlight_fat::SHARE_MAGIC;
 
     share_phys
+}
+
+/// Set up key injection buffer for test automation.
+/// Called when the `key_inject` feature is enabled.
+#[cfg(feature = "key_inject")]
+fn setup_key_injection() {
+    // Scancode sequence for Phase 3.6 test:
+    // 1. Login: "root" + Enter, "root" + Enter
+    // 2. whoami + Enter
+    // 3. cat /etc/motd + Enter
+    // 4. Ctrl+T (new tab)
+    // 5. echo hello + Enter (with Ctrl+1 to switch back)
+    use crate::arch::x86_64::keyboard;
+
+    let sequence: [u8; 50] = [
+        // Username: r, o, o, t, Enter
+        0x13, 0x18, 0x18, 0x14, 0x1C,
+        // Password: r, o, o, t, Enter
+        0x13, 0x18, 0x18, 0x14, 0x1C,
+        // whoami + Enter
+        0x11, 0x23, 0x18, 0x1E, 0x32, 0x17, 0x1C,
+        // cat /etc/motd + Enter
+        0x2E, 0x1E, 0x14, 0x39, 0x35, 0x12, 0x14, 0x2E, 0x35, 0x32, 0x18, 0x14, 0x20, 0x1C,
+        // Ctrl+T: Ctrl_down, t_press, t_release, Ctrl_release
+        0x1D, 0x14, 0x94, 0x9D,
+        // echo hello + Enter
+        0x12, 0x2E, 0x23, 0x18, 0x39, 0x23, 0x12, 0x26, 0x26, 0x18, 0x1C,
+        // Ctrl+1 (switch to tab 1): Ctrl_down, 1_press, 1_release, Ctrl_release
+        0x1D, 0x02, 0x82, 0x9D,
+    ];
+
+    // SAFETY: single-threaded kernel boot, no concurrent access
+    unsafe {
+        let len = sequence.len().min(keyboard::KEY_INJECT_DATA.len());
+        keyboard::KEY_INJECT_DATA[..len].copy_from_slice(&sequence[..len]);
+        keyboard::KEY_INJECT_LEN = len;
+        keyboard::KEY_INJECT_IDX = 0;
+        keyboard::KEY_INJECT_ENABLED = true;
+    }
+
+    serial_println!("[KBD]  Key injection enabled ({} scancodes)", sequence.len());
+}
+
+/// Helper to log a string to the splash debug log (non-static).
+#[allow(dead_code)]
+fn splash_log_string(msg: &str) {
+    // The splash.log() requires &'static str. For runtime strings we use serial.
+    crate::serial_println!("{}", msg);
 }

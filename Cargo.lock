@@ -138,6 +138,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-tty"
+version = "0.1.0"
+dependencies = [
+ "sunlight-fs",
+ "sunlight-ipc",
+ "sunlight-tui",
+]
+
+[[package]]
+name = "sunlight-tty-server"
+version = "0.1.0"
+dependencies = [
+ "sunlight-fs",
+ "sunlight-ipc",
+ "sunlight-tty",
+]
+
+[[package]]
 name = "sunlight-tui"
 version = "0.1.0"
 

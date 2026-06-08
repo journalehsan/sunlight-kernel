@@ -106,6 +106,34 @@ pub mod VfsMsg {
     pub const ERROR: u64 = 6;
 }
 
+#[allow(non_snake_case)]
+pub mod KbdMsg {
+    pub const KEY_EVENT: u64 = 1;
+}
+
+/// Pack a key event into a single u64 word for IPC transport.
+/// Layout: keycode(u8) | pressed(u8) << 8 | mods_byte(u8) << 16 | ascii(u8) << 24
+pub fn pack_key_event(keycode: u8, pressed: bool, shift: bool, ctrl: bool, alt: bool, ascii: Option<u8>) -> u64 {
+    let mut val = keycode as u64;
+    val |= (pressed as u64) << 8;
+    let mods = ((shift as u64) << 0) | ((ctrl as u64) << 1) | ((alt as u64) << 2);
+    val |= mods << 16;
+    val |= (ascii.unwrap_or(0) as u64) << 24;
+    val
+}
+
+/// Unpack a key event from a u64 word.
+pub fn unpack_key_event(val: u64) -> (u8, bool, bool, bool, bool, Option<u8>) {
+    let keycode = (val & 0xFF) as u8;
+    let pressed = ((val >> 8) & 0xFF) != 0;
+    let mods = (val >> 16) & 0xFF;
+    let shift = (mods & 1) != 0;
+    let ctrl = (mods & 2) != 0;
+    let alt = (mods & 4) != 0;
+    let ascii = if (val >> 24) & 0xFF != 0 { Some(((val >> 24) & 0xFF) as u8) } else { None };
+    (keycode, pressed, shift, ctrl, alt, ascii)
+}
+
 /// Errors returned by IPC operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcError {

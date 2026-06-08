@@ -1,0 +1,3 @@
+# sunshell runs on Linux; override the kernel workspace's bare-metal target.
+[build]
+target = "x86_64-unknown-linux-gnu"

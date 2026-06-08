@@ -15,6 +15,7 @@ echo "[build] Building user-space services..."
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
 
 # --- Step 2: Build the kernel ELF ---
 echo "[build] Building kernel..."

@@ -30,8 +30,14 @@ case "$PHASE" in
         PASS_LABEL="Phase 3.5"
         NEED_DISK=true
         ;;
+    phase3.6)
+        EXPECTED_FILE="tools/tests/phase3_6.expected"
+        FINAL_MARKER="[SunlightOS] Phase 3.6 OK"
+        PASS_LABEL="Phase 3.6"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6"
         exit 2
         ;;
 esac
@@ -42,6 +48,7 @@ mapfile -t EXPECTED < <(grep -Ev '^[[:space:]]*($|#)' "$EXPECTED_FILE")
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release >"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
 if [[ "$NEED_DISK" == "true" ]]; then
@@ -49,7 +56,11 @@ if [[ "$NEED_DISK" == "true" ]]; then
 fi
 
 # --- Step 2: Build kernel ---
-cargo build --package sunlight-kernel >>"$BUILD_LOG" 2>&1
+KERNEL_FEATURES=""
+if [[ "$PHASE" == "phase3.6" ]]; then
+    KERNEL_FEATURES="--features key_inject"
+fi
+cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
 
 # --- Step 3: Ensure Limine is available ---
 if [[ ! -d "$LIMINE_DIR" ]]; then

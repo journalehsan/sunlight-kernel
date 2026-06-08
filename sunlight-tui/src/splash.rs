@@ -196,6 +196,11 @@ impl SplashScreen {
     pub fn set_kernel_status(&mut self, status: &'static str) {
         self.footer.kernel_status = status;
     }
+
+    /// Update the phase string shown in the header
+    pub fn set_phase(&mut self, phase: &'static str) {
+        self.phase = phase;
+    }
     
     fn draw_header(&mut self) {
         let header = &self.layout.header;

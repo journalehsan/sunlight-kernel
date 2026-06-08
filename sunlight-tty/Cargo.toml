@@ -1,0 +1,23 @@
+[package]
+name = "sunlight-tty"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "sunlight_tty"
+
+[dependencies]
+sunlight-tui = { path = "../sunlight-tui" }
+sunlight-fs  = { path = "../sunlight-fs" }
+sunlight-ipc = { path = "../ipc" }
+
+[profile.dev]
+panic = "abort"
+opt-level = 1
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

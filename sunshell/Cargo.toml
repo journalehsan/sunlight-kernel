@@ -1,0 +1,19 @@
+[workspace]
+
+[package]
+name    = "sunshell"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sshl"
+path = "src/main.rs"
+
+[dependencies]
+
+[profile.release]
+panic         = "abort"
+opt-level     = "z"
+lto           = true
+strip         = true
+codegen-units = 1
