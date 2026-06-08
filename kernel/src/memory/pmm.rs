@@ -93,6 +93,38 @@ impl PhysicalMemoryManager {
         None
     }
 
+    /// Allocate `count` physically-contiguous 4 KiB frames.
+    /// Returns the physical address of the first frame on success.
+    pub fn alloc_frames(&mut self, count: usize) -> Option<PhysAddr> {
+        if count == 0 {
+            return None;
+        }
+        let total = unsafe { TOTAL_FRAMES };
+        'search: for start in 0..total {
+            let end = start + count;
+            if end > total {
+                break;
+            }
+            // Verify all frames in [start, end) are free
+            for f in start..end {
+                // SAFETY: BITMAP is only mutated under PMM lock (single-threaded kernel).
+                if unsafe { BITMAP[f / 8] & (1 << (f % 8)) != 0 } {
+                    continue 'search;
+                }
+            }
+            // Mark all frames as allocated
+            for f in start..end {
+                // SAFETY: same as above.
+                unsafe {
+                    BITMAP[f / 8] |= 1 << (f % 8);
+                    FREE_FRAMES -= 1;
+                }
+            }
+            return Some(PhysAddr::new(start as u64 * FRAME_SIZE as u64));
+        }
+        None
+    }
+
     /// Free a previously allocated frame.
     #[allow(dead_code)]
     pub fn free_frame(&mut self, addr: PhysAddr) {
