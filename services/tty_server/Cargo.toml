@@ -20,6 +20,7 @@ path = "src/main.rs"
 sunlight-ipc = { path = "../../ipc" }
 sunlight-fs  = { path = "../../sunlight-fs" }
 sunlight-tty = { path = "../../sunlight-tty" }
+sunlight-tui = { path = "../../sunlight-tui" }
 
 [profile.dev]
 panic = "abort"

@@ -153,6 +153,7 @@ dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
  "sunlight-tty",
+ "sunlight-tui",
 ]
 
 [[package]]

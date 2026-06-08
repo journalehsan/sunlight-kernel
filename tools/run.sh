@@ -20,6 +20,9 @@ ${GREEN}SunlightOS QEMU Runner${NC}
 
 Usage: $0 [OPTIONS]
 
+Build Options:
+  -b, --build        Rebuild kernel + services before launching
+
 Display Options:
   -g, --gui          Launch with GTK window (default, requires X11)
   -s, --sdl          Launch with SDL window
@@ -32,14 +35,15 @@ QEMU Options:
   -m, --memory MB    Set RAM size (default: 256)
   --debug            Enable QEMU debug output
   --gdb              Wait for GDB connection on port 1234
-  
+
 Other:
   -h, --help         Show this help message
 
 Examples:
-  $0                 # Launch with GTK (default)
+  $0 --build         # Rebuild and launch with GTK (most common)
+  $0                 # Launch existing ISO with GTK (no rebuild)
+  $0 --build --sdl   # Rebuild and launch with SDL
   $0 --vnc           # Launch with VNC on port 5900
-  $0 --sdl           # Launch with SDL window
   $0 --no-display    # Serial output only
   $0 --screenshot    # Capture boot screenshot
 
@@ -52,10 +56,15 @@ MEMORY="256"
 DEBUG_MODE=false
 GDB_MODE=false
 SCREENSHOT_MODE=false
+BUILD_FIRST=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -b|--build)
+            BUILD_FIRST=true
+            shift
+            ;;
         -g|--gui)
             DISPLAY_TYPE="gtk"
             shift
@@ -107,6 +116,36 @@ done
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}  SunlightOS — QEMU Runner${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# Rebuild if requested
+if [ "$BUILD_FIRST" = true ]; then
+    echo -e "${YELLOW}Rebuilding kernel and services...${NC}"
+    SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
+    cargo build --package sunlight-kernel
+
+    # Repack ISO
+    LIMINE_DIR="$PROJECT_ROOT/target/limine"
+    KERNEL_ELF="$PROJECT_ROOT/target/x86_64-unknown-none/debug/sunlight-kernel"
+    ISO_ROOT="$PROJECT_ROOT/target/iso_root"
+    rm -rf "$ISO_ROOT"
+    mkdir -p "$ISO_ROOT/boot/limine"
+    cp "$KERNEL_ELF" "$ISO_ROOT/boot/sunlight-kernel.elf"
+    cp "$PROJECT_ROOT/limine.conf" "$ISO_ROOT/boot/limine/"
+    cp "$LIMINE_DIR/bin/limine-bios.sys"    "$ISO_ROOT/boot/limine/"
+    cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
+    cp "$LIMINE_DIR/bin/BOOTX64.EFI"        "$ISO_ROOT/boot/limine/"
+    xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
+        -no-emul-boot -boot-load-size 4 -boot-info-table \
+        --efi-boot boot/limine/BOOTX64.EFI \
+        -efi-boot-part --efi-boot-image --protective-msdos-label \
+        "$ISO_ROOT" -o "$ISO_PATH" 2>/dev/null
+    "$LIMINE_DIR/bin/limine" bios-install "$ISO_PATH"
+    echo -e "${GREEN}✓${NC} Build complete"
+fi
 
 # Check if ISO exists
 if [ ! -f "$ISO_PATH" ]; then

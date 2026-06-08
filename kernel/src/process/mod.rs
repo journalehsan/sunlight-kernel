@@ -134,4 +134,15 @@ impl Process {
             base.add(19).write_volatile(0x23);
         }
     }
+
+    /// Set initial userspace argument registers for a freshly initialized context.
+    pub fn set_initial_args(&mut self, rdi: u64, rsi: u64, rdx: u64, rcx: u64) {
+        unsafe {
+            let base = self.context_rsp as *mut u64;
+            base.add(10).write_volatile(rdi);
+            base.add(11).write_volatile(rsi);
+            base.add(12).write_volatile(rdx);
+            base.add(13).write_volatile(rcx);
+        }
+    }
 }

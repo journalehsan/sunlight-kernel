@@ -42,6 +42,7 @@ static TTY_SERVER_ELF_BYTES: &[u8] =
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
+const TTY_FB_VADDR: u64 = 0x0000_0002_0000_0000;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -340,7 +341,21 @@ pub extern "C" fn _start() -> ! {
                     tty.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
             }
+            map_tty_framebuffer(
+                &mut tty,
+                &mut pmm,
+                hhdm_offset,
+                fb.address() as u64,
+                fb.pitch as u64,
+                fb.height as u64,
+            );
             tty.init_context(entry, layout::USER_STACK_TOP);
+            tty.set_initial_args(
+                TTY_FB_VADDR + ((fb.address() as u64) & 0xfff),
+                fb.width as u64,
+                fb.height as u64,
+                fb.pitch as u64,
+            );
             sched::with_scheduler(|s| { s.add_process(tty); });
             splash.log("[PROC] tty_server pid=4");
         } else {
@@ -355,6 +370,8 @@ pub extern "C" fn _start() -> ! {
     splash.set_kernel_status("OK");
     splash.log("[SunlightOS] Phase 3 OK");
     splash.redraw();
+    splash.clear_main();
+    splash.set_status("login...");
 
     serial_println!("[PROC] Entering scheduler — dropping to Ring 3");
     serial_println!("══════════════════════════════════════");
@@ -495,6 +512,36 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     share.magic = sunlight_fat::SHARE_MAGIC;
 
     share_phys
+}
+
+fn map_tty_framebuffer(
+    tty: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+    fb_addr: u64,
+    fb_pitch: u64,
+    fb_height: u64,
+) {
+    let hhdm = hhdm_offset.as_u64();
+    let fb_phys_base = if fb_addr >= hhdm { fb_addr - hhdm } else { fb_addr };
+    let fb_page_offset = fb_phys_base & 0xfff;
+    let page_count = ((fb_page_offset + fb_pitch * fb_height) + 4095) / 4096;
+    let flags = PageTableFlags::PRESENT
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::USER_ACCESSIBLE
+        | PageTableFlags::NO_EXECUTE;
+
+    for page_idx in 0..page_count {
+        let user_page =
+            Page::from_start_address(VirtAddr::new(TTY_FB_VADDR + page_idx * 4096))
+                .expect("TTY_FB_VADDR is page-aligned");
+        let fb_phys = PhysAddr::new((fb_phys_base & !0xfff) + page_idx * 4096);
+        let fb_frame = unsafe { PhysFrame::from_start_address_unchecked(fb_phys) };
+        unsafe {
+            tty.address_space
+                .map_page(user_page, fb_frame, flags, pmm, hhdm_offset);
+        }
+    }
 }
 
 /// Set up key injection buffer for test automation.

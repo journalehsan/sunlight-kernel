@@ -201,6 +201,11 @@ impl SplashScreen {
     pub fn set_phase(&mut self, phase: &'static str) {
         self.phase = phase;
     }
+
+    /// Clear the main content zone before handing display ownership to another renderer.
+    pub fn clear_main(&mut self) {
+        self.layout.clear_main(&mut self.fb);
+    }
     
     fn draw_header(&mut self) {
         let header = &self.layout.header;

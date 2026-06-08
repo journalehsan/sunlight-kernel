@@ -56,6 +56,8 @@ services/tty_server/
 [KBD]  PS/2 keyboard initialized
 [KBD]  IRQ1 handler installed
 [TTY]  Registered as 'tty'
+[TTY] Framebuffer acquired
+[TTY] Login rendered
 [TTY]  Login screen ready
 [TTY]  Login success: root
 [TTY]  Built-in shell ready

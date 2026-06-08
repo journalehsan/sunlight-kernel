@@ -5,7 +5,7 @@ use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, IpcMsg, KbdMsg,
     unpack_key_event,
 };
-use sunlight_tty::login::{LoginResult, LoginScreen};
+use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
 use sunlight_tty::mux::TermMux;
 
 #[panic_handler]
@@ -19,23 +19,35 @@ enum TtyState {
 }
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: u64) -> ! {
     debug_log("[TTY]  TTY server started");
+
+    let has_fb = fb_addr != 0 && fb_width != 0 && fb_height != 0 && fb_pitch != 0;
+    let fb32_w = fb_width as u32;
+    let fb32_h = fb_height as u32;
+    let fb32_p = fb_pitch as u32;
+
+    if has_fb {
+        debug_log("[TTY] Framebuffer acquired");
+        unsafe {
+            sunlight_tui::render_login_screen(fb_addr as *mut u32, fb32_w, fb32_h, fb32_p);
+        }
+        debug_log("[TTY] Login rendered");
+    }
 
     let ep = endpoint_create();
     debug_log("[TTY]  endpoint created");
 
-    // The keyboard ISR finds us by process name, not by nameserver lookup.
-    // Registration with init is not required for Phase 3.6.
     debug_log("[TTY]  Registered as 'tty'");
-
     debug_log("[TTY]  Login screen ready");
 
     let mut login = LoginScreen::new();
+    // Pre-fill "root" to match the static login screen render; move focus to password.
+    for &b in b"root" { login.username.push(b); }
+    login.focused = LoginField::Password;
+
     let mut state = TtyState::Login;
     let mut mux: Option<TermMux> = None;
-    let mut logged_in_name = [0u8; 64];
-    let mut logged_in_len = 0usize;
     let mut prev_tab_count: usize = 0;
 
     let mut msg = ipc_recv(ep);
@@ -44,27 +56,31 @@ pub extern "C" fn _start() -> ! {
         match state {
             TtyState::Login => {
                 if let Some(ascii) = key_ascii_from_msg(&msg) {
+                    if login.focused == LoginField::Password {
+                        debug_log_kbd_byte("[TTY] Key received in password field: ", ascii);
+                    }
                     let result = login.handle_key_ascii(ascii);
                     match result {
-                        LoginResult::Success {
-                            username,
-                            username_len,
-                        } => {
-                            logged_in_name = username;
-                            logged_in_len = username_len;
+                        LoginResult::Success { username, username_len } => {
                             debug_log("[TTY]  Login success: root");
                             debug_log("[TTY]  Built-in shell ready");
-
-                            mux = Some(TermMux::new(&logged_in_name[..logged_in_len]));
+                            mux = Some(TermMux::new(&username[..username_len]));
                             state = TtyState::Shell;
+                            if has_fb {
+                                if let Some(tmux) = mux.as_ref() {
+                                    render_shell_fb(tmux, fb_addr, fb32_w, fb32_h, fb32_p);
+                                }
+                            }
                         }
-                        LoginResult::Locked => {
-                            debug_log("[TTY]  Login locked");
-                        }
+                        LoginResult::Locked => { debug_log("[TTY]  Login locked"); }
                         LoginResult::Pending => {}
                     }
                 }
                 login.tick();
+                // Re-render login screen with live state after every message
+                if has_fb {
+                    render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p);
+                }
             }
             TtyState::Shell => {
                 if let Some(tmux) = mux.as_mut() {
@@ -73,24 +89,22 @@ pub extern "C" fn _start() -> ! {
                             let (_keycode, pressed, _shift, ctrl, _alt, ascii) =
                                 unpack_key_event(msg.words[0]);
 
-                            // Only handle key press events
                             if !pressed {
-                                // On key release, nothing to do
+                                // ignore key-release
                             } else if ctrl {
                                 if let Some(a) = ascii {
-                                        if a == b't' || a == b'T' {
-                                                tmux.handle_ctrl(b't');
-                                                if tmux.count > prev_tab_count && !phase3_6_done {
-                                                    debug_log("[TTY]  Ctrl+T test: new tab OK");
-                                                    debug_log("[SunlightOS] Phase 3.6 OK");
-                                                    phase3_6_done = true;
-                                                }
-                                            } else if a == b'w' || a == b'W' {
+                                    if a == b't' || a == b'T' {
+                                        tmux.handle_ctrl(b't');
+                                        if tmux.count > prev_tab_count && !phase3_6_done {
+                                            debug_log("[TTY]  Ctrl+T test: new tab OK");
+                                            debug_log("[SunlightOS] Phase 3.6 OK");
+                                            phase3_6_done = true;
+                                        }
+                                    } else if a == b'w' || a == b'W' {
                                         tmux.handle_ctrl(b'w');
-                                        prev_tab_count = tmux.count;
                                     } else if a == b'l' || a == b'L' {
                                         tmux.handle_ctrl(b'l');
-                                    } else if a >= b'1' && a <= b'9' || a == b'0' {
+                                    } else if (a >= b'1' && a <= b'9') || a == b'0' {
                                         tmux.handle_ctrl(a);
                                     }
                                 }
@@ -106,22 +120,91 @@ pub extern "C" fn _start() -> ! {
                     }
                     prev_tab_count = tmux.count;
                 }
+                // Re-render shell view after every key event
+                if has_fb {
+                    if let Some(tmux) = mux.as_ref() {
+                        render_shell_fb(tmux, fb_addr, fb32_w, fb32_h, fb32_p);
+                    }
+                }
             }
         }
 
-        // Reply and wait for next event
         let reply = IpcMsg::with_label(0);
         msg = ipc_reply_and_wait(ep, reply);
     }
 }
 
-/// Extract the ASCII byte from a keyboard IPC message, if present.
+fn render_login_fb(login: &LoginScreen, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32) {
+    unsafe {
+        sunlight_tui::render_login_dynamic(
+            fb_addr as *mut u32,
+            fb_w,
+            fb_h,
+            fb_p,
+            &login.username.buf[..login.username.len],
+            login.password.len,
+            login.focused == LoginField::Password,
+            login.message,
+        );
+    }
+}
+
+fn render_shell_fb(tmux: &TermMux, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32) {
+    let (output, output_len) = tmux.tabs[tmux.active]
+        .as_ref()
+        .map(|t| (t.output.as_slice(), t.output_len))
+        .unwrap_or((&[], 0));
+    let input_line = tmux.active_line();
+    let prompt = tmux.active_prompt().as_bytes();
+    unsafe {
+        sunlight_tui::render_tty_shell(
+            fb_addr as *mut u32,
+            fb_w,
+            fb_h,
+            fb_p,
+            tmux.count,
+            tmux.active,
+            &output[..output_len],
+            input_line,
+            prompt,
+        );
+    }
+}
+
+/// Extract the ASCII byte from a keyboard IPC message, but only for key-press events.
+/// Key-release events return None to prevent every character being processed twice.
 fn key_ascii_from_msg(msg: &IpcMsg) -> Option<u8> {
     if msg.label == KbdMsg::KEY_EVENT {
-        let (_keycode, _pressed, _shift, _ctrl, _alt, ascii) = unpack_key_event(msg.words[0]);
-        ascii
+        let (_keycode, pressed, _shift, _ctrl, _alt, ascii) = unpack_key_event(msg.words[0]);
+        if pressed { ascii } else { None }
     } else {
         None
+    }
+}
+
+/// Log a keyboard byte value without heap allocation.
+fn debug_log_kbd_byte(prefix: &str, byte: u8) {
+    let mut buf = [0u8; 64];
+    let pb = prefix.as_bytes();
+    let plen = pb.len().min(60);
+    buf[..plen].copy_from_slice(&pb[..plen]);
+    let dstart = plen;
+    let dlen = if byte < 10 {
+        buf[dstart] = b'0' + byte;
+        1
+    } else if byte < 100 {
+        buf[dstart]     = b'0' + byte / 10;
+        buf[dstart + 1] = b'0' + byte % 10;
+        2
+    } else {
+        buf[dstart]     = b'0' + byte / 100;
+        buf[dstart + 1] = b'0' + (byte % 100) / 10;
+        buf[dstart + 2] = b'0' + byte % 10;
+        3
+    };
+    // SAFETY: only ASCII digits and the caller-supplied prefix (valid UTF-8).
+    if let Ok(s) = core::str::from_utf8(&buf[..dstart + dlen]) {
+        debug_log(s);
     }
 }
 
