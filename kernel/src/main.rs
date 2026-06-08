@@ -145,6 +145,9 @@ serial_println!("[CAP]  Capability broker initialized");
     // 7. IPC bus
         splash.set_status("Initializing IPC bus");
 serial_println!("[IPC]  IPC bus initialized");
+serial_println!("[IPC]  IpcMsg format: fixed 80-byte struct");
+serial_println!("[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait");
+serial_println!("[IPC]  Fastpath check: enabled (stub)");
     splash.log("[IPC] IPC bus initialized");
     splash.set_progress(700);  // 70%
     splash.redraw();

@@ -1,0 +1,11 @@
+# Phase 3.6 SunlightTTY + keyboard + login/mux gate
+[KBD]  PS/2 keyboard initialized
+[KBD]  IRQ1 handler installed
+[TTY]  Registered as 'tty'
+[TTY]  Login screen ready
+[TTY]  Login success: root
+[TTY]  Built-in shell ready
+[TTY]  Output: root
+[TTY]  Output: Welcome to SunlightOS
+[TTY]  Ctrl+T test: new tab OK
+[SunlightOS] Phase 3.6 OK

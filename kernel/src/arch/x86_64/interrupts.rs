@@ -276,23 +276,15 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     sched.tick();
 
-    // Every tick, enqueue a timer message for timer_server (if it exists).
-    for p in &mut sched.processes {
-        if p.name == "timer_server" {
-            let msg = crate::process::IpcMessage {
-                sender_pid: 0,
-                endpoint_id: 0,
-                tag: 0x1,
-                capability: None,
-                len: 0,
-                data: [0; crate::process::IPC_INLINE_MAX],
-            };
-            p.ipc_queue.push_back(msg);
-            if p.state == crate::process::ProcessState::BlockedOnIpc {
-                p.state = crate::process::ProcessState::Ready;
-            }
-            break;
-        }
+    // Every tick, enqueue a timer notification for timer_server (if it exists).
+    let timer_endpoint = sched
+        .processes
+        .iter()
+        .find(|p| p.name == "timer_server")
+        .and_then(|p| p.ipc_endpoint.map(|endpoint| (endpoint, p.pid)));
+    if let Some((endpoint_id, timer_pid)) = timer_endpoint {
+        let mut bus = crate::ipc::IPC_BUS.lock();
+        bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
     }
 
     if crate::sched::check_reschedule() {

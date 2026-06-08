@@ -1,0 +1,9 @@
+# Phase 3.0 Storage Bootstrap + VFS/RamFs gate
+[VFS]  Registered as 'vfs'
+[VFS]  Test open /etc/motd
+[VFS]  Test read /etc/motd
+[VFS]  Read: "Welcome to SunlightOS\n"
+[VFS]  ENOENT test OK
+[VFS]  Bad handle test OK
+[VFS]  Stat OK
+[SunlightOS] Phase 3.0 OK

@@ -77,6 +77,24 @@ impl Scheduler {
         &mut self.processes[self.current]
     }
 
+    pub fn is_blocked_on_recv(&self, pid: usize) -> bool {
+        self.processes
+            .iter()
+            .any(|p| p.pid == pid && p.state == ProcessState::BlockedOnIpc)
+    }
+
+    pub fn wake_pid(&mut self, pid: usize) {
+        if let Some(process) = self.processes.iter_mut().find(|p| p.pid == pid) {
+            if process.state == ProcessState::BlockedOnIpc {
+                process.state = ProcessState::Ready;
+            }
+        }
+    }
+
+    pub fn process_mut_by_pid(&mut self, pid: usize) -> Option<&mut Process> {
+        self.processes.iter_mut().find(|p| p.pid == pid)
+    }
+
     /// Run the scheduler — enter the first process and never return.
     pub fn run_forever(&mut self) -> ! {
         // Find first Ready process.

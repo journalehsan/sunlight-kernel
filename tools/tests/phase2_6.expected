@@ -1,0 +1,24 @@
+# Phase 2.6 IPC foundation gate
+  SunlightOS — Phase 2 Boot Sequence
+[PMM] OK
+[VMM] OK
+[IDT] OK
+[HEAP] OK
+[CAP]  Capability broker initialized
+[IPC]  IPC bus initialized
+[IPC]  IpcMsg format: fixed 80-byte struct
+[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait
+[IPC]  Fastpath check: enabled (stub)
+[PROC] Spawning init (pid=1)...
+[PROC] Spawning timer_server (pid=2)...
+[PROC] Entering scheduler — dropping to Ring 3
+[ init] SunlightOS init process started
+[ init] Waiting for system services to register...
+[init] Name server: listening
+[timer] Timer server started
+[timer] Registered as 'time' with init name server
+[timer] Serving via ipc_reply_and_wait loop
+[timer] Listening for tick events
+[timer] 100 ticks elapsed
+[IPC]  round-trip test: 1000 calls OK
+[SunlightOS] Phase 2.6 OK

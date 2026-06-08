@@ -4,6 +4,7 @@ pub mod layout;
 
 use address_space::AddressSpace;
 use layout::USER_STACK_TOP;
+use crate::ipc::IpcMsg;
 use crate::memory::pmm::PhysicalMemoryManager;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
@@ -23,7 +24,11 @@ pub struct Process {
     pub user_stack_top: u64,
     pub entry_point: u64,
     pub context_rsp: u64,
-    pub ipc_queue: VecDeque<IpcMessage>,
+    pub ipc_queue: VecDeque<IpcMsg>,
+    pub ipc_endpoint: Option<u32>,
+    pub ipc_reply: Option<IpcMsg>,
+    pub pending_call: Option<(u64, IpcMsg)>,
+    pub pending_reply_wait: Option<(u32, IpcMsg)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,32 +47,6 @@ pub struct Capability {
     pub can_send: bool,
     pub can_recv: bool,
     pub can_grant: bool,
-}
-
-/// An IPC message within the kernel.
-#[repr(C)]
-pub struct IpcMessage {
-    pub sender_pid: u32,
-    pub endpoint_id: u32,
-    pub tag: u64,
-    pub capability: Option<u64>,
-    pub len: u32,
-    pub data: [u8; IPC_INLINE_MAX],
-}
-
-pub const IPC_INLINE_MAX: usize = 240;
-
-impl IpcMessage {
-    pub const fn new(tag: u64) -> Self {
-        Self {
-            sender_pid: 0,
-            endpoint_id: 0,
-            tag,
-            capability: None,
-            len: 0,
-            data: [0; IPC_INLINE_MAX],
-        }
-    }
 }
 
 impl Process {
@@ -97,6 +76,10 @@ impl Process {
             entry_point: 0,
             context_rsp: 0,
             ipc_queue: VecDeque::new(),
+            ipc_endpoint: None,
+            ipc_reply: None,
+            pending_call: None,
+            pending_reply_wait: None,
         }
     }
 

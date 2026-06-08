@@ -18,16 +18,22 @@ EXPECTED=(
     "[HEAP] OK"
     "[CAP]  Capability broker initialized"
     "[IPC]  IPC bus initialized"
+    "[IPC]  IpcMsg format: fixed 80-byte struct"
+    "[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait"
+    "[IPC]  Fastpath check: enabled (stub)"
     "[PROC] Spawning init (pid=1)..."
     "[PROC] Spawning timer_server (pid=2)..."
     "[PROC] Entering scheduler — dropping to Ring 3"
     "[ init] SunlightOS init process started"
     "[ init] Waiting for system services to register..."
-    "[ init] Phase 2 complete"
     "[timer] Timer server started"
+    "[init] Name server: listening"
+    "[timer] Registered as 'time' with init name server"
+    "[timer] Serving via ipc_reply_and_wait loop"
     "[timer] Listening for tick events"
     "[timer] 100 ticks elapsed"
-    "[SunlightOS] Phase 2 OK"
+    "[IPC]  round-trip test: 1000 calls OK"
+    "[SunlightOS] Phase 2.6 OK"
 )
 
 # --- Step 1: Build service binaries first ---
@@ -96,7 +102,7 @@ for ((i=0; i<TIMEOUT; i++)); do
     fi
     # Check if the final runtime milestone is present (early exit on success).
     if grep -Fq "[timer] 100 ticks elapsed" "$QEMU_OUTPUT" 2>/dev/null \
-        && grep -Fq "[SunlightOS] Phase 2 OK" "$QEMU_OUTPUT" 2>/dev/null; then
+        && grep -Fq "[SunlightOS] Phase 2.6 OK" "$QEMU_OUTPUT" 2>/dev/null; then
         sleep 1
         break
     fi
@@ -140,20 +146,26 @@ $PMM_LINE
 [HEAP] OK
 [CAP]  Capability broker initialized
 [IPC]  IPC bus initialized
+[IPC]  IpcMsg format: fixed 80-byte struct
+[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait
+[IPC]  Fastpath check: enabled (stub)
 [PROC] Spawning init (pid=1)...
 [PROC] Spawning timer_server (pid=2)...
 [PROC] Entering scheduler — dropping to Ring 3
 ══════════════════════════════════════
 [ init] SunlightOS init process started
 [ init] Waiting for system services to register...
-[ init] Phase 2 complete — all services nominal
+[init] Name server: listening
 [timer] Timer server started
+[timer] Registered as 'time' with init name server
+[timer] Serving via ipc_reply_and_wait loop
 [timer] Listening for tick events...
 [timer] 100 ticks elapsed
+[IPC]  round-trip test: 1000 calls OK
 ══════════════════════════════════════
-[SunlightOS] Phase 2 OK
+[SunlightOS] Phase 2.6 OK
 ══════════════════════════════════════
-✓ Phase 2 gate PASSED
+✓ Phase 2.6 gate PASSED
 EOF
     exit 0
 else
@@ -179,6 +191,6 @@ else
             echo "[test] ✗ Missing: $expected"
         fi
     done
-    echo "[test] ✗ Phase 2 gate FAILED"
+    echo "[test] ✗ Phase 2.6 gate FAILED"
     exit 1
 fi

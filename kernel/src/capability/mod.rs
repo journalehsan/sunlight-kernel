@@ -2,10 +2,13 @@ use crate::serial_println;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 /// A capability token: opaque to user-space, meaningful to the kernel.
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CapabilityToken(pub u64);
 
 impl CapabilityToken {
+    pub const INVALID: Self = Self(0);
+
     pub fn as_u64(self) -> u64 {
         self.0
     }
@@ -29,6 +32,14 @@ impl CapabilityRights {
     pub const SEND_ONLY: Self = Self {
         can_send: true,
         can_receive: false,
+        can_grant: false,
+    };
+
+    pub const SEND: Self = Self::SEND_ONLY;
+
+    pub const RECV_ONLY: Self = Self {
+        can_send: false,
+        can_receive: true,
         can_grant: false,
     };
 }
@@ -121,6 +132,29 @@ impl CapabilityBroker {
         Some(token)
     }
 
+    /// Return an existing token for an endpoint if one already has the rights.
+    pub fn token_for_endpoint(
+        &self,
+        endpoint_id: u32,
+        rights: CapabilityRights,
+    ) -> Option<CapabilityToken> {
+        self.capabilities.iter().find_map(|(token, id, token_rights)| {
+            if *id != endpoint_id {
+                return None;
+            }
+            if rights.can_send && !token_rights.can_send {
+                return None;
+            }
+            if rights.can_receive && !token_rights.can_receive {
+                return None;
+            }
+            if rights.can_grant && !token_rights.can_grant {
+                return None;
+            }
+            Some(*token)
+        })
+    }
+
     /// Revoke a capability token.
     pub fn revoke(&mut self, token: CapabilityToken) {
         if let Some(idx) = self.capabilities.iter().position(|(t, _, _)| *t == token) {
@@ -132,5 +166,16 @@ impl CapabilityBroker {
     /// Get endpoint owner.
     pub fn endpoint_owner(&self, endpoint_id: u32) -> Option<usize> {
         self.endpoints.iter().find(|e| e.id == endpoint_id).map(|e| e.owner_pid)
+    }
+
+    /// Resolve a token to its endpoint owner after checking rights.
+    pub fn token_owner(
+        &self,
+        token: CapabilityToken,
+        rights: CapabilityRights,
+    ) -> Result<(u32, usize), CapError> {
+        let endpoint_id = self.check(token, rights)?;
+        let owner = self.endpoint_owner(endpoint_id).ok_or(CapError::EndpointNotFound)?;
+        Ok((endpoint_id, owner))
     }
 }

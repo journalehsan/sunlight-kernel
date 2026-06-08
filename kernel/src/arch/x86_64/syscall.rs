@@ -5,13 +5,17 @@ use x86_64::VirtAddr;
 #[repr(u64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SunlightSyscall {
-    IpcSend = 1,
-    IpcRecv = 2,
-    IpcCall = 3,
-    CapDup = 10,
-    CapRevoke = 11,
+    IpcCall = 1,
+    IpcReply = 2,
+    IpcReplyWait = 3,
+    IpcRecv = 4,
+    IpcNotifySend = 5,
+    IpcNotifyWait = 6,
+    EndpointCreate = 10,
+    EndpointBind = 11,
     ProcessExit = 20,
     ProcessYield = 21,
+    ThreadSpawn = 22,
     DebugLog = 99,
 }
 
@@ -90,7 +94,7 @@ pub unsafe extern "C" fn syscall_entry() {
 
 /// Saved register frame layout (matches push order in syscall_entry).
 #[repr(C)]
-pub struct SyscallFrame {
+pub struct SyscallRegs {
     pub rax: u64,
     pub rbx: u64,
     pub rcx: u64,
@@ -108,6 +112,8 @@ pub struct SyscallFrame {
     pub r15: u64,
 }
 
+pub type SyscallFrame = SyscallRegs;
+
 /// Syscall dispatch — called from assembly with pointer to saved frame.
 /// Returns the value to put in RAX.
 /// SAFETY: `frame` must point to a valid SyscallFrame on the stack.
@@ -119,10 +125,17 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         num, frame.rdi, frame.rsi, frame.rdx
     );
     match num {
-        1 => ipc_send(frame.rdi, frame.rsi, frame.rdx),
-        2 => ipc_recv(frame.rdi),
+        1 => ipc_call(frame),
+        2 => ipc_reply(frame),
+        3 => ipc_reply_wait(frame),
+        4 => ipc_recv(frame),
+        5 => ipc_notify_send(frame.rdi),
+        6 => ipc_notify_wait(frame.rdi),
+        10 => endpoint_create(),
+        11 => endpoint_bind(frame.rdi),
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
+        22 => thread_spawn(),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -135,74 +148,121 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
 // Individual syscall implementations
 // ---------------------------------------------------------------------------
 
-use crate::ipc::IpcError;
+use crate::ipc::{IpcError, IpcMsg, INIT_NAMESERVER_ENDPOINT};
 use crate::capability::CapabilityToken;
-use crate::process::{IpcMessage, ProcessState};
+use crate::capability::CapabilityRights;
+use crate::process::ProcessState;
 use crate::sched;
 use crate::process::layout::is_user_address;
 
-/// Syscall: IpcSend
-/// rdi = capability token
-/// rsi = pointer to IpcMessage in user space
-/// rdx = data length
-fn ipc_send(token: u64, msg_ptr: u64, _len: u64) -> u64 {
-    // SAFETY: Validate user pointer before dereferencing.
-    if !is_user_address(msg_ptr) {
-        return IpcError::InvalidArgument as u64;
-    }
-
-    // SAFETY: msg_ptr is validated to be in user space.
-    let user_msg = unsafe { &*(msg_ptr as *const IpcMessage) };
-
-    let mut msg = IpcMessage::new(user_msg.tag);
-    let data_len = (user_msg.len as usize).min(crate::process::IPC_INLINE_MAX);
-    msg.len = data_len as u32;
-    msg.data[..data_len].copy_from_slice(&user_msg.data[..data_len]);
-
-    let token = CapabilityToken(token);
-
-    // Access IPC bus and capability broker
+fn ipc_call(frame: &mut SyscallFrame) -> u64 {
+    let token = CapabilityToken(frame.rsi);
+    let msg = IpcMsg::from_registers(frame);
     let mut bus = crate::ipc::IPC_BUS.lock();
     let caps = crate::capability::CAP_BROKER.lock();
-    let sender_pid = sched::with_scheduler(|s| s.current_process().pid);
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let sender_pid = sched.current_process().pid;
 
-    match bus.send(token, msg, &caps, sender_pid) {
+    match crate::ipc::handle_ipc_call(sender_pid, token, msg, &caps, &mut sched, &mut bus) {
+        Ok(reply) => {
+            reply.to_registers(frame);
+            0
+        }
+        Err(IpcError::WouldBlock) => {
+            sched::request_reschedule();
+            IpcError::WouldBlock as u64
+        }
+        Err(e) => e as u64,
+    }
+}
+
+fn ipc_reply(frame: &mut SyscallFrame) -> u64 {
+    let reply = IpcMsg::from_registers(frame);
+    let mut bus = crate::ipc::IPC_BUS.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let server_pid = sched.current_process().pid;
+    match crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, &mut bus) {
         Ok(()) => 0,
         Err(e) => e as u64,
     }
 }
 
-/// Syscall: IpcRecv
-/// rdi = pointer to IpcMessage buffer in user space
-fn ipc_recv(msg_ptr: u64) -> u64 {
-    if !is_user_address(msg_ptr) {
-        return IpcError::InvalidArgument as u64;
+fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
+    let endpoint_token = CapabilityToken(frame.rsi);
+    let reply = IpcMsg::from_registers(frame);
+    let mut bus = crate::ipc::IPC_BUS.lock();
+    let caps = crate::capability::CAP_BROKER.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let server_pid = sched.current_process().pid;
+    let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
+        Ok(id) => id,
+        Err(_) => return IpcError::InvalidCapability as u64,
+    };
+    match crate::ipc::handle_ipc_reply_wait(server_pid, endpoint_id, reply, &mut sched, &mut bus) {
+        Ok(next) => {
+            next.to_registers(frame);
+            0
+        }
+        Err(IpcError::WouldBlock) => {
+            sched::request_reschedule();
+            IpcError::WouldBlock as u64
+        }
+        Err(e) => e as u64,
     }
+}
 
-    // SAFETY: msg_ptr validated to be in user space.
-    let user_msg = unsafe { &mut *(msg_ptr as *mut IpcMessage) };
-
-    let _pid = sched::with_scheduler(|s| s.current_process().pid);
-
-    // Check the current process's own queue first.
-    let msg = sched::with_scheduler(|s| s.current_process_mut().ipc_queue.pop_front());
-
-    if let Some(msg) = msg {
-        let data_len = (msg.len as usize).min(crate::process::IPC_INLINE_MAX);
-        user_msg.sender_pid = msg.sender_pid;
-        user_msg.endpoint_id = msg.endpoint_id;
-        user_msg.tag = msg.tag;
-        user_msg.capability = msg.capability;
-        user_msg.len = msg.len;
-        user_msg.data[..data_len].copy_from_slice(&msg.data[..data_len]);
-        return 0;
+fn ipc_recv(frame: &mut SyscallFrame) -> u64 {
+    let endpoint_token = CapabilityToken(frame.rsi);
+    let mut bus = crate::ipc::IPC_BUS.lock();
+    let caps = crate::capability::CAP_BROKER.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let receiver_pid = sched.current_process().pid;
+    let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
+        Ok(id) => id,
+        Err(_) => return IpcError::InvalidCapability as u64,
+    };
+    match crate::ipc::handle_ipc_recv(receiver_pid, endpoint_id, &mut sched, &mut bus) {
+        Ok(msg) => {
+            msg.to_registers(frame);
+            0
+        }
+        Err(IpcError::WouldBlock) => {
+            sched::request_reschedule();
+            IpcError::WouldBlock as u64
+        }
+        Err(e) => e as u64,
     }
+}
 
-    // No message - block.
+fn ipc_notify_send(_token: u64) -> u64 {
+    0
+}
+
+fn ipc_notify_wait(_endpoint_token: u64) -> u64 {
     sched::with_scheduler(|s| {
         s.current_process_mut().state = ProcessState::BlockedOnIpc;
     });
+    sched::request_reschedule();
     IpcError::WouldBlock as u64
+}
+
+fn endpoint_create() -> u64 {
+    let pid = sched::with_scheduler(|s| s.current_process().pid);
+    let (_endpoint_id, token) = {
+        let mut caps = crate::capability::CAP_BROKER.lock();
+        caps.create_endpoint(pid)
+    };
+    token.0
+}
+
+fn endpoint_bind(token: u64) -> u64 {
+    if token == INIT_NAMESERVER_ENDPOINT as u64 {
+        let caps = crate::capability::CAP_BROKER.lock();
+        return caps
+            .token_for_endpoint(INIT_NAMESERVER_ENDPOINT, CapabilityRights::SEND)
+            .map_or(0, |cap| cap.0);
+    }
+    token
 }
 
 /// Syscall: ProcessExit
@@ -225,6 +285,10 @@ fn process_yield() -> u64 {
     });
     sched::request_reschedule();
     0
+}
+
+fn thread_spawn() -> u64 {
+    IpcError::InvalidArgument as u64
 }
 
 /// Syscall: DebugLog
