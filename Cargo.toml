@@ -7,6 +7,7 @@ members = [
     "compat-linux",
     "services/init",
     "services/timer_server",
+    "services/vfs_server",
     "sunlight-tui",
     "sunlight-fs",
 ]

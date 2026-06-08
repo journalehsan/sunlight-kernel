@@ -1,0 +1,32 @@
+[build]
+target = "x86_64-unknown-none"
+
+[target.x86_64-unknown-none]
+rustflags = [
+    "-C", "link-arg=-T../../user-space.ld",
+    "-C", "relocation-model=static",
+]
+
+[package]
+name = "sunlight-vfs-server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sunlight-vfs-server"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-fs = { path = "../../sunlight-fs" }
+sunlight-ipc = { path = "../../ipc" }
+
+[profile.dev]
+panic = "abort"
+opt-level = 1
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

@@ -32,6 +32,8 @@ static INIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-init");
 static TIMER_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
+static VFS_SERVER_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -191,7 +193,47 @@ serial_println!("[PROC] Spawning init (pid=1)...");
     splash.set_progress(800);  // 80%
     splash.redraw();
 
-    // 9. Spawn timer_server (pid=2)
+    // 9. Spawn vfs_server (pid=3)
+    serial_println!("[PROC] Spawning vfs_server (pid=3)...");
+    splash.set_status("Loading vfs_server");
+    splash.log("[PROC] Spawning vfs_server (pid=3)...");
+    splash.redraw();
+    {
+        let mut pmm = PMM.lock();
+        // SAFETY: hhdm_offset was provided by Limine and initialized before user process creation.
+        let mut vfs = unsafe {
+            Process::new(3, "vfs_server", &mut pmm, hhdm_offset)
+        };
+        let entry = process::elf_loader::load_elf(VFS_SERVER_ELF_BYTES, &mut vfs, &mut pmm, hhdm_offset);
+        if let Some(entry) = entry {
+            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
+            for i in 0..stack_pages {
+                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
+                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
+                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
+                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+                    | x86_64::structures::paging::PageTableFlags::WRITABLE
+                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                // SAFETY: page and frame are valid user-stack mappings for this process address space.
+                unsafe {
+                    vfs.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                }
+            }
+            vfs.init_context(entry, layout::USER_STACK_TOP);
+            sched::with_scheduler(|s| { s.add_process(vfs); });
+            splash.log("[PROC] vfs_server pid=3");
+        } else {
+            serial_println!("[PROC] Failed to load vfs_server ELF");
+            splash.log("[PROC] Failed to load vfs_server ELF");
+        }
+    }
+
+    splash.set_progress(900);  // 90%
+    splash.redraw();
+
+    // 10. Spawn timer_server (pid=2)
     serial_println!("[PROC] Spawning timer_server (pid=2)...");
     splash.set_status("Loading timer_server");
     splash.log("[PROC] Spawning timer_server (pid=2)...");

@@ -96,6 +96,16 @@ pub mod TimerMsg {
     pub const ERROR: u64 = 4;
 }
 
+#[allow(non_snake_case)]
+pub mod VfsMsg {
+    pub const OPEN: u64 = 1;
+    pub const READ: u64 = 2;
+    pub const CLOSE: u64 = 3;
+    pub const STAT: u64 = 4;
+    pub const REPLY: u64 = 5;
+    pub const ERROR: u64 = 6;
+}
+
 /// Errors returned by IPC operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcError {
