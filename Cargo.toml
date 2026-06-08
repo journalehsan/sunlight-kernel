@@ -10,6 +10,7 @@ members = [
     "services/vfs_server",
     "sunlight-tui",
     "sunlight-fs",
+    "sunlight-virtio",
 ]
 
 [workspace.dependencies]
