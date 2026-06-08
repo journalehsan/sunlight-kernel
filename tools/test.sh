@@ -9,36 +9,31 @@ LIMINE_BRANCH="v8.x"
 LIMINE_DIR="target/limine"
 SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
 BUILD_LOG=$(mktemp)
+PHASE="${1:-phase3.0}"
 
-EXPECTED=(
-    "  SunlightOS — Phase 2 Boot Sequence  "
-    "[PMM] OK"
-    "[VMM] OK"
-    "[IDT] OK"
-    "[HEAP] OK"
-    "[CAP]  Capability broker initialized"
-    "[IPC]  IPC bus initialized"
-    "[IPC]  IpcMsg format: fixed 80-byte struct"
-    "[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait"
-    "[IPC]  Fastpath check: enabled (stub)"
-    "[PROC] Spawning init (pid=1)..."
-    "[PROC] Spawning timer_server (pid=2)..."
-    "[PROC] Entering scheduler — dropping to Ring 3"
-    "[ init] SunlightOS init process started"
-    "[ init] Waiting for system services to register..."
-    "[timer] Timer server started"
-    "[init] Name server: listening"
-    "[timer] Registered as 'time' with init name server"
-    "[timer] Serving via ipc_reply_and_wait loop"
-    "[timer] Listening for tick events"
-    "[timer] 100 ticks elapsed"
-    "[IPC]  round-trip test: 1000 calls OK"
-    "[SunlightOS] Phase 2.6 OK"
-)
+case "$PHASE" in
+    phase2.6)
+        EXPECTED_FILE="tools/tests/phase2_6.expected"
+        FINAL_MARKER="[SunlightOS] Phase 2.6 OK"
+        PASS_LABEL="Phase 2.6"
+        ;;
+    phase3.0)
+        EXPECTED_FILE="tools/tests/phase3_0.expected"
+        FINAL_MARKER="[SunlightOS] Phase 3.0 OK"
+        PASS_LABEL="Phase 3.0"
+        ;;
+    *)
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0"
+        exit 2
+        ;;
+esac
+
+mapfile -t EXPECTED < <(grep -Ev '^[[:space:]]*($|#)' "$EXPECTED_FILE")
 
 # --- Step 1: Build service binaries first ---
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release >"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
 
 # --- Step 2: Build kernel ---
 cargo build --package sunlight-kernel >>"$BUILD_LOG" 2>&1
@@ -102,7 +97,7 @@ for ((i=0; i<TIMEOUT; i++)); do
     fi
     # Check if the final runtime milestone is present (early exit on success).
     if grep -Fq "[timer] 100 ticks elapsed" "$QEMU_OUTPUT" 2>/dev/null \
-        && grep -Fq "[SunlightOS] Phase 2.6 OK" "$QEMU_OUTPUT" 2>/dev/null; then
+        && grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT" 2>/dev/null; then
         sleep 1
         break
     fi
@@ -135,38 +130,17 @@ for expected in "${EXPECTED[@]}"; do
 done
 
 if [[ "$ALL_FOUND" == true ]]; then
-    cat <<EOF
-══════════════════════════════════════
-  SunlightOS — Phase 2 Boot Sequence
-══════════════════════════════════════
-$PMM_LINE
-[PMM] OK
-[VMM] OK
-[IDT] OK
-[HEAP] OK
-[CAP]  Capability broker initialized
-[IPC]  IPC bus initialized
-[IPC]  IpcMsg format: fixed 80-byte struct
-[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait
-[IPC]  Fastpath check: enabled (stub)
-[PROC] Spawning init (pid=1)...
-[PROC] Spawning timer_server (pid=2)...
-[PROC] Entering scheduler — dropping to Ring 3
-══════════════════════════════════════
-[ init] SunlightOS init process started
-[ init] Waiting for system services to register...
-[init] Name server: listening
-[timer] Timer server started
-[timer] Registered as 'time' with init name server
-[timer] Serving via ipc_reply_and_wait loop
-[timer] Listening for tick events...
-[timer] 100 ticks elapsed
-[IPC]  round-trip test: 1000 calls OK
-══════════════════════════════════════
-[SunlightOS] Phase 2.6 OK
-══════════════════════════════════════
-✓ Phase 2.6 gate PASSED
-EOF
+    echo "══════════════════════════════════════"
+    echo "  SunlightOS — ${PASS_LABEL} Boot Gate"
+    echo "══════════════════════════════════════"
+    if [[ -n "$PMM_LINE" ]]; then
+        echo "$PMM_LINE"
+    fi
+    for expected in "${EXPECTED[@]}"; do
+        echo "$expected"
+    done
+    echo "══════════════════════════════════════"
+    echo "✓ ${PASS_LABEL} gate PASSED"
     exit 0
 else
     echo "[test] --- build and tool output ---"
@@ -191,6 +165,6 @@ else
             echo "[test] ✗ Missing: $expected"
         fi
     done
-    echo "[test] ✗ Phase 2.6 gate FAILED"
+    echo "[test] ✗ ${PASS_LABEL} gate FAILED"
     exit 1
 fi
