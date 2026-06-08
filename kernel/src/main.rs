@@ -18,7 +18,10 @@ mod sched;
 use arch::x86_64::{interrupts, serial, syscall};
 use memory::{heap, pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
 use process::{layout, Process};
-use x86_64::VirtAddr;
+use x86_64::{
+    PhysAddr, VirtAddr,
+    structures::paging::{Page, PageTableFlags, PhysFrame},
+};
 
 static PMM: spin::Mutex<PhysicalMemoryManager> = spin::Mutex::new(PhysicalMemoryManager::new());
 
@@ -34,6 +37,9 @@ static TIMER_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
 static VFS_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
+
+/// Virtual address in each user process at which the FAT32 share page is mapped.
+const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -123,7 +129,12 @@ pub extern "C" fn _start() -> ! {
     splash.set_progress(400);  // 40%
     splash.redraw();
 
-    // 5. Syscall MSRs
+    // 5. virtio-blk + FAT32 bootstrap
+    // Initialize the block device, read FAT32 test files, and write them into a
+    // shared physical page that will be mapped into the vfs_server's address space.
+    let fat_share_phys = init_block_and_fat(hhdm_offset);
+
+    // 6. Syscall MSRs
     serial_println!("[SYSCALL] Setting up MSRs...");
     splash.set_status("Setting up system calls");
     splash.log("[SYSCALL] Setting up MSRs...");
@@ -136,27 +147,27 @@ pub extern "C" fn _start() -> ! {
     splash.set_progress(500);  // 50%
     splash.redraw();
 
-    // 6. Capability broker
-        splash.set_status("Initializing capability broker");
-serial_println!("[CAP]  Capability broker initialized");
+    // 7. Capability broker
+    splash.set_status("Initializing capability broker");
+    serial_println!("[CAP]  Capability broker initialized");
     splash.log("[CAP] Capability broker initialized");
     splash.set_progress(600);  // 60%
     splash.redraw();
     capability::init_token_seed();
 
-    // 7. IPC bus
-        splash.set_status("Initializing IPC bus");
-serial_println!("[IPC]  IPC bus initialized");
-serial_println!("[IPC]  IpcMsg format: fixed 80-byte struct");
-serial_println!("[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait");
-serial_println!("[IPC]  Fastpath check: enabled (stub)");
+    // 8. IPC bus
+    splash.set_status("Initializing IPC bus");
+    serial_println!("[IPC]  IPC bus initialized");
+    serial_println!("[IPC]  IpcMsg format: fixed 80-byte struct");
+    serial_println!("[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait");
+    serial_println!("[IPC]  Fastpath check: enabled (stub)");
     splash.log("[IPC] IPC bus initialized");
     splash.set_progress(700);  // 70%
     splash.redraw();
 
-    // 8. Spawn init (pid=1)
-        splash.set_status("Loading init process");
-serial_println!("[PROC] Spawning init (pid=1)...");
+    // 9. Spawn init (pid=1)
+    splash.set_status("Loading init process");
+    serial_println!("[PROC] Spawning init (pid=1)...");
     splash.log("[PROC] Spawning init (pid=1)...");
     splash.redraw();
     {
@@ -167,7 +178,6 @@ serial_println!("[PROC] Spawning init (pid=1)...");
         serial_println!("[PROC] Loading init ELF ({} bytes)...", INIT_ELF_BYTES.len());
         let entry = process::elf_loader::load_elf(INIT_ELF_BYTES, &mut init, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
-            // Map user stack
             let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
             for i in 0..stack_pages {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
@@ -193,7 +203,7 @@ serial_println!("[PROC] Spawning init (pid=1)...");
     splash.set_progress(800);  // 80%
     splash.redraw();
 
-    // 9. Spawn vfs_server (pid=3)
+    // 10. Spawn vfs_server (pid=3) with the FAT32 share page mapped
     serial_println!("[PROC] Spawning vfs_server (pid=3)...");
     splash.set_status("Loading vfs_server");
     splash.log("[PROC] Spawning vfs_server (pid=3)...");
@@ -221,6 +231,22 @@ serial_println!("[PROC] Spawning init (pid=1)...");
                     vfs.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
             }
+
+            // Map the FAT32 share page (read-only) at FAT_SHARE_VADDR in the vfs_server.
+            // Always mapped: zeroed page when no block device, populated when disk present.
+            // SAFETY: fat_share_phys is a page-aligned physical frame allocated by PMM.
+            {
+                let share_page = Page::from_start_address(VirtAddr::new(FAT_SHARE_VADDR))
+                    .expect("FAT_SHARE_VADDR is not page-aligned");
+                let share_frame = unsafe {
+                    PhysFrame::from_start_address_unchecked(fat_share_phys)
+                };
+                let share_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+                unsafe {
+                    vfs.address_space.map_page(share_page, share_frame, share_flags, &mut pmm, hhdm_offset);
+                }
+            }
+
             vfs.init_context(entry, layout::USER_STACK_TOP);
             sched::with_scheduler(|s| { s.add_process(vfs); });
             splash.log("[PROC] vfs_server pid=3");
@@ -233,7 +259,7 @@ serial_println!("[PROC] Spawning init (pid=1)...");
     splash.set_progress(900);  // 90%
     splash.redraw();
 
-    // 10. Spawn timer_server (pid=2)
+    // 11. Spawn timer_server (pid=2)
     serial_println!("[PROC] Spawning timer_server (pid=2)...");
     splash.set_status("Loading timer_server");
     splash.log("[PROC] Spawning timer_server (pid=2)...");
@@ -267,9 +293,6 @@ serial_println!("[PROC] Spawning init (pid=1)...");
         }
     }
 
-    splash.set_progress(900);  // 90%
-    splash.redraw();
-
     splash.set_progress(1000);  // 100%
     splash.set_status("SunlightOS ready");
     splash.set_kernel_status("OK");
@@ -279,10 +302,140 @@ serial_println!("[PROC] Spawning init (pid=1)...");
     serial_println!("[PROC] Entering scheduler — dropping to Ring 3");
     serial_println!("══════════════════════════════════════");
 
-    // Start scheduler — first process runs, kernel becomes interrupt-only
-    // run_forever sets the first Ready process to Running and iretq's into it.
-    // The saved RFLAGS in init_context has IF=1, so interrupts are enabled
-    // when the process starts.
-    unsafe { core::arch::asm!("sti"); }
+    // Start scheduler — first process runs, kernel becomes interrupt-only.
+    // Interrupts are still disabled here; iretq_to_context will restore the
+    // first process's RFLAGS (IF=1 from init_context), enabling them in user mode.
+    // Do NOT call sti here — it creates a window where the timer interrupt fires
+    // while enter_first_process holds the scheduler lock, causing a deadlock.
     sched::enter_first_process()
+}
+
+/// Initialize virtio-blk, read the FAT32 test files, and return the physical
+/// address of the share page.
+///
+/// Always returns a valid physical address (the share page is always allocated
+/// and mapped into vfs_server). The page is zeroed (magic=0) when no device
+/// was found; vfs_server checks the magic and skips the boot mount gracefully.
+///
+/// Logs [BLK] and [FAT] gate lines to the serial port.
+fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
+    serial_println!("[BLK]  Scanning PCI...");
+
+    // Always allocate the share page; virtio queue and request buffer are only
+    // used when a device is present.
+    let share_phys = PMM.lock().alloc_frame().expect("fat share alloc");
+    let share_virt = hhdm_offset.as_u64() + share_phys.as_u64();
+
+    // Zero the share page so vfs_server gets a safe sentinel when no device exists.
+    // SAFETY: share_virt is a valid HHDM-mapped kernel frame of 4096 bytes.
+    unsafe { (share_virt as *mut u8).write_bytes(0, 4096) };
+
+    // SAFETY: PCI port I/O requires ring-0, which we have during kernel boot.
+    let blk_info = unsafe { sunlight_virtio::find_virtio_blk() };
+    let (_, _, _, io_base) = match blk_info {
+        Some(info) => info,
+        None => {
+            serial_println!("[BLK]  No virtio-blk found — /boot will be unavailable");
+            return share_phys;
+        }
+    };
+
+    // Allocate virtio queue and request buffer only when device is present.
+    let (queue_phys, req_phys) = {
+        let mut pmm = PMM.lock();
+        let q = pmm.alloc_frames(sunlight_virtio::QUEUE_PAGES)
+            .expect("virtio queue alloc");
+        let r = pmm.alloc_frame().expect("virtio req alloc");
+        (q, r)
+    };
+
+    let hhdm = hhdm_offset.as_u64();
+    let queue_virt = hhdm + queue_phys.as_u64();
+    let req_virt = hhdm + req_phys.as_u64();
+    serial_println!("[BLK]  Found virtio-blk");
+
+    // SAFETY: All physical/virtual addresses are valid kernel-allocated frames;
+    // we hold ring-0 privilege for port I/O.
+    let mut blk = match unsafe {
+        sunlight_virtio::VirtioBlk::init(
+            io_base,
+            queue_phys.as_u64(),
+            queue_virt,
+            req_phys.as_u64(),
+            req_virt,
+        )
+    } {
+        Some(b) => b,
+        None => {
+            serial_println!("[BLK]  virtio-blk init failed");
+            return share_phys;
+        }
+    };
+
+    serial_println!("[BLK]  Negotiated features");
+    serial_println!("[BLK]  Queue initialized");
+
+    // Test: read LBA 0 (BPB sector)
+    let mut sector0 = [0u8; 512];
+    // SAFETY: blk was initialized with valid queue/req buffers above.
+    if !unsafe { blk.read_block(0, &mut sector0) } {
+        serial_println!("[BLK]  Read LBA 0 FAILED");
+        return share_phys;
+    }
+    serial_println!("[BLK]  Read LBA 0 OK");
+
+    // Initialize FAT32 using a closure that calls blk.read_block
+    let mut blk_reader = |lba: u64, buf: &mut [u8; 512]| -> bool {
+        // SAFETY: blk is valid and we are in single-threaded kernel boot.
+        unsafe { blk.read_block(lba, buf) }
+    };
+
+    let mut fat = match sunlight_fat::Fat32::mount(&mut blk_reader) {
+        Some(f) => f,
+        None => {
+            serial_println!("[FAT]  FAT32 detection failed");
+            return share_phys;
+        }
+    };
+    serial_println!("[FAT]  FAT32 detected");
+
+    // Populate the share page with pre-read file contents
+    // SAFETY: share_virt points to a valid writable physical frame (one page).
+    let share = unsafe { &mut *(share_virt as *mut sunlight_fat::FatSharePage) };
+    *share = sunlight_fat::FatSharePage::zeroed();
+
+    let mut count = 0u32;
+
+    // Read /HELLO.TXT from FAT32 root
+    if count < sunlight_fat::share::MAX_SHARE_FILES as u32 {
+        let entry = &mut share.files[count as usize];
+        let src_path = b"/HELLO.TXT";
+        let path_len = src_path.len().min(48);
+        entry.path[..path_len].copy_from_slice(&src_path[..path_len]);
+        entry.path_len = path_len as u32;
+
+        if let Some(n) = fat.read_file(b"/HELLO.TXT", &mut entry.data) {
+            entry.data_len = n as u32;
+            count += 1;
+        }
+    }
+
+    // Read /BOOT/PHASE35.TXT from FAT32
+    if count < sunlight_fat::share::MAX_SHARE_FILES as u32 {
+        let entry = &mut share.files[count as usize];
+        let src_path = b"/BOOT/PHASE35.TXT";
+        let path_len = src_path.len().min(48);
+        entry.path[..path_len].copy_from_slice(&src_path[..path_len]);
+        entry.path_len = path_len as u32;
+
+        if let Some(n) = fat.read_file(b"/BOOT/PHASE35.TXT", &mut entry.data) {
+            entry.data_len = n as u32;
+            count += 1;
+        }
+    }
+
+    share.count = count;
+    share.magic = sunlight_fat::SHARE_MAGIC;
+
+    share_phys
 }
