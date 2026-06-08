@@ -19,6 +19,7 @@ path = "src/main.rs"
 [dependencies]
 sunlight-fs = { path = "../../sunlight-fs" }
 sunlight-ipc = { path = "../../ipc" }
+sunlight-fat = { path = "../../sunlight-fat" }
 
 [profile.dev]
 panic = "abort"

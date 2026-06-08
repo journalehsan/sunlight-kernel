@@ -11,6 +11,7 @@ members = [
     "sunlight-tui",
     "sunlight-fs",
     "sunlight-virtio",
+    "sunlight-fat",
 ]
 
 [workspace.dependencies]

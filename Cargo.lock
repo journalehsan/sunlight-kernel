@@ -98,6 +98,10 @@ name = "sunlight-drivers"
 version = "0.1.0"
 
 [[package]]
+name = "sunlight-fat"
+version = "0.1.0"
+
+[[package]]
 name = "sunlight-fs"
 version = "0.1.0"
 
@@ -119,7 +123,9 @@ dependencies = [
  "limine",
  "linked_list_allocator",
  "spin",
+ "sunlight-fat",
  "sunlight-tui",
+ "sunlight-virtio",
  "uart_16550",
  "x86_64",
 ]
@@ -139,9 +145,14 @@ version = "0.1.0"
 name = "sunlight-vfs-server"
 version = "0.1.0"
 dependencies = [
+ "sunlight-fat",
  "sunlight-fs",
  "sunlight-ipc",
 ]
+
+[[package]]
+name = "sunlight-virtio"
+version = "0.1.0"
 
 [[package]]
 name = "uart_16550"
