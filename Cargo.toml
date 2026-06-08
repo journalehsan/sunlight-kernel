@@ -8,6 +8,7 @@ members = [
     "services/init",
     "services/timer_server",
     "sunlight-tui",
+    "sunlight-fs",
 ]
 
 [workspace.dependencies]

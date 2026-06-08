@@ -98,6 +98,10 @@ name = "sunlight-drivers"
 version = "0.1.0"
 
 [[package]]
+name = "sunlight-fs"
+version = "0.1.0"
+
+[[package]]
 name = "sunlight-init"
 version = "0.1.0"
 dependencies = [
