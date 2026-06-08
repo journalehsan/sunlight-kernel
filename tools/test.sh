@@ -16,14 +16,22 @@ case "$PHASE" in
         EXPECTED_FILE="tools/tests/phase2_6.expected"
         FINAL_MARKER="[SunlightOS] Phase 2.6 OK"
         PASS_LABEL="Phase 2.6"
+        NEED_DISK=false
         ;;
     phase3.0)
         EXPECTED_FILE="tools/tests/phase3_0.expected"
         FINAL_MARKER="[SunlightOS] Phase 3.0 OK"
         PASS_LABEL="Phase 3.0"
+        NEED_DISK=false
+        ;;
+    phase3.5)
+        EXPECTED_FILE="tools/tests/phase3_5.expected"
+        FINAL_MARKER="[SunlightOS] Phase 3.5 OK"
+        PASS_LABEL="Phase 3.5"
+        NEED_DISK=true
         ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5"
         exit 2
         ;;
 esac
@@ -34,6 +42,11 @@ mapfile -t EXPECTED < <(grep -Ev '^[[:space:]]*($|#)' "$EXPECTED_FILE")
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release >"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
+
+# --- Step 1b: Create FAT32 disk image (phase3.5+) ---
+if [[ "$NEED_DISK" == "true" ]]; then
+    bash tools/disk.sh >>"$BUILD_LOG" 2>&1
+fi
 
 # --- Step 2: Build kernel ---
 cargo build --package sunlight-kernel >>"$BUILD_LOG" 2>&1
@@ -78,6 +91,12 @@ fi
 QEMU_OUTPUT=$(mktemp)
 trap "rm -f $QEMU_OUTPUT $BUILD_LOG" EXIT
 
+# Extra QEMU flags for phases that need a virtio-blk disk
+DISK_FLAGS=""
+if [[ "$NEED_DISK" == "true" && -f "target/test.img" ]]; then
+    DISK_FLAGS="-drive id=hd0,file=target/test.img,if=none,format=raw -device virtio-blk-pci,disable-modern=on,drive=hd0"
+fi
+
 set +e
 qemu-system-x86_64 \
     -cdrom "$ISO_PATH" \
@@ -86,6 +105,7 @@ qemu-system-x86_64 \
     -m 256M \
     -smp 2 \
     $KVM_FLAGS \
+    $DISK_FLAGS \
     -no-reboot \
     -no-shutdown >>"$BUILD_LOG" 2>&1 &
 QEMU_PID=$!
