@@ -311,6 +311,10 @@ fn render_active_shell_fb(
 
 fn reset_login(login: &mut LoginScreen) {
     *login = LoginScreen::new();
+    for &b in b"root" {
+        login.username.push(b);
+    }
+    login.focused = LoginField::Password;
     login.message = "Logged out. Please log in.";
 }
 

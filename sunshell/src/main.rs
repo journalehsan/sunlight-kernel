@@ -122,9 +122,9 @@ static BUMP: BumpAllocator = BumpAllocator;
 #[no_main]
 mod sunlight {
     use sunlight_ipc::{
-        debug_log, endpoint_create, ipc_reply, ipc_reply_and_wait, nameserver_register,
+        debug_log, endpoint_create, ipc_reply_and_wait, nameserver_register,
         nameserver_lookup, ipc_call, get_init_cap, IpcMsg, InitMsg, VfsMsg,
-        CapabilityToken, SunlightSyscall, process_exit::ProcessExit,
+        CapabilityToken, SunlightSyscall,
     };
 
     const KBD_LABEL: u64 = 1;
@@ -732,8 +732,7 @@ mod sunlight {
                     debug_log_cmd_output(&cmd_snap[..cmd_snap_len], &out[..out_len]);
                 }
                 if cmd_snap_len == 4 && &cmd_snap[..cmd_snap_len] == b"exit" {
-                    ipc_reply(IpcMsg::with_label(EXIT_LABEL));
-                    ProcessExit::exit(0);
+                    IpcMsg::with_label(EXIT_LABEL)
                 } else {
                     pack_output(&out[..out_len])
                 }
