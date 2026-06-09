@@ -1,6 +1,31 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+use alloc::vec::Vec;
+
+struct BumpAllocator;
+
+unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        static mut HEAP: [u8; 65536] = [0; 65536];
+        static mut NEXT: usize = 0;
+        let start = NEXT;
+        let align = layout.align();
+        let aligned = (start + align - 1) & !(align - 1);
+        let end = aligned + layout.size();
+        if end > HEAP.len() {
+            return core::ptr::null_mut();
+        }
+        NEXT = end;
+        HEAP.as_mut_ptr().add(aligned)
+    }
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
+}
+
+#[global_allocator]
+static BUMP: BumpAllocator = BumpAllocator;
+
 use sunlight_fat::{FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 use sunlight_fs::{
     check_permission, parse_group, parse_passwd, Credential, FileHandle, FileType, FsError,
@@ -185,9 +210,27 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             let requested = (msg.words[2] as usize).min(READ_REPLY_BYTES);
             read_handle(state, raw_handle, offset, requested)
         }
+        VfsMsg::WRITE => {
+            let raw_handle = FileHandle(msg.words[0] as u32);
+            let offset = msg.words[1] as usize;
+            let data = unpack_bytes(&msg.words[2..]);
+            write_handle(state, raw_handle, offset, &data)
+        }
         VfsMsg::CLOSE => close_handle(state, FileHandle(msg.words[0] as u32)),
         VfsMsg::STAT => match decoded_path(&msg.words) {
             Some(pb) => stat_path(state, pb.as_str()),
+            None => error_reply(FsError::InvalidPath),
+        },
+        VfsMsg::MKDIR => match decoded_path(&msg.words) {
+            Some(pb) => mkdir_path(state, pb.as_str(), msg.words[4] as u32, msg.words[5] as u32, msg.words[6] as u16),
+            None => error_reply(FsError::InvalidPath),
+        },
+        VfsMsg::CHMOD => match decoded_path(&msg.words) {
+            Some(pb) => chmod_path(state, pb.as_str(), msg.words[4] as u16),
+            None => error_reply(FsError::InvalidPath),
+        },
+        VfsMsg::CHOWN => match decoded_path(&msg.words) {
+            Some(pb) => chown_path(state, pb.as_str(), msg.words[4] as u32, msg.words[5] as u32),
             None => error_reply(FsError::InvalidPath),
         },
         _ => error_reply(FsError::Unsupported),
@@ -285,6 +328,47 @@ fn stat_path(state: &mut State, path: &str) -> IpcMsg {
                 .word(2, file_type_code(stat.file_type)),
             Err(e) => error_reply(e),
         }
+    }
+}
+
+fn write_handle(state: &mut State, raw: FileHandle, offset: usize, buf: &[u8]) -> IpcMsg {
+    let (mount, local) = unpack_handle(raw);
+    match mount {
+        MOUNT_RAM => match state.vfs.write(local, offset, buf) {
+            Ok(n) => ok_reply().word(1, n as u64),
+            Err(e) => error_reply(e),
+        },
+        _ => error_reply(FsError::BadHandle),
+    }
+}
+
+fn mkdir_path(state: &mut State, path: &str, uid: u32, gid: u32, mode: u16) -> IpcMsg {
+    if strip_boot_prefix(path).is_some() {
+        return error_reply(FsError::Unsupported);
+    }
+    match state.vfs.mkdir(path, uid, gid, mode) {
+        Ok(()) => ok_reply(),
+        Err(e) => error_reply(e),
+    }
+}
+
+fn chmod_path(state: &mut State, path: &str, mode: u16) -> IpcMsg {
+    if strip_boot_prefix(path).is_some() {
+        return error_reply(FsError::Unsupported);
+    }
+    match state.vfs.chmod(path, mode) {
+        Ok(()) => ok_reply(),
+        Err(e) => error_reply(e),
+    }
+}
+
+fn chown_path(state: &mut State, path: &str, uid: u32, gid: u32) -> IpcMsg {
+    if strip_boot_prefix(path).is_some() {
+        return error_reply(FsError::Unsupported);
+    }
+    match state.vfs.chown(path, uid, gid) {
+        Ok(()) => ok_reply(),
+        Err(e) => error_reply(e),
     }
 }
 
@@ -601,6 +685,21 @@ fn pack_bytes(bytes: &[u8]) -> u64 {
     while idx < bytes.len() && idx < 8 {
         out |= (bytes[idx] as u64) << (idx * 8);
         idx += 1;
+    }
+    out
+}
+
+/// Unpack bytes from an array of u64 words into a Vec.
+fn unpack_bytes(words: &[u64]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for word in words {
+        let bytes = word.to_le_bytes();
+        for b in bytes {
+            if b == 0 {
+                break;
+            }
+            out.push(b);
+        }
     }
     out
 }

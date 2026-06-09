@@ -1,6 +1,7 @@
 pub mod address_space;
 pub mod elf_loader;
 pub mod layout;
+pub mod spawn;
 
 use address_space::AddressSpace;
 use layout::USER_STACK_TOP;

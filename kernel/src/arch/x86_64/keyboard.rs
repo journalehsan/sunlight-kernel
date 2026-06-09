@@ -298,6 +298,23 @@ pub fn poll_inject_buffer() {
     }
     drop(ticks);
 
+    // The first 5 scancodes are the login password (r,o,o,t,Enter).
+    // After that, pause injection until sshl appears in the scheduler so that
+    // all shell-command keys arrive AFTER sshl has registered. This keeps the
+    // tty_server pre-sshl buffer empty, avoiding dozens of slow IPC round-trips.
+    const LOGIN_SCANCODES: usize = 5;
+    let inject_idx = unsafe { KEY_INJECT_IDX };
+    if inject_idx >= LOGIN_SCANCODES {
+        let sshl_up = crate::sched::SCHEDULER
+            .lock()
+            .processes
+            .iter()
+            .any(|p| p.name == "sshl");
+        if !sshl_up {
+            return;
+        }
+    }
+
     let mut processed = 0;
     while processed < 4 {
         let idx = unsafe { KEY_INJECT_IDX };

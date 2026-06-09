@@ -14,6 +14,8 @@ members = [
     "sunlight-fat",
     "sunlight-tty",
     "services/tty_server",
+    "sunlight-elf",
+    "sunshell",
 ]
 
 [workspace.dependencies]

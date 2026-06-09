@@ -98,6 +98,10 @@ name = "sunlight-drivers"
 version = "0.1.0"
 
 [[package]]
+name = "sunlight-elf"
+version = "0.1.0"
+
+[[package]]
 name = "sunlight-fat"
 version = "0.1.0"
 
@@ -172,6 +176,13 @@ dependencies = [
 [[package]]
 name = "sunlight-virtio"
 version = "0.1.0"
+
+[[package]]
+name = "sunshell"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ipc",
+]
 
 [[package]]
 name = "uart_16550"

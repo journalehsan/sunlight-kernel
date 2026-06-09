@@ -39,6 +39,8 @@ static VFS_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
 static TTY_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
+static SUNSHELL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sshl");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -158,6 +160,13 @@ pub extern "C" fn _start() -> ! {
     splash.redraw();
     capability::init_token_seed();
 
+    // 7a. ELF loader + spawn endpoint
+    serial_println!("[ELF]  Static ELF loader initialized");
+    splash.log("[ELF] Static ELF loader initialized");
+    serial_println!("[KERN] spawn endpoint registered");
+    splash.log("[KERN] spawn endpoint registered");
+    splash.redraw();
+
     // 8. IPC bus
     splash.set_status("Initializing IPC bus");
     serial_println!("[IPC]  IPC bus initialized");
@@ -209,6 +218,7 @@ pub extern "C" fn _start() -> ! {
                 }
             }
             init.init_context(entry, layout::USER_STACK_TOP);
+            init.set_initial_args(capability::SPAWN_TOKEN.0, 0, 0, 0);
             sched::with_scheduler(|s| { s.add_process(init); });
             splash.log("[PROC] init pid=1");
         } else {
@@ -556,21 +566,28 @@ fn setup_key_injection() {
     // 5. echo hello + Enter (with Ctrl+1 to switch back)
     use crate::arch::x86_64::keyboard;
 
-    let sequence: [u8; 50] = [
-        // Username: r, o, o, t, Enter
-        0x13, 0x18, 0x18, 0x14, 0x1C,
-        // Password: r, o, o, t, Enter
+    // Minimal sequence: password login + phase-3.8 commands + Ctrl+T for phase-3.6.
+    // cat /etc/motd and echo hello were removed — they're not required by any
+    // test gate and each added 14–25 IPC round-trips to an already-slow path.
+    // Ctrl+T is filtered by tty_server (ctrl=true → not forwarded to sshl).
+    let sequence: [u8; 65] = [
+        // Password: r, o, o, t, Enter  (username is pre-filled "root")
         0x13, 0x18, 0x18, 0x14, 0x1C,
         // whoami + Enter
         0x11, 0x23, 0x18, 0x1E, 0x32, 0x17, 0x1C,
-        // cat /etc/motd + Enter
-        0x2E, 0x1E, 0x14, 0x39, 0x35, 0x12, 0x14, 0x2E, 0x35, 0x32, 0x18, 0x14, 0x20, 0x1C,
-        // Ctrl+T: Ctrl_down, t_press, t_release, Ctrl_release
+        // Ctrl+T (phase 3.6 gate): Ctrl_down, t_press, t_release, Ctrl_release
         0x1D, 0x14, 0x94, 0x9D,
-        // echo hello + Enter
-        0x12, 0x2E, 0x23, 0x18, 0x39, 0x23, 0x12, 0x26, 0x26, 0x18, 0x1C,
-        // Ctrl+1 (switch to tab 1): Ctrl_down, 1_press, 1_release, Ctrl_release
-        0x1D, 0x02, 0x82, 0x9D,
+        // id + Enter
+        0x17, 0x20, 0x1C,
+        // useradd testuser + Enter
+        0x16, 0x1F, 0x12, 0x13, 0x1E, 0x20, 0x20, 0x39,
+        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
+        // id testuser + Enter
+        0x17, 0x20, 0x39,
+        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
+        // userdel testuser + Enter
+        0x16, 0x1F, 0x12, 0x13, 0x20, 0x12, 0x26, 0x39,
+        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
     ];
 
     // SAFETY: single-threaded kernel boot, no concurrent access

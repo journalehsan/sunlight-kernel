@@ -97,13 +97,26 @@ pub fn load_elf(
             let page_addr = VirtAddr::new(page_vaddr_start + page_idx as u64 * 4096);
             let page = Page::from_start_address(page_addr).ok()?;
 
-            let frame_addr = pmm.alloc_frame()?;
-            let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
+            // Check if this virtual page is already mapped by a previous segment.
+            // When two segments share a page (e.g., rodata and GOT both landing in
+            // the same 4 KiB page), reuse the existing physical frame instead of
+            // allocating a new one that would overwrite the previous segment's data.
+            let existing_phys = unsafe {
+                process.address_space.lookup_phys(page, hhdm_offset)
+            };
 
-            // Zero the frame
+            let (frame_addr, is_new) = if let Some(phys) = existing_phys {
+                (phys, false)
+            } else {
+                (pmm.alloc_frame()?, true)
+            };
+
+            let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
             let hhdm_ptr = (hhdm_offset + frame_addr.as_u64()).as_mut_ptr::<u8>();
-            unsafe {
-                core::ptr::write_bytes(hhdm_ptr, 0, 4096);
+
+            if is_new {
+                // Zero the new frame before copying segment data into it.
+                unsafe { core::ptr::write_bytes(hhdm_ptr, 0, 4096); }
             }
 
             // Calculate overlap between this page and the segment
@@ -128,10 +141,14 @@ pub fn load_elf(
                 }
             }
 
-            // SAFETY: mapping a user page into the process address space.
-            unsafe {
-                process.address_space.map_page(page, phys, flags, pmm, hhdm_offset);
+            if is_new {
+                // SAFETY: mapping a user page into the process address space.
+                unsafe {
+                    process.address_space.map_page(page, phys, flags, pmm, hhdm_offset);
+                }
             }
+            // If the page was already mapped, the data was written into the existing
+            // frame. No remapping is needed; the original flags are preserved.
         }
     }
 

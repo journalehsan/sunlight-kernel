@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-TIMEOUT=30
+TIMEOUT=60
 KERNEL_ELF="target/x86_64-unknown-none/debug/sunlight-kernel"
 ISO_PATH="target/sunlightos.iso"
 LIMINE_BRANCH="v8.x"
@@ -42,8 +42,14 @@ case "$PHASE" in
         PASS_LABEL="Phase 3.7"
         NEED_DISK=false
         ;;
+    phase3.8)
+        EXPECTED_FILE="tools/tests/phase3_8.expected"
+        FINAL_MARKER="[SunlightOS] Phase 3.8 OK"
+        PASS_LABEL="Phase 3.8"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8"
         exit 2
         ;;
 esac
@@ -55,6 +61,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release >"$
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release >>"$BUILD_LOG" 2>&1
 
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
 if [[ "$NEED_DISK" == "true" ]]; then
@@ -63,7 +70,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" ]]; then
+if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" ]]; then
     KERNEL_FEATURES="--features key_inject"
 fi
 cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1

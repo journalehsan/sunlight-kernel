@@ -104,11 +104,22 @@ pub mod VfsMsg {
     pub const STAT: u64 = 4;
     pub const REPLY: u64 = 5;
     pub const ERROR: u64 = 6;
+    pub const WRITE: u64 = 7;
+    pub const MKDIR: u64 = 8;
+    pub const CHMOD: u64 = 9;
+    pub const CHOWN: u64 = 10;
 }
 
 #[allow(non_snake_case)]
 pub mod KbdMsg {
     pub const KEY_EVENT: u64 = 1;
+}
+
+#[allow(non_snake_case)]
+pub mod SpawnMsg {
+    pub const SPAWN: u64 = 1;
+    pub const REPLY: u64 = 2;
+    pub const ERROR: u64 = 3;
 }
 
 /// Pack a key event into a single u64 word for IPC transport.

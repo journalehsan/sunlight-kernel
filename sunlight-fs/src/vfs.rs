@@ -52,8 +52,13 @@ pub trait FileSystem {
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError>;
     fn read(&mut self, handle: FileHandle, offset: usize, buf: &mut [u8])
         -> Result<usize, FsError>;
+    fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8])
+        -> Result<usize, FsError>;
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError>;
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError>;
+    fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError>;
+    fn chmod(&mut self, path: &str, mode: u16) -> Result<(), FsError>;
+    fn chown(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), FsError>;
     fn readdir(&mut self, path: &str) -> Result<DirIter, FsError>;
 }
 
@@ -79,6 +84,17 @@ impl FileSystem for FsNode {
         }
     }
 
+    fn write(
+        &mut self,
+        handle: FileHandle,
+        offset: usize,
+        buf: &[u8],
+    ) -> Result<usize, FsError> {
+        match self {
+            Self::Ram(fs) => fs.write(handle, offset, buf),
+        }
+    }
+
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
         match self {
             Self::Ram(fs) => fs.close(handle),
@@ -88,6 +104,24 @@ impl FileSystem for FsNode {
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
         match self {
             Self::Ram(fs) => fs.stat(path),
+        }
+    }
+
+    fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.mkdir(path, uid, gid, mode),
+        }
+    }
+
+    fn chmod(&mut self, path: &str, mode: u16) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.chmod(path, mode),
+        }
+    }
+
+    fn chown(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.chown(path, uid, gid),
         }
     }
 
@@ -158,6 +192,21 @@ impl Vfs {
             .read(local_handle, offset, buf)
     }
 
+    pub fn write(
+        &mut self,
+        handle: FileHandle,
+        offset: usize,
+        buf: &[u8],
+    ) -> Result<usize, FsError> {
+        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        self.mounts
+            .get_mut(mount_idx)
+            .and_then(Option::as_mut)
+            .ok_or(FsError::BadHandle)?
+            .fs
+            .write(local_handle, offset, buf)
+    }
+
     pub fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
         let (mount_idx, local_handle) = unpack_handle(handle)?;
         self.mounts
@@ -175,6 +224,33 @@ impl Vfs {
             .ok_or(FsError::NotFound)?
             .fs
             .stat(local_path)
+    }
+
+    pub fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError> {
+        let (mount_idx, local_path) = self.resolve_mount(path)?;
+        self.mounts[mount_idx]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs
+            .mkdir(local_path, uid, gid, mode)
+    }
+
+    pub fn chmod(&mut self, path: &str, mode: u16) -> Result<(), FsError> {
+        let (mount_idx, local_path) = self.resolve_mount(path)?;
+        self.mounts[mount_idx]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs
+            .chmod(local_path, mode)
+    }
+
+    pub fn chown(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), FsError> {
+        let (mount_idx, local_path) = self.resolve_mount(path)?;
+        self.mounts[mount_idx]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs
+            .chown(local_path, uid, gid)
     }
 
     fn resolve_mount<'a>(&self, path: &'a str) -> Result<(usize, &'a str), FsError> {

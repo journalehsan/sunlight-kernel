@@ -1,5 +1,3 @@
-[workspace]
-
 [package]
 name    = "sunshell"
 version = "0.1.0"
@@ -10,6 +8,12 @@ name = "sshl"
 path = "src/main.rs"
 
 [dependencies]
+sunlight-ipc = { path = "../ipc", optional = true }
+
+[features]
+default = ["sunlight"]
+std = []
+sunlight = ["sunlight-ipc"]
 
 [profile.release]
 panic         = "abort"

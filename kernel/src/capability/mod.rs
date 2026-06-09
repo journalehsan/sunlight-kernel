@@ -66,6 +66,10 @@ static TOKEN_SEED: AtomicU64 = AtomicU64::new(0);
 /// Global capability broker instance.
 pub static CAP_BROKER: spin::Mutex<CapabilityBroker> = spin::Mutex::new(CapabilityBroker::new());
 
+/// Global spawn capability token. A hardcoded special token that the kernel
+/// recognizes in `ipc_call` to handle spawn requests directly.
+pub const SPAWN_TOKEN: CapabilityToken = CapabilityToken(0xCAFEBABE_DEADBEEF);
+
 /// Initialize the token seed from TSC.
 pub fn init_token_seed() {
     let tsc = unsafe { core::arch::x86_64::_rdtsc() };

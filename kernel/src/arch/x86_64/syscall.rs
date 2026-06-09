@@ -120,10 +120,6 @@ pub type SyscallFrame = SyscallRegs;
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     let num = frame.rax;
-    crate::serial_println!(
-        "[SYSCALL] dispatch rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x}",
-        num, frame.rdi, frame.rsi, frame.rdx
-    );
     match num {
         1 => ipc_call(frame),
         2 => ipc_reply(frame),
@@ -158,6 +154,12 @@ use crate::process::layout::is_user_address;
 fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     let token = CapabilityToken(frame.rsi);
     let msg = IpcMsg::from_registers(frame);
+
+    // Check for spawn capability (fast path handled by kernel)
+    if token == crate::capability::SPAWN_TOKEN {
+        return handle_spawn_call(frame, msg);
+    }
+
     let mut bus = crate::ipc::IPC_BUS.lock();
     let caps = crate::capability::CAP_BROKER.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
@@ -174,6 +176,56 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
         }
         Err(e) => e as u64,
     }
+}
+
+/// Handle a spawn IPC call directly in the kernel.
+/// Extracts path from the message words and spawns a new process.
+fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
+    let path = decode_path_from_words(&msg.words);
+    let _uid = msg.words[4] as u32;
+    let _gid = msg.words[5] as u32;
+
+    crate::serial_println!("[SPAWN] Request from pid={} for path={}",
+        crate::sched::SCHEDULER.lock().current_process().pid,
+        path);
+
+    let mut pmm = crate::PMM.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
+
+    match crate::process::spawn::spawn_from_path(
+        &path,
+        &[],
+        &mut *pmm,
+        &mut *sched,
+        &mut crate::capability::CAP_BROKER.lock(),
+        VirtAddr::new(hhdm),
+    ) {
+        Ok(pid) => {
+            let mut reply = IpcMsg::with_label(crate::ipc::SpawnMsg::REPLY);
+            reply.words[0] = pid as u64;
+            reply.to_registers(frame);
+            0
+        }
+        Err(e) => {
+            crate::serial_println!("[SPAWN] Failed: {:?}", e);
+            let mut reply = IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR);
+            reply.words[0] = e as u64;
+            reply.to_registers(frame);
+            0
+        }
+    }
+}
+
+/// Decode a path from the first 4 IPC words (32 bytes max).
+fn decode_path_from_words(words: &[u64; 8]) -> alloc::string::String {
+    let mut bytes = [0u8; 32];
+    for i in 0..4 {
+        bytes[i * 8..i * 8 + 8].copy_from_slice(&words[i].to_le_bytes());
+    }
+    let len = bytes.iter().position(|&b| b == 0).unwrap_or(32);
+    // SAFETY: path bytes are ASCII from the caller.
+    unsafe { alloc::string::String::from_utf8_unchecked(bytes[..len].to_vec()) }
 }
 
 fn ipc_reply(frame: &mut SyscallFrame) -> u64 {

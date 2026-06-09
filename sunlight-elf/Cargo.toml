@@ -1,0 +1,20 @@
+[package]
+name = "sunlight-elf"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "sunlight_elf"
+
+[dependencies]
+
+[profile.dev]
+panic = "abort"
+opt-level = 1
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

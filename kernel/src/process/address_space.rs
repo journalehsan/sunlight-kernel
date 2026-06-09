@@ -59,6 +59,24 @@ impl AddressSpace {
         p1_entry.set_frame(phys, flags);
     }
 
+    /// Look up the physical address mapped for `page`, if any.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn lookup_phys(&self, page: Page<Size4KiB>, hhdm_offset: VirtAddr) -> Option<PhysAddr> {
+        let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
+        let p4_entry = &pml4[page.p4_index()];
+        if p4_entry.is_unused() { return None; }
+        let p3_table = &*((hhdm_offset + p4_entry.addr().as_u64()).as_ptr::<PageTable>());
+        let p3_entry = &p3_table[page.p3_index()];
+        if p3_entry.is_unused() { return None; }
+        let p2_table = &*((hhdm_offset + p3_entry.addr().as_u64()).as_ptr::<PageTable>());
+        let p2_entry = &p2_table[page.p2_index()];
+        if p2_entry.is_unused() { return None; }
+        let p1_table = &*((hhdm_offset + p2_entry.addr().as_u64()).as_ptr::<PageTable>());
+        let p1_entry = &p1_table[page.p1_index()];
+        if p1_entry.is_unused() { return None; }
+        Some(p1_entry.addr())
+    }
+
     /// Switch to this address space (write PML4 phys addr to CR3).
     /// SAFETY: `pml4_phys` must be a valid, page-aligned physical address.
     pub unsafe fn activate(&self) {

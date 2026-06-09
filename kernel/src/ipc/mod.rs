@@ -9,6 +9,13 @@ pub use message::IpcMsg;
 
 pub const INIT_NAMESERVER_ENDPOINT: u32 = 0;
 
+#[allow(non_snake_case)]
+pub mod SpawnMsg {
+    pub const SPAWN: u64 = 1;
+    pub const REPLY: u64 = 2;
+    pub const ERROR: u64 = 3;
+}
+
 /// Global IPC bus instance.
 pub static IPC_BUS: spin::Mutex<IpcBus> = spin::Mutex::new(IpcBus::new());
 

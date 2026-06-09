@@ -11,7 +11,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 }
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(spawn_token: u64) -> ! {
     debug_log("[ init] SunlightOS init process started");
     debug_log("[ init] Waiting for system services to register...");
 
@@ -19,6 +19,14 @@ pub extern "C" fn _start() -> ! {
     debug_log("[init] Name server: listening");
 
     let mut registry = [RegistryEntry::empty(); 32];
+
+    // Register the kernel spawn endpoint if token was passed.
+    if spawn_token != 0 {
+        let name = name_to_u64("spawn");
+        registry_insert(&mut registry, name, CapabilityToken(spawn_token));
+        debug_log("[init] Registered kernel spawn endpoint");
+    }
+
     let mut msg = ipc_recv(ep);
     loop {
         let reply = match msg.label {
@@ -66,4 +74,15 @@ fn registry_find(registry: &[RegistryEntry; 32], name: u64) -> Option<Capability
         .iter()
         .find(|entry| entry.name == name && entry.cap != CapabilityToken::INVALID)
         .map(|entry| entry.cap)
+}
+
+fn name_to_u64(name: &str) -> u64 {
+    let bytes = name.as_bytes();
+    let mut out = 0u64;
+    let mut i = 0;
+    while i < bytes.len() && i < 8 {
+        out |= (bytes[i] as u64) << (i * 8);
+        i += 1;
+    }
+    out
 }
