@@ -122,13 +122,14 @@ static BUMP: BumpAllocator = BumpAllocator;
 #[no_main]
 mod sunlight {
     use sunlight_ipc::{
-        debug_log, endpoint_create, ipc_reply_and_wait, nameserver_register,
+        debug_log, endpoint_create, ipc_reply, ipc_reply_and_wait, nameserver_register,
         nameserver_lookup, ipc_call, get_init_cap, IpcMsg, InitMsg, VfsMsg,
-        CapabilityToken, SunlightSyscall,
+        CapabilityToken, SunlightSyscall, process_exit::ProcessExit,
     };
 
     const KBD_LABEL: u64 = 1;
     const OUTPUT_LABEL: u64 = 2;
+    const EXIT_LABEL: u64 = 3;
     const MAX_LINE: usize = 128;
     const MAX_OUT: usize = 64;
 
@@ -205,9 +206,10 @@ mod sunlight {
                 "groups" => self.cmd_groups(&args),
                 "chmod" => self.cmd_chmod(&args),
                 "chown" => self.cmd_chown(&args),
-                "help" => b"Builtins: whoami, id, useradd, userdel, groups, chmod, chown, help, echo, cat\n",
+                "help" => b"Builtins: whoami, id, uname, useradd, userdel, groups, chmod, chown, help, echo, cat\n",
                 "echo" => self.cmd_echo(&args),
                 "cat" => self.cmd_cat(&args),
+                "uname" => self.cmd_uname(&args),
                 "clear" => b"",
                 "exit" => b"exit\n",
                 _ => b"sshl: command not found\n",
@@ -228,6 +230,20 @@ mod sunlight {
 
         fn cmd_whoami(&self) -> &[u8] {
             &self.username[..self.username_len]
+        }
+
+        fn cmd_uname(&self, args: &[&str]) -> &[u8] {
+            match args.first().copied() {
+                None => b"SunlightOS",
+                Some("-s") => b"SunlightOS",
+                Some("-n") => b"sunlight",
+                Some("-r") => b"0.1.0",
+                Some("-v") => b"Phase 3.8",
+                Some("-m") | Some("-p") | Some("-i") => b"x86_64",
+                Some("-o") => b"SunlightOS",
+                Some("-a") => b"SunlightOS sunlight 0.1.0 Phase 3.8 x86_64 SunlightOS",
+                Some(_) => b"uname: invalid option\n",
+            }
         }
 
         fn cmd_id(&self, args: &[&str]) -> &[u8] {
@@ -658,12 +674,44 @@ mod sunlight {
         msg
     }
 
+    fn shell_name(shell_id: u64, buf: &mut [u8; 16]) -> &str {
+        let prefix = b"sshl";
+        buf[..prefix.len()].copy_from_slice(prefix);
+        let mut pos = prefix.len();
+        pos += fmt_u64_into(&mut buf[pos..], shell_id);
+        core::str::from_utf8(&buf[..pos]).unwrap_or("sshl0")
+    }
+
+    fn fmt_u64_into(buf: &mut [u8], val: u64) -> usize {
+        if val == 0 {
+            buf[0] = b'0';
+            return 1;
+        }
+        let mut tmp = [0u8; 20];
+        let mut n = 0usize;
+        let mut v = val;
+        while v > 0 && n < tmp.len() {
+            tmp[n] = b'0' + (v % 10) as u8;
+            v /= 10;
+            n += 1;
+        }
+        for i in 0..n {
+            buf[i] = tmp[n - 1 - i];
+        }
+        n
+    }
+
     #[no_mangle]
-    pub extern "C" fn _start() -> ! {
+    pub extern "C" fn _start(shell_id: u64) -> ! {
         debug_log("[TTY]  Shell: sshl v0.1.0 running");
 
         let ep = endpoint_create();
-        nameserver_register("sshl", ep);
+        let mut name_buf = [0u8; 16];
+        let name = shell_name(shell_id, &mut name_buf);
+        nameserver_register(name, ep);
+        if shell_id == 0 {
+            nameserver_register("sshl", ep);
+        }
         debug_log("[TTY]  sunshell registered as 'sshl'");
 
         let mut shell = Shell::new();
@@ -683,7 +731,12 @@ mod sunlight {
                 if out_len > 0 {
                     debug_log_cmd_output(&cmd_snap[..cmd_snap_len], &out[..out_len]);
                 }
-                pack_output(&out[..out_len])
+                if cmd_snap_len == 4 && &cmd_snap[..cmd_snap_len] == b"exit" {
+                    ipc_reply(IpcMsg::with_label(EXIT_LABEL));
+                    ProcessExit::exit(0);
+                } else {
+                    pack_output(&out[..out_len])
+                }
             } else {
                 IpcMsg::with_label(0)
             };

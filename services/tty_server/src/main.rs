@@ -26,8 +26,8 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, ipc_call,
-    nameserver_lookup, IpcMsg, KbdMsg, SpawnMsg, unpack_key_event,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
+    CapabilityToken, IpcMsg, KbdMsg, SpawnMsg, unpack_key_event,
 };
 use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
 
@@ -43,9 +43,41 @@ enum TtyState {
 
 const KBD_LABEL: u64 = 1;
 const OUTPUT_LABEL: u64 = 2;
+const EXIT_LABEL: u64 = 3;
 const PROMPT: &[u8] = b"root@sunlight:/$ ";
 const TERM_OUTPUT_MAX: usize = 2048;
 const INPUT_LINE_MAX: usize = 128;
+const PENDING_INPUT_MAX: usize = 128;
+const MAX_TABS: usize = 10;
+
+#[derive(Clone, Copy)]
+struct ShellTab {
+    shell_id: u64,
+    pid: u64,
+    cap: Option<CapabilityToken>,
+    output: [u8; TERM_OUTPUT_MAX],
+    output_len: usize,
+    input_line: [u8; INPUT_LINE_MAX],
+    input_line_len: usize,
+    pending: [u8; PENDING_INPUT_MAX],
+    pending_len: usize,
+}
+
+impl ShellTab {
+    const fn empty() -> Self {
+        Self {
+            shell_id: 0,
+            pid: 0,
+            cap: None,
+            output: [0; TERM_OUTPUT_MAX],
+            output_len: 0,
+            input_line: [0; INPUT_LINE_MAX],
+            input_line_len: 0,
+            pending: [0; PENDING_INPUT_MAX],
+            pending_len: 0,
+        }
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: u64) -> ! {
@@ -76,21 +108,19 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     login.focused = LoginField::Password;
 
     let mut state = TtyState::Login;
-    let mut sshl_cap: Option<sunlight_ipc::CapabilityToken> = None;
-    // Keys received in Shell state before sshl registers are buffered here and
-    // replayed to sshl once it comes up, preserving the injection sequence.
-    let mut pre_sshl_buf = [0u8; 128];
-    let mut pre_sshl_len = 0usize;
-    let mut term_output = [0u8; TERM_OUTPUT_MAX];
-    let mut term_output_len = 0usize;
-    let mut input_line = [0u8; INPUT_LINE_MAX];
-    let mut input_line_len = 0usize;
+    let mut spawn_cap: Option<CapabilityToken> = None;
+    let mut tabs = [ShellTab::empty(); MAX_TABS];
+    let mut tab_count = 0usize;
+    let mut active_tab = 0usize;
+    let mut next_shell_id = 0u64;
+    let mut logged_initial_spawn = false;
 
     let mut msg = ipc_recv(ep);
     let mut phase3_6_done = false;
     loop {
         match state {
             TtyState::Login => {
+                let mut logged_in = false;
                 if let Some(ascii) = key_ascii_from_msg(&msg) {
                     if login.focused == LoginField::Password {
                         debug_log_kbd_byte("[TTY] Key received in password field: ", ascii);
@@ -102,7 +132,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             debug_log("[SunlightOS] Phase 3.7 OK");
 
                             // Spawn sunshell
-                            let spawn_cap = match nameserver_lookup("spawn") {
+                            let cap = match nameserver_lookup("spawn") {
                                 Some(c) => c,
                                 None => {
                                     debug_log("[TTY]  spawn capability not found");
@@ -110,23 +140,19 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     continue;
                                 }
                             };
+                            spawn_cap = Some(cap);
 
-                            // Pack the full path across multiple 8-byte words.
-                            // pack_bytes() is limited to 8 bytes; "/bin/sshl" is 9.
-                            let (pw0, pw1, pw2, pw3) = pack_path(b"/bin/sshl");
-                            let spawn_msg = IpcMsg::with_label(SpawnMsg::SPAWN)
-                                .word(0, pw0)
-                                .word(1, pw1)
-                                .word(2, pw2)
-                                .word(3, pw3)
-                                .word(4, uid as u64)
-                                .word(5, gid as u64);
-                            let spawn_reply = ipc_call(spawn_cap, spawn_msg);
-                            if spawn_reply.label == SpawnMsg::REPLY {
-                                let shell_pid = spawn_reply.words[0];
-                                debug_log_spawn(&username[..username_len], shell_pid);
-                            } else {
-                                debug_log("[TTY]  Spawning /bin/sshl FAILED");
+                            if spawn_tab(
+                                &mut tabs,
+                                &mut tab_count,
+                                &mut active_tab,
+                                &mut next_shell_id,
+                                cap,
+                            ) {
+                                if let Some(tab) = active_shell_tab(&tabs, active_tab) {
+                                    debug_log_spawn(&username[..username_len], tab.pid);
+                                    logged_initial_spawn = true;
+                                }
                             }
 
                             // Don't spin-poll here — process_yield() doesn't context-switch;
@@ -135,100 +161,97 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             state = TtyState::Shell;
                             debug_log("[TTY]  Built-in shell ready");
                             if has_fb {
-                                render_shell_fb(
+                                render_active_shell_fb(
                                     fb_addr,
                                     fb32_w,
                                     fb32_h,
                                     fb32_p,
-                                    &term_output[..term_output_len],
-                                    &input_line[..input_line_len],
+                                    &tabs,
+                                    tab_count,
+                                    active_tab,
                                 );
                             }
+                            logged_in = true;
                         }
                         LoginResult::Locked => { debug_log("[TTY]  Login locked"); }
                         LoginResult::Pending => {}
                     }
                 }
                 login.tick();
-                if has_fb {
+                if has_fb && !logged_in {
                     render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p);
                 }
             }
             TtyState::Shell => {
                 let mut needs_render = false;
 
-                // Handle Ctrl combos for the TTY itself. This must be outside
-                // key_ascii_from_msg(), because Ctrl-modified keys are filtered
-                // before shell forwarding.
+                // Lazy lookup: try to find sshl once it registers after being spawned.
                 if msg.label == KbdMsg::KEY_EVENT {
                     let (_keycode, pressed, _shift, ctrl, _alt, ctrl_ascii) = unpack_key_event(msg.words[0]);
                     if pressed && ctrl {
                         if let Some(a) = ctrl_ascii {
-                            if a == b't' || a == b'T' {
-                                if !phase3_6_done {
-                                    debug_log("[TTY]  Ctrl+T test: new tab OK");
-                                    debug_log("[SunlightOS] Phase 3.6 OK");
-                                    phase3_6_done = true;
-                                }
+                            if handle_ctrl_key(
+                                a,
+                                &mut tabs,
+                                &mut tab_count,
+                                &mut active_tab,
+                                &mut next_shell_id,
+                                spawn_cap,
+                                &mut phase3_6_done,
+                            ) {
+                                needs_render = true;
                             }
                         }
                     }
                 }
 
-                // Lazy lookup: try to find sshl once it registers after being spawned.
-                if sshl_cap.is_none() {
-                    if let Some(cap) = nameserver_lookup("sshl") {
-                        sshl_cap = Some(cap);
-                        debug_log("[TTY]  sunshell endpoint found");
-                        // Replay any keys that arrived before sshl registered.
-                        for i in 0..pre_sshl_len {
-                            let b = pre_sshl_buf[i];
-                            send_key_to_shell(
-                                cap,
-                                b,
-                                &mut term_output,
-                                &mut term_output_len,
-                            );
-                        }
-                        pre_sshl_len = 0;
-                        needs_render = true;
-                    }
-                }
+                resolve_active_shell(&mut tabs, active_tab, &mut logged_initial_spawn);
 
                 if let Some(ascii) = key_ascii_from_msg(&msg) {
-                    update_input_echo(
-                        ascii,
-                        &mut term_output,
-                        &mut term_output_len,
-                        &mut input_line,
-                        &mut input_line_len,
-                    );
-                    needs_render = true;
-
-                    if let Some(cap) = sshl_cap {
-                        send_key_to_shell(
-                            cap,
+                    if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                        update_input_echo(
                             ascii,
-                            &mut term_output,
-                            &mut term_output_len,
+                            &mut tab.output,
+                            &mut tab.output_len,
+                            &mut tab.input_line,
+                            &mut tab.input_line_len,
                         );
-                    } else {
-                        // Buffer the key; replay to sshl once it registers.
-                        if pre_sshl_len < pre_sshl_buf.len() {
-                            pre_sshl_buf[pre_sshl_len] = ascii;
-                            pre_sshl_len += 1;
+                        needs_render = true;
+
+                        if let Some(cap) = tab.cap {
+                            let exited = send_key_to_shell(
+                                cap,
+                                ascii,
+                                &mut tab.output,
+                                &mut tab.output_len,
+                            );
+                            if exited {
+                                state = TtyState::Login;
+                                reset_login(&mut login);
+                                reset_tabs(&mut tabs, &mut tab_count, &mut active_tab);
+                                spawn_cap = None;
+                                logged_initial_spawn = false;
+                                if has_fb {
+                                    render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p);
+                                }
+                                continue;
+                            }
+                        } else if tab.pending_len < tab.pending.len() {
+                            tab.pending[tab.pending_len] = ascii;
+                            tab.pending_len += 1;
                         }
                     }
                 }
 
                 if has_fb && needs_render {
-                    render_shell_fb(
+                    render_active_shell_fb(
                         fb_addr,
                         fb32_w,
                         fb32_h,
                         fb32_p,
-                        &term_output[..term_output_len],
-                        &input_line[..input_line_len],
+                        &tabs,
+                        tab_count,
+                        active_tab,
                     );
                 }
             }
@@ -254,19 +277,191 @@ fn render_login_fb(login: &LoginScreen, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p
     }
 }
 
-fn render_shell_fb(fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32, output: &[u8], input_line: &[u8]) {
+fn render_active_shell_fb(
+    fb_addr: u64,
+    fb_w: u32,
+    fb_h: u32,
+    fb_p: u32,
+    tabs: &[ShellTab; MAX_TABS],
+    tab_count: usize,
+    active_tab: usize,
+) {
+    let (output, input_line) = active_shell_tab(tabs, active_tab)
+        .map(|tab| {
+            (
+                &tab.output[..tab.output_len],
+                &tab.input_line[..tab.input_line_len],
+            )
+        })
+        .unwrap_or((&[][..], &[][..]));
     unsafe {
         sunlight_tui::render_tty_shell(
             fb_addr as *mut u32,
             fb_w,
             fb_h,
             fb_p,
-            1,
-            0,
+            tab_count.max(1),
+            active_tab,
             output,
             input_line,
             PROMPT,
         );
+    }
+}
+
+fn reset_login(login: &mut LoginScreen) {
+    *login = LoginScreen::new();
+    for &b in b"root" {
+        login.username.push(b);
+    }
+    login.focused = LoginField::Password;
+}
+
+fn reset_tabs(tabs: &mut [ShellTab; MAX_TABS], tab_count: &mut usize, active_tab: &mut usize) {
+    for tab in tabs.iter_mut() {
+        *tab = ShellTab::empty();
+    }
+    *tab_count = 0;
+    *active_tab = 0;
+}
+
+fn active_shell_tab(tabs: &[ShellTab; MAX_TABS], active_tab: usize) -> Option<&ShellTab> {
+    tabs.get(active_tab).filter(|tab| tab.pid != 0)
+}
+
+fn active_shell_tab_mut(
+    tabs: &mut [ShellTab; MAX_TABS],
+    active_tab: usize,
+) -> Option<&mut ShellTab> {
+    tabs.get_mut(active_tab).filter(|tab| tab.pid != 0)
+}
+
+fn spawn_tab(
+    tabs: &mut [ShellTab; MAX_TABS],
+    tab_count: &mut usize,
+    active_tab: &mut usize,
+    next_shell_id: &mut u64,
+    spawn_cap: CapabilityToken,
+) -> bool {
+    if *tab_count >= MAX_TABS {
+        return false;
+    }
+
+    let shell_id = *next_shell_id;
+    *next_shell_id += 1;
+    let mut path = [0u8; 16];
+    let path_len = make_shell_path(shell_id, &mut path);
+    let (pw0, pw1, pw2, pw3) = pack_path(&path[..path_len]);
+    let spawn_msg = IpcMsg::with_label(SpawnMsg::SPAWN)
+        .word(0, pw0)
+        .word(1, pw1)
+        .word(2, pw2)
+        .word(3, pw3);
+    let spawn_reply = ipc_call(spawn_cap, spawn_msg);
+    if spawn_reply.label != SpawnMsg::REPLY {
+        debug_log("[TTY]  Spawning /bin/sshl FAILED");
+        return false;
+    }
+
+    let index = *tab_count;
+    tabs[index] = ShellTab::empty();
+    tabs[index].shell_id = shell_id;
+    tabs[index].pid = spawn_reply.words[0];
+    *active_tab = index;
+    *tab_count += 1;
+    true
+}
+
+fn handle_ctrl_key(
+    ascii: u8,
+    tabs: &mut [ShellTab; MAX_TABS],
+    tab_count: &mut usize,
+    active_tab: &mut usize,
+    next_shell_id: &mut u64,
+    spawn_cap: Option<CapabilityToken>,
+    phase3_6_done: &mut bool,
+) -> bool {
+    match ascii {
+        b't' | b'T' => {
+            if let Some(cap) = spawn_cap {
+                if spawn_tab(tabs, tab_count, active_tab, next_shell_id, cap) && !*phase3_6_done {
+                    debug_log("[TTY]  Ctrl+T test: new tab OK");
+                    debug_log("[SunlightOS] Phase 3.6 OK");
+                    *phase3_6_done = true;
+                }
+                return true;
+            }
+        }
+        b'w' | b'W' => {
+            close_active_tab(tabs, tab_count, active_tab);
+            return true;
+        }
+        b'1'..=b'9' => {
+            let idx = (ascii - b'1') as usize;
+            if idx < *tab_count {
+                *active_tab = idx;
+                return true;
+            }
+        }
+        b'0' => {
+            if *tab_count >= 10 {
+                *active_tab = 9;
+                return true;
+            }
+        }
+        _ => {}
+    }
+    false
+}
+
+fn close_active_tab(
+    tabs: &mut [ShellTab; MAX_TABS],
+    tab_count: &mut usize,
+    active_tab: &mut usize,
+) {
+    if *tab_count <= 1 {
+        return;
+    }
+
+    for i in *active_tab..(*tab_count - 1) {
+        tabs[i] = tabs[i + 1];
+    }
+    tabs[*tab_count - 1] = ShellTab::empty();
+    *tab_count -= 1;
+    if *active_tab >= *tab_count {
+        *active_tab = *tab_count - 1;
+    }
+}
+
+fn resolve_active_shell(
+    tabs: &mut [ShellTab; MAX_TABS],
+    active_tab: usize,
+    logged_initial_spawn: &mut bool,
+) {
+    let Some(tab) = active_shell_tab_mut(tabs, active_tab) else {
+        return;
+    };
+    if tab.cap.is_some() {
+        return;
+    }
+
+    let mut name = [0u8; 16];
+    let name_len = make_shell_name(tab.shell_id, &mut name);
+    let Some(name_str) = core::str::from_utf8(&name[..name_len]).ok() else {
+        return;
+    };
+    if let Some(cap) = nameserver_lookup(name_str) {
+        tab.cap = Some(cap);
+        if *logged_initial_spawn {
+            debug_log("[TTY]  sunshell endpoint found");
+            *logged_initial_spawn = false;
+        }
+        let pending_len = tab.pending_len;
+        for i in 0..pending_len {
+            let b = tab.pending[i];
+            let _ = send_key_to_shell(cap, b, &mut tab.output, &mut tab.output_len);
+        }
+        tab.pending_len = 0;
     }
 }
 
@@ -312,14 +507,18 @@ fn update_input_echo(
 }
 
 fn send_key_to_shell(
-    cap: sunlight_ipc::CapabilityToken,
+    cap: CapabilityToken,
     byte: u8,
     term_output: &mut [u8; TERM_OUTPUT_MAX],
     term_output_len: &mut usize,
-) {
+) -> bool {
     let kbd_msg = IpcMsg::with_label(KBD_LABEL).word(0, byte as u64);
     let reply = ipc_call(cap, kbd_msg);
+    if reply.label == EXIT_LABEL {
+        return true;
+    }
     append_shell_reply(term_output, term_output_len, &reply);
+    false
 }
 
 fn append_shell_reply(
@@ -484,6 +683,18 @@ fn pack_bytes(bytes: &[u8]) -> u64 {
         idx += 1;
     }
     out
+}
+
+fn make_shell_path(shell_id: u64, out: &mut [u8]) -> usize {
+    let prefix = b"/bin/sshl";
+    out[..prefix.len()].copy_from_slice(prefix);
+    prefix.len() + fmt_u64(&mut out[prefix.len()..], shell_id)
+}
+
+fn make_shell_name(shell_id: u64, out: &mut [u8]) -> usize {
+    let prefix = b"sshl";
+    out[..prefix.len()].copy_from_slice(prefix);
+    prefix.len() + fmt_u64(&mut out[prefix.len()..], shell_id)
 }
 
 /// Pack a path (up to 32 bytes) into four u64 words for IPC transport.

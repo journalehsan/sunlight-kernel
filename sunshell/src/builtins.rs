@@ -14,7 +14,11 @@ pub fn run(argv: &[&str]) -> BuiltinResult {
     match argv[0] {
         "exit" => BuiltinResult::Exit(0),
         "help" => {
-            println!("Built-in commands: help, exit, cd, pwd, echo");
+            println!("Built-in commands: help, exit, cd, pwd, echo, uname");
+            BuiltinResult::Done(0)
+        }
+        "uname" => {
+            println!("{}", uname_output(argv.get(1).copied()));
             BuiltinResult::Done(0)
         }
         "pwd" => match env::current_dir() {
@@ -51,3 +55,15 @@ pub fn run(argv: &[&str]) -> BuiltinResult {
     }
 }
 
+fn uname_output(arg: Option<&str>) -> &'static str {
+    match arg {
+        None | Some("-s") => "SunlightOS",
+        Some("-n") => "sunlight",
+        Some("-r") => "0.1.0",
+        Some("-v") => "Phase 3.8",
+        Some("-m") | Some("-p") | Some("-i") => "x86_64",
+        Some("-o") => "SunlightOS",
+        Some("-a") => "SunlightOS sunlight 0.1.0 Phase 3.8 x86_64 SunlightOS",
+        Some(_) => "uname: invalid option",
+    }
+}

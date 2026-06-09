@@ -20,7 +20,7 @@ pub enum SpawnError {
 /// For the kernel, we embed the sunshell binary and look it up by path.
 pub fn spawn_from_path(
     path: &str,
-    _argv: &[&str],
+    argv: &[&str],
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
     _caps: &mut CapabilityBroker,
@@ -28,8 +28,13 @@ pub fn spawn_from_path(
 ) -> Result<usize, SpawnError> {
     // Find the embedded binary for the requested path.
     // The kernel embeds service binaries via include_bytes!.
+    let shell_id = shell_id_from_path(path).ok_or(SpawnError::NotFound)?;
     let bytes = match path {
-        "/bin/sshl" | "/bin/sh" | "/bin/ssh" => {
+        "/bin/sh" | "/bin/ssh" => {
+            // SAFETY: These statics are embedded at kernel build time.
+            crate::SUNSHELL_ELF_BYTES
+        }
+        p if p.starts_with("/bin/sshl") => {
             // SAFETY: These statics are embedded at kernel build time.
             crate::SUNSHELL_ELF_BYTES
         }
@@ -65,9 +70,33 @@ pub fn spawn_from_path(
     }
 
     process.init_context(entry, super::layout::USER_STACK_TOP);
+    let _ = argv;
+    process.set_initial_args(shell_id, 0, 0, 0);
     let actual_pid = process.pid;
     let _id = sched.add_process(process);
 
     crate::serial_println!("[SPAWN] {} spawned pid={}", path, actual_pid);
     Ok(actual_pid)
+}
+
+fn shell_id_from_path(path: &str) -> Option<u64> {
+    match path {
+        "/bin/sh" | "/bin/ssh" | "/bin/sshl" => Some(0),
+        p if p.starts_with("/bin/sshl") => parse_u64(&p[9..]),
+        _ => None,
+    }
+}
+
+fn parse_u64(s: &str) -> Option<u64> {
+    if s.is_empty() {
+        return None;
+    }
+    let mut result = 0u64;
+    for &b in s.as_bytes() {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        result = result.checked_mul(10)?.checked_add((b - b'0') as u64)?;
+    }
+    Some(result)
 }
