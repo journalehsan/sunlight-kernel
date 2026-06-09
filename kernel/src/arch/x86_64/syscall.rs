@@ -319,13 +319,14 @@ fn endpoint_bind(token: u64) -> u64 {
 
 /// Syscall: ProcessExit
 /// rdi = exit code
-fn process_exit(_code: i32) -> u64 {
+fn process_exit(_code: i32) -> ! {
     sched::with_scheduler(|s| {
         s.current_process_mut().state = ProcessState::Finished;
     });
-    // Request an immediate reschedule.
     sched::request_reschedule();
-    0
+    loop {
+        core::arch::x86_64::_mm_pause()
+    }
 }
 
 /// Syscall: ProcessYield
