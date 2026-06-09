@@ -2,7 +2,10 @@
 #![no_main]
 
 use sunlight_fat::{FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
-use sunlight_fs::{FileHandle, FileType, FsError, RamFs, Vfs, INITRAMFS};
+use sunlight_fs::{
+    check_permission, parse_group, parse_passwd, Credential, FileHandle, FileType, FsError,
+    PermCheck, RamFs, Vfs, INITRAMFS,
+};
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg, VfsMsg,
 };
@@ -154,6 +157,9 @@ pub extern "C" fn _start() -> ! {
 
     // Phase 3.5 self-tests (/boot mount)
     run_phase35_tests(&mut state);
+
+    // Phase 3.7 self-tests (Unix permissions)
+    run_phase37_tests(&mut state);
 
     // IPC server loop
     let mut msg = ipc_recv(ep);
@@ -401,6 +407,111 @@ fn run_phase35_tests(state: &mut State) {
     }
 
     debug_log("[SunlightOS] Phase 3.5 OK");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3.7 self-tests (Unix permissions gate)
+// ---------------------------------------------------------------------------
+
+fn run_phase37_tests(state: &mut State) {
+    debug_log("[VFS]  Permission model: Unix uid/gid/mode");
+
+    // Read and parse /etc/passwd to count users
+    let mut passwd_buf = [0u8; 256];
+    let passwd_len = read_file_bytes(state, "/etc/passwd", &mut passwd_buf);
+    let (passwd_entries, passwd_count) = parse_passwd(&passwd_buf[..passwd_len]);
+    if passwd_count == 2 {
+        debug_log("[VFS]  /etc/passwd: 2 users loaded");
+    } else {
+        return;
+    }
+
+    // Read and parse /etc/group to count groups
+    let mut group_buf = [0u8; 256];
+    let group_len = read_file_bytes(state, "/etc/group", &mut group_buf);
+    let (_, group_count) = parse_group(&group_buf[..group_len]);
+    if group_count == 7 {
+        debug_log("[VFS]  /etc/group: 7 groups loaded");
+    } else {
+        return;
+    }
+
+    // Stat /etc/shadow and /etc/passwd for permission tests
+    let shadow_stat = match state.vfs.stat("/etc/shadow") {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let passwd_stat = match state.vfs.stat("/etc/passwd") {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    // Verify parsed root entry
+    let root_entry = match sunlight_fs::lookup_by_name(&passwd_entries[..passwd_count], b"root") {
+        Some(e) => e,
+        None => return,
+    };
+    if root_entry.uid != 0 || root_entry.gid != 0 {
+        return;
+    }
+
+    let root_cred = Credential { uid: 0, gid: 0 };
+    let user_cred = Credential { uid: 1000, gid: 1000 };
+
+    // Root bypasses all permission checks (including shadow which is mode 0600)
+    if check_permission(&shadow_stat, &root_cred, PermCheck::Read) {
+        debug_log("[VFS]  Permission check: root bypasses OK");
+    } else {
+        return;
+    }
+
+    // Regular user can read /etc/passwd (mode 0644, other-readable)
+    if check_permission(&passwd_stat, &user_cred, PermCheck::Read) {
+        debug_log("[VFS]  Permission check: user read /etc/passwd OK");
+    } else {
+        return;
+    }
+
+    // Regular user cannot read /etc/shadow (mode 0600, owner=root)
+    if !check_permission(&shadow_stat, &user_cred, PermCheck::Read) {
+        debug_log("[VFS]  Permission check: user read /etc/shadow EACCES OK");
+    } else {
+        return;
+    }
+}
+
+/// Read a file via internal handle_request calls into a caller-provided buffer.
+/// Returns the number of bytes written.
+fn read_file_bytes(state: &mut State, path: &str, out: &mut [u8]) -> usize {
+    let open_reply = handle_request(state, path_msg(VfsMsg::OPEN, path));
+    if open_reply.label != VfsMsg::REPLY || open_reply.words[0] != STATUS_OK {
+        return 0;
+    }
+    let handle = FileHandle(open_reply.words[1] as u32);
+    let mut total = 0usize;
+
+    loop {
+        if total >= out.len() {
+            break;
+        }
+        let r = handle_request(state, read_msg(handle, total, READ_REPLY_BYTES));
+        if r.label != VfsMsg::REPLY {
+            break;
+        }
+        let n = r.words[1] as usize;
+        if n == 0 {
+            break;
+        }
+        let to_copy = n.min(out.len() - total);
+        unpack_data(&r, &mut out[total..total + to_copy]);
+        total += to_copy;
+    }
+
+    let _ = handle_request(
+        state,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle.0 as u64),
+    );
+    total
 }
 
 // ---------------------------------------------------------------------------

@@ -36,8 +36,14 @@ case "$PHASE" in
         PASS_LABEL="Phase 3.6"
         NEED_DISK=false
         ;;
+    phase3.7)
+        EXPECTED_FILE="tools/tests/phase3_7.expected"
+        FINAL_MARKER="[SunlightOS] Phase 3.7 OK"
+        PASS_LABEL="Phase 3.7"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7"
         exit 2
         ;;
 esac
@@ -57,7 +63,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase3.6" ]]; then
+if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" ]]; then
     KERNEL_FEATURES="--features key_inject"
 fi
 cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1

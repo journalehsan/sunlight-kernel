@@ -61,8 +61,9 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
                     let result = login.handle_key_ascii(ascii);
                     match result {
-                        LoginResult::Success { username, username_len } => {
-                            debug_log("[TTY]  Login success: root");
+                        LoginResult::Success { username, username_len, uid, gid } => {
+                            debug_log_login_success(&username[..username_len], uid, gid);
+                            debug_log("[SunlightOS] Phase 3.7 OK");
                             debug_log("[TTY]  Built-in shell ready");
                             mux = Some(TermMux::new(&username[..username_len]));
                             state = TtyState::Shell;
@@ -223,4 +224,48 @@ fn log_shell_output(data: &[u8]) {
 fn trim_newline(data: &[u8]) -> &[u8] {
     let end = if data.ends_with(b"\n") { data.len() - 1 } else { data.len() };
     &data[..end]
+}
+
+/// Log "[TTY]  Login success: <username> (uid=<uid>, gid=<gid>)".
+fn debug_log_login_success(username: &[u8], uid: u32, gid: u32) {
+    let mut buf = [0u8; 128];
+    let prefix = b"[TTY]  Login success: ";
+    let mut pos = prefix.len();
+    buf[..pos].copy_from_slice(prefix);
+    let ulen = username.len().min(64);
+    buf[pos..pos + ulen].copy_from_slice(&username[..ulen]);
+    pos += ulen;
+    let mid = b" (uid=";
+    buf[pos..pos + mid.len()].copy_from_slice(mid);
+    pos += mid.len();
+    pos += fmt_u32(&mut buf[pos..], uid);
+    let sep = b", gid=";
+    buf[pos..pos + sep.len()].copy_from_slice(sep);
+    pos += sep.len();
+    pos += fmt_u32(&mut buf[pos..], gid);
+    buf[pos] = b')';
+    pos += 1;
+    // SAFETY: only ASCII digits and caller-supplied username (valid ASCII).
+    if let Ok(s) = core::str::from_utf8(&buf[..pos]) {
+        debug_log(s);
+    }
+}
+
+fn fmt_u32(buf: &mut [u8], val: u32) -> usize {
+    if val == 0 {
+        buf[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 10];
+    let mut n = 0;
+    let mut v = val;
+    while v > 0 {
+        tmp[n] = b'0' + (v % 10) as u8;
+        v /= 10;
+        n += 1;
+    }
+    for i in 0..n {
+        buf[i] = tmp[n - 1 - i];
+    }
+    n
 }

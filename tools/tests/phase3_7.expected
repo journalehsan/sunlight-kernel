@@ -1,0 +1,11 @@
+# Phase 3.7 Unix permissions + /etc/passwd migration gate
+[VFS]  Permission model: Unix uid/gid/mode
+[VFS]  /etc/passwd: 2 users loaded
+[VFS]  /etc/group: 7 groups loaded
+[VFS]  Permission check: root bypasses OK
+[VFS]  Permission check: user read /etc/passwd OK
+[VFS]  Permission check: user read /etc/shadow EACCES OK
+[TTY]  Login: reading /etc/passwd via VFS
+[TTY]  Login: auth from /etc/shadow
+[TTY]  Login success: root (uid=0, gid=0)
+[SunlightOS] Phase 3.7 OK

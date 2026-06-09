@@ -11,10 +11,38 @@ pub enum FileType {
     Directory,
 }
 
+/// Unix permission-bit constants.
+pub mod mode {
+    pub const S_IRUSR: u16 = 0o400;
+    pub const S_IWUSR: u16 = 0o200;
+    pub const S_IXUSR: u16 = 0o100;
+    pub const S_IRGRP: u16 = 0o040;
+    pub const S_IWGRP: u16 = 0o020;
+    pub const S_IXGRP: u16 = 0o010;
+    pub const S_IROTH: u16 = 0o004;
+    pub const S_IWOTH: u16 = 0o002;
+    pub const S_IXOTH: u16 = 0o001;
+
+    pub const S_IFDIR: u16 = 0o040_000;
+    pub const S_IFREG: u16 = 0o100_000;
+
+    pub const DIR_755:  u16 = S_IFDIR | 0o755;
+    pub const FILE_644: u16 = S_IFREG | 0o644;
+    pub const FILE_600: u16 = S_IFREG | 0o600;
+    pub const FILE_755: u16 = S_IFREG | 0o755;
+    pub const FILE_700: u16 = S_IFREG | 0o700;
+    pub const DIR_700:  u16 = S_IFDIR | 0o700;
+    pub const DIR_1777: u16 = S_IFDIR | 0o1777;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileStat {
     pub file_type: FileType,
     pub size: usize,
+    pub uid: u32,
+    pub gid: u32,
+    pub mode: u16,
+    pub nlinks: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -193,21 +221,16 @@ mod tests {
     use super::*;
     use crate::RamEntry;
 
+    use crate::vfs::mode;
+
     static ROOT_ENTRIES: &[RamEntry] = &[
-        RamEntry {
-            path: "/etc/motd",
-            data: b"Welcome to SunlightOS\n",
-        },
-        RamEntry {
-            path: "/etc/sunlight/users",
-            data: b"root:root\n",
-        },
+        RamEntry::file("/etc/motd",    0, 0, mode::FILE_644, b"Welcome to SunlightOS\n"),
+        RamEntry::file("/etc/passwd",  0, 0, mode::FILE_644, b"root:x:0:0:root:/root:/bin/sh\n"),
     ];
 
-    static BOOT_ENTRIES: &[RamEntry] = &[RamEntry {
-        path: "/HELLO.TXT",
-        data: b"boot volume\n",
-    }];
+    static BOOT_ENTRIES: &[RamEntry] = &[
+        RamEntry::file("/HELLO.TXT", 0, 0, mode::FILE_644, b"boot volume\n"),
+    ];
 
     #[test]
     fn routes_root_mount_open_read_stat() {

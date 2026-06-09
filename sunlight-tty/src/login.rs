@@ -1,9 +1,10 @@
 //! Login screen state machine.
 //!
 //! Renders a simple login form with username/password fields, authenticates
-//! against /etc/sunlight/users via VFS IPC.
+//! against /etc/passwd + /etc/shadow via VFS IPC.
 
 use sunlight_ipc::{IpcMsg, VfsMsg, nameserver_lookup, ipc_call};
+use sunlight_fs::{parse_passwd, parse_shadow, lookup_by_name};
 
 pub const MAX_FIELD_LEN: usize = 64;
 
@@ -51,7 +52,7 @@ pub enum LoginField {
 
 pub enum LoginResult {
     Pending,
-    Success { username: [u8; 64], username_len: usize },
+    Success { username: [u8; 64], username_len: usize, uid: u32, gid: u32 },
     Locked,
 }
 
@@ -124,21 +125,18 @@ impl LoginScreen {
     }
 
     fn attempt_login(&mut self) -> LoginResult {
-        let user = self.username.as_str();
-        let pass = self.password.as_str();
+        let user = &self.username.buf[..self.username.len];
+        let pass = &self.password.buf[..self.password.len];
 
-        let valid = verify_login(user, pass);
+        let cred = verify_login(user, pass);
 
-        if valid {
+        if let Some((uid, gid)) = cred {
             let ulen = self.username.len.min(63);
             let mut uname = [0u8; 64];
             uname[..ulen].copy_from_slice(&self.username.buf[..ulen]);
             self.message = "Login successful.";
             self.attempts = 0;
-            LoginResult::Success {
-                username: uname,
-                username_len: ulen,
-            }
+            LoginResult::Success { username: uname, username_len: ulen, uid, gid }
         } else {
             self.attempts += 1;
             self.password.clear();
@@ -165,44 +163,73 @@ impl LoginScreen {
     }
 }
 
-/// Verify login credentials against /etc/sunlight/users via VFS IPC.
-/// Falls back to hardcoded root:root and user:user if VFS is unavailable.
-fn verify_login(username: &str, password: &str) -> bool {
-    let users_data = match read_vfs_file("/etc/sunlight/users") {
-        Some(data) => data,
+/// Verify login credentials via /etc/passwd + /etc/shadow.
+/// Returns Some((uid, gid)) on success, None on failure.
+/// Falls back to hardcoded credentials if VFS is unavailable.
+fn verify_login(username: &[u8], password: &[u8]) -> Option<(u32, u32)> {
+    use sunlight_ipc::debug_log;
+
+    let vfs_cap = match nameserver_lookup("vfs") {
+        Some(c) => c,
         None => {
-            // Fallback: hardcoded users
-            return (username == "root" && password == "root")
-                || (username == "user" && password == "user");
+            return fallback_auth(username, password);
         }
     };
 
-    let text = match core::str::from_utf8(&users_data) {
-        Ok(s) => s,
-        Err(_) => return false,
+    debug_log("[TTY]  Login: reading /etc/passwd via VFS");
+
+    let (passwd_data, passwd_len) = match read_vfs_bytes(vfs_cap, "/etc/passwd") {
+        Some(pair) => pair,
+        None => return fallback_auth(username, password),
     };
 
-    for line in text.split('\n') {
-        let line = line.trim();
-        if line.is_empty() {
+    let (passwd_entries, passwd_count) = parse_passwd(&passwd_data[..passwd_len]);
+    let entry = lookup_by_name(&passwd_entries[..passwd_count], username)?;
+    let uid = entry.uid;
+    let gid = entry.gid;
+
+    debug_log("[TTY]  Login: auth from /etc/shadow");
+
+    let (shadow_data, shadow_len) = match read_vfs_bytes(vfs_cap, "/etc/shadow") {
+        Some(pair) => pair,
+        None => return fallback_auth(username, password),
+    };
+
+    let (shadow_entries, shadow_count) = parse_shadow(&shadow_data[..shadow_len]);
+
+    for i in 0..shadow_count {
+        let s = &shadow_entries[i];
+        let slen = s.username.iter().position(|&b| b == 0).unwrap_or(64);
+        if slen != username.len() || &s.username[..slen] != username {
             continue;
         }
-        if let Some(colon) = line.find(':') {
-            let u = &line[..colon];
-            let p = &line[colon + 1..];
-            if u == username && p == password {
-                return true;
-            }
+        let plen = s.password.iter().position(|&b| b == 0).unwrap_or(128);
+        if plen == password.len() && &s.password[..plen] == password {
+            return Some((uid, gid));
         }
+        return None;
     }
 
-    false
+    None
 }
 
-/// Read a file from VFS, returning the data in a fixed-size buffer.
-fn read_vfs_file(path: &str) -> Option<[u8; 256]> {
-    let vfs_cap = nameserver_lookup("vfs")?;
+/// Hardcoded fallback used when VFS is unavailable.
+fn fallback_auth(username: &[u8], password: &[u8]) -> Option<(u32, u32)> {
+    if username == b"root" && password == b"root" {
+        return Some((0, 0));
+    }
+    if username == b"user" && password == b"user" {
+        return Some((1000, 1000));
+    }
+    None
+}
 
+/// Read a file from VFS into a fixed 512-byte buffer.
+/// Returns (buffer, bytes_read) on success.
+fn read_vfs_bytes(
+    vfs_cap: sunlight_ipc::CapabilityToken,
+    path: &str,
+) -> Option<([u8; 512], usize)> {
     let open_msg = path_msg(VfsMsg::OPEN, path);
     let reply = ipc_call(vfs_cap, open_msg);
     if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
@@ -210,7 +237,7 @@ fn read_vfs_file(path: &str) -> Option<[u8; 256]> {
     }
     let handle = reply.words[1] as u32;
 
-    let mut data = [0u8; 256];
+    let mut data = [0u8; 512];
     let mut total = 0usize;
 
     loop {
@@ -238,10 +265,9 @@ fn read_vfs_file(path: &str) -> Option<[u8; 256]> {
         total += n;
     }
 
-    // Close
     let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
 
-    Some(data)
+    Some((data, total))
 }
 
 fn path_msg(label: u64, path: &str) -> IpcMsg {

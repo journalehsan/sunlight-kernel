@@ -1,11 +1,31 @@
-use crate::vfs::{DirIter, FileHandle, FileStat, FileSystem, FileType};
+use crate::vfs::{mode, DirIter, FileHandle, FileStat, FileSystem, FileType};
 use crate::{path, FsError};
 
 pub const RAMFS_MAX_HANDLES: usize = 32;
 
 pub struct RamEntry {
-    pub path: &'static str,
-    pub data: &'static [u8],
+    pub path:   &'static str,
+    pub data:   &'static [u8],
+    pub uid:    u32,
+    pub gid:    u32,
+    pub mode:   u16,
+    pub is_dir: bool,
+}
+
+impl RamEntry {
+    pub const fn file(
+        path: &'static str,
+        uid: u32,
+        gid: u32,
+        file_mode: u16,
+        data: &'static [u8],
+    ) -> Self {
+        Self { path, data, uid, gid, mode: file_mode, is_dir: false }
+    }
+
+    pub const fn dir(path: &'static str, uid: u32, gid: u32, dir_mode: u16) -> Self {
+        Self { path, data: b"", uid, gid, mode: dir_mode, is_dir: true }
+    }
 }
 
 pub struct RamFs {
@@ -17,7 +37,7 @@ impl RamFs {
     pub const fn new(entries: &'static [RamEntry]) -> Self {
         Self {
             entries,
-            handles: [None; RAMFS_MAX_HANDLES],
+            handles: [const { None }; RAMFS_MAX_HANDLES],
         }
     }
 
@@ -51,6 +71,9 @@ impl RamFs {
 impl FileSystem for RamFs {
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
         let entry_idx = self.entry_idx(path)?;
+        if self.entries[entry_idx].is_dir {
+            return Err(FsError::IsDir);
+        }
         self.alloc_handle(entry_idx)
     }
 
@@ -83,9 +106,14 @@ impl FileSystem for RamFs {
 
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
         let entry_idx = self.entry_idx(path)?;
+        let e = &self.entries[entry_idx];
         Ok(FileStat {
-            file_type: FileType::File,
-            size: self.entries[entry_idx].data.len(),
+            file_type: if e.is_dir { FileType::Directory } else { FileType::File },
+            size: e.data.len(),
+            uid: e.uid,
+            gid: e.gid,
+            mode: e.mode,
+            nlinks: if e.is_dir { 2 } else { 1 },
         })
     }
 
@@ -96,13 +124,31 @@ impl FileSystem for RamFs {
 }
 
 pub static INITRAMFS: &[RamEntry] = &[
-    RamEntry {
-        path: "/etc/motd",
-        data: b"Welcome to SunlightOS\n",
-    },
-    RamEntry {
-        path: "/etc/sunlight/session.toml",
-        data: br#"
+    // Directories
+    RamEntry::dir("/",                 0,    0,    mode::DIR_755),
+    RamEntry::dir("/etc",              0,    0,    mode::DIR_755),
+    RamEntry::dir("/etc/sunlight",     0,    0,    mode::DIR_755),
+    RamEntry::dir("/bin",              0,    0,    mode::DIR_755),
+    RamEntry::dir("/root",             0,    0,    mode::DIR_700),
+    RamEntry::dir("/home",             0,    0,    mode::DIR_755),
+    RamEntry::dir("/home/user",        1000, 1000, mode::DIR_755),
+    RamEntry::dir("/tmp",              0,    0,    mode::DIR_1777),
+    RamEntry::dir("/var",              0,    0,    mode::DIR_755),
+    RamEntry::dir("/var/log",          0,    0,    mode::DIR_755),
+
+    // System config files (world-readable)
+    RamEntry::file("/etc/passwd",  0, 0, mode::FILE_644,
+        include_bytes!("../etc/passwd")),
+    RamEntry::file("/etc/group",   0, 0, mode::FILE_644,
+        include_bytes!("../etc/group")),
+    RamEntry::file("/etc/shadow",  0, 0, mode::FILE_600,
+        include_bytes!("../etc/shadow")),
+    RamEntry::file("/etc/motd",    0, 0, mode::FILE_644,
+        b"Welcome to SunlightOS\n"),
+    RamEntry::file("/etc/hostname",0, 0, mode::FILE_644,
+        b"sunlight\n"),
+    RamEntry::file("/etc/sunlight/session.toml", 0, 0, mode::FILE_644,
+        br#"
 [default]
 mode = "terminal"
 
@@ -114,16 +160,9 @@ theme = "sunlight-dark"
 [multi_user]
 enabled = false
 max_ttys = 6
-"#,
-    },
-    RamEntry {
-        path: "/etc/sunlight/users",
-        data: b"root:root\nuser:user\n",
-    },
-    RamEntry {
-        path: "/bin/sh",
-        data: b"#!/sunlight/builtin-sh\n",
-    },
+"#),
+    RamEntry::file("/bin/sh",      0, 0, mode::FILE_755,
+        b"#!/sunlight/builtin-sh\n"),
 ];
 
 #[cfg(test)]
@@ -131,14 +170,8 @@ mod tests {
     use super::*;
 
     static TEST_ENTRIES: &[RamEntry] = &[
-        RamEntry {
-            path: "/etc/motd",
-            data: b"Welcome to SunlightOS\n",
-        },
-        RamEntry {
-            path: "/bin/sh",
-            data: b"shell",
-        },
+        RamEntry::file("/etc/motd", 0, 0, mode::FILE_644, b"Welcome to SunlightOS\n"),
+        RamEntry::file("/bin/sh",   0, 0, mode::FILE_755, b"shell"),
     ];
 
     #[test]
@@ -175,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn stat_reports_file_size() {
+    fn stat_reports_file_size_and_permissions() {
         let mut fs = RamFs::new(TEST_ENTRIES);
 
         assert_eq!(
@@ -183,6 +216,10 @@ mod tests {
             Ok(FileStat {
                 file_type: FileType::File,
                 size: 5,
+                uid: 0,
+                gid: 0,
+                mode: mode::FILE_755,
+                nlinks: 1,
             })
         );
     }
@@ -218,5 +255,26 @@ mod tests {
         }
 
         assert_eq!(fs.open("/bin/sh"), Err(FsError::TooManyOpenFiles));
+    }
+
+    static DIR_ENTRIES: &[RamEntry] = &[
+        RamEntry::dir("/", 0, 0, mode::DIR_755),
+        RamEntry::dir("/etc", 0, 0, mode::DIR_755),
+        RamEntry::file("/etc/motd", 0, 0, mode::FILE_644, b"hello\n"),
+    ];
+
+    #[test]
+    fn open_dir_returns_isdir() {
+        let mut fs = RamFs::new(DIR_ENTRIES);
+        assert_eq!(fs.open("/etc"), Err(FsError::IsDir));
+    }
+
+    #[test]
+    fn stat_dir_returns_directory_type() {
+        let mut fs = RamFs::new(DIR_ENTRIES);
+        let stat = fs.stat("/etc").unwrap();
+        assert_eq!(stat.file_type, FileType::Directory);
+        assert_eq!(stat.mode, mode::DIR_755);
+        assert_eq!(stat.nlinks, 2);
     }
 }
