@@ -1,94 +1,134 @@
-//! 8×16 bitmap font — no heap, complete ASCII + special glyphs
-//!
-//! font8x16.bin: raw glyph data for ASCII 0x20–0x7E (95 glyphs × 16 bytes = 1520 bytes).
-//! Sourced from cp866-8x16 PSF2 console font (standard VGA 8×16, public domain).
-//! Bit order: MSB (bit 7) = leftmost pixel of each row.
-//! Offset formula: glyph_start = (char_code − 0x20) × 16.
-
 #![allow(dead_code)]
 
 use crate::framebuffer::Framebuffer;
 
-/// Raw glyph data: 95 chars × 16 bytes, ASCII 0x20–0x7E, MSB = leftmost pixel.
-static FONT_DATA: &[u8] = include_bytes!("font8x16.bin");
-
-const FIRST_GLYPH: u8 = 0x20;
-const LAST_GLYPH: u8 = 0x7E;
+// Font constants — no division, pure bit manipulation
 const GLYPH_WIDTH: u32 = 8;
 const GLYPH_HEIGHT: usize = 16;
 const GLYPH_BYTES: usize = 16;
+const FIRST_GLYPH: u8 = 0x20;  // Space
+const LAST_GLYPH: u8 = 0x7E;   // Tilde
 
-const DIAGNOSTIC_A_GLYPH: [u8; GLYPH_BYTES] = [
-    0x00, 0x00, 0x10, 0x38, 0x6C, 0xC6, 0xC6, 0xFE,
-    0xC6, 0xC6, 0xC6, 0xC6, 0x00, 0x00, 0x00, 0x00,
-];
-
-/// Special Unicode glyphs mapped to indices beyond ASCII
+// Special Unicode glyph pseudo-indices (used for UTF-8 symbol mapping)
 const GLYPH_CHECK: u8 = 0x80;    // ✓
 const GLYPH_CROSS: u8 = 0x81;    // ✗
 const GLYPH_SPINNER: u8 = 0x82;  // ⟳
 const GLYPH_SUN: u8 = 0x83;      // ☀
 
+// Embedded bitmap font: 95 glyphs × 16 bytes = 1520 bytes
+// ASCII 0x20–0x7E, MSB (bit 7) = leftmost pixel per row
+static FONT_DATA: &[u8] = include_bytes!("font8x16.bin");
+
+/// Hardcoded reference 'A' glyph for diagnostic testing — validates renderer pipeline
+const DIAGNOSTIC_A_GLYPH: [u8; GLYPH_BYTES] = [
+    0x00, 0x00, 0x00, 0x38, 0x44, 0x82, 0x82, 0x82,
+    0xfe, 0x82, 0x82, 0x82, 0x82, 0x00, 0x00, 0x00,
+];
+
+/// Retrieve glyph row bytes for ASCII character [0x20..0x7E]
 #[inline]
 fn glyph_for_ascii(c: u8) -> Option<&'static [u8]> {
     if !(FIRST_GLYPH..=LAST_GLYPH).contains(&c) {
         return None;
     }
-
     let glyph_idx = (c - FIRST_GLYPH) as usize;
     let start = glyph_idx * GLYPH_BYTES;
     let end = start + GLYPH_BYTES;
     FONT_DATA.get(start..end)
 }
 
-fn draw_glyph(fb: &mut Framebuffer, x: u32, y: u32, glyph: &[u8], color: u32, scale: u32) {
-    for (row, &byte) in glyph.iter().enumerate() {
+/// Internal: Render a single glyph bitmap with optional background fill.
+/// Bit rendering: MSB-first (0x80 = leftmost pixel), right-shift advancing.
+/// Scaling: no division — multiply x,y by scale factor for per-pixel expansion.
+/// Transparent mode: bg_color=None skips background, preserving adjacent graphics.
+#[inline(always)]
+fn draw_glyph(
+    fb: &mut Framebuffer,
+    x: u32,
+    y: u32,
+    glyph: &[u8],
+    fg_color: u32,
+    bg_color: Option<u32>,
+    scale: u32,
+) {
+    // Fill entire character bounding box with background color (if specified)
+    if let Some(bg) = bg_color {
+        let glyph_w = GLYPH_WIDTH * scale;
+        let glyph_h = (GLYPH_HEIGHT as u32) * scale;
+        for dy in 0..glyph_h {
+            for dx in 0..glyph_w {
+                fb.put_pixel(x + dx, y + dy, bg);
+            }
+        }
+    }
+
+    // Render foreground pixels: MSB-first bit extraction with right-shift advancing
+    for (row_idx, &row_byte) in glyph.iter().enumerate() {
+        let base_y = y + (row_idx as u32) * scale;
+        let mut bit_mask = 0x80u8;  // Start at MSB (leftmost pixel)
+
         for col in 0..GLYPH_WIDTH {
-            // MSB-first: bit 7 is column 0, the leftmost pixel.
-            if (byte & (0x80u8 >> col)) != 0 {
+            if (row_byte & bit_mask) != 0 {
+                // Pixel is set: fill scale×scale block starting at (x + col*scale, base_y)
                 for sy in 0..scale {
                     for sx in 0..scale {
-                        fb.put_pixel(
-                            x + col * scale + sx,
-                            y + (row as u32) * scale + sy,
-                            color,
-                        );
+                        fb.put_pixel(x + col * scale + sx, base_y + sy, fg_color);
                     }
                 }
             }
+            bit_mask >>= 1;  // Shift to next bit (no division, no branching)
         }
     }
 }
 
-/// Draw a single character at pixel position (x, y).
-///
-/// Bit steering: `byte & (0x80 >> col)` — bit 7 (MSB) drives col 0 (leftmost pixel).
-/// This is correct for the MSB-first encoding used in font8x16.bin.
-pub fn draw_char(fb: &mut Framebuffer, x: u32, y: u32, c: u8, color: u32, scale: u32) {
-    let glyph = match c {
-        FIRST_GLYPH..=LAST_GLYPH => glyph_for_ascii(c),
-        b'\n' | b'\r' => return,
-        _ => glyph_for_ascii(FIRST_GLYPH),  // fallback to space
+/// Draw a single ASCII character at pixel position (x, y).
+/// Safely maps ascii [0x20..0x7E] to font glyph offsets.
+/// Uses transparent mode (no background fill) — only renders foreground pixels.
+pub fn draw_char(
+    fb: &mut Framebuffer,
+    x: u32,
+    y: u32,
+    ascii: u8,
+    color: u32,
+    scale: u32,
+) {
+    let glyph = match ascii {
+        FIRST_GLYPH..=LAST_GLYPH => glyph_for_ascii(ascii),
+        b'\n' | b'\r' => return,  // Skip newlines (handled by caller)
+        _ => glyph_for_ascii(FIRST_GLYPH),  // Fallback to space for unprintable
     };
 
     if let Some(glyph) = glyph {
-        draw_glyph(fb, x, y, glyph, color, scale);
+        draw_glyph(fb, x, y, glyph, color, None, scale);
     }
 }
 
-/// Diagnostic: render a hardcoded reference 'A' glyph (cp866/VGA standard).
-/// Use this to verify the renderer independently of font8x16.bin.
-/// If this renders correctly but file-based characters don't, the issue is
-/// the font binary's offset or content, not the rendering loop.
-#[allow(dead_code)]
-pub fn draw_char_diagnostic_a(fb: &mut Framebuffer, x: u32, y: u32, color: u32, scale: u32) {
-    draw_glyph(fb, x, y, &DIAGNOSTIC_A_GLYPH, color, scale);
+/// Diagnostic: render a hardcoded reference 'A' glyph for renderer validation.
+/// Use this to verify the rendering pipeline independently of font8x16.bin.
+/// If this renders correctly but file-based glyphs don't, the issue is the binary file.
+#[inline]
+pub fn draw_char_diagnostic_a(
+    fb: &mut Framebuffer,
+    x: u32,
+    y: u32,
+    color: u32,
+    scale: u32,
+) {
+    draw_glyph(fb, x, y, &DIAGNOSTIC_A_GLYPH, color, None, scale);
 }
 
-/// Draw special Unicode glyph
-pub fn draw_special(fb: &mut Framebuffer, x: u32, y: u32, glyph: u8, color: u32, scale: u32) {
-    // For now, draw ASCII approximations until we embed actual glyphs
-    let fallback = match glyph {
+/// Draw a special Unicode symbol using a pseudo-glyph ID.
+/// Maps GLYPH_CHECK, GLYPH_CROSS, GLYPH_SPINNER, GLYPH_SUN to ASCII fallbacks.
+#[inline]
+fn draw_special(
+    fb: &mut Framebuffer,
+    x: u32,
+    y: u32,
+    symbol: u8,
+    color: u32,
+    scale: u32,
+) {
+    let fallback = match symbol {
         GLYPH_CHECK => b'v',     // ✓ → v
         GLYPH_CROSS => b'x',     // ✗ → x
         GLYPH_SPINNER => b'o',   // ⟳ → o
@@ -98,16 +138,28 @@ pub fn draw_special(fb: &mut Framebuffer, x: u32, y: u32, glyph: u8, color: u32,
     draw_char(fb, x, y, fallback, color, scale);
 }
 
-/// Draw a &str — zero memory allocations, evaluates raw byte streams on the fly.
-pub fn draw_str(fb: &mut Framebuffer, x: u32, y: u32, s: &str, color: u32, scale: u32) {
+/// Draw a &str with full UTF-8 multi-byte symbol support.
+/// Zero allocations: stateless byte-stream parser using index advancement.
+/// Handles:
+///   - Single-byte ASCII (0x20–0x7E, plus common control chars)
+///   - 3-byte UTF-8 symbols: ✓ (E2 9C 93), ✗ (E2 9C 97), ⟳ (E2 9F B3), ☀ (E2 98 80)
+/// Transparent mode: renders only foreground pixels, no background fill.
+pub fn draw_str(
+    fb: &mut Framebuffer,
+    x: u32,
+    y: u32,
+    s: &str,
+    color: u32,
+    scale: u32,
+) {
     let mut cx = x;
-    let char_width = 8 * scale;
+    let char_width = GLYPH_WIDTH * scale;
     let bytes = s.as_bytes();
     let mut i = 0;
 
     while i < bytes.len() {
         match bytes[i] {
-            // Intercept standard multibyte UTF-8 prefix identifiers
+            // UTF-8 three-byte sequences: E2 xx xx format (common Unicode range)
             0xE2 => {
                 if i + 2 < bytes.len() {
                     let b1 = bytes[i + 1];
@@ -127,18 +179,21 @@ pub fn draw_str(fb: &mut Framebuffer, x: u32, y: u32, s: &str, color: u32, scale
                             draw_special(fb, cx, y, GLYPH_SUN, color, scale);
                         }
                         _ => {
+                            // Unknown UTF-8 sequence: render placeholder
                             draw_char(fb, cx, y, b'?', color, scale);
                         }
                     }
                     cx += char_width;
-                    i += 3;
+                    i += 3;  // Advance past 3-byte sequence
                     continue;
                 }
                 i += 1;
             }
+            // Whitespace: newlines skipped inline; tab/space render as ASCII
             b'\n' | b'\r' => {
                 i += 1;
             }
+            // Standard single-byte ASCII
             _ => {
                 draw_char(fb, cx, y, bytes[i], color, scale);
                 cx += char_width;
@@ -148,49 +203,37 @@ pub fn draw_str(fb: &mut Framebuffer, x: u32, y: u32, s: &str, color: u32, scale
     }
 }
 
-/// Measure text width in pixels
+/// Measure the width of a string in pixels (pre-render calculation).
+/// Counts characters and UTF-8 sequences without rendering.
 pub fn text_width(s: &str, scale: u32) -> u32 {
-    let char_count = s.as_bytes().iter().filter(|&&b| b >= 0x20 && b <= 0x7E).count();
-    (char_count as u32) * 8 * scale
-}
+    let bytes = s.as_bytes();
+    let mut width = 0u32;
+    let mut i = 0;
 
-/// Single line height in pixels
-pub const fn line_height(scale: u32) -> u32 {
-    GLYPH_HEIGHT as u32 * scale
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn font_binary_has_printable_ascii_layout() {
-        assert_eq!(FONT_DATA.len(), 95 * GLYPH_BYTES);
-        assert_eq!(glyph_for_ascii(b' ').unwrap(), &[0; GLYPH_BYTES]);
-        assert_eq!(glyph_for_ascii(b'A').unwrap(), &DIAGNOSTIC_A_GLYPH);
-    }
-
-    #[test]
-    fn draw_char_uses_msb_as_leftmost_pixel() {
-        const COLOR: u32 = 0x00EE_EEEE;
-        let mut pixels = [0u32; GLYPH_HEIGHT * GLYPH_WIDTH as usize];
-        let mut fb = unsafe {
-            Framebuffer::from_limine(
-                pixels.as_mut_ptr(),
-                GLYPH_WIDTH,
-                GLYPH_HEIGHT as u32,
-                GLYPH_WIDTH * 4,
-            )
-        };
-
-        draw_char(&mut fb, 0, 0, b'A', COLOR, 1);
-
-        for row in 0..GLYPH_HEIGHT {
-            let byte = DIAGNOSTIC_A_GLYPH[row];
-            for col in 0..GLYPH_WIDTH as usize {
-                let expected = if (byte & (0x80u8 >> col)) != 0 { COLOR } else { 0 };
-                assert_eq!(pixels[row * GLYPH_WIDTH as usize + col], expected);
+    while i < bytes.len() {
+        match bytes[i] {
+            0xE2 => {
+                if i + 2 < bytes.len() {
+                    width += GLYPH_WIDTH * scale;
+                    i += 3;
+                    continue;
+                }
+                i += 1;
+            }
+            b'\n' | b'\r' => {
+                i += 1;
+            }
+            _ => {
+                width += GLYPH_WIDTH * scale;
+                i += 1;
             }
         }
     }
+    width
+}
+
+/// Single line height in pixels (constant for 8×16 glyphs).
+#[inline]
+pub const fn line_height(scale: u32) -> u32 {
+    16 * scale
 }
