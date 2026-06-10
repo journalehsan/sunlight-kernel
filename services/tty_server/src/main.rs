@@ -44,6 +44,7 @@ enum TtyState {
 const KBD_LABEL: u64 = 1;
 const OUTPUT_LABEL: u64 = 2;
 const EXIT_LABEL: u64 = 3;
+const DRAIN_LABEL: u64 = 4;
 const PROMPT: &[u8] = b"root@sunlight:/$ ";
 const TERM_OUTPUT_MAX: usize = 2048;
 const INPUT_LINE_MAX: usize = 128;
@@ -518,11 +519,12 @@ fn send_key_to_shell(
     if reply.label == EXIT_LABEL {
         return true;
     }
-    append_shell_reply(term_output, term_output_len, &reply);
+    append_shell_reply(cap, term_output, term_output_len, &reply);
     false
 }
 
 fn append_shell_reply(
+    cap: CapabilityToken,
     term_output: &mut [u8; TERM_OUTPUT_MAX],
     term_output_len: &mut usize,
     reply: &IpcMsg,
@@ -531,6 +533,33 @@ fn append_shell_reply(
         return;
     }
 
+    append_one_chunk(term_output, term_output_len, reply);
+
+    // Drain additional chunks if the shell has long output pending.
+    // Word 1 of the reply carries the number of remaining bytes after this
+    // chunk. The first chunk is small (≤40 bytes) so its reply has word
+    // layout: word 0 = length, word 1 = remaining, words 2.. = data.
+    let mut remaining = reply.words[1] as usize;
+    let mut seq: u64 = 1;
+    let mut safety: usize = 64; // hard cap to avoid infinite drain loops
+    while remaining > 0 && safety > 0 {
+        let drain_msg = IpcMsg::with_label(DRAIN_LABEL).word(0, seq);
+        let next = ipc_call(cap, drain_msg);
+        if next.label != OUTPUT_LABEL {
+            break;
+        }
+        append_one_chunk(term_output, term_output_len, &next);
+        remaining = next.words[1] as usize;
+        seq += 1;
+        safety -= 1;
+    }
+}
+
+fn append_one_chunk(
+    term_output: &mut [u8; TERM_OUTPUT_MAX],
+    term_output_len: &mut usize,
+    reply: &IpcMsg,
+) {
     let len = (reply.words[0] as usize).min(48);
     if len == 0 {
         return;
@@ -538,7 +567,7 @@ fn append_shell_reply(
 
     let mut bytes = [0u8; 48];
     for i in 0..len {
-        let word_idx = 1 + i / 8;
+        let word_idx = 2 + i / 8;
         let byte_idx = i % 8;
         bytes[i] = ((reply.words[word_idx] >> (byte_idx * 8)) & 0xff) as u8;
     }

@@ -558,48 +558,77 @@ fn map_tty_framebuffer(
 /// Called when the `key_inject` feature is enabled.
 #[cfg(feature = "key_inject")]
 fn setup_key_injection() {
-    // Scancode sequence for Phase 3.6 test:
-    // 1. Login: "root" + Enter, "root" + Enter
-    // 2. whoami + Enter
-    // 3. cat /etc/motd + Enter
-    // 4. Ctrl+T (new tab)
-    // 5. echo hello + Enter (with Ctrl+1 to switch back)
     use crate::arch::x86_64::keyboard;
 
-    // Minimal sequence: password login + phase-3.8 commands + Ctrl+T for phase-3.6.
-    // cat /etc/motd and echo hello were removed — they're not required by any
-    // test gate and each added 14–25 IPC round-trips to an already-slow path.
-    // Ctrl+T is filtered by tty_server (ctrl=true → not forwarded to sshl).
-    let sequence: [u8; 65] = [
-        // Password: r, o, o, t, Enter  (username is pre-filled "root")
-        0x13, 0x18, 0x18, 0x14, 0x1C,
-        // whoami + Enter
-        0x11, 0x23, 0x18, 0x1E, 0x32, 0x17, 0x1C,
-        // Ctrl+T (phase 3.6 gate): Ctrl_down, t_press, t_release, Ctrl_release
-        0x1D, 0x14, 0x94, 0x9D,
-        // id + Enter
-        0x17, 0x20, 0x1C,
-        // useradd testuser + Enter
-        0x16, 0x1F, 0x12, 0x13, 0x1E, 0x20, 0x20, 0x39,
-        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
-        // id testuser + Enter
-        0x17, 0x20, 0x39,
-        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
-        // userdel testuser + Enter
-        0x16, 0x1F, 0x12, 0x13, 0x20, 0x12, 0x26, 0x39,
-        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
-    ];
+    // Detect which phase the active test gate expects by inspecting the
+    // environment. We support a small list of named sequences. The default
+    // (when no env var is set) is the phase 3.8 sequence used by the boot gate.
+    let phase = option_env!("SUNLIGHT_INJECT_PHASE").unwrap_or("phase3.8");
+
+    let sequence: [u8; 256] = match phase {
+        "phase3.9" => build_phase3_9_sequence(),
+        _ => build_phase3_8_sequence(),
+    };
+    let len = sequence
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(sequence.len());
 
     // SAFETY: single-threaded kernel boot, no concurrent access
     unsafe {
-        let len = sequence.len().min(keyboard::KEY_INJECT_DATA.len());
         keyboard::KEY_INJECT_DATA[..len].copy_from_slice(&sequence[..len]);
         keyboard::KEY_INJECT_LEN = len;
         keyboard::KEY_INJECT_IDX = 0;
         keyboard::KEY_INJECT_ENABLED = true;
     }
 
-    serial_println!("[KBD]  Key injection enabled ({} scancodes)", sequence.len());
+    serial_println!("[KBD]  Key injection enabled (phase={}, {} scancodes)", phase, len);
+}
+
+/// Phase 3.8 injection: login + whoami + id + useradd/id/userdel.
+/// Scancodes:
+///   Password: r,o,o,t,Enter
+///   whoami+Enter
+///   Ctrl+T (phase 3.6 gate trigger)
+///   id+Enter
+///   useradd testuser+Enter
+///   id testuser+Enter
+///   userdel testuser+Enter
+#[cfg(feature = "key_inject")]
+fn build_phase3_8_sequence() -> [u8; 256] {
+    let mut s = [0u8; 256];
+    let codes: [u8; 65] = [
+        0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
+        0x11, 0x23, 0x18, 0x1E, 0x32, 0x17, 0x1C, // whoami+Enter
+        0x1D, 0x14, 0x94, 0x9D, // Ctrl+T (phase 3.6 marker)
+        0x17, 0x20, 0x1C, // id+Enter
+        0x16, 0x1F, 0x12, 0x13, 0x1E, 0x20, 0x20, 0x39, // useradd testuser
+        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
+        0x17, 0x20, 0x39, // id testuser
+        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
+        0x16, 0x1F, 0x12, 0x13, 0x20, 0x12, 0x26, 0x39, // userdel testuser
+        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
+    ];
+    s[..codes.len()].copy_from_slice(&codes);
+    s
+}
+
+/// Phase 3.9 injection: phase 3.8 baseline + sysfetch + hostnamectl.
+#[cfg(feature = "key_inject")]
+fn build_phase3_9_sequence() -> [u8; 256] {
+    let mut s = [0u8; 256];
+    let p38 = build_phase3_8_sequence();
+    let p38_len = p38.iter().position(|&b| b == 0).unwrap_or(p38.len());
+    s[..p38_len].copy_from_slice(&p38[..p38_len]);
+
+    // Append sysfetch + Enter after phase 3.8 commands
+    let extra: [u8; 27] = [
+        0x1F, 0x15, 0x1F, 0x21, 0x12, 0x14, 0x2E, 0x23, 0x1C, // sysfetch + Enter
+        0x23, 0x18, 0x1F, 0x14, 0x31, 0x1E, 0x32, 0x12, 0x2E, 0x14, 0x26, 0x1C, // hostnamectl + Enter
+        0x1F, 0x15, 0x1F, 0x21, 0x12, 0x14, // sysfetch + (no Enter; we are done)
+    ];
+    s[p38_len..p38_len + extra.len()].copy_from_slice(&extra);
+    s
 }
 
 /// Helper to log a string to the splash debug log (non-static).

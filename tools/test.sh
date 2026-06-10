@@ -48,8 +48,14 @@ case "$PHASE" in
         PASS_LABEL="Phase 3.8"
         NEED_DISK=false
         ;;
+    phase3.9)
+        EXPECTED_FILE="tools/tests/phase3_9.expected"
+        FINAL_MARKER="[TTY]  hostnamectl invoked"
+        PASS_LABEL="Phase 3.9"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9"
         exit 2
         ;;
 esac
@@ -70,10 +76,14 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" ]]; then
+if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" ]]; then
     KERNEL_FEATURES="--features key_inject"
 fi
-cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
+EXTRA_ENV=()
+if [[ "$PHASE" == "phase3.9" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
+fi
+env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
 
 # --- Step 3: Ensure Limine is available ---
 if [[ ! -d "$LIMINE_DIR" ]]; then
