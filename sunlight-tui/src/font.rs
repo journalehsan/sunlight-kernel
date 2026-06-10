@@ -98,25 +98,51 @@ pub fn draw_special(fb: &mut Framebuffer, x: u32, y: u32, glyph: u8, color: u32,
     draw_char(fb, x, y, fallback, color, scale);
 }
 
-/// Draw a &str — no allocation, no iterators over String
+/// Draw a &str — zero memory allocations, evaluates raw byte streams on the fly.
 pub fn draw_str(fb: &mut Framebuffer, x: u32, y: u32, s: &str, color: u32, scale: u32) {
     let mut cx = x;
     let char_width = 8 * scale;
-    
-    for byte in s.as_bytes() {
-        match *byte {
-            // Special Unicode chars (UTF-8 encoded)
+    let bytes = s.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        match bytes[i] {
+            // Intercept standard multibyte UTF-8 prefix identifiers
             0xE2 => {
-                // Peek next bytes for UTF-8 sequences
-                // For now, skip complex UTF-8, draw fallback
-                cx += char_width;
+                if i + 2 < bytes.len() {
+                    let b1 = bytes[i + 1];
+                    let b2 = bytes[i + 2];
+
+                    match (b1, b2) {
+                        (0x9C, 0x93) => { // ✓ (E2 9C 93)
+                            draw_special(fb, cx, y, GLYPH_CHECK, color, scale);
+                        }
+                        (0x9C, 0x97) => { // ✗ (E2 9C 97)
+                            draw_special(fb, cx, y, GLYPH_CROSS, color, scale);
+                        }
+                        (0x9F, 0xB3) => { // ⟳ (E2 9F B3)
+                            draw_special(fb, cx, y, GLYPH_SPINNER, color, scale);
+                        }
+                        (0x98, 0x80) => { // ☀ (E2 98 80)
+                            draw_special(fb, cx, y, GLYPH_SUN, color, scale);
+                        }
+                        _ => {
+                            draw_char(fb, cx, y, b'?', color, scale);
+                        }
+                    }
+                    cx += char_width;
+                    i += 3;
+                    continue;
+                }
+                i += 1;
             }
-            b'\n' => {
-                // Not handled in single-line draw
+            b'\n' | b'\r' => {
+                i += 1;
             }
             _ => {
-                draw_char(fb, cx, y, *byte, color, scale);
+                draw_char(fb, cx, y, bytes[i], color, scale);
                 cx += char_width;
+                i += 1;
             }
         }
     }
