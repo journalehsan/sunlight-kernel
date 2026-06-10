@@ -121,6 +121,129 @@ static BUMP: BumpAllocator = BumpAllocator;
 #[cfg(feature = "sunlight")]
 #[no_main]
 mod sunlight {
+    use core::fmt::{self, Write};
+
+    /// Stack-allocated buffer for formatting strings without heap allocation.
+    pub struct StackBuffer<const N: usize> {
+        buf: [u8; N],
+        pos: usize,
+    }
+
+    impl<const N: usize> StackBuffer<N> {
+        pub fn new() -> Self {
+            Self { buf: [0; N], pos: 0 }
+        }
+
+        pub fn as_bytes(&self) -> &[u8] {
+            &self.buf[..self.pos]
+        }
+
+        pub fn len(&self) -> usize {
+            self.pos
+        }
+    }
+
+    impl<const N: usize> Write for StackBuffer<N> {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            let bytes = s.as_bytes();
+            if self.pos + bytes.len() > N {
+                return Err(fmt::Error);
+            }
+            self.buf[self.pos..self.pos + bytes.len()].copy_from_slice(bytes);
+            self.pos += bytes.len();
+            Ok(())
+        }
+    }
+
+    /// Emit standard ANSI 8-color palette bars
+    fn append_color_bar<const N: usize>(w: &mut StackBuffer<N>, bright: bool) -> fmt::Result {
+        let base = if bright { 100 } else { 40 };
+        for i in 0..8 {
+            write!(w, "\x1B[{}m   ", base + i)?;
+        }
+        write!(w, "\x1B[0m")?;
+        Ok(())
+    }
+
+    /// Format uptime in human-readable form (zero-allocation variant for sysfetch)
+    fn sysfetch_format_uptime<const N: usize>(w: &mut StackBuffer<N>, uptime_secs: u64) -> fmt::Result {
+        let hours = uptime_secs / 3600;
+        let mins = (uptime_secs / 60) % 60;
+        let secs = uptime_secs % 60;
+        if hours > 0 {
+            write!(w, "{}h {}m {}s", hours, mins, secs)?;
+        } else if mins > 0 {
+            write!(w, "{}m {}s", mins, secs)?;
+        } else {
+            write!(w, "{}s", secs)?;
+        }
+        Ok(())
+    }
+
+    /// Generate sysfetch output using zero-allocation StackBuffer
+    fn sysfetch_generate(
+        username: &str,
+        kernel_version: &str,
+        uptime_secs: u64,
+        mem_used_mb: u32,
+        mem_total_mb: u32,
+    ) -> ([u8; 512], usize) {
+        let mut out_buf = [0u8; 512];
+        let mut writer = StackBuffer::<512>::new();
+
+        let cyan = "\x1B[1;36m";
+        let reset = "\x1B[0m";
+        let gray = "\x1B[1;30m";
+
+        let _ = writeln!(writer, "{}{}@sunlightos{}", cyan, username, reset);
+        let _ = writeln!(writer, "{}─────────────────────────────────{}", gray, reset);
+        let _ = writeln!(writer);
+
+        let _ = write!(writer, "{}OS:{} ", cyan, reset);
+        let _ = writeln!(writer, "SunlightOS Alpha (x86_64)");
+
+        let _ = write!(writer, "{}Kernel:{} ", cyan, reset);
+        let _ = writeln!(writer, "{}", kernel_version);
+
+        let _ = write!(writer, "{}Uptime:{} ", cyan, reset);
+        let _ = sysfetch_format_uptime(&mut writer, uptime_secs);
+        let _ = writeln!(writer);
+
+        let _ = write!(writer, "{}Memory:{} ", cyan, reset);
+        let _ = writeln!(
+            writer,
+            "{} MiB / {} MiB ({}%)",
+            mem_used_mb,
+            mem_total_mb,
+            if mem_total_mb > 0 {
+                (mem_used_mb as u32 * 100) / mem_total_mb
+            } else {
+                0
+            }
+        );
+
+        let _ = write!(writer, "{}Shell:{} ", cyan, reset);
+        let _ = writeln!(writer, "SunShell v0.1.0");
+
+        let _ = write!(writer, "{}Architecture:{} ", cyan, reset);
+        let _ = writeln!(writer, "x86_64");
+
+        let _ = writeln!(writer);
+        let _ = write!(writer, "    ");
+        let _ = append_color_bar(&mut writer, false);
+        let _ = writeln!(writer);
+
+        let _ = write!(writer, "    ");
+        let _ = append_color_bar(&mut writer, true);
+        let _ = writeln!(writer);
+
+        let rendered = writer.as_bytes();
+        let limit = rendered.len().min(512);
+        out_buf[..limit].copy_from_slice(&rendered[..limit]);
+
+        (out_buf, limit)
+    }
+
     use sunlight_ipc::{
         debug_log, endpoint_create, ipc_reply_and_wait, nameserver_register,
         nameserver_lookup, ipc_call, get_init_cap, IpcMsg, InitMsg, VfsMsg,
@@ -130,8 +253,11 @@ mod sunlight {
     const KBD_LABEL: u64 = 1;
     const OUTPUT_LABEL: u64 = 2;
     const EXIT_LABEL: u64 = 3;
+    const DRAIN_LABEL: u64 = 4;
     const MAX_LINE: usize = 128;
     const MAX_OUT: usize = 64;
+    const LONG_OUT_MAX: usize = 1024;
+    const LONG_OUT_CHUNK: usize = 48;
 
     struct Shell {
         line: [u8; MAX_LINE],
@@ -206,7 +332,9 @@ mod sunlight {
                 "groups" => self.cmd_groups(&args),
                 "chmod" => self.cmd_chmod(&args),
                 "chown" => self.cmd_chown(&args),
-                "help" => b"Builtins: whoami, id, uname, useradd, userdel, groups, chmod, chown, help, echo, cat\n",
+                "sysfetch" => self.cmd_sysfetch(),
+                "hostnamectl" => self.cmd_hostnamectl(),
+                "help" => b"Builtins: whoami, id, uname, useradd, userdel, groups, chmod, chown, sysfetch, hostnamectl, help, echo, cat\n",
                 "echo" => self.cmd_echo(&args),
                 "cat" => self.cmd_cat(&args),
                 "uname" => self.cmd_uname(&args),
@@ -480,6 +608,86 @@ mod sunlight {
                 b"chown: failed\n"
             }
         }
+
+        fn cmd_sysfetch(&self) -> &[u8] {
+            debug_log("[TTY]  sysfetch invoked");
+            unsafe {
+                LONG_OUT_ACTIVE = true;
+            }
+
+            let (buf, len) = sysfetch_generate(
+                "root",
+                "SunlightOS 0.1.0",
+                1337,  // uptime seconds
+                240,   // memory used (MiB)
+                256,   // memory total (MiB)
+            );
+
+            // Copy into long output buffer for chunked transmission
+            unsafe {
+                let bytes = &buf[..len];
+                let space = LONG_OUT_MAX - LONG_OUT_LEN;
+                let to_copy = bytes.len().min(space);
+                LONG_OUT_BUF[LONG_OUT_LEN..LONG_OUT_LEN + to_copy]
+                    .copy_from_slice(&bytes[..to_copy]);
+                LONG_OUT_LEN += to_copy;
+            }
+
+            b""
+        }
+
+        fn cmd_hostnamectl(&self) -> &[u8] {
+            debug_log("[TTY]  hostnamectl invoked");
+            unsafe {
+                LONG_OUT_ACTIVE = true;
+            }
+            push_section_header("Static hostname:");
+            push_line("ehsan-21ahs1qm00");
+            push_blank();
+            push_section_header("Icon name:");
+            push_line("computer-laptop");
+            push_blank();
+            push_section_header("Chassis:");
+            push_line("laptop");
+            push_blank();
+            push_section_header("Chassis Asset Tag:");
+            push_line("No Asset Tag");
+            push_blank();
+            push_section_header("Machine ID:");
+            push_line("658603116ba54b838da9b2f28c288257");
+            push_blank();
+            push_section_header("Boot ID:");
+            push_line("35763b833f844053ae2fd0af6eabba4c");
+            push_blank();
+            push_section_header("Operating System:");
+            push_line("SunlightOS 0.1 (QEMU)");
+            push_blank();
+            push_section_header("Kernel:");
+            push_line("SunlightOS 0.1.0");
+            push_blank();
+            push_section_header("Architecture:");
+            push_line("x86-64");
+            push_blank();
+            push_section_header("Hardware Vendor:");
+            push_line("QEMU");
+            push_blank();
+            push_section_header("Hardware Model:");
+            push_line("Standard PC (i440FX + PIIX, 1996)");
+            push_blank();
+            push_section_header("Hardware SKU:");
+            push_line("SUNLIGHT-VM-1");
+            push_blank();
+            push_section_header("Firmware Version:");
+            push_line("Limine BIOS (1.17)");
+            push_blank();
+            push_section_header("Firmware Date:");
+            push_line("Tue 2024-01-01");
+            push_blank();
+            push_section_header("Firmware Age:");
+            push_line("1y 6month 0w 0d");
+            push_blank();
+            b""
+        }
     }
 
     fn copy_out(data: &[u8]) -> ([u8; MAX_OUT], usize) {
@@ -487,6 +695,59 @@ mod sunlight {
         let len = data.len().min(buf.len());
         buf[..len].copy_from_slice(&data[..len]);
         (buf, len)
+    }
+
+    fn push_art_line(line: &[u8]) {
+        long_out_push_byte(b' ');
+        long_out_push_byte(b' ');
+        for &b in line.iter() {
+            if b != b' ' {
+                long_out_push_str("\x1b[33m");
+                long_out_push_byte(b);
+                long_out_push_str("\x1b[0m");
+            } else {
+                long_out_push_byte(b' ');
+            }
+        }
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_label_value(label: &str, value: &str) {
+        long_out_push_str("  \x1b[1m");
+        long_out_push_str(label);
+        long_out_push_str("\x1b[0m ");
+        long_out_push_str(value);
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_label_value_bytes(label: &[u8], value: &[u8]) {
+        long_out_push_str("  \x1b[1m");
+        for &b in label.iter() { long_out_push_byte(b); }
+        long_out_push_str("\x1b[0m ");
+        for &b in value.iter() { long_out_push_byte(b); }
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_section_header(title: &str) {
+        long_out_push_str("\x1b[33m\x1b[1m[");
+        long_out_push_str(title);
+        long_out_push_str("]\x1b[0m\n");
+    }
+
+    fn push_blank() {
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_line(s: &str) {
+        long_out_push_str(s);
+        long_out_push_byte(b'\n');
+    }
+
+    fn format_uptime(total_s: u64) -> alloc::string::String {
+        let h = total_s / 3600;
+        let m = (total_s % 3600) / 60;
+        let s = total_s % 60;
+        alloc::format!("{}h {}m {}s", h, m, s)
     }
 
     fn read_file(vfs_cap: CapabilityToken, path: &str) -> alloc::vec::Vec<u8> {
@@ -654,11 +915,13 @@ mod sunlight {
     }
 
     fn pack_output(data: &[u8]) -> IpcMsg {
-        let mut msg = IpcMsg::with_label(OUTPUT_LABEL).word(0, data.len() as u64);
+        let mut msg = IpcMsg::with_label(OUTPUT_LABEL)
+            .word(0, data.len() as u64)
+            .word(1, 0);
         let mut word = 0u64;
         let mut byte_idx = 0;
-        let mut word_idx = 1;
-        for &b in data.iter().take(48) {
+        let mut word_idx = 2;
+        for &b in data.iter().take(40) {
             word |= (b as u64) << (byte_idx * 8);
             byte_idx += 1;
             if byte_idx == 8 {
@@ -666,6 +929,31 @@ mod sunlight {
                 word = 0;
                 byte_idx = 0;
                 word_idx += 1;
+                if word_idx >= 8 { break; }
+            }
+        }
+        if byte_idx > 0 && word_idx < 8 {
+            msg = msg.word(word_idx, word);
+        }
+        msg
+    }
+
+    fn pack_long_output(data: &[u8], more_remaining: usize) -> IpcMsg {
+        let mut msg = IpcMsg::with_label(OUTPUT_LABEL)
+            .word(0, data.len() as u64)
+            .word(1, more_remaining as u64);
+        let mut word = 0u64;
+        let mut byte_idx = 0;
+        let mut word_idx = 2;
+        for &b in data.iter() {
+            word |= (b as u64) << (byte_idx * 8);
+            byte_idx += 1;
+            if byte_idx == 8 {
+                msg = msg.word(word_idx, word);
+                word = 0;
+                byte_idx = 0;
+                word_idx += 1;
+                if word_idx >= 8 { break; }
             }
         }
         if byte_idx > 0 && word_idx < 8 {
@@ -701,6 +989,37 @@ mod sunlight {
         n
     }
 
+    static mut LONG_OUT_BUF: [u8; LONG_OUT_MAX] = [0; LONG_OUT_MAX];
+    static mut LONG_OUT_LEN: usize = 0;
+    static mut LONG_OUT_ACTIVE: bool = false;
+
+    fn long_out_reset() {
+        unsafe {
+            LONG_OUT_LEN = 0;
+            LONG_OUT_ACTIVE = false;
+        }
+    }
+
+    fn long_out_push_str(s: &str) {
+        unsafe {
+            let bytes = s.as_bytes();
+            let space = LONG_OUT_MAX - LONG_OUT_LEN;
+            let to_copy = bytes.len().min(space);
+            LONG_OUT_BUF[LONG_OUT_LEN..LONG_OUT_LEN + to_copy]
+                .copy_from_slice(&bytes[..to_copy]);
+            LONG_OUT_LEN += to_copy;
+        }
+    }
+
+    fn long_out_push_byte(b: u8) {
+        unsafe {
+            if LONG_OUT_LEN < LONG_OUT_MAX {
+                LONG_OUT_BUF[LONG_OUT_LEN] = b;
+                LONG_OUT_LEN += 1;
+            }
+        }
+    }
+
     #[no_mangle]
     pub extern "C" fn _start(shell_id: u64) -> ! {
         debug_log("[TTY]  Shell: sshl v0.1.0 running");
@@ -717,6 +1036,34 @@ mod sunlight {
         let mut shell = Shell::new();
         let mut msg = ipc_reply_and_wait(ep, IpcMsg::with_label(0));
         loop {
+            // Drain request from tty_server: send the next chunk of long output
+            if msg.label == DRAIN_LABEL {
+                let total = unsafe { LONG_OUT_LEN };
+                let offset = msg.words[0] as usize * LONG_OUT_CHUNK;
+                if offset >= total {
+                    // Nothing more — return empty marker
+                    msg = ipc_reply_and_wait(
+                        ep,
+                        IpcMsg::with_label(OUTPUT_LABEL)
+                            .word(0, 0)
+                            .word(1, 0),
+                    );
+                    continue;
+                }
+                let remaining = total - offset;
+                let chunk_size = remaining.min(LONG_OUT_CHUNK);
+                let mut tmp = [0u8; LONG_OUT_CHUNK];
+                unsafe {
+                    tmp[..chunk_size]
+                        .copy_from_slice(&LONG_OUT_BUF[offset..offset + chunk_size]);
+                }
+                let more_remaining = remaining.saturating_sub(chunk_size);
+                let chunk_reply = pack_long_output(&tmp[..chunk_size], more_remaining);
+                msg = ipc_reply_and_wait(ep, chunk_reply);
+                continue;
+            }
+
+            // Kbd event
             let reply = if msg.label == KBD_LABEL {
                 let byte = msg.words[0] as u8;
                 // Snapshot the full command (with args) BEFORE handle_byte
@@ -727,12 +1074,22 @@ mod sunlight {
                 if is_enter {
                     cmd_snap[..cmd_snap_len].copy_from_slice(&shell.line[..cmd_snap_len]);
                 }
+                long_out_reset();
                 let (out, out_len) = shell.handle_byte(byte);
                 if out_len > 0 {
                     debug_log_cmd_output(&cmd_snap[..cmd_snap_len], &out[..out_len]);
                 }
                 if cmd_snap_len == 4 && &cmd_snap[..cmd_snap_len] == b"exit" {
                     IpcMsg::with_label(EXIT_LABEL)
+                } else if unsafe { LONG_OUT_ACTIVE } {
+                    let total = unsafe { LONG_OUT_LEN };
+                    let chunk_size = total.min(LONG_OUT_CHUNK);
+                    let mut tmp = [0u8; LONG_OUT_CHUNK];
+                    unsafe {
+                        tmp[..chunk_size].copy_from_slice(&LONG_OUT_BUF[..chunk_size]);
+                    }
+                    let more_remaining = total.saturating_sub(chunk_size);
+                    pack_long_output(&tmp[..chunk_size], more_remaining)
                 } else {
                     pack_output(&out[..out_len])
                 }
