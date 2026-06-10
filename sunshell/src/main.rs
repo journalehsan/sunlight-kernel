@@ -119,130 +119,12 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 #[cfg(feature = "sunlight")]
+mod sysfetch;
+
+#[cfg(feature = "sunlight")]
 #[no_main]
 mod sunlight {
-    use core::fmt::{self, Write};
-
-    /// Stack-allocated buffer for formatting strings without heap allocation.
-    pub struct StackBuffer<const N: usize> {
-        buf: [u8; N],
-        pos: usize,
-    }
-
-    impl<const N: usize> StackBuffer<N> {
-        pub fn new() -> Self {
-            Self { buf: [0; N], pos: 0 }
-        }
-
-        pub fn as_bytes(&self) -> &[u8] {
-            &self.buf[..self.pos]
-        }
-
-        pub fn len(&self) -> usize {
-            self.pos
-        }
-    }
-
-    impl<const N: usize> Write for StackBuffer<N> {
-        fn write_str(&mut self, s: &str) -> fmt::Result {
-            let bytes = s.as_bytes();
-            if self.pos + bytes.len() > N {
-                return Err(fmt::Error);
-            }
-            self.buf[self.pos..self.pos + bytes.len()].copy_from_slice(bytes);
-            self.pos += bytes.len();
-            Ok(())
-        }
-    }
-
-    /// Emit standard ANSI 8-color palette bars
-    fn append_color_bar<const N: usize>(w: &mut StackBuffer<N>, bright: bool) -> fmt::Result {
-        let base = if bright { 100 } else { 40 };
-        for i in 0..8 {
-            write!(w, "\x1B[{}m   ", base + i)?;
-        }
-        write!(w, "\x1B[0m")?;
-        Ok(())
-    }
-
-    /// Format uptime in human-readable form (zero-allocation variant for sysfetch)
-    fn sysfetch_format_uptime<const N: usize>(w: &mut StackBuffer<N>, uptime_secs: u64) -> fmt::Result {
-        let hours = uptime_secs / 3600;
-        let mins = (uptime_secs / 60) % 60;
-        let secs = uptime_secs % 60;
-        if hours > 0 {
-            write!(w, "{}h {}m {}s", hours, mins, secs)?;
-        } else if mins > 0 {
-            write!(w, "{}m {}s", mins, secs)?;
-        } else {
-            write!(w, "{}s", secs)?;
-        }
-        Ok(())
-    }
-
-    /// Generate sysfetch output using zero-allocation StackBuffer
-    fn sysfetch_generate(
-        username: &str,
-        kernel_version: &str,
-        uptime_secs: u64,
-        mem_used_mb: u32,
-        mem_total_mb: u32,
-    ) -> ([u8; 512], usize) {
-        let mut out_buf = [0u8; 512];
-        let mut writer = StackBuffer::<512>::new();
-
-        let cyan = "\x1B[1;36m";
-        let reset = "\x1B[0m";
-        let gray = "\x1B[1;30m";
-
-        let _ = writeln!(writer, "{}{}@sunlightos{}", cyan, username, reset);
-        let _ = writeln!(writer, "{}─────────────────────────────────{}", gray, reset);
-        let _ = writeln!(writer);
-
-        let _ = write!(writer, "{}OS:{} ", cyan, reset);
-        let _ = writeln!(writer, "SunlightOS Alpha (x86_64)");
-
-        let _ = write!(writer, "{}Kernel:{} ", cyan, reset);
-        let _ = writeln!(writer, "{}", kernel_version);
-
-        let _ = write!(writer, "{}Uptime:{} ", cyan, reset);
-        let _ = sysfetch_format_uptime(&mut writer, uptime_secs);
-        let _ = writeln!(writer);
-
-        let _ = write!(writer, "{}Memory:{} ", cyan, reset);
-        let _ = writeln!(
-            writer,
-            "{} MiB / {} MiB ({}%)",
-            mem_used_mb,
-            mem_total_mb,
-            if mem_total_mb > 0 {
-                (mem_used_mb as u32 * 100) / mem_total_mb
-            } else {
-                0
-            }
-        );
-
-        let _ = write!(writer, "{}Shell:{} ", cyan, reset);
-        let _ = writeln!(writer, "SunShell v0.1.0");
-
-        let _ = write!(writer, "{}Architecture:{} ", cyan, reset);
-        let _ = writeln!(writer, "x86_64");
-
-        let _ = writeln!(writer);
-        let _ = write!(writer, "    ");
-        let _ = append_color_bar(&mut writer, false);
-        let _ = writeln!(writer);
-
-        let _ = write!(writer, "    ");
-        let _ = append_color_bar(&mut writer, true);
-        let _ = writeln!(writer);
-
-        let rendered = writer.as_bytes();
-        let limit = rendered.len().min(512);
-        out_buf[..limit].copy_from_slice(&rendered[..limit]);
-
-        (out_buf, limit)
-    }
+    use core::fmt::Write;
 
     use sunlight_ipc::{
         debug_log, endpoint_create, ipc_reply_and_wait, nameserver_register,
@@ -615,12 +497,14 @@ mod sunlight {
                 LONG_OUT_ACTIVE = true;
             }
 
-            let (buf, len) = sysfetch_generate(
+            let mut buf = [0u8; 512];
+            let len = crate::sysfetch::render_sysfetch_to_buffer(
                 "root",
                 "SunlightOS 0.1.0",
                 1337,  // uptime seconds
                 240,   // memory used (MiB)
                 256,   // memory total (MiB)
+                &mut buf,
             );
 
             // Copy into long output buffer for chunked transmission
