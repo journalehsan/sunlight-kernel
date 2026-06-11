@@ -238,6 +238,7 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             None => error_reply(FsError::InvalidPath),
         },
         VfsMsg::GETGRGID => getgrgid(state, msg.words[0] as u32),
+        VfsMsg::GETPWUID => getpwuid(state, msg.words[0] as u32),
         _ => error_reply(FsError::Unsupported),
     }
 }
@@ -421,6 +422,37 @@ fn getgrgid(state: &mut State, gid: u32) -> IpcMsg {
                             match entries[..count].iter().find(|e| e.gid == gid) {
                                 Some(_entry) => {
                                     let reply = ok_reply().word(1, gid as u64);
+                                    reply
+                                }
+                                None => error_reply(FsError::NotFound),
+                            }
+                        }
+                    }
+                }
+                Err(e) => error_reply(e),
+            }
+        }
+        Err(e) => error_reply(e),
+    }
+}
+
+/// Get user information by uid from /etc/passwd
+fn getpwuid(state: &mut State, uid: u32) -> IpcMsg {
+    // Read /etc/passwd
+    match state.vfs.open("/etc/passwd") {
+        Ok(handle) => {
+            let mut buf = [0u8; 512];
+            match state.vfs.read(handle, 0, &mut buf) {
+                Ok(n) => {
+                    let passwd_data = core::str::from_utf8(&buf[..n]).unwrap_or("");
+                    match parse_passwd(passwd_data.as_bytes()) {
+                        (entries, count) => {
+                            match entries[..count].iter().find(|e| e.uid == uid) {
+                                Some(entry) => {
+                                    let mut reply = ok_reply();
+                                    reply.words[1] = entry.uid as u64;
+                                    reply.words[2] = entry.gid as u64;
+                                    reply.word_count = 3;
                                     reply
                                 }
                                 None => error_reply(FsError::NotFound),

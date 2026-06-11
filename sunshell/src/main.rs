@@ -275,6 +275,26 @@ mod sunlight {
             }
         }
 
+        fn load_user_by_uid(&mut self, uid: u32) -> bool {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return false,
+            };
+
+            // Build GETPWUID request
+            let msg = IpcMsg::with_label(VfsMsg::GETPWUID).word(0, uid as u64);
+            let reply = ipc_call(vfs_cap, msg);
+            if reply.label == VfsMsg::REPLY && reply.word_count >= 3 {
+                self.uid = reply.words[1] as u32;
+                self.gid = reply.words[2] as u32;
+                // For GETPWUID, we still need the username. Fall back to mapping or could return empty
+                // For now, just set basic uid/gid and let caller populate username
+                true
+            } else {
+                false
+            }
+        }
+
         fn cmd_whoami(&self) -> &[u8] {
             &self.username[..self.username_len]
         }
