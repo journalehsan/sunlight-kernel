@@ -2,6 +2,7 @@ pub mod address_space;
 pub mod elf_loader;
 pub mod layout;
 pub mod spawn;
+pub mod fork;
 
 use address_space::AddressSpace;
 use layout::USER_STACK_TOP;
@@ -16,6 +17,7 @@ pub const KERNEL_STACK_SIZE: usize = 32 * 1024;
 /// A schedulable process.
 pub struct Process {
     pub pid: usize,
+    pub ppid: usize,  // parent pid
     pub name: &'static str,
     pub state: ProcessState,
     pub address_space: AddressSpace,
@@ -25,6 +27,8 @@ pub struct Process {
     pub user_stack_top: u64,
     pub entry_point: u64,
     pub context_rsp: u64,
+    pub uid: u32,
+    pub gid: u32,
     pub ipc_queue: VecDeque<IpcMsg>,
     pub ipc_endpoint: Option<u32>,
     pub ipc_reply: Option<IpcMsg>,
@@ -55,6 +59,7 @@ impl Process {
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
     pub unsafe fn new(
         pid: usize,
+        ppid: usize,
         name: &'static str,
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
@@ -67,6 +72,7 @@ impl Process {
 
         Self {
             pid,
+            ppid,
             name,
             state: ProcessState::Ready,
             address_space,
@@ -76,6 +82,8 @@ impl Process {
             user_stack_top,
             entry_point: 0,
             context_rsp: 0,
+            uid: 0,
+            gid: 0,
             ipc_queue: VecDeque::new(),
             ipc_endpoint: None,
             ipc_reply: None,

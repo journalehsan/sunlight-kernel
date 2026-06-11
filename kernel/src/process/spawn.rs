@@ -48,7 +48,7 @@ pub fn spawn_from_path(
 
     let pid = sched.processes.len() + 1;
     let mut process = unsafe {
-        Process::new(pid, "sshl", pmm, hhdm_offset)
+        Process::new(pid, 1, "sshl", pmm, hhdm_offset)
     };
 
     let entry = super::elf_loader::load_elf(bytes, &mut process, pmm, hhdm_offset);

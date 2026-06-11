@@ -16,6 +16,30 @@ pub enum SunlightSyscall {
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
+
+    // Process management (Phase 4)
+    Fork = 30,
+    Exec = 31,
+    Waitpid = 32,
+    Getpid = 33,
+    Getppid = 34,
+    Getuid = 35,
+    Getgid = 36,
+    Setuid = 37,
+    Setgid = 38,
+
+    // File descriptor management
+    Open = 40,
+    Close = 41,
+    Read = 42,
+    Write = 43,
+    Lseek = 44,
+    Dup = 45,
+    Dup2 = 46,
+    Pipe = 47,
+    Fstat = 48,
+    Fcntl = 49,
+
     DebugLog = 99,
 }
 
@@ -132,6 +156,25 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
         22 => thread_spawn(),
+        30 => sys_fork(frame),
+        31 => sys_exec(frame),
+        32 => sys_waitpid(frame),
+        33 => sys_getpid(),
+        34 => sys_getppid(frame),
+        35 => sys_getuid(),
+        36 => sys_getgid(),
+        37 => sys_setuid(frame),
+        38 => sys_setgid(frame),
+        40 => sys_open(frame),
+        41 => sys_close(frame),
+        42 => sys_read(frame),
+        43 => sys_write(frame),
+        44 => sys_lseek(frame),
+        45 => sys_dup(frame),
+        46 => sys_dup2(frame),
+        47 => sys_pipe(frame),
+        48 => sys_fstat(frame),
+        49 => sys_fcntl(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -367,4 +410,132 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
         crate::serial_println!("[SYSCALL] DebugLog: invalid UTF-8");
     }
     0
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: Process management syscalls
+// ---------------------------------------------------------------------------
+
+/// Syscall: Fork (30)
+/// Returns: child_pid (parent), 0 (child)
+fn sys_fork(_frame: &mut SyscallFrame) -> u64 {
+    let mut pmm = crate::PMM.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
+
+    // Borrow the parent process momentarily to fork it
+    let parent_pid = sched.current_process().pid;
+    match crate::process::fork::fork_current_process(
+        &mut *pmm,
+        &mut *sched,
+        VirtAddr::new(hhdm),
+    ) {
+        Ok(child_pid) => {
+            crate::serial_println!("[SYSCALL] fork {} -> {}", parent_pid, child_pid);
+            child_pid as u64
+        }
+        Err(_) => {
+            crate::serial_println!("[SYSCALL] fork failed for pid={}", parent_pid);
+            u64::MAX
+        }
+    }
+}
+
+/// Syscall: Exec (31)
+fn sys_exec(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] exec requested");
+    u64::MAX
+}
+
+/// Syscall: Waitpid (32)
+fn sys_waitpid(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] waitpid requested");
+    u64::MAX
+}
+
+/// Syscall: Getpid (33)
+fn sys_getpid() -> u64 {
+    sched::with_scheduler(|s| s.current_process().pid as u64)
+}
+
+/// Syscall: Getppid (34)
+fn sys_getppid(_frame: &mut SyscallFrame) -> u64 {
+    // TODO: implement when ppid is tracked
+    crate::serial_println!("[SYSCALL] getppid requested");
+    1
+}
+
+/// Syscall: Getuid (35)
+fn sys_getuid() -> u64 {
+    // TODO: track uid in process
+    0
+}
+
+/// Syscall: Getgid (36)
+fn sys_getgid() -> u64 {
+    // TODO: track gid in process
+    0
+}
+
+/// Syscall: Setuid (37)
+fn sys_setuid(_frame: &mut SyscallFrame) -> u64 {
+    // TODO: implement setuid (requires root)
+    IpcError::InvalidArgument as u64
+}
+
+/// Syscall: Setgid (38)
+fn sys_setgid(_frame: &mut SyscallFrame) -> u64 {
+    // TODO: implement setgid (requires root)
+    IpcError::InvalidArgument as u64
+}
+
+// File descriptor syscalls (stubs for now)
+fn sys_open(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] open requested");
+    u64::MAX
+}
+
+fn sys_close(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] close requested");
+    u64::MAX
+}
+
+fn sys_read(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] read requested");
+    u64::MAX
+}
+
+fn sys_write(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] write requested");
+    u64::MAX
+}
+
+fn sys_lseek(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] lseek requested");
+    u64::MAX
+}
+
+fn sys_dup(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] dup requested");
+    u64::MAX
+}
+
+fn sys_dup2(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] dup2 requested");
+    u64::MAX
+}
+
+fn sys_pipe(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] pipe requested");
+    u64::MAX
+}
+
+fn sys_fstat(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] fstat requested");
+    u64::MAX
+}
+
+fn sys_fcntl(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] fcntl requested");
+    u64::MAX
 }
