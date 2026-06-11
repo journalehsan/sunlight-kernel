@@ -129,6 +129,21 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --release --features sunlight
     cargo build --package sunlight-kernel
 
+    # Download and build Limine bootloader if needed
+    LIMINE_DIR="$PROJECT_ROOT/target/limine"
+    if [[ ! -d "$LIMINE_DIR" ]]; then
+        echo -e "${YELLOW}Downloading and building Limine bootloader...${NC}"
+        git clone --branch="v8.x" --depth=1 https://github.com/limine-bootloader/limine.git "$LIMINE_DIR"
+        pushd "$LIMINE_DIR" >/dev/null
+        ./bootstrap
+        ./configure --enable-uefi-x86-64 --enable-bios-cd --enable-bios-pxe
+        make -j"$(nproc)"
+        popd >/dev/null
+        echo -e "${GREEN}✓${NC} Limine built"
+    else
+        echo -e "${GREEN}✓${NC} Limine already cached"
+    fi
+
     # Repack ISO
     LIMINE_DIR="$PROJECT_ROOT/target/limine"
     KERNEL_ELF="$PROJECT_ROOT/target/x86_64-unknown-none/debug/sunlight-kernel"
