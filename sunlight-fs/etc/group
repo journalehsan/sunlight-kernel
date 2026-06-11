@@ -1,6 +1,6 @@
 root:x:0:root
 wheel:x:10:root
-users:x:100:user
+users:x:100:
 audio:x:63:
 video:x:44:
 storage:x:998:

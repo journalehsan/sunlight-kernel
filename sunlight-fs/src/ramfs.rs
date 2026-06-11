@@ -283,7 +283,6 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/bin",              0,    0,    mode::DIR_755),
     RamEntry::dir("/root",             0,    0,    mode::DIR_700),
     RamEntry::dir("/home",             0,    0,    mode::DIR_755),
-    RamEntry::dir("/home/user",        1000, 1000, mode::DIR_755),
     RamEntry::dir("/tmp",              0,    0,    mode::DIR_1777),
     RamEntry::dir("/var",              0,    0,    mode::DIR_755),
     RamEntry::dir("/var/log",          0,    0,    mode::DIR_755),
