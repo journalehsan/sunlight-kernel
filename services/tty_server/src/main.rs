@@ -45,7 +45,6 @@ const KBD_LABEL: u64 = 1;
 const OUTPUT_LABEL: u64 = 2;
 const EXIT_LABEL: u64 = 3;
 const DRAIN_LABEL: u64 = 4;
-const PROMPT: &[u8] = b"root@sunlight:/$ ";
 const TERM_OUTPUT_MAX: usize = 2048;
 const INPUT_LINE_MAX: usize = 128;
 const PENDING_INPUT_MAX: usize = 128;
@@ -62,6 +61,8 @@ struct ShellTab {
     input_line_len: usize,
     pending: [u8; PENDING_INPUT_MAX],
     pending_len: usize,
+    username: [u8; 32],
+    username_len: usize,
 }
 
 impl ShellTab {
@@ -76,6 +77,8 @@ impl ShellTab {
             input_line_len: 0,
             pending: [0; PENDING_INPUT_MAX],
             pending_len: 0,
+            username: [0; 32],
+            username_len: 0,
         }
     }
 }
@@ -152,6 +155,12 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 uid,
                                 gid,
                             ) {
+                                // Store username in the active tab for prompt rendering
+                                if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                                    let len = username_len.min(tab.username.len() - 1);
+                                    tab.username[..len].copy_from_slice(&username[..len]);
+                                    tab.username_len = len;
+                                }
                                 if let Some(tab) = active_shell_tab(&tabs, active_tab) {
                                     debug_log_spawn(&username[..username_len], tab.pid);
                                     logged_initial_spawn = true;
@@ -218,6 +227,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             &mut tab.output_len,
                             &mut tab.input_line,
                             &mut tab.input_line_len,
+                            tab.username,
+                            tab.username_len,
                         );
                         needs_render = true;
 
@@ -289,14 +300,17 @@ fn render_active_shell_fb(
     tab_count: usize,
     active_tab: usize,
 ) {
-    let (output, input_line) = active_shell_tab(tabs, active_tab)
+    let mut prompt_buf = [0u8; 32];
+    let (output, input_line, prompt_slice) = active_shell_tab(tabs, active_tab)
         .map(|tab| {
+            let prompt_len = build_prompt(tab, &mut prompt_buf);
             (
                 &tab.output[..tab.output_len],
                 &tab.input_line[..tab.input_line_len],
+                &prompt_buf[..prompt_len],
             )
         })
-        .unwrap_or((&[][..], &[][..]));
+        .unwrap_or((&[][..], &[][..], b"root@sunlight:/$ "));
     unsafe {
         sunlight_tui::render_tty_shell(
             fb_addr as *mut u32,
@@ -307,7 +321,7 @@ fn render_active_shell_fb(
             active_tab,
             output,
             input_line,
-            PROMPT,
+            prompt_slice,
         );
     }
 }
@@ -338,6 +352,31 @@ fn active_shell_tab_mut(
     active_tab: usize,
 ) -> Option<&mut ShellTab> {
     tabs.get_mut(active_tab).filter(|tab| tab.pid != 0)
+}
+
+fn build_prompt(tab: &ShellTab, buf: &mut [u8]) -> usize {
+    let username = if tab.username_len > 0 {
+        &tab.username[..tab.username_len]
+    } else {
+        b"root"
+    };
+    let suffix = b"@sunlight:/$ ";
+
+    let mut pos = 0;
+    // Copy username
+    for &b in username.iter().take(buf.len()) {
+        buf[pos] = b;
+        pos += 1;
+        if pos >= buf.len() {
+            break;
+        }
+    }
+    // Copy suffix
+    for &b in suffix.iter().take(buf.len() - pos) {
+        buf[pos] = b;
+        pos += 1;
+    }
+    pos
 }
 
 fn spawn_tab(
@@ -491,10 +530,31 @@ fn update_input_echo(
     term_output_len: &mut usize,
     input_line: &mut [u8; INPUT_LINE_MAX],
     input_line_len: &mut usize,
+    username: [u8; 32],
+    username_len: usize,
 ) {
     match byte {
         b'\n' | b'\r' => {
-            append_term(term_output, term_output_len, PROMPT);
+            let mut prompt_buf = [0u8; 32];
+            let username_ref = if username_len > 0 {
+                &username[..username_len]
+            } else {
+                b"root"
+            };
+            let suffix = b"@sunlight:/$ ";
+            let mut pos = 0;
+            for &b in username_ref.iter().take(prompt_buf.len()) {
+                prompt_buf[pos] = b;
+                pos += 1;
+                if pos >= prompt_buf.len() {
+                    break;
+                }
+            }
+            for &b in suffix.iter().take(prompt_buf.len() - pos) {
+                prompt_buf[pos] = b;
+                pos += 1;
+            }
+            append_term(term_output, term_output_len, &prompt_buf[..pos]);
             append_term(term_output, term_output_len, &input_line[..*input_line_len]);
             append_term(term_output, term_output_len, b"\n");
             *input_line_len = 0;
