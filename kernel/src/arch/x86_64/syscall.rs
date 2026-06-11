@@ -315,12 +315,12 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
 /// Extracts path from the message words and spawns a new process.
 fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let path = decode_path_from_words(&msg.words);
-    let _uid = msg.words[4] as u32;
-    let _gid = msg.words[5] as u32;
+    let uid = msg.words[4] as u32;
+    let gid = msg.words[5] as u32;
 
-    crate::serial_println!("[SPAWN] Request from pid={} for path={}",
+    crate::serial_println!("[SPAWN] Request from pid={} for path={} uid={} gid={}",
         crate::sched::SCHEDULER.lock().current_process().pid,
-        path);
+        path, uid, gid);
 
     let mut pmm = crate::PMM.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
@@ -333,6 +333,8 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         &mut *sched,
         &mut crate::capability::CAP_BROKER.lock(),
         VirtAddr::new(hhdm),
+        uid,
+        gid,
     ) {
         Ok(pid) => {
             let mut reply = IpcMsg::with_label(crate::ipc::SpawnMsg::REPLY);

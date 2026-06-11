@@ -149,6 +149,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 &mut active_tab,
                                 &mut next_shell_id,
                                 cap,
+                                uid,
+                                gid,
                             ) {
                                 if let Some(tab) = active_shell_tab(&tabs, active_tab) {
                                     debug_log_spawn(&username[..username_len], tab.pid);
@@ -344,6 +346,8 @@ fn spawn_tab(
     active_tab: &mut usize,
     next_shell_id: &mut u64,
     spawn_cap: CapabilityToken,
+    uid: u32,
+    gid: u32,
 ) -> bool {
     if *tab_count >= MAX_TABS {
         return false;
@@ -358,7 +362,9 @@ fn spawn_tab(
         .word(0, pw0)
         .word(1, pw1)
         .word(2, pw2)
-        .word(3, pw3);
+        .word(3, pw3)
+        .word(4, uid as u64)
+        .word(5, gid as u64);
     let spawn_reply = ipc_call(spawn_cap, spawn_msg);
     if spawn_reply.label != SpawnMsg::REPLY {
         debug_log("[TTY]  Spawning /bin/sshl FAILED");
@@ -386,7 +392,7 @@ fn handle_ctrl_key(
     match ascii {
         b't' | b'T' => {
             if let Some(cap) = spawn_cap {
-                if spawn_tab(tabs, tab_count, active_tab, next_shell_id, cap) && !*phase3_6_done {
+                if spawn_tab(tabs, tab_count, active_tab, next_shell_id, cap, 0, 0) && !*phase3_6_done {
                     debug_log("[TTY]  Ctrl+T test: new tab OK");
                     debug_log("[SunlightOS] Phase 3.6 OK");
                     *phase3_6_done = true;

@@ -25,6 +25,8 @@ pub fn spawn_from_path(
     sched: &mut Scheduler,
     _caps: &mut CapabilityBroker,
     hhdm_offset: VirtAddr,
+    uid: u32,
+    gid: u32,
 ) -> Result<usize, SpawnError> {
     // Find the embedded binary for the requested path.
     // The kernel embeds service binaries via include_bytes!.
@@ -77,7 +79,7 @@ pub fn spawn_from_path(
 
     process.init_context(entry, super::layout::USER_STACK_TOP);
     let _ = argv;
-    process.set_initial_args(shell_id, 0, 0, 0);
+    process.set_initial_args(shell_id, uid as u64, gid as u64, 0);
     let actual_pid = process.pid;
     let _id = sched.add_process(process);
 

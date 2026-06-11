@@ -954,7 +954,7 @@ mod sunlight {
     }
 
     #[no_mangle]
-    pub extern "C" fn _start(shell_id: u64) -> ! {
+    pub extern "C" fn _start(shell_id: u64, uid: u64, gid: u64) -> ! {
         debug_log("[TTY]  Shell: sshl v0.1.0 running");
 
         let ep = endpoint_create();
@@ -967,8 +967,13 @@ mod sunlight {
         debug_log("[TTY]  sunshell registered as 'sshl'");
 
         let mut shell = Shell::new();
-        // Load real user info from /etc/passwd
-        shell.load_user_from_vfs(b"root");
+        // Load real user info from /etc/passwd based on uid passed from TTY
+        let username = match uid {
+            0 => b"root",
+            1000 => b"user",
+            _ => b"root",
+        };
+        shell.load_user_from_vfs(username);
         let mut msg = ipc_reply_and_wait(ep, IpcMsg::with_label(0));
         loop {
             // Drain request from tty_server: send the next chunk of long output
