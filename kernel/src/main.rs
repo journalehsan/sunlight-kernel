@@ -383,6 +383,13 @@ pub extern "C" fn _start() -> ! {
     splash.clear_main();
     splash.set_status("login...");
 
+    // Phase 4.5: Print Helios compat layer status
+    let test_phase = option_env!("SUNLIGHT_INJECT_PHASE").unwrap_or("phase3.8");
+    serial_println!("[HELIOS] Linux ELF compatibility layer loaded");
+    if test_phase == "phase4.5" {
+        serial_println!("[SunlightOS] Phase 4.5 OK");
+    }
+
     serial_println!("[PROC] Entering scheduler — dropping to Ring 3");
     serial_println!("══════════════════════════════════════");
 

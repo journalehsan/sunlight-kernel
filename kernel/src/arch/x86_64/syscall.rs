@@ -191,7 +191,32 @@ fn deliver_pending_signals(process: &mut crate::process::Process) {
 /// SAFETY: `frame` must point to a valid SyscallFrame on the stack.
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
-    let num = frame.rax;
+    let mut num = frame.rax;
+
+    // Phase 4.5: Check if this is a Linux-compat process and translate syscall
+    crate::sched::with_scheduler(|sched| {
+        if sched.current_process().is_linux_compat {
+            // Translate Linux syscall number to SunlightOS number
+            let linux_num = num as u64;
+            match sunlight_compat_linux::translate_syscall(linux_num) {
+                native_num if native_num >= 0 => {
+                    num = native_num as u64;
+                }
+                -1 => {
+                    // exit(code) — store code in rdi for process_exit handler
+                    if linux_num == 60 || linux_num == 231 {
+                        crate::serial_println!("[HELIOS] Linux exit({}) pid={}", frame.rdi, sched.current_process().pid);
+                        num = 20;  // ProcessExit
+                    }
+                }
+                _ => {
+                    // Unknown or unsupported syscall
+                    crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
+                    num = u64::MAX;
+                }
+            }
+        }
+    });
 
     let result = match num {
         1 => ipc_call(frame),

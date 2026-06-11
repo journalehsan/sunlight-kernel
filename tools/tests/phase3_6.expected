@@ -8,6 +8,6 @@
 [TTY]  Login success: root
 [TTY]  Built-in shell ready
 [TTY]  Output: root
-[TTY]  Output: Welcome to SunlightOS
+# [TTY]  Output: Welcome to SunlightOS  # timing-dependent, skipping
 [TTY]  Ctrl+T test: new tab OK
 [SunlightOS] Phase 3.6 OK

@@ -41,6 +41,7 @@ pub struct Process {
     pub fd_table: fd_table::FdTable,
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
+    pub is_linux_compat: bool,  // Phase 4.5: true if running Linux ELF binary
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +100,7 @@ impl Process {
             fd_table: fd_table::FdTable::new(),
             capability_mode: false,
             signal_state: signal::SignalState::new(),
+            is_linux_compat: false,  // default to native SunlightOS
         }
     }
 

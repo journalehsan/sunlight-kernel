@@ -51,6 +51,12 @@ pub fn spawn_from_path(
         Process::new(pid, 1, "sshl", pmm, hhdm_offset)
     };
 
+    // Phase 4.5: Detect if this is a Linux-compatible ELF binary
+    process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
+    if process.is_linux_compat {
+        crate::serial_println!("[HELIOS] Linux ELF detected for {}", path);
+    }
+
     let entry = super::elf_loader::load_elf(bytes, &mut process, pmm, hhdm_offset);
     let entry = entry.ok_or(SpawnError::ElfLoadFailed)?;
 

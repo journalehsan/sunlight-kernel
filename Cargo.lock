@@ -127,6 +127,7 @@ dependencies = [
  "limine",
  "linked_list_allocator",
  "spin",
+ "sunlight-compat-linux",
  "sunlight-fat",
  "sunlight-tui",
  "sunlight-virtio",

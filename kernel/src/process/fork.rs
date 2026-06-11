@@ -109,6 +109,7 @@ pub fn fork_current_process(
             fd_table: super::fd_table::FdTable::new(),
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
+            is_linux_compat: false,
         };
 
         // Setup kernel stack top
@@ -188,6 +189,7 @@ fn sys_fork(
             fd_table: super::fd_table::FdTable::new(),
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
+            is_linux_compat: parent.is_linux_compat,  // inherit from parent
         };
 
         // Setup kernel stack top

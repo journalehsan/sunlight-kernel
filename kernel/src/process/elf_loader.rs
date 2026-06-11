@@ -154,3 +154,23 @@ pub fn load_elf(
 
     Some(entry)
 }
+
+/// Detect if an ELF binary is a Linux-compatible ELF (Phase 4.5).
+/// Returns true if e_ident[EI_OSABI] == ELFOSABI_LINUX (3).
+pub fn is_linux_elf(elf_bytes: &[u8]) -> bool {
+    // ELF64 e_ident[EI_OSABI] at offset 0x07
+    const EI_OSABI: usize = 0x07;
+    const ELFOSABI_LINUX: u8 = 3;
+
+    if elf_bytes.len() < 8 {
+        return false;
+    }
+
+    // Check ELF magic first
+    if elf_bytes[0..4] != [0x7f, b'E', b'L', b'F'] {
+        return false;
+    }
+
+    // Check OSABI field
+    elf_bytes[EI_OSABI] == ELFOSABI_LINUX
+}

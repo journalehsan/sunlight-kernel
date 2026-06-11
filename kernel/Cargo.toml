@@ -16,6 +16,7 @@ linked_list_allocator = "0.10"
 sunlight-tui = { path = "../sunlight-tui" }
 sunlight-virtio = { path = "../sunlight-virtio" }
 sunlight-fat = { path = "../sunlight-fat" }
+sunlight-compat-linux = { path = "../compat-linux" }
 
 [features]
 key_inject = []

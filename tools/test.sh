@@ -54,8 +54,14 @@ case "$PHASE" in
         PASS_LABEL="Phase 3.9"
         NEED_DISK=false
         ;;
+    phase4.5)
+        EXPECTED_FILE="tools/tests/phase4_5.expected"
+        FINAL_MARKER="[SunlightOS] Phase 4.5 OK"
+        PASS_LABEL="Phase 4.5"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5"
         exit 2
         ;;
 esac
@@ -82,6 +88,8 @@ fi
 EXTRA_ENV=()
 if [[ "$PHASE" == "phase3.9" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
+elif [[ "$PHASE" == "phase4.5" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
 fi
 env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
 
