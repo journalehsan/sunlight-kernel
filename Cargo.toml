@@ -8,6 +8,7 @@ members = [
     "services/init",
     "services/timer_server",
     "services/vfs_server",
+    "services/net_server",
     "sunlight-tui",
     "sunlight-fs",
     "sunlight-virtio",
@@ -16,6 +17,7 @@ members = [
     "services/tty_server",
     "sunlight-elf",
     "sunshell",
+    "sunlight-net",
 ]
 
 [workspace.dependencies]

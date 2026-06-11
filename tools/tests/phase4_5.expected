@@ -1,3 +1,5 @@
 # Phase 4.5 test: Linux ELF syscall translation (Helios compat layer)
 [HELIOS] Linux ELF compatibility layer loaded
+[SCHED] CFS-style scheduler (round-robin baseline)
+✓ Phase 4 Scheduler verification PASSED
 [SunlightOS] Phase 4.5 OK

@@ -1,0 +1,17 @@
+[package]
+name = "sunlight-net-server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "net_server"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-net = { path = "../../sunlight-net" }
+x86_64 = "0.15"
+
+[profile.release]
+opt-level = 3
+lto = true

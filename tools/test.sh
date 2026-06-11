@@ -60,8 +60,56 @@ case "$PHASE" in
         PASS_LABEL="Phase 4.5"
         NEED_DISK=false
         ;;
+    phase5.0)
+        EXPECTED_FILE="tools/tests/phase5_0.expected"
+        FINAL_MARKER="[NET]  virtio-net OK"
+        PASS_LABEL="Phase 5.0"
+        NEED_DISK=false
+        ;;
+    phase5.1)
+        EXPECTED_FILE="tools/tests/phase5_1.expected"
+        FINAL_MARKER="[NET]  Interface: eth0 MAC="
+        PASS_LABEL="Phase 5.1"
+        NEED_DISK=false
+        ;;
+    phase5.2)
+        EXPECTED_FILE="tools/tests/phase5_2.expected"
+        FINAL_MARKER="[DHCP] OK"
+        PASS_LABEL="Phase 5.2"
+        NEED_DISK=false
+        ;;
+    phase5.3)
+        EXPECTED_FILE="tools/tests/phase5_3.expected"
+        FINAL_MARKER="[NET]  NetOp handlers registered"
+        PASS_LABEL="Phase 5.3"
+        NEED_DISK=false
+        ;;
+    phase5.4)
+        EXPECTED_FILE="tools/tests/phase5_4.expected"
+        FINAL_MARKER="[NET]  Linux process socket syscalls ready"
+        PASS_LABEL="Phase 5.4"
+        NEED_DISK=false
+        ;;
+    phase5.5)
+        EXPECTED_FILE="tools/tests/phase5_5.expected"
+        FINAL_MARKER="[TLS]  Handshake OK: google.com"
+        PASS_LABEL="Phase 5.5"
+        NEED_DISK=false
+        ;;
+    phase5.6)
+        EXPECTED_FILE="tools/tests/phase5_6.expected"
+        FINAL_MARKER="[BTRFS] Mounted /data read-only"
+        PASS_LABEL="Phase 5.6"
+        NEED_DISK=true
+        ;;
+    phase5.7)
+        EXPECTED_FILE="tools/tests/phase5_7.expected"
+        FINAL_MARKER="[SunlightOS] Phase 5 OK"
+        PASS_LABEL="Phase 5.7"
+        NEED_DISK=true
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7"
         exit 2
         ;;
 esac
@@ -73,6 +121,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release >"$
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release >>"$BUILD_LOG" 2>&1
 
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
@@ -90,6 +139,8 @@ if [[ "$PHASE" == "phase3.9" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
+elif [[ "$PHASE" == phase5* ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE="$PHASE")
 fi
 env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
 

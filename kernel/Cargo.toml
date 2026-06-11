@@ -17,6 +17,7 @@ sunlight-tui = { path = "../sunlight-tui" }
 sunlight-virtio = { path = "../sunlight-virtio" }
 sunlight-fat = { path = "../sunlight-fat" }
 sunlight-compat-linux = { path = "../compat-linux" }
+sunlight-net = { path = "../sunlight-net" }
 
 [features]
 key_inject = []

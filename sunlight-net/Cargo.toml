@@ -1,0 +1,24 @@
+[package]
+name = "sunlight-net"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+smoltcp = {
+    version = "0.11",
+    default-features = false,
+    features = [
+        "medium-ethernet",
+        "proto-ipv4",
+        "proto-dhcpv4",
+        "proto-dns",
+        "socket-tcp",
+        "socket-udp",
+        "socket-dhcpv4",
+        "socket-dns",
+    ]
+}
+x86_64 = "0.15"
+log = { version = "0.4", default-features = false }
+
+[dev-dependencies]

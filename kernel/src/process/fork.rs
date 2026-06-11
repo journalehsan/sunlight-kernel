@@ -110,6 +110,9 @@ pub fn fork_current_process(
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
             is_linux_compat: false,
+            sched_type: 0,           // inherit SCHED_NORMAL
+            weight: 1024,            // inherit default weight
+            cpu_mask: 0xFF,          // inherit all CPUs
         };
 
         // Setup kernel stack top
@@ -190,6 +193,9 @@ fn sys_fork(
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
             is_linux_compat: parent.is_linux_compat,  // inherit from parent
+            sched_type: parent.sched_type,            // inherit scheduling type
+            weight: parent.weight,                    // inherit CFS weight
+            cpu_mask: parent.cpu_mask,                // inherit CPU mask
         };
 
         // Setup kernel stack top
