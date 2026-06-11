@@ -331,7 +331,7 @@ mod sunlight {
                 "chown" => self.cmd_chown(&args),
                 "sysfetch" => self.cmd_sysfetch(),
                 "hostnamectl" => self.cmd_hostnamectl(),
-                "help" => b"Builtins: whoami, id, uname, useradd, userdel, groups, chmod, chown, sysfetch, hostnamectl, help, echo, cat\n",
+                "help" => b"Builtins: whoami, id, uname, useradd, userdel, passwd, groups, chmod, chown, sysfetch, hostnamectl, help, echo, cat\n",
                 "echo" => self.cmd_echo(&args),
                 "cat" => self.cmd_cat(&args),
                 "uname" => self.cmd_uname(&args),
