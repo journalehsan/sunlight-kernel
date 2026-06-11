@@ -106,6 +106,8 @@ pub fn fork_current_process(
             ipc_reply: None,
             pending_call: None,
             pending_reply_wait: None,
+            fd_table: super::fd_table::FdTable::new(),
+            capability_mode: false,
         };
 
         // Setup kernel stack top
@@ -182,6 +184,8 @@ fn sys_fork(
             ipc_reply: None,
             pending_call: None,
             pending_reply_wait: None,
+            fd_table: super::fd_table::FdTable::new(),
+            capability_mode: false,
         };
 
         // Setup kernel stack top
