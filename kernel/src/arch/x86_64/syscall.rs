@@ -547,9 +547,30 @@ fn sys_dup2(_frame: &mut SyscallFrame) -> u64 {
     u64::MAX
 }
 
-fn sys_pipe(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] pipe requested");
-    u64::MAX
+/// Syscall: pipe (47)
+/// rdi = pointer to int[2] array for (read_fd, write_fd)
+fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
+    let fds_ptr = frame.rdi as *mut i32;
+
+    // Check that the pointer is in user space
+    if fds_ptr as u64 >= 0x0000_8000_0000_0000 {
+        return u64::MAX;  // EFAULT
+    }
+
+    let mut pmm = crate::PMM.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+
+    match crate::process::pipe::create_pipe(&mut pmm, &mut sched) {
+        Ok((read_fd, write_fd)) => {
+            // Write the fds to user space
+            unsafe {
+                *fds_ptr = read_fd;
+                *fds_ptr.add(1) = write_fd;
+            }
+            0  // Success
+        }
+        Err(_) => u64::MAX,
+    }
 }
 
 fn sys_fstat(_frame: &mut SyscallFrame) -> u64 {

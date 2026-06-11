@@ -6,6 +6,7 @@ pub mod fork;
 pub mod mmap;
 pub mod fd_table;
 pub mod signal;
+pub mod pipe;
 
 use address_space::AddressSpace;
 use layout::USER_STACK_TOP;
