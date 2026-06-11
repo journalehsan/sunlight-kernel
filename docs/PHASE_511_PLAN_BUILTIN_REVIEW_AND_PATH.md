@@ -500,6 +500,75 @@ fn execute_external(&mut self, path: &str, args: &[&str]) -> ([u8; MAX_OUT], usi
 
 ---
 
+## Phase 5.11E: Shell Loading Refactor (Microkernel Proper)
+
+**NOTE:** This is the proper microkernel architecture, to be done after shell is working in Phase 5.11A-D.
+
+### Current Issue (Technical Debt)
+
+Shell is embedded in kernel ELF with kernel address space:
+```
+[ELF] PT_LOAD vaddr=ffffffff80000000  ← Kernel addresses!
+```
+
+Should be user-space addresses:
+```
+[ELF] PT_LOAD vaddr=0x400000  ← User-space addresses
+```
+
+### Solution: Load from RamFs
+
+```rust
+// Phase 5.11E: Replace embedded bytes with RamFs loading
+
+// Before (kernel/src/main.rs):
+static SUNSHELL_ELF_BYTES: &[u8] = include_bytes!("sshl");
+
+// After: Shell in RamFs
+kernel/initialize_ramfs() {
+    ramfs.add_file("/bin/sshl", sunshell_elf_bytes);
+}
+
+// Then in spawn.rs:
+fn spawn_from_path() {
+    let bytes = ramfs.read("/bin/sshl")?;  // From kernel-internal RamFs
+    load_elf(bytes, ...);
+}
+```
+
+### Why This Is Better
+
+✅ **Microkernel principle** — Kernel doesn't embed user binaries  
+✅ **User-space addresses** — Shell loads at 0x400000+  
+✅ **Scalable** — Can swap shells without kernel rebuild  
+✅ **Standard** — Matches Unix bootloader model  
+
+### Implementation Plan (Phase 5.11E)
+
+**Step 1: Fix linker target** (quick, may solve immediately)
+```bash
+# Add --target flag to force x86_64-unknown-none
+cargo build --package sunshell --release --features sunlight \
+  --no-default-features \
+  --target x86_64-unknown-none
+```
+
+**Step 2: If linker target doesn't work, implement RamFs loading**
+- Extract shell ELF from embedded bytes
+- Add to RamFs at kernel init
+- Change spawn.rs to read from RamFs
+- Test user-space addresses
+
+**Step 3: Validate**
+- Verify ELF loads at 0x400000+
+- Verify shell works
+- Verify no kernel panic
+
+### Timeline
+
+- **Phase 5.11A-D:** Get shell working (current plan)
+- **Phase 5.11E:** Proper microkernel refactor (after shell stable)
+
 ## Future: Phase 5.12+
 
 Once Phase 5.11 is complete:
