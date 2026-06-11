@@ -287,8 +287,24 @@ mod sunlight {
             if reply.label == VfsMsg::REPLY && reply.word_count >= 3 {
                 self.uid = reply.words[1] as u32;
                 self.gid = reply.words[2] as u32;
-                // For GETPWUID, we still need the username. Fall back to mapping or could return empty
-                // For now, just set basic uid/gid and let caller populate username
+
+                // Extract username from words[3:7] if available (new GETPWUID enhancement)
+                if reply.word_count >= 7 {
+                    let mut username_bytes = [0u8; 64];
+                    for i in 0..4 {
+                        let word = reply.words[3 + i];
+                        for j in 0..8 {
+                            let b = ((word >> (j * 8)) & 0xFF) as u8;
+                            if b == 0 {
+                                break;
+                            }
+                            username_bytes[i * 8 + j] = b;
+                        }
+                    }
+                    let username_len = username_bytes.iter().position(|&b| b == 0).unwrap_or(64).min(64);
+                    self.username[..username_len].copy_from_slice(&username_bytes[..username_len]);
+                    self.username_len = username_len;
+                }
                 true
             } else {
                 false
@@ -987,13 +1003,9 @@ mod sunlight {
         debug_log("[TTY]  sunshell registered as 'sshl'");
 
         let mut shell = Shell::new();
-        // Load real user info from /etc/passwd based on uid passed from TTY
-        let username = match uid {
-            0 => b"root",
-            1000 => b"user",
-            _ => b"root",
-        };
-        shell.load_user_from_vfs(username);
+        // Load real user info from VFS by uid (GETPWUID returns uid, gid, AND username)
+        // This is more robust than hardcoded uid→username mapping
+        shell.load_user_by_uid(uid as u32);
         let mut msg = ipc_reply_and_wait(ep, IpcMsg::with_label(0));
         loop {
             // Drain request from tty_server: send the next chunk of long output

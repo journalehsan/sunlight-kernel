@@ -452,7 +452,20 @@ fn getpwuid(state: &mut State, uid: u32) -> IpcMsg {
                                     let mut reply = ok_reply();
                                     reply.words[1] = entry.uid as u64;
                                     reply.words[2] = entry.gid as u64;
-                                    reply.word_count = 3;
+                                    // Pack username into words[3:7] (up to 32 bytes)
+                                    let username_len = entry.username.iter().position(|&b| b == 0).unwrap_or(64).min(64);
+                                    for i in 0..4 {
+                                        let start = i * 8;
+                                        let end = (start + 8).min(username_len);
+                                        if start < username_len {
+                                            let mut word = 0u64;
+                                            for (j, &b) in entry.username[start..end].iter().enumerate() {
+                                                word |= (b as u64) << (j * 8);
+                                            }
+                                            reply.words[3 + i] = word;
+                                        }
+                                    }
+                                    reply.word_count = 7;
                                     reply
                                 }
                                 None => error_reply(FsError::NotFound),

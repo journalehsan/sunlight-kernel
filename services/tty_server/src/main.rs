@@ -107,9 +107,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     debug_log("[TTY]  Login screen ready");
 
     let mut login = LoginScreen::new();
-    // Pre-fill "root" to match the static login screen render; move focus to password.
-    for &b in b"root" { login.username.push(b); }
-    login.focused = LoginField::Password;
+    // Don't pre-fill username — let users type their actual username
+    // (previously hardcoded "root" which forced users to clear and retype)
 
     let mut state = TtyState::Login;
     let mut spawn_cap: Option<CapabilityToken> = None;
