@@ -238,6 +238,43 @@ mod sunlight {
             copy_out(out)
         }
 
+        /// Load user information from VFS by username
+        fn load_user_from_vfs(&mut self, username: &[u8]) -> bool {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return false,
+            };
+
+            // Build GETPWNAM request
+            let mut msg = IpcMsg::with_label(VfsMsg::GETPWNAM);
+            let mut word_idx = 0;
+            for i in 0..(username.len() / 8 + 1) {
+                let start = i * 8;
+                let end = (start + 8).min(username.len());
+                if start < username.len() {
+                    let mut word = 0u64;
+                    for (j, &b) in username[start..end].iter().enumerate() {
+                        word |= (b as u64) << (j * 8);
+                    }
+                    msg = msg.word(word_idx, word);
+                }
+                word_idx += 1;
+            }
+
+            let reply = ipc_call(vfs_cap, msg);
+            if reply.label == VfsMsg::REPLY && reply.word_count >= 3 {
+                self.uid = reply.words[1] as u32;
+                self.gid = reply.words[2] as u32;
+                // Copy username to shell
+                let len = username.len().min(self.username.len() - 1);
+                self.username[..len].copy_from_slice(&username[..len]);
+                self.username_len = len;
+                true
+            } else {
+                false
+            }
+        }
+
         fn cmd_whoami(&self) -> &[u8] {
             &self.username[..self.username_len]
         }
@@ -258,7 +295,19 @@ mod sunlight {
 
         fn cmd_id(&self, args: &[&str]) -> &[u8] {
             if args.is_empty() {
-                return b"uid=0(root) gid=0(root) groups=0(root),10(wheel)";
+                // Return current user's info
+                unsafe {
+                    static mut BUF: [u8; 64] = [0u8; 64];
+                    let buf = &mut BUF;
+                    let username_str = core::str::from_utf8(&self.username[..self.username_len])
+                        .unwrap_or("root");
+                    let prefix = alloc::format!("uid={}({}) gid={}(root) groups={}(root)",
+                        self.uid, username_str, self.gid, self.gid);
+                    let bytes = prefix.as_bytes();
+                    let len = bytes.len().min(buf.len());
+                    buf[..len].copy_from_slice(&bytes[..len]);
+                    return &buf[..len];
+                }
             }
             // lookup specific user
             let username = args[0].as_bytes();
@@ -918,6 +967,8 @@ mod sunlight {
         debug_log("[TTY]  sunshell registered as 'sshl'");
 
         let mut shell = Shell::new();
+        // Load real user info from /etc/passwd
+        shell.load_user_from_vfs(b"root");
         let mut msg = ipc_reply_and_wait(ep, IpcMsg::with_label(0));
         loop {
             // Drain request from tty_server: send the next chunk of long output

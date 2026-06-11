@@ -108,6 +108,8 @@ pub mod VfsMsg {
     pub const MKDIR: u64 = 8;
     pub const CHMOD: u64 = 9;
     pub const CHOWN: u64 = 10;
+    pub const GETPWNAM: u64 = 11;  // Get user info by username
+    pub const GETGRGID: u64 = 12;  // Get group info by gid
 }
 
 #[allow(non_snake_case)]

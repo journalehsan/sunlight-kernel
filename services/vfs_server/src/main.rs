@@ -233,6 +233,11 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             Some(pb) => chown_path(state, pb.as_str(), msg.words[4] as u32, msg.words[5] as u32),
             None => error_reply(FsError::InvalidPath),
         },
+        VfsMsg::GETPWNAM => match decoded_path(&msg.words) {
+            Some(pb) => getpwnam(state, pb.as_str()),
+            None => error_reply(FsError::InvalidPath),
+        },
+        VfsMsg::GETGRGID => getgrgid(state, msg.words[0] as u32),
         _ => error_reply(FsError::Unsupported),
     }
 }
@@ -368,6 +373,64 @@ fn chown_path(state: &mut State, path: &str, uid: u32, gid: u32) -> IpcMsg {
     }
     match state.vfs.chown(path, uid, gid) {
         Ok(()) => ok_reply(),
+        Err(e) => error_reply(e),
+    }
+}
+
+/// Get user information by name from /etc/passwd
+fn getpwnam(state: &mut State, username: &str) -> IpcMsg {
+    // Read /etc/passwd
+    match state.vfs.open("/etc/passwd") {
+        Ok(handle) => {
+            let mut buf = [0u8; 512];
+            match state.vfs.read(handle, 0, &mut buf) {
+                Ok(n) => {
+                    let passwd_data = core::str::from_utf8(&buf[..n]).unwrap_or("");
+                    match parse_passwd(passwd_data.as_bytes()) {
+                        (entries, count) => {
+                            match sunlight_fs::lookup_by_name(&entries[..count], username.as_bytes()) {
+                                Some(entry) => {
+                                    let mut reply = ok_reply();
+                                    reply.words[1] = entry.uid as u64;
+                                    reply.words[2] = entry.gid as u64;
+                                    reply.word_count = 3;
+                                    reply
+                                }
+                                None => error_reply(FsError::NotFound),
+                            }
+                        }
+                    }
+                }
+                Err(e) => error_reply(e),
+            }
+        }
+        Err(e) => error_reply(e),
+    }
+}
+
+/// Get group information by gid from /etc/group
+fn getgrgid(state: &mut State, gid: u32) -> IpcMsg {
+    // Read /etc/group
+    match state.vfs.open("/etc/group") {
+        Ok(handle) => {
+            let mut buf = [0u8; 512];
+            match state.vfs.read(handle, 0, &mut buf) {
+                Ok(n) => {
+                    match parse_group(&buf[..n]) {
+                        (entries, count) => {
+                            match entries[..count].iter().find(|e| e.gid == gid) {
+                                Some(_entry) => {
+                                    let reply = ok_reply().word(1, gid as u64);
+                                    reply
+                                }
+                                None => error_reply(FsError::NotFound),
+                            }
+                        }
+                    }
+                }
+                Err(e) => error_reply(e),
+            }
+        }
         Err(e) => error_reply(e),
     }
 }
