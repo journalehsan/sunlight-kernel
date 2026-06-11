@@ -46,6 +46,13 @@ pub enum SunlightSyscall {
     Mprotect = 52,
     Mremap = 53,
 
+    // Signal handling (Phase 4.3)
+    Sigaction = 70,
+    Sigprocmask = 71,
+    Kill = 72,
+    Pause = 73,
+    Sigreturn = 74,
+
     DebugLog = 99,
 }
 
@@ -185,6 +192,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         51 => sys_munmap(frame),
         52 => sys_mprotect(frame),
         53 => sys_mremap(frame),
+        70 => sys_sigaction(frame),
+        71 => sys_sigprocmask(frame),
+        72 => sys_kill(frame),
+        73 => sys_pause(),
+        74 => sys_sigreturn(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -627,4 +639,48 @@ fn sys_mremap(frame: &mut SyscallFrame) -> u64 {
         Ok(addr) => addr,
         Err(_) => u64::MAX,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4.3: Signal handling syscalls
+// ---------------------------------------------------------------------------
+
+/// Syscall: sigaction (70)
+/// rdi = signal number
+/// rsi = pointer to new sigaction
+/// rdx = pointer to old sigaction
+fn sys_sigaction(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] sigaction requested");
+    u64::MAX
+}
+
+/// Syscall: sigprocmask (71)
+/// rdi = how (SIG_BLOCK, SIG_UNBLOCK, SIG_SETMASK)
+/// rsi = pointer to new mask
+/// rdx = pointer to old mask
+fn sys_sigprocmask(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] sigprocmask requested");
+    u64::MAX
+}
+
+/// Syscall: kill (72)
+/// rdi = pid
+/// rsi = signal number
+fn sys_kill(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] kill requested");
+    u64::MAX
+}
+
+/// Syscall: pause (73)
+/// Sleep until a signal is delivered
+fn sys_pause() -> u64 {
+    crate::serial_println!("[SYSCALL] pause requested");
+    u64::MAX
+}
+
+/// Syscall: sigreturn (74)
+/// Return from signal handler
+fn sys_sigreturn(_frame: &mut SyscallFrame) -> u64 {
+    crate::serial_println!("[SYSCALL] sigreturn requested");
+    u64::MAX
 }

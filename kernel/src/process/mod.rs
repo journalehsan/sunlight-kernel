@@ -5,6 +5,7 @@ pub mod spawn;
 pub mod fork;
 pub mod mmap;
 pub mod fd_table;
+pub mod signal;
 
 use address_space::AddressSpace;
 use layout::USER_STACK_TOP;
@@ -38,6 +39,7 @@ pub struct Process {
     pub pending_reply_wait: Option<(u32, IpcMsg)>,
     pub fd_table: fd_table::FdTable,
     pub capability_mode: bool,
+    pub signal_state: signal::SignalState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +97,7 @@ impl Process {
             pending_reply_wait: None,
             fd_table: fd_table::FdTable::new(),
             capability_mode: false,
+            signal_state: signal::SignalState::new(),
         }
     }
 
