@@ -190,12 +190,91 @@ extern "x86-interrupt" fn gpf_handler(
 }
 
 extern "x86-interrupt" fn page_fault_handler(
-    stack_frame: InterruptStackFrame,
+    _stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
-    let addr = x86_64::registers::control::Cr2::read_raw();
-    serial_println!("[INT] Page Fault at {:#x}: {:?} code={:?}", addr, stack_frame, error_code);
+    let vaddr = x86_64::registers::control::Cr2::read_raw();
+
+    // Check if this is a write fault (CoW candidate)
+    if error_code.contains(PageFaultErrorCode::CAUSED_BY_WRITE) {
+        // Try to handle as CoW page fault
+        if handle_cow_page_fault(vaddr) {
+            return;  // CoW fault handled successfully
+        }
+    }
+
+    // Not a CoW fault — unrecoverable
+    serial_println!("[FAULT] Page Fault at {:#x}: code={:?}", vaddr, error_code);
     loop { x86_64::instructions::hlt(); }
+}
+
+/// Handle Copy-on-Write page fault
+/// Returns true if handled, false if unrecoverable
+fn handle_cow_page_fault(vaddr: u64) -> bool {
+    // Only handle user-space addresses
+    if vaddr >= 0x0000_8000_0000_0000 {
+        return false;
+    }
+
+    let page_addr = vaddr & !0xFFF;  // Page-align
+    let page = match x86_64::structures::paging::Page::from_start_address(
+        x86_64::VirtAddr::new(page_addr)
+    ) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    // Get current page mappings
+    let hhdm = match crate::HHDM_REQ.response() {
+        Some(resp) => x86_64::VirtAddr::new(resp.offset),
+        None => return false,
+    };
+
+    let mut pmm = crate::PMM.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+
+    let process = sched.current_process_mut();
+
+    // Look up the current physical frame
+    let old_phys = match unsafe { process.address_space.lookup_phys(page, hhdm) } {
+        Some(phys) => phys,
+        None => return false,
+    };
+
+    // Allocate a new frame for the copy
+    let new_phys = match pmm.alloc_frame() {
+        Some(phys) => phys,
+        None => return false,
+    };
+
+    // Copy the page content
+    let old_vaddr = hhdm + old_phys.as_u64();
+    let new_vaddr = hhdm + new_phys.as_u64();
+
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            old_vaddr.as_ptr::<u8>(),
+            new_vaddr.as_mut_ptr::<u8>(),
+            4096,
+        );
+    }
+
+    // Remap the page as writable
+    let new_frame = match x86_64::structures::paging::PhysFrame::from_start_address(new_phys) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+
+    let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+        | x86_64::structures::paging::PageTableFlags::WRITABLE
+        | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+
+    unsafe {
+        process.address_space.map_page(page, new_frame, flags, &mut *pmm, hhdm);
+    }
+
+    crate::serial_println!("[COW] CoW page fault at {:#x}: allocated new frame", page_addr);
+    true
 }
 
 static TICKS: spin::Mutex<u64> = spin::Mutex::new(0);

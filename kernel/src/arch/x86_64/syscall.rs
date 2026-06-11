@@ -151,13 +151,49 @@ pub struct SyscallRegs {
 
 pub type SyscallFrame = SyscallRegs;
 
+/// Deliver pending signals before returning to user space
+fn deliver_pending_signals(process: &mut crate::process::Process) {
+    use crate::process::signal::{Signal, SigHandler};
+
+    // Check for pending signals (in priority order)
+    let pending = process.signal_state.pending_signals();
+
+    // Handle a few critical signals
+    for sig_num in [2, 9, 15, 17].iter() {  // SIGINT, SIGKILL, SIGTERM, SIGCHLD
+        if let Some(sig) = Signal::try_from_u32(*sig_num) {
+            if pending.contains(sig) && !process.signal_state.is_blocked(sig) {
+                process.signal_state.clear_pending(sig);
+
+                let action = process.signal_state.get_handler(sig);
+                match action.handler {
+                    SigHandler::Ignore => {
+                        crate::serial_println!("[SIG] {} ignored", sig_num);
+                    }
+                    SigHandler::Default => {
+                        // Default action: terminate
+                        crate::serial_println!("[SIG] {} delivered: terminating process", sig_num);
+                        process.state = crate::process::ProcessState::Finished;
+                        crate::sched::request_reschedule();
+                    }
+                    SigHandler::UserHandler(_handler_addr) => {
+                        // Would need to setup signal frame on user stack
+                        crate::serial_println!("[SIG] {} would call user handler at {:#x}", sig_num, _handler_addr);
+                        // TODO: Setup signal frame and jump to handler
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Syscall dispatch — called from assembly with pointer to saved frame.
 /// Returns the value to put in RAX.
 /// SAFETY: `frame` must point to a valid SyscallFrame on the stack.
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     let num = frame.rax;
-    match num {
+
+    let result = match num {
         1 => ipc_call(frame),
         2 => ipc_reply(frame),
         3 => ipc_reply_wait(frame),
@@ -202,7 +238,14 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
             u64::MAX
         }
-    }
+    };
+
+    // Deliver pending signals before returning to user space
+    crate::sched::with_scheduler(|sched| {
+        deliver_pending_signals(sched.current_process_mut());
+    });
+
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -512,24 +555,103 @@ fn sys_setgid(_frame: &mut SyscallFrame) -> u64 {
 }
 
 // File descriptor syscalls (stubs for now)
-fn sys_open(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] open requested");
-    u64::MAX
+/// Syscall: open (40)
+/// rdi = pathname (user-space pointer)
+/// rsi = flags (O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, etc.)
+/// rdx = mode (for creation)
+fn sys_open(frame: &mut SyscallFrame) -> u64 {
+    let _path = frame.rdi as *const u8;
+    let _flags = frame.rsi as u32;
+    let _mode = frame.rdx as u32;
+
+    // TODO: Implement actual open
+    // For now: return stub errno
+    crate::serial_println!("[SYSCALL] open requested (stub)");
+    u64::MAX  // ENOENT
 }
 
-fn sys_close(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] close requested");
-    u64::MAX
+/// Syscall: close (41)
+/// rdi = fd
+fn sys_close(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    match sched.current_process_mut().fd_table.close(fd) {
+        Ok(()) => 0,
+        Err(_) => u64::MAX,  // EBADF
+    }
 }
 
-fn sys_read(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] read requested");
-    u64::MAX
+/// Syscall: read (42)
+/// rdi = fd
+/// rsi = buf (user-space pointer)
+/// rdx = count
+fn sys_read(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let _buf = frame.rsi as *mut u8;
+    let _count = frame.rdx as usize;
+
+    let sched = crate::sched::SCHEDULER.lock();
+
+    // Check if fd is valid and has READ right
+    match sched.current_process().fd_table.check_rights(
+        fd,
+        crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::READ),
+    ) {
+        Ok(()) => {
+            crate::serial_println!("[SYSCALL] read fd={} (capability check passed)", fd);
+            // TODO: Actual read implementation
+            0
+        }
+        Err(_) => {
+            crate::serial_println!("[SYSCALL] read fd={} (capability denied)", fd);
+            u64::MAX  // EACCES
+        }
+    }
 }
 
-fn sys_write(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] write requested");
-    u64::MAX
+/// Syscall: write (43)
+/// rdi = fd
+/// rsi = buf (user-space pointer)
+/// rdx = count
+fn sys_write(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let buf = frame.rsi as *const u8;
+    let count = frame.rdx as usize;
+
+    let sched = crate::sched::SCHEDULER.lock();
+
+    // Check if fd is valid and has WRITE right
+    match sched.current_process().fd_table.check_rights(
+        fd,
+        crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::WRITE),
+    ) {
+        Ok(()) => {
+            // For now, handle stdin/stdout/stderr specially
+            match fd {
+                1 | 2 => {
+                    // stdout/stderr: write to serial
+                    if buf as u64 != 0 && count > 0 {
+                        let slice = unsafe {
+                            core::slice::from_raw_parts(buf, count.min(256))
+                        };
+                        if let Ok(s) = core::str::from_utf8(slice) {
+                            crate::serial_println!("{}", s);
+                        }
+                    }
+                    count as u64
+                }
+                _ => {
+                    // Other fds: not implemented yet
+                    0
+                }
+            }
+        }
+        Err(_) => {
+            crate::serial_println!("[SYSCALL] write fd={} (capability denied)", fd);
+            u64::MAX  // EACCES
+        }
+    }
 }
 
 fn sys_lseek(_frame: &mut SyscallFrame) -> u64 {
