@@ -40,6 +40,12 @@ pub enum SunlightSyscall {
     Fstat = 48,
     Fcntl = 49,
 
+    // Memory management (Phase 4.1)
+    Mmap = 50,
+    Munmap = 51,
+    Mprotect = 52,
+    Mremap = 53,
+
     DebugLog = 99,
 }
 
@@ -175,6 +181,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         47 => sys_pipe(frame),
         48 => sys_fstat(frame),
         49 => sys_fcntl(frame),
+        50 => sys_mmap(frame),
+        51 => sys_munmap(frame),
+        52 => sys_mprotect(frame),
+        53 => sys_mremap(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -538,4 +548,83 @@ fn sys_fstat(_frame: &mut SyscallFrame) -> u64 {
 fn sys_fcntl(_frame: &mut SyscallFrame) -> u64 {
     crate::serial_println!("[SYSCALL] fcntl requested");
     u64::MAX
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4.1: Memory management syscalls
+// ---------------------------------------------------------------------------
+
+/// Syscall: mmap (50)
+/// rdi = addr (hint, 0 = kernel chooses)
+/// rsi = length
+/// rdx = prot (PROT_READ | PROT_WRITE | PROT_EXEC)
+/// rcx = flags (MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED)
+/// r8 = fd (-1 for anonymous)
+/// r9 = offset
+fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
+    let addr = frame.rdi;
+    let length = frame.rsi;
+    let prot = frame.rdx as u32;
+    let flags = frame.rcx as u32;
+    let fd = frame.r8 as i32;
+    let offset = frame.r9;
+
+    let mut pmm = crate::PMM.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+
+    match crate::process::mmap::sys_mmap(addr, length, prot, flags, fd, offset, &mut *pmm, &mut *sched) {
+        Ok(mapped_addr) => {
+            crate::serial_println!("[SYSCALL] mmap({:#x}, {:#x}) -> {:#x}", addr, length, mapped_addr);
+            mapped_addr
+        }
+        Err(_) => {
+            crate::serial_println!("[SYSCALL] mmap failed ({:#x}, {:#x})", addr, length);
+            u64::MAX
+        }
+    }
+}
+
+/// Syscall: munmap (51)
+/// rdi = addr
+/// rsi = length
+fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
+    let addr = frame.rdi;
+    let length = frame.rsi;
+
+    match crate::process::mmap::sys_munmap(addr, length) {
+        Ok(()) => 0,
+        Err(_) => u64::MAX,
+    }
+}
+
+/// Syscall: mprotect (52)
+/// rdi = addr
+/// rsi = length
+/// rdx = prot (PROT_READ | PROT_WRITE | PROT_EXEC)
+fn sys_mprotect(frame: &mut SyscallFrame) -> u64 {
+    let addr = frame.rdi;
+    let length = frame.rsi;
+    let prot = frame.rdx as u32;
+
+    match crate::process::mmap::sys_mprotect(addr, length, prot) {
+        Ok(()) => 0,
+        Err(_) => u64::MAX,
+    }
+}
+
+/// Syscall: mremap (53)
+/// rdi = old_addr
+/// rsi = old_size
+/// rdx = new_size
+/// rcx = flags
+fn sys_mremap(frame: &mut SyscallFrame) -> u64 {
+    let old_addr = frame.rdi;
+    let old_size = frame.rsi;
+    let new_size = frame.rdx;
+    let flags = frame.rcx as u32;
+
+    match crate::process::mmap::sys_mremap(old_addr, old_size, new_size, flags) {
+        Ok(addr) => addr,
+        Err(_) => u64::MAX,
+    }
 }

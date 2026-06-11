@@ -3,6 +3,7 @@ pub mod elf_loader;
 pub mod layout;
 pub mod spawn;
 pub mod fork;
+pub mod mmap;
 
 use address_space::AddressSpace;
 use layout::USER_STACK_TOP;
