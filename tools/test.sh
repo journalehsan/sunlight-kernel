@@ -108,8 +108,50 @@ case "$PHASE" in
         PASS_LABEL="Phase 5.7"
         NEED_DISK=true
         ;;
+    phase5x.0)
+        EXPECTED_FILE="tools/tests/phase5x_0.expected"
+        FINAL_MARKER="[DHCP] OK"
+        PASS_LABEL="Phase 5.x.0"
+        NEED_DISK=false
+        ;;
+    phase5x.1)
+        EXPECTED_FILE="tools/tests/phase5x_1.expected"
+        FINAL_MARKER="[DNS]  OK"
+        PASS_LABEL="Phase 5.x.1"
+        NEED_DISK=false
+        ;;
+    phase5x.2)
+        EXPECTED_FILE="tools/tests/phase5x_2.expected"
+        FINAL_MARKER="[TCP]  OK"
+        PASS_LABEL="Phase 5.x.2"
+        NEED_DISK=false
+        ;;
+    phase5x.3)
+        EXPECTED_FILE="tools/tests/phase5x_3.expected"
+        FINAL_MARKER="[M3]   ping 8.8.8.8: SUCCESS"
+        PASS_LABEL="Phase 5.x.3"
+        NEED_DISK=false
+        ;;
+    phase5x.4)
+        EXPECTED_FILE="tools/tests/phase5x_4.expected"
+        FINAL_MARKER="[TLS]  Handshake OK"
+        PASS_LABEL="Phase 5.x.4"
+        NEED_DISK=false
+        ;;
+    phase5x.5)
+        EXPECTED_FILE="tools/tests/phase5x_5.expected"
+        FINAL_MARKER="[UTIL] OK"
+        PASS_LABEL="Phase 5.x.5"
+        NEED_DISK=false
+        ;;
+    phase5x.6)
+        EXPECTED_FILE="tools/tests/phase5x_6.expected"
+        FINAL_MARKER="[NET]  OK"
+        PASS_LABEL="Phase 5.x.6"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6"
         exit 2
         ;;
 esac
@@ -139,7 +181,7 @@ if [[ "$PHASE" == "phase3.9" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
-elif [[ "$PHASE" == phase5* ]]; then
+elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE="$PHASE")
 fi
 env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1

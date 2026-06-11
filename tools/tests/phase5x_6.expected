@@ -1,0 +1,4 @@
+# Phase 5.x.6 test: sunlight-net-utils network utilities
+[NET]  sunlight-net-utils v0.1 loaded
+[NET]  Commands available: ping ifconfig wget curl dig nslookup hostname netstat ss traceroute
+[NET]  OK

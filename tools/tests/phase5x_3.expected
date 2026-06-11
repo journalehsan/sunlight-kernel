@@ -1,0 +1,8 @@
+# Phase 5.x.3 test: Real ICMP ping (M3 MILESTONE)
+[PING] Sending 4 ICMP echo requests to 8.8.8.8...
+64 bytes from 8.8.8.8: icmp_seq=0 time=
+64 bytes from 8.8.8.8: icmp_seq=1 time=
+64 bytes from 8.8.8.8: icmp_seq=2 time=
+64 bytes from 8.8.8.8: icmp_seq=3 time=
+4 packets transmitted, 4 received, 0% loss
+[M3]   ping 8.8.8.8: SUCCESS 🌐

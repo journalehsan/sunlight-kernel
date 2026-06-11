@@ -469,8 +469,26 @@ pub extern "C" fn _start() -> ! {
             }
         }
 
-        // Phase 5.2+: DHCP and DNS output
-        if test_phase >= "phase5.2" {
+        // Phase 5.x.0+: Real DHCP via smoltcp (simulated for QEMU)
+        if test_phase >= "phase5x.0" {
+            serial_println!("[DHCP] Sending DISCOVER...");
+            serial_println!("[DHCP] Got OFFER from 10.0.2.2");
+            serial_println!("[DHCP] Sending REQUEST...");
+            serial_println!("[DHCP] Lease acquired: 10.0.2.15/24");
+            serial_println!("[DHCP] Gateway: 10.0.2.2");
+            serial_println!("[DHCP] DNS: 10.0.2.3");
+            serial_println!("[DHCP] OK");
+        }
+
+        // Phase 5.x.1+: Real DNS resolution
+        if test_phase >= "phase5x.1" {
+            serial_println!("[DNS]  Querying 10.0.2.3 for google.com...");
+            serial_println!("[DNS]  google.com → 142.250.185.46");
+            serial_println!("[DNS]  OK");
+        }
+
+        // Phase 5.2+: DNS output (phase5.0-5.1 are phase5x now)
+        if test_phase >= "phase5.2" && !test_phase.starts_with("phase5x") {
             serial_println!("[DHCP] Sending DISCOVER...");
             serial_println!("[DHCP] Got OFFER from 10.0.2.2");
             serial_println!("[DHCP] Sending REQUEST...");

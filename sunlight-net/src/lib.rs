@@ -11,6 +11,6 @@ pub mod netop;
 
 pub use virtio_net::VirtioNet;
 pub use device::SunlightNetDevice;
-pub use dhcp::{DhcpConfig, DhcpError, run_dhcp};
+pub use dhcp::{DhcpConfig, DhcpError, acquire_lease};
 pub use dns::{DnsError, resolve};
 pub use netop::NetOp;

@@ -1,0 +1,4 @@
+# Phase 5.x.2 test: Real TCP socket connections
+[TCP]  Connecting to example.com:80...
+[TCP]  Connected (local
+[TCP]  OK

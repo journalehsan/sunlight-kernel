@@ -1,0 +1,4 @@
+# Phase 5.x.1 test: Real DNS resolution
+[DNS]  Querying 10.0.2.3 for google.com...
+[DNS]  google.com → 142.250.
+[DNS]  OK
