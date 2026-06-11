@@ -18,6 +18,8 @@ members = [
     "sunlight-elf",
     "sunshell",
     "sunlight-net",
+    "sunlight-utils",
+    "sunlight-net-utils",
 ]
 
 [workspace.dependencies]

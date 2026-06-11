@@ -217,6 +217,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-net-utils"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ipc",
+]
+
+[[package]]
 name = "sunlight-timer-server"
 version = "0.1.0"
 dependencies = [
@@ -245,6 +252,14 @@ dependencies = [
 [[package]]
 name = "sunlight-tui"
 version = "0.1.0"
+
+[[package]]
+name = "sunlight-utils"
+version = "0.1.0"
+dependencies = [
+ "sunlight-fs",
+ "sunlight-ipc",
+]
 
 [[package]]
 name = "sunlight-vfs-server"

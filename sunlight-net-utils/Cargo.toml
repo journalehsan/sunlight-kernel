@@ -1,0 +1,11 @@
+[package]
+name = "sunlight-net-utils"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sunlight-net-utils"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }

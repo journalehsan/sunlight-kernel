@@ -1,0 +1,12 @@
+[package]
+name = "sunlight-utils"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sunlight-utils"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
+sunlight-fs = { path = "../sunlight-fs" }
