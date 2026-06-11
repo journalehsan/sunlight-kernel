@@ -141,6 +141,12 @@ mod sunlight {
     const LONG_OUT_MAX: usize = 1024;
     const LONG_OUT_CHUNK: usize = 48;
 
+    enum PasswdState {
+        None,
+        PromptNew { target_user: [u8; 64], target_user_len: usize },
+        PromptConfirm { target_user: [u8; 64], target_user_len: usize, new_password: [u8; 64], new_password_len: usize },
+    }
+
     struct Shell {
         line: [u8; MAX_LINE],
         line_len: usize,
@@ -148,6 +154,9 @@ mod sunlight {
         username_len: usize,
         uid: u32,
         gid: u32,
+        passwd_state: PasswdState,
+        passwd_buffer: [u8; 64],
+        passwd_buffer_len: usize,
     }
 
     impl Shell {
@@ -162,10 +171,32 @@ mod sunlight {
                 username_len: 4,
                 uid: 0,
                 gid: 0,
+                passwd_state: PasswdState::None,
+                passwd_buffer: [0; 64],
+                passwd_buffer_len: 0,
             }
         }
 
         fn handle_byte(&mut self, byte: u8) -> ([u8; MAX_OUT], usize) {
+            // Check if we're in password entry mode
+            match &self.passwd_state {
+                PasswdState::PromptNew { target_user, target_user_len } => {
+                    let target = (*target_user, *target_user_len);
+                    return self.handle_passwd_input(byte, PasswdState::PromptNew { target_user: target.0, target_user_len: target.1 });
+                }
+                PasswdState::PromptConfirm { target_user, target_user_len, new_password, new_password_len } => {
+                    let state = PasswdState::PromptConfirm {
+                        target_user: *target_user,
+                        target_user_len: *target_user_len,
+                        new_password: *new_password,
+                        new_password_len: *new_password_len,
+                    };
+                    return self.handle_passwd_input(byte, state);
+                }
+                PasswdState::None => {}
+            }
+
+            // Normal command mode
             match byte {
                 b'\n' | b'\r' => {
                     let result = self.run_line();
@@ -189,17 +220,102 @@ mod sunlight {
             }
         }
 
-        fn run_line(&mut self) -> ([u8; MAX_OUT], usize) {
-            let line = &self.line[..self.line_len];
-            let line_str = match core::str::from_utf8(line) {
-                Ok(s) => s.trim(),
-                Err(_) => return copy_out(b"Invalid UTF-8\n"),
-            };
+        fn handle_passwd_input(&mut self, byte: u8, state: PasswdState) -> ([u8; MAX_OUT], usize) {
+            match byte {
+                b'\n' | b'\r' => {
+                    // Password entry complete
+                    let password = self.passwd_buffer[..self.passwd_buffer_len].to_vec();
 
-            if line_str.is_empty() {
-                return ([0; MAX_OUT], 0);
+                    match state {
+                        PasswdState::PromptNew { target_user, target_user_len } => {
+                            // Transition to confirm password prompt
+                            self.passwd_state = PasswdState::PromptConfirm {
+                                target_user,
+                                target_user_len,
+                                new_password: self.passwd_buffer,
+                                new_password_len: self.passwd_buffer_len,
+                            };
+                            self.passwd_buffer_len = 0;
+                            return copy_out(b"Retype new password: ");
+                        }
+                        PasswdState::PromptConfirm { target_user, target_user_len, new_password, new_password_len } => {
+                            // Verify passwords match
+                            if self.passwd_buffer_len != new_password_len
+                                || &self.passwd_buffer[..self.passwd_buffer_len] != &new_password[..new_password_len] {
+                                self.passwd_state = PasswdState::None;
+                                self.passwd_buffer_len = 0;
+                                return copy_out(b"passwd: passwords do not match\n");
+                            }
+                            // Passwords match, update shadow
+                            let result = self.update_shadow(&target_user[..target_user_len], &new_password[..new_password_len]);
+                            self.passwd_state = PasswdState::None;
+                            self.passwd_buffer_len = 0;
+                            return result;
+                        }
+                        PasswdState::None => {}
+                    }
+                    ([0; MAX_OUT], 0)
+                }
+                0x08 => {
+                    // Backspace - delete from password buffer silently
+                    if self.passwd_buffer_len > 0 {
+                        self.passwd_buffer_len -= 1;
+                    }
+                    ([0; MAX_OUT], 0)
+                }
+                c if c >= 0x20 && c <= 0x7E => {
+                    // Accumulate password without echoing
+                    if self.passwd_buffer_len < 64 {
+                        self.passwd_buffer[self.passwd_buffer_len] = c;
+                        self.passwd_buffer_len += 1;
+                    }
+                    ([0; MAX_OUT], 0)
+                }
+                _ => ([0; MAX_OUT], 0),
+            }
+        }
+
+        fn run_line(&mut self) -> ([u8; MAX_OUT], usize) {
+            // Make owned copies of cmd and args first
+            let cmd_owned: alloc::string::String;
+            let target_user_owned: Option<alloc::string::String>;
+
+            {
+                let line = &self.line[..self.line_len];
+                let line_str = match core::str::from_utf8(line) {
+                    Ok(s) => s.trim(),
+                    Err(_) => return copy_out(b"Invalid UTF-8\n"),
+                };
+
+                if line_str.is_empty() {
+                    return ([0; MAX_OUT], 0);
+                }
+
+                let mut parts = line_str.split_ascii_whitespace();
+                let cmd = parts.next().unwrap_or("");
+                cmd_owned = alloc::string::String::from(cmd);
+
+                // Check if this is passwd and get target arg
+                if cmd == "passwd" {
+                    let args: alloc::vec::Vec<&str> = parts.collect();
+                    target_user_owned = if args.is_empty() {
+                        None
+                    } else {
+                        Some(alloc::string::String::from(args[0]))
+                    };
+                } else {
+                    target_user_owned = None;
+                }
             }
 
+            // Now self is not borrowed anymore, safe to call mutable methods
+            if cmd_owned == "passwd" {
+                return self.cmd_passwd(target_user_owned.as_deref());
+            }
+
+            // Re-parse for normal commands
+            let line = &self.line[..self.line_len];
+            let line_str = core::str::from_utf8(line).unwrap_or("").trim();
             let mut parts = line_str.split_ascii_whitespace();
             let cmd = parts.next().unwrap_or("");
             let args: alloc::vec::Vec<&str> = parts.collect();
@@ -209,7 +325,6 @@ mod sunlight {
                 "id" => self.cmd_id(&args),
                 "useradd" => self.cmd_useradd(&args),
                 "userdel" => self.cmd_userdel(&args),
-                "passwd" => b"passwd: not implemented\n",
                 "su" => b"su: not implemented\n",
                 "groups" => self.cmd_groups(&args),
                 "chmod" => self.cmd_chmod(&args),
@@ -471,6 +586,113 @@ mod sunlight {
 
             debug_log("[SunlightOS] Phase 3.8 OK");
             b"OK\n"
+        }
+
+        fn cmd_passwd(&mut self, target_arg: Option<&str>) -> ([u8; MAX_OUT], usize) {
+            // Determine target user
+            let target_user_bytes = if let Some(arg) = target_arg {
+                // Arg provided: change specified user's password (root only)
+                if self.uid != 0 {
+                    return copy_out(b"passwd: permission denied\n");
+                }
+                arg.as_bytes()
+            } else {
+                // No args: change current user's password
+                &self.username[..self.username_len]
+            };
+            let target_user = target_user_bytes;
+
+            // Verify target user exists
+            if !self.user_exists(target_user) {
+                return copy_out(b"passwd: user not found\n");
+            }
+
+            // Enter password prompt mode
+            let mut target_user_buf = [0u8; 64];
+            let target_user_len = target_user.len().min(64);
+            target_user_buf[..target_user_len].copy_from_slice(&target_user[..target_user_len]);
+
+            self.passwd_state = PasswdState::PromptNew {
+                target_user: target_user_buf,
+                target_user_len,
+            };
+            self.passwd_buffer_len = 0;
+
+            copy_out(b"New password: ")
+        }
+
+        fn user_exists(&self, username: &[u8]) -> bool {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return false,
+            };
+
+            let mut msg = IpcMsg::with_label(VfsMsg::GETPWNAM);
+            let mut word_idx = 0;
+            for i in 0..(username.len() / 8 + 1) {
+                let start = i * 8;
+                let end = (start + 8).min(username.len());
+                if start < username.len() {
+                    let mut word = 0u64;
+                    for (j, &b) in username[start..end].iter().enumerate() {
+                        word |= (b as u64) << (j * 8);
+                    }
+                    msg = msg.word(word_idx, word);
+                }
+                word_idx += 1;
+            }
+
+            let reply = ipc_call(vfs_cap, msg);
+            reply.label == VfsMsg::REPLY && reply.words[0] == 0
+        }
+
+        fn update_shadow(&mut self, username: &[u8], password: &[u8]) -> ([u8; MAX_OUT], usize) {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return copy_out(b"passwd: VFS not available\n"),
+            };
+
+            // Read current shadow file
+            let shadow_data = read_file(vfs_cap, "/etc/shadow");
+            let shadow_str = core::str::from_utf8(&shadow_data).unwrap_or("");
+
+            // Find and update the target user's shadow entry
+            let mut new_shadow = alloc::string::String::new();
+            let target_username = core::str::from_utf8(username).unwrap_or("");
+            let new_password_str = core::str::from_utf8(password).unwrap_or("?");
+            let mut found = false;
+
+            for line in shadow_str.lines() {
+                let parts: alloc::vec::Vec<&str> = line.split(':').collect();
+                if !parts.is_empty() && parts[0] == target_username {
+                    // Replace password in this entry
+                    new_shadow.push_str(&alloc::format!(
+                        "{}:{}:0:0:99999:7:::\n",
+                        target_username, new_password_str
+                    ));
+                    found = true;
+                } else {
+                    new_shadow.push_str(line);
+                    new_shadow.push('\n');
+                }
+            }
+
+            // If user not found in shadow, add new entry
+            if !found {
+                new_shadow.push_str(&alloc::format!(
+                    "{}:{}:0:0:99999:7:::\n",
+                    target_username, new_password_str
+                ));
+            }
+
+            // Write updated shadow file
+            match write_file(vfs_cap, "/etc/shadow", new_shadow.as_bytes()) {
+                Ok(()) => {
+                    debug_log("[PASSWD] Password updated");
+                    copy_out(b"passwd: password updated\n")
+                }
+                Err(()) => copy_out(b"passwd: failed to update shadow\n"),
+            }
         }
 
         fn cmd_groups(&self, _args: &[&str]) -> &[u8] {
