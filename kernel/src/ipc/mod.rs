@@ -53,7 +53,10 @@ impl IpcBus {
     }
 
     fn reply_waiters_for(&mut self, endpoint_id: u32) -> &mut VecDeque<usize> {
-        let idx = self.reply_waiters.iter().position(|(id, _)| *id == endpoint_id);
+        let idx = self
+            .reply_waiters
+            .iter()
+            .position(|(id, _)| *id == endpoint_id);
         if let Some(idx) = idx {
             return &mut self.reply_waiters[idx].1;
         }
@@ -62,11 +65,7 @@ impl IpcBus {
         &mut self.reply_waiters[last].1
     }
 
-    pub fn endpoint_owner(
-        &self,
-        token: CapabilityToken,
-        caps: &CapabilityBroker,
-    ) -> Option<usize> {
+    pub fn endpoint_owner(&self, token: CapabilityToken, caps: &CapabilityBroker) -> Option<usize> {
         let endpoint_id = caps.check(token, CapabilityRights::SEND).ok()?;
         caps.endpoint_owner(endpoint_id)
     }
@@ -88,12 +87,7 @@ impl IpcBus {
         sched.wake_pid(server_pid);
     }
 
-    pub fn block_on_recv(
-        &mut self,
-        endpoint_id: u32,
-        receiver_pid: usize,
-        sched: &mut Scheduler,
-    ) {
+    pub fn block_on_recv(&mut self, endpoint_id: u32, receiver_pid: usize, sched: &mut Scheduler) {
         let global_tick = sched.global_tick;
         if let Some(receiver) = sched.process_mut_by_pid(receiver_pid) {
             receiver.ipc_endpoint = Some(endpoint_id);
@@ -116,7 +110,13 @@ impl IpcBus {
         sched.wake_pid(server_pid);
     }
 
-    pub fn send_keyboard_event(&mut self, endpoint_id: u32, event_val: u64, sched: &mut Scheduler, server_pid: usize) {
+    pub fn send_keyboard_event(
+        &mut self,
+        endpoint_id: u32,
+        event_val: u64,
+        sched: &mut Scheduler,
+        server_pid: usize,
+    ) {
         let msg = IpcMsg::with_label(0x1).word(0, event_val);
         self.queue_for(endpoint_id).push_back(msg);
         sched.wake_pid(server_pid);
@@ -191,10 +191,12 @@ pub fn handle_ipc_reply(
     let Some(client_pid) = bus.reply_waiter_pop_front(endpoint_id) else {
         return Err(IpcError::WouldBlock);
     };
-    if let Some(client) = sched.process_mut_by_pid(client_pid) {
+    if let Some(client_idx) = sched.processes.iter().position(|p| p.pid == client_pid) {
+        let client = &mut sched.processes[client_idx];
         client.ipc_reply = Some(reply);
         client.pending_call = None;
         client.state = ProcessState::Ready;
+        sched.enqueue_process_once(client_idx);
     }
     Ok(())
 }
@@ -214,10 +216,12 @@ pub fn handle_ipc_reply_wait(
 
     if !already_waiting {
         if let Some(client_pid) = bus.reply_waiter_pop_front(endpoint_id) {
-            if let Some(client) = sched.process_mut_by_pid(client_pid) {
+            if let Some(client_idx) = sched.processes.iter().position(|p| p.pid == client_pid) {
+                let client = &mut sched.processes[client_idx];
                 client.ipc_reply = Some(reply);
                 client.pending_call = None;
                 client.state = ProcessState::Ready;
+                sched.enqueue_process_once(client_idx);
             }
         }
     }

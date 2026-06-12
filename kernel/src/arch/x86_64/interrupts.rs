@@ -1,13 +1,11 @@
 use crate::arch::x86_64::keyboard;
 use crate::serial_println;
-use x86_64::structures::idt::{
-    InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode,
-};
-use x86_64::structures::gdt::{GlobalDescriptorTable, Descriptor, SegmentSelector};
-use x86_64::structures::tss::TaskStateSegment;
-use x86_64::VirtAddr;
 use x86_64::instructions::port::Port;
 use x86_64::instructions::segmentation::Segment;
+use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::structures::tss::TaskStateSegment;
+use x86_64::VirtAddr;
 
 static mut IDT: InterruptDescriptorTable = InterruptDescriptorTable::new();
 
@@ -50,10 +48,16 @@ static GDT: spin::Lazy<(GlobalDescriptorTable, Selectors)> = spin::Lazy::new(|| 
     let code_selector = gdt.append(Descriptor::kernel_code_segment());
     let _data_selector = gdt.append(Descriptor::kernel_data_segment());
     let _user_code_compat = gdt.append(user_code_segment()); // index 3, selector 0x1B
-    let _user_data = gdt.append(user_data_segment());        // index 4, selector 0x23
-    let _user_code_64 = gdt.append(user_code_segment());     // index 5, selector 0x2B
+    let _user_data = gdt.append(user_data_segment()); // index 4, selector 0x23
+    let _user_code_64 = gdt.append(user_code_segment()); // index 5, selector 0x2B
     let tss_selector = gdt.append(Descriptor::tss_segment(&*TSS));
-    (gdt, Selectors { code_selector, tss_selector })
+    (
+        gdt,
+        Selectors {
+            code_selector,
+            tss_selector,
+        },
+    )
 });
 
 /// Initialize IDT, GDT, PIC, and PIT.
@@ -63,9 +67,15 @@ pub fn init() {
     GDT.0.load();
     unsafe {
         x86_64::instructions::segmentation::CS::set_reg(GDT.1.code_selector);
-        x86_64::instructions::segmentation::SS::set_reg(x86_64::structures::gdt::SegmentSelector(0));
-        x86_64::instructions::segmentation::DS::set_reg(x86_64::structures::gdt::SegmentSelector(0));
-        x86_64::instructions::segmentation::ES::set_reg(x86_64::structures::gdt::SegmentSelector(0));
+        x86_64::instructions::segmentation::SS::set_reg(x86_64::structures::gdt::SegmentSelector(
+            0,
+        ));
+        x86_64::instructions::segmentation::DS::set_reg(x86_64::structures::gdt::SegmentSelector(
+            0,
+        ));
+        x86_64::instructions::segmentation::ES::set_reg(x86_64::structures::gdt::SegmentSelector(
+            0,
+        ));
         x86_64::instructions::tables::load_tss(GDT.1.tss_selector);
     }
 
@@ -74,14 +84,18 @@ pub fn init() {
     idt.divide_error.set_handler_fn(divide_error_handler);
     idt.invalid_opcode.set_handler_fn(invalid_opcode_handler);
     unsafe {
-        idt.double_fault.set_handler_fn(double_fault_handler).set_stack_index(0);
+        idt.double_fault
+            .set_handler_fn(double_fault_handler)
+            .set_stack_index(0);
     }
     idt.general_protection_fault.set_handler_fn(gpf_handler);
     idt.page_fault.set_handler_fn(page_fault_handler);
 
     // Use naked timer handler to enable manual context switching.
     unsafe {
-        idt[0x20].set_handler_addr(x86_64::VirtAddr::new(timer_entry as *const () as usize as u64));
+        idt[0x20].set_handler_addr(x86_64::VirtAddr::new(
+            timer_entry as *const () as usize as u64,
+        ));
     }
 
     // Keyboard IRQ1 handler (vector 0x21)
@@ -165,12 +179,16 @@ fn init_pit() {
 
 extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
     serial_println!("[INT] Divide Error: {:?}", stack_frame);
-    loop { x86_64::instructions::hlt(); }
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
 
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
     serial_println!("[INT] Invalid Opcode: {:?}", stack_frame);
-    loop { x86_64::instructions::hlt(); }
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
 
 extern "x86-interrupt" fn double_fault_handler(
@@ -178,15 +196,20 @@ extern "x86-interrupt" fn double_fault_handler(
     _error_code: u64,
 ) -> ! {
     serial_println!("[INT] Double Fault: {:?}", stack_frame);
-    loop { x86_64::instructions::hlt(); }
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
 
-extern "x86-interrupt" fn gpf_handler(
-    stack_frame: InterruptStackFrame,
-    error_code: u64,
-) {
-    serial_println!("[INT] General Protection Fault: {:?} code={}", stack_frame, error_code);
-    loop { x86_64::instructions::hlt(); }
+extern "x86-interrupt" fn gpf_handler(stack_frame: InterruptStackFrame, error_code: u64) {
+    serial_println!(
+        "[INT] General Protection Fault: {:?} code={}",
+        stack_frame,
+        error_code
+    );
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
 
 extern "x86-interrupt" fn page_fault_handler(
@@ -199,13 +222,15 @@ extern "x86-interrupt" fn page_fault_handler(
     if error_code.contains(PageFaultErrorCode::CAUSED_BY_WRITE) {
         // Try to handle as CoW page fault
         if handle_cow_page_fault(vaddr) {
-            return;  // CoW fault handled successfully
+            return; // CoW fault handled successfully
         }
     }
 
     // Not a CoW fault — unrecoverable
     serial_println!("[FAULT] Page Fault at {:#x}: code={:?}", vaddr, error_code);
-    loop { x86_64::instructions::hlt(); }
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
 
 /// Handle Copy-on-Write page fault
@@ -216,10 +241,10 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
         return false;
     }
 
-    let page_addr = vaddr & !0xFFF;  // Page-align
-    let page = match x86_64::structures::paging::Page::from_start_address(
-        x86_64::VirtAddr::new(page_addr)
-    ) {
+    let page_addr = vaddr & !0xFFF; // Page-align
+    let page = match x86_64::structures::paging::Page::from_start_address(x86_64::VirtAddr::new(
+        page_addr,
+    )) {
         Ok(p) => p,
         Err(_) => return false,
     };
@@ -270,10 +295,15 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
         | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
 
     unsafe {
-        process.address_space.map_page(page, new_frame, flags, &mut *pmm, hhdm);
+        process
+            .address_space
+            .map_page(page, new_frame, flags, &mut *pmm, hhdm);
     }
 
-    crate::serial_println!("[COW] CoW page fault at {:#x}: allocated new frame", page_addr);
+    crate::serial_println!(
+        "[COW] CoW page fault at {:#x}: allocated new frame",
+        page_addr
+    );
     true
 }
 
@@ -349,8 +379,6 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         cmd1.write(0x20);
     }
 
-    serial_println!("[TIMER] fire");
-
     let mut ticks = TICKS.lock();
     *ticks += 1;
     let _t = *ticks;
@@ -387,19 +415,17 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
             sched.processes[current].context_rsp = saved_rsp;
             if sched.processes[current].state == crate::process::ProcessState::Running {
                 sched.processes[current].state = crate::process::ProcessState::Ready;
-                // Re-queue process to appropriate tier based on burst_score
-                sched.enqueue_process(current);
+                if crate::sched::SCHEDULER_MODE == crate::sched::SchedulerMode::Bore {
+                    sched.enqueue_process(current);
+                }
             }
 
-            if let Some(next) = sched.pick_next_bore() {
+            if let Some(next) = sched.pick_next() {
                 let next_rsp = sched.processes[next].context_rsp;
                 let next_stack_top = sched.processes[next].kernel_stack_top;
-                let next_name = sched.processes[next].name;
                 sched.current = next;
                 sched.processes[next].state = crate::process::ProcessState::Running;
                 sched.processes[next].last_run_tick = sched.global_tick;
-
-                serial_println!("[TIMER] switching from {} to {} (rsp={:x})", sched.processes[current].name, next_name, next_rsp);
 
                 // Switch address space.
                 unsafe {

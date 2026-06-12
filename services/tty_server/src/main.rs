@@ -96,8 +96,12 @@ impl TerminalGeometry {
 }
 
 /// Global terminal geometry state (per tab)
-static mut TERMINAL_GEOMETRY: [TerminalGeometry; MAX_TABS] =
-    [TerminalGeometry { cols: 80, rows: 24, viewport_offset: 0, max_scrollback: 256 }; MAX_TABS];
+static mut TERMINAL_GEOMETRY: [TerminalGeometry; MAX_TABS] = [TerminalGeometry {
+    cols: 80,
+    rows: 24,
+    viewport_offset: 0,
+    max_scrollback: 256,
+}; MAX_TABS];
 
 #[derive(Clone, Copy)]
 struct ShellTab {
@@ -160,8 +164,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     debug_log("[TTY]  Login screen ready");
 
     let mut login = LoginScreen::new();
-    // Don't pre-fill username — let users type their actual username
-    // (previously hardcoded "root" which forced users to clear and retype)
+    prefill_root_login(&mut login);
 
     let mut state = TtyState::Login;
     let mut spawn_cap: Option<CapabilityToken> = None;
@@ -490,11 +493,15 @@ fn render_active_shell_fb(
 
 fn reset_login(login: &mut LoginScreen) {
     *login = LoginScreen::new();
+    prefill_root_login(login);
+    login.message = "Logged out. Please log in.";
+}
+
+fn prefill_root_login(login: &mut LoginScreen) {
     for &b in b"root" {
         login.username.push(b);
     }
     login.focused = LoginField::Password;
-    login.message = "Logged out. Please log in.";
 }
 
 fn reset_tabs(tabs: &mut [ShellTab; MAX_TABS], tab_count: &mut usize, active_tab: &mut usize) {

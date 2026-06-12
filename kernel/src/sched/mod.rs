@@ -6,46 +6,57 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 pub const TIME_SLICE_TICKS: u64 = 10;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchedulerMode {
+    RoundRobin,
+    Bore,
+}
+
+pub const SCHEDULER_MODE: SchedulerMode = SchedulerMode::RoundRobin;
+
 // === Phase 3 BORE Scheduler Constants ===
 pub const BURST_SCORE_MIN: u32 = 0;
 pub const BURST_SCORE_MAX: u32 = 1024;
 pub const BURST_SCORE_DEFAULT: u32 = 256;
-pub const BURST_SCORE_HIGH: u32 = 256;      // Interactive threshold
-pub const BURST_SCORE_LOW: u32 = 768;       // CPU-bound threshold
+pub const BURST_SCORE_HIGH: u32 = 256; // Interactive threshold
+pub const BURST_SCORE_LOW: u32 = 768; // CPU-bound threshold
 
-pub const BURST_REDUCTION_EARLY_BLOCK: u32 = 64;   // ~6% reduction
-pub const BURST_INCREASE_FULL_QUANTUM: u32 = 32;   // ~3% increase
-pub const BURST_REDUCTION_AGING: u32 = 20;         // ~2% per aging tick
+pub const BURST_REDUCTION_EARLY_BLOCK: u32 = 64; // ~6% reduction
+pub const BURST_INCREASE_FULL_QUANTUM: u32 = 32; // ~3% increase
+pub const BURST_REDUCTION_AGING: u32 = 20; // ~2% per aging tick
 
 pub const AGING_INTERVAL_TICKS: u64 = 10;
-pub const AGING_THRESHOLD_TICKS: u64 = 100;        // Age after 100ms
-pub const MINIMUM_AGED_BURST_SCORE: u32 = 256;     // Don't starve below HIGH
+pub const AGING_THRESHOLD_TICKS: u64 = 100; // Age after 100ms
+pub const MINIMUM_AGED_BURST_SCORE: u32 = 256; // Don't starve below HIGH
 pub const INTERACTIVE_DETECTION_THRESHOLD: u32 = 3; // Block < 3 ticks = interactive
 
 #[derive(Debug, Clone, Copy)]
 pub enum BurstReason {
-    EarlyBlock,     // Task blocked early (< 3 ticks)
-    FullQuantum,    // Task used full 10-tick quantum
-    Aged,           // Task hasn't run in 100+ ticks
+    EarlyBlock,  // Task blocked early (< 3 ticks)
+    FullQuantum, // Task used full 10-tick quantum
+    Aged,        // Task hasn't run in 100+ ticks
 }
 
 /// Update burst score based on why the task yielded
 pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
     match reason {
         BurstReason::EarlyBlock => {
-            process.burst_score = process.burst_score
+            process.burst_score = process
+                .burst_score
                 .saturating_sub(BURST_REDUCTION_EARLY_BLOCK)
                 .max(BURST_SCORE_MIN);
             process.interactive_bonus = 20;
         }
         BurstReason::FullQuantum => {
-            process.burst_score = process.burst_score
+            process.burst_score = process
+                .burst_score
                 .saturating_add(BURST_INCREASE_FULL_QUANTUM)
                 .min(BURST_SCORE_MAX);
             process.interactive_bonus = 0;
         }
         BurstReason::Aged => {
-            process.burst_score = process.burst_score
+            process.burst_score = process
+                .burst_score
                 .saturating_sub(BURST_REDUCTION_AGING)
                 .max(MINIMUM_AGED_BURST_SCORE);
             process.aging_counter += 1;
@@ -60,13 +71,13 @@ pub struct Scheduler {
     pub processes: Vec<Process>,
 
     // BORE: Tiered ready queues by priority
-    pub ready_queue_high: VecDeque<usize>,      // Burst 0-256 (interactive)
-    pub ready_queue_medium: VecDeque<usize>,    // Burst 257-768
-    pub ready_queue_low: VecDeque<usize>,       // Burst 769-1024 (CPU-bound)
+    pub ready_queue_high: VecDeque<usize>, // Burst 0-256 (interactive)
+    pub ready_queue_medium: VecDeque<usize>, // Burst 257-768
+    pub ready_queue_low: VecDeque<usize>,  // Burst 769-1024 (CPU-bound)
 
     pub current: usize,
     pub current_ticks: u64,
-    pub global_tick: u64,                       // Ever-incrementing counter
+    pub global_tick: u64, // Ever-incrementing counter
     pub idle_context_rsp: u64,
 }
 
@@ -88,8 +99,13 @@ impl Scheduler {
     pub fn add_process(&mut self, process: Process) -> usize {
         let id = self.processes.len();
 
-        serial_println!("[SCHED] add_process '{}' id={} burst_score={} tier={:?}",
-            process.name, id, process.burst_score, process.get_queue_tier());
+        serial_println!(
+            "[SCHED] add_process '{}' id={} burst_score={} tier={:?}",
+            process.name,
+            id,
+            process.burst_score,
+            process.get_queue_tier()
+        );
         self.processes.push(process);
 
         // Don't queue here - let enqueue_process() handle it
@@ -103,11 +119,51 @@ impl Scheduler {
         if idx >= self.processes.len() {
             return;
         }
+        if !matches!(self.processes[idx].state, ProcessState::Ready) {
+            return;
+        }
+        self.remove_from_ready_queues(idx);
         let tier = self.processes[idx].get_queue_tier();
         match tier {
             QueueTier::High => self.ready_queue_high.push_back(idx),
             QueueTier::Medium => self.ready_queue_medium.push_back(idx),
             QueueTier::Low => self.ready_queue_low.push_back(idx),
+        }
+    }
+
+    /// Enqueue a Ready process once, avoiding stale duplicate queue entries.
+    pub fn enqueue_process_once(&mut self, idx: usize) {
+        if idx >= self.processes.len()
+            || !matches!(self.processes[idx].state, ProcessState::Ready)
+            || self.is_queued(idx)
+        {
+            return;
+        }
+        self.enqueue_process(idx);
+    }
+
+    fn remove_from_ready_queues(&mut self, idx: usize) {
+        self.ready_queue_high.retain(|&queued| queued != idx);
+        self.ready_queue_medium.retain(|&queued| queued != idx);
+        self.ready_queue_low.retain(|&queued| queued != idx);
+    }
+
+    fn is_queued(&self, idx: usize) -> bool {
+        self.ready_queue_high.iter().any(|&queued| queued == idx)
+            || self.ready_queue_medium.iter().any(|&queued| queued == idx)
+            || self.ready_queue_low.iter().any(|&queued| queued == idx)
+    }
+
+    /// Seed all currently Ready processes except the one already running.
+    pub fn seed_ready_queues_except(&mut self, running_idx: usize) {
+        self.ready_queue_high.clear();
+        self.ready_queue_medium.clear();
+        self.ready_queue_low.clear();
+
+        for idx in 0..self.processes.len() {
+            if idx != running_idx && matches!(self.processes[idx].state, ProcessState::Ready) {
+                self.enqueue_process(idx);
+            }
         }
     }
 
@@ -140,7 +196,7 @@ impl Scheduler {
 
     fn age_ready_tasks(&mut self) {
         if self.global_tick % AGING_INTERVAL_TICKS != 0 {
-            return;  // Only age every AGING_INTERVAL_TICKS
+            return; // Only age every AGING_INTERVAL_TICKS
         }
 
         for idx in 0..self.processes.len() {
@@ -161,32 +217,46 @@ impl Scheduler {
 
     /// Pick the next Ready process using BORE tiered queues
     pub fn pick_next_bore(&mut self) -> Option<usize> {
-        // Try HIGH priority queue first (interactive)
-        while !self.ready_queue_high.is_empty() {
-            if let Some(idx) = self.ready_queue_high.pop_front() {
-                // Verify index is valid and process is still Ready
-                if idx < self.processes.len() && matches!(self.processes[idx].state, ProcessState::Ready) {
-                    return Some(idx);
-                }
+        let mut skipped_current = None;
+
+        if let Some(idx) = pop_ready_excluding_current(
+            &mut self.ready_queue_high,
+            &self.processes,
+            self.current,
+            &mut skipped_current,
+        ) {
+            if let Some(current) = skipped_current {
+                self.enqueue_process_once(current);
             }
+            return Some(idx);
         }
 
-        // Fall back to MEDIUM queue
-        while !self.ready_queue_medium.is_empty() {
-            if let Some(idx) = self.ready_queue_medium.pop_front() {
-                if idx < self.processes.len() && matches!(self.processes[idx].state, ProcessState::Ready) {
-                    return Some(idx);
-                }
+        if let Some(idx) = pop_ready_excluding_current(
+            &mut self.ready_queue_medium,
+            &self.processes,
+            self.current,
+            &mut skipped_current,
+        ) {
+            if let Some(current) = skipped_current {
+                self.enqueue_process_once(current);
             }
+            return Some(idx);
         }
 
-        // Fall back to LOW queue
-        while !self.ready_queue_low.is_empty() {
-            if let Some(idx) = self.ready_queue_low.pop_front() {
-                if idx < self.processes.len() && matches!(self.processes[idx].state, ProcessState::Ready) {
-                    return Some(idx);
-                }
+        if let Some(idx) = pop_ready_excluding_current(
+            &mut self.ready_queue_low,
+            &self.processes,
+            self.current,
+            &mut skipped_current,
+        ) {
+            if let Some(current) = skipped_current {
+                self.enqueue_process_once(current);
             }
+            return Some(idx);
+        }
+
+        if let Some(current) = skipped_current {
+            return Some(current);
         }
 
         // Fallback: if queues are empty but processes exist, do a linear search (safety net)
@@ -198,7 +268,10 @@ impl Scheduler {
         let mut idx = start;
         loop {
             if matches!(self.processes[idx].state, ProcessState::Ready) {
-                serial_println!("[SCHED] WARNING: pick_next_bore fallback to linear search, idx={}", idx);
+                serial_println!(
+                    "[SCHED] WARNING: pick_next_bore fallback to linear search, idx={}",
+                    idx
+                );
                 return Some(idx);
             }
             idx = (idx + 1) % len;
@@ -208,6 +281,35 @@ impl Scheduler {
         }
 
         None
+    }
+
+    /// Pick the next Ready process using the original stable round-robin scan.
+    pub fn pick_next_round_robin(&self) -> Option<usize> {
+        let len = self.processes.len();
+        if len == 0 {
+            return None;
+        }
+
+        let start = (self.current + 1) % len;
+        let mut idx = start;
+        loop {
+            if matches!(self.processes[idx].state, ProcessState::Ready) {
+                return Some(idx);
+            }
+            idx = (idx + 1) % len;
+            if idx == start {
+                break;
+            }
+        }
+
+        None
+    }
+
+    pub fn pick_next(&mut self) -> Option<usize> {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => self.pick_next_round_robin(),
+            SchedulerMode::Bore => self.pick_next_bore(),
+        }
     }
 
     /// Get the currently running process.
@@ -243,7 +345,7 @@ impl Scheduler {
 
             // Update state and enqueue
             self.processes[idx].state = ProcessState::Ready;
-            self.enqueue_process(idx);
+            self.enqueue_process_once(idx);
         }
     }
 
@@ -253,7 +355,8 @@ impl Scheduler {
 
     /// Get BORE diagnostics for a process
     pub fn get_process_burst_info(&self, pid: usize) -> Option<(u32, ProcessState)> {
-        self.processes.iter()
+        self.processes
+            .iter()
             .find(|p| p.pid == pid)
             .map(|p| (p.burst_score, p.state))
     }
@@ -278,14 +381,16 @@ impl Scheduler {
             // Enqueue other Ready processes (idx might not be first in order)
             for i in 0..self.processes.len() {
                 if i != idx && matches!(self.processes[i].state, ProcessState::Ready) {
-                    self.enqueue_process(i);
+                    self.enqueue_process_once(i);
                 }
             }
 
             let rsp = self.processes[idx].context_rsp;
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",
-                idx, self.processes[idx].name, rsp
+                idx,
+                self.processes[idx].name,
+                rsp
             );
             // Switch to the process's address space before entering user space.
             unsafe {
@@ -301,6 +406,34 @@ impl Scheduler {
         serial_println!("[SCHED] No user processes, entering idle");
         idle_loop();
     }
+}
+
+fn pop_ready_excluding_current(
+    queue: &mut VecDeque<usize>,
+    processes: &[Process],
+    current: usize,
+    skipped_current: &mut Option<usize>,
+) -> Option<usize> {
+    let mut remaining = queue.len();
+    while remaining > 0 {
+        let Some(idx) = queue.pop_front() else {
+            break;
+        };
+        remaining -= 1;
+
+        if idx >= processes.len() || !matches!(processes[idx].state, ProcessState::Ready) {
+            continue;
+        }
+
+        if idx == current && skipped_current.is_none() {
+            *skipped_current = Some(idx);
+            continue;
+        }
+
+        return Some(idx);
+    }
+
+    None
 }
 
 /// Idle loop — runs when no user process is Ready.
@@ -349,11 +482,15 @@ pub fn enter_first_process() -> ! {
         if let Some(idx) = first {
             sched.current = idx;
             sched.processes[idx].state = ProcessState::Running;
+            sched.processes[idx].last_run_tick = sched.global_tick;
+            sched.seed_ready_queues_except(idx);
             let rsp = sched.processes[idx].context_rsp;
             let pml4_phys = sched.processes[idx].address_space.pml4_phys;
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",
-                idx, sched.processes[idx].name, rsp
+                idx,
+                sched.processes[idx].name,
+                rsp
             );
             (rsp, pml4_phys)
         } else {
