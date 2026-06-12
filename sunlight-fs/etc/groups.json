@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "gid": 0,
+      "groupname": "root",
+      "members": ["root"]
+    },
+    {
+      "gid": 10,
+      "groupname": "wheel",
+      "members": ["root"]
+    },
+    {
+      "gid": 100,
+      "groupname": "users",
+      "members": []
+    },
+    {
+      "gid": 1000,
+      "groupname": "ehsan",
+      "members": ["ehsan"]
+    }
+  ]
+}

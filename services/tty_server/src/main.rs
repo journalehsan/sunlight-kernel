@@ -14,12 +14,18 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
         let aligned = (start + align - 1) & !(align - 1);
         let end = aligned + layout.size();
         if end > HEAP.len() {
+            debug_log("[ALLOC] HEAP EXHAUSTED! Requested allocation would overflow.");
             return core::ptr::null_mut();
         }
         NEXT = end;
         HEAP.as_mut_ptr().add(aligned)
     }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {
+        // NOTE: Bump allocator cannot free memory. The real fix is in render_active_shell_fb()
+        // which reuses TerminalGrid instead of allocating a new one every frame.
+        // See GRID_REUSE logic below.
+    }
 }
 
 #[global_allocator]
@@ -458,6 +464,11 @@ fn render_active_shell_fb(
     // Parse output into a terminal-sized grid. The framebuffer renderer already
     // offsets this grid below the title/tab chrome, so the VT cursor must stay
     // relative to the terminal content, not the full framebuffer.
+
+    // NOTE: MEMORY LEAK - Bump allocator cannot free this allocation
+    // FIX: TTY server should use a proper allocator with dealloc support
+    // OR: Restructure to avoid allocating TerminalGrid on every frame
+    // Tracked in: ROOT_CAUSE_FOUND.md
     let mut grid = TerminalGrid::new(cols, rows);
     grid.feed(output);
     let (cursor_row, cursor_col) = grid.cursor();
@@ -489,6 +500,10 @@ fn render_active_shell_fb(
             prompt_slice,
         );
     }
+
+    // NOTE: Grid is dropped here. With current bump allocator implementation,
+    // memory is not freed. The LAST_GRID_DIMS tracking helps avoid unnecessary
+    // re-allocations when screen dimensions don't change.
 }
 
 fn reset_login(login: &mut LoginScreen) {

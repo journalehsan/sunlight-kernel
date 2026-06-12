@@ -1,0 +1,296 @@
+══════════════════════════════════════
+  SunlightOS — Phase 3 Boot Sequence  
+══════════════════════════════════════
+[PMM] Initializing...
+[PMM] 231/246 MiB free
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0xffe2383
+[ACPI] Found table: FACP at 0xffe222f
+[ACPI] Found table: APIC at 0xffe22a3
+[ACPI] Found table: HPET at 0xffe2323
+[ACPI] Found table: WAET at 0xffe235b
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x4, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[IDT] Loading interrupt descriptor table...
+[IDT] PIC remapped, timer IRQ0 enabled at ~100Hz
+[IDT] OK
+[IDT] OK
+[HEAP] Initializing 1 MiB kernel heap at 0xffffffff90000000...
+[PMM] ALLOC #1 addr=0x1000000 free_now=59307
+[PMM] ALLOC #2 addr=0x1001000 free_now=59306
+[PMM] ALLOC #3 addr=0x1002000 free_now=59305
+[PMM] ALLOC #4 addr=0x1003000 free_now=59304
+[PMM] ALLOC #5 addr=0x1004000 free_now=59303
+[PMM] ALLOC #6 addr=0x1005000 free_now=59302
+[PMM] ALLOC #7 addr=0x1006000 free_now=59301
+[PMM] ALLOC #8 addr=0x1007000 free_now=59300
+[PMM] ALLOC #9 addr=0x1008000 free_now=59299
+[PMM] ALLOC #10 addr=0x1009000 free_now=59298
+[PMM] ALLOC #101 addr=0x1064000 free_now=59207
+[PMM] ALLOC #201 addr=0x10c8000 free_now=59107
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff800048a0
+[SYSCALL] OK
+[CAP]  Capability broker initialized
+[ELF]  Static ELF loader initialized
+[KERN] spawn endpoint registered
+[IPC]  IPC bus initialized
+[IPC]  IpcMsg format: fixed 80-byte struct
+[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait
+[IPC]  Fastpath check: enabled (stub)
+[KBD]  Initializing PS/2 keyboard...
+[KBD]  PS/2 keyboard initialized
+[KBD]  IRQ1 handler installed
+[PROC] Spawning init (pid=1)...
+[PROC] Loading init ELF (12648 bytes)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=a15 memsz=a15 flags=5
+[ELF] mapping 1 pages from 400000 to 401000
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=9d memsz=9d flags=4
+[ELF] mapping 1 pages from 401000 to 402000
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=8 memsz=8 flags=6
+[ELF] mapping 1 pages from 402000 to 403000
+[PMM] ALLOC #301 addr=0x112c000 free_now=59007
+[SCHED] CREATED process #1 'init' idx=0 burst_score=256 tier=High
+[PROC] Spawning vfs_server (pid=3)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=8075 memsz=8075 flags=5
+[ELF] mapping 9 pages from 400000 to 409000
+[PMM] ALLOC #401 addr=0x1190000 free_now=58907
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=b48 memsz=b48 flags=4
+[ELF] mapping 1 pages from 409000 to 40a000
+[ELF] PT_LOAD off=ab48 vaddr=409b48 filesz=18 memsz=18 flags=6
+[ELF] mapping 1 pages from 409000 to 40a000
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=0 memsz=10008 flags=6
+[ELF] mapping 17 pages from 40a000 to 41b000
+[PMM] ALLOC #501 addr=0x11f4000 free_now=58807
+[SCHED] CREATED process #2 'vfs_server' idx=1 burst_score=256 tier=High
+[PROC] Spawning timer_server (pid=2)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2c2 memsz=2c2 flags=5
+[ELF] mapping 1 pages from 400000 to 401000
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=f4 memsz=f4 flags=4
+[ELF] mapping 1 pages from 401000 to 402000
+[PMM] ALLOC #601 addr=0x1258000 free_now=58707
+[SCHED] CREATED process #3 'timer_server' idx=2 burst_score=256 tier=High
+[PROC] Spawning tty_server (pid=4)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=a1e5 memsz=a1e5 flags=5
+[ELF] mapping 11 pages from 400000 to 40b000
+[PMM] ALLOC #701 addr=0x12bc000 free_now=58607
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=c6b memsz=c6b flags=4
+[ELF] mapping 1 pages from 40b000 to 40c000
+[ELF] PT_LOAD off=cc70 vaddr=40bc70 filesz=20 memsz=20 flags=6
+[ELF] mapping 1 pages from 40b000 to 40c000
+[ELF] PT_LOAD off=d000 vaddr=40c000 filesz=0 memsz=400058 flags=6
+[ELF] mapping 1025 pages from 40c000 to 80d000
+[PMM] ALLOC #801 addr=0x1320000 free_now=58507
+[PMM] ALLOC #901 addr=0x1384000 free_now=58407
+[PMM] ALLOC #1001 addr=0x13e8000 free_now=58307
+[PMM] ALLOC #1101 addr=0x144c000 free_now=58207
+[PMM] ALLOC #1201 addr=0x14b0000 free_now=58107
+[PMM] ALLOC #1301 addr=0x1514000 free_now=58007
+[PMM] ALLOC #1401 addr=0x1578000 free_now=57907
+[PMM] ALLOC #1501 addr=0x15dc000 free_now=57807
+[PMM] ALLOC #1601 addr=0x1640000 free_now=57707
+[PMM] ALLOC #1701 addr=0x16a4000 free_now=57607
+[PMM] ALLOC #1801 addr=0x1708000 free_now=57507
+[SCHED] CREATED process #4 'tty_server' idx=3 burst_score=256 tier=High
+[HELIOS] Linux ELF compatibility layer loaded
+[SCHED] CFS-style scheduler (round-robin baseline)
+[SCHED]  ✓ weighted CFS weight field
+[SCHED]  ✓ SCHED_FIFO real-time type field
+[SCHED]  ✓ cpu_mask CPU affinity field
+✓ Phase 4 Scheduler verification PASSED
+[PROC] Entering scheduler — dropping to Ring 3
+══════════════════════════════════════
+[SCHED] process 0 'init' state=Ready
+[SCHED] Entering process 0 'init' at rsp=0xffffffff90007f60
+[IRQ0] Timer interrupt - EOI sent to PIC
+[ init] SunlightOS init process started
+[ init] Waiting for system services to register...
+[CAP] Created endpoint 0 for pid=1
+[init] Name server: listening
+[init] Registered kernel spawn endpoint
+[IRQ0] Timer interrupt - EOI sent to PIC
+[VFS]  VFS server started
+[CAP] Created endpoint 1 for pid=3
+[IRQ0] Timer interrupt - EOI sent to PIC
+[timer] Timer server started
+[CAP] Created endpoint 2 for pid=2
+[IRQ0] Timer interrupt - EOI sent to PIC
+[TTY]  TTY server started
+[TTY] Framebuffer acquired
+[TTY] Login rendered
+[CAP] Created endpoint 3 for pid=4
+[TTY]  endpoint created
+[TTY]  Registered as 'tty'
+[TTY]  Login screen ready
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[VFS]  Registered as 'vfs'
+[VFS]  Test open /etc/motd
+[VFS]  Test read /etc/motd
+[VFS]  Read: "Welcome to SunlightOS\n"
+[VFS]  ENOENT test OK
+[VFS]  Bad handle test OK
+[VFS]  Stat OK
+[SunlightOS] Phase 3.0 OK
+[VFS]  Permission model: Unix uid/gid/mode
+[VFS]  /etc/passwd: 2 users loaded
+[VFS]  /etc/group: 7 groups loaded
+[VFS]  Permission check: root bypasses OK
+[VFS]  Permission check: user read /etc/passwd OK
+[VFS]  Permission check: user read /etc/shadow EACCES OK
+[IRQ0] Timer interrupt - EOI sent to PIC
+[timer] Registered as 'time' with init name server
+[timer] Serving via ipc_reply_and_wait loop
+[timer] Listening for tick events...
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[timer] 100 ticks elapsed
+[IPC]  round-trip test: 1000 calls OK
+[SunlightOS] Phase 2.6 OK
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC
+[IRQ0] Timer interrupt - EOI sent to PIC

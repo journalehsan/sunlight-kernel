@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "users": [
+    {
+      "uid": 0,
+      "gid": 0,
+      "username": "root",
+      "password_hash": "root",
+      "home": "/root",
+      "shell": "/bin/sh"
+    },
+    {
+      "uid": 1000,
+      "gid": 1000,
+      "username": "ehsan",
+      "password_hash": "ehsan",
+      "home": "/home/ehsan",
+      "shell": "/bin/sh"
+    }
+  ]
+}
