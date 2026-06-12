@@ -101,14 +101,11 @@ pub unsafe extern "C" fn syscall_entry() {
         "push rcx",
         "push rbx",
         "push rax",
-
         // Pass pointer to saved frame as first argument
         "mov rdi, rsp",
         "call syscall_dispatch",
-
         // rax now holds the return value. Store it into the rax slot on stack.
         "mov [rsp], rax",
-
         // Restore all GPRs
         "pop rax",
         "pop rbx",
@@ -125,7 +122,6 @@ pub unsafe extern "C" fn syscall_entry() {
         "pop r13",
         "pop r14",
         "pop r15",
-
         // Ensure IF is set in R11 so user space returns with interrupts enabled.
         "or r11, 0x200",
         "sysretq",
@@ -156,13 +152,14 @@ pub type SyscallFrame = SyscallRegs;
 
 /// Deliver pending signals before returning to user space
 fn deliver_pending_signals(process: &mut crate::process::Process) {
-    use crate::process::signal::{Signal, SigHandler};
+    use crate::process::signal::{SigHandler, Signal};
 
     // Check for pending signals (in priority order)
     let pending = process.signal_state.pending_signals();
 
     // Handle a few critical signals
-    for sig_num in [2, 9, 15, 17].iter() {  // SIGINT, SIGKILL, SIGTERM, SIGCHLD
+    for sig_num in [2, 9, 15, 17].iter() {
+        // SIGINT, SIGKILL, SIGTERM, SIGCHLD
         if let Some(sig) = Signal::try_from_u32(*sig_num) {
             if pending.contains(sig) && !process.signal_state.is_blocked(sig) {
                 process.signal_state.clear_pending(sig);
@@ -180,7 +177,11 @@ fn deliver_pending_signals(process: &mut crate::process::Process) {
                     }
                     SigHandler::UserHandler(_handler_addr) => {
                         // Would need to setup signal frame on user stack
-                        crate::serial_println!("[SIG] {} would call user handler at {:#x}", sig_num, _handler_addr);
+                        crate::serial_println!(
+                            "[SIG] {} would call user handler at {:#x}",
+                            sig_num,
+                            _handler_addr
+                        );
                         // TODO: Setup signal frame and jump to handler
                     }
                 }
@@ -208,8 +209,12 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 -1 => {
                     // exit(code) — store code in rdi for process_exit handler
                     if linux_num == 60 || linux_num == 231 {
-                        crate::serial_println!("[HELIOS] Linux exit({}) pid={}", frame.rdi, sched.current_process().pid);
-                        num = 20;  // ProcessExit
+                        crate::serial_println!(
+                            "[HELIOS] Linux exit({}) pid={}",
+                            frame.rdi,
+                            sched.current_process().pid
+                        );
+                        num = 20; // ProcessExit
                     }
                 }
                 _ => {
@@ -281,12 +286,12 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
 // Individual syscall implementations
 // ---------------------------------------------------------------------------
 
-use crate::ipc::{IpcError, IpcMsg, INIT_NAMESERVER_ENDPOINT};
-use crate::capability::CapabilityToken;
 use crate::capability::CapabilityRights;
+use crate::capability::CapabilityToken;
+use crate::ipc::{IpcError, IpcMsg, INIT_NAMESERVER_ENDPOINT};
+use crate::process::layout::is_user_address;
 use crate::process::ProcessState;
 use crate::sched;
-use crate::process::layout::is_user_address;
 use alloc::vec::Vec;
 
 /// Read a null-terminated C string from user space.
@@ -338,9 +343,9 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
         return handle_spawn_call(frame, msg);
     }
 
-    let mut bus = crate::ipc::IPC_BUS.lock();
-    let caps = crate::capability::CAP_BROKER.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let caps = crate::capability::CAP_BROKER.lock();
+    let mut bus = crate::ipc::IPC_BUS.lock();
     let sender_pid = sched.current_process().pid;
 
     match crate::ipc::handle_ipc_call(sender_pid, token, msg, &caps, &mut sched, &mut bus) {
@@ -363,9 +368,13 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let uid = msg.words[4] as u32;
     let gid = msg.words[5] as u32;
 
-    crate::serial_println!("[SPAWN] Request from pid={} for path={} uid={} gid={}",
+    crate::serial_println!(
+        "[SPAWN] Request from pid={} for path={} uid={} gid={}",
         crate::sched::SCHEDULER.lock().current_process().pid,
-        path, uid, gid);
+        path,
+        uid,
+        gid
+    );
 
     let mut pmm = crate::PMM.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
@@ -410,8 +419,8 @@ fn decode_path_from_words(words: &[u64; 8]) -> alloc::string::String {
 
 fn ipc_reply(frame: &mut SyscallFrame) -> u64 {
     let reply = IpcMsg::from_registers(frame);
-    let mut bus = crate::ipc::IPC_BUS.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let mut bus = crate::ipc::IPC_BUS.lock();
     let server_pid = sched.current_process().pid;
     match crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, &mut bus) {
         Ok(()) => 0,
@@ -422,9 +431,9 @@ fn ipc_reply(frame: &mut SyscallFrame) -> u64 {
 fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
     let endpoint_token = CapabilityToken(frame.rsi);
     let reply = IpcMsg::from_registers(frame);
-    let mut bus = crate::ipc::IPC_BUS.lock();
-    let caps = crate::capability::CAP_BROKER.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let caps = crate::capability::CAP_BROKER.lock();
+    let mut bus = crate::ipc::IPC_BUS.lock();
     let server_pid = sched.current_process().pid;
     let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
         Ok(id) => id,
@@ -445,9 +454,9 @@ fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
 
 fn ipc_recv(frame: &mut SyscallFrame) -> u64 {
     let endpoint_token = CapabilityToken(frame.rsi);
-    let mut bus = crate::ipc::IPC_BUS.lock();
-    let caps = crate::capability::CAP_BROKER.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let caps = crate::capability::CAP_BROKER.lock();
+    let mut bus = crate::ipc::IPC_BUS.lock();
     let receiver_pid = sched.current_process().pid;
     let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
         Ok(id) => id,
@@ -537,9 +546,7 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
     }
 
     // SAFETY: ptr is validated to be in user space and len is bounded.
-    let slice = unsafe {
-        core::slice::from_raw_parts(ptr as *const u8, len.min(256) as usize)
-    };
+    let slice = unsafe { core::slice::from_raw_parts(ptr as *const u8, len.min(256) as usize) };
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(slice) {
@@ -563,11 +570,7 @@ fn sys_fork(_frame: &mut SyscallFrame) -> u64 {
 
     // Borrow the parent process momentarily to fork it
     let parent_pid = sched.current_process().pid;
-    match crate::process::fork::fork_current_process(
-        &mut *pmm,
-        &mut *sched,
-        VirtAddr::new(hhdm),
-    ) {
+    match crate::process::fork::fork_current_process(&mut *pmm, &mut *sched, VirtAddr::new(hhdm)) {
         Ok(child_pid) => {
             crate::serial_println!("[SYSCALL] fork {} -> {}", parent_pid, child_pid);
             child_pid as u64
@@ -625,7 +628,11 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
-    crate::serial_println!("[SYSCALL] exec path={}, argc={}", path_str, argv_bytes.len());
+    crate::serial_println!(
+        "[SYSCALL] exec path={}, argc={}",
+        path_str,
+        argv_bytes.len()
+    );
 
     // Get embedded ELF bytes for the requested path
     let bytes = match crate::process::spawn::embedded_bytes_for_path(path_str) {
@@ -649,7 +656,7 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         &mut *pmm,
         VirtAddr::new(hhdm),
         &argv_refs,
-        &[],  // envp: empty for now
+        &[], // envp: empty for now
     ) {
         Ok(entry) => {
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
@@ -686,26 +693,57 @@ fn sys_getppid(_frame: &mut SyscallFrame) -> u64 {
 
 /// Syscall: Getuid (35)
 fn sys_getuid() -> u64 {
-    // TODO: track uid in process
-    0
+    sched::with_scheduler(|s| s.current_process().uid as u64)
 }
 
 /// Syscall: Getgid (36)
 fn sys_getgid() -> u64 {
-    // TODO: track gid in process
-    0
+    sched::with_scheduler(|s| s.current_process().gid as u64)
 }
 
 /// Syscall: Setuid (37)
-fn sys_setuid(_frame: &mut SyscallFrame) -> u64 {
-    // TODO: implement setuid (requires root)
-    IpcError::InvalidArgument as u64
+/// rdi = uid to set
+/// Returns 0 on success, -1 on error
+fn sys_setuid(frame: &mut SyscallFrame) -> u64 {
+    let new_uid = frame.rdi as u32;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let process = sched.current_process_mut();
+    let current_uid = process.uid;
+
+    // Only root (UID 0) can call setuid for other users
+    // Any user can setuid to their own uid
+    if current_uid == 0 || new_uid == current_uid {
+        process.uid = new_uid;
+        crate::serial_println!("[SYSCALL] setuid: pid={} uid {}→{}", process.pid, current_uid, new_uid);
+        0
+    } else {
+        crate::serial_println!("[SYSCALL] setuid: EPERM (uid {} cannot setuid to {})", current_uid, new_uid);
+        u64::MAX // -1 (EPERM)
+    }
 }
 
 /// Syscall: Setgid (38)
-fn sys_setgid(_frame: &mut SyscallFrame) -> u64 {
-    // TODO: implement setgid (requires root)
-    IpcError::InvalidArgument as u64
+/// rdi = gid to set
+/// Returns 0 on success, -1 on error
+fn sys_setgid(frame: &mut SyscallFrame) -> u64 {
+    let new_gid = frame.rdi as u32;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let process = sched.current_process_mut();
+    let current_uid = process.uid;
+    let current_gid = process.gid;
+
+    // Only root (UID 0) can call setgid for other groups
+    // Any user can setgid to their own gid
+    if current_uid == 0 || new_gid == current_gid {
+        process.gid = new_gid;
+        crate::serial_println!("[SYSCALL] setgid: pid={} gid {}→{}", process.pid, current_gid, new_gid);
+        0
+    } else {
+        crate::serial_println!("[SYSCALL] setgid: EPERM (uid {} cannot setgid to {})", current_uid, new_gid);
+        u64::MAX // -1 (EPERM)
+    }
 }
 
 // File descriptor syscalls (stubs for now)
@@ -721,7 +759,7 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
     // TODO: Implement actual open
     // For now: return stub errno
     crate::serial_println!("[SYSCALL] open requested (stub)");
-    u64::MAX  // ENOENT
+    u64::MAX // ENOENT
 }
 
 /// Syscall: close (41)
@@ -742,7 +780,7 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
 
     match sched.current_process_mut().fd_table.close(fd) {
         Ok(()) => 0,
-        Err(_) => u64::MAX,  // EBADF
+        Err(_) => u64::MAX, // EBADF
     }
 }
 
@@ -773,7 +811,9 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
 
                     match crate::process::pipe::pipe_read(pipe_idx, &mut kernel_buf[..read_size]) {
                         crate::process::pipe::PipeResult::Ok(n) => {
-                            if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + n as u64) {
+                            if !is_user_address(buf_ptr as u64)
+                                || !is_user_address((buf_ptr as u64) + n as u64)
+                            {
                                 return u64::MAX;
                             }
                             unsafe {
@@ -786,7 +826,10 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                         crate::process::pipe::PipeResult::BrokenPipe => u64::MAX,
                     }
                 } else {
-                    crate::serial_println!("[SYSCALL] read fd={} (not a pipe, not implemented)", fd);
+                    crate::serial_println!(
+                        "[SYSCALL] read fd={} (not a pipe, not implemented)",
+                        fd
+                    );
                     0
                 }
             } else {
@@ -795,7 +838,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
         }
         Err(_) => {
             crate::serial_println!("[SYSCALL] read fd={} (capability denied)", fd);
-            u64::MAX  // EACCES
+            u64::MAX // EACCES
         }
     }
 }
@@ -821,7 +864,8 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
         Ok(()) => {
             if let Some(fd_entry) = sched.current_process().fd_table.get(fd) {
                 if fd_entry.handle.is_pipe() {
-                    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64) {
+                    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64)
+                    {
                         return u64::MAX;
                     }
 
@@ -845,19 +889,20 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                         1 | 2 => {
                             // stdout/stderr: write to serial
                             if buf as u64 != 0 && count > 0 {
-                                if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64) {
+                                if !is_user_address(buf as u64)
+                                    || !is_user_address((buf as u64) + count as u64)
+                                {
                                     return u64::MAX;
                                 }
-                                let slice = unsafe {
-                                    core::slice::from_raw_parts(buf, count.min(256))
-                                };
+                                let slice =
+                                    unsafe { core::slice::from_raw_parts(buf, count.min(256)) };
                                 if let Ok(s) = core::str::from_utf8(slice) {
                                     crate::serial_println!("{}", s);
                                 }
                             }
                             count as u64
                         }
-                        _ => 0
+                        _ => 0,
                     }
                 }
             } else {
@@ -866,7 +911,7 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
         }
         Err(_) => {
             crate::serial_println!("[SYSCALL] write fd={} (capability denied)", fd);
-            u64::MAX  // EACCES
+            u64::MAX // EACCES
         }
     }
 }
@@ -893,7 +938,7 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
 
     // Check that the pointer is in user space
     if fds_ptr as u64 >= 0x0000_8000_0000_0000 {
-        return u64::MAX;  // EFAULT
+        return u64::MAX; // EFAULT
     }
 
     let mut pmm = crate::PMM.lock();
@@ -906,7 +951,7 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
                 *fds_ptr = read_fd;
                 *fds_ptr.add(1) = write_fd;
             }
-            0  // Success
+            0 // Success
         }
         Err(_) => u64::MAX,
     }
@@ -944,9 +989,23 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
     let mut pmm = crate::PMM.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
 
-    match crate::process::mmap::sys_mmap(addr, length, prot, flags, fd, offset, &mut *pmm, &mut *sched) {
+    match crate::process::mmap::sys_mmap(
+        addr,
+        length,
+        prot,
+        flags,
+        fd,
+        offset,
+        &mut *pmm,
+        &mut *sched,
+    ) {
         Ok(mapped_addr) => {
-            crate::serial_println!("[SYSCALL] mmap({:#x}, {:#x}) -> {:#x}", addr, length, mapped_addr);
+            crate::serial_println!(
+                "[SYSCALL] mmap({:#x}, {:#x}) -> {:#x}",
+                addr,
+                length,
+                mapped_addr
+            );
             mapped_addr
         }
         Err(_) => {
