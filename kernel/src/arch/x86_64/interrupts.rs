@@ -384,14 +384,22 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         sched.processes[current].context_rsp = saved_rsp;
         if sched.processes[current].state == crate::process::ProcessState::Running {
             sched.processes[current].state = crate::process::ProcessState::Ready;
+            // Re-queue process to appropriate tier based on burst_score
+            let tier = sched.processes[current].get_queue_tier();
+            match tier {
+                crate::process::QueueTier::High => sched.ready_queue_high.push_back(current),
+                crate::process::QueueTier::Medium => sched.ready_queue_medium.push_back(current),
+                crate::process::QueueTier::Low => sched.ready_queue_low.push_back(current),
+            }
         }
 
-        if let Some(next) = sched.pick_next() {
+        if let Some(next) = sched.pick_next_bore() {
             let next_rsp = sched.processes[next].context_rsp;
             let next_stack_top = sched.processes[next].kernel_stack_top;
             let next_name = sched.processes[next].name;
             sched.current = next;
             sched.processes[next].state = crate::process::ProcessState::Running;
+            sched.processes[next].last_run_tick = sched.global_tick;
 
             serial_println!("[TIMER] switching from {} to {} (rsp={:x})", sched.processes[current].name, next_name, next_rsp);
 

@@ -113,6 +113,13 @@ pub fn fork_current_process(
             sched_type: 0,           // inherit SCHED_NORMAL
             weight: 1024,            // inherit default weight
             cpu_mask: 0xFF,          // inherit all CPUs
+            burst_score: 256,        // Start at MEDIUM tier
+            timeslice_used: 0,       // Fresh quantum
+            last_run_tick: 0,        // Will be set on first run
+            io_wait_time: 0,         // No wait yet
+            interactive_bonus: 20,   // Assume interactive initially
+            block_start_tick: 0,     // Not blocked yet
+            aging_counter: 0,        // No aging yet
         };
 
         // Setup kernel stack top
@@ -196,6 +203,13 @@ fn sys_fork(
             sched_type: parent.sched_type,            // inherit scheduling type
             weight: parent.weight,                    // inherit CFS weight
             cpu_mask: parent.cpu_mask,                // inherit CPU mask
+            burst_score: 256,        // Start at MEDIUM tier
+            timeslice_used: 0,       // Fresh quantum
+            last_run_tick: 0,        // Will be set on first run
+            io_wait_time: 0,         // No wait yet
+            interactive_bonus: 20,   // Assume interactive initially
+            block_start_tick: 0,     // Not blocked yet
+            aging_counter: 0,        // No aging yet
         };
 
         // Setup kernel stack top

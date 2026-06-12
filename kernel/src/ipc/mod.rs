@@ -94,9 +94,11 @@ impl IpcBus {
         receiver_pid: usize,
         sched: &mut Scheduler,
     ) {
+        let global_tick = sched.global_tick;
         if let Some(receiver) = sched.process_mut_by_pid(receiver_pid) {
             receiver.ipc_endpoint = Some(endpoint_id);
             receiver.state = ProcessState::BlockedOnIpc;
+            receiver.block_start_tick = global_tick;
         }
     }
 
@@ -141,6 +143,7 @@ pub fn handle_ipc_call(
     }
 
     let mut should_enqueue = false;
+    let global_tick = sched.global_tick;
     if let Some(process) = sched.process_mut_by_pid(caller_pid) {
         if let Some(reply) = process.ipc_reply.take() {
             process.pending_call = None;
@@ -151,6 +154,7 @@ pub fn handle_ipc_call(
             should_enqueue = true;
         }
         process.state = ProcessState::BlockedOnIpc;
+        process.block_start_tick = global_tick;
     }
     if should_enqueue {
         bus.enqueue_call(endpoint_id, msg, caller_pid, sched, target_owner);

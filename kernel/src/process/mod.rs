@@ -45,6 +45,23 @@ pub struct Process {
     pub sched_type: u8,  // SCHED_NORMAL=0, SCHED_FIFO=1 for real-time bypass
     pub weight: u32,     // CFS weight (default 1024)
     pub cpu_mask: u64,   // CPU affinity mask
+
+    // === BORE Scheduling Metrics (Phase 3.0) ===
+    /// Burst score: 0-1024 (0=interactive, 1024=CPU-bound)
+    /// Lower scores → moved to HIGH priority queue
+    pub burst_score: u32,
+    /// Ticks consumed in current timeslice (0-10)
+    pub timeslice_used: u32,
+    /// Global tick counter when this process last ran
+    pub last_run_tick: u64,
+    /// Ticks spent blocked on IPC/IO (for interactivity detection)
+    pub io_wait_time: u32,
+    /// Latency bonus ticks for interactive processes (-50..+50)
+    pub interactive_bonus: i32,
+    /// Global tick when this process entered BlockedOnIpc state
+    pub block_start_tick: u64,
+    /// Counter for aging mechanism (prevent starvation)
+    pub aging_counter: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +70,13 @@ pub enum ProcessState {
     Running,
     BlockedOnIpc,
     Finished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueTier {
+    High,
+    Medium,
+    Low,
 }
 
 /// A capability held by a process.
@@ -107,6 +131,13 @@ impl Process {
             sched_type: 0,           // SCHED_NORMAL
             weight: 1024,            // default CFS weight
             cpu_mask: 0xFF,          // all CPUs
+            burst_score: 256,        // Start at MEDIUM tier (interactive bias)
+            timeslice_used: 0,       // Fresh quantum
+            last_run_tick: 0,        // Will be set on first run
+            io_wait_time: 0,         // No wait yet
+            interactive_bonus: 20,   // Assume interactive initially
+            block_start_tick: 0,     // Not blocked yet
+            aging_counter: 0,        // No aging yet
         }
     }
 
@@ -170,6 +201,16 @@ impl Process {
             base.add(11).write_volatile(rsi);
             base.add(12).write_volatile(rdx);
             base.add(13).write_volatile(rcx);
+        }
+    }
+
+    /// Determine which priority queue this process belongs to based on burst_score
+    pub fn get_queue_tier(&self) -> QueueTier {
+        match self.burst_score {
+            0..=256 => QueueTier::High,      // Interactive
+            257..=768 => QueueTier::Medium,   // Mixed
+            769..=1024 => QueueTier::Low,     // CPU-bound
+            _ => QueueTier::Low,              // Clamp to Low for out-of-range values
         }
     }
 }

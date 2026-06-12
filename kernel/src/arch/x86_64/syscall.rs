@@ -473,6 +473,7 @@ fn ipc_notify_send(_token: u64) -> u64 {
 fn ipc_notify_wait(_endpoint_token: u64) -> u64 {
     sched::with_scheduler(|s| {
         s.current_process_mut().state = ProcessState::BlockedOnIpc;
+        s.current_process_mut().block_start_tick = s.global_tick;
     });
     sched::request_reschedule();
     IpcError::WouldBlock as u64
