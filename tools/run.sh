@@ -32,7 +32,7 @@ Display Options:
   --screenshot       Capture screenshot and exit
 
 QEMU Options:
-  -m, --memory MB    Set RAM size (default: 256)
+  -m, --memory MB    Set RAM size (default: 1024, was 256 to test for memory leaks)
   --debug            Enable QEMU debug output
   --gdb              Wait for GDB connection on port 1234
 
@@ -52,7 +52,7 @@ USAGE
 
 # Default options
 DISPLAY_TYPE="gtk"
-MEMORY="256"
+MEMORY="1024"
 DEBUG_MODE=false
 GDB_MODE=false
 SCREENSHOT_MODE=false
