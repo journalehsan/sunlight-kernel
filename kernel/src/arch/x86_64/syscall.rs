@@ -267,6 +267,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         73 => sys_pause(),
         74 => sys_sigreturn(frame),
         80 => sys_powerctl(frame.rdi),
+        81 => sys_get_time_utc(),
+        82 => sys_sysinfo(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1103,6 +1105,41 @@ fn sys_pause() -> u64 {
 fn sys_sigreturn(_frame: &mut SyscallFrame) -> u64 {
     crate::serial_println!("[SYSCALL] sigreturn requested");
     u64::MAX
+}
+
+/// Syscall: get_time_utc (81)
+/// Returns the current Unix timestamp in seconds (RTC + tick advancement).
+fn sys_get_time_utc() -> u64 {
+    crate::arch::x86_64::rtc::unix_time()
+}
+
+/// Syscall: sysinfo (82)
+/// rdi = user pointer to four u64s, filled as:
+///   [0] total RAM (KiB)   [1] used RAM (KiB)
+///   [2] uptime (seconds)  [3] Unix time (seconds)
+fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
+    const SYSINFO_BYTES: u64 = 4 * 8;
+
+    let ptr = frame.rdi;
+    if !is_user_address(ptr) || !is_user_address(ptr + SYSINFO_BYTES - 1) {
+        return u64::MAX;
+    }
+
+    let (total_frames, free_frames) = crate::PMM.lock().stats();
+    // 4 KiB frames -> KiB
+    let total_kb = (total_frames as u64) * 4;
+    let used_kb = (total_frames.saturating_sub(free_frames) as u64) * 4;
+
+    let info = [
+        total_kb,
+        used_kb,
+        crate::arch::x86_64::rtc::uptime_secs(),
+        crate::arch::x86_64::rtc::unix_time(),
+    ];
+    unsafe {
+        core::ptr::copy_nonoverlapping(info.as_ptr(), ptr as *mut u64, info.len());
+    }
+    0
 }
 
 /// Syscall: powerctl (80)

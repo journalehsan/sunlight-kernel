@@ -133,6 +133,8 @@ pub extern "C" fn _start() -> ! {
     interrupts::init();
     serial_println!("[IDT] OK");
     splash.log("[IDT] OK");
+    arch::x86_64::rtc::init();
+    splash.log("[RTC] OK");
     splash.set_progress(300);  // 30%
     splash.redraw();
 

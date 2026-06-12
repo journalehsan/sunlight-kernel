@@ -193,19 +193,23 @@ pub unsafe fn render_terminal_grid(
     cursor_col: usize,
     input_line: &[u8],
     prompt: &[u8],
+    clock: &[u8],
 ) {
     let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
     let layout = layout::Layout::new(fb_width, fb_height);
     layout.draw_chrome(&mut fb);
 
-    // Header
+    // Header: logo left, clock right, mode label left of the clock
     font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
     font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
+    let clock_w = clock.len() as u32 * 8;
+    let clock_x = fb_width.saturating_sub(clock_w + 16);
+    tty_draw_line(&mut fb, clock_x, 16, clock, layout::palette::TEXT, 1);
     let mode_label = "TTY";
     let mode_w = font::text_width(mode_label, 1);
     font::draw_str(
         &mut fb,
-        fb_width.saturating_sub(mode_w + 16),
+        clock_x.saturating_sub(mode_w + 24),
         16,
         mode_label,
         layout::palette::ACCENT_DIM,

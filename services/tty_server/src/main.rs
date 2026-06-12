@@ -33,8 +33,8 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use alloc::boxed::Box;
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
-    unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
+    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
+    nameserver_lookup, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
 };
 use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
 use sunlight_tty::TerminalGrid;
@@ -380,6 +380,16 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
                 }
 
+                // Re-render whenever the title-bar clock minute rolls over
+                static mut LAST_CLOCK_MIN: u64 = u64::MAX;
+                let now_min = get_time_utc() / 60;
+                unsafe {
+                    if now_min != LAST_CLOCK_MIN {
+                        LAST_CLOCK_MIN = now_min;
+                        needs_render = true;
+                    }
+                }
+
                 if has_fb && needs_render {
                     render_active_shell_fb(
                         fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
@@ -512,6 +522,10 @@ fn render_active_shell_fb(
         grid.to_term_cells(&ANSI_COLORS)
     };
 
+    // Title-bar clock, e.g. "12:22 AM | 2026/6/12"
+    let mut clock_buf = [0u8; 32];
+    let clock_len = sunlight_tui::fmt::fmt_clock(&mut clock_buf, get_time_utc());
+
     unsafe {
         sunlight_tui::render_terminal_grid(
             fb_addr as *mut u32,
@@ -527,6 +541,7 @@ fn render_active_shell_fb(
             cursor_col,
             input_line,
             prompt_slice,
+            &clock_buf[..clock_len],
         );
     }
 

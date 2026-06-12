@@ -150,8 +150,14 @@ case "$PHASE" in
         PASS_LABEL="Phase 5.x.6"
         NEED_DISK=false
         ;;
+    phase6.5.1)
+        EXPECTED_FILE="tools/tests/phase6_5_1.expected"
+        FINAL_MARKER="[TTY]  sysfetch invoked"
+        PASS_LABEL="Phase 6.5.1"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 phase6.5.1"
         exit 2
         ;;
 esac
@@ -173,11 +179,14 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" ]]; then
+if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" ]]; then
     KERNEL_FEATURES="--features key_inject"
 fi
 EXTRA_ENV=()
 if [[ "$PHASE" == "phase3.9" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
+elif [[ "$PHASE" == "phase6.5.1" ]]; then
+    # Reuse the phase3.9 key sequence — it logs in and types sysfetch
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)

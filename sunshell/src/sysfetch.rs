@@ -32,6 +32,7 @@ impl<'a> Write for CompactWriter<'a> {
 pub fn render_sysfetch_to_buffer(
     username: &str,
     kernel_version: &str,
+    cpu: &str,
     uptime_secs: u64,
     mem_used: u32,
     mem_total: u32,
@@ -60,6 +61,9 @@ pub fn render_sysfetch_to_buffer(
     let _ = writeln!(w, "{}{}@sunlightos{}", c, username, r);
     let _ = writeln!(w, "{}OS:{} SunlightOS", c, r);
     let _ = writeln!(w, "{}Kernel:{} {}", c, r, kernel_version);
+    if !cpu.is_empty() {
+        let _ = writeln!(w, "{}CPU:{} {}", c, r, cpu);
+    }
 
     let _ = write!(w, "{}Uptime:{} ", c, r);
     if h > 0 {

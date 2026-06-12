@@ -19,8 +19,21 @@ pub enum SunlightSyscall {
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
-    GetTimeUtc = 50,
+    // NOTE: 50 belongs to sys_mmap in the kernel dispatcher — GetTimeUtc
+    // previously sat there and silently invoked mmap.
+    GetTimeUtc = 81,
+    SysInfo = 82,
     DebugLog = 99,
+}
+
+/// System statistics filled by the SysInfo syscall (kernel writes four u64s).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SystemInfo {
+    pub total_ram_kb: u64,
+    pub used_ram_kb: u64,
+    pub uptime_secs: u64,
+    pub unix_time: u64,
 }
 
 #[repr(transparent)]
@@ -381,6 +394,25 @@ pub fn get_time_utc() -> u64 {
     // SAFETY: GetTimeUtc takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetTimeUtc, 0, 0, 0, 0, 0, 0, 0) };
     ret
+}
+
+pub fn sysinfo() -> SystemInfo {
+    let mut info = SystemInfo::default();
+    // SAFETY: passes a pointer to a properly sized and aligned SystemInfo that
+    // the kernel fills with four u64s.
+    unsafe {
+        raw_syscall(
+            SunlightSyscall::SysInfo,
+            &mut info as *mut SystemInfo as u64,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        );
+    }
+    info
 }
 
 pub struct ProcessExit;

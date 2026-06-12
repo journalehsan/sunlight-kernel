@@ -128,8 +128,27 @@ mod sunlight {
 
     use sunlight_ipc::{
         debug_log, endpoint_create, get_init_cap, ipc_call, ipc_reply_and_wait, nameserver_lookup,
-        nameserver_register, CapabilityToken, InitMsg, IpcMsg, SunlightSyscall, VfsMsg,
+        nameserver_register, sysinfo, CapabilityToken, InitMsg, IpcMsg, SunlightSyscall, VfsMsg,
     };
+
+    /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
+    /// Returns the bytes written into `buf` (trimmed of NULs/leading spaces).
+    fn cpu_brand(buf: &mut [u8; 48]) -> usize {
+        for (i, leaf) in (0x8000_0002u32..=0x8000_0004).enumerate() {
+            let r = core::arch::x86_64::__cpuid(leaf);
+            for (j, reg) in [r.eax, r.ebx, r.ecx, r.edx].into_iter().enumerate() {
+                buf[i * 16 + j * 4..i * 16 + j * 4 + 4].copy_from_slice(&reg.to_le_bytes());
+            }
+        }
+        let start = buf.iter().position(|&b| b != b' ' && b != 0).unwrap_or(0);
+        let end = buf.iter().rposition(|&b| b != 0).map_or(0, |p| p + 1);
+        if start < end {
+            buf.copy_within(start..end, 0);
+            end - start
+        } else {
+            0
+        }
+    }
 
     const KBD_LABEL: u64 = 1;
     const OUTPUT_LABEL: u64 = 2;
@@ -882,13 +901,19 @@ mod sunlight {
                 LONG_OUT_ACTIVE = true;
             }
 
-            let mut buf = [0u8; 512];
+            let info = sysinfo();
+            let mut cpu_buf = [0u8; 48];
+            let cpu_len = cpu_brand(&mut cpu_buf);
+            let cpu = core::str::from_utf8(&cpu_buf[..cpu_len]).unwrap_or("");
+
+            let mut buf = [0u8; 640];
             let len = crate::sysfetch::render_sysfetch_to_buffer(
                 "root",
                 "SunlightOS 0.1.0",
-                1337, // uptime seconds
-                240,  // memory used (MiB)
-                256,  // memory total (MiB)
+                cpu,
+                info.uptime_secs,
+                (info.used_ram_kb / 1024) as u32,
+                (info.total_ram_kb / 1024) as u32,
                 &mut buf,
             );
 
@@ -911,11 +936,11 @@ mod sunlight {
                 LONG_OUT_ACTIVE = true;
             }
 
-            // Hardcoded for now (would need kernel syscall for real values)
-            let total_mb = 256u32;
-            let used_mb = 48u32;
-            let free_mb = total_mb - used_mb;
-            let percent = (used_mb as u64 * 100) / total_mb as u64;
+            let info = sysinfo();
+            let total_mb = (info.total_ram_kb / 1024) as u32;
+            let used_mb = (info.used_ram_kb / 1024) as u32;
+            let free_mb = total_mb.saturating_sub(used_mb);
+            let percent = (used_mb as u64 * 100) / (total_mb as u64).max(1);
 
             push_line("              total    used    free    percent");
             let line = alloc::format!(
@@ -933,26 +958,29 @@ mod sunlight {
         fn cmd_uptime(&self) -> &[u8] {
             debug_log("[TTY]  uptime invoked");
 
-            // Hardcoded for now (would need kernel syscall for real uptime)
-            let uptime_secs = 86400u64 + 3600u64 * 2 + 45 * 60; // ~1 day 2h 45m
+            let info = sysinfo();
+            let uptime_secs = info.uptime_secs;
             let days = uptime_secs / 86400;
             let hours = (uptime_secs % 86400) / 3600;
             let mins = (uptime_secs % 3600) / 60;
             let user_count = 1;
 
+            // Wall clock (UTC) for the leading HH:MM:SS field
+            let clock = info.unix_time % 86400;
+
             unsafe {
                 static mut BUF: [u8; 128] = [0u8; 128];
                 let buf = &mut BUF;
                 let uptime_str = alloc::format!(
-                    " {}:{}:{:02} up {} day, {}:{:02}, {} user",
-                    9,
-                    45,
-                    30,
+                    " {}:{:02}:{:02} up {} day, {}:{:02}, {} user",
+                    clock / 3600,
+                    (clock / 60) % 60,
+                    clock % 60,
                     days,
                     hours,
                     mins,
                     user_count
-                ); // HH:MM:SS hardcoded
+                );
                 let bytes = uptime_str.as_bytes();
                 let len = bytes.len().min(buf.len());
                 buf[..len].copy_from_slice(&bytes[..len]);
@@ -1345,10 +1373,11 @@ mod sunlight {
 
     fn send_system_stats_header() {
         // System stats banner: CPU % and RAM % display
-        let cpu_percent = 15; // Placeholder: would be calculated from scheduler in Phase 5.12
-        let ram_total = 256u32;
-        let ram_used = 48u32;
-        let ram_percent = (ram_used as u64 * 100) / ram_total as u64;
+        let cpu_percent = 15; // Placeholder: needs scheduler accounting (Phase 5.12)
+        let info = sysinfo();
+        let ram_total = (info.total_ram_kb / 1024) as u32;
+        let ram_used = (info.used_ram_kb / 1024) as u32;
+        let ram_percent = (ram_used as u64 * 100) / (ram_total as u64).max(1);
 
         // ANSI colors
         let bold = "\x1B[1m";
