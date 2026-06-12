@@ -337,23 +337,19 @@ pub fn poll_inject_buffer() {
 
 /// Send a keyboard event to the tty_server via IPC.
 fn send_event_to_tty(event_val: u64) {
-    let (endpoint_id, server_pid) = {
-        let sched = crate::sched::SCHEDULER.lock();
-        let found = sched
-            .processes
-            .iter()
-            .find(|p| p.name == "tty_server")
-            .and_then(|p| p.ipc_endpoint.map(|ep| {
-                let pid = p.pid;
-                (ep, pid)
-            }))
-            .unwrap_or((0, 0));
-        found
-    };
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let (endpoint_id, server_pid) = sched
+        .processes
+        .iter()
+        .find(|p| p.name == "tty_server")
+        .and_then(|p| p.ipc_endpoint.map(|ep| {
+            let pid = p.pid;
+            (ep, pid)
+        }))
+        .unwrap_or((0, 0));
 
     if endpoint_id != 0 {
         let mut bus = crate::ipc::IPC_BUS.lock();
-        let mut sched = crate::sched::SCHEDULER.lock();
         bus.send_keyboard_event(endpoint_id, event_val, &mut sched, server_pid);
     }
 }
