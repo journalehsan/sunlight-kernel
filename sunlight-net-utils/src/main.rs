@@ -1,225 +1,132 @@
-/// SunlightOS Network Utilities - Busybox-style dispatcher
-/// Usage: sunlight-net-utils <command> [args...]
-/// Symlinks (ping, ifconfig, wget, etc.) point to this binary
+//! SunlightOS network utilities — busybox-style multi-call binary.
+//!
+//! `argv[0]` selects the applet (PATH entries under /sunlight-net-utils all
+//! exec this binary). no_std on top of sunlight-libc. Applets that need the
+//! net_server IPC backend report so and exit non-zero until Phase 6.5 Step 4
+//! wires spawned processes to the network stack; hostname/dnsdomainname work
+//! today through the kernel VFS.
 
-use std::env;
-use std::io;
-use std::path::Path;
+#![no_std]
+#![no_main]
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let cmd_name = if args.is_empty() {
-        "unknown"
-    } else {
-        let path = Path::new(&args[0]);
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
+use sunlight_libc as libc;
+use libc::{Errno, STDOUT};
+
+const MAX_ARGS: usize = 16;
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    let _ = write_all(b"sunlight-net-utils: panic\n");
+    libc::exit(101);
+}
+
+#[no_mangle]
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    let mut storage = [""; MAX_ARGS];
+    let count = unsafe { collect_args(argc, argv, &mut storage) };
+    let code = run(&storage[..count]);
+    libc::exit(code as u64);
+}
+
+/// SAFETY: argc/argv come from the kernel's SysV stack marshalling.
+unsafe fn collect_args<'a>(argc: u64, argv: *const *const u8, out: &mut [&'a str]) -> usize {
+    if argv.is_null() {
+        return 0;
+    }
+    let mut count = 0;
+    for i in 0..(argc as usize).min(out.len()) {
+        let ptr = *argv.add(i);
+        if ptr.is_null() {
+            break;
+        }
+        let mut len = 0;
+        while len < 256 && *ptr.add(len) != 0 {
+            len += 1;
+        }
+        let slice = core::slice::from_raw_parts(ptr, len);
+        out[count] = core::str::from_utf8(slice).unwrap_or("");
+        count += 1;
+    }
+    count
+}
+
+fn basename(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+fn run(args: &[&str]) -> i32 {
+    let (applet, _rest) = match args.split_first() {
+        Some((first, rest)) => {
+            let name = basename(first);
+            if name == "sunlight-net-utils" {
+                match rest.split_first() {
+                    Some((sub, subrest)) => (*sub, subrest),
+                    None => {
+                        let _ = write_all(b"usage: sunlight-net-utils <applet> [args...]\n");
+                        return 2;
+                    }
+                }
+            } else {
+                (name, rest)
+            }
+        }
+        None => return 2,
     };
 
-    let args_slice = if args.len() > 1 { &args[1..] } else { &[] };
-
-    let exit_code = match cmd_name {
-        "ping" => cmd_ping(args_slice),
-        "ifconfig" => cmd_ifconfig(args_slice),
-        "wget" => cmd_wget(args_slice),
-        "curl" => cmd_curl(args_slice),
-        "dig" => cmd_dig(args_slice),
-        "nslookup" => cmd_nslookup(args_slice),
-        "hostname" => cmd_hostname(args_slice),
-        "netstat" => cmd_netstat(args_slice),
-        "ss" => cmd_ss(args_slice),
-        "traceroute" => cmd_traceroute(args_slice),
-        "arp" => cmd_arp(args_slice),
-        "dhclient" => cmd_dhclient(args_slice),
+    match applet {
+        "hostname" => cmd_hostname(),
+        "dnsdomainname" => {
+            let _ = write_all(b"local\n");
+            0
+        }
+        "ping" | "ifconfig" | "wget" | "curl" | "dig" | "nslookup" | "netstat" | "ss"
+        | "traceroute" | "arp" | "dhclient" => {
+            print2(applet, ": net_server IPC for spawned processes arrives in Step 4\n");
+            1
+        }
         _ => {
-            eprintln!("sunlight-net-utils: command '{}' not found", cmd_name);
+            print2(applet, ": applet not found\n");
             127
         }
+    }
+}
+
+/// Print /etc/hostname (the file already ends in a newline).
+fn cmd_hostname() -> i32 {
+    let fd = match libc::open(b"/etc/hostname") {
+        Ok(fd) => fd,
+        Err(_) => {
+            let _ = write_all(b"hostname: cannot read /etc/hostname\n");
+            return 1;
+        }
     };
-
-    std::process::exit(exit_code);
-}
-
-// ICMP ping
-fn cmd_ping(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("ping: missing host");
-        return 1;
+    let mut buf = [0u8; 128];
+    loop {
+        match libc::read(fd, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                let _ = write_all(&buf[..n]);
+            }
+            Err(Errno::Again) => libc::yield_now(),
+            Err(_) => break,
+        }
     }
+    let _ = libc::close(fd);
+    0
+}
 
-    let host = &args[0];
-    let count = args.iter()
-        .position(|a| a == "-c")
-        .and_then(|i| args.get(i + 1))
-        .and_then(|s| s.parse::<u32>().ok())
-        .unwrap_or(4);
-
-    println!("PING {} ({}) 56 bytes of data", host, host);
-    for i in 0..count {
-        println!("64 bytes from {}: icmp_seq={} time={}ms", host, i, 20 + (i % 5));
+fn write_all(mut data: &[u8]) -> Result<(), Errno> {
+    while !data.is_empty() {
+        match libc::write(STDOUT, data) {
+            Ok(n) => data = &data[n.min(data.len())..],
+            Err(Errno::Again) => libc::yield_now(),
+            Err(e) => return Err(e),
+        }
     }
-    println!("{} packets transmitted, {} received, 0% loss", count, count);
-    0
+    Ok(())
 }
 
-// Network interface configuration
-fn cmd_ifconfig(_args: &[String]) -> i32 {
-    println!("eth0: flags=UP,BROADCAST,RUNNING mtu=1500");
-    println!("  inet 10.0.2.15 netmask 255.255.255.0 broadcast 10.0.2.255");
-    println!("  inet6 fe80::52:54ff:fe12:3456 prefixlen 64 scopeid 0x20<link>");
-    println!("  ether 52:54:00:12:34:56  txqueuelen 1000");
-    println!("  RX packets 0  bytes 0 (0.0 B)");
-    println!("  TX packets 0  bytes 0 (0.0 B)");
-    println!();
-    println!("lo: flags=UP,LOOPBACK,RUNNING mtu 65536");
-    println!("  inet 127.0.0.1  netmask 255.0.0.0");
-    println!("  inet6 ::1  prefixlen 128 scopeid 0x10<host>");
-    println!("  loop  txqueuelen 1000");
-    println!("  RX packets 0  bytes 0 (0.0 B)");
-    println!("  TX packets 0  bytes 0 (0.0 B)");
-    0
-}
-
-// File download
-fn cmd_wget(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("wget: missing URL");
-        return 1;
-    }
-
-    let url = &args[0];
-    println!("--{}-- {}", chrono_like(), url);
-    println!("Resolving {} ...", parse_host(url));
-    println!("Connecting to {} [142.250.185.46]:80 ... connected.");
-    println!("HTTP request sent, awaiting response... 200 OK");
-    println!("Saving to: '{}'", get_filename(url));
-    println!("100%[=======================================] 1,234     --.-KB/s");
-    println!("'{}' saved", get_filename(url));
-    0
-}
-
-// URL fetcher (like curl)
-fn cmd_curl(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("curl: missing URL");
-        return 1;
-    }
-
-    let url = &args[0];
-    println!("HTTP/1.1 200 OK");
-    println!("Content-Type: text/html");
-    println!("Content-Length: 1234");
-    println!("Connection: close");
-    println!();
-    println!("<!DOCTYPE html>");
-    println!("<html><head><title>Example</title></head>");
-    println!("<body><h1>Example</h1></body></html>");
-    0
-}
-
-// DNS query
-fn cmd_dig(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("dig: missing domain");
-        return 1;
-    }
-
-    let domain = &args[0];
-    println!("; <<>> DiG 9.10 <<>> {}", domain);
-    println!(";; global options: +cmd");
-    println!(";{}\t\tIN\tA", domain);
-    println!();
-    println!(";; ANSWER SECTION:");
-    println!("{}\t3600\tIN\tA\t142.250.185.46", domain);
-    println!();
-    println!(";; Query time: 20 msec");
-    0
-}
-
-// Name service lookup
-fn cmd_nslookup(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("nslookup: missing host");
-        return 1;
-    }
-
-    let host = &args[0];
-    println!("Server:\t\t10.0.2.3");
-    println!("Address:\t10.0.2.3#53");
-    println!();
-    println!("Non-authoritative answer:");
-    println!("Name:\t{}", host);
-    println!("Address: 142.250.185.46");
-    0
-}
-
-// Get hostname
-fn cmd_hostname(_args: &[String]) -> i32 {
-    println!("sunlight");
-    0
-}
-
-// Network statistics
-fn cmd_netstat(_args: &[String]) -> i32 {
-    println!("Active Internet connections");
-    println!("Proto Recv-Q Send-Q Local Address    Foreign Address  State");
-    println!("tcp        0      0 127.0.0.1:22    0.0.0.0:*        LISTEN");
-    println!("tcp        0      0 10.0.2.15:80    0.0.0.0:*        LISTEN");
-    0
-}
-
-// Socket statistics
-fn cmd_ss(_args: &[String]) -> i32 {
-    println!("Netid State   Recv-Q Send-Q Local Address:Port Peer Address:Port Process");
-    println!("tcp   LISTEN  0      128    127.0.0.1:22                *:*");
-    println!("tcp   LISTEN  0      128    10.0.2.15:80               *:*");
-    0
-}
-
-// Trace route to host
-fn cmd_traceroute(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("traceroute: missing host");
-        return 1;
-    }
-
-    let host = &args[0];
-    println!("traceroute to {} (142.250.185.46), 30 hops max, 60 byte packets", host);
-    println!(" 1  10.0.2.2  5.234 ms  5.321 ms  5.123 ms");
-    println!(" 2  10.0.0.1  15.234 ms  15.321 ms  15.123 ms");
-    println!(" 3  142.250.185.46  20.234 ms  20.321 ms  20.123 ms");
-    0
-}
-
-// ARP (address resolution protocol)
-fn cmd_arp(_args: &[String]) -> i32 {
-    println!("Address    HWtype  HWaddress        Flags Mask  Iface");
-    println!("10.0.2.2   ether   52:54:00:12:34:56  C          eth0");
-    println!("10.0.2.3   ether   52:54:00:12:34:57  C          eth0");
-    0
-}
-
-// DHCP client (stub)
-fn cmd_dhclient(_args: &[String]) -> i32 {
-    println!("dhclient: DHCP configuration:");
-    println!("  interface eth0");
-    println!("  inet 10.0.2.15");
-    println!("  netmask 255.255.255.0");
-    println!("  gateway 10.0.2.2");
-    println!("  dns 10.0.2.3");
-    0
-}
-
-// Helper functions
-fn chrono_like() -> String {
-    "2026-06-11 12:00:00".to_string()
-}
-
-fn parse_host(url: &str) -> String {
-    url.split('/').next().unwrap_or("example.com").to_string()
-}
-
-fn get_filename(url: &str) -> String {
-    url.split('/').last().unwrap_or("index.html").to_string()
+fn print2(a: &str, b: &str) {
+    let _ = write_all(a.as_bytes());
+    let _ = write_all(b.as_bytes());
 }

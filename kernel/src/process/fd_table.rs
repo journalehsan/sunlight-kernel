@@ -57,6 +57,9 @@ pub struct FileHandle(pub u32);
 impl FileHandle {
     const PIPE_FLAG: u32 = 0x8000_0000;
     const PIPE_WRITE_FLAG: u32 = 0x4000_0000;
+    /// Marks a handle backed by the kernel VFS (only meaningful when the
+    /// pipe flag is clear; bits 0..30 carry the packed Vfs handle).
+    const VFS_FLAG: u32 = 0x4000_0000;
 
     pub fn is_pipe(self) -> bool {
         (self.0 & Self::PIPE_FLAG) != 0
@@ -68,6 +71,18 @@ impl FileHandle {
 
     pub fn pipe_is_write(self) -> bool {
         (self.0 & Self::PIPE_WRITE_FLAG) != 0
+    }
+
+    pub fn vfs(packed: u32) -> Self {
+        Self(Self::VFS_FLAG | (packed & 0x3FFF_FFFF))
+    }
+
+    pub fn is_vfs(self) -> bool {
+        (self.0 & (Self::PIPE_FLAG | Self::VFS_FLAG)) == Self::VFS_FLAG
+    }
+
+    pub fn vfs_handle(self) -> u32 {
+        self.0 & 0x3FFF_FFFF
     }
 }
 
@@ -87,6 +102,8 @@ pub struct FileDescriptor {
     pub handle: FileHandle,
     pub rights: CapRights,
     pub flags: u32,  // O_RDONLY, O_WRONLY, O_RDWR, O_CLOEXEC
+    /// Current read/write position (VFS-backed fds only).
+    pub offset: usize,
 }
 
 /// File descriptor table for a process (max 256 open fds)
@@ -108,18 +125,21 @@ impl FdTable {
             handle: FileHandle(0),
             rights: CapRights::new(CapRights::READ | CapRights::FSTAT),
             flags: 0,  // O_RDONLY
+            offset: 0,
         });
         table.entries[1] = Some(FileDescriptor {
             fd: 1,
             handle: FileHandle(1),
             rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
             flags: 1,  // O_WRONLY
+            offset: 0,
         });
         table.entries[2] = Some(FileDescriptor {
             fd: 2,
             handle: FileHandle(2),
             rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
             flags: 1,  // O_WRONLY
+            offset: 0,
         });
         table
     }
@@ -136,6 +156,7 @@ impl FdTable {
             handle,
             rights,
             flags,
+            offset: 0,
         });
         self.next_fd += 1;
 
@@ -163,11 +184,29 @@ impl FdTable {
     }
 
     /// Get a mutable file descriptor
-    fn get_mut(&mut self, fd: i32) -> Option<&mut FileDescriptor> {
+    pub fn get_mut(&mut self, fd: i32) -> Option<&mut FileDescriptor> {
         if fd < 0 || fd >= 256 {
             return None;
         }
         self.entries[fd as usize].as_mut()
+    }
+
+    /// Install a descriptor at a fixed fd number, replacing any existing
+    /// entry (used by Spawn to hand a parent's pipe end to the child's
+    /// stdout). Unlike `dup2` this does not require the source fd to live
+    /// in this table.
+    pub fn install_at(&mut self, fd: i32, handle: FileHandle, rights: CapRights, flags: u32) -> Result<(), FdError> {
+        if fd < 0 || fd >= 256 {
+            return Err(FdError::InvalidFd);
+        }
+        self.entries[fd as usize] = Some(FileDescriptor {
+            fd,
+            handle,
+            rights,
+            flags,
+            offset: 0,
+        });
+        Ok(())
     }
 
     /// Check if fd has required rights
@@ -193,6 +232,7 @@ impl FdTable {
             handle: orig.handle,
             rights: orig.rights,
             flags: orig.flags,
+            offset: orig.offset,
         });
         self.next_fd += 1;
 
@@ -211,6 +251,7 @@ impl FdTable {
             handle: orig.handle,
             rights: orig.rights,
             flags: orig.flags,
+            offset: orig.offset,
         };
 
         self.entries[new_fd as usize] = Some(desc);

@@ -430,8 +430,8 @@ mod sunlight {
                 "uname" => self.cmd_uname(&args),
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
-                // Not a builtin: resolve through $PATH against the VFS
-                _ => self.resolve_external(cmd),
+                // Not a builtin: resolve through $PATH and run it (Step 3)
+                _ => self.run_external(cmd, &args),
             };
 
             // Backward compatibility logging for phase 3.6 tests
@@ -857,24 +857,104 @@ mod sunlight {
             b""
         }
 
-        /// Resolve a non-builtin command via $PATH and report the result.
-        /// Actual execution of the resolved binary lands in Phase 6.5 Step 3
-        /// (VFS-backed ELF loading).
-        fn resolve_external(&self, cmd: &str) -> &[u8] {
-            let msg = match self.resolve_in_path(cmd) {
-                Some(path) => {
-                    alloc::format!("sshl: {}: found at {} (exec arrives in Step 3)\n", cmd, path)
+        /// Resolve a non-builtin command via $PATH, spawn it with its stdout
+        /// on a pipe, stream the output into the long-output buffer, and
+        /// record the exit code in `$?` (Phase 6.5 Step 3).
+        fn run_external(&mut self, cmd: &str, args: &[&str]) -> &'static [u8] {
+            use sunlight_libc as ulibc;
+
+            let path = match self.resolve_in_path(cmd) {
+                Some(p) => p,
+                None => {
+                    self.env.set("?", "127");
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    push_line(&alloc::format!("sshl: command not found: {}", cmd));
+                    return b"";
                 }
-                None => alloc::format!("sshl: command not found: {}\n", cmd),
             };
-            unsafe {
-                static mut BUF: [u8; 160] = [0u8; 160];
-                let buf = &mut BUF;
-                let bytes = msg.as_bytes();
-                let len = bytes.len().min(buf.len());
-                buf[..len].copy_from_slice(&bytes[..len]);
-                &buf[..len]
+
+            let (read_end, write_end) = match ulibc::pipe() {
+                Ok(p) => p,
+                Err(_) => {
+                    self.env.set("?", "126");
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    push_line("sshl: pipe failed");
+                    return b"";
+                }
+            };
+
+            // argv[0] is the applet name (multi-call binaries dispatch on it).
+            let mut argv: alloc::vec::Vec<&[u8]> = alloc::vec::Vec::new();
+            argv.push(cmd.as_bytes());
+            for a in args {
+                argv.push(a.as_bytes());
             }
+
+            let pid = match ulibc::spawn(path.as_bytes(), &argv, Some(write_end)) {
+                Ok(pid) => pid,
+                Err(_) => {
+                    let _ = ulibc::close(read_end);
+                    let _ = ulibc::close(write_end);
+                    self.env.set("?", "126");
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    push_line(&alloc::format!("sshl: cannot execute {}", path));
+                    return b"";
+                }
+            };
+
+            unsafe {
+                LONG_OUT_ACTIVE = true;
+            }
+
+            // Drain the pipe until the child exits. We keep our copy of the
+            // write end open, so an empty pipe reads as EAGAIN (never EOF)
+            // while the child is alive.
+            let mut chunk = [0u8; 256];
+            let mut exit_code: u64 = 1;
+            let mut spins: u32 = 0;
+            loop {
+                if let Ok(n) = ulibc::read(read_end, &mut chunk) {
+                    if n > 0 {
+                        push_bytes(&chunk[..n]);
+                        continue;
+                    }
+                }
+                match ulibc::try_waitpid(pid) {
+                    Ok(Some(code)) => {
+                        // Final drain after the child finished.
+                        while let Ok(n) = ulibc::read(read_end, &mut chunk) {
+                            if n == 0 {
+                                break;
+                            }
+                            push_bytes(&chunk[..n]);
+                        }
+                        exit_code = code;
+                        break;
+                    }
+                    Ok(None) => {
+                        spins += 1;
+                        if spins > 5_000_000 {
+                            push_line("sshl: timeout waiting for child");
+                            exit_code = 124;
+                            break;
+                        }
+                        ulibc::yield_now();
+                    }
+                    Err(_) => break,
+                }
+            }
+            let _ = ulibc::close(read_end);
+            let _ = ulibc::close(write_end);
+
+            self.env.set("?", &alloc::format!("{}", exit_code));
+            debug_log(&alloc::format!("[EXEC] {} exit={}", cmd, exit_code));
+            b""
         }
 
         /// Search the colon-separated $PATH for `cmd`, probing each candidate
@@ -1226,6 +1306,12 @@ mod sunlight {
     fn push_line(s: &str) {
         long_out_push_str(s);
         long_out_push_byte(b'\n');
+    }
+
+    fn push_bytes(data: &[u8]) {
+        for &b in data {
+            long_out_push_byte(b);
+        }
     }
 
     fn format_uptime(total_s: u64) -> alloc::string::String {

@@ -9,11 +9,12 @@ path = "src/main.rs"
 
 [dependencies]
 sunlight-ipc = { path = "../ipc", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true }
 
 [features]
 default = ["sunlight"]
 std = []
-sunlight = ["sunlight-ipc"]
+sunlight = ["sunlight-ipc", "sunlight-libc"]
 
 [profile.release]
 panic         = "abort"

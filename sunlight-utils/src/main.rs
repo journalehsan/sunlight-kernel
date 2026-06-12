@@ -1,526 +1,419 @@
-/// SunlightOS File Utilities - Busybox-style dispatcher
-/// Usage: sunlight-utils <command> [args...]
-/// Symlinks (ls, cat, cp, etc.) point to this binary
+//! SunlightOS file utilities — busybox-style multi-call binary.
+//!
+//! `argv[0]` selects the applet (the PATH entries `/sunlight-utils/ls` etc.
+//! all exec this binary); `sunlight-utils <applet> [args…]` also works.
+//! no_std on top of sunlight-libc: all I/O goes through the kernel VFS
+//! syscalls (Open/Read/Close/ReadDir/StatPath/Mkdir) added in Phase 6.5
+//! Step 3.
 
-// Stub implementation for Phase 5.x testing
+#![no_std]
+#![no_main]
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let cmd_name = if args.is_empty() {
-        "unknown"
-    } else {
-        let path = Path::new(&args[0]);
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
+use sunlight_libc as libc;
+use libc::{DirEntry, Errno, Fd, STDOUT, FT_DIR};
+
+const MAX_ARGS: usize = 16;
+const MAX_DIR_ENTRIES: usize = 64;
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    let _ = write_all(b"sunlight-utils: panic\n");
+    libc::exit(101);
+}
+
+#[no_mangle]
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    let mut storage = [""; MAX_ARGS];
+    let count = unsafe { collect_args(argc, argv, &mut storage) };
+    let code = run(&storage[..count]);
+    libc::exit(code as u64);
+}
+
+/// Borrow argv strings out of the exec-time stack arena.
+/// SAFETY: argc/argv come from the kernel's SysV stack marshalling.
+unsafe fn collect_args<'a>(argc: u64, argv: *const *const u8, out: &mut [&'a str]) -> usize {
+    if argv.is_null() {
+        return 0;
+    }
+    let mut count = 0;
+    for i in 0..(argc as usize).min(out.len()) {
+        let ptr = *argv.add(i);
+        if ptr.is_null() {
+            break;
+        }
+        let mut len = 0;
+        while len < 256 && *ptr.add(len) != 0 {
+            len += 1;
+        }
+        let slice = core::slice::from_raw_parts(ptr, len);
+        out[count] = core::str::from_utf8(slice).unwrap_or("");
+        count += 1;
+    }
+    count
+}
+
+fn basename(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+fn run(args: &[&str]) -> i32 {
+    let (applet, rest) = match args.split_first() {
+        Some((first, rest)) => {
+            let name = basename(first);
+            if name == "sunlight-utils" {
+                match rest.split_first() {
+                    Some((sub, subrest)) => (*sub, subrest),
+                    None => {
+                        let _ = write_all(b"usage: sunlight-utils <applet> [args...]\n");
+                        return 2;
+                    }
+                }
+            } else {
+                (name, rest)
+            }
+        }
+        None => return 2,
     };
 
-    let args_slice = if args.len() > 1 { &args[1..] } else { &[] };
-
-    let exit_code = match cmd_name {
-        "ls" => cmd_ls(args_slice),
-        "cat" => cmd_cat(args_slice),
-        "cp" => cmd_cp(args_slice),
-        "mv" => cmd_mv(args_slice),
-        "rm" => cmd_rm(args_slice),
-        "mkdir" => cmd_mkdir(args_slice),
-        "rmdir" => cmd_rmdir(args_slice),
-        "touch" => cmd_touch(args_slice),
-        "chmod" => cmd_chmod(args_slice),
-        "chown" => cmd_chown(args_slice),
-        "find" => cmd_find(args_slice),
-        "grep" => cmd_grep(args_slice),
-        "head" => cmd_head(args_slice),
-        "tail" => cmd_tail(args_slice),
-        "wc" => cmd_wc(args_slice),
-        "sort" => cmd_sort(args_slice),
-        "uniq" => cmd_uniq(args_slice),
-        "cut" => cmd_cut(args_slice),
-        "file" => cmd_file(args_slice),
-        "stat" => cmd_stat(args_slice),
-        "pwd" => cmd_pwd(args_slice),
-        "cd" => cmd_cd(args_slice),
-        "echo" => cmd_echo(args_slice),
-        "date" => cmd_date(args_slice),
+    match applet {
+        "ls" => cmd_ls(rest),
+        "cat" => cmd_cat(rest),
+        "mkdir" => cmd_mkdir(rest),
+        "echo" => cmd_echo(rest),
+        "pwd" => cmd_pwd(),
+        "stat" => cmd_stat(rest),
+        "file" => cmd_file(rest),
+        "head" => cmd_head(rest),
+        "wc" => cmd_wc(rest),
+        "uname" => {
+            let _ = write_all(b"SunlightOS x86_64\n");
+            0
+        }
+        "touch" | "rm" | "rmdir" | "cp" | "mv" | "chmod" | "chown" => {
+            print2(applet, ": filesystem is read-only from utils (Step 4)\n");
+            1
+        }
+        "find" | "grep" | "sort" | "uniq" | "cut" | "tail" | "date" => {
+            print2(applet, ": not implemented yet\n");
+            1
+        }
         _ => {
-            eprintln!("sunlight-utils: command '{}' not found", cmd_name);
+            print2(applet, ": applet not found\n");
             127
         }
-    };
-
-    std::process::exit(exit_code);
+    }
 }
 
-// File listing
-fn cmd_ls(args: &[String]) -> i32 {
-    let path = if args.is_empty() { "." } else { &args[0] };
-    match fs::read_dir(path) {
-        Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    if let Some(name) = entry.file_name().to_str() {
-                        println!("{}", name);
-                    }
+// ---------------------------------------------------------------------------
+// Applets
+// ---------------------------------------------------------------------------
+
+fn cmd_ls(args: &[&str]) -> i32 {
+    let path = args.first().copied().unwrap_or("/");
+    let mut entries = [DirEntry::zeroed(); MAX_DIR_ENTRIES];
+    match libc::read_dir(path.as_bytes(), &mut entries) {
+        Ok(n) => {
+            for entry in &entries[..n] {
+                let _ = write_all(entry.name_bytes());
+                if entry.file_type == FT_DIR {
+                    let _ = write_all(b"/");
                 }
+                let _ = write_all(b"\n");
             }
             0
         }
-        Err(e) => {
-            eprintln!("ls: {}: {}", path, e);
+        Err(_) => {
+            print2("ls: cannot access ", path);
+            let _ = write_all(b"\n");
             1
         }
     }
 }
 
-// File reading
-fn cmd_cat(args: &[String]) -> i32 {
+fn cmd_cat(args: &[&str]) -> i32 {
     if args.is_empty() {
-        eprintln!("cat: missing file operand");
+        let _ = write_all(b"cat: missing file operand\n");
         return 1;
     }
-
-    for arg in args {
-        match fs::read(arg) {
-            Ok(contents) => {
-                if let Ok(text) = String::from_utf8(contents) {
-                    print!("{}", text);
-                } else {
-                    eprint!("cat: {} contains invalid UTF-8", arg);
-                    return 1;
+    for path in args {
+        let fd = match libc::open(path.as_bytes()) {
+            Ok(fd) => fd,
+            Err(_) => {
+                print2("cat: cannot open ", path);
+                let _ = write_all(b"\n");
+                return 1;
+            }
+        };
+        let mut buf = [0u8; 512];
+        loop {
+            match read_retry(fd, &mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let _ = write_all(&buf[..n]);
                 }
-            }
-            Err(e) => {
-                eprintln!("cat: {}: {}", arg, e);
-                return 1;
-            }
-        }
-    }
-    0
-}
-
-// File copying
-fn cmd_cp(args: &[String]) -> i32 {
-    if args.len() < 2 {
-        eprintln!("cp: missing file operand");
-        return 1;
-    }
-
-    match fs::copy(&args[0], &args[1]) {
-        Ok(_) => 0,
-        Err(e) => {
-            eprintln!("cp: {}: {}", args[0], e);
-            1
-        }
-    }
-}
-
-// File moving
-fn cmd_mv(args: &[String]) -> i32 {
-    if args.len() < 2 {
-        eprintln!("mv: missing file operand");
-        return 1;
-    }
-
-    match fs::rename(&args[0], &args[1]) {
-        Ok(_) => 0,
-        Err(e) => {
-            eprintln!("mv: {}: {}", args[0], e);
-            1
-        }
-    }
-}
-
-// File removal
-fn cmd_rm(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("rm: missing file operand");
-        return 1;
-    }
-
-    for arg in args {
-        match fs::remove_file(arg) {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("rm: {}: {}", arg, e);
-                return 1;
-            }
-        }
-    }
-    0
-}
-
-// Directory creation
-fn cmd_mkdir(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("mkdir: missing operand");
-        return 1;
-    }
-
-    for arg in args {
-        match fs::create_dir(arg) {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("mkdir: {}: {}", arg, e);
-                return 1;
-            }
-        }
-    }
-    0
-}
-
-// Directory removal
-fn cmd_rmdir(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("rmdir: missing operand");
-        return 1;
-    }
-
-    for arg in args {
-        match fs::remove_dir(arg) {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("rmdir: {}: {}", arg, e);
-                return 1;
-            }
-        }
-    }
-    0
-}
-
-// File touching (create empty or update timestamp)
-fn cmd_touch(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("touch: missing file operand");
-        return 1;
-    }
-
-    for arg in args {
-        if !Path::new(arg).exists() {
-            match fs::File::create(arg) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("touch: {}: {}", arg, e);
+                Err(_) => {
+                    let _ = libc::close(fd);
+                    print2("cat: read error on ", path);
+                    let _ = write_all(b"\n");
                     return 1;
                 }
             }
         }
+        let _ = libc::close(fd);
     }
     0
 }
 
-// Permission changing (stub)
-fn cmd_chmod(args: &[String]) -> i32 {
-    if args.len() < 2 {
-        eprintln!("chmod: missing operand");
+fn cmd_mkdir(args: &[&str]) -> i32 {
+    if args.is_empty() {
+        let _ = write_all(b"mkdir: missing operand\n");
         return 1;
     }
-    // Not implemented on most file systems without kernel support
-    println!("chmod: mode {} on {} (not supported)", args[0], args[1]);
-    0
-}
-
-// Owner changing (stub)
-fn cmd_chown(args: &[String]) -> i32 {
-    if args.len() < 2 {
-        eprintln!("chown: missing operand");
-        return 1;
-    }
-    // Not implemented on most file systems without kernel support
-    println!("chown: owner {} on {} (not supported)", args[0], args[1]);
-    0
-}
-
-// Find files (simple recursive search)
-fn cmd_find(args: &[String]) -> i32 {
-    let path = if args.is_empty() { "." } else { &args[0] };
-    let pattern = if args.len() > 2 && args[1] == "-name" {
-        Some(&args[2])
-    } else {
-        None
-    };
-
-    fn search(path: &Path, pattern: Option<&String>) -> io::Result<()> {
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-
-            let matches = if let Some(p) = pattern {
-                name_str.contains(p)
-            } else {
-                true
-            };
-
-            if matches {
-                println!("{}", path.display());
-            }
-
-            if path.is_dir() {
-                let _ = search(&path, pattern);
-            }
+    for path in args {
+        if libc::mkdir(path.as_bytes(), 0o755).is_err() {
+            print2("mkdir: cannot create directory ", path);
+            let _ = write_all(b"\n");
+            return 1;
         }
-        Ok(())
     }
+    0
+}
 
-    match search(Path::new(path), pattern) {
-        Ok(_) => 0,
-        Err(e) => {
-            eprintln!("find: {}: {}", path, e);
+fn cmd_echo(args: &[&str]) -> i32 {
+    for (i, arg) in args.iter().enumerate() {
+        if i > 0 {
+            let _ = write_all(b" ");
+        }
+        let _ = write_all(arg.as_bytes());
+    }
+    let _ = write_all(b"\n");
+    0
+}
+
+fn cmd_pwd() -> i32 {
+    // No per-process cwd yet; every path is absolute.
+    let _ = write_all(b"/\n");
+    0
+}
+
+fn cmd_stat(args: &[&str]) -> i32 {
+    let Some(path) = args.first() else {
+        let _ = write_all(b"stat: missing operand\n");
+        return 1;
+    };
+    match libc::stat(path.as_bytes()) {
+        Ok(st) => {
+            print2("  File: ", path);
+            let _ = write_all(b"\n  Size: ");
+            print_u64(st.size);
+            let _ = write_all(b"\n  Type: ");
+            let _ = write_all(if st.file_type == FT_DIR {
+                b"directory" as &[u8]
+            } else {
+                b"regular file"
+            });
+            let _ = write_all(b"\n  Mode: 0o");
+            print_octal(st.mode as u64 & 0o7777);
+            let _ = write_all(b"  Uid: ");
+            print_u64(st.uid as u64);
+            let _ = write_all(b"  Gid: ");
+            print_u64(st.gid as u64);
+            let _ = write_all(b"\n");
+            0
+        }
+        Err(_) => {
+            print2("stat: cannot stat ", path);
+            let _ = write_all(b"\n");
             1
         }
     }
 }
 
-// Grep (simple pattern search)
-fn cmd_grep(args: &[String]) -> i32 {
-    if args.len() < 2 {
-        eprintln!("grep: missing operand");
+fn cmd_file(args: &[&str]) -> i32 {
+    let Some(path) = args.first() else {
+        let _ = write_all(b"file: missing operand\n");
         return 1;
+    };
+    match libc::stat(path.as_bytes()) {
+        Ok(st) => {
+            print2(path, ": ");
+            let _ = write_all(if st.file_type == FT_DIR {
+                b"directory\n" as &[u8]
+            } else {
+                b"regular file\n"
+            });
+            0
+        }
+        Err(_) => {
+            print2("file: cannot stat ", path);
+            let _ = write_all(b"\n");
+            1
+        }
     }
+}
 
-    let pattern = &args[0];
-    for file_arg in &args[1..] {
-        match fs::read_to_string(file_arg) {
-            Ok(contents) => {
-                for line in contents.lines() {
-                    if line.contains(pattern) {
-                        println!("{}", line);
+fn cmd_head(args: &[&str]) -> i32 {
+    let (limit, path) = match args {
+        ["-n", n, path, ..] => (parse_u64(n).unwrap_or(10), *path),
+        [path, ..] => (10, *path),
+        [] => {
+            let _ = write_all(b"head: missing file operand\n");
+            return 1;
+        }
+    };
+    let fd = match libc::open(path.as_bytes()) {
+        Ok(fd) => fd,
+        Err(_) => {
+            print2("head: cannot open ", path);
+            let _ = write_all(b"\n");
+            return 1;
+        }
+    };
+    let mut printed_lines = 0u64;
+    let mut buf = [0u8; 512];
+    'outer: loop {
+        match read_retry(fd, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                for (i, &b) in buf[..n].iter().enumerate() {
+                    if b == b'\n' {
+                        printed_lines += 1;
+                        if printed_lines >= limit {
+                            let _ = write_all(&buf[..=i]);
+                            break 'outer;
+                        }
+                    }
+                }
+                let _ = write_all(&buf[..n]);
+            }
+            Err(_) => break,
+        }
+    }
+    let _ = libc::close(fd);
+    0
+}
+
+fn cmd_wc(args: &[&str]) -> i32 {
+    let Some(path) = args.first() else {
+        let _ = write_all(b"wc: missing file operand\n");
+        return 1;
+    };
+    let fd = match libc::open(path.as_bytes()) {
+        Ok(fd) => fd,
+        Err(_) => {
+            print2("wc: cannot open ", path);
+            let _ = write_all(b"\n");
+            return 1;
+        }
+    };
+    let (mut lines, mut words, mut bytes) = (0u64, 0u64, 0u64);
+    let mut in_word = false;
+    let mut buf = [0u8; 512];
+    loop {
+        match read_retry(fd, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                bytes += n as u64;
+                for &b in &buf[..n] {
+                    if b == b'\n' {
+                        lines += 1;
+                    }
+                    if b.is_ascii_whitespace() {
+                        in_word = false;
+                    } else if !in_word {
+                        in_word = true;
+                        words += 1;
                     }
                 }
             }
-            Err(e) => {
-                eprintln!("grep: {}: {}", file_arg, e);
-                return 1;
-            }
+            Err(_) => break,
         }
     }
+    let _ = libc::close(fd);
+    let _ = write_all(b" ");
+    print_u64(lines);
+    let _ = write_all(b" ");
+    print_u64(words);
+    let _ = write_all(b" ");
+    print_u64(bytes);
+    print2(" ", path);
+    let _ = write_all(b"\n");
     0
 }
 
-// Head (print first N lines)
-fn cmd_head(args: &[String]) -> i32 {
-    let (lines, file) = if args.len() >= 2 && args[0] == "-n" {
-        (args[1].parse::<usize>().unwrap_or(10), &args[2])
-    } else if args.is_empty() {
-        eprintln!("head: missing file");
-        return 1;
-    } else {
-        (10, &args[0])
-    };
+// ---------------------------------------------------------------------------
+// Small I/O helpers (no alloc, retry on EAGAIN)
+// ---------------------------------------------------------------------------
 
-    match fs::read_to_string(file) {
-        Ok(contents) => {
-            for (i, line) in contents.lines().enumerate() {
-                if i >= lines {
-                    break;
-                }
-                println!("{}", line);
-            }
-            0
+fn write_all(mut data: &[u8]) -> Result<(), Errno> {
+    while !data.is_empty() {
+        match libc::write(STDOUT, data) {
+            Ok(n) => data = &data[n.min(data.len())..],
+            Err(Errno::Again) => libc::yield_now(),
+            Err(e) => return Err(e),
         }
-        Err(e) => {
-            eprintln!("head: {}: {}", file, e);
-            1
+    }
+    Ok(())
+}
+
+fn read_retry(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+    loop {
+        match libc::read(fd, buf) {
+            Err(Errno::Again) => libc::yield_now(),
+            other => return other,
         }
     }
 }
 
-// Tail (print last N lines)
-fn cmd_tail(args: &[String]) -> i32 {
-    let (lines, file) = if args.len() >= 2 && args[0] == "-n" {
-        (args[1].parse::<usize>().unwrap_or(10), &args[2])
-    } else if args.is_empty() {
-        eprintln!("tail: missing file");
-        return 1;
-    } else {
-        (10, &args[0])
-    };
+fn print2(a: &str, b: &str) {
+    let _ = write_all(a.as_bytes());
+    let _ = write_all(b.as_bytes());
+}
 
-    match fs::read_to_string(file) {
-        Ok(contents) => {
-            let all_lines: Vec<&str> = contents.lines().collect();
-            let start = if all_lines.len() > lines {
-                all_lines.len() - lines
-            } else {
-                0
-            };
-            for line in &all_lines[start..] {
-                println!("{}", line);
-            }
-            0
+fn print_u64(mut v: u64) {
+    let mut digits = [0u8; 20];
+    let mut n = 0;
+    loop {
+        digits[n] = b'0' + (v % 10) as u8;
+        v /= 10;
+        n += 1;
+        if v == 0 {
+            break;
         }
-        Err(e) => {
-            eprintln!("tail: {}: {}", file, e);
-            1
-        }
+    }
+    while n > 0 {
+        n -= 1;
+        let _ = write_all(&digits[n..n + 1]);
     }
 }
 
-// Word count
-fn cmd_wc(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("wc: missing file");
-        return 1;
-    }
-
-    for file in args {
-        match fs::read_to_string(file) {
-            Ok(contents) => {
-                let lines = contents.lines().count();
-                let words = contents.split_whitespace().count();
-                let bytes = contents.len();
-                println!("  {} {} {} {}", lines, words, bytes, file);
-            }
-            Err(e) => {
-                eprintln!("wc: {}: {}", file, e);
-                return 1;
-            }
+fn print_octal(mut v: u64) {
+    let mut digits = [0u8; 22];
+    let mut n = 0;
+    loop {
+        digits[n] = b'0' + (v % 8) as u8;
+        v /= 8;
+        n += 1;
+        if v == 0 {
+            break;
         }
     }
-    0
-}
-
-// Sort lines
-fn cmd_sort(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("sort: missing file");
-        return 1;
-    }
-
-    match fs::read_to_string(&args[0]) {
-        Ok(contents) => {
-            let mut lines: Vec<&str> = contents.lines().collect();
-            lines.sort();
-            for line in lines {
-                println!("{}", line);
-            }
-            0
-        }
-        Err(e) => {
-            eprintln!("sort: {}: {}", args[0], e);
-            1
-        }
+    while n > 0 {
+        n -= 1;
+        let _ = write_all(&digits[n..n + 1]);
     }
 }
 
-// Unique lines
-fn cmd_uniq(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("uniq: missing file");
-        return 1;
+fn parse_u64(s: &str) -> Option<u64> {
+    if s.is_empty() {
+        return None;
     }
-
-    match fs::read_to_string(&args[0]) {
-        Ok(contents) => {
-            let mut prev = "";
-            for line in contents.lines() {
-                if line != prev {
-                    println!("{}", line);
-                    prev = line;
-                }
-            }
-            0
+    let mut out = 0u64;
+    for &b in s.as_bytes() {
+        if !b.is_ascii_digit() {
+            return None;
         }
-        Err(e) => {
-            eprintln!("uniq: {}: {}", args[0], e);
-            1
-        }
+        out = out.checked_mul(10)?.checked_add((b - b'0') as u64)?;
     }
-}
-
-// Cut fields (simple CSV)
-fn cmd_cut(args: &[String]) -> i32 {
-    eprintln!("cut: not implemented");
-    1
-}
-
-// File type
-fn cmd_file(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("file: missing file");
-        return 1;
-    }
-
-    for arg in args {
-        match fs::metadata(arg) {
-            Ok(meta) => {
-                let type_str = if meta.is_dir() {
-                    "directory"
-                } else if meta.is_file() {
-                    "regular file"
-                } else {
-                    "unknown"
-                };
-                println!("{}: {}", arg, type_str);
-            }
-            Err(e) => {
-                eprintln!("file: {}: {}", arg, e);
-                return 1;
-            }
-        }
-    }
-    0
-}
-
-// File stats
-fn cmd_stat(args: &[String]) -> i32 {
-    if args.is_empty() {
-        eprintln!("stat: missing file");
-        return 1;
-    }
-
-    for arg in args {
-        match fs::metadata(arg) {
-            Ok(meta) => {
-                println!("File: {}", arg);
-                println!("Size: {} bytes", meta.len());
-                println!("Is dir: {}", meta.is_dir());
-                println!("Is file: {}", meta.is_file());
-            }
-            Err(e) => {
-                eprintln!("stat: {}: {}", arg, e);
-                return 1;
-            }
-        }
-    }
-    0
-}
-
-// Print working directory
-fn cmd_pwd(_args: &[String]) -> i32 {
-    match env::current_dir() {
-        Ok(path) => {
-            println!("{}", path.display());
-            0
-        }
-        Err(e) => {
-            eprintln!("pwd: {}", e);
-            1
-        }
-    }
-}
-
-// Change directory (limited support)
-fn cmd_cd(args: &[String]) -> i32 {
-    let path = if args.is_empty() { "/" } else { &args[0] };
-    match env::set_current_dir(path) {
-        Ok(_) => 0,
-        Err(e) => {
-            eprintln!("cd: {}: {}", path, e);
-            1
-        }
-    }
-}
-
-// Echo
-fn cmd_echo(args: &[String]) -> i32 {
-    println!("{}", args.join(" "));
-    0
-}
-
-// Date
-fn cmd_date(_args: &[String]) -> i32 {
-    println!("Wed Jun 11 2026 12:00:00 UTC");
-    0
+    Some(out)
 }

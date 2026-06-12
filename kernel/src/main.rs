@@ -30,6 +30,13 @@ static MEMMAP_REQ: limine::request::MemmapRequest = limine::request::MemmapReque
 static HHDM_REQ: limine::request::HhdmRequest = limine::request::HhdmRequest::new();
 static FB_REQ: limine::request::FramebufferRequest = limine::request::FramebufferRequest::new();
 static RSDP_REQ: limine::request::RsdpRequest = limine::request::RsdpRequest::new();
+// 1 MiB boot stack (Limine defaults to 64 KiB). `init_kernel_vfs` and the
+// FAT bootstrap keep multi-KiB filesystem objects on the stack before the
+// scheduler's per-process kernel stacks take over; overflowing the default
+// stack silently corrupts bootloader-reclaimable data (e.g. the memmap).
+#[used]
+static STACK_SIZE_REQ: limine::request::StackSizeRequest =
+    limine::request::StackSizeRequest::new(1024 * 1024);
 
 // Embedded service binaries (must be built before kernel)
 static INIT_ELF_BYTES: &[u8] =
@@ -44,6 +51,13 @@ static NET_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/net_server");
 static SUNSHELL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sshl");
+// Phase 6.5 Step 3: busybox-style multi-call userland binaries. PATH entries
+// under /sunlight-utils and /sunlight-net-utils all exec one of these; the
+// applet is selected by argv[0].
+static SUNLIGHT_UTILS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-utils");
+static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -160,6 +174,9 @@ pub extern "C" fn _start() -> ! {
     // Initialize the block device, read FAT32 test files, and write them into a
     // shared physical page that will be mapped into the vfs_server's address space.
     let fat_share_phys = init_block_and_fat(hhdm_offset);
+
+    // 5.5. Kernel-global VFS over INITRAMFS + boot FAT volume (Phase 6.5.3)
+    init_kernel_vfs();
 
     // 6. Syscall MSRs
     serial_println!("[SYSCALL] Setting up MSRs...");
@@ -598,6 +615,56 @@ pub extern "C" fn _start() -> ! {
     sched::enter_first_process()
 }
 
+/// The boot virtio-blk device, moved here after `init_block_and_fat` so the
+/// kernel VFS can keep reading the FAT volume after boot.
+struct BlkCell(Option<sunlight_virtio::VirtioBlk>);
+// SAFETY: VirtioBlk holds raw queue pointers into kernel-owned frames that
+// live for the whole kernel lifetime; access is serialized by the mutex.
+unsafe impl Send for BlkCell {}
+static VIRTIO_BLK: spin::Mutex<BlkCell> = spin::Mutex::new(BlkCell(None));
+
+/// BlockDevice adapter over the long-lived VIRTIO_BLK static.
+pub struct KernelBlkDev;
+
+impl sunlight_block::BlockDevice for KernelBlkDev {
+    fn read_block(
+        &mut self,
+        lba: u64,
+        buf: &mut [u8; sunlight_block::BLOCK_SIZE],
+    ) -> Result<(), sunlight_block::BlockError> {
+        let mut cell = VIRTIO_BLK.lock();
+        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
+        // SAFETY: blk was initialized with valid queue/req buffers and the
+        // mutex serializes all device access.
+        if unsafe { blk.read_block(lba, buf) } {
+            Ok(())
+        } else {
+            Err(sunlight_block::BlockError::Io)
+        }
+    }
+
+    fn write_block(
+        &mut self,
+        _lba: u64,
+        _buf: &[u8; sunlight_block::BLOCK_SIZE],
+    ) -> Result<(), sunlight_block::BlockError> {
+        Err(sunlight_block::BlockError::Unsupported)
+    }
+
+    fn block_count(&self) -> u64 {
+        0 // capacity not read from device config yet
+    }
+}
+
+/// Disk type behind the kernel VFS: a small block cache over the virtio device.
+pub type KernelDisk = sunlight_block::CachedBlockDevice<KernelBlkDev, 16>;
+
+/// Kernel-global VFS (Phase 6.5 Step 3): ramfs `/` plus the FAT boot volume at
+/// `/boot` when a disk is present. Backs exec-from-VFS and the file syscalls.
+/// Lock order: never acquire SCHEDULER or PMM while holding this lock.
+pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> =
+    spin::Mutex::new(None);
+
 /// BlockDevice adapter over the kernel's virtio-blk driver (read-only:
 /// VirtioBlk has no write path yet, and the boot volume is never written).
 struct VirtioBootDisk<'a> {
@@ -754,7 +821,46 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     share.count = count;
     share.magic = sunlight_fat::SHARE_MAGIC;
 
+    // Release the borrow on `blk`, then keep the device alive for post-boot
+    // reads through the kernel VFS.
+    drop(fat);
+    VIRTIO_BLK.lock().0 = Some(blk);
+
     share_phys
+}
+
+/// Build the kernel-global VFS: INITRAMFS at `/`, and — when the boot disk is
+/// present — the FAT32 volume at `/boot`. Logs the `[VFS]` gate line.
+fn init_kernel_vfs() {
+    let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
+
+    if vfs
+        .mount_ramfs("/", sunlight_fs::RamFs::new(sunlight_fs::INITRAMFS))
+        .is_err()
+    {
+        serial_println!("[VFS] kernel ramfs mount FAILED");
+        return;
+    }
+
+    let have_disk = VIRTIO_BLK.lock().0.is_some();
+    if have_disk {
+        let disk = sunlight_block::CachedBlockDevice::new(KernelBlkDev);
+        match sunlight_fat::Fat32::mount(disk) {
+            Some(fat) => {
+                if vfs.mount_fat("/boot", fat).is_ok() {
+                    serial_println!("[VFS] FAT volume mounted at /boot");
+                } else {
+                    serial_println!("[VFS] /boot mount failed");
+                }
+            }
+            None => {
+                serial_println!("[VFS] FAT detection failed for /boot");
+            }
+        }
+    }
+
+    *KERNEL_VFS.lock() = Some(vfs);
+    serial_println!("[VFS] kernel mount OK");
 }
 
 fn map_tty_framebuffer(
@@ -800,6 +906,7 @@ fn setup_key_injection() {
 
     let sequence: [u8; 256] = match phase {
         "phase3.9" => build_phase3_9_sequence(),
+        "phase6.5.3" => build_phase6_5_3_sequence(),
         _ => build_phase3_8_sequence(),
     };
     let len = sequence
@@ -861,6 +968,24 @@ fn build_phase3_9_sequence() -> [u8; 256] {
         0x1F, 0x15, 0x1F, 0x21, 0x12, 0x14, // sysfetch + (no Enter; we are done)
     ];
     s[p38_len..p38_len + extra.len()].copy_from_slice(&extra);
+    s
+}
+
+/// Phase 6.5.3 injection: login, then exercise exec-from-PATH:
+///   ls /            (spawns /sunlight-utils/ls)
+///   mkdir /tmp/x    (spawns /sunlight-utils/mkdir)
+///   ls /tmp         (shows the new directory)
+#[cfg(feature = "key_inject")]
+fn build_phase6_5_3_sequence() -> [u8; 256] {
+    let mut s = [0u8; 256];
+    let codes: [u8; 31] = [
+        0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
+        0x26, 0x1F, 0x39, 0x35, 0x1C, // ls /
+        0x32, 0x25, 0x20, 0x17, 0x13, 0x39, // mkdir<space>
+        0x35, 0x14, 0x32, 0x19, 0x35, 0x2D, 0x1C, // /tmp/x + Enter
+        0x26, 0x1F, 0x39, 0x35, 0x14, 0x32, 0x19, 0x1C, // ls /tmp + Enter
+    ];
+    s[..codes.len()].copy_from_slice(&codes);
     s
 }
 

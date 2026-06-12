@@ -8,5 +8,4 @@ name = "sunlight-utils"
 path = "src/main.rs"
 
 [dependencies]
-sunlight-ipc = { path = "../ipc" }
-sunlight-fs = { path = "../sunlight-fs" }
+sunlight-libc = { path = "../sunlight-libc" }

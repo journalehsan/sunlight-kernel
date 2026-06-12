@@ -27,6 +27,10 @@ pub enum SunlightSyscall {
     Getgid = 36,
     Setuid = 37,
     Setgid = 38,
+    /// posix_spawn-style: create a new child process from an ELF path
+    /// (Phase 6.5 Step 3). rdi=path, rsi=argv, rdx=fd to install as the
+    /// child's stdout (u64::MAX for none).
+    Spawn = 39,
 
     // File descriptor management
     Open = 40,
@@ -45,6 +49,11 @@ pub enum SunlightSyscall {
     Munmap = 51,
     Mprotect = 52,
     Mremap = 53,
+
+    // Kernel-VFS path syscalls (Phase 6.5 Step 3)
+    ReadDir = 60,
+    StatPath = 61,
+    Mkdir = 62,
 
     // Signal handling (Phase 4.3)
     Sigaction = 70,
@@ -247,6 +256,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         36 => sys_getgid(),
         37 => sys_setuid(frame),
         38 => sys_setgid(frame),
+        39 => sys_spawn(frame),
         40 => sys_open(frame),
         41 => sys_close(frame),
         42 => sys_read(frame),
@@ -261,6 +271,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         51 => sys_munmap(frame),
         52 => sys_mprotect(frame),
         53 => sys_mremap(frame),
+        60 => sys_readdir(frame),
+        61 => sys_stat_path(frame),
+        62 => sys_mkdir(frame),
         70 => sys_sigaction(frame),
         71 => sys_sigprocmask(frame),
         72 => sys_kill(frame),
@@ -512,13 +525,31 @@ fn endpoint_bind(token: u64) -> u64 {
 
 /// Syscall: ProcessExit
 /// rdi = exit code
-fn process_exit(_code: i32) -> ! {
+fn process_exit(code: i32) -> ! {
     sched::with_scheduler(|s| {
-        s.current_process_mut().state = ProcessState::Finished;
+        let p = s.current_process_mut();
+        p.exit_code = code;
+        p.state = ProcessState::Finished;
     });
     sched::request_reschedule();
-    loop {
-        core::arch::x86_64::_mm_pause()
+
+    // We currently run on the process's *user* stack (syscall_entry builds
+    // its frame there). The timer IRQ that switches away will keep using
+    // this stack across the CR3 switch, where it is no longer mapped. Pivot
+    // to the process's kernel stack (kernel heap — mapped in every address
+    // space), then re-enable interrupts (syscall_entry ran `cli`) and wait
+    // to be switched away from; this context is never resumed.
+    let kstack_top = sched::with_scheduler(|s| s.current_process().kernel_stack_top);
+    unsafe {
+        core::arch::asm!(
+            "mov rsp, {0}",
+            "sti",
+            "2:",
+            "hlt",
+            "jmp 2b",
+            in(reg) kstack_top,
+            options(noreturn),
+        );
     }
 }
 
@@ -662,14 +693,29 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         envp_bytes.len()
     );
 
-    // Get embedded ELF bytes for the requested path
-    let bytes = match crate::process::spawn::embedded_bytes_for_path(path_str) {
+    // Resolve the binary: embedded images first (boot servers, /bin/sshl,
+    // the multi-call utils), then the kernel VFS (Phase 6.5 Step 3).
+    let vfs_bytes;
+    let bytes: &[u8] = match crate::process::spawn::embedded_bytes_for_path(path_str) {
         Ok(b) => b,
-        Err(_) => {
-            crate::serial_println!("[SYSCALL] exec: path not found: {}", path_str);
-            return u64::MAX;
-        }
+        Err(_) => match vfs_read_file(path_str) {
+            Some(v) => {
+                vfs_bytes = v;
+                &vfs_bytes
+            }
+            None => {
+                crate::serial_println!("[SYSCALL] exec: path not found: {}", path_str);
+                return u64::MAX;
+            }
+        },
     };
+
+    // Validate before exec_into_process tears down the current image, so a
+    // non-ELF file (e.g. `exec /etc/passwd`) fails cleanly.
+    if sunlight_elf::parse_elf_header(bytes).is_err() {
+        crate::serial_println!("[SYSCALL] exec: not a valid ELF: {}", path_str);
+        return u64::MAX;
+    }
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
@@ -711,9 +757,171 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
 }
 
 /// Syscall: Waitpid (32)
-fn sys_waitpid(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] waitpid requested");
+/// rdi = child pid. Non-blocking: returns the exit code (0..=255) once the
+/// child is Finished, EAGAIN while it is still running, and -1 when no such
+/// child exists. Userland loops with yield for blocking semantics.
+fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
+    const EAGAIN: u64 = u64::MAX - 1;
+    let pid = frame.rdi as usize;
+
+    let sched = crate::sched::SCHEDULER.lock();
+    let me = sched.current_process().pid;
+    for p in sched.processes.iter() {
+        if p.pid == pid && p.ppid == me {
+            return if p.state == ProcessState::Finished {
+                (p.exit_code as u8) as u64
+            } else {
+                EAGAIN
+            };
+        }
+    }
     u64::MAX
+}
+
+/// Read a whole file out of the kernel VFS into a heap buffer.
+/// Returns None when the VFS is absent, the path does not resolve, or the
+/// path is not a regular file.
+fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
+    use sunlight_fs::vfs::FileType;
+
+    let mut guard = crate::KERNEL_VFS.lock();
+    let vfs = guard.as_mut()?;
+
+    let stat = vfs.stat(path).ok()?;
+    if stat.file_type != FileType::File {
+        return None;
+    }
+
+    let handle = vfs.open(path).ok()?;
+    let mut buf = alloc::vec![0u8; stat.size];
+    let mut filled = 0usize;
+    while filled < buf.len() {
+        match vfs.read(handle, filled, &mut buf[filled..]) {
+            Ok(0) => break,
+            Ok(n) => filled += n,
+            Err(_) => {
+                let _ = vfs.close(handle);
+                return None;
+            }
+        }
+    }
+    let _ = vfs.close(handle);
+    buf.truncate(filled);
+    Some(buf)
+}
+
+/// Syscall: Spawn (39) — posix_spawn-style process creation.
+/// rdi = path pointer (C string)
+/// rsi = argv pointer (array of *const u8, NULL-terminated)
+/// rdx = parent fd to install as the child's stdout, or u64::MAX for none
+/// Returns the child pid, or -1 on error.
+fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
+    let path_ptr = frame.rdi;
+    let argv_ptr = frame.rsi;
+    let stdout_fd = frame.rdx;
+
+    let path_bytes = match unsafe { read_user_cstr(path_ptr, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path_str = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+
+    let mut argv_bytes = alloc::vec::Vec::new();
+    if argv_ptr != 0 {
+        let argv_ptrs = match unsafe { read_user_ptr_array(argv_ptr, 16) } {
+            Some(a) => a,
+            None => return u64::MAX,
+        };
+        for &arg_ptr in &argv_ptrs {
+            match unsafe { read_user_cstr(arg_ptr, 256) } {
+                Some(bytes) => argv_bytes.push(bytes),
+                None => return u64::MAX,
+            }
+        }
+    }
+
+    // Resolve the binary before touching scheduler state: embedded images
+    // first, then the kernel VFS. (KERNEL_VFS must not be held across the
+    // SCHEDULER/PMM locks below.)
+    let vfs_bytes;
+    let bytes: &[u8] = match crate::process::spawn::embedded_bytes_for_path(path_str) {
+        Ok(b) => b,
+        Err(_) => match vfs_read_file(path_str) {
+            Some(v) => {
+                vfs_bytes = v;
+                &vfs_bytes
+            }
+            None => {
+                crate::serial_println!("[SYSCALL] spawn: path not found: {}", path_str);
+                return u64::MAX;
+            }
+        },
+    };
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+
+    let parent = sched.current_process();
+    let ppid = parent.pid;
+    let uid = parent.uid;
+    let gid = parent.gid;
+    let env = crate::process::env::EnvMap::inherit(&parent.env);
+    let capabilities = parent.capabilities.clone();
+    let stdout_entry = if stdout_fd != u64::MAX {
+        parent.fd_table.get(stdout_fd as i32).copied()
+    } else {
+        None
+    };
+    if stdout_fd != u64::MAX && stdout_entry.is_none() {
+        return u64::MAX; // caller asked to pass an fd it does not own
+    }
+
+    let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
+    let mut child = unsafe { crate::process::Process::new(pid, ppid, "user", &mut pmm, hhdm) };
+    child.uid = uid;
+    child.gid = gid;
+    child.env = env;
+    child.capabilities = capabilities;
+
+    let argv_refs: alloc::vec::Vec<&[u8]> = argv_bytes.iter().map(|v| v.as_slice()).collect();
+    let envp_strings = child.env.to_envp();
+    let envp_refs: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
+
+    match crate::process::spawn::exec_into_process(
+        bytes,
+        &mut child,
+        &mut pmm,
+        hhdm,
+        &argv_refs,
+        &envp_refs,
+    ) {
+        Ok(_) => {}
+        Err(e) => {
+            crate::serial_println!("[SYSCALL] spawn: load failed: {:?}", e);
+            return u64::MAX;
+        }
+    }
+
+    if let Some(entry) = stdout_entry {
+        // The child's stdout becomes the parent-supplied handle (e.g. a pipe
+        // write end). The parent keeps its own copy open, so pipe writer
+        // accounting stays balanced.
+        let _ = child
+            .fd_table
+            .install_at(1, entry.handle, entry.rights, entry.flags);
+    }
+
+    let child_pid = child.pid;
+    let idx = sched.add_process(child);
+    // add_process leaves queueing to the caller; without this the child sits
+    // Ready but is never picked by the BORE queues.
+    sched.enqueue_process(idx);
+    crate::serial_println!("[SYSCALL] spawn: {} pid={} ppid={}", path_str, child_pid, ppid);
+    child_pid as u64
 }
 
 /// Syscall: Getpid (33)
@@ -783,20 +991,190 @@ fn sys_setgid(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
-// File descriptor syscalls (stubs for now)
-/// Syscall: open (40)
+/// Syscall: open (40) — kernel-VFS backed, read-only for now.
 /// rdi = pathname (user-space pointer)
-/// rsi = flags (O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, etc.)
-/// rdx = mode (for creation)
+/// rsi = flags (reserved)
+/// rdx = mode (reserved)
 fn sys_open(frame: &mut SyscallFrame) -> u64 {
-    let _path = frame.rdi as *const u8;
-    let _flags = frame.rsi as u32;
-    let _mode = frame.rdx as u32;
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
 
-    // TODO: Implement actual open
-    // For now: return stub errno
-    crate::serial_println!("[SYSCALL] open requested (stub)");
-    u64::MAX // ENOENT
+    // Open on the VFS first, then register the fd. KERNEL_VFS is released
+    // before SCHEDULER is taken (lock-order invariant).
+    let vfs_handle = {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return u64::MAX;
+        };
+        match vfs.open(path) {
+            Ok(h) => h,
+            Err(_) => return u64::MAX,
+        }
+    };
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let handle = crate::process::fd_table::FileHandle::vfs(vfs_handle.0);
+    let rights = crate::process::fd_table::CapRights::new(
+        crate::process::fd_table::CapRights::READ | crate::process::fd_table::CapRights::FSTAT,
+    );
+    match sched.current_process_mut().fd_table.open(handle, rights, 0) {
+        Ok(fd) => fd as u64,
+        Err(_) => {
+            drop(sched);
+            if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                let _ = vfs.close(vfs_handle);
+            }
+            u64::MAX
+        }
+    }
+}
+
+/// Syscall: ReadDir (60)
+/// rdi = pathname (user-space pointer)
+/// rsi = output buffer (array of 80-byte records)
+/// rdx = buffer length in bytes
+/// Record layout (repr(C), 80 bytes): name[64], name_len u8, file_type u8
+/// (1=file, 2=dir), pad[6], size u64. Returns the number of records written.
+fn sys_readdir(frame: &mut SyscallFrame) -> u64 {
+    use sunlight_fs::vfs::FileType;
+    const RECORD: usize = 80;
+
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+
+    let buf = frame.rsi;
+    let max_entries = (frame.rdx as usize) / RECORD;
+    if max_entries == 0 || !is_user_address(buf) || !is_user_address(buf + frame.rdx - 1) {
+        return u64::MAX;
+    }
+
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return u64::MAX;
+    };
+
+    let mut written = 0usize;
+    let result = vfs.read_dir(path, &mut |entry| {
+        if written >= max_entries {
+            return false;
+        }
+        let mut record = [0u8; RECORD];
+        let name = entry.name_bytes();
+        let len = name.len().min(64);
+        record[..len].copy_from_slice(&name[..len]);
+        record[64] = len as u8;
+        record[65] = match entry.file_type {
+            FileType::File => 1,
+            FileType::Directory => 2,
+        };
+        record[72..80].copy_from_slice(&(entry.size as u64).to_le_bytes());
+        // SAFETY: destination range was validated as user memory above.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                record.as_ptr(),
+                (buf as usize + written * RECORD) as *mut u8,
+                RECORD,
+            );
+        }
+        written += 1;
+        true
+    });
+
+    match result {
+        Ok(()) => written as u64,
+        Err(_) => u64::MAX,
+    }
+}
+
+/// Syscall: StatPath (61)
+/// rdi = pathname (user-space pointer)
+/// rsi = output buffer (24 bytes, repr(C)): size u64, uid u32, gid u32,
+///       mode u16, file_type u8 (1=file, 2=dir), pad u8, nlinks u32.
+fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
+    use sunlight_fs::vfs::FileType;
+
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+
+    let buf = frame.rsi;
+    if !is_user_address(buf) || !is_user_address(buf + 23) {
+        return u64::MAX;
+    }
+
+    let stat = {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return u64::MAX;
+        };
+        match vfs.stat(path) {
+            Ok(s) => s,
+            Err(_) => return u64::MAX,
+        }
+    };
+
+    let mut record = [0u8; 24];
+    record[0..8].copy_from_slice(&(stat.size as u64).to_le_bytes());
+    record[8..12].copy_from_slice(&stat.uid.to_le_bytes());
+    record[12..16].copy_from_slice(&stat.gid.to_le_bytes());
+    record[16..18].copy_from_slice(&stat.mode.to_le_bytes());
+    record[18] = match stat.file_type {
+        FileType::File => 1,
+        FileType::Directory => 2,
+    };
+    record[20..24].copy_from_slice(&stat.nlinks.to_le_bytes());
+    // SAFETY: destination range was validated as user memory above.
+    unsafe {
+        core::ptr::copy_nonoverlapping(record.as_ptr(), buf as *mut u8, 24);
+    }
+    0
+}
+
+/// Syscall: Mkdir (62)
+/// rdi = pathname (user-space pointer)
+/// rsi = mode bits
+fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+    let mode = frame.rsi as u16;
+
+    let (uid, gid) = {
+        let sched = crate::sched::SCHEDULER.lock();
+        let p = sched.current_process();
+        (p.uid, p.gid)
+    };
+
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return u64::MAX;
+    };
+    match vfs.mkdir(path, uid, gid, sunlight_fs::vfs::mode::S_IFDIR | mode) {
+        Ok(()) => 0,
+        Err(_) => u64::MAX,
+    }
 }
 
 /// Syscall: close (41)
@@ -806,12 +1184,16 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
 
     let mut sched = crate::sched::SCHEDULER.lock();
 
-    // Check if this is a pipe before closing
-    if let Some(fd_entry) = sched.current_process().fd_table.get(fd) {
-        if fd_entry.handle.is_pipe() {
-            let pipe_idx = fd_entry.handle.pipe_index();
-            let is_write = fd_entry.handle.pipe_is_write();
-            crate::process::pipe::pipe_close_end(pipe_idx, is_write);
+    // Release the underlying object (pipe end or VFS handle) before
+    // dropping the fd table entry.
+    let handle = sched.current_process().fd_table.get(fd).map(|e| e.handle);
+    if let Some(h) = handle {
+        if h.is_pipe() {
+            crate::process::pipe::pipe_close_end(h.pipe_index(), h.pipe_is_write());
+        } else if h.is_vfs() {
+            if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                let _ = vfs.close(sunlight_fs::vfs::FileHandle(h.vfs_handle()));
+            }
         }
     }
 
@@ -832,7 +1214,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
     let buf_ptr = frame.rsi as *mut u8;
     let count = frame.rdx as usize;
 
-    let sched = crate::sched::SCHEDULER.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
 
     // Check if fd is valid and has READ right
     match sched.current_process().fd_table.check_rights(
@@ -840,7 +1222,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
         crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::READ),
     ) {
         Ok(()) => {
-            if let Some(fd_entry) = sched.current_process().fd_table.get(fd) {
+            if let Some(&fd_entry) = sched.current_process().fd_table.get(fd) {
                 if fd_entry.handle.is_pipe() {
                     let pipe_idx = fd_entry.handle.pipe_index();
                     let mut kernel_buf = [0u8; 4096];
@@ -862,9 +1244,43 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                         crate::process::pipe::PipeResult::Eof => 0,
                         crate::process::pipe::PipeResult::BrokenPipe => u64::MAX,
                     }
+                } else if fd_entry.handle.is_vfs() {
+                    if !is_user_address(buf_ptr as u64)
+                        || !is_user_address((buf_ptr as u64) + count as u64)
+                    {
+                        return u64::MAX;
+                    }
+                    let vfs_handle =
+                        sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
+                    let mut kernel_buf = [0u8; 4096];
+                    let to_read = count.min(4096);
+                    let read = {
+                        let mut guard = crate::KERNEL_VFS.lock();
+                        match guard.as_mut() {
+                            Some(vfs) => {
+                                vfs.read(vfs_handle, fd_entry.offset, &mut kernel_buf[..to_read])
+                            }
+                            None => return u64::MAX,
+                        }
+                    };
+                    match read {
+                        Ok(n) => {
+                            // SAFETY: buf_ptr..buf_ptr+n validated as user memory.
+                            unsafe {
+                                core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
+                            }
+                            if let Some(entry) =
+                                sched.current_process_mut().fd_table.get_mut(fd)
+                            {
+                                entry.offset += n;
+                            }
+                            n as u64
+                        }
+                        Err(_) => u64::MAX,
+                    }
                 } else {
                     crate::serial_println!(
-                        "[SYSCALL] read fd={} (not a pipe, not implemented)",
+                        "[SYSCALL] read fd={} (unsupported handle)",
                         fd
                     );
                     0

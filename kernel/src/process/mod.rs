@@ -34,6 +34,8 @@ pub struct Process {
     pub context_rsp: u64,
     pub uid: u32,
     pub gid: u32,
+    /// Exit code set by ProcessExit; read by waitpid once state is Finished.
+    pub exit_code: i32,
     /// Environment variable registry (Phase 6.5 Step 2).
     /// Populated with defaults at spawn or inherited from the parent.
     pub env: env::EnvMap,
@@ -123,6 +125,7 @@ impl Process {
             context_rsp: 0,
             uid: 0,
             gid: 0,
+            exit_code: 0,
             env: env::EnvMap::new(),
             ipc_queue: VecDeque::new(),
             ipc_endpoint: None,

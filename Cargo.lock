@@ -204,6 +204,7 @@ dependencies = [
  "sunlight-compat-linux",
  "sunlight-elf",
  "sunlight-fat",
+ "sunlight-fs",
  "sunlight-net",
  "sunlight-tui",
  "sunlight-virtio",
@@ -237,7 +238,7 @@ dependencies = [
 name = "sunlight-net-utils"
 version = "0.1.0"
 dependencies = [
- "sunlight-ipc",
+ "sunlight-libc",
 ]
 
 [[package]]
@@ -281,8 +282,7 @@ version = "0.1.0"
 name = "sunlight-utils"
 version = "0.1.0"
 dependencies = [
- "sunlight-fs",
- "sunlight-ipc",
+ "sunlight-libc",
 ]
 
 [[package]]
@@ -303,6 +303,7 @@ name = "sunshell"
 version = "0.1.0"
 dependencies = [
  "sunlight-ipc",
+ "sunlight-libc",
 ]
 
 [[package]]

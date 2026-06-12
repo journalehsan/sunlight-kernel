@@ -7,10 +7,15 @@ pub const SYS_FORK: u64 = 30;
 pub const SYS_EXEC: u64 = 31;
 pub const SYS_WAITPID: u64 = 32;
 pub const SYS_GETPID: u64 = 33;
+pub const SYS_SPAWN: u64 = 39;
 pub const SYS_OPEN: u64 = 40;
 pub const SYS_CLOSE: u64 = 41;
 pub const SYS_READ: u64 = 42;
 pub const SYS_WRITE: u64 = 43;
+pub const SYS_PIPE: u64 = 47;
+pub const SYS_READDIR: u64 = 60;
+pub const SYS_STAT: u64 = 61;
+pub const SYS_MKDIR: u64 = 62;
 pub const SYS_DEBUG_LOG: u64 = 99;
 
 /// Raw error return from the kernel.

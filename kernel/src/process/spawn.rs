@@ -245,10 +245,11 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         p if p.starts_with("/bin/sshl") => {
             Ok(crate::SUNSHELL_ELF_BYTES)
         }
-        _ => {
-            crate::serial_println!("[SPAWN] Unknown path: {}", path);
-            Err(SpawnError::NotFound)
-        }
+        // Phase 6.5 Step 3: PATH entries under these directories are applets
+        // of the embedded multi-call binaries (argv[0] picks the applet).
+        p if p.starts_with("/sunlight-utils/") => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),
+        p if p.starts_with("/sunlight-net-utils/") => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
+        _ => Err(SpawnError::NotFound),
     }
 }
 

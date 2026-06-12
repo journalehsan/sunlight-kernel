@@ -8,4 +8,4 @@ name = "sunlight-net-utils"
 path = "src/main.rs"
 
 [dependencies]
-sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc" }

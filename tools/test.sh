@@ -156,8 +156,14 @@ case "$PHASE" in
         PASS_LABEL="Phase 6.5.1"
         NEED_DISK=false
         ;;
+    phase6.5.3)
+        EXPECTED_FILE="tools/tests/phase6_5_3.expected"
+        FINAL_MARKER="[EXEC] ls exit=0"
+        PASS_LABEL="Phase 6.5.3"
+        NEED_DISK=true
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 phase6.5.1"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 phase6.5.1 phase6.5.3"
         exit 2
         ;;
 esac
@@ -171,6 +177,8 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --relea
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release >>"$BUILD_LOG" 2>&1
 
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
 if [[ "$NEED_DISK" == "true" ]]; then
@@ -179,7 +187,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" ]]; then
+if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" ]]; then
     KERNEL_FEATURES="--features key_inject"
 fi
 EXTRA_ENV=()
@@ -188,6 +196,8 @@ if [[ "$PHASE" == "phase3.9" ]]; then
 elif [[ "$PHASE" == "phase6.5.1" ]]; then
     # Reuse the phase3.9 key sequence — it logs in and types sysfetch
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
+elif [[ "$PHASE" == "phase6.5.3" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase6.5.3)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
 elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* ]]; then

@@ -1,0 +1,6 @@
+# Phase 6.5.3 gate: kernel VFS mounts + exec-from-PATH for sunlight-utils.
+# Boot brings up the kernel-global VFS, then injected keys run `ls /`,
+# `mkdir /tmp/x` and `ls /tmp` through spawn/waitpid.
+[VFS] kernel mount OK
+[EXEC] ls exit=0
+[EXEC] mkdir exit=0
