@@ -87,20 +87,28 @@ impl Scheduler {
     /// Add a process to the scheduler.
     pub fn add_process(&mut self, process: Process) -> usize {
         let id = self.processes.len();
-        let tier = process.get_queue_tier();
 
         serial_println!("[SCHED] add_process '{}' id={} burst_score={} tier={:?}",
-            process.name, id, process.burst_score, tier);
+            process.name, id, process.burst_score, process.get_queue_tier());
         self.processes.push(process);
 
-        // Add to appropriate ready queue (store index, not PID)
-        match tier {
-            QueueTier::High => self.ready_queue_high.push_back(id),
-            QueueTier::Medium => self.ready_queue_medium.push_back(id),
-            QueueTier::Low => self.ready_queue_low.push_back(id),
-        }
+        // Don't queue here - let enqueue_process() handle it
+        // This avoids duplicates when a process is first started in run_forever()
 
         id
+    }
+
+    /// Enqueue a Ready process to the appropriate tier queue
+    pub fn enqueue_process(&mut self, idx: usize) {
+        if idx >= self.processes.len() {
+            return;
+        }
+        let tier = self.processes[idx].get_queue_tier();
+        match tier {
+            QueueTier::High => self.ready_queue_high.push_back(idx),
+            QueueTier::Medium => self.ready_queue_medium.push_back(idx),
+            QueueTier::Low => self.ready_queue_low.push_back(idx),
+        }
     }
 
     /// Set the idle thread's context RSP.
@@ -233,16 +241,9 @@ impl Scheduler {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
 
-            // Update state
+            // Update state and enqueue
             self.processes[idx].state = ProcessState::Ready;
-
-            // Re-queue to appropriate tier based on new burst_score
-            let tier = self.processes[idx].get_queue_tier();
-            match tier {
-                QueueTier::High => self.ready_queue_high.push_back(idx),
-                QueueTier::Medium => self.ready_queue_medium.push_back(idx),
-                QueueTier::Low => self.ready_queue_low.push_back(idx),
-            }
+            self.enqueue_process(idx);
         }
     }
 
@@ -273,6 +274,14 @@ impl Scheduler {
             self.current = idx;
             self.processes[idx].state = ProcessState::Running;
             self.processes[idx].last_run_tick = self.global_tick;
+
+            // Enqueue other Ready processes (idx might not be first in order)
+            for i in 0..self.processes.len() {
+                if i != idx && matches!(self.processes[i].state, ProcessState::Ready) {
+                    self.enqueue_process(i);
+                }
+            }
+
             let rsp = self.processes[idx].context_rsp;
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",

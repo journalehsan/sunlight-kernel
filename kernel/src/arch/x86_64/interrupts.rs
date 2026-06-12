@@ -385,12 +385,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         if sched.processes[current].state == crate::process::ProcessState::Running {
             sched.processes[current].state = crate::process::ProcessState::Ready;
             // Re-queue process to appropriate tier based on burst_score
-            let tier = sched.processes[current].get_queue_tier();
-            match tier {
-                crate::process::QueueTier::High => sched.ready_queue_high.push_back(current),
-                crate::process::QueueTier::Medium => sched.ready_queue_medium.push_back(current),
-                crate::process::QueueTier::Low => sched.ready_queue_low.push_back(current),
-            }
+            sched.enqueue_process(current);
         }
 
         if let Some(next) = sched.pick_next_bore() {
