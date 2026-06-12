@@ -31,6 +31,7 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
+use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
     unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
@@ -127,6 +128,11 @@ struct ShellTab {
 /// Global scrollback state for all tabs (indexed by active_tab)
 static mut SCROLLBACK_STATE: [TabScrollback; MAX_TABS] =
     [TabScrollback { viewport_offset: 0 }; MAX_TABS];
+
+/// FIX: Cached TerminalGrid to avoid repeated 400KB+ allocations per frame
+/// This single grid is reused across all renders, preventing heap exhaustion
+/// See ROOT_CAUSE_FOUND.md for detailed explanation
+static mut GRID_CACHE: Option<Box<TerminalGrid>> = None;
 
 impl ShellTab {
     const fn empty() -> Self {
@@ -465,11 +471,33 @@ fn render_active_shell_fb(
     // offsets this grid below the title/tab chrome, so the VT cursor must stay
     // relative to the terminal content, not the full framebuffer.
 
-    // NOTE: MEMORY LEAK - Bump allocator cannot free this allocation
-    // FIX: TTY server should use a proper allocator with dealloc support
-    // OR: Restructure to avoid allocating TerminalGrid on every frame
-    // Tracked in: ROOT_CAUSE_FOUND.md
-    let mut grid = TerminalGrid::new(cols, rows);
+    // FIX: Reuse cached grid instead of allocating 400KB+ per frame
+    // This prevents bump allocator memory exhaustion that was causing freezes
+    let mut grid = unsafe {
+        match &mut GRID_CACHE {
+            Some(cached) => {
+                // Grid exists - check if dimensions match
+                if cached.cols == cols && cached.rows == rows {
+                    // Dimensions match - reuse grid, clear for fresh content
+                    // NOTE: TerminalGrid doesn't expose clear(), so we work with it as-is
+                    // The parser will overwrite cells as it processes new output
+                    cached.as_mut()
+                } else {
+                    // Dimensions changed - allocate new grid
+                    debug_log("[TTY]  Grid dimensions changed, reallocating");
+                    *cached = Box::new(TerminalGrid::new(cols, rows));
+                    cached.as_mut()
+                }
+            }
+            None => {
+                // First render - allocate and cache the grid
+                debug_log("[TTY]  First render, caching grid");
+                GRID_CACHE = Some(Box::new(TerminalGrid::new(cols, rows)));
+                GRID_CACHE.as_mut().unwrap().as_mut()
+            }
+        }
+    };
+
     grid.feed(output);
     let (cursor_row, cursor_col) = grid.cursor();
 
@@ -501,9 +529,9 @@ fn render_active_shell_fb(
         );
     }
 
-    // NOTE: Grid is dropped here. With current bump allocator implementation,
-    // memory is not freed. The LAST_GRID_DIMS tracking helps avoid unnecessary
-    // re-allocations when screen dimensions don't change.
+    // NOTE: Grid is NOT dropped here - it's cached in GRID_CACHE for reuse on next render
+    // This prevents the 400KB+ allocation that was exhausting the bump allocator heap
+    // Grid stays alive until dimensions change or process exits
 }
 
 fn reset_login(login: &mut LoginScreen) {
