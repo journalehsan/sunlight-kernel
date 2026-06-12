@@ -359,6 +359,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // Poll key injection buffer for test automation (no IRQ1 needed)
     keyboard::poll_inject_buffer();
 
+    // Disable interrupts while holding scheduler lock to prevent deadlock
+    // if keyboard IRQ fires while we hold the lock
+    x86_64::instructions::interrupts::disable();
     let mut sched = crate::sched::SCHEDULER.lock();
     sched.tick();
 
@@ -373,50 +376,61 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
     }
 
-    if crate::sched::check_reschedule() {
+    let result = if crate::sched::check_reschedule() {
         let current = sched.current;
         // Guard: processes may be empty during early boot (interrupts enabled before
         // any process is loaded). Skip reschedule until the scheduler has entries.
         if current >= sched.processes.len() {
-            return 0;
-        }
-        // Save current context.
-        sched.processes[current].context_rsp = saved_rsp;
-        if sched.processes[current].state == crate::process::ProcessState::Running {
-            sched.processes[current].state = crate::process::ProcessState::Ready;
-            // Re-queue process to appropriate tier based on burst_score
-            sched.enqueue_process(current);
-        }
-
-        if let Some(next) = sched.pick_next_bore() {
-            let next_rsp = sched.processes[next].context_rsp;
-            let next_stack_top = sched.processes[next].kernel_stack_top;
-            let next_name = sched.processes[next].name;
-            sched.current = next;
-            sched.processes[next].state = crate::process::ProcessState::Running;
-            sched.processes[next].last_run_tick = sched.global_tick;
-
-            serial_println!("[TIMER] switching from {} to {} (rsp={:x})", sched.processes[current].name, next_name, next_rsp);
-
-            // Switch address space.
-            unsafe {
-                sched.processes[next].address_space.activate();
+            0
+        } else {
+            // Save current context.
+            sched.processes[current].context_rsp = saved_rsp;
+            if sched.processes[current].state == crate::process::ProcessState::Running {
+                sched.processes[current].state = crate::process::ProcessState::Ready;
+                // Re-queue process to appropriate tier based on burst_score
+                sched.enqueue_process(current);
             }
 
-            // Update TSS RSP0 for next interrupt.
-            // SAFETY: timer handler runs with interrupts disabled; no concurrent TSS access.
-            // Note: ltr is NOT needed here — the CPU reads RSP0 from the TSS memory
-            // on each privilege-level stack switch. We only need to update the TSS contents.
-            unsafe {
-                let tss_ptr = &*TSS as *const TaskStateSegment as *mut TaskStateSegment;
-                (*tss_ptr).privilege_stack_table[0] = VirtAddr::new(next_stack_top);
+            if let Some(next) = sched.pick_next_bore() {
+                let next_rsp = sched.processes[next].context_rsp;
+                let next_stack_top = sched.processes[next].kernel_stack_top;
+                let next_name = sched.processes[next].name;
+                sched.current = next;
+                sched.processes[next].state = crate::process::ProcessState::Running;
+                sched.processes[next].last_run_tick = sched.global_tick;
+
+                serial_println!("[TIMER] switching from {} to {} (rsp={:x})", sched.processes[current].name, next_name, next_rsp);
+
+                // Switch address space.
+                unsafe {
+                    sched.processes[next].address_space.activate();
+                }
+
+                // Update TSS RSP0 for next interrupt.
+                // SAFETY: timer handler runs with interrupts disabled; no concurrent TSS access.
+                // Note: ltr is NOT needed here — the CPU reads RSP0 from the TSS memory
+                // on each privilege-level stack switch. We only need to update the TSS contents.
+                unsafe {
+                    let tss_ptr = &*TSS as *const TaskStateSegment as *mut TaskStateSegment;
+                    (*tss_ptr).privilege_stack_table[0] = VirtAddr::new(next_stack_top);
+                }
+
+                next_rsp
+            } else {
+                0
             }
-
-            return next_rsp;
         }
-    }
+    } else {
+        0
+    };
 
-    0
+    // Release scheduler lock by dropping it
+    drop(sched);
+
+    // Re-enable interrupts
+    x86_64::instructions::interrupts::enable();
+
+    result
 }
 
 #[allow(dead_code)]
