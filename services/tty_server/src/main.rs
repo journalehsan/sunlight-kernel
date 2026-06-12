@@ -479,8 +479,7 @@ fn render_active_shell_fb(
                 // Grid exists - check if dimensions match
                 if cached.cols == cols && cached.rows == rows {
                     // Dimensions match - reuse grid, clear for fresh content
-                    // NOTE: TerminalGrid doesn't expose clear(), so we work with it as-is
-                    // The parser will overwrite cells as it processes new output
+                    cached.clear_screen();  // FIX: Clear previous content before reuse
                     cached.as_mut()
                 } else {
                     // Dimensions changed - allocate new grid

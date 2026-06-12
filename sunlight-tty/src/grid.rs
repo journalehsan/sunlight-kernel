@@ -160,7 +160,7 @@ impl TerminalGrid {
     }
 
     /// Clear the entire screen, reset cursor to origin.
-    fn clear_screen(&mut self) {
+    pub fn clear_screen(&mut self) {
         for cell in &mut self.cells {
             *cell = Cell::blank();
         }
