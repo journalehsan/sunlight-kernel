@@ -377,6 +377,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     unsafe {
         let mut cmd1: Port<u8> = Port::new(0x20);
         cmd1.write(0x20);
+        crate::serial_println!("[IRQ0] Timer interrupt - EOI sent to PIC");
     }
 
     let mut ticks = TICKS.lock();
@@ -476,5 +477,6 @@ extern "x86-interrupt" fn keyboard_entry(_stack_frame: InterruptStackFrame) {
     unsafe {
         let mut cmd1: Port<u8> = Port::new(0x20);
         cmd1.write(0x20);
+        crate::serial_println!("[IRQ1] Keyboard interrupt - EOI sent to PIC");
     }
 }

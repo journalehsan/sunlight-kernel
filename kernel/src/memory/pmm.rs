@@ -1,5 +1,6 @@
 use limine::memmap::Entry;
 use x86_64::PhysAddr;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 const FRAME_SIZE: usize = 4096;
 const MAX_FRAMES: usize = 1024 * 1024; // 4 GiB
@@ -8,6 +9,10 @@ const BITMAP_SIZE: usize = MAX_FRAMES / 8;
 static mut BITMAP: [u8; BITMAP_SIZE] = [0; BITMAP_SIZE];
 static mut TOTAL_FRAMES: usize = 0;
 static mut FREE_FRAMES: usize = 0;
+
+// === Diagnostic counters for memory leak detection ===
+static ALLOC_COUNT: AtomicUsize = AtomicUsize::new(0);
+static FREE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 extern "C" {
     static __kernel_start: u8;
@@ -83,6 +88,10 @@ impl PhysicalMemoryManager {
                             let frame = byte_idx * 8 + bit;
                             *byte |= 1 << bit;
                             FREE_FRAMES -= 1;
+                            let count = ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
+                            if count % 100 == 0 || count < 10 {
+                                crate::serial_println!("[PMM] ALLOC #{} addr={:#x} free_now={}", count + 1, frame as u64 * FRAME_SIZE as u64, FREE_FRAMES);
+                            }
                             return Some(PhysAddr::new(frame as u64 * FRAME_SIZE as u64));
                         }
                     }
@@ -134,12 +143,28 @@ impl PhysicalMemoryManager {
                 BITMAP[frame / 8] &= !(1 << (frame % 8));
                 FREE_FRAMES += 1;
             }
+            let count = FREE_COUNT.fetch_add(1, Ordering::Relaxed);
+            if count % 100 == 0 || count < 10 {
+                crate::serial_println!("[PMM] FREE #{} addr={:#x} free_now={}", count + 1, addr.as_u64(), unsafe { FREE_FRAMES });
+            }
         }
     }
 
     /// Return (total_frames, free_frames) for diagnostics.
     pub fn stats(&self) -> (usize, usize) {
         unsafe { (TOTAL_FRAMES, FREE_FRAMES) }
+    }
+
+    /// Print diagnostic information about memory allocation
+    pub fn diagnostic_report(&self) {
+        let (total, free) = self.stats();
+        let allocated = total.saturating_sub(free);
+        let alloc_ops = ALLOC_COUNT.load(Ordering::Relaxed);
+        let free_ops = FREE_COUNT.load(Ordering::Relaxed);
+        crate::serial_println!(
+            "[PMM-DIAG] total={} free={} allocated={} alloc_ops={} free_ops={} delta={}",
+            total, free, allocated, alloc_ops, free_ops, alloc_ops.saturating_sub(free_ops)
+        );
     }
 }
 

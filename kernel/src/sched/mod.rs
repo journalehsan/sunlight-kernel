@@ -2,7 +2,7 @@ use crate::process::{Process, ProcessState, QueueTier};
 use crate::serial_println;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 pub const TIME_SLICE_TICKS: u64 = 10;
 
@@ -67,6 +67,10 @@ pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
 /// Flag set by timer IRQ when a reschedule is needed.
 static NEEDS_RESCHEDULE: AtomicBool = AtomicBool::new(false);
 
+/// === Diagnostic counters for process leak detection ===
+static PROCESS_CREATED: AtomicUsize = AtomicUsize::new(0);
+static PROCESS_FINISHED: AtomicUsize = AtomicUsize::new(0);
+
 pub struct Scheduler {
     pub processes: Vec<Process>,
 
@@ -98,9 +102,11 @@ impl Scheduler {
     /// Add a process to the scheduler.
     pub fn add_process(&mut self, process: Process) -> usize {
         let id = self.processes.len();
+        let created_count = PROCESS_CREATED.fetch_add(1, Ordering::Relaxed);
 
         serial_println!(
-            "[SCHED] add_process '{}' id={} burst_score={} tier={:?}",
+            "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?}",
+            created_count + 1,
             process.name,
             id,
             process.burst_score,
@@ -177,6 +183,16 @@ impl Scheduler {
         self.global_tick += 1;
         self.current_ticks += 1;
 
+        // Check if current process has finished and reap it
+        if self.current < self.processes.len() {
+            if self.processes[self.current].state == ProcessState::Finished {
+                let pid = self.processes[self.current].pid;
+                let name = self.processes[self.current].name;
+                PROCESS_FINISHED.fetch_add(1, Ordering::Relaxed);
+                serial_println!("[SCHED] FINISHED process pid={} name='{}' still in vector (LEAK!)", pid, name);
+            }
+        }
+
         if self.current_ticks >= TIME_SLICE_TICKS {
             // Process used full quantum
             let current_proc = &mut self.processes[self.current];
@@ -191,6 +207,11 @@ impl Scheduler {
             // Request reschedule
             self.current_ticks = 0;
             NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
+        }
+
+        // Every 1000 ticks, report process diagnostics
+        if self.global_tick % 1000 == 0 {
+            self.diagnostic_report();
         }
     }
 
@@ -405,6 +426,22 @@ impl Scheduler {
         // No user processes — enter idle loop directly.
         serial_println!("[SCHED] No user processes, entering idle");
         idle_loop();
+    }
+
+    /// Print diagnostic information about process lifecycle
+    pub fn diagnostic_report(&self) {
+        let created = PROCESS_CREATED.load(Ordering::Relaxed);
+        let finished = PROCESS_FINISHED.load(Ordering::Relaxed);
+        let alive = self.processes.len();
+        let ready_high = self.ready_queue_high.len();
+        let ready_mid = self.ready_queue_medium.len();
+        let ready_low = self.ready_queue_low.len();
+
+        serial_println!(
+            "[SCHED-DIAG] created={} finished={} alive={} ready_queues=({},{},{}) delta_created-finished={}",
+            created, finished, alive, ready_high, ready_mid, ready_low,
+            created.saturating_sub(finished)
+        );
     }
 }
 
