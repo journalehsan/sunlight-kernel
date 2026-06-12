@@ -34,8 +34,17 @@ pub struct TerminalGrid {
     // Current screen cells (row-major order: row 0 col 0..cols, row 1 col 0..cols, etc.)
     cells: Vec<Cell>,
 
-    // Scrollback history: each element is a complete row (cols cells)
-    scrollback: Vec<Vec<Cell>>,
+    // Scrollback history as a fixed ring buffer of SCROLLBACK_LINES rows
+    // (cols cells each), allocated once in new(). The tty_server runs on a
+    // bump allocator whose dealloc is a no-op, so per-scroll Vec allocations
+    // would leak until the heap is exhausted and the server freezes.
+    scrollback: Vec<Cell>,
+    scrollback_head: usize, // ring index of the oldest line
+    scrollback_count: usize, // number of valid lines in the ring
+
+    // Reusable render buffer (cols * rows), allocated once in new().
+    // to_term_cells() fills this in place instead of allocating per frame.
+    term_cells: Vec<TermCell>,
 
     // Cursor position
     cursor_row: usize,
@@ -57,11 +66,20 @@ impl TerminalGrid {
         let mut cells = Vec::new();
         cells.resize(cols * rows, Cell::blank());
 
+        let mut scrollback = Vec::new();
+        scrollback.resize(SCROLLBACK_LINES * cols, Cell::blank());
+
+        let mut term_cells = Vec::new();
+        term_cells.resize(cols * rows, TermCell { ch: b' ', fg: 0, bg: 0 });
+
         Self {
             cols,
             rows,
             cells,
-            scrollback: Vec::new(),
+            scrollback,
+            scrollback_head: 0,
+            scrollback_count: 0,
+            term_cells,
             cursor_row: 0,
             cursor_col: 0,
             cur_fg: 7,  // default white
@@ -129,7 +147,11 @@ impl TerminalGrid {
     }
 
     /// Move cursor to the next line, scrolling if necessary.
+    /// Treats LF as CR+LF (ONLCR): nothing in this stack emits bare-LF
+    /// vertical motion on purpose, and without the column reset every
+    /// line starts where the previous one ended (staircase output).
     fn newline(&mut self) {
+        self.cursor_col = 0;
         self.cursor_row += 1;
         if self.cursor_row >= self.rows {
             self.scroll_up();
@@ -160,12 +182,20 @@ impl TerminalGrid {
     }
 
     /// Clear the entire screen, reset cursor to origin.
+    ///
+    /// Also resets scrollback and the escape parser: the tty_server clears the
+    /// cached grid and re-feeds the full output buffer every frame, so stale
+    /// scrollback would duplicate the same history each render and a parser
+    /// left mid-escape-sequence would corrupt the next feed.
     pub fn clear_screen(&mut self) {
         for cell in &mut self.cells {
             *cell = Cell::blank();
         }
         self.cursor_row = 0;
         self.cursor_col = 0;
+        self.scrollback_head = 0;
+        self.scrollback_count = 0;
+        self.parser = Vt100Parser::new();
     }
 
     /// Clear from cursor to end of line.
@@ -202,15 +232,22 @@ impl TerminalGrid {
     /// Scroll the grid up by one line: push current top row to scrollback,
     /// shift all rows up, clear the new bottom row, and move cursor back.
     fn scroll_up(&mut self) {
-        // Push top row to scrollback (cap at SCROLLBACK_LINES)
-        if self.scrollback.len() >= SCROLLBACK_LINES {
-            self.scrollback.remove(0);
-        }
-        let mut top_row = Vec::with_capacity(self.cols);
+        // Copy the top row into the preallocated scrollback ring. When the
+        // ring is full the oldest line is overwritten. No allocation here:
+        // this runs on every scrolled line of every frame.
+        let slot = if self.scrollback_count == SCROLLBACK_LINES {
+            let oldest = self.scrollback_head;
+            self.scrollback_head = (self.scrollback_head + 1) % SCROLLBACK_LINES;
+            oldest
+        } else {
+            let next = (self.scrollback_head + self.scrollback_count) % SCROLLBACK_LINES;
+            self.scrollback_count += 1;
+            next
+        };
+        let dst = slot * self.cols;
         for i in 0..self.cols {
-            top_row.push(self.cells[i]);
+            self.scrollback[dst + i] = self.cells[i];
         }
-        self.scrollback.push(top_row);
 
         // Shift rows up
         for row in 0..self.rows.saturating_sub(1) {
@@ -246,35 +283,31 @@ impl TerminalGrid {
         self.cells[row * self.cols + col]
     }
 
-    /// Convert the entire grid to a flat Vec with RGB colors resolved.
+    /// Render the grid into the cached term-cell buffer with RGB colors resolved.
     /// Folds `bold` into the palette index (bright variants: if bold, add 8 to indices 0-7).
-    pub fn to_term_cells(&self, ansi_colors: &[u32; 16]) -> Vec<TermCell> {
-        let mut result = Vec::with_capacity(self.cells.len());
-        for cell in &self.cells {
-            let fg_idx = if cell.bold && cell.fg < 8 {
-                cell.fg + 8
-            } else {
-                cell.fg
-            };
-            let fg = ansi_colors[fg_idx as usize % 16];
-            let bg = ansi_colors[cell.bg as usize % 16];
-
-            result.push(TermCell { ch: cell.ch, fg, bg });
+    /// Fills the buffer in place — no allocation per frame (the tty_server's
+    /// bump allocator never frees, so a per-frame Vec would exhaust the heap).
+    pub fn to_term_cells(&mut self, ansi_colors: &[u32; 16]) -> &[TermCell] {
+        for i in 0..self.cells.len() {
+            self.term_cells[i] = resolve_cell(self.cells[i], ansi_colors);
         }
-        result
+        &self.term_cells
     }
 
     /// Get the number of lines in scrollback history.
     pub fn scrollback_len(&self) -> usize {
-        self.scrollback.len()
+        self.scrollback_count
     }
 
-    /// Convert grid to term cells with viewport offset for scrollback viewing.
-    /// viewport_offset: 0 = live view, 1..scrollback_len() = viewing history
-    /// For each screen row, either pull from scrollback (if offset > 0) or live cells.
-    pub fn to_term_cells_with_offset(&self, ansi_colors: &[u32; 16], viewport_offset: usize) -> Vec<TermCell> {
-        let mut result = Vec::new();
-
+    /// Render grid into the cached term-cell buffer with viewport offset for
+    /// scrollback viewing. viewport_offset: 0 = live view, 1..scrollback_len()
+    /// = viewing history. For each screen row, either pull from scrollback
+    /// (if offset > 0) or live cells. Fills in place — no allocation per frame.
+    pub fn to_term_cells_with_offset(
+        &mut self,
+        ansi_colors: &[u32; 16],
+        viewport_offset: usize,
+    ) -> &[TermCell] {
         if viewport_offset == 0 {
             // Live view: return normal cells
             return self.to_term_cells(ansi_colors);
@@ -282,39 +315,46 @@ impl TerminalGrid {
 
         // Scrollback view: render from history
         for screen_row in 0..self.rows {
-            let history_row_idx = if self.scrollback.len() > viewport_offset {
-                self.scrollback.len() - viewport_offset + screen_row
+            let history_row_idx = if self.scrollback_count > viewport_offset {
+                self.scrollback_count - viewport_offset + screen_row
             } else {
                 screen_row
             };
 
-            let cells_to_render = if history_row_idx < self.scrollback.len() {
-                &self.scrollback[history_row_idx]
-            } else if screen_row < self.rows {
-                // Fallback to live cells if out of scrollback range
-                let live_idx = screen_row * self.cols;
-                &self.cells[live_idx..core::cmp::min(live_idx + self.cols, self.cells.len())]
+            let dst_start = screen_row * self.cols;
+            if history_row_idx < self.scrollback_count {
+                // Ring index: history_row_idx-th oldest line
+                let src_start =
+                    ((self.scrollback_head + history_row_idx) % SCROLLBACK_LINES) * self.cols;
+                for col in 0..self.cols {
+                    self.term_cells[dst_start + col] =
+                        resolve_cell(self.scrollback[src_start + col], ansi_colors);
+                }
             } else {
-                &[]
-            };
-
-            for cell in cells_to_render {
-                let fg_idx = if cell.bold && cell.fg < 8 {
-                    cell.fg + 8
-                } else {
-                    cell.fg
-                };
-                let fg = ansi_colors[fg_idx as usize % 16];
-                let bg = ansi_colors[cell.bg as usize % 16];
-                result.push(TermCell { ch: cell.ch, fg, bg });
-            }
-
-            // Pad row if needed
-            while result.len() % self.cols != 0 {
-                result.push(TermCell { ch: b' ', fg: ansi_colors[7], bg: ansi_colors[0] });
+                // Fallback to live cells if out of scrollback range
+                let src_start = screen_row * self.cols;
+                for col in 0..self.cols {
+                    self.term_cells[dst_start + col] =
+                        resolve_cell(self.cells[src_start + col], ansi_colors);
+                }
             }
         }
 
-        result
+        &self.term_cells
+    }
+}
+
+/// Resolve a styled cell to a TermCell with RGB colors, folding bold into
+/// the bright palette variants (indices 8-15).
+fn resolve_cell(cell: Cell, ansi_colors: &[u32; 16]) -> TermCell {
+    let fg_idx = if cell.bold && cell.fg < 8 {
+        cell.fg + 8
+    } else {
+        cell.fg
+    };
+    TermCell {
+        ch: cell.ch,
+        fg: ansi_colors[fg_idx as usize % 16],
+        bg: ansi_colors[cell.bg as usize % 16],
     }
 }

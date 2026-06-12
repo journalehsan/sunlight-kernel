@@ -473,7 +473,7 @@ fn render_active_shell_fb(
 
     // FIX: Reuse cached grid instead of allocating 400KB+ per frame
     // This prevents bump allocator memory exhaustion that was causing freezes
-    let mut grid = unsafe {
+    let grid = unsafe {
         match &mut GRID_CACHE {
             Some(cached) => {
                 // Grid exists - check if dimensions match
@@ -503,7 +503,9 @@ fn render_active_shell_fb(
     // Get viewport offset for scrollback
     let viewport_offset = unsafe { SCROLLBACK_STATE[active_tab].viewport_offset };
 
-    // Render with scrollback offset if active
+    // Render with scrollback offset if active. Both methods fill the grid's
+    // internal term-cell buffer in place and return a borrowed slice — no
+    // per-frame allocation (the bump allocator never frees).
     let term_cells = if viewport_offset > 0 {
         grid.to_term_cells_with_offset(&ANSI_COLORS, viewport_offset)
     } else {
@@ -520,7 +522,7 @@ fn render_active_shell_fb(
             active_tab,
             cols,
             rows,
-            &term_cells,
+            term_cells,
             cursor_row,
             cursor_col,
             input_line,
