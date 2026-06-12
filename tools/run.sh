@@ -32,7 +32,12 @@ Display Options:
   --screenshot       Capture screenshot and exit
 
 QEMU Options:
-  -m, --memory MB    Set RAM size (default: 1024, was 256 to test for memory leaks)
+  -m, --memory MB    Set RAM size (default: 2048)
+  --disk PATH        Disk image to attach (default: ~/vmware/sunlight.qcow2,
+                     auto-created as 10G qcow2 if missing)
+  --no-disk          Don't attach a disk
+  --no-net           Disable NAT networking (virtio-net + user-mode NAT)
+  --no-audio         Disable audio (intel-hda)
   --debug            Enable QEMU debug output
   --gdb              Wait for GDB connection on port 1234
 
@@ -52,7 +57,12 @@ USAGE
 
 # Default options
 DISPLAY_TYPE="gtk"
-MEMORY="1024"
+MEMORY="2048"
+DISK_PATH="$HOME/vmware/sunlight.qcow2"
+DISK_SIZE="10G"
+USE_DISK=true
+USE_NET=true
+USE_AUDIO=true
 DEBUG_MODE=false
 GDB_MODE=false
 SCREENSHOT_MODE=false
@@ -92,6 +102,22 @@ while [[ $# -gt 0 ]]; do
         -m|--memory)
             MEMORY="$2"
             shift 2
+            ;;
+        --disk)
+            DISK_PATH="$2"
+            shift 2
+            ;;
+        --no-disk)
+            USE_DISK=false
+            shift
+            ;;
+        --no-net)
+            USE_NET=false
+            shift
+            ;;
+        --no-audio)
+            USE_AUDIO=false
+            shift
             ;;
         --debug)
             DEBUG_MODE=true
@@ -185,6 +211,13 @@ fi
 echo -e "${GREEN}✓${NC} QEMU: $(qemu-system-x86_64 --version | head -1)"
 echo ""
 
+# Create disk image if missing (qcow2 — QEMU's native format)
+if [ "$USE_DISK" = true ] && [ ! -f "$DISK_PATH" ]; then
+    echo -e "${YELLOW}Disk image not found, creating ${DISK_SIZE} qcow2 at $DISK_PATH${NC}"
+    mkdir -p "$(dirname "$DISK_PATH")"
+    qemu-img create -f qcow2 "$DISK_PATH" "$DISK_SIZE"
+fi
+
 # Build QEMU command
 QEMU_CMD=(
     qemu-system-x86_64
@@ -194,6 +227,34 @@ QEMU_CMD=(
     -serial stdio
     -no-reboot
 )
+
+# Attach disk (virtio-blk, legacy mode — matches the kernel's virtio driver)
+if [ "$USE_DISK" = true ]; then
+    QEMU_CMD+=(
+        -drive "id=hd0,file=$DISK_PATH,if=none,format=qcow2"
+        -device "virtio-blk-pci,disable-modern=on,drive=hd0"
+    )
+    echo -e "${BLUE}Disk:${NC}    $DISK_PATH"
+fi
+
+# NAT networking (virtio-net + user-mode NAT, host port 2222 -> guest 22)
+if [ "$USE_NET" = true ]; then
+    QEMU_CMD+=(
+        -netdev "user,id=net0,hostfwd=tcp::2222-:22"
+        -device "virtio-net-pci,disable-modern=on,netdev=net0"
+    )
+    echo -e "${BLUE}Network:${NC} NAT (host 2222 -> guest 22)"
+fi
+
+# Audio (intel-hda; pa works with both PulseAudio and PipeWire)
+if [ "$USE_AUDIO" = true ]; then
+    QEMU_CMD+=(
+        -audiodev "pa,id=snd0"
+        -device intel-hda
+        -device "hda-output,audiodev=snd0"
+    )
+    echo -e "${BLUE}Audio:${NC}   intel-hda"
+fi
 
 # Add display option
 case $DISPLAY_TYPE in
