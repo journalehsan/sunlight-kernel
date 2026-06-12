@@ -368,16 +368,16 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let uid = msg.words[4] as u32;
     let gid = msg.words[5] as u32;
 
+    let mut sched = crate::sched::SCHEDULER.lock();
     crate::serial_println!(
         "[SPAWN] Request from pid={} for path={} uid={} gid={}",
-        crate::sched::SCHEDULER.lock().current_process().pid,
+        sched.current_process().pid,
         path,
         uid,
         gid
     );
 
     let mut pmm = crate::PMM.lock();
-    let mut sched = crate::sched::SCHEDULER.lock();
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
 
     match crate::process::spawn::spawn_from_path(
@@ -564,8 +564,8 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 /// Syscall: Fork (30)
 /// Returns: child_pid (parent), 0 (child)
 fn sys_fork(_frame: &mut SyscallFrame) -> u64 {
-    let mut pmm = crate::PMM.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
 
     // Borrow the parent process momentarily to fork it
@@ -643,8 +643,8 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         }
     };
 
-    let mut pmm = crate::PMM.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
 
     let process = sched.current_process_mut();
@@ -941,8 +941,8 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX; // EFAULT
     }
 
-    let mut pmm = crate::PMM.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
 
     match crate::process::pipe::create_pipe(&mut pmm, &mut sched) {
         Ok((read_fd, write_fd)) => {
@@ -986,8 +986,8 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.r8 as i32;
     let offset = frame.r9;
 
-    let mut pmm = crate::PMM.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
 
     match crate::process::mmap::sys_mmap(
         addr,

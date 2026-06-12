@@ -255,8 +255,8 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
         None => return false,
     };
 
-    let mut pmm = crate::PMM.lock();
     let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
 
     let process = sched.current_process_mut();
 
