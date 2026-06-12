@@ -378,6 +378,7 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     );
 
     let mut pmm = crate::PMM.lock();
+    let mut caps = crate::capability::CAP_BROKER.lock();
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
 
     match crate::process::spawn::spawn_from_path(
@@ -385,7 +386,7 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         &[],
         &mut *pmm,
         &mut *sched,
-        &mut crate::capability::CAP_BROKER.lock(),
+        &mut *caps,
         VirtAddr::new(hhdm),
         uid,
         gid,
