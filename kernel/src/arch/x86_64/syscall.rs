@@ -592,7 +592,7 @@ fn sys_fork(_frame: &mut SyscallFrame) -> u64 {
 fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     let path_ptr = frame.rdi;
     let argv_ptr = frame.rsi;
-    let _envp_ptr = frame.rdx;
+    let envp_ptr = frame.rdx;
 
     // Read path from user space
     let path_bytes = match unsafe { read_user_cstr(path_ptr, 256) } {
@@ -631,10 +631,35 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
+    // Read envp from user space; NULL means "inherit my environment".
+    let mut envp_bytes = alloc::vec::Vec::new();
+    if envp_ptr != 0 {
+        let envp_ptrs = match unsafe { read_user_ptr_array(envp_ptr, 16) } {
+            Some(e) => e,
+            None => {
+                crate::serial_println!("[SYSCALL] exec: bad envp pointer");
+                return u64::MAX;
+            }
+        };
+        for &env_ptr in &envp_ptrs {
+            match unsafe { read_user_cstr(env_ptr, 256) } {
+                Some(bytes) => envp_bytes.push(bytes),
+                None => {
+                    crate::serial_println!(
+                        "[SYSCALL] exec: bad envp[{}] pointer",
+                        envp_bytes.len()
+                    );
+                    return u64::MAX;
+                }
+            }
+        }
+    }
+
     crate::serial_println!(
-        "[SYSCALL] exec path={}, argc={}",
+        "[SYSCALL] exec path={}, argc={}, envc={}",
         path_str,
-        argv_bytes.len()
+        argv_bytes.len(),
+        envp_bytes.len()
     );
 
     // Get embedded ELF bytes for the requested path
@@ -653,13 +678,22 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     let process = sched.current_process_mut();
     let argv_refs: alloc::vec::Vec<&[u8]> = argv_bytes.iter().map(|v| v.as_slice()).collect();
 
+    // No explicit environment: the new image inherits this process's EnvMap.
+    let inherited_env;
+    let envp_refs: alloc::vec::Vec<&[u8]> = if envp_bytes.is_empty() {
+        inherited_env = process.env.to_envp();
+        inherited_env.iter().map(|s| s.as_bytes()).collect()
+    } else {
+        envp_bytes.iter().map(|v| v.as_slice()).collect()
+    };
+
     match crate::process::spawn::exec_into_process(
         bytes,
         process,
         &mut *pmm,
         VirtAddr::new(hhdm),
         &argv_refs,
-        &[], // envp: empty for now
+        &envp_refs,
     ) {
         Ok(entry) => {
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);

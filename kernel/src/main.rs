@@ -598,6 +598,40 @@ pub extern "C" fn _start() -> ! {
     sched::enter_first_process()
 }
 
+/// BlockDevice adapter over the kernel's virtio-blk driver (read-only:
+/// VirtioBlk has no write path yet, and the boot volume is never written).
+struct VirtioBootDisk<'a> {
+    blk: &'a mut sunlight_virtio::VirtioBlk,
+}
+
+impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
+    fn read_block(
+        &mut self,
+        lba: u64,
+        buf: &mut [u8; sunlight_block::BLOCK_SIZE],
+    ) -> Result<(), sunlight_block::BlockError> {
+        // SAFETY: blk was initialized with valid queue/req buffers, and the
+        // kernel is single-threaded during boot-time FAT access.
+        if unsafe { self.blk.read_block(lba, buf) } {
+            Ok(())
+        } else {
+            Err(sunlight_block::BlockError::Io)
+        }
+    }
+
+    fn write_block(
+        &mut self,
+        _lba: u64,
+        _buf: &[u8; sunlight_block::BLOCK_SIZE],
+    ) -> Result<(), sunlight_block::BlockError> {
+        Err(sunlight_block::BlockError::Unsupported)
+    }
+
+    fn block_count(&self) -> u64 {
+        0 // capacity not read from device config yet
+    }
+}
+
 /// Initialize virtio-blk, read the FAT32 test files, and return the physical
 /// address of the share page.
 ///
@@ -672,13 +706,8 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     }
     serial_println!("[BLK]  Read LBA 0 OK");
 
-    // Initialize FAT32 using a closure that calls blk.read_block
-    let mut blk_reader = |lba: u64, buf: &mut [u8; 512]| -> bool {
-        // SAFETY: blk is valid and we are in single-threaded kernel boot.
-        unsafe { blk.read_block(lba, buf) }
-    };
-
-    let mut fat = match sunlight_fat::Fat32::mount(&mut blk_reader) {
+    // Mount FAT32 over the virtio-blk device through the BlockDevice trait.
+    let mut fat = match sunlight_fat::Fat32::mount(VirtioBootDisk { blk: &mut blk }) {
         Some(f) => f,
         None => {
             serial_println!("[FAT]  FAT32 detection failed");

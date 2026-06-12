@@ -1,4 +1,4 @@
-use crate::vfs::{mode, DirIter, FileHandle, FileStat, FileSystem, FileType};
+use crate::vfs::{mode, FileHandle, FileStat, FileSystem, FileType, VfsDirEntry};
 use crate::{path, FsError};
 use alloc::vec::Vec;
 
@@ -170,6 +170,14 @@ impl RamFs {
         }
     }
 
+    fn entry_path(&self, idx: usize) -> Option<&str> {
+        if idx < self.entries.len() {
+            Some(self.entries[idx].path)
+        } else {
+            core::str::from_utf8(&self.dynamic[idx - self.entries.len()].path).ok()
+        }
+    }
+
     fn alloc_handle(&mut self, entry_idx: usize) -> Result<FileHandle, FsError> {
         for (idx, slot) in self.handles.iter_mut().enumerate() {
             if slot.is_none() {
@@ -295,9 +303,49 @@ impl FileSystem for RamFs {
         Ok(())
     }
 
-    fn readdir(&mut self, path: &str) -> Result<DirIter, FsError> {
+    fn read_dir(
+        &mut self,
+        path: &str,
+        f: &mut dyn FnMut(&VfsDirEntry) -> bool,
+    ) -> Result<(), FsError> {
         path::validate_absolute(path)?;
-        Err(FsError::Unsupported)
+        if path != "/" {
+            let idx = self.entry_idx(path)?;
+            if !self.is_dir(idx) {
+                return Err(FsError::NotDir);
+            }
+        }
+        for idx in 0..self.all_entry_count() {
+            let Some(entry_path) = self.entry_path(idx) else {
+                continue;
+            };
+            let Some(name) = direct_child_name(entry_path, path) else {
+                continue;
+            };
+            let entry = if self.is_dir(idx) {
+                VfsDirEntry::from_bytes(name.as_bytes(), FileType::Directory, 0)
+            } else {
+                VfsDirEntry::from_bytes(name.as_bytes(), FileType::File, self.entry_data_len(idx))
+            };
+            if !f(&entry) {
+                break;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// If `entry_path` names a direct child of directory `dir`, return its name.
+fn direct_child_name<'a>(entry_path: &'a str, dir: &str) -> Option<&'a str> {
+    let rest = if dir == "/" {
+        entry_path.strip_prefix('/')?
+    } else {
+        entry_path.strip_prefix(dir)?.strip_prefix('/')?
+    };
+    if rest.is_empty() || rest.contains('/') {
+        None
+    } else {
+        Some(rest)
     }
 }
 
@@ -410,6 +458,7 @@ max_ttys = 6
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::borrow::ToOwned;
 
     static TEST_ENTRIES: &[RamEntry] = &[
         RamEntry::file(
@@ -543,5 +592,53 @@ mod tests {
         let stat = fs.stat("/newdir").unwrap();
         assert_eq!(stat.file_type, FileType::Directory);
         assert_eq!(stat.mode, mode::S_IFDIR | 0o755);
+    }
+
+    #[test]
+    fn read_dir_lists_direct_children_only() {
+        let mut fs = RamFs::new(DIR_ENTRIES);
+
+        let mut root_names = Vec::new();
+        fs.read_dir("/", &mut |entry| {
+            root_names.push((entry.name().to_owned(), entry.file_type));
+            true
+        })
+        .unwrap();
+        // "/etc/motd" is not a direct child of "/".
+        assert_eq!(
+            root_names,
+            std::vec![("etc".to_owned(), FileType::Directory)]
+        );
+
+        let mut etc_names = Vec::new();
+        fs.read_dir("/etc", &mut |entry| {
+            etc_names.push((entry.name().to_owned(), entry.size));
+            true
+        })
+        .unwrap();
+        assert_eq!(etc_names, std::vec![("motd".to_owned(), 6)]);
+    }
+
+    #[test]
+    fn read_dir_includes_dynamic_entries_and_rejects_files() {
+        let mut fs = RamFs::new(DIR_ENTRIES);
+        fs.mkdir("/etc/sunlight", 0, 0, 0o755).unwrap();
+
+        let mut names = Vec::new();
+        fs.read_dir("/etc", &mut |entry| {
+            names.push(entry.name().to_owned());
+            true
+        })
+        .unwrap();
+        assert_eq!(names, std::vec!["motd".to_owned(), "sunlight".to_owned()]);
+
+        assert_eq!(
+            fs.read_dir("/etc/motd", &mut |_| true),
+            Err(FsError::NotDir)
+        );
+        assert_eq!(
+            fs.read_dir("/missing", &mut |_| true),
+            Err(FsError::NotFound)
+        );
     }
 }

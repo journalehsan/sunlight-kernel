@@ -15,7 +15,9 @@ spin = "0.9"
 linked_list_allocator = "0.10"
 sunlight-tui = { path = "../sunlight-tui" }
 sunlight-virtio = { path = "../sunlight-virtio" }
+sunlight-block = { path = "../sunlight-block" }
 sunlight-fat = { path = "../sunlight-fat" }
+sunlight-elf = { path = "../sunlight-elf" }
 sunlight-compat-linux = { path = "../compat-linux" }
 sunlight-net = { path = "../sunlight-net" }
 

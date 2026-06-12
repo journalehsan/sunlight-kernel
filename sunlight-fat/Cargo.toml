@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
+
+[features]
+# Exposes the synthetic FAT32 image builder for other crates' tests.
+testutil = []
+
+[dependencies]
+sunlight-block = { path = "../sunlight-block" }

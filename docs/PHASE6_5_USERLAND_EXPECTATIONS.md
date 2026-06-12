@@ -85,14 +85,14 @@ ls                          # prints "command not found: ls", shell survives
 
 ---
 
-## Step 3: VFS & Binary Loading
+## Step 3: VFS & Binary Loading — ⏳ Parts A & B done 2026-06-12, see [PHASE6_5_STEP3_VFS_ELF.md](PHASE6_5_STEP3_VFS_ELF.md)
 
 ### 3.1 Luxos reference analysis
-- [ ] Notes written (docs/ or code comments) on lxfs on-disk layout and lucerna's exec/loader path, with what we adopt vs. reject for Rust
+- [x] Notes written (docs/ or code comments) on lxfs on-disk layout and lucerna's exec/loader path, with what we adopt vs. reject for Rust — [PHASE6_5_STEP3_VFS_ELF.md](PHASE6_5_STEP3_VFS_ELF.md)
 
 ### 3.2 VFS mounting: FAT32 + SunlightFS
-- [ ] `mount`/`umount` mechanism in sunlight-fs with a mount table routing paths by longest-prefix
-- [ ] FAT32 read support (dir listing + file read) against a real image
+- [x] `mount` mechanism in sunlight-fs with a mount table routing paths by longest-prefix — `Vfs::mount`/`mount_fat`; `umount` (+ cache flush) still open
+- [x] FAT32 read support (dir listing + file read) against a real image — unit-tested against synthetic images (`sunlight-fat::testimg`); in-VM check against a `mkfs.vfat` image still open
 - [ ] SunlightFS partitions mountable through the same interface
 
 **Test**
@@ -108,10 +108,10 @@ cat /mnt/hello.txt     # prints file contents
 ```
 
 ### 3.3 Kernel ELF loader executes sunlight-utils
-- [ ] ELF64 header + program-header parsing with validation (magic, machine, PT_LOAD bounds)
-- [ ] Segments mapped at user VAs with correct R/W/X permissions, BSS zeroed
-- [ ] `ls`, `mkdir`, `ping` from sunlight-utils launch via PATH, run, and return an exit code
-- [ ] Corrupt/non-ELF file is rejected with an error, not a kernel panic
+- [x] ELF64 header + program-header parsing with validation (magic, machine, PT_LOAD bounds) — `sunlight_elf::plan_segments`, kernel loader rewritten on top of it
+- [x] Segments mapped at user VAs with correct R/W/X permissions, BSS zeroed — incl. W^X enforcement, shared-page flag union, filesz-bounded copy
+- [ ] `ls`, `mkdir`, `ping` from sunlight-utils launch via PATH, run, and return an exit code — blocked on routing `sys_exec` through the VFS (still resolves embedded paths only)
+- [x] Corrupt/non-ELF file is rejected with an error, not a kernel panic — `load_elf` returns None with a serial log on any validation failure; covered by 9 rejection unit tests
 
 **Test**
 ```sh

@@ -5,6 +5,7 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
+pub mod block;
 pub mod error;
 pub mod fstab;
 pub mod passwd;
@@ -21,4 +22,8 @@ pub use passwd::{
 };
 pub use permission::{check_permission, Credential, PermCheck};
 pub use ramfs::{RamEntry, RamFs, INITRAMFS};
-pub use vfs::{mode, DirIter, FileHandle, FileStat, FileSystem, FileType, FsNode, Vfs};
+pub use block::{BlockDevice, BlockError, CachedBlockDevice, NullDevice, BLOCK_SIZE};
+pub use vfs::{
+    mode, FatFs, FileHandle, FileStat, FileSystem, FileType, FsNode, Vfs, VfsDirEntry,
+    VFS_NAME_MAX,
+};

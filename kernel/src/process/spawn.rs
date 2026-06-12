@@ -57,37 +57,124 @@ pub fn exec_into_process(
     }
 
     // Setup stack with argv/envp
-    let stack_ptr = setup_exec_stack(argv, envp, process, pmm, hhdm_offset)?;
+    let stack = setup_exec_stack(argv, envp, process, hhdm_offset)?;
 
-    process.init_context(entry, stack_ptr);
-    // Set rdi=argc, rsi=argv, rdx=envp (SysV ABI) via initial args
-    let argc = argv.len() as u64;
-    // argv and envp pointers will be computed from stack layout below
-    process.set_initial_args(argc, 0, 0, 0);
+    process.init_context(entry, stack.rsp);
+    // SysV-style register convenience on top of the canonical stack layout:
+    // rdi=argc, rsi=argv, rdx=envp. _start can use either.
+    process.set_initial_args(argv.len() as u64, stack.argv_ptr, stack.envp_ptr, 0);
 
-    crate::serial_println!("[EXEC] Loaded ELF entry={:#x}, stack={:#x}", entry, stack_ptr);
+    crate::serial_println!("[EXEC] Loaded ELF entry={:#x}, stack={:#x}", entry, stack.rsp);
     Ok(entry)
 }
 
-/// Setup the user stack with argc, argv, envp per SysV x86_64 ABI.
-/// Returns the final RSP value for process entry.
-/// For minimal scope: just set up argc and basic stack; argv/envp full marshalling deferred.
+/// Final stack state handed to the new process image.
+struct ExecStack {
+    rsp: u64,
+    argv_ptr: u64,
+    envp_ptr: u64,
+}
+
+/// Copy `bytes` into the process address space at user `vaddr`, walking the
+/// page tables and writing through the HHDM. The target pages must already
+/// be mapped (the user stack is mapped just before this runs).
+fn copy_to_user(
+    process: &Process,
+    hhdm_offset: VirtAddr,
+    vaddr: u64,
+    bytes: &[u8],
+) -> Result<(), SpawnError> {
+    let mut written = 0usize;
+    while written < bytes.len() {
+        let current = vaddr + written as u64;
+        let page_base = current & !0xFFF;
+        let page = Page::from_start_address(VirtAddr::new(page_base))
+            .map_err(|_| SpawnError::ElfLoadFailed)?;
+        // SAFETY: hhdm_offset is the boot HHDM base.
+        let phys = unsafe { process.address_space.lookup_phys(page, hhdm_offset) }
+            .ok_or(SpawnError::NoMemory)?;
+
+        let in_page = (current - page_base) as usize;
+        let chunk = (4096 - in_page).min(bytes.len() - written);
+        // SAFETY: phys is a mapped user frame; the HHDM window covers it.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                bytes.as_ptr().add(written),
+                (hhdm_offset + phys.as_u64() + in_page as u64).as_mut_ptr::<u8>(),
+                chunk,
+            );
+        }
+        written += chunk;
+    }
+    Ok(())
+}
+
+/// Marshal argc/argv/envp onto the user stack per the SysV x86_64 ABI.
+///
+/// Layout (high → low): NUL-terminated string data, padding, then the
+/// pointer table `[argc][argv0..argvN][NULL][envp0..envpM][NULL]` with the
+/// final RSP 16-byte aligned and pointing at argc.
 fn setup_exec_stack(
     argv: &[&[u8]],
-    _envp: &[&[u8]],
-    _process: &mut Process,
-    _pmm: &mut PhysicalMemoryManager,
-    _hhdm_offset: VirtAddr,
-) -> Result<u64, SpawnError> {
-    // Minimal implementation: just return the stack top
-    // Full argv/envp marshalling requires writing through the page tables,
-    // which is deferred to avoid complexity in this phase.
-    // The entry point receives argc=argv.len() via set_initial_args.
+    envp: &[&[u8]],
+    process: &mut Process,
+    hhdm_offset: VirtAddr,
+) -> Result<ExecStack, SpawnError> {
     let stack_top = super::layout::USER_STACK_TOP;
+    let stack_floor = stack_top - super::layout::USER_STACK_SIZE;
+    let mut cursor = stack_top;
 
-    crate::serial_println!("[EXEC] Stack setup: argc={}, top={:#x}", argv.len(), stack_top);
+    let copy_string = |cursor: &mut u64, s: &[u8]| -> Result<u64, SpawnError> {
+        *cursor = cursor
+            .checked_sub(s.len() as u64 + 1)
+            .filter(|&c| c > stack_floor)
+            .ok_or(SpawnError::NoMemory)?;
+        copy_to_user(process, hhdm_offset, *cursor, s)?;
+        copy_to_user(process, hhdm_offset, *cursor + s.len() as u64, &[0])?;
+        Ok(*cursor)
+    };
 
-    Ok(stack_top)
+    let mut argv_addrs = alloc::vec::Vec::with_capacity(argv.len());
+    for arg in argv {
+        argv_addrs.push(copy_string(&mut cursor, arg)?);
+    }
+    let mut envp_addrs = alloc::vec::Vec::with_capacity(envp.len());
+    for env in envp {
+        envp_addrs.push(copy_string(&mut cursor, env)?);
+    }
+
+    // Pointer table: argc + argv pointers + NULL + envp pointers + NULL.
+    let table_words = 1 + argv.len() + 1 + envp.len() + 1;
+    let mut rsp = (cursor & !0x7)
+        .checked_sub(table_words as u64 * 8)
+        .ok_or(SpawnError::NoMemory)?;
+    rsp &= !0xF; // ABI: RSP ≡ 0 (mod 16) at entry, argc at (%rsp)
+    if rsp <= stack_floor {
+        return Err(SpawnError::NoMemory);
+    }
+
+    let mut table = alloc::vec::Vec::with_capacity(table_words * 8);
+    table.extend_from_slice(&(argv.len() as u64).to_le_bytes());
+    for addr in &argv_addrs {
+        table.extend_from_slice(&addr.to_le_bytes());
+    }
+    table.extend_from_slice(&0u64.to_le_bytes());
+    for addr in &envp_addrs {
+        table.extend_from_slice(&addr.to_le_bytes());
+    }
+    table.extend_from_slice(&0u64.to_le_bytes());
+    copy_to_user(process, hhdm_offset, rsp, &table)?;
+
+    crate::serial_println!(
+        "[EXEC] Stack: argc={} envc={} rsp={:#x}",
+        argv.len(), envp.len(), rsp
+    );
+
+    Ok(ExecStack {
+        rsp,
+        argv_ptr: rsp + 8,
+        envp_ptr: rsp + 8 + (argv.len() as u64 + 1) * 8,
+    })
 }
 
 /// Spawn a new process from a static ELF binary on the filesystem.

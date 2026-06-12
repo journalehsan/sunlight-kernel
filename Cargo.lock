@@ -152,6 +152,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
+name = "sunlight-block"
+version = "0.1.0"
+
+[[package]]
 name = "sunlight-compat-linux"
 version = "0.1.0"
 
@@ -166,10 +170,17 @@ version = "0.1.0"
 [[package]]
 name = "sunlight-fat"
 version = "0.1.0"
+dependencies = [
+ "sunlight-block",
+]
 
 [[package]]
 name = "sunlight-fs"
 version = "0.1.0"
+dependencies = [
+ "sunlight-block",
+ "sunlight-fat",
+]
 
 [[package]]
 name = "sunlight-init"
@@ -189,7 +200,9 @@ dependencies = [
  "limine",
  "linked_list_allocator",
  "spin",
+ "sunlight-block",
  "sunlight-compat-linux",
+ "sunlight-elf",
  "sunlight-fat",
  "sunlight-net",
  "sunlight-tui",
@@ -197,6 +210,10 @@ dependencies = [
  "uart_16550",
  "x86_64",
 ]
+
+[[package]]
+name = "sunlight-libc"
+version = "0.1.0"
 
 [[package]]
 name = "sunlight-net"

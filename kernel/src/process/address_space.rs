@@ -62,6 +62,16 @@ impl AddressSpace {
     /// Look up the physical address mapped for `page`, if any.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
     pub unsafe fn lookup_phys(&self, page: Page<Size4KiB>, hhdm_offset: VirtAddr) -> Option<PhysAddr> {
+        unsafe { self.lookup_entry(page, hhdm_offset).map(|(phys, _)| phys) }
+    }
+
+    /// Look up the physical address and flags mapped for `page`, if any.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn lookup_entry(
+        &self,
+        page: Page<Size4KiB>,
+        hhdm_offset: VirtAddr,
+    ) -> Option<(PhysAddr, PageTableFlags)> {
         let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
         let p4_entry = &pml4[page.p4_index()];
         if p4_entry.is_unused() { return None; }
@@ -74,7 +84,36 @@ impl AddressSpace {
         let p1_table = &*((hhdm_offset + p2_entry.addr().as_u64()).as_ptr::<PageTable>());
         let p1_entry = &p1_table[page.p1_index()];
         if p1_entry.is_unused() { return None; }
-        Some(p1_entry.addr())
+        Some((p1_entry.addr(), p1_entry.flags()))
+    }
+
+    /// Replace the flags of an already-mapped page, keeping its frame.
+    /// Returns false if the page is not mapped.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn update_flags(
+        &mut self,
+        page: Page<Size4KiB>,
+        flags: PageTableFlags,
+        hhdm_offset: VirtAddr,
+    ) -> bool {
+        let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
+        let p4_entry = &mut pml4[page.p4_index()];
+        if p4_entry.is_unused() { return false; }
+        let p3_table =
+            &mut *((hhdm_offset + p4_entry.addr().as_u64()).as_mut_ptr::<PageTable>());
+        let p3_entry = &mut p3_table[page.p3_index()];
+        if p3_entry.is_unused() { return false; }
+        let p2_table =
+            &mut *((hhdm_offset + p3_entry.addr().as_u64()).as_mut_ptr::<PageTable>());
+        let p2_entry = &mut p2_table[page.p2_index()];
+        if p2_entry.is_unused() { return false; }
+        let p1_table =
+            &mut *((hhdm_offset + p2_entry.addr().as_u64()).as_mut_ptr::<PageTable>());
+        let p1_entry = &mut p1_table[page.p1_index()];
+        if p1_entry.is_unused() { return false; }
+        let frame = p1_entry.addr();
+        p1_entry.set_addr(frame, flags);
+        true
     }
 
     /// Switch to this address space (write PML4 phys addr to CR3).

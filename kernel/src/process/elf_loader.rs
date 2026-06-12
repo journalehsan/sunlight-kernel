@@ -1,5 +1,6 @@
 use super::Process;
 use crate::memory::pmm::PhysicalMemoryManager;
+use sunlight_elf::{SegmentPlan, SegmentProt};
 use x86_64::{
     VirtAddr,
     structures::paging::{
@@ -7,152 +8,168 @@ use x86_64::{
     },
 };
 
-/// Minimal ELF64 parser: load PT_LOAD segments into the process address space.
+/// User-address window allowed for PT_LOAD segments. The stack and heap are
+/// mapped separately above USER_HI, so a validated binary can never collide
+/// with them or reach the kernel higher half.
+const USER_LO: u64 = 0x1000;
+const USER_HI: u64 = super::layout::USER_HEAP_START;
+
+fn prot_flags(prot: SegmentProt) -> PageTableFlags {
+    match prot {
+        // Executable (read + execute). W^X is already enforced by validation.
+        SegmentProt::ReadExec => PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
+        SegmentProt::ReadWrite => {
+            PageTableFlags::PRESENT
+                | PageTableFlags::WRITABLE
+                | PageTableFlags::USER_ACCESSIBLE
+                | PageTableFlags::NO_EXECUTE
+        }
+        SegmentProt::Read => {
+            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE
+        }
+    }
+}
+
+/// Combine protections when two segments share a 4 KiB page (e.g. .rodata
+/// ending where .data begins): writable if either side is, executable if
+/// either side is (NX must drop out of the union).
+fn union_flags(old: PageTableFlags, new: PageTableFlags) -> PageTableFlags {
+    let mut merged = old | new;
+    if !old.contains(PageTableFlags::NO_EXECUTE) || !new.contains(PageTableFlags::NO_EXECUTE) {
+        merged.remove(PageTableFlags::NO_EXECUTE);
+    }
+    merged
+}
+
+/// Load a validated ELF64 into the process address space.
+/// Returns the entry point, or None if the binary is rejected.
 pub fn load_elf(
     elf_bytes: &[u8],
     process: &mut Process,
     pmm: &mut PhysicalMemoryManager,
     hhdm_offset: VirtAddr,
 ) -> Option<u64> {
-    // ELF64 header
-    if elf_bytes.len() < 64 {
-        crate::serial_println!("[ELF] too short: {}", elf_bytes.len());
-        return None;
-    }
-    if elf_bytes[0..4] != [0x7f, b'E', b'L', b'F'] {
-        crate::serial_println!("[ELF] bad magic");
-        return None;
-    }
-
-    // e_entry at offset 0x18
-    let entry = u64::from_le_bytes(elf_bytes[0x18..0x20].try_into().ok()?);
-
-    // e_phoff at offset 0x20
-    let phoff = u64::from_le_bytes(elf_bytes[0x20..0x28].try_into().ok()?);
-
-    // e_phentsize at offset 0x36
-    let phentsize = u16::from_le_bytes(elf_bytes[0x36..0x38].try_into().ok()?);
-
-    // e_phnum at offset 0x38
-    let phnum = u16::from_le_bytes(elf_bytes[0x38..0x3A].try_into().ok()?);
-
-    for i in 0..phnum {
-        let ph_start = phoff as usize + (i as usize * phentsize as usize);
-        let ph_end = ph_start + phentsize as usize;
-        if ph_end > elf_bytes.len() {
-            crate::serial_println!("[ELF] phdr {} out of bounds", i);
+    let header = match sunlight_elf::parse_elf_header(elf_bytes) {
+        Ok(h) => h,
+        Err(e) => {
+            crate::serial_println!("[ELF] header rejected: {:?}", e);
             return None;
         }
-        let ph = &elf_bytes[ph_start..ph_end];
+    };
 
-        // p_type at offset 0x00
-        let p_type = u32::from_le_bytes(ph[0x00..0x04].try_into().ok()?);
-        if p_type != 1 {
-            // Not PT_LOAD
-            continue;
-        }
+    // plan_segments validates every segment (user-range bounds, W^X, entry
+    // coverage) before emitting anything, so mapping never starts on a
+    // binary that will be rejected.
+    let mut map_failed = false;
+    let planned = sunlight_elf::plan_segments(
+        elf_bytes,
+        &header,
+        USER_LO,
+        USER_HI,
+        &mut |plan| {
+            if !map_failed && map_segment(plan, elf_bytes, process, pmm, hhdm_offset).is_none() {
+                map_failed = true;
+            }
+        },
+    );
+    if let Err(e) = planned {
+        crate::serial_println!("[ELF] segment validation failed: {:?}", e);
+        return None;
+    }
+    if map_failed {
+        crate::serial_println!("[ELF] segment mapping failed (out of frames?)");
+        return None;
+    }
 
-        // p_offset at offset 0x08
-        let p_offset = u64::from_le_bytes(ph[0x08..0x10].try_into().ok()?);
-        // p_vaddr at offset 0x10
-        let p_vaddr = u64::from_le_bytes(ph[0x10..0x18].try_into().ok()?);
-        // p_filesz at offset 0x20
-        let p_filesz = u64::from_le_bytes(ph[0x20..0x28].try_into().ok()?);
-        // p_memsz at offset 0x28
-        let p_memsz = u64::from_le_bytes(ph[0x28..0x30].try_into().ok()?);
-        // p_flags at offset 0x04
-        let p_flags = u32::from_le_bytes(ph[0x04..0x08].try_into().ok()?);
+    Some(header.entry)
+}
 
-        crate::serial_println!(
-            "[ELF] PT_LOAD off={:x} vaddr={:x} filesz={:x} memsz={:x} flags={:x}",
-            p_offset, p_vaddr, p_filesz, p_memsz, p_flags
-        );
+fn map_segment(
+    plan: &SegmentPlan,
+    elf_bytes: &[u8],
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Option<()> {
+    let flags = prot_flags(plan.prot);
 
-        let flags = if p_flags & 0x1 != 0 {
-            // PF_X: executable (read + execute)
-            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE
-        } else if p_flags & 0x2 != 0 {
-            // PF_W: writable data (read + write)
-            PageTableFlags::PRESENT
-                | PageTableFlags::WRITABLE
-                | PageTableFlags::USER_ACCESSIBLE
-                | PageTableFlags::NO_EXECUTE
-        } else {
-            // Read-only data
-            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE
+    crate::serial_println!(
+        "[ELF] PT_LOAD off={:x} vaddr={:x} filesz={:x} memsz={:x} prot={:?}",
+        plan.file_offset, plan.vaddr, plan.file_size, plan.mem_size, plan.prot
+    );
+
+    // Only bytes up to file_size are copied; the rest of the segment
+    // (.bss tail) stays zero from the fresh frames.
+    let copy_end = plan.vaddr + plan.file_size;
+
+    for page_idx in 0..plan.page_count {
+        let page_addr = VirtAddr::new(plan.vaddr_page_start + page_idx as u64 * 4096);
+        let page = Page::from_start_address(page_addr).ok()?;
+
+        // When two segments share a page, reuse the existing physical frame
+        // instead of allocating a new one that would overwrite the previous
+        // segment's data.
+        let existing = unsafe {
+            process.address_space.lookup_entry(page, hhdm_offset)
         };
 
-        let vaddr_start = p_vaddr;
-        let vaddr_end = p_vaddr.saturating_add(p_memsz);
-        let page_vaddr_start = vaddr_start & !0xFFF;
-        let page_vaddr_end = (vaddr_end + 0xFFF) & !0xFFF;
-        let memsz_pages = ((page_vaddr_end - page_vaddr_start) / 4096) as usize;
+        let (frame_addr, existing_flags) = match existing {
+            Some((phys, old_flags)) => (phys, Some(old_flags)),
+            None => (pmm.alloc_frame()?, None),
+        };
 
-        crate::serial_println!(
-            "[ELF] mapping {} pages from {:x} to {:x}",
-            memsz_pages, page_vaddr_start, page_vaddr_end
-        );
+        let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
+        let hhdm_ptr = (hhdm_offset + frame_addr.as_u64()).as_mut_ptr::<u8>();
 
-        for page_idx in 0..memsz_pages {
-            let page_addr = VirtAddr::new(page_vaddr_start + page_idx as u64 * 4096);
-            let page = Page::from_start_address(page_addr).ok()?;
+        if existing_flags.is_none() {
+            // Zero the new frame before copying segment data into it.
+            unsafe { core::ptr::write_bytes(hhdm_ptr, 0, 4096); }
+        }
 
-            // Check if this virtual page is already mapped by a previous segment.
-            // When two segments share a page (e.g., rodata and GOT both landing in
-            // the same 4 KiB page), reuse the existing physical frame instead of
-            // allocating a new one that would overwrite the previous segment's data.
-            let existing_phys = unsafe {
-                process.address_space.lookup_phys(page, hhdm_offset)
-            };
+        // Copy the overlap between this page and the segment's file bytes.
+        let page_start = page_addr.as_u64();
+        let page_end = page_start + 4096;
+        let overlap_start = plan.vaddr.max(page_start);
+        let overlap_end = copy_end.min(page_end);
 
-            let (frame_addr, is_new) = if let Some(phys) = existing_phys {
-                (phys, false)
-            } else {
-                (pmm.alloc_frame()?, true)
-            };
+        if overlap_start < overlap_end {
+            let file_offset = (plan.file_offset + (overlap_start - plan.vaddr)) as usize;
+            let dst_offset = (overlap_start - page_start) as usize;
+            let len = (overlap_end - overlap_start) as usize;
 
-            let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
-            let hhdm_ptr = (hhdm_offset + frame_addr.as_u64()).as_mut_ptr::<u8>();
-
-            if is_new {
-                // Zero the new frame before copying segment data into it.
-                unsafe { core::ptr::write_bytes(hhdm_ptr, 0, 4096); }
+            // Validation guarantees file_offset + len <= elf_bytes.len().
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    elf_bytes.as_ptr().add(file_offset),
+                    hhdm_ptr.add(dst_offset),
+                    len,
+                );
             }
+        }
 
-            // Calculate overlap between this page and the segment
-            let page_start = page_addr.as_u64();
-            let page_end = page_start + 4096;
-            let overlap_start = vaddr_start.max(page_start);
-            let overlap_end = vaddr_end.min(page_end);
-
-            if overlap_start < overlap_end {
-                let file_offset = p_offset + (overlap_start - vaddr_start);
-                let dst_offset = (overlap_start - page_start) as usize;
-                let len = (overlap_end - overlap_start) as usize;
-
-                if file_offset as usize + len <= elf_bytes.len() {
-                    unsafe {
-                        core::ptr::copy_nonoverlapping(
-                            elf_bytes.as_ptr().add(file_offset as usize),
-                            hhdm_ptr.add(dst_offset),
-                            len,
-                        );
-                    }
-                }
-            }
-
-            if is_new {
-                // SAFETY: mapping a user page into the process address space.
+        match existing_flags {
+            None => {
+                // SAFETY: mapping a fresh user page into the process address space.
                 unsafe {
                     process.address_space.map_page(page, phys, flags, pmm, hhdm_offset);
                 }
             }
-            // If the page was already mapped, the data was written into the existing
-            // frame. No remapping is needed; the original flags are preserved.
+            Some(old_flags) if old_flags != flags => {
+                // Shared page with different protections: union them so e.g.
+                // a .data byte in a mostly-.rodata page stays writable.
+                unsafe {
+                    process.address_space.update_flags(
+                        page,
+                        union_flags(old_flags, flags),
+                        hhdm_offset,
+                    );
+                }
+            }
+            Some(_) => {}
         }
     }
 
-    Some(entry)
+    Some(())
 }
 
 /// Detect if an ELF binary is a Linux-compatible ELF (Phase 4.5).
@@ -160,7 +177,6 @@ pub fn load_elf(
 pub fn is_linux_elf(elf_bytes: &[u8]) -> bool {
     // ELF64 e_ident[EI_OSABI] at offset 0x07
     const EI_OSABI: usize = 0x07;
-    const ELFOSABI_LINUX: u8 = 3;
 
     if elf_bytes.len() < 8 {
         return false;
@@ -172,5 +188,5 @@ pub fn is_linux_elf(elf_bytes: &[u8]) -> bool {
     }
 
     // Check OSABI field
-    elf_bytes[EI_OSABI] == ELFOSABI_LINUX
+    elf_bytes[EI_OSABI] == sunlight_elf::ELFOSABI_LINUX
 }

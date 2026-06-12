@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+sunlight-block = { path = "../sunlight-block" }
+sunlight-fat = { path = "../sunlight-fat" }
+
+[dev-dependencies]
+sunlight-fat = { path = "../sunlight-fat", features = ["testutil"] }
