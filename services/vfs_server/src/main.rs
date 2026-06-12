@@ -28,8 +28,8 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_fat::{FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 use sunlight_fs::{
-    check_permission, parse_group, parse_passwd, Credential, FileHandle, FileType, FsError,
-    PermCheck, RamFs, Vfs, INITRAMFS,
+    check_permission, parse_fstab, parse_group, parse_passwd, Credential, FileHandle, FileType,
+    FsError, FstabEntry, PermCheck, RamFs, Vfs, INITRAMFS,
 };
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg, VfsMsg,
@@ -41,6 +41,7 @@ const ERR_BAD_HANDLE: u64 = 9;
 const ERR_INVALID: u64 = 22;
 const MAX_PATH_BYTES: usize = 32;
 const READ_REPLY_BYTES: usize = 16;
+const FSTAB_MAX_BYTES: usize = 512;
 
 // Handle encoding: high byte = mount (0=ram, 1=boot), lower bytes = local handle
 const MOUNT_RAM: u32 = 0;
@@ -59,7 +60,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 const BOOT_MAX_HANDLES: usize = 16;
 
 struct BootHandle {
-    file_idx: u8,  // index into share.files
+    file_idx: u8, // index into share.files
     in_use: bool,
 }
 
@@ -81,7 +82,10 @@ impl BootFs {
         }
         Some(BootFs {
             share,
-            handles: core::array::from_fn(|_| BootHandle { file_idx: 0, in_use: false }),
+            handles: core::array::from_fn(|_| BootHandle {
+                file_idx: 0,
+                in_use: false,
+            }),
         })
     }
 
@@ -153,6 +157,7 @@ impl BootFs {
 struct State {
     vfs: Vfs,
     boot: Option<BootFs>,
+    boot_mountpoint: Option<&'static str>,
 }
 
 // ---------------------------------------------------------------------------
@@ -169,13 +174,14 @@ pub extern "C" fn _start() -> ! {
 
     // Root filesystem (RamFs)
     let mut vfs = Vfs::new();
-    let _ = vfs.mount_ramfs("/", RamFs::new(INITRAMFS));
+    let mut boot = None;
+    let boot_mountpoint = mount_from_fstab(&mut vfs, &mut boot);
 
-    // Boot filesystem from kernel-populated FAT32 share page
-    // SAFETY: Kernel mapped the share page before starting this process.
-    let boot = unsafe { BootFs::new() };
-
-    let mut state = State { vfs, boot };
+    let mut state = State {
+        vfs,
+        boot,
+        boot_mountpoint,
+    };
 
     // Phase 3.0 self-tests (RamFs)
     run_phase30_tests(&mut state);
@@ -192,6 +198,62 @@ pub extern "C" fn _start() -> ! {
         let reply = handle_request(&mut state, msg);
         msg = ipc_reply_and_wait(ep, reply);
     }
+}
+
+// ---------------------------------------------------------------------------
+// FSTAB mount coordinator
+// ---------------------------------------------------------------------------
+
+fn mount_from_fstab(vfs: &mut Vfs, boot: &mut Option<BootFs>) -> Option<&'static str> {
+    let mut seed = Vfs::new();
+    let _ = seed.mount_ramfs("/", RamFs::new(INITRAMFS));
+
+    let mut fstab_buf = [0u8; FSTAB_MAX_BYTES];
+    let fstab_len = read_seed_file(&mut seed, "/etc/fstab", &mut fstab_buf);
+    let fstab_text = core::str::from_utf8(&fstab_buf[..fstab_len]).unwrap_or("");
+    let entries = parse_fstab(fstab_text);
+    let mut boot_mountpoint = None;
+
+    for entry in entries.iter().flatten() {
+        if let Some(mountpoint) = mount_fstab_entry(vfs, boot, entry) {
+            boot_mountpoint = Some(mountpoint);
+        }
+    }
+
+    boot_mountpoint
+}
+
+fn mount_fstab_entry(
+    vfs: &mut Vfs,
+    boot: &mut Option<BootFs>,
+    entry: &FstabEntry<'_>,
+) -> Option<&'static str> {
+    match entry.fs_type {
+        "ramfs" => {
+            if entry.mountpoint == "/" {
+                let _ = vfs.mount_ramfs("/", RamFs::new(INITRAMFS));
+            }
+            None
+        }
+        "bootfs" => {
+            if entry.mountpoint == "/boot" && boot.is_none() {
+                // SAFETY: Kernel maps the FAT share page before starting this process.
+                *boot = unsafe { BootFs::new() };
+            }
+            boot.as_ref().map(|_| "/boot")
+        }
+        _ => None,
+    }
+}
+
+fn read_seed_file(vfs: &mut Vfs, path: &str, out: &mut [u8]) -> usize {
+    let handle = match vfs.open(path) {
+        Ok(handle) => handle,
+        Err(_) => return 0,
+    };
+    let read = vfs.read(handle, 0, out).unwrap_or(0);
+    let _ = vfs.close(handle);
+    read
 }
 
 // ---------------------------------------------------------------------------
@@ -222,7 +284,13 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             None => error_reply(FsError::InvalidPath),
         },
         VfsMsg::MKDIR => match decoded_path(&msg.words) {
-            Some(pb) => mkdir_path(state, pb.as_str(), msg.words[4] as u32, msg.words[5] as u32, msg.words[6] as u16),
+            Some(pb) => mkdir_path(
+                state,
+                pb.as_str(),
+                msg.words[4] as u32,
+                msg.words[5] as u32,
+                msg.words[6] as u16,
+            ),
             None => error_reply(FsError::InvalidPath),
         },
         VfsMsg::CHMOD => match decoded_path(&msg.words) {
@@ -245,7 +313,7 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
 
 /// Open a VFS path, routing /boot/* to BootFs.
 fn open_path(state: &mut State, path: &str) -> IpcMsg {
-    if let Some(local) = strip_boot_prefix(path) {
+    if let Some(local) = strip_boot_prefix(state, path) {
         match state.boot.as_mut() {
             Some(boot) => match boot.open(local) {
                 Ok(handle) => ok_reply().word(1, handle.0 as u64),
@@ -317,12 +385,10 @@ fn close_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
 }
 
 fn stat_path(state: &mut State, path: &str) -> IpcMsg {
-    if let Some(local) = strip_boot_prefix(path) {
+    if let Some(local) = strip_boot_prefix(state, path) {
         match state.boot.as_ref() {
             Some(boot) => match boot.stat(local) {
-                Ok((size, ft)) => ok_reply()
-                    .word(1, size as u64)
-                    .word(2, file_type_code(ft)),
+                Ok((size, ft)) => ok_reply().word(1, size as u64).word(2, file_type_code(ft)),
                 Err(e) => error_reply(e),
             },
             None => error_reply(FsError::NotFound),
@@ -349,7 +415,7 @@ fn write_handle(state: &mut State, raw: FileHandle, offset: usize, buf: &[u8]) -
 }
 
 fn mkdir_path(state: &mut State, path: &str, uid: u32, gid: u32, mode: u16) -> IpcMsg {
-    if strip_boot_prefix(path).is_some() {
+    if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::Unsupported);
     }
     match state.vfs.mkdir(path, uid, gid, mode) {
@@ -359,7 +425,7 @@ fn mkdir_path(state: &mut State, path: &str, uid: u32, gid: u32, mode: u16) -> I
 }
 
 fn chmod_path(state: &mut State, path: &str, mode: u16) -> IpcMsg {
-    if strip_boot_prefix(path).is_some() {
+    if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::Unsupported);
     }
     match state.vfs.chmod(path, mode) {
@@ -369,7 +435,7 @@ fn chmod_path(state: &mut State, path: &str, mode: u16) -> IpcMsg {
 }
 
 fn chown_path(state: &mut State, path: &str, uid: u32, gid: u32) -> IpcMsg {
-    if strip_boot_prefix(path).is_some() {
+    if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::Unsupported);
     }
     match state.vfs.chown(path, uid, gid) {
@@ -389,7 +455,10 @@ fn getpwnam(state: &mut State, username: &str) -> IpcMsg {
                     let passwd_data = core::str::from_utf8(&buf[..n]).unwrap_or("");
                     match parse_passwd(passwd_data.as_bytes()) {
                         (entries, count) => {
-                            match sunlight_fs::lookup_by_name(&entries[..count], username.as_bytes()) {
+                            match sunlight_fs::lookup_by_name(
+                                &entries[..count],
+                                username.as_bytes(),
+                            ) {
                                 Some(entry) => {
                                     let mut reply = ok_reply();
                                     reply.words[1] = entry.uid as u64;
@@ -416,19 +485,15 @@ fn getgrgid(state: &mut State, gid: u32) -> IpcMsg {
         Ok(handle) => {
             let mut buf = [0u8; 512];
             match state.vfs.read(handle, 0, &mut buf) {
-                Ok(n) => {
-                    match parse_group(&buf[..n]) {
-                        (entries, count) => {
-                            match entries[..count].iter().find(|e| e.gid == gid) {
-                                Some(_entry) => {
-                                    let reply = ok_reply().word(1, gid as u64);
-                                    reply
-                                }
-                                None => error_reply(FsError::NotFound),
-                            }
+                Ok(n) => match parse_group(&buf[..n]) {
+                    (entries, count) => match entries[..count].iter().find(|e| e.gid == gid) {
+                        Some(_entry) => {
+                            let reply = ok_reply().word(1, gid as u64);
+                            reply
                         }
-                    }
-                }
+                        None => error_reply(FsError::NotFound),
+                    },
+                },
                 Err(e) => error_reply(e),
             }
         }
@@ -453,13 +518,20 @@ fn getpwuid(state: &mut State, uid: u32) -> IpcMsg {
                                     reply.words[1] = entry.uid as u64;
                                     reply.words[2] = entry.gid as u64;
                                     // Pack username into words[3:7] (up to 32 bytes)
-                                    let username_len = entry.username.iter().position(|&b| b == 0).unwrap_or(64).min(64);
+                                    let username_len = entry
+                                        .username
+                                        .iter()
+                                        .position(|&b| b == 0)
+                                        .unwrap_or(64)
+                                        .min(64);
                                     for i in 0..4 {
                                         let start = i * 8;
                                         let end = (start + 8).min(username_len);
                                         if start < username_len {
                                             let mut word = 0u64;
-                                            for (j, &b) in entry.username[start..end].iter().enumerate() {
+                                            for (j, &b) in
+                                                entry.username[start..end].iter().enumerate()
+                                            {
                                                 word |= (b as u64) << (j * 8);
                                             }
                                             reply.words[3 + i] = word;
@@ -567,7 +639,10 @@ fn run_phase35_tests(state: &mut State) {
             debug_log("[VFS]  Read: \"SunlightOS FAT32 boot volume\\n\"");
         }
     }
-    let _ = handle_request(state, IpcMsg::with_label(VfsMsg::CLOSE).word(0, h1.0 as u64));
+    let _ = handle_request(
+        state,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, h1.0 as u64),
+    );
 
     // Read /boot/BOOT/PHASE35.TXT → "Phase 3.5 FAT32 OK\n" (19 bytes, two read calls)
     let open2 = handle_request(state, path_msg(VfsMsg::OPEN, "/boot/BOOT/PHASE35.TXT"));
@@ -588,7 +663,10 @@ fn run_phase35_tests(state: &mut State) {
             debug_log("[VFS]  Read: \"Phase 3.5 FAT32 OK\\n\"");
         }
     }
-    let _ = handle_request(state, IpcMsg::with_label(VfsMsg::CLOSE).word(0, h2.0 as u64));
+    let _ = handle_request(
+        state,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, h2.0 as u64),
+    );
 
     // ENOENT test for /boot/MISSING.TXT
     let missing = handle_request(state, path_msg(VfsMsg::OPEN, "/boot/MISSING.TXT"));
@@ -648,7 +726,10 @@ fn run_phase37_tests(state: &mut State) {
     }
 
     let root_cred = Credential { uid: 0, gid: 0 };
-    let user_cred = Credential { uid: 1000, gid: 1000 };
+    let user_cred = Credential {
+        uid: 1000,
+        gid: 1000,
+    };
 
     // Root bypasses all permission checks (including shadow which is mode 0600)
     if check_permission(&shadow_stat, &root_cred, PermCheck::Read) {
@@ -710,14 +791,13 @@ fn read_file_bytes(state: &mut State, path: &str, out: &mut [u8]) -> usize {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Strip the "/boot" prefix from a path; returns the local path (e.g. "/HELLO.TXT").
-/// Returns None if path does not start with "/boot".
-fn strip_boot_prefix(path: &str) -> Option<&str> {
-    if path == "/boot" {
+/// Strip the configured bootfs prefix from a path; returns the local path.
+fn strip_boot_prefix<'a>(state: &State, path: &'a str) -> Option<&'a str> {
+    let mountpoint = state.boot_mountpoint?;
+    if path == mountpoint {
         Some("/")
-    } else if path.starts_with("/boot/") {
-        // path[5..] starts with '/' → gives the local path e.g. "/HELLO.TXT"
-        Some(&path[5..])
+    } else if path.starts_with(mountpoint) && path.as_bytes().get(mountpoint.len()) == Some(&b'/') {
+        Some(&path[mountpoint.len()..])
     } else {
         None
     }

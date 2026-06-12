@@ -6,6 +6,7 @@ extern crate alloc;
 extern crate std;
 
 pub mod error;
+pub mod fstab;
 pub mod passwd;
 pub mod path;
 pub mod permission;
@@ -13,9 +14,10 @@ pub mod ramfs;
 pub mod vfs;
 
 pub use error::FsError;
+pub use fstab::{parse_fstab, FstabEntry, FstabTable, MAX_FSTAB_ENTRIES};
 pub use passwd::{
-    parse_group, parse_passwd, parse_shadow, lookup_by_name, lookup_by_uid,
-    GroupEntry, PasswdEntry, ShadowEntry,
+    lookup_by_name, lookup_by_uid, parse_group, parse_passwd, parse_shadow, GroupEntry,
+    PasswdEntry, ShadowEntry,
 };
 pub use permission::{check_permission, Credential, PermCheck};
 pub use ramfs::{RamEntry, RamFs, INITRAMFS};

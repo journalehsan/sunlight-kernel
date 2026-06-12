@@ -6,11 +6,11 @@ pub const RAMFS_MAX_HANDLES: usize = 32;
 pub const RAMFS_MAX_ENTRIES: usize = 64;
 
 pub struct RamEntry {
-    pub path:   &'static str,
-    pub data:   &'static [u8],
-    pub uid:    u32,
-    pub gid:    u32,
-    pub mode:   u16,
+    pub path: &'static str,
+    pub data: &'static [u8],
+    pub uid: u32,
+    pub gid: u32,
+    pub mode: u16,
     pub is_dir: bool,
 }
 
@@ -22,11 +22,25 @@ impl RamEntry {
         file_mode: u16,
         data: &'static [u8],
     ) -> Self {
-        Self { path, data, uid, gid, mode: file_mode, is_dir: false }
+        Self {
+            path,
+            data,
+            uid,
+            gid,
+            mode: file_mode,
+            is_dir: false,
+        }
     }
 
     pub const fn dir(path: &'static str, uid: u32, gid: u32, dir_mode: u16) -> Self {
-        Self { path, data: b"", uid, gid, mode: dir_mode, is_dir: true }
+        Self {
+            path,
+            data: b"",
+            uid,
+            gid,
+            mode: dir_mode,
+            is_dir: true,
+        }
     }
 }
 
@@ -68,7 +82,11 @@ impl RamFs {
         if let Some(idx) = self.entries.iter().position(|e| e.path == path) {
             return Ok(idx);
         }
-        if let Some(idx) = self.dynamic.iter().position(|e| core::str::from_utf8(&e.path).ok() == Some(path)) {
+        if let Some(idx) = self
+            .dynamic
+            .iter()
+            .position(|e| core::str::from_utf8(&e.path).ok() == Some(path))
+        {
             return Ok(self.entries.len() + idx);
         }
         Err(FsError::NotFound)
@@ -108,7 +126,9 @@ impl RamFs {
 
     fn entry_data(&self, idx: usize) -> &[u8] {
         if idx < self.entries.len() {
-            self.buffers[idx].as_deref().unwrap_or(self.entries[idx].data)
+            self.buffers[idx]
+                .as_deref()
+                .unwrap_or(self.entries[idx].data)
         } else {
             &self.dynamic[idx - self.entries.len()].data
         }
@@ -116,7 +136,10 @@ impl RamFs {
 
     fn entry_data_len(&self, idx: usize) -> usize {
         if idx < self.entries.len() {
-            self.buffers[idx].as_ref().map(|v| v.len()).unwrap_or(self.entries[idx].data.len())
+            self.buffers[idx]
+                .as_ref()
+                .map(|v| v.len())
+                .unwrap_or(self.entries[idx].data.len())
         } else {
             self.dynamic[idx - self.entries.len()].data.len()
         }
@@ -192,12 +215,7 @@ impl FileSystem for RamFs {
         Ok(len)
     }
 
-    fn write(
-        &mut self,
-        handle: FileHandle,
-        offset: usize,
-        buf: &[u8],
-    ) -> Result<usize, FsError> {
+    fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError> {
         let entry_idx = self.handle_entry_idx(handle)?;
         let current = self.entry_data(entry_idx);
         let mut new_data = Vec::new();
@@ -228,8 +246,16 @@ impl FileSystem for RamFs {
 
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
         let entry_idx = self.entry_idx(path)?;
-        let ft = if self.is_dir(entry_idx) { FileType::Directory } else { FileType::File };
-        let size = if ft == FileType::Directory { 0 } else { self.entry_data_len(entry_idx) };
+        let ft = if self.is_dir(entry_idx) {
+            FileType::Directory
+        } else {
+            FileType::File
+        };
+        let size = if ft == FileType::Directory {
+            0
+        } else {
+            self.entry_data_len(entry_idx)
+        };
         let nlinks = if ft == FileType::Directory { 2 } else { 1 };
         Ok(FileStat {
             file_type: ft,
@@ -277,28 +303,59 @@ impl FileSystem for RamFs {
 
 pub static INITRAMFS: &[RamEntry] = &[
     // Directories
-    RamEntry::dir("/",                 0,    0,    mode::DIR_755),
-    RamEntry::dir("/etc",              0,    0,    mode::DIR_755),
-    RamEntry::dir("/etc/sunlight",     0,    0,    mode::DIR_755),
-    RamEntry::dir("/bin",              0,    0,    mode::DIR_755),
-    RamEntry::dir("/root",             0,    0,    mode::DIR_700),
-    RamEntry::dir("/home",             0,    0,    mode::DIR_755),
-    RamEntry::dir("/tmp",              0,    0,    mode::DIR_1777),
-    RamEntry::dir("/var",              0,    0,    mode::DIR_755),
-    RamEntry::dir("/var/log",          0,    0,    mode::DIR_755),
-
+    RamEntry::dir("/", 0, 0, mode::DIR_755),
+    RamEntry::dir("/etc", 0, 0, mode::DIR_755),
+    RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
+    RamEntry::dir("/bin", 0, 0, mode::DIR_755),
+    RamEntry::dir("/root", 0, 0, mode::DIR_700),
+    RamEntry::dir("/home", 0, 0, mode::DIR_755),
+    RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
+    RamEntry::dir("/var", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/log", 0, 0, mode::DIR_755),
     // System config files (world-readable)
-    RamEntry::file("/etc/passwd",  0, 0, mode::FILE_644,
-        include_bytes!("../etc/passwd")),
-    RamEntry::file("/etc/group",   0, 0, mode::FILE_644,
-        include_bytes!("../etc/group")),
-    RamEntry::file("/etc/shadow",  0, 0, mode::FILE_600,
-        include_bytes!("../etc/shadow")),
-    RamEntry::file("/etc/motd",    0, 0, mode::FILE_644,
-        b"Welcome to SunlightOS\n"),
-    RamEntry::file("/etc/hostname",0, 0, mode::FILE_644,
-        b"sunlight\n"),
-    RamEntry::file("/etc/sunlight/session.toml", 0, 0, mode::FILE_644,
+    RamEntry::file(
+        "/etc/passwd",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../etc/passwd"),
+    ),
+    RamEntry::file(
+        "/etc/group",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../etc/group"),
+    ),
+    RamEntry::file(
+        "/etc/shadow",
+        0,
+        0,
+        mode::FILE_600,
+        include_bytes!("../etc/shadow"),
+    ),
+    RamEntry::file(
+        "/etc/motd",
+        0,
+        0,
+        mode::FILE_644,
+        b"Welcome to SunlightOS\n",
+    ),
+    RamEntry::file("/etc/hostname", 0, 0, mode::FILE_644, b"sunlight\n"),
+    RamEntry::file(
+        "/etc/fstab",
+        0,
+        0,
+        mode::FILE_644,
+        b"# device    mountpoint   type         options\n\
+/dev/sda1   /boot        bootfs       defaults\n\
+/dev/ram0   /            ramfs        defaults\n",
+    ),
+    RamEntry::file(
+        "/etc/sunlight/session.toml",
+        0,
+        0,
+        mode::FILE_644,
         br#"
 [default]
 mode = "terminal"
@@ -311,11 +368,10 @@ theme = "sunlight-dark"
 [multi_user]
 enabled = false
 max_ttys = 6
-"#),
-    RamEntry::file("/bin/sshl",    0, 0, mode::FILE_755,
-        b"#!/sunlight/sunshell\n"),
-    RamEntry::file("/bin/sh",      0, 0, mode::FILE_755,
-        b"#!/sunlight/builtin-sh\n"),
+"#,
+    ),
+    RamEntry::file("/bin/sshl", 0, 0, mode::FILE_755, b"#!/sunlight/sunshell\n"),
+    RamEntry::file("/bin/sh", 0, 0, mode::FILE_755, b"#!/sunlight/builtin-sh\n"),
 ];
 
 #[cfg(test)]
@@ -323,8 +379,14 @@ mod tests {
     use super::*;
 
     static TEST_ENTRIES: &[RamEntry] = &[
-        RamEntry::file("/etc/motd", 0, 0, mode::FILE_644, b"Welcome to SunlightOS\n"),
-        RamEntry::file("/bin/sh",   0, 0, mode::FILE_755, b"shell"),
+        RamEntry::file(
+            "/etc/motd",
+            0,
+            0,
+            mode::FILE_644,
+            b"Welcome to SunlightOS\n",
+        ),
+        RamEntry::file("/bin/sh", 0, 0, mode::FILE_755, b"shell"),
     ];
 
     #[test]
