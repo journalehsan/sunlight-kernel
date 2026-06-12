@@ -3,7 +3,7 @@ use crate::{path, FsError};
 use alloc::vec::Vec;
 
 pub const RAMFS_MAX_HANDLES: usize = 32;
-pub const RAMFS_MAX_ENTRIES: usize = 64;
+pub const RAMFS_MAX_ENTRIES: usize = 128;
 
 pub struct RamEntry {
     pub path: &'static str,
@@ -372,6 +372,39 @@ max_ttys = 6
     ),
     RamEntry::file("/bin/sshl", 0, 0, mode::FILE_755, b"#!/sunlight/sunshell\n"),
     RamEntry::file("/bin/sh", 0, 0, mode::FILE_755, b"#!/sunlight/builtin-sh\n"),
+    // Phase 6.5 Step 2: applet stubs so $PATH resolution can find the
+    // sunlight-utils / sunlight-net-utils binaries. Step 3 replaces these
+    // with real ELF loading from the VFS.
+    RamEntry::dir("/sunlight-utils", 0, 0, mode::DIR_755),
+    RamEntry::dir("/sunlight-net-utils", 0, 0, mode::DIR_755),
+    RamEntry::file("/sunlight-utils/ls", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/cat", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/cp", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/mv", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/rm", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/mkdir", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/rmdir", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/touch", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/find", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/grep", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/head", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/tail", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/wc", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/sort", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/uniq", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/cut", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/file", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/stat", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/pwd", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/date", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-net-utils/ping", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
+    RamEntry::file("/sunlight-net-utils/ifconfig", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
+    RamEntry::file("/sunlight-net-utils/wget", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
+    RamEntry::file("/sunlight-net-utils/curl", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
+    RamEntry::file("/sunlight-net-utils/dig", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
+    RamEntry::file("/sunlight-net-utils/nslookup", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
+    RamEntry::file("/sunlight-net-utils/hostname", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
+    RamEntry::file("/sunlight-net-utils/netstat", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
 ];
 
 #[cfg(test)]

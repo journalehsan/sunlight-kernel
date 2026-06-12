@@ -69,6 +69,7 @@ pub fn fork_current_process(
     let parent_entry_point = sched.current_process().entry_point;
     let parent_user_stack_top = sched.current_process().user_stack_top;
     let parent_capabilities = sched.current_process().capabilities.clone();
+    let parent_env = super::env::EnvMap::inherit(&sched.current_process().env);
 
     // Clone the parent's address space with CoW
     let child_address_space = unsafe {
@@ -101,6 +102,7 @@ pub fn fork_current_process(
             context_rsp: 0,
             uid: parent_uid,
             gid: parent_gid,
+            env: parent_env,
             ipc_queue: alloc::collections::VecDeque::new(),
             ipc_endpoint: None,
             ipc_reply: None,
@@ -191,6 +193,7 @@ fn sys_fork(
             context_rsp: 0,
             uid: parent_uid,
             gid: parent_gid,
+            env: super::env::EnvMap::inherit(&parent.env),
             ipc_queue: alloc::collections::VecDeque::new(),
             ipc_endpoint: None,
             ipc_reply: None,

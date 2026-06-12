@@ -92,7 +92,23 @@ fn setup_exec_stack(
 
 /// Spawn a new process from a static ELF binary on the filesystem.
 /// For the kernel, we embed the sunshell binary and look it up by path.
+/// The process receives the default environment for `uid`.
 pub fn spawn_from_path(
+    path: &str,
+    argv: &[&str],
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
+    hhdm_offset: VirtAddr,
+    uid: u32,
+    gid: u32,
+) -> Result<usize, SpawnError> {
+    spawn_from_path_with_env(path, argv, pmm, sched, caps, hhdm_offset, uid, gid, None)
+}
+
+/// Spawn with an explicit base environment (e.g. inherited from a parent via
+/// `EnvMap::inherit`). `None` falls back to `EnvMap::with_defaults(uid)`.
+pub fn spawn_from_path_with_env(
     path: &str,
     _argv: &[&str],
     pmm: &mut PhysicalMemoryManager,
@@ -101,6 +117,7 @@ pub fn spawn_from_path(
     hhdm_offset: VirtAddr,
     uid: u32,
     gid: u32,
+    env: Option<super::env::EnvMap>,
 ) -> Result<usize, SpawnError> {
     let bytes = embedded_bytes_for_path(path)?;
     let shell_id = shell_id_from_path(path).ok_or(SpawnError::NotFound)?;
@@ -111,8 +128,18 @@ pub fn spawn_from_path(
     let mut process = unsafe {
         Process::new(pid, 1, "sshl", pmm, hhdm_offset)
     };
+    process.uid = uid;
+    process.gid = gid;
+    // Phase 6.5 Step 2: every spawned process gets an environment — either
+    // one inherited from the caller or the defaults for this uid (PATH,
+    // USER, HOME, SHELL). Username resolution from /etc/passwd happens in
+    // userspace via VFS; the kernel only knows the uid here.
+    process.env = env.unwrap_or_else(|| super::env::EnvMap::with_defaults(uid, ""));
 
-    exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &[])?;
+    let envp_strings = process.env.to_envp();
+    let envp: alloc::vec::Vec<&[u8]> =
+        envp_strings.iter().map(|s| s.as_bytes()).collect();
+    exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp)?;
     process.set_initial_args(shell_id, uid as u64, gid as u64, 0);
 
     let actual_pid = process.pid;

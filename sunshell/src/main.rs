@@ -122,6 +122,9 @@ static BUMP: BumpAllocator = BumpAllocator;
 mod sysfetch;
 
 #[cfg(feature = "sunlight")]
+mod shellenv;
+
+#[cfg(feature = "sunlight")]
 #[no_main]
 mod sunlight {
     use core::fmt::Write;
@@ -183,6 +186,7 @@ mod sunlight {
         passwd_state: PasswdState,
         passwd_buffer: [u8; 64],
         passwd_buffer_len: usize,
+        env: crate::shellenv::ShellEnv,
     }
 
     impl Shell {
@@ -201,7 +205,16 @@ mod sunlight {
                 passwd_state: PasswdState::None,
                 passwd_buffer: [0; 64],
                 passwd_buffer_len: 0,
+                env: crate::shellenv::ShellEnv::new(),
             }
+        }
+
+        /// Seed PATH/USER/HOME/SHELL once the user identity is known.
+        fn init_env(&mut self) {
+            let username = alloc::string::String::from(
+                core::str::from_utf8(&self.username[..self.username_len]).unwrap_or(""),
+            );
+            self.env.load_defaults(self.uid, &username);
         }
 
         fn handle_byte(&mut self, byte: u8) -> ([u8; MAX_OUT], usize) {
@@ -367,12 +380,20 @@ mod sunlight {
                 return self.cmd_passwd(target_user_owned.as_deref());
             }
 
-            // Re-parse for normal commands
-            let line = &self.line[..self.line_len];
-            let line_str = core::str::from_utf8(line).unwrap_or("").trim();
-            let mut parts = line_str.split_ascii_whitespace();
-            let cmd = parts.next().unwrap_or("");
-            let args: alloc::vec::Vec<&str> = parts.collect();
+            // Re-parse for normal commands, expanding $VAR tokens in arguments.
+            // cmd and args are owned so &mut self builtins (export/unset) can
+            // run without keeping self.line borrowed.
+            let cmd: alloc::string::String;
+            let expanded: alloc::vec::Vec<alloc::string::String>;
+            {
+                let line = &self.line[..self.line_len];
+                let line_str = core::str::from_utf8(line).unwrap_or("").trim();
+                let mut parts = line_str.split_ascii_whitespace();
+                cmd = alloc::string::String::from(parts.next().unwrap_or(""));
+                expanded = parts.map(|t| self.env.expand_token(t)).collect();
+            }
+            let cmd = cmd.as_str();
+            let args: alloc::vec::Vec<&str> = expanded.iter().map(|s| s.as_str()).collect();
 
             // Handle shutdown and reboot specially (they don't return)
             match cmd {
@@ -396,17 +417,21 @@ mod sunlight {
                 "groups" => self.cmd_groups(&args),
                 "chmod" => self.cmd_chmod(&args),
                 "chown" => self.cmd_chown(&args),
+                "env" => self.cmd_env(),
+                "export" => self.cmd_export(&args),
+                "unset" => self.cmd_unset(&args),
                 "sysfetch" => self.cmd_sysfetch(),
                 "hostnamectl" => self.cmd_hostnamectl(),
                 "free" => self.cmd_free(),
                 "uptime" => self.cmd_uptime(),
-                "help" => b"Builtins: whoami, id, uname, useradd, userdel, passwd, groups, chmod, chown, sysfetch, hostnamectl, free, uptime, help, echo, cat, shutdown, reboot\n",
+                "help" => b"Builtins: whoami, id, uname, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, free, uptime, help, echo, cat, shutdown, reboot\n",
                 "echo" => self.cmd_echo(&args),
                 "cat" => self.cmd_cat(&args),
                 "uname" => self.cmd_uname(&args),
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
-                _ => b"sshl: command not found\n",
+                // Not a builtin: resolve through $PATH against the VFS
+                _ => self.resolve_external(cmd),
             };
 
             // Backward compatibility logging for phase 3.6 tests
@@ -797,6 +822,86 @@ mod sunlight {
             b"root wheel\n"
         }
 
+        /// List the environment, one KEY=VALUE per line (long output path).
+        fn cmd_env(&self) -> &[u8] {
+            unsafe {
+                LONG_OUT_ACTIVE = true;
+            }
+            for (key, value) in self.env.iter() {
+                let line = alloc::format!("{}={}", key, value);
+                push_line(&line);
+            }
+            b""
+        }
+
+        fn cmd_export(&mut self, args: &[&str]) -> &[u8] {
+            if args.is_empty() {
+                return b"export: usage: export KEY=VALUE\n";
+            }
+            for arg in args {
+                match arg.split_once('=') {
+                    Some((key, value)) if !key.is_empty() => self.env.set(key, value),
+                    _ => return b"export: usage: export KEY=VALUE\n",
+                }
+            }
+            b""
+        }
+
+        fn cmd_unset(&mut self, args: &[&str]) -> &[u8] {
+            if args.is_empty() {
+                return b"unset: usage: unset KEY\n";
+            }
+            for arg in args {
+                self.env.unset(arg);
+            }
+            b""
+        }
+
+        /// Resolve a non-builtin command via $PATH and report the result.
+        /// Actual execution of the resolved binary lands in Phase 6.5 Step 3
+        /// (VFS-backed ELF loading).
+        fn resolve_external(&self, cmd: &str) -> &[u8] {
+            let msg = match self.resolve_in_path(cmd) {
+                Some(path) => {
+                    alloc::format!("sshl: {}: found at {} (exec arrives in Step 3)\n", cmd, path)
+                }
+                None => alloc::format!("sshl: command not found: {}\n", cmd),
+            };
+            unsafe {
+                static mut BUF: [u8; 160] = [0u8; 160];
+                let buf = &mut BUF;
+                let bytes = msg.as_bytes();
+                let len = bytes.len().min(buf.len());
+                buf[..len].copy_from_slice(&bytes[..len]);
+                &buf[..len]
+            }
+        }
+
+        /// Search the colon-separated $PATH for `cmd`, probing each candidate
+        /// with a VFS STAT. First match wins. Paths containing '/' bypass the
+        /// search and are probed directly.
+        fn resolve_in_path(&self, cmd: &str) -> Option<alloc::string::String> {
+            let vfs_cap = nameserver_lookup("vfs")?;
+            if cmd.contains('/') {
+                return if stat_is_file(vfs_cap, cmd) {
+                    Some(alloc::string::String::from(cmd))
+                } else {
+                    None
+                };
+            }
+            for dir in self.env.path_entries() {
+                let candidate = if dir.ends_with('/') {
+                    alloc::format!("{}{}", dir, cmd)
+                } else {
+                    alloc::format!("{}/{}", dir, cmd)
+                };
+                if stat_is_file(vfs_cap, &candidate) {
+                    return Some(candidate);
+                }
+            }
+            None
+        }
+
         fn cmd_echo(&self, args: &[&str]) -> &[u8] {
             unsafe {
                 static mut BUF: [u8; 64] = [0u8; 64];
@@ -1128,6 +1233,17 @@ mod sunlight {
         let m = (total_s % 3600) / 60;
         let s = total_s % 60;
         alloc::format!("{}h {}m {}s", h, m, s)
+    }
+
+    /// STAT a path on the VFS and check it is a regular file.
+    /// The IPC path encoding carries at most 32 bytes (4 words).
+    fn stat_is_file(vfs_cap: CapabilityToken, path: &str) -> bool {
+        const FILE_TYPE_FILE: u64 = 1; // vfs_server file_type_code(FileType::File)
+        if path.len() > 32 {
+            return false;
+        }
+        let reply = ipc_call(vfs_cap, path_msg(VfsMsg::STAT, path));
+        reply.label == VfsMsg::REPLY && reply.words[0] == 0 && reply.words[2] == FILE_TYPE_FILE
     }
 
     fn read_file(vfs_cap: CapabilityToken, path: &str) -> alloc::vec::Vec<u8> {
@@ -1509,6 +1625,8 @@ mod sunlight {
         // Load real user info from VFS by uid (GETPWUID returns uid, gid, AND username)
         // This is more robust than hardcoded uid→username mapping
         shell.load_user_by_uid(uid as u32);
+        // Seed PATH/USER/HOME/SHELL now that the user identity is resolved
+        shell.init_env();
 
         // Send welcome banner with system stats (clear screen first)
         unsafe {

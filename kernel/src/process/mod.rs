@@ -1,5 +1,6 @@
 pub mod address_space;
 pub mod elf_loader;
+pub mod env;
 pub mod layout;
 pub mod spawn;
 pub mod fork;
@@ -33,6 +34,9 @@ pub struct Process {
     pub context_rsp: u64,
     pub uid: u32,
     pub gid: u32,
+    /// Environment variable registry (Phase 6.5 Step 2).
+    /// Populated with defaults at spawn or inherited from the parent.
+    pub env: env::EnvMap,
     pub ipc_queue: VecDeque<IpcMsg>,
     pub ipc_endpoint: Option<u32>,
     pub ipc_reply: Option<IpcMsg>,
@@ -119,6 +123,7 @@ impl Process {
             context_rsp: 0,
             uid: 0,
             gid: 0,
+            env: env::EnvMap::new(),
             ipc_queue: VecDeque::new(),
             ipc_endpoint: None,
             ipc_reply: None,
