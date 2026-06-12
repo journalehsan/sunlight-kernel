@@ -1,0 +1,148 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    TTY SYSTEM STATS HEADER — DEMO OUTPUT
+═══════════════════════════════════════════════════════════════════════════════
+
+This document shows what users will see when they log into SunlightOS with the
+new TTY system stats header enhancement.
+
+───────────────────────────────────────────────────────────────────────────────
+SCENARIO 1: System Idle (Low Load)
+───────────────────────────────────────────────────────────────────────────────
+
+Welcome to SunlightOS
+
+Username: root
+Password: ****
+
+╔═══════════════════════════════════╗
+║  CPU: 5% │ RAM: 12% (32MB)       ║
+╚═══════════════════════════════════╝
+
+root@sunlight:~ $
+
+[GREEN TEXT — System is healthy]
+
+
+───────────────────────────────────────────────────────────────────────────────
+SCENARIO 2: System Under Moderate Load
+───────────────────────────────────────────────────────────────────────────────
+
+Welcome to SunlightOS
+
+Username: user
+Password: ****
+
+╔═══════════════════════════════════╗
+║  CPU: 68% │ RAM: 75% (192MB)     ║
+╚═══════════════════════════════════╝
+
+user@sunlight:~ $
+
+[YELLOW TEXT — Monitor resource usage]
+
+
+───────────────────────────────────────────────────────────────────────────────
+SCENARIO 3: System Under Heavy Load
+───────────────────────────────────────────────────────────────────────────────
+
+Welcome to SunlightOS
+
+Username: admin
+Password: ****
+
+╔═══════════════════════════════════╗
+║  CPU: 92% │ RAM: 88% (225MB)     ║
+╚═══════════════════════════════════╝
+
+admin@sunlight:~ $
+
+[RED TEXT — Critical! System is under heavy load]
+
+
+───────────────────────────────────────────────────────────────────────────────
+SCENARIO 4: Initial Login (Typical)
+───────────────────────────────────────────────────────────────────────────────
+
+╔═══════════════════════════════════╗
+║  CPU: 15% │ RAM: 18% (48MB)      ║
+╚═══════════════════════════════════╝
+
+root@sunlight:~ $ free
+              total    used    free    percent
+Memory:        256M     48M    208M     18%
+
+root@sunlight:~ $ uptime
+ 09:45:30 up 1 day, 2:45, 1 user
+
+root@sunlight:~ $ sysfetch
+root@sunlightos
+OS: SunlightOS
+Kernel: SunlightOS 0.1.0
+Uptime: 0h 22m
+Memory: 48MB/256MB (18%)
+Bar: ██░░░░░░░░
+Palette: [████████]
+
+root@sunlight:~ $
+
+
+───────────────────────────────────────────────────────────────────────────────
+COLOR REFERENCE
+───────────────────────────────────────────────────────────────────────────────
+
+GREEN (Healthy):        CPU < 50%, RAM < 50%
+YELLOW (Warning):       CPU 50-80%, RAM 50-80%
+RED (Critical):         CPU > 80%, RAM > 80%
+
+Box Drawing:            Using Unicode box characters (╔═╗║╚═╝)
+Text Styling:           Bold cyan text for emphasis
+Reset:                  ANSI reset code after stats
+
+
+───────────────────────────────────────────────────────────────────────────────
+BENEFITS
+───────────────────────────────────────────────────────────────────────────────
+
+✓ Immediate System Status   — See resource usage right after login
+✓ Professional Appearance   — Box formatting looks polished
+✓ Color Intelligence       — Visual feedback on system health
+✓ No Performance Overhead  — Minimal computation, fast display
+✓ User-Friendly            — No configuration needed
+✓ Future-Ready             — Easy to upgrade to real kernel data
+
+
+───────────────────────────────────────────────────────────────────────────────
+IMPLEMENTATION NOTES
+───────────────────────────────────────────────────────────────────────────────
+
+Current Status (Phase 5.11E):
+  • Header displayed on every login ✓
+  • Color coding implemented ✓
+  • Box drawing characters ✓
+  • ANSI styling (bold, colors) ✓
+  • Hardcoded CPU = 15%, RAM = 18% (48/256 MB)
+
+Future Upgrade (Phase 5.12):
+  • CPU % from scheduler real-time data
+  • RAM % from PMM kernel interface
+  • Periodic refresh option
+  • Optional `/proc/stats` endpoint
+
+
+───────────────────────────────────────────────────────────────────────────────
+TECHNICAL FLOW
+───────────────────────────────────────────────────────────────────────────────
+
+1. User logs in via TTY login screen
+2. TTY server spawns shell process
+3. Shell _start() function executes
+4. send_system_stats_header() called
+5. System stats formatted with colors
+6. Header sent to TTY via OUTPUT_LABEL message
+7. TTY displays banner before first prompt
+8. User sees system health before typing commands
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                              END OF DEMO
+═══════════════════════════════════════════════════════════════════════════════

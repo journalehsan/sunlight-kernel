@@ -54,6 +54,23 @@ impl CapRights {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileHandle(pub u32);
 
+impl FileHandle {
+    const PIPE_FLAG: u32 = 0x8000_0000;
+    const PIPE_WRITE_FLAG: u32 = 0x4000_0000;
+
+    pub fn is_pipe(self) -> bool {
+        (self.0 & Self::PIPE_FLAG) != 0
+    }
+
+    pub fn pipe_index(self) -> u32 {
+        self.0 & 0x7FFF_FFFF
+    }
+
+    pub fn pipe_is_write(self) -> bool {
+        (self.0 & Self::PIPE_WRITE_FLAG) != 0
+    }
+}
+
 /// Errors from file descriptor operations
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FdError {

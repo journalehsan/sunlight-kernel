@@ -38,14 +38,24 @@ pub fn render_sysfetch_to_buffer(
     out: &mut [u8],
 ) -> usize {
     let mut w = CompactWriter::new(out);
-    
-    // Minimal inline ANSI: only cyan for labels + reset
-    let c = "\x1B[36m";
-    let r = "\x1B[0m";
+
+    // Minimal inline ANSI: cyan for labels, green for good usage, yellow for warn, red for danger
+    let c = "\x1B[36m"; // cyan
+    let g = "\x1B[32m"; // green (good - low usage)
+    let y = "\x1B[33m"; // yellow (warning - medium usage)
+    let r_color = "\x1B[31m"; // red (danger - high usage)
+    let r = "\x1B[0m"; // reset
 
     let h = uptime_secs / 3600;
     let m = (uptime_secs / 60) % 60;
     let s = uptime_secs % 60;
+
+    // Calculate memory percentage for color coding
+    let mem_percent = if mem_total > 0 {
+        (mem_used as u32 * 100) / mem_total
+    } else {
+        0
+    };
 
     let _ = writeln!(w, "{}{}@sunlightos{}", c, username, r);
     let _ = writeln!(w, "{}OS:{} SunlightOS", c, r);
@@ -60,14 +70,39 @@ pub fn render_sysfetch_to_buffer(
         let _ = writeln!(w, "{}s", s);
     }
 
-    let _ = writeln!(w, "{}Memory:{} {}MB/{}MB", c, r, mem_used, mem_total);
+    // Color-coded memory display
+    let mem_color = if mem_percent < 50 {
+        g // Green if < 50%
+    } else if mem_percent < 80 {
+        y // Yellow if 50-80%
+    } else {
+        r_color // Red if > 80%
+    };
 
-    // Ultra-short color blocks: 1 space instead of 3
+    let _ = writeln!(
+        w,
+        "{}Memory:{} {}{}MB{}/{}MB ({}%)",
+        c, r, mem_color, mem_used, r, mem_total, mem_percent
+    );
+
+    // Memory bar: 10 blocks = 10% each
+    let _ = write!(w, "{}Bar:{} ", c, r);
+    let blocks = (mem_percent / 10) as u32;
+    for i in 0..10 {
+        if i < blocks {
+            let _ = write!(w, "{}█{}", mem_color, r);
+        } else {
+            let _ = write!(w, "░");
+        }
+    }
+    let _ = writeln!(w);
+
+    // Minimal palette: 8 color blocks
     let _ = write!(w, "Palette: ");
     for i in 0..8 {
         let _ = write!(w, "\x1B[4{}m \x1B[0m", i);
     }
     let _ = writeln!(w);
-    
+
     w.len()
 }

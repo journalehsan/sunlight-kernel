@@ -53,6 +53,9 @@ pub enum SunlightSyscall {
     Pause = 73,
     Sigreturn = 74,
 
+    // Power management (Phase 5.11)
+    PowerCtl = 80,
+
     DebugLog = 99,
 }
 
@@ -258,6 +261,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         72 => sys_kill(frame),
         73 => sys_pause(),
         74 => sys_sigreturn(frame),
+        80 => sys_powerctl(frame.rdi),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -283,6 +287,47 @@ use crate::capability::CapabilityRights;
 use crate::process::ProcessState;
 use crate::sched;
 use crate::process::layout::is_user_address;
+use alloc::vec::Vec;
+
+/// Read a null-terminated C string from user space.
+unsafe fn read_user_cstr(ptr: u64, max_len: usize) -> Option<Vec<u8>> {
+    if !is_user_address(ptr) {
+        return None;
+    }
+
+    let mut result = Vec::new();
+    let bytes = ptr as *const u8;
+
+    for i in 0..max_len {
+        let byte = *bytes.add(i);
+        if byte == 0 {
+            return Some(result);
+        }
+        result.push(byte);
+    }
+
+    Some(result)
+}
+
+/// Read an array of pointers from user space (null-terminated array of *const u8).
+unsafe fn read_user_ptr_array(ptr: u64, max_entries: usize) -> Option<Vec<u64>> {
+    if !is_user_address(ptr) {
+        return None;
+    }
+
+    let mut result = Vec::new();
+    let ptrs = ptr as *const u64;
+
+    for i in 0..max_entries {
+        let ptr_val = *ptrs.add(i);
+        if ptr_val == 0 {
+            return Some(result);
+        }
+        result.push(ptr_val);
+    }
+
+    Some(result)
+}
 
 fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     let token = CapabilityToken(frame.rsi);
@@ -534,9 +579,90 @@ fn sys_fork(_frame: &mut SyscallFrame) -> u64 {
 }
 
 /// Syscall: Exec (31)
-fn sys_exec(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] exec requested");
-    u64::MAX
+/// rdi = path pointer (C string)
+/// rsi = argv pointer (array of *const u8, NULL-terminated)
+/// rdx = envp pointer (array of *const u8, NULL-terminated)
+fn sys_exec(frame: &mut SyscallFrame) -> u64 {
+    let path_ptr = frame.rdi;
+    let argv_ptr = frame.rsi;
+    let _envp_ptr = frame.rdx;
+
+    // Read path from user space
+    let path_bytes = match unsafe { read_user_cstr(path_ptr, 256) } {
+        Some(b) => b,
+        None => {
+            crate::serial_println!("[SYSCALL] exec: bad path pointer");
+            return u64::MAX;
+        }
+    };
+
+    let path_str = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => {
+            crate::serial_println!("[SYSCALL] exec: invalid UTF-8 path");
+            return u64::MAX;
+        }
+    };
+
+    // Read argv from user space
+    let argv_ptrs = match unsafe { read_user_ptr_array(argv_ptr, 16) } {
+        Some(a) => a,
+        None => {
+            crate::serial_println!("[SYSCALL] exec: bad argv pointer");
+            return u64::MAX;
+        }
+    };
+
+    let mut argv_bytes = alloc::vec::Vec::new();
+    for &arg_ptr in &argv_ptrs {
+        match unsafe { read_user_cstr(arg_ptr, 256) } {
+            Some(bytes) => argv_bytes.push(bytes),
+            None => {
+                crate::serial_println!("[SYSCALL] exec: bad argv[{}] pointer", argv_bytes.len());
+                return u64::MAX;
+            }
+        }
+    }
+
+    crate::serial_println!("[SYSCALL] exec path={}, argc={}", path_str, argv_bytes.len());
+
+    // Get embedded ELF bytes for the requested path
+    let bytes = match crate::process::spawn::embedded_bytes_for_path(path_str) {
+        Ok(b) => b,
+        Err(_) => {
+            crate::serial_println!("[SYSCALL] exec: path not found: {}", path_str);
+            return u64::MAX;
+        }
+    };
+
+    let mut pmm = crate::PMM.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
+
+    let process = sched.current_process_mut();
+    let argv_refs: alloc::vec::Vec<&[u8]> = argv_bytes.iter().map(|v| v.as_slice()).collect();
+
+    match crate::process::spawn::exec_into_process(
+        bytes,
+        process,
+        &mut *pmm,
+        VirtAddr::new(hhdm),
+        &argv_refs,
+        &[],  // envp: empty for now
+    ) {
+        Ok(entry) => {
+            crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
+            // Request immediate reschedule so the next timer tick switches context
+            crate::sched::request_reschedule();
+            // Return 0; the actual context switch will happen via timer interrupt
+            // and the next time this process runs, it will be at the new entry point
+            0
+        }
+        Err(e) => {
+            crate::serial_println!("[SYSCALL] exec: failed with error {:?}", e);
+            u64::MAX
+        }
+    }
 }
 
 /// Syscall: Waitpid (32)
@@ -603,6 +729,16 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
 
     let mut sched = crate::sched::SCHEDULER.lock();
+
+    // Check if this is a pipe before closing
+    if let Some(fd_entry) = sched.current_process().fd_table.get(fd) {
+        if fd_entry.handle.is_pipe() {
+            let pipe_idx = fd_entry.handle.pipe_index();
+            let is_write = fd_entry.handle.pipe_is_write();
+            crate::process::pipe::pipe_close_end(pipe_idx, is_write);
+        }
+    }
+
     match sched.current_process_mut().fd_table.close(fd) {
         Ok(()) => 0,
         Err(_) => u64::MAX,  // EBADF
@@ -614,9 +750,11 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
 /// rsi = buf (user-space pointer)
 /// rdx = count
 fn sys_read(frame: &mut SyscallFrame) -> u64 {
+    const EAGAIN: u64 = u64::MAX - 1;
+
     let fd = frame.rdi as i32;
-    let _buf = frame.rsi as *mut u8;
-    let _count = frame.rdx as usize;
+    let buf_ptr = frame.rsi as *mut u8;
+    let count = frame.rdx as usize;
 
     let sched = crate::sched::SCHEDULER.lock();
 
@@ -626,9 +764,33 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
         crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::READ),
     ) {
         Ok(()) => {
-            crate::serial_println!("[SYSCALL] read fd={} (capability check passed)", fd);
-            // TODO: Actual read implementation
-            0
+            if let Some(fd_entry) = sched.current_process().fd_table.get(fd) {
+                if fd_entry.handle.is_pipe() {
+                    let pipe_idx = fd_entry.handle.pipe_index();
+                    let mut kernel_buf = [0u8; 4096];
+                    let read_size = core::cmp::min(count, 4096);
+
+                    match crate::process::pipe::pipe_read(pipe_idx, &mut kernel_buf[..read_size]) {
+                        crate::process::pipe::PipeResult::Ok(n) => {
+                            if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + n as u64) {
+                                return u64::MAX;
+                            }
+                            unsafe {
+                                core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
+                            }
+                            n as u64
+                        }
+                        crate::process::pipe::PipeResult::WouldBlock => EAGAIN,
+                        crate::process::pipe::PipeResult::Eof => 0,
+                        crate::process::pipe::PipeResult::BrokenPipe => u64::MAX,
+                    }
+                } else {
+                    crate::serial_println!("[SYSCALL] read fd={} (not a pipe, not implemented)", fd);
+                    0
+                }
+            } else {
+                u64::MAX
+            }
         }
         Err(_) => {
             crate::serial_println!("[SYSCALL] read fd={} (capability denied)", fd);
@@ -642,6 +804,8 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
 /// rsi = buf (user-space pointer)
 /// rdx = count
 fn sys_write(frame: &mut SyscallFrame) -> u64 {
+    const EAGAIN: u64 = u64::MAX - 1;
+
     let fd = frame.rdi as i32;
     let buf = frame.rsi as *const u8;
     let count = frame.rdx as usize;
@@ -654,24 +818,49 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
         crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::WRITE),
     ) {
         Ok(()) => {
-            // For now, handle stdin/stdout/stderr specially
-            match fd {
-                1 | 2 => {
-                    // stdout/stderr: write to serial
-                    if buf as u64 != 0 && count > 0 {
-                        let slice = unsafe {
-                            core::slice::from_raw_parts(buf, count.min(256))
-                        };
-                        if let Ok(s) = core::str::from_utf8(slice) {
-                            crate::serial_println!("{}", s);
-                        }
+            if let Some(fd_entry) = sched.current_process().fd_table.get(fd) {
+                if fd_entry.handle.is_pipe() {
+                    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64) {
+                        return u64::MAX;
                     }
-                    count as u64
+
+                    let pipe_idx = fd_entry.handle.pipe_index();
+                    let write_size = core::cmp::min(count, 4096);
+                    let mut kernel_buf = [0u8; 4096];
+
+                    unsafe {
+                        core::ptr::copy_nonoverlapping(buf, kernel_buf.as_mut_ptr(), write_size);
+                    }
+
+                    match crate::process::pipe::pipe_write(pipe_idx, &kernel_buf[..write_size]) {
+                        crate::process::pipe::PipeResult::Ok(n) => n as u64,
+                        crate::process::pipe::PipeResult::WouldBlock => EAGAIN,
+                        crate::process::pipe::PipeResult::BrokenPipe => u64::MAX,
+                        crate::process::pipe::PipeResult::Eof => u64::MAX,
+                    }
+                } else {
+                    // Handle stdin/stdout/stderr specially
+                    match fd {
+                        1 | 2 => {
+                            // stdout/stderr: write to serial
+                            if buf as u64 != 0 && count > 0 {
+                                if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64) {
+                                    return u64::MAX;
+                                }
+                                let slice = unsafe {
+                                    core::slice::from_raw_parts(buf, count.min(256))
+                                };
+                                if let Ok(s) = core::str::from_utf8(slice) {
+                                    crate::serial_println!("{}", s);
+                                }
+                            }
+                            count as u64
+                        }
+                        _ => 0
+                    }
                 }
-                _ => {
-                    // Other fds: not implemented yet
-                    0
-                }
+            } else {
+                u64::MAX
             }
         }
         Err(_) => {
@@ -853,4 +1042,25 @@ fn sys_pause() -> u64 {
 fn sys_sigreturn(_frame: &mut SyscallFrame) -> u64 {
     crate::serial_println!("[SYSCALL] sigreturn requested");
     u64::MAX
+}
+
+/// Syscall: powerctl (80)
+/// Power management: shutdown (0) or reboot (1)
+fn sys_powerctl(command: u64) -> u64 {
+    match command {
+        0 => {
+            // Shutdown
+            crate::serial_println!("[SYSCALL] shutdown requested");
+            crate::arch::x86_64::acpi::shutdown();
+        }
+        1 => {
+            // Reboot
+            crate::serial_println!("[SYSCALL] reboot requested");
+            crate::arch::x86_64::acpi::reboot();
+        }
+        _ => {
+            crate::serial_println!("[SYSCALL] unknown powerctl command: {}", command);
+            return u64::MAX;
+        }
+    }
 }

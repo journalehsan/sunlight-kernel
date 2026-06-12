@@ -99,7 +99,7 @@ struct BumpAllocator;
 #[cfg(feature = "sunlight")]
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 65536] = [0; 65536];
+        static mut HEAP: [u8; 1 * 1024 * 1024] = [0; 1 * 1024 * 1024];
         static mut NEXT: usize = 0;
         let start = NEXT;
         let align = layout.align();
@@ -127,24 +127,31 @@ mod sunlight {
     use core::fmt::Write;
 
     use sunlight_ipc::{
-        debug_log, endpoint_create, ipc_reply_and_wait, nameserver_register,
-        nameserver_lookup, ipc_call, get_init_cap, IpcMsg, InitMsg, VfsMsg,
-        CapabilityToken, SunlightSyscall,
+        debug_log, endpoint_create, get_init_cap, ipc_call, ipc_reply_and_wait, nameserver_lookup,
+        nameserver_register, CapabilityToken, InitMsg, IpcMsg, SunlightSyscall, VfsMsg,
     };
 
     const KBD_LABEL: u64 = 1;
     const OUTPUT_LABEL: u64 = 2;
     const EXIT_LABEL: u64 = 3;
     const DRAIN_LABEL: u64 = 4;
-    const MAX_LINE: usize = 128;
+    const MAX_LINE: usize = 256;
     const MAX_OUT: usize = 64;
-    const LONG_OUT_MAX: usize = 1024;
-    const LONG_OUT_CHUNK: usize = 48;
+    const LONG_OUT_MAX: usize = 16384;
+    const IPC_OUTPUT_BYTES: usize = 16;
 
     enum PasswdState {
         None,
-        PromptNew { target_user: [u8; 64], target_user_len: usize },
-        PromptConfirm { target_user: [u8; 64], target_user_len: usize, new_password: [u8; 64], new_password_len: usize },
+        PromptNew {
+            target_user: [u8; 64],
+            target_user_len: usize,
+        },
+        PromptConfirm {
+            target_user: [u8; 64],
+            target_user_len: usize,
+            new_password: [u8; 64],
+            new_password_len: usize,
+        },
     }
 
     struct Shell {
@@ -164,10 +171,11 @@ mod sunlight {
             Self {
                 line: [0; MAX_LINE],
                 line_len: 0,
-                username: [b'r', b'o', b'o', b't', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                username: [
+                    b'r', b'o', b'o', b't', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ],
                 username_len: 4,
                 uid: 0,
                 gid: 0,
@@ -180,11 +188,25 @@ mod sunlight {
         fn handle_byte(&mut self, byte: u8) -> ([u8; MAX_OUT], usize) {
             // Check if we're in password entry mode
             match &self.passwd_state {
-                PasswdState::PromptNew { target_user, target_user_len } => {
+                PasswdState::PromptNew {
+                    target_user,
+                    target_user_len,
+                } => {
                     let target = (*target_user, *target_user_len);
-                    return self.handle_passwd_input(byte, PasswdState::PromptNew { target_user: target.0, target_user_len: target.1 });
+                    return self.handle_passwd_input(
+                        byte,
+                        PasswdState::PromptNew {
+                            target_user: target.0,
+                            target_user_len: target.1,
+                        },
+                    );
                 }
-                PasswdState::PromptConfirm { target_user, target_user_len, new_password, new_password_len } => {
+                PasswdState::PromptConfirm {
+                    target_user,
+                    target_user_len,
+                    new_password,
+                    new_password_len,
+                } => {
                     let state = PasswdState::PromptConfirm {
                         target_user: *target_user,
                         target_user_len: *target_user_len,
@@ -227,7 +249,10 @@ mod sunlight {
                     let password = self.passwd_buffer[..self.passwd_buffer_len].to_vec();
 
                     match state {
-                        PasswdState::PromptNew { target_user, target_user_len } => {
+                        PasswdState::PromptNew {
+                            target_user,
+                            target_user_len,
+                        } => {
                             // Transition to confirm password prompt
                             self.passwd_state = PasswdState::PromptConfirm {
                                 target_user,
@@ -238,16 +263,26 @@ mod sunlight {
                             self.passwd_buffer_len = 0;
                             return copy_out(b"Retype new password: ");
                         }
-                        PasswdState::PromptConfirm { target_user, target_user_len, new_password, new_password_len } => {
+                        PasswdState::PromptConfirm {
+                            target_user,
+                            target_user_len,
+                            new_password,
+                            new_password_len,
+                        } => {
                             // Verify passwords match
                             if self.passwd_buffer_len != new_password_len
-                                || &self.passwd_buffer[..self.passwd_buffer_len] != &new_password[..new_password_len] {
+                                || &self.passwd_buffer[..self.passwd_buffer_len]
+                                    != &new_password[..new_password_len]
+                            {
                                 self.passwd_state = PasswdState::None;
                                 self.passwd_buffer_len = 0;
                                 return copy_out(b"passwd: passwords do not match\n");
                             }
                             // Passwords match, update shadow
-                            let result = self.update_shadow(&target_user[..target_user_len], &new_password[..new_password_len]);
+                            let result = self.update_shadow(
+                                &target_user[..target_user_len],
+                                &new_password[..new_password_len],
+                            );
                             self.passwd_state = PasswdState::None;
                             self.passwd_buffer_len = 0;
                             return result;
@@ -320,6 +355,19 @@ mod sunlight {
             let cmd = parts.next().unwrap_or("");
             let args: alloc::vec::Vec<&str> = parts.collect();
 
+            // Handle shutdown and reboot specially (they don't return)
+            match cmd {
+                "shutdown" => {
+                    self.cmd_shutdown();
+                    unreachable!();
+                }
+                "reboot" => {
+                    self.cmd_reboot();
+                    unreachable!();
+                }
+                _ => {}
+            }
+
             let out: &[u8] = match cmd {
                 "whoami" => self.cmd_whoami(),
                 "id" => self.cmd_id(&args),
@@ -331,11 +379,13 @@ mod sunlight {
                 "chown" => self.cmd_chown(&args),
                 "sysfetch" => self.cmd_sysfetch(),
                 "hostnamectl" => self.cmd_hostnamectl(),
-                "help" => b"Builtins: whoami, id, uname, useradd, userdel, passwd, groups, chmod, chown, sysfetch, hostnamectl, help, echo, cat\n",
+                "free" => self.cmd_free(),
+                "uptime" => self.cmd_uptime(),
+                "help" => b"Builtins: whoami, id, uname, useradd, userdel, passwd, groups, chmod, chown, sysfetch, hostnamectl, free, uptime, help, echo, cat, shutdown, reboot\n",
                 "echo" => self.cmd_echo(&args),
                 "cat" => self.cmd_cat(&args),
                 "uname" => self.cmd_uname(&args),
-                "clear" => b"",
+                "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
                 _ => b"sshl: command not found\n",
             };
@@ -416,7 +466,11 @@ mod sunlight {
                             username_bytes[i * 8 + j] = b;
                         }
                     }
-                    let username_len = username_bytes.iter().position(|&b| b == 0).unwrap_or(64).min(64);
+                    let username_len = username_bytes
+                        .iter()
+                        .position(|&b| b == 0)
+                        .unwrap_or(64)
+                        .min(64);
                     self.username[..username_len].copy_from_slice(&username_bytes[..username_len]);
                     self.username_len = username_len;
                 }
@@ -450,10 +504,15 @@ mod sunlight {
                 unsafe {
                     static mut BUF: [u8; 64] = [0u8; 64];
                     let buf = &mut BUF;
-                    let username_str = core::str::from_utf8(&self.username[..self.username_len])
-                        .unwrap_or("root");
-                    let prefix = alloc::format!("uid={}({}) gid={}(root) groups={}(root)",
-                        self.uid, username_str, self.gid, self.gid);
+                    let username_str =
+                        core::str::from_utf8(&self.username[..self.username_len]).unwrap_or("root");
+                    let prefix = alloc::format!(
+                        "uid={}({}) gid={}(root) groups={}(root)",
+                        self.uid,
+                        username_str,
+                        self.gid,
+                        self.gid
+                    );
                     let bytes = prefix.as_bytes();
                     let len = bytes.len().min(buf.len());
                     buf[..len].copy_from_slice(&bytes[..len]);
@@ -466,7 +525,8 @@ mod sunlight {
                 unsafe {
                     static mut BUF: [u8; 64] = [0u8; 64];
                     let buf = &mut BUF;
-                    let prefix = alloc::format!("uid={}({}) gid={}({})", uid, args[0], gid, "users");
+                    let prefix =
+                        alloc::format!("uid={}({}) gid={}({})", uid, args[0], gid, "users");
                     let bytes = prefix.as_bytes();
                     let len = bytes.len().min(buf.len());
                     buf[..len].copy_from_slice(&bytes[..len]);
@@ -496,7 +556,12 @@ mod sunlight {
             let new_uid = if max_uid < 1000 { 1000 } else { max_uid + 1 };
 
             let mut new_passwd = alloc::string::String::from_utf8_lossy(&passwd_data).into_owned();
-            new_passwd.push_str(&alloc::format!("{}:x:{}:100::/home/{}:/bin/sh\n", username, new_uid, username));
+            new_passwd.push_str(&alloc::format!(
+                "{}:x:{}:100::/home/{}:/bin/sh\n",
+                username,
+                new_uid,
+                username
+            ));
 
             let shadow_data = read_file(vfs_cap, "/etc/shadow");
             let mut new_shadow = alloc::string::String::from_utf8_lossy(&shadow_data).into_owned();
@@ -548,7 +613,13 @@ mod sunlight {
 
             let mut new_passwd = alloc::string::String::new();
             for line in alloc::string::String::from_utf8_lossy(&passwd_data).lines() {
-                if !line.starts_with(username) || !line.as_bytes().get(username.len()).map(|&b| b == b':').unwrap_or(false) {
+                if !line.starts_with(username)
+                    || !line
+                        .as_bytes()
+                        .get(username.len())
+                        .map(|&b| b == b':')
+                        .unwrap_or(false)
+                {
                     new_passwd.push_str(line);
                     new_passwd.push('\n');
                 }
@@ -556,7 +627,13 @@ mod sunlight {
 
             let mut new_shadow = alloc::string::String::new();
             for line in alloc::string::String::from_utf8_lossy(&shadow_data).lines() {
-                if !line.starts_with(username) || !line.as_bytes().get(username.len()).map(|&b| b == b':').unwrap_or(false) {
+                if !line.starts_with(username)
+                    || !line
+                        .as_bytes()
+                        .get(username.len())
+                        .map(|&b| b == b':')
+                        .unwrap_or(false)
+                {
                     new_shadow.push_str(line);
                     new_shadow.push('\n');
                 }
@@ -567,7 +644,7 @@ mod sunlight {
                 let mut modified = alloc::string::String::from(line);
                 if modified.contains("users:x:100:") {
                     modified = modified.replace(&alloc::format!("{},", username), "");
-                    modified = modified.replace(&alloc::format!(",{}" , username), "");
+                    modified = modified.replace(&alloc::format!(",{}", username), "");
                     modified = modified.replace(username, "");
                 }
                 new_group.push_str(&modified);
@@ -668,7 +745,8 @@ mod sunlight {
                     // Replace password in this entry
                     new_shadow.push_str(&alloc::format!(
                         "{}:{}:0:0:99999:7:::\n",
-                        target_username, new_password_str
+                        target_username,
+                        new_password_str
                     ));
                     found = true;
                 } else {
@@ -681,7 +759,8 @@ mod sunlight {
             if !found {
                 new_shadow.push_str(&alloc::format!(
                     "{}:{}:0:0:99999:7:::\n",
-                    target_username, new_password_str
+                    target_username,
+                    new_password_str
                 ));
             }
 
@@ -756,8 +835,7 @@ mod sunlight {
             let mode_str = args[0];
             let path = args[1];
             let mode = parse_mode(mode_str).unwrap_or(0);
-            let msg = path_msg(VfsMsg::CHMOD, path)
-                .word(4, mode as u64);
+            let msg = path_msg(VfsMsg::CHMOD, path).word(4, mode as u64);
             let reply = ipc_call(vfs_cap, msg);
             if reply.label == VfsMsg::REPLY && reply.words[0] == 0 {
                 b""
@@ -808,9 +886,9 @@ mod sunlight {
             let len = crate::sysfetch::render_sysfetch_to_buffer(
                 "root",
                 "SunlightOS 0.1.0",
-                1337,  // uptime seconds
-                240,   // memory used (MiB)
-                256,   // memory total (MiB)
+                1337, // uptime seconds
+                240,  // memory used (MiB)
+                256,  // memory total (MiB)
                 &mut buf,
             );
 
@@ -825,6 +903,61 @@ mod sunlight {
             }
 
             b""
+        }
+
+        fn cmd_free(&self) -> &[u8] {
+            debug_log("[TTY]  free invoked");
+            unsafe {
+                LONG_OUT_ACTIVE = true;
+            }
+
+            // Hardcoded for now (would need kernel syscall for real values)
+            let total_mb = 256u32;
+            let used_mb = 48u32;
+            let free_mb = total_mb - used_mb;
+            let percent = (used_mb as u64 * 100) / total_mb as u64;
+
+            push_line("              total    used    free    percent");
+            let line = alloc::format!(
+                "Memory:        {}M      {}M     {}M     {}%",
+                total_mb,
+                used_mb,
+                free_mb,
+                percent
+            );
+            push_line(&line);
+
+            b""
+        }
+
+        fn cmd_uptime(&self) -> &[u8] {
+            debug_log("[TTY]  uptime invoked");
+
+            // Hardcoded for now (would need kernel syscall for real uptime)
+            let uptime_secs = 86400u64 + 3600u64 * 2 + 45 * 60; // ~1 day 2h 45m
+            let days = uptime_secs / 86400;
+            let hours = (uptime_secs % 86400) / 3600;
+            let mins = (uptime_secs % 3600) / 60;
+            let user_count = 1;
+
+            unsafe {
+                static mut BUF: [u8; 128] = [0u8; 128];
+                let buf = &mut BUF;
+                let uptime_str = alloc::format!(
+                    " {}:{}:{:02} up {} day, {}:{:02}, {} user",
+                    9,
+                    45,
+                    30,
+                    days,
+                    hours,
+                    mins,
+                    user_count
+                ); // HH:MM:SS hardcoded
+                let bytes = uptime_str.as_bytes();
+                let len = bytes.len().min(buf.len());
+                buf[..len].copy_from_slice(&bytes[..len]);
+                &buf[..len]
+            }
         }
 
         fn cmd_hostnamectl(&self) -> &[u8] {
@@ -879,6 +1012,30 @@ mod sunlight {
             push_blank();
             b""
         }
+
+        fn cmd_shutdown(&self) -> ! {
+            debug_log("[TTY]  cmd: shutdown -> Broadcasting system shutdown loop...");
+            unsafe {
+                core::arch::asm!(
+                    "mov rax, 80", // PowerCtl syscall number
+                    "mov rdi, 0",  // 0 = shutdown
+                    "syscall",
+                    options(noreturn),
+                );
+            }
+        }
+
+        fn cmd_reboot(&self) -> ! {
+            debug_log("[TTY]  cmd: reboot -> Broadcasting system reboot loop...");
+            unsafe {
+                core::arch::asm!(
+                    "mov rax, 80", // PowerCtl syscall number
+                    "mov rdi, 1",  // 1 = reboot
+                    "syscall",
+                    options(noreturn),
+                );
+            }
+        }
     }
 
     fn copy_out(data: &[u8]) -> ([u8; MAX_OUT], usize) {
@@ -913,9 +1070,13 @@ mod sunlight {
 
     fn push_label_value_bytes(label: &[u8], value: &[u8]) {
         long_out_push_str("  \x1b[1m");
-        for &b in label.iter() { long_out_push_byte(b); }
+        for &b in label.iter() {
+            long_out_push_byte(b);
+        }
         long_out_push_str("\x1b[0m ");
-        for &b in value.iter() { long_out_push_byte(b); }
+        for &b in value.iter() {
+            long_out_push_byte(b);
+        }
         long_out_push_byte(b'\n');
     }
 
@@ -971,7 +1132,10 @@ mod sunlight {
             }
             offset += n;
         }
-        let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+        let _ = ipc_call(
+            vfs_cap,
+            IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+        );
         out
     }
 
@@ -1006,17 +1170,29 @@ mod sunlight {
             }
             let reply = ipc_call(vfs_cap, msg);
             if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
-                let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+                let _ = ipc_call(
+                    vfs_cap,
+                    IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+                );
                 return Err(());
             }
             let n = reply.words[1] as usize;
             offset += n;
         }
-        let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+        let _ = ipc_call(
+            vfs_cap,
+            IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+        );
         Ok(())
     }
 
-    fn mkdir(vfs_cap: CapabilityToken, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), ()> {
+    fn mkdir(
+        vfs_cap: CapabilityToken,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<(), ()> {
         let msg = path_msg(VfsMsg::MKDIR, path)
             .word(4, uid as u64)
             .word(5, gid as u64)
@@ -1106,13 +1282,14 @@ mod sunlight {
     }
 
     fn pack_output(data: &[u8]) -> IpcMsg {
+        let len = data.len().min(IPC_OUTPUT_BYTES);
         let mut msg = IpcMsg::with_label(OUTPUT_LABEL)
-            .word(0, data.len() as u64)
+            .word(0, len as u64)
             .word(1, 0);
         let mut word = 0u64;
         let mut byte_idx = 0;
         let mut word_idx = 2;
-        for &b in data.iter().take(40) {
+        for &b in data.iter().take(len) {
             word |= (b as u64) << (byte_idx * 8);
             byte_idx += 1;
             if byte_idx == 8 {
@@ -1120,23 +1297,26 @@ mod sunlight {
                 word = 0;
                 byte_idx = 0;
                 word_idx += 1;
-                if word_idx >= 8 { break; }
+                if word_idx >= 4 {
+                    break;
+                }
             }
         }
-        if byte_idx > 0 && word_idx < 8 {
+        if byte_idx > 0 && word_idx < 4 {
             msg = msg.word(word_idx, word);
         }
         msg
     }
 
     fn pack_long_output(data: &[u8], more_remaining: usize) -> IpcMsg {
+        let len = data.len().min(IPC_OUTPUT_BYTES);
         let mut msg = IpcMsg::with_label(OUTPUT_LABEL)
-            .word(0, data.len() as u64)
+            .word(0, len as u64)
             .word(1, more_remaining as u64);
         let mut word = 0u64;
         let mut byte_idx = 0;
         let mut word_idx = 2;
-        for &b in data.iter() {
+        for &b in data.iter().take(len) {
             word |= (b as u64) << (byte_idx * 8);
             byte_idx += 1;
             if byte_idx == 8 {
@@ -1144,10 +1324,12 @@ mod sunlight {
                 word = 0;
                 byte_idx = 0;
                 word_idx += 1;
-                if word_idx >= 8 { break; }
+                if word_idx >= 4 {
+                    break;
+                }
             }
         }
-        if byte_idx > 0 && word_idx < 8 {
+        if byte_idx > 0 && word_idx < 4 {
             msg = msg.word(word_idx, word);
         }
         msg
@@ -1159,6 +1341,67 @@ mod sunlight {
         let mut pos = prefix.len();
         pos += fmt_u64_into(&mut buf[pos..], shell_id);
         core::str::from_utf8(&buf[..pos]).unwrap_or("sshl0")
+    }
+
+    fn send_system_stats_header() {
+        // System stats banner: CPU % and RAM % display
+        let cpu_percent = 15; // Placeholder: would be calculated from scheduler in Phase 5.12
+        let ram_total = 256u32;
+        let ram_used = 48u32;
+        let ram_percent = (ram_used as u64 * 100) / ram_total as u64;
+
+        // ANSI colors
+        let bold = "\x1B[1m";
+        let cyan = "\x1B[36m";
+        let green = "\x1B[32m";
+        let yellow = "\x1B[33m";
+        let reset = "\x1B[0m";
+
+        // Color code CPU usage
+        let cpu_color = if cpu_percent < 50 {
+            green
+        } else if cpu_percent < 80 {
+            yellow
+        } else {
+            "\x1B[31m" // red
+        };
+
+        // Color code RAM usage
+        let ram_color = if ram_percent < 50 {
+            green
+        } else if ram_percent < 80 {
+            yellow
+        } else {
+            "\x1B[31m" // red
+        };
+
+        // Build header string
+        let header = alloc::format!(
+            "{}╔═══════════════════════════════════╗{}{}╝{}\n\
+             {}║{}  CPU: {}{}%{} │ RAM: {}{}%{} ({}MB)  {}║{}\n\
+             {}╚═══════════════════════════════════╝{}\n",
+            cyan,
+            reset,
+            bold,
+            reset,
+            cyan,
+            reset,
+            cpu_color,
+            cpu_percent,
+            reset,
+            ram_color,
+            ram_percent as u32,
+            reset,
+            ram_used,
+            reset,
+            reset,
+            cyan,
+            reset
+        );
+
+        // Push header into long output buffer
+        long_out_push_str(&header);
+        long_out_push_byte(b'\n');
     }
 
     fn fmt_u64_into(buf: &mut [u8], val: u64) -> usize {
@@ -1191,13 +1434,22 @@ mod sunlight {
         }
     }
 
+    fn long_out_replace(data: &[u8]) {
+        unsafe {
+            LONG_OUT_ACTIVE = true;
+            LONG_OUT_LEN = 0;
+            let to_copy = data.len().min(LONG_OUT_MAX);
+            LONG_OUT_BUF[..to_copy].copy_from_slice(&data[..to_copy]);
+            LONG_OUT_LEN = to_copy;
+        }
+    }
+
     fn long_out_push_str(s: &str) {
         unsafe {
             let bytes = s.as_bytes();
             let space = LONG_OUT_MAX - LONG_OUT_LEN;
             let to_copy = bytes.len().min(space);
-            LONG_OUT_BUF[LONG_OUT_LEN..LONG_OUT_LEN + to_copy]
-                .copy_from_slice(&bytes[..to_copy]);
+            LONG_OUT_BUF[LONG_OUT_LEN..LONG_OUT_LEN + to_copy].copy_from_slice(&bytes[..to_copy]);
             LONG_OUT_LEN += to_copy;
         }
     }
@@ -1228,28 +1480,54 @@ mod sunlight {
         // Load real user info from VFS by uid (GETPWUID returns uid, gid, AND username)
         // This is more robust than hardcoded uid→username mapping
         shell.load_user_by_uid(uid as u32);
+
+        // Send welcome banner with system stats (clear screen first)
+        unsafe {
+            LONG_OUT_ACTIVE = true;
+            LONG_OUT_LEN = 0;
+        }
+
+        // Write clear screen + home cursor to LONG_OUT_BUF
+        unsafe {
+            LONG_OUT_BUF[0] = b'\x1B';
+            LONG_OUT_BUF[1] = b'[';
+            LONG_OUT_BUF[2] = b'2';
+            LONG_OUT_BUF[3] = b'J';
+            LONG_OUT_BUF[4] = b'\x1B';
+            LONG_OUT_BUF[5] = b'[';
+            LONG_OUT_BUF[6] = b'H';
+            LONG_OUT_LEN = 7;
+        }
+
+        // Send welcome banner
+        long_out_push_str("\x1b[36m"); // cyan
+        long_out_push_str("Welcome to SunlightOS v0.1\n");
+        long_out_push_str("\x1b[0m"); // reset
+        long_out_push_str("A lightweight microkernel OS for x86_64\n");
+        long_out_push_str("Type 'help' for available commands\n");
+        long_out_push_str("\n");
+
+        send_system_stats_header();
+
         let mut msg = ipc_reply_and_wait(ep, IpcMsg::with_label(0));
         loop {
             // Drain request from tty_server: send the next chunk of long output
             if msg.label == DRAIN_LABEL {
                 let total = unsafe { LONG_OUT_LEN };
-                let offset = msg.words[0] as usize * LONG_OUT_CHUNK;
+                let offset = msg.words[0] as usize * IPC_OUTPUT_BYTES;
                 if offset >= total {
                     // Nothing more — return empty marker
                     msg = ipc_reply_and_wait(
                         ep,
-                        IpcMsg::with_label(OUTPUT_LABEL)
-                            .word(0, 0)
-                            .word(1, 0),
+                        IpcMsg::with_label(OUTPUT_LABEL).word(0, 0).word(1, 0),
                     );
                     continue;
                 }
                 let remaining = total - offset;
-                let chunk_size = remaining.min(LONG_OUT_CHUNK);
-                let mut tmp = [0u8; LONG_OUT_CHUNK];
+                let chunk_size = remaining.min(IPC_OUTPUT_BYTES);
+                let mut tmp = [0u8; IPC_OUTPUT_BYTES];
                 unsafe {
-                    tmp[..chunk_size]
-                        .copy_from_slice(&LONG_OUT_BUF[offset..offset + chunk_size]);
+                    tmp[..chunk_size].copy_from_slice(&LONG_OUT_BUF[offset..offset + chunk_size]);
                 }
                 let more_remaining = remaining.saturating_sub(chunk_size);
                 let chunk_reply = pack_long_output(&tmp[..chunk_size], more_remaining);
@@ -1260,16 +1538,23 @@ mod sunlight {
             // Kbd event
             let reply = if msg.label == KBD_LABEL {
                 let byte = msg.words[0] as u8;
+                let is_enter = byte == b'\n' || byte == b'\r';
+                let is_poll = byte == 0;
                 // Snapshot the full command (with args) BEFORE handle_byte
                 // resets line_len to 0 on Enter. This is what gets logged.
-                let is_enter = byte == b'\n' || byte == b'\r';
                 let cmd_snap_len = if is_enter { shell.line_len } else { 0 };
                 let mut cmd_snap = [0u8; MAX_LINE];
                 if is_enter {
                     cmd_snap[..cmd_snap_len].copy_from_slice(&shell.line[..cmd_snap_len]);
                 }
-                long_out_reset();
-                let (out, out_len) = shell.handle_byte(byte);
+                let mut out = [0u8; MAX_OUT];
+                let mut out_len = 0usize;
+                if !is_poll {
+                    long_out_reset();
+                    let handled = shell.handle_byte(byte);
+                    out = handled.0;
+                    out_len = handled.1;
+                }
                 if out_len > 0 {
                     debug_log_cmd_output(&cmd_snap[..cmd_snap_len], &out[..out_len]);
                 }
@@ -1277,13 +1562,18 @@ mod sunlight {
                     IpcMsg::with_label(EXIT_LABEL)
                 } else if unsafe { LONG_OUT_ACTIVE } {
                     let total = unsafe { LONG_OUT_LEN };
-                    let chunk_size = total.min(LONG_OUT_CHUNK);
-                    let mut tmp = [0u8; LONG_OUT_CHUNK];
+                    let chunk_size = total.min(IPC_OUTPUT_BYTES);
+                    let mut tmp = [0u8; IPC_OUTPUT_BYTES];
                     unsafe {
                         tmp[..chunk_size].copy_from_slice(&LONG_OUT_BUF[..chunk_size]);
                     }
                     let more_remaining = total.saturating_sub(chunk_size);
                     pack_long_output(&tmp[..chunk_size], more_remaining)
+                } else if out_len > IPC_OUTPUT_BYTES {
+                    long_out_replace(&out[..out_len]);
+                    let chunk_size = out_len.min(IPC_OUTPUT_BYTES);
+                    let more_remaining = out_len.saturating_sub(chunk_size);
+                    pack_long_output(&out[..chunk_size], more_remaining)
                 } else {
                     pack_output(&out[..out_len])
                 }
@@ -1307,7 +1597,11 @@ mod sunlight {
         pos += arrow.len();
         let olen = output.len().min(64);
         // Remove trailing newline for log
-        let olen = if olen > 0 && output[olen - 1] == b'\n' { olen - 1 } else { olen };
+        let olen = if olen > 0 && output[olen - 1] == b'\n' {
+            olen - 1
+        } else {
+            olen
+        };
         buf[pos..pos + olen].copy_from_slice(&output[..olen]);
         pos += olen;
         if let Ok(s) = core::str::from_utf8(&buf[..pos]) {

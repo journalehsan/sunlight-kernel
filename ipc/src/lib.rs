@@ -19,6 +19,7 @@ pub enum SunlightSyscall {
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
+    GetTimeUtc = 50,
     DebugLog = 99,
 }
 
@@ -94,6 +95,16 @@ pub mod TimerMsg {
     pub const GET_TICKS: u64 = 2;
     pub const REPLY: u64 = 3;
     pub const ERROR: u64 = 4;
+}
+
+#[allow(non_snake_case)]
+pub mod TimeMsg {
+    pub const GET_TIME: u64 = 1;           // Query current UTC time
+    pub const GET_STATE: u64 = 2;          // Get full TimeState
+    pub const SET_TIMEZONE: u64 = 3;       // Reload timezone config
+    pub const SYNC_NTP: u64 = 4;           // Trigger NTP sync
+    pub const REPLY: u64 = 100;
+    pub const ERROR: u64 = 101;
 }
 
 #[allow(non_snake_case)]
@@ -364,6 +375,12 @@ pub fn process_yield() {
     unsafe {
         raw_syscall(SunlightSyscall::ProcessYield, 0, 0, 0, 0, 0, 0, 0);
     }
+}
+
+pub fn get_time_utc() -> u64 {
+    // SAFETY: GetTimeUtc takes no user pointers.
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetTimeUtc, 0, 0, 0, 0, 0, 0, 0) };
+    ret
 }
 
 pub struct ProcessExit;

@@ -224,6 +224,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-timed"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ipc",
+]
+
+[[package]]
 name = "sunlight-timer-server"
 version = "0.1.0"
 dependencies = [

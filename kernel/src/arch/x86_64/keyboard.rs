@@ -98,6 +98,8 @@ pub mod keycode {
     pub const RIGHT_SHIFT: u8 = 0x36;
     pub const RIGHT_CTRL_EXT: u8 = 0x1D; // prefixed with 0xE0
     pub const RIGHT_ALT_EXT: u8 = 0x38; // prefixed with 0xE0
+    pub const PAGE_UP_EXT: u8 = 0x49;   // prefixed with 0xE0
+    pub const PAGE_DOWN_EXT: u8 = 0x51; // prefixed with 0xE0
     pub const EXTENDED_PREFIX: u8 = 0xE0;
     pub const RELEASE_MASK: u8 = 0x80;
 }

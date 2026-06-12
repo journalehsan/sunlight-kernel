@@ -7,7 +7,7 @@ struct BumpAllocator;
 
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 65536] = [0; 65536];
+        static mut HEAP: [u8; 4 * 1024 * 1024] = [0; 4 * 1024 * 1024];
         static mut NEXT: usize = 0;
         let start = NEXT;
         let align = layout.align();
@@ -27,9 +27,11 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
-    CapabilityToken, IpcMsg, KbdMsg, SpawnMsg, unpack_key_event,
+    unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
 };
 use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
+use sunlight_tty::TerminalGrid;
+use sunlight_tui::ANSI_COLORS;
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -45,10 +47,57 @@ const KBD_LABEL: u64 = 1;
 const OUTPUT_LABEL: u64 = 2;
 const EXIT_LABEL: u64 = 3;
 const DRAIN_LABEL: u64 = 4;
-const TERM_OUTPUT_MAX: usize = 2048;
-const INPUT_LINE_MAX: usize = 128;
+const TERM_OUTPUT_MAX: usize = 4096;
+const IPC_OUTPUT_BYTES: usize = 16;
+const INPUT_LINE_MAX: usize = 256;
 const PENDING_INPUT_MAX: usize = 128;
 const MAX_TABS: usize = 10;
+
+/// Per-tab scrollback viewport state
+#[derive(Clone, Copy)]
+struct TabScrollback {
+    viewport_offset: usize,
+}
+
+impl TabScrollback {
+    const fn new() -> Self {
+        Self { viewport_offset: 0 }
+    }
+}
+
+/// Terminal geometry: current dimensions and viewport state
+#[derive(Clone, Copy, Debug)]
+pub struct TerminalGeometry {
+    pub cols: u32,
+    pub rows: u32,
+    pub viewport_offset: usize,
+    pub max_scrollback: usize,
+}
+
+impl TerminalGeometry {
+    const fn new() -> Self {
+        Self {
+            cols: 80,
+            rows: 24,
+            viewport_offset: 0,
+            max_scrollback: 256,
+        }
+    }
+
+    fn update(&mut self, cols: u32, rows: u32, viewport_offset: usize) {
+        self.cols = cols;
+        self.rows = rows;
+        self.viewport_offset = viewport_offset;
+    }
+
+    fn set_viewport(&mut self, offset: usize) {
+        self.viewport_offset = offset;
+    }
+}
+
+/// Global terminal geometry state (per tab)
+static mut TERMINAL_GEOMETRY: [TerminalGeometry; MAX_TABS] =
+    [TerminalGeometry { cols: 80, rows: 24, viewport_offset: 0, max_scrollback: 256 }; MAX_TABS];
 
 #[derive(Clone, Copy)]
 struct ShellTab {
@@ -64,6 +113,10 @@ struct ShellTab {
     username: [u8; 32],
     username_len: usize,
 }
+
+/// Global scrollback state for all tabs (indexed by active_tab)
+static mut SCROLLBACK_STATE: [TabScrollback; MAX_TABS] =
+    [TabScrollback { viewport_offset: 0 }; MAX_TABS];
 
 impl ShellTab {
     const fn empty() -> Self {
@@ -130,7 +183,12 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
                     let result = login.handle_key_ascii(ascii);
                     match result {
-                        LoginResult::Success { username, username_len, uid, gid } => {
+                        LoginResult::Success {
+                            username,
+                            username_len,
+                            uid,
+                            gid,
+                        } => {
                             debug_log_login_success(&username[..username_len], uid, gid);
                             debug_log("[SunlightOS] Phase 3.7 OK");
 
@@ -173,18 +231,14 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             debug_log("[TTY]  Built-in shell ready");
                             if has_fb {
                                 render_active_shell_fb(
-                                    fb_addr,
-                                    fb32_w,
-                                    fb32_h,
-                                    fb32_p,
-                                    &tabs,
-                                    tab_count,
-                                    active_tab,
+                                    fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
                                 );
                             }
                             logged_in = true;
                         }
-                        LoginResult::Locked => { debug_log("[TTY]  Login locked"); }
+                        LoginResult::Locked => {
+                            debug_log("[TTY]  Login locked");
+                        }
                         LoginResult::Pending => {}
                     }
                 }
@@ -195,11 +249,56 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             }
             TtyState::Shell => {
                 let mut needs_render = false;
+                let prev_output_len = active_shell_tab(&tabs, active_tab)
+                    .map(|tab| tab.output_len)
+                    .unwrap_or(0);
 
                 // Lazy lookup: try to find sshl once it registers after being spawned.
                 if msg.label == KbdMsg::KEY_EVENT {
-                    let (_keycode, pressed, _shift, ctrl, _alt, ctrl_ascii) = unpack_key_event(msg.words[0]);
-                    if pressed && ctrl {
+                    let (keycode, pressed, shift, ctrl, _alt, ctrl_ascii) =
+                        unpack_key_event(msg.words[0]);
+
+                    // Scrollback viewport control
+                    // - Ctrl+Up/Down: scroll by 1 line
+                    // - Shift+PageUp/Down: scroll by full page (rows at a time)
+                    let is_ctrl_scroll = pressed && ctrl && (keycode == 0x48 || keycode == 0x50);
+                    let is_shift_page = pressed && shift && (keycode == 0x49 || keycode == 0x51);
+
+                    if is_ctrl_scroll || is_shift_page {
+                        unsafe {
+                            let scrollback = &mut SCROLLBACK_STATE[active_tab];
+                            match keycode {
+                                0x48 if ctrl => {
+                                    // Ctrl+Up: scroll up by 1 line
+                                    scrollback.viewport_offset =
+                                        (scrollback.viewport_offset + 1).min(256);
+                                    needs_render = true;
+                                }
+                                0x50 if ctrl => {
+                                    // Ctrl+Down: scroll down by 1 line
+                                    scrollback.viewport_offset =
+                                        scrollback.viewport_offset.saturating_sub(1);
+                                    needs_render = true;
+                                }
+                                0x49 if shift => {
+                                    // Shift+PageUp: scroll up by multiple lines (full page)
+                                    scrollback.viewport_offset =
+                                        (scrollback.viewport_offset + 24).min(256);
+                                    needs_render = true;
+                                }
+                                0x51 if shift => {
+                                    // Shift+PageDown: scroll down by multiple lines
+                                    if scrollback.viewport_offset >= 24 {
+                                        scrollback.viewport_offset -= 24;
+                                    } else {
+                                        scrollback.viewport_offset = 0;
+                                    }
+                                    needs_render = true;
+                                }
+                                _ => {}
+                            }
+                        }
+                    } else if pressed && ctrl {
                         if let Some(a) = ctrl_ascii {
                             if handle_ctrl_key(
                                 a,
@@ -218,7 +317,19 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
                 resolve_active_shell(&mut tabs, active_tab, &mut logged_initial_spawn);
 
+                // Check if shell was just resolved and has greeting output to render
+                let current_output_len = active_shell_tab(&tabs, active_tab)
+                    .map(|tab| tab.output_len)
+                    .unwrap_or(0);
+                if current_output_len > prev_output_len {
+                    needs_render = true;
+                }
+
                 if let Some(ascii) = key_ascii_from_msg(&msg) {
+                    // Reset scrollback on any normal keypress (return to live view)
+                    unsafe {
+                        SCROLLBACK_STATE[active_tab].viewport_offset = 0;
+                    }
                     if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
                         update_input_echo(
                             ascii,
@@ -232,12 +343,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         needs_render = true;
 
                         if let Some(cap) = tab.cap {
-                            let exited = send_key_to_shell(
-                                cap,
-                                ascii,
-                                &mut tab.output,
-                                &mut tab.output_len,
-                            );
+                            let exited =
+                                send_key_to_shell(cap, ascii, &mut tab.output, &mut tab.output_len);
                             if exited {
                                 state = TtyState::Login;
                                 reset_login(&mut login);
@@ -249,6 +356,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 }
                                 continue;
                             }
+                            // Output was received from shell - ensure immediate render
+                            needs_render = true;
                         } else if tab.pending_len < tab.pending.len() {
                             tab.pending[tab.pending_len] = ascii;
                             tab.pending_len += 1;
@@ -258,13 +367,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
                 if has_fb && needs_render {
                     render_active_shell_fb(
-                        fb_addr,
-                        fb32_w,
-                        fb32_h,
-                        fb32_p,
-                        &tabs,
-                        tab_count,
-                        active_tab,
+                        fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
                     );
                 }
             }
@@ -272,6 +375,29 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
         let reply = IpcMsg::with_label(0);
         msg = ipc_reply_and_wait(ep, reply);
+    }
+}
+
+/// Get current terminal geometry for the active tab
+pub fn get_terminal_geometry(tab_idx: usize) -> Option<TerminalGeometry> {
+    if tab_idx < MAX_TABS {
+        unsafe { Some(TERMINAL_GEOMETRY[tab_idx]) }
+    } else {
+        None
+    }
+}
+
+/// Get terminal dimensions (cols, rows) for the active tab
+pub fn get_terminal_dims(tab_idx: usize) -> Option<(u32, u32)> {
+    get_terminal_geometry(tab_idx).map(|g| (g.cols, g.rows))
+}
+
+/// Get current viewport offset for the active tab
+pub fn get_viewport_offset(tab_idx: usize) -> usize {
+    if tab_idx < MAX_TABS {
+        unsafe { TERMINAL_GEOMETRY[tab_idx].viewport_offset }
+    } else {
+        0
     }
 }
 
@@ -299,6 +425,21 @@ fn render_active_shell_fb(
     tab_count: usize,
     active_tab: usize,
 ) {
+    // Compute terminal dimensions (8x16 glyphs, accounting for chrome)
+    // Header: 48px, Tab bar: 26px, Footer: 32px, margins: 16px top/bottom
+    let char_w: u32 = 8;
+    let char_h: u32 = 16;
+    let chrome_h: u32 = 48 + 26 + 32 + 8; // header + tabbar + footer + gaps
+    let avail_h = fb_h.saturating_sub(chrome_h);
+    let rows = (avail_h / char_h) as usize;
+    let cols = (fb_w / char_w) as usize;
+
+    // Update terminal geometry state
+    unsafe {
+        let viewport_offset = SCROLLBACK_STATE[active_tab].viewport_offset;
+        TERMINAL_GEOMETRY[active_tab].update(cols as u32, rows as u32, viewport_offset);
+    }
+
     let mut prompt_buf = [0u8; 32];
     let (output, input_line, prompt_slice) = active_shell_tab(tabs, active_tab)
         .map(|tab| {
@@ -310,15 +451,37 @@ fn render_active_shell_fb(
             )
         })
         .unwrap_or((&[][..], &[][..], b"root@sunlight:/$ "));
+
+    // Parse output into a terminal-sized grid. The framebuffer renderer already
+    // offsets this grid below the title/tab chrome, so the VT cursor must stay
+    // relative to the terminal content, not the full framebuffer.
+    let mut grid = TerminalGrid::new(cols, rows);
+    grid.feed(output);
+    let (cursor_row, cursor_col) = grid.cursor();
+
+    // Get viewport offset for scrollback
+    let viewport_offset = unsafe { SCROLLBACK_STATE[active_tab].viewport_offset };
+
+    // Render with scrollback offset if active
+    let term_cells = if viewport_offset > 0 {
+        grid.to_term_cells_with_offset(&ANSI_COLORS, viewport_offset)
+    } else {
+        grid.to_term_cells(&ANSI_COLORS)
+    };
+
     unsafe {
-        sunlight_tui::render_tty_shell(
+        sunlight_tui::render_terminal_grid(
             fb_addr as *mut u32,
             fb_w,
             fb_h,
             fb_p,
             tab_count.max(1),
             active_tab,
-            output,
+            cols,
+            rows,
+            &term_cells,
+            cursor_row,
+            cursor_col,
             input_line,
             prompt_slice,
         );
@@ -430,7 +593,9 @@ fn handle_ctrl_key(
     match ascii {
         b't' | b'T' => {
             if let Some(cap) = spawn_cap {
-                if spawn_tab(tabs, tab_count, active_tab, next_shell_id, cap, 0, 0) && !*phase3_6_done {
+                if spawn_tab(tabs, tab_count, active_tab, next_shell_id, cap, 0, 0)
+                    && !*phase3_6_done
+                {
                     debug_log("[TTY]  Ctrl+T test: new tab OK");
                     debug_log("[SunlightOS] Phase 3.6 OK");
                     *phase3_6_done = true;
@@ -502,6 +667,10 @@ fn resolve_active_shell(
             debug_log("[TTY]  sunshell endpoint found");
             *logged_initial_spawn = false;
         }
+        // Trigger the shell's greeting by sending a null byte (ignored by shell)
+        // This causes the shell to immediately reply with its greeting output
+        let _ = send_key_to_shell(cap, 0x00, &mut tab.output, &mut tab.output_len);
+
         let pending_len = tab.pending_len;
         for i in 0..pending_len {
             let b = tab.pending[i];
@@ -517,7 +686,11 @@ fn key_ascii_from_msg(msg: &IpcMsg) -> Option<u8> {
         // Suppress ctrl combos: Ctrl+T, Ctrl+1 etc. are handled by tty_server
         // itself and must NOT be forwarded as bare ASCII to the shell (which
         // would corrupt its line buffer, e.g. turning "id" into "1id").
-        if pressed && !ctrl { ascii } else { None }
+        if pressed && !ctrl {
+            ascii
+        } else {
+            None
+        }
     } else {
         None
     }
@@ -598,13 +771,11 @@ fn append_shell_reply(
         return;
     }
 
-    append_one_chunk(term_output, term_output_len, reply);
-
-    // Drain additional chunks if the shell has long output pending.
-    // Word 1 of the reply carries the number of remaining bytes after this
-    // chunk. The first chunk is small (≤40 bytes) so its reply has word
-    // layout: word 0 = length, word 1 = remaining, words 2.. = data.
     let mut remaining = reply.words[1] as usize;
+    append_one_chunk(term_output, term_output_len, reply, remaining == 0);
+
+    // Drain additional chunks if the shell has long output pending. IPC replies
+    // currently return four register words, so payload bytes live in words 2..4.
     let mut seq: u64 = 1;
     let mut safety: usize = 64; // hard cap to avoid infinite drain loops
     while remaining > 0 && safety > 0 {
@@ -613,8 +784,8 @@ fn append_shell_reply(
         if next.label != OUTPUT_LABEL {
             break;
         }
-        append_one_chunk(term_output, term_output_len, &next);
         remaining = next.words[1] as usize;
+        append_one_chunk(term_output, term_output_len, &next, remaining == 0);
         seq += 1;
         safety -= 1;
     }
@@ -624,21 +795,25 @@ fn append_one_chunk(
     term_output: &mut [u8; TERM_OUTPUT_MAX],
     term_output_len: &mut usize,
     reply: &IpcMsg,
+    append_missing_newline: bool,
 ) {
-    let len = (reply.words[0] as usize).min(48);
+    let len = (reply.words[0] as usize).min(IPC_OUTPUT_BYTES);
     if len == 0 {
         return;
     }
 
-    let mut bytes = [0u8; 48];
+    let mut bytes = [0u8; IPC_OUTPUT_BYTES];
     for i in 0..len {
         let word_idx = 2 + i / 8;
+        if word_idx >= 4 {
+            break;
+        }
         let byte_idx = i % 8;
         bytes[i] = ((reply.words[word_idx] >> (byte_idx * 8)) & 0xff) as u8;
     }
 
     append_term(term_output, term_output_len, &bytes[..len]);
-    if bytes[len - 1] != b'\n' {
+    if append_missing_newline && bytes[len - 1] != b'\n' {
         append_term(term_output, term_output_len, b"\n");
     }
 }
@@ -648,6 +823,17 @@ fn append_term(output: &mut [u8; TERM_OUTPUT_MAX], output_len: &mut usize, data:
         return;
     }
 
+    // Detect clear screen sequence (ESC[2J) and reset the buffer
+    // This prevents output from accumulating across commands
+    if data.len() >= 4
+        && data[0] == b'\x1B'
+        && data[1] == b'['
+        && data[2] == b'2'
+        && data[3] == b'J'
+    {
+        *output_len = 0; // Clear the accumulated output buffer
+    }
+
     if data.len() >= output.len() {
         let start = data.len() - output.len();
         output.copy_from_slice(&data[start..]);
@@ -655,7 +841,9 @@ fn append_term(output: &mut [u8; TERM_OUTPUT_MAX], output_len: &mut usize, data:
         return;
     }
 
-    let overflow = output_len.saturating_add(data.len()).saturating_sub(output.len());
+    let overflow = output_len
+        .saturating_add(data.len())
+        .saturating_sub(output.len());
     if overflow > 0 {
         let keep = *output_len - overflow;
         for i in 0..keep {
@@ -679,11 +867,11 @@ fn debug_log_kbd_byte(prefix: &str, byte: u8) {
         buf[dstart] = b'0' + byte;
         1
     } else if byte < 100 {
-        buf[dstart]     = b'0' + byte / 10;
+        buf[dstart] = b'0' + byte / 10;
         buf[dstart + 1] = b'0' + byte % 10;
         2
     } else {
-        buf[dstart]     = b'0' + byte / 100;
+        buf[dstart] = b'0' + byte / 100;
         buf[dstart + 1] = b'0' + (byte % 100) / 10;
         buf[dstart + 2] = b'0' + byte % 10;
         3
@@ -798,7 +986,9 @@ fn pack_path(path: &[u8]) -> (u64, u64, u64, u64) {
     let mut word_idx = 0;
     while word_idx < 4 {
         let start = word_idx * 8;
-        if start >= path.len() { break; }
+        if start >= path.len() {
+            break;
+        }
         let end = (start + 8).min(path.len());
         words[word_idx] = pack_bytes(&path[start..end]);
         word_idx += 1;

@@ -6,14 +6,14 @@ use crate::framebuffer::Framebuffer;
 const GLYPH_WIDTH: u32 = 8;
 const GLYPH_HEIGHT: usize = 16;
 const GLYPH_BYTES: usize = 16;
-const FIRST_GLYPH: u8 = 0x20;  // Space
-const LAST_GLYPH: u8 = 0x7E;   // Tilde
+const FIRST_GLYPH: u8 = 0x20; // Space
+const LAST_GLYPH: u8 = 0x7E; // Tilde
 
 // Special Unicode glyph pseudo-indices (used for UTF-8 symbol mapping)
-const GLYPH_CHECK: u8 = 0x80;    // ✓
-const GLYPH_CROSS: u8 = 0x81;    // ✗
-const GLYPH_SPINNER: u8 = 0x82;  // ⟳
-const GLYPH_SUN: u8 = 0x83;      // ☀
+const GLYPH_CHECK: u8 = 0x80; // ✓
+const GLYPH_CROSS: u8 = 0x81; // ✗
+const GLYPH_SPINNER: u8 = 0x82; // ⟳
+const GLYPH_SUN: u8 = 0x83; // ☀
 
 // Embedded bitmap font: 95 glyphs × 16 bytes = 1520 bytes
 // ASCII 0x20–0x7E, MSB (bit 7) = leftmost pixel per row
@@ -21,8 +21,7 @@ static FONT_DATA: &[u8] = include_bytes!("font8x16.bin");
 
 /// Hardcoded reference 'A' glyph for diagnostic testing — validates renderer pipeline
 const DIAGNOSTIC_A_GLYPH: [u8; GLYPH_BYTES] = [
-    0x00, 0x00, 0x00, 0x38, 0x44, 0x82, 0x82, 0x82,
-    0xfe, 0x82, 0x82, 0x82, 0x82, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x38, 0x44, 0x82, 0x82, 0x82, 0xfe, 0x82, 0x82, 0x82, 0x82, 0x00, 0x00, 0x00,
 ];
 
 /// Retrieve glyph row bytes for ASCII character [0x20..0x7E]
@@ -65,7 +64,7 @@ fn draw_glyph(
     // Render foreground pixels: MSB-first bit extraction with right-shift advancing
     for (row_idx, &row_byte) in glyph.iter().enumerate() {
         let base_y = y + (row_idx as u32) * scale;
-        let mut bit_mask = 0x80u8;  // Start at MSB (leftmost pixel)
+        let mut bit_mask = 0x80u8; // Start at MSB (leftmost pixel)
 
         for col in 0..GLYPH_WIDTH {
             if (row_byte & bit_mask) != 0 {
@@ -76,7 +75,7 @@ fn draw_glyph(
                     }
                 }
             }
-            bit_mask >>= 1;  // Shift to next bit (no division, no branching)
+            bit_mask >>= 1; // Shift to next bit (no division, no branching)
         }
     }
 }
@@ -84,18 +83,11 @@ fn draw_glyph(
 /// Draw a single ASCII character at pixel position (x, y).
 /// Safely maps ascii [0x20..0x7E] to font glyph offsets.
 /// Uses transparent mode (no background fill) — only renders foreground pixels.
-pub fn draw_char(
-    fb: &mut Framebuffer,
-    x: u32,
-    y: u32,
-    ascii: u8,
-    color: u32,
-    scale: u32,
-) {
+pub fn draw_char(fb: &mut Framebuffer, x: u32, y: u32, ascii: u8, color: u32, scale: u32) {
     let glyph = match ascii {
         FIRST_GLYPH..=LAST_GLYPH => glyph_for_ascii(ascii),
-        b'\n' | b'\r' => return,  // Skip newlines (handled by caller)
-        _ => glyph_for_ascii(FIRST_GLYPH),  // Fallback to space for unprintable
+        b'\n' | b'\r' => return, // Skip newlines (handled by caller)
+        _ => glyph_for_ascii(FIRST_GLYPH), // Fallback to space for unprintable
     };
 
     if let Some(glyph) = glyph {
@@ -107,32 +99,19 @@ pub fn draw_char(
 /// Use this to verify the rendering pipeline independently of font8x16.bin.
 /// If this renders correctly but file-based glyphs don't, the issue is the binary file.
 #[inline]
-pub fn draw_char_diagnostic_a(
-    fb: &mut Framebuffer,
-    x: u32,
-    y: u32,
-    color: u32,
-    scale: u32,
-) {
+pub fn draw_char_diagnostic_a(fb: &mut Framebuffer, x: u32, y: u32, color: u32, scale: u32) {
     draw_glyph(fb, x, y, &DIAGNOSTIC_A_GLYPH, color, None, scale);
 }
 
 /// Draw a special Unicode symbol using a pseudo-glyph ID.
 /// Maps GLYPH_CHECK, GLYPH_CROSS, GLYPH_SPINNER, GLYPH_SUN to ASCII fallbacks.
 #[inline]
-fn draw_special(
-    fb: &mut Framebuffer,
-    x: u32,
-    y: u32,
-    symbol: u8,
-    color: u32,
-    scale: u32,
-) {
+fn draw_special(fb: &mut Framebuffer, x: u32, y: u32, symbol: u8, color: u32, scale: u32) {
     let fallback = match symbol {
-        GLYPH_CHECK => b'v',     // ✓ → v
-        GLYPH_CROSS => b'x',     // ✗ → x
-        GLYPH_SPINNER => b'o',   // ⟳ → o
-        GLYPH_SUN => b'*',       // ☀ → *
+        GLYPH_CHECK => b'v',   // ✓ → v
+        GLYPH_CROSS => b'x',   // ✗ → x
+        GLYPH_SPINNER => b'o', // ⟳ → o
+        GLYPH_SUN => b'*',     // ☀ → *
         _ => b'?',
     };
     draw_char(fb, x, y, fallback, color, scale);
@@ -144,14 +123,7 @@ fn draw_special(
 ///   - Single-byte ASCII (0x20–0x7E, plus common control chars)
 ///   - 3-byte UTF-8 symbols: ✓ (E2 9C 93), ✗ (E2 9C 97), ⟳ (E2 9F B3), ☀ (E2 98 80)
 /// Transparent mode: renders only foreground pixels, no background fill.
-pub fn draw_str(
-    fb: &mut Framebuffer,
-    x: u32,
-    y: u32,
-    s: &str,
-    color: u32,
-    scale: u32,
-) {
+pub fn draw_str(fb: &mut Framebuffer, x: u32, y: u32, s: &str, color: u32, scale: u32) {
     let mut cx = x;
     let char_width = GLYPH_WIDTH * scale;
     let bytes = s.as_bytes();
@@ -166,16 +138,20 @@ pub fn draw_str(
                     let b2 = bytes[i + 2];
 
                     match (b1, b2) {
-                        (0x9C, 0x93) => { // ✓ (E2 9C 93)
+                        (0x9C, 0x93) => {
+                            // ✓ (E2 9C 93)
                             draw_special(fb, cx, y, GLYPH_CHECK, color, scale);
                         }
-                        (0x9C, 0x97) => { // ✗ (E2 9C 97)
+                        (0x9C, 0x97) => {
+                            // ✗ (E2 9C 97)
                             draw_special(fb, cx, y, GLYPH_CROSS, color, scale);
                         }
-                        (0x9F, 0xB3) => { // ⟳ (E2 9F B3)
+                        (0x9F, 0xB3) => {
+                            // ⟳ (E2 9F B3)
                             draw_special(fb, cx, y, GLYPH_SPINNER, color, scale);
                         }
-                        (0x98, 0x80) => { // ☀ (E2 98 80)
+                        (0x98, 0x80) => {
+                            // ☀ (E2 98 80)
                             draw_special(fb, cx, y, GLYPH_SUN, color, scale);
                         }
                         _ => {
@@ -184,7 +160,7 @@ pub fn draw_str(
                         }
                     }
                     cx += char_width;
-                    i += 3;  // Advance past 3-byte sequence
+                    i += 3; // Advance past 3-byte sequence
                     continue;
                 }
                 i += 1;

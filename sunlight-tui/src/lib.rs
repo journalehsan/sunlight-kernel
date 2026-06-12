@@ -1,21 +1,30 @@
 //! SunlightOS graphical boot TUI
-//! 
+//!
 //! Pure Rust, no_std, no heap, no floats.
 //! Renders directly to Limine framebuffer.
 
 #![no_std]
 #![allow(dead_code)]
 
-mod framebuffer;
-mod font;
 mod draw;
 pub mod fmt;
-mod layout;
+mod font;
+mod framebuffer;
+pub mod layout;
 mod modes;
 mod splash;
 
-pub use splash::{SplashScreen, BootMode};
+pub use layout::ANSI_COLORS;
 pub use modes::debug::LogBuffer;
+pub use splash::{BootMode, SplashScreen};
+
+/// A terminal cell with character and pre-resolved RGB colors.
+#[derive(Clone, Copy, Debug)]
+pub struct TermCell {
+    pub ch: u8,
+    pub fg: u32, // RGB color
+    pub bg: u32, // RGB color
+}
 
 /// Render the TTY shell screen. Called after successful login and on every key event.
 ///
@@ -58,7 +67,11 @@ pub unsafe fn render_tty_shell(
     let mut tx = 8u32;
     for i in 0..tab_count.min(10) {
         let is_active = i == active_tab;
-        let fg = if is_active { layout::palette::ACCENT } else { layout::palette::TEXT_DIM };
+        let fg = if is_active {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::TEXT_DIM
+        };
         let tab_text = " shell ";
         let tw = font::text_width(tab_text, 1);
         fb.fill_rect(tx, tab_y + 3, tw + 2, TAB_H - 6, layout::palette::BG);
@@ -83,7 +96,10 @@ pub unsafe fn render_tty_shell(
     let mut ls = 0usize;
     for (i, &b) in output.iter().enumerate() {
         if b == b'\n' {
-            if line_count < 32 { line_starts[line_count] = ls; line_count += 1; }
+            if line_count < 32 {
+                line_starts[line_count] = ls;
+                line_count += 1;
+            }
             ls = i + 1;
         }
     }
@@ -92,7 +108,11 @@ pub unsafe fn render_tty_shell(
         line_count += 1;
     }
 
-    let start_line = if line_count > max_visible { line_count - max_visible } else { 0 };
+    let start_line = if line_count > max_visible {
+        line_count - max_visible
+    } else {
+        0
+    };
     for li in start_line..line_count {
         let ly = content_y + (li - start_line) as u32 * CHAR_H;
         let lstart = line_starts[li];
@@ -101,28 +121,198 @@ pub unsafe fn render_tty_shell(
         } else {
             output.len()
         };
-        tty_draw_line(&mut fb, MARGIN, ly, &output[lstart..lend.min(output.len())], layout::palette::TEXT, 1);
+        tty_draw_line(
+            &mut fb,
+            MARGIN,
+            ly,
+            &output[lstart..lend.min(output.len())],
+            layout::palette::TEXT,
+            1,
+        );
     }
 
     // Footer — prompt in accent colour, then current input in white
     let footer_text_y = layout.footer.y + 8;
-    tty_draw_line(&mut fb, MARGIN, footer_text_y, prompt, layout::palette::ACCENT, 1);
+    tty_draw_line(
+        &mut fb,
+        MARGIN,
+        footer_text_y,
+        prompt,
+        layout::palette::ACCENT,
+        1,
+    );
     let prompt_w = prompt.len() as u32 * 8; // scale-1 glyph is always 8px wide
-    tty_draw_line(&mut fb, MARGIN + prompt_w, footer_text_y, input_line, layout::palette::TEXT, 1);
+    tty_draw_line(
+        &mut fb,
+        MARGIN + prompt_w,
+        footer_text_y,
+        input_line,
+        layout::palette::TEXT,
+        1,
+    );
     // Block cursor
     let cursor_x = MARGIN + (prompt.len() + input_line.len()) as u32 * 8;
     fb.fill_rect(cursor_x, footer_text_y, 8, 16, layout::palette::ACCENT);
 }
 
 /// Draw a slice of ASCII bytes as a single line (stops at `\n`, `\r`, or `\0`).
-fn tty_draw_line(fb: &mut framebuffer::Framebuffer, mut x: u32, y: u32, bytes: &[u8], color: u32, scale: u32) {
+fn tty_draw_line(
+    fb: &mut framebuffer::Framebuffer,
+    mut x: u32,
+    y: u32,
+    bytes: &[u8],
+    color: u32,
+    scale: u32,
+) {
     for &b in bytes {
-        if b == b'\n' || b == b'\r' || b == 0 { break; }
+        if b == b'\n' || b == b'\r' || b == 0 {
+            break;
+        }
         if b >= 0x20 && b <= 0x7E {
             font::draw_char(fb, x, y, b, color, scale);
             x += 8 * scale;
         }
     }
+}
+
+/// Render a 2D character grid with full color support (VT100 terminal).
+/// Called after successful login to display terminal content with ANSI colors.
+///
+/// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
+pub unsafe fn render_terminal_grid(
+    fb_addr: *mut u32,
+    fb_width: u32,
+    fb_height: u32,
+    fb_pitch: u32,
+    tab_count: usize,
+    active_tab: usize,
+    cols: usize,
+    rows: usize,
+    cells: &[TermCell],
+    cursor_row: usize,
+    cursor_col: usize,
+    input_line: &[u8],
+    prompt: &[u8],
+) {
+    let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
+    let layout = layout::Layout::new(fb_width, fb_height);
+    layout.draw_chrome(&mut fb);
+
+    // Header
+    font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
+    font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
+    let mode_label = "TTY";
+    let mode_w = font::text_width(mode_label, 1);
+    font::draw_str(
+        &mut fb,
+        fb_width.saturating_sub(mode_w + 16),
+        16,
+        mode_label,
+        layout::palette::ACCENT_DIM,
+        1,
+    );
+
+    // Tab bar
+    const TAB_H: u32 = 26;
+    let tab_y = layout.main.y;
+    fb.fill_rect(0, tab_y, fb_width, TAB_H, layout::palette::SURFACE);
+    fb.hline(0, tab_y + TAB_H, fb_width, layout::palette::SEPARATOR);
+
+    let mut tx = 8u32;
+    for i in 0..tab_count.min(10) {
+        let is_active = i == active_tab;
+        let fg = if is_active {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::TEXT_DIM
+        };
+        let tab_text = " shell ";
+        let tw = font::text_width(tab_text, 1);
+        fb.fill_rect(tx, tab_y + 3, tw + 2, TAB_H - 6, layout::palette::BG);
+        font::draw_str(&mut fb, tx + 1, tab_y + 5, tab_text, fg, 1);
+        if is_active {
+            fb.hline(tx, tab_y + TAB_H - 2, tw + 2, layout::palette::ACCENT);
+        }
+        tx += tw + 8;
+    }
+
+    // Content area: render the grid
+    const CHAR_H: u32 = 18;
+    const MARGIN: u32 = 16;
+    let content_y = tab_y + TAB_H + 4;
+    let avail_h = layout.footer.y.saturating_sub(content_y + 4);
+    let max_visible = (avail_h / CHAR_H) as usize;
+
+    // Only show the last `max_visible` rows
+    let start_row = if rows > max_visible {
+        rows - max_visible
+    } else {
+        0
+    };
+    for row in start_row..rows {
+        let screen_row = row - start_row;
+        let y = content_y + (screen_row as u32) * CHAR_H;
+
+        for col in 0..cols {
+            let cell_idx = row * cols + col;
+            if cell_idx >= cells.len() {
+                break;
+            }
+            let cell = cells[cell_idx];
+            let x = MARGIN + (col as u32) * 8;
+
+            // Draw background
+            fb.fill_rect(x, y, 8, 16, cell.bg);
+
+            // Draw character if not space
+            if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
+                font::draw_char(&mut fb, x, y, cell.ch, cell.fg, 1);
+            }
+        }
+    }
+
+    // Draw the grid cursor only when the caller is not rendering a separate
+    // prompt/input area. The TTY shell keeps the live prompt in the footer.
+    if prompt.is_empty() && input_line.is_empty() && cursor_row >= start_row && cursor_row < rows {
+        let screen_row = cursor_row - start_row;
+        let y = content_y + (screen_row as u32) * CHAR_H;
+        let x = MARGIN + (cursor_col as u32) * 8;
+
+        // Inverted: swap fg/bg for cursor cell
+        let cell_idx = cursor_row * cols + cursor_col.min(cols - 1);
+        if cell_idx < cells.len() {
+            let cell = cells[cell_idx];
+            fb.fill_rect(x, y, 8, 16, cell.fg); // fg becomes bg
+            if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
+                font::draw_char(&mut fb, x, y, cell.ch, cell.bg, 1); // bg becomes fg
+            }
+        } else {
+            // Empty cell: just draw inverted space
+            fb.fill_rect(x, y, 8, 16, layout::palette::TEXT);
+        }
+    }
+
+    // Footer: prompt + input + command cursor
+    let footer_text_y = layout.footer.y + 8;
+    tty_draw_line(
+        &mut fb,
+        MARGIN,
+        footer_text_y,
+        prompt,
+        layout::palette::ACCENT,
+        1,
+    );
+    let prompt_w = prompt.len() as u32 * 8;
+    tty_draw_line(
+        &mut fb,
+        MARGIN + prompt_w,
+        footer_text_y,
+        input_line,
+        layout::palette::TEXT,
+        1,
+    );
+    let cursor_x = MARGIN + (prompt.len() + input_line.len()) as u32 * 8;
+    fb.fill_rect(cursor_x, footer_text_y, 8, 16, layout::palette::ACCENT);
 }
 
 /// Render the login screen with live state (username typed, password dots, cursor, message).
@@ -146,7 +336,14 @@ pub unsafe fn render_login_dynamic(
     font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
     let mode = "TTY Login";
     let mode_w = font::text_width(mode, 1);
-    font::draw_str(&mut fb, fb_width.saturating_sub(mode_w + 16), 16, mode, layout::palette::TEXT_DIM, 1);
+    font::draw_str(
+        &mut fb,
+        fb_width.saturating_sub(mode_w + 16),
+        16,
+        mode,
+        layout::palette::TEXT_DIM,
+        1,
+    );
 
     let main = &layout.main;
     let panel_w = 360u32.min(main.w.saturating_sub(32));
@@ -156,17 +353,39 @@ pub unsafe fn render_login_dynamic(
 
     // Clear the panel area before redrawing
     fb.fill_rect(panel_x, panel_y, panel_w, panel_h, layout::palette::BG);
-    draw::rect_outline(&mut fb, panel_x, panel_y, panel_w, panel_h, 1, layout::palette::SEPARATOR);
+    draw::rect_outline(
+        &mut fb,
+        panel_x,
+        panel_y,
+        panel_w,
+        panel_h,
+        1,
+        layout::palette::SEPARATOR,
+    );
 
     let title = "Welcome to SunlightOS";
     let title_w = font::text_width(title, 2);
-    font::draw_str(&mut fb, panel_x + panel_w.saturating_sub(title_w) / 2, panel_y + 24, title, layout::palette::ACCENT, 2);
+    font::draw_str(
+        &mut fb,
+        panel_x + panel_w.saturating_sub(title_w) / 2,
+        panel_y + 24,
+        title,
+        layout::palette::ACCENT,
+        2,
+    );
 
     // Username row
     let user_label_x = panel_x + 32;
     let user_y = panel_y + 72;
     let pass_y = panel_y + 100;
-    font::draw_str(&mut fb, user_label_x, user_y, "login:    ", layout::palette::TEXT_DIM, 1);
+    font::draw_str(
+        &mut fb,
+        user_label_x,
+        user_y,
+        "login:    ",
+        layout::palette::TEXT_DIM,
+        1,
+    );
     let uval_x = user_label_x + font::text_width("login:    ", 1);
     tty_draw_line(&mut fb, uval_x, user_y, username, layout::palette::TEXT, 1);
     if !focused_password {
@@ -176,12 +395,26 @@ pub unsafe fn render_login_dynamic(
     }
 
     // Password row
-    font::draw_str(&mut fb, user_label_x, pass_y, "password: ", layout::palette::TEXT_DIM, 1);
+    font::draw_str(
+        &mut fb,
+        user_label_x,
+        pass_y,
+        "password: ",
+        layout::palette::TEXT_DIM,
+        1,
+    );
     let pval_x = user_label_x + font::text_width("password: ", 1);
     // Show one '*' per typed character
     let dot_count = password_len.min(20) as u32;
     for i in 0..dot_count {
-        font::draw_char(&mut fb, pval_x + i * 8, pass_y, b'*', layout::palette::TEXT, 1);
+        font::draw_char(
+            &mut fb,
+            pval_x + i * 8,
+            pass_y,
+            b'*',
+            layout::palette::TEXT,
+            1,
+        );
     }
     if focused_password {
         let cx = pval_x + dot_count * 8;
@@ -204,22 +437,33 @@ pub unsafe fn render_login_dynamic(
 
     let footer = "Type username, Tab, type password, Enter";
     let footer_w = font::text_width(footer, 1);
-    font::draw_str(&mut fb, fb_width.saturating_sub(footer_w + 16), fb_height.saturating_sub(24), footer, layout::palette::TEXT_DIM, 1);
+    font::draw_str(
+        &mut fb,
+        fb_width.saturating_sub(footer_w + 16),
+        fb_height.saturating_sub(24),
+        footer,
+        layout::palette::TEXT_DIM,
+        1,
+    );
 }
 
 /// Render the initial static login screen (before any input).
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping with
 /// the provided dimensions and pitch.
-pub unsafe fn render_login_screen(
-    fb_addr: *mut u32,
-    fb_width: u32,
-    fb_height: u32,
-    fb_pitch: u32,
-) {
+pub unsafe fn render_login_screen(fb_addr: *mut u32, fb_width: u32, fb_height: u32, fb_pitch: u32) {
     // Delegate to the dynamic renderer with the pre-filled "root" username
     // (matching the static display users see on first boot) and focus on password.
     unsafe {
-        render_login_dynamic(fb_addr, fb_width, fb_height, fb_pitch, b"root", 0, true, "Welcome. Please log in.");
+        render_login_dynamic(
+            fb_addr,
+            fb_width,
+            fb_height,
+            fb_pitch,
+            b"root",
+            0,
+            true,
+            "Welcome. Please log in.",
+        );
     }
 }

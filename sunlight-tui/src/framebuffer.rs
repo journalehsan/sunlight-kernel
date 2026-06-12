@@ -3,17 +3,22 @@
 #![allow(dead_code)]
 
 pub struct Framebuffer {
-    addr:   *mut u32,
-    width:  u32,
+    addr: *mut u32,
+    width: u32,
     height: u32,
-    pitch:  u32,   // bytes per row — NOT pixels per row
+    pitch: u32, // bytes per row — NOT pixels per row
 }
 
 impl Framebuffer {
     /// SAFETY: caller must ensure addr is valid Limine framebuffer memory
     #[inline]
     pub unsafe fn from_limine(addr: *mut u32, width: u32, height: u32, pitch: u32) -> Self {
-        Self { addr, width, height, pitch }
+        Self {
+            addr,
+            width,
+            height,
+            pitch,
+        }
     }
 
     #[inline(always)]
@@ -32,7 +37,7 @@ impl Framebuffer {
     pub fn fill_rect(&mut self, x: u32, y: u32, w: u32, h: u32, color: u32) {
         let x_end = (x + w).min(self.width);
         let y_end = (y + h).min(self.height);
-        
+
         for row in y..y_end {
             for col in x..x_end {
                 self.put_pixel(col, row, color);
@@ -47,7 +52,7 @@ impl Framebuffer {
         }
         let x_end = (x + len).min(self.width);
         let offset = y as usize * (self.pitch as usize / 4);
-        
+
         for col in x..x_end {
             // SAFETY: bounds checked, valid framebuffer
             unsafe {
@@ -62,7 +67,7 @@ impl Framebuffer {
             return;
         }
         let y_end = (y + len).min(self.height);
-        
+
         for row in y..y_end {
             self.put_pixel(x, row, color);
         }

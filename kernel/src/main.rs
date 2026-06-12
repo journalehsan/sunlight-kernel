@@ -15,7 +15,7 @@ mod panic;
 mod process;
 mod sched;
 
-use arch::x86_64::{interrupts, serial, syscall, keyboard};
+use arch::x86_64::{acpi, interrupts, serial, syscall, keyboard};
 use memory::{heap, pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
 use process::{layout, Process};
 use x86_64::{
@@ -29,6 +29,7 @@ static PMM: spin::Mutex<PhysicalMemoryManager> = spin::Mutex::new(PhysicalMemory
 static MEMMAP_REQ: limine::request::MemmapRequest = limine::request::MemmapRequest::new();
 static HHDM_REQ: limine::request::HhdmRequest = limine::request::HhdmRequest::new();
 static FB_REQ: limine::request::FramebufferRequest = limine::request::FramebufferRequest::new();
+static RSDP_REQ: limine::request::RsdpRequest = limine::request::RsdpRequest::new();
 
 // Embedded service binaries (must be built before kernel)
 static INIT_ELF_BYTES: &[u8] =
@@ -106,6 +107,23 @@ pub extern "C" fn _start() -> ! {
     serial_println!("[VMM] OK");
     splash.log("[VMM] OK");
     splash.set_progress(200);  // 20%
+    splash.redraw();
+
+    // 2.5. ACPI
+    splash.set_status("Discovering ACPI power management");
+    splash.log("[ACPI] Initializing...");
+    splash.redraw();
+    let rsdp_phys = RSDP_REQ.response()
+        .map(|r| r.address as u64)
+        .unwrap_or(0);
+    if let Err(e) = unsafe { acpi::init(rsdp_phys) } {
+        serial_println!("[ACPI] Warning: initialization failed: {}", e);
+        splash.log("[ACPI] Warning: initialization failed");
+    } else {
+        serial_println!("[ACPI] OK");
+        splash.log("[ACPI] OK");
+    }
+    splash.set_progress(250);  // 25%
     splash.redraw();
 
     // 3. IDT + PIC + PIT
