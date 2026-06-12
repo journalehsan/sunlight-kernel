@@ -399,6 +399,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         .iter()
         .find(|p| p.name == "timer_server")
         .and_then(|p| p.ipc_endpoint.map(|endpoint| (endpoint, p.pid)));
+
     if let Some((endpoint_id, timer_pid)) = timer_endpoint {
         let mut bus = crate::ipc::IPC_BUS.lock();
         bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
