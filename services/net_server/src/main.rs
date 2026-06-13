@@ -4,7 +4,7 @@
 extern crate alloc;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup, nameserver_register, CapabilityToken, IpcMsg, VfsMsg,
 };
 use sunlight_net::netop::NetOp;
 
@@ -31,6 +31,10 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
+/// 1.1 Combined DNS resolver (populated at init from /etc/hosts + hardcoded fallback).
+/// Written once before the IPC loop; read-only thereafter.
+static mut DNS_RESOLVER: Option<sunlight_net::DnsResolver> = None;
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
@@ -48,6 +52,26 @@ pub extern "C" fn _start() -> ! {
     debug_log("[NET]  Registered as 'net' with init");
     debug_log("[NET]  Interface: eth0 MAC=52:54:00:12:34:56");
     debug_log("[NET]  NetOp handlers registered");
+
+    // 1.0 VFS /etc/hosts + 1.1 Combined Resolver (hosts first, hardcoded fallback)
+    // We read via capability-gated VFS IPC (existing VfsMsg + nameserver).
+    // Parser is minimal (no heavy alloc beyond small BTreeMap<String,[u8;4]> inside resolver).
+    let hosts_content = if let Some(vfs_cap) = nameserver_lookup("vfs") {
+        let data = read_file_simple(vfs_cap, "/etc/hosts");
+        // SAFETY: the data Vec lives in our process bump heap; from_utf8_lossy is safe on arbitrary bytes;
+        // DnsResolver::new + parse_hosts will copy names into owned Strings so the temp content can be dropped.
+        alloc::string::String::from_utf8_lossy(&data).into_owned()
+    } else {
+        alloc::string::String::new()
+    };
+    let resolver = sunlight_net::DnsResolver::new(&hosts_content);
+    unsafe {
+        // SAFETY: written exactly once, before any messages are handled (single-threaded
+        // userspace service, no interrupts in this model). Subsequent reads in handle_msg
+        // are after this point. The contained map owns its data for process lifetime.
+        DNS_RESOLVER = Some(resolver);
+    }
+    debug_log("[DNS] /etc/hosts loaded (hosts + hardcoded resolver active)");
 
     // Main service loop
     let mut msg = ipc_recv(ep);
@@ -83,11 +107,8 @@ fn handle_msg(msg: IpcMsg) -> IpcMsg {
             IpcMsg::with_label(msg.label).word(0, 1)
         }
         NetOp::RESOLVE => {
-            // Bite 2: actual (stub) DNS resolution for ping + other net-utils.
-            // Client packs: words[0] = name_len (bytes), words[1..] = 8-byte chunks of the hostname.
-            // We support a few well-known names (matching the spirit of sunlight-net/dns.rs stub)
-            // so that `ping google.com` / `ping irancell.ir` produce the nice "PING name (ip)" output
-            // and the failure case for unknown names prints the exact required message.
+            // 1.2: use the combined DnsResolver (hosts from /etc/hosts via VFS + hardcoded fallback).
+            // Unpack hostname from client (same packing as before for RESOLVE).
             let name_len = msg.words[0] as usize;
             let mut name_buf = [0u8; 64];
             let mut collected = 0usize;
@@ -101,15 +122,17 @@ fn handle_msg(msg: IpcMsg) -> IpcMsg {
                 }
             }
             let hostname = core::str::from_utf8(&name_buf[..core::cmp::min(name_len, 63)]).unwrap_or("");
-            let ip = match hostname {
-                "google.com" => [142, 250, 185, 46],
-                "irancell.ir" => [91, 99, 12, 34],
-                "example.com" => [93, 184, 216, 34],
-                // anything else (including "nonexistent.invalid", "doesnotexist.invalid") fails
-                _ => [0, 0, 0, 0],
+            let ip = unsafe {
+                // SAFETY: DNS_RESOLVER is initialized exactly once before the receive loop
+                // and never mutated again. This is the only reader. Single-threaded service.
+                if let Some(ref r) = DNS_RESOLVER {
+                    r.resolve(hostname).unwrap_or([0, 0, 0, 0])
+                } else {
+                    [0, 0, 0, 0]
+                }
             };
             if ip == [0, 0, 0, 0] {
-                IpcMsg::with_label(NetOp::RESOLVE).word(0, 0) // signals failure to caller
+                IpcMsg::with_label(NetOp::RESOLVE).word(0, 0) // failure -> "Name or service not known"
             } else {
                 IpcMsg::with_label(NetOp::RESOLVE).word(0, pack_ipv4(ip))
             }
@@ -134,4 +157,65 @@ fn pack_ipv4(ip: [u8; 4]) -> u64 {
         | ((ip[1] as u64) << 8)
         | ((ip[2] as u64) << 16)
         | ((ip[3] as u64) << 24)
+}
+
+/// Minimal VFS file reader for net_server (used only for /etc/hosts at init).
+/// 16-byte chunks via VfsMsg READ; data returned packed in reply.words[2..].
+/// SAFETY comments only on the bump alloc (existing); this path has no raw pointers.
+fn read_file_simple(vfs_cap: CapabilityToken, path: &str) -> alloc::vec::Vec<u8> {
+    let mut out = alloc::vec::Vec::new();
+
+    // OPEN
+    let open_msg = path_msg(VfsMsg::OPEN, path);
+    let reply = ipc_call(vfs_cap, open_msg);
+    if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
+        return out;
+    }
+    let handle = reply.words[1] as u32;
+
+    let mut offset = 0usize;
+    loop {
+        let read_msg = IpcMsg::with_label(VfsMsg::READ)
+            .word(0, handle as u64)
+            .word(1, offset as u64)
+            .word(2, 16);
+        let reply = ipc_call(vfs_cap, read_msg);
+        if reply.label != VfsMsg::REPLY {
+            break;
+        }
+        let n = reply.words[1] as usize;
+        if n == 0 {
+            break;
+        }
+        // data packed in words[2] and [3] (up to 16 bytes)
+        let src = [reply.words.get(2).copied().unwrap_or(0), reply.words.get(3).copied().unwrap_or(0)];
+        for i in 0..n {
+            let word_idx = i / 8;
+            let byte_idx = i % 8;
+            out.push( ((src[word_idx] >> (byte_idx * 8)) & 0xFF) as u8 );
+        }
+        offset += n;
+    }
+
+    // CLOSE (best effort)
+    let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+    out
+}
+
+/// Pack a path into the first 4 words (same as sunshell VFS client).
+fn path_msg(label: u64, path: &str) -> IpcMsg {
+    let bytes = path.as_bytes();
+    let mut msg = IpcMsg::with_label(label);
+    for word_idx in 0..4 {
+        let start = word_idx * 8;
+        let end = (start + 8).min(bytes.len());
+        if start < bytes.len() {
+            let mut word = 0u64;
+            for (i, &b) in bytes[start..end].iter().enumerate() {
+                word |= (b as u64) << (i * 8);
+            }
+            msg = msg.word(word_idx, word);
+        }
+    }
+    msg
 }

@@ -150,6 +150,12 @@ case "$PHASE" in
         PASS_LABEL="Phase 5.x.6"
         NEED_DISK=false
         ;;
+    dns_hosts)
+        EXPECTED_FILE="tools/tests/dns_hosts.expected"
+        FINAL_MARKER="[DNS] /etc/hosts loaded (hosts + hardcoded resolver active)"
+        PASS_LABEL="dns_hosts"
+        NEED_DISK=false
+        ;;
     phase6.5.1)
         EXPECTED_FILE="tools/tests/phase6_5_1.expected"
         FINAL_MARKER="[TTY]  sysfetch invoked"
@@ -163,7 +169,7 @@ case "$PHASE" in
         NEED_DISK=true
         ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 phase6.5.1 phase6.5.3"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3"
         exit 2
         ;;
 esac
@@ -200,7 +206,7 @@ elif [[ "$PHASE" == "phase6.5.3" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase6.5.3)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
-elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* ]]; then
+elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* || "$PHASE" == "dns_hosts" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE="$PHASE")
 fi
 env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1

@@ -1,0 +1,7 @@
+# SunlightOS /etc/hosts - minimal for DNS resolver (Phase 5.x)
+# IPv6 lines are ignored by parser (MVI)
+127.0.0.1	localhost
+127.0.1.1	sunlight
+127.0.0.1	mylocal localhost.localdomain
+# example external for demo (hosts overrides hardcoded)
+93.184.216.34	example.com

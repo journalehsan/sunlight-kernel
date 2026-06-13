@@ -1,0 +1,5 @@
+# dns_hosts gate: /etc/hosts VFS + parser in net_server + combined resolver (hosts precedence + hardcoded)
+[NET]  Registered as 'net' with init
+[DNS] /etc/hosts loaded (hosts + hardcoded resolver active)
+[NET]  Interface: eth0 MAC=52:54:00:12:34:56
+[NET]  NetOp handlers registered

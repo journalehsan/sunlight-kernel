@@ -101,9 +101,34 @@ impl Scheduler {
 
     /// Add a process to the scheduler.
     pub fn add_process(&mut self, process: Process) -> usize {
-        let id = self.processes.len();
         let created_count = PROCESS_CREATED.fetch_add(1, Ordering::Relaxed);
 
+        // Reuse a finished slot when possible so we avoid growing Vec<Process>
+        // unboundedly under spawn/exit churn. `Process` is large, so a Vec
+        // growth reallocation can fail even when only one additional process
+        // is being created.
+        if let Some(id) = self
+            .processes
+            .iter()
+            .enumerate()
+            .find(|(idx, p)| *idx != self.current && p.state == ProcessState::Finished)
+            .map(|(idx, _)| idx)
+        {
+            self.remove_from_ready_queues(id);
+
+            serial_println!(
+                "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused slot)",
+                created_count + 1,
+                process.name,
+                id,
+                process.burst_score,
+                process.get_queue_tier()
+            );
+            self.processes[id] = process;
+            return id;
+        }
+
+        let id = self.processes.len();
         serial_println!(
             "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?}",
             created_count + 1,

@@ -399,6 +399,14 @@ pub static INITRAMFS: &[RamEntry] = &[
 /dev/sda1   /boot        bootfs       defaults\n\
 /dev/ram0   /            ramfs        defaults\n",
     ),
+    // /etc/hosts for DNS resolver (hosts first, then hardcoded fallback)
+    RamEntry::file(
+        "/etc/hosts",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../etc/hosts"),
+    ),
     RamEntry::file(
         "/etc/sunlight/session.toml",
         0,

@@ -107,6 +107,9 @@ pub fn render_sysfetch_to_buffer(
         let _ = write!(w, "{}IP:{} {}.{}.{}.{}/24 (eth0)\n", c, r, ip[0], ip[1], ip[2], ip[3]);
     }
 
+    //  TUI: DNS resolver sources (hosts file via VFS + hardcoded fallback in net_server)
+    let _ = write!(w, "{}DNS:{} hosts + hardcoded\n", c, r);
+
     // Minimal palette: 8 color blocks
     let _ = write!(w, "Palette: ");
     for i in 0..8 {
