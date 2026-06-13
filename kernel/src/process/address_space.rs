@@ -131,6 +131,83 @@ impl AddressSpace {
         true
     }
 
+    /// Walk to the leaf (P1) entry for `page`, returning a raw pointer to it
+    /// if every higher-level table is already present. Works for both
+    /// present and not-present (e.g. swapped) leaf entries.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    unsafe fn p1_entry_ptr(
+        &self,
+        page: Page<Size4KiB>,
+        hhdm_offset: VirtAddr,
+    ) -> Option<*mut x86_64::structures::paging::page_table::PageTableEntry> {
+        let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
+        let p4_entry = &pml4[page.p4_index()];
+        if p4_entry.is_unused() {
+            return None;
+        }
+        let p3_table = &*((hhdm_offset + p4_entry.addr().as_u64()).as_ptr::<PageTable>());
+        let p3_entry = &p3_table[page.p3_index()];
+        if p3_entry.is_unused() {
+            return None;
+        }
+        let p2_table = &*((hhdm_offset + p3_entry.addr().as_u64()).as_ptr::<PageTable>());
+        let p2_entry = &p2_table[page.p2_index()];
+        if p2_entry.is_unused() {
+            return None;
+        }
+        let p1_table = &*((hhdm_offset + p2_entry.addr().as_u64()).as_ptr::<PageTable>());
+        Some(&p1_table[page.p1_index()] as *const _ as *mut _)
+    }
+
+    /// Replace a present leaf entry with a swapped marker: PRESENT cleared,
+    /// address field repurposed to hold `block_id` (shifted into the
+    /// page-aligned address bits). Returns false if `page` isn't mapped.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn mark_swapped(
+        &mut self,
+        page: Page<Size4KiB>,
+        block_id: u64,
+        hhdm_offset: VirtAddr,
+    ) -> bool {
+        match self.p1_entry_ptr(page, hhdm_offset) {
+            Some(ptr) => {
+                (*ptr).set_addr(PhysAddr::new(block_id << 12), PageTableFlags::empty());
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// If `page`'s leaf entry is a swapped marker (not present, non-zero
+    /// address field), return the encoded ZRAM block id.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn swapped_block_id(&self, page: Page<Size4KiB>, hhdm_offset: VirtAddr) -> Option<u64> {
+        let entry = &*self.p1_entry_ptr(page, hhdm_offset)?;
+        if entry.is_unused() || entry.flags().contains(PageTableFlags::PRESENT) {
+            return None;
+        }
+        Some(entry.addr().as_u64() >> 12)
+    }
+
+    /// Re-map `page` to `frame` with `flags` (used to fault a swapped page
+    /// back in). Returns false if `page`'s leaf entry doesn't exist.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn remap_present(
+        &mut self,
+        page: Page<Size4KiB>,
+        frame: PhysFrame<Size4KiB>,
+        flags: PageTableFlags,
+        hhdm_offset: VirtAddr,
+    ) -> bool {
+        match self.p1_entry_ptr(page, hhdm_offset) {
+            Some(ptr) => {
+                (*ptr).set_addr(frame.start_address(), flags);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Switch to this address space (write PML4 phys addr to CR3).
     /// SAFETY: `pml4_phys` must be a valid, page-aligned physical address.
     pub unsafe fn activate(&self) {
