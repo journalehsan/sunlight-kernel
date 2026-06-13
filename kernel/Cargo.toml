@@ -21,6 +21,7 @@ sunlight-elf = { path = "../sunlight-elf" }
 sunlight-fs = { path = "../sunlight-fs" }
 sunlight-compat-linux = { path = "../compat-linux" }
 sunlight-net = { path = "../sunlight-net" }
+lz4_flex = { version = "0.11", default-features = false }
 
 [features]
 key_inject = []

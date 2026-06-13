@@ -185,6 +185,7 @@ pub struct SysInfo {
     pub unix_time: u64,
     pub swap_total_kb: u64,
     pub swap_used_kb: u64,
+    pub swap_compressed_kb: u64,
 }
 
 /// List a directory into `entries`; returns how many were filled.
@@ -233,7 +234,7 @@ pub fn mkdir(path: &[u8], mode: u16) -> Result<(), Errno> {
 }
 
 pub fn sysinfo() -> Result<SysInfo, Errno> {
-    let mut raw = [0u64; 6];
+    let mut raw = [0u64; 7];
     let ret = unsafe { sys::syscall1(sys::SYS_SYSINFO, raw.as_mut_ptr() as u64) };
     sys::check(ret).map(|_| SysInfo {
         total_ram_kb: raw[0],
@@ -242,6 +243,7 @@ pub fn sysinfo() -> Result<SysInfo, Errno> {
         unix_time: raw[3],
         swap_total_kb: raw[4],
         swap_used_kb: raw[5],
+        swap_compressed_kb: raw[6],
     })
 }
 

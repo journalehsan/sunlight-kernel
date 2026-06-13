@@ -1778,15 +1778,16 @@ fn sys_get_time_utc() -> u64 {
 }
 
 /// Syscall: sysinfo (82)
-/// rdi = user pointer to six u64s, filled as:
+/// rdi = user pointer to seven u64s, filled as:
 ///   [0] total RAM (KiB)
 ///   [1] used RAM (KiB)
 ///   [2] uptime (seconds)
 ///   [3] Unix time (seconds)
 ///   [4] swap total (KiB)
 ///   [5] swap used (KiB)
+///   [6] swap used, real compressed size (KiB)
 fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
-    const SYSINFO_BYTES: u64 = 6 * 8;
+    const SYSINFO_BYTES: u64 = 7 * 8;
 
     let ptr = frame.rdi;
     if !is_user_address(ptr) || !is_user_address(ptr + SYSINFO_BYTES - 1) {
@@ -1798,9 +1799,10 @@ fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
     let total_kb = (total_frames as u64) * 4;
     let used_kb = (total_frames.saturating_sub(free_frames) as u64) * 4;
 
-    let (swap_total_blocks, swap_used_blocks, _swap_used_bytes) = crate::memory::zram::stats();
+    let (swap_total_blocks, swap_used_blocks, swap_used_bytes) = crate::memory::zram::stats();
     let swap_total_kb = (swap_total_blocks as u64) * 4;
     let swap_used_kb = (swap_used_blocks as u64) * 4;
+    let swap_compressed_kb = (swap_used_bytes as u64 + 1023) / 1024;
 
     let info = [
         total_kb,
@@ -1809,6 +1811,7 @@ fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
         crate::arch::x86_64::rtc::unix_time(),
         swap_total_kb,
         swap_used_kb,
+        swap_compressed_kb,
     ];
     unsafe {
         core::ptr::copy_nonoverlapping(info.as_ptr(), ptr as *mut u64, info.len());

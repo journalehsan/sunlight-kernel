@@ -60,21 +60,44 @@ impl ZramState {
 static ZRAM: spin::Lazy<spin::Mutex<ZramState>> =
     spin::Lazy::new(|| spin::Mutex::new(ZramState::new()));
 
+/// Header byte prefixing every stored page: 0 = raw (incompressible), 1 = LZ4.
+const FLAG_RAW: u8 = 0;
+const FLAG_LZ4: u8 = 1;
+
 fn compress_page(src: &[u8; ZRAM_BLOCK_SIZE]) -> Result<Vec<u8>, ()> {
-    let mut out = Vec::with_capacity(ZRAM_BLOCK_SIZE);
-    out.extend_from_slice(src);
-    Ok(out)
+    let compressed = lz4_flex::block::compress(src);
+    if compressed.len() < ZRAM_BLOCK_SIZE {
+        let mut out = Vec::with_capacity(compressed.len() + 1);
+        out.push(FLAG_LZ4);
+        out.extend_from_slice(&compressed);
+        Ok(out)
+    } else {
+        let mut out = Vec::with_capacity(ZRAM_BLOCK_SIZE + 1);
+        out.push(FLAG_RAW);
+        out.extend_from_slice(src);
+        Ok(out)
+    }
 }
 
 fn decompress_page(src: &[u8], dst: &mut [u8; ZRAM_BLOCK_SIZE]) -> Result<(), ()> {
-    if src.len() > ZRAM_BLOCK_SIZE {
-        return Err(());
+    let (flag, payload) = src.split_first().ok_or(())?;
+    match *flag {
+        FLAG_RAW => {
+            if payload.len() != ZRAM_BLOCK_SIZE {
+                return Err(());
+            }
+            dst.copy_from_slice(payload);
+            Ok(())
+        }
+        FLAG_LZ4 => {
+            let written = lz4_flex::block::decompress_into(payload, dst).map_err(|_| ())?;
+            if written != ZRAM_BLOCK_SIZE {
+                return Err(());
+            }
+            Ok(())
+        }
+        _ => Err(()),
     }
-
-    let len = src.len().min(ZRAM_BLOCK_SIZE);
-    dst[..len].copy_from_slice(&src[..len]);
-    dst[len..].fill(0);
-    Ok(())
 }
 
 pub fn init() {

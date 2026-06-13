@@ -1162,6 +1162,8 @@ mod sunlight {
                 info.uptime_secs,
                 (info.used_ram_kb / 1024) as u32,
                 (info.total_ram_kb / 1024) as u32,
+                (info.swap_used_kb / 1024) as u32,
+                (info.swap_total_kb / 1024) as u32,
                 net_ip,
                 &mut buf,
             );

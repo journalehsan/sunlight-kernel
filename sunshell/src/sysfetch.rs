@@ -43,6 +43,8 @@ pub fn render_sysfetch_to_buffer(
     uptime_secs: u64,
     mem_used: u32,
     mem_total: u32,
+    swap_used: u32,
+    swap_total: u32,
     net_ip: Option<[u8; 4]>,
     out: &mut [u8],
 ) -> usize {
@@ -114,6 +116,35 @@ pub fn render_sysfetch_to_buffer(
         }
     }
     let _ = writeln!(w);
+
+    // Color-coded swap display (only shown when swap is configured)
+    if swap_total > 0 {
+        let swap_percent = (swap_used as u32 * 100) / swap_total;
+        let swap_color = if swap_percent < 50 {
+            g
+        } else if swap_percent < 80 {
+            y
+        } else {
+            r_color
+        };
+
+        let _ = writeln!(
+            w,
+            "{}Swap:{} {}{}MB{}/{}MB ({}%)",
+            c, r, swap_color, swap_used, r, swap_total, swap_percent
+        );
+
+        let _ = write!(w, "{}Bar:{} ", c, r);
+        let swap_blocks = (swap_percent / 10) as u32;
+        for i in 0..10 {
+            if i < swap_blocks {
+                let _ = write!(w, "{}█{}", swap_color, r);
+            } else {
+                let _ = write!(w, "░");
+            }
+        }
+        let _ = writeln!(w);
+    }
 
     if let Some(ip) = net_ip {
         let _ = write!(w, "{}IP:{} {}.{}.{}.{}/24 (eth0)\n", c, r, ip[0], ip[1], ip[2], ip[3]);
