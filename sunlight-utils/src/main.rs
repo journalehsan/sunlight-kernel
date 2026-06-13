@@ -83,6 +83,7 @@ fn run(args: &[&str]) -> i32 {
         "echo" => cmd_echo(rest),
         "whoami" => cmd_whoami(),
         "id" => cmd_id(rest),
+        "free" => cmd_free(rest),
         "nice" => cmd_nice(rest),
         "renice" => cmd_renice(rest),
         "pwd" => cmd_pwd(),
@@ -484,6 +485,103 @@ fn cmd_wc(args: &[&str]) -> i32 {
     print2(" ", path);
     let _ = write_all(b"\n");
     0
+}
+
+#[derive(Clone, Copy)]
+enum FreeUnit {
+    Human,
+    MB,
+    GB,
+}
+
+fn cmd_free(args: &[&str]) -> i32 {
+    let mut unit = FreeUnit::MB;
+
+    for arg in args {
+        match *arg {
+            "-h" | "--human-readable" => unit = FreeUnit::Human,
+            "-m" => unit = FreeUnit::MB,
+            "-g" => unit = FreeUnit::GB,
+            _ => {
+                let _ = write_all(b"usage: free [-h|-m|-g]\n");
+                return 2;
+            }
+        }
+    }
+
+    let info = match libc::sysinfo() {
+        Ok(s) => s,
+        Err(_) => {
+            let _ = write_all(b"free: sysinfo failed\n");
+            return 1;
+        }
+    };
+
+    let total_kb = info.total_ram_kb;
+    let used_kb = info.used_ram_kb.min(total_kb);
+    let free_kb = total_kb.saturating_sub(used_kb);
+    let swap_total_kb = 0u64;
+    let swap_used_kb = 0u64;
+    let swap_free_kb = 0u64;
+
+    let (hdr1, hdr2, hdr3) = match unit {
+        FreeUnit::Human => ("total", "used", "free"),
+        FreeUnit::MB => ("total(MB)", "used(MB)", "free(MB)"),
+        FreeUnit::GB => ("total(GB)", "used(GB)", "free(GB)"),
+    };
+
+    let _ = write_all(b"              ");
+    let _ = write_all(hdr1.as_bytes());
+    let _ = write_all(b"    ");
+    let _ = write_all(hdr2.as_bytes());
+    let _ = write_all(b"    ");
+    let _ = write_all(hdr3.as_bytes());
+    let _ = write_all(b"\n");
+
+    let _ = write_all(b"Mem:        ");
+    write_unit(total_kb, unit);
+    let _ = write_all(b"    ");
+    write_unit(used_kb, unit);
+    let _ = write_all(b"    ");
+    write_unit(free_kb, unit);
+    let _ = write_all(b"\n");
+
+    let _ = write_all(b"Swap:       ");
+    write_unit(swap_total_kb, unit);
+    let _ = write_all(b"    ");
+    write_unit(swap_used_kb, unit);
+    let _ = write_all(b"    ");
+    write_unit(swap_free_kb, unit);
+    let _ = write_all(b"\n");
+    0
+}
+
+fn write_unit(kb: u64, unit: FreeUnit) {
+    match unit {
+        FreeUnit::MB => print_u64(kb / 1024),
+        FreeUnit::GB => print_u64(kb / (1024 * 1024)),
+        FreeUnit::Human => print_human(kb),
+    }
+}
+
+fn print_human(kb: u64) {
+    if kb >= 1024 * 1024 {
+        print_scaled(kb, 1024 * 1024, b'G');
+    } else if kb >= 1024 {
+        print_scaled(kb, 1024, b'M');
+    } else {
+        print_u64(kb);
+        let _ = write_all(b"K");
+    }
+}
+
+fn print_scaled(value: u64, base: u64, suffix: u8) {
+    let integer = value / base;
+    let frac = ((value % base) * 10) / base;
+    print_u64(integer);
+    let _ = write_all(b".");
+    print_u64(frac);
+    let _ = write_all(&[suffix]);
 }
 
 fn cmd_uname(args: &[&str]) -> i32 {

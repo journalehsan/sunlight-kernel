@@ -253,7 +253,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file"
         | "/bin/stat" | "/bin/pwd" | "/bin/date" | "/bin/whoami"
         | "/bin/id" | "/bin/uname" | "/bin/echo" | "/bin/nice"
-        | "/bin/renice"
+        | "/bin/renice" | "/bin/free"
         | "/usr/bin/ls" | "/usr/bin/cat" | "/usr/bin/cp" | "/usr/bin/mv"
         | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
         | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep"
@@ -262,7 +262,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd"
         | "/usr/bin/date" | "/usr/bin/whoami" | "/usr/bin/id"
         | "/usr/bin/uname" | "/usr/bin/echo" | "/usr/bin/nice"
-        | "/usr/bin/renice" => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),
+        | "/usr/bin/renice" | "/usr/bin/free" => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),
         "/bin/ping" | "/bin/ifconfig" | "/bin/wget" | "/bin/curl"
         | "/bin/dig" | "/bin/nslookup" | "/bin/hostname" | "/bin/netstat"
         | "/bin/ss" | "/bin/traceroute" | "/bin/arp" | "/bin/dhclient"

@@ -177,6 +177,14 @@ pub struct Stat {
     pub nlinks: u32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct SysInfo {
+    pub total_ram_kb: u64,
+    pub used_ram_kb: u64,
+    pub uptime_secs: u64,
+    pub unix_time: u64,
+}
+
 /// List a directory into `entries`; returns how many were filled.
 pub fn read_dir(path: &[u8], entries: &mut [DirEntry]) -> Result<usize, Errno> {
     let mut path_buf = [0u8; MAX_PATH];
@@ -220,6 +228,17 @@ pub fn mkdir(path: &[u8], mode: u16) -> Result<(), Errno> {
     let path_ptr = cstr(&mut path_buf, path)?;
     let ret = unsafe { sys::syscall3(sys::SYS_MKDIR, path_ptr as u64, mode as u64, 0) };
     sys::check(ret).map(|_| ())
+}
+
+pub fn sysinfo() -> Result<SysInfo, Errno> {
+    let mut raw = [0u64; 4];
+    let ret = unsafe { sys::syscall1(sys::SYS_SYSINFO, raw.as_mut_ptr() as u64) };
+    sys::check(ret).map(|_| SysInfo {
+        total_ram_kb: raw[0],
+        used_ram_kb: raw[1],
+        uptime_secs: raw[2],
+        unix_time: raw[3],
+    })
 }
 
 /// Create an anonymous pipe; returns (read_end, write_end).

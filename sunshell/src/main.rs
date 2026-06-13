@@ -533,20 +533,6 @@ mod sunlight {
             &self.username[..self.username_len]
         }
 
-        fn cmd_uname(&self, args: &[&str]) -> &[u8] {
-            match args.first().copied() {
-                None => b"SunlightOS",
-                Some("-s") => b"SunlightOS",
-                Some("-n") => b"sunlight",
-                Some("-r") => b"0.1.0",
-                Some("-v") => b"Phase 3.8",
-                Some("-m") | Some("-p") | Some("-i") => b"x86_64",
-                Some("-o") => b"SunlightOS",
-                Some("-a") => b"SunlightOS sunlight 0.1.0 Phase 3.8 x86_64 SunlightOS",
-                Some(_) => b"uname: invalid option\n",
-            }
-        }
-
         fn cmd_id(&self, args: &[&str]) -> &[u8] {
             if args.is_empty() {
                 // Return current user's info
@@ -1256,51 +1242,23 @@ mod sunlight {
             unsafe {
                 LONG_OUT_ACTIVE = true;
             }
-            push_section_header("Static hostname:");
-            push_line("ehsan-21ahs1qm00");
-            push_blank();
-            push_section_header("Icon name:");
-            push_line("computer-laptop");
-            push_blank();
-            push_section_header("Chassis:");
-            push_line("laptop");
-            push_blank();
-            push_section_header("Chassis Asset Tag:");
-            push_line("No Asset Tag");
-            push_blank();
-            push_section_header("Machine ID:");
-            push_line("658603116ba54b838da9b2f28c288257");
-            push_blank();
-            push_section_header("Boot ID:");
-            push_line("35763b833f844053ae2fd0af6eabba4c");
-            push_blank();
-            push_section_header("Operating System:");
-            push_line("SunlightOS 0.1 (QEMU)");
-            push_blank();
-            push_section_header("Kernel:");
-            push_line("SunlightOS 0.1.0");
-            push_blank();
-            push_section_header("Architecture:");
-            push_line("x86-64");
-            push_blank();
-            push_section_header("Hardware Vendor:");
-            push_line("QEMU");
-            push_blank();
-            push_section_header("Hardware Model:");
-            push_line("Standard PC (i440FX + PIIX, 1996)");
-            push_blank();
-            push_section_header("Hardware SKU:");
-            push_line("SUNLIGHT-VM-1");
-            push_blank();
-            push_section_header("Firmware Version:");
-            push_line("Limine BIOS (1.17)");
-            push_blank();
-            push_section_header("Firmware Date:");
-            push_line("Tue 2024-01-01");
-            push_blank();
-            push_section_header("Firmware Age:");
-            push_line("1y 6month 0w 0d");
-            push_blank();
+            let mut host_buf = [0u8; 64];
+            let host_len = read_hostname_from_vfs(&mut host_buf);
+            let host = core::str::from_utf8(&host_buf[..host_len]).unwrap_or("sunlight");
+
+            let line1 = alloc::format!(
+                "Static hostname: {} | OS: {}/{} | Kernel: {}/{} | Arch: {}",
+                host,
+                OS_NAME,
+                OS_VERSION,
+                KERNEL_NAME,
+                KERNEL_VERSION,
+                machine_name()
+            );
+            push_line(&line1);
+
+            let line2 = "Chassis: vm | Hardware Vendor: QEMU | Hardware Model: Standard PC (i440FX + PIIX, 1996) | Firmware: Limine BIOS (1.17)";
+            push_line(line2);
             b""
         }
 
