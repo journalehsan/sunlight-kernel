@@ -1,0 +1,6 @@
+[SEC]  Token forge attempt: REJECTED (CapError::NotFound)
+[SEC]  word_count=9 attempt: REJECTED (IpcError::InvalidWordCount)
+[SEC]  kernel ptr attempt: REJECTED (PtrError::KernelAddress)
+[SEC]  badge forge attempt: REJECTED (overwritten by kernel)
+[SEC]  dead process cap: REJECTED (CapError::Revoked)
+[SEC]  Security hardening: PASSED

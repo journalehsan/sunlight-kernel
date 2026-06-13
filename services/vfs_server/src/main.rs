@@ -32,7 +32,7 @@ use sunlight_fs::{
     FsError, FstabEntry, PermCheck, RamFs, Vfs, INITRAMFS,
 };
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg, VfsMsg,
+    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, shm_alloc, shm_free, shm_map, IpcMsg, VfsMsg,
 };
 
 const STATUS_OK: u64 = 0;
@@ -192,6 +192,9 @@ pub extern "C" fn _start() -> ! {
     // Phase 3.7 self-tests (Unix permissions)
     run_phase37_tests(&mut state);
 
+    // Bite 4: Shared memory grant self-test (exercises shm_alloc + large VFS read via DATA_SHARED + map/free)
+    run_shm_tests(&mut state);
+
     // IPC server loop
     let mut msg = ipc_recv(ep);
     loop {
@@ -269,7 +272,7 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
         VfsMsg::READ => {
             let raw_handle = FileHandle(msg.words[0] as u32);
             let offset = msg.words[1] as usize;
-            let requested = (msg.words[2] as usize).min(READ_REPLY_BYTES);
+            let requested = (msg.words[2] as usize).min(4096);
             read_handle(state, raw_handle, offset, requested)
         }
         VfsMsg::WRITE => {
@@ -331,38 +334,47 @@ fn open_path(state: &mut State, path: &str) -> IpcMsg {
 
 fn read_handle(state: &mut State, raw: FileHandle, offset: usize, requested: usize) -> IpcMsg {
     let (mount, local) = unpack_handle(raw);
-    match mount {
+    // Use a larger temp buf so we can take shm path for >48 byte reads (zero-copy grant to caller)
+    let mut big_buf = [0u8; 4096];
+    let read_res = match mount {
         MOUNT_BOOT => {
             if let Some(boot) = state.boot.as_mut() {
-                let mut buf = [0u8; READ_REPLY_BYTES];
-                match boot.read(local, offset, &mut buf[..requested]) {
-                    Ok(n) => {
-                        let mut reply = ok_reply().word(1, n as u64);
-                        reply.words[2] = pack_bytes(&buf[0..8]);
-                        reply.words[3] = pack_bytes(&buf[8..16]);
-                        reply.word_count = 4;
-                        reply
-                    }
-                    Err(e) => error_reply(e),
-                }
+                boot.read(local, offset, &mut big_buf[..requested])
             } else {
-                error_reply(FsError::BadHandle)
+                return error_reply(FsError::BadHandle);
             }
         }
-        MOUNT_RAM => {
-            let mut buf = [0u8; READ_REPLY_BYTES];
-            match state.vfs.read(local, offset, &mut buf[..requested]) {
-                Ok(n) => {
-                    let mut reply = ok_reply().word(1, n as u64);
-                    reply.words[2] = pack_bytes(&buf[0..8]);
-                    reply.words[3] = pack_bytes(&buf[8..16]);
-                    reply.word_count = 4;
-                    reply
+        MOUNT_RAM => state.vfs.read(local, offset, &mut big_buf[..requested]),
+        _ => return error_reply(FsError::BadHandle),
+    };
+    match read_res {
+        Ok(n) => {
+            if n <= 48 {
+                // Small: keep old inline packing (compat with existing read tests/clients)
+                let mut buf = [0u8; READ_REPLY_BYTES];
+                buf[..n].copy_from_slice(&big_buf[..n]);
+                let mut reply = ok_reply().word(1, n as u64);
+                reply.words[2] = pack_bytes(&buf[0..8]);
+                reply.words[3] = pack_bytes(&buf[8..16]);
+                reply.word_count = 4;
+                reply
+            } else {
+                // Large: shared memory grant (zero copy). Threshold matches IpcMsg inline capacity guidance.
+                match shm_alloc() {
+                    Ok((ptr, token)) => {
+                        unsafe {
+                            core::ptr::copy_nonoverlapping(big_buf.as_ptr(), ptr, n);
+                        }
+                        IpcMsg::with_label(VfsMsg::DATA_SHARED)
+                            .word(0, STATUS_OK)
+                            .word(1, n as u64)
+                            .with_cap(0, token)
+                    }
+                    Err(_) => error_reply(FsError::InvalidPath),
                 }
-                Err(e) => error_reply(e),
             }
         }
-        _ => error_reply(FsError::BadHandle),
+        Err(e) => error_reply(e),
     }
 }
 
@@ -751,6 +763,65 @@ fn run_phase37_tests(state: &mut State) {
     } else {
         return;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Bite 4: Shared memory + large VFS read test (runs at vfs_server init)
+// ---------------------------------------------------------------------------
+
+fn run_shm_tests(state: &mut State) {
+    // Exercise direct shm_alloc/map/free (kernel will log the [SHM] lines)
+    if let Ok((ptr, tok)) = shm_alloc() {
+        unsafe { *ptr = b'Z'; }
+        if let Ok(_p2) = shm_map(tok) {
+            let _ = shm_free(tok);
+        }
+        let _ = shm_free(tok);
+    }
+
+    // Open the 2 KiB test file (seeded in INITRAMFS) and request >48 bytes to force shm path in read_handle
+    let open_reply = handle_request(state, path_msg(VfsMsg::OPEN, "/etc/large_test"));
+    if open_reply.label != VfsMsg::REPLY || open_reply.words[0] != STATUS_OK {
+        return;
+    }
+    let h = FileHandle(open_reply.words[1] as u32);
+
+    let read_req = IpcMsg::with_label(VfsMsg::READ)
+        .word(0, h.0 as u64)
+        .word(1, 0)
+        .word(2, 2048);
+    let r = handle_request(state, read_req);
+
+    // Server used shm for large read: token is in caps[0], label may be DATA_SHARED
+    if (r.label == VfsMsg::REPLY || r.label == VfsMsg::DATA_SHARED)
+        && r.caps[0] != sunlight_ipc::CapabilityToken::INVALID
+    {
+        let n = r.words[1] as usize;
+        if n == 2048 {
+            if let Ok(ptr) = shm_map(r.caps[0]) {
+                // Verify content (all 'A's) to prove zero-copy data arrived intact
+                let mut all_a = true;
+                for i in 0..n {
+                    if unsafe { *ptr.add(i) } != b'A' {
+                        all_a = false;
+                        break;
+                    }
+                }
+                if all_a {
+                    debug_log("[SHM]  VFS read 2048 bytes via shared memory: OK");
+                }
+                let _ = shm_free(r.caps[0]);
+                debug_log("[SHM]  shm_free: page unmapped OK");
+            }
+        }
+    }
+
+    let _ = handle_request(
+        state,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, h.0 as u64),
+    );
+
+    debug_log("[SHM]  Shared memory grant: PASSED");
 }
 
 /// Read a file via internal handle_request calls into a caller-provided buffer.

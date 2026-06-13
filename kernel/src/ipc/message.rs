@@ -56,6 +56,17 @@ impl IpcMsg {
         self
     }
 
+    pub fn with_cap(mut self, idx: usize, val: CapabilityToken) -> Self {
+        if idx < IPC_MAX_CAPS {
+            self.caps[idx] = val;
+            let count = (idx + 1) as u32;
+            if self.cap_count < count {
+                self.cap_count = count;
+            }
+        }
+        self
+    }
+
     /// Load a compact IPC message from syscall registers.
     pub fn from_registers(regs: &SyscallRegs) -> Self {
         let counts = regs.rdx;

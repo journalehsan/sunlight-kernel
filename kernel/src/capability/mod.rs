@@ -1,5 +1,6 @@
 use crate::serial_println;
 use core::sync::atomic::{AtomicU64, Ordering};
+use x86_64::PhysAddr;
 
 /// A capability token: opaque to user-space, meaningful to the kernel.
 #[repr(transparent)]
@@ -57,6 +58,10 @@ pub enum CapError {
     InvalidToken,
     InsufficientRights,
     EndpointNotFound,
+    /// Token does not exist in the broker's table at all (forged/guessed).
+    NotFound,
+    /// Token existed but has been revoked (e.g. owning process exited).
+    Revoked,
 }
 
 /// Global token counter and seed.
@@ -87,6 +92,8 @@ fn generate_token() -> CapabilityToken {
 pub struct CapabilityBroker {
     endpoints: alloc::vec::Vec<Endpoint>,
     capabilities: alloc::vec::Vec<(CapabilityToken, u32, CapabilityRights)>,
+    /// Shared memory grants: (token, phys_frame, owner_pid, revoked)
+    shared_grants: alloc::vec::Vec<(CapabilityToken, PhysAddr, usize, bool)>,
 }
 
 impl CapabilityBroker {
@@ -94,6 +101,7 @@ impl CapabilityBroker {
         Self {
             endpoints: alloc::vec::Vec::new(),
             capabilities: alloc::vec::Vec::new(),
+            shared_grants: alloc::vec::Vec::new(),
         }
     }
 
@@ -189,5 +197,60 @@ impl CapabilityBroker {
             .endpoint_owner(endpoint_id)
             .ok_or(CapError::EndpointNotFound)?;
         Ok((endpoint_id, owner))
+    }
+
+    /// Mint a capability token granting access to map a shared physical frame.
+    pub fn mint_shared_page(&mut self, phys: PhysAddr, owner_pid: usize) -> CapabilityToken {
+        let token = generate_token();
+        self.shared_grants.push((token, phys, owner_pid, false));
+        serial_println!(
+            "[CAP] Minted shared-page token {:#x} phys={:#x} owner={}",
+            token.as_u64(),
+            phys.as_u64(),
+            owner_pid
+        );
+        token
+    }
+
+    /// Resolve a shared-page capability token to its physical frame (if valid and not revoked).
+    pub fn resolve_shared_page(&self, token: CapabilityToken) -> Option<PhysAddr> {
+        self.shared_grants
+            .iter()
+            .find_map(|(t, phys, _, revoked)| if *t == token && !*revoked { Some(*phys) } else { None })
+    }
+
+    /// Validate a shared-page token, distinguishing "never existed" (forged/guessed)
+    /// from "existed but revoked" (owner exited). Used by security self-tests and
+    /// can be used by callers that need to report the precise rejection reason.
+    pub fn validate_shared_page(&self, token: CapabilityToken) -> Result<PhysAddr, CapError> {
+        let entry = self
+            .shared_grants
+            .iter()
+            .find(|(t, _, _, _)| *t == token)
+            .ok_or(CapError::NotFound)?;
+        if entry.3 {
+            return Err(CapError::Revoked);
+        }
+        Ok(entry.1)
+    }
+
+    /// Revoke a shared-page grant token (called on owner free or cleanup).
+    pub fn revoke_shared(&mut self, token: CapabilityToken) {
+        if let Some(idx) = self.shared_grants.iter().position(|(t, _, _, _)| *t == token) {
+            self.shared_grants.swap_remove(idx);
+            serial_println!("[CAP] Revoked shared-page token {:#x}", token.as_u64());
+        }
+    }
+
+    /// Mark all shared-page grants owned by `pid` as revoked, without removing
+    /// them from the table (so a subsequent lookup correctly reports
+    /// `CapError::Revoked` rather than `CapError::NotFound`).
+    /// Called when a process exits, before its frames are freed.
+    pub fn revoke_all_for(&mut self, pid: usize) {
+        for entry in self.shared_grants.iter_mut() {
+            if entry.2 == pid {
+                entry.3 = true;
+            }
+        }
     }
 }

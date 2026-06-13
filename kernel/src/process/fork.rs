@@ -50,9 +50,7 @@ unsafe fn clone_address_space_cow(
         new_pml4[i].set_addr(parent_entry.addr(), parent_entry.flags());
     }
 
-    Ok(AddressSpace {
-        pml4_phys: new_pml4_phys,
-    })
+    Ok(AddressSpace::from_pml4(new_pml4_phys))
 }
 
 /// Fork the current process from within the scheduler.
@@ -122,6 +120,8 @@ pub fn fork_current_process(
             block_start_tick: 0,   // Not blocked yet
             aging_counter: 0,      // No aging yet
             wait_child: None,      // Not waiting on a child
+            owned_shared: alloc::vec::Vec::new(),
+            mapped_shared: alloc::vec::Vec::new(),
         };
 
         // Setup kernel stack top
@@ -220,6 +220,8 @@ fn sys_fork(
             block_start_tick: 0,                     // Not blocked yet
             aging_counter: 0,                        // No aging yet
             wait_child: None,                        // Not waiting on a child
+            owned_shared: alloc::vec::Vec::new(),
+            mapped_shared: alloc::vec::Vec::new(),
         };
 
         // Setup kernel stack top

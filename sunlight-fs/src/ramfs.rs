@@ -389,6 +389,8 @@ pub static INITRAMFS: &[RamEntry] = &[
         mode::FILE_644,
         b"Welcome to SunlightOS\n",
     ),
+    // Large file for shared-memory IPC read test (>48 bytes triggers shm path)
+    RamEntry::file("/etc/large_test", 0, 0, mode::FILE_644, &[b'A'; 2048]),
     RamEntry::file("/etc/hostname", 0, 0, mode::FILE_644, b"sunlight\n"),
     RamEntry::file(
         "/etc/fstab",

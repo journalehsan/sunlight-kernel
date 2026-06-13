@@ -67,6 +67,11 @@ pub enum SunlightSyscall {
     SetNice = 83,
     GetNice = 84,
 
+    // Shared memory grant (Bite 4)
+    ShmAlloc = 92,
+    ShmMap = 93,
+    ShmFree = 94,
+
     DebugLog = 99,
 }
 
@@ -290,6 +295,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         85 => sys_swapctl(frame),
         90 => sys_net_tx(frame),
         91 => sys_net_rx(frame),
+        92 => sys_shm_alloc(frame),
+        93 => sys_shm_map(frame),
+        94 => sys_shm_free(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -357,9 +365,32 @@ unsafe fn read_user_ptr_array(ptr: u64, max_entries: usize) -> Option<Vec<u64>> 
     Some(result)
 }
 
+/// Reject IpcMsg whose counts exceed the fixed-size word/cap arrays. Registers are
+/// attacker-controlled, so `IpcMsg::from_registers` clamps these defensively — but
+/// a clamp silently truncates instead of telling the caller their message was
+/// forged/malformed. This catches the out-of-range case explicitly.
+pub fn validate_ipc_msg(msg: &IpcMsg) -> Result<(), IpcError> {
+    if msg.word_count as usize > crate::ipc::message::IPC_MAX_WORDS {
+        return Err(IpcError::InvalidWordCount);
+    }
+    if msg.cap_count as usize > crate::ipc::message::IPC_MAX_CAPS {
+        return Err(IpcError::InvalidCapCount);
+    }
+    Ok(())
+}
+
 fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     let token = CapabilityToken(frame.rsi);
     let msg = IpcMsg::from_registers(frame);
+
+    if let Err(e) = validate_ipc_msg(&msg) {
+        let pid = crate::sched::SCHEDULER.lock().current_process().pid;
+        crate::serial_println!(
+            "[IPC] WARN: invalid msg from pid={} word_count={} cap_count={}",
+            pid, msg.word_count, msg.cap_count
+        );
+        return e as u64;
+    }
 
     // Check for spawn capability (fast path handled by kernel)
     if token == crate::capability::SPAWN_TOKEN {
@@ -542,6 +573,13 @@ fn process_exit(code: i32) -> ! {
         let parent_pid = p.ppid;
         crate::memory::swap::untrack_process(my_pid);
         crate::sched::note_process_finished(my_pid, p.name);
+
+        // Shared memory grant cleanup (owner frees frames, everyone unmaps views)
+        {
+            let mut pmm = crate::PMM.lock();
+            let mut caps = crate::capability::CAP_BROKER.lock();
+            crate::memory::shared::cleanup_shared_pages(p, &mut *pmm, &mut *caps);
+        }
 
         // Wake a parent that is blocked in waitpid() on this child. wake_pid
         // only acts on BlockedOnIpc processes, and we gate on wait_child so a
@@ -1812,6 +1850,67 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
         );
     }
     n as u64
+}
+
+fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
+    let hhdm_offset = VirtAddr::new(
+        crate::HHDM_REQ
+            .response()
+            .expect("no hhdm")
+            .offset,
+    );
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let mut caps = crate::capability::CAP_BROKER.lock();
+    let process = sched.current_process_mut();
+    match crate::memory::shared::alloc_shared_page(process, &mut *pmm, &mut *caps, hhdm_offset) {
+        Ok((virt, token)) => {
+            crate::serial_println!("[SHM]  alloc_shared_page: OK");
+            // Return virt in rax (the fn result), token also in rdx (and r13 for ipc wrapper convenience)
+            frame.rdx = token.0;
+            frame.r13 = token.0;
+            virt.as_u64()
+        }
+        Err(_) => u64::MAX,
+    }
+}
+
+fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
+    let token = crate::capability::CapabilityToken(frame.rdi);
+    let hhdm_offset = VirtAddr::new(
+        crate::HHDM_REQ
+            .response()
+            .expect("no hhdm")
+            .offset,
+    );
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let mut caps = crate::capability::CAP_BROKER.lock();
+    let process = sched.current_process_mut();
+    match crate::memory::shared::map_shared_page(process, token, &mut *pmm, &mut *caps, hhdm_offset) {
+        Ok(virt) => {
+            crate::serial_println!("[SHM]  map_shared_page: OK");
+            virt.as_u64()
+        }
+        Err(_) => u64::MAX,
+    }
+}
+
+fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
+    let token = crate::capability::CapabilityToken(frame.rdi);
+    let hhdm_offset = VirtAddr::new(
+        crate::HHDM_REQ
+            .response()
+            .expect("no hhdm")
+            .offset,
+    );
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let mut caps = crate::capability::CAP_BROKER.lock();
+    let process = sched.current_process_mut();
+    crate::memory::shared::free_shared_page(process, token, &mut *pmm, &mut *caps, hhdm_offset);
+    crate::serial_println!("[SHM]  shm_free: page unmapped OK");
+    0
 }
 
 /// Syscall: get_time_utc (81)

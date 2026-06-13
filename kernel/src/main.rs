@@ -206,6 +206,9 @@ pub extern "C" fn _start() -> ! {
     splash.redraw();
     capability::init_token_seed();
 
+    // 7b. Security hardening self-test (Bite 4, Task 0)
+    run_security_hardening_tests(hhdm_offset);
+
     // 7a. ELF loader + spawn endpoint
     serial_println!("[ELF]  Static ELF loader initialized");
     splash.log("[ELF] Static ELF loader initialized");
@@ -1004,6 +1007,96 @@ fn map_tty_framebuffer(
                 .map_page(user_page, fb_frame, flags, pmm, hhdm_offset);
         }
     }
+}
+
+/// Bite 4, Task 0: exercise the IPC/capability hardening paths at boot and
+/// confirm each attack surface is rejected with the expected error.
+fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
+    use crate::capability::{CapError, CapabilityToken};
+    use crate::ipc::message::IpcMsg;
+    use crate::memory::validate::{validate_user_ptr, PtrError, KERNEL_START};
+
+    // 1. Token forge: a token that was never minted must be rejected as NotFound.
+    {
+        let caps = capability::CAP_BROKER.lock();
+        let forged = CapabilityToken(0xDEAD_BEEF_DEAD_BEEF);
+        match caps.validate_shared_page(forged) {
+            Err(CapError::NotFound) => {
+                serial_println!("[SEC]  Token forge attempt: REJECTED (CapError::NotFound)");
+            }
+            other => { serial_println!("[SEC]  Token forge attempt: UNEXPECTED {:?}", other); }
+        }
+    }
+
+    // 2. word_count overflow: a forged message claiming more words than the
+    //    fixed-size array holds must be rejected.
+    {
+        let mut msg = IpcMsg::with_label(0);
+        msg.word_count = (crate::ipc::message::IPC_MAX_WORDS as u32) + 1;
+        match crate::arch::x86_64::syscall::validate_ipc_msg(&msg) {
+            Err(crate::ipc::IpcError::InvalidWordCount) => {
+                serial_println!(
+                    "[SEC]  word_count={} attempt: REJECTED (IpcError::InvalidWordCount)",
+                    msg.word_count
+                );
+            }
+            other => { serial_println!("[SEC]  word_count overflow: UNEXPECTED {:?}", other); }
+        }
+    }
+
+    // 3. Kernel pointer: a user-space syscall passing a kernel-space address
+    //    must be rejected before the kernel ever dereferences it.
+    {
+        let mut pmm = PMM.lock();
+        // SAFETY: hhdm_offset is the Limine-provided HHDM base, valid at this point in boot.
+        let process = unsafe { Process::new(usize::MAX, 0, "sectest", &mut pmm, hhdm_offset) };
+        // SAFETY: hhdm_offset is correct; this only reads page tables.
+        match unsafe { validate_user_ptr(KERNEL_START, 8, &process, hhdm_offset) } {
+            Err(PtrError::KernelAddress) => {
+                serial_println!("[SEC]  kernel ptr attempt: REJECTED (PtrError::KernelAddress)");
+            }
+            other => { serial_println!("[SEC]  kernel ptr attempt: UNEXPECTED {:?}", other); }
+        }
+    }
+
+    // 4. Badge forge: the kernel must overwrite the badge with the real sender
+    //    pid, discarding whatever the caller placed in the message.
+    {
+        let mut bus = crate::ipc::IpcBus::new();
+        let mut sched = sched::SCHEDULER.lock();
+        let mut msg = IpcMsg::with_label(0);
+        msg.badge = 0x1337; // forged badge — must be discarded
+        let real_caller_pid = 0x4242;
+        bus.enqueue_call(0, msg, real_caller_pid, &mut sched, real_caller_pid);
+        let delivered = bus.pop_pending(0).expect("enqueued message must be present");
+        if delivered.badge == real_caller_pid as u64 && delivered.badge != 0x1337 {
+            serial_println!("[SEC]  badge forge attempt: REJECTED (overwritten by kernel)");
+        } else {
+            serial_println!("[SEC]  badge forge attempt: UNEXPECTED badge={:#x}", delivered.badge);
+        }
+    }
+
+    // 5. Dead process cap: a shared-page grant owned by an exited process must
+    //    report Revoked, not silently resolve to the stale physical frame.
+    {
+        let mut caps = capability::CAP_BROKER.lock();
+        let mut pmm = PMM.lock();
+        let phys = pmm.alloc_frame().expect("sectest frame alloc");
+        let dead_pid = 0x9999;
+        let token = caps.mint_shared_page(phys, dead_pid);
+        caps.revoke_all_for(dead_pid);
+        match caps.validate_shared_page(token) {
+            Err(CapError::Revoked) => {
+                serial_println!("[SEC]  dead process cap: REJECTED (CapError::Revoked)");
+            }
+            other => { serial_println!("[SEC]  dead process cap: UNEXPECTED {:?}", other); }
+        }
+        // Clean up: remove the grant entirely and free the frame.
+        caps.revoke_shared(token);
+        pmm.free_frame(phys);
+    }
+
+    serial_println!("[SEC]  Security hardening: PASSED");
 }
 
 /// Touch one zram block after heap setup so swap accounting is visible without

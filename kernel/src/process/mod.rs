@@ -73,6 +73,11 @@ pub struct Process {
     /// the parent from `BlockedOnIpc` when that child exits, instead of having
     /// the parent busy-spin in a yield loop.
     pub wait_child: Option<usize>,
+
+    /// Shared memory pages this process owns (via shm_alloc).
+    pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedPage>,
+    /// Shared memory pages this process currently has mapped via tokens (owner + receivers).
+    pub mapped_shared: alloc::vec::Vec<(crate::capability::CapabilityToken, x86_64::VirtAddr)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,6 +158,8 @@ impl Process {
             block_start_tick: 0,    // Not blocked yet
             aging_counter: 0,       // No aging yet
             wait_child: None,       // Not waiting on a child
+            owned_shared: alloc::vec::Vec::new(),
+            mapped_shared: alloc::vec::Vec::new(),
         }
     }
 

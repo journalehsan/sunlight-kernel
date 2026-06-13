@@ -27,6 +27,10 @@ pub enum SunlightSyscall {
     // device (ring-0 port I/O); these exchange raw Ethernet frames.
     NetTx = 90,
     NetRx = 91,
+    // Shared memory grant for large zero-copy IPC (Bite 4)
+    ShmAlloc = 92,
+    ShmMap = 93,
+    ShmFree = 94,
     DebugLog = 99,
 }
 
@@ -99,6 +103,17 @@ impl IpcMsg {
         }
         self
     }
+
+    pub fn with_cap(mut self, idx: usize, val: CapabilityToken) -> Self {
+        if idx < IPC_MAX_CAPS {
+            self.caps[idx] = val;
+            let count = (idx + 1) as u32;
+            if self.cap_count < count {
+                self.cap_count = count;
+            }
+        }
+        self
+    }
 }
 
 #[allow(non_snake_case)]
@@ -142,6 +157,7 @@ pub mod VfsMsg {
     pub const GETPWNAM: u64 = 11;  // Get user info by username
     pub const GETGRGID: u64 = 12;  // Get group info by gid
     pub const GETPWUID: u64 = 13;  // Get user info by uid
+    pub const DATA_SHARED: u64 = 31;  // large read reply carries cap in caps[0]
 }
 
 #[allow(non_snake_case)]
@@ -186,6 +202,14 @@ pub enum IpcError {
     EndpointNotFound = 2,
     WouldBlock = 3,
     InvalidArgument = 4,
+}
+
+/// Errors from shared memory grant syscalls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShmError {
+    OutOfMemory = 1,
+    InvalidToken = 2,
+    InvalidArgument = 3,
 }
 
 #[inline(always)]
@@ -473,4 +497,32 @@ impl ProcessExit {
 
 pub mod process_exit {
     pub use super::ProcessExit;
+}
+
+/// Allocate a shared physical page. Returns (local virtual ptr in caller AS, capability token to send to receiver).
+pub fn shm_alloc() -> Result<(*mut u8, CapabilityToken), ShmError> {
+    let (ret, msg) = unsafe { raw_syscall(SunlightSyscall::ShmAlloc, 0, 0, 0, 0, 0, 0, 0) };
+    if ret == u64::MAX || msg.caps[0] == CapabilityToken::INVALID {
+        return Err(ShmError::OutOfMemory);
+    }
+    Ok((ret as *mut u8, msg.caps[0]))
+}
+
+/// Map a shared page into the caller's AS using a received token. Returns local ptr.
+pub fn shm_map(token: CapabilityToken) -> Result<*mut u8, ShmError> {
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ShmMap, token.0, 0, 0, 0, 0, 0, 0) };
+    if ret == u64::MAX {
+        return Err(ShmError::InvalidToken);
+    }
+    Ok(ret as *mut u8)
+}
+
+/// Unmap and (if owner) release the shared page grant.
+pub fn shm_free(token: CapabilityToken) -> Result<(), ShmError> {
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ShmFree, token.0, 0, 0, 0, 0, 0, 0) };
+    if ret == 0 {
+        Ok(())
+    } else {
+        Err(ShmError::InvalidToken)
+    }
 }

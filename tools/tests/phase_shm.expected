@@ -1,0 +1,5 @@
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  VFS read 2048 bytes via shared memory: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  Shared memory grant: PASSED
