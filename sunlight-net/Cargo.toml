@@ -18,6 +18,7 @@ smoltcp = {
         "socket-dns",
     ]
 }
+sunlight-virtio = { path = "../sunlight-virtio" }
 x86_64 = "0.15"
 log = { version = "0.4", default-features = false }
 

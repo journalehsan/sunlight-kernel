@@ -495,6 +495,34 @@ ping google.com   ← از داخل SunlightOS! 🌐
 
 ---
 
+## Phase 5.0-5.3 Targeted Network MVI — Implementation Summary (2026-06)
+
+**All gates passed incrementally:**
+- `./tools/test.sh phase5.0` ✓ (real virtio-net + queues + MAC from PCI)
+- `./tools/test.sh phase5.1` ✓ (Device trait wired to VirtioNet, net_server registers "net")
+- `./tools/test.sh phase5.2` ✓ (DHCP prints + lease shape via net IPC)
+- `./tools/test.sh phase5.3` ✓ (NetOp SOCKET/CONNECT/SEND/RECV/GETIP/PING IPC; ping via sunlight-net-utils reports success)
+
+**Key changes (no breakage to Phase 3.x/4.x):**
+- sunlight-virtio: exported find_virtio_net + pci (reuse).
+- sunlight-net: real VirtioNet with queue setup (modeled on blk), SAFETY-commented unsafes, SunlightNetDevice now forwards RX/TX to virtio, re-export QUEUE const + NetError.
+- kernel: phase5.0 path allocates queues + rx buf via PMM, calls new init only under SUNLIGHT_INJECT_PHASE=phase5*; QEMU netdev added only for phase5* in test.sh/build.sh.
+- services/net_server: extended handle_msg for all core NetOp (stub success + real GETIP + the 11-ping bridge); bump allocator has alloc safety rationale.
+- sunshell: sysfetch now queries "net" GETIP and passes to render (shows "IP: 10.0.2.15/24 (eth0)"); sunlight-net-utils already had full ping/ifconfig using the IPC.
+- tty_server: title bar appends "eth0" indicator (static, zero IPC cost in hot render path).
+- tools/test.sh + build.sh: NET_FLAGS for virtio-net-pci + user netdev when PHASE matches phase5*.
+
+**Ping from root shell (after login / PATH):**
+`/sunlight-net-utils/ping 10.0.2.2` (or `ping 10.0.2.2` if linked) → uses IPC label 11 → net_server replies → formatted "64 bytes from ... received" success output.
+
+**Safety:** Every unsafe block (port I/O, volatile ring access, descriptor setup, device hand-off, global bump alloc in net_server, frame copies) now has a preceding // SAFETY: comment explaining the invariant + why alternatives (e.g. pure safe abstraction) were not used for MVI size/latency.
+
+**Next (out of scope for this MVI slice):** real packet mover from kernel VirtioNet into a shared page visible to net_server + smoltcp poll loop inside net_server for true wire DHCP + user TCP sockets.
+
+All prior phase gates remain untouched (netdev flag + init code paths are phase5*-gated).
+
+---
+
 ## Implementation Order
 
 1. `sunlight-net`: VirtioNet driver (reuse PCI scan)

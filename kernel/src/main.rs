@@ -484,24 +484,62 @@ pub extern "C" fn _start() -> ! {
             serial_println!("[NET]  Registered as 'net' with init");
             serial_println!("[NET]  Interface: eth0 MAC=52:54:00:12:34:56");
         } else {
-            // Phase 5.0: Just device detection
+            // Phase 5.0: Real virtio-net driver init (requires ring-0 + device present via QEMU -device)
             serial_println!("[NET]  Scanning PCI for virtio-net...");
-            unsafe {
-                match sunlight_net::VirtioNet::init() {
-                    Ok(_dev) => {
-                        serial_println!("[NET]  Found virtio-net at PCI 00:03.0");
-                        serial_println!("[NET]  MAC: 52:54:00:12:34:56");
-                        serial_println!("[NET]  RX/TX queues initialized");
-                        serial_println!("[NET]  virtio-net OK");
+            // Allocate two queue regions (RX + TX) + one RX scratch buffer from PMM.
+            // SAFETY: We hold the PMM lock only for allocation; frames stay owned by the
+            // kernel for the lifetime of the system. The returned physical addresses are
+            // identity-mapped via HHDM for virt addresses.
+            let net_init_result = {
+                let mut pmm = PMM.lock();
+                let rx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+                    .map(|f| f.as_u64());
+                let tx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+                    .map(|f| f.as_u64());
+                let rx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
+
+                match (rx_q_phys, tx_q_phys, rx_buf_phys) {
+                    (Some(rp), Some(tp), Some(bp)) => {
+                        let h = hhdm_offset.as_u64();
+                        let rx_q_virt = h + rp;
+                        let tx_q_virt = h + tp;
+                        let rx_b_virt = h + bp;
+                        // SAFETY: All phys/virt pairs are valid HHDM-mapped kernel frames.
+                        // Ring-0 privilege for find + port I/O + queue setup.
+                        // We intentionally only attempt when phase5* to avoid side effects on earlier gates.
+                        let pci_info = unsafe { sunlight_virtio::find_virtio_net() };
+                        if let Some((bus, slot, _func, io_base)) = pci_info {
+                            unsafe {
+                                sunlight_net::VirtioNet::init(
+                                    io_base,
+                                    bus,
+                                    slot,
+                                    rp,
+                                    rx_q_virt,
+                                    tp,
+                                    tx_q_virt,
+                                    bp,
+                                    rx_b_virt,
+                                    1514,
+                                )
+                            }
+                        } else {
+                            None
+                        }
                     }
-                    Err(_) => {
-                        // Fallback for QEMU: print success messages even if device scan fails
-                        // This allows testing the boot sequence with virtual networks
-                        serial_println!("[NET]  Found virtio-net at PCI 00:03.0");
-                        serial_println!("[NET]  MAC: 52:54:00:12:34:56");
-                        serial_println!("[NET]  RX/TX queues initialized");
-                        serial_println!("[NET]  virtio-net OK");
-                    }
+                    _ => None,
+                }
+            };
+
+            match net_init_result {
+                Some(_dev) => {
+                    serial_println!("[NET]  Found virtio-net at PCI 00:03.0");
+                    serial_println!("[NET]  MAC: 52:54:00:12:34:56");
+                    serial_println!("[NET]  RX/TX queues initialized");
+                    serial_println!("[NET]  virtio-net OK");
+                }
+                None => {
+                    serial_println!("[NET]  virtio-net not found (no -device or alloc failure)");
                 }
             }
         }

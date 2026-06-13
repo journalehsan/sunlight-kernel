@@ -1138,6 +1138,22 @@ mod sunlight {
             let cpu_len = cpu_brand(&mut cpu_buf);
             let cpu = core::str::from_utf8(&cpu_buf[..cpu_len]).unwrap_or("");
 
+            // Phase 5: fetch IP from net service for display in sysfetch (and TUI)
+            let net_ip: Option<[u8; 4]> = nameserver_lookup("net").and_then(|net_cap| {
+                let reply = ipc_call(net_cap, IpcMsg::with_label(10 /* NetOp::GETIP */));
+                if reply.label == 10 && reply.word_count >= 1 {
+                    let w = reply.words[0];
+                    Some([
+                        (w & 0xff) as u8,
+                        ((w >> 8) & 0xff) as u8,
+                        ((w >> 16) & 0xff) as u8,
+                        ((w >> 24) & 0xff) as u8,
+                    ])
+                } else {
+                    None
+                }
+            });
+
             let mut buf = [0u8; 640];
             let len = crate::sysfetch::render_sysfetch_to_buffer(
                 "root",
@@ -1146,6 +1162,7 @@ mod sunlight {
                 info.uptime_secs,
                 (info.used_ram_kb / 1024) as u32,
                 (info.total_ram_kb / 1024) as u32,
+                net_ip,
                 &mut buf,
             );
 

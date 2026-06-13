@@ -28,7 +28,8 @@ impl<'a> Write for CompactWriter<'a> {
     }
 }
 
-/// Renders system stats cleanly without breaking the 512-byte payload threshold
+/// Renders system stats cleanly without breaking the 512-byte payload threshold.
+/// net_ip: optional [a,b,c,d] for "IP: a.b.c.d" line (Phase 5+).
 pub fn render_sysfetch_to_buffer(
     username: &str,
     kernel_version: &str,
@@ -36,6 +37,7 @@ pub fn render_sysfetch_to_buffer(
     uptime_secs: u64,
     mem_used: u32,
     mem_total: u32,
+    net_ip: Option<[u8; 4]>,
     out: &mut [u8],
 ) -> usize {
     let mut w = CompactWriter::new(out);
@@ -100,6 +102,10 @@ pub fn render_sysfetch_to_buffer(
         }
     }
     let _ = writeln!(w);
+
+    if let Some(ip) = net_ip {
+        let _ = write!(w, "{}IP:{} {}.{}.{}.{}/24 (eth0)\n", c, r, ip[0], ip[1], ip[2], ip[3]);
+    }
 
     // Minimal palette: 8 color blocks
     let _ = write!(w, "Palette: ");

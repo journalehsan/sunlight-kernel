@@ -78,5 +78,6 @@ qemu-system-x86_64 \
     -m "$QEMU_MEMORY" \
     -smp "$QEMU_CPUS" \
     $KVM_FLAGS \
+    -netdev user,id=net0 -device virtio-net-pci,netdev=net0,disable-modern=on \
     -no-reboot \
     -no-shutdown

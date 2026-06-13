@@ -12,7 +12,7 @@ pub mod icmp;
 pub mod netop;
 pub mod simulation;
 
-pub use virtio_net::VirtioNet;
+pub use virtio_net::{VirtioNet, VirtioNetHeader, NetError, QUEUE_PAGES_PER_NET_QUEUE};
 pub use device::SunlightNetDevice;
 pub use dhcp::{DhcpConfig, DhcpError, acquire_lease};
 pub use dns::{DnsError, resolve};

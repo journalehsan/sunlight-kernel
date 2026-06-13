@@ -251,6 +251,12 @@ if [[ "$NEED_DISK" == "true" && -f "target/test.img" ]]; then
     DISK_FLAGS="-drive id=hd0,file=target/test.img,if=none,format=raw -device virtio-blk-pci,disable-modern=on,drive=hd0"
 fi
 
+# Extra QEMU flags for Phase 5 networking (virtio-net). Always add for phase5* so PCI scan + driver init succeed.
+NET_FLAGS=""
+if [[ "$PHASE" == phase5* || "$PHASE" == phase5x* ]]; then
+    NET_FLAGS="-netdev user,id=net0 -device virtio-net-pci,netdev=net0,disable-modern=on"
+fi
+
 set +e
 qemu-system-x86_64 \
     -cdrom "$ISO_PATH" \
@@ -260,6 +266,7 @@ qemu-system-x86_64 \
     -smp 2 \
     $KVM_FLAGS \
     $DISK_FLAGS \
+    $NET_FLAGS \
     -no-reboot \
     -no-shutdown >>"$BUILD_LOG" 2>&1 &
 QEMU_PID=$!

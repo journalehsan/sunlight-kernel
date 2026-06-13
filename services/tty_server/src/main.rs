@@ -522,9 +522,22 @@ fn render_active_shell_fb(
         grid.to_term_cells(&ANSI_COLORS)
     };
 
-    // Title-bar clock, e.g. "12:22 AM | 2026/6/12"
+    // Title-bar clock, e.g. "12:22 AM | 2026/6/12"  (+ net indicator for Phase 5+)
     let mut clock_buf = [0u8; 32];
     let clock_len = sunlight_tui::fmt::fmt_clock(&mut clock_buf, get_time_utc());
+    // Append lightweight net status (no extra IPC to avoid latency in render path).
+    // Real impl would cache last known IP from net service.
+    let mut clock_len = clock_len;
+    if clock_len < 24 {
+        clock_buf[clock_len] = b' ';
+        clock_buf[clock_len + 1] = b'|';
+        clock_buf[clock_len + 2] = b' ';
+        clock_buf[clock_len + 3] = b'e';
+        clock_buf[clock_len + 4] = b't';
+        clock_buf[clock_len + 5] = b'h';
+        clock_buf[clock_len + 6] = b'0';
+        clock_len += 7;
+    }
 
     unsafe {
         sunlight_tui::render_terminal_grid(
