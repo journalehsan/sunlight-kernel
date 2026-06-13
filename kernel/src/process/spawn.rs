@@ -250,13 +250,13 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/bin/rmdir" | "/bin/touch" | "/bin/find" | "/bin/grep" | "/bin/head" | "/bin/tail"
         | "/bin/wc" | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file" | "/bin/stat"
         | "/bin/pwd" | "/bin/date" | "/bin/whoami" | "/bin/id" | "/bin/uname" | "/bin/echo"
-        | "/bin/nice" | "/bin/renice" | "/bin/free" | "/usr/bin/ls" | "/usr/bin/cat"
+        | "/bin/nice" | "/bin/renice" | "/bin/free" | "/bin/freezram" | "/usr/bin/ls" | "/usr/bin/cat"
         | "/usr/bin/cp" | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
         | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep" | "/usr/bin/head"
         | "/usr/bin/tail" | "/usr/bin/wc" | "/usr/bin/sort" | "/usr/bin/uniq" | "/usr/bin/cut"
         | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd" | "/usr/bin/date"
         | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname" | "/usr/bin/echo"
-        | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" => {
+        | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" | "/usr/bin/freezram" => {
             Ok(crate::SUNLIGHT_UTILS_ELF_BYTES)
         }
         "/bin/ping"
