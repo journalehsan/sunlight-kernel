@@ -187,6 +187,7 @@ mod sunlight {
         passwd_buffer: [u8; 64],
         passwd_buffer_len: usize,
         env: crate::shellenv::ShellEnv,
+        cwd: alloc::string::String,
     }
 
     impl Shell {
@@ -206,6 +207,7 @@ mod sunlight {
                 passwd_buffer: [0; 64],
                 passwd_buffer_len: 0,
                 env: crate::shellenv::ShellEnv::new(),
+                cwd: alloc::string::String::from("/"),
             }
         }
 
@@ -215,6 +217,7 @@ mod sunlight {
                 core::str::from_utf8(&self.username[..self.username_len]).unwrap_or(""),
             );
             self.env.load_defaults(self.uid, &username);
+            self.env.set("PWD", &self.cwd);
         }
 
         fn handle_byte(&mut self, byte: u8) -> ([u8; MAX_OUT], usize) {
@@ -409,6 +412,9 @@ mod sunlight {
             }
 
             let out: &[u8] = match cmd {
+                "cd" => self.cmd_cd(&args),
+                "pwd" => self.cmd_pwd(),
+                "ls" => self.run_ls_external(&args),
                 "useradd" => self.cmd_useradd(&args),
                 "userdel" => self.cmd_userdel(&args),
                 "su" => b"su: not implemented\n",
@@ -422,7 +428,7 @@ mod sunlight {
                 "hostnamectl" => self.cmd_hostnamectl(),
                 "free" => self.cmd_free(),
                 "uptime" => self.cmd_uptime(),
-                "help" => b"Builtins: useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, free, uptime, help, shutdown, reboot\n",
+                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, free, uptime, help, shutdown, reboot\n",
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
                 // Not a builtin: resolve through $PATH and run it (Step 3)
@@ -840,6 +846,52 @@ mod sunlight {
                 }
             }
             b""
+        }
+
+        fn cmd_cd(&mut self, args: &[&str]) -> &[u8] {
+            let target = if let Some(path) = args.first().copied() {
+                path
+            } else {
+                self.env.get("HOME").unwrap_or("/")
+            };
+            let Some(next) = normalize_path(&self.cwd, target) else {
+                return b"cd: invalid path\n";
+            };
+
+            let Some(vfs_cap) = nameserver_lookup("vfs") else {
+                return b"cd: VFS not available\n";
+            };
+            if !stat_is_dir(vfs_cap, &next) {
+                return b"cd: no such directory\n";
+            }
+
+            self.env.set("OLDPWD", &self.cwd);
+            self.cwd = next;
+            self.env.set("PWD", &self.cwd);
+            b""
+        }
+
+        fn cmd_pwd(&self) -> &[u8] {
+            static mut BUF: [u8; 256] = [0; 256];
+            unsafe {
+                let bytes = self.cwd.as_bytes();
+                let n = bytes.len().min(BUF.len().saturating_sub(1));
+                BUF[..n].copy_from_slice(&bytes[..n]);
+                BUF[n] = b'\n';
+                &BUF[..n + 1]
+            }
+        }
+
+        fn run_ls_external(&mut self, args: &[&str]) -> &'static [u8] {
+            let has_path = args.iter().any(|a| !a.starts_with('-') || *a == "-");
+            if has_path {
+                return self.run_external("ls", args);
+            }
+            let mut forwarded: alloc::vec::Vec<&str> = alloc::vec::Vec::with_capacity(args.len() + 1);
+            forwarded.extend_from_slice(args);
+            let cwd_owned = self.cwd.clone();
+            forwarded.push(cwd_owned.as_str());
+            self.run_external("ls", &forwarded)
         }
 
         fn cmd_unset(&mut self, args: &[&str]) -> &[u8] {
@@ -1325,6 +1377,54 @@ mod sunlight {
         }
         let reply = ipc_call(vfs_cap, path_msg(VfsMsg::STAT, path));
         reply.label == VfsMsg::REPLY && reply.words[0] == 0 && reply.words[2] == FILE_TYPE_FILE
+    }
+
+    fn stat_is_dir(vfs_cap: CapabilityToken, path: &str) -> bool {
+        const FILE_TYPE_DIR: u64 = 2; // vfs_server file_type_code(FileType::Directory)
+        if path.len() > 32 {
+            return false;
+        }
+        let reply = ipc_call(vfs_cap, path_msg(VfsMsg::STAT, path));
+        reply.label == VfsMsg::REPLY && reply.words[0] == 0 && reply.words[2] == FILE_TYPE_DIR
+    }
+
+    fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {
+        let mut parts: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
+        let full = if path.starts_with('/') {
+            alloc::string::String::from(path)
+        } else if cwd == "/" {
+            alloc::format!("/{}", path)
+        } else {
+            alloc::format!("{}/{}", cwd, path)
+        };
+
+        for part in full.split('/') {
+            if part.is_empty() || part == "." {
+                continue;
+            }
+            if part == ".." {
+                if !parts.is_empty() {
+                    parts.pop();
+                }
+                continue;
+            }
+            if part.len() > 64 {
+                return None;
+            }
+            parts.push(part);
+        }
+
+        if parts.is_empty() {
+            return Some(alloc::string::String::from("/"));
+        }
+        let mut out = alloc::string::String::from("/");
+        for (idx, part) in parts.iter().enumerate() {
+            if idx > 0 {
+                out.push('/');
+            }
+            out.push_str(part);
+        }
+        Some(out)
     }
 
     fn read_file(vfs_cap: CapabilityToken, path: &str) -> alloc::vec::Vec<u8> {

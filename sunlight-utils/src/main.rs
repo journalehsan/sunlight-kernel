@@ -112,21 +112,54 @@ fn run(args: &[&str]) -> i32 {
 // ---------------------------------------------------------------------------
 
 fn cmd_ls(args: &[&str]) -> i32 {
-    let path = args.first().copied().unwrap_or("/");
+    let mut long_format = false;
+    let mut show_all = false;
+    let mut classify = false;
+    let mut path = "/";
+    for arg in args {
+        if arg.starts_with('-') && arg.len() > 1 {
+            for &b in arg.as_bytes().iter().skip(1) {
+                match b {
+                    b'l' => long_format = true,
+                    b'a' => show_all = true,
+                    b'F' => classify = true,
+                    _ => {}
+                }
+            }
+        } else {
+            path = arg;
+        }
+    }
     debug_log2("[UTILS] ls start path=", path);
     let mut entries = [DirEntry::zeroed(); MAX_DIR_ENTRIES];
     match libc::read_dir(path.as_bytes(), &mut entries) {
         Ok(n) => {
+            let mut shown = 0u64;
             debug_log_u64("[UTILS] ls entries=", n as u64);
             for entry in &entries[..n] {
+                let name = entry.name_bytes();
+                if !show_all && name.first() == Some(&b'.') {
+                    continue;
+                }
+                if long_format {
+                    let _ = write_all(if entry.file_type == FT_DIR {
+                        b"drwxr-xr-x " as &[u8]
+                    } else {
+                        b"-rw-r--r-- "
+                    });
+                    print_u64(entry.size);
+                    let _ = write_all(b" ");
+                }
                 debug_log_bytes("[UTILS] ls write name=", entry.name_bytes());
                 let _ = write_all(entry.name_bytes());
-                if entry.file_type == FT_DIR {
+                if entry.file_type == FT_DIR && (classify || !long_format) {
                     let _ = write_all(b"/");
                 }
                 debug_log_static("[UTILS] ls write newline");
                 let _ = write_all(b"\n");
+                shown += 1;
             }
+            debug_log_u64("[UTILS] ls shown=", shown);
             0
         }
         Err(_) => {
