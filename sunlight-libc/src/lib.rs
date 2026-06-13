@@ -105,6 +105,26 @@ pub fn getgid() -> u64 {
     unsafe { sys::syscall0(sys::SYS_GETGID) }
 }
 
+pub fn getnice(pid: u64) -> Result<i8, Errno> {
+    let ret = unsafe { sys::syscall1(sys::SYS_GETNICE, pid) };
+    let value = sys::check(ret)? as i64;
+    if (-10..=10).contains(&value) {
+        Ok(value as i8)
+    } else {
+        Err(Errno::Failed)
+    }
+}
+
+pub fn setnice(pid: u64, nice: i8) -> Result<i8, Errno> {
+    let ret = unsafe { sys::syscall2(sys::SYS_SETNICE, pid, nice as i64 as u64) };
+    let value = sys::check(ret)? as i64;
+    if (-10..=10).contains(&value) {
+        Ok(value as i8)
+    } else {
+        Err(Errno::Failed)
+    }
+}
+
 /// Yield the CPU to the scheduler.
 pub fn yield_now() {
     unsafe {

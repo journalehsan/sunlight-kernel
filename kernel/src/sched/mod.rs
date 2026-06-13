@@ -6,6 +6,11 @@ use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 pub const TIME_SLICE_TICKS: u64 = 10;
 
+fn time_slice_for_nice(nice: i8) -> u64 {
+    let quantum = TIME_SLICE_TICKS as i64 - nice as i64;
+    quantum.clamp(2, 20) as u64
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedulerMode {
     RoundRobin,
@@ -218,7 +223,8 @@ impl Scheduler {
             }
         }
 
-        if self.current_ticks >= TIME_SLICE_TICKS {
+        let quantum = time_slice_for_nice(self.processes[self.current].nice);
+        if self.current_ticks >= quantum {
             // Process used full quantum
             let current_proc = &mut self.processes[self.current];
             current_proc.timeslice_used = self.current_ticks as u32;

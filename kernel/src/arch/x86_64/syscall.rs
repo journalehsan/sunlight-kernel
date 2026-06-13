@@ -64,6 +64,8 @@ pub enum SunlightSyscall {
 
     // Power management (Phase 5.11)
     PowerCtl = 80,
+    SetNice = 83,
+    GetNice = 84,
 
     DebugLog = 99,
 }
@@ -282,6 +284,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         80 => sys_powerctl(frame.rdi),
         81 => sys_get_time_utc(),
         82 => sys_sysinfo(frame),
+        83 => sys_setnice(frame),
+        84 => sys_getnice(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -989,6 +993,99 @@ fn sys_setgid(frame: &mut SyscallFrame) -> u64 {
         crate::serial_println!("[SYSCALL] setgid: EPERM (uid {} cannot setgid to {})", current_uid, new_gid);
         u64::MAX // -1 (EPERM)
     }
+}
+
+fn clamp_nice(raw: i64) -> i8 {
+    raw.clamp(-10, 10) as i8
+}
+
+/// Syscall: GetNice (84)
+/// rdi = pid (0 means current process)
+/// Returns signed nice encoded in u64, or u64::MAX on failure.
+fn sys_getnice(frame: &mut SyscallFrame) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+
+    let current_pid = sched.current_process().pid;
+    let current_uid = sched.current_process().uid;
+    let target_pid = if frame.rdi == 0 {
+        current_pid
+    } else {
+        frame.rdi as usize
+    };
+
+    let Some(target) = sched.processes.iter().find(|p| p.pid == target_pid) else {
+        crate::serial_println!("[SYSCALL] getnice: no such pid {}", target_pid);
+        return u64::MAX;
+    };
+
+    if current_uid != 0 && target.uid != current_uid {
+        crate::serial_println!(
+            "[SYSCALL] getnice: EPERM current_uid={} target_uid={} pid={}",
+            current_uid,
+            target.uid,
+            target_pid
+        );
+        return u64::MAX;
+    }
+
+    (target.nice as i64) as u64
+}
+
+/// Syscall: SetNice (83)
+/// rdi = pid (0 means current process)
+/// rsi = absolute nice value (kernel clamps to -10..=10)
+/// Returns signed nice encoded in u64, or u64::MAX on failure.
+fn sys_setnice(frame: &mut SyscallFrame) -> u64 {
+    let mut sched = crate::sched::SCHEDULER.lock();
+
+    let current_pid = sched.current_process().pid;
+    let current_uid = sched.current_process().uid;
+    let target_pid = if frame.rdi == 0 {
+        current_pid
+    } else {
+        frame.rdi as usize
+    };
+    let new_nice = clamp_nice(frame.rsi as i64);
+
+    let Some(target_idx) = sched.processes.iter().position(|p| p.pid == target_pid) else {
+        crate::serial_println!("[SYSCALL] setnice: no such pid {}", target_pid);
+        return u64::MAX;
+    };
+
+    let target_uid = sched.processes[target_idx].uid;
+    let old_nice = sched.processes[target_idx].nice;
+
+    if current_uid != 0 {
+        if target_uid != current_uid {
+            crate::serial_println!(
+                "[SYSCALL] setnice: EPERM cross-uid current_uid={} target_uid={} pid={}",
+                current_uid,
+                target_uid,
+                target_pid
+            );
+            return u64::MAX;
+        }
+        if new_nice < old_nice {
+            crate::serial_println!(
+                "[SYSCALL] setnice: EPERM raise-priority denied uid={} pid={} old={} new={}",
+                current_uid,
+                target_pid,
+                old_nice,
+                new_nice
+            );
+            return u64::MAX;
+        }
+    }
+
+    sched.processes[target_idx].nice = new_nice;
+    crate::serial_println!(
+        "[SYSCALL] setnice: pid={} uid={} {}→{}",
+        target_pid,
+        target_uid,
+        old_nice,
+        new_nice
+    );
+    (new_nice as i64) as u64
 }
 
 /// Syscall: open (40) — kernel-VFS backed, read-only for now.

@@ -83,15 +83,14 @@ fn run(args: &[&str]) -> i32 {
         "echo" => cmd_echo(rest),
         "whoami" => cmd_whoami(),
         "id" => cmd_id(rest),
+        "nice" => cmd_nice(rest),
+        "renice" => cmd_renice(rest),
         "pwd" => cmd_pwd(),
         "stat" => cmd_stat(rest),
         "file" => cmd_file(rest),
         "head" => cmd_head(rest),
         "wc" => cmd_wc(rest),
-        "uname" => {
-            let _ = write_all(b"SunlightOS x86_64\n");
-            0
-        }
+        "uname" => cmd_uname(rest),
         "touch" | "rm" | "rmdir" | "cp" | "mv" | "chmod" | "chown" => {
             print2(applet, ": filesystem is read-only from utils (Step 4)\n");
             1
@@ -259,6 +258,83 @@ fn cmd_id(args: &[&str]) -> i32 {
     0
 }
 
+fn cmd_nice(args: &[&str]) -> i32 {
+    match args {
+        [] => match libc::getnice(0) {
+            Ok(nice) => {
+                print_i64(nice as i64);
+                let _ = write_all(b"\n");
+                0
+            }
+            Err(_) => {
+                let _ = write_all(b"nice: failed to get current nice\n");
+                1
+            }
+        },
+        ["-n", n] => {
+            let Some(value) = parse_i64(n) else {
+                let _ = write_all(b"nice: invalid nice value\n");
+                return 1;
+            };
+            let Ok(requested) = i8::try_from(value) else {
+                let _ = write_all(b"nice: invalid nice value\n");
+                return 1;
+            };
+            match libc::setnice(0, requested) {
+                Ok(applied) => {
+                    let _ = write_all(b"nice: set to ");
+                    print_i64(applied as i64);
+                    let _ = write_all(b"\n");
+                    0
+                }
+                Err(_) => {
+                    let _ = write_all(b"nice: permission denied or failed\n");
+                    1
+                }
+            }
+        }
+        _ => {
+            let _ = write_all(b"usage: nice [-n N]\n");
+            2
+        }
+    }
+}
+
+fn cmd_renice(args: &[&str]) -> i32 {
+    let [nice_s, pid_s] = args else {
+        let _ = write_all(b"usage: renice N PID\n");
+        return 2;
+    };
+
+    let Some(nice) = parse_i64(nice_s) else {
+        let _ = write_all(b"renice: invalid nice value\n");
+        return 1;
+    };
+    let Ok(requested) = i8::try_from(nice) else {
+        let _ = write_all(b"renice: invalid nice value\n");
+        return 1;
+    };
+    let Some(pid) = parse_u64(pid_s) else {
+        let _ = write_all(b"renice: invalid pid\n");
+        return 1;
+    };
+
+    match libc::setnice(pid, requested) {
+        Ok(applied) => {
+            let _ = write_all(b"renice: pid ");
+            print_u64(pid);
+            let _ = write_all(b" now ");
+            print_i64(applied as i64);
+            let _ = write_all(b"\n");
+            0
+        }
+        Err(_) => {
+            let _ = write_all(b"renice: permission denied or failed\n");
+            1
+        }
+    }
+}
+
 fn cmd_pwd() -> i32 {
     // No per-process cwd yet; every path is absolute.
     let _ = write_all(b"/\n");
@@ -410,6 +486,251 @@ fn cmd_wc(args: &[&str]) -> i32 {
     0
 }
 
+fn cmd_uname(args: &[&str]) -> i32 {
+    let mut show_kernel_name = false;
+    let mut show_nodename = false;
+    let mut show_kernel_release = false;
+    let mut show_kernel_version = false;
+    let mut show_machine = false;
+    let mut show_processor = false;
+    let mut show_hw_platform = false;
+    let mut show_operating_system = false;
+
+    if args.is_empty() {
+        show_kernel_name = true;
+    } else {
+        for arg in args {
+            if *arg == "--help" {
+                return uname_help();
+            }
+            if *arg == "--version" {
+                return uname_version();
+            }
+            if let Some(long) = arg.strip_prefix("--") {
+                match long {
+                    "all" => {
+                        show_kernel_name = true;
+                        show_nodename = true;
+                        show_kernel_release = true;
+                        show_kernel_version = true;
+                        show_machine = true;
+                        if processor_name().is_some() {
+                            show_processor = true;
+                        }
+                        if hardware_platform_name().is_some() {
+                            show_hw_platform = true;
+                        }
+                        show_operating_system = true;
+                    }
+                    "kernel-name" => show_kernel_name = true,
+                    "nodename" => show_nodename = true,
+                    "kernel-release" => show_kernel_release = true,
+                    "kernel-version" => show_kernel_version = true,
+                    "machine" => show_machine = true,
+                    "processor" => show_processor = true,
+                    "hardware-platform" => show_hw_platform = true,
+                    "operating-system" => show_operating_system = true,
+                    _ => {
+                        let _ = write_all(b"uname: invalid option -- ");
+                        let _ = write_all(arg.as_bytes());
+                        let _ = write_all(b"\nTry 'uname --help' for more information.\n");
+                        return 1;
+                    }
+                }
+                continue;
+            }
+
+            if arg.starts_with('-') && arg.len() > 1 {
+                for &b in arg.as_bytes().iter().skip(1) {
+                    match b {
+                        b'a' => {
+                            show_kernel_name = true;
+                            show_nodename = true;
+                            show_kernel_release = true;
+                            show_kernel_version = true;
+                            show_machine = true;
+                            if processor_name().is_some() {
+                                show_processor = true;
+                            }
+                            if hardware_platform_name().is_some() {
+                                show_hw_platform = true;
+                            }
+                            show_operating_system = true;
+                        }
+                        b's' => show_kernel_name = true,
+                        b'n' => show_nodename = true,
+                        b'r' => show_kernel_release = true,
+                        b'v' => show_kernel_version = true,
+                        b'm' => show_machine = true,
+                        b'p' => show_processor = true,
+                        b'i' => show_hw_platform = true,
+                        b'o' => show_operating_system = true,
+                        _ => {
+                            let _ = write_all(b"uname: invalid option -- ");
+                            let _ = write_all(&[b]);
+                            let _ = write_all(b"\nTry 'uname --help' for more information.\n");
+                            return 1;
+                        }
+                    }
+                }
+            } else {
+                let _ = write_all(b"uname: extra operand ");
+                let _ = write_all(arg.as_bytes());
+                let _ = write_all(b"\nTry 'uname --help' for more information.\n");
+                return 1;
+            }
+        }
+    }
+
+    let mut first = true;
+    if show_kernel_name {
+        write_uname_field(&mut first, kernel_name().as_bytes());
+    }
+    if show_nodename {
+        let mut host = [0u8; 64];
+        let n = nodename_bytes(&mut host);
+        write_uname_field(&mut first, &host[..n]);
+    }
+    if show_kernel_release {
+        write_uname_field(&mut first, kernel_release().as_bytes());
+    }
+    if show_kernel_version {
+        write_uname_field(&mut first, kernel_version().as_bytes());
+    }
+    if show_machine {
+        write_uname_field(&mut first, machine_name().as_bytes());
+    }
+    if show_processor {
+        let value = processor_name().unwrap_or("unknown");
+        write_uname_field(&mut first, value.as_bytes());
+    }
+    if show_hw_platform {
+        let value = hardware_platform_name().unwrap_or("unknown");
+        write_uname_field(&mut first, value.as_bytes());
+    }
+    if show_operating_system {
+        write_uname_field(&mut first, operating_system().as_bytes());
+    }
+    let _ = write_all(b"\n");
+    0
+}
+
+fn write_uname_field(first: &mut bool, value: &[u8]) {
+    if !*first {
+        let _ = write_all(b" ");
+    }
+    let _ = write_all(value);
+    *first = false;
+}
+
+fn uname_help() -> i32 {
+    let _ = write_all(
+        b"Usage: uname [OPTION]...\n\
+Print certain system information.  With no OPTION, same as -s.\n\
+\n\
+  -a, --all                print all information, in the following order,\n\
+                             except omit -p and -i if unknown\n\
+  -s, --kernel-name        print the kernel name\n\
+  -n, --nodename           print the network node hostname\n\
+  -r, --kernel-release     print the kernel release\n\
+  -v, --kernel-version     print the kernel version\n\
+  -m, --machine            print the machine hardware name\n\
+  -p, --processor          print the processor type (non-portable)\n\
+  -i, --hardware-platform  print the hardware platform (non-portable)\n\
+  -o, --operating-system   print the operating system\n\
+      --help               display this help and exit\n\
+      --version            output version information and exit\n",
+    );
+    0
+}
+
+fn uname_version() -> i32 {
+    let _ = write_all(b"uname (sunlight-utils) ");
+    let _ = write_all(kernel_release().as_bytes());
+    let _ = write_all(b"\n");
+    let _ = write_all(b"target: ");
+    let _ = write_all(machine_name().as_bytes());
+    let _ = write_all(b"\n");
+    if let Some(source_ident) = option_env!("COOKBOOK_SOURCE_IDENT") {
+        if !source_ident.is_empty() {
+            let _ = write_all(b"source: ");
+            let _ = write_all(source_ident.as_bytes());
+            let _ = write_all(b"\n");
+        }
+    }
+    0
+}
+
+fn kernel_name() -> &'static str {
+    "SunlightOS"
+}
+
+fn operating_system() -> &'static str {
+    "SunlightOS"
+}
+
+fn machine_name() -> &'static str {
+    option_env!("TARGET")
+        .and_then(|t| t.split('-').next())
+        .unwrap_or("x86_64")
+}
+
+fn processor_name() -> Option<&'static str> {
+    None
+}
+
+fn hardware_platform_name() -> Option<&'static str> {
+    None
+}
+
+fn kernel_release() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+fn kernel_version() -> &'static str {
+    if let Some(source_ident) = option_env!("COOKBOOK_SOURCE_IDENT") {
+        if !source_ident.is_empty() {
+            return source_ident;
+        }
+    }
+    "SunlightOS build"
+}
+
+fn nodename_bytes(out: &mut [u8]) -> usize {
+    let fd = match libc::open(b"/etc/hostname") {
+        Ok(fd) => fd,
+        Err(_) => return copy_into(out, b"sunlight"),
+    };
+
+    let mut buf = [0u8; 128];
+    let read = read_retry(fd, &mut buf).unwrap_or(0);
+    let _ = libc::close(fd);
+    if read == 0 {
+        return copy_into(out, b"sunlight");
+    }
+
+    let mut end = 0usize;
+    while end < read {
+        let b = buf[end];
+        if b == b'\n' || b == b'\r' {
+            break;
+        }
+        end += 1;
+    }
+
+    if end == 0 {
+        copy_into(out, b"sunlight")
+    } else {
+        copy_into(out, &buf[..end])
+    }
+}
+
+fn copy_into(dst: &mut [u8], src: &[u8]) -> usize {
+    let n = src.len().min(dst.len());
+    dst[..n].copy_from_slice(&src[..n]);
+    n
+}
+
 // ---------------------------------------------------------------------------
 // Small I/O helpers (no alloc, retry on EAGAIN)
 // ---------------------------------------------------------------------------
@@ -531,6 +852,15 @@ fn print_u64(mut v: u64) {
     }
 }
 
+fn print_i64(v: i64) {
+    if v < 0 {
+        let _ = write_all(b"-");
+        print_u64(v.unsigned_abs());
+    } else {
+        print_u64(v as u64);
+    }
+}
+
 fn print_octal(mut v: u64) {
     let mut digits = [0u8; 22];
     let mut n = 0;
@@ -560,6 +890,25 @@ fn parse_u64(s: &str) -> Option<u64> {
         out = out.checked_mul(10)?.checked_add((b - b'0') as u64)?;
     }
     Some(out)
+}
+
+fn parse_i64(s: &str) -> Option<i64> {
+    if s.is_empty() {
+        return None;
+    }
+    if let Some(rest) = s.strip_prefix('-') {
+        let value = parse_u64(rest)?;
+        if value > i64::MAX as u64 {
+            return None;
+        }
+        Some(-(value as i64))
+    } else {
+        let value = parse_u64(s)?;
+        if value > i64::MAX as u64 {
+            return None;
+        }
+        Some(value as i64)
+    }
 }
 
 fn username_for_uid(uid: u32) -> &'static str {

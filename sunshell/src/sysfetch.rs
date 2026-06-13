@@ -32,7 +32,13 @@ impl<'a> Write for CompactWriter<'a> {
 /// net_ip: optional [a,b,c,d] for "IP: a.b.c.d" line (Phase 5+).
 pub fn render_sysfetch_to_buffer(
     username: &str,
+    hostname: &str,
+    os_name: &str,
+    os_version: &str,
+    kernel_name: &str,
     kernel_version: &str,
+    machine: &str,
+    source_ident: Option<&str>,
     cpu: &str,
     uptime_secs: u64,
     mem_used: u32,
@@ -60,9 +66,15 @@ pub fn render_sysfetch_to_buffer(
         0
     };
 
-    let _ = writeln!(w, "{}{}@sunlightos{}", c, username, r);
-    let _ = writeln!(w, "{}OS:{} SunlightOS", c, r);
-    let _ = writeln!(w, "{}Kernel:{} {}", c, r, kernel_version);
+    let _ = writeln!(w, "{}{}@{}{}", c, username, hostname, r);
+    let _ = writeln!(w, "{}OS:{} {}/{}", c, r, os_name, os_version);
+    let _ = writeln!(w, "{}Kernel:{} {}/{}", c, r, kernel_name, kernel_version);
+    let _ = writeln!(w, "{}Machine:{} {}", c, r, machine);
+    if let Some(src) = source_ident {
+        if !src.is_empty() {
+            let _ = writeln!(w, "{}Source:{} {}", c, r, src);
+        }
+    }
     if !cpu.is_empty() {
         let _ = writeln!(w, "{}CPU:{} {}", c, r, cpu);
     }

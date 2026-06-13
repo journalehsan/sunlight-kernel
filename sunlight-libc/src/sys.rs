@@ -18,6 +18,8 @@ pub const SYS_PIPE: u64 = 47;
 pub const SYS_READDIR: u64 = 60;
 pub const SYS_STAT: u64 = 61;
 pub const SYS_MKDIR: u64 = 62;
+pub const SYS_SETNICE: u64 = 83;
+pub const SYS_GETNICE: u64 = 84;
 pub const SYS_DEBUG_LOG: u64 = 99;
 
 /// Raw error return from the kernel.

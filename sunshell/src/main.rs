@@ -161,6 +161,10 @@ mod sunlight {
     const MAX_OUT: usize = 64;
     const LONG_OUT_MAX: usize = 16384;
     const IPC_OUTPUT_BYTES: usize = 16;
+    const OS_NAME: &str = "SunlightOS";
+    const KERNEL_NAME: &str = "SunlightOS/CORE";
+    const OS_VERSION: &str = env!("CARGO_PKG_VERSION");
+    const KERNEL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
     enum PasswdState {
         None,
@@ -1155,9 +1159,19 @@ mod sunlight {
             });
 
             let mut buf = [0u8; 640];
+            let username = core::str::from_utf8(&self.username[..self.username_len]).unwrap_or("root");
+            let mut hostname_buf = [0u8; 64];
+            let hostname_len = read_hostname_from_vfs(&mut hostname_buf);
+            let hostname = core::str::from_utf8(&hostname_buf[..hostname_len]).unwrap_or("sunlight");
             let len = crate::sysfetch::render_sysfetch_to_buffer(
-                "root",
-                "SunlightOS 0.1.0",
+                username,
+                hostname,
+                OS_NAME,
+                OS_VERSION,
+                KERNEL_NAME,
+                KERNEL_VERSION,
+                machine_name(),
+                option_env!("COOKBOOK_SOURCE_IDENT"),
                 cpu,
                 info.uptime_secs,
                 (info.used_ram_kb / 1024) as u32,
@@ -1479,6 +1493,37 @@ mod sunlight {
             IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
         );
         out
+    }
+
+    fn read_hostname_from_vfs(out: &mut [u8]) -> usize {
+        let Some(vfs_cap) = nameserver_lookup("vfs") else {
+            return copy_into(out, b"sunlight");
+        };
+        let data = read_file(vfs_cap, "/etc/hostname");
+        if data.is_empty() {
+            return copy_into(out, b"sunlight");
+        }
+        let end = data
+            .iter()
+            .position(|b| *b == b'\n' || *b == b'\r')
+            .unwrap_or(data.len());
+        if end == 0 {
+            copy_into(out, b"sunlight")
+        } else {
+            copy_into(out, &data[..end])
+        }
+    }
+
+    fn copy_into(dst: &mut [u8], src: &[u8]) -> usize {
+        let n = dst.len().min(src.len());
+        dst[..n].copy_from_slice(&src[..n]);
+        n
+    }
+
+    fn machine_name() -> &'static str {
+        option_env!("TARGET")
+            .and_then(|t| t.split('-').next())
+            .unwrap_or("x86_64")
     }
 
     fn write_file(vfs_cap: CapabilityToken, path: &str, data: &[u8]) -> Result<(), ()> {
