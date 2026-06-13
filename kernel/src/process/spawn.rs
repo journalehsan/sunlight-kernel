@@ -245,6 +245,31 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         p if p.starts_with("/bin/sshl") => {
             Ok(crate::SUNSHELL_ELF_BYTES)
         }
+        // POSIX-style command paths: standard applets execute from /bin or
+        // /usr/bin and dispatch by argv[0] inside the multi-call binaries.
+        "/bin/ls" | "/bin/cat" | "/bin/cp" | "/bin/mv" | "/bin/rm"
+        | "/bin/mkdir" | "/bin/rmdir" | "/bin/touch" | "/bin/find"
+        | "/bin/grep" | "/bin/head" | "/bin/tail" | "/bin/wc"
+        | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file"
+        | "/bin/stat" | "/bin/pwd" | "/bin/date" | "/bin/whoami"
+        | "/bin/id" | "/bin/uname" | "/bin/echo"
+        | "/usr/bin/ls" | "/usr/bin/cat" | "/usr/bin/cp" | "/usr/bin/mv"
+        | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
+        | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep"
+        | "/usr/bin/head" | "/usr/bin/tail" | "/usr/bin/wc"
+        | "/usr/bin/sort" | "/usr/bin/uniq" | "/usr/bin/cut"
+        | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd"
+        | "/usr/bin/date" | "/usr/bin/whoami" | "/usr/bin/id"
+        | "/usr/bin/uname" | "/usr/bin/echo" => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),
+        "/bin/ping" | "/bin/ifconfig" | "/bin/wget" | "/bin/curl"
+        | "/bin/dig" | "/bin/nslookup" | "/bin/hostname" | "/bin/netstat"
+        | "/bin/ss" | "/bin/traceroute" | "/bin/arp" | "/bin/dhclient"
+        | "/usr/bin/ping" | "/usr/bin/ifconfig" | "/usr/bin/wget"
+        | "/usr/bin/curl" | "/usr/bin/dig" | "/usr/bin/nslookup"
+        | "/usr/bin/hostname" | "/usr/bin/netstat" | "/usr/bin/ss"
+        | "/usr/bin/traceroute" | "/usr/bin/arp" | "/usr/bin/dhclient" => {
+            Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES)
+        }
         // Phase 6.5 Step 3: PATH entries under these directories are applets
         // of the embedded multi-call binaries (argv[0] picks the applet).
         p if p.starts_with("/sunlight-utils/") => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),

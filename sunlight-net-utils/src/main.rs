@@ -11,8 +11,11 @@
 
 use sunlight_libc as libc;
 use libc::{Errno, STDOUT};
+use sunlight_ipc::{IpcMsg, ipc_call, nameserver_lookup};
 
 const MAX_ARGS: usize = 16;
+const NET_LABEL_GETIP: u64 = 10;
+const NET_LABEL_PING: u64 = 11;
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -55,7 +58,7 @@ fn basename(path: &str) -> &str {
 }
 
 fn run(args: &[&str]) -> i32 {
-    let (applet, _rest) = match args.split_first() {
+    let (applet, rest) = match args.split_first() {
         Some((first, rest)) => {
             let name = basename(first);
             if name == "sunlight-net-utils" {
@@ -79,9 +82,11 @@ fn run(args: &[&str]) -> i32 {
             let _ = write_all(b"local\n");
             0
         }
-        "ping" | "ifconfig" | "wget" | "curl" | "dig" | "nslookup" | "netstat" | "ss"
-        | "traceroute" | "arp" | "dhclient" => {
-            print2(applet, ": net_server IPC for spawned processes arrives in Step 4\n");
+        "ping" => cmd_ping(rest),
+        "ifconfig" => cmd_ifconfig(),
+        "wget" | "curl" | "dig" | "nslookup" | "netstat" | "ss" | "traceroute" | "arp"
+        | "dhclient" => {
+            print2(applet, ": not implemented yet\n");
             1
         }
         _ => {
@@ -115,6 +120,86 @@ fn cmd_hostname() -> i32 {
     0
 }
 
+fn cmd_ifconfig() -> i32 {
+    let Some(net_cap) = nameserver_lookup("net") else {
+        let _ = write_all(b"ifconfig: net service unavailable\n");
+        return 1;
+    };
+    let reply = ipc_call(net_cap, IpcMsg::with_label(NET_LABEL_GETIP));
+    if reply.label != NET_LABEL_GETIP {
+        let _ = write_all(b"ifconfig: getip failed\n");
+        return 1;
+    }
+
+    let ip = unpack_ipv4(reply.words[0]);
+    let prefix = (reply.words[1] as u8).min(32);
+    let gw = unpack_ipv4(reply.words[2]);
+    let dns = unpack_ipv4(reply.words[3]);
+
+    let _ = write_all(b"eth0: UP\n  inet ");
+    print_ipv4(ip);
+    let _ = write_all(b"/");
+    print_u64(prefix as u64);
+    let _ = write_all(b"\n  gateway ");
+    print_ipv4(gw);
+    let _ = write_all(b"\n  dns ");
+    print_ipv4(dns);
+    let _ = write_all(b"\n");
+    0
+}
+
+fn cmd_ping(args: &[&str]) -> i32 {
+    let target = args.first().copied().unwrap_or("8.8.8.8");
+    let ip = match parse_ipv4(target) {
+        Some(ip) => ip,
+        None => {
+            let _ = write_all(b"ping: only dotted-quad IPv4 is supported\n");
+            return 2;
+        }
+    };
+
+    let Some(net_cap) = nameserver_lookup("net") else {
+        let _ = write_all(b"ping: net service unavailable\n");
+        return 1;
+    };
+
+    let _ = write_all(b"PING ");
+    let _ = write_all(target.as_bytes());
+    let _ = write_all(b"\n");
+
+    let req_count = 4u64;
+    let reply = ipc_call(
+        net_cap,
+        IpcMsg::with_label(NET_LABEL_PING)
+            .word(0, pack_ipv4(ip))
+            .word(1, req_count),
+    );
+    if reply.label != NET_LABEL_PING || reply.words[0] == 0 {
+        let _ = write_all(b"ping: request failed\n");
+        return 1;
+    }
+
+    let received = reply.words[1].min(req_count);
+    let base_rtt = reply.words[2];
+    for seq in 0..received {
+        let _ = write_all(b"64 bytes from ");
+        let _ = write_all(target.as_bytes());
+        let _ = write_all(b": icmp_seq=");
+        print_u64(seq);
+        let _ = write_all(b" time=");
+        print_u64(base_rtt + seq);
+        let _ = write_all(b"ms\n");
+    }
+    let _ = write_all(b"--- ");
+    let _ = write_all(target.as_bytes());
+    let _ = write_all(b" ping statistics ---\n");
+    print_u64(req_count);
+    let _ = write_all(b" packets transmitted, ");
+    print_u64(received);
+    let _ = write_all(b" received\n");
+    if received > 0 { 0 } else { 1 }
+}
+
 fn write_all(mut data: &[u8]) -> Result<(), Errno> {
     while !data.is_empty() {
         match libc::write(STDOUT, data) {
@@ -129,4 +214,81 @@ fn write_all(mut data: &[u8]) -> Result<(), Errno> {
 fn print2(a: &str, b: &str) {
     let _ = write_all(a.as_bytes());
     let _ = write_all(b.as_bytes());
+}
+
+fn print_u64(mut v: u64) {
+    let mut digits = [0u8; 20];
+    let mut n = 0usize;
+    loop {
+        digits[n] = b'0' + (v % 10) as u8;
+        n += 1;
+        v /= 10;
+        if v == 0 {
+            break;
+        }
+    }
+    while n > 0 {
+        n -= 1;
+        let _ = write_all(&digits[n..n + 1]);
+    }
+}
+
+fn parse_u8_dec(s: &str) -> Option<u8> {
+    if s.is_empty() {
+        return None;
+    }
+    let mut out = 0u16;
+    for &b in s.as_bytes() {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        out = out.checked_mul(10)?.checked_add((b - b'0') as u16)?;
+        if out > 255 {
+            return None;
+        }
+    }
+    Some(out as u8)
+}
+
+fn parse_ipv4(s: &str) -> Option<[u8; 4]> {
+    let mut out = [0u8; 4];
+    let mut count = 0usize;
+    for part in s.split('.') {
+        if count >= 4 {
+            return None;
+        }
+        out[count] = parse_u8_dec(part)?;
+        count += 1;
+    }
+    if count == 4 {
+        Some(out)
+    } else {
+        None
+    }
+}
+
+fn pack_ipv4(ip: [u8; 4]) -> u64 {
+    (ip[0] as u64)
+        | ((ip[1] as u64) << 8)
+        | ((ip[2] as u64) << 16)
+        | ((ip[3] as u64) << 24)
+}
+
+fn unpack_ipv4(v: u64) -> [u8; 4] {
+    [
+        (v & 0xff) as u8,
+        ((v >> 8) & 0xff) as u8,
+        ((v >> 16) & 0xff) as u8,
+        ((v >> 24) & 0xff) as u8,
+    ]
+}
+
+fn print_ipv4(ip: [u8; 4]) {
+    print_u64(ip[0] as u64);
+    let _ = write_all(b".");
+    print_u64(ip[1] as u64);
+    let _ = write_all(b".");
+    print_u64(ip[2] as u64);
+    let _ = write_all(b".");
+    print_u64(ip[3] as u64);
 }

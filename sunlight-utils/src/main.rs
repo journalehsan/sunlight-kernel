@@ -25,6 +25,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let mut storage = [""; MAX_ARGS];
     let count = unsafe { collect_args(argc, argv, &mut storage) };
+    debug_log_start(storage.first().copied().unwrap_or(""));
     let code = run(&storage[..count]);
     libc::exit(code as u64);
 }
@@ -80,6 +81,8 @@ fn run(args: &[&str]) -> i32 {
         "cat" => cmd_cat(rest),
         "mkdir" => cmd_mkdir(rest),
         "echo" => cmd_echo(rest),
+        "whoami" => cmd_whoami(),
+        "id" => cmd_id(rest),
         "pwd" => cmd_pwd(),
         "stat" => cmd_stat(rest),
         "file" => cmd_file(rest),
@@ -110,14 +113,18 @@ fn run(args: &[&str]) -> i32 {
 
 fn cmd_ls(args: &[&str]) -> i32 {
     let path = args.first().copied().unwrap_or("/");
+    debug_log2("[UTILS] ls start path=", path);
     let mut entries = [DirEntry::zeroed(); MAX_DIR_ENTRIES];
     match libc::read_dir(path.as_bytes(), &mut entries) {
         Ok(n) => {
+            debug_log_u64("[UTILS] ls entries=", n as u64);
             for entry in &entries[..n] {
+                debug_log_bytes("[UTILS] ls write name=", entry.name_bytes());
                 let _ = write_all(entry.name_bytes());
                 if entry.file_type == FT_DIR {
                     let _ = write_all(b"/");
                 }
+                debug_log_static("[UTILS] ls write newline");
                 let _ = write_all(b"\n");
             }
             0
@@ -187,6 +194,35 @@ fn cmd_echo(args: &[&str]) -> i32 {
         let _ = write_all(arg.as_bytes());
     }
     let _ = write_all(b"\n");
+    0
+}
+
+fn cmd_whoami() -> i32 {
+    let uid = libc::getuid() as u32;
+    let name = username_for_uid(uid);
+    let _ = write_all(name.as_bytes());
+    let _ = write_all(b"\n");
+    0
+}
+
+fn cmd_id(args: &[&str]) -> i32 {
+    if !args.is_empty() {
+        let _ = write_all(b"id: user lookup by name not implemented\n");
+        return 1;
+    }
+    let uid = libc::getuid() as u32;
+    let gid = libc::getgid() as u32;
+    let uname = username_for_uid(uid);
+    let gname = groupname_for_gid(gid);
+    let _ = write_all(b"uid=");
+    print_u64(uid as u64);
+    let _ = write_all(b"(");
+    let _ = write_all(uname.as_bytes());
+    let _ = write_all(b") gid=");
+    print_u64(gid as u64);
+    let _ = write_all(b"(");
+    let _ = write_all(gname.as_bytes());
+    let _ = write_all(b")\n");
     0
 }
 
@@ -356,6 +392,81 @@ fn write_all(mut data: &[u8]) -> Result<(), Errno> {
     Ok(())
 }
 
+fn debug_log_start(argv0: &str) {
+    let mut msg = [0u8; 128];
+    let prefix = b"[UTILS] main() entered, argv[0]=";
+    let mut pos = prefix.len();
+    msg[..pos].copy_from_slice(prefix);
+    let bytes = argv0.as_bytes();
+    let copy = bytes.len().min(msg.len().saturating_sub(pos));
+    msg[pos..pos + copy].copy_from_slice(&bytes[..copy]);
+    pos += copy;
+    let _ = unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
+}
+
+fn debug_log_static(s: &str) {
+    let _ = unsafe {
+        libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, s.as_ptr() as u64, s.len() as u64)
+    };
+}
+
+fn debug_log2(prefix: &str, value: &str) {
+    let mut msg = [0u8; 128];
+    let p = prefix.as_bytes();
+    let v = value.as_bytes();
+    let p_len = p.len().min(msg.len());
+    msg[..p_len].copy_from_slice(&p[..p_len]);
+    let space = msg.len().saturating_sub(p_len);
+    let v_len = v.len().min(space);
+    msg[p_len..p_len + v_len].copy_from_slice(&v[..v_len]);
+    let _ = unsafe {
+        libc::sys::syscall2(
+            libc::sys::SYS_DEBUG_LOG,
+            msg.as_ptr() as u64,
+            (p_len + v_len) as u64,
+        )
+    };
+}
+
+fn debug_log_u64(prefix: &str, value: u64) {
+    let mut digits = [0u8; 20];
+    let mut v = value;
+    let mut dlen = 0usize;
+    loop {
+        digits[dlen] = b'0' + (v % 10) as u8;
+        dlen += 1;
+        v /= 10;
+        if v == 0 {
+            break;
+        }
+    }
+    let mut msg = [0u8; 128];
+    let p = prefix.as_bytes();
+    let mut pos = p.len().min(msg.len());
+    msg[..pos].copy_from_slice(&p[..pos]);
+    while dlen > 0 && pos < msg.len() {
+        dlen -= 1;
+        msg[pos] = digits[dlen];
+        pos += 1;
+    }
+    let _ = unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
+}
+
+fn debug_log_bytes(prefix: &str, value: &[u8]) {
+    let mut msg = [0u8; 128];
+    let p = prefix.as_bytes();
+    let mut pos = p.len().min(msg.len());
+    msg[..pos].copy_from_slice(&p[..pos]);
+    for &b in value {
+        if pos >= msg.len() {
+            break;
+        }
+        msg[pos] = if b.is_ascii_graphic() || b == b' ' { b } else { b'?' };
+        pos += 1;
+    }
+    let _ = unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
+}
+
 fn read_retry(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
     loop {
         match libc::read(fd, buf) {
@@ -416,4 +527,24 @@ fn parse_u64(s: &str) -> Option<u64> {
         out = out.checked_mul(10)?.checked_add((b - b'0') as u64)?;
     }
     Some(out)
+}
+
+fn username_for_uid(uid: u32) -> &'static str {
+    match uid {
+        0 => "root",
+        1000 => "user",
+        1001 => "testuser",
+        _ => "unknown",
+    }
+}
+
+fn groupname_for_gid(gid: u32) -> &'static str {
+    match gid {
+        0 => "root",
+        10 => "wheel",
+        100 => "users",
+        1000 => "user",
+        1001 => "testuser",
+        _ => "unknown",
+    }
 }

@@ -97,6 +97,14 @@ pub fn getpid() -> u64 {
     unsafe { sys::syscall0(sys::SYS_GETPID) }
 }
 
+pub fn getuid() -> u64 {
+    unsafe { sys::syscall0(sys::SYS_GETUID) }
+}
+
+pub fn getgid() -> u64 {
+    unsafe { sys::syscall0(sys::SYS_GETGID) }
+}
+
 /// Yield the CPU to the scheduler.
 pub fn yield_now() {
     unsafe {

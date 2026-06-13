@@ -409,8 +409,6 @@ mod sunlight {
             }
 
             let out: &[u8] = match cmd {
-                "whoami" => self.cmd_whoami(),
-                "id" => self.cmd_id(&args),
                 "useradd" => self.cmd_useradd(&args),
                 "userdel" => self.cmd_userdel(&args),
                 "su" => b"su: not implemented\n",
@@ -424,10 +422,7 @@ mod sunlight {
                 "hostnamectl" => self.cmd_hostnamectl(),
                 "free" => self.cmd_free(),
                 "uptime" => self.cmd_uptime(),
-                "help" => b"Builtins: whoami, id, uname, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, free, uptime, help, echo, cat, shutdown, reboot\n",
-                "echo" => self.cmd_echo(&args),
-                "cat" => self.cmd_cat(&args),
-                "uname" => self.cmd_uname(&args),
+                "help" => b"Builtins: useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, free, uptime, help, shutdown, reboot\n",
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
                 // Not a builtin: resolve through $PATH and run it (Step 3)

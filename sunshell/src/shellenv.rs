@@ -9,7 +9,7 @@ use alloc::format;
 use alloc::string::String;
 
 /// Mirrors `kernel::process::env::DEFAULT_PATH`.
-pub const DEFAULT_PATH: &str = "/bin:/usr/bin:/sunlight-utils:/sunlight-net-utils";
+pub const DEFAULT_PATH: &str = "/bin:/usr/bin";
 
 pub struct ShellEnv {
     vars: BTreeMap<String, String>,

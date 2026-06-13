@@ -10,7 +10,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 /// Default PATH handed to every freshly spawned process.
-pub const DEFAULT_PATH: &str = "/bin:/usr/bin:/sunlight-utils:/sunlight-net-utils";
+pub const DEFAULT_PATH: &str = "/bin:/usr/bin";
 
 /// Key→value environment registry attached to a `Process`.
 #[derive(Debug, Clone, Default)]

@@ -57,6 +57,7 @@ pub struct FileHandle(pub u32);
 impl FileHandle {
     const PIPE_FLAG: u32 = 0x8000_0000;
     const PIPE_WRITE_FLAG: u32 = 0x4000_0000;
+    const PIPE_INDEX_MASK: u32 = 0x3FFF_FFFF;
     /// Marks a handle backed by the kernel VFS (only meaningful when the
     /// pipe flag is clear; bits 0..30 carry the packed Vfs handle).
     const VFS_FLAG: u32 = 0x4000_0000;
@@ -66,7 +67,7 @@ impl FileHandle {
     }
 
     pub fn pipe_index(self) -> u32 {
-        self.0 & 0x7FFF_FFFF
+        self.0 & Self::PIPE_INDEX_MASK
     }
 
     pub fn pipe_is_write(self) -> bool {
