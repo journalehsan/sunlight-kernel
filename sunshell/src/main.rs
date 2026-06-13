@@ -430,9 +430,8 @@ mod sunlight {
                 "unset" => self.cmd_unset(&args),
                 "sysfetch" => self.cmd_sysfetch(),
                 "hostnamectl" => self.cmd_hostnamectl(),
-                "free" => self.cmd_free(),
                 "uptime" => self.cmd_uptime(),
-                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, free, uptime, help, shutdown, reboot\n",
+                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, help, shutdown, reboot\n",
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
                 // Not a builtin: resolve through $PATH and run it (Step 3)
@@ -1177,31 +1176,6 @@ mod sunlight {
                     .copy_from_slice(&bytes[..to_copy]);
                 LONG_OUT_LEN += to_copy;
             }
-
-            b""
-        }
-
-        fn cmd_free(&self) -> &[u8] {
-            debug_log("[TTY]  free invoked");
-            unsafe {
-                LONG_OUT_ACTIVE = true;
-            }
-
-            let info = sysinfo();
-            let total_mb = (info.total_ram_kb / 1024) as u32;
-            let used_mb = (info.used_ram_kb / 1024) as u32;
-            let free_mb = total_mb.saturating_sub(used_mb);
-            let percent = (used_mb as u64 * 100) / (total_mb as u64).max(1);
-
-            push_line("              total    used    free    percent");
-            let line = alloc::format!(
-                "Memory:        {}M      {}M     {}M     {}%",
-                total_mb,
-                used_mb,
-                free_mb,
-                percent
-            );
-            push_line(&line);
 
             b""
         }
