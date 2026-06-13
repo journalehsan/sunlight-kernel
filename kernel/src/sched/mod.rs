@@ -213,16 +213,6 @@ impl Scheduler {
         self.global_tick += 1;
         self.current_ticks += 1;
 
-        // Check if current process has finished and reap it
-        if self.current < self.processes.len() {
-            if self.processes[self.current].state == ProcessState::Finished {
-                let pid = self.processes[self.current].pid;
-                let name = self.processes[self.current].name;
-                PROCESS_FINISHED.fetch_add(1, Ordering::Relaxed);
-                serial_println!("[SCHED] FINISHED process pid={} name='{}' still in vector (LEAK!)", pid, name);
-            }
-        }
-
         let quantum = time_slice_for_nice(self.processes[self.current].nice);
         if self.current_ticks >= quantum {
             // Process used full quantum
@@ -463,14 +453,19 @@ impl Scheduler {
     pub fn diagnostic_report(&self) {
         let created = PROCESS_CREATED.load(Ordering::Relaxed);
         let finished = PROCESS_FINISHED.load(Ordering::Relaxed);
-        let alive = self.processes.len();
+        let alive = self
+            .processes
+            .iter()
+            .filter(|p| p.state != ProcessState::Finished)
+            .count();
+        let finished_slots = self.processes.len().saturating_sub(alive);
         let ready_high = self.ready_queue_high.len();
         let ready_mid = self.ready_queue_medium.len();
         let ready_low = self.ready_queue_low.len();
 
         serial_println!(
-            "[SCHED-DIAG] created={} finished={} alive={} ready_queues=({},{},{}) delta_created-finished={}",
-            created, finished, alive, ready_high, ready_mid, ready_low,
+            "[SCHED-DIAG] created={} finished={} alive={} finished_slots={} ready_queues=({},{},{}) delta_created-finished={}",
+            created, finished, alive, finished_slots, ready_high, ready_mid, ready_low,
             created.saturating_sub(finished)
         );
     }
@@ -520,6 +515,11 @@ pub fn check_reschedule() -> bool {
 /// Set the reschedule flag.
 pub fn request_reschedule() {
     NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
+}
+
+pub fn note_process_finished(pid: usize, name: &'static str) {
+    PROCESS_FINISHED.fetch_add(1, Ordering::Relaxed);
+    serial_println!("[SCHED] FINISHED process pid={} name='{}'", pid, name);
 }
 
 /// Global scheduler instance.

@@ -23,6 +23,10 @@ pub enum SunlightSyscall {
     // previously sat there and silently invoked mmap.
     GetTimeUtc = 81,
     SysInfo = 82,
+    // Phase 3.4: net_server (pid 5) frame proxy — kernel owns the virtio-net
+    // device (ring-0 port I/O); these exchange raw Ethernet frames.
+    NetTx = 90,
+    NetRx = 91,
     DebugLog = 99,
 }
 
@@ -394,6 +398,30 @@ pub fn get_time_utc() -> u64 {
     // SAFETY: GetTimeUtc takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetTimeUtc, 0, 0, 0, 0, 0, 0, 0) };
     ret
+}
+
+/// Phase 3.4: hand a raw Ethernet frame to the kernel-owned virtio-net
+/// device for transmission. Returns `true` on success. Restricted to the
+/// net_server process (pid 5) by the kernel.
+pub fn net_tx(frame: &[u8]) -> bool {
+    // SAFETY: passes a read-only pointer/length describing `frame` to the
+    // kernel, which copies it into its own TX buffer before returning.
+    let (ret, _) = unsafe {
+        raw_syscall(SunlightSyscall::NetTx, frame.as_ptr() as u64, frame.len() as u64, 0, 0, 0, 0, 0)
+    };
+    ret == 1
+}
+
+/// Phase 3.4: poll the kernel-owned virtio-net device's RX queue for one
+/// frame, copying up to `buf.len()` bytes in. Returns the frame length, or
+/// `0` if no frame is pending.
+pub fn net_rx(buf: &mut [u8]) -> usize {
+    // SAFETY: passes a writable pointer/capacity for `buf`; the kernel
+    // bounds-checks and copies at most `buf.len()` bytes into it.
+    let (ret, _) = unsafe {
+        raw_syscall(SunlightSyscall::NetRx, buf.as_mut_ptr() as u64, buf.len() as u64, 0, 0, 0, 0, 0)
+    };
+    ret as usize
 }
 
 pub fn sysinfo() -> SystemInfo {

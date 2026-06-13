@@ -183,6 +183,7 @@ fn deliver_pending_signals(process: &mut crate::process::Process) {
                     SigHandler::Default => {
                         // Default action: terminate
                         crate::serial_println!("[SIG] {} delivered: terminating process", sig_num);
+                        crate::sched::note_process_finished(process.pid, process.name);
                         process.state = crate::process::ProcessState::Finished;
                         crate::sched::request_reschedule();
                     }
@@ -286,6 +287,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         82 => sys_sysinfo(frame),
         83 => sys_setnice(frame),
         84 => sys_getnice(frame),
+        90 => sys_net_tx(frame),
+        91 => sys_net_rx(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -534,6 +537,7 @@ fn process_exit(code: i32) -> ! {
         let p = s.current_process_mut();
         p.exit_code = code;
         p.state = ProcessState::Finished;
+        crate::sched::note_process_finished(p.pid, p.name);
     });
     sched::request_reschedule();
 
@@ -1652,6 +1656,107 @@ fn sys_pause() -> u64 {
 fn sys_sigreturn(_frame: &mut SyscallFrame) -> u64 {
     crate::serial_println!("[SYSCALL] sigreturn requested");
     u64::MAX
+}
+
+/// Syscall: net_tx (90) — Phase 3.4 frame proxy.
+/// rdi = user pointer to a raw Ethernet frame, rsi = frame length.
+/// Restricted to net_server (pid 5), which holds the network capability.
+/// Returns 1 on success, 0 on failure (no device / send error), u64::MAX
+/// if the calling process is not authorized or the buffer is invalid.
+fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
+    const MAX_FRAME: usize = 1514;
+
+    let buf_ptr = frame.rdi as *const u8;
+    let len = (frame.rsi as usize).min(MAX_FRAME);
+
+    let pid = crate::sched::SCHEDULER.lock().current_process().pid;
+    if pid != 5 {
+        return u64::MAX;
+    }
+    if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + len as u64) {
+        return u64::MAX;
+    }
+
+    let mut kernel_buf = [0u8; MAX_FRAME];
+    // SAFETY: buf_ptr..buf_ptr+len validated as a user-space range above;
+    // `len` is capped to MAX_FRAME so the copy cannot overflow kernel_buf.
+    unsafe {
+        core::ptr::copy_nonoverlapping(buf_ptr, kernel_buf.as_mut_ptr(), len);
+    }
+
+    let mut dev = crate::NET_DEVICE.lock();
+    let result = match dev.as_mut() {
+        // SAFETY: NET_DEVICE holds the sole VirtioNet instance, initialized
+        // once at boot with valid ring-0 mapped queues; access is serialized
+        // by the mutex.
+        Some(d) => match unsafe { d.send(&kernel_buf[..len]) } {
+            Ok(()) => 1,
+            Err(_) => 0,
+        },
+        None => 0,
+    };
+    crate::serial_println!("[NETDBG] tx len={} result={}", len, result);
+    if len >= 42 {
+        crate::serial_println!(
+            "[NETDBG] tx ethertype={:02x}{:02x} proto={:02x} src_port={:02x}{:02x} dst_port={:02x}{:02x}",
+            kernel_buf[12], kernel_buf[13],
+            kernel_buf[23],
+            kernel_buf[34], kernel_buf[35],
+            kernel_buf[36], kernel_buf[37],
+        );
+    }
+    result
+}
+
+/// Syscall: net_rx (91) — Phase 3.4 frame proxy.
+/// rdi = user pointer to a buffer, rsi = buffer capacity.
+/// Restricted to net_server (pid 5). Returns the number of bytes copied
+/// (0 if no frame is pending or the device is absent), or u64::MAX if the
+/// calling process is not authorized or the buffer is invalid.
+fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
+    const MAX_FRAME: usize = 1514;
+
+    let buf_ptr = frame.rdi as *mut u8;
+    let cap = (frame.rsi as usize).min(MAX_FRAME);
+
+    let pid = crate::sched::SCHEDULER.lock().current_process().pid;
+    if pid != 5 {
+        return u64::MAX;
+    }
+    if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + cap as u64) {
+        return u64::MAX;
+    }
+
+    let mut kernel_buf = [0u8; MAX_FRAME];
+    let n = {
+        let mut dev = crate::NET_DEVICE.lock();
+        match dev.as_mut() {
+            // SAFETY: see sys_net_tx — single VirtioNet instance, mutex-serialized.
+            Some(d) => unsafe { d.recv(&mut kernel_buf) },
+            None => 0,
+        }
+    };
+    let n = n.min(cap);
+    if n > 0 {
+        // SAFETY: buf_ptr..buf_ptr+cap validated as user memory above; n <= cap.
+        unsafe {
+            core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
+        }
+        crate::serial_println!(
+            "[NETDBG] rx n={} ethertype={:02x}{:02x} proto={:02x} src_port={:02x}{:02x} dst_port={:02x}{:02x} ip_total_len={:02x}{:02x} udp_len={:02x}{:02x} dns_hdr={:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            n,
+            kernel_buf[12], kernel_buf[13],
+            kernel_buf[23],
+            kernel_buf[34], kernel_buf[35],
+            kernel_buf[36], kernel_buf[37],
+            kernel_buf[16], kernel_buf[17],
+            kernel_buf[38], kernel_buf[39],
+            kernel_buf[42], kernel_buf[43], kernel_buf[44], kernel_buf[45],
+            kernel_buf[46], kernel_buf[47], kernel_buf[48], kernel_buf[49],
+            kernel_buf[50], kernel_buf[51], kernel_buf[52], kernel_buf[53],
+        );
+    }
+    n as u64
 }
 
 /// Syscall: get_time_utc (81)

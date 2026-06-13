@@ -7,6 +7,10 @@ use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup, nameserver_register, CapabilityToken, IpcMsg, VfsMsg,
 };
 use sunlight_net::netop::NetOp;
+use sunlight_net::ProxyNetDevice;
+use smoltcp::iface::{Config, Interface, SocketSet, SocketStorage};
+use smoltcp::time::Instant;
+use smoltcp::wire::{EthernetAddress, HardwareAddress, IpCidr, Ipv4Address, Ipv4Cidr};
 
 // Simple bump allocator for the network server
 struct BumpAllocator;
@@ -31,9 +35,21 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
-/// 1.1 Combined DNS resolver (populated at init from /etc/hosts + hardcoded fallback).
-/// Written once before the IPC loop; read-only thereafter.
-static mut DNS_RESOLVER: Option<sunlight_net::DnsResolver> = None;
+/// Phase 3.0 resolver chain: /etc/hosts -> TTL cache -> upstream DNS (Phase 3.1/3.2).
+/// Populated at init from /etc/hosts; can be refreshed via NetOp::RELOAD_HOSTS.
+static mut RESOLVER_CHAIN: Option<sunlight_net::ResolverChain> = None;
+
+/// Phase 3.4: smoltcp interface + frame-proxy device, used by the RESOLVE
+/// handler's upstream DNS fallback. Built once at startup from the same
+/// static QEMU user-net config as NetOp::GETIP (10.0.2.15/24 via 10.0.2.2).
+static mut NET_DEVICE: Option<ProxyNetDevice> = None;
+static mut NET_IFACE: Option<Interface> = None;
+/// Backing storage for the UDP socket `upstream::query_a` allocates per query.
+static mut SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
+const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [
+    [8, 8, 8, 8],
+    [1, 1, 1, 1],
+];
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -53,25 +69,37 @@ pub extern "C" fn _start() -> ! {
     debug_log("[NET]  Interface: eth0 MAC=52:54:00:12:34:56");
     debug_log("[NET]  NetOp handlers registered");
 
-    // 1.0 VFS /etc/hosts + 1.1 Combined Resolver (hosts first, hardcoded fallback)
+    // Phase 3.0: VFS /etc/hosts -> ResolverChain (hosts -> TTL cache -> upstream DNS).
     // We read via capability-gated VFS IPC (existing VfsMsg + nameserver).
-    // Parser is minimal (no heavy alloc beyond small BTreeMap<String,[u8;4]> inside resolver).
-    let hosts_content = if let Some(vfs_cap) = nameserver_lookup("vfs") {
-        let data = read_file_simple(vfs_cap, "/etc/hosts");
-        // SAFETY: the data Vec lives in our process bump heap; from_utf8_lossy is safe on arbitrary bytes;
-        // DnsResolver::new + parse_hosts will copy names into owned Strings so the temp content can be dropped.
-        alloc::string::String::from_utf8_lossy(&data).into_owned()
-    } else {
-        alloc::string::String::new()
-    };
-    let resolver = sunlight_net::DnsResolver::new(&hosts_content);
+    let hosts_content = load_hosts_from_vfs();
+    let mut chain = sunlight_net::ResolverChain::new(&hosts_content);
+    // QEMU user-net (slirp) built-in DNS forwarder — reliably reachable inside
+    // the guest's NAT'd subnet and forwards to the host's real resolver.
+    chain.upstream = [10, 0, 2, 3];
     unsafe {
         // SAFETY: written exactly once, before any messages are handled (single-threaded
-        // userspace service, no interrupts in this model). Subsequent reads in handle_msg
-        // are after this point. The contained map owns its data for process lifetime.
-        DNS_RESOLVER = Some(resolver);
+        // userspace service, no interrupts in this model). Subsequent reads/writes in
+        // handle_msg happen after this point and never alias.
+        RESOLVER_CHAIN = Some(chain);
     }
-    debug_log("[DNS] /etc/hosts loaded (hosts + hardcoded resolver active)");
+    debug_log("[DNS] /etc/hosts loaded into resolver chain");
+
+    // Phase 3.4: bring up the smoltcp interface over the kernel frame proxy
+    // using the same static QEMU user-net config as NetOp::GETIP.
+    let mac = EthernetAddress([0x52, 0x54, 0x00, 0x12, 0x34, 0x56]);
+    let mut device = ProxyNetDevice::new(mac.0);
+    let config = Config::new(HardwareAddress::Ethernet(mac));
+    let mut iface = Interface::new(config, &mut device, Instant::from_millis(0));
+    iface.update_ip_addrs(|addrs| {
+        let _ = addrs.push(IpCidr::Ipv4(Ipv4Cidr::new(Ipv4Address::new(10, 0, 2, 15), 24)));
+    });
+    let _ = iface.routes_mut().add_default_ipv4_route(Ipv4Address::new(10, 0, 2, 2));
+    unsafe {
+        // SAFETY: written exactly once before the receive loop; see RESOLVER_CHAIN.
+        NET_DEVICE = Some(device);
+        NET_IFACE = Some(iface);
+    }
+    debug_log("[NET]  smoltcp interface up over kernel frame proxy (10.0.2.15/24)");
 
     // Main service loop
     let mut msg = ipc_recv(ep);
@@ -107,7 +135,7 @@ fn handle_msg(msg: IpcMsg) -> IpcMsg {
             IpcMsg::with_label(msg.label).word(0, 1)
         }
         NetOp::RESOLVE => {
-            // 1.2: use the combined DnsResolver (hosts from /etc/hosts via VFS + hardcoded fallback).
+            // Phase 3.0: resolver chain - /etc/hosts -> TTL cache -> upstream DNS.
             // Unpack hostname from client (same packing as before for RESOLVE).
             let name_len = msg.words[0] as usize;
             let mut name_buf = [0u8; 64];
@@ -122,20 +150,125 @@ fn handle_msg(msg: IpcMsg) -> IpcMsg {
                 }
             }
             let hostname = core::str::from_utf8(&name_buf[..core::cmp::min(name_len, 63)]).unwrap_or("");
+            let now = sunlight_ipc::get_time_utc();
+            debug_log(&alloc::format!("[DNSDBG] resolve request host='{}' len={} now={}", hostname, name_len, now));
+
             let ip = unsafe {
-                // SAFETY: DNS_RESOLVER is initialized exactly once before the receive loop
-                // and never mutated again. This is the only reader. Single-threaded service.
-                if let Some(ref r) = DNS_RESOLVER {
-                    r.resolve(hostname).unwrap_or([0, 0, 0, 0])
+                // SAFETY: RESOLVER_CHAIN, NET_DEVICE and NET_IFACE are each
+                // initialized exactly once before the receive loop. This handler
+                // is the only place that reads or mutates them (single-threaded
+                // IPC service), so &mut access here never aliases.
+                if let Some(ref mut chain) = RESOLVER_CHAIN {
+                    match chain.resolve_local(hostname, now) {
+                        Some(ip) => {
+                            debug_log(&alloc::format!(
+                                "[DNSDBG] local hit host='{}' ip={}.{}.{}.{}",
+                                hostname, ip[0], ip[1], ip[2], ip[3]
+                            ));
+                            Some(ip)
+                        }
+                        None => {
+                            debug_log(&alloc::format!(
+                                "[DNSDBG] local miss host='{}' upstream={}.{}.{}.{}",
+                                hostname,
+                                chain.upstream[0],
+                                chain.upstream[1],
+                                chain.upstream[2],
+                                chain.upstream[3]
+                            ));
+                            // Phase 3.1/3.4: fall through to upstream DNS-over-UDP via
+                            // the kernel frame proxy.
+                            match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+                                (Some(iface), Some(device)) => {
+                                    let mut sockets = SocketSet::new(&mut SOCKET_STORAGE[..]);
+                                    match sunlight_net::dns::upstream::query_a(
+                                        hostname,
+                                        chain.upstream,
+                                        iface,
+                                        &mut sockets,
+                                        device,
+                                    ) {
+                                        Ok((ip, ttl)) => {
+                                            debug_log(&alloc::format!(
+                                                "[DNSDBG] upstream ok host='{}' ip={}.{}.{}.{} ttl={}",
+                                                hostname, ip[0], ip[1], ip[2], ip[3], ttl
+                                            ));
+                                            chain.cache_insert(hostname, ip, ttl, now);
+                                            Some(ip)
+                                        }
+                                        Err(err) => {
+                                            debug_log(&alloc::format!(
+                                                "[DNSDBG] upstream err host='{}' err={:?}",
+                                                hostname, err
+                                            ));
+                                            if err == sunlight_net::DnsError::Timeout {
+                                                let mut resolved = None;
+                                                for server in DNS_FALLBACK_SERVERS {
+                                                    debug_log(&alloc::format!(
+                                                        "[DNSDBG] fallback try host='{}' upstream={}.{}.{}.{}",
+                                                        hostname, server[0], server[1], server[2], server[3]
+                                                    ));
+                                                    match sunlight_net::dns::upstream::query_a(
+                                                        hostname,
+                                                        server,
+                                                        iface,
+                                                        &mut sockets,
+                                                        device,
+                                                    ) {
+                                                        Ok((ip, ttl)) => {
+                                                            debug_log(&alloc::format!(
+                                                                "[DNSDBG] fallback ok host='{}' ip={}.{}.{}.{} ttl={}",
+                                                                hostname, ip[0], ip[1], ip[2], ip[3], ttl
+                                                            ));
+                                                            chain.cache_insert(hostname, ip, ttl, now);
+                                                            resolved = Some(ip);
+                                                            break;
+                                                        }
+                                                        Err(fallback_err) => {
+                                                            debug_log(&alloc::format!(
+                                                                "[DNSDBG] fallback err host='{}' upstream={}.{}.{}.{} err={:?}",
+                                                                hostname,
+                                                                server[0], server[1], server[2], server[3],
+                                                                fallback_err
+                                                            ));
+                                                        }
+                                                    }
+                                                }
+                                                resolved
+                                            } else {
+                                                None // no route / NXDOMAIN / parse error
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    debug_log("[DNSDBG] upstream unavailable: iface/device missing");
+                                    None // interface not yet brought up
+                                }
+                            }
+                        }
+                    }
                 } else {
-                    [0, 0, 0, 0]
+                    debug_log("[DNSDBG] resolver chain missing");
+                    None
                 }
             };
-            if ip == [0, 0, 0, 0] {
-                IpcMsg::with_label(NetOp::RESOLVE).word(0, 0) // failure -> "Name or service not known"
-            } else {
-                IpcMsg::with_label(NetOp::RESOLVE).word(0, pack_ipv4(ip))
+
+            match ip {
+                Some(ip) => IpcMsg::with_label(NetOp::RESOLVE).word(0, pack_ipv4(ip)),
+                None => IpcMsg::with_label(NetOp::RESOLVE).word(0, 0), // "Name or service not known"
             }
+        }
+        NetOp::RELOAD_HOSTS => {
+            // Phase 3.0: re-read /etc/hosts from VFS and atomically swap the table.
+            let hosts_content = load_hosts_from_vfs();
+            unsafe {
+                // SAFETY: see RESOLVE above - single-threaded, exclusive access.
+                if let Some(ref mut chain) = RESOLVER_CHAIN {
+                    chain.reload_hosts(&hosts_content);
+                }
+            }
+            IpcMsg::with_label(NetOp::RELOAD_HOSTS).word(0, 1)
         }
         11 => {
             // Phase 6.5 Step 4 bridge + Phase 5.3 ping support: the net-utils "ping"
@@ -157,6 +290,19 @@ fn pack_ipv4(ip: [u8; 4]) -> u64 {
         | ((ip[1] as u64) << 8)
         | ((ip[2] as u64) << 16)
         | ((ip[3] as u64) << 24)
+}
+
+/// Read `/etc/hosts` via the VFS capability and return its UTF-8 content.
+/// Used at startup and on every NetOp::RELOAD_HOSTS.
+fn load_hosts_from_vfs() -> alloc::string::String {
+    if let Some(vfs_cap) = nameserver_lookup("vfs") {
+        let data = read_file_simple(vfs_cap, "/etc/hosts");
+        // SAFETY: from_utf8_lossy is safe on arbitrary bytes; parse_hosts copies
+        // names into owned Strings so this temporary buffer can be dropped.
+        alloc::string::String::from_utf8_lossy(&data).into_owned()
+    } else {
+        alloc::string::String::new()
+    }
 }
 
 /// Minimal VFS file reader for net_server (used only for /etc/hosts at init).

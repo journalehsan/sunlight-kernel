@@ -58,6 +58,8 @@ qemu-system-x86_64 \
     -vga std \
     -display gtk \
     -serial stdio \
+    -netdev user,id=net0 \
+    -device virtio-net-pci,netdev=net0,disable-modern=on \
     -no-reboot \
     -no-shutdown \
     "$@"

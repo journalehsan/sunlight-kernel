@@ -416,6 +416,62 @@ pub extern "C" fn _start() -> ! {
     splash.set_progress(975);  // 97.5%
     splash.redraw();
 
+    // Ensure the kernel-owned virtio-net device is initialized for normal boots
+    // (not only phase5* test gates), so net_server DNS upstream queries can
+    // actually transmit/receive frames via NetTx/NetRx.
+    if NET_DEVICE.lock().is_none() {
+        let net_init_result = {
+            let mut pmm = PMM.lock();
+            let rx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+                .map(|f| f.as_u64());
+            let tx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+                .map(|f| f.as_u64());
+            let rx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
+            let tx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
+
+            match (rx_q_phys, tx_q_phys, rx_buf_phys, tx_buf_phys) {
+                (Some(rp), Some(tp), Some(bp), Some(xp)) => {
+                    let h = hhdm_offset.as_u64();
+                    let rx_q_virt = h + rp;
+                    let tx_q_virt = h + tp;
+                    let rx_b_virt = h + bp;
+                    let tx_b_virt = h + xp;
+                    let pci_info = unsafe { sunlight_virtio::find_virtio_net() };
+                    if let Some((bus, slot, _func, io_base)) = pci_info {
+                        unsafe {
+                            sunlight_net::VirtioNet::init(
+                                io_base,
+                                bus,
+                                slot,
+                                rp,
+                                rx_q_virt,
+                                tp,
+                                tx_q_virt,
+                                bp,
+                                rx_b_virt,
+                                1514,
+                                xp,
+                                tx_b_virt,
+                            )
+                        }
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        };
+        match net_init_result {
+            Some(dev) => {
+                serial_println!("[NET]  virtio-net device ready for frame proxy (pid 5)");
+                *NET_DEVICE.lock() = Some(dev);
+            }
+            None => {
+                serial_println!("[NET]  virtio-net not found for frame proxy (no -device or alloc failure)");
+            }
+        }
+    }
+
     // 13. Spawn net_server (pid=5).
     // This keeps `ping`/`ifconfig` and sysfetch IP available in normal boots,
     // not only in phase-gated test builds.
@@ -496,13 +552,15 @@ pub extern "C" fn _start() -> ! {
                 let tx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
                     .map(|f| f.as_u64());
                 let rx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
+                let tx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
 
-                match (rx_q_phys, tx_q_phys, rx_buf_phys) {
-                    (Some(rp), Some(tp), Some(bp)) => {
+                match (rx_q_phys, tx_q_phys, rx_buf_phys, tx_buf_phys) {
+                    (Some(rp), Some(tp), Some(bp), Some(xp)) => {
                         let h = hhdm_offset.as_u64();
                         let rx_q_virt = h + rp;
                         let tx_q_virt = h + tp;
                         let rx_b_virt = h + bp;
+                        let tx_b_virt = h + xp;
                         // SAFETY: All phys/virt pairs are valid HHDM-mapped kernel frames.
                         // Ring-0 privilege for find + port I/O + queue setup.
                         // We intentionally only attempt when phase5* to avoid side effects on earlier gates.
@@ -520,6 +578,8 @@ pub extern "C" fn _start() -> ! {
                                     bp,
                                     rx_b_virt,
                                     1514,
+                                    xp,
+                                    tx_b_virt,
                                 )
                             }
                         } else {
@@ -531,11 +591,15 @@ pub extern "C" fn _start() -> ! {
             };
 
             match net_init_result {
-                Some(_dev) => {
+                Some(dev) => {
                     serial_println!("[NET]  Found virtio-net at PCI 00:03.0");
                     serial_println!("[NET]  MAC: 52:54:00:12:34:56");
                     serial_println!("[NET]  RX/TX queues initialized");
                     serial_println!("[NET]  virtio-net OK");
+                    // Phase 3.4: keep the device alive so net_server (pid 5) can
+                    // drive it via the NetTx/NetRx syscall frame proxy instead of
+                    // touching ports directly (ring-3 has no port I/O access).
+                    *NET_DEVICE.lock() = Some(dev);
                 }
                 None => {
                     serial_println!("[NET]  virtio-net not found (no -device or alloc failure)");
@@ -701,6 +765,11 @@ pub type KernelDisk = sunlight_block::CachedBlockDevice<KernelBlkDev, 16>;
 /// Lock order: never acquire SCHEDULER or PMM while holding this lock.
 pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> =
     spin::Mutex::new(None);
+
+/// Kernel-owned virtio-net device (Phase 3.4: net_server frame proxy).
+/// Only ring-0 can touch the device's I/O ports; net_server (pid 5) exchanges
+/// raw Ethernet frames with it via the NetTx/NetRx syscalls below.
+pub static NET_DEVICE: spin::Mutex<Option<sunlight_net::VirtioNet>> = spin::Mutex::new(None);
 
 /// BlockDevice adapter over the kernel's virtio-blk driver (read-only:
 /// VirtioBlk has no write path yet, and the boot volume is never written).
@@ -944,6 +1013,7 @@ fn setup_key_injection() {
     let sequence: [u8; 256] = match phase {
         "phase3.9" => build_phase3_9_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
+        "dns_test" => build_dns_test_sequence(),
         _ => build_phase3_8_sequence(),
     };
     let len = sequence
@@ -1021,6 +1091,22 @@ fn build_phase6_5_3_sequence() -> [u8; 256] {
         0x32, 0x25, 0x20, 0x17, 0x13, 0x39, // mkdir<space>
         0x35, 0x14, 0x32, 0x19, 0x35, 0x2D, 0x1C, // /tmp/x + Enter
         0x26, 0x1F, 0x39, 0x35, 0x14, 0x32, 0x19, 0x1C, // ls /tmp + Enter
+    ];
+    s[..codes.len()].copy_from_slice(&codes);
+    s
+}
+
+/// DNS resolver debug injection: login, then `ping google.com` twice (second
+/// run should be served from the resolver's TTL cache).
+#[cfg(feature = "key_inject")]
+fn build_dns_test_sequence() -> [u8; 256] {
+    let mut s = [0u8; 256];
+    let codes: [u8; 37] = [
+        0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
+        // ping google.com + Enter
+        0x19, 0x17, 0x31, 0x22, 0x39, 0x22, 0x18, 0x18, 0x22, 0x26, 0x12, 0x34, 0x2E, 0x18, 0x32, 0x1C,
+        // ping google.com + Enter (again, exercise cache)
+        0x19, 0x17, 0x31, 0x22, 0x39, 0x22, 0x18, 0x18, 0x22, 0x26, 0x12, 0x34, 0x2E, 0x18, 0x32, 0x1C,
     ];
     s[..codes.len()].copy_from_slice(&codes);
     s

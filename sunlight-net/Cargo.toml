@@ -19,6 +19,7 @@ smoltcp = {
     ]
 }
 sunlight-virtio = { path = "../sunlight-virtio" }
+sunlight-ipc = { path = "../ipc" }
 x86_64 = "0.15"
 log = { version = "0.4", default-features = false }
 

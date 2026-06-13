@@ -75,6 +75,12 @@ pub struct VirtioNet {
 
     // TX queue (index 1)
     tx: NetVirtq,
+    // Dedicated TX staging buffer, separate from the RX buffer above. The RX
+    // descriptor stays armed (DESC_F_WRITE) for the whole device lifetime, so
+    // reusing it as TX staging would let an inbound DMA write race with our
+    // outbound frame write/read — see send().
+    tx_buf_phys: u64,
+    tx_buf_virt: u64,
 }
 
 #[derive(Debug)]
@@ -114,6 +120,8 @@ impl VirtioNet {
         rx_buf_phys: u64,
         rx_buf_virt: u64,
         rx_buf_len: usize,
+        tx_buf_phys: u64,
+        tx_buf_virt: u64,
     ) -> Option<Self> {
         // --- Reset + feature negotiation (identical pattern to virtio-blk) ---
         // SAFETY: io_base is a valid legacy virtio I/O BAR; ring-0 required.
@@ -250,6 +258,8 @@ impl VirtioNet {
             rx_buf_virt,
             rx_buf_len,
             tx,
+            tx_buf_phys,
+            tx_buf_virt,
         })
     }
 
@@ -276,12 +286,15 @@ impl VirtioNet {
             return 0; // nothing
         }
 
-        // For simplicity we only armed descriptor 0. Read the used entry.
-        // Used ring entry layout after flags+idx: {id:u32, len:u32}
-        let used_ring_base = self.rx.used_virt + 4;
+        // We only ever arm descriptor 0, but the device writes each completion
+        // to the used ring slot at (used.idx % queue_size), not always slot 0.
+        // Read the slot matching our tracked last_used_idx.
+        // Used ring entry layout after flags+idx: {id:u32, len:u32}, 8 bytes/entry.
+        let slot = (self.rx.last_used_idx as usize) % (self.rx.queue_size as usize);
+        let used_entry_base = self.rx.used_virt + 4 + (slot as u64) * 8;
         // SAFETY: volatile reads from the used ring written by the device.
-        let used0_id = unsafe { ((used_ring_base) as *const u32).read_volatile() };
-        let used0_len = unsafe { ((used_ring_base + 4) as *const u32).read_volatile() };
+        let used0_id = unsafe { ((used_entry_base) as *const u32).read_volatile() };
+        let used0_len = unsafe { ((used_entry_base + 4) as *const u32).read_volatile() };
 
         self.rx.last_used_idx = self.rx.last_used_idx.wrapping_add(1);
 
@@ -347,14 +360,15 @@ impl VirtioNet {
     /// The internal TX scratch must not alias with caller memory.
     pub unsafe fn send(&mut self, frame: &[u8]) -> Result<(), NetError> {
         if frame.len() > self.rx_buf_len {
-            // Reuse rx_buf_len as a reasonable MTU proxy; real TX would use separate buf.
+            // Reuse rx_buf_len as a reasonable MTU proxy for the TX buffer size.
             return Err(NetError::QueueError);
         }
 
-        // We reuse the RX scratch page as temporary TX staging for MVI (header + frame).
-        // In a fuller driver we would have dedicated TX buffers.
-        let tx_buf_virt = self.rx_buf_virt; // ok for MVI, single threaded early on
-        let tx_buf_phys = self.rx_buf_phys;
+        // Dedicated TX staging buffer (separate from the RX buffer, which stays
+        // armed with DESC_F_WRITE for the device to DMA incoming frames into at
+        // any time).
+        let tx_buf_virt = self.tx_buf_virt;
+        let tx_buf_phys = self.tx_buf_phys;
 
         // Write header + frame into the staging area.
         let hdr = VirtioNetHeader {

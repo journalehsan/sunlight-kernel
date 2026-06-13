@@ -48,6 +48,8 @@ for DISPLAY in "${DISPLAY_OPTS[@]}"; do
         -vga std \
         $DISPLAY \
         -serial stdio \
+        -netdev user,id=net0 \
+        -device virtio-net-pci,netdev=net0,disable-modern=on \
         -no-reboot \
         2>&1; then
         echo ""
@@ -70,6 +72,8 @@ timeout 15 qemu-system-x86_64 \
     -vga std \
     -display none \
     -serial stdio \
+    -netdev user,id=net0 \
+    -device virtio-net-pci,netdev=net0,disable-modern=on \
     -no-reboot \
     2>&1 || true
 
