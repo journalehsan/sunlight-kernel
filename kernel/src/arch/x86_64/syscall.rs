@@ -537,6 +537,7 @@ fn process_exit(code: i32) -> ! {
         let p = s.current_process_mut();
         p.exit_code = code;
         p.state = ProcessState::Finished;
+        crate::memory::swap::untrack_process(p.pid);
         crate::sched::note_process_finished(p.pid, p.name);
     });
     sched::request_reschedule();

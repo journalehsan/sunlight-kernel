@@ -86,6 +86,7 @@ pub fn sys_mmap(
 
     // Map all the pages
     let proc = sched.current_process_mut();
+    let pid = proc.pid;
     for i in 0..page_count {
         let page_vaddr = VirtAddr::new(map_addr + i * 4096);
         let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
@@ -102,6 +103,9 @@ pub fn sys_mmap(
                 VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset),
             );
         }
+
+        // Track as a swap reclaim candidate (Phase 6.6 Step 2).
+        crate::memory::swap::track_anon(pid, page_vaddr, frame_addr);
     }
 
     Ok(map_addr)

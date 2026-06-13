@@ -554,11 +554,11 @@ fn cmd_free(args: &[&str]) -> i32 {
     write_unit(swap_free_kb, unit);
     let _ = write_all(b"\n");
 
-    if matches!(unit, FreeUnit::Human) && swap_used_kb > 0 {
+    if swap_used_kb > 0 {
         let compressed_kb = info.swap_compressed_kb.max(1);
         let ratio_x10 = (swap_used_kb * 10) / compressed_kb;
         let _ = write_all(b"  compressed: ");
-        print_human(compressed_kb);
+        write_unit(compressed_kb, unit);
         let _ = write_all(b" (ratio ");
         print_u64(ratio_x10 / 10);
         let _ = write_all(b".");
