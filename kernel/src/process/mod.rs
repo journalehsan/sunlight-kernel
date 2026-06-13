@@ -69,6 +69,10 @@ pub struct Process {
     pub block_start_tick: u64,
     /// Counter for aging mechanism (prevent starvation)
     pub aging_counter: u32,
+    /// Child pid this process is blocked in `waitpid` on, if any. Used to wake
+    /// the parent from `BlockedOnIpc` when that child exits, instead of having
+    /// the parent busy-spin in a yield loop.
+    pub wait_child: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,6 +152,7 @@ impl Process {
             interactive_bonus: 20,  // Assume interactive initially
             block_start_tick: 0,    // Not blocked yet
             aging_counter: 0,       // No aging yet
+            wait_child: None,       // Not waiting on a child
         }
     }
 

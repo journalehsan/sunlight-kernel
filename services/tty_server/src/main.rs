@@ -34,7 +34,7 @@ static BUMP: BumpAllocator = BumpAllocator;
 use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
+    nameserver_lookup, sysinfo, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
 };
 use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
 use sunlight_tty::TerminalGrid;
@@ -522,22 +522,10 @@ fn render_active_shell_fb(
         grid.to_term_cells(&ANSI_COLORS)
     };
 
-    // Title-bar clock, e.g. "12:22 AM | 2026/6/12"  (+ net indicator for Phase 5+)
-    let mut clock_buf = [0u8; 32];
-    let clock_len = sunlight_tui::fmt::fmt_clock(&mut clock_buf, get_time_utc());
-    // Append lightweight net status (no extra IPC to avoid latency in render path).
-    // Real impl would cache last known IP from net service.
-    let mut clock_len = clock_len;
-    if clock_len < 24 {
-        clock_buf[clock_len] = b' ';
-        clock_buf[clock_len + 1] = b'|';
-        clock_buf[clock_len + 2] = b' ';
-        clock_buf[clock_len + 3] = b'e';
-        clock_buf[clock_len + 4] = b't';
-        clock_buf[clock_len + 5] = b'h';
-        clock_buf[clock_len + 6] = b'0';
-        clock_len += 7;
-    }
+    // Title-bar stats: "CPU 15% RAM 42%  12:22 AM | 2026/6/12 | eth0".
+    // Cached and refreshed at most once per minute (the same cadence the clock
+    // re-renders) so the per-keystroke render path never does a sysinfo syscall.
+    let (clock_buf, clock_len) = unsafe { titlebar(get_time_utc()) };
 
     unsafe {
         sunlight_tui::render_terminal_grid(
@@ -1015,6 +1003,60 @@ fn fmt_u32(buf: &mut [u8], val: u32) -> usize {
     for i in 0..n {
         buf[i] = tmp[n - 1 - i];
     }
+    n
+}
+
+/// Build the title-bar string shown in the header next to the "TTY" label:
+/// `CPU 15% RAM 42%  <clock> | eth0`.
+///
+/// The CPU/RAM figures come from a single `sysinfo` syscall, cached and
+/// refreshed at most once per minute. The render path runs on every keystroke,
+/// so this keeps it allocation- and (almost always) syscall-free. Returns a
+/// fixed buffer plus its used length.
+///
+/// SAFETY: touches function-local `static mut` cache; tty_server is
+/// single-threaded so there is no concurrent access.
+unsafe fn titlebar(ts: u64) -> ([u8; 64], usize) {
+    static mut CACHE_BUF: [u8; 64] = [0; 64];
+    static mut CACHE_LEN: usize = 0;
+    static mut CACHE_MIN: u64 = u64::MAX;
+
+    let now_min = ts / 60;
+    if now_min == CACHE_MIN && CACHE_LEN != 0 {
+        return (CACHE_BUF, CACHE_LEN);
+    }
+
+    let mut buf = [0u8; 64];
+    let mut n = 0usize;
+
+    // CPU usage (placeholder until scheduler accounting lands — matches the old
+    // banner's behaviour).
+    let cpu_percent: u64 = 15;
+    n += copy_into(&mut buf[n..], b"CPU ");
+    n += fmt_u64(&mut buf[n..], cpu_percent);
+    n += copy_into(&mut buf[n..], b"% RAM ");
+
+    let info = sysinfo();
+    let total = info.total_ram_kb.max(1);
+    let ram_percent = (info.used_ram_kb * 100) / total;
+    n += fmt_u64(&mut buf[n..], ram_percent);
+    n += copy_into(&mut buf[n..], b"%  ");
+
+    // Clock + net indicator (same format the header used before).
+    n += sunlight_tui::fmt::fmt_clock(&mut buf[n..], ts);
+    n += copy_into(&mut buf[n..], b" | eth0");
+
+    CACHE_BUF = buf;
+    CACHE_LEN = n;
+    CACHE_MIN = now_min;
+    (buf, n)
+}
+
+/// Copy `src` into the front of `dst`, returning the number of bytes written
+/// (bounded by `dst`'s length).
+fn copy_into(dst: &mut [u8], src: &[u8]) -> usize {
+    let n = src.len().min(dst.len());
+    dst[..n].copy_from_slice(&src[..n]);
     n
 }
 

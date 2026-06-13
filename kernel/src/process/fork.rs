@@ -121,6 +121,7 @@ pub fn fork_current_process(
             interactive_bonus: 20, // Assume interactive initially
             block_start_tick: 0,   // Not blocked yet
             aging_counter: 0,      // No aging yet
+            wait_child: None,      // Not waiting on a child
         };
 
         // Setup kernel stack top
@@ -218,6 +219,7 @@ fn sys_fork(
             interactive_bonus: 20,                   // Assume interactive initially
             block_start_tick: 0,                     // Not blocked yet
             aging_counter: 0,                        // No aging yet
+            wait_child: None,                        // Not waiting on a child
         };
 
         // Setup kernel stack top

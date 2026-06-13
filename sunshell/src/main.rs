@@ -1664,6 +1664,9 @@ mod sunlight {
         core::str::from_utf8(&buf[..pos]).unwrap_or("sshl0")
     }
 
+    // Retained for reference: the old shell-startup CPU/RAM banner. No longer
+    // called — these stats now render in the TUI title bar (tty_server).
+    #[allow(dead_code)]
     fn send_system_stats_header() {
         // System stats banner: CPU % and RAM % display
         let cpu_percent = 15; // Placeholder: needs scheduler accounting (Phase 5.12)
@@ -1823,15 +1826,17 @@ mod sunlight {
             LONG_OUT_LEN = 7;
         }
 
-        // Send welcome banner
+        // Simple, fast greeting. The CPU/RAM stats banner was removed from the
+        // shell startup: every tab spawned its own shell, and each did a sysinfo
+        // syscall on launch — extra latency/IPC churn per tab. Live CPU/RAM now
+        // lives in the TUI title bar (rendered once by tty_server, see
+        // build_titlebar in services/tty_server). Keep this greeting minimal so
+        // a new tab paints instantly.
         long_out_push_str("\x1b[36m"); // cyan
-        long_out_push_str("Welcome to SunlightOS v0.1\n");
+        long_out_push_str("Welcome to SunlightOS\n");
         long_out_push_str("\x1b[0m"); // reset
-        long_out_push_str("A lightweight microkernel OS for x86_64\n");
-        long_out_push_str("Type 'help' for available commands\n");
+        long_out_push_str("Type commands at the prompt below.\n");
         long_out_push_str("\n");
-
-        send_system_stats_header();
 
         let mut msg = ipc_reply_and_wait(ep, IpcMsg::with_label(0));
         loop {

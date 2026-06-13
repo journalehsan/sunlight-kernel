@@ -538,8 +538,20 @@ fn process_exit(code: i32) -> ! {
         let p = s.current_process_mut();
         p.exit_code = code;
         p.state = ProcessState::Finished;
-        crate::memory::swap::untrack_process(p.pid);
-        crate::sched::note_process_finished(p.pid, p.name);
+        let my_pid = p.pid;
+        let parent_pid = p.ppid;
+        crate::memory::swap::untrack_process(my_pid);
+        crate::sched::note_process_finished(my_pid, p.name);
+
+        // Wake a parent that is blocked in waitpid() on this child. wake_pid
+        // only acts on BlockedOnIpc processes, and we gate on wait_child so a
+        // parent blocked for any other reason is left untouched.
+        let parent_waiting = s
+            .process_mut_by_pid(parent_pid)
+            .is_some_and(|parent| parent.wait_child == Some(my_pid));
+        if parent_waiting {
+            s.wake_pid(parent_pid);
+        }
     });
     sched::request_reschedule();
 
@@ -767,25 +779,54 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
 }
 
 /// Syscall: Waitpid (32)
-/// rdi = child pid. Non-blocking: returns the exit code (0..=255) once the
-/// child is Finished, EAGAIN while it is still running, and -1 when no such
-/// child exists. Userland loops with yield for blocking semantics.
+/// rdi = child pid. Returns the exit code (0..=255) once the child is Finished,
+/// EAGAIN while it is still running, and -1 when no such child exists.
+///
+/// While the child is still running, the caller is parked in `BlockedOnIpc`
+/// (recording the awaited child in `wait_child`) so it does NOT busy-spin in
+/// the scheduler's ready queue. `process_exit` wakes the parent when the child
+/// finishes. Userland still loops over the EAGAIN return with yield, but each
+/// iteration de-schedules the blocked parent instead of re-queuing it Ready —
+/// this is what prevents multi-tab waitpid livelock/starvation.
 fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
     const EAGAIN: u64 = u64::MAX - 1;
     let pid = frame.rdi as usize;
 
-    let sched = crate::sched::SCHEDULER.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
     let me = sched.current_process().pid;
+
+    let mut found = false;
+    let mut finished_code = None;
     for p in sched.processes.iter() {
         if p.pid == pid && p.ppid == me {
-            return if p.state == ProcessState::Finished {
-                (p.exit_code as u8) as u64
-            } else {
-                EAGAIN
-            };
+            found = true;
+            if p.state == ProcessState::Finished {
+                finished_code = Some((p.exit_code as u8) as u64);
+            }
+            break;
         }
     }
-    u64::MAX
+
+    if !found {
+        // No such child — clear any stale wait and report failure.
+        sched.current_process_mut().wait_child = None;
+        return u64::MAX;
+    }
+
+    if let Some(code) = finished_code {
+        sched.current_process_mut().wait_child = None;
+        return code;
+    }
+
+    // Child still running: park the caller until the child exits.
+    let global_tick = sched.global_tick;
+    let caller = sched.current_process_mut();
+    caller.wait_child = Some(pid);
+    caller.state = ProcessState::BlockedOnIpc;
+    caller.block_start_tick = global_tick;
+    drop(sched);
+    crate::sched::request_reschedule();
+    EAGAIN
 }
 
 /// Read a whole file out of the kernel VFS into a heap buffer.
