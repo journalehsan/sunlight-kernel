@@ -102,7 +102,8 @@ impl CapabilityBroker {
         let id = self.endpoints.len() as u32;
         self.endpoints.push(Endpoint { id, owner_pid });
         let token = generate_token();
-        self.capabilities.push((token, id, CapabilityRights::SEND_RECV));
+        self.capabilities
+            .push((token, id, CapabilityRights::SEND_RECV));
         serial_println!("[CAP] Created endpoint {} for pid={}", id, owner_pid);
         (id, token)
     }
@@ -142,21 +143,23 @@ impl CapabilityBroker {
         endpoint_id: u32,
         rights: CapabilityRights,
     ) -> Option<CapabilityToken> {
-        self.capabilities.iter().find_map(|(token, id, token_rights)| {
-            if *id != endpoint_id {
-                return None;
-            }
-            if rights.can_send && !token_rights.can_send {
-                return None;
-            }
-            if rights.can_receive && !token_rights.can_receive {
-                return None;
-            }
-            if rights.can_grant && !token_rights.can_grant {
-                return None;
-            }
-            Some(*token)
-        })
+        self.capabilities
+            .iter()
+            .find_map(|(token, id, token_rights)| {
+                if *id != endpoint_id {
+                    return None;
+                }
+                if rights.can_send && !token_rights.can_send {
+                    return None;
+                }
+                if rights.can_receive && !token_rights.can_receive {
+                    return None;
+                }
+                if rights.can_grant && !token_rights.can_grant {
+                    return None;
+                }
+                Some(*token)
+            })
     }
 
     /// Revoke a capability token.
@@ -169,7 +172,10 @@ impl CapabilityBroker {
 
     /// Get endpoint owner.
     pub fn endpoint_owner(&self, endpoint_id: u32) -> Option<usize> {
-        self.endpoints.iter().find(|e| e.id == endpoint_id).map(|e| e.owner_pid)
+        self.endpoints
+            .iter()
+            .find(|e| e.id == endpoint_id)
+            .map(|e| e.owner_pid)
     }
 
     /// Resolve a token to its endpoint owner after checking rights.
@@ -179,7 +185,9 @@ impl CapabilityBroker {
         rights: CapabilityRights,
     ) -> Result<(u32, usize), CapError> {
         let endpoint_id = self.check(token, rights)?;
-        let owner = self.endpoint_owner(endpoint_id).ok_or(CapError::EndpointNotFound)?;
+        let owner = self
+            .endpoint_owner(endpoint_id)
+            .ok_or(CapError::EndpointNotFound)?;
         Ok((endpoint_id, owner))
     }
 }

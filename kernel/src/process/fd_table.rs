@@ -17,7 +17,7 @@ impl CapRights {
     pub const MMAP_R: u64 = 1 << 7;
     pub const MMAP_W: u64 = 1 << 8;
     pub const MMAP_X: u64 = 1 << 9;
-    pub const CONNECT: u64 = 1 << 10;  // Phase 5: network
+    pub const CONNECT: u64 = 1 << 10; // Phase 5: network
     pub const BIND: u64 = 1 << 11;
     pub const ACCEPT: u64 = 1 << 12;
 
@@ -38,11 +38,15 @@ impl CapRights {
     }
 
     pub fn intersection(self, other: Self) -> Self {
-        Self { bits: self.bits & other.bits }
+        Self {
+            bits: self.bits & other.bits,
+        }
     }
 
     pub fn union(self, other: Self) -> Self {
-        Self { bits: self.bits | other.bits }
+        Self {
+            bits: self.bits | other.bits,
+        }
     }
 
     pub fn bits(self) -> u64 {
@@ -102,7 +106,7 @@ pub struct FileDescriptor {
     pub fd: i32,
     pub handle: FileHandle,
     pub rights: CapRights,
-    pub flags: u32,  // O_RDONLY, O_WRONLY, O_RDWR, O_CLOEXEC
+    pub flags: u32, // O_RDONLY, O_WRONLY, O_RDWR, O_CLOEXEC
     /// Current read/write position (VFS-backed fds only).
     pub offset: usize,
 }
@@ -118,35 +122,40 @@ impl FdTable {
         let entries: [Option<FileDescriptor>; 256] = [None; 256];
         let mut table = Self {
             entries,
-            next_fd: 3,  // Reserve 0=stdin, 1=stdout, 2=stderr
+            next_fd: 3, // Reserve 0=stdin, 1=stdout, 2=stderr
         };
         // Initialize standard streams
         table.entries[0] = Some(FileDescriptor {
             fd: 0,
             handle: FileHandle(0),
             rights: CapRights::new(CapRights::READ | CapRights::FSTAT),
-            flags: 0,  // O_RDONLY
+            flags: 0, // O_RDONLY
             offset: 0,
         });
         table.entries[1] = Some(FileDescriptor {
             fd: 1,
             handle: FileHandle(1),
             rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
-            flags: 1,  // O_WRONLY
+            flags: 1, // O_WRONLY
             offset: 0,
         });
         table.entries[2] = Some(FileDescriptor {
             fd: 2,
             handle: FileHandle(2),
             rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
-            flags: 1,  // O_WRONLY
+            flags: 1, // O_WRONLY
             offset: 0,
         });
         table
     }
 
     /// Open a new file descriptor
-    pub fn open(&mut self, handle: FileHandle, rights: CapRights, flags: u32) -> Result<i32, FdError> {
+    pub fn open(
+        &mut self,
+        handle: FileHandle,
+        rights: CapRights,
+        flags: u32,
+    ) -> Result<i32, FdError> {
         if self.next_fd >= 256 {
             return Err(FdError::NoSlots);
         }
@@ -196,7 +205,13 @@ impl FdTable {
     /// entry (used by Spawn to hand a parent's pipe end to the child's
     /// stdout). Unlike `dup2` this does not require the source fd to live
     /// in this table.
-    pub fn install_at(&mut self, fd: i32, handle: FileHandle, rights: CapRights, flags: u32) -> Result<(), FdError> {
+    pub fn install_at(
+        &mut self,
+        fd: i32,
+        handle: FileHandle,
+        rights: CapRights,
+        flags: u32,
+    ) -> Result<(), FdError> {
         if fd < 0 || fd >= 256 {
             return Err(FdError::InvalidFd);
         }

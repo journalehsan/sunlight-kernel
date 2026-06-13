@@ -6,15 +6,15 @@ use x86_64::PhysAddr;
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
 pub struct ACPIRSDP {
-    pub signature: [u8; 8],      // "RSD PTR "
+    pub signature: [u8; 8], // "RSD PTR "
     pub checksum: u8,
     pub oem_id: [u8; 6],
     pub revision: u8,
-    pub rsdt_addr: u32,          // 32-bit pointer to RSDT (ACPI 1.0)
+    pub rsdt_addr: u32, // 32-bit pointer to RSDT (ACPI 1.0)
 
     // Extended fields (ACPI 2.0+)
     pub length: u32,
-    pub xsdt_addr: u64,          // 64-bit pointer to XSDT (ACPI 2.0+)
+    pub xsdt_addr: u64, // 64-bit pointer to XSDT (ACPI 2.0+)
     pub extended_checksum: u8,
     pub reserved: [u8; 3],
 }
@@ -95,7 +95,7 @@ pub struct ACPIFADT {
     pub reset_value: u8,
     pub reserved3: [u8; 3],
     pub firmware_ctrl_ext: u64, // ACPI 4.0+
-    pub dsdt_addr_ext: u64,      // ACPI 4.0+
+    pub dsdt_addr_ext: u64,     // ACPI 4.0+
 }
 
 /// MADT - Multiple APIC Description Table (for multiprocessor support)
@@ -172,11 +172,13 @@ pub unsafe fn init(rsdp_phys: u64) -> Result<(), &'static str> {
         return Err("No RSDP from bootloader");
     }
 
-    crate::serial_println!("[ACPI] RSDP structure located at physical address: {:#x}", rsdp_phys);
+    crate::serial_println!(
+        "[ACPI] RSDP structure located at physical address: {:#x}",
+        rsdp_phys
+    );
 
     // Map RSDP (should be identity-mapped in HHDM)
-    let rsdp = unsafe { (rsdp_phys as *const ACPIRSDP).as_ref() }
-        .ok_or("Failed to map RSDP")?;
+    let rsdp = unsafe { (rsdp_phys as *const ACPIRSDP).as_ref() }.ok_or("Failed to map RSDP")?;
 
     // Verify RSDP signature
     if &rsdp.signature != b"RSD PTR " {
@@ -186,9 +188,8 @@ pub unsafe fn init(rsdp_phys: u64) -> Result<(), &'static str> {
 
     // Verify RSDP checksum
     let rsdp_size = if rsdp.revision == 0 { 20 } else { 36 };
-    let rsdp_slice = unsafe {
-        core::slice::from_raw_parts(rsdp as *const _ as *const u8, rsdp_size)
-    };
+    let rsdp_slice =
+        unsafe { core::slice::from_raw_parts(rsdp as *const _ as *const u8, rsdp_size) };
     if !verify_checksum(rsdp_slice) {
         crate::serial_println!("[ACPI] RSDP checksum invalid");
         return Err("RSDP checksum invalid");
@@ -224,15 +225,11 @@ pub unsafe fn init(rsdp_phys: u64) -> Result<(), &'static str> {
 }
 
 fn discover_tables_from_xsdt(xsdt_phys: u64, state: &mut ACPIState) -> Result<(), &'static str> {
-    let xsdt = unsafe { (xsdt_phys as *const ACPIXSDT).as_ref() }
-        .ok_or("Failed to map XSDT")?;
+    let xsdt = unsafe { (xsdt_phys as *const ACPIXSDT).as_ref() }.ok_or("Failed to map XSDT")?;
 
     // Verify XSDT checksum
     let xsdt_slice = unsafe {
-        core::slice::from_raw_parts(
-            xsdt as *const _ as *const u8,
-            xsdt.header.length as usize,
-        )
+        core::slice::from_raw_parts(xsdt as *const _ as *const u8, xsdt.header.length as usize)
     };
     if !verify_checksum(xsdt_slice) {
         crate::serial_println!("[ACPI] XSDT checksum invalid");
@@ -263,15 +260,11 @@ fn discover_tables_from_xsdt(xsdt_phys: u64, state: &mut ACPIState) -> Result<()
 }
 
 fn discover_tables_from_rsdt(rsdt_phys: u64, state: &mut ACPIState) -> Result<(), &'static str> {
-    let rsdt = unsafe { (rsdt_phys as *const ACPIRSDT).as_ref() }
-        .ok_or("Failed to map RSDT")?;
+    let rsdt = unsafe { (rsdt_phys as *const ACPIRSDT).as_ref() }.ok_or("Failed to map RSDT")?;
 
     // Verify RSDT checksum
     let rsdt_slice = unsafe {
-        core::slice::from_raw_parts(
-            rsdt as *const _ as *const u8,
-            rsdt.header.length as usize,
-        )
+        core::slice::from_raw_parts(rsdt as *const _ as *const u8, rsdt.header.length as usize)
     };
     if !verify_checksum(rsdt_slice) {
         crate::serial_println!("[ACPI] RSDT checksum invalid");
@@ -307,10 +300,7 @@ fn dump_table_header(table_phys: u64) -> Result<(), &'static str> {
 
     // Verify table checksum
     let table_slice = unsafe {
-        core::slice::from_raw_parts(
-            header as *const _ as *const u8,
-            header.length as usize,
-        )
+        core::slice::from_raw_parts(header as *const _ as *const u8, header.length as usize)
     };
     if !verify_checksum(table_slice) {
         crate::serial_println!(
@@ -335,7 +325,8 @@ fn parse_fadt() -> Result<(), &'static str> {
     let fadt_phys = find_table_by_signature(b"FACP")?;
 
     let fadt_hdr = unsafe {
-        (fadt_phys as *const ACPIFADT).as_ref()
+        (fadt_phys as *const ACPIFADT)
+            .as_ref()
             .ok_or("Failed to map FADT")?
     };
 
@@ -363,12 +354,21 @@ fn parse_fadt() -> Result<(), &'static str> {
     }
     state.reset_reg_addr = reset_addr;
 
-    crate::serial_println!("[ACPI] PM1a_CNT_BLK port assigned: {:#x}", state.pm1a_cnt_blk);
-    crate::serial_println!("[ACPI] PM1b_CNT_BLK port assigned: {:#x}", state.pm1b_cnt_blk);
+    crate::serial_println!(
+        "[ACPI] PM1a_CNT_BLK port assigned: {:#x}",
+        state.pm1a_cnt_blk
+    );
+    crate::serial_println!(
+        "[ACPI] PM1b_CNT_BLK port assigned: {:#x}",
+        state.pm1b_cnt_blk
+    );
 
     // Enable ACPI mode if needed
     if state.smi_cmd_port != 0 && state.acpi_enable_value != 0 {
-        crate::serial_println!("[ACPI] Enabling ACPI mode via SMI_CMD port {:#x}... Done.", state.smi_cmd_port);
+        crate::serial_println!(
+            "[ACPI] Enabling ACPI mode via SMI_CMD port {:#x}... Done.",
+            state.smi_cmd_port
+        );
         // Would write ACPI_ENABLE_VALUE to SMI_CMD_PORT here in real implementation
         // For QEMU/KVM, ACPI is often already enabled; this is a safety check
     }
@@ -390,25 +390,23 @@ fn parse_dsdt(dsdt_phys: u64) -> Result<(), &'static str> {
     }
 
     let dsdt_hdr = unsafe {
-        (dsdt_phys as *const ACPITableHeader).as_ref()
+        (dsdt_phys as *const ACPITableHeader)
+            .as_ref()
             .ok_or("Failed to map DSDT")?
     };
 
     // Search for _S5 object in DSDT AML bytecode
     // Pattern: 0x08 0x5F 0x53 0x35 (name definition) followed by a package
-    let dsdt_bytes = unsafe {
-        core::slice::from_raw_parts(
-            dsdt_phys as *const u8,
-            dsdt_hdr.length as usize,
-        )
-    };
+    let dsdt_bytes =
+        unsafe { core::slice::from_raw_parts(dsdt_phys as *const u8, dsdt_hdr.length as usize) };
 
     // Search for _S5 bytecode sequence
     for i in 0..dsdt_bytes.len().saturating_sub(4) {
         if dsdt_bytes[i] == 0x08 &&        // Name operation
            dsdt_bytes[i+1] == b'_' as u8 &&  // Underscore prefix
            dsdt_bytes[i+2] == b'S' as u8 &&  // S
-           dsdt_bytes[i+3] == b'5' as u8     // 5
+           dsdt_bytes[i+3] == b'5' as u8
+        // 5
         {
             // Found _S5 object. Extract sleep type values from following package
             // Simplified: look for the package payload bytes
@@ -419,7 +417,11 @@ fn parse_dsdt(dsdt_phys: u64) -> Result<(), &'static str> {
                 let mut state = ACPI_STATE.lock();
                 state.slp_typea = slp_typea;
                 state.slp_typeb = slp_typeb;
-                crate::serial_println!("[ACPI] _S5 Sleep Types: a={:#x}, b={:#x}", slp_typea, slp_typeb);
+                crate::serial_println!(
+                    "[ACPI] _S5 Sleep Types: a={:#x}, b={:#x}",
+                    slp_typea,
+                    slp_typeb
+                );
                 return Ok(());
             }
         }
@@ -446,7 +448,8 @@ fn find_table_by_signature(signature: &[u8; 4]) -> Result<u64, &'static str> {
 
 fn find_table_in_xsdt(signature: &[u8; 4], xsdt_phys: u64) -> Result<u64, &'static str> {
     let xsdt = unsafe {
-        (xsdt_phys as *const ACPIXSDT).as_ref()
+        (xsdt_phys as *const ACPIXSDT)
+            .as_ref()
             .ok_or("Failed to map XSDT")?
     };
 
@@ -458,7 +461,8 @@ fn find_table_in_xsdt(signature: &[u8; 4], xsdt_phys: u64) -> Result<u64, &'stat
             table_ptr.read_unaligned()
         };
         let header = unsafe {
-            (table_phys as *const ACPITableHeader).as_ref()
+            (table_phys as *const ACPITableHeader)
+                .as_ref()
                 .ok_or("Failed to map table")?
         };
         if &header.signature == signature {
@@ -470,7 +474,8 @@ fn find_table_in_xsdt(signature: &[u8; 4], xsdt_phys: u64) -> Result<u64, &'stat
 
 fn find_table_in_rsdt(signature: &[u8; 4], rsdt_phys: u64) -> Result<u64, &'static str> {
     let rsdt = unsafe {
-        (rsdt_phys as *const ACPIRSDT).as_ref()
+        (rsdt_phys as *const ACPIRSDT)
+            .as_ref()
             .ok_or("Failed to map RSDT")?
     };
 
@@ -482,7 +487,8 @@ fn find_table_in_rsdt(signature: &[u8; 4], rsdt_phys: u64) -> Result<u64, &'stat
             table_ptr.read_unaligned() as u64
         };
         let header = unsafe {
-            (table_phys as *const ACPITableHeader).as_ref()
+            (table_phys as *const ACPITableHeader)
+                .as_ref()
                 .ok_or("Failed to map table")?
         };
         if &header.signature == signature {

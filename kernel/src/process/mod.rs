@@ -1,20 +1,20 @@
 pub mod address_space;
 pub mod elf_loader;
 pub mod env;
-pub mod layout;
-pub mod spawn;
-pub mod fork;
-pub mod mmap;
 pub mod fd_table;
-pub mod signal;
+pub mod fork;
+pub mod layout;
+pub mod mmap;
 pub mod pipe;
+pub mod signal;
+pub mod spawn;
 
-use address_space::AddressSpace;
-use layout::USER_STACK_TOP;
 use crate::ipc::IpcMsg;
 use crate::memory::pmm::PhysicalMemoryManager;
+use address_space::AddressSpace;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
+use layout::USER_STACK_TOP;
 use x86_64::VirtAddr;
 
 pub const KERNEL_STACK_SIZE: usize = 32 * 1024;
@@ -22,7 +22,7 @@ pub const KERNEL_STACK_SIZE: usize = 32 * 1024;
 /// A schedulable process.
 pub struct Process {
     pub pid: usize,
-    pub ppid: usize,  // parent pid
+    pub ppid: usize, // parent pid
     pub name: &'static str,
     pub state: ProcessState,
     pub address_space: AddressSpace,
@@ -48,10 +48,10 @@ pub struct Process {
     pub fd_table: fd_table::FdTable,
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
-    pub is_linux_compat: bool,  // Phase 4.5: true if running Linux ELF binary
-    pub sched_type: u8,  // SCHED_NORMAL=0, SCHED_FIFO=1 for real-time bypass
-    pub weight: u32,     // CFS weight (default 1024)
-    pub cpu_mask: u64,   // CPU affinity mask
+    pub is_linux_compat: bool, // Phase 4.5: true if running Linux ELF binary
+    pub sched_type: u8,        // SCHED_NORMAL=0, SCHED_FIFO=1 for real-time bypass
+    pub weight: u32,           // CFS weight (default 1024)
+    pub cpu_mask: u64,         // CPU affinity mask
 
     // === BORE Scheduling Metrics (Phase 3.0) ===
     /// Burst score: 0-1024 (0=interactive, 1024=CPU-bound)
@@ -137,17 +137,17 @@ impl Process {
             fd_table: fd_table::FdTable::new(),
             capability_mode: false,
             signal_state: signal::SignalState::new(),
-            is_linux_compat: false,  // default to native SunlightOS
-            sched_type: 0,           // SCHED_NORMAL
-            weight: 1024,            // default CFS weight
-            cpu_mask: 0xFF,          // all CPUs
-            burst_score: 256,        // Start at MEDIUM tier (interactive bias)
-            timeslice_used: 0,       // Fresh quantum
-            last_run_tick: 0,        // Will be set on first run
-            io_wait_time: 0,         // No wait yet
-            interactive_bonus: 20,   // Assume interactive initially
-            block_start_tick: 0,     // Not blocked yet
-            aging_counter: 0,        // No aging yet
+            is_linux_compat: false, // default to native SunlightOS
+            sched_type: 0,          // SCHED_NORMAL
+            weight: 1024,           // default CFS weight
+            cpu_mask: 0xFF,         // all CPUs
+            burst_score: 256,       // Start at MEDIUM tier (interactive bias)
+            timeslice_used: 0,      // Fresh quantum
+            last_run_tick: 0,       // Will be set on first run
+            io_wait_time: 0,        // No wait yet
+            interactive_bonus: 20,  // Assume interactive initially
+            block_start_tick: 0,    // Not blocked yet
+            aging_counter: 0,       // No aging yet
         }
     }
 
@@ -217,10 +217,10 @@ impl Process {
     /// Determine which priority queue this process belongs to based on burst_score
     pub fn get_queue_tier(&self) -> QueueTier {
         match self.burst_score {
-            0..=256 => QueueTier::High,      // Interactive
-            257..=768 => QueueTier::Medium,   // Mixed
-            769..=1024 => QueueTier::Low,     // CPU-bound
-            _ => QueueTier::Low,              // Clamp to Low for out-of-range values
+            0..=256 => QueueTier::High,     // Interactive
+            257..=768 => QueueTier::Medium, // Mixed
+            769..=1024 => QueueTier::Low,   // CPU-bound
+            _ => QueueTier::Low,            // Clamp to Low for out-of-range values
         }
     }
 }

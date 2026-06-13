@@ -98,7 +98,7 @@ pub mod keycode {
     pub const RIGHT_SHIFT: u8 = 0x36;
     pub const RIGHT_CTRL_EXT: u8 = 0x1D; // prefixed with 0xE0
     pub const RIGHT_ALT_EXT: u8 = 0x38; // prefixed with 0xE0
-    pub const PAGE_UP_EXT: u8 = 0x49;   // prefixed with 0xE0
+    pub const PAGE_UP_EXT: u8 = 0x49; // prefixed with 0xE0
     pub const PAGE_DOWN_EXT: u8 = 0x51; // prefixed with 0xE0
     pub const EXTENDED_PREFIX: u8 = 0xE0;
     pub const RELEASE_MASK: u8 = 0x80;
@@ -239,7 +239,9 @@ pub fn init() {
     let mut data_port: Port<u8> = Port::new(0x60);
     let mut status_port: Port<u8> = Port::new(0x64);
     while unsafe { status_port.read() } & 1 != 0 {
-        unsafe { data_port.read(); }
+        unsafe {
+            data_port.read();
+        }
     }
 
     // Unmask IRQ1 (bit 1) on PIC1
@@ -262,11 +264,15 @@ fn read_keyboard_byte() -> u8 {
         let len = unsafe { KEY_INJECT_LEN };
         if idx < len {
             let val = unsafe { KEY_INJECT_DATA[idx] };
-            unsafe { KEY_INJECT_IDX = idx + 1; }
+            unsafe {
+                KEY_INJECT_IDX = idx + 1;
+            }
             return val;
         }
         // Inject buffer exhausted, fall through to real hardware
-        unsafe { KEY_INJECT_ENABLED = false; }
+        unsafe {
+            KEY_INJECT_ENABLED = false;
+        }
     }
 
     let mut port: Port<u8> = Port::new(0x60);
@@ -322,11 +328,15 @@ pub fn poll_inject_buffer() {
         let idx = unsafe { KEY_INJECT_IDX };
         let len = unsafe { KEY_INJECT_LEN };
         if idx >= len {
-            unsafe { KEY_INJECT_ENABLED = false; }
+            unsafe {
+                KEY_INJECT_ENABLED = false;
+            }
             break;
         }
         let scancode = unsafe { KEY_INJECT_DATA[idx] };
-        unsafe { KEY_INJECT_IDX = idx + 1; }
+        unsafe {
+            KEY_INJECT_IDX = idx + 1;
+        }
 
         if let Some(event_val) = process_scancode(scancode) {
             send_event_to_tty(event_val);
@@ -342,10 +352,12 @@ fn send_event_to_tty(event_val: u64) {
         .processes
         .iter()
         .find(|p| p.name == "tty_server")
-        .and_then(|p| p.ipc_endpoint.map(|ep| {
-            let pid = p.pid;
-            (ep, pid)
-        }))
+        .and_then(|p| {
+            p.ipc_endpoint.map(|ep| {
+                let pid = p.pid;
+                (ep, pid)
+            })
+        })
         .unwrap_or((0, 0));
 
     if endpoint_id != 0 {

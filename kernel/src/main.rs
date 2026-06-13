@@ -107,6 +107,9 @@ pub extern "C" fn _start() -> ! {
         serial_println!("[PMM] {}/{} MiB free", free * 4 / 1024, total * 4 / 1024);
         splash.set_ram((total * 4 / 1024) as u32);
     }
+    // Initialize ZRAM metadata early; smoke-fill after heap setup because
+    // compressed pages are heap-backed.
+    memory::zram::init();
     serial_println!("[PMM] OK");
     splash.log("[PMM] OK");
     splash.set_progress(100);  // 10%
@@ -169,6 +172,10 @@ pub extern "C" fn _start() -> ! {
     splash.log("[HEAP] OK");
     splash.set_progress(400);  // 40%
     splash.redraw();
+
+    // Perform a tiny smoke-fill so swap space is visible from day 1 in
+    // user-visible free/swap reporting.
+    init_swap_smoke(&mut PMM.lock());
 
     // 5. virtio-blk + FAT32 bootstrap
     // Initialize the block device, read FAT32 test files, and write them into a
@@ -995,6 +1002,25 @@ fn map_tty_framebuffer(
         unsafe {
             tty.address_space
                 .map_page(user_page, fb_frame, flags, pmm, hhdm_offset);
+        }
+    }
+}
+
+/// Touch one zram block after heap setup so swap accounting is visible without
+/// forcing zram metadata to allocate during PMM initialization.
+fn init_swap_smoke(pmm: &mut PhysicalMemoryManager) {
+    let frame = match pmm.alloc_frame() {
+        Some(frame) => frame,
+        None => return,
+    };
+    pmm.free_frame(frame);
+
+    let mut page = [0u8; memory::zram::ZRAM_BLOCK_SIZE];
+    page[..4].copy_from_slice(b"swap");
+
+    if let Ok(block_id) = memory::zram::alloc_block() {
+        if memory::zram::write_block(block_id, &page).is_ok() {
+            serial_println!("[SWAP] smoke zram block {} written", block_id);
         }
     }
 }

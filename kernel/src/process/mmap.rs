@@ -88,8 +88,7 @@ pub fn sys_mmap(
     let proc = sched.current_process_mut();
     for i in 0..page_count {
         let page_vaddr = VirtAddr::new(map_addr + i * 4096);
-        let page = Page::from_start_address(page_vaddr)
-            .map_err(|_| MmapError::InvalidAddress)?;
+        let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
 
         let frame_addr = pmm.alloc_frame().ok_or(MmapError::NoMemory)?;
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };

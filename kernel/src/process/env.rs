@@ -31,7 +31,11 @@ impl EnvMap {
     pub fn with_defaults(uid: u32, username: &str) -> Self {
         let mut env = Self::new();
         let user = if username.is_empty() {
-            if uid == 0 { "root" } else { "user" }
+            if uid == 0 {
+                "root"
+            } else {
+                "user"
+            }
         } else {
             username
         };

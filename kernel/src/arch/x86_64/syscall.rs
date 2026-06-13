@@ -900,12 +900,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let envp_refs: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
 
     match crate::process::spawn::exec_into_process(
-        bytes,
-        &mut child,
-        &mut pmm,
-        hhdm,
-        &argv_refs,
-        &envp_refs,
+        bytes, &mut child, &mut pmm, hhdm, &argv_refs, &envp_refs,
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -928,7 +923,12 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // add_process leaves queueing to the caller; without this the child sits
     // Ready but is never picked by the BORE queues.
     sched.enqueue_process(idx);
-    crate::serial_println!("[SYSCALL] spawn: {} pid={} ppid={}", path_str, child_pid, ppid);
+    crate::serial_println!(
+        "[SYSCALL] spawn: {} pid={} ppid={}",
+        path_str,
+        child_pid,
+        ppid
+    );
     child_pid as u64
 }
 
@@ -968,10 +968,19 @@ fn sys_setuid(frame: &mut SyscallFrame) -> u64 {
     // Any user can setuid to their own uid
     if current_uid == 0 || new_uid == current_uid {
         process.uid = new_uid;
-        crate::serial_println!("[SYSCALL] setuid: pid={} uid {}→{}", process.pid, current_uid, new_uid);
+        crate::serial_println!(
+            "[SYSCALL] setuid: pid={} uid {}→{}",
+            process.pid,
+            current_uid,
+            new_uid
+        );
         0
     } else {
-        crate::serial_println!("[SYSCALL] setuid: EPERM (uid {} cannot setuid to {})", current_uid, new_uid);
+        crate::serial_println!(
+            "[SYSCALL] setuid: EPERM (uid {} cannot setuid to {})",
+            current_uid,
+            new_uid
+        );
         u64::MAX // -1 (EPERM)
     }
 }
@@ -991,10 +1000,19 @@ fn sys_setgid(frame: &mut SyscallFrame) -> u64 {
     // Any user can setgid to their own gid
     if current_uid == 0 || new_gid == current_gid {
         process.gid = new_gid;
-        crate::serial_println!("[SYSCALL] setgid: pid={} gid {}→{}", process.pid, current_gid, new_gid);
+        crate::serial_println!(
+            "[SYSCALL] setgid: pid={} gid {}→{}",
+            process.pid,
+            current_gid,
+            new_gid
+        );
         0
     } else {
-        crate::serial_println!("[SYSCALL] setgid: EPERM (uid {} cannot setgid to {})", current_uid, new_gid);
+        crate::serial_println!(
+            "[SYSCALL] setgid: EPERM (uid {} cannot setgid to {})",
+            current_uid,
+            new_gid
+        );
         u64::MAX // -1 (EPERM)
     }
 }
@@ -1351,8 +1369,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     {
                         return u64::MAX;
                     }
-                    let vfs_handle =
-                        sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
+                    let vfs_handle = sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
                     let mut kernel_buf = [0u8; 4096];
                     let to_read = count.min(4096);
                     let read = {
@@ -1370,9 +1387,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                             unsafe {
                                 core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
                             }
-                            if let Some(entry) =
-                                sched.current_process_mut().fd_table.get_mut(fd)
-                            {
+                            if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
                                 entry.offset += n;
                             }
                             n as u64
@@ -1380,10 +1395,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                         Err(_) => u64::MAX,
                     }
                 } else {
-                    crate::serial_println!(
-                        "[SYSCALL] read fd={} (unsupported handle)",
-                        fd
-                    );
+                    crate::serial_println!("[SYSCALL] read fd={} (unsupported handle)", fd);
                     0
                 }
             } else {
@@ -1766,11 +1778,15 @@ fn sys_get_time_utc() -> u64 {
 }
 
 /// Syscall: sysinfo (82)
-/// rdi = user pointer to four u64s, filled as:
-///   [0] total RAM (KiB)   [1] used RAM (KiB)
-///   [2] uptime (seconds)  [3] Unix time (seconds)
+/// rdi = user pointer to six u64s, filled as:
+///   [0] total RAM (KiB)
+///   [1] used RAM (KiB)
+///   [2] uptime (seconds)
+///   [3] Unix time (seconds)
+///   [4] swap total (KiB)
+///   [5] swap used (KiB)
 fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
-    const SYSINFO_BYTES: u64 = 4 * 8;
+    const SYSINFO_BYTES: u64 = 6 * 8;
 
     let ptr = frame.rdi;
     if !is_user_address(ptr) || !is_user_address(ptr + SYSINFO_BYTES - 1) {
@@ -1782,11 +1798,17 @@ fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
     let total_kb = (total_frames as u64) * 4;
     let used_kb = (total_frames.saturating_sub(free_frames) as u64) * 4;
 
+    let (swap_total_blocks, swap_used_blocks, _swap_used_bytes) = crate::memory::zram::stats();
+    let swap_total_kb = (swap_total_blocks as u64) * 4;
+    let swap_used_kb = (swap_used_blocks as u64) * 4;
+
     let info = [
         total_kb,
         used_kb,
         crate::arch::x86_64::rtc::uptime_secs(),
         crate::arch::x86_64::rtc::unix_time(),
+        swap_total_kb,
+        swap_used_kb,
     ];
     unsafe {
         core::ptr::copy_nonoverlapping(info.as_ptr(), ptr as *mut u64, info.len());

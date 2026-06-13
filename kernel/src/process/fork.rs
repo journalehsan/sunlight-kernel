@@ -74,11 +74,7 @@ pub fn fork_current_process(
 
     // Clone the parent's address space with CoW
     let child_address_space = unsafe {
-        clone_address_space_cow(
-            &sched.current_process().address_space,
-            pmm,
-            hhdm_offset,
-        )?
+        clone_address_space_cow(&sched.current_process().address_space, pmm, hhdm_offset)?
     };
 
     // Allocate a new PID
@@ -115,20 +111,21 @@ pub fn fork_current_process(
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
             is_linux_compat: false,
-            sched_type: 0,           // inherit SCHED_NORMAL
-            weight: 1024,            // inherit default weight
-            cpu_mask: 0xFF,          // inherit all CPUs
-            burst_score: 256,        // Start at MEDIUM tier
-            timeslice_used: 0,       // Fresh quantum
-            last_run_tick: 0,        // Will be set on first run
-            io_wait_time: 0,         // No wait yet
-            interactive_bonus: 20,   // Assume interactive initially
-            block_start_tick: 0,     // Not blocked yet
-            aging_counter: 0,        // No aging yet
+            sched_type: 0,         // inherit SCHED_NORMAL
+            weight: 1024,          // inherit default weight
+            cpu_mask: 0xFF,        // inherit all CPUs
+            burst_score: 256,      // Start at MEDIUM tier
+            timeslice_used: 0,     // Fresh quantum
+            last_run_tick: 0,      // Will be set on first run
+            io_wait_time: 0,       // No wait yet
+            interactive_bonus: 20, // Assume interactive initially
+            block_start_tick: 0,   // Not blocked yet
+            aging_counter: 0,      // No aging yet
         };
 
         // Setup kernel stack top
-        p.kernel_stack_top = core::ptr::addr_of!(p.kernel_stack[super::KERNEL_STACK_SIZE - 1]) as u64 + 1;
+        p.kernel_stack_top =
+            core::ptr::addr_of!(p.kernel_stack[super::KERNEL_STACK_SIZE - 1]) as u64 + 1;
 
         // Copy the parent's context frame to the child's kernel stack
         const FRAME_SIZE: u64 = 160;
@@ -152,7 +149,11 @@ pub fn fork_current_process(
     let child_pid_copy = child.pid;
     sched.add_process(child);
 
-    crate::serial_println!("[FORK] parent pid={} created child pid={}", parent_pid, child_pid_copy);
+    crate::serial_println!(
+        "[FORK] parent pid={} created child pid={}",
+        parent_pid,
+        child_pid_copy
+    );
 
     Ok(child_pid_copy)
 }
@@ -176,9 +177,8 @@ fn sys_fork(
     }
 
     // Clone the address space with Copy-on-Write
-    let child_address_space = unsafe {
-        clone_address_space_cow(&parent.address_space, pmm, hhdm_offset)?
-    };
+    let child_address_space =
+        unsafe { clone_address_space_cow(&parent.address_space, pmm, hhdm_offset)? };
 
     // Create the child process
     let child = unsafe {
@@ -207,21 +207,22 @@ fn sys_fork(
             fd_table: super::fd_table::FdTable::new(),
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
-            is_linux_compat: parent.is_linux_compat,  // inherit from parent
-            sched_type: parent.sched_type,            // inherit scheduling type
-            weight: parent.weight,                    // inherit CFS weight
-            cpu_mask: parent.cpu_mask,                // inherit CPU mask
-            burst_score: 256,        // Start at MEDIUM tier
-            timeslice_used: 0,       // Fresh quantum
-            last_run_tick: 0,        // Will be set on first run
-            io_wait_time: 0,         // No wait yet
-            interactive_bonus: 20,   // Assume interactive initially
-            block_start_tick: 0,     // Not blocked yet
-            aging_counter: 0,        // No aging yet
+            is_linux_compat: parent.is_linux_compat, // inherit from parent
+            sched_type: parent.sched_type,           // inherit scheduling type
+            weight: parent.weight,                   // inherit CFS weight
+            cpu_mask: parent.cpu_mask,               // inherit CPU mask
+            burst_score: 256,                        // Start at MEDIUM tier
+            timeslice_used: 0,                       // Fresh quantum
+            last_run_tick: 0,                        // Will be set on first run
+            io_wait_time: 0,                         // No wait yet
+            interactive_bonus: 20,                   // Assume interactive initially
+            block_start_tick: 0,                     // Not blocked yet
+            aging_counter: 0,                        // No aging yet
         };
 
         // Setup kernel stack top
-        p.kernel_stack_top = core::ptr::addr_of!(p.kernel_stack[super::KERNEL_STACK_SIZE - 1]) as u64 + 1;
+        p.kernel_stack_top =
+            core::ptr::addr_of!(p.kernel_stack[super::KERNEL_STACK_SIZE - 1]) as u64 + 1;
 
         // Copy the parent's context frame to the child's kernel stack
         // The parent's context is at parent.context_rsp, and it's 160 bytes.
@@ -246,7 +247,11 @@ fn sys_fork(
     let child_pid_copy = child.pid;
     sched.add_process(child);
 
-    crate::serial_println!("[FORK] parent pid={} created child pid={}", parent_pid, child_pid_copy);
+    crate::serial_println!(
+        "[FORK] parent pid={} created child pid={}",
+        parent_pid,
+        child_pid_copy
+    );
 
     Ok(child_pid_copy)
 }

@@ -1,12 +1,8 @@
 use super::{pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
 use linked_list_allocator::LockedHeap;
 use x86_64::{
+    structures::paging::{Page, PageSize, PageTableFlags, PhysFrame, Size4KiB},
     VirtAddr,
-    structures::paging::{
-        Page, PageSize, Size4KiB,
-        PageTableFlags,
-        PhysFrame,
-    },
 };
 
 pub const HEAP_START: VirtAddr = VirtAddr::new_truncate(0xFFFF_FFFF_9000_0000);
@@ -27,7 +23,8 @@ pub fn init_heap(vmm: &mut VirtualMemoryManager, pmm: &mut PhysicalMemoryManager
             phys,
             PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
             pmm,
-        ).expect("heap page map failed");
+        )
+        .expect("heap page map failed");
     }
 
     // SAFETY: all heap pages are mapped with correct permissions.

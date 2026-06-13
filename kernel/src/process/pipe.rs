@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
-use spin::Mutex;
 use alloc::vec::Vec;
+use spin::Mutex;
 
 const PIPE_BUFFER_SIZE: usize = 4096;
 const PIPE_FLAG: u32 = 0x8000_0000;
@@ -12,8 +12,8 @@ pub struct Pipe {
     read_pos: usize,
     write_pos: usize,
     data_len: usize,
-    readers: u32,   // reference count for read side
-    writers: u32,   // reference count for write side
+    readers: u32, // reference count for read side
+    writers: u32, // reference count for write side
 }
 
 /// Global pipe pool (slot table, None = free slot)
@@ -22,10 +22,10 @@ static PIPE_POOL: spin::Mutex<Vec<Option<Pipe>>> = spin::Mutex::new(Vec::new());
 /// Result type for pipe operations
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PipeResult {
-    Ok(usize),      // bytes read/written
-    WouldBlock,     // no data/space available
-    Eof,           // no writers (on read)
-    BrokenPipe,    // no readers (on write)
+    Ok(usize),  // bytes read/written
+    WouldBlock, // no data/space available
+    Eof,        // no writers (on read)
+    BrokenPipe, // no readers (on write)
 }
 
 impl Pipe {
@@ -253,16 +253,21 @@ pub fn create_pipe(
         .open(write_handle, CapRights::new(CapRights::WRITE), 0)
         .map_err(|_| PipeError::BadFd)?;
 
-    crate::serial_println!("[PIPE] created pipe: read_fd={}, write_fd={}, pool_idx={}", read_fd, write_fd, pipe_idx);
+    crate::serial_println!(
+        "[PIPE] created pipe: read_fd={}, write_fd={}, pool_idx={}",
+        read_fd,
+        write_fd,
+        pipe_idx
+    );
 
     Ok((read_fd, write_fd))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PipeError {
-    BrokenPipe,  // Write to pipe with no readers
-    BadFd,       // Invalid file descriptor
-    NotAPipe,    // FD is not a pipe
+    BrokenPipe, // Write to pipe with no readers
+    BadFd,      // Invalid file descriptor
+    NotAPipe,   // FD is not a pipe
 }
 
 /// Pipe handle (index into global pipe table)

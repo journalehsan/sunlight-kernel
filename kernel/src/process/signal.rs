@@ -5,27 +5,27 @@ use alloc::vec::Vec;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Signal {
     SIGHUP = 1,
-    SIGINT = 2,     // Ctrl+C
-    SIGQUIT = 3,    // Ctrl+\
+    SIGINT = 2,  // Ctrl+C
+    SIGQUIT = 3, // Ctrl+\
     SIGILL = 4,
     SIGTRAP = 5,
     SIGABRT = 6,
     SIGBUS = 7,
     SIGFPE = 8,
-    SIGKILL = 9,    // cannot be caught
+    SIGKILL = 9, // cannot be caught
     SIGUSR1 = 10,
     SIGSEGV = 11,
     SIGUSR2 = 12,
     SIGPIPE = 13,
     SIGALRM = 14,
-    SIGTERM = 15,   // termination signal
-    SIGCHLD = 17,   // child stopped or terminated
-    SIGCONT = 18,   // continue stopped process
-    SIGSTOP = 19,   // cannot be caught
-    SIGTSTP = 20,   // Ctrl+Z
+    SIGTERM = 15, // termination signal
+    SIGCHLD = 17, // child stopped or terminated
+    SIGCONT = 18, // continue stopped process
+    SIGSTOP = 19, // cannot be caught
+    SIGTSTP = 20, // Ctrl+Z
     SIGTTIN = 21,
     SIGTTOU = 22,
-    SIGWINCH = 28,  // terminal window size changed
+    SIGWINCH = 28, // terminal window size changed
 }
 
 impl Signal {
@@ -65,17 +65,17 @@ impl Signal {
 /// How a signal is handled
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SigHandler {
-    Default,           // SIG_DFL: default action
-    Ignore,            // SIG_IGN: ignore the signal
-    UserHandler(u64),  // function pointer in user-space
+    Default,          // SIG_DFL: default action
+    Ignore,           // SIG_IGN: ignore the signal
+    UserHandler(u64), // function pointer in user-space
 }
 
 /// Signal action
 #[derive(Clone, Copy, Debug)]
 pub struct SigAction {
     pub handler: SigHandler,
-    pub mask: u64,     // signals to block during handler execution
-    pub flags: u32,    // SA_RESTART, SA_SIGINFO, SA_NOCLDWAIT, etc.
+    pub mask: u64,  // signals to block during handler execution
+    pub flags: u32, // SA_RESTART, SA_SIGINFO, SA_NOCLDWAIT, etc.
 }
 
 impl SigAction {
@@ -91,10 +91,10 @@ impl SigAction {
 /// Default signal actions
 pub fn get_default_action(signal: Signal) -> SigHandler {
     match signal {
-        Signal::SIGKILL | Signal::SIGSTOP => SigHandler::Default,  // Cannot be caught
+        Signal::SIGKILL | Signal::SIGSTOP => SigHandler::Default, // Cannot be caught
         Signal::SIGCHLD | Signal::SIGWINCH => SigHandler::Ignore,
-        Signal::SIGCONT => SigHandler::Default,  // Resume process
-        _ => SigHandler::Default,  // Terminate by default
+        Signal::SIGCONT => SigHandler::Default, // Resume process
+        _ => SigHandler::Default,               // Terminate by default
     }
 }
 
@@ -103,7 +103,7 @@ pub fn get_default_action(signal: Signal) -> SigHandler {
 pub enum SignalError {
     InvalidSignal,
     InvalidHandler,
-    CannotCatch,  // SIGKILL and SIGSTOP cannot be caught
+    CannotCatch, // SIGKILL and SIGSTOP cannot be caught
     PermissionDenied,
 }
 

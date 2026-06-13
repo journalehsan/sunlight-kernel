@@ -1,12 +1,11 @@
 use super::pmm::PhysicalMemoryManager;
 use x86_64::{
-    PhysAddr, VirtAddr,
     structures::paging::{
-        mapper::{Mapper, MapToError},
+        mapper::{MapToError, Mapper},
         page::{Page, Size4KiB},
-        FrameAllocator, Translate,
-        OffsetPageTable, PageTable, PageTableFlags, PhysFrame,
+        FrameAllocator, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Translate,
     },
+    PhysAddr, VirtAddr,
 };
 
 pub struct VirtualMemoryManager {
@@ -38,9 +37,7 @@ impl VirtualMemoryManager {
     ) -> Result<(), MapToError<Size4KiB>> {
         let mut alloc = PmmFrameAllocator { pmm };
         // SAFETY: caller ensures the mapping does not cause UB.
-        let flush = unsafe {
-            self.page_table.map_to(page, phys, flags, &mut alloc)
-        }?;
+        let flush = unsafe { self.page_table.map_to(page, phys, flags, &mut alloc) }?;
         flush.flush();
         Ok(())
     }

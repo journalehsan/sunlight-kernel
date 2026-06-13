@@ -1,6 +1,6 @@
 use core::fmt;
-use uart_16550::SerialPort;
 use spin::Mutex;
+use uart_16550::SerialPort;
 
 const SERIAL_PORT: u16 = 0x3F8;
 

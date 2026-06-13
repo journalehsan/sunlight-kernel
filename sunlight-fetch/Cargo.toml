@@ -1,0 +1,20 @@
+[package]
+name = "sunlight-fetch"
+version = "0.1.0"
+edition = "2021"
+authors = ["SunlightOS Contributors"]
+description = "Lightweight chunked HTTP downloader for SunlightOS"
+
+[[bin]]
+name = "fetch"
+path = "src/main.rs"
+
+# Keep minimal dependencies for testing
+[dependencies]
+
+[profile.release]
+opt-level = "z"       # Optimize for size
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

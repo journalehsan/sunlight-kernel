@@ -2,10 +2,8 @@ use super::Process;
 use crate::memory::pmm::PhysicalMemoryManager;
 use sunlight_elf::{SegmentPlan, SegmentProt};
 use x86_64::{
+    structures::paging::{Page, PageTableFlags, PhysFrame},
     VirtAddr,
-    structures::paging::{
-        Page, PageTableFlags, PhysFrame,
-    },
 };
 
 /// User-address window allowed for PT_LOAD segments. The stack and heap are
@@ -61,17 +59,11 @@ pub fn load_elf(
     // coverage) before emitting anything, so mapping never starts on a
     // binary that will be rejected.
     let mut map_failed = false;
-    let planned = sunlight_elf::plan_segments(
-        elf_bytes,
-        &header,
-        USER_LO,
-        USER_HI,
-        &mut |plan| {
-            if !map_failed && map_segment(plan, elf_bytes, process, pmm, hhdm_offset).is_none() {
-                map_failed = true;
-            }
-        },
-    );
+    let planned = sunlight_elf::plan_segments(elf_bytes, &header, USER_LO, USER_HI, &mut |plan| {
+        if !map_failed && map_segment(plan, elf_bytes, process, pmm, hhdm_offset).is_none() {
+            map_failed = true;
+        }
+    });
     if let Err(e) = planned {
         crate::serial_println!("[ELF] segment validation failed: {:?}", e);
         return None;
@@ -95,7 +87,11 @@ fn map_segment(
 
     crate::serial_println!(
         "[ELF] PT_LOAD off={:x} vaddr={:x} filesz={:x} memsz={:x} prot={:?}",
-        plan.file_offset, plan.vaddr, plan.file_size, plan.mem_size, plan.prot
+        plan.file_offset,
+        plan.vaddr,
+        plan.file_size,
+        plan.mem_size,
+        plan.prot
     );
 
     // Only bytes up to file_size are copied; the rest of the segment
@@ -109,9 +105,7 @@ fn map_segment(
         // When two segments share a page, reuse the existing physical frame
         // instead of allocating a new one that would overwrite the previous
         // segment's data.
-        let existing = unsafe {
-            process.address_space.lookup_entry(page, hhdm_offset)
-        };
+        let existing = unsafe { process.address_space.lookup_entry(page, hhdm_offset) };
 
         let (frame_addr, existing_flags) = match existing {
             Some((phys, old_flags)) => (phys, Some(old_flags)),
@@ -123,7 +117,9 @@ fn map_segment(
 
         if existing_flags.is_none() {
             // Zero the new frame before copying segment data into it.
-            unsafe { core::ptr::write_bytes(hhdm_ptr, 0, 4096); }
+            unsafe {
+                core::ptr::write_bytes(hhdm_ptr, 0, 4096);
+            }
         }
 
         // Copy the overlap between this page and the segment's file bytes.
@@ -151,7 +147,9 @@ fn map_segment(
             None => {
                 // SAFETY: mapping a fresh user page into the process address space.
                 unsafe {
-                    process.address_space.map_page(page, phys, flags, pmm, hhdm_offset);
+                    process
+                        .address_space
+                        .map_page(page, phys, flags, pmm, hhdm_offset);
                 }
             }
             Some(old_flags) if old_flags != flags => {

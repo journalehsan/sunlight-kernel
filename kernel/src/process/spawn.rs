@@ -1,10 +1,10 @@
 use super::{Process, ProcessState};
+use crate::capability::{CapabilityBroker, CapabilityRights};
 use crate::memory::pmm::PhysicalMemoryManager;
 use crate::sched::Scheduler;
-use crate::capability::{CapabilityBroker, CapabilityRights};
 use x86_64::{
-    VirtAddr,
     structures::paging::{Page, PageTableFlags, PhysFrame},
+    VirtAddr,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,9 +28,8 @@ pub fn exec_into_process(
     envp: &[&[u8]],
 ) -> Result<u64, SpawnError> {
     // Tear down old address space (note: old frames leak; acceptable for minimal scope)
-    process.address_space = unsafe {
-        crate::process::address_space::AddressSpace::new(pmm, hhdm_offset)
-    };
+    process.address_space =
+        unsafe { crate::process::address_space::AddressSpace::new(pmm, hhdm_offset) };
 
     // Phase 4.5: Detect if this is a Linux-compatible ELF binary
     process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
@@ -48,11 +47,12 @@ pub fn exec_into_process(
         let page = Page::from_start_address(page_addr).unwrap();
         let frame_addr = pmm.alloc_frame().ok_or(SpawnError::NoMemory)?;
         let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
-        let flags = PageTableFlags::PRESENT
-            | PageTableFlags::WRITABLE
-            | PageTableFlags::USER_ACCESSIBLE;
+        let flags =
+            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
         unsafe {
-            process.address_space.map_page(page, phys, flags, pmm, hhdm_offset);
+            process
+                .address_space
+                .map_page(page, phys, flags, pmm, hhdm_offset);
         }
     }
 
@@ -64,7 +64,11 @@ pub fn exec_into_process(
     // rdi=argc, rsi=argv, rdx=envp. _start can use either.
     process.set_initial_args(argv.len() as u64, stack.argv_ptr, stack.envp_ptr, 0);
 
-    crate::serial_println!("[EXEC] Loaded ELF entry={:#x}, stack={:#x}", entry, stack.rsp);
+    crate::serial_println!(
+        "[EXEC] Loaded ELF entry={:#x}, stack={:#x}",
+        entry,
+        stack.rsp
+    );
     Ok(entry)
 }
 
@@ -167,7 +171,9 @@ fn setup_exec_stack(
 
     crate::serial_println!(
         "[EXEC] Stack: argc={} envc={} rsp={:#x}",
-        argv.len(), envp.len(), rsp
+        argv.len(),
+        envp.len(),
+        rsp
     );
 
     Ok(ExecStack {
@@ -212,9 +218,7 @@ pub fn spawn_from_path_with_env(
     crate::serial_println!("[SPAWN] Loading {} ({} bytes)", path, bytes.len());
 
     let pid = sched.processes.len() + 1;
-    let mut process = unsafe {
-        Process::new(pid, 1, "sshl", pmm, hhdm_offset)
-    };
+    let mut process = unsafe { Process::new(pid, 1, "sshl", pmm, hhdm_offset) };
     process.uid = uid;
     process.gid = gid;
     // Phase 6.5 Step 2: every spawned process gets an environment — either
@@ -224,8 +228,7 @@ pub fn spawn_from_path_with_env(
     process.env = env.unwrap_or_else(|| super::env::EnvMap::with_defaults(uid, ""));
 
     let envp_strings = process.env.to_envp();
-    let envp: alloc::vec::Vec<&[u8]> =
-        envp_strings.iter().map(|s| s.as_bytes()).collect();
+    let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
     exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp)?;
     process.set_initial_args(shell_id, uid as u64, gid as u64, 0);
 
@@ -239,39 +242,47 @@ pub fn spawn_from_path_with_env(
 /// Get embedded ELF bytes for a given path.
 pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> {
     match path {
-        "/bin/sh" | "/bin/ssh" | "/bin/sshl" => {
-            Ok(crate::SUNSHELL_ELF_BYTES)
-        }
-        p if p.starts_with("/bin/sshl") => {
-            Ok(crate::SUNSHELL_ELF_BYTES)
-        }
+        "/bin/sh" | "/bin/ssh" | "/bin/sshl" => Ok(crate::SUNSHELL_ELF_BYTES),
+        p if p.starts_with("/bin/sshl") => Ok(crate::SUNSHELL_ELF_BYTES),
         // POSIX-style command paths: standard applets execute from /bin or
         // /usr/bin and dispatch by argv[0] inside the multi-call binaries.
-        "/bin/ls" | "/bin/cat" | "/bin/cp" | "/bin/mv" | "/bin/rm"
-        | "/bin/mkdir" | "/bin/rmdir" | "/bin/touch" | "/bin/find"
-        | "/bin/grep" | "/bin/head" | "/bin/tail" | "/bin/wc"
-        | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file"
-        | "/bin/stat" | "/bin/pwd" | "/bin/date" | "/bin/whoami"
-        | "/bin/id" | "/bin/uname" | "/bin/echo" | "/bin/nice"
-        | "/bin/renice" | "/bin/free"
-        | "/usr/bin/ls" | "/usr/bin/cat" | "/usr/bin/cp" | "/usr/bin/mv"
-        | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
-        | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep"
-        | "/usr/bin/head" | "/usr/bin/tail" | "/usr/bin/wc"
-        | "/usr/bin/sort" | "/usr/bin/uniq" | "/usr/bin/cut"
-        | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd"
-        | "/usr/bin/date" | "/usr/bin/whoami" | "/usr/bin/id"
-        | "/usr/bin/uname" | "/usr/bin/echo" | "/usr/bin/nice"
-        | "/usr/bin/renice" | "/usr/bin/free" => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),
-        "/bin/ping" | "/bin/ifconfig" | "/bin/wget" | "/bin/curl"
-        | "/bin/dig" | "/bin/nslookup" | "/bin/hostname" | "/bin/netstat"
-        | "/bin/ss" | "/bin/traceroute" | "/bin/arp" | "/bin/dhclient"
-        | "/usr/bin/ping" | "/usr/bin/ifconfig" | "/usr/bin/wget"
-        | "/usr/bin/curl" | "/usr/bin/dig" | "/usr/bin/nslookup"
-        | "/usr/bin/hostname" | "/usr/bin/netstat" | "/usr/bin/ss"
-        | "/usr/bin/traceroute" | "/usr/bin/arp" | "/usr/bin/dhclient" => {
-            Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES)
+        "/bin/ls" | "/bin/cat" | "/bin/cp" | "/bin/mv" | "/bin/rm" | "/bin/mkdir"
+        | "/bin/rmdir" | "/bin/touch" | "/bin/find" | "/bin/grep" | "/bin/head" | "/bin/tail"
+        | "/bin/wc" | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file" | "/bin/stat"
+        | "/bin/pwd" | "/bin/date" | "/bin/whoami" | "/bin/id" | "/bin/uname" | "/bin/echo"
+        | "/bin/nice" | "/bin/renice" | "/bin/free" | "/usr/bin/ls" | "/usr/bin/cat"
+        | "/usr/bin/cp" | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
+        | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep" | "/usr/bin/head"
+        | "/usr/bin/tail" | "/usr/bin/wc" | "/usr/bin/sort" | "/usr/bin/uniq" | "/usr/bin/cut"
+        | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd" | "/usr/bin/date"
+        | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname" | "/usr/bin/echo"
+        | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" => {
+            Ok(crate::SUNLIGHT_UTILS_ELF_BYTES)
         }
+        "/bin/ping"
+        | "/bin/ifconfig"
+        | "/bin/wget"
+        | "/bin/curl"
+        | "/bin/dig"
+        | "/bin/nslookup"
+        | "/bin/hostname"
+        | "/bin/netstat"
+        | "/bin/ss"
+        | "/bin/traceroute"
+        | "/bin/arp"
+        | "/bin/dhclient"
+        | "/usr/bin/ping"
+        | "/usr/bin/ifconfig"
+        | "/usr/bin/wget"
+        | "/usr/bin/curl"
+        | "/usr/bin/dig"
+        | "/usr/bin/nslookup"
+        | "/usr/bin/hostname"
+        | "/usr/bin/netstat"
+        | "/usr/bin/ss"
+        | "/usr/bin/traceroute"
+        | "/usr/bin/arp"
+        | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
         // Phase 6.5 Step 3: PATH entries under these directories are applets
         // of the embedded multi-call binaries (argv[0] picks the applet).
         p if p.starts_with("/sunlight-utils/") => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),

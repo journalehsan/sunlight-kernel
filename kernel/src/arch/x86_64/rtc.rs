@@ -121,7 +121,8 @@ fn days_from_civil(year: u64, month: u64, day: u64) -> u64 {
 pub fn unix_time() -> u64 {
     let boot_time = BOOT_UNIX_TIME.load(Ordering::Relaxed);
     if boot_time != 0 {
-        let elapsed_ticks = super::interrupts::ticks().saturating_sub(BOOT_TICKS.load(Ordering::Relaxed));
+        let elapsed_ticks =
+            super::interrupts::ticks().saturating_sub(BOOT_TICKS.load(Ordering::Relaxed));
         return boot_time + elapsed_ticks / TIMER_HZ;
     }
 
@@ -146,6 +147,12 @@ pub fn init() {
     BOOT_TICKS.store(super::interrupts::ticks(), Ordering::Relaxed);
     crate::serial_println!(
         "[RTC] CMOS clock: {}/{}/{} {:02}:{:02}:{:02} UTC (unix {}) OK",
-        year, month, day, hour, min, sec, ts
+        year,
+        month,
+        day,
+        hour,
+        min,
+        sec,
+        ts
     );
 }

@@ -38,6 +38,8 @@ pub struct SystemInfo {
     pub used_ram_kb: u64,
     pub uptime_secs: u64,
     pub unix_time: u64,
+    pub swap_total_kb: u64,
+    pub swap_used_kb: u64,
 }
 
 #[repr(transparent)]

@@ -520,9 +520,9 @@ fn cmd_free(args: &[&str]) -> i32 {
     let total_kb = info.total_ram_kb;
     let used_kb = info.used_ram_kb.min(total_kb);
     let free_kb = total_kb.saturating_sub(used_kb);
-    let swap_total_kb = 0u64;
-    let swap_used_kb = 0u64;
-    let swap_free_kb = 0u64;
+    let swap_total_kb = info.swap_total_kb;
+    let swap_used_kb = info.swap_used_kb.min(info.swap_total_kb);
+    let swap_free_kb = swap_total_kb.saturating_sub(swap_used_kb);
 
     let (hdr1, hdr2, hdr3) = match unit {
         FreeUnit::Human => ("total", "used", "free"),

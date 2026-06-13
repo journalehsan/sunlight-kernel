@@ -1,6 +1,6 @@
+use core::sync::atomic::{AtomicUsize, Ordering};
 use limine::memmap::Entry;
 use x86_64::PhysAddr;
-use core::sync::atomic::{AtomicUsize, Ordering};
 
 const FRAME_SIZE: usize = 4096;
 const MAX_FRAMES: usize = 1024 * 1024; // 4 GiB
@@ -38,7 +38,8 @@ impl PhysicalMemoryManager {
         for entry in entries {
             if entry.type_ == limine::memmap::MEMMAP_USABLE {
                 let start_frame = (entry.base / FRAME_SIZE as u64) as usize;
-                let end_frame = ((entry.base + entry.length + FRAME_SIZE as u64 - 1) / FRAME_SIZE as u64) as usize;
+                let end_frame = ((entry.base + entry.length + FRAME_SIZE as u64 - 1)
+                    / FRAME_SIZE as u64) as usize;
 
                 for f in start_frame..end_frame {
                     if f < MAX_FRAMES {
@@ -90,7 +91,12 @@ impl PhysicalMemoryManager {
                             FREE_FRAMES -= 1;
                             let count = ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
                             if count % 100 == 0 || count < 10 {
-                                crate::serial_println!("[PMM] ALLOC #{} addr={:#x} free_now={}", count + 1, frame as u64 * FRAME_SIZE as u64, FREE_FRAMES);
+                                crate::serial_println!(
+                                    "[PMM] ALLOC #{} addr={:#x} free_now={}",
+                                    count + 1,
+                                    frame as u64 * FRAME_SIZE as u64,
+                                    FREE_FRAMES
+                                );
                             }
                             return Some(PhysAddr::new(frame as u64 * FRAME_SIZE as u64));
                         }
@@ -145,7 +151,12 @@ impl PhysicalMemoryManager {
             }
             let count = FREE_COUNT.fetch_add(1, Ordering::Relaxed);
             if count % 100 == 0 || count < 10 {
-                crate::serial_println!("[PMM] FREE #{} addr={:#x} free_now={}", count + 1, addr.as_u64(), unsafe { FREE_FRAMES });
+                crate::serial_println!(
+                    "[PMM] FREE #{} addr={:#x} free_now={}",
+                    count + 1,
+                    addr.as_u64(),
+                    unsafe { FREE_FRAMES }
+                );
             }
         }
     }
@@ -163,7 +174,12 @@ impl PhysicalMemoryManager {
         let free_ops = FREE_COUNT.load(Ordering::Relaxed);
         crate::serial_println!(
             "[PMM-DIAG] total={} free={} allocated={} alloc_ops={} free_ops={} delta={}",
-            total, free, allocated, alloc_ops, free_ops, alloc_ops.saturating_sub(free_ops)
+            total,
+            free,
+            allocated,
+            alloc_ops,
+            free_ops,
+            alloc_ops.saturating_sub(free_ops)
         );
     }
 }
