@@ -247,6 +247,19 @@ pub fn sysinfo() -> Result<SysInfo, Errno> {
     })
 }
 
+/// Write `n` synthetic compressed pages into ZRAM for live demo/verification
+/// of swap activity. Returns the number actually written.
+pub fn freezram_fill(n: u64) -> u64 {
+    unsafe { sys::syscall2(sys::SYS_SWAPCTL, 0, n) }
+}
+
+/// Verify and discard the pages written by `freezram_fill`. Returns the
+/// number that matched their expected pattern, or `Err` if a read failed.
+pub fn freezram_verify() -> Result<u64, Errno> {
+    let ret = unsafe { sys::syscall1(sys::SYS_SWAPCTL, 1) };
+    sys::check(ret)
+}
+
 /// Create an anonymous pipe; returns (read_end, write_end).
 pub fn pipe() -> Result<(Fd, Fd), Errno> {
     let mut fds = [0i32; 2];

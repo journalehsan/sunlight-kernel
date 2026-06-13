@@ -287,6 +287,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         82 => sys_sysinfo(frame),
         83 => sys_setnice(frame),
         84 => sys_getnice(frame),
+        85 => sys_swapctl(frame),
         90 => sys_net_tx(frame),
         91 => sys_net_rx(frame),
         99 => debug_log(frame.rdi, frame.rsi),
@@ -1818,6 +1819,25 @@ fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
         core::ptr::copy_nonoverlapping(info.as_ptr(), ptr as *mut u64, info.len());
     }
     0
+}
+
+/// Syscall: swapctl (85) — controlled ZRAM demo/verification (freezram).
+/// rdi = op (0 = fill, 1 = verify)
+/// rsi = page count (op=0 only)
+///
+/// fill: writes `rsi` synthetic compressed pages into ZRAM, returns the
+///       number actually written.
+/// verify: reads back and checks the pages written by the last `fill`,
+///         discarding each afterward; returns the number that matched.
+///         Returns u64::MAX if a read/decompress failed outright.
+fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
+    match frame.rdi {
+        0 => crate::memory::zram::freezram_fill(frame.rsi as usize) as u64,
+        1 => crate::memory::zram::freezram_verify()
+            .map(|n| n as u64)
+            .unwrap_or(u64::MAX),
+        _ => u64::MAX,
+    }
 }
 
 /// Syscall: powerctl (80)

@@ -84,6 +84,7 @@ fn run(args: &[&str]) -> i32 {
         "whoami" => cmd_whoami(),
         "id" => cmd_id(rest),
         "free" => cmd_free(rest),
+        "freezram" => cmd_freezram(rest),
         "nice" => cmd_nice(rest),
         "renice" => cmd_renice(rest),
         "pwd" => cmd_pwd(),
@@ -566,6 +567,67 @@ fn cmd_free(args: &[&str]) -> i32 {
         let _ = write_all(b"x)\n");
     }
     0
+}
+
+/// Demo/verification command for the ZRAM swap pipeline: writes synthetic
+/// compressed pages into ZRAM (`freezram [n]`, default 16) or verifies and
+/// discards a prior fill (`freezram verify`), printing swap usage before and
+/// after so live activity is visible.
+fn cmd_freezram(args: &[&str]) -> i32 {
+    match args {
+        ["verify"] => match libc::freezram_verify() {
+            Ok(n) => {
+                let _ = write_all(b"freezram: verified ");
+                print_u64(n);
+                let _ = write_all(b" page(s)\n");
+                print_swap_used("after verify: ");
+                0
+            }
+            Err(_) => {
+                let _ = write_all(b"freezram: verify failed (read/decompress error)\n");
+                1
+            }
+        },
+        [] | [_] => {
+            let n = match args {
+                [n_str] => match parse_u64(n_str) {
+                    Some(n) => n,
+                    None => {
+                        let _ = write_all(b"usage: freezram [n] | freezram verify\n");
+                        return 2;
+                    }
+                },
+                _ => 16,
+            };
+
+            print_swap_used("before fill: ");
+            let written = libc::freezram_fill(n);
+            let _ = write_all(b"freezram: wrote ");
+            print_u64(written);
+            let _ = write_all(b" page(s)\n");
+            print_swap_used("after fill:  ");
+            0
+        }
+        _ => {
+            let _ = write_all(b"usage: freezram [n] | freezram verify\n");
+            2
+        }
+    }
+}
+
+fn print_swap_used(label: &str) {
+    let _ = write_all(label.as_bytes());
+    match libc::sysinfo() {
+        Ok(info) => {
+            print_human(info.swap_used_kb);
+            let _ = write_all(b" used / ");
+            print_human(info.swap_total_kb);
+            let _ = write_all(b" total swap\n");
+        }
+        Err(_) => {
+            let _ = write_all(b"sysinfo failed\n");
+        }
+    }
 }
 
 fn write_unit(kb: u64, unit: FreeUnit) {

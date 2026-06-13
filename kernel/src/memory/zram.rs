@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use spin::Mutex;
 
 pub const ZRAM_BLOCK_SIZE: usize = 4096;
 pub const ZRAM_CAPACITY_MB: usize = 256;
@@ -159,6 +160,49 @@ pub fn discard_block(id: BlockId) -> Result<(), ZramError> {
     let slot_idx = state.find_slot(id).ok_or(ZramError::NoData)?;
     state.slots.swap_remove(slot_idx);
     Ok(())
+}
+
+/// Block ids written by the most recent `freezram_fill`, pending `freezram_verify`.
+static FREEZRAM_BLOCKS: Mutex<Vec<BlockId>> = Mutex::new(Vec::new());
+
+/// Write `n` synthetic pages (each filled with a byte pattern derived from its
+/// index) into ZRAM for live demo/verification of swap activity. Returns the
+/// number of pages successfully written.
+pub fn freezram_fill(n: usize) -> usize {
+    let mut blocks = FREEZRAM_BLOCKS.lock();
+    blocks.clear();
+
+    let mut written = 0;
+    for i in 0..n {
+        let mut page = [0u8; ZRAM_BLOCK_SIZE];
+        page.fill((i & 0xFF) as u8);
+        match write_page(&page) {
+            Ok(id) => {
+                blocks.push(id);
+                written += 1;
+            }
+            Err(_) => break,
+        }
+    }
+    written
+}
+
+/// Read back and verify the pages written by `freezram_fill`, discarding each
+/// block afterward. Returns the number of pages that matched their expected
+/// pattern, or `None` if any read/decompress failed outright.
+pub fn freezram_verify() -> Option<usize> {
+    let mut blocks = FREEZRAM_BLOCKS.lock();
+    let mut verified = 0;
+    for (i, id) in blocks.drain(..).enumerate() {
+        let mut out = [0u8; ZRAM_BLOCK_SIZE];
+        read_block(id, &mut out).ok()?;
+        let expected = (i & 0xFF) as u8;
+        if out.iter().all(|&b| b == expected) {
+            verified += 1;
+        }
+        let _ = discard_block(id);
+    }
+    Some(verified)
 }
 
 pub fn stats() -> (usize, usize, usize) {
