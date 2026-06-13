@@ -85,23 +85,41 @@ pub fn sys_mmap(
     let page_flags = prot_to_flags(prot);
 
     // Map all the pages
-    let proc = sched.current_process_mut();
-    let pid = proc.pid;
+    let pid = sched.current_process_mut().pid;
+    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
     for i in 0..page_count {
         let page_vaddr = VirtAddr::new(map_addr + i * 4096);
         let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
 
-        let frame_addr = pmm.alloc_frame().ok_or(MmapError::NoMemory)?;
+        let frame_addr = match pmm.alloc_frame() {
+            Some(addr) => addr,
+            None => {
+                // Memory pressure: try to evict one anonymous page to ZRAM
+                // and retry the allocation once (Phase 6.6 Step 4).
+                let evicted = unsafe {
+                    crate::memory::swap::reclaim(
+                        1,
+                        |pid| {
+                            sched
+                                .process_mut_by_pid(pid)
+                                .map(|p| &mut p.address_space as *mut _)
+                        },
+                        hhdm_offset,
+                        pmm,
+                    )
+                };
+                if evicted == 0 {
+                    return Err(MmapError::NoMemory);
+                }
+                pmm.alloc_frame().ok_or(MmapError::NoMemory)?
+            }
+        };
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
 
+        let proc = sched.process_mut_by_pid(pid).ok_or(MmapError::NoMemory)?;
         unsafe {
-            proc.address_space.map_page(
-                page,
-                frame,
-                page_flags,
-                pmm,
-                VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset),
-            );
+            proc.address_space
+                .map_page(page, frame, page_flags, pmm, hhdm_offset);
         }
 
         // Track as a swap reclaim candidate (Phase 6.6 Step 2).

@@ -218,6 +218,13 @@ extern "x86-interrupt" fn page_fault_handler(
 ) {
     let vaddr = x86_64::registers::control::Cr2::read_raw();
 
+    // Not-present fault: check whether this page was swapped out to ZRAM.
+    if !error_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
+        && handle_swap_page_fault(vaddr)
+    {
+        return;
+    }
+
     // Check if this is a write fault (CoW candidate)
     if error_code.contains(PageFaultErrorCode::CAUSED_BY_WRITE) {
         // Try to handle as CoW page fault
@@ -230,6 +237,54 @@ extern "x86-interrupt" fn page_fault_handler(
     serial_println!("[FAULT] Page Fault at {:#x}: code={:?}", vaddr, error_code);
     loop {
         x86_64::instructions::hlt();
+    }
+}
+
+/// Handle a fault on a page that was swapped out to ZRAM.
+/// Returns true if `vaddr`'s page held a swapped marker and was faulted back in.
+fn handle_swap_page_fault(vaddr: u64) -> bool {
+    if vaddr >= 0x0000_8000_0000_0000 {
+        return false;
+    }
+
+    let page_addr = vaddr & !0xFFF;
+    let page = match x86_64::structures::paging::Page::from_start_address(x86_64::VirtAddr::new(
+        page_addr,
+    )) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    let hhdm = match crate::HHDM_REQ.response() {
+        Some(resp) => x86_64::VirtAddr::new(resp.offset),
+        None => return false,
+    };
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let process = sched.current_process_mut();
+    let pid = process.pid;
+
+    if unsafe { process.address_space.swapped_block_id(page, hhdm) }.is_none() {
+        return false;
+    }
+
+    let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+        | x86_64::structures::paging::PageTableFlags::WRITABLE
+        | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE
+        | x86_64::structures::paging::PageTableFlags::NO_EXECUTE;
+
+    match unsafe {
+        crate::memory::swap::swap_in_page(&mut process.address_space, page, pid, flags, hhdm, &mut pmm)
+    } {
+        Ok(_) => {
+            crate::serial_println!("[SWAP] page-in at {:#x}", page_addr);
+            true
+        }
+        Err(e) => {
+            crate::serial_println!("[SWAP] page-in failed at {:#x}: {:?}", page_addr, e);
+            false
+        }
     }
 }
 

@@ -107,7 +107,7 @@ pub unsafe fn swap_in_page(
 /// SAFETY: `hhdm_offset` must be the correct HHDM base.
 pub unsafe fn reclaim(
     max_pages: usize,
-    address_space_for: impl Fn(usize) -> Option<*mut AddressSpace>,
+    mut address_space_for: impl FnMut(usize) -> Option<*mut AddressSpace>,
     hhdm_offset: VirtAddr,
     pmm: &mut PhysicalMemoryManager,
 ) -> usize {
