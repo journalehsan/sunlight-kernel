@@ -416,40 +416,39 @@ pub extern "C" fn _start() -> ! {
     splash.set_progress(975);  // 97.5%
     splash.redraw();
 
-    // 13. Spawn net_server (pid=5) for Phase 5 testing
-    let test_phase = option_env!("SUNLIGHT_INJECT_PHASE").unwrap_or("phase3.8");
-    if test_phase.starts_with("phase5") || test_phase == "phase4.5" {
-        serial_println!("[PROC] Spawning net_server (pid=5)...");
-        splash.set_status("Loading net_server");
-        splash.log("[PROC] Spawning net_server (pid=5)...");
-        splash.redraw();
-        {
-            let mut pmm = PMM.lock();
-            let mut net = unsafe {
-                Process::new(5, 0, "net_server", &mut pmm, hhdm_offset)
-            };
-            let entry = process::elf_loader::load_elf(NET_SERVER_ELF_BYTES, &mut net, &mut pmm, hhdm_offset);
-            if let Some(entry) = entry {
-                let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-                for i in 0..stack_pages {
-                    let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                    let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                    let frame_addr = pmm.alloc_frame().expect("stack alloc");
-                    let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
-                    let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                        | x86_64::structures::paging::PageTableFlags::WRITABLE
-                        | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
-                    unsafe {
-                        net.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
-                    }
+    // 13. Spawn net_server (pid=5).
+    // This keeps `ping`/`ifconfig` and sysfetch IP available in normal boots,
+    // not only in phase-gated test builds.
+    serial_println!("[PROC] Spawning net_server (pid=5)...");
+    splash.set_status("Loading net_server");
+    splash.log("[PROC] Spawning net_server (pid=5)...");
+    splash.redraw();
+    {
+        let mut pmm = PMM.lock();
+        let mut net = unsafe {
+            Process::new(5, 0, "net_server", &mut pmm, hhdm_offset)
+        };
+        let entry = process::elf_loader::load_elf(NET_SERVER_ELF_BYTES, &mut net, &mut pmm, hhdm_offset);
+        if let Some(entry) = entry {
+            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
+            for i in 0..stack_pages {
+                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
+                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
+                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+                    | x86_64::structures::paging::PageTableFlags::WRITABLE
+                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                unsafe {
+                    net.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
-                net.init_context(entry, layout::USER_STACK_TOP);
-                sched::with_scheduler(|s| { s.add_process(net); });
-                splash.log("[PROC] net_server pid=5");
-            } else {
-                serial_println!("[PROC] Failed to load net_server ELF");
-                splash.log("[PROC] Failed to load net_server ELF");
             }
+            net.init_context(entry, layout::USER_STACK_TOP);
+            sched::with_scheduler(|s| { s.add_process(net); });
+            splash.log("[PROC] net_server pid=5");
+        } else {
+            serial_println!("[PROC] Failed to load net_server ELF");
+            splash.log("[PROC] Failed to load net_server ELF");
         }
     }
 
