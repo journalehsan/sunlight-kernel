@@ -83,8 +83,36 @@ fn handle_msg(msg: IpcMsg) -> IpcMsg {
             IpcMsg::with_label(msg.label).word(0, 1)
         }
         NetOp::RESOLVE => {
-            // Stub: return 10.0.2.3 (the fake DNS) for any query.
-            IpcMsg::with_label(NetOp::RESOLVE).word(0, pack_ipv4([10, 0, 2, 3]))
+            // Bite 2: actual (stub) DNS resolution for ping + other net-utils.
+            // Client packs: words[0] = name_len (bytes), words[1..] = 8-byte chunks of the hostname.
+            // We support a few well-known names (matching the spirit of sunlight-net/dns.rs stub)
+            // so that `ping google.com` / `ping irancell.ir` produce the nice "PING name (ip)" output
+            // and the failure case for unknown names prints the exact required message.
+            let name_len = msg.words[0] as usize;
+            let mut name_buf = [0u8; 64];
+            let mut collected = 0usize;
+            for wi in 1..8 {
+                if collected >= name_len { break; }
+                let w = msg.words[wi];
+                for j in 0..8 {
+                    if collected >= name_len { break; }
+                    name_buf[collected] = ((w >> (j * 8)) & 0xff) as u8;
+                    collected += 1;
+                }
+            }
+            let hostname = core::str::from_utf8(&name_buf[..core::cmp::min(name_len, 63)]).unwrap_or("");
+            let ip = match hostname {
+                "google.com" => [142, 250, 185, 46],
+                "irancell.ir" => [91, 99, 12, 34],
+                "example.com" => [93, 184, 216, 34],
+                // anything else (including "nonexistent.invalid", "doesnotexist.invalid") fails
+                _ => [0, 0, 0, 0],
+            };
+            if ip == [0, 0, 0, 0] {
+                IpcMsg::with_label(NetOp::RESOLVE).word(0, 0) // signals failure to caller
+            } else {
+                IpcMsg::with_label(NetOp::RESOLVE).word(0, pack_ipv4(ip))
+            }
         }
         11 => {
             // Phase 6.5 Step 4 bridge + Phase 5.3 ping support: the net-utils "ping"

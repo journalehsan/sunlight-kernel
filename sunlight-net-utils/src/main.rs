@@ -11,11 +11,12 @@
 
 use sunlight_libc as libc;
 use libc::{Errno, STDOUT};
-use sunlight_ipc::{IpcMsg, ipc_call, nameserver_lookup};
+use sunlight_ipc::{CapabilityToken, IpcMsg, ipc_call, nameserver_lookup};
 
 const MAX_ARGS: usize = 16;
 const NET_LABEL_GETIP: u64 = 10;
 const NET_LABEL_PING: u64 = 11;
+const NET_LABEL_RESOLVE: u64 = 9;  // DNS lookup(hostname) -> packed ip in word(0) or 0 on failure
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -150,28 +151,49 @@ fn cmd_ifconfig() -> i32 {
 
 fn cmd_ping(args: &[&str]) -> i32 {
     let target = args.first().copied().unwrap_or("8.8.8.8");
-    let ip = match parse_ipv4(target) {
-        Some(ip) => ip,
-        None => {
-            let _ = write_all(b"ping: only dotted-quad IPv4 is supported\n");
-            return 2;
-        }
-    };
 
     let Some(net_cap) = nameserver_lookup("net") else {
         let _ = write_all(b"ping: net service unavailable\n");
         return 1;
     };
 
-    let _ = write_all(b"PING ");
-    let _ = write_all(target.as_bytes());
-    let _ = write_all(b"\n");
+    let ping_ip: [u8; 4];
+    if let Some(ip) = parse_ipv4(target) {
+        // Dotted-quad IP path — unchanged behavior
+        ping_ip = ip;
+        let _ = write_all(b"PING ");
+        let _ = write_all(target.as_bytes());
+        let _ = write_all(b"\n");
+    } else if is_valid_hostname(target) {
+        // Hostname path: resolve via NetOp::RESOLVE, then ping the resulting IP.
+        // Print the special "PING name (ip) ..." header; "from" lines will use the IP.
+        match resolve_via_net(net_cap, target) {
+            Some(ip) => {
+                ping_ip = ip;
+                let _ = write_all(b"PING ");
+                let _ = write_all(target.as_bytes());
+                let _ = write_all(b" (");
+                print_ipv4(ping_ip);
+                let _ = write_all(b") 56 bytes of data.\n");
+            }
+            None => {
+                let _ = write_all(b"ping: ");
+                let _ = write_all(target.as_bytes());
+                let _ = write_all(b": Name or service not known\n");
+                return 1;
+            }
+        }
+    } else {
+        let _ = write_all(b"ping: only dotted-quad IPv4 is supported\n");
+        return 2;
+    }
 
+    // Common ping execution path (uses the (possibly resolved) numeric IP for the actual NetOp ping).
     let req_count = 4u64;
     let reply = ipc_call(
         net_cap,
         IpcMsg::with_label(NET_LABEL_PING)
-            .word(0, pack_ipv4(ip))
+            .word(0, pack_ipv4(ping_ip))
             .word(1, req_count),
     );
     if reply.label != NET_LABEL_PING || reply.words[0] == 0 {
@@ -183,7 +205,7 @@ fn cmd_ping(args: &[&str]) -> i32 {
     let base_rtt = reply.words[2];
     for seq in 0..received {
         let _ = write_all(b"64 bytes from ");
-        let _ = write_all(target.as_bytes());
+        print_ipv4(ping_ip);  // always the dotted IP for the "from" lines (even when original target was hostname)
         let _ = write_all(b": icmp_seq=");
         print_u64(seq);
         let _ = write_all(b" time=");
@@ -191,7 +213,7 @@ fn cmd_ping(args: &[&str]) -> i32 {
         let _ = write_all(b"ms\n");
     }
     let _ = write_all(b"--- ");
-    let _ = write_all(target.as_bytes());
+    let _ = write_all(target.as_bytes());  // original target (name or IP) for the statistics header
     let _ = write_all(b" ping statistics ---\n");
     print_u64(req_count);
     let _ = write_all(b" packets transmitted, ");
@@ -265,6 +287,45 @@ fn parse_ipv4(s: &str) -> Option<[u8; 4]> {
     } else {
         None
     }
+}
+
+/// Returns true for things that look like hostnames (have letters or '-', and otherwise valid chars).
+/// Must be called only after parse_ipv4 returned None.
+fn is_valid_hostname(s: &str) -> bool {
+    if s.is_empty() || s.len() > 253 {
+        return false;
+    }
+    let has_letter_or_hyphen = s.chars().any(|c| c.is_ascii_alphabetic() || c == '-');
+    if !has_letter_or_hyphen {
+        return false;
+    }
+    s.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+}
+
+/// Call net_server over IPC (NetOp::RESOLVE) with hostname packed into the message.
+/// Returns Some(ip) on success, None on "Name or service not known".
+/// Hostname is sent as: words[0]=len, then 8-byte little-endian chunks in words[1..].
+fn resolve_via_net(net_cap: CapabilityToken, hostname: &str) -> Option<[u8; 4]> {
+    let bytes = hostname.as_bytes();
+    let name_len = bytes.len().min(48);
+    let mut msg = IpcMsg::with_label(NET_LABEL_RESOLVE).word(0, name_len as u64);
+    let mut w_idx = 1usize;
+    let mut b_idx = 0usize;
+    while b_idx < name_len && w_idx < 8 {
+        let mut w = 0u64;
+        for j in 0..8 {
+            if b_idx >= name_len { break; }
+            w |= (bytes[b_idx] as u64) << (j * 8);
+            b_idx += 1;
+        }
+        msg = msg.word(w_idx, w);
+        w_idx += 1;
+    }
+    let reply = ipc_call(net_cap, msg);
+    if reply.label != NET_LABEL_RESOLVE || reply.word_count == 0 || reply.words[0] == 0 {
+        return None;
+    }
+    Some(unpack_ipv4(reply.words[0]))
 }
 
 fn pack_ipv4(ip: [u8; 4]) -> u64 {
