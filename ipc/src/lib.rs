@@ -361,6 +361,20 @@ pub fn ipc_reply_and_wait(ep: EndpointId, reply: IpcMsg) -> IpcMsg {
     }
 }
 
+/// Server: send reply, then make a single non-blocking attempt to receive the
+/// next call. Returns `None` (instead of yield-looping forever) if no call is
+/// pending yet, so callers can do periodic work (e.g. clock refresh) while
+/// waiting for the next message.
+pub fn ipc_reply_and_try_recv(ep: EndpointId, reply: IpcMsg) -> Option<IpcMsg> {
+    // SAFETY: ipc_reply_and_try_recv passes the endpoint owner token and fixed reply message.
+    let (ret, msg) = unsafe { raw_syscall_ipc(SunlightSyscall::IpcReplyWait, ep.0, reply) };
+    if would_block(ret) {
+        None
+    } else {
+        Some(msg)
+    }
+}
+
 pub fn notify_send(cap: CapabilityToken) {
     // SAFETY: notify_send passes only an opaque capability token.
     unsafe {

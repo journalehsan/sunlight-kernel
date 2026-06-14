@@ -33,8 +33,9 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use alloc::boxed::Box;
 use sunlight_ipc::{
-    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup, sysinfo, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg, TzMsg,
+    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_try_recv,
+    nameserver_lookup, process_yield, sysinfo, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
+    SpawnMsg, TzMsg,
 };
 use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
 use sunlight_tty::TerminalGrid;
@@ -398,8 +399,29 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             }
         }
 
+        // Wait for the next message, but keep polling the clock while idle so
+        // the title-bar time doesn't lag behind real time until a keypress.
         let reply = IpcMsg::with_label(0);
-        msg = ipc_reply_and_wait(ep, reply);
+        loop {
+            if let Some(m) = ipc_reply_and_try_recv(ep, reply) {
+                msg = m;
+                break;
+            }
+            if has_fb && matches!(state, TtyState::Shell) {
+                static mut LAST_POLL_MIN: u64 = u64::MAX;
+                let now_min = get_time_utc() / 60;
+                // SAFETY: tty_server is single-threaded; no concurrent access to LAST_POLL_MIN.
+                unsafe {
+                    if now_min != LAST_POLL_MIN {
+                        LAST_POLL_MIN = now_min;
+                        render_active_shell_fb(
+                            fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
+                        );
+                    }
+                }
+            }
+            process_yield();
+        }
     }
 }
 

@@ -534,7 +534,7 @@ max_ttys = 6
         "/etc/zoneinfo/Asia/Tehran.txt",
         0, 0, mode::FILE_644,
         b"id=Asia/Tehran\ndisplay_name=Iran Standard Time\n\
-utc_offset=+03:30\ndst=+01:00 (March-September)\n",
+utc_offset=+03:30\ndst=none (abolished 2022)\n",
     ),
     RamEntry::file(
         "/etc/zoneinfo/UTC.txt",

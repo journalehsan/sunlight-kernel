@@ -1228,21 +1228,76 @@ mod sunlight {
                     out[pos] = b'\n'; pos+=1;
                     return &out[..pos];
                 } else if args[0] == "list" {
+                    let filter = args.get(1).map(|s| s.to_lowercase());
                     let _ = copy_bytes(out, &mut pos, b"ID\tDISPLAY\tOFFSET\n");
-                    for i in 0..32u64 {
+                    if filter.is_none() {
+                        let _ = copy_bytes(out, &mut pos, b"(showing first matches; use 'tzctl list <filter>' to search by id/name)\n");
+                    }
+                    let mut shown = 0u32;
+                    for i in 0..600u64 {
                         let req = IpcMsg::with_label(TzMsg::LIST_ZONES).word(0, i);
                         let r = ipc_call(tz_cap, req);
                         if r.label != TzMsg::REPLY { break; }
                         if r.words[0] == 0xFFFF_FFFFu64 { break; }
-                        // id at words 2..
-                        for wi in 2..4 {
+
+                        // id at words 2..6 (up to 32 bytes)
+                        let mut idbuf = [0u8; 32];
+                        let mut idlen = 0usize;
+                        'idloop: for wi in 2..6 {
                             for b in 0..8 {
-                                let ch = ((r.words[wi] >> (b*8))&0xff) as u8;
-                                if ch==0 || pos>480 {break;}
-                                out[pos]=ch; pos+=1;
+                                let ch = ((r.words[wi] >> (b*8)) & 0xff) as u8;
+                                if ch == 0 { break 'idloop; }
+                                idbuf[idlen] = ch; idlen += 1;
                             }
                         }
+
+                        // display name at words 6..8 (up to 16 bytes)
+                        let mut dispbuf = [0u8; 16];
+                        let mut displen = 0usize;
+                        'disploop: for wi in 6..8 {
+                            for b in 0..8 {
+                                let ch = ((r.words[wi] >> (b*8)) & 0xff) as u8;
+                                if ch == 0 { break 'disploop; }
+                                dispbuf[displen] = ch; displen += 1;
+                            }
+                        }
+
+                        if let Some(ref f) = filter {
+                            let id_str = core::str::from_utf8(&idbuf[..idlen]).unwrap_or("");
+                            let disp_str = core::str::from_utf8(&dispbuf[..displen]).unwrap_or("");
+                            if !id_str.to_lowercase().contains(f.as_str())
+                                && !disp_str.to_lowercase().contains(f.as_str())
+                            {
+                                continue;
+                            }
+                        }
+
+                        // bail out before overflowing the output buffer
+                        if pos + idlen + displen + 10 > out.len() {
+                            break;
+                        }
+
+                        let _ = copy_bytes(out, &mut pos, &idbuf[..idlen]);
+                        out[pos]=b'\t'; pos+=1;
+                        let _ = copy_bytes(out, &mut pos, &dispbuf[..displen]);
+                        out[pos]=b'\t'; pos+=1;
+
+                        // offset from word(1): hours in low byte (signed), minutes in next byte
+                        let w1 = r.words[1];
+                        let oh = (w1 & 0xff) as i8;
+                        let om = ((w1 >> 8) & 0xff) as u8;
+                        out[pos] = if oh < 0 { b'-' } else { b'+' }; pos+=1;
+                        let ah = oh.unsigned_abs();
+                        out[pos]=b'0'+ah/10; pos+=1; out[pos]=b'0'+ah%10; pos+=1;
+                        out[pos]=b':'; pos+=1;
+                        out[pos]=b'0'+om/10; pos+=1; out[pos]=b'0'+om%10; pos+=1;
                         out[pos]=b'\n'; pos+=1;
+
+                        shown += 1;
+                        if filter.is_none() && shown >= 32 { break; }
+                    }
+                    if filter.is_some() && shown == 0 {
+                        let _ = copy_bytes(out, &mut pos, b"(no matching zones)\n");
                     }
                     return &out[..pos];
                 } else if args[0] == "set" && args.len() > 1 {
