@@ -178,6 +178,10 @@ fn init_pit() {
 }
 
 extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
+    // Diagnostic 1d: log pid/rip/rsp for every fault (before existing log)
+    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    serial_println!("[FAULT] #0 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid, stack_frame.instruction_pointer.as_u64(), stack_frame.stack_pointer.as_u64(), 0u64);
     serial_println!("[INT] Divide Error: {:?}", stack_frame);
     loop {
         x86_64::instructions::hlt();
@@ -185,6 +189,10 @@ extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame)
 }
 
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
+    // Diagnostic 1d: log pid/rip/rsp for #UD
+    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    serial_println!("[FAULT] #6 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid, stack_frame.instruction_pointer.as_u64(), stack_frame.stack_pointer.as_u64(), 0u64);
     serial_println!("[INT] Invalid Opcode: {:?}", stack_frame);
     loop {
         x86_64::instructions::hlt();
@@ -195,6 +203,9 @@ extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame,
     _error_code: u64,
 ) -> ! {
+    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    serial_println!("[FAULT] #8 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid, stack_frame.instruction_pointer.as_u64(), stack_frame.stack_pointer.as_u64(), _error_code);
     serial_println!("[INT] Double Fault: {:?}", stack_frame);
     loop {
         x86_64::instructions::hlt();
@@ -202,6 +213,10 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn gpf_handler(stack_frame: InterruptStackFrame, error_code: u64) {
+    // Diagnostic 1d: log pid/rip/rsp for #GP
+    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    serial_println!("[FAULT] #13 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid, stack_frame.instruction_pointer.as_u64(), stack_frame.stack_pointer.as_u64(), error_code);
     serial_println!(
         "[INT] General Protection Fault: {:?} code={}",
         stack_frame,
@@ -216,6 +231,12 @@ extern "x86-interrupt" fn page_fault_handler(
     _stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
+    // Diagnostic 1d: log pid/rip/rsp for #PF (before the vaddr read)
+    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    let rip = _stack_frame.instruction_pointer.as_u64();
+    let rsp = _stack_frame.stack_pointer.as_u64();
+    serial_println!("[FAULT] #14 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid, rip, rsp, 0u64);
     let vaddr = x86_64::registers::control::Cr2::read_raw();
 
     // Not-present fault: check whether this page was swapped out to ZRAM.

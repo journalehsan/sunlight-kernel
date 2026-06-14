@@ -529,17 +529,27 @@ pub extern "C" fn _start() -> ! {
         let mut sunlightd = unsafe {
             Process::new(6, 0, "sunlightd", &mut pmm, hhdm_offset)
         };
+        // Diagnostic logs before load attempt (logs first)
+        serial_println!("[SUNLIGHTD-ELF-DIAG] embed_len={} first_magic={:02x}{:02x}{:02x}{:02x} target_release_path=../../target/x86_64-unknown-none/release/sunlightd",
+            SUNLIGHTD_ELF_BYTES.len(),
+            SUNLIGHTD_ELF_BYTES.get(0).copied().unwrap_or(0),
+            SUNLIGHTD_ELF_BYTES.get(1).copied().unwrap_or(0),
+            SUNLIGHTD_ELF_BYTES.get(2).copied().unwrap_or(0),
+            SUNLIGHTD_ELF_BYTES.get(3).copied().unwrap_or(0));
         let entry = process::elf_loader::load_elf(SUNLIGHTD_ELF_BYTES, &mut sunlightd, &mut pmm, hhdm_offset);
+        serial_println!("[SUNLIGHTD-ELF-DIAG] load_elf returned entry={:?}", entry);
         if let Some(entry) = entry {
             let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
             for i in 0..stack_pages {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
                 let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                // SAFETY: frame_addr comes from pmm.alloc_frame which guarantees a valid, page-aligned physical address for the lifetime of the system; the unchecked ctor is valid here.
                 let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
                 let flags = x86_64::structures::paging::PageTableFlags::PRESENT
                     | x86_64::structures::paging::PageTableFlags::WRITABLE
                     | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                // SAFETY: mapping a user-accessible page into the freshly created sunlightd address space; pmm and hhdm valid at this boot stage, no concurrent access.
                 unsafe {
                     sunlightd.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
@@ -548,6 +558,13 @@ pub extern "C" fn _start() -> ! {
             sched::with_scheduler(|s| { s.add_process(sunlightd); });
             splash.log("[PROC] sunlightd pid=6");
             serial_println!("[PROC] sunlightd spawned successfully");
+            // Diagnostic 1a: log state immediately after spawn (before any scheduler run)
+            sched::with_scheduler(|s| {
+                if let Some(p) = s.processes.iter().find(|pp| pp.pid == 6) {
+                    serial_println!("[SUNLIGHTD-SPAWN] pid=6 state={:?} entry=0x{:x} rsp=0x{:x}",
+                        p.state, p.entry_point, p.context_rsp);
+                }
+            });
         } else {
             serial_println!("[PROC] Failed to load sunlightd ELF");
             splash.log("[PROC] Failed to load sunlightd ELF");

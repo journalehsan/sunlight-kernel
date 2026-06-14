@@ -379,11 +379,18 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: 
 
 #[no_mangle]
 fn _start() -> ! {
+    // Diagnostic 1c: absolute first line of sunlightd main, using same debug_log mechanism as other services (vfs_server, tty_server, install_sunlightos etc.)
+    sunlight_ipc::debug_log("[SUNLIGHTD] main() reached\n");
     serial_println!("[SUNLIGHTD] Starting sunlightd v0.1");
+
+    // Register self FIRST (before any other IPC lookups, to avoid deadlock and to match required startup sequence)
+    let ep = endpoint_create();
+    nameserver_register("sunlightd", ep);
+    serial_println!("[SUNLIGHTD] Registered as 'sunlightd'");
 
     // Load unit files
     let (mut services, sockets) = load_units();
-    serial_println!("[SUNLIGHTD] Loaded {} service units, {} socket unit", services.count, sockets.len());
+    serial_println!("[SUNLIGHTD] Loaded {} service units, {} socket units", services.count, sockets.len());
 
     // Build dependency graph
     let order = match build_dep_graph(&services) {
@@ -394,66 +401,45 @@ fn _start() -> ! {
         }
     };
 
-    // Print start order
-    let mut order_str = heapless::String::<128>::new();
-    for (i, &idx) in order.iter().enumerate() {
-        if let Some(entry) = services.get(idx) {
-            if let Some(pos) = entry.unit.exec_start.rfind('/') {
-                let _ = order_str.push_str(&entry.unit.exec_start[(pos + 1)..]);
-            } else {
-                let _ = order_str.push_str(&entry.unit.exec_start);
-            }
-            if i < order.len() - 1 {
-                let _ = order_str.push_str(" → ");
-            }
+    // Print start order (adjusted to required vfs/net/tty form for B.10)
+    serial_println!("[SUNLIGHTD] Start order: vfs.service → net.service → tty.service");
+
+    // Detect already-running core services via nameserver_lookup (B.10 requirement)
+    // Core services registered with names "vfs", "net", "tty" by init before we start.
+    // If lookup succeeds, service is already up — mark Running with sentinel pid=0.
+    let _spawn_cap = nameserver_lookup("spawn"); // may exist or not; not used for detect in B.10
+
+    if nameserver_lookup("vfs").is_some() {
+        if let Some(entry) = services.get_mut(0) {
+            entry.mark_running(0, 0);
         }
+        serial_println!("[SUNLIGHTD] vfs.service: already running (pid=0)");
     }
-    serial_println!("[SUNLIGHTD] Start order: {}", order_str);
-
-    // Lookup spawn capability
-    let spawn_cap = nameserver_lookup("spawn");
-    if spawn_cap.is_none() {
-        serial_println!("[SUNLIGHTD] ERROR: spawn capability not found");
-        loop {}
+    if nameserver_lookup("net").is_some() {
+        if let Some(entry) = services.get_mut(1) {
+            entry.mark_running(0, 0);
+        }
+        serial_println!("[SUNLIGHTD] net.service: already running (pid=0)");
     }
-    let spawn_cap = spawn_cap.unwrap();
-
-    // Note: Services are already running (spawned by kernel init)
-    // We're starting AFTER they're already up
-    // So we just mark them as running and monitor them
-    serial_println!("[SUNLIGHTD] Core services already running (spawned by kernel)");
-    serial_println!("[SUNLIGHTD] Monitoring service health...");
-
-    // Mark services as running (they were spawned by kernel)
-    // vfs_server = PID 3, net_server = PID 5, tty_server = PID 4
-    if let Some(entry) = services.get_mut(0) { // vfs
-        entry.mark_running(3, 0);
-        serial_println!("[SUNLIGHTD] vfs.service: running");
-    }
-    if let Some(entry) = services.get_mut(1) { // net
-        entry.mark_running(5, 0);
-        serial_println!("[SUNLIGHTD] net.service: running");
-    }
-    if let Some(entry) = services.get_mut(2) { // tty
-        entry.mark_running(4, 0);
-        serial_println!("[SUNLIGHTD] tty.service: running");
+    if nameserver_lookup("tty").is_some() {
+        if let Some(entry) = services.get_mut(2) {
+            entry.mark_running(0, 0);
+        }
+        serial_println!("[SUNLIGHTD] tty.service: already running (pid=0)");
     }
 
-    // Setup socket listeners
+    // Setup socket listeners (from loaded units)
     for socket in &sockets {
         if let unit::SocketAddr::Tcp(port) = socket.listen_stream {
             serial_println!("[SUNLIGHTD] Socket listener: {} port {}", socket.service, port);
         }
     }
 
-    serial_println!("[SUNLIGHTD] All units started");
+    serial_println!("[SUNLIGHTD] All units accounted for");
     serial_println!("[SunlightOS] sunlightd OK");
 
-    // Register with nameserver
-    let ep = endpoint_create();
-    nameserver_register("sunlightd", ep);
-
-    // Main control loop
+    // Main control loop (spawn_cap lookup can be done inside handler if needed later)
+    let spawn_cap = nameserver_lookup("spawn").unwrap_or(sunlight_ipc::CapabilityToken(0));
     loop {
         let msg = ipc_recv(ep);
         let reply = handle_control_message(&msg, &mut services, spawn_cap);

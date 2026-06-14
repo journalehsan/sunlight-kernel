@@ -72,6 +72,9 @@ pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
 /// Flag set by timer IRQ when a reschedule is needed.
 static NEEDS_RESCHEDULE: AtomicBool = AtomicBool::new(false);
 
+/// Diagnostic: track first time sunlightd (pid 6) is picked by scheduler.
+static SUNLIGHTD_FIRST_SCHED: AtomicBool = AtomicBool::new(false);
+
 /// === Diagnostic counters for process leak detection ===
 static PROCESS_CREATED: AtomicUsize = AtomicUsize::new(0);
 static PROCESS_FINISHED: AtomicUsize = AtomicUsize::new(0);
@@ -348,10 +351,18 @@ impl Scheduler {
     }
 
     pub fn pick_next(&mut self) -> Option<usize> {
-        match SCHEDULER_MODE {
+        let next = match SCHEDULER_MODE {
             SchedulerMode::RoundRobin => self.pick_next_round_robin(),
             SchedulerMode::Bore => self.pick_next_bore(),
+        };
+        // Diagnostic 1b: one-time log the FIRST time sunlightd's pid is picked for execution.
+        if let Some(idx) = next {
+            let next_pid = self.processes[idx].pid;
+            if next_pid == 6 && !SUNLIGHTD_FIRST_SCHED.swap(true, Ordering::SeqCst) {
+                serial_println!("[SUNLIGHTD-SCHED] First time scheduled, rip=0x{:x} idx={}", self.processes[idx].entry_point, idx);
+            }
         }
+        next
     }
 
     /// Get the currently running process.
