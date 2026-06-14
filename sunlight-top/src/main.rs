@@ -80,18 +80,7 @@ pub extern "C" fn _start() -> ! {
 
     sunlight_ipc::debug_log("[TOP] rendering");
 
-    let mut iterations = 0;
-    const MAX_ITERATIONS: u32 = 100; // ~10 seconds at 100ms per iteration
-
     loop {
-        iterations += 1;
-        if iterations >= MAX_ITERATIONS {
-            canvas.show_cursor();
-            canvas.exit_alt_screen();
-            canvas.flush();
-            sunlight_ipc::ProcessExit::exit(0);
-        }
-
         if let Some(key) = read_key_nonblocking() {
             match key {
                 b'q' | b'Q' | 0x1b => {

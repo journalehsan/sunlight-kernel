@@ -446,6 +446,11 @@ pub unsafe extern "C" fn timer_entry() {
     );
 }
 
+/// Wake tty_server every N timer ticks for the foreground render cadence.
+/// Timer is ~100 Hz, so 3 ticks ≈ 30 ms ≈ ~33 FPS. Larger = less CPU but
+/// choppier; smaller = smoother but starves the foreground app of CPU.
+const TTY_WAKE_INTERVAL_TICKS: u64 = 3;
+
 /// Rust side of the timer handler.
 /// `saved_rsp` points to the pushed registers on the kernel stack.
 /// Returns 0 to resume the interrupted context, or a new RSP to switch.
@@ -492,6 +497,23 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     if let Some((endpoint_id, timer_pid)) = timer_endpoint {
         let mut bus = crate::ipc::IPC_BUS.lock();
         bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
+    }
+
+    // Wake tty_server on a render cadence. Its idle loop parks in BlockedOnIpc
+    // between events (an empty ipc_reply_wait blocks via block_on_recv), so
+    // without this it only ran — and only repainted a live foreground app like
+    // `top` — when a keyboard IRQ happened to wake it. Waking every few ticks
+    // gives a steady ~30 FPS refresh; spacing it (not every tick) leaves CPU
+    // for the foreground app to actually produce frames instead of starving it.
+    if ticks_total % TTY_WAKE_INTERVAL_TICKS == 0 {
+        if let Some(tty_pid) = sched
+            .processes
+            .iter()
+            .find(|p| p.name == "tty_server")
+            .map(|p| p.pid)
+        {
+            sched.wake_pid(tty_pid);
+        }
     }
 
     let result = if crate::sched::check_reschedule() {
