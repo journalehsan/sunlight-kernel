@@ -31,6 +31,7 @@ pub enum SunlightSyscall {
     ShmAlloc = 92,
     ShmMap = 93,
     ShmFree = 94,
+    MapTelemetry = 95,
     DebugLog = 99,
 }
 
@@ -552,4 +553,11 @@ pub fn shm_free(token: CapabilityToken) -> Result<(), ShmError> {
     } else {
         Err(ShmError::InvalidToken)
     }
+}
+
+/// Map the kernel telemetry page into this process; returns null on failure.
+pub fn map_telemetry() -> *const u8 {
+    // SAFETY: MapTelemetry takes no pointers and returns a virtual address in rax.
+    let (addr, _) = unsafe { raw_syscall(SunlightSyscall::MapTelemetry, 0, 0, 0, 0, 0, 0, 0) };
+    addr as *const u8
 }

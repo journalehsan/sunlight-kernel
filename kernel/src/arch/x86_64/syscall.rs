@@ -71,6 +71,7 @@ pub enum SunlightSyscall {
     ShmAlloc = 92,
     ShmMap = 93,
     ShmFree = 94,
+    MapTelemetry = 95,
 
     DebugLog = 99,
 }
@@ -298,6 +299,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         92 => sys_shm_alloc(frame),
         93 => sys_shm_map(frame),
         94 => sys_shm_free(frame),
+        95 => sys_map_telemetry(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1788,6 +1790,7 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
         },
         None => 0,
     };
+    crate::telemetry::record_net_tx(len as u64);
     crate::serial_println!("[NETDBG] tx len={} result={}", len, result);
     if len >= 42 {
         crate::serial_println!(
@@ -1835,6 +1838,7 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
         unsafe {
             core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
         }
+        crate::telemetry::record_net_rx(n as u64);
         crate::serial_println!(
             "[NETDBG] rx n={} ethertype={:02x}{:02x} proto={:02x} src_port={:02x}{:02x} dst_port={:02x}{:02x} ip_total_len={:02x}{:02x} udp_len={:02x}{:02x} dns_hdr={:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
             n,
@@ -1911,6 +1915,55 @@ fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
     crate::memory::shared::free_shared_page(process, token, &mut *pmm, &mut *caps, hhdm_offset);
     crate::serial_println!("[SHM]  shm_free: page unmapped OK");
     0
+}
+
+fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
+    let hhdm_offset = VirtAddr::new(
+        crate::HHDM_REQ
+            .response()
+            .expect("no hhdm")
+            .offset,
+    );
+
+    let telemetry_virt = x86_64::VirtAddr::from_ptr(core::ptr::addr_of!(crate::telemetry::TELEMETRY));
+    let telemetry_page = x86_64::structures::paging::Page::containing_address(telemetry_virt);
+
+    let kernel_pml4 = x86_64::registers::control::Cr3::read().0.start_address();
+    let kernel_as = crate::process::address_space::AddressSpace::from_pml4(kernel_pml4);
+    // SAFETY: we walk the currently active kernel page tables via a valid HHDM mapping.
+    let telemetry_phys = match unsafe { kernel_as.lookup_phys(telemetry_page, hhdm_offset) } {
+        Some(p) => p,
+        None => return 0,
+    };
+    let telemetry_phys_page = telemetry_phys.as_u64() & !0xFFF;
+    let telemetry_page_off = telemetry_virt.as_u64() & 0xFFF;
+
+    let user_addr = x86_64::VirtAddr::new(0x0000_0000_0080_0000);
+    let page = match x86_64::structures::paging::Page::from_start_address(user_addr) {
+        Ok(p) => p,
+        Err(_) => return 0,
+    };
+    // SAFETY: TELEMETRY lives in static kernel memory and is page-mapped for kernel lifetime.
+    let frame = unsafe {
+        x86_64::structures::paging::PhysFrame::from_start_address_unchecked(
+            x86_64::PhysAddr::new(telemetry_phys_page),
+        )
+    };
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let process = sched.current_process_mut();
+    let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+        | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE
+        | x86_64::structures::paging::PageTableFlags::NO_EXECUTE;
+
+    // SAFETY: mapping user-visible read-only page into current process page tables.
+    unsafe {
+        process
+            .address_space
+            .map_page(page, frame, flags, &mut pmm, hhdm_offset);
+    }
+    user_addr.as_u64() + telemetry_page_off
 }
 
 /// Syscall: get_time_utc (81)

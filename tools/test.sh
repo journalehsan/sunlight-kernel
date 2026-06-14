@@ -186,8 +186,14 @@ case "$PHASE" in
         PASS_LABEL="Security Hardening"
         NEED_DISK=false
         ;;
+    top)
+        EXPECTED_FILE="tools/tests/top.expected"
+        FINAL_MARKER="[TOP] rendering"
+        PASS_LABEL="top"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec sunlightd"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec sunlightd top"
         exit 2
         ;;
 esac
@@ -206,6 +212,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release >>"$B
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release >>"$BUILD_LOG" 2>&1
 
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
 if [[ "$NEED_DISK" == "true" ]]; then
@@ -214,7 +221,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" ]]; then
+if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "top" ]]; then
     KERNEL_FEATURES="--features key_inject"
 fi
 EXTRA_ENV=()
@@ -225,6 +232,8 @@ elif [[ "$PHASE" == "phase6.5.1" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
 elif [[ "$PHASE" == "phase6.5.3" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase6.5.3)
+elif [[ "$PHASE" == "top" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=top)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
 elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* || "$PHASE" == "dns_hosts" ]]; then

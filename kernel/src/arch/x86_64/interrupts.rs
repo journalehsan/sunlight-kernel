@@ -1,5 +1,6 @@
 use crate::arch::x86_64::keyboard;
 use crate::serial_println;
+use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::instructions::port::Port;
 use x86_64::instructions::segmentation::Segment;
 use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
@@ -384,6 +385,7 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
 }
 
 static TICKS: spin::Mutex<u64> = spin::Mutex::new(0);
+static TELEMETRY_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
 
 /// Naked timer interrupt entry. Manually saves all GPRs to match the
 /// `iretq_to_context` / `init_context` layout, calls the Rust handler,
@@ -461,6 +463,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     *ticks += 1;
     let _t = *ticks;
     drop(ticks);
+    let ticks_total = TELEMETRY_TICK_COUNT.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
 
     // Poll key injection buffer for test automation (no IRQ1 needed)
     keyboard::poll_inject_buffer();
@@ -470,6 +473,14 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     x86_64::instructions::interrupts::disable();
     let mut sched = crate::sched::SCHEDULER.lock();
     sched.tick();
+
+    if ticks_total % 100 == 0 {
+        let pmm = crate::PMM.lock();
+        // SAFETY: timer handler has interrupts disabled during scheduler mutation and telemetry update.
+        unsafe {
+            crate::telemetry::update_telemetry(&sched, &pmm, ticks_total);
+        }
+    }
 
     // Every tick, enqueue a timer notification for timer_server (if it exists).
     let timer_endpoint = sched

@@ -14,6 +14,7 @@ mod memory;
 mod panic;
 mod process;
 mod sched;
+mod telemetry;
 
 use arch::x86_64::{acpi, interrupts, serial, syscall, keyboard};
 use memory::{heap, pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
@@ -62,6 +63,8 @@ static SUNLIGHT_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-utils");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
+static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-top");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -1221,6 +1224,7 @@ fn setup_key_injection() {
     let sequence: [u8; 256] = match phase {
         "phase3.9" => build_phase3_9_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
+        "top" => build_top_sequence(),
         "dns_test" => build_dns_test_sequence(),
         _ => build_phase3_8_sequence(),
     };
@@ -1299,6 +1303,19 @@ fn build_phase6_5_3_sequence() -> [u8; 256] {
         0x32, 0x25, 0x20, 0x17, 0x13, 0x39, // mkdir<space>
         0x35, 0x14, 0x32, 0x19, 0x35, 0x2D, 0x1C, // /tmp/x + Enter
         0x26, 0x1F, 0x39, 0x35, 0x14, 0x32, 0x19, 0x1C, // ls /tmp + Enter
+    ];
+    s[..codes.len()].copy_from_slice(&codes);
+    s
+}
+
+/// top gate injection: login, run `top`, then send `q` to exit.
+#[cfg(feature = "key_inject")]
+fn build_top_sequence() -> [u8; 256] {
+    let mut s = [0u8; 256];
+    let codes: [u8; 10] = [
+        0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
+        0x14, 0x18, 0x19, 0x1C, // top + Enter
+        0x10, // q
     ];
     s[..codes.len()].copy_from_slice(&codes);
     s

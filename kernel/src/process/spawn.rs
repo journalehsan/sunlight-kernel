@@ -283,6 +283,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/traceroute"
         | "/usr/bin/arp"
         | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
+        "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
         // Phase 6.5 Step 3: PATH entries under these directories are applets
         // of the embedded multi-call binaries (argv[0] picks the applet).
         p if p.starts_with("/sunlight-utils/") => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),

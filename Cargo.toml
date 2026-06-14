@@ -5,6 +5,7 @@ members = [
     "ipc",
     "drivers",
     "compat-linux",
+    "sunlight-top",
     "services/init",
     "services/timer_server",
     "services/timed",

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# --- Step 0: Auto-version all workspace crates ---
+echo "[build] Updating version..."
+python3 "$SCRIPT_DIR/version_manager.py" "$PROJECT_ROOT"
+
 # --- Configuration ---
 QEMU_MEMORY="256M"
 QEMU_CPUS="2"
@@ -23,6 +30,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release
 
 # --- Step 2: Build the kernel ELF ---
 echo "[build] Building kernel..."

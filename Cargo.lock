@@ -267,6 +267,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-top"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ipc",
+]
+
+[[package]]
 name = "sunlight-tty"
 version = "0.1.0"
 dependencies = [
