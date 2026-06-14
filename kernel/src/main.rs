@@ -49,6 +49,8 @@ static TTY_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
 static NET_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/net_server");
+static SUNLIGHTD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlightd");
 static SUNSHELL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sshl");
 // Phase 6.5 Step 3: busybox-style multi-call userland binaries. PATH entries
@@ -515,6 +517,40 @@ pub extern "C" fn _start() -> ! {
         } else {
             serial_println!("[PROC] Failed to load net_server ELF");
             splash.log("[PROC] Failed to load net_server ELF");
+        }
+    }
+
+    // Spawn sunlightd - service supervisor daemon
+    serial_println!("[PROC] Spawning sunlightd (pid=6)...");
+    splash.log("[PROC] Spawning sunlightd (pid=6)...");
+    splash.redraw();
+    {
+        let mut pmm = PMM.lock();
+        let mut sunlightd = unsafe {
+            Process::new(6, 0, "sunlightd", &mut pmm, hhdm_offset)
+        };
+        let entry = process::elf_loader::load_elf(SUNLIGHTD_ELF_BYTES, &mut sunlightd, &mut pmm, hhdm_offset);
+        if let Some(entry) = entry {
+            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
+            for i in 0..stack_pages {
+                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
+                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
+                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+                    | x86_64::structures::paging::PageTableFlags::WRITABLE
+                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                unsafe {
+                    sunlightd.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                }
+            }
+            sunlightd.init_context(entry, layout::USER_STACK_TOP);
+            sched::with_scheduler(|s| { s.add_process(sunlightd); });
+            splash.log("[PROC] sunlightd pid=6");
+            serial_println!("[PROC] sunlightd spawned successfully");
+        } else {
+            serial_println!("[PROC] Failed to load sunlightd ELF");
+            splash.log("[PROC] Failed to load sunlightd ELF");
         }
     }
 

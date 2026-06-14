@@ -1,0 +1,22 @@
+[build]
+target = "x86_64-unknown-none"
+
+[target.x86_64-unknown-none]
+rustflags = [
+    "-C", "link-arg=-T../../services/user-space.ld",
+    "-C", "relocation-model=static",
+]
+
+[package]
+name = "sunlightd"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-fs = { path = "../../sunlight-fs" }
+heapless = "0.8"
+
+[[bin]]
+name = "sunlightd"
+path = "src/main.rs"

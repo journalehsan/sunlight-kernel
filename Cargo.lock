@@ -310,6 +310,23 @@ name = "sunlight-virtio"
 version = "0.1.0"
 
 [[package]]
+name = "sunlightctl"
+version = "0.1.0"
+dependencies = [
+ "heapless",
+ "sunlight-ipc",
+]
+
+[[package]]
+name = "sunlightd"
+version = "0.1.0"
+dependencies = [
+ "heapless",
+ "sunlight-fs",
+ "sunlight-ipc",
+]
+
+[[package]]
 name = "sunshell"
 version = "0.1.0"
 dependencies = [

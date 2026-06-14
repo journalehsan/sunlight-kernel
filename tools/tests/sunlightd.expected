@@ -1,0 +1,11 @@
+[SUNLIGHTD] Starting sunlightd v0.1
+[SUNLIGHTD] Loaded 3 service units, 1 socket unit
+[SUNLIGHTD] Start order:
+[SUNLIGHTD] Core services already running (spawned by kernel)
+[SUNLIGHTD] Monitoring service health...
+[SUNLIGHTD] vfs.service: running
+[SUNLIGHTD] net.service: running
+[SUNLIGHTD] tty.service: running
+[SUNLIGHTD] Socket listener:
+[SUNLIGHTD] All units started
+[SunlightOS] sunlightd OK
