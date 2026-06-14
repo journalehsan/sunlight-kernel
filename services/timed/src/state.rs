@@ -7,61 +7,22 @@
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct TimeState {
-    pub utc_epoch: u64,                // Unix timestamp from RTC
-    pub local_offset_secs: i32,        // Offset from UTC in seconds
-    pub dst_active: bool,              // Is DST currently active
-    pub timezone_name: [u8; 64],       // Timezone name (e.g., "Asia/Tehran")
-    pub timezone_name_len: usize,      // Length of timezone name
+    pub utc_epoch: u64,                // Unix timestamp from RTC (pure UTC, no tz)
     pub ntp_synced: bool,              // Has NTP synchronized the clock?
     pub ntp_drift_ppm: i32,            // PPM drift correction
 }
 
 impl TimeState {
-    /// Create a new TimeState with default values
+    /// Create a new TimeState with default values (pure UTC source)
     pub const fn new() -> Self {
         Self {
             utc_epoch: 0,
-            local_offset_secs: 0,
-            dst_active: false,
-            timezone_name: [0u8; 64],
-            timezone_name_len: 0,
             ntp_synced: false,
             ntp_drift_ppm: 0,
         }
     }
 
-    /// Set timezone name from a string slice
-    pub fn set_timezone_name(&mut self, name: &str) {
-        let bytes = name.as_bytes();
-        let len = core::cmp::min(bytes.len(), 63);
-        self.timezone_name[..len].copy_from_slice(&bytes[..len]);
-        self.timezone_name[len] = 0; // Null terminator
-        self.timezone_name_len = len;
-    }
-
-    /// Get timezone name as string slice
-    pub fn get_timezone_name(&self) -> &str {
-        match core::str::from_utf8(&self.timezone_name[..self.timezone_name_len]) {
-            Ok(s) => s,
-            Err(_) => "Unknown",
-        }
-    }
-
-    /// Calculate local time from UTC epoch
-    pub fn local_time(&self) -> u64 {
-        (self.utc_epoch as i64 + self.local_offset_secs as i64) as u64
-    }
-
-    /// Calculate total offset including DST
-    pub fn total_offset_secs(&self) -> i32 {
-        if self.dst_active {
-            self.local_offset_secs + 3600
-        } else {
-            self.local_offset_secs
-        }
-    }
-
-    /// Serialize to JSON format
+    /// Serialize to JSON format (UTC + NTP status only)
     /// Note: This is a simple string builder since we can't use serde in no_std
     pub fn to_json(&self) -> [u8; 256] {
         let mut buf = [0u8; 256];
@@ -82,14 +43,23 @@ impl TimeState {
             pos += 1;
         }
 
-        // Append rest of JSON structure
-        let json_rest = b",\"offset_secs\":";
-        buf[pos..pos + json_rest.len()].copy_from_slice(json_rest);
-        pos += json_rest.len();
+        // NTP fields
+        if self.ntp_synced {
+            let ntp_str = b",\"ntp_synced\":true";
+            buf[pos..pos + ntp_str.len()].copy_from_slice(ntp_str);
+            pos += ntp_str.len();
+        } else {
+            let ntp_str = b",\"ntp_synced\":false";
+            buf[pos..pos + ntp_str.len()].copy_from_slice(ntp_str);
+            pos += ntp_str.len();
+        }
 
-        // Offset seconds
-        let offset_str = format_i32(self.local_offset_secs);
-        for (_i, &byte) in offset_str.iter().enumerate() {
+        let drift_start = b",\"drift_ppm\":";
+        buf[pos..pos + drift_start.len()].copy_from_slice(drift_start);
+        pos += drift_start.len();
+
+        let drift_str = format_i32(self.ntp_drift_ppm);
+        for (_i, &byte) in drift_str.iter().enumerate() {
             if byte == 0 {
                 break;
             }
@@ -97,19 +67,6 @@ impl TimeState {
             pos += 1;
         }
 
-        // DST flag
-        let dst_str: &[u8] = if self.dst_active { b",\"dst\":true" } else { b",\"dst\":false" };
-        buf[pos..pos + dst_str.len()].copy_from_slice(dst_str);
-        pos += dst_str.len();
-
-        // Timezone name (already null-terminated)
-        let tz_str = b",\"timezone\":\"";
-        buf[pos..pos + tz_str.len()].copy_from_slice(tz_str);
-        pos += tz_str.len();
-        buf[pos..pos + self.timezone_name_len].copy_from_slice(&self.timezone_name[..self.timezone_name_len]);
-        pos += self.timezone_name_len;
-        buf[pos] = b'"';
-        pos += 1;
         buf[pos] = b'}';
 
         buf
@@ -180,28 +137,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_local_time() {
+    fn test_utc_epoch_roundtrip() {
         let mut state = TimeState::new();
-        state.utc_epoch = 1000;
-        state.local_offset_secs = 3600; // +1 hour
-        assert_eq!(state.local_time(), 4600);
+        state.utc_epoch = 1234567890;
+        assert_eq!(state.utc_epoch, 1234567890);
     }
 
     #[test]
-    fn test_total_offset_with_dst() {
+    fn test_ntp_fields() {
         let mut state = TimeState::new();
-        state.local_offset_secs = 3600;
-        state.dst_active = false;
-        assert_eq!(state.total_offset_secs(), 3600);
-
-        state.dst_active = true;
-        assert_eq!(state.total_offset_secs(), 7200);
-    }
-
-    #[test]
-    fn test_timezone_name() {
-        let mut state = TimeState::new();
-        state.set_timezone_name("Asia/Tehran");
-        assert_eq!(state.get_timezone_name(), "Asia/Tehran");
+        state.ntp_synced = true;
+        state.ntp_drift_ppm = 42;
+        assert!(state.ntp_synced);
+        assert_eq!(state.ntp_drift_ppm, 42);
     }
 }

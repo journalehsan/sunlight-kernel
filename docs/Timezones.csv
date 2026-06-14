@@ -1,0 +1,560 @@
+Time zone ID,Raw offset (Hours : Minutes),DST offset (Minutes),Display name
+Etc/GMT+12,-12 : 00,,GMT-12:00
+Etc/GMT+11,-11 : 00,,GMT-11:00
+MIT,-11 : 00,,West Samoa Time
+Pacific/Apia,-11 : 00,,West Samoa Time
+Pacific/Midway,-11 : 00,,Samoa Standard Time
+Pacific/Niue,-11 : 00,,Niue Time
+Pacific/Pago_Pago,-11 : 00,,Samoa Standard Time
+Pacific/Samoa,-11 : 00,,Samoa Standard Time
+US/Samoa,-11 : 00,,Samoa Standard Time
+America/Adak,-10 : 00,60,Hawaii-Aleutian Standard Time
+America/Atka,-10 : 00,60,Hawaii-Aleutian Standard Time
+Etc/GMT+10,-10 : 00,,GMT-10:00
+HST,-10 : 00,,Hawaii Standard Time
+Pacific/Fakaofo,-10 : 00,,Tokelau Time
+Pacific/Honolulu,-10 : 00,,Hawaii Standard Time
+Pacific/Johnston,-10 : 00,,Hawaii Standard Time
+Pacific/Rarotonga,-10 : 00,,Cook Is. Time
+Pacific/Tahiti,-10 : 00,,Tahiti Time
+SystemV/HST10,-10 : 00,,Hawaii Standard Time
+US/Aleutian,-10 : 00,60,Hawaii-Aleutian Standard Time
+US/Hawaii,-10 : 00,,Hawaii Standard Time
+Pacific/Marquesas,-9 : 30,,Marquesas Time
+AST,-9 : 00,60,Alaska Standard Time
+America/Anchorage,-9 : 00,60,Alaska Standard Time
+America/Juneau,-9 : 00,60,Alaska Standard Time
+America/Nome,-9 : 00,60,Alaska Standard Time
+America/Yakutat,-9 : 00,60,Alaska Standard Time
+Etc/GMT+9,-9 : 00,,GMT-09:00
+Pacific/Gambier,-9 : 00,,Gambier Time
+SystemV/YST9,-9 : 00,60,Alaska Standard Time
+US/Alaska,-9 : 00,60,Alaska Standard Time
+America/Dawson,-8 : 00,60,Pacific Standard Time
+America/Ensenada,-8 : 00,60,Pacific Standard Time
+America/Los_Angeles,-8 : 00,60,Pacific Standard Time
+America/Tiajuana,-8 : 00,60,Pacific Standard Time
+America/Vancouver,-8 : 00,60,Pacific Standard Time
+America/Whitehorse,-8 : 00,60,Pacific Standard Time
+Canada/Pacific,-8 : 00,60,Pacific Standard Time
+Canada/Yukon,-8 : 00,60,Pacific Standard Time
+Etc/GMT+8,-8 : 00,,GMT-08:00
+Mexico/BajaNorte,-8 : 00,60,Pacific Standard Time
+PST,-8 : 00,60,Pacific Standard Time
+PST8PDT,-8 : 00,60,Pacific Standard Time
+Pacific/Pitcairn,-8 : 00,,Pitcairn Standard Time
+SystemV/PST8,-8 : 00,,Pitcairn Standard Time
+SystemV/PST8PDT,-8 : 00,60,Pacific Standard Time
+US/Pacific,-8 : 00,60,Pacific Standard Time
+US/Pacific-New,-8 : 00,60,Pacific Standard Time
+America/Boise,-7 : 00,60,Mountain Standard Time
+America/Cambridge_Bay,-7 : 00,60,Mountain Standard Time
+America/Chihuahua,-7 : 00,60,Mountain Standard Time
+America/Dawson_Creek,-7 : 00,,Mountain Standard Time
+America/Denver,-7 : 00,60,Mountain Standard Time
+America/Edmonton,-7 : 00,60,Mountain Standard Time
+America/Hermosillo,-7 : 00,,Mountain Standard Time
+America/Inuvik,-7 : 00,60,Mountain Standard Time
+America/Mazatlan,-7 : 00,60,Mountain Standard Time
+America/Phoenix,-7 : 00,,Mountain Standard Time
+America/Shiprock,-7 : 00,60,Mountain Standard Time
+America/Yellowknife,-7 : 00,60,Mountain Standard Time
+Canada/Mountain,-7 : 00,60,Mountain Standard Time
+Etc/GMT+7,-7 : 00,,GMT-07:00
+MST,-7 : 00,60,Mountain Standard Time
+MST7MDT,-7 : 00,60,Mountain Standard Time
+Mexico/BajaSur,-7 : 00,60,Mountain Standard Time
+Navajo,-7 : 00,60,Mountain Standard Time
+PNT,-7 : 00,60,Mountain Standard Time
+SystemV/MST7,-7 : 00,,Mountain Standard Time
+SystemV/MST7MDT,-7 : 00,60,Mountain Standard Time
+UA/Arizona,-7 : 00,,Mountain Standard Time
+US/Mountain,-7 : 00,60,Mountain Standard Time
+America/Belize,-6 : 00,,Central Standard Time
+America/Cancun,-6 : 00,60,Central Standard Time
+America/Chicago,-6 : 00,60,Central Standard Time
+America/Costa_Rica,-6 : 00,,Central Standard Time
+America/El_Salvador,-6 : 00,,Central Standard Time
+America/Guatemala,-6 : 00,,Central Standard Time
+America/Managua,-6 : 00,,Central Standard Time
+America/Menominee,-6 : 00,60,Central Standard Time
+America/Merida,-6 : 00,60,Central Standard Time
+America/Mexico_City,-6 : 00,60,Central Standard Time
+America/Monterrey,-6 : 00,60,Central Standard Time
+America/North_Dakota/Center,-6 : 00,60,Central Standard Time
+America/Rainy_River,-6 : 00,60,Central Standard Time
+America/Rankin_Inlet,-6 : 00,60,Central Standard Time
+America/Regina,-6 : 00,,Central Standard Time
+America/Swift_Current,-6 : 00,,Central Standard Time
+America/Tegucigalpa,-6 : 00,,Central Standard Time
+America/Winnipeg,-6 : 00,60,Central Standard Time
+CST,-6 : 00,60,Central Standard Time
+CST6CDT,-6 : 00,60,Central Standard Time
+Canada/Central,-6 : 00,60,Central Standard Time
+Canada/East-Saskatchewan,-6 : 00,,Central Standard Time
+Canada/Saskatchewan,-6 : 00,,Central Standard Time
+Chile/EasterIsland,-6 : 00,60,Easter Is.Time
+Etc/GMT+6,-6 : 00,,GMT-06:00
+Mexico/General,-6 : 00,60,Central Standard Time
+Pacific/Easter,-6 : 00,60,Easter Is. Time
+Pacific/Galapagos,-6 : 00,,Galapagos Time
+Pacific/Easter,-6 : 00,60,Easter Is. Time
+Pacific/Galapagos,-6 : 00,,Galapagos Time
+SystemV/CST6,-6 : 00,,Central Standard Time
+SystemV/CST6CDT,-6 : 00,60,Central Standard Time
+US/Central,-6 : 00,60,Central Standard Time
+America/Bogota,-5 : 00,,Colombia Time
+America/Cayman,-5 : 00,,Eastern Standard Time
+America/Detroit,-5 : 00,60,Eastern Standard Time
+America/Eirunepe,-5 : 00,,Acre Time
+America/Fort_Wayne,-5 : 00,,Eastern Standard Time
+America/Grand_Turk,-5 : 00,60,Eastern Standard Time
+America/Guayaquil,-5 : 00,,Ecuador Time
+America/Havana,-5 : 00,60,Central Standard Time
+America/Indiana/Indianapolis,-5 : 00,,Eastern Standard Time
+America/Indiana/Knox,-5 : 00,,Eastern Standard Time
+America/Indiana/Marengo,-5 : 00,,Eastern Standard Time
+America/Indiana/Vevay,-5 : 00,,Eastern Standard Time
+America/Indianapolis,-5 : 00,,Eastern Standard Time
+America/Iqaluit,-5 : 00,60,Eastern Standard Time
+America/Jamaica,-5 : 00,,Eastern Standard Time
+America/Kentucky/Louisville,-5 : 00,60,Eastern Standard Time
+America/Kentucky/Monticello,-5 : 00,60,Eastern Standard Time
+America/Knox_IN,-5 : 00,,Eastern Standard Time
+America/Lima,-5 : 00,,Peru Time
+America/Louisville,-5 : 00,60,Eastern Standard Time
+America/Montreal,-5 : 00,60,Eastern Standard Time
+America/Nassau,-5 : 00,60,Eastern Standard Time
+America/New_York,-5 : 00,60,Eastern Standard Time
+America/Nipigon,-5 : 00,60,Eastern Standard Time
+America/Panama,-5 : 00,,Eastern Standard Time
+America/Pangnirtung,-5 : 00,60,Eastern Standard Time
+America/Port-au-Prince,-5 : 00,,Eastern Standard Time
+America/Porto_Acre,-5 : 00,,Acre Time
+America/Rio_Branco,-5 : 00,,Acre Time
+America/Thunder_Bay,-5 : 00,60,Eastern Standard Time
+Brazil/Acre,-5 : 00,,Acre Time
+Canada/Eastern,-5 : 00,60,Eastern Standard Time
+Cuba,-5 : 00,60,Central Standard Time
+EST,-5 : 00,60,Eastern Standard Time
+EST5EDT,-5 : 00,60,Eastern Standard Time
+Etc/GMT+5,-5 : 00,,GMT-05:00
+IET,-5 : 00,,Eastern Standard Time
+Jamaica,-5 : 00,,Eastern Standard Time
+SystemV/EST5,-5 : 00,,Eastern Standard Time
+SystemV/EST5EDT,-5 : 00,60,Eastern Standard Time
+US/East-Indiana,-5 : 00,,Eastern Standard Time
+US/Eastern,-5 : 00,60,Eastern Standard Time
+US/Indiana-Starke,-5 : 00,,Eastern Standard Time
+US/Michigan,-5 : 00,60,Eastern Standard Time
+America/Anguilla,-4 : 00,,Atlantic Standard Time
+America/Antigua,-4 : 00,,Atlantic Standard Time
+America/Aruba,-4 : 00,,Atlantic Standard Time
+America/Asuncion,-4 : 00,60,Paraguay Time
+America/Barbados,-4 : 00,,Atlantic Standard Time
+America/Boa_Vista,-4 : 00,,Amazon Standard Time
+America/Caracas,-4 : 00,,Venezuela Time
+America/Cuiaba,-4 : 00,60,Amazon Standard Time
+America/Curacao,-4 : 00,,Atlantic Standard Time
+America/Dominica,-4 : 00,,Atlantic Standard Time
+America/Glace_Bay,-4 : 00,60,Atlantic Standard Time
+America/Goose_Bay,-4 : 00,60,Atlantic Standard Time
+America/Grenada,-4 : 00,,Atlantic Standard Time
+America/Guadeloupe,-4 : 00,,Atlantic Standard Time
+America/Guyana,-4 : 00,,Guyana Time
+America/Halifax,-4 : 00,60,Atlantic Standard Time
+America/La_Paz,-4 : 00,,Bolivia Time
+America/Manaus,-4 : 00,,Amazon Standard Time
+America/Martinique,-4 : 00,,Atlantic Standard Time
+America/Montserrat,-4 : 00,,Atlantic Standard Time
+America/Port_of_Spain,-4 : 00,,Atlantic Standard Time
+America/Porto_Velho,-4 : 00,,Amazon Standard Time
+America/Puerto_Rico,-4 : 00,,Atlantic Standard Time
+America/Santiago,-4 : 00,60,Chile Time
+America/Santo_Domingo,-4 : 00,,Atlantic Standard Time
+America/St_Kitts,-4 : 00,,Atlantic Standard Time
+America/St_Lucia,-4 : 00,,Atlantic Standard Time
+America/St_Thomas,-4 : 00,,Atlantic Standard Time
+America/St_Vincent,-4 : 00,,Atlantic Standard Time
+America/Thule,-4 : 00,60,Atlantic Standard Time
+America/Tortola,-4 : 00,,Atlantic Standard Time
+America/Virgin,-4 : 00,,Atlantic Standard Time
+Antarctica/Palmer,-4 : 00,60,Chile Time
+Atlantic/Bermuda,-4 : 00,60,Atlantic Standard Time
+Atlantic/Stanley,-4 : 00,60,Falkland Is. Time
+Brazil/West,-4 : 00,,Amazon Standard Time
+Canada/Atlantic,-4 : 00,60,Atlantic Standard Time
+Chile/Continental,-4 : 00,60,Chile Time
+Etc/GMT+4,-4 : 00,,GMT-04:00
+PRT,-4 : 00,,Atlantic Standard Time
+SystemV/AST4,-4 : 00,,Atlantic Standard Time
+SystemV/AST4ADT,-4 : 00,60,Atlantic Standard Time
+America/St_Johns,-3 : 30,60,Newfoundland Standard Time
+CNT,-3 : 30,60,Newfoundland Standard Time
+Canada/Newfoundland,-3 : 30,60,Newfoundland Standard Time
+AGT,-3 : 00,,Argentine Time
+America/Araguaina,-3 : 00,60,Brazil Time
+America/Belem,-3 : 00,,Brazil Time
+America/Buenos_Aires,-3 : 00,,Argentine Time
+America/Catamarca,-3 : 00,,Argentine Time
+America/Cayenne,-3 : 00,,French Guiana Time
+America/Cordoba,-3 : 00,,Argentine Time
+America/Fortaleza,-3 : 00,,Brazil Time
+America/Godthab,-3 : 00,60,Western Greenland Time
+America/Jujuy,-3 : 00,,Argentine Time
+America/Maceio,-3 : 00,,Brazil Time
+America/Mendoza,-3 : 00,,Argentine Time
+America/Miquelon,-3 : 00,60,Pierre & Miquelon Standard Time
+America/Montevideo,-3 : 00,,Uruguay Time
+America/Paramaribo,-3 : 00,,Suriname Time
+America/Recife,-3 : 00,,Brazil Time
+America/Rosario,-3 : 00,,Argentine Time
+America/Sao_Paulo,-3 : 00,60,Brazil Time
+Antarctica/Rothera,-3 : 00,,Rothera Time
+BET,-3 : 00,60,Brazil Time
+Brazil/East,-3 : 00,60,Brazil Time
+Etc/GMT+3,-3 : 00,,GMT-03:00
+America/Noronha,-2 : 00,,Fernando de Noronha Time
+Atlantic/South_Georgia,-2 : 00,,South Georgia Standard Time
+Brazil/DeNoronha,-2 : 00,,Fernando de Noronha Time
+Etc/GMT+2,-2 : 00,,GMT-02:00
+America/Scoresbysund,-1 : 00,60,Eastern Greenland Time
+Atlantic/Azores,-1 : 00,60,Azores Time
+Atlantic/Cape_Verde,-1 : 00,,Cape Verde Time
+Etc/GMT+1,-1 : 00,,GMT-01:00
+Africa/Abidjan,0 : 00,,Greenwich Mean Time
+Africa/Accra,0 : 00,,Greenwich Mean Time
+Africa/Bamako,0 : 00,,Greenwich Mean Time
+Africa/Banjul,0 : 00,,Greenwich Mean Time
+Africa/Bissau,0 : 00,,Greenwich Mean Time
+Africa/Casablanca,0 : 00,,Western European Time
+Africa/Conakry,0 : 00,,Greenwich Mean Time
+Africa/Dakar,0 : 00,,Greenwich Mean Time
+Africa/El_Aaiun,0 : 00,,Western European Time
+Africa/Freetown,0 : 00,,Greenwich Mean Time
+Africa/Lome,0 : 00,,Greenwich Mean Time
+Africa/Monrovia,0 : 00,,Greenwich Mean Time
+Africa/Nouakchott,0 : 00,,Greenwich Mean Time
+Africa/Ouagadougou,0 : 00,,Greenwich Mean Time
+Africa/Sao_Tome,0 : 00,,Greenwich Mean Time
+Africa/Timbuktu,0 : 00,,Greenwich Mean Time
+America/Danmarkshavn,0 : 00,,Greenwich Mean Time
+Atlantic/Canary,0 : 00,60,Western European Time
+Atlantic/Faeroe,0 : 00,60,Western European Time
+Atlantic/Madeira,0 : 00,60,Western European Time
+Atlantic/Reykjavik,0 : 00,,Greenwich Mean Time
+Atlantic/St_Helena,0 : 00,,Greenwich Mean Time
+Eire,0 : 00,60,Greenwich Mean Time
+Etc/GMT,0 : 00,,GMT+00:00
+Etc/GMT+0,0 : 00,,GMT+00:00
+Etc/GMT-0,0 : 00,,GMT+00:00
+Etc/GMT0,0 : 00,,GMT+00:00
+Etc/Greenwich,0 : 00,,Greenwich Mean Time
+Etc/UCT,0 : 00,,Coordinated Universal Time
+Etc/UTC,0 : 00,,Coordinated Universal Time
+Etc/Universal,0 : 00,,Coordinated Universal Time
+Etc/Zulu,0 : 00,,Coordinated Universal Time
+Europe/Belfast,0 : 00,60,Greenwich Mean Time
+Europe/Dublin,0 : 00,60,Greenwich Mean Time
+Europe/Lisbon,0 : 00,60,Western European Time
+Europe/London,0 : 00,60,Greenwich Mean Time
+GB,0 : 00,60,Greenwich Mean Time
+GB-Eire,0 : 00,60,Greenwich Mean Time
+GMT,0 : 00,,Greenwich Mean Time
+GMT0,0 : 00,,GMT+00:00
+Greenwich,0 : 00,,Greenwich Mean Time
+Iceland,0 : 00,,Greenwich Mean Time
+Portugal,0 : 00,60,Western European Time
+UCT,0 : 00,,Coordinated Universal Time
+UTC,0 : 00,,Coordinated Universal Time
+Universal,0 : 00,,Coordinated Universal Time
+WET,0 : 00,60,Western European Time
+Zulu,0 : 00,,Coordinated Universal Time
+Africa/Algiers,1 : 00,,Central European Time
+Africa/Bangui,1 : 00,,Western African Time
+Africa/Brazzaville,1 : 00,,Western African Time
+Africa/Ceuta,1 : 00,60,Central European Time
+Africa/Douala,1 : 00,,Western African Time
+Africa/Kinshasa,1 : 00,,Western African Time
+Africa/Lagos,1 : 00,,Western African Time
+Africa/Libreville,1 : 00,,Western African Time
+Africa/Luanda,1 : 00,,Western African Time
+Africa/Malabo,1 : 00,,Western African Time
+Africa/Ndjamena,1 : 00,,Western African Time
+Africa/Niamey,1 : 00,,Western African Time
+Africa/Porto-Novo,1 : 00,,Western African Time
+Africa/Tunis,1 : 00,,Central European Time
+Africa/Windhoek,1 : 00,60,Western African Time
+Arctic/Longyearbyen,1 : 00,60,Central European Time
+Atlantic/Jan_Mayen,1 : 00,60,Eastern Greenland Time
+CET,1 : 00,60,Central European Time
+ECT,1 : 00,60,Central European Time
+Etc/GMT-1,1 : 00,,GMT+01:00
+Europe/Amsterdam,1 : 00,60,Central European Time
+Europe/Andorra,1 : 00,60,Central European Time
+Europe/Belgrade,1 : 00,60,Central European Time
+Europe/Berlin,1 : 00,60,Central European Time
+Europe/Bratislava,1 : 00,60,Central European Time
+Europe/Brussels,1 : 00,60,Central European Time
+Europe/Budapest,1 : 00,60,Central European Time
+Europe/Copenhagen,1 : 00,60,Central European Time
+Europe/Gibraltar,1 : 00,60,Central European Time
+Europe/Ljubljana,1 : 00,60,Central European Time
+Europe/Luxembourg,1 : 00,60,Central European Time
+Europe/Madrid,1 : 00,60,Central European Time
+Europe/Malta,1 : 00,60,Central European Time
+Europe/Monaco,1 : 00,60,Central European Time
+Europe/Oslo,1 : 00,60,Central European Time
+Europe/Paris,1 : 00,60,Central European Time
+Europe/Prague,1 : 00,60,Central European Time
+Europe/Rome,1 : 00,60,Central European Time
+Europe/San_Marino,1 : 00,60,Central European Time
+Europe/Sarajevo,1 : 00,60,Central European Time
+Europe/Skopje,1 : 00,60,Central European Time
+Europe/Stockholm,1 : 00,60,Central European Time
+Europe/Tirane,1 : 00,60,Central European Time
+Europe/Vaduz,1 : 00,60,Central European Time
+Europe/Vatican,1 : 00,60,Central European Time
+Europe/Vienna,1 : 00,60,Central European Time
+Europe/Warsaw,1 : 00,60,Central European Time
+Europe/Zagreb,1 : 00,60,Central European Time
+Europe/Zurich,1 : 00,60,Central European Time
+MET,1 : 00,60,Middle Europe Time
+Poland,1 : 00,60,Central European Time
+ART,2 : 00,60,Eastern European Time
+Africa/Blantyre,2 : 00,,Central African Time
+Africa/Bujumbura,2 : 00,,Central African Time
+Africa/Cairo,2 : 00,60,Eastern European Time
+Africa/Gaborone,2 : 00,,Central African Time
+Africa/Harare,2 : 00,,Central African Time
+Africa/Johannesburg,2 : 00,,South Africa Standard Time
+Africa/Kigali,2 : 00,,Central African Time
+Africa/Lubumbashi,2 : 00,,Central African Time
+Africa/Lusaka,2 : 00,,Central African Time
+Africa/Maputo,2 : 00,,Central African Time
+Africa/Maseru,2 : 00,,South Africa Standard Time
+Africa/Mbabane,2 : 00,,South Africa Standard Time
+Africa/Tripoli,2 : 00,,Eastern European Time
+Asia/Amman,2 : 00,60,Eastern European Time
+Asia/Beirut,2 : 00,60,Eastern European Time
+Asia/Damascus,2 : 00,60,Eastern European Time
+Asia/Gaza,2 : 00,60,Eastern European Time
+Asia/Istanbul,2 : 00,60,Eastern European Time
+Asia/Jerusalem,2 : 00,60,Israel Standard Time
+Asia/Nicosia,2 : 00,60,Eastern European Time
+Asia/Tel_Aviv,2 : 00,60,Israel Standard Time
+CAT,2 : 00,,Central African Time
+EET,2 : 00,60,Eastern European Time
+Egypt,2 : 00,60,Eastern European Time
+Etc/GMT-2,2 : 00,,GMT+02:00
+Europe/Athens,2 : 00,60,Eastern European Time
+Europe/Bucharest,2 : 00,60,Eastern European Time
+Europe/Chisinau,2 : 00,60,Eastern European Time
+Europe/Helsinki,2 : 00,60,Eastern European Time
+Europe/Istanbul,2 : 00,60,Eastern European Time
+Europe/Kaliningrad,2 : 00,60,Eastern European Time
+Europe/Kiev,2 : 00,60,Eastern European Time
+Europe/Minsk,2 : 00,60,Eastern European Time
+Europe/Nicosia,2 : 00,60,Eastern European Time
+Europe/Riga,2 : 00,60,Eastern European Time
+Europe/Simferopol,2 : 00,60,Eastern European Time
+Europe/Sofia,2 : 00,60,Eastern European Time
+Europe/Tallinn,2 : 00,60,Eastern European Time
+Europe/Tiraspol,2 : 00,60,Eastern European Time
+Europe/Uzhgorod,2 : 00,60,Eastern European Time
+Europe/Vilnius,2 : 00,60,Eastern European Time
+Europe/Zaporozhye,2 : 00,60,Eastern European Time
+Israel,2 : 00,60,Israel Standard Time
+Libya,2 : 00,,Eastern European Time
+Turkey,2 : 00,60,Eastern European Time
+Africa/Addis_Ababa,3 : 00,,Eastern African Time
+Africa/Asmera,3 : 00,,Eastern African Time
+Africa/Dar_es_Salaam,3 : 00,,Eastern African Time
+Africa/Djibouti,3 : 00,,Eastern African Time
+Africa/Kampala,3 : 00,,Eastern African Time
+Africa/Khartoum,3 : 00,,Eastern African Time
+Africa/Mogadishu,3 : 00,,Eastern African Time
+Africa/Nairobi,3 : 00,,Eastern African Time
+Antarctica/Syowa,3 : 00,,Syowa Time
+Asia/Aden,3 : 00,,Arabia Standard Time
+Asia/Baghdad,3 : 00,60,Arabia Standard Time
+Asia/Bahrain,3 : 00,,Arabia Standard Time
+Asia/Kuwait,3 : 00,,Arabia Standard Time
+Asia/Qatar,3 : 00,,Arabia Standard Time
+Asia/Riyadh,3 : 00,,Arabia Standard Time
+EAT,3 : 00,,Eastern African Time
+Etc/GMT-3,3 : 00,,GMT+03:00
+Europe/Moscow,3 : 00,60,Moscow Standard Time
+Indian/Antananarivo,3 : 00,,Eastern African Time
+Indian/Comoro,3 : 00,,Eastern African Time
+Indian/Mayotte,3 : 00,,Eastern African Time
+W-SU,3 : 00,60,Moscow Standard Time
+Asia/Riyadh87,3 : 07,,GMT+03:07
+Asia/Riyadh88,3 : 07,,GMT+03:07
+Asia/Riyadh89,3 : 07,,GMT+03:07
+Mideast/Riyadh87,3 : 07,,GMT+03:07
+Mideast/Riyadh88,3 : 07,,GMT+03:07
+Mideast/Riyadh89,3 : 07,,GMT+03:07
+Asia/Tehran,3 : 30,60,Iran Standard Time
+Iran,3 : 30,60,Iran Standard Time
+Asia/Aqtau,4 : 00,60,Aqtau Time
+Asia/Baku,4 : 00,60,Azerbaijan Time
+Asia/Dubai,4 : 00,,Gulf Standard Time
+Asia/Muscat,4 : 00,,Gulf Standard Time
+Asia/Oral,4 : 00,60,Oral Time
+Asia/Tbilisi,4 : 00,60,Georgia Time
+Asia/Yerevan,4 : 00,60,Armenia Time
+Etc/GMT-4,4 : 00,,GMT+04:00
+Europe/Samara,4 : 00,60,Samara Time
+Indian/Mahe,4 : 00,,Seychelles Time
+Indian/Mauritius,4 : 00,,Mauritius Time
+Indian/Reunion,4 : 00,,Reunion Time
+NET,4 : 00,60,Armenia Time
+Asia/Kabul,4 : 30,,Afghanistan Time
+Asia/Aqtobe,5 : 00,60,Aqtobe Time
+Asia/Ashgabat,5 : 00,,Turkmenistan Time
+Asia/Ashkhabad,5 : 00,,Turkmenistan Time
+Asia/Bishkek,5 : 00,60,Kirgizstan Time
+Asia/Dushanbe,5 : 00,,Tajikistan Time
+Asia/Karachi,5 : 00,,Pakistan Time
+Asia/Samarkand,5 : 00,,Turkmenistan Time
+Asia/Tashkent,5 : 00,,Uzbekistan Time
+Asia/Yekaterinburg,5 : 00,60,Yekaterinburg Time
+Etc/GMT-5,5 : 00,,GMT+05:00
+Indian/Kerguelen,5 : 00,,French Southern & Antarctic Lands Time
+Indian/Maldives,5 : 00,,Maldives Time
+PLT,5 : 00,,Pakistan Time
+Asia/Calcutta,5 : 30,,India Standard Time
+IST,5 : 30,,India Standard Time
+Asia/Katmandu,5 : 45,,Nepal Time
+Antarctica/Mawson,6 : 00,,Mawson Time
+Antarctica/Vostok,6 : 00,,Vostok Time
+Asia/Almaty,6 : 00,60,Alma-Ata Time
+Asia/Colombo,6 : 00,,Sri Lanka Time
+Asia/Dacca,6 : 00,,Bangladesh Time
+Asia/Dhaka,6 : 00,,Bangladesh Time
+Asia/Novosibirsk,6 : 00,60,Novosibirsk Time
+Asia/Omsk,6 : 00,60,Omsk Time
+Asia/Qyzylorda,6 : 00,60,Qyzylorda Time
+Asia/Thimbu,6 : 00,,Bhutan Time
+Asia/Thimphu,6 : 00,,Bhutan Time
+BST,6 : 00,,Bangladesh Time
+Etc/GMT-6,6 : 00,,GMT+06:00
+Indian/Chagos,6 : 00,,Indian Ocean Territory Time
+Asia/Rangoon,6 : 30,,Myanmar Time
+Indian/Cocos,6 : 30,,Cocos Islands Time
+Antarctica/Davis,7 : 00,,Davis Time
+Asia/Bangkok,7 : 00,,Indochina Time
+Asia/Hovd,7 : 00,,Hovd Time
+Asia/Jakarta,7 : 00,,West Indonesia Time
+Asia/Krasnoyarsk,7 : 00,60,Krasnoyarsk Time
+Asia/Phnom_Penh,7 : 00,,Indochina Time
+Asia/Pontianak,7 : 00,,West Indonesia Time
+Asia/Saigon,7 : 00,,Indochina Time
+Asia/Vientiane,7 : 00,,Indochina Time
+Etc/GMT-7,7 : 00,,GMT+07:00
+Indian/Christmas,7 : 00,,Christmas Island Time
+VST,7 : 00,,Indochina Time
+Antarctica/Casey,8 : 00,,Western Standard Time (Australia)
+Asia/Brunei,8 : 00,,Brunei Time
+Asia/Chongqing,8 : 00,,China Standard Time
+Asia/Chungking,8 : 00,,China Standard Time
+Asia/Harbin,8 : 00,,China Standard Time
+Asia/Hong_Kong,8 : 00,,Hong Kong Time
+Asia/Irkutsk,8 : 00,60,Irkutsk Time
+Asia/Kashgar,8 : 00,,China Standard Time
+Asia/Kuala_Lumpur,8 : 00,,Malaysia Time
+Asia/Kuching,8 : 00,,Malaysia Time
+Asia/Macao,8 : 00,,China Standard Time
+Asia/Macau,8 : 00,,China Standard Time
+Asia/Makassar,8 : 00,,Central Indonesia Time
+Asia/Manila,8 : 00,,Philippines Time
+Asia/Shanghai,8 : 00,,China Standard Time
+Asia/Singapore,8 : 00,,Singapore Time
+Asia/Taipei,8 : 00,,China Standard Time
+Asia/Ujung_Pandang,8 : 00,,Central Indonesia Time
+Asia/Ulaanbaatar,8 : 00,,Ulaanbaatar Time
+Asia/Ulan_Bator,8 : 00,,Ulaanbaatar Time
+Asia/Urumqi,8 : 00,,China Standard Time
+Australia/Perth,8 : 00,,Western Standard Time (Australia)
+Australia/West,8 : 00,,Western Standard Time (Australia)
+CTT,8 : 00,,China Standard Time
+Etc/GMT-8,8 : 00,,GMT+08:00
+Hongkong,8 : 00,,Hong Kong Time
+PRC,8 : 00,,China Standard Time
+Singapore,8 : 00,,Singapore Time
+Asia/Choibalsan,9 : 00,,Choibalsan Time
+Asia/Dili,9 : 00,,East Timor Time
+Asia/Jayapura,9 : 00,,East Indonesia Time
+Asia/Pyongyang,9 : 00,,Korea Standard Time
+Asia/Seoul,9 : 00,,Korea Standard Time
+Asia/Tokyo,9 : 00,,Japan Standard Time
+Asia/Yakutsk,9 : 00,60,Yakutsk Time
+Etc/GMT-9,9 : 00,,GMT+09:00
+JST,9 : 00,,Japan Standard Time
+Japan,9 : 00,,Japan Standard Time
+Pacific/Palau,9 : 00,,Palau Time
+ROK,9 : 00,,Korea Standard Time
+ACT,9 : 30,,Central Standard Time (Northern Territory)
+Australia/Adelaide,9 : 30,60,Central Standard Time (South Australia)
+Australia/Broken_Hill,9 : 30,60,Central Standard Time (South Australia/New South Wales)
+Australia/Darwin,9 : 30,,Central Standard Time (Northern Territory)
+Australia/North,9 : 30,,Central Standard Time (Northern Territory)
+Australia/South,9 : 30,60,Central Standard Time (South Australia)
+Australia/Yancowinna,9 : 30,60,Central Standard Time (South Australia/New South Wales)
+AET,10 : 00,60,Eastern Standard Time (New South Wales)
+Antarctica/DumontDUrville,10 : 00,,Dumont-d'Urville Time
+Asia/Sakhalin,10 : 00,60,Sakhalin Time
+Asia/Vladivostok,10 : 00,60,Vladivostok Time
+Australia/ACT,10 : 00,60,Eastern Standard Time (New South Wales)
+Australia/Brisbane,10 : 00,,Eastern Standard Time (Queensland)
+Australia/Canberra,10 : 00,60,Eastern Standard Time (New South Wales)
+Australia/Hobart,10 : 00,60,Eastern Standard Time (Tasmania)
+Australia/Lindeman,10 : 00,,Eastern Standard Time (Queensland)
+Australia/Melbourne,10 : 00,60,Eastern Standard Time (Victoria)
+Australia/NSW,10 : 00,60,Eastern Standard Time (New South Wales)
+Australia/Queensland,10 : 00,,Eastern Standard Time (Queensland)
+Australia/Sydney,10 : 00,60,Eastern Standard Time (New South Wales)
+Australia/Tasmania,10 : 00,60,Eastern Standard Time (Tasmania)
+Australia/Victoria,10 : 00,60,Eastern Standard Time (Victoria)
+Etc/GMT-10,10 : 00,,GMT+10:00
+Pacific/Guam,10 : 00,,Chamorro Standard Time
+Pacific/Port_Moresby,10 : 00,,Papua New Guinea Time
+Pacific/Saipan,10 : 00,,Chamorro Standard Time
+Pacific/Truk,10 : 00,,Truk Time
+Pacific/Yap,10 : 00,,Yap Time
+Australia/LHI,10 : 30,30,Load Howe Standard Time
+Australia/Lord_Howe,10 : 30,30,Load Howe Standard Time
+Asia/Magadan,11 : 00,60,Magadan Time
+Etc/GMT-11,11 : 00,,GMT+11:00
+Pacific/Efate,11 : 00,,Vanuatu Time
+Pacific/Guadalcanal,11 : 00,,Solomon Is. Time
+Pacific/Kosrae,11 : 00,,Kosrae Time
+Pacific/Noumea,11 : 00,,New Caledonia Time
+Pacific/Ponape,11 : 00,,Ponape Time
+SST,11 : 00,,Solomon Is. Time
+Pacific/Norfolk,11 : 30,,Norfolk Time
+Antarctica/McMurdo,12 : 00,60,New Zealand Standard Time
+Antarctica/South_Pole,12 : 00,60,New Zealand Standard Time
+Asia/Anadyr,12 : 00,60,Anadyr Time
+Asia/Kamchatka,12 : 00,60,Petropavlovsk-Kamchatski Time
+Etc/GMT-12,12 : 00,,GMT+12:00
+Kwajalein,12 : 00,,Marshall Islands Time
+NST,12 : 00,60,New Zealand Standard Time
+NZ,12 : 00,60,New Zealand Standard Time
+Pacific/Auckland,12 : 00,60,New Zealand Standard Time
+Pacific/Fiji,12 : 00,,Fiji Time
+Pacific/Funafuti,12 : 00,,Tuvalu Time
+Pacific/Kwajalein,12 : 00,,Marshall Islands Time
+Pacific/Majuro,12 : 00,,Marshall Islands Time
+Pacific/Nauru,12 : 00,,Nauru Time
+Pacific/Tarawa,12 : 00,,Gilbert Is. Time
+Pacific/Wake,12 : 00,,Wake Time
+Pacific/Wallis,12 : 00,,Wallis & Futuna Time
+NZ-CHAT,12 : 45,60,Chatham Standard Time
+Pacific/Chatham,12 : 45,60,Chatham Standard Time
+Etc/GMT-13,13 : 00,,GMT+13:00
+Pacific/Enderbury,13 : 00,,Phoenix Is. Time
+Pacific/Tongatapu,13 : 00,,Tonga Time
+Etc/GMT-14,14 : 00,,GMT+14:00
+Pacific/Kiritimati,14 : 00,,Line Is. Time

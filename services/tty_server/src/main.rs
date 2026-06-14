@@ -34,7 +34,7 @@ static BUMP: BumpAllocator = BumpAllocator;
 use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup, sysinfo, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
+    nameserver_lookup, sysinfo, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg, TzMsg,
 };
 use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
 use sunlight_tty::TerminalGrid;
@@ -1009,10 +1009,8 @@ fn fmt_u32(buf: &mut [u8], val: u32) -> usize {
 /// Build the title-bar string shown in the header next to the "TTY" label:
 /// `CPU 15% RAM 42%  <clock> | eth0`.
 ///
-/// The CPU/RAM figures come from a single `sysinfo` syscall, cached and
-/// refreshed at most once per minute. The render path runs on every keystroke,
-/// so this keeps it allocation- and (almost always) syscall-free. Returns a
-/// fixed buffer plus its used length.
+/// Tries "tz" TZ_GET_LOCAL_TIME for local time + abbr. Falls back to UTC
+/// from kernel + "UTC" label if tz service not yet available.
 ///
 /// SAFETY: touches function-local `static mut` cache; tty_server is
 /// single-threaded so there is no concurrent access.
@@ -1042,14 +1040,57 @@ unsafe fn titlebar(ts: u64) -> ([u8; 64], usize) {
     n += fmt_u64(&mut buf[n..], ram_percent);
     n += copy_into(&mut buf[n..], b"%  ");
 
-    // Clock + net indicator (same format the header used before).
-    n += sunlight_tui::fmt::fmt_clock(&mut buf[n..], ts);
+    // Local time via tz service if available (sub-phase 9 refactor)
+    let (clock_len, used_tz) = try_local_clock(&mut buf[n..], ts);
+    n += clock_len;
+    if !used_tz {
+        // fallback already wrote UTC style inside try_ or here
+    }
     n += copy_into(&mut buf[n..], b" | eth0");
 
     CACHE_BUF = buf;
     CACHE_LEN = n;
     CACHE_MIN = now_min;
     (buf, n)
+}
+
+/// Attempt to get local time+abbr from "tz" service. Returns (bytes_written, used_tz).
+/// On failure falls back to writing a UTC clock string (using existing fmt).
+unsafe fn try_local_clock(dst: &mut [u8], _ts: u64) -> (usize, bool) {
+    if let Some(tz_cap) = nameserver_lookup("tz") {
+        let req = IpcMsg::with_label(TzMsg::GET_LOCAL_TIME);
+        let reply = ipc_call(tz_cap, req);
+        if reply.label == TzMsg::REPLY && reply.word_count >= 1 {
+            // unpack word(0)
+            let w0 = reply.words[0];
+            let hour = ((w0 >> 24) & 0xff) as u8;
+            let minute = ((w0 >> 16) & 0xff) as u8;
+            // abbr from word(3) low 8 bytes
+            let abw = if reply.word_count > 3 { reply.words[3] } else { 0 };
+            let mut abbr = [0u8; 5]; // short for title e.g. IRDT or UTC
+            for i in 0..4 {
+                let b = ((abw >> (i*8)) & 0xff) as u8;
+                if b == 0 { break; }
+                abbr[i] = b;
+            }
+            // write HH:MM ABBR
+            let mut p = 0usize;
+            dst[p] = b'0' + hour/10; p+=1;
+            dst[p] = b'0' + hour%10; p+=1;
+            dst[p] = b':'; p+=1;
+            dst[p] = b'0' + minute/10; p+=1;
+            dst[p] = b'0' + minute%10; p+=1;
+            dst[p] = b' '; p+=1;
+            for i in 0..4 {
+                if abbr[i] == 0 { break; }
+                dst[p] = abbr[i]; p+=1;
+            }
+            return (p, true);
+        }
+    }
+    // fallback UTC using tui fmt (no abbr change)
+    let len = sunlight_tui::fmt::fmt_clock(dst, sunlight_ipc::get_time_utc());
+    (len, false)
 }
 
 /// Copy `src` into the front of `dst`, returning the number of bytes written

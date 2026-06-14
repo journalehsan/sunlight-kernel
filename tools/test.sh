@@ -200,6 +200,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --rel
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release >>"$BUILD_LOG" 2>&1

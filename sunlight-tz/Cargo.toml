@@ -1,0 +1,21 @@
+[package]
+name = "sunlight-tz"
+version = "0.1.0"
+edition = "2021"
+
+# No std — this crate must work in both no_std services and std test harnesses
+[features]
+default = []
+std = []                 # enable for unit tests and sunlightctl binary
+tzctl = []               # opt-in build of tzctl client bin (prevents host-test link of no_main binary)
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
+
+[dev-dependencies]
+# std is available for tests via cargo test --target x86_64-unknown-linux-gnu
+
+[[bin]]
+name = "tzctl"
+path = "src/bin/tzctl.rs"
+required-features = ["tzctl"]

@@ -39,7 +39,7 @@ pub fn parse_dst_flag(s: &str) -> bool {
 
 /// Safe i32 parsing without using parse()
 /// Handles signs and basic validation
-fn parse_i32(s: &str) -> Result<i32, &'static str> {
+pub(crate) fn parse_i32(s: &str) -> Result<i32, &'static str> {
     let mut chars = s.chars();
     let mut is_negative = false;
     let mut result: i32 = 0;

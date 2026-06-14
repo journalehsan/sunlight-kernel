@@ -135,11 +135,24 @@ pub mod TimerMsg {
 #[allow(non_snake_case)]
 pub mod TimeMsg {
     pub const GET_TIME: u64 = 1;           // Query current UTC time
-    pub const GET_STATE: u64 = 2;          // Get full TimeState
-    pub const SET_TIMEZONE: u64 = 3;       // Reload timezone config
+    pub const GET_STATE: u64 = 2;          // Get full TimeState (back-compat: tz fields are 0)
+    pub const SET_TIMEZONE: u64 = 3;       // No-op (timezone moved to "tz")
     pub const SYNC_NTP: u64 = 4;           // Trigger NTP sync
+    pub const GET_UTC: u64 = 5;            // Preferred alias for GET_TIME (pure UTC)
     pub const REPLY: u64 = 100;
     pub const ERROR: u64 = 101;
+}
+
+/// Timezone service opcodes (registered as "tz")
+#[allow(non_snake_case)]
+pub mod TzMsg {
+    pub const GET_LOCAL_TIME: u64 = 0x7001;
+    pub const GET_ZONE:       u64 = 0x7002;
+    pub const SET_ZONE:       u64 = 0x7003;  // arg: zone id in data[0..64]
+    pub const LIST_ZONES:     u64 = 0x7004;  // arg: page in word(0), 8 per page (but one zone per reply for packing)
+    pub const NOTIFY_CHANGED: u64 = 0x7005;  // sent TO timed after SET_ZONE (best effort)
+    pub const REPLY:          u64 = 0x70FF;
+    pub const ERROR:          u64 = 0x70FE;
 }
 
 #[allow(non_snake_case)]

@@ -1,0 +1,8 @@
+[package]
+name = "timezone_service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-tz  = { path = "../../sunlight-tz" }

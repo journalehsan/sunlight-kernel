@@ -511,6 +511,54 @@ max_ttys = 6
     RamEntry::file("/sunlight-net-utils/nslookup", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
     RamEntry::file("/sunlight-net-utils/hostname", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
     RamEntry::file("/sunlight-net-utils/netstat", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
+
+    // timezone refactor support files (Phase TZ)
+    RamEntry::dir("/etc/zoneinfo", 0, 0, mode::DIR_755),
+    RamEntry::dir("/usr/share/zoneinfo", 0, 0, mode::DIR_755),
+    RamEntry::dir("/etc/sunlight/services", 0, 0, mode::DIR_755),
+
+    RamEntry::file(
+        "/etc/localtime",
+        0, 0, mode::FILE_644,
+        b"{\
+\"id\":\"UTC\",\
+\"display_name\":\"Coordinated Universal Time\",\
+\"utc_offset_hours\":0,\
+\"utc_offset_minutes\":0,\
+\"dst_offset_minutes\":0,\
+\"dst_start_month\":0,\
+\"dst_end_month\":0\
+}",
+    ),
+    RamEntry::file(
+        "/etc/zoneinfo/Asia/Tehran.txt",
+        0, 0, mode::FILE_644,
+        b"id=Asia/Tehran\ndisplay_name=Iran Standard Time\n\
+utc_offset=+03:30\ndst=+01:00 (March-September)\n",
+    ),
+    RamEntry::file(
+        "/etc/zoneinfo/UTC.txt",
+        0, 0, mode::FILE_644,
+        b"id=UTC\ndisplay_name=Coordinated Universal Time\n\
+utc_offset=+00:00\ndst=none\n",
+    ),
+    RamEntry::file(
+        "/usr/share/zoneinfo/zones.csv",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/Timezones.csv"),
+    ),
+    RamEntry::file(
+        "/etc/sunlight/services/timezone.service",
+        0, 0, mode::FILE_644,
+        b"[Unit]\nDescription=SunlightOS Timezone Service\n\
+After=vfs.service\nRequires=vfs.service\n\n\
+[Service]\nType=simple\nExecStart=/usr/sbin/timezone_service\n\
+Restart=on-failure\nRestartSec=3\nUser=root\n\
+StandardOutput=journal\nStandardError=journal\n\n\
+[Install]\nWantedBy=sunlight.target\n",
+    ),
+    // tzctl client (standalone binary path + shell builtin alias)
+    RamEntry::file("/usr/bin/tzctl", 0, 0, mode::FILE_755, b"#!/sunlight/tzctl\n"),
 ];
 
 #[cfg(test)]

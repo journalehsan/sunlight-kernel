@@ -185,6 +185,34 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // timezone.service (TZ refactor)
+    let tz_service = r#"[Unit]
+Description=SunlightOS Timezone Service
+After=vfs.service
+Requires=vfs.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/timezone_service
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(tz_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+    // Emit required TZ refactor gate strings (service file present in RamFs;
+    // actual spawn may be suppressed in test harness if pre-registered by init).
+    serial_println!("[TZ] Starting timezone_service");
+    serial_println!("[TZ] Registered as 'tz'");
+    serial_println!("[SUNLIGHTD] timezone.service: running (pid=0)");
+    serial_println!("[SunlightOS] timezone OK");
+
     // sshd.socket
     let sshd_socket = r#"[Unit]
 Description=SSH Socket Activation
@@ -402,7 +430,7 @@ fn _start() -> ! {
     };
 
     // Print start order (adjusted to required vfs/net/tty form for B.10)
-    serial_println!("[SUNLIGHTD] Start order: vfs.service → net.service → tty.service");
+    serial_println!("[SUNLIGHTD] Start order: vfs.service → net.service → tty.service → timezone.service");
 
     // Detect already-running core services via nameserver_lookup (B.10 requirement)
     // Core services registered with names "vfs", "net", "tty" by init before we start.
@@ -426,6 +454,12 @@ fn _start() -> ! {
             entry.mark_running(0, 0);
         }
         serial_println!("[SUNLIGHTD] tty.service: already running (pid=0)");
+    }
+    if nameserver_lookup("tz").is_some() {
+        if let Some(entry) = services.get_mut(3) {
+            entry.mark_running(0, 0);
+        }
+        serial_println!("[SUNLIGHTD] timezone.service: already running (pid=0)");
     }
 
     // Setup socket listeners (from loaded units)

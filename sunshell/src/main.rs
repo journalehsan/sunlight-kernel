@@ -131,7 +131,7 @@ mod sunlight {
 
     use sunlight_ipc::{
         debug_log, endpoint_create, get_init_cap, ipc_call, ipc_reply_and_wait, nameserver_lookup,
-        nameserver_register, sysinfo, CapabilityToken, InitMsg, IpcMsg, SunlightSyscall, VfsMsg,
+        nameserver_register, sysinfo, CapabilityToken, InitMsg, IpcMsg, SunlightSyscall, VfsMsg, TzMsg,
     };
 
     /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
@@ -431,7 +431,8 @@ mod sunlight {
                 "sysfetch" => self.cmd_sysfetch(),
                 "hostnamectl" => self.cmd_hostnamectl(),
                 "uptime" => self.cmd_uptime(),
-                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, help, shutdown, reboot\n",
+                "tzctl" => self.cmd_tzctl(&args),
+                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, tzctl, help, shutdown, reboot\n",
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
                 // Not a builtin: resolve through $PATH and run it (Step 3)
@@ -1178,6 +1179,95 @@ mod sunlight {
             }
 
             b""
+        }
+
+        fn cmd_tzctl(&mut self, args: &[&str]) -> &[u8] {
+            // tzctl list | get | set <id> | info <id>
+            // Uses "tz" service directly.
+            unsafe {
+                static mut OUT: [u8; 512] = [0u8; 512];
+                let out = &mut OUT;
+                let mut pos = 0usize;
+
+                fn copy_bytes(dst: &mut [u8], pos: &mut usize, src: &[u8]) -> usize {
+                    let n = src.len().min(dst.len().saturating_sub(*pos));
+                    dst[*pos..*pos + n].copy_from_slice(&src[..n]);
+                    *pos += n; n
+                }
+
+                let Some(tz_cap) = nameserver_lookup("tz") else {
+                    let msg = b"tzctl: tz service not available\n";
+                    out[..msg.len()].copy_from_slice(msg);
+                    return &out[..msg.len()];
+                };
+
+                if args.is_empty() || args[0] == "get" {
+                    // GET_ZONE + local time for display
+                    let r = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_ZONE));
+                    if r.label == TzMsg::REPLY {
+                        let _ = copy_bytes(out, &mut pos, b"Active: ");
+                        // simplistic id from first word bytes
+                        for wi in 2..5 {
+                            for b in 0..8 {
+                                let ch = ((r.words[wi] >> (b*8)) & 0xff) as u8;
+                                if ch == 0 || pos >= 500 { break; }
+                                out[pos] = ch; pos += 1;
+                            }
+                        }
+                    }
+                    let r2 = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
+                    if r2.label == TzMsg::REPLY {
+                        let w0 = r2.words[0];
+                        let h = ((w0>>24)&0xff) as u8;
+                        let m = ((w0>>16)&0xff) as u8;
+                        let _ = copy_bytes(out, &mut pos, b"\nLocal: ");
+                        out[pos] = b'0'+h/10; pos+=1; out[pos]=b'0'+h%10; pos+=1;
+                        out[pos]=b':'; pos+=1;
+                        out[pos]=b'0'+m/10; pos+=1; out[pos]=b'0'+m%10; pos+=1;
+                    }
+                    out[pos] = b'\n'; pos+=1;
+                    return &out[..pos];
+                } else if args[0] == "list" {
+                    let _ = copy_bytes(out, &mut pos, b"ID\tDISPLAY\tOFFSET\n");
+                    for i in 0..32u64 {
+                        let req = IpcMsg::with_label(TzMsg::LIST_ZONES).word(0, i);
+                        let r = ipc_call(tz_cap, req);
+                        if r.label != TzMsg::REPLY { break; }
+                        if r.words[0] == 0xFFFF_FFFFu64 { break; }
+                        // id at words 2..
+                        for wi in 2..4 {
+                            for b in 0..8 {
+                                let ch = ((r.words[wi] >> (b*8))&0xff) as u8;
+                                if ch==0 || pos>480 {break;}
+                                out[pos]=ch; pos+=1;
+                            }
+                        }
+                        out[pos]=b'\n'; pos+=1;
+                    }
+                    return &out[..pos];
+                } else if args[0] == "set" && args.len() > 1 {
+                    let id = args[1].as_bytes();
+                    let mut req = IpcMsg::with_label(TzMsg::SET_ZONE);
+                    // pack id into words[0..]
+                    let mut wi=0; let mut bi=0; let mut w=0u64;
+                    for &bb in id.iter().take(32) {
+                        w |= (bb as u64) << (bi*8); bi+=1;
+                        if bi==8 { req = req.word(wi, w); w=0; bi=0; wi+=1; }
+                    }
+                    if bi>0 { req = req.word(wi, w); }
+                    let r = ipc_call(tz_cap, req);
+                    if r.label == TzMsg::REPLY && r.words[0]==0 {
+                        let _ = copy_bytes(out, &mut pos, b"Timezone changed to ");
+                        let _ = copy_bytes(out, &mut pos, args[1].as_bytes());
+                        out[pos]=b'\n'; pos+=1;
+                    } else {
+                        let _ = copy_bytes(out, &mut pos, b"tzctl: set failed\n");
+                    }
+                    return &out[..pos];
+                }
+                let _ = copy_bytes(out, &mut pos, b"tzctl: list | get | set <id>\n");
+                &out[..pos]
+            }
         }
 
         fn cmd_uptime(&self) -> &[u8] {

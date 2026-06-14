@@ -290,6 +290,13 @@ name = "sunlight-tui"
 version = "0.1.0"
 
 [[package]]
+name = "sunlight-tz"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ipc",
+]
+
+[[package]]
 name = "sunlight-utils"
 version = "0.1.0"
 dependencies = [
@@ -332,6 +339,14 @@ version = "0.1.0"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
+]
+
+[[package]]
+name = "timezone_service"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ipc",
+ "sunlight-tz",
 ]
 
 [[package]]

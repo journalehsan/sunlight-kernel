@@ -30,8 +30,6 @@ use sunlight_ipc::{
     IpcMsg, TimeMsg,
 };
 
-mod config;
-mod localtime;
 mod ntp;
 mod state;
 
@@ -46,23 +44,12 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 pub extern "C" fn _start() -> ! {
     debug_log("[timed] Time daemon started");
 
-    // Initialize TimeState with default values
+    // Initialize TimeState with default values (pure UTC mode)
     let mut time_state = TimeState::new();
 
-    // Attempt to load timezone configuration from /etc/localtime
-    match localtime::resolve_and_load_timezone() {
-        Ok((offset_secs, dst_active, tz_name)) => {
-            time_state.local_offset_secs = offset_secs;
-            time_state.dst_active = dst_active;
-            time_state.set_timezone_name(&tz_name);
-            debug_log("[timed] Timezone loaded successfully");
-        }
-        Err(_) => {
-            debug_log("[timed] Warning: Could not load timezone, using UTC");
-            time_state.local_offset_secs = 0;
-            time_state.dst_active = false;
-        }
-    }
+    // Timezone handling has moved to timezone_service ("tz").
+    // timed is now a pure UTC time source.
+    debug_log("[timed] UTC mode — timezone handled by timezone_service");
 
     // Get initial UTC time from kernel
     time_state.utc_epoch = get_time_utc();
@@ -86,29 +73,26 @@ pub extern "C" fn _start() -> ! {
                 IpcMsg::with_label(TimeMsg::REPLY).word(0, time_state.utc_epoch)
             }
             TimeMsg::GET_STATE => {
-                // Return time state: utc(0), offset(1), dst(2)
+                // Back-compat: timezone logic moved to timezone_service ("tz").
+                // Always report offset=0, dst=false.
                 IpcMsg::with_label(TimeMsg::REPLY)
                     .word(0, time_state.utc_epoch)
-                    .word(1, time_state.local_offset_secs as u64)
-                    .word(2, time_state.dst_active as u64)
+                    .word(1, 0u64)   // offset_secs — always 0 (UTC)
+                    .word(2, 0u64)   // dst_active  — always false
             }
             TimeMsg::SET_TIMEZONE => {
-                // Reload timezone configuration
-                match localtime::resolve_and_load_timezone() {
-                    Ok((offset_secs, dst_active, tz_name)) => {
-                        time_state.local_offset_secs = offset_secs;
-                        time_state.dst_active = dst_active;
-                        time_state.set_timezone_name(&tz_name);
-                        debug_log("[timed] Timezone reloaded");
-                        IpcMsg::with_label(TimeMsg::REPLY)
-                    }
-                    Err(_) => IpcMsg::with_label(TimeMsg::ERROR),
-                }
+                // No-op: timezone is managed by timezone_service, not timed.
+                debug_log("[timed] SET_TIMEZONE ignored — use timezone_service");
+                IpcMsg::with_label(TimeMsg::REPLY)
             }
             TimeMsg::SYNC_NTP => {
                 // Placeholder for NTP sync (Phase 2.2)
                 debug_log("[timed] NTP sync requested (Phase 2.2)");
                 IpcMsg::with_label(TimeMsg::REPLY)
+            }
+            TimeMsg::GET_UTC => {
+                // Alias for GET_TIME (clarity for new callers)
+                IpcMsg::with_label(TimeMsg::REPLY).word(0, time_state.utc_epoch)
             }
             _ => IpcMsg::with_label(TimeMsg::ERROR),
         };

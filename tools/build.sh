@@ -17,6 +17,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --rel
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release
