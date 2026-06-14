@@ -68,6 +68,7 @@ def load_state(project_root: str) -> dict:
         "last_known_lines": BASE_LINES,
         "accumulated_patch": BASE_VERSION_PATCH,
         "last_version": f"{BASE_VERSION_MAJOR}.{BASE_VERSION_MINOR}.{BASE_VERSION_PATCH}",
+        "last_total_lines": BASE_LINES,
         "history": [],
     }
 
@@ -98,15 +99,19 @@ def calculate_version(project_root: str) -> tuple[str, dict, dict]:
     current_lines = count_rs_lines(project_root)
     last_known_lines = state.get("last_known_lines", BASE_LINES)
     accumulated_patch = state.get("accumulated_patch", BASE_VERSION_PATCH)
+    last_total_lines = state.get("last_total_lines", last_known_lines)
 
     new_lines = current_lines - last_known_lines
 
     if new_lines > 0:
-        patch_increment = new_lines // LINES_PER_PATCH_UNIT
+        # 1-100 new lines -> +1, 101-200 -> +2, etc. (any positive change under 100 now bumps patch)
+        patch_increment = (new_lines + (LINES_PER_PATCH_UNIT - 1)) // LINES_PER_PATCH_UNIT
     else:
         patch_increment = 0
-        if new_lines < 0:
-            print(f"  Warning: Line count decreased by {abs(new_lines)} lines (refactoring?)")
+        # Only warn about real shrinkage vs the last *observed* total (not our internal accounting baseline)
+        real_delta = current_lines - last_total_lines
+        if real_delta < 0:
+            print(f"  Warning: Line count decreased by {abs(real_delta)} lines since last recorded total (refactoring?)")
             print("  Patch version will not decrease")
 
     new_patch = accumulated_patch + patch_increment
@@ -132,6 +137,7 @@ def calculate_version(project_root: str) -> tuple[str, dict, dict]:
         "last_known_lines": updated_lines,
         "accumulated_patch": new_patch,
         "last_version": version_string,
+        "last_total_lines": current_lines,   # actual observed total (for better decrease detection)
         "history": history[-50:],
     }
 
@@ -164,49 +170,83 @@ def find_cargo_tomls(project_root: str) -> list[str]:
     return cargo_files
 
 
-def update_cargo_toml(file_path: str, new_version: str) -> bool:
-    """Update version in [package] section only. Returns True if modified."""
-    try:
-        with open(file_path, encoding="utf-8") as f:
-            content = f.read()
-    except OSError as e:
-        print(f"  Warning: Could not read {file_path}: {e}")
-        return False
+def update_cargo_toml(file_path: str, new_version: str) -> str:
+    """
+    Update version in:
+    - [package] -> version = "..."
+    - [workspace.package] -> version = "..."
 
-    original_content = content
-    lines = content.split("\n")
+    Returns one of:
+    - "updated"
+    - "already-current"
+    - "workspace-inherited"
+    - "no-version-field"
+    - "error"
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except Exception as e:
+        print(f"  ⚠ Could not read {file_path}: {e}")
+        return "error"
+
+    current_section = None
+    changed = False
+    found_editable_version = False
+    found_workspace_inherited = False
+
     new_lines = []
-    in_package_section = False
-    version_updated = False
 
     for line in lines:
         stripped = line.strip()
 
-        if stripped.startswith("["):
-            in_package_section = stripped == "[package]"
+        # section tracking
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current_section = stripped
 
-        if in_package_section and not version_updated:
-            version_match = re.match(r'^(\s*version\s*=\s*)"[^"]*"(.*)$', line)
-            if version_match:
-                prefix = version_match.group(1)
-                suffix = version_match.group(2)
-                line = f'{prefix}"{new_version}"{suffix}'
-                version_updated = True
+        # detect inherited workspace version in [package]
+        if current_section == "[package]":
+            if re.match(r'^\s*version\.workspace\s*=\s*true\s*(#.*)?$', line):
+                found_workspace_inherited = True
+
+            m = re.match(r'^(\s*version\s*=\s*)"([^"]*)"(\s*(#.*)?)?$', line)
+            if m:
+                found_editable_version = True
+                old_version = m.group(2)
+                if old_version != new_version:
+                    suffix = m.group(3) or ""
+                    newline = "\n" if line.endswith("\n") else ""
+                    line = f'{m.group(1)}"{new_version}"{suffix}{newline}'
+                    changed = True
+
+        # support workspace.package version
+        elif current_section == "[workspace.package]":
+            m = re.match(r'^(\s*version\s*=\s*)"([^"]*)"(\s*(#.*)?)?$', line)
+            if m:
+                found_editable_version = True
+                old_version = m.group(2)
+                if old_version != new_version:
+                    suffix = m.group(3) or ""
+                    newline = "\n" if line.endswith("\n") else ""
+                    line = f'{m.group(1)}"{new_version}"{suffix}{newline}'
+                    changed = True
 
         new_lines.append(line)
 
-    new_content = "\n".join(new_lines)
-
-    if new_content != original_content:
+    if changed:
         try:
             with open(file_path, "w", encoding="utf-8") as f:
-                f.write(new_content)
-            return True
-        except OSError as e:
-            print(f"  Warning: Could not write {file_path}: {e}")
-            return False
+                f.writelines(new_lines)
+            return "updated"
+        except Exception as e:
+            print(f"  ⚠ Could not write {file_path}: {e}")
+            return "error"
 
-    return False
+    if found_editable_version:
+        return "already-current"
+    if found_workspace_inherited:
+        return "workspace-inherited"
+    return "no-version-field"
 
 
 def print_banner() -> None:
@@ -222,8 +262,20 @@ def print_banner() -> None:
     print()
 
 
-def print_report(version: str, details: dict, cargo_files_updated: list[str]) -> None:
+def print_report(
+    version: str,
+    details: dict,
+    cargo_files_updated: list[str],
+    already_current: list[str] | None = None,
+    workspace_inherited: list[str] | None = None,
+    no_version_field: list[str] | None = None,
+    errors: list[str] | None = None,
+) -> None:
     now = datetime.datetime.now()
+    already_current = already_current or []
+    workspace_inherited = workspace_inherited or []
+    no_version_field = no_version_field or []
+    errors = errors or []
 
     print("-" * 62)
     print("  Version Calculation Report")
@@ -241,15 +293,45 @@ def print_report(version: str, details: dict, cargo_files_updated: list[str]) ->
     print(f"  Current lines:    {details['current_lines']}")
     print(f"  New lines:        {details['new_lines']}")
     print(f"  Patch increment:  +{details['patch_increment']}")
-    print(f"  Remainder lines:  {details['remainder_lines']} (carried to next build)")
+    rem = details["remainder_lines"]
+    if rem < 0:
+        print(f"  Remainder lines:  {rem} (patch credit issued early; next bump after {-rem} more lines)")
+    else:
+        print(f"  Remainder lines:  {rem} (carried to next build)")
     print(f"  NEW VERSION:      {version}")
 
+    total = len(cargo_files_updated) + len(already_current) + len(workspace_inherited) + len(no_version_field) + len(errors)
+
     if cargo_files_updated:
-        print("  Updated Cargo.toml files:")
+        print(f"  Updated ({len(cargo_files_updated)}):")
         for cargo_file in cargo_files_updated:
             print(f"    - {os.path.relpath(cargo_file)}")
-    else:
-        print("  No Cargo.toml files needed updating")
+
+    if already_current:
+        print(f"  Already current ({len(already_current)}):")
+        for cargo_file in already_current:
+            print(f"    - {os.path.relpath(cargo_file)}")
+
+    if workspace_inherited:
+        print(f"  Uses version.workspace = true ({len(workspace_inherited)}):")
+        for cargo_file in workspace_inherited:
+            print(f"    - {os.path.relpath(cargo_file)}")
+
+    if no_version_field:
+        print(f"  No editable version field ({len(no_version_field)}):")
+        for cargo_file in no_version_field:
+            print(f"    - {os.path.relpath(cargo_file)}")
+
+    if errors:
+        print(f"  Errors ({len(errors)}):")
+        for cargo_file in errors:
+            print(f"    - {os.path.relpath(cargo_file)}")
+
+    if not cargo_files_updated and not errors:
+        if total > 0:
+            print(f"  All {total} Cargo.toml files processed (no changes required this run).")
+        else:
+            print("  No Cargo.toml files found or needed updating.")
 
     print("-" * 62)
     print()
@@ -269,28 +351,51 @@ def main() -> str:
 
     print("  Counting .rs file lines...")
     version, new_state, details = calculate_version(project_root)
-    print(f"  Total .rs lines: {details['current_lines']}")
+
+    # Detailed calculation output (as recommended)
     print(f"  Calculated version: {version}")
+    print(f"  Current lines:      {details['current_lines']}")
+    print(f"  Last known lines:   {details['last_known_lines']}")
+    print(f"  New lines:          {details['new_lines']}")
+    print(f"  Patch increment:    +{details['patch_increment']}")
     print()
 
     print("  Searching for Cargo.toml files...")
     cargo_files = find_cargo_tomls(project_root)
     print(f"  Found {len(cargo_files)} Cargo.toml file(s)")
+    print()
 
+    # Track all outcomes for better reporting
     updated_files = []
+    already_current = []
+    workspace_inherited = []
+    no_version_field = []
+    errors = []
+
     for cargo_file in cargo_files:
         rel_path = os.path.relpath(cargo_file, project_root)
-        print(f"  Processing {rel_path}...", end=" ")
-        if update_cargo_toml(cargo_file, version):
-            print("updated")
+        status = update_cargo_toml(cargo_file, version)
+
+        if status == "updated":
+            print(f"  Processing {rel_path}... updated")
             updated_files.append(cargo_file)
+        elif status == "already-current":
+            print(f"  Processing {rel_path}... already current")
+            already_current.append(cargo_file)
+        elif status == "workspace-inherited":
+            print(f"  Processing {rel_path}... uses version.workspace = true")
+            workspace_inherited.append(cargo_file)
+        elif status == "no-version-field":
+            print(f"  Processing {rel_path}... no editable version field")
+            no_version_field.append(cargo_file)
         else:
-            print("unchanged")
+            print(f"  Processing {rel_path}... error")
+            errors.append(cargo_file)
 
     print()
     save_state(project_root, new_state)
     print()
-    print_report(version, details, updated_files)
+    print_report(version, details, updated_files, already_current, workspace_inherited, no_version_field, errors)
 
     return version
 

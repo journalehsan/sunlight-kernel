@@ -5,3 +5,6 @@
 *.o
 *.elf
 *.bin
+
+# Version manager state (generated)
+.version_state.json
