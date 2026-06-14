@@ -145,6 +145,9 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 
 # Rebuild if requested
 if [ "$BUILD_FIRST" = true ]; then
+    echo -e "${YELLOW}Updating version...${NC}"
+    python3 "$SCRIPT_DIR/version_manager.py" "$PROJECT_ROOT"
+
     echo -e "${YELLOW}Rebuilding kernel and services...${NC}"
     SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release
