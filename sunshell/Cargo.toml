@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true }
+sunlight-tz = { path = "../sunlight-tz" }
 
 [features]
 default = ["sunlight"]

@@ -339,6 +339,7 @@ version = "0.1.0"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
+ "sunlight-tz",
 ]
 
 [[package]]

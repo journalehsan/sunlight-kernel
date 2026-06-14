@@ -1228,64 +1228,39 @@ mod sunlight {
                     out[pos] = b'\n'; pos+=1;
                     return &out[..pos];
                 } else if args[0] == "list" {
+                    // Local filtering against the embedded zone table — no IPC
+                    // round-trips to the tz service (was up to 600 ipc_call()s,
+                    // each a scheduler round-trip, causing multi-second freezes).
                     let filter = args.get(1).map(|s| s.to_lowercase());
                     let _ = copy_bytes(out, &mut pos, b"ID\tDISPLAY\tOFFSET\n");
                     if filter.is_none() {
                         let _ = copy_bytes(out, &mut pos, b"(showing first matches; use 'tzctl list <filter>' to search by id/name)\n");
                     }
                     let mut shown = 0u32;
-                    for i in 0..600u64 {
-                        let req = IpcMsg::with_label(TzMsg::LIST_ZONES).word(0, i);
-                        let r = ipc_call(tz_cap, req);
-                        if r.label != TzMsg::REPLY { break; }
-                        if r.words[0] == 0xFFFF_FFFFu64 { break; }
-
-                        // id at words 2..6 (up to 32 bytes)
-                        let mut idbuf = [0u8; 32];
-                        let mut idlen = 0usize;
-                        'idloop: for wi in 2..6 {
-                            for b in 0..8 {
-                                let ch = ((r.words[wi] >> (b*8)) & 0xff) as u8;
-                                if ch == 0 { break 'idloop; }
-                                idbuf[idlen] = ch; idlen += 1;
-                            }
-                        }
-
-                        // display name at words 6..8 (up to 16 bytes)
-                        let mut dispbuf = [0u8; 16];
-                        let mut displen = 0usize;
-                        'disploop: for wi in 6..8 {
-                            for b in 0..8 {
-                                let ch = ((r.words[wi] >> (b*8)) & 0xff) as u8;
-                                if ch == 0 { break 'disploop; }
-                                dispbuf[displen] = ch; displen += 1;
-                            }
-                        }
-
+                    for zone in sunlight_tz::all_zones() {
                         if let Some(ref f) = filter {
-                            let id_str = core::str::from_utf8(&idbuf[..idlen]).unwrap_or("");
-                            let disp_str = core::str::from_utf8(&dispbuf[..displen]).unwrap_or("");
-                            if !id_str.to_lowercase().contains(f.as_str())
-                                && !disp_str.to_lowercase().contains(f.as_str())
+                            if !zone.id.to_lowercase().contains(f.as_str())
+                                && !zone.display_name.to_lowercase().contains(f.as_str())
                             {
                                 continue;
                             }
                         }
 
+                        let idbuf = zone.id.as_bytes();
+                        let dispbuf = zone.display_name.as_bytes();
+
                         // bail out before overflowing the output buffer
-                        if pos + idlen + displen + 10 > out.len() {
+                        if pos + idbuf.len() + dispbuf.len() + 10 > out.len() {
                             break;
                         }
 
-                        let _ = copy_bytes(out, &mut pos, &idbuf[..idlen]);
+                        let _ = copy_bytes(out, &mut pos, idbuf);
                         out[pos]=b'\t'; pos+=1;
-                        let _ = copy_bytes(out, &mut pos, &dispbuf[..displen]);
+                        let _ = copy_bytes(out, &mut pos, dispbuf);
                         out[pos]=b'\t'; pos+=1;
 
-                        // offset from word(1): hours in low byte (signed), minutes in next byte
-                        let w1 = r.words[1];
-                        let oh = (w1 & 0xff) as i8;
-                        let om = ((w1 >> 8) & 0xff) as u8;
+                        let oh = zone.utc_offset_hours;
+                        let om = zone.utc_offset_minutes;
                         out[pos] = if oh < 0 { b'-' } else { b'+' }; pos+=1;
                         let ah = oh.unsigned_abs();
                         out[pos]=b'0'+ah/10; pos+=1; out[pos]=b'0'+ah%10; pos+=1;
