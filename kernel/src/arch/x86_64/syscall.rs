@@ -1478,8 +1478,11 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                         Err(_) => u64::MAX,
                     }
                 } else {
-                    crate::serial_println!("[SYSCALL] read fd={} (unsupported handle)", fd);
-                    0
+                    // Placeholder stdio fds (0/1/2): return EAGAIN for stdin, error for stdout/stderr
+                    match fd {
+                        0 => EAGAIN, // stdin placeholder: would block
+                        _ => 0,      // stdout/stderr: invalid for read, silent
+                    }
                 }
             } else {
                 u64::MAX
