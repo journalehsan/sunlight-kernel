@@ -8,6 +8,7 @@ pub mod mmap;
 pub mod pipe;
 pub mod signal;
 pub mod spawn;
+pub mod tty_io;
 
 use crate::ipc::IpcMsg;
 use crate::memory::pmm::PhysicalMemoryManager;
@@ -73,6 +74,11 @@ pub struct Process {
     /// the parent from `BlockedOnIpc` when that child exits, instead of having
     /// the parent busy-spin in a yield loop.
     pub wait_child: Option<usize>,
+
+    /// TTY tab this process is attached to, if any. Set when the shell is
+    /// spawned for a tab and inherited by children, so a spawned app's fd0/fd1
+    /// route to that tab's kernel stdin/stdout rings (see process::tty_io).
+    pub tty_tab: Option<u8>,
 
     /// Shared memory pages this process owns (via shm_alloc).
     pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedPage>,
@@ -158,6 +164,7 @@ impl Process {
             block_start_tick: 0,    // Not blocked yet
             aging_counter: 0,       // No aging yet
             wait_child: None,       // Not waiting on a child
+            tty_tab: None,          // Attached to a TTY tab only when spawned for one
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
         }

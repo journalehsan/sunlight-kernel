@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-fetch"
-version = "0.1.0"
+version = "0.1.6"
+
 edition = "2021"
 authors = ["SunlightOS Contributors"]
 description = "Lightweight chunked HTTP downloader for SunlightOS"

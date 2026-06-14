@@ -16,6 +16,16 @@ pub enum SunlightSyscall {
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
+    /// TTY mux (foreground input routing). tty_server pushes keyboard bytes
+    /// into a tab's kernel stdin ring; the foreground app reads them via fd0.
+    /// rdi=tab, rsi=buf, rdx=len. Returns bytes accepted.
+    TtyStdinPush = 23,
+    /// tty_server drains a tab's kernel stdout ring (written by the app's fd1)
+    /// to render. rdi=tab, rsi=buf, rdx=len. Returns bytes pulled.
+    TtyStdoutPull = 24,
+    /// Non-reaping liveness probe used by tty_server to detect when the
+    /// foreground app exits. rdi=pid. Returns 1 if alive, 0 otherwise.
+    ProcessIsAlive = 25,
 
     // Process management (Phase 4)
     Fork = 30,
@@ -256,6 +266,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
         22 => thread_spawn(),
+        23 => sys_tty_stdin_push(frame),
+        24 => sys_tty_stdout_pull(frame),
+        25 => sys_process_is_alive(frame),
         30 => sys_fork(frame),
         31 => sys_exec(frame),
         32 => sys_waitpid(frame),
@@ -421,6 +434,10 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
 /// Extracts path from the message words and spawns a new process.
 fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let path = decode_path_from_words(&msg.words);
+    // NOTE: register IPC only transmits words[0..3] (see IpcMsg::from_registers),
+    // so words[4]/[5] arrive as 0 here — uid/gid are effectively always 0 today.
+    // The TTY tab is derived from shell_id (parsed from the transmitted path)
+    // inside spawn_from_path, not passed as a word.
     let uid = msg.words[4] as u32;
     let gid = msg.words[5] as u32;
 
@@ -624,6 +641,61 @@ fn process_yield() -> u64 {
     });
     sched::request_reschedule();
     0
+}
+
+/// Syscall: TtyStdinPush (23). tty_server forwards keyboard bytes to the
+/// foreground app's stdin ring. rdi=tab, rsi=buf, rdx=len. Returns bytes pushed.
+fn sys_tty_stdin_push(frame: &mut SyscallFrame) -> u64 {
+    let tab = frame.rdi as usize;
+    let buf = frame.rsi as *const u8;
+    let len = (frame.rdx as usize).min(256);
+    if len == 0 {
+        return 0;
+    }
+    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + len as u64) {
+        return u64::MAX;
+    }
+    let mut kbuf = [0u8; 256];
+    // SAFETY: buf..buf+len validated as user memory above.
+    unsafe {
+        core::ptr::copy_nonoverlapping(buf, kbuf.as_mut_ptr(), len);
+    }
+    crate::process::tty_io::push_stdin(tab, &kbuf[..len]) as u64
+}
+
+/// Syscall: TtyStdoutPull (24). tty_server drains the foreground app's stdout
+/// ring to render it. rdi=tab, rsi=buf, rdx=len. Returns bytes pulled.
+fn sys_tty_stdout_pull(frame: &mut SyscallFrame) -> u64 {
+    let tab = frame.rdi as usize;
+    let buf = frame.rsi as *mut u8;
+    let len = (frame.rdx as usize).min(4096);
+    if len == 0 {
+        return 0;
+    }
+    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + len as u64) {
+        return u64::MAX;
+    }
+    let mut kbuf = [0u8; 4096];
+    let n = crate::process::tty_io::pull_stdout(tab, &mut kbuf[..len]);
+    if n > 0 {
+        // SAFETY: buf..buf+len validated as user memory above; n <= len.
+        unsafe {
+            core::ptr::copy_nonoverlapping(kbuf.as_ptr(), buf, n);
+        }
+    }
+    n as u64
+}
+
+/// Syscall: ProcessIsAlive (25). Non-reaping liveness probe. rdi=pid.
+/// Returns 1 if a process with that pid exists and is not Finished, else 0.
+fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
+    let pid = frame.rdi as usize;
+    let sched = crate::sched::SCHEDULER.lock();
+    let alive = sched
+        .processes
+        .iter()
+        .any(|p| p.pid == pid && p.state != ProcessState::Finished);
+    alive as u64
 }
 
 fn thread_spawn() -> u64 {
@@ -962,6 +1034,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let gid = parent.gid;
     let env = crate::process::env::EnvMap::inherit(&parent.env);
     let capabilities = parent.capabilities.clone();
+    let parent_tty_tab = parent.tty_tab;
     let stdout_entry = if stdout_fd != u64::MAX {
         parent.fd_table.get(stdout_fd as i32).copied()
     } else {
@@ -977,6 +1050,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.gid = gid;
     child.env = env;
     child.capabilities = capabilities;
+    // Inherit the TTY tab so a shell-spawned app's stdio routes to that tab's
+    // kernel rings (foreground input routing).
+    child.tty_tab = parent_tty_tab;
 
     let argv_refs: alloc::vec::Vec<&[u8]> = argv_bytes.iter().map(|v| v.as_slice()).collect();
     let envp_strings = child.env.to_envp();
@@ -990,6 +1066,26 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             crate::serial_println!("[SYSCALL] spawn: load failed: {:?}", e);
             return u64::MAX;
         }
+    }
+
+    // Wire the child's stdio. If attached to a TTY tab, fd0/fd1 route to that
+    // tab's kernel rings so keyboard input reaches the app and its output is
+    // rendered by tty_server. An explicit stdout_fd (e.g. a pipe write end for
+    // `a | b`) still overrides fd1 below.
+    if let Some(tab) = parent_tty_tab {
+        use crate::process::fd_table::{CapRights, FileHandle};
+        let _ = child.fd_table.install_at(
+            0,
+            FileHandle::tty_stdin(tab),
+            CapRights::new(CapRights::READ | CapRights::FSTAT),
+            0,
+        );
+        let _ = child.fd_table.install_at(
+            1,
+            FileHandle::tty_stdout(tab),
+            CapRights::new(CapRights::WRITE | CapRights::FSTAT),
+            1,
+        );
     }
 
     if let Some(entry) = stdout_entry {
@@ -1477,6 +1573,29 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                         }
                         Err(_) => u64::MAX,
                     }
+                } else if fd_entry.handle.is_tty_stdin() {
+                    // fd0 wired to a TTY tab's kernel stdin ring. Drain locally —
+                    // no IPC to tty_server, so no lock inversion with SCHEDULER.
+                    if count == 0 {
+                        return 0;
+                    }
+                    if !is_user_address(buf_ptr as u64)
+                        || !is_user_address((buf_ptr as u64) + count as u64)
+                    {
+                        return u64::MAX;
+                    }
+                    let tab = fd_entry.handle.tty_tab() as usize;
+                    let mut kbuf = [0u8; 256];
+                    let to_read = count.min(256);
+                    let n = crate::process::tty_io::read_stdin(tab, &mut kbuf[..to_read]);
+                    if n == 0 {
+                        return EAGAIN; // no keystrokes buffered → try again later
+                    }
+                    // SAFETY: buf_ptr..buf_ptr+count validated as user memory above.
+                    unsafe {
+                        core::ptr::copy_nonoverlapping(kbuf.as_ptr(), buf_ptr, n);
+                    }
+                    n as u64
                 } else {
                     // Placeholder stdio fds (0/1/2): return EAGAIN for stdin, error for stdout/stderr
                     match fd {
@@ -1535,6 +1654,27 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                         crate::process::pipe::PipeResult::BrokenPipe => u64::MAX,
                         crate::process::pipe::PipeResult::Eof => u64::MAX,
                     }
+                } else if fd_entry.handle.is_tty_stdout() {
+                    // fd1 wired to a TTY tab's kernel stdout ring. tty_server
+                    // drains it (TtyStdoutPull) and renders. No serial spam.
+                    if count == 0 {
+                        return 0;
+                    }
+                    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64)
+                    {
+                        return u64::MAX;
+                    }
+                    let tab = fd_entry.handle.tty_tab() as usize;
+                    let write_size = count.min(4096);
+                    let mut kernel_buf = [0u8; 4096];
+                    // SAFETY: buf..buf+count validated as user memory above.
+                    unsafe {
+                        core::ptr::copy_nonoverlapping(buf, kernel_buf.as_mut_ptr(), write_size);
+                    }
+                    crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]);
+                    // Report the full count as written even if the ring dropped
+                    // tail bytes under pressure — apps treat short writes as errors.
+                    count as u64
                 } else {
                     // Handle stdin/stdout/stderr specially
                     match fd {

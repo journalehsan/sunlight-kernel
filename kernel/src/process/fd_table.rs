@@ -65,6 +65,13 @@ impl FileHandle {
     /// Marks a handle backed by the kernel VFS (only meaningful when the
     /// pipe flag is clear; bits 0..30 carry the packed Vfs handle).
     const VFS_FLAG: u32 = 0x4000_0000;
+    /// Marks a handle wired to a TTY tab's kernel stdin/stdout ring. Bits 0..8
+    /// carry the tab index. Both flags keep bit31 (pipe) and bit30 (vfs) clear
+    /// so `is_pipe`/`is_vfs` stay false for them (see process::tty_io).
+    const TTY_STDIN_FLAG: u32 = 0x2000_0000;
+    const TTY_STDOUT_FLAG: u32 = 0x1000_0000;
+    const TTY_TAG_MASK: u32 = 0xF000_0000;
+    const TTY_TAB_MASK: u32 = 0x0000_00FF;
 
     pub fn is_pipe(self) -> bool {
         (self.0 & Self::PIPE_FLAG) != 0
@@ -88,6 +95,29 @@ impl FileHandle {
 
     pub fn vfs_handle(self) -> u32 {
         self.0 & 0x3FFF_FFFF
+    }
+
+    /// fd0 handle wired to tab `tab`'s kernel stdin ring.
+    pub fn tty_stdin(tab: u8) -> Self {
+        Self(Self::TTY_STDIN_FLAG | (tab as u32 & Self::TTY_TAB_MASK))
+    }
+
+    /// fd1 handle wired to tab `tab`'s kernel stdout ring.
+    pub fn tty_stdout(tab: u8) -> Self {
+        Self(Self::TTY_STDOUT_FLAG | (tab as u32 & Self::TTY_TAB_MASK))
+    }
+
+    pub fn is_tty_stdin(self) -> bool {
+        (self.0 & Self::TTY_TAG_MASK) == Self::TTY_STDIN_FLAG
+    }
+
+    pub fn is_tty_stdout(self) -> bool {
+        (self.0 & Self::TTY_TAG_MASK) == Self::TTY_STDOUT_FLAG
+    }
+
+    /// Tab index for a TTY stdin/stdout handle.
+    pub fn tty_tab(self) -> u8 {
+        (self.0 & Self::TTY_TAB_MASK) as u8
     }
 }
 

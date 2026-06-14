@@ -34,8 +34,8 @@ static BUMP: BumpAllocator = BumpAllocator;
 use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_try_recv,
-    nameserver_lookup, process_yield, sysinfo, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
-    SpawnMsg, TzMsg,
+    nameserver_lookup, process_is_alive, process_yield, sysinfo, tty_stdin_push, tty_stdout_pull,
+    unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg, TzMsg,
 };
 use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
 use sunlight_tty::TerminalGrid;
@@ -55,6 +55,13 @@ const KBD_LABEL: u64 = 1;
 const OUTPUT_LABEL: u64 = 2;
 const EXIT_LABEL: u64 = 3;
 const DRAIN_LABEL: u64 = 4;
+/// Shell→tty reply: an external command was launched as a foreground job;
+/// word0 = child pid. tty_server then drives the session (routes keyboard to
+/// the child's stdin ring, renders its stdout ring) until the child exits.
+const FG_STARTED_LABEL: u64 = 5;
+/// tty→shell request: the foreground child has exited; the shell reaps it and
+/// redraws the prompt.
+const FG_DONE_LABEL: u64 = 6;
 const TERM_OUTPUT_MAX: usize = 4096;
 const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
@@ -124,6 +131,10 @@ struct ShellTab {
     pending_len: usize,
     username: [u8; 32],
     username_len: usize,
+    /// pid of a foreground command running in this tab, if any. While set,
+    /// keyboard goes to this tab's stdin ring and its stdout ring is rendered
+    /// live, instead of going through the shell line editor.
+    fg_pid: Option<u64>,
 }
 
 /// Global scrollback state for all tabs (indexed by active_tab)
@@ -149,6 +160,7 @@ impl ShellTab {
             pending_len: 0,
             username: [0; 32],
             username_len: 0,
+            fg_pid: None,
         }
     }
 }
@@ -248,6 +260,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             if has_fb {
                                 render_active_shell_fb(
                                     fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
+                                    true,
                                 );
                             }
                             logged_in = true;
@@ -347,36 +360,58 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         SCROLLBACK_STATE[active_tab].viewport_offset = 0;
                     }
                     if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
-                        update_input_echo(
-                            ascii,
-                            &mut tab.output,
-                            &mut tab.output_len,
-                            &mut tab.input_line,
-                            &mut tab.input_line_len,
-                            tab.username,
-                            tab.username_len,
-                        );
-                        needs_render = true;
-
-                        if let Some(cap) = tab.cap {
-                            let exited =
-                                send_key_to_shell(cap, ascii, &mut tab.output, &mut tab.output_len);
-                            if exited {
-                                state = TtyState::Login;
-                                reset_login(&mut login);
-                                reset_tabs(&mut tabs, &mut tab_count, &mut active_tab);
-                                spawn_cap = None;
-                                logged_initial_spawn = false;
-                                if has_fb {
-                                    render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p);
-                                }
-                                continue;
-                            }
-                            // Output was received from shell - ensure immediate render
+                        if tab.fg_pid.is_some() {
+                            // A foreground command owns the screen: route the key
+                            // to its stdin ring (keyed by shell_id) instead of the
+                            // shell line editor. No prompt echo.
+                            let _ = tty_stdin_push(tab.shell_id as u32, &[ascii]);
+                        } else {
+                            update_input_echo(
+                                ascii,
+                                &mut tab.output,
+                                &mut tab.output_len,
+                                &mut tab.input_line,
+                                &mut tab.input_line_len,
+                                tab.username,
+                                tab.username_len,
+                            );
                             needs_render = true;
-                        } else if tab.pending_len < tab.pending.len() {
-                            tab.pending[tab.pending_len] = ascii;
-                            tab.pending_len += 1;
+
+                            if let Some(cap) = tab.cap {
+                                match send_key_to_shell(
+                                    cap,
+                                    ascii,
+                                    &mut tab.output,
+                                    &mut tab.output_len,
+                                ) {
+                                    ShellKeyResult::Exited => {
+                                        state = TtyState::Login;
+                                        reset_login(&mut login);
+                                        reset_tabs(&mut tabs, &mut tab_count, &mut active_tab);
+                                        spawn_cap = None;
+                                        logged_initial_spawn = false;
+                                        if has_fb {
+                                            render_login_fb(
+                                                &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                            );
+                                        }
+                                        continue;
+                                    }
+                                    ShellKeyResult::ForegroundStarted(pid) => {
+                                        // Enter foreground mode. The app's output
+                                        // is drained into scrollback and rendered
+                                        // by the idle loop; a full-screen app's
+                                        // alt-screen enter resets the buffer.
+                                        tab.fg_pid = Some(pid);
+                                    }
+                                    ShellKeyResult::Continue => {}
+                                }
+                                // Output was received from shell - ensure immediate render
+                                needs_render = true;
+                            } else if tab.pending_len < tab.pending.len() {
+                                tab.pending[tab.pending_len] = ascii;
+                                tab.pending_len += 1;
+                            }
                         }
                     }
                 }
@@ -391,16 +426,22 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
                 }
 
-                if has_fb && needs_render {
+                // Don't run the shell renderer while a foreground app owns the
+                // screen — it would clear the grid and replay the shell buffer,
+                // wiping the app's frame. The idle loop renders the app instead.
+                let active_fg =
+                    active_shell_tab(&tabs, active_tab).map_or(false, |t| t.fg_pid.is_some());
+                if has_fb && needs_render && !active_fg {
                     render_active_shell_fb(
-                        fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
+                        fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
                     );
                 }
             }
         }
 
-        // Wait for the next message, but keep polling the clock while idle so
-        // the title-bar time doesn't lag behind real time until a keypress.
+        // Wait for the next message, but keep the active tab live while idle:
+        // drive a foreground command (drain its output, detect exit) and keep
+        // the title-bar clock current.
         let reply = IpcMsg::with_label(0);
         loop {
             if let Some(m) = ipc_reply_and_try_recv(ep, reply) {
@@ -408,15 +449,68 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 break;
             }
             if has_fb && matches!(state, TtyState::Shell) {
-                static mut LAST_POLL_MIN: u64 = u64::MAX;
-                let now_min = get_time_utc() / 60;
-                // SAFETY: tty_server is single-threaded; no concurrent access to LAST_POLL_MIN.
-                unsafe {
-                    if now_min != LAST_POLL_MIN {
-                        LAST_POLL_MIN = now_min;
+                let fg = active_shell_tab(&tabs, active_tab).and_then(|t| t.fg_pid);
+                if let Some(pid) = fg {
+                    // Drain the foreground app's output (kernel stdout ring,
+                    // keyed by shell_id) into the tab's scrollback. The existing
+                    // replay renderer then shows the live screen; full-screen
+                    // apps redraw in place (their alt-screen enter resets the
+                    // buffer in append_term), streaming output simply scrolls.
+                    let mut drained = false;
+                    if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                        let mut buf = [0u8; 1024];
+                        loop {
+                            let n = tty_stdout_pull(tab.shell_id as u32, &mut buf);
+                            if n == 0 {
+                                break;
+                            }
+                            append_term(&mut tab.output, &mut tab.output_len, &buf[..n]);
+                            drained = true;
+                        }
+                    }
+
+                    if !process_is_alive(pid) {
+                        // The app exited. Final drain to catch any output written
+                        // just before exit (between the drain above and now).
+                        if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                            let mut buf = [0u8; 1024];
+                            loop {
+                                let n = tty_stdout_pull(tab.shell_id as u32, &mut buf);
+                                if n == 0 {
+                                    break;
+                                }
+                                append_term(&mut tab.output, &mut tab.output_len, &buf[..n]);
+                            }
+                        }
+                        // Tell the shell to reap it and record $?; leave
+                        // foreground mode and redraw with the prompt.
+                        let cap = active_shell_tab(&tabs, active_tab).and_then(|t| t.cap);
+                        if let Some(cap) = cap {
+                            let _ = ipc_call(cap, IpcMsg::with_label(FG_DONE_LABEL));
+                        }
+                        if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                            tab.fg_pid = None;
+                        }
                         render_active_shell_fb(
-                            fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
+                            fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
                         );
+                    } else if drained {
+                        // Foreground app owns the screen: render without a prompt.
+                        render_active_shell_fb(
+                            fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, false,
+                        );
+                    }
+                } else {
+                    static mut LAST_POLL_MIN: u64 = u64::MAX;
+                    let now_min = get_time_utc() / 60;
+                    // SAFETY: tty_server is single-threaded; no concurrent access.
+                    unsafe {
+                        if now_min != LAST_POLL_MIN {
+                            LAST_POLL_MIN = now_min;
+                            render_active_shell_fb(
+                                fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
+                            );
+                        }
                     }
                 }
             }
@@ -471,6 +565,7 @@ fn render_active_shell_fb(
     tabs: &[ShellTab; MAX_TABS],
     tab_count: usize,
     active_tab: usize,
+    show_prompt: bool,
 ) {
     // Compute terminal dimensions (8x16 glyphs, accounting for chrome)
     // Header: 48px, Tab bar: 26px, Footer: 32px, margins: 16px top/bottom
@@ -487,15 +582,20 @@ fn render_active_shell_fb(
         TERMINAL_GEOMETRY[active_tab].update(cols as u32, rows as u32, viewport_offset);
     }
 
+    // A foreground app owns the screen, so suppress the shell prompt/input line.
     let mut prompt_buf = [0u8; 32];
     let (output, input_line, prompt_slice) = active_shell_tab(tabs, active_tab)
         .map(|tab| {
-            let prompt_len = build_prompt(tab, &mut prompt_buf);
-            (
-                &tab.output[..tab.output_len],
-                &tab.input_line[..tab.input_line_len],
-                &prompt_buf[..prompt_len],
-            )
+            if show_prompt {
+                let prompt_len = build_prompt(tab, &mut prompt_buf);
+                (
+                    &tab.output[..tab.output_len],
+                    &tab.input_line[..tab.input_line_len],
+                    &prompt_buf[..prompt_len],
+                )
+            } else {
+                (&tab.output[..tab.output_len], &[][..], &b""[..])
+            }
         })
         .unwrap_or((&[][..], &[][..], b"root@sunlight:/$ "));
 
@@ -648,6 +748,9 @@ fn spawn_tab(
     let mut path = [0u8; 16];
     let path_len = make_shell_path(shell_id, &mut path);
     let (pw0, pw1, pw2, pw3) = pack_path(&path[..path_len]);
+    // The kernel derives the TTY tab (kernel ring key) from shell_id parsed out
+    // of this path, so children's fd0/fd1 route to this tab's rings. tty_server
+    // uses the same shell_id as the ring key (see the foreground drive loop).
     let spawn_msg = IpcMsg::with_label(SpawnMsg::SPAWN)
         .word(0, pw0)
         .word(1, pw1)
@@ -835,19 +938,32 @@ fn update_input_echo(
     }
 }
 
+/// Outcome of forwarding a keystroke to the shell.
+enum ShellKeyResult {
+    /// Normal: the shell handled the key (output already appended).
+    Continue,
+    /// The shell wants to exit (logout).
+    Exited,
+    /// The shell launched a foreground command; tty_server now drives it.
+    ForegroundStarted(u64),
+}
+
 fn send_key_to_shell(
     cap: CapabilityToken,
     byte: u8,
     term_output: &mut [u8; TERM_OUTPUT_MAX],
     term_output_len: &mut usize,
-) -> bool {
+) -> ShellKeyResult {
     let kbd_msg = IpcMsg::with_label(KBD_LABEL).word(0, byte as u64);
     let reply = ipc_call(cap, kbd_msg);
     if reply.label == EXIT_LABEL {
-        return true;
+        return ShellKeyResult::Exited;
+    }
+    if reply.label == FG_STARTED_LABEL {
+        return ShellKeyResult::ForegroundStarted(reply.words[0]);
     }
     append_shell_reply(cap, term_output, term_output_len, &reply);
-    false
+    ShellKeyResult::Continue
 }
 
 fn append_shell_reply(
@@ -907,19 +1023,30 @@ fn append_one_chunk(
     }
 }
 
+/// True if `needle` appears anywhere in `haystack`.
+fn slice_contains(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() || needle.len() > haystack.len() {
+        return false;
+    }
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
 fn append_term(output: &mut [u8; TERM_OUTPUT_MAX], output_len: &mut usize, data: &[u8]) {
     if data.is_empty() {
         return;
     }
 
-    // Detect clear screen sequence (ESC[2J) and reset the buffer
-    // This prevents output from accumulating across commands
-    if data.len() >= 4
+    // Reset the buffer on a full-screen clear (ESC[2J) or on alt-screen
+    // enter/exit (ESC[?1049h / ESC[?1049l). This gives full-screen apps like
+    // top a clean screen and returns to a clean prompt when they exit, without
+    // clearing scrollback for ordinary streaming commands (ls, cat, ...), whose
+    // output simply appends and slides on overflow below.
+    let starts_with_clear = data.len() >= 4
         && data[0] == b'\x1B'
         && data[1] == b'['
         && data[2] == b'2'
-        && data[3] == b'J'
-    {
+        && data[3] == b'J';
+    if starts_with_clear || slice_contains(data, b"\x1b[?1049") {
         *output_len = 0; // Clear the accumulated output buffer
     }
 

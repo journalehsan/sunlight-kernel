@@ -159,30 +159,30 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "sunlight-block"
-version = "0.1.0"
+version = "0.1.6"
 
 [[package]]
 name = "sunlight-compat-linux"
-version = "0.1.0"
+version = "0.1.6"
 
 [[package]]
 name = "sunlight-drivers"
-version = "0.1.0"
+version = "0.1.6"
 
 [[package]]
 name = "sunlight-elf"
-version = "0.1.0"
+version = "0.1.6"
 
 [[package]]
 name = "sunlight-fat"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-block",
 ]
 
 [[package]]
 name = "sunlight-fs"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-block",
  "sunlight-fat",
@@ -190,18 +190,18 @@ dependencies = [
 
 [[package]]
 name = "sunlight-init"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-ipc"
-version = "0.1.0"
+version = "0.1.6"
 
 [[package]]
 name = "sunlight-kernel"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "limine",
  "linked_list_allocator",
@@ -221,11 +221,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-libc"
-version = "0.1.0"
+version = "0.1.6"
 
 [[package]]
 name = "sunlight-net"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "log",
  "smoltcp",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-server"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "smoltcp",
  "sunlight-ipc",
@@ -246,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-utils"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -254,28 +254,28 @@ dependencies = [
 
 [[package]]
 name = "sunlight-timed"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-timer-server"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-top"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-tty"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -284,7 +284,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tty-server"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -294,25 +294,25 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tui"
-version = "0.1.0"
+version = "0.1.6"
 
 [[package]]
 name = "sunlight-tz"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-utils"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-vfs-server"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-fat",
  "sunlight-fs",
@@ -321,11 +321,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-virtio"
-version = "0.1.0"
+version = "0.1.6"
 
 [[package]]
 name = "sunlightctl"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "sunlightd"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "heapless",
  "sunlight-fs",
@@ -342,7 +342,7 @@ dependencies = [
 
 [[package]]
 name = "sunshell"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "timezone_service"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "sunlight-ipc",
  "sunlight-tz",

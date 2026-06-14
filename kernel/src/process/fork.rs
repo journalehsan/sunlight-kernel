@@ -120,6 +120,7 @@ pub fn fork_current_process(
             block_start_tick: 0,   // Not blocked yet
             aging_counter: 0,      // No aging yet
             wait_child: None,      // Not waiting on a child
+            tty_tab: None,         // fork() children are not part of the TTY spawn flow
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
         };
@@ -220,6 +221,7 @@ fn sys_fork(
             block_start_tick: 0,                     // Not blocked yet
             aging_counter: 0,                        // No aging yet
             wait_child: None,                        // Not waiting on a child
+            tty_tab: None,                           // fork() children are not part of the TTY spawn flow
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
         };

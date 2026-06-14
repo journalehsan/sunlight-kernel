@@ -221,6 +221,11 @@ pub fn spawn_from_path_with_env(
     let mut process = unsafe { Process::new(pid, 1, "sshl", pmm, hhdm_offset) };
     process.uid = uid;
     process.gid = gid;
+    // Attach this shell to a TTY tab keyed by its shell_id (parsed from the
+    // path above). Children spawned by the shell inherit this, so their fd0/fd1
+    // route to the tab's kernel stdin/stdout rings (foreground input routing).
+    // tty_server uses the same shell_id as the ring key.
+    process.tty_tab = Some(shell_id as u8);
     // Phase 6.5 Step 2: every spawned process gets an environment — either
     // one inherited from the caller or the defaults for this uid (PATH,
     // USER, HOME, SHELL). Username resolution from /etc/passwd happens in

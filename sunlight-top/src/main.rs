@@ -167,8 +167,19 @@ fn get_terminal_size() -> Option<(u16, u16)> {
 }
 
 fn sleep_ms(ms: u64) {
-    for _ in 0..(ms.saturating_mul(5000)) {
+    // No fine-grained sleep syscall yet. Approximate the frame interval with a
+    // light spin, but yield to the scheduler frequently so tty_server (which
+    // renders our output and forwards keystrokes) and the shell get CPU between
+    // frames. Without the yields, top would hold the CPU and keyboard input
+    // would never be processed.
+    let spins = ms.saturating_mul(1000);
+    let mut i: u64 = 0;
+    while i < spins {
         core::hint::spin_loop();
+        if i & 0xFF == 0 {
+            sunlight_ipc::process_yield();
+        }
+        i += 1;
     }
 }
 

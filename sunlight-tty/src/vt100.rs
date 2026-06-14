@@ -150,6 +150,18 @@ impl Vt100Parser {
                 self.state = VtState::Ground;
                 self.handle_sgr()
             }
+            // DEC private mode introducer (e.g. ESC[?1049h alt-screen,
+            // ESC[?25l hide cursor). Stay in CSI so the digits and final
+            // byte don't leak into the grid as literal text.
+            b'?' => VtOutput::Nothing,
+            // Set/reset mode (incl. DEC private modes). We don't implement an
+            // alt-screen buffer or cursor visibility, but must consume these so
+            // full-screen apps like top don't print "1049h"/"25l" garbage.
+            b'h' | b'l' => {
+                self.store_param();
+                self.state = VtState::Ground;
+                VtOutput::Nothing
+            }
             _ => {
                 self.state = VtState::Ground;
                 VtOutput::Nothing

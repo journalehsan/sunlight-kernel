@@ -19,6 +19,10 @@ pub enum SunlightSyscall {
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
+    // TTY mux for foreground input routing — see kernel process::tty_io.
+    TtyStdinPush = 23,
+    TtyStdoutPull = 24,
+    ProcessIsAlive = 25,
     // NOTE: 50 belongs to sys_mmap in the kernel dispatcher — GetTimeUtc
     // previously sat there and silently invoked mmap.
     GetTimeUtc = 81,
@@ -447,6 +451,60 @@ pub fn process_yield() {
     unsafe {
         raw_syscall(SunlightSyscall::ProcessYield, 0, 0, 0, 0, 0, 0, 0);
     }
+}
+
+/// Push keyboard bytes into tab `tab`'s kernel stdin ring so the foreground
+/// app can read them via fd0. Returns the number of bytes accepted.
+pub fn tty_stdin_push(tab: u32, bytes: &[u8]) -> usize {
+    if bytes.is_empty() {
+        return 0;
+    }
+    // SAFETY: passes a read-only pointer/length describing `bytes`; the kernel
+    // copies it into the tab's stdin ring before returning.
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::TtyStdinPush,
+            tab as u64,
+            bytes.as_ptr() as u64,
+            bytes.len() as u64,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret as usize
+}
+
+/// Drain tab `tab`'s kernel stdout ring into `buf`. Returns bytes pulled.
+pub fn tty_stdout_pull(tab: u32, buf: &mut [u8]) -> usize {
+    if buf.is_empty() {
+        return 0;
+    }
+    // SAFETY: passes a writable pointer/length describing `buf`; the kernel
+    // writes at most `buf.len()` bytes and returns the count.
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::TtyStdoutPull,
+            tab as u64,
+            buf.as_mut_ptr() as u64,
+            buf.len() as u64,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret as usize
+}
+
+/// Non-reaping check whether `pid` is still alive (used to detect when a
+/// foreground command exits).
+pub fn process_is_alive(pid: u64) -> bool {
+    // SAFETY: ProcessIsAlive takes no user pointers.
+    let (ret, _) =
+        unsafe { raw_syscall(SunlightSyscall::ProcessIsAlive, pid, 0, 0, 0, 0, 0, 0) };
+    ret == 1
 }
 
 pub fn get_time_utc() -> u64 {

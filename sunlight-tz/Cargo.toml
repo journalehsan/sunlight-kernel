@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-tz"
-version = "0.1.0"
+version = "0.1.6"
+
 edition = "2021"
 
 # No std — this crate must work in both no_std services and std test harnesses
