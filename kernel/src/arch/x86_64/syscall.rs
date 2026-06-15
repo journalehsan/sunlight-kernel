@@ -303,6 +303,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         74 => sys_sigreturn(frame),
         80 => sys_powerctl(frame.rdi),
         81 => sys_get_time_utc(),
+        86 => sys_monotonic_ms(),
         82 => sys_sysinfo(frame),
         83 => sys_setnice(frame),
         84 => sys_getnice(frame),
@@ -2113,6 +2114,14 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
 /// Returns the current Unix timestamp in seconds (RTC + tick advancement).
 fn sys_get_time_utc() -> u64 {
     crate::arch::x86_64::rtc::unix_time()
+}
+
+/// Syscall: monotonic_ms (86). Milliseconds since boot, derived from the PIT
+/// tick counter (~100 Hz, so ~10 ms resolution). Used for RTT measurement
+/// (e.g. ping) where the 1 s resolution of `get_time_utc` is too coarse.
+fn sys_monotonic_ms() -> u64 {
+    // PIT runs at ~100 Hz (see interrupts::init), i.e. 10 ms per tick.
+    crate::arch::x86_64::interrupts::ticks().wrapping_mul(10)
 }
 
 /// Syscall: sysinfo (82)

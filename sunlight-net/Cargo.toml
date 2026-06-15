@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-net"
-version = "0.1.50"
+version = "0.1.51"
+
 
 
 
@@ -22,6 +23,7 @@ smoltcp = {
         "socket-tcp",
         "socket-udp",
         "socket-dhcpv4",
+        "socket-icmp",
         "socket-dns",
     ]
 }

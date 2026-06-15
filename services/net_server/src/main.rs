@@ -332,15 +332,30 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             IpcMsg::with_label(NetOp::RELOAD_HOSTS).word(0, 1)
         }
         11 => {
-            // Phase 6.5 Step 4 bridge + Phase 5.3 ping support: the net-utils "ping"
-            // applet (and sunshell external resolution) round-trips here.
-            // words[0] = packed IPv4 target, words[1] = requested packet count.
-            let _target = msg.words[0];
-            let requested = msg.words[1].max(1).min(16);
-            IpcMsg::with_label(11)
-                .word(0, 1)           // success
-                .word(1, requested)   // replies
-                .word(2, 20)          // base RTT ms
+            // Phase 5.x.3 + 6.5: ICMP echo (ping) over the real device.
+            // words[0] = packed IPv4, words[1] = count (1..16).
+            let target = unpack_ipv4(msg.words[0]);
+            let count = msg.words[1].max(1).min(16) as u32;
+            unsafe {
+                // SAFETY: see RESOLVE above — single-threaded, exclusive access.
+                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+                    (Some(iface), Some(device)) => {
+                        let mut sockets = SocketSet::new(&mut SOCKET_STORAGE[..]);
+                        match sunlight_net::icmp::ping(target, count, iface, &mut sockets, device) {
+                            Ok(stats) => IpcMsg::with_label(11)
+                                .word(0, 1)
+                                .word(1, stats.packets_received as u64)
+                                .word(2, if stats.packets_received > 0 {
+                                    stats.total_rtt_ms / (stats.packets_received as u64)
+                                } else {
+                                    0
+                                }),
+                            Err(_) => IpcMsg::with_label(11).word(0, 0),
+                        }
+                    }
+                    _ => IpcMsg::with_label(11).word(0, 0),
+                }
+            }
         }
         _ => IpcMsg::with_label(0).word(0, 0),
     }

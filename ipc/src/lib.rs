@@ -26,6 +26,7 @@ pub enum SunlightSyscall {
     // NOTE: 50 belongs to sys_mmap in the kernel dispatcher — GetTimeUtc
     // previously sat there and silently invoked mmap.
     GetTimeUtc = 81,
+    MonotonicMs = 86,
     SysInfo = 82,
     SetNice = 83,
     GetNice = 84,
@@ -530,6 +531,14 @@ pub fn get_nice(pid: u64) -> i8 {
 pub fn get_time_utc() -> u64 {
     // SAFETY: GetTimeUtc takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetTimeUtc, 0, 0, 0, 0, 0, 0, 0) };
+    ret
+}
+
+/// Milliseconds since boot (~10 ms resolution, PIT-derived). Suitable for
+/// RTT/elapsed measurement where `get_time_utc`'s 1 s resolution is too coarse.
+pub fn monotonic_millis() -> u64 {
+    // SAFETY: MonotonicMs takes no user pointers.
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::MonotonicMs, 0, 0, 0, 0, 0, 0, 0) };
     ret
 }
 

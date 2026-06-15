@@ -15,8 +15,18 @@ use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint, Ipv4Address};
 
 const DNS_PORT: u16 = 53;
 const LOCAL_PORT: u16 = 53000;
-/// Poll budget in "ticks" before giving up and (optionally) retrying once.
-const POLL_TIMEOUT_TICKS: u32 = 2000;
+/// Wall-clock budget (seconds) for a single attempt before giving up and
+/// (optionally) retrying once.
+///
+/// This MUST be measured against real time, not a fixed poll-iteration count:
+/// `process_yield()` returns as soon as the scheduler re-runs net_server (often
+/// immediately, since it is usually the only runnable process), so a fixed
+/// iteration budget burns through in microseconds — long before a reply can
+/// traverse the QEMU slirp NAT and the host's recursive resolver. Names the
+/// host already has cached (e.g. google.com) used to "work" only because they
+/// happened to reply within that microsecond window; uncached names always
+/// raced out to a spurious `Timeout`.
+const DNS_TIMEOUT_SECS: u64 = 3;
 
 /// Resolve `hostname` to an IPv4 address via the upstream `server` (e.g.
 /// `[8, 8, 8, 8]`), sending a single A query over UDP/53.
@@ -92,31 +102,44 @@ fn run_query<D: Device>(
             .map_err(|_| DnsError::QueryFailed)?;
     }
 
-    for tick in 0..POLL_TIMEOUT_TICKS {
-        let now = Instant::from_millis(tick as i64);
+    // Real-time deadline (1 s resolution — coarse but sufficient for a UDP DNS
+    // round trip). `tick` is a separate monotonic counter feeding smoltcp's
+    // Instant; the UDP socket has no timers so its only requirement is that it
+    // not go backwards within the call.
+    let deadline = sunlight_ipc::get_time_utc().wrapping_add(DNS_TIMEOUT_SECS);
+    let mut tick: i64 = 0;
+
+    loop {
+        let now = Instant::from_millis(tick);
         iface.poll(now, device, sockets);
 
         let socket = sockets.get_mut::<udp::Socket>(handle);
         if socket.can_recv() {
             let mut res_buf = BytePacketBuffer::new();
-            let (n, _meta) = socket.recv_slice(&mut res_buf.buf).map_err(|_| DnsError::QueryFailed)?;
-            let _ = n;
-
-            let response = DnsPacket::from_buffer(&mut res_buf).map_err(|_| DnsError::QueryFailed)?;
-            if response.header.id != query_id {
-                // Stale/spoofed reply for a different query — keep waiting.
-                continue;
+            // A failed recv or a malformed/unparseable packet is not fatal: keep
+            // waiting for a well-formed reply until the deadline (a single bad
+            // datagram must not abort the query before the fallback logic, which
+            // keys on `Timeout`, ever gets a chance to run).
+            if let Ok((_n, _meta)) = socket.recv_slice(&mut res_buf.buf) {
+                if let Ok(response) = DnsPacket::from_buffer(&mut res_buf) {
+                    if response.header.id == query_id {
+                        return match response.first_a() {
+                            Some((addr, ttl)) => Ok((addr, ttl)),
+                            None => Err(DnsError::NotFound),
+                        };
+                    }
+                    // Stale/spoofed reply for a different query — keep waiting.
+                }
             }
-            return match response.first_a() {
-                Some((addr, ttl)) => Ok((addr, ttl)),
-                None => Err(DnsError::NotFound),
-            };
+        }
+
+        if sunlight_ipc::get_time_utc() >= deadline {
+            return Err(DnsError::Timeout);
         }
 
         // Each poll is a syscall round trip to the kernel's frame proxy;
         // yield so other processes get scheduled while we wait for a reply.
         sunlight_ipc::process_yield();
+        tick = tick.wrapping_add(1);
     }
-
-    Err(DnsError::Timeout)
 }
