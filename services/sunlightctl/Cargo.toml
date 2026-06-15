@@ -1,6 +1,8 @@
 [package]
 name = "sunlightctl"
-version = "0.1.26"
+version = "0.1.50"
+
+
 
 
 
@@ -10,6 +12,7 @@ edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [[bin]]

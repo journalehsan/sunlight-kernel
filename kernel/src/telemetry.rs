@@ -135,6 +135,9 @@ pub unsafe fn update_telemetry(sched: &Scheduler, pmm: &PhysicalMemoryManager, t
             crate::process::ProcessState::Running => 1,
             crate::process::ProcessState::BlockedOnIpc => 2,
             crate::process::ProcessState::Finished => 3,
+            crate::process::ProcessState::Suspended => 4,
+            crate::process::ProcessState::BlockedOnTimer => 5,
+            crate::process::ProcessState::BlockedOnIo => 6,
         };
         entry.cpu_ticks = sched.global_tick.saturating_sub(proc.last_run_tick);
         // Per-process resident memory: count present user-space pages in this

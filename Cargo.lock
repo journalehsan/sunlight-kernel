@@ -258,30 +258,30 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sunlight-block"
-version = "0.1.26"
+version = "0.1.50"
 
 [[package]]
 name = "sunlight-compat-linux"
-version = "0.1.26"
+version = "0.1.50"
 
 [[package]]
 name = "sunlight-drivers"
-version = "0.1.26"
+version = "0.1.50"
 
 [[package]]
 name = "sunlight-elf"
-version = "0.1.26"
+version = "0.1.50"
 
 [[package]]
 name = "sunlight-fat"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-block",
 ]
 
 [[package]]
 name = "sunlight-fetch"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "rustls",
  "sunlight-ipc",
@@ -292,26 +292,34 @@ dependencies = [
 
 [[package]]
 name = "sunlight-fs"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-block",
  "sunlight-fat",
 ]
 
 [[package]]
+name = "sunlight-gcd"
+version = "0.1.50"
+dependencies = [
+ "heapless",
+ "sunlight-ipc",
+]
+
+[[package]]
 name = "sunlight-init"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-ipc"
-version = "0.1.26"
+version = "0.1.50"
 
 [[package]]
 name = "sunlight-kernel"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "limine",
  "linked_list_allocator",
@@ -331,11 +339,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-libc"
-version = "0.1.26"
+version = "0.1.50"
 
 [[package]]
 name = "sunlight-net"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "log",
  "smoltcp",
@@ -346,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-server"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "smoltcp",
  "sunlight-ipc",
@@ -356,36 +364,44 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-utils"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
 ]
 
 [[package]]
+name = "sunlight-niced"
+version = "0.1.50"
+dependencies = [
+ "heapless",
+ "sunlight-ipc",
+]
+
+[[package]]
 name = "sunlight-timed"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-timer-server"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-top"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-tty"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -394,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tty-server"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -404,25 +420,25 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tui"
-version = "0.1.26"
+version = "0.1.50"
 
 [[package]]
 name = "sunlight-tz"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-utils"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-vfs-server"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-fat",
  "sunlight-fs",
@@ -431,19 +447,20 @@ dependencies = [
 
 [[package]]
 name = "sunlight-virtio"
-version = "0.1.26"
+version = "0.1.50"
 
 [[package]]
 name = "sunlightctl"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "heapless",
  "sunlight-ipc",
+ "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlightd"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "heapless",
  "sunlight-fs",
@@ -452,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "sunshell"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -461,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "timezone_service"
-version = "0.1.26"
+version = "0.1.50"
 dependencies = [
  "sunlight-ipc",
  "sunlight-tz",

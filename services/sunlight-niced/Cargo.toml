@@ -1,0 +1,17 @@
+[package]
+name = "sunlight-niced"
+version = "0.1.50"
+
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+heapless = "0.8"
+
+[[bin]]
+name = "niced"
+path = "src/main.rs"
+
+[[bin]]
+name = "nicectl"
+path = "src/bin/nicectl.rs"

@@ -1,0 +1,13 @@
+[package]
+name = "sunlight-gcd"
+version = "0.1.50"
+
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+heapless = "0.8"
+
+[[bin]]
+name = "gcd"
+path = "src/main.rs"

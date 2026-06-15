@@ -30,17 +30,12 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_ipc::{IpcMsg, ipc_call, nameserver_lookup, CapabilityToken};
 
-const SERIAL_PORT: u16 = 0x3f8;
-
-fn serial_out(s: &str) {
-    for byte in s.as_bytes() {
-        unsafe {
-            core::arch::asm!(
-                "out dx, al",
-                in("dx") SERIAL_PORT,
-                in("al") *byte,
-                options(nomem, nostack)
-            );
+fn stdout_write(s: &str) {
+    let mut data = s.as_bytes();
+    while !data.is_empty() {
+        match sunlight_libc::write(sunlight_libc::STDOUT, data) {
+            Ok(n) if n > 0 => data = &data[n..],
+            _ => break,
         }
     }
 }
@@ -50,8 +45,8 @@ macro_rules! println {
         use core::fmt::Write;
         let mut buf = heapless::String::<256>::new();
         let _ = write!(&mut buf, $($arg)*);
-        serial_out(&buf);
-        serial_out("\n");
+        stdout_write(&buf);
+        stdout_write("\n");
     }};
 }
 
@@ -217,19 +212,19 @@ fn _start() -> ! {
     
     // Lookup sunlightd capability
     let sunlightd_cap = nameserver_lookup("sunlightd");
-    if sunlightd_cap.is_none() {
+    let Some(sunlightd_cap) = sunlightd_cap else {
         println!("ERROR: sunlightd not found (is it running?)");
-        loop {}
-    }
+        sunlight_libc::exit(1);
+    };
 
     // Run list command
-    cmd_list(sunlightd_cap.unwrap());
+    cmd_list(sunlightd_cap);
 
-    loop {}
+    sunlight_libc::exit(0);
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     println!("sunlightctl: PANIC: {}", _info);
-    loop {}
+    sunlight_libc::exit(1);
 }

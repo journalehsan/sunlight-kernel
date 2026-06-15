@@ -29,6 +29,8 @@ members = [
     "sunlight-utils",
     "sunlight-net-utils",
     "sunlight-fetch",
+    "services/sunlight-niced",
+    "services/sunlight-gcd",
 ]
 
 [workspace.dependencies]

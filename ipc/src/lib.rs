@@ -27,6 +27,8 @@ pub enum SunlightSyscall {
     // previously sat there and silently invoked mmap.
     GetTimeUtc = 81,
     SysInfo = 82,
+    SetNice = 83,
+    GetNice = 84,
     // Phase 3.4: net_server (pid 5) frame proxy — kernel owns the virtio-net
     // device (ring-0 port I/O); these exchange raw Ethernet frames.
     NetTx = 90,
@@ -505,6 +507,24 @@ pub fn process_is_alive(pid: u64) -> bool {
     let (ret, _) =
         unsafe { raw_syscall(SunlightSyscall::ProcessIsAlive, pid, 0, 0, 0, 0, 0, 0) };
     ret == 1
+}
+
+/// Set the nice value (-10..=10) for `pid` (0 = current process).
+/// Wraps syscall 83 (SetNice), kernel clamps to NICE_MIN..=NICE_MAX.
+pub fn set_nice(pid: u64, nice: i8) -> bool {
+    // SAFETY: SetNice takes pid and nice value as plain integers, no pointers.
+    let (ret, _) = unsafe {
+        raw_syscall(SunlightSyscall::SetNice, pid, nice as i64 as u64, 0, 0, 0, 0, 0)
+    };
+    ret != u64::MAX
+}
+
+/// Get the current nice value for `pid` (0 = current process).
+/// Wraps syscall 84 (GetNice). Returns 0 on failure (best-effort).
+pub fn get_nice(pid: u64) -> i8 {
+    // SAFETY: GetNice takes pid as plain integer, no pointers.
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetNice, pid, 0, 0, 0, 0, 0, 0) };
+    ret as i64 as i8
 }
 
 pub fn get_time_utc() -> u64 {

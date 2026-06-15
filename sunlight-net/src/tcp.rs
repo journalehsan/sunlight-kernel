@@ -88,7 +88,9 @@ impl TcpManager {
                 )),
                 remote_port,
             );
-            socket.connect(iface.context(), endpoint, local_port);
+            socket
+                .connect(iface.context(), endpoint, local_port)
+                .map_err(|_| TcpError::SocketError)?;
         }
 
         for round in 0..POLL_ROUNDS {

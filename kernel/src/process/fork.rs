@@ -123,6 +123,10 @@ pub fn fork_current_process(
             tty_tab: None,         // fork() children are not part of the TTY spawn flow
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
+            wd_period_ticks: None,
+            counter: 0,
+            aging_boosted_this_pick: false,
+            quantum_override: None,
         };
 
         // Setup kernel stack top
@@ -224,6 +228,10 @@ fn sys_fork(
             tty_tab: None,                           // fork() children are not part of the TTY spawn flow
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
+            wd_period_ticks: None,
+            counter: 0,
+            aging_boosted_this_pick: false,
+            quantum_override: None,
         };
 
         // Setup kernel stack top

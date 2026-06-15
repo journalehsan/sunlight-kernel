@@ -462,6 +462,7 @@ max_ttys = 6
     RamEntry::file("/bin/free", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
     RamEntry::file("/bin/freezram", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
     RamEntry::file("/bin/top", 0, 0, mode::FILE_755, b"#!/sunlight/top\n"),
+    RamEntry::file("/bin/sunlightctl", 0, 0, mode::FILE_755, b"#!/sunlight/sunlightctl\n"),
     RamEntry::file("/bin/fetch", 0, 0, mode::FILE_755, b"#!/sunlight/fetch\n"),
     RamEntry::file("/bin/ping", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
     RamEntry::file("/bin/ifconfig", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),

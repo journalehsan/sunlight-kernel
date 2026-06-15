@@ -217,7 +217,13 @@ pub fn spawn_from_path_with_env(
 
     crate::serial_println!("[SPAWN] Loading {} ({} bytes)", path, bytes.len());
 
-    let pid = sched.processes.len() + 1;
+    // Allocate a collision-free pid the same way the spawn syscall does:
+    // highest existing pid + 1. Using processes.len()+1 here is unsafe because
+    // boot services hardcode non-contiguous pids (e.g. niced=10, gcd=11), so
+    // len()+1 can alias an existing pid — duplicate pids then break every
+    // pid-keyed lookup (wake_pid/waitpid/process_is_alive find the wrong
+    // process, leaving the real one blocked forever).
+    let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
     let mut process = unsafe { Process::new(pid, 1, "sshl", pmm, hhdm_offset) };
     process.uid = uid;
     process.gid = gid;
@@ -289,6 +295,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/arp"
         | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
+        "/usr/bin/sunlightctl" | "/bin/sunlightctl" => Ok(crate::SUNLIGHTCTL_ELF_BYTES),
         "/bin/fetch" | "/usr/bin/fetch" => Ok(crate::SUNLIGHT_FETCH_ELF_BYTES),
         // Phase 6.5 Step 3: PATH entries under these directories are applets
         // of the embedded multi-call binaries (argv[0] picks the applet).

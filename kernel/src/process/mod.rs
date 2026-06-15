@@ -84,14 +84,29 @@ pub struct Process {
     pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedPage>,
     /// Shared memory pages this process currently has mapped via tokens (owner + receivers).
     pub mapped_shared: alloc::vec::Vec<(crate::capability::CapabilityToken, x86_64::VirtAddr)>,
+
+    // === Scheduler bug-fix / feature fields ===
+    /// Watchdog: maximum runtime per quantum, in ticks. None = disabled. [FEAT-1]
+    pub wd_period_ticks: Option<u64>,
+    /// Nice-weighted counter for RoundRobin promotion/demotion. [FEAT-3]
+    pub counter: i32,
+    /// Guards against double starvation boost within a single pick(). [FEAT-3]
+    pub aging_boosted_this_pick: bool,
+    /// Quantum override set on promotion, consumed by tick(). [FEAT-3]
+    pub quantum_override: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessState {
     Ready,
     Running,
-    BlockedOnIpc,
+    Suspended,
     Finished,
+    BlockedOnIpc,
+    /// Blocked waiting for a timer/sleep to expire. [FEAT-2]
+    BlockedOnTimer,
+    /// Blocked waiting for I/O completion. [FEAT-2]
+    BlockedOnIo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -167,6 +182,10 @@ impl Process {
             tty_tab: None,          // Attached to a TTY tab only when spawned for one
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
+            wd_period_ticks: None,
+            counter: 0,
+            aging_boosted_this_pick: false,
+            quantum_override: None,
         }
     }
 

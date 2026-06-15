@@ -68,6 +68,12 @@ static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-top");
 static SUNLIGHT_FETCH_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/fetch");
+static SUNLIGHTCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlightctl");
+static SUNLIGHT_NICED_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/niced");
+static SUNLIGHT_GCD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/gcd");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -610,6 +616,74 @@ pub extern "C" fn _start() -> ! {
         } else {
             serial_println!("[PROC] Failed to load timezone_service ELF");
             splash.log("[PROC] Failed to load timezone_service ELF");
+        }
+    }
+
+    // Spawn sunlight-niced (pid=10) - registers as "niced" with init nameserver
+    serial_println!("[PROC] Spawning sunlight-niced (pid=10)...");
+    splash.set_status("Loading sunlight-niced");
+    splash.log("[PROC] Spawning sunlight-niced (pid=10)...");
+    splash.redraw();
+    {
+        let mut pmm = PMM.lock();
+        let mut niced = unsafe {
+            Process::new(10, 0, "niced", &mut pmm, hhdm_offset)
+        };
+        let entry = process::elf_loader::load_elf(SUNLIGHT_NICED_ELF_BYTES, &mut niced, &mut pmm, hhdm_offset);
+        if let Some(entry) = entry {
+            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
+            for i in 0..stack_pages {
+                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
+                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
+                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+                    | x86_64::structures::paging::PageTableFlags::WRITABLE
+                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                unsafe {
+                    niced.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                }
+            }
+            niced.init_context(entry, layout::USER_STACK_TOP);
+            sched::with_scheduler(|s| { s.add_process(niced); });
+            splash.log("[PROC] sunlight-niced pid=10");
+        } else {
+            serial_println!("[PROC] Failed to load sunlight-niced ELF");
+            splash.log("[PROC] Failed to load sunlight-niced ELF");
+        }
+    }
+
+    // Spawn sunlight-gcd (pid=11) - registers as "gcd" with init nameserver
+    serial_println!("[PROC] Spawning sunlight-gcd (pid=11)...");
+    splash.set_status("Loading sunlight-gcd");
+    splash.log("[PROC] Spawning sunlight-gcd (pid=11)...");
+    splash.redraw();
+    {
+        let mut pmm = PMM.lock();
+        let mut gcd = unsafe {
+            Process::new(11, 0, "gcd", &mut pmm, hhdm_offset)
+        };
+        let entry = process::elf_loader::load_elf(SUNLIGHT_GCD_ELF_BYTES, &mut gcd, &mut pmm, hhdm_offset);
+        if let Some(entry) = entry {
+            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
+            for i in 0..stack_pages {
+                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
+                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
+                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
+                    | x86_64::structures::paging::PageTableFlags::WRITABLE
+                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                unsafe {
+                    gcd.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                }
+            }
+            gcd.init_context(entry, layout::USER_STACK_TOP);
+            sched::with_scheduler(|s| { s.add_process(gcd); });
+            splash.log("[PROC] sunlight-gcd pid=11");
+        } else {
+            serial_println!("[PROC] Failed to load sunlight-gcd ELF");
+            splash.log("[PROC] Failed to load sunlight-gcd ELF");
         }
     }
 

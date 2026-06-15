@@ -30,6 +30,14 @@ pub const AGING_THRESHOLD_TICKS: u64 = 100; // Age after 100ms
 pub const MINIMUM_AGED_BURST_SCORE: u32 = 256; // Don't starve below HIGH
 pub const INTERACTIVE_DETECTION_THRESHOLD: u32 = 3; // Block < 3 ticks = interactive
 
+// === Feature 3: Nice-weighted counter system (RoundRobin mode only) ===
+pub const MAX_CREDIT: i32 = 6;
+pub const MAX_DEBT: i32 = -8; // asymmetric: easier to be demoted
+pub const PROMOTE_LIMIT: i32 = 3;
+pub const SKIP_LIMIT: i32 = -3;
+pub const DECAY_RATE: i32 = 1;
+pub const STARVATION_BOOST: i32 = 2;
+
 #[derive(Debug, Clone, Copy)]
 pub enum BurstReason {
     EarlyBlock,  // Task blocked early (< 3 ticks)
@@ -89,11 +97,62 @@ fn calculate_quantum_with_nice(burst_score: u32, nice: i8) -> u32 {
         .clamp(0, BURST_SCORE_MAX as i32) as u32;
 
     // 3. Continue calculating weight and quantum as before
-    let weight = BURST_SCORE_MAX - effective_score;
-    let bonus_quantum = (weight * (QUANTUM_MAX - QUANTUM_MIN)) / BURST_SCORE_MAX;
+    // [FIX-4] Interactive tasks (low score) get short quanta; CPU-bound tasks
+    // (high score) get long quanta. Previously this was inverted.
+    let bonus_quantum = (effective_score * (QUANTUM_MAX - QUANTUM_MIN)) / BURST_SCORE_MAX;
 
     QUANTUM_MIN + bonus_quantum
 }
+
+/// Returns the quantum (in ticks) a process should run for, honoring any
+/// promotion override set by the RoundRobin counter system. [FEAT-3]
+fn quantum_ticks(process: &Process) -> u32 {
+    process
+        .quantum_override
+        .unwrap_or_else(|| calculate_quantum_with_nice(process.burst_score, process.nice))
+}
+
+/// Accumulate the nice-weighted counter for a candidate process. [FEAT-3]
+/// nice == 0 tasks are pure round-robin and never have their counter touched.
+fn accumulate_counter(process: &mut Process) {
+    if process.nice == 0 {
+        return; // [FEAT-3] pure RR for neutral tasks
+    }
+
+    // CPU-bound tasks feel nice value MORE strongly than interactive ones.
+    let factor: i32 = if process.burst_score > BURST_SCORE_LOW { 2 } else { 1 };
+
+    if process.nice < 0 {
+        let gain = ((-process.nice as i32) / 4 + 1) * factor;
+        process.counter = (process.counter + gain).min(MAX_CREDIT);
+    } else {
+        let loss = (process.nice as i32 / 4 + 1) * factor;
+        process.counter = (process.counter - loss).max(MAX_DEBT);
+    }
+}
+
+/// Post-run housekeeping for the RoundRobin counter system. [FEAT-3]
+/// Called after a process's quantum ends, before it is re-enqueued.
+fn on_task_ran(process: &mut Process, ticks_used: u64) {
+    process.aging_boosted_this_pick = false; // [FEAT-3] reset guard
+
+    let q = quantum_ticks(process);
+    process.quantum_override = None; // [FEAT-3] consume override
+
+    if ticks_used < (q / 2) as u64 {
+        // Interactive: used less than half the quantum. Fast decay toward
+        // neutral, preserving sign (halving doesn't flip polarity).
+        process.counter /= 2; // [FEAT-3]
+    } else {
+        // CPU-bound: slow linear decay.
+        if process.counter > 0 {
+            process.counter -= DECAY_RATE; // [FEAT-3]
+        } else if process.counter < 0 {
+            process.counter += DECAY_RATE; // [FEAT-3]
+        }
+    }
+}
+
 pub struct Scheduler {
     pub processes: Vec<Process>,
 
@@ -226,24 +285,67 @@ impl Scheduler {
         self.idle_context_rsp = rsp;
     }
 
+    /// Set a per-process watchdog: if a single quantum runs longer than
+    /// `period_ticks`, the process is suspended. [FEAT-1]
+    pub fn set_process_watchdog(&mut self, pid: usize, period_ticks: u64) {
+        if let Some(p) = self.process_mut_by_pid(pid) {
+            p.wd_period_ticks = Some(period_ticks); // [FEAT-1]
+        }
+    }
+
+    /// Disable the per-process watchdog. [FEAT-1]
+    pub fn clear_process_watchdog(&mut self, pid: usize) {
+        if let Some(p) = self.process_mut_by_pid(pid) {
+            p.wd_period_ticks = None; // [FEAT-1]
+        }
+    }
+
+    /// Reset a process's nice-weighted counter (e.g. when nice changes at runtime). [FEAT-3]
+    pub fn reset_counter(&mut self, pid: usize) {
+        if let Some(p) = self.process_mut_by_pid(pid) {
+            p.counter = 0; // [FEAT-3]
+        }
+    }
+
     /// Called from timer IRQ — may set the reschedule flag.
     pub fn tick(&mut self) {
         self.global_tick += 1;
         self.current_ticks += 1;
 
         // This is the key line! We get the timeslice based on the current behavior of the process:
-        let current_burst_score = self.processes[self.current].burst_score;
-        let quantum =
-            calculate_quantum_with_nice(current_burst_score, self.processes[self.current].nice)
-                as u64;
+        let current = self.current;
+        let quantum = quantum_ticks(&self.processes[current]) as u64; // [FEAT-3]
 
         if self.current_ticks >= quantum {
             // Process used full quantum
-            let current_proc = &mut self.processes[self.current];
-            current_proc.timeslice_used = self.current_ticks as u32;
+            let ticks_used = self.current_ticks;
+            let current_proc = &mut self.processes[current];
+            current_proc.timeslice_used = ticks_used as u32;
 
             // Update burst score for full quantum usage
             update_burst_score(current_proc, BurstReason::FullQuantum);
+
+            // [FEAT-3] Counter decay / override consumption is RoundRobin-only.
+            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                on_task_ran(current_proc, ticks_used);
+            } else {
+                current_proc.quantum_override = None;
+                current_proc.aging_boosted_this_pick = false;
+            }
+
+            // [FEAT-1] Per-process watchdog: suspend if this quantum ran too long.
+            if let Some(wd) = current_proc.wd_period_ticks {
+                if ticks_used > wd {
+                    current_proc.state = ProcessState::Suspended;
+                    serial_println!(
+                        "[WD] pid={} '{}' exceeded watchdog: ran={} limit={} ticks — suspended",
+                        current_proc.pid,
+                        current_proc.name,
+                        ticks_used,
+                        wd
+                    );
+                }
+            }
 
             // Age processes that haven't run recently
             self.age_ready_tasks();
@@ -259,14 +361,16 @@ impl Scheduler {
     }
 
     fn age_ready_tasks(&mut self) {
-        if self.global_tick.is_multiple_of(AGING_INTERVAL_TICKS) {
-            return; // Only age every AGING_INTERVAL_TICKS
+        // [FIX-1] Only age on multiples of AGING_INTERVAL_TICKS; previously
+        // this condition was inverted and aged on ~99% of ticks.
+        if !self.global_tick.is_multiple_of(AGING_INTERVAL_TICKS) {
+            return; // [FIX-1] skip unless this is an aging tick
         }
 
         for idx in 0..self.processes.len() {
             let p = &mut self.processes[idx];
 
-            // Only age Ready (not Running/BlockedOnIpc) processes
+            // Only age Ready (not Running/Blocked*) processes
             if !matches!(p.state, ProcessState::Ready) {
                 continue;
             }
@@ -281,15 +385,20 @@ impl Scheduler {
 
     /// Pick the next Ready process using BORE tiered queues
     pub fn pick_next_bore(&mut self) -> Option<usize> {
-        let mut skipped_current = None;
+        // [FIX-2] Each queue pop gets its own isolated "skipped current"
+        // variable so a value popped from one tier doesn't leak into the
+        // re-enqueue decision for another tier.
+        let mut skipped_high: Option<usize> = None;
+        let mut skipped_medium: Option<usize> = None;
+        let mut skipped_low: Option<usize> = None;
 
         if let Some(idx) = pop_ready_excluding_current(
             &mut self.ready_queue_high,
             &self.processes,
             self.current,
-            &mut skipped_current,
+            &mut skipped_high,
         ) {
-            if let Some(current) = skipped_current {
+            if let Some(current) = skipped_high {
                 self.enqueue_process_once(current);
             }
             return Some(idx);
@@ -299,9 +408,12 @@ impl Scheduler {
             &mut self.ready_queue_medium,
             &self.processes,
             self.current,
-            &mut skipped_current,
+            &mut skipped_medium,
         ) {
-            if let Some(current) = skipped_current {
+            if let Some(current) = skipped_high {
+                self.enqueue_process_once(current);
+            }
+            if let Some(current) = skipped_medium {
                 self.enqueue_process_once(current);
             }
             return Some(idx);
@@ -311,15 +423,21 @@ impl Scheduler {
             &mut self.ready_queue_low,
             &self.processes,
             self.current,
-            &mut skipped_current,
+            &mut skipped_low,
         ) {
-            if let Some(current) = skipped_current {
+            if let Some(current) = skipped_high {
+                self.enqueue_process_once(current);
+            }
+            if let Some(current) = skipped_medium {
+                self.enqueue_process_once(current);
+            }
+            if let Some(current) = skipped_low {
                 self.enqueue_process_once(current);
             }
             return Some(idx);
         }
 
-        if let Some(current) = skipped_current {
+        if let Some(current) = skipped_high.or(skipped_medium).or(skipped_low) {
             return Some(current);
         }
 
@@ -347,26 +465,134 @@ impl Scheduler {
         None
     }
 
-    /// Pick the next Ready process using the original stable round-robin scan.
-    pub fn pick_next_round_robin(&self) -> Option<usize> {
+    /// Pick the next Ready process for RoundRobin mode. [FEAT-3]
+    ///
+    /// Turn ORDER remains round-robin (every Ready task gets a turn), but
+    /// nice != 0 tasks can be promoted earlier or deferred within a cycle via
+    /// the nice-weighted counter system. nice == 0 tasks are pure RR.
+    pub fn pick_next_round_robin(&mut self) -> Option<usize> {
         let len = self.processes.len();
         if len == 0 {
             return None;
         }
 
+        // Safety bound: exactly one full pass through the queue.
+        // Do NOT use len*2. A task enqueued-back cannot be seen again
+        // within len attempts, preventing double accumulation.
+        let mut attempts = len;
         let start = (self.current + 1) % len;
         let mut idx = start;
+
         loop {
-            if matches!(self.processes[idx].state, ProcessState::Ready) {
-                return Some(idx);
-            }
-            idx = (idx + 1) % len;
-            if idx == start {
+            if attempts == 0 {
                 break;
             }
+            attempts -= 1;
+
+            // Skip non-Ready processes silently
+            if !matches!(self.processes[idx].state, ProcessState::Ready) {
+                idx = (idx + 1) % len;
+                if idx == start && attempts == 0 {
+                    break;
+                }
+                continue;
+            }
+
+            // ── Starvation rescue BEFORE accumulate_counter ──────────────
+            // Must run before accumulate so deeply-penalized starving tasks
+            // still get rescued (otherwise skip fires before boost applies).
+            let ticks_waiting = self
+                .global_tick
+                .saturating_sub(self.processes[idx].last_run_tick);
+            if ticks_waiting > AGING_THRESHOLD_TICKS
+                && !self.processes[idx].aging_boosted_this_pick
+            {
+                self.processes[idx].counter =
+                    (self.processes[idx].counter + STARVATION_BOOST).min(MAX_CREDIT); // [FEAT-3] capped
+                self.processes[idx].aging_boosted_this_pick = true; // one-shot per pick
+                update_burst_score(&mut self.processes[idx], BurstReason::Aged);
+            }
+
+            // ── Accumulate counter for this candidate ────────────────────
+            accumulate_counter(&mut self.processes[idx]); // [FEAT-3]
+
+            // ── High priority promotion ───────────────────────────────────
+            if self.processes[idx].nice < 0 && self.processes[idx].counter >= PROMOTE_LIMIT {
+                // Partial spend: keep residual credit, don't reset to zero.
+                self.processes[idx].counter =
+                    0_i32.max(self.processes[idx].counter - PROMOTE_LIMIT); // [FEAT-3]
+
+                // 10% quantum bonus via quantum_override (fixed-point: *110/100)
+                let base_q = calculate_quantum_with_nice(
+                    self.processes[idx].burst_score,
+                    self.processes[idx].nice,
+                );
+                let quantum_override_value = ((base_q * 110) / 100).min(QUANTUM_MAX);
+                self.processes[idx].quantum_override = Some(quantum_override_value); // [FEAT-3]
+
+                serial_println!(
+                    "[SCHED-RR] promoted pid={} nice={} counter={} quantum_override={}",
+                    self.processes[idx].pid,
+                    self.processes[idx].nice,
+                    self.processes[idx].counter,
+                    quantum_override_value
+                );
+
+                self.processes[idx].aging_boosted_this_pick = false;
+                return Some(idx);
+            }
+
+            // ── Low priority skip (debt zone) ─────────────────────────────
+            if self.processes[idx].nice > 0 && self.processes[idx].counter <= SKIP_LIMIT {
+                // Partial debt recovery each time we skip
+                self.processes[idx].counter += DECAY_RATE; // [FEAT-3]
+
+                serial_println!(
+                    "[SCHED-RR] skipped pid={} nice={} counter={}",
+                    self.processes[idx].pid,
+                    self.processes[idx].nice,
+                    self.processes[idx].counter
+                );
+
+                self.processes[idx].aging_boosted_this_pick = false;
+                // Move to next — this task deferred for this cycle
+                idx = (idx + 1) % len;
+                if idx == start && attempts == 0 {
+                    break;
+                }
+                continue;
+            }
+
+            // ── Normal pick (nice==0 or counter in neutral zone) ─────────
+            self.processes[idx].aging_boosted_this_pick = false;
+            return Some(idx);
         }
 
-        None
+        // ── Fallback: all tasks were skipped ─────────────────────────────
+        // Bounded debt means this is rare. Find the least-indebted Ready task.
+        // This prevents livelock when every task is in debt simultaneously.
+        let mut best_idx = None;
+        let mut best_counter = i32::MIN;
+        let mut scan = start;
+        for _ in 0..len {
+            if matches!(self.processes[scan].state, ProcessState::Ready)
+                && self.processes[scan].counter > best_counter
+            {
+                best_counter = self.processes[scan].counter;
+                best_idx = Some(scan);
+            }
+            scan = (scan + 1) % len;
+        }
+
+        if let Some(idx) = best_idx {
+            serial_println!(
+                "[SCHED-RR] fallback: all tasks in debt, picking least-indebted idx={} counter={}",
+                idx,
+                best_counter
+            );
+        }
+
+        best_idx // [FEAT-3] pick least-indebted rather than blind front
     }
 
     pub fn pick_next(&mut self) -> Option<usize> {
@@ -419,9 +645,54 @@ impl Scheduler {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
 
-            // Update state and enqueue
+            // Update state and enqueue. [FIX-3] update_burst_score may change
+            // this process's queue tier, so force-remove from any tier queue
+            // before re-enqueuing at the (possibly new) correct tier — using
+            // enqueue_process_once() here could no-op if it's still queued
+            // under its old tier.
             self.processes[idx].state = ProcessState::Ready;
-            self.enqueue_process_once(idx);
+            self.remove_from_ready_queues(idx); // [FIX-3] force remove from any tier
+            self.enqueue_process(idx); // then enqueue fresh at correct tier
+        }
+    }
+
+    /// Wake a process blocked on a timer/sleep. [FEAT-2]
+    pub fn wake_timer_pid(&mut self, pid: usize) {
+        let idx = match self.processes.iter().position(|p| p.pid == pid) {
+            Some(i) => i,
+            None => return,
+        };
+
+        if self.processes[idx].state == ProcessState::BlockedOnTimer {
+            let ticks_blocked = self.global_tick - self.processes[idx].block_start_tick;
+
+            if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
+                update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
+            }
+
+            self.processes[idx].state = ProcessState::Ready;
+            self.remove_from_ready_queues(idx); // [FIX-3] / [FEAT-2]
+            self.enqueue_process(idx);
+        }
+    }
+
+    /// Wake a process blocked on I/O completion. [FEAT-2]
+    pub fn wake_io_pid(&mut self, pid: usize) {
+        let idx = match self.processes.iter().position(|p| p.pid == pid) {
+            Some(i) => i,
+            None => return,
+        };
+
+        if self.processes[idx].state == ProcessState::BlockedOnIo {
+            let ticks_blocked = self.global_tick - self.processes[idx].block_start_tick;
+
+            if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
+                update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
+            }
+
+            self.processes[idx].state = ProcessState::Ready;
+            self.remove_from_ready_queues(idx); // [FIX-3] / [FEAT-2]
+            self.enqueue_process(idx);
         }
     }
 
@@ -497,10 +768,28 @@ impl Scheduler {
         let ready_mid = self.ready_queue_medium.len();
         let ready_low = self.ready_queue_low.len();
 
+        // [FEAT-2] Per-blocked-state diagnostics.
+        let blocked_ipc = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::BlockedOnIpc)
+            .count();
+        let blocked_timer = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::BlockedOnTimer)
+            .count();
+        let blocked_io = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::BlockedOnIo)
+            .count();
+
         serial_println!(
-            "[SCHED-DIAG] created={} finished={} alive={} finished_slots={} ready_queues=({},{},{}) delta_created-finished={}",
+            "[SCHED-DIAG] created={} finished={} alive={} finished_slots={} ready_queues=({},{},{}) delta_created-finished={} blocked_ipc={} blocked_timer={} blocked_io={}",
             created, finished, alive, finished_slots, ready_high, ready_mid, ready_low,
-            created.saturating_sub(finished)
+            created.saturating_sub(finished),
+            blocked_ipc, blocked_timer, blocked_io
         );
     }
 }
