@@ -1984,7 +1984,26 @@ mod sunlight {
                 if let Some(pid) = shell.fg_pid {
                     // An external command was launched as a foreground job. Tell
                     // tty_server, which drives the session until the child exits.
-                    IpcMsg::with_label(FG_STARTED_LABEL).word(0, pid)
+                    // Pack the command's basename so the tab bar can show it:
+                    // word(0)=pid, word(1)=name len, words[2..]=name (8 bytes/word).
+                    let (name, name_len) = fg_app_name(&cmd_snap[..cmd_snap_len]);
+                    let mut fg = IpcMsg::with_label(FG_STARTED_LABEL)
+                        .word(0, pid)
+                        .word(1, name_len as u64);
+                    let mut wi = 2usize;
+                    let mut ni = 0usize;
+                    while ni < name_len && wi < 8 {
+                        let mut chunk = [0u8; 8];
+                        let mut bi = 0usize;
+                        while bi < 8 && ni < name_len {
+                            chunk[bi] = name[ni];
+                            ni += 1;
+                            bi += 1;
+                        }
+                        fg = fg.word(wi, u64::from_le_bytes(chunk));
+                        wi += 1;
+                    }
+                    fg
                 } else if cmd_snap_len == 4 && &cmd_snap[..cmd_snap_len] == b"exit" {
                     IpcMsg::with_label(EXIT_LABEL)
                 } else if unsafe { LONG_OUT_ACTIVE } {
@@ -2009,6 +2028,35 @@ mod sunlight {
             };
             msg = ipc_reply_and_wait(ep, reply);
         }
+    }
+
+    /// Extract the application name shown in the tab bar from a command line:
+    /// the first whitespace-delimited token, reduced to its basename
+    /// (text after the last '/'). Returns a fixed buffer + length.
+    fn fg_app_name(cmd: &[u8]) -> ([u8; 24], usize) {
+        // Skip leading whitespace.
+        let start = cmd
+            .iter()
+            .position(|&b| b != b' ' && b != b'\t')
+            .unwrap_or(cmd.len());
+        let rest = &cmd[start..];
+        // Take up to the next whitespace -> the command token.
+        let end = rest
+            .iter()
+            .position(|&b| b == b' ' || b == b'\t')
+            .unwrap_or(rest.len());
+        let token = &rest[..end];
+        // Basename: text after the last '/'.
+        let base_start = token
+            .iter()
+            .rposition(|&b| b == b'/')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let base = &token[base_start..];
+        let mut out = [0u8; 24];
+        let n = base.len().min(24);
+        out[..n].copy_from_slice(&base[..n]);
+        (out, n)
     }
 
     fn debug_log_cmd_output(cmd: &[u8], output: &[u8]) {

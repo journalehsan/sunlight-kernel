@@ -26,6 +26,28 @@ pub struct TermCell {
     pub bg: u32, // RGB color
 }
 
+/// Display info for a single tab in the tab bar.
+///
+/// `name`/`name_len` hold the title text (e.g. "SHELL" or "TOP"). `running`
+/// marks a tab whose foreground app is still alive — the renderer appends a
+/// `*` when such a tab is not the active one.
+#[derive(Clone, Copy)]
+pub struct TabLabel {
+    pub name: [u8; 24],
+    pub name_len: usize,
+    pub running: bool,
+}
+
+impl TabLabel {
+    pub const fn empty() -> Self {
+        Self {
+            name: [0; 24],
+            name_len: 0,
+            running: false,
+        }
+    }
+}
+
 /// Render the TTY shell screen. Called after successful login and on every key event.
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
@@ -184,7 +206,7 @@ pub unsafe fn render_terminal_grid(
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
-    tab_count: usize,
+    tab_labels: &[TabLabel],
     active_tab: usize,
     cols: usize,
     rows: usize,
@@ -223,14 +245,36 @@ pub unsafe fn render_terminal_grid(
     fb.hline(0, tab_y + TAB_H, fb_width, layout::palette::SEPARATOR);
 
     let mut tx = 8u32;
-    for i in 0..tab_count.min(10) {
+    for (i, label) in tab_labels.iter().take(10).enumerate() {
         let is_active = i == active_tab;
         let fg = if is_active {
             layout::palette::ACCENT
         } else {
             layout::palette::TEXT_DIM
         };
-        let tab_text = " shell ";
+        // Compose the visible label: " NAME " (uppercase title), with a
+        // trailing "*" when a background tab still has a running app.
+        let mut buf = [b' '; 28];
+        let mut n = 1usize; // leading space
+        let name = if label.name_len == 0 {
+            &b"SHELL"[..]
+        } else {
+            &label.name[..label.name_len.min(24)]
+        };
+        for &b in name {
+            if n < buf.len() - 2 {
+                // ASCII uppercase so titles read "TOP", "CURL", etc.
+                buf[n] = if b.is_ascii_lowercase() { b - 32 } else { b };
+                n += 1;
+            }
+        }
+        if label.running && !is_active && n < buf.len() - 1 {
+            buf[n] = b'*';
+            n += 1;
+        }
+        buf[n] = b' '; // trailing space
+        n += 1;
+        let tab_text = core::str::from_utf8(&buf[..n]).unwrap_or(" SHELL ");
         let tw = font::text_width(tab_text, 1);
         fb.fill_rect(tx, tab_y + 3, tw + 2, TAB_H - 6, layout::palette::BG);
         font::draw_str(&mut fb, tx + 1, tab_y + 5, tab_text, fg, 1);

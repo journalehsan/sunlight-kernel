@@ -135,6 +135,10 @@ struct ShellTab {
     /// keyboard goes to this tab's stdin ring and its stdout ring is rendered
     /// live, instead of going through the shell line editor.
     fg_pid: Option<u64>,
+    /// Basename of the running foreground app (e.g. "top"), shown in the tab
+    /// title. Empty (`fg_app_name_len == 0`) means the tab shows "SHELL".
+    fg_app_name: [u8; 24],
+    fg_app_name_len: usize,
 }
 
 /// Global scrollback state for all tabs (indexed by active_tab)
@@ -161,6 +165,8 @@ impl ShellTab {
             username: [0; 32],
             username_len: 0,
             fg_pid: None,
+            fg_app_name: [0; 24],
+            fg_app_name_len: 0,
         }
     }
 }
@@ -397,12 +403,14 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         }
                                         continue;
                                     }
-                                    ShellKeyResult::ForegroundStarted(pid) => {
+                                    ShellKeyResult::ForegroundStarted(pid, name, name_len) => {
                                         // Enter foreground mode. The app's output
                                         // is drained into scrollback and rendered
                                         // by the idle loop; a full-screen app's
                                         // alt-screen enter resets the buffer.
                                         tab.fg_pid = Some(pid);
+                                        tab.fg_app_name = name;
+                                        tab.fg_app_name_len = name_len;
                                     }
                                     ShellKeyResult::Continue => {}
                                 }
@@ -490,6 +498,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         }
                         if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
                             tab.fg_pid = None;
+                            tab.fg_app_name_len = 0;
                         }
                         render_active_shell_fb(
                             fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
@@ -649,13 +658,27 @@ fn render_active_shell_fb(
     // re-renders) so the per-keystroke render path never does a sysinfo syscall.
     let (clock_buf, clock_len) = unsafe { titlebar(get_time_utc()) };
 
+    // Build the dynamic tab labels: each tab shows its running app's name
+    // (uppercased by the renderer) or "SHELL" when idle, plus a "*" on
+    // background tabs that still have a live foreground app.
+    let mut labels = [sunlight_tui::TabLabel::empty(); MAX_TABS];
+    let n_tabs = tab_count.max(1).min(MAX_TABS);
+    for i in 0..n_tabs {
+        if let Some(tab) = tabs.get(i).filter(|t| t.pid != 0) {
+            let len = tab.fg_app_name_len.min(24);
+            labels[i].name[..len].copy_from_slice(&tab.fg_app_name[..len]);
+            labels[i].name_len = len;
+            labels[i].running = tab.fg_pid.is_some();
+        }
+    }
+
     unsafe {
         sunlight_tui::render_terminal_grid(
             fb_addr as *mut u32,
             fb_w,
             fb_h,
             fb_p,
-            tab_count.max(1),
+            &labels[..n_tabs],
             active_tab,
             cols,
             rows,
@@ -945,7 +968,8 @@ enum ShellKeyResult {
     /// The shell wants to exit (logout).
     Exited,
     /// The shell launched a foreground command; tty_server now drives it.
-    ForegroundStarted(u64),
+    /// Carries (pid, app-name buffer, app-name length).
+    ForegroundStarted(u64, [u8; 24], usize),
 }
 
 fn send_key_to_shell(
@@ -960,7 +984,24 @@ fn send_key_to_shell(
         return ShellKeyResult::Exited;
     }
     if reply.label == FG_STARTED_LABEL {
-        return ShellKeyResult::ForegroundStarted(reply.words[0]);
+        // words[0] = pid, words[1] = name length, words[2..] = name bytes
+        // packed 8 per word (little-endian).
+        let pid = reply.words[0];
+        let name_len = (reply.words[1] as usize).min(24);
+        let mut name = [0u8; 24];
+        let mut ni = 0usize;
+        let mut wi = 2usize;
+        while ni < name_len && wi < reply.words.len() {
+            let bytes = reply.words[wi].to_le_bytes();
+            let mut bi = 0usize;
+            while bi < 8 && ni < name_len {
+                name[ni] = bytes[bi];
+                ni += 1;
+                bi += 1;
+            }
+            wi += 1;
+        }
+        return ShellKeyResult::ForegroundStarted(pid, name, name_len);
     }
     append_shell_reply(cap, term_output, term_output_len, &reply);
     ShellKeyResult::Continue
