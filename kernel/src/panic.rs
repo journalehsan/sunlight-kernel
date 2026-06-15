@@ -8,3 +8,15 @@ fn panic(info: &PanicInfo) -> ! {
         core::arch::x86_64::_mm_pause();
     }
 }
+
+#[alloc_error_handler]
+fn alloc_error(layout: core::alloc::Layout) -> ! {
+    serial_println!(
+        "[OOM] Allocation of {} bytes (align={}) failed",
+        layout.size(),
+        layout.align()
+    );
+    loop {
+        core::arch::x86_64::_mm_pause();
+    }
+}

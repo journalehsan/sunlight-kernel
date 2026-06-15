@@ -6,7 +6,7 @@ use x86_64::{
 };
 
 pub const HEAP_START: VirtAddr = VirtAddr::new_truncate(0xFFFF_FFFF_9000_0000);
-pub const HEAP_SIZE: usize = 1024 * 1024; // 1 MiB
+pub const HEAP_SIZE: usize = 16 * 1024 * 1024; // 16 MiB
 pub const HEAP_PAGES: usize = HEAP_SIZE / Size4KiB::SIZE as usize;
 
 #[global_allocator]
