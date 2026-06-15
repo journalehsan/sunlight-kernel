@@ -223,7 +223,7 @@ pub unsafe fn render_terminal_grid(
 
     // Header: logo left, clock right, mode label left of the clock
     font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
-    font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
+    font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::ACCENT, 1);
     let clock_w = clock.len() as u32 * 8;
     let clock_x = fb_width.saturating_sub(clock_w + 16);
     tty_draw_line(&mut fb, clock_x, 16, clock, layout::palette::TEXT, 1);

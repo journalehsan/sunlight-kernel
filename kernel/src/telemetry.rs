@@ -137,7 +137,19 @@ pub unsafe fn update_telemetry(sched: &Scheduler, pmm: &PhysicalMemoryManager, t
             crate::process::ProcessState::Finished => 3,
         };
         entry.cpu_ticks = sched.global_tick.saturating_sub(proc.last_run_tick);
-        entry.mem_pages = 0;
+        // Per-process resident memory: count present user-space pages in this
+        // process's address space. hhdm_offset comes from the Limine response;
+        // if unavailable, fall back to 0.
+        entry.mem_pages = match crate::HHDM_REQ.response() {
+            Some(resp) => {
+                let hhdm = x86_64::VirtAddr::new(resp.offset);
+                // SAFETY: caller holds the scheduler lock, so page tables are
+                // quiescent; hhdm is the bootloader-provided HHDM base.
+                let pages = unsafe { proc.address_space.count_user_pages(hhdm) };
+                pages.min(u32::MAX as usize) as u32
+            }
+            None => 0,
+        };
         entry._pad = [0; 3];
         entry._pad2 = 0;
         entry.name = [0; 32];

@@ -166,13 +166,15 @@ impl Canvas {
             self.fg_red();
         }
 
+        // ASCII bar glyphs: the TTY grid stores each cell as a single byte, so
+        // multi-byte box-drawing characters would render as garbage.
         for _ in 0..filled {
-            self.push_str("█");
+            self.push(b'#');
         }
 
         self.fg_dim();
         for _ in filled..width {
-            self.push_str("░");
+            self.push(b'-');
         }
 
         self.reset();

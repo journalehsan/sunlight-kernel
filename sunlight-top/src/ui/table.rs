@@ -97,7 +97,7 @@ pub fn render_table(
         let name = proc.name_str();
         if name.len() > name_col_width && name_col_width > 1 {
             c.push_bytes(&name.as_bytes()[..name_col_width - 1]);
-            c.push_str("…");
+            c.push(b'~');
         } else {
             c.push_padded(name, name_col_width);
         }

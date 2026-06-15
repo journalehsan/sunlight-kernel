@@ -31,7 +31,7 @@ impl ViewState {
         c.move_to(7, 1);
         c.fg_dim();
         for _ in 0..self.term_cols {
-            c.push_str("─");
+            c.push(b'-');
         }
         c.reset();
 

@@ -289,6 +289,52 @@ impl AddressSpace {
         Some(phys)
     }
 
+    /// Count the number of present user-space 4 KiB pages mapped in this
+    /// address space (an RSS-like measure). Walks only the lower half of the
+    /// PML4 (indices 0..256); the kernel higher half is shared and excluded.
+    /// Huge pages are counted by the number of 4 KiB pages they span.
+    ///
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base and the page tables
+    /// must be quiescent (caller holds the scheduler lock).
+    pub unsafe fn count_user_pages(&self, hhdm_offset: VirtAddr) -> usize {
+        let mut total = 0usize;
+        let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
+        for p4e in pml4.iter().take(256) {
+            if p4e.is_unused() {
+                continue;
+            }
+            let p3 = &*((hhdm_offset + p4e.addr().as_u64()).as_ptr::<PageTable>());
+            for p3e in p3.iter() {
+                if p3e.is_unused() {
+                    continue;
+                }
+                // 1 GiB huge page
+                if p3e.flags().contains(PageTableFlags::HUGE_PAGE) {
+                    total += 512 * 512;
+                    continue;
+                }
+                let p2 = &*((hhdm_offset + p3e.addr().as_u64()).as_ptr::<PageTable>());
+                for p2e in p2.iter() {
+                    if p2e.is_unused() {
+                        continue;
+                    }
+                    // 2 MiB huge page
+                    if p2e.flags().contains(PageTableFlags::HUGE_PAGE) {
+                        total += 512;
+                        continue;
+                    }
+                    let p1 = &*((hhdm_offset + p2e.addr().as_u64()).as_ptr::<PageTable>());
+                    for p1e in p1.iter() {
+                        if !p1e.is_unused() && p1e.flags().contains(PageTableFlags::PRESENT) {
+                            total += 1;
+                        }
+                    }
+                }
+            }
+        }
+        total
+    }
+
     /// Create or get the next-level page table for an entry.
     fn create_next_table(
         entry: &mut x86_64::structures::paging::page_table::PageTableEntry,

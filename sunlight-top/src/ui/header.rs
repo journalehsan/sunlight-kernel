@@ -7,33 +7,35 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
     c.fg_orange();
     c.bold();
 
-    let title = " ☀ sunlight-top ";
+    // ASCII-only chrome: the TTY grid renders one byte per cell, so box-drawing
+    // and other multi-byte glyphs would come out as garbage.
+    let title = " * sunlight-top ";
     let width = term_width as usize;
     let pad = width.saturating_sub(title.len()) / 2;
     for _ in 0..pad {
-        c.push_str("─");
+        c.push(b'-');
     }
     c.push_str(title);
     let used = pad + title.len();
     for _ in used..width {
-        c.push_str("─");
+        c.push(b'-');
     }
     c.reset();
     c.clear_eol();
 
     c.move_to(2, 1);
-    c.fg_dim();
+    c.fg_orange();
     c.push_str(" uptime: ");
     c.reset();
     render_uptime(c, snap.uptime_secs);
-    c.fg_dim();
+    c.fg_orange();
     c.push_str("  tasks: ");
     c.reset();
     c.fg_white();
     c.push_u64(snap.proc_count as u64);
     c.reset();
     if snap.local_time_len > 0 {
-        c.fg_dim();
+        c.fg_orange();
         c.push_str("  local: ");
         c.reset();
         c.push_bytes(&snap.local_time[..snap.local_time_len]);
@@ -41,7 +43,7 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
     c.clear_eol();
 
     c.move_to(3, 1);
-    c.fg_dim();
+    c.fg_orange();
     c.push_str(" CPU  [");
     c.reset();
     c.progress_bar(snap.cpu_usage_pct, term_width.saturating_sub(14));
@@ -57,7 +59,7 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
     } else {
         0
     };
-    c.fg_dim();
+    c.fg_orange();
     c.push_str(" MEM  [");
     c.reset();
     c.progress_bar(mem_pct, term_width.saturating_sub(14));
@@ -80,14 +82,14 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
     if snap.zram_orig_kb > 0 {
         let zram_pct = ((snap.zram_comp_kb.saturating_mul(100)) / snap.zram_orig_kb.max(1)).min(100) as u8;
         let ratio = snap.zram_orig_kb / snap.zram_comp_kb.max(1);
-        c.fg_dim();
+        c.fg_orange();
         c.push_str(" ZRAM [");
         c.reset();
         c.progress_bar(zram_pct, term_width.saturating_sub(14));
         c.push_str("] ");
         push_kb_human(c, snap.zram_comp_kb);
         c.fg_dim();
-        c.push_str(" → ");
+        c.push_str(" -> ");
         c.reset();
         push_kb_human(c, snap.zram_orig_kb);
         c.fg_dim();
@@ -98,19 +100,22 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
         c.push_str("x)");
         c.reset();
     } else {
+        c.fg_orange();
+        c.push_str(" ZRAM ");
+        c.reset();
         c.fg_dim();
-        c.push_str(" ZRAM  no compressed memory");
+        c.push_str(" no compressed memory");
         c.reset();
     }
     c.clear_eol();
 
     c.move_to(6, 1);
-    c.fg_dim();
-    c.push_str(" NET   ↓ ");
+    c.fg_orange();
+    c.push_str(" NET   Rx ");
     c.reset();
     push_bytes_human(c, snap.net_rx_bytes);
-    c.fg_dim();
-    c.push_str("  ↑ ");
+    c.fg_orange();
+    c.push_str("  Tx ");
     c.reset();
     push_bytes_human(c, snap.net_tx_bytes);
     c.fg_dim();
