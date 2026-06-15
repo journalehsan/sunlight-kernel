@@ -6,11 +6,6 @@ use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 pub const TIME_SLICE_TICKS: u64 = 10;
 
-fn time_slice_for_nice(nice: i8) -> u64 {
-    let quantum = TIME_SLICE_TICKS as i64 - nice as i64;
-    quantum.clamp(2, 20) as u64
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedulerMode {
     RoundRobin,
@@ -48,8 +43,7 @@ pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
         BurstReason::EarlyBlock => {
             process.burst_score = process
                 .burst_score
-                .saturating_sub(BURST_REDUCTION_EARLY_BLOCK)
-                .max(BURST_SCORE_MIN);
+                .saturating_sub(BURST_REDUCTION_EARLY_BLOCK);
             process.interactive_bonus = 20;
         }
         BurstReason::FullQuantum => {
@@ -82,18 +76,21 @@ static PROCESS_FINISHED: AtomicUsize = AtomicUsize::new(0);
 pub const QUANTUM_MIN: u32 = 5;
 pub const QUANTUM_MAX: u32 = 50;
 
-fn calculate_quantum(burst_score: u32) -> u32 {
-    // Make sure the score doesn't go above the maximum
-    let s = burst_score.min(BURST_SCORE_MAX);
+fn calculate_quantum(burst_score: u32, nice: i8) -> u32 {
+    // 1. Convert to i32 for safe calculations (supports negative numbers)
+    // Each 1 nice unit is equivalent to 16 jump units in the burst graph
+    let nice_modifier = (nice as i32) * 16;
 
-    // The distance between the lowest and highest timeslice
-    let quantum_range = QUANTUM_MAX - QUANTUM_MIN;
+    // 2. Algebraic sum of dynamic score with static priority
+    // Positive nice (lower priority) -> score increases -> timeslice decreases
+    // Negative nice (higher priority) -> score decreases -> timeslice increases
+    let effective_score = (burst_score as i32 + nice_modifier)
+        // With clamp, we make sure we don't go outside the allowed range [0, 1024]
+        .clamp(0, BURST_SCORE_MAX as i32) as u32;
 
-    // Inverse weighting: lower score = higher weight
-    let weight = BURST_SCORE_MAX - s;
-
-    // Final calculation with multiplication before division to avoid loss of precision in integers
-    let bonus_quantum = (weight * quantum_range) / BURST_SCORE_MAX;
+    // 3. Continue calculating weight and quantum as before
+    let weight = BURST_SCORE_MAX - effective_score;
+    let bonus_quantum = (weight * (QUANTUM_MAX - QUANTUM_MIN)) / BURST_SCORE_MAX;
 
     QUANTUM_MIN + bonus_quantum
 }
@@ -236,7 +233,8 @@ impl Scheduler {
 
         // This is the key line! We get the timeslice based on the current behavior of the process:
         let current_burst_score = self.processes[self.current].burst_score;
-        let quantum = calculate_quantum(current_burst_score) as u64;
+        let quantum =
+            calculate_quantum(current_burst_score, self.processes[self.current].nice) as u64;
 
         if self.current_ticks >= quantum {
             // Process used full quantum
