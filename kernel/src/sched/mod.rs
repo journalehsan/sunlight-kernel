@@ -78,7 +78,25 @@ static SUNLIGHTD_FIRST_SCHED: AtomicBool = AtomicBool::new(false);
 /// === Diagnostic counters for process leak detection ===
 static PROCESS_CREATED: AtomicUsize = AtomicUsize::new(0);
 static PROCESS_FINISHED: AtomicUsize = AtomicUsize::new(0);
+// Adjust the timeslice constants to your needs
+pub const QUANTUM_MIN: u32 = 5;
+pub const QUANTUM_MAX: u32 = 50;
 
+fn calculate_quantum(burst_score: u32) -> u32 {
+    // Make sure the score doesn't go above the maximum
+    let s = burst_score.min(BURST_SCORE_MAX);
+
+    // The distance between the lowest and highest timeslice
+    let quantum_range = QUANTUM_MAX - QUANTUM_MIN;
+
+    // Inverse weighting: lower score = higher weight
+    let weight = BURST_SCORE_MAX - s;
+
+    // Final calculation with multiplication before division to avoid loss of precision in integers
+    let bonus_quantum = (weight * quantum_range) / BURST_SCORE_MAX;
+
+    QUANTUM_MIN + bonus_quantum
+}
 pub struct Scheduler {
     pub processes: Vec<Process>,
 
@@ -216,7 +234,10 @@ impl Scheduler {
         self.global_tick += 1;
         self.current_ticks += 1;
 
-        let quantum = time_slice_for_nice(self.processes[self.current].nice);
+        // This is the key line! We get the timeslice based on the current behavior of the process:
+        let current_burst_score = self.processes[self.current].burst_score;
+        let quantum = calculate_quantum(current_burst_score) as u64;
+
         if self.current_ticks >= quantum {
             // Process used full quantum
             let current_proc = &mut self.processes[self.current];
@@ -233,7 +254,6 @@ impl Scheduler {
             NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
         }
 
-        // Every 1000 ticks, report process diagnostics
         if self.global_tick % 1000 == 0 {
             self.diagnostic_report();
         }
@@ -359,7 +379,11 @@ impl Scheduler {
         if let Some(idx) = next {
             let next_pid = self.processes[idx].pid;
             if next_pid == 6 && !SUNLIGHTD_FIRST_SCHED.swap(true, Ordering::SeqCst) {
-                serial_println!("[SUNLIGHTD-SCHED] First time scheduled, rip=0x{:x} idx={}", self.processes[idx].entry_point, idx);
+                serial_println!(
+                    "[SUNLIGHTD-SCHED] First time scheduled, rip=0x{:x} idx={}",
+                    self.processes[idx].entry_point,
+                    idx
+                );
             }
         }
         next
