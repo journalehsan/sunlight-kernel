@@ -8,3 +8,7 @@
 
 # Version manager state (generated)
 .version_state.json
+
+# sunlight-fetch downloaded test artifacts
+sunlight-fetch/*.zip
+sunlight-fetch/*.zip?*
