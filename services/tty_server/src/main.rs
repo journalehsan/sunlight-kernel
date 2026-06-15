@@ -811,14 +811,12 @@ fn render_active_shell_fb(
     active_tab: usize,
     show_prompt: bool,
 ) {
-    // Compute terminal dimensions (8x16 glyphs, accounting for chrome)
-    // Header: 48px, Tab bar: 26px, Footer: 32px, margins: 16px top/bottom
-    let char_w: u32 = 8;
-    let char_h: u32 = 16;
-    let chrome_h: u32 = 48 + 26 + 32 + 8; // header + tabbar + footer + gaps
-    let avail_h = fb_h.saturating_sub(chrome_h);
-    let rows = (avail_h / char_h) as usize;
-    let cols = (fb_w / char_w) as usize;
+    // Size the grid with the exact same formula the renderer uses, so every
+    // row is shown from the top of the content area with no clipping. Computing
+    // this independently here (it previously used a different glyph height and
+    // chrome height) made the grid taller than the viewport, so the renderer
+    // dropped the top rows.
+    let (cols, rows) = sunlight_tui::terminal_dims(fb_w, fb_h);
 
     // Update terminal geometry state
     unsafe {

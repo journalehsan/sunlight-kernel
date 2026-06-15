@@ -201,6 +201,24 @@ fn tty_draw_line(
 /// Called after successful login to display terminal content with ANSI colors.
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
+/// Terminal cell metrics and tab-bar height, shared by the grid sizer and the
+/// renderer so they never disagree (a mismatch clips rows off the top).
+pub const TERM_CHAR_W: u32 = 8;
+pub const TERM_CHAR_H: u32 = 18;
+pub const TERM_TAB_BAR_H: u32 = 26;
+
+/// Compute the (cols, rows) of the terminal content area for a framebuffer.
+/// Callers must size the grid with exactly these dimensions so the renderer
+/// shows every row from the top with no clipping.
+pub fn terminal_dims(fb_width: u32, fb_height: u32) -> (usize, usize) {
+    let layout = layout::Layout::new(fb_width, fb_height);
+    let content_y = layout.main.y + TERM_TAB_BAR_H + 4;
+    let avail_h = layout.footer.y.saturating_sub(content_y + 4);
+    let rows = (avail_h / TERM_CHAR_H) as usize;
+    let cols = (fb_width / TERM_CHAR_W) as usize;
+    (cols, rows)
+}
+
 pub unsafe fn render_terminal_grid(
     fb_addr: *mut u32,
     fb_width: u32,
@@ -285,8 +303,9 @@ pub unsafe fn render_terminal_grid(
         tx += tw + 8;
     }
 
-    // Content area: render the grid
-    const CHAR_H: u32 = 18;
+    // Content area: render the grid. CHAR_H must match terminal_dims() or rows
+    // get clipped off the top of the content area.
+    const CHAR_H: u32 = TERM_CHAR_H;
     const MARGIN: u32 = 16;
     let content_y = tab_y + TAB_H + 4;
     let avail_h = layout.footer.y.saturating_sub(content_y + 4);
