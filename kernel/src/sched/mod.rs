@@ -76,7 +76,7 @@ static PROCESS_FINISHED: AtomicUsize = AtomicUsize::new(0);
 pub const QUANTUM_MIN: u32 = 5;
 pub const QUANTUM_MAX: u32 = 50;
 
-fn calculate_quantum(burst_score: u32, nice: i8) -> u32 {
+fn calculate_quantum_with_nice(burst_score: u32, nice: i8) -> u32 {
     // 1. Convert to i32 for safe calculations (supports negative numbers)
     // Each 1 nice unit is equivalent to 16 jump units in the burst graph
     let nice_modifier = (nice as i32) * 16;
@@ -234,7 +234,8 @@ impl Scheduler {
         // This is the key line! We get the timeslice based on the current behavior of the process:
         let current_burst_score = self.processes[self.current].burst_score;
         let quantum =
-            calculate_quantum(current_burst_score, self.processes[self.current].nice) as u64;
+            calculate_quantum_with_nice(current_burst_score, self.processes[self.current].nice)
+                as u64;
 
         if self.current_ticks >= quantum {
             // Process used full quantum
