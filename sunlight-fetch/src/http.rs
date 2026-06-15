@@ -1,13 +1,20 @@
 //! Minimal HTTP types and URL parser.
 //! No external crates — hand-rolled for SunlightOS constraints.
 
-use std::string::String;
-use std::vec::Vec;
 use crate::error::{FetchError, FetchResult};
+use crate::prelude::{format, String, Vec};
 
-/// Parsed URL — only HTTP supported (no TLS in this phase)
+/// URL scheme
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UrlScheme {
+    Http,
+    Https,
+}
+
+/// Parsed URL — HTTP and HTTPS (TLS on host-linux builds).
 #[derive(Debug, Clone)]
 pub struct ParsedUrl {
+    pub scheme: UrlScheme,
     pub host: String,
     pub port: u16,
     pub path: String,
@@ -16,15 +23,18 @@ pub struct ParsedUrl {
 impl ParsedUrl {
     /// Parse a URL string into components.
     ///
-    /// Supports: `http://host[:port][/path]`
-    /// Does NOT support: https, auth, query params (future work).
+    /// Supports: `http://host[:port][/path]` and `https://host[:port][/path]`
+    /// Query strings are preserved in `path` (e.g. `/file?token=1`).
     pub fn parse(url: &str) -> FetchResult<Self> {
-        // Strip scheme
-        let rest = url
-            .strip_prefix("http://")
-            .ok_or_else(|| FetchError::InvalidUrl(format!(
-                "only http:// URLs supported, got: {url}"
-            )))?;
+        let (scheme, rest) = if let Some(rest) = url.strip_prefix("https://") {
+            (UrlScheme::Https, rest)
+        } else if let Some(rest) = url.strip_prefix("http://") {
+            (UrlScheme::Http, rest)
+        } else {
+            return Err(FetchError::InvalidUrl(format!(
+                "only http:// and https:// URLs supported, got: {url}"
+            )));
+        };
 
         if rest.is_empty() {
             return Err(FetchError::InvalidUrl(String::from("empty host")));
@@ -45,7 +55,11 @@ impl ParsedUrl {
             })?;
             (host_part, port)
         } else {
-            (host_port, 80)
+            let default_port = match scheme {
+                UrlScheme::Http => 80,
+                UrlScheme::Https => 443,
+            };
+            (host_port, default_port)
         };
 
         if host.is_empty() {
@@ -53,10 +67,15 @@ impl ParsedUrl {
         }
 
         Ok(Self {
+            scheme,
             host: String::from(host),
             port,
             path: String::from(path),
         })
+    }
+
+    pub fn uses_tls(&self) -> bool {
+        self.scheme == UrlScheme::Https
     }
 
     /// Infer a filename from the URL path.
@@ -64,6 +83,7 @@ impl ParsedUrl {
     /// `/` or empty → `index.html`
     pub fn infer_filename(&self) -> String {
         let path = self.path.trim_end_matches('/');
+        let path = path.split('?').next().unwrap_or(path);
 
         if path.is_empty() || path == "/" {
             return String::from("index.html");
@@ -332,7 +352,17 @@ mod tests {
     }
 
     #[test]
-    fn test_https_rejected() {
-        assert!(ParsedUrl::parse("https://example.com").is_err());
+    fn test_https_parse() {
+        let url = ParsedUrl::parse("https://example.com/file").unwrap();
+        assert_eq!(url.scheme, UrlScheme::Https);
+        assert_eq!(url.port, 443);
+        assert!(url.uses_tls());
+    }
+
+    #[test]
+    fn test_query_in_path() {
+        let url = ParsedUrl::parse("https://x.com/a/b.zip?token=1").unwrap();
+        assert_eq!(url.path, "/a/b.zip?token=1");
+        assert_eq!(url.infer_filename(), "b.zip");
     }
 }

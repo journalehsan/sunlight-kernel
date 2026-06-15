@@ -9,9 +9,16 @@
 //! Security: All operations require explicit capabilities.
 //! No ambient authority. Network via net_server IPC only.
 
+#![cfg_attr(not(feature = "host-linux"), no_std)]
 #![forbid(unsafe_op_in_unsafe_fn)]
 #![deny(clippy::all, clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+
+#[cfg(not(feature = "host-linux"))]
+#[macro_use]
+extern crate alloc;
+
+mod prelude;
 
 pub mod cli;
 pub mod downloader;

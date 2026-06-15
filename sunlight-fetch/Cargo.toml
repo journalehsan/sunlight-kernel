@@ -1,10 +1,6 @@
 [package]
 name = "sunlight-fetch"
 version = "0.1.14"
-
-
-
-
 edition = "2021"
 authors = ["SunlightOS Contributors"]
 description = "Lightweight chunked HTTP downloader for SunlightOS"
@@ -13,11 +9,27 @@ description = "Lightweight chunked HTTP downloader for SunlightOS"
 name = "fetch"
 path = "src/main.rs"
 
-# Keep minimal dependencies for testing
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = ["host-linux"]
+host-linux = ["dep:rustls", "dep:webpki-roots", "rustls/std"]
+sunlightos = [
+    "dep:sunlight-libc",
+    "dep:sunlight-ipc",
+    "dep:sunlight-net",
+]
+
 [dependencies]
+sunlight-libc = { path = "../sunlight-libc", optional = true }
+sunlight-ipc = { path = "../ipc", optional = true }
+sunlight-net = { path = "../sunlight-net", optional = true }
+rustls = { version = "0.23", default-features = false, features = ["tls12", "ring"], optional = true }
+webpki-roots = { version = "0.26", optional = true }
 
 [profile.release]
-opt-level = "z"       # Optimize for size
+opt-level = "z"
 lto = true
 strip = true
 codegen-units = 1

@@ -1,7 +1,7 @@
 //! Hand-rolled argument parser — zero dependencies, no heap for fixed args.
 //! Follows SunlightOS convention: explicit, no magic.
 
-use std::string::String;
+use crate::prelude::{String, Vec};
 
 /// HTTP method supported by fetch
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_basic_url() {
-        let args = alloc::vec![s("http://example.com")];
+        let args = vec![s("http://example.com")];
         let config = parse_args(&args).unwrap();
         assert_eq!(config.url, "http://example.com");
         assert_eq!(config.method, HttpMethod::Get);
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_post_with_data() {
-        let args = alloc::vec![s("-T"), s("POST"), s("-d"), s("hello"), s("http://x.com")];
+        let args = vec![s("-T"), s("POST"), s("-d"), s("hello"), s("http://x.com")];
         let config = parse_args(&args).unwrap();
         assert_eq!(config.method, HttpMethod::Post);
         assert_eq!(config.post_data.as_deref(), Some("hello"));
@@ -206,14 +206,14 @@ mod tests {
 
     #[test]
     fn test_implicit_post() {
-        let args = alloc::vec![s("-d"), s("body"), s("http://x.com")];
+        let args = vec![s("-d"), s("body"), s("http://x.com")];
         let config = parse_args(&args).unwrap();
         assert_eq!(config.method, HttpMethod::Post);
     }
 
     #[test]
     fn test_chunks_and_output() {
-        let args = alloc::vec![
+        let args = vec![
             s("-c"),
             s("8"),
             s("-o"),
@@ -227,13 +227,13 @@ mod tests {
 
     #[test]
     fn test_no_url_error() {
-        let args: Vec<String> = alloc::vec![];
+        let args: Vec<String> = vec![];
         assert!(parse_args(&args).is_err());
     }
 
     #[test]
     fn test_zero_chunks_error() {
-        let args = alloc::vec![s("-c"), s("0"), s("http://x.com")];
+        let args = vec![s("-c"), s("0"), s("http://x.com")];
         assert!(parse_args(&args).is_err());
     }
 }

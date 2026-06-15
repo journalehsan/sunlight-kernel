@@ -28,6 +28,7 @@ members = [
     "sunlight-net",
     "sunlight-utils",
     "sunlight-net-utils",
+    "sunlight-fetch",
 ]
 
 [workspace.dependencies]

@@ -1,8 +1,9 @@
 //! Unified error type for fetch operations.
 //! No dynamic dispatch — enum-based, size-optimized.
 
-use std::string::String;
-use std::fmt;
+use core::fmt;
+
+use crate::prelude::{format, String};
 
 /// Every error fetch can produce, with enough context to diagnose.
 #[derive(Debug)]

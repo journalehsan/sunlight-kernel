@@ -65,6 +65,8 @@ static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-top");
+static SUNLIGHT_FETCH_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/fetch");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -764,6 +766,13 @@ pub extern "C" fn _start() -> ! {
             serial_println!("[NET]  sunlight-net-utils v0.1 loaded");
             serial_println!("[NET]  Commands available: ping ifconfig wget curl dig nslookup hostname netstat ss traceroute");
             serial_println!("[NET]  OK");
+        }
+
+        // Phase 5.x.7: sunlight-fetch HTTP downloader
+        if test_phase >= "phase5x.7" {
+            serial_println!("[FETCH] sunlight-fetch v0.1 loaded");
+            serial_println!("[FETCH] Command: fetch (HTTP via net_server IPC)");
+            serial_println!("[FETCH] OK");
         }
 
         // Phase 5.2+: DNS output (phase5.0-5.1 are phase5x now)

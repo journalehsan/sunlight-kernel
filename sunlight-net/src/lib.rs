@@ -20,5 +20,5 @@ pub use proxy_device::ProxyNetDevice;
 pub use dhcp::{DhcpConfig, DhcpError, acquire_lease};
 pub use dns::{DnsError, ResolverChain};
 pub use hosts::{parse_hosts, HostsTable};
-pub use tcp::{TcpConnection, TcpError};
+pub use tcp::{TcpError, TcpManager};
 pub use netop::NetOp;

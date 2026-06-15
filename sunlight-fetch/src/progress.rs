@@ -5,8 +5,7 @@
 //! - Non-blocking: pure computation, no I/O blocking
 //! - SunlightTTY-friendly: respects terminal width, clean on Ctrl+C
 
-use std::string::String;
-use std::fmt::Write;
+use crate::prelude::{format, String, ToString, Write};
 
 /// Track download progress across all chunks
 pub struct ProgressTracker {
@@ -178,13 +177,18 @@ pub fn format_bytes(bytes: usize) -> String {
 }
 
 /// Get current monotonic time in milliseconds.
-use std::time::{SystemTime, UNIX_EPOCH};
-
+#[cfg(feature = "host-linux")]
 fn current_tick_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(not(feature = "host-linux"))]
+fn current_tick_ms() -> u64 {
+    sunlight_ipc::get_time_utc().saturating_mul(1000)
 }
 
 #[cfg(test)]

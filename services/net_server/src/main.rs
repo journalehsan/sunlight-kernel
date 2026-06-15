@@ -45,7 +45,8 @@ static mut RESOLVER_CHAIN: Option<sunlight_net::ResolverChain> = None;
 static mut NET_DEVICE: Option<ProxyNetDevice> = None;
 static mut NET_IFACE: Option<Interface> = None;
 /// Backing storage for the UDP socket `upstream::query_a` allocates per query.
-static mut SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
+static mut SOCKET_STORAGE: [SocketStorage; 16] = [SocketStorage::EMPTY; 16];
+static mut TCP_MANAGER: sunlight_net::TcpManager = sunlight_net::TcpManager::new();
 const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [
     [8, 8, 8, 8],
     [1, 1, 1, 1],
@@ -101,15 +102,20 @@ pub extern "C" fn _start() -> ! {
     }
     debug_log("[NET]  smoltcp interface up over kernel frame proxy (10.0.2.15/24)");
 
-    // Main service loop
+    // Main service loop — one SocketSet for the process lifetime (TCP handles persist).
+    let sockets_storage: &'static mut [SocketStorage; 16] =
+        unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_STORAGE) };
+    let mut sockets = SocketSet::new(&mut sockets_storage[..]);
     let mut msg = ipc_recv(ep);
     loop {
-        let reply = handle_msg(msg);
+        let reply = handle_msg(msg, &mut sockets);
         msg = ipc_reply_and_wait(ep, reply);
     }
 }
 
-fn handle_msg(msg: IpcMsg) -> IpcMsg {
+const IPC_CHUNK: usize = 48;
+
+fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
     match msg.label {
         NetOp::GETIP => {
             // QEMU user-net defaults (also returned by real DHCP in a full impl).
@@ -120,16 +126,71 @@ fn handle_msg(msg: IpcMsg) -> IpcMsg {
                 .word(3, pack_ipv4([10, 0, 2, 3]))
         }
         NetOp::SOCKET => {
-            // Minimal: allocate a synthetic socket id (we are a userspace service; real
-            // smoltcp sockets would live in our SocketSet). Return id=1 as "ok".
-            IpcMsg::with_label(NetOp::SOCKET).word(0, 1)
+            let id = unsafe {
+                let tcp: &'static mut sunlight_net::TcpManager =
+                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
+                sunlight_net::TcpManager::alloc_socket(tcp, sockets).unwrap_or(0)
+            };
+            IpcMsg::with_label(NetOp::SOCKET).word(0, id as u64)
         }
-        NetOp::CONNECT | NetOp::SEND | NetOp::RECV | NetOp::CLOSE => {
-            // For MVI Phase 5.3: acknowledge the op. A full impl would look up the
-            // socket id from word(0), perform the operation via smoltcp, and copy
-            // data via a granted shared-memory cap for SEND/RECV.
-            // Here we just echo success with a small status in word(0).
-            IpcMsg::with_label(msg.label).word(0, 1)
+        NetOp::CONNECT => {
+            let socket_id = msg.words[0] as u32;
+            let ip = unpack_ipv4(msg.words[1]);
+            let port = msg.words[2] as u16;
+            let ok = unsafe {
+                let tcp: &'static mut sunlight_net::TcpManager =
+                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
+                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+                    (Some(iface), Some(device)) => sunlight_net::TcpManager::connect(
+                        tcp, socket_id, ip, port, iface, sockets, device,
+                    )
+                    .is_ok(),
+                    _ => false,
+                }
+            };
+            IpcMsg::with_label(NetOp::CONNECT).word(0, if ok { 1 } else { 0 })
+        }
+        NetOp::SEND => {
+            let socket_id = msg.words[0] as u32;
+            let len = msg.words[1] as usize;
+            let data = unpack_chunk(&msg.words, len.min(IPC_CHUNK));
+            let sent = unsafe {
+                let tcp: &'static mut sunlight_net::TcpManager =
+                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
+                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+                    (Some(iface), Some(device)) => sunlight_net::TcpManager::send(
+                        tcp, socket_id, &data, iface, sockets, device,
+                    )
+                    .unwrap_or(0),
+                    _ => 0,
+                }
+            };
+            IpcMsg::with_label(NetOp::SEND).word(0, sent as u64)
+        }
+        NetOp::RECV => {
+            let socket_id = msg.words[0] as u32;
+            let max_len = msg.words[1] as usize;
+            let data = unsafe {
+                let tcp: &'static mut sunlight_net::TcpManager =
+                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
+                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+                    (Some(iface), Some(device)) => sunlight_net::TcpManager::recv(
+                        tcp, socket_id, max_len.min(IPC_CHUNK), iface, sockets, device,
+                    )
+                    .unwrap_or_default(),
+                    _ => alloc::vec::Vec::new(),
+                }
+            };
+            pack_recv_reply(data)
+        }
+        NetOp::CLOSE => {
+            let socket_id = msg.words[0] as u32;
+            let ok = unsafe {
+                let tcp: &'static mut sunlight_net::TcpManager =
+                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
+                sunlight_net::TcpManager::close(tcp, socket_id, sockets).is_ok()
+            };
+            IpcMsg::with_label(NetOp::CLOSE).word(0, if ok { 1 } else { 0 })
         }
         NetOp::BIND | NetOp::LISTEN | NetOp::ACCEPT => {
             IpcMsg::with_label(msg.label).word(0, 1)
@@ -283,6 +344,38 @@ fn handle_msg(msg: IpcMsg) -> IpcMsg {
         }
         _ => IpcMsg::with_label(0).word(0, 0),
     }
+}
+
+fn unpack_ipv4(v: u64) -> [u8; 4] {
+    [
+        (v & 0xff) as u8,
+        ((v >> 8) & 0xff) as u8,
+        ((v >> 16) & 0xff) as u8,
+        ((v >> 24) & 0xff) as u8,
+    ]
+}
+
+fn unpack_chunk(words: &[u64; 8], len: usize) -> alloc::vec::Vec<u8> {
+    let mut out = alloc::vec::Vec::with_capacity(len);
+    for i in 0..len {
+        let word = words[2 + i / 8];
+        let byte_idx = i % 8;
+        out.push(((word >> (byte_idx * 8)) & 0xff) as u8);
+    }
+    out
+}
+
+fn pack_recv_reply(data: alloc::vec::Vec<u8>) -> IpcMsg {
+    let len = data.len().min(IPC_CHUNK);
+    let mut reply = IpcMsg::with_label(NetOp::RECV).word(0, len as u64);
+    for i in 0..len {
+        let word_idx = 2 + i / 8;
+        let byte_idx = i % 8;
+        let word = reply.words[word_idx];
+        let byte = data[i] as u64;
+        reply.words[word_idx] = word | (byte << (byte_idx * 8));
+    }
+    reply
 }
 
 fn pack_ipv4(ip: [u8; 4]) -> u64 {

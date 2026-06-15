@@ -22,6 +22,7 @@ smoltcp = {
         "medium-ethernet",
         "proto-ipv4",
         "socket-udp",
+        "socket-tcp",
     ]
 }
 
