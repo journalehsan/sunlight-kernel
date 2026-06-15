@@ -50,14 +50,24 @@ pub fn close(fd: Fd) -> Result<(), Errno> {
 
 pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
     let ret = unsafe {
-        sys::syscall3(sys::SYS_READ, fd.0 as u64, buf.as_mut_ptr() as u64, buf.len() as u64)
+        sys::syscall3(
+            sys::SYS_READ,
+            fd.0 as u64,
+            buf.as_mut_ptr() as u64,
+            buf.len() as u64,
+        )
     };
     sys::check(ret).map(|n| n as usize)
 }
 
 pub fn write(fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
     let ret = unsafe {
-        sys::syscall3(sys::SYS_WRITE, fd.0 as u64, buf.as_ptr() as u64, buf.len() as u64)
+        sys::syscall3(
+            sys::SYS_WRITE,
+            fd.0 as u64,
+            buf.as_ptr() as u64,
+            buf.len() as u64,
+        )
     };
     sys::check(ret).map(|n| n as usize)
 }
@@ -87,9 +97,7 @@ pub fn exec(path: &[u8], argv: &[&[u8]]) -> Result<(), Errno> {
         used = end;
     }
 
-    let ret = unsafe {
-        sys::syscall3(sys::SYS_EXEC, path_ptr as u64, ptrs.as_ptr() as u64, 0)
-    };
+    let ret = unsafe { sys::syscall3(sys::SYS_EXEC, path_ptr as u64, ptrs.as_ptr() as u64, 0) };
     sys::check(ret).map(|_| ())
 }
 
@@ -197,7 +205,7 @@ pub fn read_dir(path: &[u8], entries: &mut [DirEntry]) -> Result<usize, Errno> {
             sys::SYS_READDIR,
             path_ptr as u64,
             entries.as_mut_ptr() as u64,
-            (entries.len() * core::mem::size_of::<DirEntry>()) as u64,
+            core::mem::size_of_val(entries) as u64,
         )
     };
     sys::check(ret).map(|n| n as usize)
@@ -293,7 +301,12 @@ pub fn spawn(path: &[u8], argv: &[&[u8]], stdout: Option<Fd>) -> Result<u64, Err
 
     let stdout_arg = stdout.map_or(u64::MAX, |fd| fd.0 as u64);
     let ret = unsafe {
-        sys::syscall3(sys::SYS_SPAWN, path_ptr as u64, ptrs.as_ptr() as u64, stdout_arg)
+        sys::syscall3(
+            sys::SYS_SPAWN,
+            path_ptr as u64,
+            ptrs.as_ptr() as u64,
+            stdout_arg,
+        )
     };
     sys::check(ret)
 }

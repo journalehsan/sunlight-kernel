@@ -48,7 +48,7 @@ pub fn check(ret: u64) -> Result<u64, Errno> {
         n => Ok(n),
     }
 }
-
+/// # Safety
 /// SYSCALL clobbers rcx (return RIP) and r11 (RFLAGS); the kernel preserves
 /// the remaining GPRs by saving a full frame on entry.
 #[inline]
@@ -64,7 +64,7 @@ pub unsafe fn syscall0(n: u64) -> u64 {
     );
     ret
 }
-
+/// # Safety
 #[inline]
 pub unsafe fn syscall1(n: u64, a1: u64) -> u64 {
     let ret: u64;
@@ -79,7 +79,7 @@ pub unsafe fn syscall1(n: u64, a1: u64) -> u64 {
     );
     ret
 }
-
+/// # Safety
 #[inline]
 pub unsafe fn syscall2(n: u64, a1: u64, a2: u64) -> u64 {
     let ret: u64;
@@ -95,7 +95,7 @@ pub unsafe fn syscall2(n: u64, a1: u64, a2: u64) -> u64 {
     );
     ret
 }
-
+/// # Safety
 #[inline]
 pub unsafe fn syscall3(n: u64, a1: u64, a2: u64, a3: u64) -> u64 {
     let ret: u64;
