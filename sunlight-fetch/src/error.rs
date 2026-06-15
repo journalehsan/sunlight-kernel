@@ -3,7 +3,7 @@
 
 use core::fmt;
 
-use crate::prelude::{format, String};
+use crate::prelude::String;
 
 /// Every error fetch can produce, with enough context to diagnose.
 #[derive(Debug)]

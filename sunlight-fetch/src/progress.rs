@@ -5,7 +5,7 @@
 //! - Non-blocking: pure computation, no I/O blocking
 //! - SunlightTTY-friendly: respects terminal width, clean on Ctrl+C
 
-use crate::prelude::{format, String, ToString, Write};
+use crate::prelude::{String, Write};
 
 /// Track download progress across all chunks
 pub struct ProgressTracker {

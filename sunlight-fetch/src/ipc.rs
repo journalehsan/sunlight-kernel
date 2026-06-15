@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(not(feature = "host-linux"))]
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use crate::prelude::{format, String, Vec};
+use crate::prelude::{String, Vec};
 
 use crate::error::{FetchError, FetchResult};
 use crate::http::{HttpRequest, HttpResponse};

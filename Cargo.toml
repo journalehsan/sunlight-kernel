@@ -44,3 +44,13 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+# Size-optimized userland utilities (overrides workspace release defaults).
+[profile.release.package.sunlight-fetch]
+opt-level = "z"
+
+[profile.release.package.sunlight-top]
+opt-level = "z"
+
+[profile.release.package.sunshell]
+opt-level = "z"

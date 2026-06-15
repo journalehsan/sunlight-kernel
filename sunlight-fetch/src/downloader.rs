@@ -4,7 +4,7 @@ use crate::cli::{FetchConfig, HttpMethod};
 use crate::error::{FetchError, FetchResult};
 use crate::http::{HttpRequest, ParsedUrl};
 use crate::ipc::{self, ResolvedAddr};
-use crate::prelude::{format, String, ToString, Vec};
+use crate::prelude::{String, ToString, Vec};
 use crate::progress::ProgressTracker;
 
 const MAX_REDIRECTS: usize = 10;

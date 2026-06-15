@@ -27,10 +27,3 @@ sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-net = { path = "../sunlight-net", optional = true }
 rustls = { version = "0.23", default-features = false, features = ["tls12", "ring"], optional = true }
 webpki-roots = { version = "0.26", optional = true }
-
-[profile.release]
-opt-level = "z"
-lto = true
-strip = true
-codegen-units = 1
-panic = "abort"

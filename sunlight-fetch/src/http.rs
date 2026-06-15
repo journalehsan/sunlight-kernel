@@ -2,7 +2,7 @@
 //! No external crates — hand-rolled for SunlightOS constraints.
 
 use crate::error::{FetchError, FetchResult};
-use crate::prelude::{format, String, Vec};
+use crate::prelude::{String, Vec};
 
 /// URL scheme
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

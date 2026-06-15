@@ -20,10 +20,3 @@ sunlight-tz = { path = "../sunlight-tz" }
 default = ["sunlight"]
 std = []
 sunlight = ["sunlight-ipc", "sunlight-libc"]
-
-[profile.release]
-panic         = "abort"
-opt-level     = "z"
-lto           = true
-strip         = true
-codegen-units = 1

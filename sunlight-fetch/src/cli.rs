@@ -1,7 +1,7 @@
 //! Hand-rolled argument parser — zero dependencies, no heap for fixed args.
 //! Follows SunlightOS convention: explicit, no magic.
 
-use crate::prelude::{String, Vec};
+use crate::prelude::String;
 
 /// HTTP method supported by fetch
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
