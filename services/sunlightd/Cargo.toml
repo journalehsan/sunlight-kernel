@@ -9,7 +9,8 @@ rustflags = [
 
 [package]
 name = "sunlightd"
-version = "0.1.8"
+version = "0.1.14"
+
 
 
 

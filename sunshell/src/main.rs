@@ -10,6 +10,9 @@ mod input;
 #[cfg(feature = "std")]
 mod parser;
 
+#[cfg(feature = "sunlight")]
+mod calc;
+
 #[cfg(feature = "std")]
 use exec::{Executor, PosixExecutor};
 #[cfg(feature = "std")]
@@ -359,6 +362,19 @@ mod sunlight {
         }
 
         fn run_line(&mut self) -> ([u8; MAX_OUT], usize) {
+            // `= <expr>` evaluates an arithmetic expression in-process and prints
+            // the result, e.g. `= 8 * 2` -> 16. Handled before tokenization so
+            // the whole remainder of the line is treated as one expression.
+            {
+                let line = &self.line[..self.line_len];
+                if let Ok(s) = core::str::from_utf8(line) {
+                    let s = s.trim();
+                    if let Some(expr) = s.strip_prefix('=').or_else(|| s.strip_prefix("calc ")) {
+                        return run_calc(expr.as_bytes());
+                    }
+                }
+            }
+
             // Make owned copies of cmd and args first
             let cmd_owned: alloc::string::String;
             let target_user_owned: Option<alloc::string::String>;
@@ -441,7 +457,7 @@ mod sunlight {
                 "hostnamectl" => self.cmd_hostnamectl(),
                 "uptime" => self.cmd_uptime(),
                 "tzctl" => self.cmd_tzctl(&args),
-                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, tzctl, help, shutdown, reboot\n",
+                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, tzctl, =<expr> (calc), help, shutdown, reboot\n",
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
                 // Not a builtin: resolve through $PATH and run it (Step 3)
@@ -1344,6 +1360,27 @@ mod sunlight {
         let len = data.len().min(buf.len());
         buf[..len].copy_from_slice(&data[..len]);
         (buf, len)
+    }
+
+    /// Evaluate `expr` with the in-process calculator and format the result (or
+    /// an error message) for output. Backs the `= <expr>` shell shortcut.
+    fn run_calc(expr: &[u8]) -> ([u8; MAX_OUT], usize) {
+        let mut buf = [0u8; MAX_OUT];
+        let body: &[u8] = match crate::calc::eval(expr) {
+            Ok(value) => {
+                let mut num = [0u8; 21];
+                let s = crate::calc::format_i64(value, &mut num);
+                let len = s.len().min(buf.len() - 1);
+                buf[..len].copy_from_slice(&s[..len]);
+                buf[len] = b'\n';
+                return (buf, len + 1);
+            }
+            Err(e) => crate::calc::error_msg(e),
+        };
+        let len = body.len().min(buf.len() - 1);
+        buf[..len].copy_from_slice(&body[..len]);
+        buf[len] = b'\n';
+        (buf, len + 1)
     }
 
     fn push_art_line(line: &[u8]) {

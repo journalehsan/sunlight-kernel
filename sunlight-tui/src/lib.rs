@@ -216,6 +216,7 @@ pub unsafe fn render_terminal_grid(
     input_line: &[u8],
     prompt: &[u8],
     clock: &[u8],
+    input_cursor: usize,
 ) {
     let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
     let layout = layout::Layout::new(fb_width, fb_height);
@@ -359,8 +360,19 @@ pub unsafe fn render_terminal_grid(
         layout::palette::TEXT,
         1,
     );
-    let cursor_x = MARGIN + (prompt.len() + input_line.len()) as u32 * 8;
+    // Edit cursor: drawn at `input_cursor` within the input line (defaults to
+    // end of line). When the cursor sits over an existing character (mid-line
+    // editing via Left/Right), draw an inverted block so the character stays
+    // visible; at end-of-line draw a solid block.
+    let cur = input_cursor.min(input_line.len());
+    let cursor_x = MARGIN + (prompt.len() + cur) as u32 * 8;
     fb.fill_rect(cursor_x, footer_text_y, 8, 16, layout::palette::ACCENT);
+    if cur < input_line.len() {
+        let ch = input_line[cur];
+        if ch >= 0x20 && ch <= 0x7E {
+            font::draw_char(&mut fb, cursor_x, footer_text_y, ch, layout::palette::BG, 1);
+        }
+    }
 }
 
 /// Render the login screen with live state (username typed, password dots, cursor, message).

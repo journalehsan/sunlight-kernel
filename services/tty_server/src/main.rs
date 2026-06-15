@@ -127,6 +127,16 @@ struct ShellTab {
     output_len: usize,
     input_line: [u8; INPUT_LINE_MAX],
     input_line_len: usize,
+    /// Cursor position within input_line (0..=input_line_len) for Left/Right
+    /// in-line editing.
+    input_cursor: usize,
+    /// History navigation position: 0 = editing a fresh line, N = the Nth most
+    /// recent command recalled via Up. Reset to 0 on Enter.
+    hist_pos: usize,
+    /// The in-progress line stashed when history navigation begins, so Down
+    /// past the newest entry restores what the user was typing.
+    hist_stash: [u8; INPUT_LINE_MAX],
+    hist_stash_len: usize,
     pending: [u8; PENDING_INPUT_MAX],
     pending_len: usize,
     username: [u8; 32],
@@ -150,6 +160,112 @@ static mut SCROLLBACK_STATE: [TabScrollback; MAX_TABS] =
 /// See ROOT_CAUSE_FOUND.md for detailed explanation
 static mut GRID_CACHE: Option<Box<TerminalGrid>> = None;
 
+/// Shell command history, shared across all tabs (like a single ~/.bash_history).
+const HIST_MAX: usize = 32;
+const HIST_LINE: usize = INPUT_LINE_MAX;
+static mut HISTORY: [[u8; HIST_LINE]; HIST_MAX] = [[0; HIST_LINE]; HIST_MAX];
+static mut HIST_LENS: [usize; HIST_MAX] = [0; HIST_MAX];
+static mut HIST_HEAD: usize = 0; // ring index of the oldest entry
+static mut HIST_COUNT: usize = 0; // number of valid entries (<= HIST_MAX)
+
+/// Number of stored history entries.
+fn history_count() -> usize {
+    unsafe { HIST_COUNT }
+}
+
+/// Append a command to history, skipping empties and consecutive duplicates.
+fn history_push(line: &[u8]) {
+    if line.is_empty() {
+        return;
+    }
+    unsafe {
+        // Skip if identical to the most recent entry.
+        if HIST_COUNT > 0 {
+            let last = (HIST_HEAD + HIST_COUNT - 1) % HIST_MAX;
+            if HIST_LENS[last] == line.len() && &HISTORY[last][..line.len()] == line {
+                return;
+            }
+        }
+        let slot = if HIST_COUNT == HIST_MAX {
+            let oldest = HIST_HEAD;
+            HIST_HEAD = (HIST_HEAD + 1) % HIST_MAX;
+            oldest
+        } else {
+            let next = (HIST_HEAD + HIST_COUNT) % HIST_MAX;
+            HIST_COUNT += 1;
+            next
+        };
+        let n = line.len().min(HIST_LINE);
+        HISTORY[slot][..n].copy_from_slice(&line[..n]);
+        HIST_LENS[slot] = n;
+    }
+}
+
+/// Copy the `n`-th most recent entry (n = 1 is newest) into `out`.
+/// Returns the byte length, or None if `n` is out of range.
+fn history_recent(n: usize, out: &mut [u8]) -> Option<usize> {
+    unsafe {
+        if n == 0 || n > HIST_COUNT {
+            return None;
+        }
+        let slot = (HIST_HEAD + HIST_COUNT - n) % HIST_MAX;
+        let len = HIST_LENS[slot].min(out.len());
+        out[..len].copy_from_slice(&HISTORY[slot][..len]);
+        Some(len)
+    }
+}
+
+/// Recall the previous (older) history entry into the active tab's edit line.
+/// The in-progress line is stashed the first time we leave it so Down can
+/// restore it. Returns true if the line changed.
+fn history_nav_up(tabs: &mut [ShellTab; MAX_TABS], active_tab: usize) -> bool {
+    let Some(tab) = active_shell_tab_mut(tabs, active_tab) else {
+        return false;
+    };
+    let count = history_count();
+    if count == 0 || tab.hist_pos >= count {
+        return false;
+    }
+    if tab.hist_pos == 0 {
+        tab.hist_stash = tab.input_line;
+        tab.hist_stash_len = tab.input_line_len;
+    }
+    tab.hist_pos += 1;
+    let mut buf = [0u8; INPUT_LINE_MAX];
+    if let Some(len) = history_recent(tab.hist_pos, &mut buf) {
+        tab.input_line = buf;
+        tab.input_line_len = len;
+        tab.input_cursor = len;
+        return true;
+    }
+    false
+}
+
+/// Recall the next (newer) history entry; stepping past the newest restores the
+/// stashed in-progress line. Returns true if the line changed.
+fn history_nav_down(tabs: &mut [ShellTab; MAX_TABS], active_tab: usize) -> bool {
+    let Some(tab) = active_shell_tab_mut(tabs, active_tab) else {
+        return false;
+    };
+    if tab.hist_pos == 0 {
+        return false;
+    }
+    tab.hist_pos -= 1;
+    if tab.hist_pos == 0 {
+        tab.input_line = tab.hist_stash;
+        tab.input_line_len = tab.hist_stash_len;
+        tab.input_cursor = tab.hist_stash_len;
+        return true;
+    }
+    let mut buf = [0u8; INPUT_LINE_MAX];
+    if let Some(len) = history_recent(tab.hist_pos, &mut buf) {
+        tab.input_line = buf;
+        tab.input_line_len = len;
+        tab.input_cursor = len;
+    }
+    true
+}
+
 impl ShellTab {
     const fn empty() -> Self {
         Self {
@@ -160,6 +276,10 @@ impl ShellTab {
             output_len: 0,
             input_line: [0; INPUT_LINE_MAX],
             input_line_len: 0,
+            input_cursor: 0,
+            hist_pos: 0,
+            hist_stash: [0; INPUT_LINE_MAX],
+            hist_stash_len: 0,
             pending: [0; PENDING_INPUT_MAX],
             pending_len: 0,
             username: [0; 32],
@@ -290,62 +410,100 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
                 // Lazy lookup: try to find sshl once it registers after being spawned.
                 if msg.label == KbdMsg::KEY_EVENT {
-                    let (keycode, pressed, shift, ctrl, _alt, ctrl_ascii) =
+                    let (keycode, pressed, _shift, ctrl, _alt, ctrl_ascii) =
                         unpack_key_event(msg.words[0]);
 
-                    // Scrollback viewport control
-                    // - Ctrl+Up/Down: scroll by 1 line
-                    // - Shift+PageUp/Down: scroll by full page (rows at a time)
-                    let is_ctrl_scroll = pressed && ctrl && (keycode == 0x48 || keycode == 0x50);
-                    let is_shift_page = pressed && shift && (keycode == 0x49 || keycode == 0x51);
+                    // Special navigation keys arrive as bare keycodes with no
+                    // ASCII (the keyboard driver doesn't decode the 0xE0 prefix),
+                    // so they never reach the line-editor ASCII path below:
+                    //   Up=0x48 Down=0x50 Left=0x4B Right=0x4D
+                    //   PageUp=0x49 PageDown=0x51 Home=0x47 End=0x4F
+                    let fg_active =
+                        active_shell_tab(&tabs, active_tab).map_or(false, |t| t.fg_pid.is_some());
+                    let page = unsafe { TERMINAL_GEOMETRY[active_tab].rows as usize }.max(1);
 
-                    if is_ctrl_scroll || is_shift_page {
-                        unsafe {
-                            let scrollback = &mut SCROLLBACK_STATE[active_tab];
-                            match keycode {
-                                0x48 if ctrl => {
-                                    // Ctrl+Up: scroll up by 1 line
-                                    scrollback.viewport_offset =
-                                        (scrollback.viewport_offset + 1).min(256);
-                                    needs_render = true;
-                                }
-                                0x50 if ctrl => {
-                                    // Ctrl+Down: scroll down by 1 line
-                                    scrollback.viewport_offset =
-                                        scrollback.viewport_offset.saturating_sub(1);
-                                    needs_render = true;
-                                }
-                                0x49 if shift => {
-                                    // Shift+PageUp: scroll up by multiple lines (full page)
-                                    scrollback.viewport_offset =
-                                        (scrollback.viewport_offset + 24).min(256);
-                                    needs_render = true;
-                                }
-                                0x51 if shift => {
-                                    // Shift+PageDown: scroll down by multiple lines
-                                    if scrollback.viewport_offset >= 24 {
-                                        scrollback.viewport_offset -= 24;
-                                    } else {
-                                        scrollback.viewport_offset = 0;
+                    if pressed && ctrl {
+                        // Ctrl+Up/Down keep the fine-grained line scroll.
+                        match keycode {
+                            0x48 => unsafe {
+                                let s = &mut SCROLLBACK_STATE[active_tab];
+                                s.viewport_offset = (s.viewport_offset + 1).min(256);
+                                needs_render = true;
+                            },
+                            0x50 => unsafe {
+                                let s = &mut SCROLLBACK_STATE[active_tab];
+                                s.viewport_offset = s.viewport_offset.saturating_sub(1);
+                                needs_render = true;
+                            },
+                            _ => {
+                                if let Some(a) = ctrl_ascii {
+                                    if handle_ctrl_key(
+                                        a,
+                                        &mut tabs,
+                                        &mut tab_count,
+                                        &mut active_tab,
+                                        &mut next_shell_id,
+                                        spawn_cap,
+                                        &mut phase3_6_done,
+                                    ) {
+                                        needs_render = true;
                                     }
-                                    needs_render = true;
                                 }
-                                _ => {}
                             }
                         }
-                    } else if pressed && ctrl {
-                        if let Some(a) = ctrl_ascii {
-                            if handle_ctrl_key(
-                                a,
-                                &mut tabs,
-                                &mut tab_count,
-                                &mut active_tab,
-                                &mut next_shell_id,
-                                spawn_cap,
-                                &mut phase3_6_done,
-                            ) {
+                    } else if pressed && !fg_active {
+                        match keycode {
+                            // PageUp/PageDown: scroll the viewport by a screenful.
+                            0x49 => unsafe {
+                                let s = &mut SCROLLBACK_STATE[active_tab];
+                                s.viewport_offset = (s.viewport_offset + page).min(256);
                                 needs_render = true;
+                            },
+                            0x51 => unsafe {
+                                let s = &mut SCROLLBACK_STATE[active_tab];
+                                s.viewport_offset = s.viewport_offset.saturating_sub(page);
+                                needs_render = true;
+                            },
+                            // Home: jump to the oldest scrollback. End: live view.
+                            0x47 => unsafe {
+                                SCROLLBACK_STATE[active_tab].viewport_offset = 256;
+                                needs_render = true;
+                            },
+                            0x4F => unsafe {
+                                SCROLLBACK_STATE[active_tab].viewport_offset = 0;
+                                needs_render = true;
+                            },
+                            // Up/Down: walk command history into the edit line.
+                            0x48 => {
+                                if history_nav_up(&mut tabs, active_tab) {
+                                    needs_render = true;
+                                }
+                                unsafe { SCROLLBACK_STATE[active_tab].viewport_offset = 0; }
                             }
+                            0x50 => {
+                                if history_nav_down(&mut tabs, active_tab) {
+                                    needs_render = true;
+                                }
+                                unsafe { SCROLLBACK_STATE[active_tab].viewport_offset = 0; }
+                            }
+                            // Left/Right: move the edit cursor within the line.
+                            0x4B => {
+                                if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                                    if tab.input_cursor > 0 {
+                                        tab.input_cursor -= 1;
+                                        needs_render = true;
+                                    }
+                                }
+                            }
+                            0x4D => {
+                                if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                                    if tab.input_cursor < tab.input_line_len {
+                                        tab.input_cursor += 1;
+                                        needs_render = true;
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -372,53 +530,130 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             // shell line editor. No prompt echo.
                             let _ = tty_stdin_push(tab.shell_id as u32, &[ascii]);
                         } else {
-                            update_input_echo(
-                                ascii,
-                                &mut tab.output,
-                                &mut tab.output_len,
-                                &mut tab.input_line,
-                                &mut tab.input_line_len,
-                                tab.username,
-                                tab.username_len,
-                            );
+                            // Local line editing: the TTY owns the edit line and
+                            // only flushes the completed command to the shell on
+                            // Enter. The shell only acts on '\n', so its own line
+                            // buffer stays in sync.
                             needs_render = true;
+                            match ascii {
+                                b'\n' | b'\r' => {
+                                    // Snapshot the completed line.
+                                    let mut line = [0u8; INPUT_LINE_MAX];
+                                    let line_len = tab.input_line_len;
+                                    line[..line_len]
+                                        .copy_from_slice(&tab.input_line[..line_len]);
 
-                            if let Some(cap) = tab.cap {
-                                match send_key_to_shell(
-                                    cap,
-                                    ascii,
-                                    &mut tab.output,
-                                    &mut tab.output_len,
-                                ) {
-                                    ShellKeyResult::Exited => {
-                                        state = TtyState::Login;
-                                        reset_login(&mut login);
-                                        reset_tabs(&mut tabs, &mut tab_count, &mut active_tab);
-                                        spawn_cap = None;
-                                        logged_initial_spawn = false;
-                                        if has_fb {
-                                            render_login_fb(
-                                                &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                    // Echo prompt + line + newline into scrollback.
+                                    let mut prompt_buf = [0u8; 32];
+                                    let prompt_len = build_prompt(tab, &mut prompt_buf);
+                                    append_term(
+                                        &mut tab.output,
+                                        &mut tab.output_len,
+                                        &prompt_buf[..prompt_len],
+                                    );
+                                    append_term(
+                                        &mut tab.output,
+                                        &mut tab.output_len,
+                                        &line[..line_len],
+                                    );
+                                    append_term(&mut tab.output, &mut tab.output_len, b"\n");
+
+                                    // Record in history; reset the edit state.
+                                    history_push(&line[..line_len]);
+                                    tab.input_line_len = 0;
+                                    tab.input_cursor = 0;
+                                    tab.hist_pos = 0;
+                                    tab.hist_stash_len = 0;
+
+                                    if let Some(cap) = tab.cap {
+                                        // Replay the line byte-by-byte, then the
+                                        // newline that triggers execution.
+                                        for i in 0..line_len {
+                                            let _ = send_key_to_shell(
+                                                cap,
+                                                line[i],
+                                                &mut tab.output,
+                                                &mut tab.output_len,
                                             );
                                         }
-                                        continue;
+                                        match send_key_to_shell(
+                                            cap,
+                                            b'\n',
+                                            &mut tab.output,
+                                            &mut tab.output_len,
+                                        ) {
+                                            ShellKeyResult::Exited => {
+                                                state = TtyState::Login;
+                                                reset_login(&mut login);
+                                                reset_tabs(
+                                                    &mut tabs,
+                                                    &mut tab_count,
+                                                    &mut active_tab,
+                                                );
+                                                spawn_cap = None;
+                                                logged_initial_spawn = false;
+                                                if has_fb {
+                                                    render_login_fb(
+                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                    );
+                                                }
+                                                continue;
+                                            }
+                                            ShellKeyResult::ForegroundStarted(
+                                                pid,
+                                                name,
+                                                name_len,
+                                            ) => {
+                                                tab.fg_pid = Some(pid);
+                                                tab.fg_app_name = name;
+                                                tab.fg_app_name_len = name_len;
+                                            }
+                                            ShellKeyResult::Continue => {}
+                                        }
+                                    } else {
+                                        // Shell not resolved yet: buffer raw bytes.
+                                        for i in 0..line_len {
+                                            if tab.pending_len < tab.pending.len() {
+                                                tab.pending[tab.pending_len] = line[i];
+                                                tab.pending_len += 1;
+                                            }
+                                        }
+                                        if tab.pending_len < tab.pending.len() {
+                                            tab.pending[tab.pending_len] = b'\n';
+                                            tab.pending_len += 1;
+                                        }
                                     }
-                                    ShellKeyResult::ForegroundStarted(pid, name, name_len) => {
-                                        // Enter foreground mode. The app's output
-                                        // is drained into scrollback and rendered
-                                        // by the idle loop; a full-screen app's
-                                        // alt-screen enter resets the buffer.
-                                        tab.fg_pid = Some(pid);
-                                        tab.fg_app_name = name;
-                                        tab.fg_app_name_len = name_len;
-                                    }
-                                    ShellKeyResult::Continue => {}
                                 }
-                                // Output was received from shell - ensure immediate render
-                                needs_render = true;
-                            } else if tab.pending_len < tab.pending.len() {
-                                tab.pending[tab.pending_len] = ascii;
-                                tab.pending_len += 1;
+                                0x08 => {
+                                    // Backspace: delete the char before the cursor.
+                                    if tab.input_cursor > 0 {
+                                        let c = tab.input_cursor;
+                                        let end = tab.input_line_len;
+                                        let mut i = c - 1;
+                                        while i + 1 < end {
+                                            tab.input_line[i] = tab.input_line[i + 1];
+                                            i += 1;
+                                        }
+                                        tab.input_line_len -= 1;
+                                        tab.input_cursor -= 1;
+                                    }
+                                    tab.hist_pos = 0;
+                                }
+                                c if (0x20..=0x7e).contains(&c) => {
+                                    // Insert at the cursor, shifting the tail right.
+                                    if tab.input_line_len < tab.input_line.len() {
+                                        let mut i = tab.input_line_len;
+                                        while i > tab.input_cursor {
+                                            tab.input_line[i] = tab.input_line[i - 1];
+                                            i -= 1;
+                                        }
+                                        tab.input_line[tab.input_cursor] = c;
+                                        tab.input_line_len += 1;
+                                        tab.input_cursor += 1;
+                                    }
+                                    tab.hist_pos = 0;
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -593,7 +828,7 @@ fn render_active_shell_fb(
 
     // A foreground app owns the screen, so suppress the shell prompt/input line.
     let mut prompt_buf = [0u8; 32];
-    let (output, input_line, prompt_slice) = active_shell_tab(tabs, active_tab)
+    let (output, input_line, prompt_slice, input_cursor) = active_shell_tab(tabs, active_tab)
         .map(|tab| {
             if show_prompt {
                 let prompt_len = build_prompt(tab, &mut prompt_buf);
@@ -601,12 +836,13 @@ fn render_active_shell_fb(
                     &tab.output[..tab.output_len],
                     &tab.input_line[..tab.input_line_len],
                     &prompt_buf[..prompt_len],
+                    tab.input_cursor,
                 )
             } else {
-                (&tab.output[..tab.output_len], &[][..], &b""[..])
+                (&tab.output[..tab.output_len], &[][..], &b""[..], 0usize)
             }
         })
-        .unwrap_or((&[][..], &[][..], b"root@sunlight:/$ "));
+        .unwrap_or((&[][..], &[][..], b"root@sunlight:/$ ", 0usize));
 
     // Parse output into a terminal-sized grid. The framebuffer renderer already
     // offsets this grid below the title/tab chrome, so the VT cursor must stay
@@ -688,6 +924,7 @@ fn render_active_shell_fb(
             input_line,
             prompt_slice,
             &clock_buf[..clock_len],
+            input_cursor,
         );
     }
 
@@ -908,56 +1145,6 @@ fn key_ascii_from_msg(msg: &IpcMsg) -> Option<u8> {
         }
     } else {
         None
-    }
-}
-
-fn update_input_echo(
-    byte: u8,
-    term_output: &mut [u8; TERM_OUTPUT_MAX],
-    term_output_len: &mut usize,
-    input_line: &mut [u8; INPUT_LINE_MAX],
-    input_line_len: &mut usize,
-    username: [u8; 32],
-    username_len: usize,
-) {
-    match byte {
-        b'\n' | b'\r' => {
-            let mut prompt_buf = [0u8; 32];
-            let username_ref = if username_len > 0 {
-                &username[..username_len]
-            } else {
-                b"root"
-            };
-            let suffix = b"@sunlight:/$ ";
-            let mut pos = 0;
-            for &b in username_ref.iter().take(prompt_buf.len()) {
-                prompt_buf[pos] = b;
-                pos += 1;
-                if pos >= prompt_buf.len() {
-                    break;
-                }
-            }
-            for &b in suffix.iter().take(prompt_buf.len() - pos) {
-                prompt_buf[pos] = b;
-                pos += 1;
-            }
-            append_term(term_output, term_output_len, &prompt_buf[..pos]);
-            append_term(term_output, term_output_len, &input_line[..*input_line_len]);
-            append_term(term_output, term_output_len, b"\n");
-            *input_line_len = 0;
-        }
-        0x08 => {
-            if *input_line_len > 0 {
-                *input_line_len -= 1;
-            }
-        }
-        c if (0x20..=0x7e).contains(&c) => {
-            if *input_line_len < input_line.len() {
-                input_line[*input_line_len] = c;
-                *input_line_len += 1;
-            }
-        }
-        _ => {}
     }
 }
 
