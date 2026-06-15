@@ -253,13 +253,13 @@ impl Scheduler {
             NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
         }
 
-        if self.global_tick % 1000 == 0 {
+        if self.global_tick.is_multiple_of(1000) {
             self.diagnostic_report();
         }
     }
 
     fn age_ready_tasks(&mut self) {
-        if self.global_tick % AGING_INTERVAL_TICKS != 0 {
+        if self.global_tick.is_multiple_of(AGING_INTERVAL_TICKS) {
             return; // Only age every AGING_INTERVAL_TICKS
         }
 
