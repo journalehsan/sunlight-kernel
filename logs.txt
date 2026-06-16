@@ -1,0 +1,947 @@
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[0;32m  SunlightOS — QEMU Runner[0m
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[1;33mUpdating version...[0m
+
+==============================================================
+  Rust Auto Version Manager
+
+  Version Schema:
+    MAJOR = current_year - 2026
+    MINOR = 1 (Jan-Jun) | 2 (Jul-Dec)
+    PATCH = accumulated(ceil(new .rs lines / 100))  # 1-100 lines gives +1
+==============================================================
+
+  Project root: /home/ehsantor/Projects/sunlightos-kernel
+
+  Counting .rs file lines...
+  Loaded existing state from .version_state.json
+  Calculated version: 0.1.51
+  Current lines:      38605
+  Last known lines:   38635
+  New lines:          -30
+  Patch increment:    +0
+
+  Searching for Cargo.toml files...
+  Found 32 Cargo.toml file(s)
+
+  Processing Cargo.toml... no editable version field
+  Processing kernel/Cargo.toml... already current
+  Processing ipc/Cargo.toml... already current
+  Processing drivers/Cargo.toml... already current
+  Processing compat-linux/Cargo.toml... already current
+  Processing sunlight-tui/Cargo.toml... already current
+  Processing sunlight-fs/Cargo.toml... already current
+  Processing sunlight-virtio/Cargo.toml... already current
+  Processing sunlight-fat/Cargo.toml... already current
+  Processing sunlight-tty/Cargo.toml... already current
+  Processing sunshell/Cargo.toml... already current
+  Processing sunlight-elf/Cargo.toml... already current
+  Processing sunlight-net/Cargo.toml... already current
+  Processing sunlight-utils/Cargo.toml... already current
+  Processing sunlight-net-utils/Cargo.toml... already current
+  Processing sunlight-block/Cargo.toml... already current
+  Processing sunlight-libc/Cargo.toml... already current
+  Processing sunlight-fetch/Cargo.toml... already current
+  Processing sunlight-top/Cargo.toml... already current
+  Processing sunlight-tz/Cargo.toml... already current
+  Processing services/init/Cargo.toml... already current
+  Processing services/timer_server/Cargo.toml... already current
+  Processing services/vfs_server/Cargo.toml... already current
+  Processing services/tty_server/Cargo.toml... already current
+  Processing services/net_server/Cargo.toml... already current
+  Processing services/timed/Cargo.toml... already current
+  Processing services/install_sunlightos/Cargo.toml... already current
+  Processing services/sunlightctl/Cargo.toml... already current
+  Processing services/sunlightd/Cargo.toml... already current
+  Processing services/timezone_service/Cargo.toml... already current
+  Processing services/sunlight-gcd/Cargo.toml... already current
+  Processing services/sunlight-niced/Cargo.toml... already current
+
+  State saved to .version_state.json
+
+--------------------------------------------------------------
+  Version Calculation Report
+--------------------------------------------------------------
+  Timestamp:        2026-06-16 09:04:50
+  Current Year:     2026
+  Current Month:    6
+  MAJOR version:    0 (year 2026 - base 2026)
+  MINOR version:    1 (month 6 <= 6 -> 1)
+  PATCH version:    51
+  Previous lines:   38635
+  Current lines:    38605
+  New lines:        -30
+  Patch increment:  +0
+  Remainder lines:  0 (carried to next build)
+  NEW VERSION:      0.1.51
+  Already current (31):
+    - kernel/Cargo.toml
+    - ipc/Cargo.toml
+    - drivers/Cargo.toml
+    - compat-linux/Cargo.toml
+    - sunlight-tui/Cargo.toml
+    - sunlight-fs/Cargo.toml
+    - sunlight-virtio/Cargo.toml
+    - sunlight-fat/Cargo.toml
+    - sunlight-tty/Cargo.toml
+    - sunshell/Cargo.toml
+    - sunlight-elf/Cargo.toml
+    - sunlight-net/Cargo.toml
+    - sunlight-utils/Cargo.toml
+    - sunlight-net-utils/Cargo.toml
+    - sunlight-block/Cargo.toml
+    - sunlight-libc/Cargo.toml
+    - sunlight-fetch/Cargo.toml
+    - sunlight-top/Cargo.toml
+    - sunlight-tz/Cargo.toml
+    - services/init/Cargo.toml
+    - services/timer_server/Cargo.toml
+    - services/vfs_server/Cargo.toml
+    - services/tty_server/Cargo.toml
+    - services/net_server/Cargo.toml
+    - services/timed/Cargo.toml
+    - services/install_sunlightos/Cargo.toml
+    - services/sunlightctl/Cargo.toml
+    - services/sunlightd/Cargo.toml
+    - services/timezone_service/Cargo.toml
+    - services/sunlight-gcd/Cargo.toml
+    - services/sunlight-niced/Cargo.toml
+  No editable version field (1):
+    - Cargo.toml
+  All 32 Cargo.toml files processed (no changes required this run).
+--------------------------------------------------------------
+
+[1;33mRebuilding kernel and services...[0m
+[0;32m✓[0m Limine already cached
+[0;32m✓[0m Build complete
+[0;32m✓[0m ISO: /home/ehsantor/Projects/sunlightos-kernel/target/sunlightos.iso
+[0;32m✓[0m QEMU: QEMU emulator version 11.0.0
+
+[0;34mDisk:[0m    /home/ehsantor/vmware/sunlight.qcow2
+[0;34mNetwork:[0m NAT (host 2222 -> guest 22)
+[0;34mAudio:[0m   intel-hda
+[0;34mDisplay:[0m GTK window
+[0;34mMemory:[0m  2048 MiB
+
+[1;33mStarting QEMU...[0m
+
+══════════════════════════════════════
+  SunlightOS — Phase 3 Boot Sequence  
+══════════════════════════════════════
+[PMM] Initializing...
+[PMM] 2017/2033 MiB free
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64e0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2334
+[ACPI] Found table: FACP at 0x7ffe21e8
+[ACPI] Found table: APIC at 0x7ffe225c
+[ACPI] Found table: HPET at 0x7ffe22d4
+[ACPI] Found table: WAET at 0x7ffe230c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x4, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[IDT] Loading interrupt descriptor table...
+[IDT] PIC remapped, timer IRQ0 enabled at ~100Hz
+[IDT] OK
+[IDT] OK
+[RTC] CMOS clock: 2026/6/16 05:34:52 UTC (unix 1781588092) OK
+[HEAP] Initializing 1 MiB kernel heap at 0xffffffff90000000...
+[PMM] ALLOC #1 addr=0x1000000 free_now=516571
+[PMM] ALLOC #2 addr=0x1001000 free_now=516570
+[PMM] ALLOC #3 addr=0x1002000 free_now=516569
+[PMM] ALLOC #4 addr=0x1003000 free_now=516568
+[PMM] ALLOC #5 addr=0x1004000 free_now=516567
+[PMM] ALLOC #6 addr=0x1005000 free_now=516566
+[PMM] ALLOC #7 addr=0x1006000 free_now=516565
+[PMM] ALLOC #8 addr=0x1007000 free_now=516564
+[PMM] ALLOC #9 addr=0x1008000 free_now=516563
+[PMM] ALLOC #10 addr=0x1009000 free_now=516562
+[PMM] ALLOC #101 addr=0x1064000 free_now=516471
+[PMM] ALLOC #201 addr=0x10c8000 free_now=516371
+[PMM] ALLOC #301 addr=0x112c000 free_now=516271
+[PMM] ALLOC #401 addr=0x1190000 free_now=516171
+[PMM] ALLOC #501 addr=0x11f4000 free_now=516071
+[PMM] ALLOC #601 addr=0x1258000 free_now=515971
+[PMM] ALLOC #701 addr=0x12bc000 free_now=515871
+[PMM] ALLOC #801 addr=0x1320000 free_now=515771
+[PMM] ALLOC #901 addr=0x1384000 free_now=515671
+[PMM] ALLOC #1001 addr=0x13e8000 free_now=515571
+[PMM] ALLOC #1101 addr=0x144c000 free_now=515471
+[PMM] ALLOC #1201 addr=0x14b0000 free_now=515371
+[PMM] ALLOC #1301 addr=0x1514000 free_now=515271
+[PMM] ALLOC #1401 addr=0x1578000 free_now=515171
+[PMM] ALLOC #1501 addr=0x15dc000 free_now=515071
+[PMM] ALLOC #1601 addr=0x1640000 free_now=514971
+[PMM] ALLOC #1701 addr=0x16a4000 free_now=514871
+[PMM] ALLOC #1801 addr=0x1708000 free_now=514771
+[PMM] ALLOC #1901 addr=0x176c000 free_now=514671
+[PMM] ALLOC #2001 addr=0x17d0000 free_now=514571
+[PMM] ALLOC #2101 addr=0x1834000 free_now=514471
+[PMM] ALLOC #2201 addr=0x1898000 free_now=514371
+[PMM] ALLOC #2301 addr=0x18fc000 free_now=514271
+[PMM] ALLOC #2401 addr=0x1960000 free_now=514171
+[PMM] ALLOC #2501 addr=0x19c4000 free_now=514071
+[PMM] ALLOC #2601 addr=0x1a28000 free_now=513971
+[PMM] ALLOC #2701 addr=0x1a8c000 free_now=513871
+[PMM] ALLOC #2801 addr=0x1af0000 free_now=513771
+[PMM] ALLOC #2901 addr=0x1b54000 free_now=513671
+[PMM] ALLOC #3001 addr=0x1bb8000 free_now=513571
+[PMM] ALLOC #3101 addr=0x1c1c000 free_now=513471
+[PMM] ALLOC #3201 addr=0x1c80000 free_now=513371
+[PMM] ALLOC #3301 addr=0x1ce4000 free_now=513271
+[PMM] ALLOC #3401 addr=0x1d48000 free_now=513171
+[PMM] ALLOC #3501 addr=0x1dac000 free_now=513071
+[PMM] ALLOC #3601 addr=0x1e10000 free_now=512971
+[PMM] ALLOC #3701 addr=0x1e74000 free_now=512871
+[PMM] ALLOC #3801 addr=0x1ed8000 free_now=512771
+[PMM] ALLOC #3901 addr=0x1f3c000 free_now=512671
+[PMM] ALLOC #4001 addr=0x1fa0000 free_now=512571
+[PMM] ALLOC #4101 addr=0x2004000 free_now=512471
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[PMM] FREE #1 addr=0x2008000 free_now=512468
+[SWAP] smoke zram block 0 written
+[BLK]  Scanning PCI...
+[BLK]  Found virtio-blk
+[BLK]  Negotiated features
+[BLK]  Queue initialized
+[BLK]  Read LBA 0 OK
+[FAT]  FAT32 detection failed
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff80001228
+[SYSCALL] OK
+[CAP]  Capability broker initialized
+[SEC]  Token forge attempt: REJECTED (CapError::NotFound)
+[SEC]  word_count=9 attempt: REJECTED (IpcError::InvalidWordCount)
+[SEC] WARN: pid=18446744073709551615 passed kernel ptr 0xffff800000000000
+[SEC]  kernel ptr attempt: REJECTED (PtrError::KernelAddress)
+[SEC]  badge forge attempt: REJECTED (overwritten by kernel)
+[CAP] Minted shared-page token 0xeebe596c phys=0x200f000 owner=39321
+[SEC]  dead process cap: REJECTED (CapError::Revoked)
+[CAP] Revoked shared-page token 0xeebe596c
+[PMM] FREE #2 addr=0x200f000 free_now=512461
+[SEC]  Security hardening: PASSED
+[ELF]  Static ELF loader initialized
+[KERN] spawn endpoint registered
+[IPC]  IPC bus initialized
+[IPC]  IpcMsg format: fixed 80-byte struct
+[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait
+[IPC]  Fastpath check: enabled (stub)
+[KBD]  Initializing PS/2 keyboard...
+[KBD]  PS/2 keyboard initialized
+[KBD]  IRQ1 handler installed
+[PROC] Spawning init (pid=1)...
+[PROC] Loading init ELF (12648 bytes)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=a15 memsz=a15 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=9d memsz=9d prot=Read
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=8 memsz=8 prot=ReadWrite
+[PMM] ALLOC #4201 addr=0x206a000 free_now=512369
+[SCHED] CREATED process #1 'init' idx=0 burst_score=256 tier=High
+[PROC] Spawning vfs_server (pid=3)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=9a55 memsz=9a55 prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=9c88 memsz=9c88 prot=Read
+[ELF] PT_LOAD off=14c88 vaddr=413c88 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=15000 vaddr=414000 filesz=0 memsz=10008 prot=ReadWrite
+[PMM] ALLOC #4301 addr=0x20ce000 free_now=512269
+[PMM] ALLOC #4401 addr=0x2132000 free_now=512169
+[SCHED] CREATED process #2 'vfs_server' idx=1 burst_score=256 tier=High
+[PROC] Spawning timer_server (pid=2)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2c2 memsz=2c2 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=f4 memsz=f4 prot=Read
+[PMM] ALLOC #4501 addr=0x2196000 free_now=512069
+[SCHED] CREATED process #3 'timer_server' idx=2 burst_score=256 tier=High
+[PROC] Spawning tty_server (pid=4)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=ac05 memsz=ac05 prot=ReadExec
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=e8f memsz=e8f prot=Read
+[ELF] PT_LOAD off=ce90 vaddr=40be90 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=d000 vaddr=40c000 filesz=108 memsz=4031b8 prot=ReadWrite
+[PMM] ALLOC #4601 addr=0x21fa000 free_now=511969
+[PMM] ALLOC #4701 addr=0x225e000 free_now=511869
+[PMM] ALLOC #4801 addr=0x22c2000 free_now=511769
+[PMM] ALLOC #4901 addr=0x2326000 free_now=511669
+[PMM] ALLOC #5001 addr=0x238a000 free_now=511569
+[PMM] ALLOC #5101 addr=0x23ee000 free_now=511469
+[PMM] ALLOC #5201 addr=0x2452000 free_now=511369
+[PMM] ALLOC #5301 addr=0x24b6000 free_now=511269
+[PMM] ALLOC #5401 addr=0x251a000 free_now=511169
+[PMM] ALLOC #5501 addr=0x257e000 free_now=511069
+[PMM] ALLOC #5601 addr=0x25e2000 free_now=510969
+[PMM] ALLOC #5701 addr=0x2646000 free_now=510869
+[SCHED] CREATED process #4 'tty_server' idx=3 burst_score=256 tier=High
+[NET]  virtio-net device ready for frame proxy (pid 5)
+[PROC] Spawning net_server (pid=5)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16cc5 memsz=16cc5 prot=ReadExec
+[ELF] PT_LOAD off=18000 vaddr=417000 filesz=15f0 memsz=15f0 prot=Read
+[ELF] PT_LOAD off=195f0 vaddr=4185f0 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=1a000 vaddr=419000 filesz=da90 memsz=1e748 prot=ReadWrite
+[PMM] ALLOC #5801 addr=0x26b2000 free_now=510761
+[PMM] ALLOC #5901 addr=0x2716000 free_now=510661
+[SCHED] CREATED process #5 'net_server' idx=4 burst_score=256 tier=High
+[PROC] Spawning sunlightd (pid=6)...
+[SUNLIGHTD-ELF-DIAG] embed_len=53624 first_magic=7f454c46 target_release_path=../../target/x86_64-unknown-none/release/sunlightd
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=94b5 memsz=94b5 prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=1b9e memsz=1b9e prot=Read
+[ELF] PT_LOAD off=d000 vaddr=40c000 filesz=18 memsz=18 prot=ReadWrite
+[SUNLIGHTD-ELF-DIAG] load_elf returned entry=Some(4208000)
+[PMM] ALLOC #6001 addr=0x277a000 free_now=510561
+[SCHED] CREATED process #6 'sunlightd' idx=5 burst_score=256 tier=High
+[PROC] sunlightd spawned successfully
+[SUNLIGHTD-SPAWN] pid=6 state=Ready entry=0x403580 rsp=0xffffffff90028cd8
+[PROC] Spawning timezone_service (pid=7)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=47a5 memsz=47a5 prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=d6cd memsz=d6cd prot=Read
+[PMM] ALLOC #6101 addr=0x27de000 free_now=510461
+[ELF] PT_LOAD off=136d0 vaddr=4126d0 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=14000 vaddr=413000 filesz=0 memsz=d8 prot=ReadWrite
+[PMM] ALLOC #6201 addr=0x2842000 free_now=510361
+[SCHED] CREATED process #7 'timezone_service' idx=6 burst_score=256 tier=High
+[PROC] Spawning sunlight-niced (pid=10)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=9b25 memsz=9b25 prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=777 memsz=777 prot=Read
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=18 memsz=18 prot=ReadWrite
+[PMM] ALLOC #6301 addr=0x28a6000 free_now=510261
+[SCHED] CREATED process #8 'niced' idx=7 burst_score=256 tier=High
+[PROC] Spawning sunlight-gcd (pid=11)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=7aa5 memsz=7aa5 prot=ReadExec
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=443 memsz=443 prot=Read
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=10 memsz=10 prot=ReadWrite
+[PMM] ALLOC #6401 addr=0x290a000 free_now=510161
+[PMM] ALLOC #6501 addr=0x296e000 free_now=510061
+[SCHED] CREATED process #9 'gcd' idx=8 burst_score=256 tier=High
+[HELIOS] Linux ELF compatibility layer loaded
+[SCHED] CFS-style scheduler (round-robin baseline)
+[SCHED]  ✓ weighted CFS weight field
+[SCHED]  ✓ SCHED_FIFO real-time type field
+[SCHED]  ✓ cpu_mask CPU affinity field
+✓ Phase 4 Scheduler verification PASSED
+[PROC] Entering scheduler — dropping to Ring 3
+══════════════════════════════════════
+[SCHED] process 0 'init' state=Ready
+[SCHED] Entering process 0 'init' at rsp=0xffffffff90008080
+[ init] SunlightOS init process started
+[ init] Waiting for system services to register...
+[CAP] Created endpoint 0 for pid=1
+[init] Name server: listening
+[init] Registered kernel spawn endpoint
+[VFS]  VFS server started
+[CAP] Created endpoint 1 for pid=3
+[timer] Timer server started
+[CAP] Created endpoint 2 for pid=2
+[TTY]  TTY server started
+[TTY] Framebuffer acquired
+[TTY] Login rendered
+[CAP] Created endpoint 3 for pid=4
+[TTY]  endpoint created
+[TTY]  Registered as 'tty'
+[TTY]  Login screen ready
+[CAP] Created endpoint 4 for pid=5
+[SUNLIGHTD-SCHED] First time scheduled, rip=0x403580 idx=5
+[SUNLIGHTD] main() reached
+
+[SUNLIGHTD] Starting sunlightd v0.1
+[CAP] Created endpoint 5 for pid=6
+[TZ] Starting timezone_service
+[NICED] Starting sunlight-niced v0.1
+[NICED] Loaded 5 configs, 2 rules
+[NICED] TelemetryPage mapped (read-only)
+[CAP] Created endpoint 6 for pid=10
+[GCD] Starting sunlight-gcd v0.1
+[CAP] Created endpoint 7 for pid=11
+[VFS]  Registered as 'vfs'
+[VFS]  Test open /etc/motd
+[VFS]  Test read /etc/motd
+[VFS]  Read: "Welcome to SunlightOS\n"
+[VFS]  ENOENT test OK
+[VFS]  Bad handle test OK
+[VFS]  Stat OK
+[SunlightOS] Phase 3.0 OK
+[VFS]  Permission model: Unix uid/gid/mode
+[VFS]  /etc/passwd: 2 users loaded
+[VFS]  /etc/group: 7 groups loaded
+[VFS]  Permission check: root bypasses OK
+[VFS]  Permission check: user read /etc/passwd OK
+[VFS]  Permission check: user read /etc/shadow EACCES OK
+[CAP] Minted shared-page token 0xeebe5967 phys=0x2988000 owner=3
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[CAP] Revoked shared-page token 0xeebe5967
+[PMM] FREE #3 addr=0x2988000 free_now=510034
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[CAP] Minted shared-page token 0xeebe5966 phys=0x2988000 owner=3
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  VFS read 2048 bytes via shared memory: OK
+[CAP] Revoked shared-page token 0xeebe5966
+[PMM] FREE #4 addr=0x2988000 free_now=510034
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  Shared memory grant: PASSED
+[timer] Registered as 'time' with init name server
+[timer] Serving via ipc_reply_and_wait loop
+[timer] Listening for tick events...
+[NET]  Registered as 'net' with init
+[NET]  Interface: eth0 MAC=52:54:00:12:34:56
+[NET]  NetOp handlers registered
+[SUNLIGHTD] Registered as 'sunlightd'
+[TZ] Starting timezone_service
+[TZ] Registered as 'tz'
+[SUNLIGHTD] timezone.service: running (pid=0)
+[SunlightOS] timezone OK
+[SUNLIGHTD] Loaded 4 service units, 1 socket units
+[SUNLIGHTD] Start order: vfs.service → net.service → tty.service → timezone.service
+[NICED] Registered as 'niced'
+[NICED] Monitor loop started (1Hz)
+[SunlightOS] niced OK
+[GCD] Registered as 'gcd'
+[GCD] Subscribed to PROC_EXIT
+[SunlightOS] gcd OK
+[SUNLIGHTD] vfs.service: already running (pid=0)
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[SUNLIGHTD] net.service: already running (pid=0)
+[SUNLIGHTD] Socket listener: sshd.service port 22
+[SUNLIGHTD] All units accounted for
+[SunlightOS] sunlightd OK
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[TZ] Active timezone: UTC
+[TZ] Zone database loaded
+[CAP] Created endpoint 8 for pid=7
+[TZ] Registered as 'tz'
+[timer] 100 ticks elapsed
+[IPC]  round-trip test: 1000 calls OK
+[SunlightOS] Phase 2.6 OK
+[DNS] /etc/hosts loaded into resolver chain
+[NET]  smoltcp interface up over kernel frame proxy (10.0.2.15/24)
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[TTY] Key received in password field: 114
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[TTY] Key received in password field: 111
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[TTY] Key received in password field: 111
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[TTY] Key received in password field: 116
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[TTY] Key received in password field: 10
+[TTY]  Login: reading /etc/passwd via VFS
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[TTY]  Login: auth from /etc/shadow
+[TTY]  Login success: root (uid=0, gid=0)
+[SunlightOS] Phase 3.7 OK
+[SPAWN] Request from pid=4 for path=/bin/sshl0 uid=0 gid=0
+[SPAWN] Loading /bin/sshl0 (142704 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=c84f memsz=c84f prot=ReadExec
+[ELF] PT_LOAD off=e000 vaddr=40d000 filesz=f2a0 memsz=f2a0 prot=Read
+[ELF] PT_LOAD off=1d2a0 vaddr=41c2a0 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=1e000 vaddr=41d000 filesz=0 memsz=104398 prot=ReadWrite
+[PMM] ALLOC #6601 addr=0x29d0000 free_now=509963
+[PMM] ALLOC #6701 addr=0x2a34000 free_now=509863
+[PMM] ALLOC #6801 addr=0x2a98000 free_now=509763
+[PMM] ALLOC #6901 addr=0x2afc000 free_now=509663
+[EXEC] Stack: argc=0 envc=4 rsp=0x7fffffffef90
+[EXEC] Loaded ELF entry=0x4082e5, stack=0x7fffffffef90
+[SCHED] CREATED process #10 'sshl' idx=9 burst_score=256 tier=High
+[SPAWN] /bin/sshl0 spawned pid=12
+[TTY]  Spawning /bin/sshl (pid=12)...
+[TTY]  Built-in shell ready
+[TTY]  First render, caching grid
+[TTY]  Shell: sshl v0.1.0 running
+[CAP] Created endpoint 9 for pid=12
+[TTY]  sunshell registered as 'sshl'
+[TTY]  sunshell endpoint found
+[SCHED-DIAG] created=10 finished=0 alive=10 finished_slots=0 ready_queues=(10,0,0) delta_created-finished=10 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1b35 memsz=1b35 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=2b8 memsz=2b8 prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=8 memsz=8 prot=ReadWrite
+[PMM] ALLOC #7001 addr=0x2b60000 free_now=509563
+[EXEC] Stack: argc=1 envc=4 rsp=0x7fffffffef70
+[EXEC] Loaded ELF entry=0x400cc0, stack=0x7fffffffef70
+[SCHED] CREATED process #11 'user' idx=10 burst_score=256 tier=High
+[SYSCALL] spawn: /bin/sunlightctl pid=13 ppid=12
+[EXEC] sunlightctl fg pid=13
+[SCHED] FINISHED process pid=13 name='user'
+[SCHED-DIAG] created=11 finished=1 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=11 finished=1 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=11 finished=1 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=6aa5 memsz=6aa5 prot=ReadExec
+[PMM] ALLOC #7101 addr=0x2bc4000 free_now=509463
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=cc0 memsz=cc0 prot=Read
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=18 memsz=18 prot=ReadWrite
+[PMM] ALLOC #7201 addr=0x2c28000 free_now=509363
+[EXEC] Stack: argc=1 envc=4 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x405d00, stack=0x7fffffffef80
+[SCHED] CREATED process #12 'user' idx=10 burst_score=256 tier=High (reused slot)
+[SYSCALL] spawn: /bin/nice pid=14 ppid=12
+[EXEC] nice fg pid=14
+[UTILS] main() entered, argv[0]=nice
+[SCHED] FINISHED process pid=14 name='user'
+[SCHED-DIAG] created=12 finished=2 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=6aa5 memsz=6aa5 prot=ReadExec
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=cc0 memsz=cc0 prot=Read
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=18 memsz=18 prot=ReadWrite
+[PMM] ALLOC #7301 addr=0x2c8c000 free_now=509263
+[EXEC] Stack: argc=3 envc=4 rsp=0x7fffffffef60
+[EXEC] Loaded ELF entry=0x405d00, stack=0x7fffffffef60
+[SCHED] CREATED process #13 'user' idx=10 burst_score=256 tier=High (reused slot)
+[SYSCALL] spawn: /bin/nice pid=15 ppid=12
+[EXEC] nice fg pid=15
+[UTILS] main() entered, argv[0]=nice
+[SYSCALL] setnice: pid=15 uid=0 0→10
+[SCHED] FINISHED process pid=15 name='user'
+[SCHED-DIAG] created=13 finished=3 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1edf memsz=1edf prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=3cf memsz=3cf prot=Read
+[ELF] PT_LOAD off=33d0 vaddr=4023d0 filesz=8 memsz=8 prot=ReadWrite
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=4 prot=ReadWrite
+[PMM] ALLOC #7401 addr=0x2cf0000 free_now=509163
+[PMM] ALLOC #7501 addr=0x2d54000 free_now=509063
+[EXEC] Stack: argc=1 envc=4 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x4006b2, stack=0x7fffffffef80
+[SCHED] CREATED process #14 'user' idx=10 burst_score=256 tier=High (reused slot)
+[SYSCALL] spawn: /bin/top pid=16 ppid=12
+[EXEC] top fg pid=16
+[TOP] telemetry page mapped
+[TOP] magic OK
+[TOP] rendering
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=8 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=14 finished=3 alive=11 finished_slots=0 ready_queues=(11,0,0) delta_created-finished=11 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[SCHED] FINISHED process pid=16 name='user'
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[SCHED-DIAG] created=14 finished=4 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2c35 memsz=2c35 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=375 memsz=375 prot=Read
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=10 memsz=10 prot=ReadWrite
+[PMM] ALLOC #7601 addr=0x2db8000 free_now=508963
+[EXEC] Stack: argc=2 envc=4 rsp=0x7fffffffef60
+[EXEC] Loaded ELF entry=0x402220, stack=0x7fffffffef60
+[SCHED] CREATED process #15 'user' idx=10 burst_score=256 tier=High (reused slot)
+[SYSCALL] spawn: /bin/ping pid=17 ppid=12
+[EXEC] ping fg pid=17
+[DNSDBG] resolve request host='archlinux.org' len=13 now=1781590156
+[DNSDBG] local miss host='archlinux.org' upstream=10.0.2.3
+[NETDBG] rx n=110 ethertype=86dd proto=80 src_port=0000 dst_port=0002 ip_total_len=0000 udp_len=ff02 dns_hdr=000000000000000000000001
+[NETDBG] rx n=110 ethertype=86dd proto=80 src_port=0000 dst_port=0002 ip_total_len=0000 udp_len=ff02 dns_hdr=000000000000000000000001
+[NETDBG] rx n=110 ethertype=86dd proto=80 src_port=0000 dst_port=0002 ip_total_len=0000 udp_len=ff02 dns_hdr=000000000000000000000001
+[NETDBG] rx n=110 ethertype=86dd proto=80 src_port=0000 dst_port=0002 ip_total_len=0000 udp_len=ff02 dns_hdr=000000000000000000000001
+[NETDBG] rx n=110 ethertype=86dd proto=80 src_port=0000 dst_port=0002 ip_total_len=0000 udp_len=ff02 dns_hdr=000000000000000000000001
+[NETDBG] rx n=110 ethertype=86dd proto=80 src_port=0000 dst_port=0002 ip_total_len=0000 udp_len=ff02 dns_hdr=000000000000000000000001
+[NETDBG] tx len=42 result=1
+[NETDBG] tx ethertype=0806 proto=54 src_port=ffff dst_port=ffff
+[NETDBG] rx n=64 ethertype=0806 proto=55 src_port=0012 dst_port=3456 ip_total_len=0800 udp_len=0a00 dns_hdr=000000000000000000000000
+[NETDBG] tx len=73 result=1
+[NETDBG] tx ethertype=0800 proto=11 src_port=cf08 dst_port=0035
+[NETDBG] rx n=89 ethertype=0800 proto=11 src_port=0035 dst_port=cf08 ip_total_len=004b udp_len=0037 dns_hdr=0d0581800001000100000000
+[DNSDBG] upstream ok host='archlinux.org' ip=50.7.5.83 ttl=60
+[NETDBG] tx len=42 result=1
+[NETDBG] tx ethertype=0806 proto=54 src_port=ffff dst_port=ffff
+[NETDBG] rx n=64 ethertype=0806 proto=55 src_port=0012 dst_port=3456 ip_total_len=0800 udp_len=0a00 dns_hdr=000000000000000000000000
+[NETDBG] tx len=98 result=1
+[NETDBG] tx ethertype=0800 proto=01 src_port=0800 dst_port=a455
+[NETDBG] rx n=98 ethertype=0800 proto=01 src_port=0000 dst_port=ac55 ip_total_len=0054 udp_len=53aa dns_hdr=000000000000000000000000
+[NETDBG] tx len=98 result=1
+[NETDBG] tx ethertype=0800 proto=01 src_port=0800 dst_port=a454
+[NETDBG] rx n=98 ethertype=0800 proto=01 src_port=0000 dst_port=ac54 ip_total_len=0054 udp_len=53aa dns_hdr=000000000000000000000000
+[NETDBG] tx len=98 result=1
+[NETDBG] tx ethertype=0800 proto=01 src_port=0800 dst_port=a453
+[NETDBG] rx n=98 ethertype=0800 proto=01 src_port=0000 dst_port=ac53 ip_total_len=0054 udp_len=53aa dns_hdr=000000000000000000000000
+[NETDBG] tx len=42 result=1
+[NETDBG] tx ethertype=0806 proto=54 src_port=ffff dst_port=ffff
+[NETDBG] rx n=64 ethertype=0806 proto=55 src_port=0012 dst_port=3456 ip_total_len=0800 udp_len=0a00 dns_hdr=000000000000000000000000
+[NETDBG] tx len=98 result=1
+[NETDBG] tx ethertype=0800 proto=01 src_port=0800 dst_port=a452
+[NETDBG] rx n=98 ethertype=0800 proto=01 src_port=0000 dst_port=ac52 ip_total_len=0054 udp_len=53aa dns_hdr=000000000000000000000000
+[SCHED] FINISHED process pid=17 name='user'
+[SCHED-DIAG] created=15 finished=5 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[SCHED-DIAG] created=15 finished=5 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=9 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2c35 memsz=2c35 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=375 memsz=375 prot=Read
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=10 memsz=10 prot=ReadWrite
+[PMM] ALLOC #7701 addr=0x2e1c000 free_now=508863
+[PMM] ALLOC #7801 addr=0x2e80000 free_now=508763
+[EXEC] Stack: argc=3 envc=4 rsp=0x7fffffffef60
+[EXEC] Loaded ELF entry=0x402220, stack=0x7fffffffef60
+[SCHED] CREATED process #16 'user' idx=10 burst_score=256 tier=High (reused slot)
+[SYSCALL] spawn: /bin/ping pid=18 ppid=12
+[EXEC] ping fg pid=18
+[DNSDBG] resolve request host='-n' len=2 now=1781590176
+[DNSDBG] local miss host='-n' upstream=10.0.2.3
+[NETDBG] tx len=62 result=1
+[NETDBG] tx ethertype=0800 proto=11 src_port=cf08 dst_port=0035
+[NETDBG] rx n=62 ethertype=0800 proto=11 src_port=0035 dst_port=cf08 ip_total_len=0030 udp_len=001c dns_hdr=0d0581830001000000000000
+[NETDBG] tx len=62 result=1
+[NETDBG] tx ethertype=0800 proto=11 src_port=cf08 dst_port=0035
+[NETDBG] rx n=62 ethertype=0800 proto=11 src_port=0035 dst_port=cf08 ip_total_len=0030 udp_len=001c dns_hdr=0d0481830001000000000000
+[DNSDBG] upstream err host='-n' err=NotFound
+[SCHED] FINISHED process pid=18 name='user'
+[SCHED-DIAG] created=16 finished=6 alive=10 finished_slots=1 ready_queues=(11,0,0) delta_created-finished=10 blocked_ipc=10 blocked_timer=0 blocked_io=0
+[IRQ1] Keyboard interrupt - EOI sent to PIC
+[IRQ1] Keyboard interrupt - EOI sent to PIC
