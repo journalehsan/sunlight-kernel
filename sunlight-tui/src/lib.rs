@@ -329,8 +329,8 @@ pub unsafe fn render_terminal_grid(
             let cell = cells[cell_idx];
             let x = MARGIN + (col as u32) * 8;
 
-            // Draw background
-            fb.fill_rect(x, y, 8, 16, cell.bg);
+            // Draw background — full CHAR_H to avoid 2px dark gaps between rows
+            fb.fill_rect(x, y, 8, CHAR_H, cell.bg);
 
             // Draw character if not space
             if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
@@ -350,13 +350,13 @@ pub unsafe fn render_terminal_grid(
         let cell_idx = cursor_row * cols + cursor_col.min(cols - 1);
         if cell_idx < cells.len() {
             let cell = cells[cell_idx];
-            fb.fill_rect(x, y, 8, 16, cell.fg); // fg becomes bg
+            fb.fill_rect(x, y, 8, CHAR_H, cell.fg); // fg becomes bg
             if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
                 font::draw_char(&mut fb, x, y, cell.ch, cell.bg, 1); // bg becomes fg
             }
         } else {
             // Empty cell: just draw inverted space
-            fb.fill_rect(x, y, 8, 16, layout::palette::TEXT);
+            fb.fill_rect(x, y, 8, CHAR_H, layout::palette::TEXT);
         }
     }
 

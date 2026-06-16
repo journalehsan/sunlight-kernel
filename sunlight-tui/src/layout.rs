@@ -24,7 +24,7 @@ pub mod palette {
 
 // Standard 16-color ANSI palette (matching luxOS)
 pub const ANSI_COLORS: [u32; 16] = [
-    0x1F1F1F, // 0: black
+    0x000000, // 0: black (matches palette::BG for seamless background)
     0x990000, // 1: red
     0x00A600, // 2: green
     0x999900, // 3: yellow

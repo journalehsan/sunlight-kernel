@@ -1116,7 +1116,7 @@ mod sunlight {
                 }
             });
 
-            let mut buf = [0u8; 640];
+            let mut buf = [0u8; 1024];
             let username = core::str::from_utf8(&self.username[..self.username_len]).unwrap_or("root");
             let mut hostname_buf = [0u8; 64];
             let hostname_len = read_hostname_from_vfs(&mut hostname_buf);

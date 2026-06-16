@@ -137,18 +137,6 @@ pub fn render_sysfetch_to_buffer(
         mem_percent
     );
 
-    // Memory bar: 10 blocks = 10% each
-    let _ = write!(w, "{:<24} {}Bar:{} ", next_sun(), c, r);
-    let blocks = (mem_percent / 10) as u32;
-    for i in 0..10 {
-        if i < blocks {
-            let _ = write!(w, "{}█{}", mem_color, r);
-        } else {
-            let _ = write!(w, "░");
-        }
-    }
-    let _ = writeln!(w);
-
     // Color-coded swap display (only shown when swap is configured)
     if swap_total > 0 {
         let swap_percent = (swap_used as u32 * 100) / swap_total;
@@ -172,17 +160,6 @@ pub fn render_sysfetch_to_buffer(
             swap_total,
             swap_percent
         );
-
-        let _ = write!(w, "{:<24} {}Bar:{} ", next_sun(), c, r);
-        let swap_blocks = (swap_percent / 10) as u32;
-        for i in 0..10 {
-            if i < swap_blocks {
-                let _ = write!(w, "{}█{}", swap_color, r);
-            } else {
-                let _ = write!(w, "░");
-            }
-        }
-        let _ = writeln!(w);
     }
 
     if let Some(ip) = net_ip {
@@ -199,8 +176,7 @@ pub fn render_sysfetch_to_buffer(
         );
     }
 
-    //  TUI: DNS resolver sources (hosts file via VFS + hardcoded fallback in net_server)
-    let _ = writeln!(w, "{:<24} {}DNS:{} hosts + hardcoded", next_sun(), c, r);
+    let _ = writeln!(w, "{:<24} {}DNS:{} 8.8.8.8, 1.1.1.1", next_sun(), c, r);
 
     // Minimal palette: 8 color blocks
     let _ = write!(w, "{:<24} Palette: ", next_sun());
