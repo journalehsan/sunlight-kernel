@@ -23,27 +23,17 @@ const STATUS_A_UPDATE_IN_PROGRESS: u8 = 0x80;
 const STATUS_B_24HR: u8 = 0x02;
 const STATUS_B_BINARY: u8 = 0x04;
 
-/// PIT IRQ0 frequency configured in interrupts::init()
+/// PIT IRQ0 frequency, as actually programmed in interrupts::init_pit().
 ///
-/// Current value: 1000Hz (1ms tick)
+/// This MUST match the hardware divisor: the PIT base is 1_193_182 Hz and the
+/// divisor is 11932, giving 1_193_182 / 11932 ≈ 100 Hz. This constant converts
+/// the raw tick counter into seconds, so a mismatch makes uptime wrong by the
+/// ratio of the two values.
 ///
-/// Rationale:
-/// - Stress-test scheduler context switching
-/// - Detect race conditions in interrupt/preemption paths
-/// - Reduce IPC wakeup latency
-/// - Improve interactive shell responsiveness
-///
-/// Important:
-/// The 1000Hz value was instrumental in reproducing and fixing the
-/// nested-interrupt context corruption bug (Issue #Fix-Atomic-Switch-GPF).
-///
-/// Future work:
-/// - Benchmark scheduler overhead
-/// - Measure context-switch cost
-/// - Compare 100Hz / 250Hz / 500Hz / 1000Hz
-/// - Evaluate tickless idle support
-/// - Determine optimal desktop/server defaults
-const TIMER_HZ: u64 = 1000;
+/// (telemetry.rs uses `tick_hz = 100` for the same conversion in `top`; keep
+/// these in sync. A previous change bumped this constant to 1000 without
+/// changing the divisor, which made `sysfetch`/`uptime` report 10× too small.)
+const TIMER_HZ: u64 = 100;
 
 static BOOT_UNIX_TIME: AtomicU64 = AtomicU64::new(0);
 static BOOT_TICKS: AtomicU64 = AtomicU64::new(0);
