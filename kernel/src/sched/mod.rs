@@ -201,7 +201,7 @@ impl Scheduler {
             serial_println!(
                 "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused slot)",
                 created_count + 1,
-                process.name,
+                process.name_str(),
                 id,
                 process.burst_score,
                 process.get_queue_tier()
@@ -214,7 +214,7 @@ impl Scheduler {
         serial_println!(
             "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?}",
             created_count + 1,
-            process.name,
+            process.name_str(),
             id,
             process.burst_score,
             process.get_queue_tier()
@@ -340,7 +340,7 @@ impl Scheduler {
                     serial_println!(
                         "[WD] pid={} '{}' exceeded watchdog: ran={} limit={} ticks — suspended",
                         current_proc.pid,
-                        current_proc.name,
+                        current_proc.name_str(),
                         ticks_used,
                         wd
                     );
@@ -713,7 +713,7 @@ impl Scheduler {
         // Find first Ready process.
         let mut first = None;
         for (i, p) in self.processes.iter().enumerate() {
-            serial_println!("[SCHED] process {} '{}' state={:?}", i, p.name, p.state);
+            serial_println!("[SCHED] process {} '{}' state={:?}", i, p.name_str(), p.state);
             if matches!(p.state, ProcessState::Ready) {
                 first = Some(i);
                 break;
@@ -736,7 +736,7 @@ impl Scheduler {
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",
                 idx,
-                self.processes[idx].name,
+                self.processes[idx].name_str(),
                 rsp
             );
             // Switch to the process's address space before entering user space.
@@ -840,7 +840,7 @@ pub fn request_reschedule() {
     NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
 }
 
-pub fn note_process_finished(pid: usize, name: &'static str) {
+pub fn note_process_finished(pid: usize, name: &str) {
     PROCESS_FINISHED.fetch_add(1, Ordering::Relaxed);
     serial_println!("[SCHED] FINISHED process pid={} name='{}'", pid, name);
 }
@@ -863,7 +863,7 @@ pub fn enter_first_process() -> ! {
         let mut sched = SCHEDULER.lock();
         let mut first = None;
         for (i, p) in sched.processes.iter().enumerate() {
-            serial_println!("[SCHED] process {} '{}' state={:?}", i, p.name, p.state);
+            serial_println!("[SCHED] process {} '{}' state={:?}", i, p.name_str(), p.state);
             if matches!(p.state, ProcessState::Ready) {
                 first = Some(i);
                 break;
@@ -880,7 +880,7 @@ pub fn enter_first_process() -> ! {
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",
                 idx,
-                sched.processes[idx].name,
+                sched.processes[idx].name_str(),
                 rsp
             );
             (rsp, pml4_phys)

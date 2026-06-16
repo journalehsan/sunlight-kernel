@@ -193,6 +193,83 @@ pub mod SpawnMsg {
     pub const ERROR: u64 = 3;
 }
 
+/// Structured spawn request that carries both a binary path and an explicit
+/// process name. Designed to fit within the IPC message word array.
+///
+/// Wire layout (register IPC — 4 available words via r8/r9/r10/r12):
+///   words[0..3]: path, NUL-terminated, up to 32 bytes
+///   words[4..5]: name hint, NUL-terminated, up to 16 bytes
+///                (NOT transmitted by the register-based IPC path today;
+///                 the kernel derives the name from the path basename instead.
+///                 Reserved for future memory-mapped IPC channel.)
+#[derive(Debug, Clone, Copy)]
+pub struct SpawnRequest {
+    /// Binary path, e.g. b"/sbin/timezone_service\0..."
+    pub path: [u8; 32],
+    /// Short process name, e.g. b"timezone_service\0..."
+    pub name: [u8; 16],
+}
+
+impl SpawnRequest {
+    pub fn new(path: &str, name: &str) -> Self {
+        let mut req = Self { path: [0; 32], name: [0; 16] };
+        let pb = path.as_bytes();
+        let plen = pb.len().min(31);
+        req.path[..plen].copy_from_slice(&pb[..plen]);
+        let nb = name.as_bytes();
+        let nlen = nb.len().min(15);
+        req.name[..nlen].copy_from_slice(&nb[..nlen]);
+        req
+    }
+
+    /// Pack into an IpcMsg. Path occupies words[0..3]; name hint in words[4..5].
+    pub fn pack_into(&self, msg: &mut IpcMsg) {
+        msg.label = SpawnMsg::SPAWN;
+        for i in 0..4 {
+            let mut w = 0u64;
+            for j in 0..8usize {
+                w |= (self.path[i * 8 + j] as u64) << (j * 8);
+            }
+            msg.words[i] = w;
+        }
+        for i in 0..2 {
+            let mut w = 0u64;
+            for j in 0..8usize {
+                w |= (self.name[i * 8 + j] as u64) << (j * 8);
+            }
+            msg.words[4 + i] = w;
+        }
+    }
+
+    /// Unpack from an IpcMsg.
+    pub fn unpack(msg: &IpcMsg) -> Self {
+        let mut req = Self { path: [0; 32], name: [0; 16] };
+        for i in 0..4 {
+            let w = msg.words[i];
+            for j in 0..8usize {
+                req.path[i * 8 + j] = ((w >> (j * 8)) & 0xff) as u8;
+            }
+        }
+        for i in 0..2 {
+            let w = msg.words[4 + i];
+            for j in 0..8usize {
+                req.name[i * 8 + j] = ((w >> (j * 8)) & 0xff) as u8;
+            }
+        }
+        req
+    }
+
+    pub fn path_str(&self) -> &str {
+        let len = self.path.iter().position(|&b| b == 0).unwrap_or(32);
+        core::str::from_utf8(&self.path[..len]).unwrap_or("")
+    }
+
+    pub fn name_str(&self) -> &str {
+        let len = self.name.iter().position(|&b| b == 0).unwrap_or(16);
+        core::str::from_utf8(&self.name[..len]).unwrap_or("")
+    }
+}
+
 /// Pack a key event into a single u64 word for IPC transport.
 /// Layout: keycode(u8) | pressed(u8) << 8 | mods_byte(u8) << 16 | ascii(u8) << 24
 pub fn pack_key_event(keycode: u8, pressed: bool, shift: bool, ctrl: bool, alt: bool, ascii: Option<u8>) -> u64 {

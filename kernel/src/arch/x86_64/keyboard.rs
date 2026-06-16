@@ -317,7 +317,7 @@ pub fn poll_inject_buffer() {
             .lock()
             .processes
             .iter()
-            .any(|p| p.name == "sshl");
+            .any(|p| p.name_str() == "sshl");
         if !sshl_up {
             return;
         }
@@ -351,7 +351,7 @@ fn send_event_to_tty(event_val: u64) {
     let (endpoint_id, server_pid) = sched
         .processes
         .iter()
-        .find(|p| p.name == "tty_server")
+        .find(|p| p.name_str() == "tty_server")
         .and_then(|p| {
             p.ipc_endpoint.map(|ep| {
                 let pid = p.pid;

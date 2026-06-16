@@ -24,7 +24,7 @@ pub const KERNEL_STACK_SIZE: usize = 32 * 1024;
 pub struct Process {
     pub pid: usize,
     pub ppid: usize, // parent pid
-    pub name: &'static str,
+    pub name: [u8; 32],
     pub state: ProcessState,
     pub address_space: AddressSpace,
     pub capabilities: Vec<Capability>,
@@ -127,12 +127,19 @@ pub struct Capability {
 }
 
 impl Process {
+    /// Returns the process name as a `&str`, interpreting the fixed byte array
+    /// up to the first NUL byte.
+    pub fn name_str(&self) -> &str {
+        let len = self.name.iter().position(|&b| b == 0).unwrap_or(32);
+        core::str::from_utf8(&self.name[..len]).unwrap_or("?")
+    }
+
     /// Create a new user process with its own address space.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
     pub unsafe fn new(
         pid: usize,
         ppid: usize,
-        name: &'static str,
+        name: &str,
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Self {
@@ -142,10 +149,15 @@ impl Process {
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
         let user_stack_top = USER_STACK_TOP;
 
+        let mut name_arr = [0u8; 32];
+        let nb = name.as_bytes();
+        let nlen = nb.len().min(31);
+        name_arr[..nlen].copy_from_slice(&nb[..nlen]);
+
         Self {
             pid,
             ppid,
-            name,
+            name: name_arr,
             state: ProcessState::Ready,
             address_space,
             capabilities: Vec::new(),

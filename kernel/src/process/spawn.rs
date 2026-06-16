@@ -7,6 +7,12 @@ use x86_64::{
     VirtAddr,
 };
 
+/// Extract the basename (the component after the last `/`) from a path.
+/// Used to give spawned processes a meaningful name instead of "daemon".
+pub fn name_from_path(path: &str) -> &str {
+    path.rfind('/').map(|i| &path[i + 1..]).unwrap_or(path)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpawnError {
     NotFound,
@@ -230,12 +236,12 @@ pub fn spawn_from_path_with_env(
     // net_server is no longer spawned at a fixed pid (init launches it after
     // timer_server), so the kernel frame-proxy syscalls (net_tx/net_rx) can no
     // longer gate on pid==5. Give it a stable name here and gate on that.
+    // For all other binaries derive the name from the path basename so that
+    // monitoring tools (top) can display meaningful names instead of "daemon".
     let proc_name = if shell_id.is_some() {
         "sshl"
-    } else if matches!(path, "/sbin/net_server" | "/usr/sbin/net_server") {
-        "net_server"
     } else {
-        "daemon"
+        name_from_path(path)
     };
     let mut process = unsafe { Process::new(pid, 1, proc_name, pmm, hhdm_offset) };
     process.uid = uid;

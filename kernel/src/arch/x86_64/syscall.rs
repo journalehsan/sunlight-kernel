@@ -200,7 +200,7 @@ fn deliver_pending_signals(process: &mut crate::process::Process) {
                     SigHandler::Default => {
                         // Default action: terminate
                         crate::serial_println!("[SIG] {} delivered: terminating process", sig_num);
-                        crate::sched::note_process_finished(process.pid, process.name);
+                        crate::sched::note_process_finished(process.pid, process.name_str());
                         process.state = crate::process::ProcessState::Finished;
                         crate::sched::request_reschedule();
                     }
@@ -595,7 +595,7 @@ fn process_exit(code: i32) -> ! {
         let my_pid = p.pid;
         let parent_pid = p.ppid;
         crate::memory::swap::untrack_process(my_pid);
-        crate::sched::note_process_finished(my_pid, p.name);
+        crate::sched::note_process_finished(my_pid, p.name_str());
 
         // Shared memory grant cleanup (owner frees frames, everyone unmaps views)
         {
@@ -1049,7 +1049,8 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     }
 
     let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
-    let mut child = unsafe { crate::process::Process::new(pid, ppid, "user", &mut pmm, hhdm) };
+    let proc_name = crate::process::spawn::name_from_path(path_str);
+    let mut child = unsafe { crate::process::Process::new(pid, ppid, proc_name, &mut pmm, hhdm) };
     child.uid = uid;
     child.gid = gid;
     child.env = env;
@@ -1949,7 +1950,7 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
     let buf_ptr = frame.rdi as *const u8;
     let len = (frame.rsi as usize).min(MAX_FRAME);
 
-    if crate::sched::SCHEDULER.lock().current_process().name != "net_server" {
+    if crate::sched::SCHEDULER.lock().current_process().name_str() != "net_server" {
         return u64::MAX;
     }
     if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + len as u64) {
@@ -1999,7 +2000,7 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
     let buf_ptr = frame.rdi as *mut u8;
     let cap = (frame.rsi as usize).min(MAX_FRAME);
 
-    if crate::sched::SCHEDULER.lock().current_process().name != "net_server" {
+    if crate::sched::SCHEDULER.lock().current_process().name_str() != "net_server" {
         return u64::MAX;
     }
     if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + cap as u64) {

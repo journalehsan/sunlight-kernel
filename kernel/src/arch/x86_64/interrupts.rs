@@ -491,7 +491,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     let timer_endpoint = sched
         .processes
         .iter()
-        .find(|p| p.name == "timer_server")
+        .find(|p| p.name_str() == "timer_server")
         .and_then(|p| p.ipc_endpoint.map(|endpoint| (endpoint, p.pid)));
 
     if let Some((endpoint_id, timer_pid)) = timer_endpoint {
@@ -509,7 +509,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         if let Some(tty_pid) = sched
             .processes
             .iter()
-            .find(|p| p.name == "tty_server")
+            .find(|p| p.name_str() == "tty_server")
             .map(|p| p.pid)
         {
             sched.wake_pid(tty_pid);

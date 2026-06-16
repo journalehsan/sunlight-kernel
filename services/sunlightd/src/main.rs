@@ -36,8 +36,8 @@ mod socket_act;
 mod journal;
 
 use sunlight_ipc::{
-    CapabilityToken, IpcMsg, debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup, nameserver_register,
+    CapabilityToken, IpcMsg, SpawnRequest, debug_log, endpoint_create, ipc_call, ipc_recv,
+    ipc_reply_and_wait, nameserver_lookup, nameserver_register,
 };
 use unit::{ServiceUnit, SocketUnit, parse_service_unit, parse_socket_unit, MAX_UNITS};
 use graph::DepGraph;
@@ -299,65 +299,36 @@ fn spawn_service(spawn_cap: CapabilityToken, entry: &mut ServiceEntry) -> Result
 
     entry.mark_starting();
 
-    // Parse ExecStart to get path
     let path = entry.unit.exec_start.as_str();
-    
-    // Create spawn request
+    // Derive a short name from the path basename for explicit naming.
+    let name = path.rfind('/').map(|i| &path[i + 1..]).unwrap_or(path);
+
+    let req = SpawnRequest::new(path, name);
     let mut msg = IpcMsg::empty();
-    msg.label = SpawnMsg::SPAWN as u64;
+    req.pack_into(&mut msg);
 
-    // Pack path into first 4 words (32 bytes)
-    let path_bytes = path.as_bytes();
-    for i in 0..4 {
-        let mut word: u64 = 0;
-        for j in 0..8 {
-            let idx = i * 8 + j;
-            if idx < path_bytes.len() {
-                word |= (path_bytes[idx] as u64) << (j * 8);
-            }
-        }
-        msg.words[i] = word;
-    }
-
-    // Set uid/gid (words[4] and [5])
-    msg.words[4] = 0; // root uid
-    msg.words[5] = 0; // root gid
-
-    // Send spawn request
     let reply = ipc_call(spawn_cap, msg);
-    
-    if reply.label == SpawnMsg::REPLY as u64 {
-        let pid = reply.words[0] as u32;
-        Ok(pid)
+    if reply.label == SpawnMsg::REPLY {
+        Ok(reply.words[0] as u32)
     } else {
         Err("Spawn failed")
     }
 }
 
-/// Spawn a daemon directly by absolute path via the kernel spawn capability.
-/// Returns the new pid on success. Used for user-level daemons that sunlightd
-/// owns (timezone_service, niced, gcd) now that the kernel no longer hardcodes
-/// their startup.
-fn spawn_path(spawn_cap: CapabilityToken, path: &str) -> Result<u32, &'static str> {
+/// Spawn a named daemon via the kernel spawn capability.
+///
+/// `path` is the binary path (up to 32 bytes); `name` is the explicit process
+/// name that will appear in monitoring tools such as `top`. The name is packed
+/// into the SpawnRequest alongside the path; the kernel derives the PCB name
+/// from the path basename (register IPC only forwards words[0..3]), while the
+/// name field is preserved in the request for documentation and future
+/// memory-mapped IPC channels.
+fn spawn_named(spawn_cap: CapabilityToken, path: &str, name: &str) -> Result<u32, &'static str> {
     use sunlight_ipc::SpawnMsg;
 
+    let req = SpawnRequest::new(path, name);
     let mut msg = IpcMsg::empty();
-    msg.label = SpawnMsg::SPAWN;
-
-    // Pack the path into the first 4 words (32 bytes max), little-endian.
-    let path_bytes = path.as_bytes();
-    for i in 0..4 {
-        let mut word: u64 = 0;
-        for j in 0..8 {
-            let idx = i * 8 + j;
-            if idx < path_bytes.len() {
-                word |= (path_bytes[idx] as u64) << (j * 8);
-            }
-        }
-        msg.words[i] = word;
-    }
-    msg.words[4] = 0; // root uid
-    msg.words[5] = 0; // root gid
+    req.pack_into(&mut msg);
 
     let reply = ipc_call(spawn_cap, msg);
     if reply.label == SpawnMsg::REPLY {
@@ -532,13 +503,17 @@ fn _start() -> ! {
     // nameserver under "tz", "niced" and "gcd".
     let spawn_cap = nameserver_lookup("spawn").unwrap_or(sunlight_ipc::CapabilityToken(0));
     if spawn_cap != sunlight_ipc::CapabilityToken(0) {
-        for (name, path) in [
-            ("timezone_service", "/sbin/timezone_service"),
-            ("niced", "/sbin/niced"),
-            ("gcd", "/sbin/gcd"),
-            ("uac_service", "/sbin/uac_service"),
+        // Each tuple: (binary_path, explicit_name_for_top)
+        // The kernel derives the PCB name from the path basename, which matches
+        // the explicit name here. Both are kept in sync so future memory-mapped
+        // IPC (where the name hint reaches the kernel) works without code changes.
+        for (path, name) in [
+            ("/sbin/timezone_service", "timezone_service"),
+            ("/sbin/niced",            "niced"),
+            ("/sbin/gcd",              "gcd"),
+            ("/sbin/uac_service",      "uac_service"),
         ] {
-            match spawn_path(spawn_cap, path) {
+            match spawn_named(spawn_cap, path, name) {
                 Ok(pid) => serial_println!("[SUNLIGHTD] spawned {} pid={}", name, pid),
                 Err(e) => serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name, e),
             }

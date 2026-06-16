@@ -155,12 +155,7 @@ pub unsafe fn update_telemetry(sched: &Scheduler, pmm: &PhysicalMemoryManager, t
         };
         entry._pad = [0; 3];
         entry._pad2 = 0;
-        entry.name = [0; 32];
-
-        let name_bytes = proc.name.as_bytes();
-        let len = name_bytes.len().min(31);
-        entry.name[..len].copy_from_slice(&name_bytes[..len]);
-        entry.name[len] = 0;
+        entry.name = proc.name;
 
         count += 1;
     }
