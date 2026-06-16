@@ -351,39 +351,8 @@ pub extern "C" fn _start() -> ! {
     splash.set_progress(900);  // 90%
     splash.redraw();
 
-    // 11. Spawn timer_server (pid=2)
-    serial_println!("[PROC] Spawning timer_server (pid=2)...");
-    splash.set_status("Loading timer_server");
-    splash.log("[PROC] Spawning timer_server (pid=2)...");
-    splash.redraw();
-    {
-        let mut pmm = PMM.lock();
-        let mut timer = unsafe {
-            Process::new(2, 0, "timer_server", &mut pmm, hhdm_offset)
-        };
-        let entry = process::elf_loader::load_elf(TIMER_SERVER_ELF_BYTES, &mut timer, &mut pmm, hhdm_offset);
-        if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
-                unsafe {
-                    timer.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
-                }
-            }
-            timer.init_context(entry, layout::USER_STACK_TOP);
-            sched::with_scheduler(|s| { s.add_process(timer); });
-            splash.log("[PROC] timer_server pid=2");
-        } else {
-            serial_println!("[PROC] Failed to load timer_server ELF");
-            splash.log("[PROC] Failed to load timer_server ELF");
-        }
-    }
+    // NOTE: timer_server is no longer spawned by the kernel. It needs no
+    // privileged memory setup, so init (pid=1) launches it via the spawn cap.
 
     splash.set_progress(950);  // 95%
     splash.redraw();
@@ -498,194 +467,17 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
-    // 13. Spawn net_server (pid=5).
-    // This keeps `ping`/`ifconfig` and sysfetch IP available in normal boots,
-    // not only in phase-gated test builds.
-    serial_println!("[PROC] Spawning net_server (pid=5)...");
-    splash.set_status("Loading net_server");
-    splash.log("[PROC] Spawning net_server (pid=5)...");
-    splash.redraw();
-    {
-        let mut pmm = PMM.lock();
-        let mut net = unsafe {
-            Process::new(5, 0, "net_server", &mut pmm, hhdm_offset)
-        };
-        let entry = process::elf_loader::load_elf(NET_SERVER_ELF_BYTES, &mut net, &mut pmm, hhdm_offset);
-        if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
-                unsafe {
-                    net.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
-                }
-            }
-            net.init_context(entry, layout::USER_STACK_TOP);
-            sched::with_scheduler(|s| { s.add_process(net); });
-            splash.log("[PROC] net_server pid=5");
-        } else {
-            serial_println!("[PROC] Failed to load net_server ELF");
-            splash.log("[PROC] Failed to load net_server ELF");
-        }
-    }
-
-    // Spawn sunlightd - service supervisor daemon
-    serial_println!("[PROC] Spawning sunlightd (pid=6)...");
-    splash.log("[PROC] Spawning sunlightd (pid=6)...");
-    splash.redraw();
-    {
-        let mut pmm = PMM.lock();
-        let mut sunlightd = unsafe {
-            Process::new(6, 0, "sunlightd", &mut pmm, hhdm_offset)
-        };
-        // Diagnostic logs before load attempt (logs first)
-        serial_println!("[SUNLIGHTD-ELF-DIAG] embed_len={} first_magic={:02x}{:02x}{:02x}{:02x} target_release_path=../../target/x86_64-unknown-none/release/sunlightd",
-            SUNLIGHTD_ELF_BYTES.len(),
-            SUNLIGHTD_ELF_BYTES.get(0).copied().unwrap_or(0),
-            SUNLIGHTD_ELF_BYTES.get(1).copied().unwrap_or(0),
-            SUNLIGHTD_ELF_BYTES.get(2).copied().unwrap_or(0),
-            SUNLIGHTD_ELF_BYTES.get(3).copied().unwrap_or(0));
-        let entry = process::elf_loader::load_elf(SUNLIGHTD_ELF_BYTES, &mut sunlightd, &mut pmm, hhdm_offset);
-        serial_println!("[SUNLIGHTD-ELF-DIAG] load_elf returned entry={:?}", entry);
-        if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
-                // SAFETY: frame_addr comes from pmm.alloc_frame which guarantees a valid, page-aligned physical address for the lifetime of the system; the unchecked ctor is valid here.
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
-                // SAFETY: mapping a user-accessible page into the freshly created sunlightd address space; pmm and hhdm valid at this boot stage, no concurrent access.
-                unsafe {
-                    sunlightd.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
-                }
-            }
-            sunlightd.init_context(entry, layout::USER_STACK_TOP);
-            sched::with_scheduler(|s| { s.add_process(sunlightd); });
-            splash.log("[PROC] sunlightd pid=6");
-            serial_println!("[PROC] sunlightd spawned successfully");
-            // Diagnostic 1a: log state immediately after spawn (before any scheduler run)
-            sched::with_scheduler(|s| {
-                if let Some(p) = s.processes.iter().find(|pp| pp.pid == 6) {
-                    serial_println!("[SUNLIGHTD-SPAWN] pid=6 state={:?} entry=0x{:x} rsp=0x{:x}",
-                        p.state, p.entry_point, p.context_rsp);
-                }
-            });
-        } else {
-            serial_println!("[PROC] Failed to load sunlightd ELF");
-            splash.log("[PROC] Failed to load sunlightd ELF");
-        }
-    }
-
-    // Spawn timezone_service (pid=7) - registers as "tz" with init nameserver
-    serial_println!("[PROC] Spawning timezone_service (pid=7)...");
-    splash.set_status("Loading timezone_service");
-    splash.log("[PROC] Spawning timezone_service (pid=7)...");
-    splash.redraw();
-    {
-        let mut pmm = PMM.lock();
-        let mut tz = unsafe {
-            Process::new(7, 0, "timezone_service", &mut pmm, hhdm_offset)
-        };
-        let entry = process::elf_loader::load_elf(TIMEZONE_SERVICE_ELF_BYTES, &mut tz, &mut pmm, hhdm_offset);
-        if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
-                unsafe {
-                    tz.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
-                }
-            }
-            tz.init_context(entry, layout::USER_STACK_TOP);
-            sched::with_scheduler(|s| { s.add_process(tz); });
-            splash.log("[PROC] timezone_service pid=7");
-        } else {
-            serial_println!("[PROC] Failed to load timezone_service ELF");
-            splash.log("[PROC] Failed to load timezone_service ELF");
-        }
-    }
-
-    // Spawn sunlight-niced (pid=10) - registers as "niced" with init nameserver
-    serial_println!("[PROC] Spawning sunlight-niced (pid=10)...");
-    splash.set_status("Loading sunlight-niced");
-    splash.log("[PROC] Spawning sunlight-niced (pid=10)...");
-    splash.redraw();
-    {
-        let mut pmm = PMM.lock();
-        let mut niced = unsafe {
-            Process::new(10, 0, "niced", &mut pmm, hhdm_offset)
-        };
-        let entry = process::elf_loader::load_elf(SUNLIGHT_NICED_ELF_BYTES, &mut niced, &mut pmm, hhdm_offset);
-        if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
-                unsafe {
-                    niced.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
-                }
-            }
-            niced.init_context(entry, layout::USER_STACK_TOP);
-            sched::with_scheduler(|s| { s.add_process(niced); });
-            splash.log("[PROC] sunlight-niced pid=10");
-        } else {
-            serial_println!("[PROC] Failed to load sunlight-niced ELF");
-            splash.log("[PROC] Failed to load sunlight-niced ELF");
-        }
-    }
-
-    // Spawn sunlight-gcd (pid=11) - registers as "gcd" with init nameserver
-    serial_println!("[PROC] Spawning sunlight-gcd (pid=11)...");
-    splash.set_status("Loading sunlight-gcd");
-    splash.log("[PROC] Spawning sunlight-gcd (pid=11)...");
-    splash.redraw();
-    {
-        let mut pmm = PMM.lock();
-        let mut gcd = unsafe {
-            Process::new(11, 0, "gcd", &mut pmm, hhdm_offset)
-        };
-        let entry = process::elf_loader::load_elf(SUNLIGHT_GCD_ELF_BYTES, &mut gcd, &mut pmm, hhdm_offset);
-        if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
-                unsafe {
-                    gcd.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
-                }
-            }
-            gcd.init_context(entry, layout::USER_STACK_TOP);
-            sched::with_scheduler(|s| { s.add_process(gcd); });
-            splash.log("[PROC] sunlight-gcd pid=11");
-        } else {
-            serial_println!("[PROC] Failed to load sunlight-gcd ELF");
-            splash.log("[PROC] Failed to load sunlight-gcd ELF");
-        }
-    }
+    // NOTE: net_server and sunlightd are no longer spawned by the kernel.
+    // Neither needs privileged memory setup, so init (pid=1) launches them via
+    // the spawn cap (the kernel-owned virtio-net device above is still set up
+    // here so net_server can transmit/receive once it starts).
+    //
+    // The full startup chain is now:
+    //   kernel boot      -> init, vfs_server, tty_server   (privileged setup)
+    //   init (pid=1)     -> timer_server, net_server, sunlightd
+    //   sunlightd        -> timezone_service, niced, gcd
+    // All service ELFs remain embedded (see *_ELF_BYTES above) and are resolved
+    // for the spawn path by process::spawn::embedded_bytes_for_path.
 
     splash.set_progress(1000);  // 100%
     splash.set_phase("Phase 3");

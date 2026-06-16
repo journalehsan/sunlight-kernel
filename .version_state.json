@@ -2,36 +2,8 @@
   "last_known_lines": 39535,
   "accumulated_patch": 60,
   "last_version": "0.1.60",
-  "last_total_lines": 39476,
+  "last_total_lines": 39377,
   "history": [
-    {
-      "timestamp": "2026-06-15T16:15:07.390236",
-      "version": "0.1.8",
-      "total_lines": 34312,
-      "new_lines": -23,
-      "patch_increment": 0
-    },
-    {
-      "timestamp": "2026-06-15T16:19:37.413059",
-      "version": "0.1.8",
-      "total_lines": 34312,
-      "new_lines": -23,
-      "patch_increment": 0
-    },
-    {
-      "timestamp": "2026-06-15T16:21:18.909914",
-      "version": "0.1.8",
-      "total_lines": 34312,
-      "new_lines": -23,
-      "patch_increment": 0
-    },
-    {
-      "timestamp": "2026-06-15T16:22:42.340223",
-      "version": "0.1.8",
-      "total_lines": 34312,
-      "new_lines": -23,
-      "patch_increment": 0
-    },
     {
       "timestamp": "2026-06-15T16:23:53.195018",
       "version": "0.1.8",
@@ -352,6 +324,34 @@
       "version": "0.1.60",
       "total_lines": 39476,
       "new_lines": -59,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-16T12:21:52.023534",
+      "version": "0.1.60",
+      "total_lines": 39202,
+      "new_lines": -333,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-16T12:34:17.801065",
+      "version": "0.1.60",
+      "total_lines": 39441,
+      "new_lines": -94,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-16T12:44:49.012772",
+      "version": "0.1.60",
+      "total_lines": 39377,
+      "new_lines": -158,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-16T12:49:09.816784",
+      "version": "0.1.60",
+      "total_lines": 39377,
+      "new_lines": -158,
       "patch_increment": 0
     }
   ]

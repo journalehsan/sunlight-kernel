@@ -314,6 +314,39 @@ fn spawn_service(spawn_cap: CapabilityToken, entry: &mut ServiceEntry) -> Result
     }
 }
 
+/// Spawn a daemon directly by absolute path via the kernel spawn capability.
+/// Returns the new pid on success. Used for user-level daemons that sunlightd
+/// owns (timezone_service, niced, gcd) now that the kernel no longer hardcodes
+/// their startup.
+fn spawn_path(spawn_cap: CapabilityToken, path: &str) -> Result<u32, &'static str> {
+    use sunlight_ipc::SpawnMsg;
+
+    let mut msg = IpcMsg::empty();
+    msg.label = SpawnMsg::SPAWN;
+
+    // Pack the path into the first 4 words (32 bytes max), little-endian.
+    let path_bytes = path.as_bytes();
+    for i in 0..4 {
+        let mut word: u64 = 0;
+        for j in 0..8 {
+            let idx = i * 8 + j;
+            if idx < path_bytes.len() {
+                word |= (path_bytes[idx] as u64) << (j * 8);
+            }
+        }
+        msg.words[i] = word;
+    }
+    msg.words[4] = 0; // root uid
+    msg.words[5] = 0; // root gid
+
+    let reply = ipc_call(spawn_cap, msg);
+    if reply.label == SpawnMsg::REPLY {
+        Ok(reply.words[0] as u32)
+    } else {
+        Err("Spawn failed")
+    }
+}
+
 /// Handle control IPC messages
 fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: CapabilityToken) -> IpcMsg {
     let mut reply = IpcMsg::empty();
@@ -474,8 +507,26 @@ fn _start() -> ! {
     serial_println!("[SUNLIGHTD] All units accounted for");
     serial_println!("[SunlightOS] sunlightd OK");
 
-    // Main control loop (spawn_cap lookup can be done inside handler if needed later)
+    // Spawn the user-level daemons that the kernel no longer hardcodes at boot.
+    // These run detached (no TTY tab) and self-register with the init
+    // nameserver under "tz", "niced" and "gcd".
     let spawn_cap = nameserver_lookup("spawn").unwrap_or(sunlight_ipc::CapabilityToken(0));
+    if spawn_cap != sunlight_ipc::CapabilityToken(0) {
+        for (name, path) in [
+            ("timezone_service", "/sbin/timezone_service"),
+            ("niced", "/sbin/niced"),
+            ("gcd", "/sbin/gcd"),
+        ] {
+            match spawn_path(spawn_cap, path) {
+                Ok(pid) => serial_println!("[SUNLIGHTD] spawned {} pid={}", name, pid),
+                Err(e) => serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name, e),
+            }
+        }
+    } else {
+        serial_println!("[SUNLIGHTD] spawn capability unavailable; daemons not started");
+    }
+
+    // Main control loop (spawn_cap lookup can be done inside handler if needed later)
     loop {
         let msg = ipc_recv(ep);
         let reply = handle_control_message(&msg, &mut services, spawn_cap);

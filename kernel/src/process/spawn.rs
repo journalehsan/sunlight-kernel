@@ -213,7 +213,10 @@ pub fn spawn_from_path_with_env(
     env: Option<super::env::EnvMap>,
 ) -> Result<usize, SpawnError> {
     let bytes = embedded_bytes_for_path(path)?;
-    let shell_id = shell_id_from_path(path).ok_or(SpawnError::NotFound)?;
+    // Shells map a tty tab via their shell_id; non-shell paths (e.g. user-level
+    // daemons such as timezone_service/niced/gcd spawned by sunlightd) have no
+    // shell_id and run detached from any TTY tab.
+    let shell_id = shell_id_from_path(path);
 
     crate::serial_println!("[SPAWN] Loading {} ({} bytes)", path, bytes.len());
 
@@ -224,14 +227,15 @@ pub fn spawn_from_path_with_env(
     // pid-keyed lookup (wake_pid/waitpid/process_is_alive find the wrong
     // process, leaving the real one blocked forever).
     let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
-    let mut process = unsafe { Process::new(pid, 1, "sshl", pmm, hhdm_offset) };
+    let proc_name = if shell_id.is_some() { "sshl" } else { "daemon" };
+    let mut process = unsafe { Process::new(pid, 1, proc_name, pmm, hhdm_offset) };
     process.uid = uid;
     process.gid = gid;
     // Attach this shell to a TTY tab keyed by its shell_id (parsed from the
     // path above). Children spawned by the shell inherit this, so their fd0/fd1
     // route to the tab's kernel stdin/stdout rings (foreground input routing).
-    // tty_server uses the same shell_id as the ring key.
-    process.tty_tab = Some(shell_id as u8);
+    // tty_server uses the same shell_id as the ring key. Daemons stay detached.
+    process.tty_tab = shell_id.map(|id| id as u8);
     // Phase 6.5 Step 2: every spawned process gets an environment — either
     // one inherited from the caller or the defaults for this uid (PATH,
     // USER, HOME, SHELL). Username resolution from /etc/passwd happens in
@@ -241,7 +245,7 @@ pub fn spawn_from_path_with_env(
     let envp_strings = process.env.to_envp();
     let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
     exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp)?;
-    process.set_initial_args(shell_id, uid as u64, gid as u64, 0);
+    process.set_initial_args(shell_id.unwrap_or(0), uid as u64, gid as u64, 0);
 
     let actual_pid = process.pid;
     let _id = sched.add_process(process);
@@ -294,6 +298,17 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/traceroute"
         | "/usr/bin/arp"
         | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
+        // Base servers spawned by init (pid=1), not hardcoded in kernel boot.
+        // These need no privileged memory setup (unlike vfs/tty).
+        "/sbin/timer_server" | "/usr/sbin/timer_server" => Ok(crate::TIMER_SERVER_ELF_BYTES),
+        "/sbin/net_server" | "/usr/sbin/net_server" => Ok(crate::NET_SERVER_ELF_BYTES),
+        "/sbin/sunlightd" | "/usr/sbin/sunlightd" => Ok(crate::SUNLIGHTD_ELF_BYTES),
+        // User-level daemons spawned by sunlightd (not hardcoded in kernel boot).
+        "/sbin/timezone_service" | "/usr/sbin/timezone_service" => {
+            Ok(crate::TIMEZONE_SERVICE_ELF_BYTES)
+        }
+        "/sbin/niced" | "/usr/sbin/niced" => Ok(crate::SUNLIGHT_NICED_ELF_BYTES),
+        "/sbin/gcd" | "/usr/sbin/gcd" => Ok(crate::SUNLIGHT_GCD_ELF_BYTES),
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
         "/usr/bin/sunlightctl" | "/bin/sunlightctl" => Ok(crate::SUNLIGHTCTL_ELF_BYTES),
         "/bin/fetch" | "/usr/bin/fetch" => Ok(crate::SUNLIGHT_FETCH_ELF_BYTES),

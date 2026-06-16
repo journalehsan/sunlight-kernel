@@ -2,8 +2,38 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, CapabilityToken, InitMsg, IpcMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, CapabilityToken, InitMsg,
+    IpcMsg, SpawnMsg,
 };
+
+/// Base servers that init launches via the kernel spawn capability once it
+/// holds the spawn token. These need no privileged memory setup (unlike
+/// vfs_server/tty_server, which the kernel spawns directly). sunlightd in turn
+/// launches the user-level daemons (timezone_service, niced, gcd).
+const INIT_SERVICES: [&str; 3] = ["/sbin/timer_server", "/sbin/net_server", "/sbin/sunlightd"];
+
+/// Spawn a service by absolute path using the kernel spawn capability.
+fn spawn_service(spawn_cap: CapabilityToken, path: &str) -> bool {
+    let mut msg = IpcMsg::with_label(SpawnMsg::SPAWN);
+    // Pack the path into the first 4 words (32 bytes max), little-endian.
+    let path_bytes = path.as_bytes();
+    let mut i = 0;
+    while i < 4 {
+        let mut word: u64 = 0;
+        let mut j = 0;
+        while j < 8 {
+            let idx = i * 8 + j;
+            if idx < path_bytes.len() {
+                word |= (path_bytes[idx] as u64) << (j * 8);
+            }
+            j += 1;
+        }
+        msg.words[i] = word;
+        i += 1;
+    }
+    let reply = ipc_call(spawn_cap, msg);
+    reply.label == SpawnMsg::REPLY
+}
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -25,6 +55,19 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         let name = name_to_u64("spawn");
         registry_insert(&mut registry, name, CapabilityToken(spawn_token));
         debug_log("[init] Registered kernel spawn endpoint");
+
+        // Launch the base servers that do not need privileged kernel memory
+        // setup. The spawn syscall is handled inline by the kernel and returns
+        // immediately, so these are queued before we enter the name-server loop
+        // below — their own register/lookup IPC is then serviced by that loop.
+        let spawn_cap = CapabilityToken(spawn_token);
+        for path in INIT_SERVICES.iter() {
+            if spawn_service(spawn_cap, path) {
+                debug_log("[init] launched base service");
+            } else {
+                debug_log("[init] FAILED to launch base service");
+            }
+        }
     }
 
     let mut msg = ipc_recv(ep);
