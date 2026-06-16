@@ -1939,7 +1939,8 @@ fn sys_sigreturn(_frame: &mut SyscallFrame) -> u64 {
 
 /// Syscall: net_tx (90) — Phase 3.4 frame proxy.
 /// rdi = user pointer to a raw Ethernet frame, rsi = frame length.
-/// Restricted to net_server (pid 5), which holds the network capability.
+/// Restricted to net_server (gated by process name; pid is no longer fixed
+/// since init launches it after timer_server), which holds the network capability.
 /// Returns 1 on success, 0 on failure (no device / send error), u64::MAX
 /// if the calling process is not authorized or the buffer is invalid.
 fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
@@ -1948,8 +1949,7 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
     let buf_ptr = frame.rdi as *const u8;
     let len = (frame.rsi as usize).min(MAX_FRAME);
 
-    let pid = crate::sched::SCHEDULER.lock().current_process().pid;
-    if pid != 5 {
+    if crate::sched::SCHEDULER.lock().current_process().name != "net_server" {
         return u64::MAX;
     }
     if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + len as u64) {
@@ -1990,7 +1990,7 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
 
 /// Syscall: net_rx (91) — Phase 3.4 frame proxy.
 /// rdi = user pointer to a buffer, rsi = buffer capacity.
-/// Restricted to net_server (pid 5). Returns the number of bytes copied
+/// Restricted to net_server (gated by process name). Returns the number of bytes copied
 /// (0 if no frame is pending or the device is absent), or u64::MAX if the
 /// calling process is not authorized or the buffer is invalid.
 fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
@@ -1999,8 +1999,7 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
     let buf_ptr = frame.rdi as *mut u8;
     let cap = (frame.rsi as usize).min(MAX_FRAME);
 
-    let pid = crate::sched::SCHEDULER.lock().current_process().pid;
-    if pid != 5 {
+    if crate::sched::SCHEDULER.lock().current_process().name != "net_server" {
         return u64::MAX;
     }
     if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + cap as u64) {

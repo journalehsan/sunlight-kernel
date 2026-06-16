@@ -754,8 +754,9 @@ pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> =
     spin::Mutex::new(None);
 
 /// Kernel-owned virtio-net device (Phase 3.4: net_server frame proxy).
-/// Only ring-0 can touch the device's I/O ports; net_server (pid 5) exchanges
-/// raw Ethernet frames with it via the NetTx/NetRx syscalls below.
+/// Only ring-0 can touch the device's I/O ports; net_server (identified by
+/// process name in the syscall gate) exchanges raw Ethernet frames with it via
+/// the NetTx/NetRx syscalls below.
 pub static NET_DEVICE: spin::Mutex<Option<sunlight_net::VirtioNet>> = spin::Mutex::new(None);
 
 /// BlockDevice adapter over the kernel's virtio-blk driver (read-only:

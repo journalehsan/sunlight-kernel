@@ -227,7 +227,16 @@ pub fn spawn_from_path_with_env(
     // pid-keyed lookup (wake_pid/waitpid/process_is_alive find the wrong
     // process, leaving the real one blocked forever).
     let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
-    let proc_name = if shell_id.is_some() { "sshl" } else { "daemon" };
+    // net_server is no longer spawned at a fixed pid (init launches it after
+    // timer_server), so the kernel frame-proxy syscalls (net_tx/net_rx) can no
+    // longer gate on pid==5. Give it a stable name here and gate on that.
+    let proc_name = if shell_id.is_some() {
+        "sshl"
+    } else if matches!(path, "/sbin/net_server" | "/usr/sbin/net_server") {
+        "net_server"
+    } else {
+        "daemon"
+    };
     let mut process = unsafe { Process::new(pid, 1, proc_name, pmm, hhdm_offset) };
     process.uid = uid;
     process.gid = gid;

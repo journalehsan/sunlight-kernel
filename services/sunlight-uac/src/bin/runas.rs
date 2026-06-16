@@ -153,7 +153,6 @@ fn read_line(buf: &mut [u8]) -> usize {
 
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
-    println!("[runas] v2 (spawn+waitpid)");
     let mut storage = [""; MAX_ARGS];
     let count = unsafe { collect_args(argc, argv, &mut storage) };
 
@@ -208,14 +207,14 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     }
     match sunlight_libc::spawn(path.as_bytes(), &argv_bytes[..cmd_args.len()], None) {
         Ok(pid) => {
-            println!("[runas] launched {} pid={}", path.as_str(), pid);
             let code = sunlight_libc::waitpid(pid).unwrap_or(1);
-            println!("[runas] {} exited code={}", path.as_str(), code);
             sunlight_libc::exit(code);
         }
-        Err(e) => {
-            println!("runas: spawn failed for {} (errno {:?})", path.as_str(), e);
-            sunlight_libc::exit(126);
+        Err(_) => {
+            // No such binary. Builtins (calc, sysfetch, cd, …) live inside the
+            // shell, not /bin, so there is nothing to spawn — same as `sudo cd`.
+            println!("runas: {}: command not found (not an executable)", command);
+            sunlight_libc::exit(127);
         }
     }
 }
