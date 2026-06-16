@@ -57,7 +57,37 @@ macro_rules! println {
 /// Mirror of the daemon opcodes (see `uac_service.rs`).
 const OP_RUNAS: u64 = 1;
 const OP_CHECK: u64 = 2;
+const OP_CHECK_EXEC: u64 = 5;
 const REPLY_OK: u64 = 1;
+
+/// Read a single line from stdin into `buf`, returning the byte length.
+///
+/// This is the passwd-style input path. It is written to be *impossible to
+/// hang on*:
+///   * `Ok(0)` means EOF (the TTY closed / no foreground input) — we stop
+///     instead of spinning forever waiting for bytes that will never come.
+///   * `Err(Again)` (would-block) yields the CPU and retries.
+///   * any other error stops the read.
+/// The newline terminates the line and is not stored.
+fn read_line(buf: &mut [u8]) -> usize {
+    let mut len = 0;
+    while len < buf.len() {
+        let mut byte = [0u8; 1];
+        match sunlight_libc::read(sunlight_libc::STDIN, &mut byte) {
+            Ok(0) => break,                       // EOF — never block forever.
+            Ok(_) => {
+                if byte[0] == b'\n' || byte[0] == b'\r' {
+                    break;
+                }
+                buf[len] = byte[0];
+                len += 1;
+            }
+            Err(sunlight_libc::Errno::Again) => sunlight_libc::yield_now(),
+            Err(_) => break,
+        }
+    }
+    len
+}
 
 /// Pack a NUL-terminated little-endian string into `msg.words[start..]`.
 fn pack_str(msg: &mut IpcMsg, start: usize, s: &str) {
@@ -102,6 +132,21 @@ fn report(cap: CapabilityToken) {
     } else {
         println!("access: ERROR");
     }
+
+    // Execute check for "/bin/calc": confirms the elevated session carries the
+    // /bin/* execution capability granted by the broker policy.
+    let mut m3 = IpcMsg::empty();
+    m3.label = OP_CHECK_EXEC;
+    m3.words[0] = 0; // uid
+    m3.words[1] = 0; // gid
+    pack_str(&mut m3, 2, "/bin/calc");
+    let r3 = ipc_call(cap, m3);
+    if r3.label == REPLY_OK {
+        let decision = if r3.words[0] != 0 { "allow" } else { "deny" };
+        println!("access uid=0 path=/bin/calc exec -> {}", decision);
+    } else {
+        println!("access: ERROR");
+    }
 }
 
 #[no_mangle]
@@ -110,6 +155,15 @@ fn _start() -> ! {
         println!("capabilityctl: uac service not found (is it running?)");
         sunlight_libc::exit(1);
     };
+
+    // passwd-style prompt. `read_line` is EOF/again-safe, so an unattended or
+    // non-foreground invocation returns an empty line instead of hanging.
+    stdout_write("Password: ");
+    let mut pw = [0u8; 64];
+    let n = read_line(&mut pw);
+    if n == 0 {
+        println!("(no password entered; continuing read-only checks)");
+    }
 
     report(cap);
     sunlight_libc::exit(0);

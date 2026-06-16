@@ -32,6 +32,18 @@ impl AccessFlags {
         execute: false,
     };
 
+    pub const EXECUTE: Self = Self {
+        read: false,
+        write: false,
+        execute: true,
+    };
+
+    pub const READ_EXECUTE: Self = Self {
+        read: true,
+        write: false,
+        execute: true,
+    };
+
     pub const ALL: Self = Self {
         read: true,
         write: true,

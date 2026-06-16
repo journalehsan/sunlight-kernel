@@ -49,6 +49,23 @@ pub fn render_sysfetch_to_buffer(
     out: &mut [u8],
 ) -> usize {
     let mut w = CompactWriter::new(out);
+    let sun = [
+        "      ;   :   ;",
+        "   .   \\_,!,_/   ,",
+        "    `.,'     `.,'",
+        "     /         \\",
+        "~ -- :         : -- ~",
+        "     \\         /",
+        "    ,'`._   _.'`.",
+        "   '   / `!` \\   `",
+        "      ;   :   ;",
+    ];
+    let mut sun_idx = 0usize;
+    let mut next_sun = || {
+        let line = if sun_idx < sun.len() { sun[sun_idx] } else { "" };
+        sun_idx += 1;
+        line
+    };
 
     // Minimal inline ANSI: cyan for labels, green for good usage, yellow for warn, red for danger
     let c = "\x1B[36m"; // cyan
@@ -68,20 +85,28 @@ pub fn render_sysfetch_to_buffer(
         0
     };
 
-    let _ = writeln!(w, "{}{}@{}{}", c, username, hostname, r);
-    let _ = writeln!(w, "{}OS:{} {}/{}", c, r, os_name, os_version);
-    let _ = writeln!(w, "{}Kernel:{} {}/{}", c, r, kernel_name, kernel_version);
-    let _ = writeln!(w, "{}Machine:{} {}", c, r, machine);
+    let _ = writeln!(w, "{:<24} {}{}@{}{}", next_sun(), c, username, hostname, r);
+    let _ = writeln!(w, "{:<24} {}OS:{} {}/{}", next_sun(), c, r, os_name, os_version);
+    let _ = writeln!(
+        w,
+        "{:<24} {}Kernel:{} {}/{}",
+        next_sun(),
+        c,
+        r,
+        kernel_name,
+        kernel_version
+    );
+    let _ = writeln!(w, "{:<24} {}Machine:{} {}", next_sun(), c, r, machine);
     if let Some(src) = source_ident {
         if !src.is_empty() {
-            let _ = writeln!(w, "{}Source:{} {}", c, r, src);
+            let _ = writeln!(w, "{:<24} {}Source:{} {}", next_sun(), c, r, src);
         }
     }
     if !cpu.is_empty() {
-        let _ = writeln!(w, "{}CPU:{} {}", c, r, cpu);
+        let _ = writeln!(w, "{:<24} {}CPU:{} {}", next_sun(), c, r, cpu);
     }
 
-    let _ = write!(w, "{}Uptime:{} ", c, r);
+    let _ = write!(w, "{:<24} {}Uptime:{} ", next_sun(), c, r);
     if h > 0 {
         let _ = writeln!(w, "{}h {}m", h, m);
     } else if m > 0 {
@@ -101,12 +126,19 @@ pub fn render_sysfetch_to_buffer(
 
     let _ = writeln!(
         w,
-        "{}Memory:{} {}{}MB{}/{}MB ({}%)",
-        c, r, mem_color, mem_used, r, mem_total, mem_percent
+        "{:<24} {}Memory:{} {}{}MB{}/{}MB ({}%)",
+        next_sun(),
+        c,
+        r,
+        mem_color,
+        mem_used,
+        r,
+        mem_total,
+        mem_percent
     );
 
     // Memory bar: 10 blocks = 10% each
-    let _ = write!(w, "{}Bar:{} ", c, r);
+    let _ = write!(w, "{:<24} {}Bar:{} ", next_sun(), c, r);
     let blocks = (mem_percent / 10) as u32;
     for i in 0..10 {
         if i < blocks {
@@ -130,11 +162,18 @@ pub fn render_sysfetch_to_buffer(
 
         let _ = writeln!(
             w,
-            "{}Swap:{} {}{}MB{}/{}MB ({}%)",
-            c, r, swap_color, swap_used, r, swap_total, swap_percent
+            "{:<24} {}Swap:{} {}{}MB{}/{}MB ({}%)",
+            next_sun(),
+            c,
+            r,
+            swap_color,
+            swap_used,
+            r,
+            swap_total,
+            swap_percent
         );
 
-        let _ = write!(w, "{}Bar:{} ", c, r);
+        let _ = write!(w, "{:<24} {}Bar:{} ", next_sun(), c, r);
         let swap_blocks = (swap_percent / 10) as u32;
         for i in 0..10 {
             if i < swap_blocks {
@@ -147,14 +186,24 @@ pub fn render_sysfetch_to_buffer(
     }
 
     if let Some(ip) = net_ip {
-        let _ = write!(w, "{}IP:{} {}.{}.{}.{}/24 (eth0)\n", c, r, ip[0], ip[1], ip[2], ip[3]);
+        let _ = writeln!(
+            w,
+            "{:<24} {}IP:{} {}.{}.{}.{}/24 (eth0)",
+            next_sun(),
+            c,
+            r,
+            ip[0],
+            ip[1],
+            ip[2],
+            ip[3]
+        );
     }
 
     //  TUI: DNS resolver sources (hosts file via VFS + hardcoded fallback in net_server)
-    let _ = write!(w, "{}DNS:{} hosts + hardcoded\n", c, r);
+    let _ = writeln!(w, "{:<24} {}DNS:{} hosts + hardcoded", next_sun(), c, r);
 
     // Minimal palette: 8 color blocks
-    let _ = write!(w, "Palette: ");
+    let _ = write!(w, "{:<24} Palette: ", next_sun());
     for i in 0..8 {
         let _ = write!(w, "\x1B[4{}m \x1B[0m", i);
     }

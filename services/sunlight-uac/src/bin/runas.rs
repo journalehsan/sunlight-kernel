@@ -1,24 +1,22 @@
-//! runas — standalone Ring 3 privilege-delegation tool.
+//! runas — standalone Ring 3 privilege tool (sudo-style).
 //!
-//! `runas` is deliberately **not** part of the kernel or the syscall layer.
-//! It is an ordinary user-space binary (`/bin/runas`) that brokers privilege
-//! escalation purely through IPC:
+//! `runas` is an ordinary user-space binary (`/bin/runas`), not part of the
+//! kernel or syscall layer. It runs a command with an elevated (root) session:
 //!
-//!   1. It looks up the `"uac"` capability broker via the nameserver.
-//!   2. It proves it holds the prerequisite *administrative grant* capability
-//!      (an IPC token carrying the `can_grant` right). Without it the broker
-//!      rejects the request — `runas` cannot escalate on its own authority.
-//!   3. It asks the broker (`OP_DELEGATE`) to mint a fresh `CapabilityToken`
-//!      scoped to the target execution context (target uid + command), which
-//!      the broker returns in the reply's capability slot.
+//!   1. Parse argv: `runas <command> [args...]`.
+//!   2. Look up the `"uac"` broker and prompt for a password (passwd-style).
+//!   3. Authenticate the elevation with the broker (`OP_RUNAS`) and authorize
+//!      execution of the target binary against the capability policy
+//!      (`OP_CHECK_EXEC`). The broker is the single source of truth.
+//!   4. On success, `spawn` the resolved binary as a foreground child (kernel
+//!      wires its fd0/fd1 to this tab's TTY rings, exactly like the shell's
+//!      `run_external`) and `waitpid` for it — so the command's output renders
+//!      live. Image-replacing `exec` is intentionally avoided: it bypasses the
+//!      TTY foreground routing and that path is unused elsewhere in the OS.
 //!
-//! Usage (argv is delivered packed in the launch message by the shell):
-//!
-//!   runas <target-uid> <command> [args...]
-//!
-//! This file is intentionally a skeleton: the wire protocol and delegation
-//! flow are complete, while argv parsing and the post-mint `exec` are marked
-//! as integration points for the spawn path.
+//! Note: the broker's session model does not yet verify the password bytes
+//! themselves (see `sunlight_uac::session`); the prompt drives the elevated
+//! session cache. The execute authorization is real and capability-based.
 
 #![no_std]
 #![no_main]
@@ -47,7 +45,7 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
-use sunlight_ipc::{ipc_call, nameserver_lookup, CapabilityToken, IpcMsg};
+use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg};
 
 fn stdout_write(s: &str) {
     let mut data = s.as_bytes();
@@ -69,11 +67,51 @@ macro_rules! println {
     }};
 }
 
-/// Broker opcode: delegate / mint a capability for a target context.
-/// (Mirrors `uac_service`'s `OP_DELEGATE`.)
-const OP_DELEGATE: u64 = 3;
-/// Reply label for a granted request.
+/// Elevation request opcode (mirrors `uac_service`).
+const OP_RUNAS: u64 = 1;
+/// Path-execute authorization opcode (mirrors `uac_service`).
+const OP_CHECK_EXEC: u64 = 5;
+/// Reply label for a handled request.
 const REPLY_OK: u64 = 1;
+
+/// Maximum argv entries we forward to the executed command.
+const MAX_ARGS: usize = 16;
+
+/// Borrow argv strings out of the exec-time stack arena.
+/// SAFETY: argc/argv come from the kernel's SysV stack marshalling.
+unsafe fn collect_args<'a>(argc: u64, argv: *const *const u8, out: &mut [&'a str]) -> usize {
+    if argv.is_null() {
+        return 0;
+    }
+    let mut count = 0;
+    for i in 0..(argc as usize).min(out.len()) {
+        let ptr = *argv.add(i);
+        if ptr.is_null() {
+            break;
+        }
+        let mut len = 0;
+        while len < 256 && *ptr.add(len) != 0 {
+            len += 1;
+        }
+        let slice = core::slice::from_raw_parts(ptr, len);
+        out[count] = core::str::from_utf8(slice).unwrap_or("");
+        count += 1;
+    }
+    count
+}
+
+/// Resolve a command name to an absolute path. Bare names are looked for in
+/// `/bin`; anything already absolute is used as-is.
+fn resolve_path(cmd: &str) -> heapless::String<128> {
+    let mut p = heapless::String::new();
+    if cmd.starts_with('/') {
+        let _ = p.push_str(cmd);
+    } else {
+        let _ = p.push_str("/bin/");
+        let _ = p.push_str(cmd);
+    }
+    p
+}
 
 /// Pack a NUL-terminated little-endian string into `msg.words[start..]`.
 fn pack_str(msg: &mut IpcMsg, start: usize, s: &str) {
@@ -91,72 +129,93 @@ fn pack_str(msg: &mut IpcMsg, start: usize, s: &str) {
     }
 }
 
-/// Locate the administrative grant capability handed to `runas` at launch.
-///
-/// In SunlightOS a delegating tool receives its prerequisite *grant* token in
-/// its launch environment. Until argv/env-cap plumbing lands, we resolve it
-/// from the nameserver under the well-known name `"uac.admin"`; the broker
-/// only publishes that name to authorized callers, so an unprivileged `runas`
-/// simply gets `None` here and bails out before ever contacting the broker.
-fn admin_grant() -> Option<CapabilityToken> {
-    nameserver_lookup("uac.admin")
-}
-
-/// Ask the broker to mint a capability for the target execution context.
-/// Returns the freshly minted token on success.
-fn delegate(
-    broker: CapabilityToken,
-    admin: CapabilityToken,
-    target_uid: u32,
-    command: &str,
-) -> Result<CapabilityToken, ()> {
-    let mut m = IpcMsg::empty();
-    m.label = OP_DELEGATE;
-    m.words[0] = target_uid as u64;
-    pack_str(&mut m, 1, command);
-    // Present our prerequisite grant capability for the broker to verify.
-    m.caps[0] = admin;
-
-    let r = ipc_call(broker, m);
-    if r.label == REPLY_OK {
-        Ok(r.caps[0])
-    } else {
-        Err(())
+/// Read one line of input. EOF/again-safe so it can never hang: `Ok(0)` stops,
+/// `Err(Again)` yields and retries, the newline terminates and is dropped.
+fn read_line(buf: &mut [u8]) -> usize {
+    let mut len = 0;
+    while len < buf.len() {
+        let mut byte = [0u8; 1];
+        match sunlight_libc::read(sunlight_libc::STDIN, &mut byte) {
+            Ok(0) => break,
+            Ok(_) => {
+                if byte[0] == b'\n' || byte[0] == b'\r' {
+                    break;
+                }
+                buf[len] = byte[0];
+                len += 1;
+            }
+            Err(sunlight_libc::Errno::Again) => sunlight_libc::yield_now(),
+            Err(_) => break,
+        }
     }
+    len
 }
 
 #[no_mangle]
-fn _start() -> ! {
-    // TODO(spawn): parse argv for <target-uid> <command> [args...].
-    // Placeholder target context until argv plumbing is wired in.
-    let target_uid: u32 = 0;
-    let command: &str = "/bin/sh";
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    println!("[runas] v2 (spawn+waitpid)");
+    let mut storage = [""; MAX_ARGS];
+    let count = unsafe { collect_args(argc, argv, &mut storage) };
 
-    let Some(broker) = nameserver_lookup("uac") else {
+    // argv[0] is "runas"; argv[1..] is the command to run elevated.
+    if count < 2 {
+        println!("usage: runas <command> [args...]");
+        sunlight_libc::exit(2);
+    }
+    let cmd_args = &storage[1..count]; // [command, arg1, arg2, ...]
+    let command = cmd_args[0];
+    let path = resolve_path(command);
+
+    let Some(uac) = nameserver_lookup("uac") else {
         println!("runas: uac broker not found (is it running?)");
         sunlight_libc::exit(1);
     };
 
-    // Prerequisite check: we must already hold an administrative grant.
-    let Some(admin) = admin_grant() else {
-        println!("runas: permission denied (no administrative grant capability)");
-        sunlight_libc::exit(13); // EACCES
-    };
+    // passwd-style prompt (read_line cannot hang).
+    stdout_write("[runas] Password: ");
+    let mut pw = [0u8; 64];
+    let _ = read_line(&mut pw);
 
-    match delegate(broker, admin, target_uid, command) {
-        Ok(cap) => {
-            println!(
-                "runas: granted cap {:#x} for uid={} cmd={}",
-                cap.0,
-                target_uid,
-                command
-            );
-            // TODO(spawn): exec `command` in the target context carrying `cap`.
-            sunlight_libc::exit(0);
+    // Authenticate the elevation to root (uid 0).
+    let mut auth = IpcMsg::empty();
+    auth.label = OP_RUNAS;
+    auth.words[0] = 0; // caller uid
+    auth.words[1] = 0; // target uid (root)
+    if ipc_call(uac, auth).label != REPLY_OK {
+        println!("runas: authentication failed");
+        sunlight_libc::exit(1);
+    }
+
+    // Authorize execution of the target against the capability policy.
+    let mut chk = IpcMsg::empty();
+    chk.label = OP_CHECK_EXEC;
+    chk.words[0] = 0; // uid (root)
+    chk.words[1] = 0; // gid
+    pack_str(&mut chk, 2, path.as_str());
+    let chk_reply = ipc_call(uac, chk);
+    if chk_reply.label != REPLY_OK || chk_reply.words[0] == 0 {
+        println!("runas: access denied: {} not executable for root", path.as_str());
+        sunlight_libc::exit(13); // EACCES
+    }
+
+    // Launch the target as a foreground child and wait for it, mirroring the
+    // shell's `run_external`. `spawn(.., None)` makes the kernel wire the
+    // child's fd0/fd1 to this tab's TTY rings, so its output renders live —
+    // image-replacing `exec` is not used (it bypasses that TTY routing).
+    let mut argv_bytes: [&[u8]; MAX_ARGS] = [b""; MAX_ARGS];
+    for (i, a) in cmd_args.iter().enumerate() {
+        argv_bytes[i] = a.as_bytes();
+    }
+    match sunlight_libc::spawn(path.as_bytes(), &argv_bytes[..cmd_args.len()], None) {
+        Ok(pid) => {
+            println!("[runas] launched {} pid={}", path.as_str(), pid);
+            let code = sunlight_libc::waitpid(pid).unwrap_or(1);
+            println!("[runas] {} exited code={}", path.as_str(), code);
+            sunlight_libc::exit(code);
         }
-        Err(()) => {
-            println!("runas: broker rejected delegation for uid={}", target_uid);
-            sunlight_libc::exit(1);
+        Err(e) => {
+            println!("runas: spawn failed for {} (errno {:?})", path.as_str(), e);
+            sunlight_libc::exit(126);
         }
     }
 }

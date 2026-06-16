@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-niced"
-version = "0.1.66"
+version = "0.1.70"
+
+
+
 
 
 
@@ -10,6 +13,7 @@ edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [[bin]]

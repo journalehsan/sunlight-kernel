@@ -502,7 +502,64 @@ impl CapabilityBroker {
             .iter()
             .find_map(|(t, cap, pid)| if *t == token { Some((cap.clone(), *pid)) } else { None })
     }
+
+    /// Check whether an issued VFS capability `token` authorizes `access` on
+    /// `path` via directory-prefix match. The cheap tag reject in
+    /// `resolve_vfs_capability` runs first, so a forged or IPC-tagged token is
+    /// rejected in `O(1)`.
+    pub fn vfs_allows(&self, token: CapabilityToken, path: &str, access: AccessFlags) -> bool {
+        match self.resolve_vfs_capability(token) {
+            Some((cap, _)) => {
+                path.starts_with(cap.allowed_prefix.as_str())
+                    && (!access.read || cap.flags.read)
+                    && (!access.write || cap.flags.write)
+                    && (!access.execute || cap.flags.execute)
+            }
+            None => false,
+        }
+    }
+
+    /// Policy: mint the base set of VFS capabilities every *elevated* session
+    /// (e.g. a `runas`-spawned root shell) needs to run standard tooling.
+    ///
+    /// Each entry is a **directory-level** capability — `allowed_prefix` of
+    /// `/bin` acts as the `/bin/*` execution wildcard the task calls for —
+    /// granting read+execute over the standard binary directories. Changing the
+    /// UID to 0 is not enough in a capability-first model; the session must
+    /// actually carry these tokens, so `runas` requests them and passes them
+    /// down to the spawned context.
+    pub fn grant_elevated_vfs(
+        &mut self,
+        owner_pid: usize,
+    ) -> Result<heapless::Vec<CapabilityToken, ELEVATED_EXEC_PREFIX_COUNT>, CapError> {
+        let mut out = heapless::Vec::new();
+        for prefix in ELEVATED_EXEC_PREFIXES {
+            let mut allowed_prefix = String::new();
+            if allowed_prefix.push_str(prefix).is_err() {
+                return Err(CapError::CapabilityStoreFull);
+            }
+            let cap = VfsCapability {
+                allowed_prefix,
+                flags: AccessFlags::READ_EXECUTE,
+            };
+            let token = self.grant_vfs_capability(owner_pid, cap)?;
+            // Vec capacity == prefix count, so this push cannot overflow.
+            let _ = out.push(token);
+        }
+        serial_println!(
+            "[CAP] Granted {} base exec capabilities to elevated pid={}",
+            out.len(),
+            owner_pid
+        );
+        Ok(out)
+    }
 }
+
+/// Standard executable directories an elevated session is granted read+execute
+/// access to. Directory-prefix entries behave as `/bin/*` wildcards.
+pub const ELEVATED_EXEC_PREFIXES: [&str; 2] = ["/bin", "/usr/bin"];
+/// Number of base execute capabilities minted per elevated session.
+pub const ELEVATED_EXEC_PREFIX_COUNT: usize = ELEVATED_EXEC_PREFIXES.len();
 
 /// Mock kernel entry to enforce trusted-broker minting.
 pub fn sys_grant_capability(

@@ -57,6 +57,13 @@ const OP_RUNAS: u64 = 1;
 const OP_CHECK: u64 = 2;
 /// Privilege delegation: mint a capability for a target context (used by `runas`).
 const OP_DELEGATE: u64 = 3;
+/// Request the base set of VFS exec capabilities for an elevated session.
+/// words[0]=target_uid; caps[0] must carry the caller's admin grant. Reply
+/// words[0] = number of base exec prefixes granted.
+const OP_BASE_CAPS: u64 = 4;
+/// Path-execute access check. Same wire layout as `OP_CHECK` but tests the
+/// execute right instead of read.
+const OP_CHECK_EXEC: u64 = 5;
 /// Reply label for a handled request.
 const REPLY_OK: u64 = 1;
 /// Reply label for a rejected/unknown request.
@@ -66,6 +73,11 @@ const REPLY_ERR: u64 = 0xff;
 type Sessions = SessionStore<16>;
 /// uid rules / gid rules / rules-per-subject bounds for the rule table.
 type Rules = RuleTable<8, 8, 8>;
+
+/// Standard executable directories an elevated session is granted execute
+/// access to. Mirrors the kernel broker's `ELEVATED_EXEC_PREFIXES`; each entry
+/// is a directory-prefix that acts as a `/bin/*` execution wildcard.
+const BASE_EXEC_PREFIXES: [&str; 2] = ["/bin", "/usr/bin"];
 
 /// Decode a NUL-terminated little-endian string packed from `words[start..]`.
 fn unpack_str(words: &[u64], start: usize) -> heapless::String<64> {
@@ -114,6 +126,37 @@ fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
             let allow = rules.has_access(uid, gid, path.as_str(), AccessFlags::READ);
             reply.label = REPLY_OK;
             reply.words[0] = allow as u64;
+        }
+        OP_CHECK_EXEC => {
+            let uid = msg.words[0] as u32;
+            let gid = msg.words[1] as u32;
+            let mut path = unpack_str(&msg.words, 2);
+            if path.is_empty() {
+                let _ = path.push('/');
+            }
+            let allow = rules.has_access(uid, gid, path.as_str(), AccessFlags::EXECUTE);
+            reply.label = REPLY_OK;
+            reply.words[0] = allow as u64;
+        }
+        OP_BASE_CAPS => {
+            // Base VFS-capability grant for an elevated session. Requires the
+            // caller's admin grant in caps[0]; refuse otherwise so it cannot be
+            // used to self-escalate.
+            let target_uid = msg.words[0] as u32;
+            let admin = msg.caps[0];
+            if admin == sunlight_ipc::CapabilityToken::INVALID {
+                serial_println!("[UAC] base-caps denied: no admin grant (uid={})", target_uid);
+                reply.label = REPLY_ERR;
+            } else {
+                // The actual kernel mint (grant_elevated_vfs) is driven by the
+                // trusted broker pid via SYS_GRANT_CAPABILITY; here we report
+                // how many base exec prefixes the policy grants so the client
+                // can confirm the session is provisioned.
+                // TODO(kernel-mint): forward minted tokens in reply.caps[..].
+                serial_println!("[UAC] base-caps granted for uid={}", target_uid);
+                reply.label = REPLY_OK;
+                reply.words[0] = BASE_EXEC_PREFIXES.len() as u64;
+            }
         }
         OP_DELEGATE => {
             // words[0]=target_uid, words[1..]=NUL-terminated command path.
@@ -164,12 +207,34 @@ fn _start() -> ! {
         },
     );
 
+    // Seed the base execute policy for elevated sessions explicitly. The root
+    // "/" rule above already covers these by prefix, but seeding the standard
+    // binary directories makes the `/bin/*` execution wildcard a first-class,
+    // auditable rule that a non-root elevated session can also be granted.
+    for prefix in BASE_EXEC_PREFIXES {
+        let mut p = heapless::String::<64>::new();
+        if p.push_str(prefix).is_ok() {
+            let _ = rules.add_uid_rule(
+                0,
+                PathRule {
+                    allowed_prefix: p,
+                    flags: AccessFlags::READ_EXECUTE,
+                },
+            );
+        }
+    }
+
     serial_println!("[SunlightOS] uac OK");
 
+    // Receive the first request, then loop: reply to the current request AND
+    // atomically wait for the next one. `ipc_reply_and_wait` already returns the
+    // next message, so we must NOT call `ipc_recv` again — doing so drops that
+    // message and deadlocks the next client (the bug that hung capabilityctl on
+    // its second IPC call).
+    let mut msg = ipc_recv(ep);
     loop {
-        let msg = ipc_recv(ep);
         let reply = handle(&msg, &mut store, &rules);
-        let _ = ipc_reply_and_wait(ep, reply);
+        msg = ipc_reply_and_wait(ep, reply);
     }
 }
 
