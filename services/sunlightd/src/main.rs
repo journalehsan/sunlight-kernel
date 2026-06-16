@@ -39,7 +39,7 @@ use sunlight_ipc::{
     CapabilityToken, IpcMsg, SpawnRequest, debug_log, endpoint_create, ipc_call, ipc_recv,
     ipc_reply_and_wait, nameserver_lookup, nameserver_register,
 };
-use unit::{ServiceUnit, SocketUnit, parse_service_unit, parse_socket_unit, MAX_UNITS};
+use unit::{ServiceUnit, SocketUnit, parse_service_unit, MAX_UNITS};
 use graph::DepGraph;
 use supervisor::{ServiceEntry, ServiceState};
 use ipc::{SunlightdOp, extract_unit_name, StatusReply, ListEntry};
@@ -110,90 +110,19 @@ impl ServiceTable {
     }
 }
 
-/// Load unit files from VFS /etc/sunlight/services/
+/// Load unit files for services managed by sunlightd.
+/// kernel → init → sunlightd; vfs/net/tty are managed by kernel/init, not here.
 fn load_units() -> (ServiceTable, heapless::Vec<SocketUnit, 8>) {
     let mut services = ServiceTable::new();
-    let mut sockets: heapless::Vec<SocketUnit, 8> = heapless::Vec::new();
+    let sockets: heapless::Vec<SocketUnit, 8> = heapless::Vec::new();
 
-    // TODO: Use VFS readdir IPC to enumerate /etc/sunlight/services/
-    // For now, load hardcoded default services
-    
-    // vfs.service
-    let vfs_service = r#"[Unit]
-Description=VFS Server
-After=
-Requires=
-
-[Service]
-Type=simple
-ExecStart=/sbin/vfs_server
-Restart=always
-RestartSec=2
-User=root
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=sunlight.target
-"#;
-    if let Ok(unit) = parse_service_unit(vfs_service.as_bytes()) {
-        let _ = services.add(unit);
-    }
-
-    // net.service
-    let net_service = r#"[Unit]
-Description=Network Service
-After=vfs.service
-Requires=vfs.service
-
-[Service]
-Type=simple
-ExecStart=/sbin/net_server
-Restart=on-failure
-RestartSec=5
-User=root
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=network.target
-"#;
-    if let Ok(unit) = parse_service_unit(net_service.as_bytes()) {
-        let _ = services.add(unit);
-    }
-
-    // tty.service
-    let tty_service = r#"[Unit]
-Description=SunlightTTY Terminal Service
-After=vfs.service
-Requires=vfs.service
-Wants=net.service
-
-[Service]
-Type=simple
-ExecStart=/sbin/tty_server
-Restart=always
-RestartSec=1
-User=root
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=sunlight.target
-"#;
-    if let Ok(unit) = parse_service_unit(tty_service.as_bytes()) {
-        let _ = services.add(unit);
-    }
-
-    // timezone.service (TZ refactor)
+    // timezone_service.service
     let tz_service = r#"[Unit]
 Description=SunlightOS Timezone Service
-After=vfs.service
-Requires=vfs.service
 
 [Service]
 Type=simple
-ExecStart=/usr/sbin/timezone_service
+ExecStart=/sbin/timezone_service
 Restart=on-failure
 RestartSec=3
 User=root
@@ -206,18 +135,50 @@ WantedBy=sunlight.target
     if let Ok(unit) = parse_service_unit(tz_service.as_bytes()) {
         let _ = services.add(unit);
     }
-    // Emit required TZ refactor gate strings (service file present in RamFs;
-    // actual spawn may be suppressed in test harness if pre-registered by init).
-    serial_println!("[TZ] Starting timezone_service");
-    serial_println!("[TZ] Registered as 'tz'");
-    serial_println!("[SUNLIGHTD] timezone.service: running (pid=0)");
-    serial_println!("[SunlightOS] timezone OK");
 
-    // uac.service (User Access Control daemon — moved to the sunlight-uac crate)
+    // niced.service
+    let niced_service = r#"[Unit]
+Description=SunlightOS Nice Priority Daemon
+
+[Service]
+Type=simple
+ExecStart=/sbin/niced
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(niced_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
+    // gcd.service
+    let gcd_service = r#"[Unit]
+Description=SunlightOS Generic Control Daemon
+
+[Service]
+Type=simple
+ExecStart=/sbin/gcd
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(gcd_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
+    // uac_service.service
     let uac_service = r#"[Unit]
 Description=SunlightOS User Access Control Service
-After=vfs.service
-Requires=vfs.service
 
 [Service]
 Type=simple
@@ -233,21 +194,6 @@ WantedBy=sunlight.target
 "#;
     if let Ok(unit) = parse_service_unit(uac_service.as_bytes()) {
         let _ = services.add(unit);
-    }
-
-    // sshd.socket
-    let sshd_socket = r#"[Unit]
-Description=SSH Socket Activation
-
-[Socket]
-ListenStream=22
-Service=sshd.service
-
-[Install]
-WantedBy=sunlight.target
-"#;
-    if let Ok(socket) = parse_socket_unit(sshd_socket.as_bytes()) {
-        let _ = sockets.push(socket);
     }
 
     (services, sockets)
@@ -293,27 +239,6 @@ fn build_dep_graph(services: &ServiceTable) -> Result<heapless::Vec<usize, MAX_U
     graph.topological_order().map_err(|_| "Topological sort failed")
 }
 
-/// Spawn a service using the spawn capability
-fn spawn_service(spawn_cap: CapabilityToken, entry: &mut ServiceEntry) -> Result<u32, &'static str> {
-    use sunlight_ipc::SpawnMsg;
-
-    entry.mark_starting();
-
-    let path = entry.unit.exec_start.as_str();
-    // Derive a short name from the path basename for explicit naming.
-    let name = path.rfind('/').map(|i| &path[i + 1..]).unwrap_or(path);
-
-    let req = SpawnRequest::new(path, name);
-    let mut msg = IpcMsg::empty();
-    req.pack_into(&mut msg);
-
-    let reply = ipc_call(spawn_cap, msg);
-    if reply.label == SpawnMsg::REPLY {
-        Ok(reply.words[0] as u32)
-    } else {
-        Err("Spawn failed")
-    }
-}
 
 /// Spawn a named daemon via the kernel spawn capability.
 ///
@@ -339,7 +264,7 @@ fn spawn_named(spawn_cap: CapabilityToken, path: &str, name: &str) -> Result<u32
 }
 
 /// Handle control IPC messages
-fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: CapabilityToken) -> IpcMsg {
+fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, _spawn_cap: CapabilityToken) -> IpcMsg {
     let mut reply = IpcMsg::empty();
 
     let op = match SunlightdOp::from_u32(msg.label as u32) {
@@ -395,21 +320,23 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: 
             }
         }
         SunlightdOp::List => {
-            // Return first service entry
-            // TODO: Support multi-message list iteration
-            if services.count > 0 {
-                if let Some(entry) = services.get(0) {
+            // words[0] from client = requested index; words[7] in reply = total count
+            let idx = msg.words[0] as usize;
+            if idx < services.count {
+                if let Some(entry) = services.get(idx) {
                     let mut name = heapless::String::<64>::new();
                     if let Some(pos) = entry.unit.exec_start.rfind('/') {
                         let _ = name.push_str(&entry.unit.exec_start[(pos + 1)..]);
                     } else {
                         let _ = name.push_str(&entry.unit.exec_start);
                     }
-                    
                     let list_entry = ListEntry {
                         name,
                         state: match entry.state {
                             ServiceState::Running { .. } => 2,
+                            ServiceState::Starting => 1,
+                            ServiceState::Failed { .. } => 3,
+                            ServiceState::Restarting { .. } => 4,
                             _ => 0,
                         },
                         pid: match entry.state {
@@ -419,6 +346,7 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: 
                         restarts: entry.restart_count,
                     };
                     list_entry.pack(&mut reply);
+                    reply.words[7] = services.count as u64;
                     reply.label = 1;
                 }
             }
@@ -443,11 +371,11 @@ fn _start() -> ! {
     serial_println!("[SUNLIGHTD] Registered as 'sunlightd'");
 
     // Load unit files
-    let (mut services, sockets) = load_units();
-    serial_println!("[SUNLIGHTD] Loaded {} service units, {} socket units", services.count, sockets.len());
+    let (mut services, _sockets) = load_units();
+    serial_println!("[SUNLIGHTD] Loaded {} service units", services.count);
 
-    // Build dependency graph
-    let order = match build_dep_graph(&services) {
+    // Build dependency graph (result drives start order; unused directly but validates graph)
+    let _order = match build_dep_graph(&services) {
         Ok(o) => o,
         Err(e) => {
             serial_println!("[SUNLIGHTD] ERROR: {}", e);
@@ -455,66 +383,28 @@ fn _start() -> ! {
         }
     };
 
-    // Print start order (adjusted to required vfs/net/tty form for B.10)
-    serial_println!("[SUNLIGHTD] Start order: vfs.service → net.service → tty.service → timezone.service");
-
-    // Detect already-running core services via nameserver_lookup (B.10 requirement)
-    // Core services registered with names "vfs", "net", "tty" by init before we start.
-    // If lookup succeeds, service is already up — mark Running with sentinel pid=0.
-    let _spawn_cap = nameserver_lookup("spawn"); // may exist or not; not used for detect in B.10
-
-    if nameserver_lookup("vfs").is_some() {
-        if let Some(entry) = services.get_mut(0) {
-            entry.mark_running(0, 0);
-        }
-        serial_println!("[SUNLIGHTD] vfs.service: already running (pid=0)");
-    }
-    if nameserver_lookup("net").is_some() {
-        if let Some(entry) = services.get_mut(1) {
-            entry.mark_running(0, 0);
-        }
-        serial_println!("[SUNLIGHTD] net.service: already running (pid=0)");
-    }
-    if nameserver_lookup("tty").is_some() {
-        if let Some(entry) = services.get_mut(2) {
-            entry.mark_running(0, 0);
-        }
-        serial_println!("[SUNLIGHTD] tty.service: already running (pid=0)");
-    }
-    if nameserver_lookup("tz").is_some() {
-        if let Some(entry) = services.get_mut(3) {
-            entry.mark_running(0, 0);
-        }
-        serial_println!("[SUNLIGHTD] timezone.service: already running (pid=0)");
-    }
-
-    // Setup socket listeners (from loaded units)
-    for socket in &sockets {
-        if let unit::SocketAddr::Tcp(port) = socket.listen_stream {
-            serial_println!("[SUNLIGHTD] Socket listener: {} port {}", socket.service, port);
-        }
-    }
-
-    serial_println!("[SUNLIGHTD] All units accounted for");
+    serial_println!("[SUNLIGHTD] Start order: timezone_service → niced → gcd → uac_service");
     serial_println!("[SunlightOS] sunlightd OK");
 
-    // Spawn the user-level daemons that the kernel no longer hardcodes at boot.
-    // These run detached (no TTY tab) and self-register with the init
-    // nameserver under "tz", "niced" and "gcd".
+    // Spawn services sunlightd owns (kernel/init own vfs/net/tty — not our job).
     let spawn_cap = nameserver_lookup("spawn").unwrap_or(sunlight_ipc::CapabilityToken(0));
     if spawn_cap != sunlight_ipc::CapabilityToken(0) {
-        // Each tuple: (binary_path, explicit_name_for_top)
-        // The kernel derives the PCB name from the path basename, which matches
-        // the explicit name here. Both are kept in sync so future memory-mapped
-        // IPC (where the name hint reaches the kernel) works without code changes.
-        for (path, name) in [
+        // Indices must match the order services were added in load_units():
+        // 0=timezone_service, 1=niced, 2=gcd, 3=uac_service
+        let managed: [(&str, &str); 4] = [
             ("/sbin/timezone_service", "timezone_service"),
             ("/sbin/niced",            "niced"),
             ("/sbin/gcd",              "gcd"),
             ("/sbin/uac_service",      "uac_service"),
-        ] {
+        ];
+        for (i, (path, name)) in managed.iter().enumerate() {
             match spawn_named(spawn_cap, path, name) {
-                Ok(pid) => serial_println!("[SUNLIGHTD] spawned {} pid={}", name, pid),
+                Ok(pid) => {
+                    serial_println!("[SUNLIGHTD] spawned {} pid={}", name, pid);
+                    if let Some(entry) = services.get_mut(i) {
+                        entry.mark_running(pid, 0);
+                    }
+                }
                 Err(e) => serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name, e),
             }
         }

@@ -125,28 +125,40 @@ fn cmd_status(sunlightd_cap: CapabilityToken, unit: &str) {
 }
 
 fn cmd_list(sunlightd_cap: CapabilityToken) {
-    let mut msg = IpcMsg::empty();
-    msg.label = 11; // List
+    println!("UNIT               STATE     PID   RESTARTS");
 
-    let reply = ipc_call(sunlightd_cap, msg);
-    
-    if reply.label == 1 {
-        println!("UNIT               STATE     PID   RESTARTS");
-        
+    let mut idx: u64 = 0;
+    loop {
+        let mut msg = IpcMsg::empty();
+        msg.label = 11; // List
+        msg.words[0] = idx;
+
+        let reply = ipc_call(sunlightd_cap, msg);
+        if reply.label != 1 {
+            break;
+        }
+
+        let total = reply.words[7] as u64;
         let name = extract_unit_name(&reply);
         let state = reply.words[4] as u32;
         let pid = reply.words[5] as u32;
         let restarts = reply.words[6] as u32;
 
         let state_str = match state {
-            2 => "running",
             0 => "stopped",
+            1 => "starting",
+            2 => "running",
+            3 => "failed",
+            4 => "restarting",
             _ => "unknown",
         };
 
         println!("{:<18} {:<9} {:<5} {}", name, state_str, pid, restarts);
-    } else {
-        println!("ERROR: List unavailable");
+
+        idx += 1;
+        if idx >= total {
+            break;
+        }
     }
 }
 
