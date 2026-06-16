@@ -1,0 +1,25 @@
+[package]
+name = "sunlight-uac"
+version = "0.1.62"
+
+edition = "2021"
+
+# Shared no_std logic (sessions + capability rules) consumed by both binaries.
+[lib]
+name = "sunlight_uac"
+path = "src/lib.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+heapless = "0.8"
+
+# The privileged daemon: spawned by sunlightd, registers as "uac".
+[[bin]]
+name = "uac_service"
+path = "src/bin/uac_service.rs"
+
+# The control client: lives in RamFs at /bin/capabilityctl.
+[[bin]]
+name = "capabilityctl"
+path = "src/bin/capabilityctl.rs"

@@ -34,8 +34,6 @@ mod supervisor;
 mod ipc;
 mod socket_act;
 mod journal;
-mod uac_service;
-mod capabilityctl;
 
 use sunlight_ipc::{
     CapabilityToken, IpcMsg, debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
@@ -214,6 +212,28 @@ WantedBy=sunlight.target
     serial_println!("[TZ] Registered as 'tz'");
     serial_println!("[SUNLIGHTD] timezone.service: running (pid=0)");
     serial_println!("[SunlightOS] timezone OK");
+
+    // uac.service (User Access Control daemon — moved to the sunlight-uac crate)
+    let uac_service = r#"[Unit]
+Description=SunlightOS User Access Control Service
+After=vfs.service
+Requires=vfs.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/uac_service
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(uac_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
 
     // sshd.socket
     let sshd_socket = r#"[Unit]
@@ -516,6 +536,7 @@ fn _start() -> ! {
             ("timezone_service", "/sbin/timezone_service"),
             ("niced", "/sbin/niced"),
             ("gcd", "/sbin/gcd"),
+            ("uac_service", "/sbin/uac_service"),
         ] {
             match spawn_path(spawn_cap, path) {
                 Ok(pid) => serial_println!("[SUNLIGHTD] spawned {} pid={}", name, pid),

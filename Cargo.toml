@@ -13,6 +13,7 @@ members = [
     "services/net_server",
     "services/sunlightd",
     "services/sunlightctl",
+    "services/sunlight-uac",
     "sunlight-tui",
     "sunlight-tz",
     "sunlight-block",

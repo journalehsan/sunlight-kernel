@@ -74,6 +74,11 @@ static SUNLIGHT_NICED_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/niced");
 static SUNLIGHT_GCD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/gcd");
+// User Access Control: daemon spawned by sunlightd + its control client.
+static UAC_SERVICE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
+static CAPABILITYCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
