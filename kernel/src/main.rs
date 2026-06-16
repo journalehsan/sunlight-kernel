@@ -76,6 +76,12 @@ static NICECTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/nicectl");
 static SUNLIGHT_GCD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/gcd");
+// Key-value storage daemon launched by sunlightd.
+static SUNLIGHT_KV_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kv");
+// Key-value control CLI (talks to sunlight-kv via IPC).
+static SUNLIGHT_KVCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kvctl");
 // User Access Control: daemon spawned by sunlightd + its control client.
 static UAC_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
@@ -484,7 +490,7 @@ pub extern "C" fn _start() -> ! {
     // The full startup chain is now:
     //   kernel boot      -> init, vfs_server, tty_server   (privileged setup)
     //   init (pid=1)     -> timer_server, net_server, sunlightd
-    //   sunlightd        -> timezone_service, niced, gcd
+    //   sunlightd        -> timezone_service, niced, gcd, uac_service, sunlight-kv
     // All service ELFs remain embedded (see *_ELF_BYTES above) and are resolved
     // for the spawn path by process::spawn::embedded_bytes_for_path.
 

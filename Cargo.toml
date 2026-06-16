@@ -32,6 +32,8 @@ members = [
     "sunlight-fetch",
     "services/sunlight-niced",
     "services/sunlight-gcd",
+    "sunlight-kv",
+    "sunlight-kvctl",
 ]
 
 [workspace.dependencies]

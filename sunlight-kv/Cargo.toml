@@ -1,0 +1,56 @@
+[package]
+name = "sunlight-kv"
+version = "0.1.89"
+
+
+
+edition = "2021"
+description = "SunlightOS persistent key-value storage daemon (append-only log backend)"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "sunlight-kv"
+path = "src/main.rs"
+
+[lib]
+name = "sunlight_kv"
+path = "src/lib.rs"
+
+[features]
+default = ["host"]
+# Host / development build: full std daemon using Unix sockets + direct filesystem append log.
+host = [
+    "dep:serde",
+    "dep:bincode",
+    "dep:thiserror",
+    "dep:env_logger",
+    "dep:libc",
+    "dep:crc32fast",
+    "dep:log",
+]
+# SunlightOS target build (no_std + sunlight-ipc + bump allocator).
+# The daemon uses kernel capability IPC + will later use VFS for the backing store.
+sunlightos = [
+    "dep:sunlight-ipc",
+    "dep:sunlight-libc",
+    "dep:heapless",
+]
+
+[dependencies]
+# Serialization only needed for the host (UDS + bincode framing + on-disk ACLs).
+serde = { version = "1", features = ["derive"], optional = true }
+bincode = { version = "1.3", optional = true }
+thiserror = { version = "1", optional = true }
+
+log = { version = "0.4", optional = true }
+env_logger = { version = "0.11", optional = true }
+crc32fast = { version = "1.4", optional = true }
+libc = { version = "0.2", optional = true }
+
+# SunlightOS runtime support (kernel IPC + small fixed-capacity collections)
+sunlight-ipc = { path = "../ipc", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true }
+heapless = { version = "0.8", optional = true }
+
+[dev-dependencies]
+tempfile = "3"

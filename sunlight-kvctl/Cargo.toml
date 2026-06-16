@@ -1,0 +1,43 @@
+[package]
+name = "sunlight-kvctl"
+version = "0.1.89"
+
+
+
+edition = "2021"
+description = "CLI client for the sunlight-kv daemon"
+
+[[bin]]
+name = "sunlight-kvctl"
+path = "src/main.rs"
+
+[features]
+default = ["host"]
+# Host / development build: std binary that connects via Unix socket.
+host = [
+    "dep:sunlight-kv",
+    "dep:serde",
+    "dep:bincode",
+    "dep:thiserror",
+]
+# SunlightOS target build: no_std binary that talks to sunlight-kv via kernel IPC.
+sunlightos = [
+    "dep:sunlight-ipc",
+    "dep:sunlight-libc",
+    "dep:heapless",
+]
+
+[dependencies]
+# Host deps (Unix socket + bincode framing).
+sunlight-kv   = { path = "../sunlight-kv", optional = true }
+serde         = { version = "1", features = ["derive"], optional = true }
+bincode       = { version = "1.3", optional = true }
+thiserror     = { version = "1", optional = true }
+
+# SunlightOS runtime (kernel IPC + no_std collections).
+sunlight-ipc  = { path = "../ipc", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true }
+heapless      = { version = "0.8", optional = true }
+
+[dev-dependencies]
+tempfile = "3"

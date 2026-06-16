@@ -161,6 +161,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-gcd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-uac --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kv --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release
