@@ -24,13 +24,25 @@ const STATUS_B_24HR: u8 = 0x02;
 const STATUS_B_BINARY: u8 = 0x04;
 
 /// PIT IRQ0 frequency configured in interrupts::init()
-/// TODO(ehsan): Tune PIT frequency and analyze scheduling overhead.
-// Currently set to 1000Hz (1ms tick) to force-test context switch atomicity
-// and reduce IPC latency. While performance improved significantly in boot,
-// we need to benchmark the ISR overhead vs. throughput.
-// Consider implementing a dynamic 'tickless' mode or settling on 250Hz/500Hz
-// after final stress tests.
-// See: Issue #Fix-Atomic-Switch-GPF
+///
+/// Current value: 1000Hz (1ms tick)
+///
+/// Rationale:
+/// - Stress-test scheduler context switching
+/// - Detect race conditions in interrupt/preemption paths
+/// - Reduce IPC wakeup latency
+/// - Improve interactive shell responsiveness
+///
+/// Important:
+/// The 1000Hz value was instrumental in reproducing and fixing the
+/// nested-interrupt context corruption bug (Issue #Fix-Atomic-Switch-GPF).
+///
+/// Future work:
+/// - Benchmark scheduler overhead
+/// - Measure context-switch cost
+/// - Compare 100Hz / 250Hz / 500Hz / 1000Hz
+/// - Evaluate tickless idle support
+/// - Determine optimal desktop/server defaults
 const TIMER_HZ: u64 = 1000;
 
 static BOOT_UNIX_TIME: AtomicU64 = AtomicU64::new(0);
