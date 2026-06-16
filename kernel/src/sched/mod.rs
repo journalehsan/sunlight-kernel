@@ -120,7 +120,11 @@ fn accumulate_counter(process: &mut Process) {
     }
 
     // CPU-bound tasks feel nice value MORE strongly than interactive ones.
-    let factor: i32 = if process.burst_score > BURST_SCORE_LOW { 2 } else { 1 };
+    let factor: i32 = if process.burst_score > BURST_SCORE_LOW {
+        2
+    } else {
+        1
+    };
 
     if process.nice < 0 {
         let gain = ((-process.nice as i32) / 4 + 1) * factor;
@@ -315,6 +319,15 @@ impl Scheduler {
         // This is the key line! We get the timeslice based on the current behavior of the process:
         let current = self.current;
         let quantum = quantum_ticks(&self.processes[current]) as u64; // [FEAT-3]
+                                                                      // if for sshl set to less than 5 reset to -1 :)
+
+        // print quantum in serial
+        // serial_println!(
+        //     "[SCHED] Quantum {} ticks (process #{} '{}')",
+        //     quantum,
+        //     current,
+        //     self.processes[current].pid
+        // );
 
         if self.current_ticks >= quantum {
             // Process used full quantum
@@ -504,8 +517,7 @@ impl Scheduler {
             let ticks_waiting = self
                 .global_tick
                 .saturating_sub(self.processes[idx].last_run_tick);
-            if ticks_waiting > AGING_THRESHOLD_TICKS
-                && !self.processes[idx].aging_boosted_this_pick
+            if ticks_waiting > AGING_THRESHOLD_TICKS && !self.processes[idx].aging_boosted_this_pick
             {
                 self.processes[idx].counter =
                     (self.processes[idx].counter + STARVATION_BOOST).min(MAX_CREDIT); // [FEAT-3] capped
@@ -713,7 +725,12 @@ impl Scheduler {
         // Find first Ready process.
         let mut first = None;
         for (i, p) in self.processes.iter().enumerate() {
-            serial_println!("[SCHED] process {} '{}' state={:?}", i, p.name_str(), p.state);
+            serial_println!(
+                "[SCHED] process {} '{}' state={:?}",
+                i,
+                p.name_str(),
+                p.state
+            );
             if matches!(p.state, ProcessState::Ready) {
                 first = Some(i);
                 break;
@@ -863,7 +880,12 @@ pub fn enter_first_process() -> ! {
         let mut sched = SCHEDULER.lock();
         let mut first = None;
         for (i, p) in sched.processes.iter().enumerate() {
-            serial_println!("[SCHED] process {} '{}' state={:?}", i, p.name_str(), p.state);
+            serial_println!(
+                "[SCHED] process {} '{}' state={:?}",
+                i,
+                p.name_str(),
+                p.state
+            );
             if matches!(p.state, ProcessState::Ready) {
                 first = Some(i);
                 break;

@@ -412,11 +412,14 @@ fn _start() -> ! {
         serial_println!("[SUNLIGHTD] spawn capability unavailable; daemons not started");
     }
 
-    // Main control loop (spawn_cap lookup can be done inside handler if needed later)
+    // Main control loop.
+    // ipc_reply_and_wait returns the NEXT incoming message atomically with the reply.
+    // We must feed that returned message into the next iteration instead of calling
+    // ipc_recv again, otherwise the consumed message is dropped and the client deadlocks.
+    let mut msg = ipc_recv(ep);
     loop {
-        let msg = ipc_recv(ep);
         let reply = handle_control_message(&msg, &mut services, spawn_cap);
-        ipc_reply_and_wait(ep, reply);
+        msg = ipc_reply_and_wait(ep, reply);
     }
 }
 
