@@ -565,8 +565,21 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // Release scheduler lock by dropping it
     drop(sched);
 
-    // Re-enable interrupts
-    x86_64::instructions::interrupts::enable();
+    // IMPORTANT: do NOT re-enable interrupts here.
+    //
+    // The naked `timer_entry` still has to (a) optionally switch the stack
+    // pointer to `result` (the next process's saved kernel stack), (b) pop 15
+    // GPRs, and (c) `iretq`. If interrupts were enabled now, a nested timer or
+    // keyboard IRQ could fire *after* `mov rsp, rax` — i.e. while RSP points at
+    // a half-restored context — and the nested handler could context-switch
+    // again, clobbering the frame this handler is mid-way through restoring.
+    // The result is a garbage IRET frame and a #GP on `iretq` (observed as an
+    // intermittent GPF at the `iretq` instruction after long uptime).
+    //
+    // Interrupts are re-enabled atomically by `iretq` itself: every runnable
+    // context's saved RFLAGS has IF=1 (init_context writes 0x202; preempted
+    // frames are saved with IF set and the asm OR's 0x200 into the outgoing
+    // frame's RFLAGS as well). So leaving IF=0 here is correct and safe.
 
     result
 }
