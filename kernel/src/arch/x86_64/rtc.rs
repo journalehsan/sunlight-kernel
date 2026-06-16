@@ -24,7 +24,14 @@ const STATUS_B_24HR: u8 = 0x02;
 const STATUS_B_BINARY: u8 = 0x04;
 
 /// PIT IRQ0 frequency configured in interrupts::init()
-const TIMER_HZ: u64 = 100;
+/// TODO(ehsan): Tune PIT frequency and analyze scheduling overhead.
+// Currently set to 1000Hz (1ms tick) to force-test context switch atomicity
+// and reduce IPC latency. While performance improved significantly in boot,
+// we need to benchmark the ISR overhead vs. throughput.
+// Consider implementing a dynamic 'tickless' mode or settling on 250Hz/500Hz
+// after final stress tests.
+// See: Issue #Fix-Atomic-Switch-GPF
+const TIMER_HZ: u64 = 1000;
 
 static BOOT_UNIX_TIME: AtomicU64 = AtomicU64::new(0);
 static BOOT_TICKS: AtomicU64 = AtomicU64::new(0);
