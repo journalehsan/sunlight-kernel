@@ -34,6 +34,8 @@ members = [
     "services/sunlight-gcd",
     "sunlight-kv",
     "sunlight-kvctl",
+    "sunlight-tls",
+    "certificatectl",
 ]
 
 [workspace.dependencies]

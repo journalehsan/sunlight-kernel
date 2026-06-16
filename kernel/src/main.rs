@@ -82,6 +82,11 @@ static SUNLIGHT_KV_ELF_BYTES: &[u8] =
 // Key-value control CLI (talks to sunlight-kv via IPC).
 static SUNLIGHT_KVCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kvctl");
+// TLS service (certs via sunlight-kv) + its control CLI.
+static SUNLIGHT_TLS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tls");
+static CERTIFICATECTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/certificatectl");
 // User Access Control: daemon spawned by sunlightd + its control client.
 static UAC_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uac_service");

@@ -1,0 +1,24 @@
+[package]
+name = "sunlight-tls"
+version = "0.1.103"
+
+edition = "2021"
+description = "SunlightOS TLS service (rustls adapter over IPC; certs from sunlight-kv)"
+
+[[bin]]
+name = "sunlight-tls"
+path = "src/main.rs"
+
+[features]
+default = ["host"]
+host = []
+sunlightos = [
+    "dep:sunlight-ipc",
+    "dep:sunlight-libc",
+    "dep:heapless",
+]
+
+[dependencies]
+sunlight-ipc  = { path = "../ipc", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true }
+heapless      = { version = "0.8", optional = true }
