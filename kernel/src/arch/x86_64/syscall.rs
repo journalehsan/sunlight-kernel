@@ -82,6 +82,7 @@ pub enum SunlightSyscall {
     ShmMap = 93,
     ShmFree = 94,
     MapTelemetry = 95,
+    GrantCapability = 100,
 
     DebugLog = 99,
 }
@@ -314,6 +315,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         93 => sys_shm_map(frame),
         94 => sys_shm_free(frame),
         95 => sys_map_telemetry(frame),
+        100 => sys_grant_capability_syscall(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -335,6 +337,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
 
 use crate::capability::CapabilityRights;
 use crate::capability::CapabilityToken;
+use heapless::String;
 use crate::ipc::{IpcError, IpcMsg, INIT_NAMESERVER_ENDPOINT};
 use crate::process::layout::is_user_address;
 use crate::process::ProcessState;
@@ -1331,6 +1334,43 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             }
             u64::MAX
         }
+    }
+}
+
+/// Syscall: GrantCapability (100) — kernel-side VFS capability minting gate.
+/// rdi = pointer to path prefix string (NUL-terminated, <= 63 bytes)
+/// rsi = access bits (read=1, write=2, execute=4)
+fn sys_grant_capability_syscall(frame: &mut SyscallFrame) -> u64 {
+    let caller_pid = crate::sched::with_scheduler(|sched| sched.current_process().pid as u32);
+
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 64) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+
+    let mut prefix = heapless::String::<64>::new();
+    if prefix.push_str(path).is_err() {
+        return u64::MAX;
+    }
+    let flags = frame.rsi;
+    let cap = crate::capability::VfsCapability {
+        allowed_prefix: prefix,
+        flags: crate::capability::AccessFlags {
+            read: flags & 1 != 0,
+            write: flags & 2 != 0,
+            execute: flags & 4 != 0,
+        },
+    };
+
+    match crate::capability::sys_grant_capability(caller_pid, cap) {
+        Ok(token) => token.0,
+        Err(crate::capability::CapError::InvalidCaller) => u64::MAX,
+        Err(crate::capability::CapError::CapabilityStoreFull) => u64::MAX,
+        Err(_) => u64::MAX,
     }
 }
 

@@ -79,7 +79,7 @@ sunlightos/
 │   ├── net_server/          # Network stack IPC bridge
 │   ├── sunlightd/           # Service supervisor (systemd-like)
 │   ├── sunlightctl/         # sunlightd control client
-│   ├── sunlight-niced/      # Ring 3 nice-value policy daemon
+│   ├── sunlight-niced/      # Ring 3 nice daemon + nicectl CLI
 │   └── sunlight-gcd/        # Ring 3 garbage collector for tasks/memory
 ├── docs/                    # Phase summaries, roadmaps, and design notes
 └── tools/                   # Build scripts, test harness, disk tools
@@ -97,19 +97,20 @@ sunlightos/
 | Phase 5 | Networking | **Done** (TLS via rustls pending) |
 | Phase 6 | Userland, zram swap, and polish | **In Progress** |
 
+**Polish remaining:** `nicectl` CLI (Ring 3 companion to `sunlight-niced`) — daemon and scheduler integration are done.
+
 ## What's Working
 
 ### Kernel & Memory
 - Physical and virtual memory managers with OOM handling
 - Copy-on-write page faults for `fork()`
 - `mmap` / `munmap` / `mprotect` syscall family
-- SunBurst (BORE) round-robin scheduler with adaptive time slicing
-- Nice values integrated into quantum calculation
+- **SunBurst scheduler** — adaptive round-robin with burst scoring and nice-aware quantum calculation
 - IPC capability broker with shared-memory grants
 
 ### Ring 3 Services
 - **sunlightd** — service supervisor with unit files, dependency graphs, and restart policy
-- **sunlight-niced** — nice-value handler for interactive responsiveness
+- **sunlight-niced** — nice-value policy daemon (SunBurst Ring 3 integration); `nicectl` CLI needs polish
 - **sunlight-gcd** — garbage collector for orphaned tasks and memory reclamation
 - **timed** — localtime, clock, and NTP scaffold
 - **timezone_service** — full IANA timezone table with `tzctl`

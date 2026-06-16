@@ -1,12 +1,10 @@
 [package]
 name = "sunlight-compat-linux"
-version = "0.1.51"
+version = "0.1.60"
 
 
-
-
-
-
-
-
+authors = ["SunlightOS Team"]
 edition = "2021"
+
+[dependencies]
+heapless = "0.8"

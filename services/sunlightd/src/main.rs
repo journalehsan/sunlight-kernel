@@ -34,6 +34,8 @@ mod supervisor;
 mod ipc;
 mod socket_act;
 mod journal;
+mod uac_service;
+mod capabilityctl;
 
 use sunlight_ipc::{
     CapabilityToken, IpcMsg, debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,

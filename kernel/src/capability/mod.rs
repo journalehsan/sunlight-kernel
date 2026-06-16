@@ -15,6 +15,8 @@ impl CapabilityToken {
     }
 }
 
+pub use heapless::String;
+
 /// What rights a capability grants.
 #[derive(Debug, Clone, Copy)]
 pub struct CapabilityRights {
@@ -45,11 +47,45 @@ impl CapabilityRights {
     };
 }
 
-/// A registered IPC endpoint.
+/// Capability rights for VFS object access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AccessFlags {
+    pub read: bool,
+    pub write: bool,
+    pub execute: bool,
+}
+
+impl AccessFlags {
+    pub const READ: Self = Self {
+        read: true,
+        write: false,
+        execute: false,
+    };
+
+    pub const READ_WRITE: Self = Self {
+        read: true,
+        write: true,
+        execute: false,
+    };
+
+    pub const READ_EXECUTE: Self = Self {
+        read: true,
+        write: false,
+        execute: true,
+    };
+
+    pub const ALL: Self = Self {
+        read: true,
+        write: true,
+        execute: true,
+    };
+}
+
+/// VFS-relevant capability data.
 #[derive(Debug, Clone)]
-pub struct Endpoint {
-    pub id: u32,
-    pub owner_pid: usize,
+pub struct VfsCapability {
+    pub allowed_prefix: String<64>,
+    pub flags: AccessFlags,
 }
 
 /// Errors from the capability broker.
@@ -62,6 +98,10 @@ pub enum CapError {
     NotFound,
     /// Token existed but has been revoked (e.g. owning process exited).
     Revoked,
+    /// Not the trusted capability-broker requesting kernel minting.
+    InvalidCaller,
+    /// No more token-capability slots in kernel table.
+    CapabilityStoreFull,
 }
 
 /// Global token counter and seed.
@@ -74,6 +114,9 @@ pub static CAP_BROKER: spin::Mutex<CapabilityBroker> = spin::Mutex::new(Capabili
 /// Global spawn capability token. A hardcoded special token that the kernel
 /// recognizes in `ipc_call` to handle spawn requests directly.
 pub const SPAWN_TOKEN: CapabilityToken = CapabilityToken(0xCAFEBABE_DEADBEEF);
+
+/// PID expected to call `sys_grant_capability`.
+pub const CAPABILITY_BROKER_PID: u32 = 6;
 
 /// Initialize the token seed from TSC.
 pub fn init_token_seed() {
@@ -94,6 +137,7 @@ pub struct CapabilityBroker {
     capabilities: alloc::vec::Vec<(CapabilityToken, u32, CapabilityRights)>,
     /// Shared memory grants: (token, phys_frame, owner_pid, revoked)
     shared_grants: alloc::vec::Vec<(CapabilityToken, PhysAddr, usize, bool)>,
+    vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
 }
 
 impl CapabilityBroker {
@@ -102,6 +146,7 @@ impl CapabilityBroker {
             endpoints: alloc::vec::Vec::new(),
             capabilities: alloc::vec::Vec::new(),
             shared_grants: alloc::vec::Vec::new(),
+            vfs_caps: alloc::vec::Vec::new(),
         }
     }
 
@@ -243,9 +288,7 @@ impl CapabilityBroker {
     }
 
     /// Mark all shared-page grants owned by `pid` as revoked, without removing
-    /// them from the table (so a subsequent lookup correctly reports
-    /// `CapError::Revoked` rather than `CapError::NotFound`).
-    /// Called when a process exits, before its frames are freed.
+    /// them from the table.
     pub fn revoke_all_for(&mut self, pid: usize) {
         for entry in self.shared_grants.iter_mut() {
             if entry.2 == pid {
@@ -253,4 +296,54 @@ impl CapabilityBroker {
             }
         }
     }
+
+    /// Kernel-side VFS capability issuance and storage.
+    pub fn grant_vfs_capability(
+        &mut self,
+        owner_pid: usize,
+        cap: VfsCapability,
+    ) -> Result<CapabilityToken, CapError> {
+        const CAP_VFS_LIMIT: usize = 64;
+        let token = generate_token();
+        if self.vfs_caps.len() >= CAP_VFS_LIMIT {
+            return Err(CapError::CapabilityStoreFull);
+        }
+
+        self.vfs_caps.push((token, cap, owner_pid));
+        Ok(token)
+    }
+
+    /// Resolve an issued VFS capability token for runtime checks.
+    pub fn resolve_vfs_capability(
+        &self,
+        token: CapabilityToken,
+    ) -> Option<(VfsCapability, usize)> {
+        self.vfs_caps
+            .iter()
+            .find_map(|(t, cap, pid)| if *t == token { Some((cap.clone(), *pid)) } else { None })
+    }
+}
+
+/// Mock kernel entry to enforce trusted-broker minting.
+pub fn sys_grant_capability(
+    caller_pid: u32,
+    cap: VfsCapability,
+) -> Result<CapabilityToken, CapError> {
+    if caller_pid != CAPABILITY_BROKER_PID {
+        serial_println!(
+            "[SEC] Capability mint denied: caller_pid={} is not broker {}",
+            caller_pid, CAPABILITY_BROKER_PID
+        );
+        return Err(CapError::InvalidCaller);
+    }
+
+    let mut broker = CAP_BROKER.lock();
+    broker.grant_vfs_capability(caller_pid as usize, cap)
+}
+
+/// A registered IPC endpoint.
+#[derive(Debug, Clone)]
+pub struct Endpoint {
+    pub id: u32,
+    pub owner_pid: usize,
 }
