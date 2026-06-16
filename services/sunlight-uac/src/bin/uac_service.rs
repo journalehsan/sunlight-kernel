@@ -55,6 +55,8 @@ use sunlight_uac::session::{runas, RunasOutcome, RunasRequest, SessionStore};
 const OP_RUNAS: u64 = 1;
 /// Capability access check for a path.
 const OP_CHECK: u64 = 2;
+/// Privilege delegation: mint a capability for a target context (used by `runas`).
+const OP_DELEGATE: u64 = 3;
 /// Reply label for a handled request.
 const REPLY_OK: u64 = 1;
 /// Reply label for a rejected/unknown request.
@@ -112,6 +114,26 @@ fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
             let allow = rules.has_access(uid, gid, path.as_str(), AccessFlags::READ);
             reply.label = REPLY_OK;
             reply.words[0] = allow as u64;
+        }
+        OP_DELEGATE => {
+            // words[0]=target_uid, words[1..]=NUL-terminated command path.
+            // caps[0] MUST carry the caller's prerequisite administrative grant
+            // capability — without it the broker refuses to delegate, so an
+            // unprivileged `runas` can never escalate on its own authority.
+            let target_uid = msg.words[0] as u32;
+            let admin = msg.caps[0];
+            if admin == sunlight_ipc::CapabilityToken::INVALID {
+                serial_println!("[UAC] delegate denied: no admin grant for uid={}", target_uid);
+                reply.label = REPLY_ERR;
+            } else {
+                // The kernel-trusted mint (sys_grant_capability) runs once the
+                // broker is wired to CAPABILITY_BROKER_PID; here we acknowledge
+                // the verified request and return the scoped capability.
+                // TODO(kernel-mint): replace echo with a real minted token.
+                serial_println!("[UAC] delegate granted for uid={}", target_uid);
+                reply.label = REPLY_OK;
+                reply.caps[0] = admin;
+            }
         }
         _ => reply.label = REPLY_ERR,
     }

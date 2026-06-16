@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-uac"
-version = "0.1.62"
+version = "0.1.66"
+
 
 edition = "2021"
 
@@ -23,3 +24,8 @@ path = "src/bin/uac_service.rs"
 [[bin]]
 name = "capabilityctl"
 path = "src/bin/capabilityctl.rs"
+
+# The privilege-delegation tool: lives in RamFs at /bin/runas.
+[[bin]]
+name = "runas"
+path = "src/bin/runas.rs"

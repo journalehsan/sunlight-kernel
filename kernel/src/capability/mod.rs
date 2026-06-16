@@ -2,7 +2,27 @@ use crate::serial_println;
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::PhysAddr;
 
+/// The category a token belongs to, encoded in its high tag bits.
+///
+/// This is what lets the kernel decide in `O(1)` — by masking the top two
+/// bits of the token word — whether a presented token is an IPC capability or
+/// a VFS capability, *before* it ever touches the broker tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapKind {
+    /// IPC endpoint capability (send / receive / grant).
+    Ipc,
+    /// VFS object capability (read / write / edit / remove).
+    Vfs,
+    /// Legacy / special tokens minted before tagging (e.g. shared pages,
+    /// `SPAWN_TOKEN`). Treated as type-agnostic.
+    Untagged,
+}
+
 /// A capability token: opaque to user-space, meaningful to the kernel.
+///
+/// The low 62 bits are an unpredictable payload (counter XOR TSC seed); the
+/// top two bits are a *type tag* (`TAG_IPC` / `TAG_VFS`). Type checks are then
+/// a single shift+compare instead of a table walk.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CapabilityToken(pub u64);
@@ -10,29 +30,80 @@ pub struct CapabilityToken(pub u64);
 impl CapabilityToken {
     pub const INVALID: Self = Self(0);
 
+    /// Bit position of the 2-bit type tag.
+    const TAG_SHIFT: u64 = 62;
+    /// Mask covering the tag bits.
+    const TAG_MASK: u64 = 0b11 << Self::TAG_SHIFT;
+    /// Mask covering the unpredictable payload bits.
+    const PAYLOAD_MASK: u64 = !Self::TAG_MASK;
+
+    /// Tag value for IPC capabilities.
+    pub const TAG_IPC: u64 = 0b01;
+    /// Tag value for VFS capabilities.
+    pub const TAG_VFS: u64 = 0b10;
+
     pub fn as_u64(self) -> u64 {
         self.0
+    }
+
+    /// Build a token from a raw payload plus a type tag.
+    #[inline]
+    const fn tagged(payload: u64, tag: u64) -> Self {
+        Self((payload & Self::PAYLOAD_MASK) | (tag << Self::TAG_SHIFT))
+    }
+
+    /// Extract the type tag in `O(1)`.
+    #[inline]
+    pub const fn kind(self) -> CapKind {
+        match (self.0 & Self::TAG_MASK) >> Self::TAG_SHIFT {
+            x if x == Self::TAG_IPC => CapKind::Ipc,
+            x if x == Self::TAG_VFS => CapKind::Vfs,
+            _ => CapKind::Untagged,
+        }
+    }
+
+    /// `true` if the token is tagged for IPC (or is untagged/legacy).
+    #[inline]
+    pub const fn is_ipc(self) -> bool {
+        matches!(self.kind(), CapKind::Ipc | CapKind::Untagged)
+    }
+
+    /// `true` if the token is tagged for VFS (or is untagged/legacy).
+    #[inline]
+    pub const fn is_vfs(self) -> bool {
+        matches!(self.kind(), CapKind::Vfs | CapKind::Untagged)
     }
 }
 
 pub use heapless::String;
 
-/// What rights a capability grants.
-#[derive(Debug, Clone, Copy)]
-pub struct CapabilityRights {
-    pub can_send: bool,
-    pub can_receive: bool,
-    pub can_grant: bool,
+/// What rights a capability grants. The variant *is* the capability class —
+/// an IPC token can never be checked against VFS rights or vice versa.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapabilityRights {
+    /// Rights over an IPC endpoint.
+    Ipc {
+        can_send: bool,
+        can_receive: bool,
+        can_grant: bool,
+    },
+    /// Rights over a VFS object.
+    Vfs {
+        read: bool,
+        write: bool,
+        edit: bool,
+        remove: bool,
+    },
 }
 
 impl CapabilityRights {
-    pub const SEND_RECV: Self = Self {
+    pub const SEND_RECV: Self = Self::Ipc {
         can_send: true,
         can_receive: true,
         can_grant: false,
     };
 
-    pub const SEND_ONLY: Self = Self {
+    pub const SEND_ONLY: Self = Self::Ipc {
         can_send: true,
         can_receive: false,
         can_grant: false,
@@ -40,11 +111,103 @@ impl CapabilityRights {
 
     pub const SEND: Self = Self::SEND_ONLY;
 
-    pub const RECV_ONLY: Self = Self {
+    pub const RECV_ONLY: Self = Self::Ipc {
         can_send: false,
         can_receive: true,
         can_grant: false,
     };
+
+    /// IPC capability with the grant right — the prerequisite a delegating
+    /// tool (e.g. `runas`) must hold to ask the broker to mint new tokens.
+    pub const GRANT: Self = Self::Ipc {
+        can_send: true,
+        can_receive: false,
+        can_grant: true,
+    };
+
+    /// Read-only VFS capability.
+    pub const VFS_READ: Self = Self::Vfs {
+        read: true,
+        write: false,
+        edit: false,
+        remove: false,
+    };
+
+    /// Read+write VFS capability.
+    pub const VFS_RW: Self = Self::Vfs {
+        read: true,
+        write: true,
+        edit: false,
+        remove: false,
+    };
+
+    /// Full VFS capability (read/write/edit/remove).
+    pub const VFS_ALL: Self = Self::Vfs {
+        read: true,
+        write: true,
+        edit: true,
+        remove: true,
+    };
+
+    /// `true` if these rights describe an IPC capability.
+    #[inline]
+    pub const fn is_ipc(&self) -> bool {
+        matches!(self, Self::Ipc { .. })
+    }
+
+    /// `true` if these rights describe a VFS capability.
+    #[inline]
+    pub const fn is_vfs(&self) -> bool {
+        matches!(self, Self::Vfs { .. })
+    }
+
+    /// Destructure as IPC rights, or `None` if this is a VFS capability.
+    #[inline]
+    fn as_ipc(&self) -> Option<(bool, bool, bool)> {
+        match self {
+            Self::Ipc {
+                can_send,
+                can_receive,
+                can_grant,
+            } => Some((*can_send, *can_receive, *can_grant)),
+            Self::Vfs { .. } => None,
+        }
+    }
+
+    /// `true` if a token holding `self` satisfies a request for `wanted`.
+    /// Both must be the same class; rights are monotone (held ⊇ wanted).
+    fn satisfies(&self, wanted: &Self) -> bool {
+        match (self, wanted) {
+            (
+                Self::Ipc {
+                    can_send: hs,
+                    can_receive: hr,
+                    can_grant: hg,
+                },
+                Self::Ipc {
+                    can_send: ws,
+                    can_receive: wr,
+                    can_grant: wg,
+                },
+            ) => (!*ws || *hs) && (!*wr || *hr) && (!*wg || *hg),
+            (
+                Self::Vfs {
+                    read: hr,
+                    write: hw,
+                    edit: he,
+                    remove: hrm,
+                },
+                Self::Vfs {
+                    read: wr,
+                    write: ww,
+                    edit: we,
+                    remove: wrm,
+                },
+            ) => (!*wr || *hr) && (!*ww || *hw) && (!*we || *he) && (!*wrm || *hrm),
+            // Cross-class never satisfies — the core security invariant.
+            _ => false,
+        }
+    }
 }
 
 /// Capability rights for VFS object access.
@@ -124,11 +287,11 @@ pub fn init_token_seed() {
     TOKEN_SEED.store(tsc, Ordering::SeqCst);
 }
 
-/// Generate a new unpredictable capability token.
-fn generate_token() -> CapabilityToken {
+/// Generate a new unpredictable, type-tagged capability token.
+fn generate_token(tag: u64) -> CapabilityToken {
     let counter = NEXT_TOKEN.fetch_add(1, Ordering::SeqCst);
     let seed = TOKEN_SEED.load(Ordering::SeqCst);
-    CapabilityToken(counter ^ seed)
+    CapabilityToken::tagged(counter ^ seed, tag)
 }
 
 /// The capability broker manages endpoints and capability tokens.
@@ -154,38 +317,54 @@ impl CapabilityBroker {
     pub fn create_endpoint(&mut self, owner_pid: usize) -> (u32, CapabilityToken) {
         let id = self.endpoints.len() as u32;
         self.endpoints.push(Endpoint { id, owner_pid });
-        let token = generate_token();
+        let token = generate_token(CapabilityToken::TAG_IPC);
         self.capabilities
             .push((token, id, CapabilityRights::SEND_RECV));
         serial_println!("[CAP] Created endpoint {} for pid={}", id, owner_pid);
         (id, token)
     }
 
-    /// Validate that `token` grants at least the requested rights for its endpoint.
+    /// Validate that `token` grants at least the requested rights for its IPC
+    /// endpoint.
+    ///
+    /// Strict type validation, cheapest checks first:
+    ///   1. `O(1)` tag check — the request must be IPC and the token must not
+    ///      be tagged as a VFS capability.
+    ///   2. table walk — the stored rights must satisfy the requested rights,
+    ///      and (defensively) both must be the same class.
     pub fn check(&self, token: CapabilityToken, rights: CapabilityRights) -> Result<u32, CapError> {
+        // (1) Type gate: `check` resolves IPC endpoints only.
+        if !rights.is_ipc() {
+            return Err(CapError::InsufficientRights);
+        }
+        if !token.is_ipc() {
+            return Err(CapError::InvalidToken);
+        }
+
+        // (2) Authorization: locate the token and compare rights.
         for (t, ep_id, r) in &self.capabilities {
             if *t == token {
-                if rights.can_send && !r.can_send {
-                    return Err(CapError::InsufficientRights);
+                if r.satisfies(&rights) {
+                    return Ok(*ep_id);
                 }
-                if rights.can_receive && !r.can_receive {
-                    return Err(CapError::InsufficientRights);
-                }
-                if rights.can_grant && !r.can_grant {
-                    return Err(CapError::InsufficientRights);
-                }
-                return Ok(*ep_id);
+                return Err(CapError::InsufficientRights);
             }
         }
         Err(CapError::InvalidToken)
     }
 
-    /// Mint a new capability token for an existing endpoint.
+    /// Mint a new IPC capability token for an existing endpoint.
+    ///
+    /// Refuses to mint if `rights` are not IPC rights, keeping the IPC and VFS
+    /// capability spaces strictly disjoint.
     pub fn mint(&mut self, endpoint_id: u32, rights: CapabilityRights) -> Option<CapabilityToken> {
+        if !rights.is_ipc() {
+            return None;
+        }
         if !self.endpoints.iter().any(|e| e.id == endpoint_id) {
             return None;
         }
-        let token = generate_token();
+        let token = generate_token(CapabilityToken::TAG_IPC);
         self.capabilities.push((token, endpoint_id, rights));
         Some(token)
     }
@@ -196,19 +375,16 @@ impl CapabilityBroker {
         endpoint_id: u32,
         rights: CapabilityRights,
     ) -> Option<CapabilityToken> {
+        if !rights.is_ipc() {
+            return None;
+        }
         self.capabilities
             .iter()
             .find_map(|(token, id, token_rights)| {
                 if *id != endpoint_id {
                     return None;
                 }
-                if rights.can_send && !token_rights.can_send {
-                    return None;
-                }
-                if rights.can_receive && !token_rights.can_receive {
-                    return None;
-                }
-                if rights.can_grant && !token_rights.can_grant {
+                if !token_rights.satisfies(&rights) {
                     return None;
                 }
                 Some(*token)
@@ -246,7 +422,7 @@ impl CapabilityBroker {
 
     /// Mint a capability token granting access to map a shared physical frame.
     pub fn mint_shared_page(&mut self, phys: PhysAddr, owner_pid: usize) -> CapabilityToken {
-        let token = generate_token();
+        let token = generate_token(CapabilityToken::TAG_VFS);
         self.shared_grants.push((token, phys, owner_pid, false));
         serial_println!(
             "[CAP] Minted shared-page token {:#x} phys={:#x} owner={}",
@@ -304,7 +480,7 @@ impl CapabilityBroker {
         cap: VfsCapability,
     ) -> Result<CapabilityToken, CapError> {
         const CAP_VFS_LIMIT: usize = 64;
-        let token = generate_token();
+        let token = generate_token(CapabilityToken::TAG_VFS);
         if self.vfs_caps.len() >= CAP_VFS_LIMIT {
             return Err(CapError::CapabilityStoreFull);
         }
@@ -318,6 +494,10 @@ impl CapabilityBroker {
         &self,
         token: CapabilityToken,
     ) -> Option<(VfsCapability, usize)> {
+        // O(1) reject of anything not tagged as a VFS capability.
+        if !token.is_vfs() {
+            return None;
+        }
         self.vfs_caps
             .iter()
             .find_map(|(t, cap, pid)| if *t == token { Some((cap.clone(), *pid)) } else { None })
