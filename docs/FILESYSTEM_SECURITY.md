@@ -11,6 +11,11 @@ Normal users may create and write files only under:
 - `/tmp`
 - `/home/<user>`
 
+The root user may also write under:
+
+- `/root`
+- `/home`
+
 ## Runtime Paths
 
 Some runtime paths such as `/run` may require UAC approval. The current filesystem adapter is deny-by-default unless the caller supplies an approved UAC decision to the shared policy function.

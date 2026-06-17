@@ -123,7 +123,7 @@ pub fn can_write(
     }
 
     match actor {
-        Actor::User { name, .. } => user_decision(name, path, uac_approved),
+        Actor::User { uid, name } => user_decision(uid, name, path, uac_approved),
         Actor::Service { name } => service_decision(name, path),
         Actor::Unknown => Decision::deny(
             PolicyReason::DeniedUnknownActor,
@@ -132,9 +132,13 @@ pub fn can_write(
     }
 }
 
-fn user_decision(name: &str, path: &str, uac_approved: bool) -> Decision {
+fn user_decision(uid: u32, name: &str, path: &str, uac_approved: bool) -> Decision {
     if path == "/tmp" || is_under(path, "/tmp") {
         return Decision::allow(PolicyReason::AllowedTmp);
+    }
+
+    if uid == 0 && (path == "/root" || is_under(path, "/root") || path == "/home" || is_under(path, "/home")) {
+        return Decision::allow(PolicyReason::AllowedCurrentUserHome);
     }
 
     if let Some(home_user) = home_user(path) {
@@ -303,6 +307,10 @@ mod tests {
         uid: 1000,
         name: "user",
     };
+    const ROOT: Actor<'static> = Actor::User {
+        uid: 0,
+        name: "root",
+    };
     const KV: Actor<'static> = Actor::Service {
         name: "sunlight-kv",
     };
@@ -339,6 +347,26 @@ mod tests {
         assert_eq!(
             deny_reason("/home/other/file"),
             PolicyReason::DeniedOtherUserHome
+        );
+    }
+
+    #[test]
+    fn root_can_write_root_and_user_home_trees() {
+        assert_eq!(
+            can_write(ROOT, "/root/file", FsOperation::Create, None, false).reason,
+            PolicyReason::AllowedCurrentUserHome
+        );
+        assert_eq!(
+            can_write(ROOT, "/home/user/file", FsOperation::Create, None, false).reason,
+            PolicyReason::AllowedCurrentUserHome
+        );
+        assert_eq!(
+            can_write(ROOT, "/home/other/file", FsOperation::Create, None, false).reason,
+            PolicyReason::AllowedCurrentUserHome
+        );
+        assert_eq!(
+            can_write(ROOT, "/etc/file", FsOperation::Create, None, false).reason,
+            PolicyReason::DeniedProtectedPath
         );
     }
 
