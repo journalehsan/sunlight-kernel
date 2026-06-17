@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-fetch"
-version = "0.1.105"
+version = "0.1.107"
+
 
 
 
@@ -30,7 +31,7 @@ path = "src/lib.rs"
 
 [features]
 default = ["host-linux"]
-host-linux = ["dep:rustls", "dep:webpki-roots", "rustls/std"]
+host-linux = ["dep:rustls", "dep:webpki-roots", "rustls/std", "dep:log"]
 sunlightos = [
     "dep:sunlight-libc",
     "dep:sunlight-ipc",
@@ -41,5 +42,6 @@ sunlightos = [
 sunlight-libc = { path = "../sunlight-libc", optional = true }
 sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-net = { path = "../sunlight-net", optional = true }
-rustls = { version = "0.23", default-features = false, features = ["tls12", "ring"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["tls12", "ring", "logging"], optional = true }
 webpki-roots = { version = "0.26", optional = true }
+log = { version = "0.4", optional = true }

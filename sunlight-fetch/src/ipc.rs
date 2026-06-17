@@ -152,6 +152,38 @@ mod host {
     use std::net::{SocketAddr, TcpStream};
     use std::sync::Once;
 
+    // ── rustls → serial (stderr) log bridge ──────────────────────────────────
+
+    struct SerialLogger;
+
+    impl log::Log for SerialLogger {
+        fn enabled(&self, meta: &log::Metadata) -> bool {
+            // Only rustls internals — avoids noise from other crates.
+            meta.target().starts_with("rustls")
+        }
+
+        fn log(&self, record: &log::Record) {
+            if self.enabled(record.metadata()) {
+                eprintln!("[RUSTLS:{}] {}: {}", record.level(), record.target(), record.args());
+            }
+        }
+
+        fn flush(&self) {}
+    }
+
+    static SERIAL_LOGGER: SerialLogger = SerialLogger;
+    static LOGGER_INIT: Once = Once::new();
+
+    fn init_serial_logger() {
+        LOGGER_INIT.call_once(|| {
+            // Ignore error: another logger may already be set (e.g. env_logger in tests).
+            let _ = log::set_logger(&SERIAL_LOGGER);
+            log::set_max_level(log::LevelFilter::Debug);
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     pub(crate) enum HostConnection {
         Plain(TcpStream),
         Tls(rustls::StreamOwned<rustls::ClientConnection, TcpStream>),
@@ -188,6 +220,7 @@ mod host {
 
     fn init_tls() {
         TLS_INIT.call_once(|| {
+            init_serial_logger();
             let _ = rustls::crypto::ring::default_provider().install_default();
         });
     }
@@ -424,7 +457,7 @@ use host::{
 #[cfg(not(feature = "host-linux"))]
 mod sunlight {
     use super::*;
-    use sunlight_ipc::{ipc_call, nameserver_lookup, CapabilityToken, IpcMsg};
+    use sunlight_ipc::{debug_log, get_time_utc, ipc_call, monotonic_millis, nameserver_lookup, CapabilityToken, IpcMsg, TzMsg};
     use sunlight_net::netop::NetOp;
 
     // Maximum bytes packed into one IPC call (words[2..7] = 6 words × 8 bytes).
@@ -613,6 +646,40 @@ mod sunlight {
 
     // ── sunlight-tls IPC helpers ──────────────────────────────────────────────
 
+    /// Xorshift64 — seeds a diagnostic nonce (NOT cryptographically secure).
+    fn pseudo_rand(seed: u64) -> u64 {
+        let mut x = if seed == 0 { 0xdeadbeef_cafebabe } else { seed };
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        x
+    }
+
+    /// Query the tz service for local time as "YYYY-MM-DDTHH:MM:SS+HH:MM".
+    /// Falls back to "tz-unavail" if the tz service is not registered yet.
+    fn local_time_str() -> String {
+        if let Some(tz_cap) = nameserver_lookup("tz") {
+            let r = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
+            if r.label == TzMsg::REPLY {
+                let w0     = r.words[0];
+                let year   = (w0 >> 48) as u16;
+                let month  = ((w0 >> 40) & 0xff) as u8;
+                let day    = ((w0 >> 32) & 0xff) as u8;
+                let hour   = ((w0 >> 24) & 0xff) as u8;
+                let minute = ((w0 >> 16) & 0xff) as u8;
+                let second = ((w0 >>  8) & 0xff) as u8;
+                let off_s  = r.words[1] as i64;
+                let off_h  = off_s / 3600;
+                let off_m  = (off_s.abs() % 3600) / 60;
+                return format!(
+                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{:+03}:{:02}",
+                    year, month, day, hour, minute, second, off_h, off_m
+                );
+            }
+        }
+        String::from("tz-unavail")
+    }
+
     fn tls_cap() -> FetchResult<CapabilityToken> {
         nameserver_lookup("sunlight-tls").ok_or_else(|| {
             FetchError::IpcError(String::from("sunlight-tls service unavailable"))
@@ -650,26 +717,65 @@ mod sunlight {
     /// Returns the session_id on success.
     fn tls_handshake(hostname: &str) -> FetchResult<u64> {
         let cap = tls_cap()?;
+
+        // Diagnostic: log local time (via tz service), unix time, and a nonce
+        // to verify clock + tz offset are correct before the IPC round-trip.
+        let unix_time = get_time_utc();
+        let mono_ms   = monotonic_millis();
+        let nonce     = pseudo_rand(mono_ms ^ unix_time.wrapping_mul(0x9e3779b97f4a7c15));
+        let local_ts  = local_time_str();
+        {
+            let dbg = format!(
+                "[FETCH-TLS] hs_start host={} local={} unix={} ms={} nonce={:#018x}\n",
+                hostname, local_ts, unix_time, mono_ms, nonce
+            );
+            debug_log(&dbg);
+        }
+
         let sni = hostname.as_bytes();
-        let mut msg = IpcMsg::with_label(TLS_HANDSHAKE).word(0, 1u64); // 1 = client
-        pack_tls_data(&mut msg, sni);
-        let reply = ipc_call(cap, msg);
+        let mut ipc_msg = IpcMsg::with_label(TLS_HANDSHAKE).word(0, 1u64); // 1 = client
+        pack_tls_data(&mut ipc_msg, sni);
+        let reply = ipc_call(cap, ipc_msg);
+
         if reply.label == TLS_ERROR {
-            return Err(match reply.words[0] {
+            let code = reply.words[0];
+            {
+                let dbg = format!(
+                    "[FETCH-TLS] hs_FAIL host={} err_code={:#x} unix_time={}\n",
+                    hostname, code, unix_time
+                );
+                debug_log(&dbg);
+            }
+            return Err(match code {
                 TLS_ERR_SESSIONS_FULL => {
                     FetchError::TlsHandshakeFailed(String::from("TLS sessions full on daemon"))
                 }
                 TLS_ERR_CERT_EXPIRED => FetchError::TlsCertExpired,
-                code => FetchError::TlsHandshakeFailed(format!("daemon error code {code:#x}")),
+                _ => FetchError::TlsHandshakeFailed(format!("daemon error code {code:#x}")),
             });
         }
         if reply.label != TLS_REPLY {
+            {
+                let dbg = format!(
+                    "[FETCH-TLS] hs_FAIL host={} unexpected_label={:#x}\n",
+                    hostname, reply.label
+                );
+                debug_log(&dbg);
+            }
             return Err(FetchError::TlsHandshakeFailed(format!(
                 "unexpected label {:#x} from sunlight-tls",
                 reply.label
             )));
         }
-        Ok(reply.words[0]) // session_id
+        let sid = reply.words[0];
+        {
+            let dbg = format!(
+                "[FETCH-TLS] hs_OK host={} sid={} local={} unix={}\n",
+                hostname, sid, local_ts, unix_time
+            );
+            debug_log(&dbg);
+        }
+        Ok(sid)
     }
 
     /// Feed a plaintext or ciphertext chunk into the TLS daemon for processing.
@@ -798,13 +904,19 @@ mod sunlight {
         use_tls: bool,
         request: &HttpRequest,
     ) -> FetchResult<(HttpResponse, TcpHandle, Vec<u8>)> {
-        // sunlight-tls is a stub that echoes bytes without a real handshake.
-        // Sending raw HTTP to port 443 causes the remote to close/reset the
-        // connection and net_server to spin in an 8-second recv timeout.
-        // Fail fast until rustls + ring land on x86_64-unknown-none (see TODO.md).
+        // sunlight-tls is a stub that echoes bytes without real crypto.
+        // Sending plain HTTP to port 443 causes the remote to reset immediately.
+        // Fail fast until rustls + ring land on x86_64-unknown-none.
         if use_tls {
+            {
+                let dbg = format!(
+                    "[FETCH] HTTPS rejected host={} — stub TLS, no real crypto on SunlightOS\n",
+                    hostname
+                );
+                debug_log(&dbg);
+            }
             return Err(FetchError::TlsHandshakeFailed(String::from(
-                "HTTPS not yet supported on SunlightOS; use http:// for now",
+                "HTTPS not yet supported on SunlightOS (stub TLS); use http:// for now",
             )));
         }
 

@@ -90,8 +90,8 @@ macro_rules! serial_println {
 
 #[cfg(feature = "sunlightos")]
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup, nameserver_register, IpcMsg,
+    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
+    monotonic_millis, nameserver_lookup, nameserver_register, IpcMsg, TzMsg,
 };
 
 // Protocol labels (private to this service + its client certificatectl)
@@ -259,6 +259,35 @@ fn kv_put(key: &str, value: &[u8]) -> bool {
     reply.label == KV_REPLY && reply.words[0] == 0
 }
 
+/// Query the timezone service for the current local time.
+/// Returns "YYYY-MM-DDTHH:MM:SS" or "tz-unavail" if the tz service is not yet up.
+#[cfg(feature = "sunlightos")]
+fn local_time_str() -> heapless::String<32> {
+    use core::fmt::Write;
+    let mut out = heapless::String::<32>::new();
+    if let Some(tz_cap) = nameserver_lookup("tz") {
+        let r = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
+        if r.label == TzMsg::REPLY {
+            let w0 = r.words[0];
+            let year   = (w0 >> 48) as u16;
+            let month  = ((w0 >> 40) & 0xff) as u8;
+            let day    = ((w0 >> 32) & 0xff) as u8;
+            let hour   = ((w0 >> 24) & 0xff) as u8;
+            let minute = ((w0 >> 16) & 0xff) as u8;
+            let second = ((w0 >>  8) & 0xff) as u8;
+            // offset_secs lets us show the sign/hours for quick sanity check
+            let off_s  = r.words[1] as i64;
+            let off_h  = off_s / 3600;
+            let off_m  = (off_s.abs() % 3600) / 60;
+            let _ = write!(&mut out, "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{:+03}:{:02}",
+                           year, month, day, hour, minute, second, off_h, off_m);
+            return out;
+        }
+    }
+    let _ = out.push_str("tz-unavail");
+    out
+}
+
 #[cfg(feature = "sunlightos")]
 fn fetch_certs_from_kv() {
     // Fetch example cert material (small demo blobs that fit inline IPC).
@@ -343,10 +372,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
     let ep = endpoint_create();
     nameserver_register("sunlight-tls", ep);
     serial_println!("[SUNLIGHT-TLS] Registered as 'sunlight-tls'");
-
-    // Attempt to load cert material from sunlight-kv (depends on kv being up first).
-    fetch_certs_from_kv();
-
+    // Cert material is loaded lazily on TLS_INSTALL (KV is always empty/volatile at boot).
     serial_println!("[SUNLIGHT-TLS] Entering IPC loop");
 
     let mut msg = ipc_recv(ep);
@@ -357,16 +383,28 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
         match msg.label {
             TLS_HANDSHAKE => {
                 // word0: 1=client 2=server; servername or sni packed after
-                let _is_client = (msg.words[0] & 0xff) == 1;
+                let role = (msg.words[0] & 0xff) as u8;
+                let is_client = role == 1;
                 let sni = unpack_str(&msg.words, 1, 64);
+
+                // Log time (local + raw) to verify clock and tz service are correct.
+                let unix_time  = get_time_utc();
+                let mono_ms    = monotonic_millis();
+                let local_ts   = local_time_str();
+                serial_println!(
+                    "[SUNLIGHT-TLS] hs_recv role={} sni={} local={} unix={} ms={}",
+                    if is_client { "client" } else { "server" },
+                    sni, local_ts, unix_time, mono_ms
+                );
+
                 if let Some(sid) = alloc_session() {
-                    // In a complete rustls integration the cached cert/key would be used
-                    // to build a rustls::ServerConfig or ClientConfig here and a
-                    // rustls::Connection created for the sid. For sunlightos we simulate
-                    // a completed handshake so IPC round-trips and certctl work.
                     reply.words[0] = sid;
-                    serial_println!("[SUNLIGHT-TLS] handshake sid={} sni={}", sid, sni);
+                    serial_println!(
+                        "[SUNLIGHT-TLS] hs_OK sid={} sni={} local={} unix={}",
+                        sid, sni, local_ts, unix_time
+                    );
                 } else {
+                    serial_println!("[SUNLIGHT-TLS] hs_FAIL sessions_full sni={}", sni);
                     reply.label = TLS_ERROR;
                     reply.words[0] = 3; // sessions full
                 }
