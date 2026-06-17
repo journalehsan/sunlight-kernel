@@ -16,6 +16,11 @@ ISO_PATH="target/sunlightos.iso"
 LIMINE_BRANCH="v8.x"
 LIMINE_DIR="target/limine"
 SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+# sunlight-tls links a pure-Rust rustls stack. x86_64-unknown-none disables SSE,
+# so the RustCrypto SIMD backends must be forced to their software paths (they
+# otherwise emit 128-bit vector intrinsics that LLVM cannot lower). See the
+# Phase-0 TLS build recipe.
+TLS_RUSTFLAGS="$SERVICE_RUSTFLAGS --cfg aes_force_soft --cfg polyval_force_soft --cfg poly1305_force_soft --cfg chacha20_force_soft --cfg curve25519_dalek_backend=\"serial\""
 
 # --- Step 1: Build service binaries first (embedded via include_bytes!) ---
 echo "[build] Building user-space services..."
@@ -32,7 +37,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-uac --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kv --features sunlightos --no-default-features --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kvctl --features sunlightos --no-default-features --release
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tls --features sunlightos --no-default-features --release
+RUSTFLAGS="$TLS_RUSTFLAGS" cargo build --package sunlight-tls --features sunlightos --no-default-features --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package certificatectl --features sunlightos --no-default-features --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release

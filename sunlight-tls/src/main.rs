@@ -1,12 +1,21 @@
-//! sunlight-tls daemon.
+//! sunlight-tls daemon — real rustls TLS endpoint for SunlightOS.
 //!
-//! Provides TLS 1.3 handshake capability to other services via kernel IPC.
-//! Certificates (roots, server) are fetched/stored via IPC to sunlight-kv under
-//! keys: tls/ca/<name>, tls/server/cert, tls/server/key
+//! Design B: this daemon owns both the TCP socket (via net_server) and the
+//! crypto (rustls, no_std unbuffered API). Clients (e.g. `fetch`) exchange only
+//! plaintext with it over IPC + shared memory:
 //!
-//! Transport integration: callers feed ciphertext/plaintext buffers over IPC
-//! (smoltcp <-> this service adapter in a full net stack). This binary implements
-//! the documented SunlightOS service structure exactly.
+//!   TLS_CONNECT(ip, port, sni) -> session id   (opens socket, runs handshake)
+//!   TLS_SEND(sid, plaintext via shm)           (encrypts + transmits)
+//!   TLS_RECV(sid) -> plaintext via shm + eof   (receives + decrypts)
+//!   TLS_CLOSE(sid)                             (close_notify + socket close)
+//!
+//! Trust anchors (root CAs) live in sunlight-kv under tls/ca/<name>, indexed by
+//! tls/ca/index. On first boot the daemon self-seeds an embedded curated root
+//! (GTS Root R4) into kv, then builds its RootCertStore from kv.
+//!
+//! Crypto provider is rustls-rustcrypto (pure Rust). RNG flows through
+//! rand_service via a custom getrandom handler; time comes from the RTC/tz via
+//! get_time_utc(). See the Phase-0 build recipe for the required RUSTFLAGS.
 
 #![cfg_attr(feature = "sunlightos", no_std)]
 #![cfg_attr(feature = "sunlightos", no_main)]
@@ -16,9 +25,6 @@ extern crate alloc;
 
 #[cfg(feature = "host")]
 fn main() {
-    // Host mode: not the primary execution path. Real rustls usage lives in
-    // host tooling or future certificate provisioning. This keeps the binary
-    // runnable for cargo check / cargo run ergonomics.
     println!("sunlight-tls: host mode (no TLS daemon loop). Use in SunlightOS image.");
 }
 
@@ -27,557 +33,944 @@ fn main() {
 // -----------------------------------------------------------------------------
 
 #[cfg(feature = "sunlightos")]
-use alloc::string::String;
-#[cfg(feature = "sunlightos")]
-use alloc::vec::Vec;
+mod sunlightos_impl {
+    use alloc::format;
+    use alloc::string::String;
+    use alloc::sync::Arc;
+    use alloc::vec;
+    use alloc::vec::Vec;
+    use core::time::Duration;
 
-#[cfg(feature = "sunlightos")]
-struct BumpAllocator;
+    use linked_list_allocator::LockedHeap;
+    use rustls::client::UnbufferedClientConnection;
+    use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+    use rustls::time_provider::TimeProvider;
+    use rustls::unbuffered::{ConnectionState, UnbufferedStatus};
+    use rustls::{ClientConfig, RootCertStore};
 
-#[cfg(feature = "sunlightos")]
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 128 * 1024] = [0; 128 * 1024];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
+    use sunlight_ipc::{
+        debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
+        monotonic_millis, nameserver_lookup, nameserver_register, shm_alloc, shm_free, shm_map,
+        CapabilityToken, IpcMsg,
+    };
+
+    // ── allocator ─────────────────────────────────────────────────────────────
+    // rustls + RustCrypto allocate and free heavily during a handshake; the old
+    // never-freeing bump allocator would leak and OOM. Use a real freeing heap.
+    #[global_allocator]
+    static ALLOCATOR: LockedHeap = LockedHeap::empty();
+
+    const HEAP_SIZE: usize = 8 * 1024 * 1024; // 8 MiB
+    static mut HEAP_MEM: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
+
+    unsafe fn init_heap() {
+        ALLOCATOR
+            .lock()
+            .init(core::ptr::addr_of_mut!(HEAP_MEM) as *mut u8, HEAP_SIZE);
     }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
 
-#[cfg(feature = "sunlightos")]
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
-
-#[cfg(feature = "sunlightos")]
-fn stdout_write(s: &str) {
-    let mut data = s.as_bytes();
-    while !data.is_empty() {
-        match sunlight_libc::write(sunlight_libc::STDOUT, data) {
-            Ok(n) if n > 0 => data = &data[n..],
-            _ => break,
+    // ── randomness: route getrandom -> rand_service via libc ───────────────────
+    fn os_getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+        let n = sunlight_libc::getrandom(buf, 0);
+        if n == buf.len() as isize {
+            Ok(())
+        } else {
+            Err(getrandom::Error::UNSUPPORTED)
         }
     }
-}
+    getrandom::register_custom_getrandom!(os_getrandom);
 
-#[cfg(feature = "sunlightos")]
-macro_rules! println {
-    ($($arg:tt)*) => {{
-        use core::fmt::Write;
-        let mut buf = heapless::String::<512>::new();
-        let _ = write!(&mut buf, $($arg)*);
-        stdout_write(&buf);
-        stdout_write("\n");
-    }};
-}
+    // ── time: RTC/tz seconds since the unix epoch ──────────────────────────────
+    #[derive(Debug)]
+    struct OsTimeProvider;
+    impl TimeProvider for OsTimeProvider {
+        fn current_time(&self) -> Option<UnixTime> {
+            Some(UnixTime::since_unix_epoch(Duration::from_secs(get_time_utc())))
+        }
+    }
 
-#[cfg(feature = "sunlightos")]
-macro_rules! serial_println {
-    ($($arg:tt)*) => {{
-        use core::fmt::Write;
-        let mut buf = heapless::String::<256>::new();
-        let _ = write!(&mut buf, $($arg)*);
-        sunlight_ipc::debug_log(&buf);
-    }};
-}
-
-#[cfg(feature = "sunlightos")]
-use sunlight_ipc::{
-    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
-    monotonic_millis, nameserver_lookup, nameserver_register, IpcMsg, TzMsg,
-};
-
-// Protocol labels (private to this service + its client certificatectl)
-#[cfg(feature = "sunlightos")]
-const TLS_HANDSHAKE: u64 = 0x5401;
-#[cfg(feature = "sunlightos")]
-const TLS_FEED: u64 = 0x5402;
-#[cfg(feature = "sunlightos")]
-const TLS_GET_WRITE: u64 = 0x5403;
-#[cfg(feature = "sunlightos")]
-const TLS_GET_PLAIN: u64 = 0x5404;
-#[cfg(feature = "sunlightos")]
-const TLS_CLOSE: u64 = 0x5405;
-#[cfg(feature = "sunlightos")]
-const TLS_INSTALL: u64 = 0x5406; // from certificatectl -> stores demo certs into kv
-#[cfg(feature = "sunlightos")]
-const TLS_LIST: u64 = 0x5407;
-#[cfg(feature = "sunlightos")]
-const TLS_REPLY: u64 = 0x54FF;
-#[cfg(feature = "sunlightos")]
-const TLS_ERROR: u64 = 0x54EE;
-
-// Also re-use kv ops for internal fetches/PUTs when proxying certs
-#[cfg(feature = "sunlightos")]
-const KV_GET: u64 = 0x4B02;
-#[cfg(feature = "sunlightos")]
-const KV_PUT: u64 = 0x4B01;
-#[cfg(feature = "sunlightos")]
-const KV_REPLY: u64 = 0x4BFF;
-#[cfg(feature = "sunlightos")]
-const KV_ERROR: u64 = 0x4BEE;
-#[cfg(feature = "sunlightos")]
-const KV_VALUE: u64 = 0x4B05;
-
-#[cfg(feature = "sunlightos")]
-const MAX_SESSIONS: usize = 4;
-
-#[cfg(feature = "sunlightos")]
-struct Session {
-    id: u64,
-    established: bool,
-    /// 32-byte handshake Random (the TLS ServerHello.random equivalent),
-    /// sourced from the CSPRNG (rand service) at session creation.
-    random: [u8; 32],
-    // For demo (no rustls on sunlightos path): pass-through buffers
-    to_write: Vec<u8>,
-    to_plain: Vec<u8>,
-}
-
-#[cfg(feature = "sunlightos")]
-static mut SESSIONS: [Option<Session>; MAX_SESSIONS] = [const { None }; MAX_SESSIONS];
-
-/// Fill `buf` with cryptographic random bytes from the rand service via libc.
-/// Returns false (fail closed) if the rand service is unreachable — a TLS
-/// handshake must never proceed on weak/absent randomness.
-#[cfg(feature = "sunlightos")]
-fn fill_secure(buf: &mut [u8]) -> bool {
-    sunlight_libc::getrandom(buf, 0) == buf.len() as isize
-}
-
-#[cfg(feature = "sunlightos")]
-static mut CACHED_CA: Option<(String, Vec<u8>)> = None;
-#[cfg(feature = "sunlightos")]
-static mut CACHED_CERT: Option<Vec<u8>> = None;
-#[cfg(feature = "sunlightos")]
-static mut CACHED_KEY: Option<Vec<u8>> = None;
-
-#[cfg(feature = "sunlightos")]
-fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) {
-    let b = s.as_bytes();
-    let mut i = 0;
-    for w in start_word..8 {
-        let mut word = 0u64;
-        for j in 0..8 {
-            if i < b.len() {
-                word |= (b[i] as u64) << (j * 8);
-                i += 1;
+    // ── output macros ──────────────────────────────────────────────────────────
+    fn stdout_write(s: &str) {
+        let mut data = s.as_bytes();
+        while !data.is_empty() {
+            match sunlight_libc::write(sunlight_libc::STDOUT, data) {
+                Ok(n) if n > 0 => data = &data[n..],
+                _ => break,
             }
         }
-        msg.words[w] = word;
-        if i >= b.len() {
-            break;
+    }
+
+    macro_rules! serial_println {
+        ($($arg:tt)*) => {{
+            use core::fmt::Write;
+            let mut buf = heapless::String::<256>::new();
+            let _ = write!(&mut buf, $($arg)*);
+            debug_log(&buf);
+        }};
+    }
+
+    // ── protocol labels (must match sunlight-fetch + certificatectl) ───────────
+    const TLS_CONNECT: u64 = 0x5401;
+    const TLS_SEND: u64 = 0x5402;
+    const TLS_RECV: u64 = 0x5403;
+    const TLS_CLOSE: u64 = 0x5405;
+    const TLS_INSTALL: u64 = 0x5406; // certificatectl: install a CA into kv
+    const TLS_LIST: u64 = 0x5407;
+    const TLS_REPLY: u64 = 0x54FF;
+    const TLS_ERROR: u64 = 0x54EE;
+
+    // TLS error codes returned to clients in word[0] of a TLS_ERROR reply.
+    const ERR_SESSIONS_FULL: u64 = 3;
+    const ERR_CERT_EXPIRED: u64 = 5;
+
+    // kv protocol (we are a *client* of sunlight-kv).
+    const KV_REPLY: u64 = 0x4BFF;
+    const KV_VALUE: u64 = 0x4B05;
+    const KV_PUT_SHM: u64 = 0x4B06;
+    const KV_GET_SHM: u64 = 0x4B07;
+
+    // net_server protocol (NetOp).
+    const NET_SOCKET: u64 = 1;
+    const NET_CONNECT: u64 = 2;
+    const NET_SEND: u64 = 6;
+    const NET_RECV: u64 = 7;
+    const NET_CLOSE: u64 = 8;
+
+    const NET_CHUNK: usize = 48; // net_server caps each SEND/RECV at 48 bytes
+    const SHM_PAGE: usize = 4096; // one shared page per plaintext/cert transfer
+    const OUT_SCRATCH: usize = 18 * 1024; // > max TLS record (16 KiB + overhead)
+    const MAX_INCOMING: usize = 256 * 1024; // guard against runaway buffering
+    const MAX_SESSIONS: usize = 4;
+
+    // Embedded curated trust anchor (GTS Root R4, self-signed, valid to 2036).
+    // api.sampleapis.com chains: leaf <- GTS WE1 <- GTS Root R4.
+    static EMBEDDED_GTS_R4: &[u8] = include_bytes!("roots/gts_root_r4.der");
+    const SEED_NAME: &str = "gts-root-r4";
+
+    static mut CLIENT_CONFIG: Option<Arc<ClientConfig>> = None;
+
+    struct Session {
+        id: u64,
+        conn: UnbufferedClientConnection,
+        socket_id: u32,
+        incoming: Vec<u8>, // received ciphertext not yet consumed by rustls
+        backlog: Vec<u8>,  // decrypted plaintext not yet handed to the client
+    }
+
+    static mut SESSIONS: [Option<Session>; MAX_SESSIONS] = [const { None }; MAX_SESSIONS];
+
+    // ── packing helpers ────────────────────────────────────────────────────────
+    fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) {
+        let b = s.as_bytes();
+        let mut i = 0;
+        for w in start_word..8 {
+            let mut word = 0u64;
+            for j in 0..8 {
+                if i < b.len() {
+                    word |= (b[i] as u64) << (j * 8);
+                    i += 1;
+                }
+            }
+            msg.words[w] = word;
+            if i >= b.len() {
+                break;
+            }
         }
     }
-}
 
-#[cfg(feature = "sunlightos")]
-fn unpack_str(words: &[u64; 8], start_word: usize, max_len: usize) -> String {
-    let mut v: Vec<u8> = Vec::new();
-    let mut i = 0;
-    for w in start_word..8 {
-        if i >= max_len {
-            break;
-        }
-        let word = words[w];
-        for j in 0..8 {
+    fn unpack_str(words: &[u64; 8], start_word: usize, max_len: usize) -> String {
+        let mut v: Vec<u8> = Vec::new();
+        let mut i = 0;
+        for w in start_word..8 {
             if i >= max_len {
                 break;
             }
-            let byte = ((word >> (j * 8)) & 0xff) as u8;
-            if byte == 0 {
-                break;
+            let word = words[w];
+            for j in 0..8 {
+                if i >= max_len {
+                    break;
+                }
+                let byte = ((word >> (j * 8)) & 0xff) as u8;
+                if byte == 0 {
+                    break;
+                }
+                v.push(byte);
+                i += 1;
             }
-            v.push(byte);
-            i += 1;
         }
+        String::from_utf8(v).unwrap_or_default()
     }
-    String::from_utf8(v).unwrap_or_default()
-}
 
-#[cfg(feature = "sunlightos")]
-fn pack_kv_payload(msg: &mut IpcMsg, key: &str, value: &[u8]) {
-    let kb = key.as_bytes();
-    let vb = value;
-    msg.words[0] = (kb.len().min(63) as u64) | (((vb.len().min(63) as u64) << 16));
-    let mut bi = 0usize;
-    let mut wi = 1usize;
-    for &b in kb.iter().chain(vb.iter()) {
-        if wi >= 8 {
-            break;
-        }
-        let shift = (bi % 8) * 8;
-        msg.words[wi] |= (b as u64) << shift;
-        bi += 1;
-        if bi % 8 == 0 {
-            wi += 1;
-        }
+    fn pack_ipv4(ip: [u8; 4]) -> u64 {
+        (ip[0] as u64) | ((ip[1] as u64) << 8) | ((ip[2] as u64) << 16) | ((ip[3] as u64) << 24)
     }
-}
 
-#[cfg(feature = "sunlightos")]
-fn unpack_kv_value(msg: &IpcMsg) -> Vec<u8> {
-    let vlen = ((msg.words[0] >> 16) & 0xffff) as usize;
-    let mut v: Vec<u8> = Vec::new();
-    let mut rem = vlen;
-    let mut wi = 1usize;
-    while rem > 0 && wi < 8 {
-        for j in 0..8 {
-            if rem == 0 {
-                break;
+    // ── sunlight-kv client (shm transport) ─────────────────────────────────────
+    fn kv_get_shm(key: &str) -> Option<Vec<u8>> {
+        let cap = nameserver_lookup("sunlight-kv")?;
+        let mut msg = IpcMsg::with_label(KV_GET_SHM);
+        pack_str(&mut msg, 2, key);
+        let reply = ipc_call(cap, msg);
+        if reply.label != KV_VALUE {
+            return None;
+        }
+        let n = reply.words[0] as usize;
+        if n == 0 {
+            return Some(Vec::new());
+        }
+        let tok = reply.caps[0];
+        if tok == CapabilityToken::INVALID {
+            return None;
+        }
+        let ptr = shm_map(tok).ok()?;
+        let v = unsafe { core::slice::from_raw_parts(ptr, n.min(SHM_PAGE)) }.to_vec();
+        let _ = shm_free(tok);
+        Some(v)
+    }
+
+    fn kv_put_shm(key: &str, value: &[u8]) -> bool {
+        if value.len() > SHM_PAGE {
+            return false;
+        }
+        let cap = match nameserver_lookup("sunlight-kv") {
+            Some(c) => c,
+            None => return false,
+        };
+        let (ptr, tok) = match shm_alloc() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        unsafe {
+            core::ptr::copy_nonoverlapping(value.as_ptr(), ptr, value.len());
+        }
+        let mut msg = IpcMsg::with_label(KV_PUT_SHM)
+            .word(0, value.len() as u64)
+            .with_cap(0, tok);
+        pack_str(&mut msg, 2, key);
+        let reply = ipc_call(cap, msg);
+        let _ = shm_free(tok);
+        reply.label == KV_REPLY && reply.words[0] == 0
+    }
+
+    // ── net_server client ──────────────────────────────────────────────────────
+    fn net_cap() -> Option<CapabilityToken> {
+        nameserver_lookup("net")
+    }
+
+    fn net_socket() -> Option<u32> {
+        let cap = net_cap()?;
+        let reply = ipc_call(cap, IpcMsg::with_label(NET_SOCKET));
+        if reply.label != NET_SOCKET || reply.words[0] == 0 {
+            return None;
+        }
+        Some(reply.words[0] as u32)
+    }
+
+    fn net_connect(socket_id: u32, ip_packed: u64, port: u16) -> bool {
+        let cap = match net_cap() {
+            Some(c) => c,
+            None => return false,
+        };
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(NET_CONNECT)
+                .word(0, socket_id as u64)
+                .word(1, ip_packed)
+                .word(2, port as u64),
+        );
+        reply.label == NET_CONNECT && reply.words[0] != 0
+    }
+
+    fn net_send_all(socket_id: u32, data: &[u8]) -> bool {
+        let cap = match net_cap() {
+            Some(c) => c,
+            None => return false,
+        };
+        let mut off = 0usize;
+        while off < data.len() {
+            let clen = (data.len() - off).min(NET_CHUNK);
+            let mut msg = IpcMsg::with_label(NET_SEND)
+                .word(0, socket_id as u64)
+                .word(1, clen as u64);
+            for i in 0..clen {
+                let wi = 2 + i / 8;
+                let bi = i % 8;
+                msg.words[wi] |= (data[off + i] as u64) << (bi * 8);
             }
-            v.push(((msg.words[wi] >> (j * 8)) & 0xff) as u8);
-            rem -= 1;
+            let reply = ipc_call(cap, msg);
+            let sent = reply.words[0] as usize;
+            if sent == 0 {
+                return false;
+            }
+            off += sent;
         }
-        wi += 1;
+        true
     }
-    v
-}
 
-#[cfg(feature = "sunlightos")]
-fn kv_get(key: &str) -> Option<Vec<u8>> {
-    let kv_cap = nameserver_lookup("sunlight-kv")?;
-    let mut msg = IpcMsg::empty();
-    msg.label = KV_GET;
-    pack_kv_payload(&mut msg, key, b"");
-    let reply = ipc_call(kv_cap, msg);
-    if reply.label == KV_VALUE {
-        Some(unpack_kv_value(&reply))
-    } else {
+    fn net_recv_chunk(socket_id: u32) -> Vec<u8> {
+        let cap = match net_cap() {
+            Some(c) => c,
+            None => return Vec::new(),
+        };
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(NET_RECV)
+                .word(0, socket_id as u64)
+                .word(1, NET_CHUNK as u64),
+        );
+        if reply.label != NET_RECV {
+            return Vec::new();
+        }
+        let len = (reply.words[0] as usize).min(NET_CHUNK);
+        let mut out = Vec::with_capacity(len);
+        for i in 0..len {
+            let word = reply.words[2 + i / 8];
+            let bi = i % 8;
+            out.push(((word >> (bi * 8)) & 0xff) as u8);
+        }
+        out
+    }
+
+    fn net_close(socket_id: u32) {
+        if let Some(cap) = net_cap() {
+            let _ = ipc_call(cap, IpcMsg::with_label(NET_CLOSE).word(0, socket_id as u64));
+        }
+    }
+
+    // ── trust store ─────────────────────────────────────────────────────────────
+    fn seed_trust_if_empty() {
+        serial_println!("[SUNLIGHT-TLS] dbg: seed get index...");
+        if kv_get_shm("tls/ca/index").is_some() {
+            serial_println!("[SUNLIGHT-TLS] dbg: index present, skip seed");
+            return;
+        }
+        serial_println!("[SUNLIGHT-TLS] dbg: seeding root ({} bytes)...", EMBEDDED_GTS_R4.len());
+        if kv_put_shm(&format!("tls/ca/{}", SEED_NAME), EMBEDDED_GTS_R4)
+            && kv_put_shm("tls/ca/index", SEED_NAME.as_bytes())
+        {
+            serial_println!("[SUNLIGHT-TLS] seeded kv trust store with '{}'", SEED_NAME);
+        } else {
+            serial_println!("[SUNLIGHT-TLS] WARN: kv trust seed failed (kv down?)");
+        }
+    }
+
+    fn build_root_store() -> RootCertStore {
+        serial_println!("[SUNLIGHT-TLS] dbg: build_root_store start");
+        let mut roots = RootCertStore::empty();
+        seed_trust_if_empty();
+        serial_println!("[SUNLIGHT-TLS] dbg: seed done, loading index");
+        if let Some(index) = kv_get_shm("tls/ca/index") {
+            if let Ok(s) = String::from_utf8(index) {
+                for name in s.split(',').map(|n| n.trim()).filter(|n| !n.is_empty()) {
+                    if let Some(der) = kv_get_shm(&format!("tls/ca/{}", name)) {
+                        if !der.is_empty() {
+                            match roots.add(CertificateDer::from(der)) {
+                                Ok(()) => serial_println!("[SUNLIGHT-TLS] trust += {}", name),
+                                Err(_) => serial_println!("[SUNLIGHT-TLS] bad cert {}", name),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if roots.is_empty() {
+            // kv unavailable — fall back to the compiled-in root so HTTPS still works.
+            let _ = roots.add(CertificateDer::from(EMBEDDED_GTS_R4.to_vec()));
+            serial_println!("[SUNLIGHT-TLS] using embedded fallback root");
+        }
+        roots
+    }
+
+    fn rebuild_config() {
+        let roots = build_root_store();
+        let n = roots.len();
+        serial_println!("[SUNLIGHT-TLS] dbg: roots loaded n={}, building config", n);
+        let provider = Arc::new(rustls_rustcrypto::provider());
+        serial_println!("[SUNLIGHT-TLS] dbg: provider ready");
+        match ClientConfig::builder_with_details(provider, Arc::new(OsTimeProvider))
+            .with_safe_default_protocol_versions()
+        {
+            Ok(b) => {
+                let config = b.with_root_certificates(roots).with_no_client_auth();
+                unsafe {
+                    CLIENT_CONFIG = Some(Arc::new(config));
+                }
+                serial_println!("[SUNLIGHT-TLS] client config ready ({} roots)", n);
+            }
+            Err(_) => serial_println!("[SUNLIGHT-TLS] ERROR: failed to build client config"),
+        }
+    }
+
+    // ── session table ───────────────────────────────────────────────────────────
+    fn new_sid() -> u64 {
+        let mut b = [0u8; 8];
+        let _ = os_getrandom(&mut b);
+        let v = u64::from_le_bytes(b);
+        if v == 0 {
+            1
+        } else {
+            v
+        }
+    }
+
+    fn store_session(s: Session) -> Option<u64> {
+        let id = s.id;
+        unsafe {
+            let slots = &mut *core::ptr::addr_of_mut!(SESSIONS);
+            for slot in slots.iter_mut() {
+                if slot.is_none() {
+                    *slot = Some(s);
+                    return Some(id);
+                }
+            }
+        }
         None
     }
-}
 
-#[cfg(feature = "sunlightos")]
-fn kv_put(key: &str, value: &[u8]) -> bool {
-    let kv_cap = match nameserver_lookup("sunlight-kv") {
-        Some(c) => c,
-        None => return false,
-    };
-    let mut msg = IpcMsg::empty();
-    msg.label = KV_PUT;
-    pack_kv_payload(&mut msg, key, value);
-    let reply = ipc_call(kv_cap, msg);
-    reply.label == KV_REPLY && reply.words[0] == 0
-}
-
-/// Query the timezone service for the current local time.
-/// Returns "YYYY-MM-DDTHH:MM:SS" or "tz-unavail" if the tz service is not yet up.
-#[cfg(feature = "sunlightos")]
-fn local_time_str() -> heapless::String<32> {
-    use core::fmt::Write;
-    let mut out = heapless::String::<32>::new();
-    if let Some(tz_cap) = nameserver_lookup("tz") {
-        let r = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
-        if r.label == TzMsg::REPLY {
-            let w0 = r.words[0];
-            let year   = (w0 >> 48) as u16;
-            let month  = ((w0 >> 40) & 0xff) as u8;
-            let day    = ((w0 >> 32) & 0xff) as u8;
-            let hour   = ((w0 >> 24) & 0xff) as u8;
-            let minute = ((w0 >> 16) & 0xff) as u8;
-            let second = ((w0 >>  8) & 0xff) as u8;
-            // offset_secs lets us show the sign/hours for quick sanity check
-            let off_s  = r.words[1] as i64;
-            let off_h  = off_s / 3600;
-            let off_m  = (off_s.abs() % 3600) / 60;
-            let _ = write!(&mut out, "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{:+03}:{:02}",
-                           year, month, day, hour, minute, second, off_h, off_m);
-            return out;
-        }
-    }
-    let _ = out.push_str("tz-unavail");
-    out
-}
-
-#[cfg(feature = "sunlightos")]
-fn fetch_certs_from_kv() {
-    // Fetch example cert material (small demo blobs that fit inline IPC).
-    if let Some(v) = kv_get("tls/ca/system") {
-        if !v.is_empty() {
-            unsafe { CACHED_CA = Some((String::from("system"), v)); }
-            serial_println!("[SUNLIGHT-TLS] loaded tls/ca/system from kv");
-        }
-    }
-    if let Some(v) = kv_get("tls/server/cert") {
-        if !v.is_empty() {
-            unsafe { CACHED_CERT = Some(v); }
-            serial_println!("[SUNLIGHT-TLS] loaded tls/server/cert from kv");
-        }
-    }
-    if let Some(v) = kv_get("tls/server/key") {
-        if !v.is_empty() {
-            unsafe { CACHED_KEY = Some(v); }
-            serial_println!("[SUNLIGHT-TLS] loaded tls/server/key from kv");
-        }
-    }
-}
-
-#[cfg(feature = "sunlightos")]
-fn alloc_session() -> Option<u64> {
-    // Pull 32 bytes of cryptographic randomness for the handshake Random, and
-    // derive an unpredictable session id from it (predictable/sequential
-    // session ids are a real weakness). Fail closed if the CSPRNG is down.
-    let mut random = [0u8; 32];
-    if !fill_secure(&mut random) {
-        serial_println!("[SUNLIGHT-TLS] getrandom FAILED (rand service down?) — refusing handshake");
-        return None;
-    }
-    let mut sid_bytes = [0u8; 8];
-    sid_bytes.copy_from_slice(&random[24..32]);
-    let mut sid = u64::from_le_bytes(sid_bytes);
-    if sid == 0 {
-        sid = 1;
-    }
-
-    let mut rnd0 = [0u8; 8];
-    rnd0.copy_from_slice(&random[0..8]);
-    serial_println!(
-        "[SUNLIGHT-TLS] handshake random sourced from CSPRNG sid={:#x} rnd[0..8]={:#018x}",
-        sid,
-        u64::from_le_bytes(rnd0)
-    );
-
-    unsafe {
-        for i in 0..MAX_SESSIONS {
-            if SESSIONS[i].is_none() {
-                SESSIONS[i] = Some(Session {
-                    id: sid,
-                    established: true, // demo: "handshake" completes immediately
-                    random,
-                    to_write: Vec::new(),
-                    to_plain: Vec::new(),
-                });
-                return Some(sid);
+    fn close_session(id: u64) -> bool {
+        unsafe {
+            let slots = &mut *core::ptr::addr_of_mut!(SESSIONS);
+            for slot in slots.iter_mut() {
+                if let Some(s) = slot {
+                    if s.id == id {
+                        net_close(s.socket_id);
+                        *slot = None;
+                        return true;
+                    }
+                }
             }
         }
+        false
     }
-    None
-}
 
-#[cfg(feature = "sunlightos")]
-fn find_session_mut(id: u64) -> Option<&'static mut Session> {
-    unsafe {
-        for i in 0..MAX_SESSIONS {
-            if let Some(ref mut s) = SESSIONS[i] {
-                if s.id == id {
-                    return Some(s);
+    // ── handshake / IO state machine (rustls unbuffered, no_std) ────────────────
+    // All three loops share the same shape: process_tls_records yields a state;
+    // we encode outbound handshake bytes into `outgoing` and flush on
+    // TransmitTlsData, request more ciphertext on BlockedHandshake, and surface
+    // app-data on ReadTraffic / readiness on WriteTraffic.
+
+    fn drive_handshake(
+        conn: &mut UnbufferedClientConnection,
+        socket_id: u32,
+        incoming: &mut Vec<u8>,
+    ) -> Result<(), u64> {
+        let mut scratch = vec![0u8; OUT_SCRATCH];
+        let mut outgoing: Vec<u8> = Vec::new();
+        loop {
+            let mut need_read = false;
+            let discard;
+            {
+                let UnbufferedStatus { discard: d, state } =
+                    conn.process_tls_records(incoming.as_mut_slice());
+                discard = d;
+                match state {
+                    Ok(ConnectionState::EncodeTlsData(mut st)) => match st.encode(&mut scratch) {
+                        Ok(n) => outgoing.extend_from_slice(&scratch[..n]),
+                        Err(_) => return Err(30),
+                    },
+                    Ok(ConnectionState::TransmitTlsData(st)) => {
+                        if !outgoing.is_empty() {
+                            if !net_send_all(socket_id, &outgoing) {
+                                return Err(31);
+                            }
+                            outgoing.clear();
+                        }
+                        st.done();
+                    }
+                    Ok(ConnectionState::BlockedHandshake) => need_read = true,
+                    Ok(ConnectionState::WriteTraffic(_)) => {
+                        if discard > 0 {
+                            incoming.drain(..discard.min(incoming.len()));
+                        }
+                        return Ok(());
+                    }
+                    Ok(_) => {
+                        // ReadTraffic / ReadEarlyData unexpectedly early — treat as done.
+                        if discard > 0 {
+                            incoming.drain(..discard.min(incoming.len()));
+                        }
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        serial_println!("[SUNLIGHT-TLS] handshake error: {:?}", e);
+                        return Err(map_rustls_err(&e));
+                    }
+                }
+            }
+            if discard > 0 {
+                incoming.drain(..discard.min(incoming.len()));
+            }
+            if need_read {
+                let chunk = net_recv_chunk(socket_id);
+                if chunk.is_empty() {
+                    return Err(32); // peer closed / timeout mid-handshake
+                }
+                incoming.extend_from_slice(&chunk);
+                if incoming.len() > MAX_INCOMING {
+                    return Err(33);
                 }
             }
         }
     }
-    None
-}
 
-#[cfg(feature = "sunlightos")]
-fn close_session(id: u64) -> bool {
-    unsafe {
-        for i in 0..MAX_SESSIONS {
-            if let Some(ref s) = SESSIONS[i] {
-                if s.id == id {
-                    SESSIONS[i] = None;
-                    return true;
+    fn tls_send(
+        conn: &mut UnbufferedClientConnection,
+        socket_id: u32,
+        incoming: &mut Vec<u8>,
+        backlog: &mut Vec<u8>,
+        data: &[u8],
+    ) -> Result<(), u64> {
+        let mut scratch = vec![0u8; OUT_SCRATCH];
+        let mut outgoing: Vec<u8> = Vec::new();
+        loop {
+            let mut done = false;
+            let mut need_read = false;
+            let mut closed = false;
+            let discard;
+            {
+                let UnbufferedStatus { discard: d, state } =
+                    conn.process_tls_records(incoming.as_mut_slice());
+                discard = d;
+                match state {
+                    Ok(ConnectionState::WriteTraffic(mut wt)) => {
+                        match wt.encrypt(data, &mut scratch) {
+                            Ok(n) => {
+                                if !net_send_all(socket_id, &scratch[..n]) {
+                                    return Err(41);
+                                }
+                                done = true;
+                            }
+                            Err(_) => return Err(42),
+                        }
+                    }
+                    Ok(ConnectionState::ReadTraffic(mut rt)) => {
+                        while let Some(rec) = rt.next_record() {
+                            if let Ok(r) = rec {
+                                backlog.extend_from_slice(r.payload);
+                            }
+                        }
+                    }
+                    Ok(ConnectionState::EncodeTlsData(mut st)) => match st.encode(&mut scratch) {
+                        Ok(n) => outgoing.extend_from_slice(&scratch[..n]),
+                        Err(_) => return Err(43),
+                    },
+                    Ok(ConnectionState::TransmitTlsData(st)) => {
+                        if !outgoing.is_empty() {
+                            if !net_send_all(socket_id, &outgoing) {
+                                return Err(41);
+                            }
+                            outgoing.clear();
+                        }
+                        st.done();
+                    }
+                    Ok(ConnectionState::BlockedHandshake) => need_read = true,
+                    Ok(ConnectionState::PeerClosed) | Ok(ConnectionState::Closed) => closed = true,
+                    Ok(_) => {}
+                    Err(e) => return Err(map_rustls_err(&e)),
+                }
+            }
+            if discard > 0 {
+                incoming.drain(..discard.min(incoming.len()));
+            }
+            if done {
+                return Ok(());
+            }
+            if closed {
+                return Err(44);
+            }
+            if need_read {
+                let chunk = net_recv_chunk(socket_id);
+                if chunk.is_empty() {
+                    return Err(45);
+                }
+                incoming.extend_from_slice(&chunk);
+            }
+        }
+    }
+
+    /// Returns (plaintext, eof). Empty plaintext + eof=true means the peer closed.
+    fn tls_recv(
+        conn: &mut UnbufferedClientConnection,
+        socket_id: u32,
+        incoming: &mut Vec<u8>,
+        backlog: &mut Vec<u8>,
+    ) -> (Vec<u8>, bool) {
+        if !backlog.is_empty() {
+            let take = backlog.len().min(SHM_PAGE);
+            let out: Vec<u8> = backlog.drain(..take).collect();
+            return (out, false);
+        }
+        let mut scratch = vec![0u8; OUT_SCRATCH];
+        let mut outgoing: Vec<u8> = Vec::new();
+        loop {
+            let mut got = false;
+            let mut need_read = false;
+            let mut eof = false;
+            let discard;
+            {
+                let UnbufferedStatus { discard: d, state } =
+                    conn.process_tls_records(incoming.as_mut_slice());
+                discard = d;
+                match state {
+                    Ok(ConnectionState::ReadTraffic(mut rt)) => {
+                        while let Some(rec) = rt.next_record() {
+                            if let Ok(r) = rec {
+                                backlog.extend_from_slice(r.payload);
+                            }
+                        }
+                        got = true;
+                    }
+                    Ok(ConnectionState::WriteTraffic(_)) => need_read = true,
+                    Ok(ConnectionState::EncodeTlsData(mut st)) => match st.encode(&mut scratch) {
+                        Ok(n) => outgoing.extend_from_slice(&scratch[..n]),
+                        Err(_) => eof = true,
+                    },
+                    Ok(ConnectionState::TransmitTlsData(st)) => {
+                        if !outgoing.is_empty() {
+                            let _ = net_send_all(socket_id, &outgoing);
+                            outgoing.clear();
+                        }
+                        st.done();
+                    }
+                    Ok(ConnectionState::BlockedHandshake) => need_read = true,
+                    Ok(ConnectionState::PeerClosed) | Ok(ConnectionState::Closed) => eof = true,
+                    Ok(_) => {}
+                    Err(_) => eof = true,
+                }
+            }
+            if discard > 0 {
+                incoming.drain(..discard.min(incoming.len()));
+            }
+            if got && !backlog.is_empty() {
+                let take = backlog.len().min(SHM_PAGE);
+                let out: Vec<u8> = backlog.drain(..take).collect();
+                return (out, false);
+            }
+            if eof {
+                return (Vec::new(), true);
+            }
+            if need_read {
+                let chunk = net_recv_chunk(socket_id);
+                if chunk.is_empty() {
+                    return (Vec::new(), true);
+                }
+                incoming.extend_from_slice(&chunk);
+                if incoming.len() > MAX_INCOMING {
+                    return (Vec::new(), true);
                 }
             }
         }
     }
-    false
+
+    fn map_rustls_err(e: &rustls::Error) -> u64 {
+        match e {
+            rustls::Error::InvalidCertificate(rustls::CertificateError::Expired) => ERR_CERT_EXPIRED,
+            _ => 50,
+        }
+    }
+
+    // ── connect entry point ─────────────────────────────────────────────────────
+    fn tls_connect(ip_packed: u64, port: u16, host: &str) -> Result<u64, u64> {
+        let cfg = match unsafe { (*core::ptr::addr_of!(CLIENT_CONFIG)).clone() } {
+            Some(c) => c,
+            None => return Err(10),
+        };
+        let sni: ServerName<'static> = match ServerName::try_from(host) {
+            Ok(n) => n.to_owned(),
+            Err(_) => return Err(11),
+        };
+        let mut conn = match UnbufferedClientConnection::new(cfg, sni) {
+            Ok(c) => c,
+            Err(_) => return Err(12),
+        };
+        let socket_id = match net_socket() {
+            Some(s) => s,
+            None => return Err(13),
+        };
+        if !net_connect(socket_id, ip_packed, port) {
+            net_close(socket_id);
+            return Err(14);
+        }
+        let mut incoming: Vec<u8> = Vec::new();
+        if let Err(code) = drive_handshake(&mut conn, socket_id, &mut incoming) {
+            net_close(socket_id);
+            return Err(code);
+        }
+        let id = new_sid();
+        let session = Session {
+            id,
+            conn,
+            socket_id,
+            incoming,
+            backlog: Vec::new(),
+        };
+        match store_session(session) {
+            Some(sid) => Ok(sid),
+            None => {
+                net_close(socket_id);
+                Err(ERR_SESSIONS_FULL)
+            }
+        }
+    }
+
+    // ── IPC reply helpers for shm plaintext ────────────────────────────────────
+    fn reply_with_shm(label: u64, len_word: u64, eof: u64, data: &[u8]) -> IpcMsg {
+        match shm_alloc() {
+            Ok((ptr, token)) => {
+                unsafe {
+                    core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len().min(SHM_PAGE));
+                }
+                IpcMsg::with_label(label)
+                    .word(0, len_word)
+                    .word(1, eof)
+                    .with_cap(0, token)
+            }
+            Err(_) => {
+                let mut m = IpcMsg::with_label(TLS_ERROR);
+                m.words[0] = 60;
+                m
+            }
+        }
+    }
+
+    fn find_session_index(id: u64) -> Option<usize> {
+        unsafe {
+            let slots = &*core::ptr::addr_of!(SESSIONS);
+            for (i, slot) in slots.iter().enumerate() {
+                if let Some(s) = slot {
+                    if s.id == id {
+                        return Some(i);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    // ── main ─────────────────────────────────────────────────────────────────
+    pub fn run() -> ! {
+        unsafe {
+            init_heap();
+        }
+        debug_log("[SUNLIGHT-TLS] main() reached (no_std)\n");
+        serial_println!("[SUNLIGHT-TLS] Starting sunlight-tls (real rustls)");
+
+        let ep = endpoint_create();
+        nameserver_register("sunlight-tls", ep);
+        serial_println!("[SUNLIGHT-TLS] Registered as 'sunlight-tls'");
+
+        // Build the client config (seeds + loads trust from sunlight-kv).
+        rebuild_config();
+        serial_println!("[SUNLIGHT-TLS] Entering IPC loop");
+
+        let mut msg = ipc_recv(ep);
+        loop {
+            let mut reply = IpcMsg::with_label(TLS_REPLY);
+
+            match msg.label {
+                TLS_CONNECT => {
+                    let ip = msg.words[0];
+                    let port = msg.words[1] as u16;
+                    let host = unpack_str(&msg.words, 2, 48);
+                    let local = local_time_str();
+                    serial_println!(
+                        "[SUNLIGHT-TLS] connect host={} port={} local={} unix={}",
+                        host,
+                        port,
+                        local,
+                        get_time_utc()
+                    );
+                    match tls_connect(ip, port, &host) {
+                        Ok(sid) => {
+                            reply.words[0] = sid;
+                            serial_println!("[SUNLIGHT-TLS] hs_OK host={} sid={:#x}", host, sid);
+                        }
+                        Err(code) => {
+                            reply.label = TLS_ERROR;
+                            reply.words[0] = code;
+                            serial_println!("[SUNLIGHT-TLS] hs_FAIL host={} code={}", host, code);
+                        }
+                    }
+                }
+                TLS_SEND => {
+                    let sid = msg.words[0];
+                    let len = (msg.words[1] as usize).min(SHM_PAGE);
+                    let tok = msg.caps[0];
+                    let data = if tok != CapabilityToken::INVALID && len > 0 {
+                        match shm_map(tok) {
+                            Ok(ptr) => {
+                                let d = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+                                let _ = shm_free(tok);
+                                d
+                            }
+                            Err(_) => Vec::new(),
+                        }
+                    } else {
+                        Vec::new()
+                    };
+                    match find_session_index(sid) {
+                        Some(idx) => {
+                            let res = unsafe {
+                                let slots = &mut *core::ptr::addr_of_mut!(SESSIONS);
+                                let s = slots[idx].as_mut().unwrap();
+                                tls_send(
+                                    &mut s.conn,
+                                    s.socket_id,
+                                    &mut s.incoming,
+                                    &mut s.backlog,
+                                    &data,
+                                )
+                            };
+                            match res {
+                                Ok(()) => reply.words[0] = 0,
+                                Err(code) => {
+                                    reply.label = TLS_ERROR;
+                                    reply.words[0] = code;
+                                }
+                            }
+                        }
+                        None => {
+                            reply.label = TLS_ERROR;
+                            reply.words[0] = 2;
+                        }
+                    }
+                }
+                TLS_RECV => {
+                    let sid = msg.words[0];
+                    match find_session_index(sid) {
+                        Some(idx) => {
+                            let (data, eof) = unsafe {
+                                let slots = &mut *core::ptr::addr_of_mut!(SESSIONS);
+                                let s = slots[idx].as_mut().unwrap();
+                                tls_recv(&mut s.conn, s.socket_id, &mut s.incoming, &mut s.backlog)
+                            };
+                            if data.is_empty() {
+                                reply.words[0] = 0;
+                                reply.words[1] = if eof { 1 } else { 0 };
+                            } else {
+                                reply = reply_with_shm(
+                                    TLS_REPLY,
+                                    data.len() as u64,
+                                    if eof { 1 } else { 0 },
+                                    &data,
+                                );
+                            }
+                        }
+                        None => {
+                            reply.label = TLS_ERROR;
+                            reply.words[0] = 2;
+                        }
+                    }
+                }
+                TLS_CLOSE => {
+                    let sid = msg.words[0];
+                    if close_session(sid) {
+                        reply.words[0] = 0;
+                    } else {
+                        reply.label = TLS_ERROR;
+                        reply.words[0] = 2;
+                    }
+                }
+                TLS_INSTALL => {
+                    // certificatectl: install a CA DER (via shm) into kv under
+                    // tls/ca/<name> and append to tls/ca/index, then rebuild.
+                    let name = unpack_str(&msg.words, 2, 32);
+                    let len = (msg.words[0] as usize).min(SHM_PAGE);
+                    let tok = msg.caps[0];
+                    let mut ok = false;
+                    if !name.is_empty() && tok != CapabilityToken::INVALID && len > 0 {
+                        if let Ok(ptr) = shm_map(tok) {
+                            let der = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+                            let _ = shm_free(tok);
+                            if kv_put_shm(&format!("tls/ca/{}", name), &der) {
+                                append_to_index(&name);
+                                rebuild_config();
+                                ok = true;
+                            }
+                        }
+                    }
+                    if ok {
+                        reply.words[0] = 0;
+                    } else {
+                        reply.label = TLS_ERROR;
+                        reply.words[0] = 4;
+                    }
+                }
+                TLS_LIST => {
+                    let index = kv_get_shm("tls/ca/index").unwrap_or_default();
+                    let s = String::from_utf8(index).unwrap_or_default();
+                    let count = s.split(',').filter(|n| !n.trim().is_empty()).count();
+                    reply.words[0] = count as u64;
+                    pack_str(&mut reply, 1, &s);
+                }
+                _ => {
+                    reply.label = TLS_ERROR;
+                    reply.words[0] = 0xff;
+                }
+            }
+
+            msg = ipc_reply_and_wait(ep, reply);
+        }
+    }
+
+    fn append_to_index(name: &str) {
+        let mut s = kv_get_shm("tls/ca/index")
+            .and_then(|v| String::from_utf8(v).ok())
+            .unwrap_or_default();
+        if s.split(',').any(|n| n.trim() == name) {
+            return;
+        }
+        if !s.is_empty() {
+            s.push(',');
+        }
+        s.push_str(name);
+        let _ = kv_put_shm("tls/ca/index", s.as_bytes());
+    }
+
+    fn local_time_str() -> heapless::String<32> {
+        use core::fmt::Write;
+        use sunlight_ipc::TzMsg;
+        let mut out = heapless::String::<32>::new();
+        if let Some(tz_cap) = nameserver_lookup("tz") {
+            let r = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
+            if r.label == TzMsg::REPLY {
+                let w0 = r.words[0];
+                let year = (w0 >> 48) as u16;
+                let month = ((w0 >> 40) & 0xff) as u8;
+                let day = ((w0 >> 32) & 0xff) as u8;
+                let hour = ((w0 >> 24) & 0xff) as u8;
+                let minute = ((w0 >> 16) & 0xff) as u8;
+                let second = ((w0 >> 8) & 0xff) as u8;
+                let _ = write!(
+                    &mut out,
+                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
+                    year, month, day, hour, minute, second
+                );
+                return out;
+            }
+        }
+        let _ = out.push_str("tz-unavail");
+        out
+    }
+
+    // silence unused warnings for helpers kept for symmetry
+    #[allow(dead_code)]
+    fn _unused() {
+        let _ = (pack_ipv4([0; 4]), monotonic_millis, stdout_write);
+    }
+
+    #[panic_handler]
+    fn panic(info: &core::panic::PanicInfo) -> ! {
+        let mut buf = heapless::String::<256>::new();
+        use core::fmt::Write;
+        let _ = write!(&mut buf, "[SUNLIGHT-TLS] PANIC: {}\n", info);
+        debug_log(&buf);
+        loop {}
+    }
 }
 
 #[cfg(feature = "sunlightos")]
 #[no_mangle]
 pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *const u8) -> ! {
-    debug_log("[SUNLIGHT-TLS] main() reached (no_std)\n");
-    serial_println!("[SUNLIGHT-TLS] Starting sunlight-tls (SunlightOS mode)");
-
-    let ep = endpoint_create();
-    nameserver_register("sunlight-tls", ep);
-    serial_println!("[SUNLIGHT-TLS] Registered as 'sunlight-tls'");
-    // Cert material is loaded lazily on TLS_INSTALL (KV is always empty/volatile at boot).
-    serial_println!("[SUNLIGHT-TLS] Entering IPC loop");
-
-    let mut msg = ipc_recv(ep);
-    loop {
-        let mut reply = IpcMsg::empty();
-        reply.label = TLS_REPLY;
-
-        match msg.label {
-            TLS_HANDSHAKE => {
-                // word0: 1=client 2=server; servername or sni packed after
-                let role = (msg.words[0] & 0xff) as u8;
-                let is_client = role == 1;
-                let sni = unpack_str(&msg.words, 1, 64);
-
-                // Log time (local + raw) to verify clock and tz service are correct.
-                let unix_time  = get_time_utc();
-                let mono_ms    = monotonic_millis();
-                let local_ts   = local_time_str();
-                serial_println!(
-                    "[SUNLIGHT-TLS] hs_recv role={} sni={} local={} unix={} ms={}",
-                    if is_client { "client" } else { "server" },
-                    sni, local_ts, unix_time, mono_ms
-                );
-
-                if let Some(sid) = alloc_session() {
-                    reply.words[0] = sid;
-                    // Return the first 24 bytes of the server handshake Random in
-                    // words[1..4] (fits the 4-word register-IPC budget) so the
-                    // client can mix in real server entropy.
-                    if let Some(s) = find_session_mut(sid) {
-                        for w in 0..3 {
-                            let mut b = [0u8; 8];
-                            b.copy_from_slice(&s.random[w * 8..w * 8 + 8]);
-                            reply.words[1 + w] = u64::from_le_bytes(b);
-                        }
-                    }
-                    serial_println!(
-                        "[SUNLIGHT-TLS] hs_OK sid={} sni={} local={} unix={}",
-                        sid, sni, local_ts, unix_time
-                    );
-                } else {
-                    serial_println!("[SUNLIGHT-TLS] hs_FAIL sessions_full sni={}", sni);
-                    reply.label = TLS_ERROR;
-                    reply.words[0] = 3; // sessions full
-                }
-            }
-            TLS_FEED => {
-                let sid = msg.words[0];
-                // data is packed from word 1 using our kv-style (len in word0 of sub, but reuse)
-                // For simplicity treat remaining words as ciphertext or appdata.
-                if let Some(s) = find_session_mut(sid) {
-                    // Demo: "decrypt" by copying to plain, "encrypt" by copying to write
-                    let mut data: Vec<u8> = Vec::new();
-                    for wi in 1..8 {
-                        for j in 0..8 {
-                            let b = ((msg.words[wi] >> (j * 8)) & 0xff) as u8;
-                            if b != 0 {
-                                data.push(b);
-                            }
-                        }
-                    }
-                    // In real: feed to rustls read/write_tls + process_new_packets
-                    s.to_plain.extend_from_slice(&data);
-                    s.to_write.extend_from_slice(&data); // echo for demo
-                    reply.words[0] = 0;
-                } else {
-                    reply.label = TLS_ERROR;
-                }
-            }
-            TLS_GET_WRITE => {
-                let sid = msg.words[0];
-                if let Some(s) = find_session_mut(sid) {
-                    let out = core::mem::take(&mut s.to_write);
-                    reply.words[0] = out.len() as u64;
-                    let mut bi = 0;
-                    let mut wi = 1;
-                    for b in out.into_iter().take(7 * 8) {
-                        if wi >= 8 {
-                            break;
-                        }
-                        let shift = (bi % 8) * 8;
-                        reply.words[wi] |= (b as u64) << shift;
-                        bi += 1;
-                        if bi % 8 == 0 {
-                            wi += 1;
-                        }
-                    }
-                } else {
-                    reply.label = TLS_ERROR;
-                }
-            }
-            TLS_GET_PLAIN => {
-                let sid = msg.words[0];
-                if let Some(s) = find_session_mut(sid) {
-                    let out = core::mem::take(&mut s.to_plain);
-                    reply.words[0] = out.len() as u64;
-                    let mut bi = 0;
-                    let mut wi = 1;
-                    for b in out.into_iter().take(7 * 8) {
-                        if wi >= 8 {
-                            break;
-                        }
-                        let shift = (bi % 8) * 8;
-                        reply.words[wi] |= (b as u64) << shift;
-                        bi += 1;
-                        if bi % 8 == 0 {
-                            wi += 1;
-                        }
-                    }
-                } else {
-                    reply.label = TLS_ERROR;
-                }
-            }
-            TLS_CLOSE => {
-                let sid = msg.words[0];
-                if close_session(sid) {
-                    reply.words[0] = 0;
-                } else {
-                    reply.label = TLS_ERROR;
-                }
-            }
-            TLS_INSTALL => {
-                // Accept install request: store demo cert material into sunlight-kv
-                // under the documented tls/* names. Uses small blobs (fit IPC).
-                let demo_ca = b"DEMO-CA-CERT-BLOB-SUNLIGHT-OS-ROOT";
-                let demo_cert = b"DEMO-SERVER-CERT-BLOB-0123456789ABCDEF";
-                let demo_key = b"DEMO-SERVER-KEY-BLOB-NOT-REAL";
-                let mut ok = true;
-                if !kv_put("tls/ca/system", demo_ca) {
-                    ok = false;
-                }
-                if !kv_put("tls/server/cert", demo_cert) {
-                    ok = false;
-                }
-                if !kv_put("tls/server/key", demo_key) {
-                    ok = false;
-                }
-                if ok {
-                    // refresh our cache
-                    fetch_certs_from_kv();
-                    reply.words[0] = 0;
-                } else {
-                    reply.label = TLS_ERROR;
-                    reply.words[0] = 4;
-                }
-            }
-            TLS_LIST => {
-                // Return a small set of known tls keys (best effort from cache + static names)
-                let mut count: u64 = 0;
-                unsafe {
-                    if CACHED_CA.is_some() {
-                        count += 1;
-                    }
-                    if CACHED_CERT.is_some() {
-                        count += 1;
-                    }
-                    if CACHED_KEY.is_some() {
-                        count += 1;
-                    }
-                }
-                reply.words[0] = count;
-                // Pack a summary string
-                pack_str(&mut reply, 1, "tls/ca/system,tls/server/cert,tls/server/key");
-            }
-            _ => {
-                reply.label = TLS_ERROR;
-                reply.words[0] = 0xff;
-            }
-        }
-
-        msg = ipc_reply_and_wait(ep, reply);
-    }
-}
-
-#[cfg(feature = "sunlightos")]
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    debug_log("[SUNLIGHT-TLS] PANIC\n");
-    loop {}
+    sunlightos_impl::run()
 }

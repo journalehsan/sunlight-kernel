@@ -48,7 +48,7 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 #[cfg(feature = "sunlightos")]
-use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg};
+use sunlight_ipc::{ipc_call, nameserver_lookup, shm_alloc, shm_free, IpcMsg};
 
 #[cfg(feature = "sunlightos")]
 fn stdout_write(s: &str) {
@@ -92,6 +92,30 @@ fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) {
 }
 
 #[cfg(feature = "sunlightos")]
+fn unpack_str(words: &[u64; 8], start_word: usize, max_len: usize) -> heapless::String<64> {
+    let mut out = heapless::String::<64>::new();
+    let mut i = 0;
+    for w in start_word..8 {
+        if i >= max_len {
+            break;
+        }
+        let word = words[w];
+        for j in 0..8 {
+            if i >= max_len {
+                break;
+            }
+            let byte = ((word >> (j * 8)) & 0xff) as u8;
+            if byte == 0 {
+                break;
+            }
+            let _ = out.push(byte as char);
+            i += 1;
+        }
+    }
+    out
+}
+
+#[cfg(feature = "sunlightos")]
 const TLS_INSTALL: u64 = 0x5406;
 #[cfg(feature = "sunlightos")]
 const TLS_LIST: u64 = 0x5407;
@@ -105,13 +129,11 @@ fn print_usage() {
     println!("certificatectl - manage TLS certificates via sunlight-tls");
     println!("");
     println!("Usage:");
-    println!("  certificatectl install [ca|server] [name]");
-    println!("  certificatectl remove  <name>");
+    println!("  certificatectl install ca <name> <der-path>");
     println!("  certificatectl list");
     println!("");
     println!("Examples:");
-    println!("  certificatectl install ca system");
-    println!("  certificatectl install server");
+    println!("  certificatectl install ca myroot /etc/ssl/myroot.der");
     println!("  certificatectl list");
 }
 
@@ -150,35 +172,76 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
     match cmd {
         "install" | "add" => {
-            // certificatectl install ca <name>  or  install server
-            let what = if subargs.len() > 1 { subargs[1] } else { "server" };
-            let mut msg = IpcMsg::empty();
-            msg.label = TLS_INSTALL;
-            pack_str(&mut msg, 1, what);
-            let reply = ipc_call(tls_cap, msg);
-            if reply.label == TLS_REPLY {
-                println!("install: OK (certs pushed to sunlight-kv under tls/*)");
+            // certificatectl install ca <name> <der-path>
+            // (also accepts: install <name> <der-path>)
+            let (name, path) = if subargs.len() >= 4 && subargs[1] == "ca" {
+                (subargs[2], subargs[3])
+            } else if subargs.len() >= 3 {
+                (subargs[1], subargs[2])
             } else {
-                println!("install: ERROR");
+                println!("usage: certificatectl install ca <name> <der-path>");
+                sunlight_libc::exit(2);
+            };
+
+            // Read the DER file from VFS (one shm page = 4096 bytes max).
+            let fd = match sunlight_libc::open(path.as_bytes()) {
+                Ok(fd) => fd,
+                Err(_) => {
+                    println!("install: cannot open {}", path);
+                    sunlight_libc::exit(1);
+                }
+            };
+            let mut der = [0u8; 4096];
+            let mut total = 0usize;
+            loop {
+                if total >= der.len() {
+                    break;
+                }
+                match sunlight_libc::read(fd, &mut der[total..]) {
+                    Ok(0) => break,
+                    Ok(n) => total += n,
+                    Err(_) => break,
+                }
+            }
+            let _ = sunlight_libc::close(fd);
+            if total == 0 {
+                println!("install: {} is empty or unreadable", path);
+                sunlight_libc::exit(1);
+            }
+
+            // Hand the DER bytes to sunlight-tls via a shared page; it stores
+            // them in sunlight-kv under tls/ca/<name> and reloads its trust.
+            let (ptr, tok) = match shm_alloc() {
+                Ok(p) => p,
+                Err(_) => {
+                    println!("install: shm_alloc failed");
+                    sunlight_libc::exit(1);
+                }
+            };
+            unsafe {
+                core::ptr::copy_nonoverlapping(der.as_ptr(), ptr, total);
+            }
+            let mut msg = IpcMsg::with_label(TLS_INSTALL)
+                .word(0, total as u64)
+                .with_cap(0, tok);
+            pack_str(&mut msg, 2, name);
+            let reply = ipc_call(tls_cap, msg);
+            let _ = shm_free(tok);
+            if reply.label == TLS_REPLY {
+                println!("install: OK ({} bytes -> sunlight-kv tls/ca/{})", total, name);
+            } else {
+                println!("install: ERROR (code {})", reply.words[0]);
                 sunlight_libc::exit(1);
             }
         }
-        "remove" | "rm" | "del" => {
-            if subargs.len() < 2 {
-                println!("usage: certificatectl remove <name>");
-                sunlight_libc::exit(2);
-            }
-            // remove is advisory in this demo (real cleanup would issue kv delete)
-            println!("remove: (demo) name={} - restart or use kvctl for full removal", subargs[1]);
-        }
         "list" | "ls" => {
-            let mut msg = IpcMsg::empty();
-            msg.label = TLS_LIST;
-            let reply = ipc_call(tls_cap, msg);
+            let reply = ipc_call(tls_cap, IpcMsg::with_label(TLS_LIST));
             if reply.label == TLS_REPLY {
-                println!("known tls material: {}", reply.words[0]);
-                // crude: the tls daemon packs a summary in words[1]
-                println!("  tls/ca/system, tls/server/cert, tls/server/key");
+                println!("trusted CAs in store: {}", reply.words[0]);
+                let names = unpack_str(&reply.words, 1, 56);
+                if !names.is_empty() {
+                    println!("  {}", names);
+                }
             } else {
                 println!("list: ERROR (daemon may be starting)");
             }

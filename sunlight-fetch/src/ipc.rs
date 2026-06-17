@@ -457,18 +457,20 @@ use host::{
 #[cfg(not(feature = "host-linux"))]
 mod sunlight {
     use super::*;
-    use sunlight_ipc::{debug_log, get_time_utc, ipc_call, monotonic_millis, nameserver_lookup, CapabilityToken, IpcMsg, TzMsg};
-    use sunlight_libc::getrandom;
+    use sunlight_ipc::{
+        debug_log, ipc_call, nameserver_lookup, shm_alloc, shm_free, shm_map, CapabilityToken,
+        IpcMsg,
+    };
     use sunlight_net::netop::NetOp;
 
     // Maximum bytes packed into one IPC call (words[2..7] = 6 words × 8 bytes).
     const IPC_CHUNK: usize = 48;
 
     // TLS IPC protocol labels — must match sunlight-tls/src/main.rs.
-    const TLS_HANDSHAKE: u64 = 0x5401;
-    const TLS_FEED: u64 = 0x5402;
-    const TLS_GET_WRITE: u64 = 0x5403;
-    const TLS_GET_PLAIN: u64 = 0x5404;
+    // Design B: the daemon owns the socket + crypto; we exchange plaintext only.
+    const TLS_CONNECT: u64 = 0x5401;
+    const TLS_SEND: u64 = 0x5402;
+    const TLS_RECV: u64 = 0x5403;
     const TLS_CLOSE: u64 = 0x5405;
     const TLS_REPLY: u64 = 0x54FF;
     const TLS_ERROR: u64 = 0x54EE;
@@ -477,30 +479,27 @@ mod sunlight {
     const TLS_ERR_SESSIONS_FULL: u64 = 3;
     const TLS_ERR_CERT_EXPIRED: u64 = 5;
 
-    // Data bytes per TLS_FEED / TLS_GET_WRITE / TLS_GET_PLAIN call:
-    // word[0] = session_id or length, words[1..7] = 6 × 8 = 48 bytes.
-    const TLS_DATA_CHUNK: usize = IPC_CHUNK;
+    // One shared page per plaintext transfer to/from the daemon.
+    const TLS_SHM_PAGE: usize = 4096;
 
     pub(super) enum OsConnection {
         Tcp { socket_id: u32 },
-        Tls { socket_id: u32, session_id: u64 },
+        // Plaintext-only TLS session in the daemon. `rx` buffers decrypted bytes
+        // returned by a TLS_RECV (up to one page) that didn't fit the caller's
+        // (48-byte) read buffer, so no data is lost across read_some calls.
+        Tls { session_id: u64, rx: Vec<u8> },
     }
 
     impl OsConnection {
         pub(super) fn send_all(&mut self, data: &[u8]) -> FetchResult<()> {
             match self {
                 Self::Tcp { socket_id } => net_send(*socket_id, data),
-                Self::Tls { socket_id, session_id } => {
+                Self::Tls { session_id, .. } => {
                     let sid = *session_id;
-                    let sock = *socket_id;
                     let mut offset = 0usize;
                     while offset < data.len() {
-                        let end = (offset + TLS_DATA_CHUNK).min(data.len());
-                        tls_feed(sid, &data[offset..end])?;
-                        let encrypted = tls_get_write(sid)?;
-                        if !encrypted.is_empty() {
-                            net_send(sock, &encrypted)?;
-                        }
+                        let end = (offset + TLS_SHM_PAGE).min(data.len());
+                        tls_send(sid, &data[offset..end])?;
                         offset = end;
                     }
                     Ok(())
@@ -516,15 +515,17 @@ mod sunlight {
                     buf[..n].copy_from_slice(&chunk[..n]);
                     Ok(n)
                 }
-                Self::Tls { socket_id, session_id } => {
-                    let raw = net_recv(*socket_id, IPC_CHUNK)?;
-                    if raw.is_empty() {
-                        return Ok(0);
+                Self::Tls { session_id, rx } => {
+                    if rx.is_empty() {
+                        let (plain, _eof) = tls_recv(*session_id)?;
+                        if plain.is_empty() {
+                            return Ok(0); // EOF
+                        }
+                        *rx = plain;
                     }
-                    tls_feed(*session_id, &raw)?;
-                    let plain = tls_get_plain(*session_id)?;
-                    let n = plain.len().min(buf.len());
-                    buf[..n].copy_from_slice(&plain[..n]);
+                    let n = rx.len().min(buf.len());
+                    buf[..n].copy_from_slice(&rx[..n]);
+                    rx.drain(..n);
                     Ok(n)
                 }
             }
@@ -533,9 +534,9 @@ mod sunlight {
         pub(super) fn close(&mut self) -> FetchResult<()> {
             match self {
                 Self::Tcp { socket_id } => net_close(*socket_id),
-                Self::Tls { socket_id, session_id } => {
+                Self::Tls { session_id, .. } => {
                     tls_close(*session_id);
-                    net_close(*socket_id)
+                    Ok(())
                 }
             }
         }
@@ -647,197 +648,109 @@ mod sunlight {
 
     // ── sunlight-tls IPC helpers ──────────────────────────────────────────────
 
-    /// Fill `buf` with cryptographic randomness from the rand service (via libc
-    /// getrandom). Returns false (fail closed) if the rand service is down — a
-    /// TLS client must never generate its ClientHello.random from a weak source.
-    fn fill_secure(buf: &mut [u8]) -> bool {
-        getrandom(buf, 0) == buf.len() as isize
-    }
-
-    /// Query the tz service for local time as "YYYY-MM-DDTHH:MM:SS+HH:MM".
-    /// Falls back to "tz-unavail" if the tz service is not registered yet.
-    fn local_time_str() -> String {
-        if let Some(tz_cap) = nameserver_lookup("tz") {
-            let r = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
-            if r.label == TzMsg::REPLY {
-                let w0     = r.words[0];
-                let year   = (w0 >> 48) as u16;
-                let month  = ((w0 >> 40) & 0xff) as u8;
-                let day    = ((w0 >> 32) & 0xff) as u8;
-                let hour   = ((w0 >> 24) & 0xff) as u8;
-                let minute = ((w0 >> 16) & 0xff) as u8;
-                let second = ((w0 >>  8) & 0xff) as u8;
-                let off_s  = r.words[1] as i64;
-                let off_h  = off_s / 3600;
-                let off_m  = (off_s.abs() % 3600) / 60;
-                return format!(
-                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{:+03}:{:02}",
-                    year, month, day, hour, minute, second, off_h, off_m
-                );
-            }
-        }
-        String::from("tz-unavail")
-    }
-
     fn tls_cap() -> FetchResult<CapabilityToken> {
         nameserver_lookup("sunlight-tls").ok_or_else(|| {
             FetchError::IpcError(String::from("sunlight-tls service unavailable"))
         })
     }
 
-    /// Pack up to TLS_DATA_CHUNK bytes into words[1..7] of msg.
-    fn pack_tls_data(msg: &mut IpcMsg, data: &[u8]) {
-        let len = data.len().min(TLS_DATA_CHUNK);
-        for i in 0..len {
-            let word_idx = 1 + i / 8;
-            let byte_idx = i % 8;
-            if word_idx < 8 {
-                msg.words[word_idx] |= (data[i] as u64) << (byte_idx * 8);
-            }
-        }
-    }
-
-    /// Unpack data from a TLS_GET_WRITE / TLS_GET_PLAIN reply.
-    /// words[0] = byte count; words[1..7] = data.
-    fn unpack_tls_reply_data(words: &[u64; 8]) -> Vec<u8> {
-        let len = (words[0] as usize).min(TLS_DATA_CHUNK);
-        let mut out = Vec::with_capacity(len);
-        for i in 0..len {
-            let word_idx = 1 + i / 8;
-            let byte_idx = i % 8;
-            if word_idx < 8 {
-                out.push(((words[word_idx] >> (byte_idx * 8)) & 0xff) as u8);
-            }
-        }
-        out
-    }
-
-    /// Initiate a client-mode TLS handshake with the given SNI hostname.
-    /// Returns the session_id on success.
-    fn tls_handshake(hostname: &str) -> FetchResult<u64> {
+    /// Open a real TLS session in the daemon: it connects the socket to
+    /// `addr:port` and runs the rustls handshake with SNI = `host`. Returns the
+    /// session id. (Design B: the daemon owns the socket + crypto.)
+    fn tls_connect(host: &str, addr: &ResolvedAddr, port: u16) -> FetchResult<u64> {
         let cap = tls_cap()?;
-
-        // Generate the 32-byte ClientHello.random from the CSPRNG (rand service
-        // via libc getrandom). Fail closed: no randomness → no handshake.
-        let mut client_random = [0u8; 32];
-        if !fill_secure(&mut client_random) {
-            debug_log("[FETCH-TLS] hs_FAIL getrandom unavailable (rand service down?)\n");
-            return Err(FetchError::TlsHandshakeFailed(String::from(
-                "CSPRNG unavailable: cannot generate ClientHello.random",
-            )));
+        let mut msg = IpcMsg::with_label(TLS_CONNECT)
+            .word(0, pack_ipv4(addr.octets))
+            .word(1, port as u64);
+        // Pack SNI hostname into words[2..7] (NUL-padded), up to 48 bytes.
+        let hb = host.as_bytes();
+        let mut i = 0usize;
+        for w in 2..8 {
+            let mut word = 0u64;
+            for j in 0..8 {
+                if i < hb.len() {
+                    word |= (hb[i] as u64) << (j * 8);
+                    i += 1;
+                }
+            }
+            msg.words[w] = word;
+            if i >= hb.len() {
+                break;
+            }
         }
-        let mut nb = [0u8; 8];
-        nb.copy_from_slice(&client_random[0..8]);
-        let nonce = u64::from_le_bytes(nb);
-
-        // Diagnostic: log local time (via tz service) + unix time to verify the
-        // clock + tz offset, alongside the CSPRNG-sourced client random nonce.
-        let unix_time = get_time_utc();
-        let mono_ms   = monotonic_millis();
-        let local_ts  = local_time_str();
-        {
-            let dbg = format!(
-                "[FETCH-TLS] hs_start host={} local={} unix={} ms={} client_random[0..8]={:#018x}\n",
-                hostname, local_ts, unix_time, mono_ms, nonce
-            );
-            debug_log(&dbg);
+        msg.word_count = 8;
+        debug_log(&format!("[FETCH-TLS] connect host={} port={}\n", host, port));
+        let reply = ipc_call(cap, msg);
+        if reply.label == TLS_REPLY {
+            let sid = reply.words[0];
+            debug_log(&format!("[FETCH-TLS] hs_OK host={} sid={:#x}\n", host, sid));
+            return Ok(sid);
         }
-
-        let sni = hostname.as_bytes();
-        let mut ipc_msg = IpcMsg::with_label(TLS_HANDSHAKE).word(0, 1u64); // 1 = client
-        pack_tls_data(&mut ipc_msg, sni);
-        let reply = ipc_call(cap, ipc_msg);
-
         if reply.label == TLS_ERROR {
             let code = reply.words[0];
-            {
-                let dbg = format!(
-                    "[FETCH-TLS] hs_FAIL host={} err_code={:#x} unix_time={}\n",
-                    hostname, code, unix_time
-                );
-                debug_log(&dbg);
-            }
+            debug_log(&format!("[FETCH-TLS] hs_FAIL host={} code={}\n", host, code));
             return Err(match code {
                 TLS_ERR_SESSIONS_FULL => {
                     FetchError::TlsHandshakeFailed(String::from("TLS sessions full on daemon"))
                 }
                 TLS_ERR_CERT_EXPIRED => FetchError::TlsCertExpired,
-                _ => FetchError::TlsHandshakeFailed(format!("daemon error code {code:#x}")),
+                _ => FetchError::TlsHandshakeFailed(format!("daemon error code {code}")),
             });
         }
-        if reply.label != TLS_REPLY {
-            {
-                let dbg = format!(
-                    "[FETCH-TLS] hs_FAIL host={} unexpected_label={:#x}\n",
-                    hostname, reply.label
-                );
-                debug_log(&dbg);
-            }
-            return Err(FetchError::TlsHandshakeFailed(format!(
-                "unexpected label {:#x} from sunlight-tls",
-                reply.label
-            )));
-        }
-        let sid = reply.words[0];
-        // The daemon returns the first 24 bytes of its server handshake Random
-        // in words[1..4] (also CSPRNG-sourced). Log a preview to confirm both
-        // sides contributed real entropy to the handshake.
-        let server_rnd0 = reply.words[1];
-        {
-            let dbg = format!(
-                "[FETCH-TLS] hs_OK host={} sid={:#x} server_random[0..8]={:#018x} local={} unix={}\n",
-                hostname, sid, server_rnd0, local_ts, unix_time
-            );
-            debug_log(&dbg);
-        }
-        Ok(sid)
+        Err(FetchError::TlsHandshakeFailed(format!(
+            "unexpected label {:#x} from sunlight-tls",
+            reply.label
+        )))
     }
 
-    /// Feed a plaintext or ciphertext chunk into the TLS daemon for processing.
-    /// Chunks larger than TLS_DATA_CHUNK are split across multiple IPC calls.
-    fn tls_feed(sid: u64, data: &[u8]) -> FetchResult<()> {
+    /// Send up to one shared page (<=4096 bytes) of plaintext; the daemon
+    /// encrypts and transmits it over the session's socket.
+    fn tls_send(sid: u64, data: &[u8]) -> FetchResult<()> {
         if data.is_empty() {
             return Ok(());
         }
         let cap = tls_cap()?;
-        let mut offset = 0usize;
-        while offset < data.len() {
-            let end = (offset + TLS_DATA_CHUNK).min(data.len());
-            let mut msg = IpcMsg::with_label(TLS_FEED).word(0, sid);
-            pack_tls_data(&mut msg, &data[offset..end]);
-            let reply = ipc_call(cap, msg);
-            if reply.label == TLS_ERROR {
-                return Err(FetchError::TlsHandshakeFailed(String::from(
-                    "TLS_FEED rejected by daemon",
-                )));
-            }
-            offset = end;
+        let (ptr, tok) = shm_alloc()
+            .map_err(|_| FetchError::IpcError(String::from("shm_alloc failed (TLS send)")))?;
+        let n = data.len().min(TLS_SHM_PAGE);
+        unsafe {
+            core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, n);
         }
-        Ok(())
+        let msg = IpcMsg::with_label(TLS_SEND)
+            .word(0, sid)
+            .word(1, n as u64)
+            .with_cap(0, tok);
+        let reply = ipc_call(cap, msg);
+        let _ = shm_free(tok);
+        if reply.label == TLS_REPLY && reply.words[0] == 0 {
+            Ok(())
+        } else {
+            Err(FetchError::IoError(String::from("TLS_SEND failed")))
+        }
     }
 
-    /// Drain the "to-write" (outbound ciphertext) buffer from the TLS daemon.
-    fn tls_get_write(sid: u64) -> FetchResult<Vec<u8>> {
+    /// Receive decrypted plaintext (up to one page) from the daemon. Returns
+    /// (bytes, eof); empty bytes with eof=true means the peer closed.
+    fn tls_recv(sid: u64) -> FetchResult<(Vec<u8>, bool)> {
         let cap = tls_cap()?;
-        let reply = ipc_call(cap, IpcMsg::with_label(TLS_GET_WRITE).word(0, sid));
+        let reply = ipc_call(cap, IpcMsg::with_label(TLS_RECV).word(0, sid));
         if reply.label == TLS_ERROR {
-            return Err(FetchError::TlsHandshakeFailed(String::from(
-                "TLS_GET_WRITE failed",
-            )));
+            return Err(FetchError::IoError(String::from("TLS_RECV failed")));
         }
-        Ok(unpack_tls_reply_data(&reply.words))
-    }
-
-    /// Drain the "to-plain" (inbound plaintext) buffer from the TLS daemon.
-    fn tls_get_plain(sid: u64) -> FetchResult<Vec<u8>> {
-        let cap = tls_cap()?;
-        let reply = ipc_call(cap, IpcMsg::with_label(TLS_GET_PLAIN).word(0, sid));
-        if reply.label == TLS_ERROR {
-            return Err(FetchError::TlsHandshakeFailed(String::from(
-                "TLS_GET_PLAIN failed",
-            )));
+        let n = reply.words[0] as usize;
+        let eof = reply.words[1] != 0;
+        if n == 0 {
+            return Ok((Vec::new(), eof));
         }
-        Ok(unpack_tls_reply_data(&reply.words))
+        let tok = reply.caps[0];
+        if tok == CapabilityToken::INVALID {
+            return Ok((Vec::new(), eof));
+        }
+        let ptr = shm_map(tok)
+            .map_err(|_| FetchError::IoError(String::from("shm_map failed (TLS recv)")))?;
+        let v = unsafe { core::slice::from_raw_parts(ptr, n.min(TLS_SHM_PAGE)) }.to_vec();
+        let _ = shm_free(tok);
+        Ok((v, eof))
     }
 
     /// Close a TLS session in the daemon (best-effort, ignores errors).
@@ -919,26 +832,19 @@ mod sunlight {
         use_tls: bool,
         request: &HttpRequest,
     ) -> FetchResult<(HttpResponse, TcpHandle, Vec<u8>)> {
-        // sunlight-tls is a stub that echoes bytes without real crypto.
-        // Sending plain HTTP to port 443 causes the remote to reset immediately.
-        // Fail fast until rustls + ring land on x86_64-unknown-none.
-        if use_tls {
-            {
-                let dbg = format!(
-                    "[FETCH] HTTPS rejected host={} — stub TLS, no real crypto on SunlightOS\n",
-                    hostname
-                );
-                debug_log(&dbg);
+        // Establish the transport: a daemon-owned TLS session (rustls) for
+        // https://, or a plain TCP socket for http://.
+        let conn = if use_tls {
+            let session_id = tls_connect(hostname, addr, port)?;
+            OsConnection::Tls {
+                session_id,
+                rx: Vec::new(),
             }
-            return Err(FetchError::TlsHandshakeFailed(String::from(
-                "HTTPS not yet supported on SunlightOS (stub TLS); use http:// for now",
-            )));
-        }
-
-        let socket_id = net_socket()?;
-        net_connect(socket_id, addr, port)?;
-
-        let conn = OsConnection::Tcp { socket_id };
+        } else {
+            let socket_id = net_socket()?;
+            net_connect(socket_id, addr, port)?;
+            OsConnection::Tcp { socket_id }
+        };
 
         let mut handle = TcpHandle { conn };
 
