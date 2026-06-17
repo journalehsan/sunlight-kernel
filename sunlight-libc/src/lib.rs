@@ -26,6 +26,9 @@ pub const MAX_PATH: usize = 256;
 /// Maximum argv entries the kernel reads in `sys_exec` (one slot is the NULL).
 pub const MAX_ARGS: usize = 15;
 const ARG_ARENA: usize = 1024;
+pub const O_WRONLY: u64 = 0x1;
+pub const O_RDWR: u64 = 0x2;
+pub const O_CREAT: u64 = 0x40;
 
 /// Copy `bytes` into `buf` as a NUL-terminated C string.
 fn cstr<'a>(buf: &'a mut [u8], bytes: &[u8]) -> Result<*const u8, Errno> {
@@ -43,6 +46,17 @@ pub fn open(path: &[u8]) -> Result<Fd, Errno> {
     let path_ptr = cstr(&mut path_buf, path)?;
     let ret = unsafe { sys::syscall3(sys::SYS_OPEN, path_ptr as u64, 0, 0) };
     sys::check(ret).map(|fd| Fd(fd as u32))
+}
+
+pub fn open_with_flags(path: &[u8], flags: u64) -> Result<Fd, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall3(sys::SYS_OPEN, path_ptr as u64, flags, 0) };
+    sys::check(ret).map(|fd| Fd(fd as u32))
+}
+
+pub fn create(path: &[u8]) -> Result<Fd, Errno> {
+    open_with_flags(path, O_WRONLY | O_CREAT)
 }
 
 pub fn close(fd: Fd) -> Result<(), Errno> {

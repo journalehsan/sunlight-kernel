@@ -7,6 +7,8 @@ pub enum FsError {
     BadHandle,
     TooManyOpenFiles,
     PermissionDenied,
+    OperationNotPermitted,
+    ReadOnlyFilesystem,
     Io,
     Unsupported,
 }

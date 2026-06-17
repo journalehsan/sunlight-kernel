@@ -32,13 +32,17 @@ use sunlight_fs::{
     FsError, FstabEntry, PermCheck, RamFs, Vfs, INITRAMFS,
 };
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, shm_alloc, shm_free, shm_map, IpcMsg, VfsMsg,
+    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, shm_alloc,
+    shm_free, shm_map, IpcMsg, VfsMsg,
 };
 
 const STATUS_OK: u64 = 0;
+const ERR_PERM: u64 = 1;
 const ERR_NOT_FOUND: u64 = 2;
 const ERR_BAD_HANDLE: u64 = 9;
+const ERR_ACCES: u64 = 13;
 const ERR_INVALID: u64 = 22;
+const ERR_ROFS: u64 = 30;
 const MAX_PATH_BYTES: usize = 32;
 const READ_REPLY_BYTES: usize = 16;
 const FSTAB_MAX_BYTES: usize = 512;
@@ -416,24 +420,54 @@ fn stat_path(state: &mut State, path: &str) -> IpcMsg {
 }
 
 fn write_handle(state: &mut State, raw: FileHandle, offset: usize, buf: &[u8]) -> IpcMsg {
-    let (mount, local) = unpack_handle(raw);
-    match mount {
-        MOUNT_RAM => match state.vfs.write(local, offset, buf) {
-            Ok(n) => ok_reply().word(1, n as u64),
-            Err(e) => error_reply(e),
-        },
-        _ => error_reply(FsError::BadHandle),
-    }
+    let _ = (state, raw, offset, buf);
+    debug_log("[SUNLIGHT-FS] request actor=unknown op=write path=<ipc-handle>");
+    debug_log("[SUNLIGHT-FS] decision actor=unknown op=write path=<ipc-handle> result=deny reason=DeniedUnknownActor err=OperationNotPermitted");
+    error_reply(FsError::OperationNotPermitted)
 }
 
 fn mkdir_path(state: &mut State, path: &str, uid: u32, gid: u32, mode: u16) -> IpcMsg {
     if strip_boot_prefix(state, path).is_some() {
-        return error_reply(FsError::Unsupported);
+        return error_reply(FsError::ReadOnlyFilesystem);
+    }
+    let actor = actor_for_uid(uid);
+    debug_fs_request(actor, sunlight_fs::FsOperation::Mkdir, path);
+    let decision =
+        sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Mkdir, None, false);
+    debug_fs_decision(actor, sunlight_fs::FsOperation::Mkdir, path, decision);
+    if !decision.allowed {
+        return error_reply(decision.error.unwrap_or(FsError::OperationNotPermitted));
     }
     match state.vfs.mkdir(path, uid, gid, mode) {
         Ok(()) => ok_reply(),
         Err(e) => error_reply(e),
     }
+}
+
+fn actor_for_uid(uid: u32) -> sunlight_fs::Actor<'static> {
+    sunlight_fs::Actor::User {
+        uid,
+        name: match uid {
+            0 => "root",
+            1000 => "user",
+            _ => "",
+        },
+    }
+}
+
+fn debug_fs_request(actor: sunlight_fs::Actor<'_>, op: sunlight_fs::FsOperation, path: &str) {
+    let _ = (actor, op, path);
+    debug_log("[SUNLIGHT-FS] request actor=<ipc-user> op=<write> path=<path>");
+}
+
+fn debug_fs_decision(
+    actor: sunlight_fs::Actor<'_>,
+    op: sunlight_fs::FsOperation,
+    path: &str,
+    decision: sunlight_fs::Decision,
+) {
+    let _ = (actor, op, path, decision);
+    debug_log("[SUNLIGHT-FS] decision actor=<ipc-user> op=<op> path=<path> result=<allow|deny> reason=<policy> err=<err>");
 }
 
 fn chmod_path(state: &mut State, path: &str, mode: u16) -> IpcMsg {
@@ -772,7 +806,9 @@ fn run_phase37_tests(state: &mut State) {
 fn run_shm_tests(state: &mut State) {
     // Exercise direct shm_alloc/map/free (kernel will log the [SHM] lines)
     if let Ok((ptr, tok)) = shm_alloc() {
-        unsafe { *ptr = b'Z'; }
+        unsafe {
+            *ptr = b'Z';
+        }
         if let Ok(_p2) = shm_map(tok) {
             let _ = shm_free(tok);
         }
@@ -816,10 +852,7 @@ fn run_shm_tests(state: &mut State) {
         }
     }
 
-    let _ = handle_request(
-        state,
-        IpcMsg::with_label(VfsMsg::CLOSE).word(0, h.0 as u64),
-    );
+    let _ = handle_request(state, IpcMsg::with_label(VfsMsg::CLOSE).word(0, h.0 as u64));
 
     debug_log("[SHM]  Shared memory grant: PASSED");
 }
@@ -897,6 +930,9 @@ fn errno(err: FsError) -> u64 {
         FsError::NotFound => ERR_NOT_FOUND,
         FsError::BadHandle => ERR_BAD_HANDLE,
         FsError::InvalidPath => ERR_INVALID,
+        FsError::PermissionDenied => ERR_ACCES,
+        FsError::OperationNotPermitted => ERR_PERM,
+        FsError::ReadOnlyFilesystem => ERR_ROFS,
         _ => ERR_INVALID,
     }
 }

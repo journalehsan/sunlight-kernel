@@ -461,7 +461,7 @@ mod sunlight {
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
                 // Not a builtin: resolve through $PATH and run it (Step 3)
-                _ => self.run_external(cmd, &args),
+                _ => self.run_external_with_cwd_paths(cmd, &args),
             };
 
             // Backward compatibility logging for phase 3.6 tests
@@ -900,13 +900,39 @@ mod sunlight {
         fn run_ls_external(&mut self, args: &[&str]) -> &'static [u8] {
             let has_path = args.iter().any(|a| !a.starts_with('-') || *a == "-");
             if has_path {
-                return self.run_external("ls", args);
+                return self.run_external_with_cwd_paths("ls", args);
             }
             let mut forwarded: alloc::vec::Vec<&str> = alloc::vec::Vec::with_capacity(args.len() + 1);
             forwarded.extend_from_slice(args);
             let cwd_owned = self.cwd.clone();
             forwarded.push(cwd_owned.as_str());
             self.run_external("ls", &forwarded)
+        }
+
+        fn run_external_with_cwd_paths(&mut self, cmd: &str, args: &[&str]) -> &'static [u8] {
+            if !external_uses_fs_paths(cmd) {
+                return self.run_external(cmd, args);
+            }
+
+            let mut owned: alloc::vec::Vec<alloc::string::String> =
+                alloc::vec::Vec::with_capacity(args.len());
+            for arg in args {
+                if arg.starts_with('-') {
+                    owned.push(alloc::string::String::from(*arg));
+                    continue;
+                }
+                let Some(path) = normalize_path(&self.cwd, arg) else {
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    push_line("sshl: invalid path");
+                    return b"";
+                };
+                owned.push(path);
+            }
+
+            let forwarded: alloc::vec::Vec<&str> = owned.iter().map(|s| s.as_str()).collect();
+            self.run_external(cmd, &forwarded)
         }
 
         fn cmd_unset(&mut self, args: &[&str]) -> &[u8] {
@@ -1503,6 +1529,27 @@ mod sunlight {
             out.push_str(part);
         }
         Some(out)
+    }
+
+    fn external_uses_fs_paths(cmd: &str) -> bool {
+        matches!(
+            cmd,
+            "ls"
+                | "cat"
+                | "mkdir"
+                | "touch"
+                | "rm"
+                | "rmdir"
+                | "cp"
+                | "mv"
+                | "stat"
+                | "file"
+                | "head"
+                | "wc"
+                | "find"
+                | "grep"
+                | "tail"
+        )
     }
 
     fn read_file(vfs_cap: CapabilityToken, path: &str) -> alloc::vec::Vec<u8> {

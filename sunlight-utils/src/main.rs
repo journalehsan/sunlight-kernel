@@ -9,8 +9,8 @@
 #![no_std]
 #![no_main]
 
+use libc::{DirEntry, Errno, Fd, FT_DIR, STDOUT};
 use sunlight_libc as libc;
-use libc::{DirEntry, Errno, Fd, STDOUT, FT_DIR};
 
 const MAX_ARGS: usize = 16;
 const MAX_DIR_ENTRIES: usize = 64;
@@ -93,7 +93,8 @@ fn run(args: &[&str]) -> i32 {
         "head" => cmd_head(rest),
         "wc" => cmd_wc(rest),
         "uname" => cmd_uname(rest),
-        "touch" | "rm" | "rmdir" | "cp" | "mv" | "chmod" | "chown" => {
+        "touch" => cmd_touch(rest),
+        "rm" | "rmdir" | "cp" | "mv" | "chmod" | "chown" => {
             print2(applet, ": filesystem is read-only from utils (Step 4)\n");
             1
         }
@@ -215,6 +216,26 @@ fn cmd_mkdir(args: &[&str]) -> i32 {
             print2("mkdir: cannot create directory ", path);
             let _ = write_all(b"\n");
             return 1;
+        }
+    }
+    0
+}
+
+fn cmd_touch(args: &[&str]) -> i32 {
+    if args.is_empty() {
+        let _ = write_all(b"touch: missing file operand\n");
+        return 1;
+    }
+    for path in args {
+        match libc::create(path.as_bytes()) {
+            Ok(fd) => {
+                let _ = libc::close(fd);
+            }
+            Err(_) => {
+                print2("touch: cannot touch ", path);
+                let _ = write_all(b": permission denied or read-only filesystem\n");
+                return 1;
+            }
         }
     }
     0
@@ -927,13 +948,13 @@ fn debug_log_start(argv0: &str) {
     let copy = bytes.len().min(msg.len().saturating_sub(pos));
     msg[pos..pos + copy].copy_from_slice(&bytes[..copy]);
     pos += copy;
-    let _ = unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
+    let _ =
+        unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
 }
 
 fn debug_log_static(s: &str) {
-    let _ = unsafe {
-        libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, s.as_ptr() as u64, s.len() as u64)
-    };
+    let _ =
+        unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, s.as_ptr() as u64, s.len() as u64) };
 }
 
 fn debug_log2(prefix: &str, value: &str) {
@@ -975,7 +996,8 @@ fn debug_log_u64(prefix: &str, value: u64) {
         msg[pos] = digits[dlen];
         pos += 1;
     }
-    let _ = unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
+    let _ =
+        unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
 }
 
 fn debug_log_bytes(prefix: &str, value: &[u8]) {
@@ -987,10 +1009,15 @@ fn debug_log_bytes(prefix: &str, value: &[u8]) {
         if pos >= msg.len() {
             break;
         }
-        msg[pos] = if b.is_ascii_graphic() || b == b' ' { b } else { b'?' };
+        msg[pos] = if b.is_ascii_graphic() || b == b' ' {
+            b
+        } else {
+            b'?'
+        };
         pos += 1;
     }
-    let _ = unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
+    let _ =
+        unsafe { libc::sys::syscall2(libc::sys::SYS_DEBUG_LOG, msg.as_ptr() as u64, pos as u64) };
 }
 
 fn read_retry(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {

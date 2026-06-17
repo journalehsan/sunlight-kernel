@@ -1335,26 +1335,70 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         Ok(s) => s,
         Err(_) => return u64::MAX,
     };
+    let flags = frame.rsi;
+    let wants_write = flags & 0b11 != 0;
+    let wants_create = flags & 0x40 != 0;
 
     // Open on the VFS first, then register the fd. KERNEL_VFS is released
     // before SCHEDULER is taken (lock-order invariant).
     let vfs_handle = {
+        let (uid, gid, actor) = current_fs_actor();
+        if wants_write || wants_create {
+            let operation = if wants_create {
+                sunlight_fs::FsOperation::Create
+            } else {
+                sunlight_fs::FsOperation::Write
+            };
+            crate::serial_println!(
+                "[SUNLIGHT-FS] request actor={:?} op={:?} path={}",
+                actor,
+                operation,
+                path
+            );
+            let decision = sunlight_fs::can_write(actor, path, operation, None, false);
+            crate::serial_println!(
+                "[SUNLIGHT-FS] decision actor={:?} op={:?} path={} result={} reason={:?} err={:?}",
+                actor,
+                operation,
+                path,
+                if decision.allowed { "allow" } else { "deny" },
+                decision.reason,
+                decision.error
+            );
+            if !decision.allowed {
+                return u64::MAX;
+            }
+        }
         let mut guard = crate::KERNEL_VFS.lock();
         let Some(vfs) = guard.as_mut() else {
             return u64::MAX;
         };
-        match vfs.open(path) {
-            Ok(h) => h,
-            Err(_) => return u64::MAX,
+        if wants_create {
+            match vfs.create_file(path, uid, gid, sunlight_fs::vfs::mode::FILE_644) {
+                Ok(h) => h,
+                Err(_) => return u64::MAX,
+            }
+        } else {
+            match vfs.open(path) {
+                Ok(h) => h,
+                Err(_) => return u64::MAX,
+            }
         }
     };
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let handle = crate::process::fd_table::FileHandle::vfs(vfs_handle.0);
-    let rights = crate::process::fd_table::CapRights::new(
-        crate::process::fd_table::CapRights::READ | crate::process::fd_table::CapRights::FSTAT,
-    );
-    match sched.current_process_mut().fd_table.open(handle, rights, 0) {
+    let mut rights_bits =
+        crate::process::fd_table::CapRights::READ | crate::process::fd_table::CapRights::FSTAT;
+    if wants_write || wants_create {
+        rights_bits |= crate::process::fd_table::CapRights::WRITE;
+    }
+    let rights = crate::process::fd_table::CapRights::new(rights_bits);
+    match sched
+        .current_process_mut()
+        .fd_table
+        .open(handle, rights, flags as u32)
+    {
         Ok(fd) => fd as u64,
         Err(_) => {
             drop(sched);
@@ -1363,6 +1407,38 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             }
             u64::MAX
         }
+    }
+}
+
+fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
+    let sched = crate::sched::SCHEDULER.lock();
+    let p = sched.current_process();
+    let actor = match p.name_str() {
+        "sunlight-kv" => sunlight_fs::Actor::Service {
+            name: "sunlight-kv",
+        },
+        "sunlight-tls" => sunlight_fs::Actor::Service {
+            name: "sunlight-tls",
+        },
+        "uac_service" | "sunlight-uac" => sunlight_fs::Actor::Service {
+            name: "sunlight-uac",
+        },
+        "capability-broker" => sunlight_fs::Actor::Service {
+            name: "capability-broker",
+        },
+        _ => sunlight_fs::Actor::User {
+            uid: p.uid,
+            name: username_for_uid(p.uid),
+        },
+    };
+    (p.uid, p.gid, actor)
+}
+
+fn username_for_uid(uid: u32) -> &'static str {
+    match uid {
+        0 => "root",
+        1000 => "user",
+        _ => "",
     }
 }
 
@@ -1529,11 +1605,27 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
     };
     let mode = frame.rsi as u16;
 
-    let (uid, gid) = {
-        let sched = crate::sched::SCHEDULER.lock();
-        let p = sched.current_process();
-        (p.uid, p.gid)
-    };
+    let (uid, gid, actor) = current_fs_actor();
+    crate::serial_println!(
+        "[SUNLIGHT-FS] request actor={:?} op={:?} path={}",
+        actor,
+        sunlight_fs::FsOperation::Mkdir,
+        path
+    );
+    let decision =
+        sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Mkdir, None, false);
+    crate::serial_println!(
+        "[SUNLIGHT-FS] decision actor={:?} op={:?} path={} result={} reason={:?} err={:?}",
+        actor,
+        sunlight_fs::FsOperation::Mkdir,
+        path,
+        if decision.allowed { "allow" } else { "deny" },
+        decision.reason,
+        decision.error
+    );
+    if !decision.allowed {
+        return u64::MAX;
+    }
 
     let mut guard = crate::KERNEL_VFS.lock();
     let Some(vfs) = guard.as_mut() else {
@@ -1695,7 +1787,7 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
     let buf = frame.rsi as *const u8;
     let count = frame.rdx as usize;
 
-    let sched = crate::sched::SCHEDULER.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
 
     // Check if fd is valid and has WRITE right
     match sched.current_process().fd_table.check_rights(
@@ -1703,7 +1795,7 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
         crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::WRITE),
     ) {
         Ok(()) => {
-            if let Some(fd_entry) = sched.current_process().fd_table.get(fd) {
+            if let Some(&fd_entry) = sched.current_process().fd_table.get(fd) {
                 if fd_entry.handle.is_pipe() {
                     if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64)
                     {
@@ -1723,6 +1815,35 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                         crate::process::pipe::PipeResult::WouldBlock => EAGAIN,
                         crate::process::pipe::PipeResult::BrokenPipe => u64::MAX,
                         crate::process::pipe::PipeResult::Eof => u64::MAX,
+                    }
+                } else if fd_entry.handle.is_vfs() {
+                    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64)
+                    {
+                        return u64::MAX;
+                    }
+                    let vfs_handle = sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
+                    let write_size = count.min(4096);
+                    let mut kernel_buf = [0u8; 4096];
+                    unsafe {
+                        core::ptr::copy_nonoverlapping(buf, kernel_buf.as_mut_ptr(), write_size);
+                    }
+                    let written = {
+                        let mut guard = crate::KERNEL_VFS.lock();
+                        match guard.as_mut() {
+                            Some(vfs) => {
+                                vfs.write(vfs_handle, fd_entry.offset, &kernel_buf[..write_size])
+                            }
+                            None => return u64::MAX,
+                        }
+                    };
+                    match written {
+                        Ok(n) => {
+                            if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
+                                entry.offset += n;
+                            }
+                            n as u64
+                        }
+                        Err(_) => u64::MAX,
                     }
                 } else if fd_entry.handle.is_tty_stdout() {
                     // fd1 wired to a TTY tab's kernel stdout ring. tty_server

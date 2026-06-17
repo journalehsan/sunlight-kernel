@@ -195,6 +195,15 @@ impl RamFs {
             .and_then(|slot| *slot)
             .ok_or(FsError::BadHandle)
     }
+
+    fn parent_is_dir(&self, path: &str) -> Result<bool, FsError> {
+        let parent = parent_path(path)?;
+        if parent == "/" {
+            return Ok(true);
+        }
+        let idx = self.entry_idx(parent)?;
+        Ok(self.is_dir(idx))
+    }
 }
 
 impl FileSystem for RamFs {
@@ -204,6 +213,25 @@ impl FileSystem for RamFs {
             return Err(FsError::IsDir);
         }
         self.alloc_handle(entry_idx)
+    }
+
+    fn create_file(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<FileHandle, FsError> {
+        path::validate_absolute(path)?;
+        if self.entry_idx(path).is_ok() {
+            return self.open(path);
+        }
+        if !self.parent_is_dir(path)? {
+            return Err(FsError::NotDir);
+        }
+        self.dynamic.push(DynamicEntry {
+            path: Vec::from(path.as_bytes()),
+            data: Vec::new(),
+            uid,
+            gid,
+            mode: mode::S_IFREG | mode,
+            is_dir: false,
+        });
+        self.alloc_handle(self.all_entry_count() - 1)
     }
 
     fn read(
@@ -280,6 +308,9 @@ impl FileSystem for RamFs {
         if self.entry_idx(path).is_ok() {
             return Err(FsError::InvalidPath);
         }
+        if !self.parent_is_dir(path)? {
+            return Err(FsError::NotDir);
+        }
         self.dynamic.push(DynamicEntry {
             path: Vec::from(path.as_bytes()),
             data: Vec::new(),
@@ -335,6 +366,17 @@ impl FileSystem for RamFs {
     }
 }
 
+fn parent_path(path: &str) -> Result<&str, FsError> {
+    if path == "/" {
+        return Err(FsError::InvalidPath);
+    }
+    match path.rfind('/') {
+        Some(0) => Ok("/"),
+        Some(idx) => Ok(&path[..idx]),
+        None => Err(FsError::InvalidPath),
+    }
+}
+
 /// If `entry_path` names a direct child of directory `dir`, return its name.
 fn direct_child_name<'a>(entry_path: &'a str, dir: &str) -> Option<&'a str> {
     let rest = if dir == "/" {
@@ -357,8 +399,16 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/bin", 0, 0, mode::DIR_755),
     RamEntry::dir("/root", 0, 0, mode::DIR_700),
     RamEntry::dir("/home", 0, 0, mode::DIR_755),
+    RamEntry::dir("/home/user", 1000, 1000, mode::DIR_755),
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
+    RamEntry::dir("/run", 0, 0, mode::DIR_755),
+    RamEntry::dir("/state", 0, 0, mode::DIR_755),
+    RamEntry::dir("/state/sunlight-kv", 0, 0, mode::DIR_700),
+    RamEntry::dir("/state/sunlight-tls", 0, 0, mode::DIR_700),
+    RamEntry::dir("/state/sunlight-uac", 0, 0, mode::DIR_700),
+    RamEntry::dir("/state/capability-broker", 0, 0, mode::DIR_700),
     RamEntry::dir("/var", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/lib", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/log", 0, 0, mode::DIR_755),
     // System config files (world-readable)
     RamEntry::file(
@@ -708,6 +758,17 @@ mod tests {
         let stat = fs.stat("/newdir").unwrap();
         assert_eq!(stat.file_type, FileType::Directory);
         assert_eq!(stat.mode, mode::S_IFDIR | 0o755);
+    }
+
+    #[test]
+    fn create_file_creates_and_opens_file() {
+        let mut fs = RamFs::new(DIR_ENTRIES);
+        let handle = fs.create_file("/etc/new", 1000, 1000, 0o644).unwrap();
+        assert_eq!(fs.write(handle, 0, b"ok"), Ok(2));
+        let stat = fs.stat("/etc/new").unwrap();
+        assert_eq!(stat.file_type, FileType::File);
+        assert_eq!(stat.uid, 1000);
+        assert_eq!(stat.mode, mode::S_IFREG | 0o644);
     }
 
     #[test]

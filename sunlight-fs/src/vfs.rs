@@ -32,12 +32,12 @@ pub mod mode {
     pub const S_IFDIR: u16 = 0o040_000;
     pub const S_IFREG: u16 = 0o100_000;
 
-    pub const DIR_755:  u16 = S_IFDIR | 0o755;
+    pub const DIR_755: u16 = S_IFDIR | 0o755;
     pub const FILE_644: u16 = S_IFREG | 0o644;
     pub const FILE_600: u16 = S_IFREG | 0o600;
     pub const FILE_755: u16 = S_IFREG | 0o755;
     pub const FILE_700: u16 = S_IFREG | 0o700;
-    pub const DIR_700:  u16 = S_IFDIR | 0o700;
+    pub const DIR_700: u16 = S_IFDIR | 0o700;
     pub const DIR_1777: u16 = S_IFDIR | 0o1777;
 }
 
@@ -85,10 +85,16 @@ impl VfsDirEntry {
 
 pub trait FileSystem {
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError>;
+    fn create_file(
+        &mut self,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<FileHandle, FsError>;
     fn read(&mut self, handle: FileHandle, offset: usize, buf: &mut [u8])
         -> Result<usize, FsError>;
-    fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8])
-        -> Result<usize, FsError>;
+    fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError>;
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError>;
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError>;
     fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError>;
@@ -160,6 +166,16 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         Err(FsError::TooManyOpenFiles)
     }
 
+    fn create_file(
+        &mut self,
+        _path: &str,
+        _uid: u32,
+        _gid: u32,
+        _mode: u16,
+    ) -> Result<FileHandle, FsError> {
+        Err(FsError::ReadOnlyFilesystem)
+    }
+
     fn read(
         &mut self,
         handle: FileHandle,
@@ -172,8 +188,12 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
             .ok_or(FsError::Io)
     }
 
-    fn write(&mut self, _handle: FileHandle, _offset: usize, _buf: &[u8])
-        -> Result<usize, FsError> {
+    fn write(
+        &mut self,
+        _handle: FileHandle,
+        _offset: usize,
+        _buf: &[u8],
+    ) -> Result<usize, FsError> {
         Err(FsError::Unsupported)
     }
 
@@ -273,6 +293,19 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         }
     }
 
+    fn create_file(
+        &mut self,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<FileHandle, FsError> {
+        match self {
+            Self::Ram(fs) => fs.create_file(path, uid, gid, mode),
+            Self::Fat(fs) => fs.create_file(path, uid, gid, mode),
+        }
+    }
+
     fn read(
         &mut self,
         handle: FileHandle,
@@ -285,12 +318,7 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         }
     }
 
-    fn write(
-        &mut self,
-        handle: FileHandle,
-        offset: usize,
-        buf: &[u8],
-    ) -> Result<usize, FsError> {
+    fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError> {
         match self {
             Self::Ram(fs) => fs.write(handle, offset, buf),
             Self::Fat(fs) => fs.write(handle, offset, buf),
@@ -393,6 +421,22 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::NotFound)?
             .fs
             .open(local_path)?;
+        Ok(pack_handle(mount_idx, handle))
+    }
+
+    pub fn create_file(
+        &mut self,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<FileHandle, FsError> {
+        let (mount_idx, local_path) = self.resolve_mount_for_create(path)?;
+        let handle = self.mounts[mount_idx]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs
+            .create_file(local_path, uid, gid, mode)?;
         Ok(pack_handle(mount_idx, handle))
     }
 
@@ -503,6 +547,27 @@ impl<D: BlockDevice> Vfs<D> {
         best.map(|(idx, _, local)| (idx, local))
             .ok_or(FsError::NotFound)
     }
+
+    fn resolve_mount_for_create<'a>(&self, path: &'a str) -> Result<(usize, &'a str), FsError> {
+        path::validate_absolute(path)?;
+        let parent = parent_path(path)?;
+        let (mount_idx, _) = self.resolve_mount(parent)?;
+        let mount = self.mounts[mount_idx].as_ref().ok_or(FsError::NotFound)?;
+        path::strip_mount(path, mount.path)
+            .map(|local| (mount_idx, local))
+            .ok_or(FsError::NotFound)
+    }
+}
+
+fn parent_path(path: &str) -> Result<&str, FsError> {
+    if path == "/" {
+        return Err(FsError::InvalidPath);
+    }
+    match path.rfind('/') {
+        Some(0) => Ok("/"),
+        Some(idx) => Ok(&path[..idx]),
+        None => Err(FsError::InvalidPath),
+    }
 }
 
 impl<D: BlockDevice> Default for Vfs<D> {
@@ -536,13 +601,29 @@ mod tests {
     use crate::vfs::mode;
 
     static ROOT_ENTRIES: &[RamEntry] = &[
-        RamEntry::file("/etc/motd",    0, 0, mode::FILE_644, b"Welcome to SunlightOS\n"),
-        RamEntry::file("/etc/passwd",  0, 0, mode::FILE_644, b"root:x:0:0:root:/root:/bin/sh\n"),
+        RamEntry::file(
+            "/etc/motd",
+            0,
+            0,
+            mode::FILE_644,
+            b"Welcome to SunlightOS\n",
+        ),
+        RamEntry::file(
+            "/etc/passwd",
+            0,
+            0,
+            mode::FILE_644,
+            b"root:x:0:0:root:/root:/bin/sh\n",
+        ),
     ];
 
-    static BOOT_ENTRIES: &[RamEntry] = &[
-        RamEntry::file("/HELLO.TXT", 0, 0, mode::FILE_644, b"boot volume\n"),
-    ];
+    static BOOT_ENTRIES: &[RamEntry] = &[RamEntry::file(
+        "/HELLO.TXT",
+        0,
+        0,
+        mode::FILE_644,
+        b"boot volume\n",
+    )];
 
     #[test]
     fn routes_root_mount_open_read_stat() {
