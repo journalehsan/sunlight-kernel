@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-tls"
-version = "0.1.116"
+version = "0.1.122"
+
+
+
 
 
 
@@ -22,9 +25,24 @@ sunlightos = [
     "dep:sunlight-ipc",
     "dep:sunlight-libc",
     "dep:heapless",
+    "dep:linked_list_allocator",
+    "dep:rustls",
+    "dep:rustls-rustcrypto",
+    "dep:sha2",
+    "dep:getrandom",
 ]
 
 [dependencies]
 sunlight-ipc  = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true }
 heapless      = { version = "0.8", optional = true }
+linked_list_allocator = { version = "0.10", optional = true }
+
+# Pure-Rust TLS stack for x86_64-unknown-none (no std / no ring). See the proven
+# Phase-0 recipe: rustls + rustcrypto provider + force-soft crypto via RUSTFLAGS.
+rustls = { version = "0.23", default-features = false, features = ["tls12", "logging"], optional = true }
+rustls-rustcrypto = { version = "0.0.2-alpha", default-features = false, features = ["alloc", "tls12", "logging"], optional = true }
+# Force the pure-software SHA backend (force-soft is a cargo feature, not a cfg).
+sha2 = { version = "0.10", default-features = false, features = ["force-soft", "oid"], optional = true }
+# Route all crypto randomness through rand_service via a custom getrandom handler.
+getrandom = { version = "0.2", features = ["custom"], optional = true }
