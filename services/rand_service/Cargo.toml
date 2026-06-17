@@ -1,0 +1,8 @@
+[package]
+name = "rand_service"
+version = "0.1.111"
+
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
