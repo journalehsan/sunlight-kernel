@@ -77,7 +77,8 @@ use alloc::vec::Vec;
 
 #[cfg(feature = "sunlightos")]
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg,
+    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, shm_alloc,
+    shm_free, shm_map, CapabilityToken, IpcMsg,
 };
 #[cfg(feature = "sunlightos")]
 use sunlight_libc::{self as libc, Fd};
@@ -337,6 +338,16 @@ const KV_REPLY: u64 = 0x4BFF;
 const KV_ERROR: u64 = 0x4BEE;
 #[cfg(feature = "sunlightos")]
 const KV_VALUE: u64 = 0x4B05;
+// Shared-memory transport for values too large for register-IPC word packing
+// (e.g. TLS certificates). The data producer allocates a page, fills it, and
+// passes the cap token in caps[0]; the consumer maps + copies + frees. Mirrors
+// the VFS DATA_SHARED pattern. One page (<=4096 bytes) per value.
+#[cfg(feature = "sunlightos")]
+const KV_PUT_SHM: u64 = 0x4B06;
+#[cfg(feature = "sunlightos")]
+const KV_GET_SHM: u64 = 0x4B07;
+#[cfg(feature = "sunlightos")]
+const SHM_PAGE: usize = 4096;
 
 #[cfg(feature = "sunlightos")]
 static mut LOG_FD: Option<Fd> = None;
@@ -732,6 +743,65 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                                     wi += 1;
                                 }
                             }
+                        }
+                        Err(()) => {
+                            reply.label = KV_ERROR;
+                            reply.words[0] = 2;
+                        }
+                    }
+                }
+            }
+            KV_PUT_SHM => {
+                // word[0] = value_len, words[2..] = key (NUL-padded), caps[0] = page token.
+                let key = unpack_str(&msg.words, 2, 48);
+                let vlen = msg.words[0] as usize;
+                let tok = msg.caps[0];
+                if key.is_empty() || tok == CapabilityToken::INVALID || vlen > SHM_PAGE {
+                    reply.label = KV_ERROR;
+                    reply.words[0] = 1;
+                } else {
+                    match shm_map(tok) {
+                        Ok(ptr) => {
+                            let val = unsafe { core::slice::from_raw_parts(ptr, vlen) }.to_vec();
+                            let _ = shm_free(tok);
+                            if do_put(&key, &val, "root") {
+                                reply.words[0] = 0;
+                            } else {
+                                reply.label = KV_ERROR;
+                                reply.words[0] = 2;
+                            }
+                        }
+                        Err(_) => {
+                            reply.label = KV_ERROR;
+                            reply.words[0] = 3;
+                        }
+                    }
+                }
+            }
+            KV_GET_SHM => {
+                // words[2..] = key (NUL-padded). Reply: KV_VALUE word[0]=len, caps[0]=page token.
+                let key = unpack_str(&msg.words, 2, 48);
+                if key.is_empty() {
+                    reply.label = KV_ERROR;
+                } else {
+                    match do_get(&key, "root") {
+                        Ok(v) if v.len() <= SHM_PAGE => match shm_alloc() {
+                            Ok((ptr, token)) => {
+                                unsafe {
+                                    core::ptr::copy_nonoverlapping(v.as_ptr(), ptr, v.len());
+                                }
+                                reply.label = KV_VALUE;
+                                reply.words[0] = v.len() as u64;
+                                reply = reply.with_cap(0, token);
+                            }
+                            Err(_) => {
+                                reply.label = KV_ERROR;
+                                reply.words[0] = 3;
+                            }
+                        },
+                        Ok(_) => {
+                            reply.label = KV_ERROR;
+                            reply.words[0] = 4; // value larger than one shm page
                         }
                         Err(()) => {
                             reply.label = KV_ERROR;

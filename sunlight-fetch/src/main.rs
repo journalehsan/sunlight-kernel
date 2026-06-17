@@ -91,7 +91,9 @@ fn panic(_info: &PanicInfo) -> ! {
 pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let mut storage = [""; MAX_ARGS];
     let count = unsafe { collect_args(argc, argv, &mut storage) };
-    let code = match run_os(&storage[..count]) {
+    // argv[0] is the program name ("fetch"); parse_args expects user arguments only (consistent with host-linux path).
+    let effective_args = if count > 0 { &storage[1..count] } else { &[] };
+    let code = match run_os(effective_args) {
         Ok(()) => 0,
         Err(e) => {
             let _ = write_stderr_fmt(&alloc::format!("fetch: error: {e}\n"));

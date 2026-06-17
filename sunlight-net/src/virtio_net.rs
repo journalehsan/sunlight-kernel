@@ -42,6 +42,11 @@ pub struct VirtioNetHeader {
 /// We allocate 4 pages per queue (RX + TX = 8 pages total) — same sizing as blk.
 pub const QUEUE_PAGES_PER_NET_QUEUE: usize = 4;
 
+/// Number of pre-posted RX buffers / descriptors. Having >1 greatly reduces
+/// the chance of the virtio device dropping inbound packets while the driver
+/// is processing + re-arming a single buffer (the previous design).
+pub const MAX_RX_BUFFERS: usize = 4;
+
 /// Queue layout state for one virtqueue (RX or TX).
 struct NetVirtq {
     queue_size: u16,
@@ -67,10 +72,11 @@ pub struct VirtioNet {
 
     // RX queue (index 0)
     rx: NetVirtq,
-    // We keep a small set of pre-supplied RX buffer physical addresses.
-    // For MVI we use a single RX buffer that we re-arm after consume.
-    rx_buf_phys: u64,
-    rx_buf_virt: u64,
+    // Multiple pre-supplied RX buffers (posted via distinct descriptors).
+    // This allows the device to deliver several inbound frames without
+    // requiring an immediate re-arm from the driver for each one.
+    rx_buf_phys: [u64; MAX_RX_BUFFERS],
+    rx_buf_virt: [u64; MAX_RX_BUFFERS],
     rx_buf_len: usize,
 
     // TX queue (index 1)
@@ -102,8 +108,8 @@ impl VirtioNet {
     /// `rx_queue_phys/virt`, `tx_queue_phys/virt`: two separate physically-contiguous
     /// regions of QUEUE_PAGES_PER_NET_QUEUE * 4096 bytes each (caller allocates via PMM + HHDM).
     ///
-    /// `rx_buf_phys/virt`: at least 1514+header bytes physically contiguous buffer for RX.
-    /// The driver will arm the RX queue with this buffer.
+    /// `rx_buf_phys/virt` (arrays): RX data buffers for the descriptors we will arm.
+    /// We pre-arm MAX_RX_BUFFERS of them to avoid dropping inbound packets during re-arm.
     ///
     /// All addresses must be valid; caller must be ring 0.
     ///
@@ -117,8 +123,8 @@ impl VirtioNet {
         rx_queue_virt: u64,
         tx_queue_phys: u64,
         tx_queue_virt: u64,
-        rx_buf_phys: u64,
-        rx_buf_virt: u64,
+        rx_buf_phys: [u64; MAX_RX_BUFFERS],
+        rx_buf_virt: [u64; MAX_RX_BUFFERS],
         rx_buf_len: usize,
         tx_buf_phys: u64,
         tx_buf_virt: u64,
@@ -180,34 +186,32 @@ impl VirtioNet {
             last_used_idx: 0,
         };
 
-        // Arm one RX descriptor pointing at our RX buffer (header + frame space)
-        // Descriptor 0: RX buffer (device writes)
-        // SAFETY: The desc table lives in the rx_queue memory we just zeroed and which
-        // remains valid for the device lifetime. All fields are plain integers.
+        // Arm multiple RX descriptors (one per buffer). We use desc ids 0..MAX_RX_BUFFERS-1.
+        // Having several available lets the device DMA multiple inbound packets
+        // (e.g. during a transfer or when ARP + data arrive close together) without
+        // the driver having to immediately re-supply after each consume.
         unsafe {
-            let d0 = rx.desc_virt as *mut VirtqDesc;
-            (*d0).addr = rx_buf_phys;
-            (*d0).len = (core::mem::size_of::<VirtioNetHeader>() + rx_buf_len) as u32;
-            (*d0).flags = DESC_F_WRITE; // device writes the whole thing
-            (*d0).next = 0;
-        }
+            for i in 0..MAX_RX_BUFFERS {
+                let d = (rx.desc_virt as *mut VirtqDesc).add(i);
+                (*d).addr = rx_buf_phys[i];
+                (*d).len = (core::mem::size_of::<VirtioNetHeader>() + rx_buf_len) as u32;
+                (*d).flags = DESC_F_WRITE;
+                (*d).next = 0;
 
-        // Push to avail ring (index 0)
-        // SAFETY: avail ring is inside our queue allocation; write_volatile + fence for device visibility.
-        unsafe {
-            let avail_ring_ptr = (rx.avail_virt + 4) as *mut u16;
-            avail_ring_ptr.write_volatile(0);
+                let avail_ring_ptr = (rx.avail_virt + 4) as *mut u16;
+                avail_ring_ptr.add(i).write_volatile(i as u16);
+            }
         }
 
         fence(Ordering::SeqCst);
 
-        // SAFETY: update driver-tracked avail index in the ring and notify device.
+        // SAFETY: set initial avail head past the ones we just supplied and notify.
         unsafe {
             let avail_idx_ptr = (rx.avail_virt + 2) as *mut u16;
-            avail_idx_ptr.write_volatile(1);
+            avail_idx_ptr.write_volatile(MAX_RX_BUFFERS as u16);
             pci::outw(io_base + VIRTIO_REG_QUEUE_NOTIFY, 0); // notify RX queue
         }
-        rx.avail_idx = 1; // keep driver tracking in sync with what we wrote to the ring.
+        rx.avail_idx = MAX_RX_BUFFERS as u16;
 
         // --- Initialize TX queue (sel 1) ---
         pci::outw(io_base + VIRTIO_REG_QUEUE_SEL, 1);
@@ -282,63 +286,65 @@ impl VirtioNet {
         // SAFETY: used ring is part of the rx queue memory supplied at init and remains valid.
         let used_idx_ptr = (self.rx.used_virt + 2) as *const u16;
         fence(Ordering::SeqCst);
-        if unsafe { *used_idx_ptr } == self.rx.last_used_idx {
+        if unsafe { used_idx_ptr.read_volatile() } == self.rx.last_used_idx {
             return 0; // nothing
         }
 
-        // We only ever arm descriptor 0, but the device writes each completion
-        // to the used ring slot at (used.idx % queue_size), not always slot 0.
-        // Read the slot matching our tracked last_used_idx.
-        // Used ring entry layout after flags+idx: {id:u32, len:u32}, 8 bytes/entry.
+        // Read the used entry for the next driver-owned slot.
+        // We now support multiple RX buffers (desc ids 0..MAX_RX_BUFFERS-1).
         let slot = (self.rx.last_used_idx as usize) % (self.rx.queue_size as usize);
         let used_entry_base = self.rx.used_virt + 4 + (slot as u64) * 8;
         // SAFETY: volatile reads from the used ring written by the device.
-        let used0_id = unsafe { ((used_entry_base) as *const u32).read_volatile() };
-        let used0_len = unsafe { ((used_entry_base + 4) as *const u32).read_volatile() };
+        let used_id = unsafe { ((used_entry_base) as *const u32).read_volatile() };
+        let used_len = unsafe { ((used_entry_base + 4) as *const u32).read_volatile() };
 
         self.rx.last_used_idx = self.rx.last_used_idx.wrapping_add(1);
 
-        if used0_id != 0 {
-            // Unexpected descriptor chain; re-arm and bail
-            self.rearm_rx();
+        let buf_idx = used_id as usize;
+        if buf_idx >= MAX_RX_BUFFERS {
+            // Unexpected desc id (should never happen with our arming); re-arm the id we saw and bail.
+            self.rearm_desc(used_id);
             return 0;
         }
 
-        // The device wrote VirtioNetHeader + frame into rx_buf_virt.
-        // Length reported by device includes the header.
-        let total_written = used0_len as usize;
+        // The device wrote VirtioNetHeader + frame into the chosen rx_buf.
+        let total_written = used_len as usize;
         let hdr_sz = core::mem::size_of::<VirtioNetHeader>();
         if total_written <= hdr_sz {
-            self.rearm_rx();
+            self.rearm_desc(used_id);
             return 0;
         }
 
         let frame_len = (total_written - hdr_sz).min(buf.len());
-        let frame_src = (self.rx_buf_virt as *const u8).add(hdr_sz);
-        // SAFETY: copy from our RX buffer (device-written) into caller buffer.
+        let frame_src = (self.rx_buf_virt[buf_idx] as *const u8).add(hdr_sz);
+        // SAFETY: copy from the correct RX buffer (device-written) into caller buffer.
         unsafe {
             core::ptr::copy_nonoverlapping(frame_src, buf.as_mut_ptr(), frame_len);
         }
 
-        self.rearm_rx();
+        self.rearm_desc(used_id);
         frame_len
     }
 
-    fn rearm_rx(&mut self) {
-        // Re-arm descriptor 0 with same buffer for next packet.
-        // SAFETY: All pointers and memory regions were validated at init time and the
-        // caller of recv (which calls us) guarantees the device/queues are still live.
-        // We are inside an unsafe fn (recv) so the contract holds.
+    /// Re-arm (re-supply) the given RX descriptor id with its associated buffer.
+    /// Called after consuming a used entry for that desc.
+    fn rearm_desc(&mut self, desc_id: u32) {
+        let idx = desc_id as usize;
+        if idx >= MAX_RX_BUFFERS {
+            return;
+        }
+        // SAFETY: pointers validated at init; we only re-arm a desc the device just
+        // returned via the used ring.
         unsafe {
-            let d0 = self.rx.desc_virt as *mut VirtqDesc;
-            (*d0).addr = self.rx_buf_phys;
-            (*d0).len = (core::mem::size_of::<VirtioNetHeader>() + self.rx_buf_len) as u32;
-            (*d0).flags = DESC_F_WRITE;
-            (*d0).next = 0;
+            let d = (self.rx.desc_virt as *mut VirtqDesc).add(idx);
+            (*d).addr = self.rx_buf_phys[idx];
+            (*d).len = (core::mem::size_of::<VirtioNetHeader>() + self.rx_buf_len) as u32;
+            (*d).flags = DESC_F_WRITE;
+            (*d).next = 0;
 
             let slot = (self.rx.avail_idx as usize) % (self.rx.queue_size as usize);
             let avail_ring_ptr = (self.rx.avail_virt + 4) as *mut u16;
-            avail_ring_ptr.add(slot).write_volatile(0);
+            avail_ring_ptr.add(slot).write_volatile(desc_id as u16);
 
             fence(Ordering::SeqCst);
 
@@ -423,7 +429,7 @@ impl VirtioNet {
             let mut limit = 50_000_000u32;
             loop {
                 fence(Ordering::SeqCst);
-                if (*used_idx_ptr) != self.tx.last_used_idx {
+                if used_idx_ptr.read_volatile() != self.tx.last_used_idx {
                     self.tx.last_used_idx = self.tx.last_used_idx.wrapping_add(1);
                     break;
                 }

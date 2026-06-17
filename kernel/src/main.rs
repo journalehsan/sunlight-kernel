@@ -444,15 +444,22 @@ pub extern "C" fn _start() -> ! {
                 .map(|f| f.as_u64());
             let tx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
                 .map(|f| f.as_u64());
-            let rx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
+            // Allocate multiple RX data buffers so the virtio device can have several
+            // descriptors armed. This prevents packet loss ("net lost") while the
+            // driver processes one inbound frame and re-arms.
+            let rx_buf0 = pmm.alloc_frame().map(|f| f.as_u64());
+            let rx_buf1 = pmm.alloc_frame().map(|f| f.as_u64());
+            let rx_buf2 = pmm.alloc_frame().map(|f| f.as_u64());
+            let rx_buf3 = pmm.alloc_frame().map(|f| f.as_u64());
             let tx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
 
-            match (rx_q_phys, tx_q_phys, rx_buf_phys, tx_buf_phys) {
-                (Some(rp), Some(tp), Some(bp), Some(xp)) => {
+            match (rx_q_phys, tx_q_phys, rx_buf0, rx_buf1, rx_buf2, rx_buf3, tx_buf_phys) {
+                (Some(rp), Some(tp), Some(b0), Some(b1), Some(b2), Some(b3), Some(xp)) => {
                     let h = hhdm_offset.as_u64();
                     let rx_q_virt = h + rp;
                     let tx_q_virt = h + tp;
-                    let rx_b_virt = h + bp;
+                    let rx_bufs_phys = [b0, b1, b2, b3];
+                    let rx_bufs_virt = [h + b0, h + b1, h + b2, h + b3];
                     let tx_b_virt = h + xp;
                     let pci_info = unsafe { sunlight_virtio::find_virtio_net() };
                     if let Some((bus, slot, _func, io_base)) = pci_info {
@@ -465,8 +472,8 @@ pub extern "C" fn _start() -> ! {
                                 rx_q_virt,
                                 tp,
                                 tx_q_virt,
-                                bp,
-                                rx_b_virt,
+                                rx_bufs_phys,
+                                rx_bufs_virt,
                                 1514,
                                 xp,
                                 tx_b_virt,
@@ -545,15 +552,20 @@ pub extern "C" fn _start() -> ! {
                     .map(|f| f.as_u64());
                 let tx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
                     .map(|f| f.as_u64());
-                let rx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
+                // Allocate multiple RX data buffers (see first net init site for rationale).
+                let rx_buf0 = pmm.alloc_frame().map(|f| f.as_u64());
+                let rx_buf1 = pmm.alloc_frame().map(|f| f.as_u64());
+                let rx_buf2 = pmm.alloc_frame().map(|f| f.as_u64());
+                let rx_buf3 = pmm.alloc_frame().map(|f| f.as_u64());
                 let tx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
 
-                match (rx_q_phys, tx_q_phys, rx_buf_phys, tx_buf_phys) {
-                    (Some(rp), Some(tp), Some(bp), Some(xp)) => {
+                match (rx_q_phys, tx_q_phys, rx_buf0, rx_buf1, rx_buf2, rx_buf3, tx_buf_phys) {
+                    (Some(rp), Some(tp), Some(b0), Some(b1), Some(b2), Some(b3), Some(xp)) => {
                         let h = hhdm_offset.as_u64();
                         let rx_q_virt = h + rp;
                         let tx_q_virt = h + tp;
-                        let rx_b_virt = h + bp;
+                        let rx_bufs_phys = [b0, b1, b2, b3];
+                        let rx_bufs_virt = [h + b0, h + b1, h + b2, h + b3];
                         let tx_b_virt = h + xp;
                         // SAFETY: All phys/virt pairs are valid HHDM-mapped kernel frames.
                         // Ring-0 privilege for find + port I/O + queue setup.
@@ -569,8 +581,8 @@ pub extern "C" fn _start() -> ! {
                                     rx_q_virt,
                                     tp,
                                     tx_q_virt,
-                                    bp,
-                                    rx_b_virt,
+                                    rx_bufs_phys,
+                                    rx_bufs_virt,
                                     1514,
                                     xp,
                                     tx_b_virt,

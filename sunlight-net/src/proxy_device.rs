@@ -4,7 +4,7 @@
 //! `VirtioNet` alive (see `kernel::NET_DEVICE`) and copies raw Ethernet
 //! frames in and out on net_server's behalf.
 
-use smoltcp::phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken};
+use smoltcp::phy::{ChecksumCapabilities, Device, DeviceCapabilities, Medium, RxToken, TxToken};
 use smoltcp::time::Instant;
 
 pub struct ProxyRxToken {
@@ -75,6 +75,10 @@ impl Device for ProxyNetDevice {
         let mut caps = DeviceCapabilities::default();
         caps.max_transmission_unit = 1514;
         caps.medium = Medium::Ethernet;
+        // Force software checksums. We do not offload to the kernel virtio device;
+        // smoltcp must compute IP/TCP/UDP checksums itself. Otherwise outbound
+        // segments (SYN etc.) have zero checksum and are dropped by QEMU slirp.
+        caps.checksum = ChecksumCapabilities::ignored();
         caps
     }
 }

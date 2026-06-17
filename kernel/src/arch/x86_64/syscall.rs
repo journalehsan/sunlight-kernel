@@ -1981,6 +1981,15 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
     };
     crate::telemetry::record_net_tx(len as u64);
     crate::serial_println!("[NETDBG] tx len={} result={}", len, result);
+    if len >= 14 {
+        // Print dst MAC (first 6 bytes of frame) and ethertype to help debug neighbor/MAC resolution for IP.
+        crate::serial_println!(
+            "[NETDBG] tx dst_mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} ethertype={:02x}{:02x}",
+            kernel_buf[0], kernel_buf[1], kernel_buf[2],
+            kernel_buf[3], kernel_buf[4], kernel_buf[5],
+            kernel_buf[12], kernel_buf[13]
+        );
+    }
     if len >= 42 {
         crate::serial_println!(
             "[NETDBG] tx ethertype={:02x}{:02x} proto={:02x} src_port={:02x}{:02x} dst_port={:02x}{:02x}",
@@ -2027,18 +2036,21 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
             core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
         }
         crate::telemetry::record_net_rx(n as u64);
+        if n >= 14 {
+            crate::serial_println!(
+                "[NETDBG] rx n={} dst_mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} src_mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} ethertype={:02x}{:02x}",
+                n,
+                kernel_buf[0],kernel_buf[1],kernel_buf[2],kernel_buf[3],kernel_buf[4],kernel_buf[5],
+                kernel_buf[6],kernel_buf[7],kernel_buf[8],kernel_buf[9],kernel_buf[10],kernel_buf[11],
+                kernel_buf[12], kernel_buf[13]
+            );
+        }
         crate::serial_println!(
-            "[NETDBG] rx n={} ethertype={:02x}{:02x} proto={:02x} src_port={:02x}{:02x} dst_port={:02x}{:02x} ip_total_len={:02x}{:02x} udp_len={:02x}{:02x} dns_hdr={:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-            n,
+            "[NETDBG] rx detail ethertype={:02x}{:02x} proto={:02x} src_port={:02x}{:02x} dst_port={:02x}{:02x} ...",
             kernel_buf[12], kernel_buf[13],
             kernel_buf[23],
             kernel_buf[34], kernel_buf[35],
-            kernel_buf[36], kernel_buf[37],
-            kernel_buf[16], kernel_buf[17],
-            kernel_buf[38], kernel_buf[39],
-            kernel_buf[42], kernel_buf[43], kernel_buf[44], kernel_buf[45],
-            kernel_buf[46], kernel_buf[47], kernel_buf[48], kernel_buf[49],
-            kernel_buf[50], kernel_buf[51], kernel_buf[52], kernel_buf[53],
+            kernel_buf[36], kernel_buf[37]
         );
     }
     n as u64
