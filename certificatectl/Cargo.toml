@@ -1,6 +1,8 @@
 [package]
 name = "certificatectl"
-version = "0.1.103"
+version = "0.1.105"
+
+
 
 edition = "2021"
 description = "CLI client for sunlight-tls (certificate management)"

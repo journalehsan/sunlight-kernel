@@ -51,6 +51,11 @@ pub struct FetchConfig {
     pub help: bool,
 }
 
+pub const SAMPLE_FILE_URL: &str =
+    "https://edge10.82.ir.cdn.ir/soft/c/Codec.Tweak.Tool.6.7.6.rar?1781646885";
+
+pub const SAMPLE_GET_REQUEST_URL: &str = "https://api.sampleapis.com/coffee/hot";
+
 impl Default for FetchConfig {
     fn default() -> Self {
         Self {
@@ -80,14 +85,23 @@ pub fn parse_args(args: &[String]) -> Result<FetchConfig, String> {
                 return Ok(config);
             }
 
+            "--sample-file" => {
+                config.url = String::from(SAMPLE_FILE_URL);
+                url_found = true;
+            }
+
+            "--sample-get-request" => {
+                config.url = String::from(SAMPLE_GET_REQUEST_URL);
+                url_found = true;
+            }
+
             "-T" | "--method" => {
                 i += 1;
                 let val = args
                     .get(i)
                     .ok_or_else(|| String::from("-T/--method requires a value"))?;
-                config.method = HttpMethod::from_str(val).ok_or_else(|| {
-                    format!("unsupported HTTP method: '{val}' (use GET or POST)")
-                })?;
+                config.method = HttpMethod::from_str(val)
+                    .ok_or_else(|| format!("unsupported HTTP method: '{val}' (use GET or POST)"))?;
             }
 
             "-d" | "--data" => {
@@ -156,24 +170,26 @@ fetch — SunlightOS lightweight HTTP downloader
 
 USAGE:
     fetch [OPTIONS] <URL>
+    fetch --sample-file
 
 OPTIONS:
     -T, --method <METHOD>   HTTP method: GET (default) or POST
     -d, --data <DATA>       POST body data (use '-' for stdin)
     -c, --chunks <NUM>      Parallel download chunks (default: 16)
     -o, --output <FILE>     Output filename (default: infer from URL)
+        --sample-file           Download a 1MB test file (plain HTTP)
+        --sample-get-request    GET https://api.sampleapis.com/coffee/hot (JSON)
     -h, --help              Show this help
 
 EXAMPLES:
     fetch http://example.com
     fetch -o page.html http://example.com
+    fetch --sample-file
     fetch -T POST -d 'key=value' http://httpbin.org/post
-    fetch -c 8 -o large.bin http://mirror.example.com/file.iso
 
 NOTES:
     Requires 'net' and 'vfs_write' capabilities.
     DNS resolves via /etc/hosts first, then hardcoded resolver.
-    Chunked downloads use HTTP Range headers with automatic fallback.
 ",
     );
 }
@@ -223,6 +239,14 @@ mod tests {
         let config = parse_args(&args).unwrap();
         assert_eq!(config.chunks, 8);
         assert_eq!(config.output.as_deref(), Some("out.bin"));
+    }
+
+    #[test]
+    fn test_sample_get_request() {
+        let args = vec![s("--sample-get-request")];
+        let config = parse_args(&args).unwrap();
+        assert_eq!(config.url, SAMPLE_GET_REQUEST_URL);
+        assert_eq!(config.method, HttpMethod::Get);
     }
 
     #[test]

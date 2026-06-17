@@ -48,7 +48,7 @@ use alloc::string::String;
 #[cfg(feature = "sunlightos")]
 use sunlight_libc as libc;
 #[cfg(feature = "sunlightos")]
-use libc::{Errno, STDERR};
+use libc::{Errno, STDOUT};
 
 #[cfg(feature = "sunlightos")]
 const MAX_ARGS: usize = 16;
@@ -59,7 +59,7 @@ struct BumpAllocator;
 #[cfg(feature = "sunlightos")]
 unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        static mut HEAP: [u8; 512 * 1024] = [0; 512 * 1024];
+        static mut HEAP: [u8; 2 * 1024 * 1024] = [0; 2 * 1024 * 1024];
         static mut NEXT: usize = 0;
         let start = NEXT;
         let align = layout.align();
@@ -140,7 +140,7 @@ fn run_os(args: &[&str]) -> Result<(), FetchError> {
 fn write_stderr(data: &[u8]) -> Result<(), Errno> {
     let mut rest = data;
     while !rest.is_empty() {
-        match libc::write(STDERR, rest) {
+        match libc::write(STDOUT, rest) {
             Ok(n) => rest = &rest[n.min(rest.len())..],
             Err(Errno::Again) => libc::yield_now(),
             Err(e) => return Err(e),

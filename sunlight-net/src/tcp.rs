@@ -9,7 +9,20 @@ use smoltcp::wire::{IpAddress, IpEndpoint, Ipv4Address};
 const RX_BUF: usize = 8192;
 const TX_BUF: usize = 4096;
 const MAX_SOCKETS: usize = 4;
-const POLL_ROUNDS: usize = 2000;
+/// Real wall-clock budget for the TCP three-way handshake. QEMU's slirp NAT
+/// opens the actual connection to the external host on our behalf, so this must
+/// cover a full real RTT to the remote (filtered/overseas routes can be slow).
+/// Set to 20s: speedtest-class servers can take 8–10 s to respond to the first
+/// SYN (server-side SYN cookies + rate limiting), and our smoltcp initial RTO
+/// schedule exhausts 7 retransmits in ~6.7 s, leaving the 8th SYN and ACK
+/// exchange to complete by ~9 s on a typical overseas host.
+const CONNECT_TIMEOUT_MS: u64 = 20_000;
+/// Real wall-clock budget for flushing one `send` into the TX window.
+const SEND_TIMEOUT_MS: u64 = 8000;
+/// Real wall-clock budget to wait for inbound data on one `recv`. Bounds the
+/// idle gap between segments; an actual peer close is detected immediately and
+/// returns early regardless of this value.
+const RECV_TIMEOUT_MS: u64 = 8000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TcpError {
@@ -68,6 +81,7 @@ impl TcpManager {
         iface: &mut Interface,
         sockets: &mut SocketSet<'static>,
         device: &mut D,
+        yield_fn: Option<fn()>,
     ) -> Result<(), TcpError> {
         let handle = manager
             .slot_mut(socket_id)
@@ -93,18 +107,39 @@ impl TcpManager {
                 .map_err(|_| TcpError::SocketError)?;
         }
 
-        for round in 0..POLL_ROUNDS {
-            let timestamp = Instant::from_millis(round as i64 * 5);
-            iface.poll(timestamp, device, sockets);
+        // Drive the handshake on real wall-clock time, exactly like the ICMP
+        // ping and DNS wait loops (icmp::ping / dns::upstream::query_a): feed
+        // smoltcp real elapsed milliseconds so its SYN retransmit timers track
+        // reality, bound the wait by a real monotonic deadline, and yield on
+        // *every* poll so the kernel frame proxy can deliver the SYN-ACK.
+        //
+        // The previous loop spun a fixed POLL_ROUNDS of synthetic 5 ms steps and
+        // yielded only every 10th round; with nothing forcing real time to pass
+        // it exhausted all 2000 polls in a few ms — far less than the real RTT
+        // slirp needs to complete the external handshake — so every connect to a
+        // real host timed out even though ping/DNS (which wait on real time)
+        // worked.
+        let start = sunlight_ipc::monotonic_millis();
+        let deadline = start.wrapping_add(CONNECT_TIMEOUT_MS);
+        loop {
+            let elapsed = sunlight_ipc::monotonic_millis().wrapping_sub(start);
+            iface.poll(Instant::from_millis(elapsed as i64), device, sockets);
+
             let socket = sockets.get_mut::<tcp::Socket>(handle);
             match socket.state() {
                 tcp::State::Established => return Ok(()),
                 tcp::State::Closed | tcp::State::TimeWait => return Err(TcpError::Refused),
                 _ => {}
             }
-        }
 
-        Err(TcpError::Timeout)
+            if sunlight_ipc::monotonic_millis() >= deadline {
+                return Err(TcpError::Timeout);
+            }
+
+            if let Some(f) = yield_fn {
+                f();
+            }
+        }
     }
 
     pub fn send<D: Device>(
@@ -134,13 +169,25 @@ impl TcpManager {
                 }
             }
 
-            for round in 0..32 {
-                let timestamp = Instant::from_millis(round as i64);
-                iface.poll(timestamp, device, sockets);
+            // Flush on real time, yielding every poll so the proxy device can
+            // hand the queued segments to the kernel NIC and pick up ACKs —
+            // same discipline as the connect/recv loops below.
+            let start = sunlight_ipc::monotonic_millis();
+            let deadline = start.wrapping_add(SEND_TIMEOUT_MS);
+            loop {
+                let elapsed = sunlight_ipc::monotonic_millis().wrapping_sub(start);
+                iface.poll(Instant::from_millis(elapsed as i64), device, sockets);
                 let socket = sockets.get_mut::<tcp::Socket>(handle);
+                if !matches!(socket.state(), tcp::State::Established) {
+                    return Err(TcpError::NotConnected);
+                }
                 if socket.can_send() {
                     break;
                 }
+                if sunlight_ipc::monotonic_millis() >= deadline {
+                    return Err(TcpError::Timeout);
+                }
+                sunlight_ipc::process_yield();
             }
         }
 
@@ -160,17 +207,26 @@ impl TcpManager {
             .and_then(|s| s.handle)
             .ok_or(TcpError::InvalidSocket)?;
 
-        for round in 0..POLL_ROUNDS {
-            let timestamp = Instant::from_millis(round as i64 * 2);
-            iface.poll(timestamp, device, sockets);
+        // Wait for inbound data on real time, yielding every poll so the proxy
+        // device can pull freshly-arrived frames from the kernel NIC. The old
+        // fixed-round spin without any yield raced past the data window and
+        // returned empty mid-transfer, which the HTTP client misread as EOF
+        // (truncated body / "empty response").
+        let start = sunlight_ipc::monotonic_millis();
+        let deadline = start.wrapping_add(RECV_TIMEOUT_MS);
+        loop {
+            let elapsed = sunlight_ipc::monotonic_millis().wrapping_sub(start);
+            iface.poll(Instant::from_millis(elapsed as i64), device, sockets);
 
             let mut out = alloc::vec::Vec::new();
             out.reserve(max_len.min(RX_BUF));
             {
                 let socket = sockets.get_mut::<tcp::Socket>(handle);
                 while out.len() < max_len {
+                    let space = max_len - out.len();
                     let mut chunk = [0u8; 512];
-                    match socket.recv_slice(&mut chunk) {
+                    let limit = space.min(chunk.len());
+                    match socket.recv_slice(&mut chunk[..limit]) {
                         Ok(0) => break,
                         Ok(n) => out.extend_from_slice(&chunk[..n]),
                         Err(tcp::RecvError::Finished) => break,
@@ -187,11 +243,18 @@ impl TcpManager {
                 socket.state(),
                 tcp::State::CloseWait | tcp::State::Closed | tcp::State::TimeWait
             ) {
+                // Peer closed and the RX buffer is drained — genuine EOF.
                 return Ok(alloc::vec::Vec::new());
             }
-        }
 
-        Ok(alloc::vec::Vec::new())
+            if sunlight_ipc::monotonic_millis() >= deadline {
+                // Idle too long with the connection still open — treat as EOF so
+                // the caller stops rather than blocking forever.
+                return Ok(alloc::vec::Vec::new());
+            }
+
+            sunlight_ipc::process_yield();
+        }
     }
 
     pub fn close(

@@ -419,7 +419,7 @@ use host::{
     tcp_connect_impl,
 };
 
-// ── SunlightOS IPC via net_server ────────────────────────────────────────────
+// ── SunlightOS IPC via net_server + sunlight-tls ─────────────────────────────
 
 #[cfg(not(feature = "host-linux"))]
 mod sunlight {
@@ -427,16 +427,50 @@ mod sunlight {
     use sunlight_ipc::{ipc_call, nameserver_lookup, CapabilityToken, IpcMsg};
     use sunlight_net::netop::NetOp;
 
+    // Maximum bytes packed into one IPC call (words[2..7] = 6 words × 8 bytes).
     const IPC_CHUNK: usize = 48;
+
+    // TLS IPC protocol labels — must match sunlight-tls/src/main.rs.
+    const TLS_HANDSHAKE: u64 = 0x5401;
+    const TLS_FEED: u64 = 0x5402;
+    const TLS_GET_WRITE: u64 = 0x5403;
+    const TLS_GET_PLAIN: u64 = 0x5404;
+    const TLS_CLOSE: u64 = 0x5405;
+    const TLS_REPLY: u64 = 0x54FF;
+    const TLS_ERROR: u64 = 0x54EE;
+
+    // TLS daemon error codes (word[0] in a TLS_ERROR reply).
+    const TLS_ERR_SESSIONS_FULL: u64 = 3;
+    const TLS_ERR_CERT_EXPIRED: u64 = 5;
+
+    // Data bytes per TLS_FEED / TLS_GET_WRITE / TLS_GET_PLAIN call:
+    // word[0] = session_id or length, words[1..7] = 6 × 8 = 48 bytes.
+    const TLS_DATA_CHUNK: usize = IPC_CHUNK;
 
     pub(super) enum OsConnection {
         Tcp { socket_id: u32 },
+        Tls { socket_id: u32, session_id: u64 },
     }
 
     impl OsConnection {
         pub(super) fn send_all(&mut self, data: &[u8]) -> FetchResult<()> {
             match self {
                 Self::Tcp { socket_id } => net_send(*socket_id, data),
+                Self::Tls { socket_id, session_id } => {
+                    let sid = *session_id;
+                    let sock = *socket_id;
+                    let mut offset = 0usize;
+                    while offset < data.len() {
+                        let end = (offset + TLS_DATA_CHUNK).min(data.len());
+                        tls_feed(sid, &data[offset..end])?;
+                        let encrypted = tls_get_write(sid)?;
+                        if !encrypted.is_empty() {
+                            net_send(sock, &encrypted)?;
+                        }
+                        offset = end;
+                    }
+                    Ok(())
+                }
             }
         }
 
@@ -448,15 +482,32 @@ mod sunlight {
                     buf[..n].copy_from_slice(&chunk[..n]);
                     Ok(n)
                 }
+                Self::Tls { socket_id, session_id } => {
+                    let raw = net_recv(*socket_id, IPC_CHUNK)?;
+                    if raw.is_empty() {
+                        return Ok(0);
+                    }
+                    tls_feed(*session_id, &raw)?;
+                    let plain = tls_get_plain(*session_id)?;
+                    let n = plain.len().min(buf.len());
+                    buf[..n].copy_from_slice(&plain[..n]);
+                    Ok(n)
+                }
             }
         }
 
         pub(super) fn close(&mut self) -> FetchResult<()> {
             match self {
                 Self::Tcp { socket_id } => net_close(*socket_id),
+                Self::Tls { socket_id, session_id } => {
+                    tls_close(*session_id);
+                    net_close(*socket_id)
+                }
             }
         }
     }
+
+    // ── net_server helpers ────────────────────────────────────────────────────
 
     fn net_cap() -> FetchResult<CapabilityToken> {
         nameserver_lookup("net").ok_or_else(|| {
@@ -560,6 +611,123 @@ mod sunlight {
         out
     }
 
+    // ── sunlight-tls IPC helpers ──────────────────────────────────────────────
+
+    fn tls_cap() -> FetchResult<CapabilityToken> {
+        nameserver_lookup("sunlight-tls").ok_or_else(|| {
+            FetchError::IpcError(String::from("sunlight-tls service unavailable"))
+        })
+    }
+
+    /// Pack up to TLS_DATA_CHUNK bytes into words[1..7] of msg.
+    fn pack_tls_data(msg: &mut IpcMsg, data: &[u8]) {
+        let len = data.len().min(TLS_DATA_CHUNK);
+        for i in 0..len {
+            let word_idx = 1 + i / 8;
+            let byte_idx = i % 8;
+            if word_idx < 8 {
+                msg.words[word_idx] |= (data[i] as u64) << (byte_idx * 8);
+            }
+        }
+    }
+
+    /// Unpack data from a TLS_GET_WRITE / TLS_GET_PLAIN reply.
+    /// words[0] = byte count; words[1..7] = data.
+    fn unpack_tls_reply_data(words: &[u64; 8]) -> Vec<u8> {
+        let len = (words[0] as usize).min(TLS_DATA_CHUNK);
+        let mut out = Vec::with_capacity(len);
+        for i in 0..len {
+            let word_idx = 1 + i / 8;
+            let byte_idx = i % 8;
+            if word_idx < 8 {
+                out.push(((words[word_idx] >> (byte_idx * 8)) & 0xff) as u8);
+            }
+        }
+        out
+    }
+
+    /// Initiate a client-mode TLS handshake with the given SNI hostname.
+    /// Returns the session_id on success.
+    fn tls_handshake(hostname: &str) -> FetchResult<u64> {
+        let cap = tls_cap()?;
+        let sni = hostname.as_bytes();
+        let mut msg = IpcMsg::with_label(TLS_HANDSHAKE).word(0, 1u64); // 1 = client
+        pack_tls_data(&mut msg, sni);
+        let reply = ipc_call(cap, msg);
+        if reply.label == TLS_ERROR {
+            return Err(match reply.words[0] {
+                TLS_ERR_SESSIONS_FULL => {
+                    FetchError::TlsHandshakeFailed(String::from("TLS sessions full on daemon"))
+                }
+                TLS_ERR_CERT_EXPIRED => FetchError::TlsCertExpired,
+                code => FetchError::TlsHandshakeFailed(format!("daemon error code {code:#x}")),
+            });
+        }
+        if reply.label != TLS_REPLY {
+            return Err(FetchError::TlsHandshakeFailed(format!(
+                "unexpected label {:#x} from sunlight-tls",
+                reply.label
+            )));
+        }
+        Ok(reply.words[0]) // session_id
+    }
+
+    /// Feed a plaintext or ciphertext chunk into the TLS daemon for processing.
+    /// Chunks larger than TLS_DATA_CHUNK are split across multiple IPC calls.
+    fn tls_feed(sid: u64, data: &[u8]) -> FetchResult<()> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        let cap = tls_cap()?;
+        let mut offset = 0usize;
+        while offset < data.len() {
+            let end = (offset + TLS_DATA_CHUNK).min(data.len());
+            let mut msg = IpcMsg::with_label(TLS_FEED).word(0, sid);
+            pack_tls_data(&mut msg, &data[offset..end]);
+            let reply = ipc_call(cap, msg);
+            if reply.label == TLS_ERROR {
+                return Err(FetchError::TlsHandshakeFailed(String::from(
+                    "TLS_FEED rejected by daemon",
+                )));
+            }
+            offset = end;
+        }
+        Ok(())
+    }
+
+    /// Drain the "to-write" (outbound ciphertext) buffer from the TLS daemon.
+    fn tls_get_write(sid: u64) -> FetchResult<Vec<u8>> {
+        let cap = tls_cap()?;
+        let reply = ipc_call(cap, IpcMsg::with_label(TLS_GET_WRITE).word(0, sid));
+        if reply.label == TLS_ERROR {
+            return Err(FetchError::TlsHandshakeFailed(String::from(
+                "TLS_GET_WRITE failed",
+            )));
+        }
+        Ok(unpack_tls_reply_data(&reply.words))
+    }
+
+    /// Drain the "to-plain" (inbound plaintext) buffer from the TLS daemon.
+    fn tls_get_plain(sid: u64) -> FetchResult<Vec<u8>> {
+        let cap = tls_cap()?;
+        let reply = ipc_call(cap, IpcMsg::with_label(TLS_GET_PLAIN).word(0, sid));
+        if reply.label == TLS_ERROR {
+            return Err(FetchError::TlsHandshakeFailed(String::from(
+                "TLS_GET_PLAIN failed",
+            )));
+        }
+        Ok(unpack_tls_reply_data(&reply.words))
+    }
+
+    /// Close a TLS session in the daemon (best-effort, ignores errors).
+    fn tls_close(sid: u64) {
+        if let Some(cap) = nameserver_lookup("sunlight-tls") {
+            let _ = ipc_call(cap, IpcMsg::with_label(TLS_CLOSE).word(0, sid));
+        }
+    }
+
+    // ── DNS / TCP / HTTP public impls ─────────────────────────────────────────
+
     fn resolve_via_net(hostname: &str) -> FetchResult<ResolvedAddr> {
         let cap = net_cap()?;
         let bytes = hostname.as_bytes();
@@ -611,11 +779,12 @@ mod sunlight {
         Ok(data.len())
     }
 
-    pub(super) fn recv_impl(handle: &mut TcpHandle, max_len: usize) -> FetchResult<Vec<u8>> {
-        let mut buf = vec![0u8; max_len];
+    pub(super) fn recv_impl(handle: &mut TcpHandle, _max_len: usize) -> FetchResult<Vec<u8>> {
+        // Cap allocation to IPC_CHUNK — we can never receive more than that per
+        // kernel IPC call, so allocating 64 KiB would just drain the bump heap.
+        let mut buf = [0u8; IPC_CHUNK];
         let n = handle.conn.read_some(&mut buf)?;
-        buf.truncate(n);
-        Ok(buf)
+        Ok(buf[..n].to_vec())
     }
 
     pub(super) fn close_impl(handle: &mut TcpHandle) -> FetchResult<()> {
@@ -623,24 +792,28 @@ mod sunlight {
     }
 
     pub(super) fn http_request_impl(
-        _hostname: &str,
+        hostname: &str,
         addr: &ResolvedAddr,
         port: u16,
         use_tls: bool,
         request: &HttpRequest,
     ) -> FetchResult<(HttpResponse, TcpHandle, Vec<u8>)> {
+        // sunlight-tls is a stub that echoes bytes without a real handshake.
+        // Sending raw HTTP to port 443 causes the remote to close/reset the
+        // connection and net_server to spin in an 8-second recv timeout.
+        // Fail fast until rustls + ring land on x86_64-unknown-none (see TODO.md).
         if use_tls {
-            return Err(FetchError::IpcError(String::from(
-                "HTTPS not yet supported in SunlightOS fetch (use http:// URLs for now)",
+            return Err(FetchError::TlsHandshakeFailed(String::from(
+                "HTTPS not yet supported on SunlightOS; use http:// for now",
             )));
         }
 
         let socket_id = net_socket()?;
         net_connect(socket_id, addr, port)?;
 
-        let mut handle = TcpHandle {
-            conn: OsConnection::Tcp { socket_id },
-        };
+        let conn = OsConnection::Tcp { socket_id };
+
+        let mut handle = TcpHandle { conn };
 
         let wire = request.serialize();
         handle.conn.send_all(&wire)?;
@@ -701,7 +874,7 @@ mod sunlight {
 
         if let Some(expected) = content_length {
             while body.len() < expected {
-                let chunk = recv_impl(handle, 64 * 1024)?;
+                let chunk = recv_impl(handle, expected - body.len())?;
                 if chunk.is_empty() {
                     break;
                 }
@@ -724,7 +897,7 @@ mod sunlight {
         }
 
         loop {
-            let chunk = recv_impl(handle, 64 * 1024)?;
+            let chunk = recv_impl(handle, IPC_CHUNK)?;
             if chunk.is_empty() {
                 break;
             }

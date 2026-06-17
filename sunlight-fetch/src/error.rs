@@ -48,6 +48,12 @@ pub enum FetchError {
     /// Download was interrupted (Ctrl+C or signal)
     Interrupted,
 
+    /// TLS handshake with sunlight-tls IPC service failed
+    TlsHandshakeFailed(String),
+
+    /// TLS server certificate has expired
+    TlsCertExpired,
+
     /// URL parsing failure
     InvalidUrl(String),
 
@@ -85,6 +91,8 @@ impl fmt::Display for FetchError {
             Self::VfsError(msg) => write!(f, "VFS error: {msg}"),
             Self::IoError(msg) => write!(f, "I/O error: {msg}"),
             Self::Interrupted => write!(f, "download interrupted"),
+            Self::TlsHandshakeFailed(reason) => write!(f, "TLS handshake failed: {reason}"),
+            Self::TlsCertExpired => write!(f, "TLS certificate expired"),
             Self::InvalidUrl(msg) => write!(f, "invalid URL: {msg}"),
             Self::UnknownContentLength => {
                 write!(f, "server did not provide Content-Length")

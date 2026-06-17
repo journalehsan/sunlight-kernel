@@ -239,7 +239,7 @@ fn platform_rename(from: &str, to: &str) -> FetchResult<()> {
 
 #[cfg(not(feature = "host-linux"))]
 fn platform_write_file(path: &str, data: &[u8]) -> FetchResult<()> {
-    use sunlight_libc::{self as libc, Errno, STDERR};
+    use sunlight_libc::{self as libc, Errno};
 
     let fd = libc::open(path.as_bytes()).map_err(|e| FetchError::IoError(errno_str(e)))?;
     let mut off = 0usize;
@@ -308,10 +308,10 @@ fn eprint_progress(s: &str) {
 
     #[cfg(not(feature = "host-linux"))]
     {
-        use sunlight_libc::{self as libc, Errno, STDERR};
+        use sunlight_libc::{self as libc, Errno, STDOUT};
         let mut rest = s.as_bytes();
         while !rest.is_empty() {
-            match libc::write(STDERR, rest) {
+            match libc::write(STDOUT, rest) {
                 Ok(n) => rest = &rest[n.min(rest.len())..],
                 Err(Errno::Again) => libc::yield_now(),
                 Err(_) => break,

@@ -143,6 +143,7 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) => sunlight_net::TcpManager::connect(
                         tcp, socket_id, ip, port, iface, sockets, device,
+                        Some(sunlight_ipc::process_yield),
                     )
                     .is_ok(),
                     _ => false,
