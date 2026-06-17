@@ -458,6 +458,7 @@ use host::{
 mod sunlight {
     use super::*;
     use sunlight_ipc::{debug_log, get_time_utc, ipc_call, monotonic_millis, nameserver_lookup, CapabilityToken, IpcMsg, TzMsg};
+    use sunlight_libc::getrandom;
     use sunlight_net::netop::NetOp;
 
     // Maximum bytes packed into one IPC call (words[2..7] = 6 words × 8 bytes).
@@ -646,13 +647,11 @@ mod sunlight {
 
     // ── sunlight-tls IPC helpers ──────────────────────────────────────────────
 
-    /// Xorshift64 — seeds a diagnostic nonce (NOT cryptographically secure).
-    fn pseudo_rand(seed: u64) -> u64 {
-        let mut x = if seed == 0 { 0xdeadbeef_cafebabe } else { seed };
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        x
+    /// Fill `buf` with cryptographic randomness from the rand service (via libc
+    /// getrandom). Returns false (fail closed) if the rand service is down — a
+    /// TLS client must never generate its ClientHello.random from a weak source.
+    fn fill_secure(buf: &mut [u8]) -> bool {
+        getrandom(buf, 0) == buf.len() as isize
     }
 
     /// Query the tz service for local time as "YYYY-MM-DDTHH:MM:SS+HH:MM".
@@ -718,15 +717,27 @@ mod sunlight {
     fn tls_handshake(hostname: &str) -> FetchResult<u64> {
         let cap = tls_cap()?;
 
-        // Diagnostic: log local time (via tz service), unix time, and a nonce
-        // to verify clock + tz offset are correct before the IPC round-trip.
+        // Generate the 32-byte ClientHello.random from the CSPRNG (rand service
+        // via libc getrandom). Fail closed: no randomness → no handshake.
+        let mut client_random = [0u8; 32];
+        if !fill_secure(&mut client_random) {
+            debug_log("[FETCH-TLS] hs_FAIL getrandom unavailable (rand service down?)\n");
+            return Err(FetchError::TlsHandshakeFailed(String::from(
+                "CSPRNG unavailable: cannot generate ClientHello.random",
+            )));
+        }
+        let mut nb = [0u8; 8];
+        nb.copy_from_slice(&client_random[0..8]);
+        let nonce = u64::from_le_bytes(nb);
+
+        // Diagnostic: log local time (via tz service) + unix time to verify the
+        // clock + tz offset, alongside the CSPRNG-sourced client random nonce.
         let unix_time = get_time_utc();
         let mono_ms   = monotonic_millis();
-        let nonce     = pseudo_rand(mono_ms ^ unix_time.wrapping_mul(0x9e3779b97f4a7c15));
         let local_ts  = local_time_str();
         {
             let dbg = format!(
-                "[FETCH-TLS] hs_start host={} local={} unix={} ms={} nonce={:#018x}\n",
+                "[FETCH-TLS] hs_start host={} local={} unix={} ms={} client_random[0..8]={:#018x}\n",
                 hostname, local_ts, unix_time, mono_ms, nonce
             );
             debug_log(&dbg);
@@ -768,10 +779,14 @@ mod sunlight {
             )));
         }
         let sid = reply.words[0];
+        // The daemon returns the first 24 bytes of its server handshake Random
+        // in words[1..4] (also CSPRNG-sourced). Log a preview to confirm both
+        // sides contributed real entropy to the handshake.
+        let server_rnd0 = reply.words[1];
         {
             let dbg = format!(
-                "[FETCH-TLS] hs_OK host={} sid={} local={} unix={}\n",
-                hostname, sid, local_ts, unix_time
+                "[FETCH-TLS] hs_OK host={} sid={:#x} server_random[0..8]={:#018x} local={} unix={}\n",
+                hostname, sid, server_rnd0, local_ts, unix_time
             );
             debug_log(&dbg);
         }

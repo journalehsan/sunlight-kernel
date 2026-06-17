@@ -216,27 +216,8 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
-    // sunlight-tls.service - TLS service (rustls over IPC, certs via sunlight-kv)
-    let tls_service = r#"[Unit]
-Description=SunlightOS TLS Service
-
-[Service]
-Type=simple
-ExecStart=/sbin/sunlight-tls
-Restart=on-failure
-RestartSec=3
-User=root
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=sunlight.target
-"#;
-    if let Ok(unit) = parse_service_unit(tls_service.as_bytes()) {
-        let _ = services.add(unit);
-    }
-
-    // rand_service.service - ChaCha20 CSPRNG (libc crypto getrandom routes here)
+    // rand_service.service - ChaCha20 CSPRNG (libc crypto getrandom routes here).
+    // MUST start before sunlight-tls: TLS handshakes pull randomness from it.
     let rand_service = r#"[Unit]
 Description=SunlightOS Random Service
 
@@ -253,6 +234,27 @@ StandardError=journal
 WantedBy=sunlight.target
 "#;
     if let Ok(unit) = parse_service_unit(rand_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
+    // sunlight-tls.service - TLS service (rustls over IPC, certs via sunlight-kv,
+    // handshake randomness via rand_service). Starts after kv + rand_service.
+    let tls_service = r#"[Unit]
+Description=SunlightOS TLS Service
+
+[Service]
+Type=simple
+ExecStart=/sbin/sunlight-tls
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(tls_service.as_bytes()) {
         let _ = services.add(unit);
     }
 
@@ -443,7 +445,7 @@ fn _start() -> ! {
         }
     };
 
-    serial_println!("[SUNLIGHTD] Start order: timezone_service → niced → gcd → uac_service → sunlight-kv → sunlight-tls");
+    serial_println!("[SUNLIGHTD] Start order: timezone_service → niced → gcd → uac_service → sunlight-kv → rand_service → sunlight-tls");
     serial_println!("[SunlightOS] sunlightd OK");
 
     // Spawn services sunlightd owns (kernel/init own vfs/net/tty — not our job).
@@ -451,15 +453,16 @@ fn _start() -> ! {
     if spawn_cap != sunlight_ipc::CapabilityToken(0) {
         // Indices must match the order services were added in load_units():
         // 0=timezone_service, 1=niced, 2=gcd, 3=uac_service, 4=sunlight-kv,
-        // 5=sunlight-tls, 6=rand_service
+        // 5=rand_service, 6=sunlight-tls. rand_service MUST precede sunlight-tls
+        // (TLS handshakes pull randomness from it).
         let managed: [(&str, &str); 7] = [
             ("/sbin/timezone_service", "timezone_service"),
             ("/sbin/niced",            "niced"),
             ("/sbin/gcd",              "gcd"),
             ("/sbin/uac_service",      "uac_service"),
             ("/sbin/sunlight-kv",      "sunlight-kv"),
-            ("/sbin/sunlight-tls",     "sunlight-tls"),
             ("/sbin/rand_service",     "rand_service"),
+            ("/sbin/sunlight-tls",     "sunlight-tls"),
         ];
         for (i, (path, name)) in managed.iter().enumerate() {
             match spawn_named(spawn_cap, path, name) {

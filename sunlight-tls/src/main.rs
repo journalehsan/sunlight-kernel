@@ -133,6 +133,9 @@ const MAX_SESSIONS: usize = 4;
 struct Session {
     id: u64,
     established: bool,
+    /// 32-byte handshake Random (the TLS ServerHello.random equivalent),
+    /// sourced from the CSPRNG (rand service) at session creation.
+    random: [u8; 32],
     // For demo (no rustls on sunlightos path): pass-through buffers
     to_write: Vec<u8>,
     to_plain: Vec<u8>,
@@ -140,8 +143,14 @@ struct Session {
 
 #[cfg(feature = "sunlightos")]
 static mut SESSIONS: [Option<Session>; MAX_SESSIONS] = [const { None }; MAX_SESSIONS];
+
+/// Fill `buf` with cryptographic random bytes from the rand service via libc.
+/// Returns false (fail closed) if the rand service is unreachable — a TLS
+/// handshake must never proceed on weak/absent randomness.
 #[cfg(feature = "sunlightos")]
-static mut NEXT_SID: u64 = 1;
+fn fill_secure(buf: &mut [u8]) -> bool {
+    sunlight_libc::getrandom(buf, 0) == buf.len() as isize
+}
 
 #[cfg(feature = "sunlightos")]
 static mut CACHED_CA: Option<(String, Vec<u8>)> = None;
@@ -313,17 +322,36 @@ fn fetch_certs_from_kv() {
 
 #[cfg(feature = "sunlightos")]
 fn alloc_session() -> Option<u64> {
+    // Pull 32 bytes of cryptographic randomness for the handshake Random, and
+    // derive an unpredictable session id from it (predictable/sequential
+    // session ids are a real weakness). Fail closed if the CSPRNG is down.
+    let mut random = [0u8; 32];
+    if !fill_secure(&mut random) {
+        serial_println!("[SUNLIGHT-TLS] getrandom FAILED (rand service down?) — refusing handshake");
+        return None;
+    }
+    let mut sid_bytes = [0u8; 8];
+    sid_bytes.copy_from_slice(&random[24..32]);
+    let mut sid = u64::from_le_bytes(sid_bytes);
+    if sid == 0 {
+        sid = 1;
+    }
+
+    let mut rnd0 = [0u8; 8];
+    rnd0.copy_from_slice(&random[0..8]);
+    serial_println!(
+        "[SUNLIGHT-TLS] handshake random sourced from CSPRNG sid={:#x} rnd[0..8]={:#018x}",
+        sid,
+        u64::from_le_bytes(rnd0)
+    );
+
     unsafe {
         for i in 0..MAX_SESSIONS {
             if SESSIONS[i].is_none() {
-                let sid = NEXT_SID;
-                NEXT_SID = NEXT_SID.wrapping_add(1);
-                if NEXT_SID == 0 {
-                    NEXT_SID = 1;
-                }
                 SESSIONS[i] = Some(Session {
                     id: sid,
                     established: true, // demo: "handshake" completes immediately
+                    random,
                     to_write: Vec::new(),
                     to_plain: Vec::new(),
                 });
@@ -399,6 +427,16 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
 
                 if let Some(sid) = alloc_session() {
                     reply.words[0] = sid;
+                    // Return the first 24 bytes of the server handshake Random in
+                    // words[1..4] (fits the 4-word register-IPC budget) so the
+                    // client can mix in real server entropy.
+                    if let Some(s) = find_session_mut(sid) {
+                        for w in 0..3 {
+                            let mut b = [0u8; 8];
+                            b.copy_from_slice(&s.random[w * 8..w * 8 + 8]);
+                            reply.words[1 + w] = u64::from_le_bytes(b);
+                        }
+                    }
                     serial_println!(
                         "[SUNLIGHT-TLS] hs_OK sid={} sni={} local={} unix={}",
                         sid, sni, local_ts, unix_time
