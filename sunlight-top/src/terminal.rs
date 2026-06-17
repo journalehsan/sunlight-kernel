@@ -19,15 +19,24 @@ pub fn write_stdout(buf: &[u8]) {
     }
 }
 
+// A whole top frame (truecolor escapes everywhere, an 80-wide separator, the
+// table header and ~tens of process rows with progress bars) runs well past
+// 4 KiB. With a 4 KiB buffer the frame was split across several write() calls
+// and the TTY repainted between the partial chunks, producing visible flicker
+// on the real framebuffer. 16 KiB lets a normal frame flush in one atomic write
+// (the user stack is 512 KiB, so this is cheap). push() still auto-flushes on
+// overflow as a safety fallback for oversized terminals.
+const CANVAS_BUF_SIZE: usize = 16 * 1024;
+
 pub struct Canvas {
-    buf: [u8; 4096],
+    buf: [u8; CANVAS_BUF_SIZE],
     pos: usize,
 }
 
 impl Canvas {
     pub const fn new() -> Self {
         Self {
-            buf: [0; 4096],
+            buf: [0; CANVAS_BUF_SIZE],
             pos: 0,
         }
     }

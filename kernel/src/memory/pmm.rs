@@ -3,7 +3,7 @@ use limine::memmap::Entry;
 use x86_64::PhysAddr;
 
 const FRAME_SIZE: usize = 4096;
-const MAX_FRAMES: usize = 1024 * 1024; // 4 GiB
+const MAX_FRAMES: usize = 4 * 1024 * 1024; // 16 GiB (bitmap-tracked region)
 const BITMAP_SIZE: usize = MAX_FRAMES / 8;
 
 static mut BITMAP: [u8; BITMAP_SIZE] = [0; BITMAP_SIZE];
@@ -42,11 +42,17 @@ impl PhysicalMemoryManager {
                     / FRAME_SIZE as u64) as usize;
 
                 for f in start_frame..end_frame {
+                    // Only frames the bitmap can actually track count toward
+                    // total/free. Counting frames beyond MAX_FRAMES in `total`
+                    // (but never in `free`, since the bitmap can't represent
+                    // them) would make `used = total - free` report that RAM as
+                    // permanently allocated — the source of the bogus ~80% on
+                    // machines with more than MAX_FRAMES of RAM.
                     if f < MAX_FRAMES {
                         BITMAP[f / 8] &= !(1 << (f % 8));
                         free += 1;
+                        total += 1;
                     }
-                    total += 1;
                 }
             }
         }

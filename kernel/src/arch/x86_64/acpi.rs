@@ -382,6 +382,20 @@ fn parse_fadt() -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Decode a small AML integer operand. Returns (value, bytes_consumed).
+/// Handles ZeroOp/OneOp/OnesOp/BytePrefix; falls back to treating the byte as a
+/// literal for non-conforming firmware.
+fn read_aml_int(bytes: &[u8]) -> (u8, usize) {
+    match bytes.first().copied() {
+        None => (0, 0),
+        Some(0x00) => (0, 1),                                   // ZeroOp
+        Some(0x01) => (1, 1),                                   // OneOp
+        Some(0xFF) => (0xFF, 1),                                // OnesOp
+        Some(0x0A) => (bytes.get(1).copied().unwrap_or(0), 2),  // BytePrefix + value
+        Some(v) => (v, 1),                                      // defensive: bare literal
+    }
+}
+
 /// Milestone 3: Extract SLP_TYPx values from DSDT bytecode
 fn parse_dsdt(dsdt_phys: u64) -> Result<(), &'static str> {
     if dsdt_phys == 0 {
@@ -395,36 +409,46 @@ fn parse_dsdt(dsdt_phys: u64) -> Result<(), &'static str> {
             .ok_or("Failed to map DSDT")?
     };
 
-    // Search for _S5 object in DSDT AML bytecode
-    // Pattern: 0x08 0x5F 0x53 0x35 (name definition) followed by a package
     let dsdt_bytes =
         unsafe { core::slice::from_raw_parts(dsdt_phys as *const u8, dsdt_hdr.length as usize) };
 
-    // Search for _S5 bytecode sequence
-    for i in 0..dsdt_bytes.len().saturating_sub(4) {
-        if dsdt_bytes[i] == 0x08 &&        // Name operation
-           dsdt_bytes[i+1] == b'_' as u8 &&  // Underscore prefix
-           dsdt_bytes[i+2] == b'S' as u8 &&  // S
-           dsdt_bytes[i+3] == b'5' as u8
-        // 5
-        {
-            // Found _S5 object. Extract sleep type values from following package
-            // Simplified: look for the package payload bytes
-            if i + 9 < dsdt_bytes.len() {
-                // Typical pattern: package length, then SLP_TYPa, SLP_TYPb bytes
-                let slp_typea = dsdt_bytes[i + 7];
-                let slp_typeb = dsdt_bytes[i + 8];
-                let mut state = ACPI_STATE.lock();
-                state.slp_typea = slp_typea;
-                state.slp_typeb = slp_typeb;
-                crate::serial_println!(
-                    "[ACPI] _S5 Sleep Types: a={:#x}, b={:#x}",
-                    slp_typea,
-                    slp_typeb
-                );
-                return Ok(());
+    // The _S5 object is the AML NameString "_S5_" (note the trailing underscore)
+    // followed by a Package:
+    //     12 <PkgLength> <NumElements> <elem0> <elem1> ...
+    // where elem0 = SLP_TYPa and elem1 = SLP_TYPb. PkgLength is variable-width
+    // (its top two bits give the count of extra length bytes) and each element
+    // is an AML integer operand, so the operands must be decoded, not read at a
+    // fixed offset. The previous code read dsdt_bytes[i+7]/[i+8], which landed on
+    // NumElements/garbage and produced a bogus SLP_TYP — the reason shutdown
+    // wrote the wrong value and never powered off.
+    let n = dsdt_bytes.len();
+    let mut i = 0usize;
+    while i + 4 <= n {
+        if &dsdt_bytes[i..i + 4] == b"_S5_" {
+            let mut j = i + 4;
+            if j < n && dsdt_bytes[j] == 0x12 {
+                j += 1; // skip PackageOp
+                if j < n {
+                    let extra = (dsdt_bytes[j] >> 6) as usize; // PkgLength: extra byte count
+                    j += 1 + extra; // skip the whole PkgLength field
+                }
+                j += 1; // skip NumElements
+                if j < n {
+                    let (slp_typea, adv) = read_aml_int(&dsdt_bytes[j..]);
+                    let (slp_typeb, _) = read_aml_int(&dsdt_bytes[j + adv..]);
+                    let mut state = ACPI_STATE.lock();
+                    state.slp_typea = slp_typea;
+                    state.slp_typeb = slp_typeb;
+                    crate::serial_println!(
+                        "[ACPI] _S5 Sleep Types: a={:#x}, b={:#x}",
+                        slp_typea,
+                        slp_typeb
+                    );
+                    return Ok(());
+                }
             }
         }
+        i += 1;
     }
 
     crate::serial_println!("[ACPI] _S5 object not found in DSDT (using defaults)");
@@ -542,44 +566,97 @@ pub fn reboot() -> ! {
     }
 }
 
+#[inline]
+unsafe fn inw(port: u16) -> u16 {
+    let value: u16;
+    core::arch::asm!(
+        "in ax, dx",
+        out("ax") value,
+        in("dx") port,
+        options(nomem, nostack, preserves_flags)
+    );
+    value
+}
+
+#[inline]
+unsafe fn outw(port: u16, value: u16) {
+    core::arch::asm!(
+        "out dx, ax",
+        in("dx") port,
+        in("ax") value,
+        options(nomem, nostack, preserves_flags)
+    );
+}
+
+#[inline]
+unsafe fn outb(port: u16, value: u8) {
+    core::arch::asm!(
+        "out dx, al",
+        in("dx") port,
+        in("al") value,
+        options(nomem, nostack, preserves_flags)
+    );
+}
+
+/// SLP_EN bit in PM1_CNT (bit 13) and SCI_EN bit (bit 0).
+const SLP_EN: u16 = 1 << 13;
+const SCI_EN: u16 = 1 << 0;
+
 /// Milestone 5: Shutdown using S5 sleep state
 pub fn shutdown() -> ! {
-    let state = ACPI_STATE.lock();
+    // Snapshot what we need, then drop the lock — we never return, and we don't
+    // want to hold it across the (possibly long) ACPI-enable poll.
+    let (pm1a_port, pm1b_port, slp_typa, slp_typb, smi_cmd, acpi_enable) = {
+        let state = ACPI_STATE.lock();
+        (
+            state.pm1a_cnt_blk as u16,
+            state.pm1b_cnt_blk as u16,
+            state.slp_typea as u16,
+            state.slp_typeb as u16,
+            state.smi_cmd_port as u16,
+            state.acpi_enable_value,
+        )
+    };
+
+    // No timer/keyboard IRQ should run between enabling ACPI and the S5 write.
+    unsafe { core::arch::asm!("cli", options(nomem, nostack)) };
+
     crate::serial_println!(
-        "[ACPI] Writing S5 sleep payload state to PM1a_CNT_BLK port {:#x}...",
-        state.pm1a_cnt_blk
+        "[ACPI] Shutdown: PM1a_CNT={:#x} SLP_TYPa={:#x}",
+        pm1a_port,
+        slp_typa
     );
 
-    if state.pm1a_cnt_blk != 0 {
-        // Construct S5 sleep value:
-        // bits [12:10] = SLP_TYPa (sleep type for PM1a)
-        // bit 13 = SLP_EN (sleep enable)
-        let sleep_val = ((state.slp_typea as u32) << 10) | (1u32 << 13);
-        let port_a = state.pm1a_cnt_blk as u16;
-
-        unsafe {
-            core::arch::asm!(
-                "out dx, eax",
-                in("dx") port_a,
-                in("eax") sleep_val,
-            );
+    if pm1a_port == 0 {
+        crate::serial_println!("[ACPI] No PM1a_CNT block discovered; cannot S5 shutdown");
+    } else {
+        // Real firmware hands the machine off in legacy mode (SCI_EN=0). Writing
+        // SLP_EN to PM1_CNT only powers off once ACPI mode is enabled, so kick
+        // SMI_CMD with ACPI_ENABLE and wait for SCI_EN to latch. QEMU usually
+        // boots with SCI_EN already set, so this is a no-op there.
+        if unsafe { inw(pm1a_port) } & SCI_EN == 0 && smi_cmd != 0 && acpi_enable != 0 {
+            crate::serial_println!("[ACPI] Enabling ACPI mode via SMI_CMD {:#x}", smi_cmd);
+            unsafe { outb(smi_cmd, acpi_enable) };
+            let mut spins = 0u32;
+            while unsafe { inw(pm1a_port) } & SCI_EN == 0 && spins < 3_000_000 {
+                spins += 1;
+                core::hint::spin_loop();
+            }
         }
 
-        // Also write PM1b if present
-        if state.pm1b_cnt_blk != 0 {
-            let sleep_val_b = ((state.slp_typeb as u32) << 10) | (1u32 << 13);
-            let port_b = state.pm1b_cnt_blk as u16;
-            unsafe {
-                core::arch::asm!(
-                    "out dx, eax",
-                    in("dx") port_b,
-                    in("eax") sleep_val_b,
-                );
-            }
+        // PM1_CNT is a 16-bit register: SLP_TYP occupies bits [12:10], SLP_EN is
+        // bit 13. Must be a 16-bit OUT — the old 32-bit `out dx, eax` spilled
+        // into the adjacent port.
+        let sleep_a = (slp_typa << 10) | SLP_EN;
+        crate::serial_println!("[ACPI] Writing S5 {:#x} to PM1a_CNT {:#x}", sleep_a, pm1a_port);
+        unsafe { outw(pm1a_port, sleep_a) };
+
+        if pm1b_port != 0 {
+            let sleep_b = (slp_typb << 10) | SLP_EN;
+            unsafe { outw(pm1b_port, sleep_b) };
         }
     }
 
-    drop(state);
     crate::serial_println!("[ACPI] Shutdown initiated. Powering down...");
 
     // Loop forever waiting for power off
