@@ -32,6 +32,8 @@ pub struct TelemetryPage {
     pub tick_hz: u32,
     pub cpu_count: u8,
     pub _pad: [u8; 3],
+    /// Monotonic kernel sample time (ns) for this telemetry snapshot.
+    pub sample_time_ns: u64,
     pub proc_count: u32,
     pub procs: [ProcessStat; MAX_PROCESSES],
 }
@@ -57,7 +59,9 @@ pub struct ProcessSnapshot {
     pub state: ProcessState,
     pub name: [u8; 32],
     pub cpu_ticks: u64,
-    pub cpu_pct: u8,
+    /// CPU usage in basis points (0..=10000 means 0.00% .. 100.00%).
+    /// Machine-normalized: 10000 = all online CPUs fully busy.
+    pub cpu_bp: u16,
     pub mem_kb: u32,
 }
 
@@ -84,7 +88,12 @@ pub struct SystemSnapshot {
     pub net_tx_bytes: u64,
     pub proc_count: usize,
     pub procs: [ProcessSnapshot; MAX_PROCESSES],
-    pub cpu_usage_pct: u8,
+    /// Online CPU count reported by kernel (for capacity math).
+    pub cpu_count: u8,
+    /// Used CPU in basis points (0..=10000).
+    pub cpu_used_bp: u16,
+    /// Idle CPU in basis points (0..=10000). used_bp + idle_bp ≈ 10000.
+    pub cpu_idle_bp: u16,
     pub local_time: [u8; 16],
     pub local_time_len: usize,
 }
@@ -102,7 +111,9 @@ impl Default for SystemSnapshot {
             net_tx_bytes: 0,
             proc_count: 0,
             procs: [ProcessSnapshot::default(); MAX_PROCESSES],
-            cpu_usage_pct: 0,
+            cpu_count: 1,
+            cpu_used_bp: 0,
+            cpu_idle_bp: 10000,
             local_time: [0; 16],
             local_time_len: 0,
         }
@@ -112,6 +123,10 @@ impl Default for SystemSnapshot {
 pub struct Telemetry {
     page_ptr: *const TelemetryPage,
     last_seq: u32,
+    /// Previous sample monotonic time (ns) from kernel telemetry.
+    last_sample_time_ns: u64,
+    /// Previous effective runtime by pid for delta computation.
+    last_runtime_by_pid: [u64; MAX_PROCESSES],
     last_pids: [u32; MAX_PROCESSES],
     last_ticks: [u64; MAX_PROCESSES],
     last_snapshot: SystemSnapshot,
@@ -133,6 +148,8 @@ impl Telemetry {
         Ok(Self {
             page_ptr: ptr,
             last_seq: 0,
+            last_sample_time_ns: 0,
+            last_runtime_by_pid: [0; MAX_PROCESSES],
             last_pids: [0; MAX_PROCESSES],
             last_ticks: [0; MAX_PROCESSES],
             last_snapshot: SystemSnapshot::default(),
@@ -160,7 +177,7 @@ impl Telemetry {
                 continue;
             }
 
-            self.compute_cpu_pct(&mut snap);
+            self.compute_cpu_usage(&mut snap);
             self.fill_local_time(&mut snap);
 
             self.last_seq = seq2;
@@ -189,6 +206,8 @@ impl Telemetry {
             snap.zram_comp_kb = vread(core::ptr::addr_of!(page.zram_comp_kb));
             snap.net_rx_bytes = vread(core::ptr::addr_of!(page.net_rx_bytes));
             snap.net_tx_bytes = vread(core::ptr::addr_of!(page.net_tx_bytes));
+            snap.cpu_count = vread(core::ptr::addr_of!(page.cpu_count));
+            // sample_time_ns is read inside compute to drive interval math.
         }
 
         // SAFETY: `proc_count` is read from the same read-only telemetry mapping.
@@ -209,7 +228,7 @@ impl Telemetry {
                 },
                 name: raw.name,
                 cpu_ticks: raw.cpu_ticks,
-                cpu_pct: 0,
+                cpu_bp: 0,
                 mem_kb: raw.mem_pages.saturating_mul(4),
             };
         }
@@ -217,45 +236,128 @@ impl Telemetry {
         snap
     }
 
-    fn compute_cpu_pct(&mut self, snap: &mut SystemSnapshot) {
-        let mut total_delta = 0u64;
-        let mut deltas = [0u64; MAX_PROCESSES];
+    fn compute_cpu_usage(&mut self, snap: &mut SystemSnapshot) {
+        // Read current sample time published by kernel for this snapshot.
+        let cur_sample = unsafe { vread(core::ptr::addr_of!((*self.page_ptr).sample_time_ns)) };
+
+        let interval_ns: u64 = if self.last_sample_time_ns != 0 && cur_sample > self.last_sample_time_ns {
+            cur_sample.saturating_sub(self.last_sample_time_ns)
+        } else {
+            0
+        };
+
+        let cpu_count = if snap.cpu_count > 0 { snap.cpu_count as u64 } else { 1 };
+        let capacity_delta_ns: u64 = interval_ns.saturating_mul(cpu_count);
+
+        let mut used_delta_ns: u64 = 0;
+        let mut proc_deltas = [0u64; MAX_PROCESSES];
         let mut next_pids = [0u32; MAX_PROCESSES];
-        let mut next_ticks = [0u64; MAX_PROCESSES];
+        let mut next_runtimes = [0u64; MAX_PROCESSES];
 
         for i in 0..snap.proc_count {
             let pid = snap.procs[i].pid;
-            let cur_tick = snap.procs[i].cpu_ticks;
-            let mut prev_tick = 0u64;
+            let cur_runtime = snap.procs[i].cpu_ticks;
 
+            // Find previous runtime by pid (preferred) or fall back to legacy slot.
+            let mut prev_runtime: u64 = 0;
+            let mut found = false;
             for j in 0..MAX_PROCESSES {
                 if self.last_pids[j] == pid {
-                    prev_tick = self.last_ticks[j];
+                    prev_runtime = self.last_runtime_by_pid[j];
+                    found = true;
                     break;
                 }
             }
+            if !found {
+                // Legacy fallback using old tick array (may be zero first time).
+                for j in 0..MAX_PROCESSES {
+                    if self.last_pids[j] == pid {
+                        prev_runtime = self.last_ticks[j];
+                        found = true;
+                        break;
+                    }
+                }
+            }
 
-            let delta = cur_tick.saturating_sub(prev_tick);
-            deltas[i] = delta;
-            total_delta = total_delta.saturating_add(delta);
+            let delta = if found {
+                cur_runtime.saturating_sub(prev_runtime)
+            } else {
+                // First observation of this pid in our history: no delta yet.
+                // Seed previous to current so the *next* sample yields a real delta.
+                prev_runtime = cur_runtime;
+                0
+            };
+            proc_deltas[i] = delta;
+            used_delta_ns = used_delta_ns.saturating_add(delta);
+
             next_pids[i] = pid;
-            next_ticks[i] = cur_tick;
+            next_runtimes[i] = cur_runtime;
         }
 
-        let mut peak = 0u8;
-        if total_delta > 0 {
+        // Compute header used/idle in basis points (10000 = 100.00%).
+        let mut used_bp: u32 = 0;
+        let mut idle_bp: u32 = 10000;
+
+        if interval_ns > 0 && capacity_delta_ns > 0 {
+            used_bp = ((used_delta_ns as u128) * 10000u128 / (capacity_delta_ns as u128)) as u32;
+            used_bp = used_bp.min(10000);
+            idle_bp = 10000u32.saturating_sub(used_bp);
+        } else if interval_ns == 0 {
+            // No time elapsed; keep previous display values to avoid div0.
+            used_bp = self.last_snapshot.cpu_used_bp as u32;
+            idle_bp = self.last_snapshot.cpu_idle_bp as u32;
+        }
+
+        // Clamp and ensure used + idle == 10000 after races/rounding.
+        if used_bp + idle_bp > 10000 {
+            idle_bp = 10000 - used_bp;
+        }
+
+        snap.cpu_used_bp = used_bp as u16;
+        snap.cpu_idle_bp = idle_bp as u16;
+
+        // Per-process machine-normalized CPU in basis points.
+        if capacity_delta_ns > 0 {
             for i in 0..snap.proc_count {
-                let pct = ((deltas[i].saturating_mul(100)) / total_delta).min(100) as u8;
-                snap.procs[i].cpu_pct = pct;
-                if pct > peak {
-                    peak = pct;
+                let bp = ((proc_deltas[i] as u128) * 10000u128 / (capacity_delta_ns as u128)) as u32;
+                snap.procs[i].cpu_bp = bp.min(10000) as u16;
+            }
+        } else {
+            // First sample or zero interval: leave at 0.
+            for i in 0..snap.proc_count {
+                snap.procs[i].cpu_bp = 0;
+            }
+        }
+
+        // Update local previous state for next delta.
+        self.last_sample_time_ns = if cur_sample != 0 { cur_sample } else { self.last_sample_time_ns };
+
+        // Prune stale pid entries that are no longer present in this snapshot.
+        // This prevents a reborn pid from inheriting a dead process's previous runtime.
+        for j in 0..MAX_PROCESSES {
+            let lp = self.last_pids[j];
+            if lp != 0 {
+                let mut still_present = false;
+                for k in 0..snap.proc_count {
+                    if snap.procs[k].pid == lp {
+                        still_present = true;
+                        break;
+                    }
+                }
+                if !still_present {
+                    self.last_pids[j] = 0;
+                    self.last_runtime_by_pid[j] = 0;
+                    self.last_ticks[j] = 0;
                 }
             }
         }
 
-        snap.cpu_usage_pct = peak;
         self.last_pids = next_pids;
-        self.last_ticks = next_ticks;
+        self.last_runtime_by_pid = next_runtimes;
+        // Also keep legacy last_ticks in sync for any other readers.
+        for i in 0..snap.proc_count {
+            self.last_ticks[i] = next_runtimes[i];
+        }
     }
 
     fn fill_local_time(&self, snap: &mut SystemSnapshot) {

@@ -129,7 +129,6 @@ pub fn fork_current_process(
             quantum_override: None,
             cpu_runtime_ns: 0,
             last_start_ns: 0,
-            last_snapshot_runtime_ns: 0,
         };
 
         // Setup kernel stack top
@@ -237,7 +236,6 @@ fn sys_fork(
             quantum_override: None,
             cpu_runtime_ns: 0,
             last_start_ns: 0,
-            last_snapshot_runtime_ns: 0,
         };
 
         // Setup kernel stack top

@@ -42,14 +42,36 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
     }
     c.clear_eol();
 
+    // CPU line: machine-normalized used/idle with two decimals.
+    // 10000 basis points = 100.00%. Do not show raw capacity as "100% used".
     c.move_to(3, 1);
     c.fg_orange();
-    c.push_str(" CPU  [");
+    c.push_str(" CPU: ");
     c.reset();
-    c.progress_bar(snap.cpu_usage_pct, term_width.saturating_sub(14));
+
+    // Progress bar driven by used (0..100 coarse).
+    let used_pct_coarse = (snap.cpu_used_bp as u32 / 100) as u8;
+    c.progress_bar(used_pct_coarse, term_width.saturating_sub(28));
+
     c.fg_white();
-    c.push_str("] ");
-    push_pct(c, snap.cpu_usage_pct);
+    // used: AB.CD
+    push_bp_as_pct(c, snap.cpu_used_bp);
+    c.reset();
+    c.fg_dim();
+    c.push_str(" used, ");
+    c.reset();
+    // idle: AB.CD
+    push_bp_as_pct(c, snap.cpu_idle_bp);
+    c.fg_dim();
+    c.push_str(" idle");
+    c.reset();
+
+    // Show CPU count and normalization note.
+    c.fg_dim();
+    c.push_str("  cpus:");
+    c.reset();
+    c.fg_white();
+    c.push_u64(snap.cpu_count as u64);
     c.reset();
     c.clear_eol();
 
@@ -194,5 +216,20 @@ fn push_two(c: &mut Canvas, v: u64) {
 
 pub fn push_pct(c: &mut Canvas, pct: u8) {
     c.push_u64(pct as u64);
+    c.push(b'%');
+}
+
+/// Render basis points (0..=10000) as two-decimal percent, e.g. 742 -> "7.42".
+/// Clamped for safety.
+pub fn push_bp_as_pct(c: &mut Canvas, bp: u16) {
+    let bp = bp.min(10000);
+    let whole = (bp / 100) as u64;
+    let hundredths = (bp % 100) as u64;
+    c.push_u64(whole);
+    c.push(b'.');
+    let t = (hundredths / 10) as u8;
+    let u = (hundredths % 10) as u8;
+    c.push(b'0' + t);
+    c.push(b'0' + u);
     c.push(b'%');
 }

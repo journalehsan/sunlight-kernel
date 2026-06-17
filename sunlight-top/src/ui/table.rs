@@ -76,13 +76,13 @@ pub fn render_table(
         }
         c.push_str(state_str);
 
-        match proc.cpu_pct {
-            85..=u8::MAX => c.fg_red(),
-            60..=84 => c.fg_yellow(),
+        // Color by basis points (10000 = 100.00%).
+        match proc.cpu_bp {
+            8500..=u16::MAX => c.fg_red(),
+            6000..=8499 => c.fg_yellow(),
             _ => c.fg_green(),
         }
-        push_right_aligned_u32(c, proc.cpu_pct as u32, 3);
-        c.push(b'%');
+        push_bp_two_dec(c, proc.cpu_bp);
         c.push(b' ');
 
         c.fg_white();
@@ -121,7 +121,7 @@ fn sort_order(order: &mut [usize], snap: &SystemSnapshot, sort: &SortKey) {
             let b = &snap.procs[order[j - 1]];
             let before = match sort.column {
                 SortColumn::Pid => cmp_u32(a.pid, b.pid, sort.descending),
-                SortColumn::Cpu => cmp_u8(a.cpu_pct, b.cpu_pct, sort.descending),
+                SortColumn::Cpu => cmp_u16(a.cpu_bp, b.cpu_bp, sort.descending),
                 SortColumn::Mem => cmp_u32(a.mem_kb, b.mem_kb, sort.descending),
                 SortColumn::Name => cmp_name(a, b, sort.descending),
             };
@@ -140,7 +140,7 @@ fn cmp_u32(a: u32, b: u32, descending: bool) -> bool {
     if descending { a > b } else { a < b }
 }
 
-fn cmp_u8(a: u8, b: u8, descending: bool) -> bool {
+fn cmp_u16(a: u16, b: u16, descending: bool) -> bool {
     if descending { a > b } else { a < b }
 }
 
@@ -221,4 +221,44 @@ fn push_dec_into(out: &mut [u8], mut v: u64) -> usize {
         out[i] = rev[n - 1 - i];
     }
     n
+}
+
+/// Push machine-normalized CPU usage as two decimal places, right-aligned
+/// for the CPU% column. Example: 695 -> " 6.95", 10000 -> "100.00".
+fn push_bp_two_dec(c: &mut Canvas, bp: u16) {
+    let bp = bp.min(10000);
+    let whole = bp / 100;      // 0..100
+    let frac = bp % 100;       // 0..99
+
+    // We want a 6-char field: "  0.00" .. "100.00"
+    // Build into a small buffer then right-pad.
+    let mut tmp = [b' '; 6];
+    let mut pos = 0usize;
+
+    if whole >= 100 {
+        // 100
+        tmp[pos] = b'1'; pos += 1;
+        tmp[pos] = b'0'; pos += 1;
+        tmp[pos] = b'0'; pos += 1;
+    } else if whole >= 10 {
+        tmp[pos] = b'0' + (whole / 10) as u8; pos += 1;
+        tmp[pos] = b'0' + (whole % 10) as u8; pos += 1;
+    } else if whole > 0 {
+        // 1..9 -> one space then digit
+        tmp[pos] = b' '; pos += 1;
+        tmp[pos] = b'0' + whole as u8; pos += 1;
+    } else {
+        // 0
+        tmp[pos] = b' '; pos += 1;
+        tmp[pos] = b'0'; pos += 1;
+    }
+
+    tmp[pos] = b'.'; pos += 1;
+    tmp[pos] = b'0' + (frac / 10) as u8; pos += 1;
+    tmp[pos] = b'0' + (frac % 10) as u8; // pos not needed after this
+
+    // tmp now has exactly the digits; we have a 6-char slot
+    for i in 0..6 {
+        c.push(tmp[i]);
+    }
 }

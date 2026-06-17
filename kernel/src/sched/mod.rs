@@ -54,26 +54,32 @@
 //!
 //! ### CPU Accounting (for sunlight-top)
 //! Each Process tracks:
-//!   cpu_runtime_ns: u64            // exact accumulated on-CPU time
-//!   last_start_ns: u64             // when it was last scheduled (monotonic)
-//!   last_snapshot_runtime_ns: u64  // value at last telemetry publish
+//!   cpu_runtime_ns: u64   // exact accumulated on-CPU time (committed)
+//!   last_start_ns: u64    // when it was last scheduled (monotonic); 0 if not charging
 //!
-//! On every deschedule (timer or voluntary block/yield/exit) we do:
-//!   delta = now_ns() - last_start_ns;  cpu_runtime_ns += delta;  last_start_ns = 0
+//! On context switch out (deschedule):
+//!   if prev was actually running:
+//!       delta = now_ns() - prev.last_start_ns
+//!       prev.cpu_runtime_ns += delta
 //!
-//! On schedule to Running:
-//!   last_start_ns = now_ns()
+//! On context switch in:
+//!   next.last_start_ns = now_ns()
+//!
+//! Effective runtime for sampling (used by telemetry for Running tasks):
+//!   if state == Running:
+//!       effective = cpu_runtime_ns + (now_ns() - last_start_ns)
+//!   else:
+//!       effective = cpu_runtime_ns
 //!
 //! The monotonic clock is a calibrated TSC (or tick fallback) providing ns resolution
 //! with very low overhead (rdtsc + mul + shift, no floating point).
 //!
-//! sunlight-top reads cpu_ticks (== cpu_runtime_ns) from the telemetry page and
-//! computes:
-//!   delta = current - last_observed
-//!   cpu%  = (delta / 1e9) / refresh_interval_seconds
-//!
-//! last_snapshot_runtime_ns is updated by the kernel at each telemetry refresh
-//! to support delta-style observers.
+//! sunlight-top reads cpu_ticks (effective runtime at publish) and previous values
+//! it stores locally, then computes machine-normalized deltas using:
+//!   capacity_delta = interval_ns * online_cpu_count
+//!   process_bp   = process_delta_ns * 10000 / capacity_delta
+//!   used_bp      = sum(non_idle_deltas) * 10000 / capacity_delta
+//!   idle_bp      = 10000 - used_bp (or derived from idle if tracked)
 //!
 //! ## Invariants (Phase 2)
 //! - Only Ready or Running processes may reside in the tiered ready queues.
@@ -450,6 +456,26 @@ impl Scheduler {
             return;
         }
         self.processes[idx].last_start_ns = now_ns();
+    }
+
+    /// Compute effective runtime for a process, including uncommitted time
+    /// if the process is currently Running on CPU.
+    ///
+    /// Per CPU accounting rules: a task's committed cpu_runtime_ns is updated
+    /// on context switch-out. If the task is currently running, add the
+    /// elapsed time since last_start_ns.
+    #[inline]
+    pub fn effective_runtime_ns(&self, idx: usize) -> u64 {
+        if idx >= self.processes.len() {
+            return 0;
+        }
+        let p = &self.processes[idx];
+        if p.state == ProcessState::Running && p.last_start_ns != 0 {
+            let now = now_ns();
+            p.cpu_runtime_ns.saturating_add(now.saturating_sub(p.last_start_ns))
+        } else {
+            p.cpu_runtime_ns
+        }
     }
 
     /// Set state and ensure ready queues only contain runnable tasks.

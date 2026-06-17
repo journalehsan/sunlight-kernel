@@ -40,6 +40,10 @@ pub struct TelemetryPage {
     pub cpu_count: u8,
     pub _pad: [u8; 3],
 
+    /// Monotonic kernel time (ns) when this telemetry sample was captured.
+    /// Used by sunlight-top for accurate interval-based CPU % computation.
+    pub sample_time_ns: u64,
+
     pub proc_count: u32,
     pub procs: [ProcessStat; MAX_PROCESSES],
 }
@@ -77,6 +81,8 @@ pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
     cpu_count: 1,
     _pad: [0; 3],
 
+    sample_time_ns: 0,
+
     proc_count: 0,
     procs: [ZERO_PROC; MAX_PROCESSES],
 };
@@ -104,6 +110,22 @@ pub unsafe fn update_telemetry(sched: &mut Scheduler, pmm: &PhysicalMemoryManage
         TELEMETRY.uptime_secs = tick_count / (TELEMETRY.tick_hz as u64).max(1);
     }
 
+    // Capture monotonic sample time for this set of CPU counters.
+    // sunlight-top uses (cur - prev) as interval_ns for capacity math.
+    let sample_now: u64 = sched.now_ns();
+    unsafe {
+        TELEMETRY.sample_time_ns = sample_now;
+    }
+
+    // Online CPU count for capacity calculations (machine-normalized %).
+    // For the current uniprocessor kernel this is 1. When SMP is added,
+    // this must reflect the number of online CPUs at the time of sampling.
+    unsafe {
+        if TELEMETRY.cpu_count == 0 {
+            TELEMETRY.cpu_count = 1;
+        }
+    }
+
     let (total_frames, free_frames) = pmm.stats();
     // SAFETY: synchronized by caller; writing PMM-derived counters.
     unsafe {
@@ -126,9 +148,9 @@ pub unsafe fn update_telemetry(sched: &mut Scheduler, pmm: &PhysicalMemoryManage
             break;
         }
 
-        // Snapshot for delta accounting before any long borrow of the entry.
-        let runtime_for_telemetry = sched.processes[idx].cpu_runtime_ns;
-        sched.processes[idx].last_snapshot_runtime_ns = runtime_for_telemetry;
+        // Publish effective runtime: for Running tasks, include uncommitted time
+        // since last_start_ns so sunlight-top does not see 0% until deschedule.
+        let runtime_for_telemetry = sched.effective_runtime_ns(idx);
 
         let proc = &sched.processes[idx];
 
@@ -145,9 +167,8 @@ pub unsafe fn update_telemetry(sched: &mut Scheduler, pmm: &PhysicalMemoryManage
             crate::process::ProcessState::BlockedOnTimer => 5,
             crate::process::ProcessState::BlockedOnIo => 6,
         };
-        // Accurate CPU runtime in nanoseconds (Phase 1/5). sunlight-top uses deltas
-        // against its previous sample (or reads last_snapshot_runtime_ns indirectly via
-        // comparing successive total values).
+        // Publish effective runtime (includes uncommitted time for Running tasks).
+        // sunlight-top maintains previous samples locally and computes deltas + %.
         entry.cpu_ticks = runtime_for_telemetry;
         // Per-process resident memory: count present user-space pages in this
         // process's address space. hhdm_offset comes from the Limine response;

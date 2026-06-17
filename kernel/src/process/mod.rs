@@ -101,8 +101,6 @@ pub struct Process {
     /// TSC-derived monotonic timestamp when this process last started running on CPU.
     /// 0 when not currently accruing (descheduled or never started).
     pub last_start_ns: u64,
-    /// Snapshot of cpu_runtime_ns captured at last telemetry refresh for delta computation.
-    pub last_snapshot_runtime_ns: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,7 +207,6 @@ impl Process {
             quantum_override: None,
             cpu_runtime_ns: 0,
             last_start_ns: 0,
-            last_snapshot_runtime_ns: 0,
         }
     }
 

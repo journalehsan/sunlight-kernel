@@ -37,6 +37,8 @@ pub struct TelemetryPage {
     pub tick_hz: u32,
     pub cpu_count: u8,
     pub _pad: [u8; 3],
+    /// Monotonic kernel sample time (ns) when counters were captured.
+    pub sample_time_ns: u64,
     pub proc_count: u32,
     pub procs: [ProcessStat; MAX_PROCS],
 }
