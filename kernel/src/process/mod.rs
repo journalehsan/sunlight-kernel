@@ -94,6 +94,15 @@ pub struct Process {
     pub aging_boosted_this_pick: bool,
     /// Quantum override set on promotion, consumed by tick(). [FEAT-3]
     pub quantum_override: Option<u32>,
+
+    // === CPU Accounting (for sunlight-top and scheduler) ===
+    /// Total CPU runtime consumed by this process, in nanoseconds (monotonic).
+    pub cpu_runtime_ns: u64,
+    /// TSC-derived monotonic timestamp when this process last started running on CPU.
+    /// 0 when not currently accruing (descheduled or never started).
+    pub last_start_ns: u64,
+    /// Snapshot of cpu_runtime_ns captured at last telemetry refresh for delta computation.
+    pub last_snapshot_runtime_ns: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,6 +207,9 @@ impl Process {
             counter: 0,
             aging_boosted_this_pick: false,
             quantum_override: None,
+            cpu_runtime_ns: 0,
+            last_start_ns: 0,
+            last_snapshot_runtime_ns: 0,
         }
     }
 

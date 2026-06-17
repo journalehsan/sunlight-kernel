@@ -114,6 +114,16 @@ pub fn init() {
         pic2_data.write(0xFF);
     }
 
+    // Calibrate TSC against PIT for accurate per-process CPU accounting.
+    // This uses direct PIT counter reads and completes in ~1-2 ms.
+    calibrate_tsc_from_pit();
+    let hz = TSC_HZ_APPROX.load(Ordering::Relaxed);
+    if hz != 0 {
+        serial_println!("[TIME] TSC calibrated ~{} Hz for monotonic ns clock", hz);
+    } else {
+        serial_println!("[TIME] TSC calibration unavailable; using tick-based ns fallback");
+    }
+
     serial_println!("[IDT] PIC remapped, timer IRQ0 enabled at ~100Hz");
     serial_println!("[IDT] OK");
 }
@@ -176,6 +186,88 @@ fn init_pit() {
         ch0.write((DIVISOR & 0xFF) as u8);
         ch0.write((DIVISOR >> 8) as u8);
     }
+}
+
+/// Latch and read current PIT channel 0 countdown value.
+/// Used for early TSC calibration against real hardware timebase.
+fn read_pit_count() -> u16 {
+    unsafe {
+        let mut cmd: Port<u8> = Port::new(0x43);
+        let mut ch0: Port<u8> = Port::new(0x40);
+        // Latch count: channel 0, low+high, no mode change
+        cmd.write(0x00);
+        let lo = ch0.read();
+        let hi = ch0.read();
+        ((hi as u16) << 8) | (lo as u16)
+    }
+}
+
+/// Calibrate TSC frequency using PIT hardware counter (no dependency on IRQs).
+/// Computes fixed-point multiplier for cheap now_ns() in hot paths.
+/// Safe to call with interrupts disabled; spins briefly (~1-2 ms).
+pub fn calibrate_tsc_from_pit() {
+    const PIT_INPUT_HZ: u64 = 1_193_182;
+    // Measure over a modest delta to get decent precision without long spin.
+    let start_count = read_pit_count() as u64;
+    let tsc0 = unsafe { core::arch::x86_64::_rdtsc() };
+    // Target ~2000 PIT counts drop (~1.6 ms at 1.19MHz). Enough for ~GHz class CPU.
+    let target_drop: u64 = 2000;
+    let mut spins: u32 = 0;
+    loop {
+        let cur = read_pit_count() as u64;
+        let dropped = if start_count >= cur {
+            start_count - cur
+        } else {
+            // handle wrap of 16-bit counter
+            start_count + ((0xFFFFu64 - cur) + 1)
+        };
+        if dropped >= target_drop {
+            break;
+        }
+        spins += 1;
+        if spins > 10_000_000 {
+            // Safety timeout: leave uncalibrated, fallbacks will be used.
+            return;
+        }
+        core::hint::spin_loop();
+    }
+    let tsc1 = unsafe { core::arch::x86_64::_rdtsc() };
+    let tsc_delta = tsc1.saturating_sub(tsc0);
+    let dropped = {
+        let cur = read_pit_count() as u64;
+        if start_count >= cur { start_count - cur } else { start_count + (0xFFFF - cur) + 1 }
+    };
+    if tsc_delta < 1000 || dropped == 0 {
+        return;
+    }
+    // freq_hz = (tsc_delta / time_seconds)
+    // time_s = dropped / PIT_INPUT_HZ
+    let hz = tsc_delta.saturating_mul(PIT_INPUT_HZ) / dropped;
+    if hz < 100_000_000 {
+        // Unrealistically low (or calibration on very slow emu); keep fallback.
+        return;
+    }
+    TSC_HZ_APPROX.store(hz, Ordering::SeqCst);
+    // Fixed point: ns = (dt_tsc * mul) >> 32
+    // mul = (1_000_000_000 << 32) / hz
+    let mul = ((1_000_000_000u128 << 32) / (hz as u128)) as u64;
+    TSC_TO_NS_MUL.store(mul, Ordering::SeqCst);
+    TSC_ORIGIN.store(tsc0, Ordering::SeqCst);
+}
+
+/// Return current monotonic time in nanoseconds since an arbitrary boot origin.
+/// Uses calibrated TSC when available; otherwise coarse tick-based fallback.
+/// Cost: one rdtsc + mul/shift (very cheap) when calibrated.
+pub fn now_ns() -> u64 {
+    let mul = TSC_TO_NS_MUL.load(Ordering::Relaxed);
+    if mul != 0 {
+        let origin = TSC_ORIGIN.load(Ordering::Relaxed);
+        let tsc = unsafe { core::arch::x86_64::_rdtsc() };
+        let dt = tsc.saturating_sub(origin);
+        return ((dt as u128 * (mul as u128)) >> 32) as u64;
+    }
+    // Fallback: 100 Hz ticks * 10_000_000 ns
+    ticks().saturating_mul(10_000_000)
 }
 
 extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
@@ -387,6 +479,12 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
 static TICKS: spin::Mutex<u64> = spin::Mutex::new(0);
 static TELEMETRY_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
 
+// === Monotonic kernel clock (TSC calibrated) ===
+// These are initialized during calibrate_tsc_from_pit().
+static TSC_ORIGIN: AtomicU64 = AtomicU64::new(0);
+static TSC_TO_NS_MUL: AtomicU64 = AtomicU64::new(0); // (dt * mul) >> 32 == nanoseconds
+static TSC_HZ_APPROX: AtomicU64 = AtomicU64::new(0);
+
 /// Naked timer interrupt entry. Manually saves all GPRs to match the
 /// `iretq_to_context` / `init_context` layout, calls the Rust handler,
 /// and optionally switches context.
@@ -483,7 +581,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         let pmm = crate::PMM.lock();
         // SAFETY: timer handler has interrupts disabled during scheduler mutation and telemetry update.
         unsafe {
-            crate::telemetry::update_telemetry(&sched, &pmm, ticks_total);
+            crate::telemetry::update_telemetry(&mut sched, &pmm, ticks_total);
         }
     }
 
@@ -523,13 +621,30 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         if current >= sched.processes.len() {
             0
         } else {
+            // === CPU Accounting (Phase 1) + Phase 4 churn detection ===
+            // Charge exact runtime. If this was an extremely short burst, penalize
+            // burst_score temporarily to avoid scheduler/idle churn from thrashing tasks.
+            sched.account_and_apply_churn_penalty();
+
             // Save current context.
             sched.processes[current].context_rsp = saved_rsp;
+
+            // Phase 2: maintain runnable-only invariant in tier queues.
+            let was_runnable = matches!(
+                sched.processes[current].state,
+                crate::process::ProcessState::Ready | crate::process::ProcessState::Running
+            );
             if sched.processes[current].state == crate::process::ProcessState::Running {
                 sched.processes[current].state = crate::process::ProcessState::Ready;
+            }
+            // If it is still (or became) Ready, ensure it is enqueued for BORE.
+            // If it became Blocked*/Suspended/Finished, ensure it is NOT queued.
+            if matches!(sched.processes[current].state, crate::process::ProcessState::Ready) {
                 if crate::sched::SCHEDULER_MODE == crate::sched::SchedulerMode::Bore {
-                    sched.enqueue_process(current);
+                    sched.enqueue_process_once(current);
                 }
+            } else if !was_runnable || !matches!(sched.processes[current].state, crate::process::ProcessState::Ready) {
+                sched.remove_from_ready_queues(current);
             }
 
             if let Some(next) = sched.pick_next() {
@@ -538,6 +653,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 sched.current = next;
                 sched.processes[next].state = crate::process::ProcessState::Running;
                 sched.processes[next].last_run_tick = sched.global_tick;
+
+                // === CPU Accounting: start charging the newly scheduled process ===
+                sched.start_charging_runtime(next);
 
                 // Switch address space.
                 unsafe {

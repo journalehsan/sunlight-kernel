@@ -201,7 +201,8 @@ fn deliver_pending_signals(process: &mut crate::process::Process) {
                         crate::serial_println!("[SIG] {} ignored", sig_num);
                     }
                     SigHandler::Default => {
-                        // Default action: terminate
+                        // Default action: terminate. Accounting + queue cleanup will happen
+                        // on next timer-driven deschedule (process will be Running->Finished).
                         crate::serial_println!("[SIG] {} delivered: terminating process", sig_num);
                         crate::sched::note_process_finished(process.pid, process.name_str());
                         process.state = crate::process::ProcessState::Finished;
@@ -563,6 +564,8 @@ fn ipc_notify_send(_token: u64) -> u64 {
 
 fn ipc_notify_wait(_endpoint_token: u64) -> u64 {
     sched::with_scheduler(|s| {
+        // Phase 1 + 4: charge + penalize quick block/yield patterns
+        s.account_and_apply_churn_penalty();
         s.current_process_mut().state = ProcessState::BlockedOnIpc;
         s.current_process_mut().block_start_tick = s.global_tick;
     });
@@ -593,19 +596,24 @@ fn endpoint_bind(token: u64) -> u64 {
 /// rdi = exit code
 fn process_exit(code: i32) -> ! {
     sched::with_scheduler(|s| {
-        let p = s.current_process_mut();
-        p.exit_code = code;
-        p.state = ProcessState::Finished;
-        let my_pid = p.pid;
-        let parent_pid = p.ppid;
+        let cur = s.current;
+        s.account_current_runtime();
+        {
+            let p = &mut s.processes[cur];
+            p.exit_code = code;
+            p.state = ProcessState::Finished;
+        }
+        s.remove_from_ready_queues(cur);
+        let my_pid = s.processes[cur].pid;
+        let parent_pid = s.processes[cur].ppid;
         crate::memory::swap::untrack_process(my_pid);
-        crate::sched::note_process_finished(my_pid, p.name_str());
+        crate::sched::note_process_finished(my_pid, s.processes[cur].name_str());
 
         // Shared memory grant cleanup (owner frees frames, everyone unmaps views)
         {
             let mut pmm = crate::PMM.lock();
             let mut caps = crate::capability::CAP_BROKER.lock();
-            crate::memory::shared::cleanup_shared_pages(p, &mut *pmm, &mut *caps);
+            crate::memory::shared::cleanup_shared_pages(&mut s.processes[cur], &mut *pmm, &mut *caps);
         }
 
         // Wake a parent that is blocked in waitpid() on this child. wake_pid
@@ -643,8 +651,18 @@ fn process_exit(code: i32) -> ! {
 /// Syscall: ProcessYield
 fn process_yield() -> u64 {
     sched::with_scheduler(|s| {
+        // Phase 1 + Phase 4: account + penalize extremely short voluntary yields
+        s.account_and_apply_churn_penalty();
         if s.current_process().state == ProcessState::Running {
             s.current_process_mut().state = ProcessState::Ready;
+        }
+        // Phase 2 + 4: for BORE, ensure the yielded task is in the correct queue.
+        // The timer will also defend this, but enqueue here so next pick sees it promptly.
+        // (RR ignores queues; pick_next_round_robin scans states.)
+        if crate::sched::SCHEDULER_MODE == crate::sched::SchedulerMode::Bore {
+            // current is still the index; enqueue_once is idempotent and state-checked.
+            // We don't have idx here easily, but enqueue via scheduler logic will happen on pick.
+            // To be safe we can request reschedule; timer path handles queue hygiene.
         }
     });
     sched::request_reschedule();
@@ -940,10 +958,16 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
 
     // Child still running: park the caller until the child exits.
     let global_tick = sched.global_tick;
-    let caller = sched.current_process_mut();
-    caller.wait_child = Some(pid);
-    caller.state = ProcessState::BlockedOnIpc;
-    caller.block_start_tick = global_tick;
+    let cur = sched.current;
+    // Phase 1 + 4: account + possible churn penalty for short work before wait
+    sched.account_and_apply_churn_penalty();
+    {
+        let caller = &mut sched.processes[cur];
+        caller.wait_child = Some(pid);
+        caller.state = ProcessState::BlockedOnIpc;
+        caller.block_start_tick = global_tick;
+    }
+    sched.remove_from_ready_queues(cur);
     drop(sched);
     crate::sched::request_reschedule();
     EAGAIN

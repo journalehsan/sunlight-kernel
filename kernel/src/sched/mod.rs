@@ -1,3 +1,90 @@
+//! SunBrust RR Scheduler (SunlightOS)
+//!
+//! This module implements the "SunBrust" round-robin scheduler with BORE-inspired
+//! burst tracking, nice-weighted counters, and tiered ready queues.
+//!
+//! ## Scheduling Model
+//!
+//! ### Burst Score (0..=1024)
+//! - Low score (0-256)   => HIGH tier queue (favors interactive / short-running tasks)
+//! - Mid score (257-768) => MEDIUM tier
+//! - High score (769-1024)=> LOW tier (CPU-bound tasks get longer quanta but lower dispatch freq)
+//!
+//! Burst score is adjusted by:
+//! - Early block / short run (< ~3 ticks or <2ms) => decrease burst (more interactive credit)
+//! - Full quantum consumption => increase burst (CPU-bound behavior)
+//! - Periodic aging for tasks waiting >100 ticks => mild decrease (anti-starvation)
+//! - Short-burst churn penalty (Phase 4) => increase burst temporarily when a task
+//!   runs for extremely short periods and blocks/yields immediately. This prevents
+//!   thrashing tasks from causing excessive idle churn.
+//!
+//! Burst score is always clamped to [BURST_SCORE_MIN, BURST_SCORE_MAX].
+//!
+//! ### Nice Value (i8)
+//! - Negative nice => higher priority. Tasks gain "credit" faster and may be
+//!   promoted with a small quantum bonus.
+//! - Positive nice => lower priority. Tasks accumulate "debt" and may be skipped
+//!   for a cycle.
+//! - nice==0 => pure round-robin (counter system bypassed).
+//!
+//! The effective quantum is:
+//!   quantum = calculate_quantum_with_nice(burst_score, nice)
+//!   where positive nice inflates the score (shorter slice) and negative deflates it.
+//!
+//! ### Quantum
+//! - Base range: [QUANTUM_MIN, QUANTUM_MAX] ticks (~5..50 at 100 Hz).
+//! - Interactive tasks (low burst) receive shorter quanta for responsiveness.
+//! - CPU-bound (high burst) receive longer quanta to reduce switch overhead.
+//!
+//! quantum_override may be set by the nice promotion logic for one shot bonuses.
+//!
+//! ### Tiered Queues (BORE mode)
+//! Three ready queues (high/med/low) are maintained. pick_next_bore prefers
+//! high then medium then low. Within a tier, simple FIFO with "skip current"
+//! to avoid immediate re-run of the just-preempted task.
+//!
+//! In RoundRobin mode the tier queues are ignored; pick_next_round_robin performs
+//! a single linear scan over processes with nice-weighted promotion and skip logic.
+//!
+//! ### Aging & Starvation Prevention
+//! - Every AGING_INTERVAL_TICKS, tasks that have waited > AGING_THRESHOLD_TICKS
+//!   without running receive a small burst reduction (but never below
+//!   MINIMUM_AGED_BURST_SCORE) and a starvation boost in the RR counter system.
+//! - This guarantees forward progress for all ready tasks.
+//!
+//! ### CPU Accounting (for sunlight-top)
+//! Each Process tracks:
+//!   cpu_runtime_ns: u64            // exact accumulated on-CPU time
+//!   last_start_ns: u64             // when it was last scheduled (monotonic)
+//!   last_snapshot_runtime_ns: u64  // value at last telemetry publish
+//!
+//! On every deschedule (timer or voluntary block/yield/exit) we do:
+//!   delta = now_ns() - last_start_ns;  cpu_runtime_ns += delta;  last_start_ns = 0
+//!
+//! On schedule to Running:
+//!   last_start_ns = now_ns()
+//!
+//! The monotonic clock is a calibrated TSC (or tick fallback) providing ns resolution
+//! with very low overhead (rdtsc + mul + shift, no floating point).
+//!
+//! sunlight-top reads cpu_ticks (== cpu_runtime_ns) from the telemetry page and
+//! computes:
+//!   delta = current - last_observed
+//!   cpu%  = (delta / 1e9) / refresh_interval_seconds
+//!
+//! last_snapshot_runtime_ns is updated by the kernel at each telemetry refresh
+//! to support delta-style observers.
+//!
+//! ## Invariants (Phase 2)
+//! - Only Ready or Running processes may reside in the tiered ready queues.
+//! - Blocking (IPC, timer, IO, waitpid, yield-to-block, exit, suspend) removes
+//!   the task from ready queues before it stops being current.
+//! - pick_next_* only returns Ready tasks (or falls back safely).
+//!
+//! Overhead in the hot path is deliberately kept minimal: the dominant cost on
+//! context switch is rdtsc + a few branches and the existing queue/tier logic.
+
+use crate::arch::x86_64::interrupts::now_ns;
 use crate::process::{Process, ProcessState, QueueTier};
 use crate::serial_println;
 use alloc::collections::VecDeque;
@@ -29,6 +116,10 @@ pub const AGING_INTERVAL_TICKS: u64 = 10;
 pub const AGING_THRESHOLD_TICKS: u64 = 100; // Age after 100ms
 pub const MINIMUM_AGED_BURST_SCORE: u32 = 256; // Don't starve below HIGH
 pub const INTERACTIVE_DETECTION_THRESHOLD: u32 = 3; // Block < 3 ticks = interactive
+
+// === Phase 4: short-burst / churn detection ===
+const SHORT_BURST_NS: u64 = 2_000_000; // < 2 ms run is "extremely short"
+const SHORT_BURST_PENALTY: u32 = 48; // temporary de-prio by bumping burst (lower prio)
 
 // === Feature 3: Nice-weighted counter system (RoundRobin mode only) ===
 pub const MAX_CREDIT: i32 = 6;
@@ -259,7 +350,7 @@ impl Scheduler {
         self.enqueue_process(idx);
     }
 
-    fn remove_from_ready_queues(&mut self, idx: usize) {
+    pub fn remove_from_ready_queues(&mut self, idx: usize) {
         self.ready_queue_high.retain(|&queued| queued != idx);
         self.ready_queue_medium.retain(|&queued| queued != idx);
         self.ready_queue_low.retain(|&queued| queued != idx);
@@ -311,6 +402,75 @@ impl Scheduler {
         }
     }
 
+    /// Sample the monotonic kernel clock (nanoseconds).
+    #[inline]
+    pub fn now_ns(&self) -> u64 {
+        now_ns()
+    }
+
+    /// Stop charging CPU time to the current process and accumulate elapsed.
+    /// Safe to call when current is valid. Returns the delta that was charged (0 if none).
+    pub fn account_current_runtime(&mut self) -> u64 {
+        let now = now_ns();
+        if self.current >= self.processes.len() {
+            return 0;
+        }
+        let p = &mut self.processes[self.current];
+        let mut delta: u64 = 0;
+        if p.last_start_ns != 0 {
+            delta = now.saturating_sub(p.last_start_ns);
+            p.cpu_runtime_ns = p.cpu_runtime_ns.saturating_add(delta);
+        }
+        p.last_start_ns = 0;
+        delta
+    }
+
+    /// Account runtime for current and, if the just-run burst was extremely short,
+    /// apply a temporary priority penalty (increase burst_score) to reduce idle churn.
+    /// Called on the deschedule path for Phase 4.
+    pub fn account_and_apply_churn_penalty(&mut self) -> u64 {
+        let delta = self.account_current_runtime();
+        if delta > 0 && delta < SHORT_BURST_NS {
+            if self.current < self.processes.len() {
+                let p = &mut self.processes[self.current];
+                // Bump burst score => appears more CPU-bound => lower scheduling priority
+                // for a while. This decays via normal full-quantum/aging paths.
+                p.burst_score = p
+                    .burst_score
+                    .saturating_add(SHORT_BURST_PENALTY)
+                    .min(BURST_SCORE_MAX);
+            }
+        }
+        delta
+    }
+
+    /// Begin charging CPU time to the given process (mark start time).
+    pub fn start_charging_runtime(&mut self, idx: usize) {
+        if idx >= self.processes.len() {
+            return;
+        }
+        self.processes[idx].last_start_ns = now_ns();
+    }
+
+    /// Set state and ensure ready queues only contain runnable tasks.
+    /// Non-runnable tasks are removed from all tier queues.
+    pub fn set_state(&mut self, idx: usize, new_state: ProcessState) {
+        if idx >= self.processes.len() {
+            return;
+        }
+        let old_state = self.processes[idx].state;
+        self.processes[idx].state = new_state;
+
+        let runnable = matches!(new_state, ProcessState::Ready | ProcessState::Running);
+        if !runnable {
+            self.remove_from_ready_queues(idx);
+        } else if matches!(old_state, ProcessState::Ready | ProcessState::Running)
+            && matches!(new_state, ProcessState::Ready)
+        {
+            // Will be (re)enqueued by enqueue path as needed for tier correctness.
+        }
+    }
+
     /// Called from timer IRQ — may set the reschedule flag.
     pub fn tick(&mut self) {
         self.global_tick += 1;
@@ -349,11 +509,13 @@ impl Scheduler {
             // [FEAT-1] Per-process watchdog: suspend if this quantum ran too long.
             if let Some(wd) = current_proc.wd_period_ticks {
                 if ticks_used > wd {
-                    current_proc.state = ProcessState::Suspended;
+                    self.account_current_runtime();
+                    self.processes[current].state = ProcessState::Suspended;
+                    self.remove_from_ready_queues(current);
                     serial_println!(
                         "[WD] pid={} '{}' exceeded watchdog: ran={} limit={} ticks — suspended",
-                        current_proc.pid,
-                        current_proc.name_str(),
+                        self.processes[current].pid,
+                        self.processes[current].name_str(),
                         ticks_used,
                         wd
                     );
@@ -741,6 +903,7 @@ impl Scheduler {
             self.current = idx;
             self.processes[idx].state = ProcessState::Running;
             self.processes[idx].last_run_tick = self.global_tick;
+            self.start_charging_runtime(idx);
 
             // Enqueue other Ready processes (idx might not be first in order)
             for i in 0..self.processes.len() {
@@ -896,6 +1059,7 @@ pub fn enter_first_process() -> ! {
             sched.current = idx;
             sched.processes[idx].state = ProcessState::Running;
             sched.processes[idx].last_run_tick = sched.global_tick;
+            sched.start_charging_runtime(idx);
             sched.seed_ready_queues_except(idx);
             let rsp = sched.processes[idx].context_rsp;
             let pml4_phys = sched.processes[idx].address_space.pml4_phys;

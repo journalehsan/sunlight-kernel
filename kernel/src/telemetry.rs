@@ -90,7 +90,7 @@ pub fn record_net_tx(bytes: u64) {
 }
 
 /// SAFETY: caller must serialize updates (timer ISR with interrupts disabled).
-pub unsafe fn update_telemetry(sched: &Scheduler, pmm: &PhysicalMemoryManager, tick_count: u64) {
+pub unsafe fn update_telemetry(sched: &mut Scheduler, pmm: &PhysicalMemoryManager, tick_count: u64) {
     // SAFETY: synchronized by caller; sequence field is in the shared telemetry page.
     let seq = unsafe { TELEMETRY.sequence.wrapping_add(1) };
     // SAFETY: synchronized by caller; begin seqlock write (odd sequence).
@@ -121,10 +121,16 @@ pub unsafe fn update_telemetry(sched: &Scheduler, pmm: &PhysicalMemoryManager, t
     }
 
     let mut count = 0usize;
-    for proc in &sched.processes {
+    for idx in 0..sched.processes.len() {
         if count >= MAX_PROCESSES {
             break;
         }
+
+        // Snapshot for delta accounting before any long borrow of the entry.
+        let runtime_for_telemetry = sched.processes[idx].cpu_runtime_ns;
+        sched.processes[idx].last_snapshot_runtime_ns = runtime_for_telemetry;
+
+        let proc = &sched.processes[idx];
 
         // SAFETY: synchronized by caller; bounded index into fixed process array.
         let entry = unsafe { &mut TELEMETRY.procs[count] };
@@ -139,7 +145,10 @@ pub unsafe fn update_telemetry(sched: &Scheduler, pmm: &PhysicalMemoryManager, t
             crate::process::ProcessState::BlockedOnTimer => 5,
             crate::process::ProcessState::BlockedOnIo => 6,
         };
-        entry.cpu_ticks = sched.global_tick.saturating_sub(proc.last_run_tick);
+        // Accurate CPU runtime in nanoseconds (Phase 1/5). sunlight-top uses deltas
+        // against its previous sample (or reads last_snapshot_runtime_ns indirectly via
+        // comparing successive total values).
+        entry.cpu_ticks = runtime_for_telemetry;
         // Per-process resident memory: count present user-space pages in this
         // process's address space. hhdm_offset comes from the Limine response;
         // if unavailable, fall back to 0.

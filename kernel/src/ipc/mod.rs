@@ -93,10 +93,14 @@ impl IpcBus {
 
     pub fn block_on_recv(&mut self, endpoint_id: u32, receiver_pid: usize, sched: &mut Scheduler) {
         let global_tick = sched.global_tick;
-        if let Some(receiver) = sched.process_mut_by_pid(receiver_pid) {
-            receiver.ipc_endpoint = Some(endpoint_id);
-            receiver.state = ProcessState::BlockedOnIpc;
-            receiver.block_start_tick = global_tick;
+        if let Some(idx) = sched.processes.iter().position(|p| p.pid == receiver_pid) {
+            sched.processes[idx].ipc_endpoint = Some(endpoint_id);
+            sched.account_and_apply_churn_penalty();
+            sched.processes[idx].state = ProcessState::BlockedOnIpc;
+            sched.processes[idx].block_start_tick = global_tick;
+        }
+        if let Some(idx) = sched.processes.iter().position(|p| p.pid == receiver_pid) {
+            sched.remove_from_ready_queues(idx);
         }
     }
 
@@ -148,17 +152,26 @@ pub fn handle_ipc_call(
 
     let mut should_enqueue = false;
     let global_tick = sched.global_tick;
-    if let Some(process) = sched.process_mut_by_pid(caller_pid) {
-        if let Some(reply) = process.ipc_reply.take() {
-            process.pending_call = None;
+    if let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) {
+        if sched.processes[idx].pending_reply_wait.is_some() {
+            // unlikely path, but handle
+        }
+        if let Some(reply) = sched.processes[idx].ipc_reply.take() {
+            sched.processes[idx].pending_call = None;
             return Ok(reply);
         }
-        if process.pending_call.is_none() {
-            process.pending_call = Some((target_cap.0, msg));
+        if sched.processes[idx].pending_call.is_none() {
+            sched.processes[idx].pending_call = Some((target_cap.0, msg));
             should_enqueue = true;
         }
-        process.state = ProcessState::BlockedOnIpc;
-        process.block_start_tick = global_tick;
+        // CPU accounting + churn penalty + runnable queue hygiene when blocking on IPC
+        sched.account_and_apply_churn_penalty();
+        sched.processes[idx].state = ProcessState::BlockedOnIpc;
+        sched.processes[idx].block_start_tick = global_tick;
+    }
+    // Best-effort: remove the caller from queues by pid (Phase 2).
+    if let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) {
+        sched.remove_from_ready_queues(idx);
     }
     if should_enqueue {
         bus.enqueue_call(endpoint_id, msg, caller_pid, sched, target_owner);
