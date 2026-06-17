@@ -36,6 +36,7 @@ members = [
     "sunlight-kvctl",
     "sunlight-tls",
     "certificatectl",
+    "services/rand_service",
 ]
 
 [workspace.dependencies]

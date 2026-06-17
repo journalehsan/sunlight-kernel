@@ -55,6 +55,9 @@ static SUNLIGHTD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlightd");
 static TIMEZONE_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/timezone_service");
+// Random service (ChaCha20 CSPRNG) launched by sunlightd.
+static RAND_SERVICE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/rand_service");
 static SUNSHELL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sshl");
 // Phase 6.5 Step 3: busybox-style multi-call userland binaries. PATH entries

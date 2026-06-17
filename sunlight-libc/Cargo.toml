@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-libc"
-version = "0.1.107"
+version = "0.1.111"
+
 
 
 
@@ -23,5 +24,8 @@ version = "0.1.107"
 
 
 edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
 
 [lib]

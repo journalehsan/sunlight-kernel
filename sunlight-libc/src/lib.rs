@@ -7,8 +7,10 @@
 //! error; `u64::MAX - 1` means try again (EAGAIN). Syscall numbers must stay
 //! in sync with `SunlightSyscall` in `kernel/src/arch/x86_64/syscall.rs`.
 
+pub mod rand;
 pub mod sys;
 
+pub use rand::{getrandom, GRND_NONCRYPTO};
 pub use sys::{Errno, EAGAIN_RAW, ERR_RAW};
 
 /// A userland file descriptor.

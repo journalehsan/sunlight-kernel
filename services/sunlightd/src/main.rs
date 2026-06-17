@@ -236,6 +236,26 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // rand_service.service - ChaCha20 CSPRNG (libc crypto getrandom routes here)
+    let rand_service = r#"[Unit]
+Description=SunlightOS Random Service
+
+[Service]
+Type=simple
+ExecStart=/sbin/rand_service
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(rand_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     (services, sockets)
 }
 
@@ -430,14 +450,16 @@ fn _start() -> ! {
     let spawn_cap = nameserver_lookup("spawn").unwrap_or(sunlight_ipc::CapabilityToken(0));
     if spawn_cap != sunlight_ipc::CapabilityToken(0) {
         // Indices must match the order services were added in load_units():
-        // 0=timezone_service, 1=niced, 2=gcd, 3=uac_service, 4=sunlight-kv, 5=sunlight-tls
-        let managed: [(&str, &str); 6] = [
+        // 0=timezone_service, 1=niced, 2=gcd, 3=uac_service, 4=sunlight-kv,
+        // 5=sunlight-tls, 6=rand_service
+        let managed: [(&str, &str); 7] = [
             ("/sbin/timezone_service", "timezone_service"),
             ("/sbin/niced",            "niced"),
             ("/sbin/gcd",              "gcd"),
             ("/sbin/uac_service",      "uac_service"),
             ("/sbin/sunlight-kv",      "sunlight-kv"),
             ("/sbin/sunlight-tls",     "sunlight-tls"),
+            ("/sbin/rand_service",     "rand_service"),
         ];
         for (i, (path, name)) in managed.iter().enumerate() {
             match spawn_named(spawn_cap, path, name) {

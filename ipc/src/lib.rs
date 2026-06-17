@@ -163,6 +163,23 @@ pub mod TzMsg {
     pub const ERROR:          u64 = 0x70FE;
 }
 
+/// Random service opcodes (registered as "rand").
+///
+/// The crypto path is intentionally chunked: each GET asks for up to 32 bytes
+/// (`words[0..3]`, the real register-IPC inline budget — see `raw_syscall_ipc`)
+/// and the reply packs that many bytes back into `words[0..3]`. Callers wanting
+/// more than 32 bytes loop. This avoids any shared-memory cap-transfer.
+#[allow(non_snake_case)]
+pub mod RandMsg {
+    /// Request random bytes. `words[0]` = requested length (clamped to 32).
+    pub const GET:   u64 = 0x7201;
+    /// Reply carrying up to 32 random bytes in `words[0..3]`; `words[4]` = count.
+    pub const REPLY: u64 = 0x72FF;
+    pub const ERROR: u64 = 0x72FE;
+    /// Maximum bytes returned per GET (4 transiting words).
+    pub const MAX_CHUNK: usize = 32;
+}
+
 #[allow(non_snake_case)]
 pub mod VfsMsg {
     pub const OPEN: u64 = 1;
