@@ -1,31 +1,10 @@
 [package]
-name = "sunlight-niced"
+name = "sunlight-storage"
 version = "0.1.133"
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 edition = "2021"
+description = "SunlightOS trusted file-storage service (create/overwrite/mkdir for OS services)"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
@@ -33,9 +12,5 @@ sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [[bin]]
-name = "niced"
+name = "sunlight-storage"
 path = "src/main.rs"
-
-[[bin]]
-name = "nicectl"
-path = "src/bin/nicectl.rs"
