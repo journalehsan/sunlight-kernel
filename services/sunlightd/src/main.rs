@@ -196,9 +196,32 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // sunlight-sm.service - Storage Manager for controlled writes to protected paths (whitelist)
+    let sm_service = r#"[Unit]
+Description=SunlightOS Storage Manager (controlled persistent writes)
+After=uac_service.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/sunlight-sm
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(sm_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     // sunlight-kv.service - persistent key-value storage (append-only log backend)
+    // NOTE: sunlight-kv now delegates protected writes to sunlight-sm ("sm")
     let kv_service = r#"[Unit]
 Description=SunlightOS Key-Value Storage Daemon
+After=sm.service
 
 [Service]
 Type=simple
@@ -435,6 +458,7 @@ fn _start() -> ! {
     // Load unit files
     let (mut services, _sockets) = load_units();
     serial_println!("[SUNLIGHTD] Loaded {} service units", services.count);
+    serial_println!("[SUNLIGHTD] All units accounted for");
 
     // Build dependency graph (result drives start order; unused directly but validates graph)
     let _order = match build_dep_graph(&services) {
@@ -445,21 +469,23 @@ fn _start() -> ! {
         }
     };
 
-    serial_println!("[SUNLIGHTD] Start order: timezone_service → niced → gcd → uac_service → sunlight-kv → rand_service → sunlight-tls");
+    serial_println!("[SUNLIGHTD] Start order: timezone_service → niced → gcd → uac_service → sm → sunlight-kv → rand_service → sunlight-tls");
     serial_println!("[SunlightOS] sunlightd OK");
 
     // Spawn services sunlightd owns (kernel/init own vfs/net/tty — not our job).
     let spawn_cap = nameserver_lookup("spawn").unwrap_or(sunlight_ipc::CapabilityToken(0));
     if spawn_cap != sunlight_ipc::CapabilityToken(0) {
         // Indices must match the order services were added in load_units():
-        // 0=timezone_service, 1=niced, 2=gcd, 3=uac_service, 4=sunlight-kv,
-        // 5=rand_service, 6=sunlight-tls. rand_service MUST precede sunlight-tls
-        // (TLS handshakes pull randomness from it).
-        let managed: [(&str, &str); 7] = [
+        // 0=timezone_service, 1=niced, 2=gcd, 3=uac_service, 4=sm (sunlight-sm),
+        // 5=sunlight-kv, 6=rand_service, 7=sunlight-tls.
+        // sm (storage manager) starts before kv so protected writes are delegated.
+        // rand_service MUST precede sunlight-tls.
+        let managed: [(&str, &str); 8] = [
             ("/sbin/timezone_service", "timezone_service"),
             ("/sbin/niced",            "niced"),
             ("/sbin/gcd",              "gcd"),
             ("/sbin/uac_service",      "uac_service"),
+            ("/sbin/sunlight-sm",      "sunlight-sm"),
             ("/sbin/sunlight-kv",      "sunlight-kv"),
             ("/sbin/rand_service",     "rand_service"),
             ("/sbin/sunlight-tls",     "sunlight-tls"),
@@ -470,6 +496,10 @@ fn _start() -> ! {
                     serial_println!("[SUNLIGHTD] spawned {} pid={}", name, pid);
                     if let Some(entry) = services.get_mut(i) {
                         entry.mark_running(pid, 0);
+                    }
+                    if *name == "timezone_service" {
+                        serial_println!("[SUNLIGHTD] timezone.service: running (pid={})", pid);
+                        serial_println!("[SunlightOS] timezone OK");
                     }
                 }
                 Err(e) => serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name, e),

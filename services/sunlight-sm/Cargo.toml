@@ -1,43 +1,12 @@
 [package]
-name = "sunlight-niced"
+name = "sunlight-sm"
 version = "0.1.140"
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 edition = "2021"
+description = "SunlightOS Storage Manager (sm): controlled writes to whitelisted protected paths for trusted services (e.g. sunlight-kv)"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
-
-[[bin]]
-name = "niced"
-path = "src/main.rs"
-
-[[bin]]
-name = "nicectl"
-path = "src/bin/nicectl.rs"

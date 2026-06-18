@@ -179,6 +179,41 @@ impl FdTable {
         table
     }
 
+    pub fn new_boxed() -> alloc::boxed::Box<Self> {
+        let mut table = alloc::boxed::Box::<Self>::new_uninit();
+        let ptr = table.as_mut_ptr();
+        unsafe {
+            let entries = core::ptr::addr_of_mut!((*ptr).entries) as *mut Option<FileDescriptor>;
+            for idx in 0..256 {
+                entries.add(idx).write(None);
+            }
+            core::ptr::addr_of_mut!((*ptr).next_fd).write(3);
+            let mut table = table.assume_init();
+            table.entries[0] = Some(FileDescriptor {
+                fd: 0,
+                handle: FileHandle(0),
+                rights: CapRights::new(CapRights::READ | CapRights::FSTAT),
+                flags: 0,
+                offset: 0,
+            });
+            table.entries[1] = Some(FileDescriptor {
+                fd: 1,
+                handle: FileHandle(1),
+                rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
+                flags: 1,
+                offset: 0,
+            });
+            table.entries[2] = Some(FileDescriptor {
+                fd: 2,
+                handle: FileHandle(2),
+                rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
+                flags: 1,
+                offset: 0,
+            });
+            table
+        }
+    }
+
     /// Open a new file descriptor
     pub fn open(
         &mut self,

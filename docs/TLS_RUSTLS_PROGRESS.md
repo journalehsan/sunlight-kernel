@@ -157,3 +157,6 @@ Note: login + shell input is via emulated **PS/2 keyboard**, not serial — driv
 
 ## Verification cleanup
 - Remove the `dbg:` markers in `sunlight-tls/src/main.rs` once the hang is fixed.
+
+## Note on sunlight-sm (Phase 5.x storage)
+For protected-path persistence required by sunlight-kv (and TLS material), `sunlight-sm` (registered "sm") was added as a minimal whitelist-based storage manager. KV now performs its /var/lib/sunlight/kv.store mutations exclusively via sm IPC (mkdir + read-modify-write of log). Direct writes were removed; unavailability of sm produces explicit errors. See docs/SUNLIGHT_SM_STORAGE_MANAGER.md.

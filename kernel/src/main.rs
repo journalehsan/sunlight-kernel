@@ -97,6 +97,9 @@ static CAPABILITYCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
 static RUNAS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/runas");
+// Storage Manager (sunlight-sm) for controlled protected writes.
+static SUNLIGHT_SM_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sm");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -195,7 +198,11 @@ pub extern "C" fn _start() -> ! {
     splash.redraw();
 
     // 4. Heap
-    serial_println!("[HEAP] Initializing 1 MiB kernel heap at {:#x}...", heap::HEAP_START.as_u64());
+    serial_println!(
+        "[HEAP] Initializing {} MiB kernel heap at {:#x}...",
+        heap::HEAP_SIZE / (1024 * 1024),
+        heap::HEAP_START.as_u64()
+    );
     splash.set_status("Initializing kernel heap");
     splash.log("[HEAP] Initializing...");
     splash.redraw();

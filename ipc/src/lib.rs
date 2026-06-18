@@ -210,6 +210,32 @@ pub mod SpawnMsg {
     pub const ERROR: u64 = 3;
 }
 
+/// sunlight-sm (Storage Manager) opcodes. Registered as "sm".
+/// Uses shm for payload (path + optional content) to support file sizes > inline.
+#[allow(non_snake_case)]
+pub mod SmMsg {
+    pub const WRITE_FILE: u64 = 1;
+    pub const MKDIR_ALL:  u64 = 2;
+    pub const REMOVE:     u64 = 3;
+    pub const READ_FILE:  u64 = 4;
+    // OP 5 batch left for future; current bite keeps simple per-op IPC.
+
+    pub const REPLY_OK:  u64 = 1;
+    pub const REPLY_ERR: u64 = 0xff;
+
+    /// Max bytes for path+content in one shm page grant.
+    pub const PAGE_CAPACITY: usize = 4096;
+
+    // Error codes returned in reply.words[0] when label==REPLY_ERR
+    pub const ERR_OK: u64 = 0;
+    pub const ERR_DENIED: u64 = 1;
+    pub const ERR_INVALID_PATH: u64 = 2;
+    pub const ERR_PAYLOAD_TOO_LARGE: u64 = 3;
+    pub const ERR_NOT_FOUND: u64 = 4;
+    pub const ERR_IO: u64 = 5;
+    pub const ERR_UNSUPPORTED: u64 = 6;
+}
+
 /// Structured spawn request that carries both a binary path and an explicit
 /// process name. Designed to fit within the IPC message word array.
 ///
@@ -382,19 +408,48 @@ unsafe fn raw_syscall(
 #[inline(always)]
 unsafe fn raw_syscall_ipc(num: SunlightSyscall, object: u64, msg: IpcMsg) -> (u64, IpcMsg) {
     let counts = msg.word_count as u64 | ((msg.cap_count as u64) << 32);
-    // SAFETY: forwarded to the raw syscall wrapper with register-shaped IPC fields.
+    let ret: u64;
+    let out_rdi: u64;
+    let out_rsi: u64;
+    let out_rdx: u64;
+    let out_r8: u64;
+    let out_r9: u64;
+    let out_r10: u64;
+    let out_r12: u64;
+    let out_r13: u64;
+    let out_r14: u64;
+
+    // SAFETY: fixed register IPC ABI. r13/r14 carry capability tokens; the
+    // generic syscall wrapper cannot do that because normal syscalls do not
+    // pass cap registers.
     unsafe {
-        raw_syscall(
-            num,
-            msg.label,
-            object,
-            counts,
-            msg.words[0],
-            msg.words[1],
-            msg.words[2],
-            msg.words[3],
-        )
+        core::arch::asm!(
+            "syscall",
+            inlateout("rax") num as u64 => ret,
+            inlateout("rdi") msg.label => out_rdi,
+            inlateout("rsi") object => out_rsi,
+            inlateout("rdx") counts => out_rdx,
+            inlateout("r8") msg.words[0] => out_r8,
+            inlateout("r9") msg.words[1] => out_r9,
+            inlateout("r10") msg.words[2] => out_r10,
+            inlateout("r12") msg.words[3] => out_r12,
+            inlateout("r13") msg.caps[0].0 => out_r13,
+            inlateout("r14") msg.caps[1].0 => out_r14,
+            lateout("rcx") _,
+            lateout("r11") _,
+        );
     }
+    let mut reply = IpcMsg::with_label(out_rdi);
+    reply.badge = out_rsi;
+    reply.word_count = (out_rdx & 0xffff_ffff) as u32;
+    reply.cap_count = (out_rdx >> 32) as u32;
+    reply.words[0] = out_r8;
+    reply.words[1] = out_r9;
+    reply.words[2] = out_r10;
+    reply.words[3] = out_r12;
+    reply.caps[0] = CapabilityToken(out_r13);
+    reply.caps[1] = CapabilityToken(out_r14);
+    (ret, reply)
 }
 
 #[inline(always)]

@@ -20,6 +20,16 @@ use x86_64::VirtAddr;
 
 pub const KERNEL_STACK_SIZE: usize = 32 * 1024;
 
+pub fn new_kernel_stack() -> alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]> {
+    let mut stack = alloc::boxed::Box::<[u8; KERNEL_STACK_SIZE]>::new_uninit();
+    // Avoid `Box::new([0; N])`: it builds a 32 KiB temporary on the current
+    // kernel stack, which can overflow during spawn/fork syscalls.
+    unsafe {
+        core::ptr::write_bytes(stack.as_mut_ptr() as *mut u8, 0, KERNEL_STACK_SIZE);
+        stack.assume_init()
+    }
+}
+
 /// A schedulable process.
 pub struct Process {
     pub pid: usize,
@@ -46,7 +56,7 @@ pub struct Process {
     pub ipc_reply: Option<IpcMsg>,
     pub pending_call: Option<(u64, IpcMsg)>,
     pub pending_reply_wait: Option<(u32, IpcMsg)>,
-    pub fd_table: fd_table::FdTable,
+    pub fd_table: alloc::boxed::Box<fd_table::FdTable>,
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
     pub is_linux_compat: bool, // Phase 4.5: true if running Linux ELF binary
@@ -152,7 +162,7 @@ impl Process {
     ) -> Self {
         let address_space = AddressSpace::new(pmm, hhdm_offset);
 
-        let kernel_stack = alloc::boxed::Box::new([0u8; KERNEL_STACK_SIZE]);
+        let kernel_stack = new_kernel_stack();
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
         let user_stack_top = USER_STACK_TOP;
 
@@ -183,7 +193,7 @@ impl Process {
             ipc_reply: None,
             pending_call: None,
             pending_reply_wait: None,
-            fd_table: fd_table::FdTable::new(),
+            fd_table: fd_table::FdTable::new_boxed(),
             capability_mode: false,
             signal_state: signal::SignalState::new(),
             is_linux_compat: false, // default to native SunlightOS

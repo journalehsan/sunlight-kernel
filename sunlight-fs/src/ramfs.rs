@@ -519,6 +519,8 @@ max_ttys = 6
     RamEntry::file("/bin/fetch", 0, 0, mode::FILE_755, b"#!/sunlight/fetch\n"),
     RamEntry::file("/bin/sunlight-kvctl", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-kvctl\n"),
     RamEntry::file("/bin/certificatectl", 0, 0, mode::FILE_755, b"#!/sunlight/certificatectl\n"),
+    // sunlight-sm binary stub (real ELF embedded in kernel for spawn; entry for FS visibility/stat)
+    RamEntry::file("/sbin/sunlight-sm", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-sm\n"),
     RamEntry::file("/bin/ping", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
     RamEntry::file("/bin/ifconfig", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),
     RamEntry::file("/bin/wget", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-net-utils\n"),

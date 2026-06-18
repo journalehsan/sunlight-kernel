@@ -77,8 +77,8 @@ use alloc::vec::Vec;
 
 #[cfg(feature = "sunlightos")]
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, shm_alloc,
-    shm_free, shm_map, CapabilityToken, IpcMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup, nameserver_register, shm_alloc,
+    shm_free, shm_map, CapabilityToken, IpcMsg, SmMsg,
 };
 #[cfg(feature = "sunlightos")]
 use sunlight_libc::{self as libc, Fd};
@@ -138,6 +138,131 @@ macro_rules! serial_println {
         let _ = write!(&mut buf, $($arg)*);
         debug_log(&buf);
     }};
+}
+
+// ---- sunlight-sm client (protected writes only; no direct fallback) ----
+#[cfg(feature = "sunlightos")]
+static mut SM_CAP: Option<CapabilityToken> = None;
+
+#[cfg(feature = "sunlightos")]
+fn sm_lookup() -> Option<CapabilityToken> {
+    unsafe {
+        if SM_CAP.is_none() {
+            if let Some(c) = nameserver_lookup("sm") {
+                SM_CAP = Some(c);
+                serial_println!("[KV][SM] lookup ok");
+            } else {
+                serial_println!("[KV][SM] lookup FAILED - sunlight-sm not registered");
+            }
+        }
+        SM_CAP
+    }
+}
+
+#[cfg(feature = "sunlightos")]
+fn sm_mkdir_all(path: &[u8]) {
+    let cap = match sm_lookup() {
+        Some(c) => c,
+        None => {
+            serial_println!("[KV][SM] mkdir skipped (no sm)");
+            return;
+        }
+    };
+    let plen = path.len().min(255);
+    // Use shm for path
+    if let Ok((ptr, tok)) = shm_alloc() {
+        unsafe { core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen); }
+        let mut msg = IpcMsg::with_label(SmMsg::MKDIR_ALL)
+            .word(0, plen as u64)
+            .word(1, 0)
+            .with_cap(0, tok);
+        let reply = ipc_call(cap, msg);
+        let ok = reply.label == SmMsg::REPLY_OK;
+        serial_println!("[KV][SM] mkdir path={} ok={}", core::str::from_utf8(path).unwrap_or("?"), ok);
+        let _ = shm_free(tok);
+    }
+}
+
+#[cfg(feature = "sunlightos")]
+fn sm_write_file(path: &[u8], content: &[u8]) -> bool {
+    let cap = match sm_lookup() {
+        Some(c) => c,
+        None => {
+            serial_println!("[KV][SM] write ABORT (no sm) - would have written protected path");
+            return false;
+        }
+    };
+    let plen = path.len();
+    let clen = content.len();
+    if plen + clen > SmMsg::PAGE_CAPACITY {
+        serial_println!("[KV][SM] write too large for page");
+        return false;
+    }
+    if let Ok((ptr, tok)) = shm_alloc() {
+        unsafe {
+            core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen);
+            core::ptr::copy_nonoverlapping(content.as_ptr(), ptr.add(plen), clen);
+        }
+        let mut msg = IpcMsg::with_label(SmMsg::WRITE_FILE)
+            .word(0, plen as u64)
+            .word(1, clen as u64)
+            .with_cap(0, tok);
+        let reply = ipc_call(cap, msg);
+        let ok = reply.label == SmMsg::REPLY_OK;
+        serial_println!("[KV][SM] write path={} len={} ok={}", core::str::from_utf8(path).unwrap_or("?"), clen, ok);
+        let _ = shm_free(tok);
+        return ok;
+    }
+    false
+}
+
+#[cfg(feature = "sunlightos")]
+fn sm_read_file(path: &[u8]) -> Option<Vec<u8>> {
+    let cap = match sm_lookup() {
+        Some(c) => c,
+        None => return None,
+    };
+    let plen = path.len().min(255);
+    if let Ok((ptr, tok)) = shm_alloc() {
+        unsafe { core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen); }
+        let mut msg = IpcMsg::with_label(SmMsg::READ_FILE)
+            .word(0, plen as u64)
+            .with_cap(0, tok);
+        let reply = ipc_call(cap, msg);
+        let _ = shm_free(tok);
+        if reply.label == SmMsg::REPLY_OK {
+            // small inline data unpack (see sm impl)
+            let dlen = (reply.words[0] & 0xffff) as usize;
+            let mut out = Vec::with_capacity(dlen);
+            let mut bi = 0usize;
+            let mut wi = 1usize;
+            while bi < dlen && wi < 8 {
+                for j in 0..8 {
+                    if bi < dlen {
+                        out.push( ((reply.words[wi] >> (j*8)) & 0xff) as u8 );
+                        bi += 1;
+                    }
+                }
+                wi += 1;
+            }
+            return Some(out);
+        }
+    }
+    None
+}
+
+/// Append a delta record (header+key+val+acl) to the log via sm: read-modify-write the full log.
+#[cfg(feature = "sunlightos")]
+fn sm_append_record(record: &[u8]) -> bool {
+    const STORE: &[u8] = b"/var/lib/sunlight/kv.store";
+    let existing = sm_read_file(STORE).unwrap_or_default();
+    let mut combined = existing;
+    combined.extend_from_slice(record);
+    let ok = sm_write_file(STORE, &combined);
+    if ok {
+        serial_println!("[KV][SM] appended record via sm len={}", record.len());
+    }
+    ok
 }
 
 // ---- sunlightos storage: append-only log at /var/lib/sunlight/kv.store ----
@@ -356,20 +481,20 @@ static mut LIVE: Option<BTreeMap<String, (Vec<u8>, sunlight_kv::Acl)>> = None;
 
 #[cfg(feature = "sunlightos")]
 fn ensure_dirs() {
-    let _ = libc::mkdir(b"/var", 0o755);
-    let _ = libc::mkdir(b"/var/lib", 0o755);
-    let _ = libc::mkdir(b"/var/lib/sunlight", 0o755);
+    // Delegate protected dir creation to sunlight-sm. No silent fallback.
+    sm_mkdir_all(b"/var/lib/sunlight-kv");
+    sm_mkdir_all(b"/var/lib/sunlight");
 }
 
 #[cfg(feature = "sunlightos")]
 fn open_or_create_store() -> Option<Fd> {
     ensure_dirs();
+    // We no longer keep persistent fd for appends. All writes go via sunlight-sm.
+    // Return a dummy to satisfy old paths; recover will use sm_read_file for content.
+    // If sm read works we will parse bytes separately.
     match libc::open(b"/var/lib/sunlight/kv.store") {
         Ok(fd) => Some(fd),
-        Err(_) => match libc::open(b"/var/lib/sunlight/kv.store") {
-            Ok(fd) => Some(fd),
-            Err(_) => None,
-        },
+        Err(_) => None,
     }
 }
 
@@ -445,31 +570,31 @@ fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
 
     let acl_bytes = serialize_acl(&acl);
 
-    unsafe {
-        if let Some(fd) = LOG_FD {
-            let payload: Vec<u8> = key
-                .as_bytes()
-                .iter()
-                .chain(value.iter())
-                .chain(acl_bytes.iter())
-                .copied()
-                .collect();
-            let crc = crc32_ieee(&payload);
-            let hdr = RecordHeader {
-                magic: RECORD_MAGIC,
-                version: RECORD_VERSION,
-                flags: FLAG_PUT,
-                key_len: key.len() as u32,
-                value_len: value.len() as u32,
-                acl_len: acl_bytes.len() as u32,
-                crc32: crc,
-            };
-            let hb = hdr.to_bytes();
-            let _ = write_all(fd, &hb);
-            let _ = write_all(fd, key.as_bytes());
-            let _ = write_all(fd, value);
-            let _ = write_all(fd, &acl_bytes);
-        }
+    // Delegate store mutation through sunlight-sm (no direct protected write)
+    let payload: Vec<u8> = key
+        .as_bytes()
+        .iter()
+        .chain(value.iter())
+        .chain(acl_bytes.iter())
+        .copied()
+        .collect();
+    let crc = crc32_ieee(&payload);
+    let hdr = RecordHeader {
+        magic: RECORD_MAGIC,
+        version: RECORD_VERSION,
+        flags: FLAG_PUT,
+        key_len: key.len() as u32,
+        value_len: value.len() as u32,
+        acl_len: acl_bytes.len() as u32,
+        crc32: crc,
+    };
+    let mut rec: Vec<u8> = hdr.to_bytes().to_vec();
+    rec.extend_from_slice(key.as_bytes());
+    rec.extend_from_slice(value);
+    rec.extend_from_slice(&acl_bytes);
+    let wrote = sm_append_record(&rec);
+    if !wrote {
+        serial_println!("[KV][SM] put record via sm FAILED");
     }
 
     unsafe {
@@ -523,31 +648,33 @@ fn do_delete(key: &str, caller: &str) -> bool {
             .unwrap_or_else(|| pack_acl_default(caller))
     };
 
+    // Delegate delete record through sunlight-sm
+    let payload: Vec<u8> = key
+        .as_bytes()
+        .iter()
+        .chain((&[] as &[u8]).iter())
+        .chain(acl_bytes.iter())
+        .copied()
+        .collect();
+    let crc = crc32_ieee(&payload);
+    let hdr = RecordHeader {
+        magic: RECORD_MAGIC,
+        version: RECORD_VERSION,
+        flags: FLAG_DELETE,
+        key_len: key.len() as u32,
+        value_len: 0,
+        acl_len: acl_bytes.len() as u32,
+        crc32: crc,
+    };
+    let mut rec: Vec<u8> = hdr.to_bytes().to_vec();
+    rec.extend_from_slice(key.as_bytes());
+    rec.extend_from_slice(&[]);
+    rec.extend_from_slice(&acl_bytes);
+    let wrote = sm_append_record(&rec);
+    if !wrote {
+        serial_println!("[KV][SM] delete record via sm FAILED");
+    }
     unsafe {
-        if let Some(fd) = LOG_FD {
-            let payload: Vec<u8> = key
-                .as_bytes()
-                .iter()
-                .chain((&[] as &[u8]).iter())
-                .chain(acl_bytes.iter())
-                .copied()
-                .collect();
-            let crc = crc32_ieee(&payload);
-            let hdr = RecordHeader {
-                magic: RECORD_MAGIC,
-                version: RECORD_VERSION,
-                flags: FLAG_DELETE,
-                key_len: key.len() as u32,
-                value_len: 0,
-                acl_len: acl_bytes.len() as u32,
-                crc32: crc,
-            };
-            let hb = hdr.to_bytes();
-            let _ = write_all(fd, &hb);
-            let _ = write_all(fd, key.as_bytes());
-            let _ = write_all(fd, &[]);
-            let _ = write_all(fd, &acl_bytes);
-        }
         if let Some(map) = &mut LIVE {
             map.remove(key);
         }
@@ -681,12 +808,24 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
     nameserver_register("sunlight-kv", ep);
     serial_println!("[SUNLIGHT-KV] Registered as 'sunlight-kv'");
 
-    let fd_opt = open_or_create_store();
-    let live_map = if let Some(fd) = fd_opt {
-        let m = recover_store(fd);
-        unsafe {
-            LOG_FD = Some(fd);
+    // Prefer sm for store content (writes always via sm; reads may use direct for recover compat)
+    let live_map = if let Some(bytes) = sm_read_file(b"/var/lib/sunlight/kv.store") {
+        // We have bytes from sm; use a simple path: write to a mem fd? For minimal, fall to direct open if possible or parse inline later.
+        // For this bite use direct open for recover (read-only of sm-written file) and log the sm use.
+        serial_println!("[KV][SM] initial store read via sm len={}", bytes.len());
+        let fd_opt = open_or_create_store();
+        if let Some(fd) = fd_opt {
+            let m = recover_store(fd);
+            unsafe { LOG_FD = Some(fd); }
+            serial_println!("[SUNLIGHT-KV] store recovered via sm-written data, live keys={}", m.len());
+            m
+        } else {
+            serial_println!("[SUNLIGHT-KV] sm data present but open failed; volatile");
+            BTreeMap::new()
         }
+    } else if let Some(fd) = open_or_create_store() {
+        let m = recover_store(fd);
+        unsafe { LOG_FD = Some(fd); }
         serial_println!("[SUNLIGHT-KV] store recovered, live keys={}", m.len());
         m
     } else {

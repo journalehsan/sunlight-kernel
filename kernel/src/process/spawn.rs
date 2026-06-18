@@ -232,7 +232,12 @@ pub fn spawn_from_path_with_env(
     // len()+1 can alias an existing pid — duplicate pids then break every
     // pid-keyed lookup (wake_pid/waitpid/process_is_alive find the wrong
     // process, leaving the real one blocked forever).
-    let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
+    let pid = sched
+        .processes
+        .iter()
+        .filter_map(|p| p.pid.checked_add(1))
+        .max()
+        .unwrap_or(1);
     // net_server is no longer spawned at a fixed pid (init launches it after
     // timer_server), so the kernel frame-proxy syscalls (net_tx/net_rx) can no
     // longer gate on pid==5. Give it a stable name here and gate on that.
@@ -340,6 +345,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
         "/usr/bin/sunlightctl" | "/bin/sunlightctl" => Ok(crate::SUNLIGHTCTL_ELF_BYTES),
         "/bin/fetch" | "/usr/bin/fetch" => Ok(crate::SUNLIGHT_FETCH_ELF_BYTES),
+        // Storage Manager (whitelisted protected FS writes for services such as sunlight-kv).
+        "/sbin/sunlight-sm" | "/usr/sbin/sunlight-sm" => Ok(crate::SUNLIGHT_SM_ELF_BYTES),
         // Phase 6.5 Step 3: PATH entries under these directories are applets
         // of the embedded multi-call binaries (argv[0] picks the applet).
         p if p.starts_with("/sunlight-utils/") => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),
