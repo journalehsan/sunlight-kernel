@@ -96,7 +96,11 @@ pub fn record_net_tx(bytes: u64) {
 }
 
 /// SAFETY: caller must serialize updates (timer ISR with interrupts disabled).
-pub unsafe fn update_telemetry(sched: &mut Scheduler, pmm: &PhysicalMemoryManager, tick_count: u64) {
+pub unsafe fn update_telemetry(
+    sched: &mut Scheduler,
+    pmm: &PhysicalMemoryManager,
+    tick_count: u64,
+) {
     // SAFETY: synchronized by caller; sequence field is in the shared telemetry page.
     let seq = unsafe { TELEMETRY.sequence.wrapping_add(1) };
     // SAFETY: synchronized by caller; begin seqlock write (odd sequence).

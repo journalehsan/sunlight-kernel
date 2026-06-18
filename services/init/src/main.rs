@@ -47,6 +47,11 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
 
     let ep = endpoint_create();
     debug_log("[init] Name server: listening");
+    if name_to_u64("sunlight-kv") != name_to_u64("sunlight-tls") {
+        debug_log("[init] nameserver long-name keys OK");
+    } else {
+        debug_log("[init] ERROR: nameserver long-name key collision");
+    }
 
     let mut registry = [RegistryEntry::empty(); 32];
 
@@ -121,11 +126,16 @@ fn registry_find(registry: &[RegistryEntry; 32], name: u64) -> Option<Capability
 
 fn name_to_u64(name: &str) -> u64 {
     let bytes = name.as_bytes();
-    let mut out = 0u64;
+    let mut hash = 0xcbf29ce484222325u64;
     let mut i = 0;
-    while i < bytes.len() && i < 8 {
-        out |= (bytes[i] as u64) << (i * 8);
+    while i < bytes.len() {
+        hash ^= bytes[i] as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
         i += 1;
     }
-    out
+    if hash == 0 {
+        1
+    } else {
+        hash
+    }
 }

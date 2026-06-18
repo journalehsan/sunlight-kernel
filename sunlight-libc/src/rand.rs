@@ -56,10 +56,7 @@ impl Xoroshiro64StarStar {
         let s0 = self.s[0];
         let mut s1 = self.s[1];
         // result = rotl(s0 * 0x9E3779BB, 5) * 5
-        let result = s0
-            .wrapping_mul(0x9E37_79BB)
-            .rotate_left(5)
-            .wrapping_mul(5);
+        let result = s0.wrapping_mul(0x9E37_79BB).rotate_left(5).wrapping_mul(5);
         s1 ^= s0;
         self.s[0] = s0.rotate_left(26) ^ s1 ^ (s1 << 9);
         self.s[1] = s1.rotate_left(13);
@@ -91,8 +88,8 @@ fn fill_secure(buf: &mut [u8]) -> bool {
         if reply.label != RandMsg::REPLY {
             return false;
         }
-        let got = reply.words[4] as usize;
-        if got == 0 || got > want || got > RandMsg::MAX_CHUNK {
+        let got = want;
+        if got == 0 || got > RandMsg::MAX_CHUNK {
             return false;
         }
         // Unpack up to 32 bytes from words[0..3].

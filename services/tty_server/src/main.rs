@@ -519,6 +519,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 }
 
                 if let Some(ascii) = key_ascii_from_msg(&msg) {
+                    debug_log(&alloc::format!(
+                        "[TTY-IPC] keyboard event converted to KBD_LABEL byte={}",
+                        ascii
+                    ));
                     // Reset scrollback on any normal keypress (return to live view)
                     unsafe {
                         SCROLLBACK_STATE[active_tab].viewport_offset = 0;
@@ -729,7 +733,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         // foreground mode and redraw with the prompt.
                         let cap = active_shell_tab(&tabs, active_tab).and_then(|t| t.cap);
                         if let Some(cap) = cap {
-                            let _ = ipc_call(cap, IpcMsg::with_label(FG_DONE_LABEL));
+                            let done = IpcMsg::with_label(FG_DONE_LABEL);
+                            debug_ipc_msg("[TTY-IPC] before shell ipc_call FG_DONE_LABEL", &done);
+                            let reply = ipc_call(cap, done);
+                            debug_ipc_msg("[TTY-IPC] after shell FG_DONE reply", &reply);
                         }
                         if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
                             tab.fg_pid = None;
@@ -1117,6 +1124,7 @@ fn resolve_active_shell(
             debug_log("[TTY]  sunshell endpoint found");
             *logged_initial_spawn = false;
         }
+        debug_log("[TTY-IPC] shell cap lookup succeeded");
         // Trigger the shell's greeting by sending a null byte (ignored by shell)
         // This causes the shell to immediately reply with its greeting output
         let _ = send_key_to_shell(cap, 0x00, &mut tab.output, &mut tab.output_len);
@@ -1127,6 +1135,8 @@ fn resolve_active_shell(
             let _ = send_key_to_shell(cap, b, &mut tab.output, &mut tab.output_len);
         }
         tab.pending_len = 0;
+    } else {
+        debug_log("[TTY-IPC] shell cap lookup failed");
     }
 }
 
@@ -1164,7 +1174,9 @@ fn send_key_to_shell(
     term_output_len: &mut usize,
 ) -> ShellKeyResult {
     let kbd_msg = IpcMsg::with_label(KBD_LABEL).word(0, byte as u64);
+    debug_ipc_msg("[TTY-IPC] before shell ipc_call KBD_LABEL", &kbd_msg);
     let reply = ipc_call(cap, kbd_msg);
+    debug_ipc_msg("[TTY-IPC] after shell ipc_call reply", &reply);
     if reply.label == EXIT_LABEL {
         return ShellKeyResult::Exited;
     }
@@ -1211,7 +1223,9 @@ fn append_shell_reply(
     let mut safety: usize = 64; // hard cap to avoid infinite drain loops
     while remaining > 0 && safety > 0 {
         let drain_msg = IpcMsg::with_label(DRAIN_LABEL).word(0, seq);
+        debug_ipc_msg("[TTY-IPC] before shell ipc_call DRAIN_LABEL", &drain_msg);
         let next = ipc_call(cap, drain_msg);
+        debug_ipc_msg("[TTY-IPC] after shell drain reply", &next);
         if next.label != OUTPUT_LABEL {
             break;
         }
@@ -1493,6 +1507,18 @@ fn fmt_u64(buf: &mut [u8], val: u64) -> usize {
         buf[i] = tmp[n - 1 - i];
     }
     n
+}
+
+fn debug_ipc_msg(prefix: &str, msg: &IpcMsg) {
+    debug_log(&alloc::format!(
+        "{} label={} badge={} word_count={} w0={} w1={}",
+        prefix,
+        msg.label,
+        msg.badge,
+        msg.word_count,
+        msg.words[0],
+        msg.words[1]
+    ));
 }
 
 fn pack_bytes(bytes: &[u8]) -> u64 {

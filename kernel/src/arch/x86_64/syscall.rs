@@ -11,6 +11,7 @@ pub enum SunlightSyscall {
     IpcRecv = 4,
     IpcNotifySend = 5,
     IpcNotifyWait = 6,
+    IpcCancel = 7,
     EndpointCreate = 10,
     EndpointBind = 11,
     ProcessExit = 20,
@@ -266,6 +267,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         4 => ipc_recv(frame),
         5 => ipc_notify_send(frame.rdi),
         6 => ipc_notify_wait(frame.rdi),
+        7 => ipc_cancel(),
         10 => endpoint_create(),
         11 => endpoint_bind(frame.rdi),
         20 => process_exit(frame.rdi as i32),
@@ -342,12 +344,12 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
 
 use crate::capability::CapabilityRights;
 use crate::capability::CapabilityToken;
-use heapless::String;
 use crate::ipc::{IpcError, IpcMsg, INIT_NAMESERVER_ENDPOINT};
 use crate::process::layout::is_user_address;
 use crate::process::ProcessState;
 use crate::sched;
 use alloc::vec::Vec;
+use heapless::String;
 
 /// Read a null-terminated C string from user space.
 unsafe fn read_user_cstr(ptr: u64, max_len: usize) -> Option<Vec<u8>> {
@@ -411,7 +413,9 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
         let pid = crate::sched::SCHEDULER.lock().current_process().pid;
         crate::serial_println!(
             "[IPC] WARN: invalid msg from pid={} word_count={} cap_count={}",
-            pid, msg.word_count, msg.cap_count
+            pid,
+            msg.word_count,
+            msg.cap_count
         );
         return e as u64;
     }
@@ -573,6 +577,17 @@ fn ipc_notify_wait(_endpoint_token: u64) -> u64 {
     IpcError::WouldBlock as u64
 }
 
+fn ipc_cancel() -> u64 {
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let caps = crate::capability::CAP_BROKER.lock();
+    let mut bus = crate::ipc::IPC_BUS.lock();
+    let caller_pid = sched.current_process().pid;
+    match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &caps, &mut bus) {
+        Ok(()) => 0,
+        Err(e) => e as u64,
+    }
+}
+
 fn endpoint_create() -> u64 {
     let pid = sched::with_scheduler(|s| s.current_process().pid);
     let (_endpoint_id, token) = {
@@ -613,7 +628,11 @@ fn process_exit(code: i32) -> ! {
         {
             let mut pmm = crate::PMM.lock();
             let mut caps = crate::capability::CAP_BROKER.lock();
-            crate::memory::shared::cleanup_shared_pages(&mut s.processes[cur], &mut *pmm, &mut *caps);
+            crate::memory::shared::cleanup_shared_pages(
+                &mut s.processes[cur],
+                &mut *pmm,
+                &mut *caps,
+            );
         }
 
         // Wake a parent that is blocked in waitpid() on this child. wake_pid
@@ -2130,9 +2149,14 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
         // Print dst MAC (first 6 bytes of frame) and ethertype to help debug neighbor/MAC resolution for IP.
         crate::serial_println!(
             "[NETDBG] tx dst_mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} ethertype={:02x}{:02x}",
-            kernel_buf[0], kernel_buf[1], kernel_buf[2],
-            kernel_buf[3], kernel_buf[4], kernel_buf[5],
-            kernel_buf[12], kernel_buf[13]
+            kernel_buf[0],
+            kernel_buf[1],
+            kernel_buf[2],
+            kernel_buf[3],
+            kernel_buf[4],
+            kernel_buf[5],
+            kernel_buf[12],
+            kernel_buf[13]
         );
     }
     if len >= 42 {
@@ -2202,12 +2226,7 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
-    let hhdm_offset = VirtAddr::new(
-        crate::HHDM_REQ
-            .response()
-            .expect("no hhdm")
-            .offset,
-    );
+    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
@@ -2226,17 +2245,13 @@ fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
     let token = crate::capability::CapabilityToken(frame.rdi);
-    let hhdm_offset = VirtAddr::new(
-        crate::HHDM_REQ
-            .response()
-            .expect("no hhdm")
-            .offset,
-    );
+    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
     let process = sched.current_process_mut();
-    match crate::memory::shared::map_shared_page(process, token, &mut *pmm, &mut *caps, hhdm_offset) {
+    match crate::memory::shared::map_shared_page(process, token, &mut *pmm, &mut *caps, hhdm_offset)
+    {
         Ok(virt) => {
             crate::serial_println!("[SHM]  map_shared_page: OK");
             virt.as_u64()
@@ -2247,12 +2262,7 @@ fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
     let token = crate::capability::CapabilityToken(frame.rdi);
-    let hhdm_offset = VirtAddr::new(
-        crate::HHDM_REQ
-            .response()
-            .expect("no hhdm")
-            .offset,
-    );
+    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
@@ -2263,14 +2273,10 @@ fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
-    let hhdm_offset = VirtAddr::new(
-        crate::HHDM_REQ
-            .response()
-            .expect("no hhdm")
-            .offset,
-    );
+    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
-    let telemetry_virt = x86_64::VirtAddr::from_ptr(core::ptr::addr_of!(crate::telemetry::TELEMETRY));
+    let telemetry_virt =
+        x86_64::VirtAddr::from_ptr(core::ptr::addr_of!(crate::telemetry::TELEMETRY));
     let telemetry_page = x86_64::structures::paging::Page::containing_address(telemetry_virt);
 
     let kernel_pml4 = x86_64::registers::control::Cr3::read().0.start_address();
@@ -2290,9 +2296,9 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
     };
     // SAFETY: TELEMETRY lives in static kernel memory and is page-mapped for kernel lifetime.
     let frame = unsafe {
-        x86_64::structures::paging::PhysFrame::from_start_address_unchecked(
-            x86_64::PhysAddr::new(telemetry_phys_page),
-        )
+        x86_64::structures::paging::PhysFrame::from_start_address_unchecked(x86_64::PhysAddr::new(
+            telemetry_phys_page,
+        ))
     };
 
     let mut sched = crate::sched::SCHEDULER.lock();

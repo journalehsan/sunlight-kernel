@@ -462,8 +462,11 @@ impl CalcSession {
         }) {
             Ok((value, used)) => {
                 let result = format_number(value);
+                let out = format!("{}\n", result);
+                // History is best-effort and uses bounded IPC. Compute and
+                // return the user-visible result before/around the side-effect.
                 self.save_history(history_input, input, &result, &used);
-                format!("{}\n", result)
+                out
             }
             Err(e) => format!("calc error: {}\n", e),
         }
@@ -493,19 +496,12 @@ impl CalcSession {
     }
 
     fn save_history(&self, input: &str, normalized: &str, result: &str, vars: &[String]) {
-        #[cfg(feature = "sunlight")]
-        {
-            let _ = (input, normalized, result, vars);
-            history::warn("calc history: automatic save skipped (kv ipc has no timeout)");
-            return;
-        }
-
-        #[cfg(not(feature = "sunlight"))]
-        {
+        // Result is prepared before history save. History is best-effort and
+        // bounded (via ipc_call_timeout). A slow/missing KV cannot prevent the
+        // calculation result from being returned to the user.
         let record = history::HistoryRecord::new(input, normalized, result, vars);
         if let Err(e) = history::calc_history_put(&record) {
             history::warn(&format!("calc history unavailable: {}", e));
-        }
         }
     }
 }
@@ -976,8 +972,23 @@ pub mod history {
     use alloc::string::{String, ToString};
     use alloc::vec::Vec;
 
-    const INDEX_KEY: &str = "calc.history.index";
-    const RECORD_PREFIX: &str = "calc.history.";
+    // --- KV protocol constant validation (task 5) ---
+    // Shell-side history uses these opcodes for the sunlight-kv service:
+    //   KV_DELETE = 0x4B03
+    //   KV_VALUE  = 0x4B05
+    //   KV_PUT_SHM= 0x4B06
+    //   KV_GET_SHM= 0x4B07
+    //   KV_REPLY  = 0x4BFF
+    //
+    // Verified against sunlight-kv/src/main.rs (sunlightos cfg):
+    //   const KV_DELETE: u64 = 0x4B03;
+    //   const KV_GET: ...; const KV_PUT...; const KV_VALUE = 0x4B05;
+    //   const KV_PUT_SHM = 0x4B06; const KV_GET_SHM = 0x4B07;
+    //   const KV_REPLY = 0x4BFF; const KV_ERROR = 0x4BEE;
+    // All match. Non-SHM KV ops exist on the service but history uses SHM for values.
+
+    const INDEX_KEY: &str = "calc.hist.idx";
+    const RECORD_PREFIX: &str = "calc.h.";
     #[cfg_attr(feature = "sunlight", allow(dead_code))]
     const MAX_RECORD: usize = 4096;
 
@@ -1049,6 +1060,7 @@ pub mod history {
         kv_put(INDEX_KEY, ids.join("\n").as_bytes())
     }
 
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     pub fn calc_history_list(limit: usize) -> Result<Vec<String>, String> {
         let mut ids = read_index()?;
         ids.reverse();
@@ -1056,6 +1068,7 @@ pub mod history {
         Ok(ids)
     }
 
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     pub fn calc_history_get(id: &str) -> Result<String, String> {
         let key = format!("{}{}", RECORD_PREFIX, id);
         let bytes = kv_get(&key)?;
@@ -1064,6 +1077,7 @@ pub mod history {
             .map_err(|_| "history record is not utf8".to_string())
     }
 
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     pub fn calc_history_clear() -> Result<(), String> {
         let ids = read_index().unwrap_or_default();
         for id in ids {
@@ -1079,6 +1093,7 @@ pub mod history {
         let _ = msg;
     }
 
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     fn list(limit: usize) -> Result<String, super::CalcError> {
         match calc_history_list(limit) {
             Ok(ids) if ids.is_empty() => Ok("calc history: empty\n".to_string()),
@@ -1105,6 +1120,7 @@ pub mod history {
         }
     }
 
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     fn get(id: &str) -> Result<String, super::CalcError> {
         match calc_history_get(id) {
             Ok(record) => Ok(record),
@@ -1112,6 +1128,7 @@ pub mod history {
         }
     }
 
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     fn clear() -> Result<String, super::CalcError> {
         match calc_history_clear() {
             Ok(()) => Ok("calc history cleared\n".to_string()),
@@ -1139,6 +1156,7 @@ pub mod history {
         s.replace('\\', "\\\\").replace('\n', "\\n")
     }
 
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     fn unescape(s: &str) -> String {
         let mut out = String::new();
         let mut esc = false;
@@ -1155,6 +1173,7 @@ pub mod history {
         out
     }
 
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     fn field<'a>(record: &'a str, name: &str) -> Option<&'a str> {
         let prefix = format!("{}=", name);
         record
@@ -1165,7 +1184,7 @@ pub mod history {
     #[cfg(feature = "sunlight")]
     #[cfg_attr(feature = "sunlight", allow(dead_code))]
     fn make_id() -> String {
-        format!("{}-{}", timestamp(), sunlight_ipc::monotonic_millis())
+        format!("{:08x}", sunlight_ipc::monotonic_millis() as u32)
     }
 
     #[cfg(not(feature = "sunlight"))]
@@ -1195,31 +1214,79 @@ pub mod history {
         0
     }
 
+    /// Checked KV call wrapper.
+    ///
+    /// Timeout-safe wrapper for KV IPC.
+    ///
+    /// All calculator history must go through this (or directly use the
+    /// timeout primitives). Plain `ipc_call` is forbidden from interactive
+    /// shell history paths because it can block forever.
+    #[cfg(feature = "sunlight")]
+    const KV_TIMEOUT_MS: u64 = 50;
+
+    #[cfg(feature = "sunlight")]
+    fn kv_call_checked(
+        cap: sunlight_ipc::CapabilityToken,
+        msg: sunlight_ipc::IpcMsg,
+    ) -> Result<sunlight_ipc::IpcMsg, String> {
+        sunlight_ipc::ipc_call_timeout(cap, msg, KV_TIMEOUT_MS)
+            .map_err(|e| format!("kv ipc failed: {:?}", e))
+    }
+
     #[cfg(feature = "sunlight")]
     fn kv_put(key: &str, value: &[u8]) -> Result<(), String> {
-        use sunlight_ipc::{ipc_call, nameserver_lookup, shm_alloc, shm_free, IpcMsg};
+        use sunlight_ipc::{nameserver_lookup_timeout, shm_alloc, shm_free, IpcMsg};
         const KV_PUT_SHM: u64 = 0x4B06;
         const KV_REPLY: u64 = 0x4BFF;
         const SHM_PAGE: usize = 4096;
 
-        if key.len() > 48 {
-            return Err("key too long".to_string());
-        }
+        // KV protocol constants (shell side) verified against sunlight-kv/src/main.rs:
+        // KV_PUT_SHM=0x4B06, KV_REPLY=0x4BFF
+
+        // TODO: add KV_PUT_SHM2 with key+value in shared memory so keys are not
+        // constrained by the 4-word register IPC ABI.
+        ensure_register_key_len(2, key)?;
         if value.len() > SHM_PAGE {
             return Err("value too large".to_string());
         }
-        let cap = nameserver_lookup("sunlight-kv")
-            .ok_or_else(|| "sunlight-kv unavailable".to_string())?;
-        let (ptr, tok) = shm_alloc().map_err(|_| "shm alloc failed".to_string())?;
+
+        let cap = match nameserver_lookup_timeout("sunlight-kv", KV_TIMEOUT_MS) {
+            Some(c) => c,
+            None => {
+                sunlight_ipc::debug_log("[CALC-KV] lookup sunlight-kv failed/timeout");
+                return Err("sunlight-kv unavailable".to_string());
+            }
+        };
+
+        let (ptr, tok) = match shm_alloc() {
+            Ok(v) => v,
+            Err(_) => return Err("shm alloc failed".to_string()),
+        };
         unsafe {
             core::ptr::copy_nonoverlapping(value.as_ptr(), ptr, value.len());
         }
+
         let mut msg = IpcMsg::with_label(KV_PUT_SHM)
             .word(0, value.len() as u64)
             .with_cap(0, tok);
-        pack_str(&mut msg, 2, key);
-        let reply = ipc_call(cap, msg);
+        pack_str_register_words(&mut msg, 2, key)?;
+
+        // IMPORTANT: for PUT, the caller allocates the shared page and must free
+        // the token on *all* exit paths after the IPC attempt (success, error,
+        // timeout). The kernel returns WouldBlock to userspace, so a timeout
+        // here means we may or may not have delivered the grant; we still own
+        // and must release the local mapping.
+        let reply_res = kv_call_checked(cap, msg);
         let _ = shm_free(tok);
+
+        let reply = match reply_res {
+            Ok(r) => r,
+            Err(e) => {
+                sunlight_ipc::debug_log(&format!("[CALC-KV] put timeout/error key={}", key));
+                return Err(e);
+            }
+        };
+
         if reply.label == KV_REPLY && reply.words[0] == 0 {
             Ok(())
         } else {
@@ -1234,30 +1301,64 @@ pub mod history {
 
     #[cfg(feature = "sunlight")]
     fn kv_get(key: &str) -> Result<Vec<u8>, String> {
-        use sunlight_ipc::{
-            ipc_call, nameserver_lookup, shm_free, shm_map, CapabilityToken, IpcMsg,
-        };
+        use sunlight_ipc::{nameserver_lookup_timeout, shm_free, shm_map, CapabilityToken, IpcMsg};
         const KV_GET_SHM: u64 = 0x4B07;
         const KV_VALUE: u64 = 0x4B05;
         const SHM_PAGE: usize = 4096;
 
-        if key.len() > 48 {
-            return Err("key too long".to_string());
-        }
-        let cap = nameserver_lookup("sunlight-kv")
-            .ok_or_else(|| "sunlight-kv unavailable".to_string())?;
+        // KV protocol constants (shell side) verified against sunlight-kv/src/main.rs:
+        // KV_GET_SHM=0x4B07, KV_VALUE=0x4B05
+
+        // TODO: add KV_GET_SHM2 with the key in shared memory to remove the
+        // current 16-byte register-IPC key limit.
+        ensure_register_key_len(2, key)?;
+
+        let cap = match nameserver_lookup_timeout("sunlight-kv", KV_TIMEOUT_MS) {
+            Some(c) => c,
+            None => {
+                sunlight_ipc::debug_log("[CALC-KV] lookup sunlight-kv failed/timeout");
+                return Err("sunlight-kv unavailable".to_string());
+            }
+        };
+
         let mut msg = IpcMsg::with_label(KV_GET_SHM);
-        pack_str(&mut msg, 2, key);
-        let reply = ipc_call(cap, msg);
+        pack_str_register_words(&mut msg, 2, key)?;
+
+        let reply = match kv_call_checked(cap, msg) {
+            Ok(r) => r,
+            Err(e) => {
+                sunlight_ipc::debug_log(&format!("[CALC-KV] get timeout/error key={}", key));
+                return Err(e);
+            }
+        };
+
         if reply.label != KV_VALUE {
+            // Service replied with non-VALUE (e.g. not found or KV_ERROR).
+            // Per protocol: missing keys must produce a reply (not silence).
+            if reply.label == 0x4BEE
+            /* KV_ERROR */
+            {
+                return Err("not found".to_string());
+            }
             return Err("not found".to_string());
         }
+
         let n = (reply.words[0] as usize).min(SHM_PAGE);
         let tok = reply.caps[0];
         if tok == CapabilityToken::INVALID {
             return Ok(Vec::new());
         }
-        let ptr = shm_map(tok).map_err(|_| "shm map failed".to_string())?;
+
+        // For GET: the service returns a fresh SHM token in caps[0].
+        // Caller must map, copy, then free. Free on map failure too.
+        // Ownership comment: caller frees the token returned by the service.
+        let ptr = match shm_map(tok) {
+            Ok(p) => p,
+            Err(_) => {
+                let _ = shm_free(tok);
+                return Err("shm map failed".to_string());
+            }
+        };
         let value = unsafe { core::slice::from_raw_parts(ptr, n) }.to_vec();
         let _ = shm_free(tok);
         Ok(value)
@@ -1269,19 +1370,32 @@ pub mod history {
     }
 
     #[cfg(feature = "sunlight")]
+    #[cfg_attr(feature = "sunlight", allow(dead_code))]
     fn kv_delete(key: &str) -> Result<(), String> {
-        use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg};
+        use sunlight_ipc::{nameserver_lookup_timeout, IpcMsg};
         const KV_DELETE: u64 = 0x4B03;
         const KV_REPLY: u64 = 0x4BFF;
-        if key.len() > 63 {
-            return Err("key too long".to_string());
-        }
-        let cap = nameserver_lookup("sunlight-kv")
-            .ok_or_else(|| "sunlight-kv unavailable".to_string())?;
+        // KV protocol constants (shell side) verified against sunlight-kv/src/main.rs:
+        // KV_DELETE=0x4B03, KV_REPLY=0x4BFF
+
+        ensure_register_key_len(1, key)?;
+        let cap = match nameserver_lookup_timeout("sunlight-kv", KV_TIMEOUT_MS) {
+            Some(c) => c,
+            None => {
+                sunlight_ipc::debug_log("[CALC-KV] lookup sunlight-kv failed/timeout (delete)");
+                return Err("sunlight-kv unavailable".to_string());
+            }
+        };
         let mut msg = IpcMsg::with_label(KV_DELETE);
         msg.words[0] = key.len() as u64;
-        pack_str(&mut msg, 1, key);
-        let reply = ipc_call(cap, msg);
+        pack_str_register_words(&mut msg, 1, key)?;
+        let reply = match kv_call_checked(cap, msg) {
+            Ok(r) => r,
+            Err(e) => {
+                sunlight_ipc::debug_log(&format!("[CALC-KV] delete timeout/error key={}", key));
+                return Err(e);
+            }
+        };
         if reply.label == KV_REPLY && reply.words[0] == 0 {
             Ok(())
         } else {
@@ -1295,13 +1409,35 @@ pub mod history {
     }
 
     #[cfg(feature = "sunlight")]
-    fn pack_str(msg: &mut sunlight_ipc::IpcMsg, start_word: usize, s: &str) {
+    fn pack_str_register_words(
+        msg: &mut sunlight_ipc::IpcMsg,
+        start_word: usize,
+        s: &str,
+    ) -> Result<(), String> {
+        ensure_register_key_len(start_word, s)?;
         let bytes = s.as_bytes();
-        for (i, &b) in bytes.iter().take((8 - start_word) * 8).enumerate() {
+        for (i, &b) in bytes.iter().enumerate() {
             let wi = start_word + i / 8;
             let shift = (i % 8) * 8;
             msg.words[wi] |= (b as u64) << shift;
         }
+        Ok(())
+    }
+
+    #[cfg(feature = "sunlight")]
+    fn ensure_register_key_len(start_word: usize, s: &str) -> Result<(), String> {
+        if start_word >= sunlight_ipc::IPC_REGISTER_WORDS {
+            return Err("invalid register ipc word offset".to_string());
+        }
+        let max = (sunlight_ipc::IPC_REGISTER_WORDS - start_word) * 8;
+        if s.len() > max {
+            return Err(format!(
+                "key too long for register ipc: len={} max={}",
+                s.len(),
+                max
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -1360,5 +1496,34 @@ mod tests {
             eval_line("unknown_var + 2"),
             "calc error: unknown variable 'unknown_var'\n"
         );
+    }
+
+    // --- History / KV graceful behavior (tasks 4, 7) ---
+    #[test]
+    fn calc_result_is_printed_regardless_of_history() {
+        // "= 8 * 2" must print 16 even if history save fails (no KV in this test cfg).
+        assert_eq!(eval_line("8 * 2"), "16\n");
+    }
+
+    #[test]
+    fn history_reports_unavailable_or_empty_gracefully() {
+        // Without a running sunlight-kv (non-sunlight test build), kv ops fail.
+        // Must not panic or alter calc results.
+        let h = eval_line("history");
+        // Under real sunlight+timeout, unavailable or timeout from KV also
+        // yields the short "calc history unavailable\n" (see list()).
+        assert!(
+            h == "calc history: empty\n" || h.contains("unavailable"),
+            "unexpected history output: {:?}",
+            h
+        );
+    }
+
+    #[test]
+    fn calc_does_not_hang_on_history_failure() {
+        // Multiple calcs must complete promptly even when every history op errors.
+        assert_eq!(eval_line("2 + 2"), "4\n");
+        assert_eq!(eval_line("3 * 3"), "9\n");
+        let _ = eval_line("history");
     }
 }

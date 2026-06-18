@@ -9,9 +9,9 @@
 //! periodically reseeded.
 //!
 //! Wire protocol (`RandMsg`): a GET carries the requested length in `words[0]`,
-//! clamped to 32 bytes (the register-IPC inline budget). The REPLY packs that
-//! many bytes into `words[0..3]` with the count in `words[4]`. Callers wanting
-//! more loop; nothing here uses shared memory.
+//! clamped to 32 bytes (the register-IPC inline budget). The REPLY packs exactly
+//! that many bytes into `words[0..3]`. Callers wanting more loop; nothing here
+//! uses shared memory.
 
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg, RandMsg,
@@ -108,15 +108,29 @@ impl ChaCha20 {
         let mut x = self.state;
         macro_rules! qr {
             ($a:expr, $b:expr, $c:expr, $d:expr) => {
-                x[$a] = x[$a].wrapping_add(x[$b]); x[$d] ^= x[$a]; x[$d] = x[$d].rotate_left(16);
-                x[$c] = x[$c].wrapping_add(x[$d]); x[$b] ^= x[$c]; x[$b] = x[$b].rotate_left(12);
-                x[$a] = x[$a].wrapping_add(x[$b]); x[$d] ^= x[$a]; x[$d] = x[$d].rotate_left(8);
-                x[$c] = x[$c].wrapping_add(x[$d]); x[$b] ^= x[$c]; x[$b] = x[$b].rotate_left(7);
+                x[$a] = x[$a].wrapping_add(x[$b]);
+                x[$d] ^= x[$a];
+                x[$d] = x[$d].rotate_left(16);
+                x[$c] = x[$c].wrapping_add(x[$d]);
+                x[$b] ^= x[$c];
+                x[$b] = x[$b].rotate_left(12);
+                x[$a] = x[$a].wrapping_add(x[$b]);
+                x[$d] ^= x[$a];
+                x[$d] = x[$d].rotate_left(8);
+                x[$c] = x[$c].wrapping_add(x[$d]);
+                x[$b] ^= x[$c];
+                x[$b] = x[$b].rotate_left(7);
             };
         }
         for _ in 0..10 {
-            qr!(0, 4, 8, 12);  qr!(1, 5, 9, 13);  qr!(2, 6, 10, 14); qr!(3, 7, 11, 15);
-            qr!(0, 5, 10, 15); qr!(1, 6, 11, 12); qr!(2, 7, 8, 13);  qr!(3, 4, 9, 14);
+            qr!(0, 4, 8, 12);
+            qr!(1, 5, 9, 13);
+            qr!(2, 6, 10, 14);
+            qr!(3, 7, 11, 15);
+            qr!(0, 5, 10, 15);
+            qr!(1, 6, 11, 12);
+            qr!(2, 7, 8, 13);
+            qr!(3, 4, 9, 14);
         }
         for i in 0..16 {
             let v = x[i].wrapping_add(self.state[i]);
@@ -131,14 +145,14 @@ fn handle(msg: &IpcMsg, rng: &mut ChaCha20) -> IpcMsg {
             let want = core::cmp::min(msg.words[0] as usize, RandMsg::MAX_CHUNK);
             let mut buf = [0u8; RandMsg::MAX_CHUNK];
             rng.fill(&mut buf[..want]);
-            // Pack up to 32 bytes into words[0..3], count into words[4].
+            // Pack the requested bytes into words[0..3].
             let mut reply = IpcMsg::with_label(RandMsg::REPLY);
             for i in 0..4 {
                 let mut w = [0u8; 8];
                 w.copy_from_slice(&buf[i * 8..i * 8 + 8]);
                 reply = reply.word(i, u64::from_le_bytes(w));
             }
-            reply.word(4, want as u64)
+            reply
         }
         _ => IpcMsg::with_label(RandMsg::ERROR),
     }

@@ -388,11 +388,11 @@ fn parse_fadt() -> Result<(), &'static str> {
 fn read_aml_int(bytes: &[u8]) -> (u8, usize) {
     match bytes.first().copied() {
         None => (0, 0),
-        Some(0x00) => (0, 1),                                   // ZeroOp
-        Some(0x01) => (1, 1),                                   // OneOp
-        Some(0xFF) => (0xFF, 1),                                // OnesOp
-        Some(0x0A) => (bytes.get(1).copied().unwrap_or(0), 2),  // BytePrefix + value
-        Some(v) => (v, 1),                                      // defensive: bare literal
+        Some(0x00) => (0, 1),                                  // ZeroOp
+        Some(0x01) => (1, 1),                                  // OneOp
+        Some(0xFF) => (0xFF, 1),                               // OnesOp
+        Some(0x0A) => (bytes.get(1).copied().unwrap_or(0), 2), // BytePrefix + value
+        Some(v) => (v, 1),                                     // defensive: bare literal
     }
 }
 
@@ -648,7 +648,11 @@ pub fn shutdown() -> ! {
         // bit 13. Must be a 16-bit OUT — the old 32-bit `out dx, eax` spilled
         // into the adjacent port.
         let sleep_a = (slp_typa << 10) | SLP_EN;
-        crate::serial_println!("[ACPI] Writing S5 {:#x} to PM1a_CNT {:#x}", sleep_a, pm1a_port);
+        crate::serial_println!(
+            "[ACPI] Writing S5 {:#x} to PM1a_CNT {:#x}",
+            sleep_a,
+            pm1a_port
+        );
         unsafe { outw(pm1a_port, sleep_a) };
 
         if pm1b_port != 0 {

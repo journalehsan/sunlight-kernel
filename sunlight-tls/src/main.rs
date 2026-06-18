@@ -9,9 +9,9 @@
 //!   TLS_RECV(sid) -> plaintext via shm + eof   (receives + decrypts)
 //!   TLS_CLOSE(sid)                             (close_notify + socket close)
 //!
-//! Trust anchors (root CAs) live in sunlight-kv under tls/ca/<name>, indexed by
-//! tls/ca/index. On first boot the daemon self-seeds an embedded curated root
-//! (GTS Root R4) into kv, then builds its RootCertStore from kv.
+//! Trust anchors (root CAs) live in sunlight-kv under compact `tls.ca.*` keys.
+//! On first boot the daemon self-seeds an embedded curated root (GTS Root R4)
+//! into kv, then builds its RootCertStore from kv.
 //!
 //! Crypto provider is rustls-rustcrypto (pure Rust). RNG flows through
 //! rand_service via a custom getrandom handler; time comes from the RTC/tz via
@@ -51,7 +51,7 @@ mod sunlightos_impl {
     use sunlight_ipc::{
         debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
         monotonic_millis, nameserver_lookup, nameserver_register, shm_alloc, shm_free, shm_map,
-        CapabilityToken, IpcMsg,
+        CapabilityToken, IpcMsg, IPC_REGISTER_WORDS,
     };
 
     // ── allocator ─────────────────────────────────────────────────────────────
@@ -85,7 +85,9 @@ mod sunlightos_impl {
     struct OsTimeProvider;
     impl TimeProvider for OsTimeProvider {
         fn current_time(&self) -> Option<UnixTime> {
-            Some(UnixTime::since_unix_epoch(Duration::from_secs(get_time_utc())))
+            Some(UnixTime::since_unix_epoch(Duration::from_secs(
+                get_time_utc(),
+            )))
         }
     }
 
@@ -145,7 +147,9 @@ mod sunlightos_impl {
     // Embedded curated trust anchor (GTS Root R4, self-signed, valid to 2036).
     // api.sampleapis.com chains: leaf <- GTS WE1 <- GTS Root R4.
     static EMBEDDED_GTS_R4: &[u8] = include_bytes!("roots/gts_root_r4.der");
-    const SEED_NAME: &str = "gts-root-r4";
+    const TLS_CA_INDEX_KEY: &str = "tls.ca.idx";
+    const TLS_CA_PREFIX: &str = "tls.ca.";
+    const SEED_NAME: &str = "gtsr4";
 
     static mut CLIENT_CONFIG: Option<Arc<ClientConfig>> = None;
 
@@ -160,10 +164,16 @@ mod sunlightos_impl {
     static mut SESSIONS: [Option<Session>; MAX_SESSIONS] = [const { None }; MAX_SESSIONS];
 
     // ── packing helpers ────────────────────────────────────────────────────────
-    fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) {
+    fn pack_str_register_words(msg: &mut IpcMsg, start_word: usize, s: &str) -> bool {
+        if start_word >= IPC_REGISTER_WORDS {
+            return false;
+        }
         let b = s.as_bytes();
+        if b.len() > (IPC_REGISTER_WORDS - start_word) * 8 {
+            return false;
+        }
         let mut i = 0;
-        for w in start_word..8 {
+        for w in start_word..IPC_REGISTER_WORDS {
             let mut word = 0u64;
             for j in 0..8 {
                 if i < b.len() {
@@ -176,12 +186,13 @@ mod sunlightos_impl {
                 break;
             }
         }
+        true
     }
 
     fn unpack_str(words: &[u64; 8], start_word: usize, max_len: usize) -> String {
         let mut v: Vec<u8> = Vec::new();
         let mut i = 0;
-        for w in start_word..8 {
+        for w in start_word..IPC_REGISTER_WORDS {
             if i >= max_len {
                 break;
             }
@@ -201,15 +212,30 @@ mod sunlightos_impl {
         String::from_utf8(v).unwrap_or_default()
     }
 
+    fn tls_ca_key(name: &str) -> Option<String> {
+        let key = format!("{}{}", TLS_CA_PREFIX, name);
+        if key.len() <= (IPC_REGISTER_WORDS - 2) * 8 {
+            Some(key)
+        } else {
+            None
+        }
+    }
+
     fn pack_ipv4(ip: [u8; 4]) -> u64 {
         (ip[0] as u64) | ((ip[1] as u64) << 8) | ((ip[2] as u64) << 16) | ((ip[3] as u64) << 24)
     }
 
     // ── sunlight-kv client (shm transport) ─────────────────────────────────────
     fn kv_get_shm(key: &str) -> Option<Vec<u8>> {
+        if key.len() > (IPC_REGISTER_WORDS - 2) * 8 {
+            serial_println!("[SUNLIGHT-TLS] kv key too long: {}", key);
+            return None;
+        }
         let cap = nameserver_lookup("sunlight-kv")?;
         let mut msg = IpcMsg::with_label(KV_GET_SHM);
-        pack_str(&mut msg, 2, key);
+        if !pack_str_register_words(&mut msg, 2, key) {
+            return None;
+        }
         let reply = ipc_call(cap, msg);
         if reply.label != KV_VALUE {
             return None;
@@ -229,6 +255,10 @@ mod sunlightos_impl {
     }
 
     fn kv_put_shm(key: &str, value: &[u8]) -> bool {
+        if key.len() > (IPC_REGISTER_WORDS - 2) * 8 {
+            serial_println!("[SUNLIGHT-TLS] kv key too long: {}", key);
+            return false;
+        }
         if value.len() > SHM_PAGE {
             return false;
         }
@@ -246,7 +276,10 @@ mod sunlightos_impl {
         let mut msg = IpcMsg::with_label(KV_PUT_SHM)
             .word(0, value.len() as u64)
             .with_cap(0, tok);
-        pack_str(&mut msg, 2, key);
+        if !pack_str_register_words(&mut msg, 2, key) {
+            let _ = shm_free(tok);
+            return false;
+        }
         let reply = ipc_call(cap, msg);
         let _ = shm_free(tok);
         reply.label == KV_REPLY && reply.words[0] == 0
@@ -340,13 +373,20 @@ mod sunlightos_impl {
     // ── trust store ─────────────────────────────────────────────────────────────
     fn seed_trust_if_empty() {
         serial_println!("[SUNLIGHT-TLS] dbg: seed get index...");
-        if kv_get_shm("tls/ca/index").is_some() {
+        if kv_get_shm(TLS_CA_INDEX_KEY).is_some() {
             serial_println!("[SUNLIGHT-TLS] dbg: index present, skip seed");
             return;
         }
-        serial_println!("[SUNLIGHT-TLS] dbg: seeding root ({} bytes)...", EMBEDDED_GTS_R4.len());
-        if kv_put_shm(&format!("tls/ca/{}", SEED_NAME), EMBEDDED_GTS_R4)
-            && kv_put_shm("tls/ca/index", SEED_NAME.as_bytes())
+        serial_println!(
+            "[SUNLIGHT-TLS] dbg: seeding root ({} bytes)...",
+            EMBEDDED_GTS_R4.len()
+        );
+        let Some(seed_key) = tls_ca_key(SEED_NAME) else {
+            serial_println!("[SUNLIGHT-TLS] WARN: seed key too long");
+            return;
+        };
+        if kv_put_shm(&seed_key, EMBEDDED_GTS_R4)
+            && kv_put_shm(TLS_CA_INDEX_KEY, SEED_NAME.as_bytes())
         {
             serial_println!("[SUNLIGHT-TLS] seeded kv trust store with '{}'", SEED_NAME);
         } else {
@@ -359,10 +399,14 @@ mod sunlightos_impl {
         let mut roots = RootCertStore::empty();
         seed_trust_if_empty();
         serial_println!("[SUNLIGHT-TLS] dbg: seed done, loading index");
-        if let Some(index) = kv_get_shm("tls/ca/index") {
+        if let Some(index) = kv_get_shm(TLS_CA_INDEX_KEY) {
             if let Ok(s) = String::from_utf8(index) {
                 for name in s.split(',').map(|n| n.trim()).filter(|n| !n.is_empty()) {
-                    if let Some(der) = kv_get_shm(&format!("tls/ca/{}", name)) {
+                    let Some(key) = tls_ca_key(name) else {
+                        serial_println!("[SUNLIGHT-TLS] CA name too long {}", name);
+                        continue;
+                    };
+                    if let Some(der) = kv_get_shm(&key) {
                         if !der.is_empty() {
                             match roots.add(CertificateDer::from(der)) {
                                 Ok(()) => serial_println!("[SUNLIGHT-TLS] trust += {}", name),
@@ -664,7 +708,9 @@ mod sunlightos_impl {
 
     fn map_rustls_err(e: &rustls::Error) -> u64 {
         match e {
-            rustls::Error::InvalidCertificate(rustls::CertificateError::Expired) => ERR_CERT_EXPIRED,
+            rustls::Error::InvalidCertificate(rustls::CertificateError::Expired) => {
+                ERR_CERT_EXPIRED
+            }
             _ => 50,
         }
     }
@@ -771,7 +817,7 @@ mod sunlightos_impl {
                 TLS_CONNECT => {
                     let ip = msg.words[0];
                     let port = msg.words[1] as u16;
-                    let host = unpack_str(&msg.words, 2, 48);
+                    let host = unpack_str(&msg.words, 2, (IPC_REGISTER_WORDS - 2) * 8);
                     let local = local_time_str();
                     serial_println!(
                         "[SUNLIGHT-TLS] connect host={} port={} local={} unix={}",
@@ -873,8 +919,8 @@ mod sunlightos_impl {
                 }
                 TLS_INSTALL => {
                     // certificatectl: install a CA DER (via shm) into kv under
-                    // tls/ca/<name> and append to tls/ca/index, then rebuild.
-                    let name = unpack_str(&msg.words, 2, 32);
+                    // compact tls.ca.* keys, then rebuild.
+                    let name = unpack_str(&msg.words, 2, (IPC_REGISTER_WORDS - 2) * 8);
                     let len = (msg.words[0] as usize).min(SHM_PAGE);
                     let tok = msg.caps[0];
                     let mut ok = false;
@@ -882,7 +928,10 @@ mod sunlightos_impl {
                         if let Ok(ptr) = shm_map(tok) {
                             let der = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
                             let _ = shm_free(tok);
-                            if kv_put_shm(&format!("tls/ca/{}", name), &der) {
+                            if tls_ca_key(&name)
+                                .as_deref()
+                                .is_some_and(|key| kv_put_shm(key, &der))
+                            {
                                 append_to_index(&name);
                                 rebuild_config();
                                 ok = true;
@@ -897,11 +946,11 @@ mod sunlightos_impl {
                     }
                 }
                 TLS_LIST => {
-                    let index = kv_get_shm("tls/ca/index").unwrap_or_default();
+                    let index = kv_get_shm(TLS_CA_INDEX_KEY).unwrap_or_default();
                     let s = String::from_utf8(index).unwrap_or_default();
                     let count = s.split(',').filter(|n| !n.trim().is_empty()).count();
                     reply.words[0] = count as u64;
-                    pack_str(&mut reply, 1, &s);
+                    let _ = pack_str_register_words(&mut reply, 1, &s);
                 }
                 _ => {
                     reply.label = TLS_ERROR;
@@ -914,7 +963,7 @@ mod sunlightos_impl {
     }
 
     fn append_to_index(name: &str) {
-        let mut s = kv_get_shm("tls/ca/index")
+        let mut s = kv_get_shm(TLS_CA_INDEX_KEY)
             .and_then(|v| String::from_utf8(v).ok())
             .unwrap_or_default();
         if s.split(',').any(|n| n.trim() == name) {
@@ -924,7 +973,7 @@ mod sunlightos_impl {
             s.push(',');
         }
         s.push_str(name);
-        let _ = kv_put_shm("tls/ca/index", s.as_bytes());
+        let _ = kv_put_shm(TLS_CA_INDEX_KEY, s.as_bytes());
     }
 
     fn local_time_str() -> heapless::String<32> {

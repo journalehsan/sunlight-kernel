@@ -38,7 +38,8 @@ pub unsafe fn validate_user_ptr(
     if ptr >= KERNEL_START {
         crate::serial_println!(
             "[SEC] WARN: pid={} passed kernel ptr {:#x}",
-            process.pid, ptr
+            process.pid,
+            ptr
         );
         return Err(PtrError::KernelAddress);
     }
@@ -59,11 +60,12 @@ pub unsafe fn validate_user_ptr(
         loop {
             let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(page_addr))
                 .map_err(|_| PtrError::NotMapped)?;
-            if process.address_space.lookup_phys(page, hhdm_offset).is_none() {
-                crate::serial_println!(
-                    "[SEC] WARN: pid={} ptr {:#x} not mapped",
-                    process.pid, ptr
-                );
+            if process
+                .address_space
+                .lookup_phys(page, hhdm_offset)
+                .is_none()
+            {
+                crate::serial_println!("[SEC] WARN: pid={} ptr {:#x} not mapped", process.pid, ptr);
                 return Err(PtrError::NotMapped);
             }
             if page_addr == last_page {

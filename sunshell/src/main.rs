@@ -133,9 +133,9 @@ mod sunlight {
     use core::fmt::Write;
 
     use sunlight_ipc::{
-        debug_log, endpoint_create, get_init_cap, ipc_call, ipc_reply_and_wait, nameserver_lookup,
-        nameserver_register, sysinfo, CapabilityToken, InitMsg, IpcMsg, SunlightSyscall, TzMsg,
-        VfsMsg,
+        debug_log, endpoint_create, get_init_cap, ipc_call, ipc_recv, ipc_reply_and_wait,
+        nameserver_lookup, nameserver_register, sysinfo, CapabilityToken, InitMsg, IpcMsg,
+        SunlightSyscall, TzMsg, VfsMsg,
     };
 
     /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
@@ -1960,6 +1960,18 @@ mod sunlight {
         n
     }
 
+    fn debug_ipc_msg(prefix: &str, msg: &IpcMsg) {
+        debug_log(&alloc::format!(
+            "{} label={} badge={} word_count={} w0={} w1={}",
+            prefix,
+            msg.label,
+            msg.badge,
+            msg.word_count,
+            msg.words[0],
+            msg.words[1]
+        ));
+    }
+
     static mut LONG_OUT_BUF: [u8; LONG_OUT_MAX] = [0; LONG_OUT_MAX];
     static mut LONG_OUT_LEN: usize = 0;
     static mut LONG_OUT_ACTIVE: bool = false;
@@ -2005,6 +2017,7 @@ mod sunlight {
         debug_log("[TTY]  Shell: sshl v0.1.0 running");
 
         let ep = endpoint_create();
+        debug_log("[SSHL-IPC] endpoint created");
         let mut name_buf = [0u8; 16];
         let name = shell_name(shell_id, &mut name_buf);
         nameserver_register(name, ep);
@@ -2012,6 +2025,7 @@ mod sunlight {
             nameserver_register("sshl", ep);
         }
         debug_log("[TTY]  sunshell registered as 'sshl'");
+        debug_log("[SSHL-IPC] registered with nameserver");
 
         let mut shell = Shell::new();
         // Load real user info from VFS by uid (GETPWUID returns uid, gid, AND username)
@@ -2050,18 +2064,22 @@ mod sunlight {
         long_out_push_str("Type commands at the prompt below.\n");
         long_out_push_str("\n");
 
-        let mut msg = ipc_reply_and_wait(ep, IpcMsg::with_label(0));
+        debug_log("[SSHL-IPC] before first ipc_recv");
+        let mut msg = ipc_recv(ep);
+        debug_ipc_msg("[SSHL-IPC] after first ipc_recv", &msg);
         loop {
             // Drain request from tty_server: send the next chunk of long output
             if msg.label == DRAIN_LABEL {
+                debug_ipc_msg("[SSHL-IPC] handling DRAIN_LABEL", &msg);
                 let total = unsafe { LONG_OUT_LEN };
                 let offset = msg.words[0] as usize * IPC_OUTPUT_BYTES;
                 if offset >= total {
                     // Nothing more — return empty marker
-                    msg = ipc_reply_and_wait(
-                        ep,
-                        IpcMsg::with_label(OUTPUT_LABEL).word(0, 0).word(1, 0),
-                    );
+                    let reply = IpcMsg::with_label(OUTPUT_LABEL).word(0, 0).word(1, 0);
+                    debug_ipc_msg("[SSHL-IPC] returning empty output", &reply);
+                    debug_log("[SSHL-IPC] before reply_wait");
+                    msg = ipc_reply_and_wait(ep, reply);
+                    debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
                     continue;
                 }
                 let remaining = total - offset;
@@ -2072,7 +2090,10 @@ mod sunlight {
                 }
                 let more_remaining = remaining.saturating_sub(chunk_size);
                 let chunk_reply = pack_long_output(&tmp[..chunk_size], more_remaining);
+                debug_ipc_msg("[SSHL-IPC] replying OUTPUT_LABEL", &chunk_reply);
+                debug_log("[SSHL-IPC] before reply_wait");
                 msg = ipc_reply_and_wait(ep, chunk_reply);
+                debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
                 continue;
             }
 
@@ -2080,6 +2101,7 @@ mod sunlight {
             // record its exit code in `$?`, and reply empty so tty_server
             // redraws the prompt.
             if msg.label == FG_DONE_LABEL {
+                debug_ipc_msg("[SSHL-IPC] handling FG_DONE_LABEL", &msg);
                 // We are the child's parent: reap it to get the real exit code
                 // (tty_server only knows it died, not the code).
                 let mut code = msg.words[0];
@@ -2090,12 +2112,15 @@ mod sunlight {
                 }
                 shell.env.set("?", &alloc::format!("{}", code));
                 long_out_reset();
+                debug_log("[SSHL-IPC] before reply_wait");
                 msg = ipc_reply_and_wait(ep, pack_output(&[]));
+                debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
                 continue;
             }
 
             // Kbd event
             let reply = if msg.label == KBD_LABEL {
+                debug_ipc_msg("[SSHL-IPC] handling KBD_LABEL", &msg);
                 let byte = msg.words[0] as u8;
                 let is_enter = byte == b'\n' || byte == b'\r';
                 let is_poll = byte == 0;
@@ -2157,12 +2182,18 @@ mod sunlight {
                     let more_remaining = out_len.saturating_sub(chunk_size);
                     pack_long_output(&out[..chunk_size], more_remaining)
                 } else {
+                    debug_log("[SSHL-IPC] returning empty output");
                     pack_output(&out[..out_len])
                 }
             } else {
                 IpcMsg::with_label(0)
             };
+            if reply.label == OUTPUT_LABEL {
+                debug_ipc_msg("[SSHL-IPC] replying OUTPUT_LABEL", &reply);
+            }
+            debug_log("[SSHL-IPC] before reply_wait");
             msg = ipc_reply_and_wait(ep, reply);
+            debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
         }
     }
 

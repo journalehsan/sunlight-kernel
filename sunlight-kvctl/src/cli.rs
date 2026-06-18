@@ -47,8 +47,8 @@ pub struct Client {
 
 impl Client {
     pub fn new() -> Self {
-        let sock = env::var("SUNLIGHT_KV_SOCKET")
-            .unwrap_or_else(|_| "/tmp/sunlight/kv.sock".to_string());
+        let sock =
+            env::var("SUNLIGHT_KV_SOCKET").unwrap_or_else(|_| "/tmp/sunlight/kv.sock".to_string());
         Self {
             socket_path: sock.into(),
         }
@@ -56,7 +56,9 @@ impl Client {
 
     #[allow(dead_code)]
     pub fn with_socket<P: Into<PathBuf>>(p: P) -> Self {
-        Self { socket_path: p.into() }
+        Self {
+            socket_path: p.into(),
+        }
     }
 
     fn connect(&self) -> io::Result<UnixStream> {
@@ -92,7 +94,10 @@ pub fn execute(cmd: Command) -> Result<String, CliError> {
                 Response::OK => Ok("OK".to_string()),
                 Response::PERMISSION_DENIED => Err(CliError::PermissionDenied),
                 Response::ERROR(e) => Err(CliError::Daemon(e)),
-                other => Err(CliError::Daemon(format!("unexpected response: {:?}", other))),
+                other => Err(CliError::Daemon(format!(
+                    "unexpected response: {:?}",
+                    other
+                ))),
             }
         }
         Command::Get { key } => {
@@ -106,7 +111,10 @@ pub fn execute(cmd: Command) -> Result<String, CliError> {
                 Response::NOT_FOUND => Err(CliError::NotFound),
                 Response::PERMISSION_DENIED => Err(CliError::PermissionDenied),
                 Response::ERROR(e) => Err(CliError::Daemon(e)),
-                other => Err(CliError::Daemon(format!("unexpected response: {:?}", other))),
+                other => Err(CliError::Daemon(format!(
+                    "unexpected response: {:?}",
+                    other
+                ))),
             }
         }
         Command::Delete { key } => {
@@ -141,8 +149,8 @@ pub fn execute(cmd: Command) -> Result<String, CliError> {
 // -------------------------------------------------------------------------
 
 fn send_frame<T: serde::Serialize>(stream: &mut UnixStream, val: &T) -> io::Result<()> {
-    let bytes = bincode::serialize(val)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let bytes =
+        bincode::serialize(val).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let len = bytes.len() as u32;
     stream.write_all(&len.to_le_bytes())?;
     stream.write_all(&bytes)?;
@@ -156,13 +164,16 @@ fn recv_frame<T: serde::de::DeserializeOwned>(stream: &mut UnixStream) -> io::Re
     let len = u32::from_le_bytes(len_buf) as usize;
 
     if len > 16 * 1024 * 1024 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "frame too large"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "frame too large",
+        ));
     }
 
     let mut buf = vec![0u8; len];
     stream.read_exact(&mut buf)?;
-    let v: T = bincode::deserialize(&buf)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let v: T =
+        bincode::deserialize(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(v)
 }
 
@@ -189,9 +200,13 @@ pub fn parse_args(args: &[String]) -> Result<Command, CliError> {
         }
         "get" | "g" => {
             if args.len() != 2 {
-                return Err(CliError::Usage("get requires exactly one argument: KEY".into()));
+                return Err(CliError::Usage(
+                    "get requires exactly one argument: KEY".into(),
+                ));
             }
-            Ok(Command::Get { key: args[1].clone() })
+            Ok(Command::Get {
+                key: args[1].clone(),
+            })
         }
         "delete" | "del" | "d" | "rm" => {
             if args.len() != 2 {
@@ -199,7 +214,9 @@ pub fn parse_args(args: &[String]) -> Result<Command, CliError> {
                     "delete requires exactly one argument: KEY".into(),
                 ));
             }
-            Ok(Command::Delete { key: args[1].clone() })
+            Ok(Command::Delete {
+                key: args[1].clone(),
+            })
         }
         "scan" | "s" | "ls" => {
             let prefix = if args.len() >= 2 {
@@ -226,5 +243,6 @@ Usage:
 
 Environment:
   SUNLIGHT_KV_SOCKET   Path to the daemon Unix socket (default: /tmp/sunlight/kv.sock)
-".to_string()
+"
+    .to_string()
 }

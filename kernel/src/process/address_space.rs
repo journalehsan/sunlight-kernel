@@ -194,7 +194,11 @@ impl AddressSpace {
     /// If `page`'s leaf entry is a swapped marker (not present, non-zero
     /// address field), return the encoded ZRAM block id.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
-    pub unsafe fn swapped_block_id(&self, page: Page<Size4KiB>, hhdm_offset: VirtAddr) -> Option<u64> {
+    pub unsafe fn swapped_block_id(
+        &self,
+        page: Page<Size4KiB>,
+        hhdm_offset: VirtAddr,
+    ) -> Option<u64> {
         let entry = &*self.p1_entry_ptr(page, hhdm_offset)?;
         if entry.is_unused() || entry.flags().contains(PageTableFlags::PRESENT) {
             return None;
@@ -248,9 +252,8 @@ impl AddressSpace {
             .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
         let frame = PhysFrame::<Size4KiB>::from_start_address(phys)
             .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
-        let flags = PageTableFlags::PRESENT
-            | PageTableFlags::WRITABLE
-            | PageTableFlags::USER_ACCESSIBLE;
+        let flags =
+            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
         self.map_page(page, frame, flags, pmm, hhdm_offset);
         self.shared_bump += PAGE_SIZE;
         Ok(virt)

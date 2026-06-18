@@ -62,7 +62,11 @@ pub fn render_sysfetch_to_buffer(
     ];
     let mut sun_idx = 0usize;
     let mut next_sun = || {
-        let line = if sun_idx < sun.len() { sun[sun_idx] } else { "" };
+        let line = if sun_idx < sun.len() {
+            sun[sun_idx]
+        } else {
+            ""
+        };
         sun_idx += 1;
         line
     };
@@ -86,7 +90,15 @@ pub fn render_sysfetch_to_buffer(
     };
 
     let _ = writeln!(w, "{:<24} {}{}@{}{}", next_sun(), c, username, hostname, r);
-    let _ = writeln!(w, "{:<24} {}OS:{} {}/{}", next_sun(), c, r, os_name, os_version);
+    let _ = writeln!(
+        w,
+        "{:<24} {}OS:{} {}/{}",
+        next_sun(),
+        c,
+        r,
+        os_name,
+        os_version
+    );
     let _ = writeln!(
         w,
         "{:<24} {}Kernel:{} {}/{}",

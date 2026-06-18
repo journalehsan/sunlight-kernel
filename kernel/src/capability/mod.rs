@@ -420,6 +420,32 @@ impl CapabilityBroker {
         Ok((endpoint_id, owner))
     }
 
+    pub fn debug_resolve_ipc(
+        &self,
+        token: CapabilityToken,
+        rights: CapabilityRights,
+    ) -> Option<(u32, usize, CapabilityRights)> {
+        if !rights.is_ipc() || !token.is_ipc() {
+            return None;
+        }
+        self.capabilities
+            .iter()
+            .find_map(|(t, endpoint_id, token_rights)| {
+                if *t != token || !token_rights.satisfies(&rights) {
+                    return None;
+                }
+                let owner = self.endpoint_owner(*endpoint_id)?;
+                Some((*endpoint_id, owner, *token_rights))
+            })
+    }
+
+    pub fn debug_endpoints(&self) -> alloc::vec::Vec<(u32, usize)> {
+        self.endpoints
+            .iter()
+            .map(|endpoint| (endpoint.id, endpoint.owner_pid))
+            .collect()
+    }
+
     /// Mint a capability token granting access to map a shared physical frame.
     pub fn mint_shared_page(&mut self, phys: PhysAddr, owner_pid: usize) -> CapabilityToken {
         let token = generate_token(CapabilityToken::TAG_VFS);

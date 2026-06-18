@@ -1,6 +1,8 @@
 #![no_std]
 
 pub const IPC_MAX_WORDS: usize = 8;
+/// Register IPC currently transports only `words[0..4)` via r8/r9/r10/r12.
+pub const IPC_REGISTER_WORDS: usize = 4;
 pub const IPC_MAX_CAPS: usize = 2;
 pub const INIT_NAMESERVER_ENDPOINT: u64 = 0;
 
@@ -14,6 +16,7 @@ pub enum SunlightSyscall {
     IpcRecv = 4,
     IpcNotifySend = 5,
     IpcNotifyWait = 6,
+    IpcCancel = 7,
     EndpointCreate = 10,
     EndpointBind = 11,
     ProcessExit = 20,
@@ -142,11 +145,11 @@ pub mod TimerMsg {
 
 #[allow(non_snake_case)]
 pub mod TimeMsg {
-    pub const GET_TIME: u64 = 1;           // Query current UTC time
-    pub const GET_STATE: u64 = 2;          // Get full TimeState (back-compat: tz fields are 0)
-    pub const SET_TIMEZONE: u64 = 3;       // No-op (timezone moved to "tz")
-    pub const SYNC_NTP: u64 = 4;           // Trigger NTP sync
-    pub const GET_UTC: u64 = 5;            // Preferred alias for GET_TIME (pure UTC)
+    pub const GET_TIME: u64 = 1; // Query current UTC time
+    pub const GET_STATE: u64 = 2; // Get full TimeState (back-compat: tz fields are 0)
+    pub const SET_TIMEZONE: u64 = 3; // No-op (timezone moved to "tz")
+    pub const SYNC_NTP: u64 = 4; // Trigger NTP sync
+    pub const GET_UTC: u64 = 5; // Preferred alias for GET_TIME (pure UTC)
     pub const REPLY: u64 = 100;
     pub const ERROR: u64 = 101;
 }
@@ -155,12 +158,12 @@ pub mod TimeMsg {
 #[allow(non_snake_case)]
 pub mod TzMsg {
     pub const GET_LOCAL_TIME: u64 = 0x7001;
-    pub const GET_ZONE:       u64 = 0x7002;
-    pub const SET_ZONE:       u64 = 0x7003;  // arg: zone id in data[0..64]
-    pub const LIST_ZONES:     u64 = 0x7004;  // arg: page in word(0), 8 per page (but one zone per reply for packing)
-    pub const NOTIFY_CHANGED: u64 = 0x7005;  // sent TO timed after SET_ZONE (best effort)
-    pub const REPLY:          u64 = 0x70FF;
-    pub const ERROR:          u64 = 0x70FE;
+    pub const GET_ZONE: u64 = 0x7002;
+    pub const SET_ZONE: u64 = 0x7003; // arg: zone id in data[0..64]
+    pub const LIST_ZONES: u64 = 0x7004; // arg: page in word(0), 8 per page (but one zone per reply for packing)
+    pub const NOTIFY_CHANGED: u64 = 0x7005; // sent TO timed after SET_ZONE (best effort)
+    pub const REPLY: u64 = 0x70FF;
+    pub const ERROR: u64 = 0x70FE;
 }
 
 /// Random service opcodes (registered as "rand").
@@ -172,8 +175,8 @@ pub mod TzMsg {
 #[allow(non_snake_case)]
 pub mod RandMsg {
     /// Request random bytes. `words[0]` = requested length (clamped to 32).
-    pub const GET:   u64 = 0x7201;
-    /// Reply carrying up to 32 random bytes in `words[0..3]`; `words[4]` = count.
+    pub const GET: u64 = 0x7201;
+    /// Reply carrying exactly the requested byte count in `words[0..3]`.
     pub const REPLY: u64 = 0x72FF;
     pub const ERROR: u64 = 0x72FE;
     /// Maximum bytes returned per GET (4 transiting words).
@@ -192,10 +195,10 @@ pub mod VfsMsg {
     pub const MKDIR: u64 = 8;
     pub const CHMOD: u64 = 9;
     pub const CHOWN: u64 = 10;
-    pub const GETPWNAM: u64 = 11;  // Get user info by username
-    pub const GETGRGID: u64 = 12;  // Get group info by gid
-    pub const GETPWUID: u64 = 13;  // Get user info by uid
-    pub const DATA_SHARED: u64 = 31;  // large read reply carries cap in caps[0]
+    pub const GETPWNAM: u64 = 11; // Get user info by username
+    pub const GETGRGID: u64 = 12; // Get group info by gid
+    pub const GETPWUID: u64 = 13; // Get user info by uid
+    pub const DATA_SHARED: u64 = 31; // large read reply carries cap in caps[0]
 }
 
 #[allow(non_snake_case)]
@@ -215,12 +218,12 @@ pub mod SpawnMsg {
 #[allow(non_snake_case)]
 pub mod SmMsg {
     pub const WRITE_FILE: u64 = 1;
-    pub const MKDIR_ALL:  u64 = 2;
-    pub const REMOVE:     u64 = 3;
-    pub const READ_FILE:  u64 = 4;
+    pub const MKDIR_ALL: u64 = 2;
+    pub const REMOVE: u64 = 3;
+    pub const READ_FILE: u64 = 4;
     // OP 5 batch left for future; current bite keeps simple per-op IPC.
 
-    pub const REPLY_OK:  u64 = 1;
+    pub const REPLY_OK: u64 = 1;
     pub const REPLY_ERR: u64 = 0xff;
 
     /// Max bytes for path+content in one shm page grant.
@@ -237,7 +240,7 @@ pub mod SmMsg {
 }
 
 /// Structured spawn request that carries both a binary path and an explicit
-/// process name. Designed to fit within the IPC message word array.
+/// process name. Designed to fit within the register IPC budget.
 ///
 /// Wire layout (register IPC — 4 available words via r8/r9/r10/r12):
 ///   words[0..3]: path, NUL-terminated, up to 32 bytes
@@ -255,7 +258,10 @@ pub struct SpawnRequest {
 
 impl SpawnRequest {
     pub fn new(path: &str, name: &str) -> Self {
-        let mut req = Self { path: [0; 32], name: [0; 16] };
+        let mut req = Self {
+            path: [0; 32],
+            name: [0; 16],
+        };
         let pb = path.as_bytes();
         let plen = pb.len().min(31);
         req.path[..plen].copy_from_slice(&pb[..plen]);
@@ -286,7 +292,10 @@ impl SpawnRequest {
 
     /// Unpack from an IpcMsg.
     pub fn unpack(msg: &IpcMsg) -> Self {
-        let mut req = Self { path: [0; 32], name: [0; 16] };
+        let mut req = Self {
+            path: [0; 32],
+            name: [0; 16],
+        };
         for i in 0..4 {
             let w = msg.words[i];
             for j in 0..8usize {
@@ -315,7 +324,14 @@ impl SpawnRequest {
 
 /// Pack a key event into a single u64 word for IPC transport.
 /// Layout: keycode(u8) | pressed(u8) << 8 | mods_byte(u8) << 16 | ascii(u8) << 24
-pub fn pack_key_event(keycode: u8, pressed: bool, shift: bool, ctrl: bool, alt: bool, ascii: Option<u8>) -> u64 {
+pub fn pack_key_event(
+    keycode: u8,
+    pressed: bool,
+    shift: bool,
+    ctrl: bool,
+    alt: bool,
+    ascii: Option<u8>,
+) -> u64 {
     let mut val = keycode as u64;
     val |= (pressed as u64) << 8;
     let mods = ((shift as u64) << 0) | ((ctrl as u64) << 1) | ((alt as u64) << 2);
@@ -332,7 +348,11 @@ pub fn unpack_key_event(val: u64) -> (u8, bool, bool, bool, bool, Option<u8>) {
     let shift = (mods & 1) != 0;
     let ctrl = (mods & 2) != 0;
     let alt = (mods & 4) != 0;
-    let ascii = if (val >> 24) & 0xFF != 0 { Some(((val >> 24) & 0xFF) as u8) } else { None };
+    let ascii = if (val >> 24) & 0xFF != 0 {
+        Some(((val >> 24) & 0xFF) as u8)
+    } else {
+        None
+    };
     (keycode, pressed, shift, ctrl, alt, ascii)
 }
 
@@ -419,7 +439,8 @@ unsafe fn raw_syscall_ipc(num: SunlightSyscall, object: u64, msg: IpcMsg) -> (u6
     let out_r13: u64;
     let out_r14: u64;
 
-    // SAFETY: fixed register IPC ABI. r13/r14 carry capability tokens; the
+    // SAFETY: fixed register IPC ABI. Only words[0..4) cross in registers:
+    // r8/r9/r10/r12. r13/r14 carry capability tokens; the
     // generic syscall wrapper cannot do that because normal syscalls do not
     // pass cap registers.
     unsafe {
@@ -465,9 +486,8 @@ pub fn endpoint_create() -> EndpointId {
 
 pub fn endpoint_bind(endpoint: u64) -> CapabilityToken {
     // SAFETY: EndpointBind accepts an opaque endpoint selector/token.
-    let (ret, _) = unsafe {
-        raw_syscall(SunlightSyscall::EndpointBind, endpoint, 0, 0, 0, 0, 0, 0)
-    };
+    let (ret, _) =
+        unsafe { raw_syscall(SunlightSyscall::EndpointBind, endpoint, 0, 0, 0, 0, 0, 0) };
     CapabilityToken(ret)
 }
 
@@ -476,6 +496,14 @@ pub fn get_init_cap() -> CapabilityToken {
 }
 
 /// Client: send a message and block until reply.
+///
+/// WARNING: This is a blocking call with no timeout. It will loop
+/// (yield + retry) forever until a reply arrives or the target endpoint
+/// is destroyed. Use only for trusted boot-time or server-to-server flows
+/// where the peer is known to be alive and responsive.
+///
+/// For interactive shell paths or best-effort clients (e.g. calculator
+/// history talking to sunlight-kv), use `ipc_call_timeout` instead.
 pub fn ipc_call(cap: CapabilityToken, msg: IpcMsg) -> IpcMsg {
     loop {
         // SAFETY: ipc_call passes a capability token and fixed register IPC message.
@@ -487,11 +515,79 @@ pub fn ipc_call(cap: CapabilityToken, msg: IpcMsg) -> IpcMsg {
     }
 }
 
+/// Errors returned by `ipc_call_timeout`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IpcCallError {
+    /// The call did not complete within the provided deadline.
+    Timeout,
+    /// The capability token was invalid or lacked SEND rights.
+    InvalidCapability,
+    /// The nameserver (or target) could not resolve the endpoint.
+    EndpointNotFound,
+    /// Invalid argument (e.g. malformed message counts).
+    InvalidArgument,
+    /// Other/unknown error code from the kernel.
+    Unknown(u64),
+}
+
+/// Client: send a message and wait for reply up to `timeout_ms`.
+///
+/// This is the safe primitive for interactive/client paths. It uses
+/// `monotonic_millis()` to enforce a deadline and yields between
+/// WouldBlock retries.
+///
+/// Semantics:
+/// - The kernel IpcCall syscall returns WouldBlock (in rax) to userspace
+///   rather than blocking inside the kernel (confirmed by inspection of
+///   handle_ipc_call + syscall dispatch). Therefore a userspace deadline
+///   loop is sufficient and correct.
+/// - On success (ret==0) the assembled reply IpcMsg is returned.
+/// - Known transport errors are mapped to `IpcCallError`.
+/// - Server-side semantic errors (e.g. KV_ERROR label in reply) are **not**
+///   turned into IpcCallError; the caller must inspect `reply.label`.
+///
+/// The original `msg` is re-submitted on each retry. The kernel's pending_call
+/// state machine tolerates re-submission of the same call.
+pub fn ipc_call_timeout(
+    cap: CapabilityToken,
+    msg: IpcMsg,
+    timeout_ms: u64,
+) -> Result<IpcMsg, IpcCallError> {
+    let start = monotonic_millis();
+    loop {
+        let (ret, reply) = unsafe { raw_syscall_ipc(SunlightSyscall::IpcCall, cap.0, msg) };
+        if !would_block(ret) {
+            if ret == 0 {
+                return Ok(reply);
+            } else if ret == IpcError::InvalidCapability as u64 {
+                return Err(IpcCallError::InvalidCapability);
+            } else if ret == IpcError::EndpointNotFound as u64 {
+                return Err(IpcCallError::EndpointNotFound);
+            } else if ret == IpcError::InvalidArgument as u64 {
+                return Err(IpcCallError::InvalidArgument);
+            } else {
+                // Also catch word/cap count validation errors etc.
+                return Err(IpcCallError::Unknown(ret));
+            }
+        }
+        let elapsed = monotonic_millis().saturating_sub(start);
+        if elapsed >= timeout_ms {
+            ipc_cancel_pending();
+            // Log without allocation (this crate must remain usable by
+            // early no_std binaries like sunlight-init that have no allocator).
+            debug_log("[IPC] call timeout");
+            return Err(IpcCallError::Timeout);
+        }
+        process_yield();
+    }
+}
+
 /// Server: block waiting for first incoming call.
 pub fn ipc_recv(ep: EndpointId) -> IpcMsg {
     loop {
         // SAFETY: ipc_recv passes the endpoint owner token; kernel validates receive rights.
-        let (ret, msg) = unsafe { raw_syscall_ipc(SunlightSyscall::IpcRecv, ep.0, IpcMsg::empty()) };
+        let (ret, msg) =
+            unsafe { raw_syscall_ipc(SunlightSyscall::IpcRecv, ep.0, IpcMsg::empty()) };
         if !would_block(ret) {
             return msg;
         }
@@ -532,6 +628,13 @@ pub fn ipc_reply_and_try_recv(ep: EndpointId, reply: IpcMsg) -> Option<IpcMsg> {
     }
 }
 
+fn ipc_cancel_pending() {
+    // SAFETY: IpcCancel has no user pointers or additional arguments.
+    unsafe {
+        raw_syscall(SunlightSyscall::IpcCancel, 0, 0, 0, 0, 0, 0, 0);
+    }
+}
+
 pub fn notify_send(cap: CapabilityToken) {
     // SAFETY: notify_send passes only an opaque capability token.
     unsafe {
@@ -542,9 +645,8 @@ pub fn notify_send(cap: CapabilityToken) {
 pub fn notify_wait(ep: EndpointId) {
     loop {
         // SAFETY: notify_wait passes only an opaque endpoint token.
-        let (ret, _) = unsafe {
-            raw_syscall(SunlightSyscall::IpcNotifyWait, ep.0, 0, 0, 0, 0, 0, 0)
-        };
+        let (ret, _) =
+            unsafe { raw_syscall(SunlightSyscall::IpcNotifyWait, ep.0, 0, 0, 0, 0, 0, 0) };
         if !would_block(ret) {
             return;
         }
@@ -571,15 +673,37 @@ pub fn nameserver_lookup(name: &str) -> Option<CapabilityToken> {
     }
 }
 
+/// Nameserver lookup with a bounded timeout.
+///
+/// Returns `Some(cap)` only when the nameserver replies with `InitMsg::GRANT`.
+/// Returns `None` on timeout, lookup failure (DENY or non-GRANT label),
+/// IPC transport error, or any other failure.
+///
+/// This must be used by interactive shell code (e.g. calc history) so that
+/// a broken or slow init/nameserver cannot freeze the shell.
+pub fn nameserver_lookup_timeout(name: &str, timeout_ms: u64) -> Option<CapabilityToken> {
+    let init_cap = get_init_cap();
+    let msg = IpcMsg::with_label(InitMsg::LOOKUP).word(0, name_to_u64(name));
+    match ipc_call_timeout(init_cap, msg, timeout_ms) {
+        Ok(reply) if reply.label == InitMsg::GRANT => Some(CapabilityToken(reply.words[0])),
+        _ => None,
+    }
+}
+
 pub fn name_to_u64(name: &str) -> u64 {
     let bytes = name.as_bytes();
-    let mut out = 0u64;
+    let mut hash = 0xcbf29ce484222325u64;
     let mut i = 0;
-    while i < bytes.len() && i < 8 {
-        out |= (bytes[i] as u64) << (i * 8);
+    while i < bytes.len() {
+        hash ^= bytes[i] as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
         i += 1;
     }
-    out
+    if hash == 0 {
+        1
+    } else {
+        hash
+    }
 }
 
 pub fn debug_log(msg: &str) {
@@ -654,8 +778,7 @@ pub fn tty_stdout_pull(tab: u32, buf: &mut [u8]) -> usize {
 /// foreground command exits).
 pub fn process_is_alive(pid: u64) -> bool {
     // SAFETY: ProcessIsAlive takes no user pointers.
-    let (ret, _) =
-        unsafe { raw_syscall(SunlightSyscall::ProcessIsAlive, pid, 0, 0, 0, 0, 0, 0) };
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ProcessIsAlive, pid, 0, 0, 0, 0, 0, 0) };
     ret == 1
 }
 
@@ -664,7 +787,16 @@ pub fn process_is_alive(pid: u64) -> bool {
 pub fn set_nice(pid: u64, nice: i8) -> bool {
     // SAFETY: SetNice takes pid and nice value as plain integers, no pointers.
     let (ret, _) = unsafe {
-        raw_syscall(SunlightSyscall::SetNice, pid, nice as i64 as u64, 0, 0, 0, 0, 0)
+        raw_syscall(
+            SunlightSyscall::SetNice,
+            pid,
+            nice as i64 as u64,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
     };
     ret != u64::MAX
 }
@@ -698,7 +830,16 @@ pub fn net_tx(frame: &[u8]) -> bool {
     // SAFETY: passes a read-only pointer/length describing `frame` to the
     // kernel, which copies it into its own TX buffer before returning.
     let (ret, _) = unsafe {
-        raw_syscall(SunlightSyscall::NetTx, frame.as_ptr() as u64, frame.len() as u64, 0, 0, 0, 0, 0)
+        raw_syscall(
+            SunlightSyscall::NetTx,
+            frame.as_ptr() as u64,
+            frame.len() as u64,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
     };
     ret == 1
 }
@@ -710,7 +851,16 @@ pub fn net_rx(buf: &mut [u8]) -> usize {
     // SAFETY: passes a writable pointer/capacity for `buf`; the kernel
     // bounds-checks and copies at most `buf.len()` bytes into it.
     let (ret, _) = unsafe {
-        raw_syscall(SunlightSyscall::NetRx, buf.as_mut_ptr() as u64, buf.len() as u64, 0, 0, 0, 0, 0)
+        raw_syscall(
+            SunlightSyscall::NetRx,
+            buf.as_mut_ptr() as u64,
+            buf.len() as u64,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
     };
     ret as usize
 }
@@ -739,16 +889,7 @@ impl ProcessExit {
     pub fn exit(code: i32) -> ! {
         // SAFETY: ProcessExit terminates the current process.
         unsafe {
-            raw_syscall(
-                SunlightSyscall::ProcessExit,
-                code as u64,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-            );
+            raw_syscall(SunlightSyscall::ProcessExit, code as u64, 0, 0, 0, 0, 0, 0);
         }
         loop {
             // SAFETY: hlt is safe in a non-returning fallback loop.

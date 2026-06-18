@@ -105,6 +105,7 @@ pub fn fork_current_process(
             ipc_reply: None,
             pending_call: None,
             pending_reply_wait: None,
+            ipc_reply_target: None,
             fd_table: super::fd_table::FdTable::new_boxed(),
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
@@ -212,6 +213,7 @@ fn sys_fork(
             ipc_reply: None,
             pending_call: None,
             pending_reply_wait: None,
+            ipc_reply_target: None,
             fd_table: super::fd_table::FdTable::new_boxed(),
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
@@ -227,7 +229,7 @@ fn sys_fork(
             block_start_tick: 0,                     // Not blocked yet
             aging_counter: 0,                        // No aging yet
             wait_child: None,                        // Not waiting on a child
-            tty_tab: None,                           // fork() children are not part of the TTY spawn flow
+            tty_tab: None, // fork() children are not part of the TTY spawn flow
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
             wd_period_ticks: None,

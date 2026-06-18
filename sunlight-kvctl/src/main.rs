@@ -23,8 +23,8 @@ mod cli;
 
 #[cfg(feature = "host")]
 fn main() {
-    use std::process;
     use cli::{execute, parse_args, CliError};
+    use std::process;
 
     let raw_args: Vec<String> = std::env::args().skip(1).collect();
 
@@ -91,7 +91,7 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 #[cfg(feature = "sunlightos")]
-use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg};
+use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg, IPC_REGISTER_WORDS};
 
 #[cfg(feature = "sunlightos")]
 fn stdout_write(s: &str) {
@@ -130,14 +130,15 @@ unsafe fn cstr_to_str(ptr: *const u8) -> &'static str {
 fn pack_kv_payload(msg: &mut IpcMsg, key: &str, value: &[u8]) {
     let kb = key.as_bytes();
     let vb = value;
-    if kb.len() > 0xffff || vb.len() > 0xffff {
+    if kb.len() > 0xffff || vb.len() > 0xffff || kb.len() + vb.len() > (IPC_REGISTER_WORDS - 1) * 8
+    {
         return;
     }
     msg.words[0] = (kb.len() as u64) | ((vb.len() as u64) << 16);
     let mut bi = 0usize;
     let mut wi = 1usize;
     for &b in kb.iter().chain(vb.iter()) {
-        if wi >= 8 {
+        if wi >= IPC_REGISTER_WORDS {
             break;
         }
         let shift = (bi % 8) * 8;
@@ -155,7 +156,7 @@ fn unpack_kv_key(msg: &IpcMsg) -> String {
     let mut v: heapless::Vec<u8, 64> = heapless::Vec::new();
     let mut rem = klen;
     let mut wi = 1usize;
-    while rem > 0 && wi < 8 {
+    while rem > 0 && wi < IPC_REGISTER_WORDS {
         for j in 0..8 {
             if rem == 0 {
                 break;
@@ -175,7 +176,7 @@ fn unpack_kv_value(msg: &IpcMsg) -> heapless::Vec<u8, 64> {
     let mut v: heapless::Vec<u8, 64> = heapless::Vec::new();
     let mut rem = vlen;
     let mut wi = 1usize + (klen + 7) / 8;
-    while rem > 0 && wi < 8 {
+    while rem > 0 && wi < IPC_REGISTER_WORDS {
         for j in 0..8 {
             if rem == 0 {
                 break;
@@ -189,10 +190,16 @@ fn unpack_kv_value(msg: &IpcMsg) -> heapless::Vec<u8, 64> {
 }
 
 #[cfg(feature = "sunlightos")]
-fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) {
+fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) -> bool {
+    if start_word >= IPC_REGISTER_WORDS {
+        return false;
+    }
     let b = s.as_bytes();
+    if b.len() > (IPC_REGISTER_WORDS - start_word) * 8 {
+        return false;
+    }
     let mut i = 0;
-    for w in start_word..8 {
+    for w in start_word..IPC_REGISTER_WORDS {
         let mut word = 0u64;
         for j in 0..8 {
             if i < b.len() {
@@ -205,16 +212,24 @@ fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) {
             break;
         }
     }
+    true
 }
 
 // IPC op labels — must stay in sync with sunlight-kv/src/main.rs.
-#[cfg(feature = "sunlightos")] const KV_PUT:    u64 = 0x4B01;
-#[cfg(feature = "sunlightos")] const KV_GET:    u64 = 0x4B02;
-#[cfg(feature = "sunlightos")] const KV_DELETE: u64 = 0x4B03;
-#[cfg(feature = "sunlightos")] const KV_SCAN:   u64 = 0x4B04;
-#[cfg(feature = "sunlightos")] const KV_REPLY:  u64 = 0x4BFF;
-#[cfg(feature = "sunlightos")] const KV_ERROR:  u64 = 0x4BEE;
-#[cfg(feature = "sunlightos")] const KV_VALUE:  u64 = 0x4B05;
+#[cfg(feature = "sunlightos")]
+const KV_PUT: u64 = 0x4B01;
+#[cfg(feature = "sunlightos")]
+const KV_GET: u64 = 0x4B02;
+#[cfg(feature = "sunlightos")]
+const KV_DELETE: u64 = 0x4B03;
+#[cfg(feature = "sunlightos")]
+const KV_SCAN: u64 = 0x4B04;
+#[cfg(feature = "sunlightos")]
+const KV_REPLY: u64 = 0x4BFF;
+#[cfg(feature = "sunlightos")]
+const KV_ERROR: u64 = 0x4BEE;
+#[cfg(feature = "sunlightos")]
+const KV_VALUE: u64 = 0x4B05;
 
 #[cfg(feature = "sunlightos")]
 fn print_usage() {
@@ -262,6 +277,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
             }
             let key = subargs[1];
             let val = subargs[2].as_bytes();
+            if key.len() + val.len() > (IPC_REGISTER_WORDS - 1) * 8 {
+                println!("ERROR: inline key/value too large for register IPC");
+                sunlight_libc::exit(2);
+            }
             let mut msg = IpcMsg::empty();
             msg.label = KV_PUT;
             pack_kv_payload(&mut msg, key, val);
@@ -281,10 +300,13 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
             let key = subargs[1];
             let mut msg = IpcMsg::empty();
             msg.label = KV_GET;
-            pack_str(&mut msg, 1, key); // key starts after len word; daemon accepts either
+            if !pack_str(&mut msg, 1, key) {
+                println!("ERROR: key too long for register IPC");
+                sunlight_libc::exit(2);
+            }
             // Also set word0 len for the new unpacker
             let kb = key.as_bytes();
-            msg.words[0] = kb.len().min(63) as u64;
+            msg.words[0] = kb.len() as u64;
             let reply = ipc_call(kv_cap, msg);
             if reply.label == KV_ERROR {
                 println!("not found");
@@ -312,8 +334,11 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
             let mut msg = IpcMsg::empty();
             msg.label = KV_DELETE;
             let kb = key.as_bytes();
-            msg.words[0] = kb.len().min(63) as u64;
-            pack_str(&mut msg, 1, key);
+            msg.words[0] = kb.len() as u64;
+            if !pack_str(&mut msg, 1, key) {
+                println!("ERROR: key too long for register IPC");
+                sunlight_libc::exit(2);
+            }
             let reply = ipc_call(kv_cap, msg);
             if reply.label == KV_REPLY && reply.words[0] == 0 {
                 println!("OK");

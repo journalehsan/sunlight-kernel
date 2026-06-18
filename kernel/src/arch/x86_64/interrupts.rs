@@ -235,7 +235,11 @@ pub fn calibrate_tsc_from_pit() {
     let tsc_delta = tsc1.saturating_sub(tsc0);
     let dropped = {
         let cur = read_pit_count() as u64;
-        if start_count >= cur { start_count - cur } else { start_count + (0xFFFF - cur) + 1 }
+        if start_count >= cur {
+            start_count - cur
+        } else {
+            start_count + (0xFFFF - cur) + 1
+        }
     };
     if tsc_delta < 1000 || dropped == 0 {
         return;
@@ -272,9 +276,15 @@ pub fn now_ns() -> u64 {
 
 extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
     // Diagnostic 1d: log pid/rip/rsp for every fault (before existing log)
-    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
-    serial_println!("[FAULT] #0 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
-        pid, stack_frame.instruction_pointer.as_u64(), stack_frame.stack_pointer.as_u64(), 0u64);
+    let pid =
+        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    serial_println!(
+        "[FAULT] #0 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        stack_frame.instruction_pointer.as_u64(),
+        stack_frame.stack_pointer.as_u64(),
+        0u64
+    );
     serial_println!("[INT] Divide Error: {:?}", stack_frame);
     loop {
         x86_64::instructions::hlt();
@@ -283,9 +293,15 @@ extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame)
 
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
     // Diagnostic 1d: log pid/rip/rsp for #UD
-    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
-    serial_println!("[FAULT] #6 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
-        pid, stack_frame.instruction_pointer.as_u64(), stack_frame.stack_pointer.as_u64(), 0u64);
+    let pid =
+        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    serial_println!(
+        "[FAULT] #6 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        stack_frame.instruction_pointer.as_u64(),
+        stack_frame.stack_pointer.as_u64(),
+        0u64
+    );
     serial_println!("[INT] Invalid Opcode: {:?}", stack_frame);
     loop {
         x86_64::instructions::hlt();
@@ -296,9 +312,15 @@ extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame,
     _error_code: u64,
 ) -> ! {
-    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
-    serial_println!("[FAULT] #8 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
-        pid, stack_frame.instruction_pointer.as_u64(), stack_frame.stack_pointer.as_u64(), _error_code);
+    let pid =
+        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    serial_println!(
+        "[FAULT] #8 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        stack_frame.instruction_pointer.as_u64(),
+        stack_frame.stack_pointer.as_u64(),
+        _error_code
+    );
     serial_println!("[INT] Double Fault: {:?}", stack_frame);
     loop {
         x86_64::instructions::hlt();
@@ -307,9 +329,15 @@ extern "x86-interrupt" fn double_fault_handler(
 
 extern "x86-interrupt" fn gpf_handler(stack_frame: InterruptStackFrame, error_code: u64) {
     // Diagnostic 1d: log pid/rip/rsp for #GP
-    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
-    serial_println!("[FAULT] #13 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
-        pid, stack_frame.instruction_pointer.as_u64(), stack_frame.stack_pointer.as_u64(), error_code);
+    let pid =
+        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    serial_println!(
+        "[FAULT] #13 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        stack_frame.instruction_pointer.as_u64(),
+        stack_frame.stack_pointer.as_u64(),
+        error_code
+    );
     serial_println!(
         "[INT] General Protection Fault: {:?} code={}",
         stack_frame,
@@ -325,11 +353,17 @@ extern "x86-interrupt" fn page_fault_handler(
     error_code: PageFaultErrorCode,
 ) {
     // Diagnostic 1d: log pid/rip/rsp for #PF (before the vaddr read)
-    let pid = crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+    let pid =
+        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
     let rip = _stack_frame.instruction_pointer.as_u64();
     let rsp = _stack_frame.stack_pointer.as_u64();
-    serial_println!("[FAULT] #14 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
-        pid, rip, rsp, 0u64);
+    serial_println!(
+        "[FAULT] #14 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        rip,
+        rsp,
+        0u64
+    );
     let vaddr = x86_64::registers::control::Cr2::read_raw();
 
     // Not-present fault: check whether this page was swapped out to ZRAM.
@@ -389,7 +423,14 @@ fn handle_swap_page_fault(vaddr: u64) -> bool {
         | x86_64::structures::paging::PageTableFlags::NO_EXECUTE;
 
     match unsafe {
-        crate::memory::swap::swap_in_page(&mut process.address_space, page, pid, flags, hhdm, &mut pmm)
+        crate::memory::swap::swap_in_page(
+            &mut process.address_space,
+            page,
+            pid,
+            flags,
+            hhdm,
+            &mut pmm,
+        )
     } {
         Ok(_) => {
             crate::serial_println!("[SWAP] page-in at {:#x}", page_addr);
@@ -566,7 +607,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     *ticks += 1;
     let _t = *ticks;
     drop(ticks);
-    let ticks_total = TELEMETRY_TICK_COUNT.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
+    let ticks_total = TELEMETRY_TICK_COUNT
+        .fetch_add(1, Ordering::Relaxed)
+        .wrapping_add(1);
 
     // Poll key injection buffer for test automation (no IRQ1 needed)
     keyboard::poll_inject_buffer();
@@ -639,11 +682,19 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
             }
             // If it is still (or became) Ready, ensure it is enqueued for BORE.
             // If it became Blocked*/Suspended/Finished, ensure it is NOT queued.
-            if matches!(sched.processes[current].state, crate::process::ProcessState::Ready) {
+            if matches!(
+                sched.processes[current].state,
+                crate::process::ProcessState::Ready
+            ) {
                 if crate::sched::SCHEDULER_MODE == crate::sched::SchedulerMode::Bore {
                     sched.enqueue_process_once(current);
                 }
-            } else if !was_runnable || !matches!(sched.processes[current].state, crate::process::ProcessState::Ready) {
+            } else if !was_runnable
+                || !matches!(
+                    sched.processes[current].state,
+                    crate::process::ProcessState::Ready
+                )
+            {
                 sched.remove_from_ready_queues(current);
             }
 

@@ -472,7 +472,8 @@ impl Scheduler {
         let p = &self.processes[idx];
         if p.state == ProcessState::Running && p.last_start_ns != 0 {
             let now = now_ns();
-            p.cpu_runtime_ns.saturating_add(now.saturating_sub(p.last_start_ns))
+            p.cpu_runtime_ns
+                .saturating_add(now.saturating_sub(p.last_start_ns))
         } else {
             p.cpu_runtime_ns
         }
@@ -997,6 +998,91 @@ impl Scheduler {
             created.saturating_sub(finished),
             blocked_ipc, blocked_timer, blocked_io
         );
+
+        if alive > 0 && blocked_ipc == alive
+            || (ready_high + ready_mid + ready_low == 0 && blocked_ipc > 0)
+        {
+            serial_println!("[SCHED-DIAG] IPC wait dump:");
+            let caps = crate::capability::CAP_BROKER.lock();
+            let bus = crate::ipc::IPC_BUS.lock();
+            for p in self
+                .processes
+                .iter()
+                .filter(|p| p.state != ProcessState::Finished)
+            {
+                let (pending_call_cap, pending_call_label, resolved_ep, resolved_owner) =
+                    match p.pending_call {
+                        Some((cap, msg)) => {
+                            let resolved = caps.debug_resolve_ipc(
+                                crate::capability::CapabilityToken(cap),
+                                crate::capability::CapabilityRights::SEND,
+                            );
+                            match resolved {
+                                Some((ep, owner, _rights)) => (cap, msg.label, ep, owner),
+                                None => (cap, msg.label, u32::MAX, usize::MAX),
+                            }
+                        }
+                        None => (0, 0, u32::MAX, usize::MAX),
+                    };
+                let (receiver_waiting_ep, endpoint_queue_len, waiting_receiver, pending_callers) =
+                    if resolved_ep != u32::MAX {
+                        (
+                            resolved_ep,
+                            bus.pending_count(resolved_ep),
+                            bus.waiting_receiver_pid(resolved_ep, self)
+                                .unwrap_or(usize::MAX),
+                            bus.pending_callers_count(resolved_ep),
+                        )
+                    } else {
+                        (u32::MAX, 0, usize::MAX, 0)
+                    };
+                if pending_call_cap != 0
+                    && waiting_receiver == resolved_owner
+                    && endpoint_queue_len > 0
+                    && pending_callers > 0
+                    && self.global_tick.saturating_sub(p.block_start_tick) > 50
+                {
+                    serial_println!(
+                        "[IPC-DIAG] stuck rendezvous caller={} server={} ep={} label={:#x}",
+                        p.pid,
+                        resolved_owner,
+                        resolved_ep,
+                        pending_call_label
+                    );
+                };
+                let pending_reply_wait = match p.pending_reply_wait {
+                    Some((ep, msg)) => (ep, msg.label),
+                    None => (0, 0),
+                };
+                serial_println!(
+                    "[SCHED-DIAG] pid={} name='{}' state={:?} ipc_ep={:?} pending_call_cap={:#x} pending_call_label={:#x} pending_call_resolved_ep={} pending_call_resolved_owner_pid={} receiver_waiting_ep={} endpoint_queue_len={} endpoint_waiting_receiver_pid={} pending_callers={} reply_wait_ep={} reply_wait_label={} blocked_ticks={}",
+                    p.pid,
+                    p.name_str(),
+                    p.state,
+                    p.ipc_endpoint,
+                    pending_call_cap,
+                    pending_call_label,
+                    resolved_ep,
+                    resolved_owner,
+                    receiver_waiting_ep,
+                    endpoint_queue_len,
+                    waiting_receiver,
+                    pending_callers,
+                    pending_reply_wait.0,
+                    pending_reply_wait.1,
+                    self.global_tick.saturating_sub(p.block_start_tick)
+                );
+            }
+            for (ep, owner) in caps.debug_endpoints() {
+                serial_println!(
+                    "[IPC-DIAG] ep={} owner={} waiting_receiver={} pending_callers={}",
+                    ep,
+                    owner,
+                    bus.waiting_receiver_pid(ep, self).unwrap_or(usize::MAX),
+                    bus.pending_callers_count(ep)
+                );
+            }
+        }
     }
 }
 

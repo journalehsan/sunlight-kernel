@@ -25,7 +25,11 @@ impl ShellEnv {
     /// Seed the standard variables for the logged-in user.
     pub fn load_defaults(&mut self, uid: u32, username: &str) {
         let user = if username.is_empty() {
-            if uid == 0 { "root" } else { "user" }
+            if uid == 0 {
+                "root"
+            } else {
+                "user"
+            }
         } else {
             username
         };

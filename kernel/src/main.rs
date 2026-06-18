@@ -1087,6 +1087,31 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         }
     }
 
+    // 4b. IPC queue invariant: multiple callers to the same endpoint must keep
+    // both message order and reply-waiter order.
+    {
+        let mut bus = crate::ipc::IpcBus::new();
+        let mut sched = sched::SCHEDULER.lock();
+        let server_pid = 0x5000;
+        let first_pid = 0x5101;
+        let second_pid = 0x5102;
+        bus.enqueue_call(0, IpcMsg::with_label(0x4B07), first_pid, &mut sched, server_pid);
+        bus.enqueue_call(0, IpcMsg::with_label(0x4B07), second_pid, &mut sched, server_pid);
+        let first = bus.pop_pending(0).expect("first queued IPC call");
+        let second = bus.pop_pending(0).expect("second queued IPC call");
+        let first_waiter = bus.reply_waiter_pop_front(0).expect("first reply waiter");
+        let second_waiter = bus.reply_waiter_pop_front(0).expect("second reply waiter");
+        if first.badge == first_pid as u64
+            && second.badge == second_pid as u64
+            && first_waiter == first_pid
+            && second_waiter == second_pid
+        {
+            serial_println!("[SEC]  IPC multi-caller queue: OK");
+        } else {
+            serial_println!("[SEC]  IPC multi-caller queue: UNEXPECTED");
+        }
+    }
+
     // 5. Dead process cap: a shared-page grant owned by an exited process must
     //    report Revoked, not silently resolve to the stale physical frame.
     {

@@ -56,7 +56,11 @@ pub fn map_shared_page(
         .resolve_shared_page(token)
         .ok_or(SharedMemError::InvalidToken)?;
 
-    let virt = unsafe { receiver.address_space.map_shared_page(phys, pmm, hhdm_offset) }?;
+    let virt = unsafe {
+        receiver
+            .address_space
+            .map_shared_page(phys, pmm, hhdm_offset)
+    }?;
 
     receiver.mapped_shared.push((token, virt));
 
@@ -94,12 +98,7 @@ pub fn cleanup_shared_pages(
     pmm: &mut PhysicalMemoryManager,
     caps: &mut CapabilityBroker,
 ) {
-    let hhdm_offset = VirtAddr::new(
-        crate::HHDM_REQ
-            .response()
-            .map(|r| r.offset)
-            .unwrap_or(0),
-    );
+    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().map(|r| r.offset).unwrap_or(0));
 
     // Unmap all views this process had (owned + received)
     for &(_, virt) in &process.mapped_shared {

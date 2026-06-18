@@ -67,7 +67,7 @@ fn main() {
 // -----------------------------------------------------------------------------
 
 #[cfg(feature = "sunlightos")]
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, VecDeque};
 #[cfg(feature = "sunlightos")]
 use alloc::string::String;
 #[cfg(feature = "sunlightos")]
@@ -77,8 +77,9 @@ use alloc::vec::Vec;
 
 #[cfg(feature = "sunlightos")]
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup, nameserver_register, shm_alloc,
-    shm_free, shm_map, CapabilityToken, IpcMsg, SmMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_try_recv, nameserver_lookup,
+    nameserver_register, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, SmMsg,
+    IPC_REGISTER_WORDS,
 };
 #[cfg(feature = "sunlightos")]
 use sunlight_libc::{self as libc, Fd};
@@ -171,14 +172,20 @@ fn sm_mkdir_all(path: &[u8]) {
     let plen = path.len().min(255);
     // Use shm for path
     if let Ok((ptr, tok)) = shm_alloc() {
-        unsafe { core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen); }
+        unsafe {
+            core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen);
+        }
         let mut msg = IpcMsg::with_label(SmMsg::MKDIR_ALL)
             .word(0, plen as u64)
             .word(1, 0)
             .with_cap(0, tok);
         let reply = ipc_call(cap, msg);
         let ok = reply.label == SmMsg::REPLY_OK;
-        serial_println!("[KV][SM] mkdir path={} ok={}", core::str::from_utf8(path).unwrap_or("?"), ok);
+        serial_println!(
+            "[KV][SM] mkdir path={} ok={}",
+            core::str::from_utf8(path).unwrap_or("?"),
+            ok
+        );
         let _ = shm_free(tok);
     }
 }
@@ -209,7 +216,12 @@ fn sm_write_file(path: &[u8], content: &[u8]) -> bool {
             .with_cap(0, tok);
         let reply = ipc_call(cap, msg);
         let ok = reply.label == SmMsg::REPLY_OK;
-        serial_println!("[KV][SM] write path={} len={} ok={}", core::str::from_utf8(path).unwrap_or("?"), clen, ok);
+        serial_println!(
+            "[KV][SM] write path={} len={} ok={}",
+            core::str::from_utf8(path).unwrap_or("?"),
+            clen,
+            ok
+        );
         let _ = shm_free(tok);
         return ok;
     }
@@ -224,7 +236,9 @@ fn sm_read_file(path: &[u8]) -> Option<Vec<u8>> {
     };
     let plen = path.len().min(255);
     if let Ok((ptr, tok)) = shm_alloc() {
-        unsafe { core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen); }
+        unsafe {
+            core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen);
+        }
         let mut msg = IpcMsg::with_label(SmMsg::READ_FILE)
             .word(0, plen as u64)
             .with_cap(0, tok);
@@ -239,7 +253,7 @@ fn sm_read_file(path: &[u8]) -> Option<Vec<u8>> {
             while bi < dlen && wi < 8 {
                 for j in 0..8 {
                     if bi < dlen {
-                        out.push( ((reply.words[wi] >> (j*8)) & 0xff) as u8 );
+                        out.push(((reply.words[wi] >> (j * 8)) & 0xff) as u8);
                         bi += 1;
                     }
                 }
@@ -448,7 +462,8 @@ fn pack_acl_default(caller: &str) -> Vec<u8> {
     serialize_acl(&acl)
 }
 
-// KV IPC protocol (sunlightos IpcMsg). Supports keys/values that fit in words (~48 bytes combined).
+// KV IPC protocol (sunlightos IpcMsg). Register IPC currently transports only
+// words[0..4) via r8/r9/r10/r12.
 #[cfg(feature = "sunlightos")]
 const KV_PUT: u64 = 0x4B01;
 #[cfg(feature = "sunlightos")]
@@ -467,6 +482,8 @@ const KV_VALUE: u64 = 0x4B05;
 // (e.g. TLS certificates). The data producer allocates a page, fills it, and
 // passes the cap token in caps[0]; the consumer maps + copies + frees. Mirrors
 // the VFS DATA_SHARED pattern. One page (<=4096 bytes) per value.
+// TODO: add KV_*_SHM2 opcodes that carry keys in shared memory too; with the
+// current ABI, keys packed at word 2 are limited to 16 bytes.
 #[cfg(feature = "sunlightos")]
 const KV_PUT_SHM: u64 = 0x4B06;
 #[cfg(feature = "sunlightos")]
@@ -478,6 +495,16 @@ const SHM_PAGE: usize = 4096;
 static mut LOG_FD: Option<Fd> = None;
 #[cfg(feature = "sunlightos")]
 static mut LIVE: Option<BTreeMap<String, (Vec<u8>, sunlight_kv::Acl)>> = None;
+#[cfg(feature = "sunlightos")]
+static mut VOLATILE_ONLY: bool = true;
+#[cfg(feature = "sunlightos")]
+static mut PERSIST_QUEUE: Option<VecDeque<PersistRecord>> = None;
+
+#[cfg(feature = "sunlightos")]
+struct PersistRecord {
+    key: String,
+    bytes: Vec<u8>,
+}
 
 #[cfg(feature = "sunlightos")]
 fn ensure_dirs() {
@@ -558,19 +585,7 @@ fn recover_store(fd: Fd) -> BTreeMap<String, (Vec<u8>, sunlight_kv::Acl)> {
 }
 
 #[cfg(feature = "sunlightos")]
-fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
-    let acl = if let Some((_, existing_acl)) = unsafe { LIVE.as_ref().and_then(|m| m.get(key)) } {
-        if !existing_acl.allows_write(caller) {
-            return false;
-        }
-        existing_acl.clone()
-    } else {
-        sunlight_kv::Acl::new(caller)
-    };
-
-    let acl_bytes = serialize_acl(&acl);
-
-    // Delegate store mutation through sunlight-sm (no direct protected write)
+fn build_record_bytes(key: &str, value: &[u8], acl_bytes: &[u8], flags: u16) -> Vec<u8> {
     let payload: Vec<u8> = key
         .as_bytes()
         .iter()
@@ -582,7 +597,7 @@ fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
     let hdr = RecordHeader {
         magic: RECORD_MAGIC,
         version: RECORD_VERSION,
-        flags: FLAG_PUT,
+        flags,
         key_len: key.len() as u32,
         value_len: value.len() as u32,
         acl_len: acl_bytes.len() as u32,
@@ -591,11 +606,75 @@ fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
     let mut rec: Vec<u8> = hdr.to_bytes().to_vec();
     rec.extend_from_slice(key.as_bytes());
     rec.extend_from_slice(value);
-    rec.extend_from_slice(&acl_bytes);
-    let wrote = sm_append_record(&rec);
-    if !wrote {
-        serial_println!("[KV][SM] put record via sm FAILED");
+    rec.extend_from_slice(acl_bytes);
+    rec
+}
+
+#[cfg(feature = "sunlightos")]
+fn queue_persist_record(key: &str, rec: Vec<u8>) {
+    unsafe {
+        if VOLATILE_ONLY {
+            serial_println!(
+                "[KV][SM] persistence skipped; volatile store updated key={}",
+                key
+            );
+            return;
+        }
+        if PERSIST_QUEUE.is_none() {
+            PERSIST_QUEUE = Some(VecDeque::new());
+        }
+        if let Some(queue) = &mut PERSIST_QUEUE {
+            queue.push_back(PersistRecord {
+                key: String::from(key),
+                bytes: rec,
+            });
+        }
     }
+}
+
+#[cfg(feature = "sunlightos")]
+fn flush_one_persist() {
+    let pending = unsafe {
+        if let Some(queue) = &mut PERSIST_QUEUE {
+            queue.pop_front()
+        } else {
+            None
+        }
+    };
+    let Some(record) = pending else {
+        return;
+    };
+
+    if !sm_append_record(&record.bytes) {
+        unsafe {
+            VOLATILE_ONLY = true;
+            if PERSIST_QUEUE.is_none() {
+                PERSIST_QUEUE = Some(VecDeque::new());
+            }
+            if let Some(queue) = &mut PERSIST_QUEUE {
+                queue.clear();
+            }
+        }
+        serial_println!(
+            "[KV][SM] persistence failed; volatile store updated key={}",
+            record.key
+        );
+    }
+}
+
+#[cfg(feature = "sunlightos")]
+fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
+    let acl = if let Some((_, existing_acl)) = unsafe { LIVE.as_ref().and_then(|m| m.get(key)) } {
+        if !existing_acl.allows_write(caller) {
+            return false;
+        }
+        existing_acl.clone()
+    } else {
+        sunlight_kv::Acl::new(caller)
+    };
+
+    let acl_bytes = serialize_acl(&acl);
+    let rec = build_record_bytes(key, value, &acl_bytes, FLAG_PUT);
 
     unsafe {
         if LIVE.is_none() {
@@ -605,6 +684,7 @@ fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
             map.insert(String::from(key), (value.to_vec(), acl));
         }
     }
+    queue_persist_record(key, rec);
     true
 }
 
@@ -648,37 +728,13 @@ fn do_delete(key: &str, caller: &str) -> bool {
             .unwrap_or_else(|| pack_acl_default(caller))
     };
 
-    // Delegate delete record through sunlight-sm
-    let payload: Vec<u8> = key
-        .as_bytes()
-        .iter()
-        .chain((&[] as &[u8]).iter())
-        .chain(acl_bytes.iter())
-        .copied()
-        .collect();
-    let crc = crc32_ieee(&payload);
-    let hdr = RecordHeader {
-        magic: RECORD_MAGIC,
-        version: RECORD_VERSION,
-        flags: FLAG_DELETE,
-        key_len: key.len() as u32,
-        value_len: 0,
-        acl_len: acl_bytes.len() as u32,
-        crc32: crc,
-    };
-    let mut rec: Vec<u8> = hdr.to_bytes().to_vec();
-    rec.extend_from_slice(key.as_bytes());
-    rec.extend_from_slice(&[]);
-    rec.extend_from_slice(&acl_bytes);
-    let wrote = sm_append_record(&rec);
-    if !wrote {
-        serial_println!("[KV][SM] delete record via sm FAILED");
-    }
+    let rec = build_record_bytes(key, &[], &acl_bytes, FLAG_DELETE);
     unsafe {
         if let Some(map) = &mut LIVE {
             map.remove(key);
         }
     }
+    queue_persist_record(key, rec);
     true
 }
 
@@ -686,7 +742,10 @@ fn do_delete(key: &str, caller: &str) -> bool {
 fn do_scan(prefix: &str) -> Vec<String> {
     unsafe {
         if let Some(map) = &LIVE {
-            map.keys().filter(|k| k.starts_with(prefix)).cloned().collect()
+            map.keys()
+                .filter(|k| k.starts_with(prefix))
+                .cloned()
+                .collect()
         } else {
             Vec::new()
         }
@@ -704,7 +763,7 @@ fn pack_kv_payload(msg: &mut IpcMsg, key: &str, value: &[u8]) {
     let mut bi = 0usize;
     let mut wi = 1usize;
     for &b in kb.iter().chain(vb.iter()) {
-        if wi >= 8 {
+        if wi >= IPC_REGISTER_WORDS {
             break;
         }
         let shift = (bi % 8) * 8;
@@ -719,10 +778,13 @@ fn pack_kv_payload(msg: &mut IpcMsg, key: &str, value: &[u8]) {
 #[cfg(feature = "sunlightos")]
 fn unpack_kv_key(msg: &IpcMsg) -> String {
     let klen = (msg.words[0] & 0xffff) as usize;
+    if klen > (IPC_REGISTER_WORDS - 1) * 8 {
+        return String::new();
+    }
     let mut v: Vec<u8> = Vec::new();
     let mut rem = klen;
     let mut wi = 1usize;
-    while rem > 0 && wi < 8 {
+    while rem > 0 && wi < IPC_REGISTER_WORDS {
         for j in 0..8 {
             if rem == 0 {
                 break;
@@ -739,10 +801,13 @@ fn unpack_kv_key(msg: &IpcMsg) -> String {
 fn unpack_kv_value(msg: &IpcMsg) -> Vec<u8> {
     let klen = (msg.words[0] & 0xffff) as usize;
     let vlen = ((msg.words[0] >> 16) & 0xffff) as usize;
+    if klen + vlen > (IPC_REGISTER_WORDS - 1) * 8 {
+        return Vec::new();
+    }
     let mut v: Vec<u8> = Vec::new();
     let mut rem = vlen;
     let mut wi = 1usize + (klen + 7) / 8;
-    while rem > 0 && wi < 8 {
+    while rem > 0 && wi < IPC_REGISTER_WORDS {
         for j in 0..8 {
             if rem == 0 {
                 break;
@@ -756,10 +821,17 @@ fn unpack_kv_value(msg: &IpcMsg) -> Vec<u8> {
 }
 
 #[cfg(feature = "sunlightos")]
-fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) {
+fn pack_str_register_words(msg: &mut IpcMsg, start_word: usize, s: &str) -> bool {
+    if start_word >= IPC_REGISTER_WORDS {
+        return false;
+    }
     let b = s.as_bytes();
+    let max = (IPC_REGISTER_WORDS - start_word) * 8;
+    if b.len() > max {
+        return false;
+    }
     let mut i = 0;
-    for w in start_word..8 {
+    for w in start_word..IPC_REGISTER_WORDS {
         let mut word = 0u64;
         for j in 0..8 {
             if i < b.len() {
@@ -772,13 +844,14 @@ fn pack_str(msg: &mut IpcMsg, start_word: usize, s: &str) {
             break;
         }
     }
+    true
 }
 
 #[cfg(feature = "sunlightos")]
 fn unpack_str(words: &[u64; 8], start_word: usize, max_len: usize) -> String {
     let mut v: Vec<u8> = Vec::new();
     let mut i = 0;
-    for w in start_word..8 {
+    for w in start_word..IPC_REGISTER_WORDS {
         if i >= max_len {
             break;
         }
@@ -809,37 +882,51 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
     serial_println!("[SUNLIGHT-KV] Registered as 'sunlight-kv'");
 
     // Prefer sm for store content (writes always via sm; reads may use direct for recover compat)
-    let live_map = if let Some(bytes) = sm_read_file(b"/var/lib/sunlight/kv.store") {
+    let (live_map, volatile_only) = if let Some(bytes) = sm_read_file(b"/var/lib/sunlight/kv.store")
+    {
         // We have bytes from sm; use a simple path: write to a mem fd? For minimal, fall to direct open if possible or parse inline later.
         // For this bite use direct open for recover (read-only of sm-written file) and log the sm use.
         serial_println!("[KV][SM] initial store read via sm len={}", bytes.len());
         let fd_opt = open_or_create_store();
         if let Some(fd) = fd_opt {
             let m = recover_store(fd);
-            unsafe { LOG_FD = Some(fd); }
-            serial_println!("[SUNLIGHT-KV] store recovered via sm-written data, live keys={}", m.len());
-            m
+            unsafe {
+                LOG_FD = Some(fd);
+            }
+            serial_println!(
+                "[SUNLIGHT-KV] store recovered via sm-written data, live keys={}",
+                m.len()
+            );
+            (m, false)
         } else {
             serial_println!("[SUNLIGHT-KV] sm data present but open failed; volatile");
-            BTreeMap::new()
+            (BTreeMap::new(), true)
         }
     } else if let Some(fd) = open_or_create_store() {
         let m = recover_store(fd);
-        unsafe { LOG_FD = Some(fd); }
+        unsafe {
+            LOG_FD = Some(fd);
+        }
         serial_println!("[SUNLIGHT-KV] store recovered, live keys={}", m.len());
-        m
+        (m, false)
     } else {
         serial_println!("[SUNLIGHT-KV] WARNING: kv.store not available, using volatile store");
-        BTreeMap::new()
+        (BTreeMap::new(), true)
     };
     unsafe {
         LIVE = Some(live_map);
+        VOLATILE_ONLY = volatile_only;
+        if PERSIST_QUEUE.is_none() {
+            PERSIST_QUEUE = Some(VecDeque::new());
+        }
     }
 
     serial_println!("[SUNLIGHT-KV] Entering IPC loop");
 
     let mut msg = ipc_recv(ep);
     loop {
+        serial_println!("[KV] request label={:#x}", msg.label);
+
         let mut reply = IpcMsg::empty();
         reply.label = KV_REPLY;
 
@@ -852,6 +939,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 } else {
                     let caller = "root";
                     if do_put(&key, &val, caller) {
+                        serial_println!("[KV] put key={} len={} ok (inline)", key, val.len());
                         reply.words[0] = 0;
                     } else {
                         reply.label = KV_ERROR;
@@ -867,6 +955,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     let caller = "root";
                     match do_get(&key, caller) {
                         Ok(v) => {
+                            serial_println!("[KV] get key={} len={} hit", key, v.len());
                             reply.label = KV_VALUE;
                             reply.words[0] = v.len() as u64;
                             let mut bi = 0usize;
@@ -884,6 +973,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                             }
                         }
                         Err(()) => {
+                            serial_println!("[KV] get key={} not-found", key);
                             reply.label = KV_ERROR;
                             reply.words[0] = 2;
                         }
@@ -891,8 +981,8 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 }
             }
             KV_PUT_SHM => {
-                // word[0] = value_len, words[2..] = key (NUL-padded), caps[0] = page token.
-                let key = unpack_str(&msg.words, 2, 48);
+                // word[0] = value_len, words[2..4) = key (max 16 bytes), caps[0] = page token.
+                let key = unpack_str(&msg.words, 2, (IPC_REGISTER_WORDS - 2) * 8);
                 let vlen = msg.words[0] as usize;
                 let tok = msg.caps[0];
                 if key.is_empty() || tok == CapabilityToken::INVALID || vlen > SHM_PAGE {
@@ -904,6 +994,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                             let val = unsafe { core::slice::from_raw_parts(ptr, vlen) }.to_vec();
                             let _ = shm_free(tok);
                             if do_put(&key, &val, "root") {
+                                serial_println!("[KV] put key={} len={} ok (shm)", key, vlen);
                                 reply.words[0] = 0;
                             } else {
                                 reply.label = KV_ERROR;
@@ -918,8 +1009,8 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 }
             }
             KV_GET_SHM => {
-                // words[2..] = key (NUL-padded). Reply: KV_VALUE word[0]=len, caps[0]=page token.
-                let key = unpack_str(&msg.words, 2, 48);
+                // words[2..4) = key (max 16 bytes). Reply: KV_VALUE word[0]=len, caps[0]=page token.
+                let key = unpack_str(&msg.words, 2, (IPC_REGISTER_WORDS - 2) * 8);
                 if key.is_empty() {
                     reply.label = KV_ERROR;
                 } else {
@@ -963,25 +1054,34 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 }
             }
             KV_SCAN => {
-                let prefix = unpack_str(&msg.words, 0, 64);
+                let prefix = unpack_str(&msg.words, 0, IPC_REGISTER_WORDS * 8);
                 let keys = do_scan(&prefix);
                 reply.words[0] = keys.len() as u64;
                 let mut wi = 1usize;
                 for k in keys.iter().take(3) {
-                    if wi >= 8 {
+                    if wi >= IPC_REGISTER_WORDS {
                         break;
                     }
-                    pack_str(&mut reply, wi, k);
+                    if !pack_str_register_words(&mut reply, wi, k) {
+                        break;
+                    }
                     wi += 1;
                 }
             }
             _ => {
+                serial_println!("[KV] unsupported label={:#x}", msg.label);
                 reply.label = KV_ERROR;
                 reply.words[0] = 0xff;
             }
         }
 
-        msg = ipc_reply_and_wait(ep, reply);
+        serial_println!("[KV] reply label={:#x} w0={}", reply.label, reply.words[0]);
+        if let Some(next) = ipc_reply_and_try_recv(ep, reply) {
+            msg = next;
+            continue;
+        }
+        flush_one_persist();
+        msg = ipc_recv(ep);
     }
 }
 
