@@ -46,6 +46,7 @@ const ERR_ROFS: u64 = 30;
 const MAX_PATH_BYTES: usize = 32;
 const READ_REPLY_BYTES: usize = 16;
 const FSTAB_MAX_BYTES: usize = 512;
+const OPEN_META_SLOTS: usize = 64;
 
 // Handle encoding: high byte = mount (0=ram, 1=boot), lower bytes = local handle
 const MOUNT_RAM: u32 = 0;
@@ -162,6 +163,28 @@ struct State {
     vfs: Vfs,
     boot: Option<BootFs>,
     boot_mountpoint: Option<&'static str>,
+    open_meta: [OpenMeta; OPEN_META_SLOTS],
+}
+
+#[derive(Clone, Copy)]
+struct OpenMeta {
+    handle: u32,
+    len: usize,
+    path: [u8; MAX_PATH_BYTES],
+}
+
+impl OpenMeta {
+    const EMPTY: Self = Self {
+        handle: 0,
+        len: 0,
+        path: [0; MAX_PATH_BYTES],
+    };
+
+    fn path_str(&self) -> &str {
+        // SAFETY: metadata is only populated from decoded_path/open_path input,
+        // which is already UTF-8 validated.
+        unsafe { core::str::from_utf8_unchecked(&self.path[..self.len]) }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +208,7 @@ pub extern "C" fn _start() -> ! {
         vfs,
         boot,
         boot_mountpoint,
+        open_meta: [OpenMeta::EMPTY; OPEN_META_SLOTS],
     };
 
     // Phase 3.0 self-tests (RamFs)
@@ -323,14 +347,21 @@ fn open_path(state: &mut State, path: &str) -> IpcMsg {
     if let Some(local) = strip_boot_prefix(state, path) {
         match state.boot.as_mut() {
             Some(boot) => match boot.open(local) {
-                Ok(handle) => ok_reply().word(1, handle.0 as u64),
+                Ok(handle) => {
+                    remember_open(state, handle, path);
+                    ok_reply().word(1, handle.0 as u64)
+                }
                 Err(e) => error_reply(e),
             },
             None => error_reply(FsError::NotFound),
         }
     } else {
         match state.vfs.open(path) {
-            Ok(handle) => ok_reply().word(1, pack_handle(MOUNT_RAM, handle).0 as u64),
+            Ok(handle) => {
+                let packed = pack_handle(MOUNT_RAM, handle);
+                remember_open(state, packed, path);
+                ok_reply().word(1, packed.0 as u64)
+            }
             Err(e) => error_reply(e),
         }
     }
@@ -384,7 +415,7 @@ fn read_handle(state: &mut State, raw: FileHandle, offset: usize, requested: usi
 
 fn close_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
     let (mount, local) = unpack_handle(raw);
-    match mount {
+    let reply = match mount {
         MOUNT_BOOT => match state.boot.as_mut() {
             Some(boot) => match boot.close(local) {
                 Ok(()) => ok_reply(),
@@ -397,7 +428,11 @@ fn close_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
             Err(e) => error_reply(e),
         },
         _ => error_reply(FsError::BadHandle),
+    };
+    if reply.label == VfsMsg::REPLY && reply.words[0] == STATUS_OK {
+        forget_open(state, raw);
     }
+    reply
 }
 
 fn stat_path(state: &mut State, path: &str) -> IpcMsg {
@@ -420,10 +455,26 @@ fn stat_path(state: &mut State, path: &str) -> IpcMsg {
 }
 
 fn write_handle(state: &mut State, raw: FileHandle, offset: usize, buf: &[u8]) -> IpcMsg {
-    let _ = (state, raw, offset, buf);
-    debug_log("[SUNLIGHT-FS] request actor=unknown op=write path=<ipc-handle>");
-    debug_log("[SUNLIGHT-FS] decision actor=unknown op=write path=<ipc-handle> result=deny reason=DeniedUnknownActor err=OperationNotPermitted");
-    error_reply(FsError::OperationNotPermitted)
+    let Some(path) = open_path_for_handle(state, raw) else {
+        return error_reply(FsError::BadHandle);
+    };
+
+    if path != "/etc/localtime" {
+        debug_log("[SUNLIGHT-FS] request actor=unknown op=write path=<ipc-handle>");
+        debug_log("[SUNLIGHT-FS] decision actor=unknown op=write path=<ipc-handle> result=deny reason=DeniedUnknownActor err=OperationNotPermitted");
+        return error_reply(FsError::OperationNotPermitted);
+    }
+
+    let (mount, local) = unpack_handle(raw);
+    let write_res = match mount {
+        MOUNT_RAM => state.vfs.write(local, offset, buf),
+        MOUNT_BOOT => return error_reply(FsError::ReadOnlyFilesystem),
+        _ => return error_reply(FsError::BadHandle),
+    };
+    match write_res {
+        Ok(n) => ok_reply().word(1, n as u64),
+        Err(e) => error_reply(e),
+    }
 }
 
 fn mkdir_path(state: &mut State, path: &str, uid: u32, gid: u32, mode: u16) -> IpcMsg {
@@ -642,6 +693,39 @@ fn run_phase30_tests(state: &mut State) {
     let bad_handle = handle_request(state, read_msg(FileHandle(0), 0, 8));
     if bad_handle.label == VfsMsg::ERROR && bad_handle.words[0] == ERR_BAD_HANDLE {
         debug_log("[VFS]  Bad handle test OK");
+    } else {
+        return;
+    }
+
+    let localtime = handle_request(state, path_msg(VfsMsg::OPEN, "/etc/localtime"));
+    if localtime.label != VfsMsg::REPLY || localtime.words[0] != STATUS_OK {
+        return;
+    }
+    let localtime_handle = FileHandle(localtime.words[1] as u32);
+    let localtime_write = handle_request(
+        state,
+        write_msg(localtime_handle, 0, b"{\"id\":\"UTC\",\"di"),
+    );
+    if localtime_write.label != VfsMsg::REPLY || localtime_write.words[0] != STATUS_OK {
+        return;
+    }
+    let _ = handle_request(
+        state,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, localtime_handle.0 as u64),
+    );
+
+    let motd_write_open = handle_request(state, path_msg(VfsMsg::OPEN, "/etc/motd"));
+    if motd_write_open.label != VfsMsg::REPLY || motd_write_open.words[0] != STATUS_OK {
+        return;
+    }
+    let motd_write_handle = FileHandle(motd_write_open.words[1] as u32);
+    let denied_write = handle_request(state, write_msg(motd_write_handle, 0, b"X"));
+    let _ = handle_request(
+        state,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, motd_write_handle.0 as u64),
+    );
+    if denied_write.label == VfsMsg::ERROR && denied_write.words[0] == ERR_PERM {
+        debug_log("[VFS]  IPC write policy OK");
     } else {
         return;
     }
@@ -907,6 +991,41 @@ fn strip_boot_prefix<'a>(state: &State, path: &'a str) -> Option<&'a str> {
     }
 }
 
+fn remember_open(state: &mut State, handle: FileHandle, path: &str) {
+    let slot_idx = state
+        .open_meta
+        .iter()
+        .position(|meta| meta.handle == 0 || meta.handle == handle.0);
+    let Some(slot_idx) = slot_idx else {
+        return;
+    };
+
+    let mut meta = OpenMeta::EMPTY;
+    let bytes = path.as_bytes();
+    let len = bytes.len().min(MAX_PATH_BYTES);
+    meta.handle = handle.0;
+    meta.len = len;
+    meta.path[..len].copy_from_slice(&bytes[..len]);
+    state.open_meta[slot_idx] = meta;
+}
+
+fn forget_open(state: &mut State, handle: FileHandle) {
+    for meta in &mut state.open_meta {
+        if meta.handle == handle.0 {
+            *meta = OpenMeta::EMPTY;
+            return;
+        }
+    }
+}
+
+fn open_path_for_handle(state: &State, handle: FileHandle) -> Option<&str> {
+    state
+        .open_meta
+        .iter()
+        .find(|meta| meta.handle == handle.0 && meta.len > 0)
+        .map(OpenMeta::path_str)
+}
+
 fn pack_handle(mount: u32, local: FileHandle) -> FileHandle {
     FileHandle((mount << 28) | (local.0 & 0x0FFF_FFFF))
 }
@@ -1019,6 +1138,14 @@ fn read_msg(handle: FileHandle, offset: usize, len: usize) -> IpcMsg {
         .word(0, handle.0 as u64)
         .word(1, offset as u64)
         .word(2, len as u64)
+}
+
+fn write_msg(handle: FileHandle, offset: usize, data: &[u8]) -> IpcMsg {
+    IpcMsg::with_label(VfsMsg::WRITE)
+        .word(0, handle.0 as u64)
+        .word(1, offset as u64)
+        .word(2, pack_bytes(&data[..data.len().min(8)]))
+        .word(3, pack_bytes(&data[data.len().min(8)..data.len().min(16)]))
 }
 
 fn unpack_data(msg: &IpcMsg, out: &mut [u8]) {
