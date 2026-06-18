@@ -10,7 +10,7 @@ mod input;
 #[cfg(feature = "std")]
 mod parser;
 
-#[cfg(feature = "sunlight")]
+#[cfg(any(feature = "sunlight", test))]
 mod calc;
 
 #[cfg(feature = "std")]
@@ -134,7 +134,8 @@ mod sunlight {
 
     use sunlight_ipc::{
         debug_log, endpoint_create, get_init_cap, ipc_call, ipc_reply_and_wait, nameserver_lookup,
-        nameserver_register, sysinfo, CapabilityToken, InitMsg, IpcMsg, SunlightSyscall, VfsMsg, TzMsg,
+        nameserver_register, sysinfo, CapabilityToken, InitMsg, IpcMsg, SunlightSyscall, TzMsg,
+        VfsMsg,
     };
 
     /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
@@ -199,6 +200,7 @@ mod sunlight {
         passwd_buffer_len: usize,
         env: crate::shellenv::ShellEnv,
         cwd: alloc::string::String,
+        calc: crate::calc::CalcSession,
         /// Set when an external command was spawned as a foreground job. The
         /// shell reports it to tty_server (FG_STARTED) and parks until tty_server
         /// reports the child exited (FG_DONE), instead of blocking on the child.
@@ -223,6 +225,7 @@ mod sunlight {
                 passwd_buffer_len: 0,
                 env: crate::shellenv::ShellEnv::new(),
                 cwd: alloc::string::String::from("/"),
+                calc: crate::calc::CalcSession::new(),
                 fg_pid: None,
             }
         }
@@ -234,6 +237,37 @@ mod sunlight {
             );
             self.env.load_defaults(self.uid, &username);
             self.env.set("PWD", &self.cwd);
+        }
+
+        fn run_calc(&mut self, expr: &str) -> ([u8; MAX_OUT], usize) {
+            let output = if let Some(path) = expr.strip_prefix("file ") {
+                let path = path.trim();
+                match normalize_path(&self.cwd, path) {
+                    Some(path) => {
+                        if let Some(vfs_cap) = nameserver_lookup("vfs") {
+                            let bytes = read_file(vfs_cap, &path);
+                            match core::str::from_utf8(&bytes) {
+                                Ok(contents) => self.calc.run_file_contents(contents, expr),
+                                Err(_) => alloc::string::String::from(
+                                    "calc error: formula file is not valid UTF-8\n",
+                                ),
+                            }
+                        } else {
+                            alloc::string::String::from("calc error: vfs unavailable\n")
+                        }
+                    }
+                    None => alloc::string::String::from("calc error: invalid file path\n"),
+                }
+            } else {
+                self.calc.run_command(expr)
+            };
+
+            if output.len() > MAX_OUT {
+                long_out_replace(output.as_bytes());
+                ([0; MAX_OUT], 0)
+            } else {
+                copy_out(output.as_bytes())
+            }
         }
 
         fn handle_byte(&mut self, byte: u8) -> ([u8; MAX_OUT], usize) {
@@ -370,7 +404,8 @@ mod sunlight {
                 if let Ok(s) = core::str::from_utf8(line) {
                     let s = s.trim();
                     if let Some(expr) = s.strip_prefix('=').or_else(|| s.strip_prefix("calc ")) {
-                        return run_calc(expr.as_bytes());
+                        let expr = alloc::string::String::from(expr.trim());
+                        return self.run_calc(&expr);
                     }
                 }
             }
@@ -902,7 +937,8 @@ mod sunlight {
             if has_path {
                 return self.run_external_with_cwd_paths("ls", args);
             }
-            let mut forwarded: alloc::vec::Vec<&str> = alloc::vec::Vec::with_capacity(args.len() + 1);
+            let mut forwarded: alloc::vec::Vec<&str> =
+                alloc::vec::Vec::with_capacity(args.len() + 1);
             forwarded.extend_from_slice(args);
             let cwd_owned = self.cwd.clone();
             forwarded.push(cwd_owned.as_str());
@@ -1143,10 +1179,12 @@ mod sunlight {
             });
 
             let mut buf = [0u8; 1024];
-            let username = core::str::from_utf8(&self.username[..self.username_len]).unwrap_or("root");
+            let username =
+                core::str::from_utf8(&self.username[..self.username_len]).unwrap_or("root");
             let mut hostname_buf = [0u8; 64];
             let hostname_len = read_hostname_from_vfs(&mut hostname_buf);
-            let hostname = core::str::from_utf8(&hostname_buf[..hostname_len]).unwrap_or("sunlight");
+            let hostname =
+                core::str::from_utf8(&hostname_buf[..hostname_len]).unwrap_or("sunlight");
             let len = crate::sysfetch::render_sysfetch_to_buffer(
                 username,
                 hostname,
@@ -1190,7 +1228,8 @@ mod sunlight {
                 fn copy_bytes(dst: &mut [u8], pos: &mut usize, src: &[u8]) -> usize {
                     let n = src.len().min(dst.len().saturating_sub(*pos));
                     dst[*pos..*pos + n].copy_from_slice(&src[..n]);
-                    *pos += n; n
+                    *pos += n;
+                    n
                 }
 
                 let Some(tz_cap) = nameserver_lookup("tz") else {
@@ -1207,23 +1246,34 @@ mod sunlight {
                         // simplistic id from first word bytes
                         for wi in 2..5 {
                             for b in 0..8 {
-                                let ch = ((r.words[wi] >> (b*8)) & 0xff) as u8;
-                                if ch == 0 || pos >= 500 { break; }
-                                out[pos] = ch; pos += 1;
+                                let ch = ((r.words[wi] >> (b * 8)) & 0xff) as u8;
+                                if ch == 0 || pos >= 500 {
+                                    break;
+                                }
+                                out[pos] = ch;
+                                pos += 1;
                             }
                         }
                     }
                     let r2 = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
                     if r2.label == TzMsg::REPLY {
                         let w0 = r2.words[0];
-                        let h = ((w0>>24)&0xff) as u8;
-                        let m = ((w0>>16)&0xff) as u8;
+                        let h = ((w0 >> 24) & 0xff) as u8;
+                        let m = ((w0 >> 16) & 0xff) as u8;
                         let _ = copy_bytes(out, &mut pos, b"\nLocal: ");
-                        out[pos] = b'0'+h/10; pos+=1; out[pos]=b'0'+h%10; pos+=1;
-                        out[pos]=b':'; pos+=1;
-                        out[pos]=b'0'+m/10; pos+=1; out[pos]=b'0'+m%10; pos+=1;
+                        out[pos] = b'0' + h / 10;
+                        pos += 1;
+                        out[pos] = b'0' + h % 10;
+                        pos += 1;
+                        out[pos] = b':';
+                        pos += 1;
+                        out[pos] = b'0' + m / 10;
+                        pos += 1;
+                        out[pos] = b'0' + m % 10;
+                        pos += 1;
                     }
-                    out[pos] = b'\n'; pos+=1;
+                    out[pos] = b'\n';
+                    pos += 1;
                     return &out[..pos];
                 } else if args[0] == "list" {
                     // Local filtering against the embedded zone table — no IPC
@@ -1253,21 +1303,34 @@ mod sunlight {
                         }
 
                         let _ = copy_bytes(out, &mut pos, idbuf);
-                        out[pos]=b'\t'; pos+=1;
+                        out[pos] = b'\t';
+                        pos += 1;
                         let _ = copy_bytes(out, &mut pos, dispbuf);
-                        out[pos]=b'\t'; pos+=1;
+                        out[pos] = b'\t';
+                        pos += 1;
 
                         let oh = zone.utc_offset_hours;
                         let om = zone.utc_offset_minutes;
-                        out[pos] = if oh < 0 { b'-' } else { b'+' }; pos+=1;
+                        out[pos] = if oh < 0 { b'-' } else { b'+' };
+                        pos += 1;
                         let ah = oh.unsigned_abs();
-                        out[pos]=b'0'+ah/10; pos+=1; out[pos]=b'0'+ah%10; pos+=1;
-                        out[pos]=b':'; pos+=1;
-                        out[pos]=b'0'+om/10; pos+=1; out[pos]=b'0'+om%10; pos+=1;
-                        out[pos]=b'\n'; pos+=1;
+                        out[pos] = b'0' + ah / 10;
+                        pos += 1;
+                        out[pos] = b'0' + ah % 10;
+                        pos += 1;
+                        out[pos] = b':';
+                        pos += 1;
+                        out[pos] = b'0' + om / 10;
+                        pos += 1;
+                        out[pos] = b'0' + om % 10;
+                        pos += 1;
+                        out[pos] = b'\n';
+                        pos += 1;
 
                         shown += 1;
-                        if filter.is_none() && shown >= 32 { break; }
+                        if filter.is_none() && shown >= 32 {
+                            break;
+                        }
                     }
                     if filter.is_some() && shown == 0 {
                         let _ = copy_bytes(out, &mut pos, b"(no matching zones)\n");
@@ -1277,17 +1340,28 @@ mod sunlight {
                     let id = args[1].as_bytes();
                     let mut req = IpcMsg::with_label(TzMsg::SET_ZONE);
                     // pack id into words[0..]
-                    let mut wi=0; let mut bi=0; let mut w=0u64;
+                    let mut wi = 0;
+                    let mut bi = 0;
+                    let mut w = 0u64;
                     for &bb in id.iter().take(32) {
-                        w |= (bb as u64) << (bi*8); bi+=1;
-                        if bi==8 { req = req.word(wi, w); w=0; bi=0; wi+=1; }
+                        w |= (bb as u64) << (bi * 8);
+                        bi += 1;
+                        if bi == 8 {
+                            req = req.word(wi, w);
+                            w = 0;
+                            bi = 0;
+                            wi += 1;
+                        }
                     }
-                    if bi>0 { req = req.word(wi, w); }
+                    if bi > 0 {
+                        req = req.word(wi, w);
+                    }
                     let r = ipc_call(tz_cap, req);
-                    if r.label == TzMsg::REPLY && r.words[0]==0 {
+                    if r.label == TzMsg::REPLY && r.words[0] == 0 {
                         let _ = copy_bytes(out, &mut pos, b"Timezone changed to ");
                         let _ = copy_bytes(out, &mut pos, args[1].as_bytes());
-                        out[pos]=b'\n'; pos+=1;
+                        out[pos] = b'\n';
+                        pos += 1;
                     } else {
                         let _ = copy_bytes(out, &mut pos, b"tzctl: set failed\n");
                     }
@@ -1386,27 +1460,6 @@ mod sunlight {
         let len = data.len().min(buf.len());
         buf[..len].copy_from_slice(&data[..len]);
         (buf, len)
-    }
-
-    /// Evaluate `expr` with the in-process calculator and format the result (or
-    /// an error message) for output. Backs the `= <expr>` shell shortcut.
-    fn run_calc(expr: &[u8]) -> ([u8; MAX_OUT], usize) {
-        let mut buf = [0u8; MAX_OUT];
-        let body: &[u8] = match crate::calc::eval(expr) {
-            Ok(value) => {
-                let mut num = [0u8; 21];
-                let s = crate::calc::format_i64(value, &mut num);
-                let len = s.len().min(buf.len() - 1);
-                buf[..len].copy_from_slice(&s[..len]);
-                buf[len] = b'\n';
-                return (buf, len + 1);
-            }
-            Err(e) => crate::calc::error_msg(e),
-        };
-        let len = body.len().min(buf.len() - 1);
-        buf[..len].copy_from_slice(&body[..len]);
-        buf[len] = b'\n';
-        (buf, len + 1)
     }
 
     fn push_art_line(line: &[u8]) {
@@ -1534,8 +1587,7 @@ mod sunlight {
     fn external_uses_fs_paths(cmd: &str) -> bool {
         matches!(
             cmd,
-            "ls"
-                | "cat"
+            "ls" | "cat"
                 | "mkdir"
                 | "touch"
                 | "rm"
