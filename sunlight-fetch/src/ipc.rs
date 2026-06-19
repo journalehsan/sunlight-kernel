@@ -463,8 +463,11 @@ mod sunlight {
     };
     use sunlight_net::netop::NetOp;
 
-    // Maximum bytes packed into one IPC call (words[2..7] = 6 words × 8 bytes).
-    const IPC_CHUNK: usize = 48;
+    // Maximum bytes packed into one IPC call. Register IPC transports only
+    // words[0..4] (r8/r9/r10/r12). words[0]=socket_id, words[1]=length, so
+    // only words[2..4] = 2 words × 8 bytes = 16 bytes carry actual data.
+    // words[4..7] are silently dropped by the kernel ABI.
+    const IPC_CHUNK: usize = 16;
 
     // TLS IPC protocol labels — must match sunlight-tls/src/main.rs.
     // Design B: the daemon owns the socket + crypto; we exchange plaintext only.

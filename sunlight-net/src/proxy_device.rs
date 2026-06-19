@@ -75,10 +75,17 @@ impl Device for ProxyNetDevice {
         let mut caps = DeviceCapabilities::default();
         caps.max_transmission_unit = 1514;
         caps.medium = Medium::Ethernet;
-        // Force software checksums. We do not offload to the kernel virtio device;
-        // smoltcp must compute IP/TCP/UDP checksums itself. Otherwise outbound
-        // segments (SYN etc.) have zero checksum and are dropped by QEMU slirp.
-        caps.checksum = ChecksumCapabilities::ignored();
+        // Force software checksums. We do NOT offload to the kernel virtio device,
+        // so smoltcp must compute IP/TCP/UDP/ICMP checksums itself on tx and verify
+        // them on rx. That is exactly `Checksum::Both`, which is the *default*.
+        //
+        // NB: do NOT use `ChecksumCapabilities::ignored()` here — `ignored()` sets
+        // every protocol to `Checksum::None`, telling smoltcp to skip checksums
+        // entirely (it assumes hardware offload). With no offload, outbound frames
+        // then ship with a zero/invalid IPv4 header checksum and QEMU slirp drops
+        // every IP packet (ARP still works — it has no checksum), which silently
+        // breaks DNS, ping and TCP/TLS.
+        caps.checksum = ChecksumCapabilities::default();
         caps
     }
 }

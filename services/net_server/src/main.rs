@@ -44,8 +44,11 @@ static mut RESOLVER_CHAIN: Option<sunlight_net::ResolverChain> = None;
 /// static QEMU user-net config as NetOp::GETIP (10.0.2.15/24 via 10.0.2.2).
 static mut NET_DEVICE: Option<ProxyNetDevice> = None;
 static mut NET_IFACE: Option<Interface> = None;
-/// Backing storage for the UDP socket `upstream::query_a` allocates per query.
+/// Backing storage for the TCP SocketSet managed by TcpManager (main loop).
 static mut SOCKET_STORAGE: [SocketStorage; 16] = [SocketStorage::EMPTY; 16];
+/// Separate backing storage for the DNS SocketSet (RESOLVE handler).
+/// Kept isolated so DNS UDP sockets never alias TCP slots in SOCKET_STORAGE.
+static mut DNS_SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
 static mut TCP_MANAGER: sunlight_net::TcpManager = sunlight_net::TcpManager::new();
 const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [
     [8, 8, 8, 8],
@@ -113,7 +116,9 @@ pub extern "C" fn _start() -> ! {
     }
 }
 
-const IPC_CHUNK: usize = 48;
+// Register IPC transports only words[0..4]. For SEND/RECV: words[0]=socket_id,
+// words[1]=length, so words[2..4] = 2 × 8 = 16 bytes of payload survive.
+const IPC_CHUNK: usize = 16;
 
 fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
     match msg.label {
@@ -242,7 +247,7 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                             // the kernel frame proxy.
                             match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                                 (Some(iface), Some(device)) => {
-                                    let mut sockets = SocketSet::new(&mut SOCKET_STORAGE[..]);
+                                    let mut sockets = SocketSet::new(&mut DNS_SOCKET_STORAGE[..]);
                                     match sunlight_net::dns::upstream::query_a(
                                         hostname,
                                         chain.upstream,

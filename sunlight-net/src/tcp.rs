@@ -212,14 +212,16 @@ impl TcpManager {
         // fixed-round spin without any yield raced past the data window and
         // returned empty mid-transfer, which the HTTP client misread as EOF
         // (truncated body / "empty response").
+        // Allocate once outside the loop so the bump allocator is not drained
+        // by a Vec-per-iteration leak on every poll that finds no data.
+        let mut out = alloc::vec::Vec::with_capacity(max_len.min(RX_BUF));
         let start = sunlight_ipc::monotonic_millis();
         let deadline = start.wrapping_add(RECV_TIMEOUT_MS);
         loop {
+            out.clear();
             let elapsed = sunlight_ipc::monotonic_millis().wrapping_sub(start);
             iface.poll(Instant::from_millis(elapsed as i64), device, sockets);
 
-            let mut out = alloc::vec::Vec::new();
-            out.reserve(max_len.min(RX_BUF));
             {
                 let socket = sockets.get_mut::<tcp::Socket>(handle);
                 while out.len() < max_len {
@@ -248,9 +250,9 @@ impl TcpManager {
             }
 
             if sunlight_ipc::monotonic_millis() >= deadline {
-                // Idle too long with the connection still open — treat as EOF so
-                // the caller stops rather than blocking forever.
-                return Ok(alloc::vec::Vec::new());
+                // Return an explicit Timeout so callers distinguish a stalled
+                // connection from a clean peer close (which returns Ok(empty)).
+                return Err(TcpError::Timeout);
             }
 
             sunlight_ipc::process_yield();
@@ -266,6 +268,11 @@ impl TcpManager {
             .slot_mut(socket_id)
             .ok_or(TcpError::InvalidSocket)?;
         if let Some(handle) = slot.handle.take() {
+            // Initiate graceful FIN before removing the socket. smoltcp will
+            // queue the FIN segment; the next iface.poll() (in the caller's
+            // loop) will transmit it. Without this call, smoltcp drops the
+            // socket immediately and the peer receives RST instead of FIN.
+            sockets.get_mut::<tcp::Socket>(handle).close();
             sockets.remove(handle);
         }
         slot.active = false;
