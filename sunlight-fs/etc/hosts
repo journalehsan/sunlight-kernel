@@ -3,5 +3,6 @@
 127.0.0.1	localhost
 127.0.1.1	sunlight
 127.0.0.1	mylocal localhost.localdomain
-# example external for demo (hosts overrides hardcoded)
-93.184.216.34	example.com
+# NOTE: do NOT hardcode example.com here. The legacy 93.184.216.34 address was
+# retired in 2024 and now black-holes SYNs (fetch hung with no SYN-ACK). Leave it
+# to upstream DNS (10.0.2.3 in QEMU slirp) so it resolves to the live IP.

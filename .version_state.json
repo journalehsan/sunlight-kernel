@@ -5,27 +5,6 @@
   "last_total_lines": 49604,
   "history": [
     {
-      "timestamp": "2026-06-17T14:18:47.602774",
-      "version": "0.1.105",
-      "total_lines": 44015,
-      "new_lines": -20,
-      "patch_increment": 0
-    },
-    {
-      "timestamp": "2026-06-17T14:21:54.194214",
-      "version": "0.1.105",
-      "total_lines": 44015,
-      "new_lines": -20,
-      "patch_increment": 0
-    },
-    {
-      "timestamp": "2026-06-17T14:44:34.954292",
-      "version": "0.1.107",
-      "total_lines": 44162,
-      "new_lines": 127,
-      "patch_increment": 2
-    },
-    {
       "timestamp": "2026-06-17T14:51:54.237562",
       "version": "0.1.107",
       "total_lines": 44165,
@@ -349,6 +328,27 @@
     },
     {
       "timestamp": "2026-06-19T23:36:10.343606",
+      "version": "0.1.161",
+      "total_lines": 49604,
+      "new_lines": -31,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-19T23:43:07.751956",
+      "version": "0.1.161",
+      "total_lines": 49604,
+      "new_lines": -31,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-19T23:44:31.649951",
+      "version": "0.1.161",
+      "total_lines": 49604,
+      "new_lines": -31,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-19T23:45:36.003499",
       "version": "0.1.161",
       "total_lines": 49604,
       "new_lines": -31,
