@@ -144,12 +144,16 @@ mod sunlightos_impl {
     const MAX_INCOMING: usize = 256 * 1024; // guard against runaway buffering
     const MAX_SESSIONS: usize = 4;
 
-    // Embedded curated trust anchor (GTS Root R4, self-signed, valid to 2036).
-    // api.sampleapis.com chains: leaf <- GTS WE1 <- GTS Root R4.
+    // Embedded curated trust anchors.
+    // GTS Root R4 (Google, valid to 2036): api.sampleapis.com chain.
+    // ISRG Root X1 (Let's Encrypt, valid to 2035): archlinux.org and most
+    //   Let's Encrypt-issued certificates.
     static EMBEDDED_GTS_R4: &[u8] = include_bytes!("roots/gts_root_r4.der");
+    static EMBEDDED_ISRG_X1: &[u8] = include_bytes!("roots/isrg_root_x1.der");
     const TLS_CA_INDEX_KEY: &str = "tls.ca.idx";
     const TLS_CA_PREFIX: &str = "tls.ca.";
     const SEED_NAME: &str = "gtsr4";
+    const SEED_ISRG_X1: &str = "isrgx1";
 
     static mut CLIENT_CONFIG: Option<Arc<ClientConfig>> = None;
 
@@ -377,18 +381,42 @@ mod sunlightos_impl {
             serial_println!("[SUNLIGHT-TLS] dbg: index present, skip seed");
             return;
         }
-        serial_println!(
-            "[SUNLIGHT-TLS] dbg: seeding root ({} bytes)...",
-            EMBEDDED_GTS_R4.len()
-        );
-        let Some(seed_key) = tls_ca_key(SEED_NAME) else {
-            serial_println!("[SUNLIGHT-TLS] WARN: seed key too long");
-            return;
-        };
-        if kv_put_shm(&seed_key, EMBEDDED_GTS_R4)
-            && kv_put_shm(TLS_CA_INDEX_KEY, SEED_NAME.as_bytes())
-        {
-            serial_println!("[SUNLIGHT-TLS] seeded kv trust store with '{}'", SEED_NAME);
+
+        let roots: &[(&str, &[u8])] = &[
+            (SEED_NAME, EMBEDDED_GTS_R4),
+            (SEED_ISRG_X1, EMBEDDED_ISRG_X1),
+        ];
+
+        let mut seeded: Vec<&str> = Vec::new();
+        for (name, der) in roots {
+            let Some(key) = tls_ca_key(name) else {
+                serial_println!("[SUNLIGHT-TLS] WARN: seed key too long: {}", name);
+                continue;
+            };
+            serial_println!(
+                "[SUNLIGHT-TLS] dbg: seeding {} ({} bytes)...",
+                name,
+                der.len()
+            );
+            if kv_put_shm(&key, der) {
+                seeded.push(name);
+                serial_println!("[SUNLIGHT-TLS] seeded kv trust store with '{}'", name);
+            } else {
+                serial_println!("[SUNLIGHT-TLS] WARN: kv trust seed failed for '{}'", name);
+            }
+        }
+
+        if !seeded.is_empty() {
+            let mut index = String::new();
+            for (i, name) in seeded.iter().enumerate() {
+                if i > 0 {
+                    index.push(',');
+                }
+                index.push_str(name);
+            }
+            if !kv_put_shm(TLS_CA_INDEX_KEY, index.as_bytes()) {
+                serial_println!("[SUNLIGHT-TLS] WARN: failed to write CA index");
+            }
         } else {
             serial_println!("[SUNLIGHT-TLS] WARN: kv trust seed failed (kv down?)");
         }

@@ -9,10 +9,24 @@ use crate::progress::ProgressTracker;
 
 const MAX_REDIRECTS: usize = 10;
 
-/// Main download entry point.
+/// Main download entry point — routes by URL scheme.
 pub fn execute_download(config: &FetchConfig) -> FetchResult<()> {
     ipc::acquire_capabilities()?;
 
+    if config.url.starts_with("https://") {
+        do_https_fetch(config)
+    } else if config.url.starts_with("http://") {
+        do_plain_http_fetch(config)
+    } else {
+        Err(FetchError::InvalidUrl(format!(
+            "only http:// and https:// are supported: {}",
+            config.url
+        )))
+    }
+}
+
+/// Plain HTTP fetch — the complete, verified working path. Do not modify.
+fn do_plain_http_fetch(config: &FetchConfig) -> FetchResult<()> {
     let url = ParsedUrl::parse(&config.url)?;
 
     let output_name = config
@@ -21,6 +35,32 @@ pub fn execute_download(config: &FetchConfig) -> FetchResult<()> {
         .unwrap_or_else(|| url.infer_filename());
 
     eprintln_fetch(&format!("Resolving {}...", url.host));
+
+    let addr = ipc::dns_resolve(&url.host)?;
+    eprintln_fetch(&format!(
+        "Resolved to {}.{}.{}.{}",
+        addr.octets[0], addr.octets[1], addr.octets[2], addr.octets[3]
+    ));
+
+    match config.method {
+        HttpMethod::Get => execute_get(config, &url, &addr, &output_name),
+        HttpMethod::Post => execute_post(config, &url, &addr, &output_name),
+    }
+}
+
+/// HTTPS fetch — delegates to the same execute_get/execute_post machinery as
+/// the plain path.  TLS is transparent: ParsedUrl sets uses_tls()=true which
+/// makes ipc::http_request route through the sunlight-tls daemon
+/// (tls_connect → TLS_{SEND,RECV} IPC) instead of a raw TCP socket.
+fn do_https_fetch(config: &FetchConfig) -> FetchResult<()> {
+    let url = ParsedUrl::parse(&config.url)?;
+
+    let output_name = config
+        .output
+        .clone()
+        .unwrap_or_else(|| url.infer_filename());
+
+    eprintln_fetch(&format!("Resolving {} (HTTPS)...", url.host));
 
     let addr = ipc::dns_resolve(&url.host)?;
     eprintln_fetch(&format!(
