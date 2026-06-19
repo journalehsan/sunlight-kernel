@@ -1036,6 +1036,18 @@ impl Scheduler {
                     } else {
                         (u32::MAX, 0, usize::MAX, 0)
                     };
+                // Stuck rendezvous: caller is blocked calling endpoint E,
+                // the server that owns E is also blocked waiting to receive
+                // on E, yet no delivery happened. This should be impossible
+                // with a correct multi-caller queue: the kernel must match
+                // callers to a waiting receiver immediately.
+                //
+                // False positive guard: we check waiting_receiver == resolved_owner
+                // (server actively blocked on ipc_recv/reply_wait for THIS endpoint).
+                // If the server is processing a previous message or is blocked on a
+                // different endpoint, waiting_receiver != resolved_owner and this
+                // warning will not fire — so tty_server busy while sshl handles a
+                // command does NOT trigger this.
                 if pending_call_cap != 0
                     && waiting_receiver == resolved_owner
                     && endpoint_queue_len > 0

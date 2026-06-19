@@ -1960,7 +1960,13 @@ mod sunlight {
         n
     }
 
+    // Set to true only during IPC debugging sessions; otherwise boot logs are too noisy.
+    const TRACE_SHELL_IPC: bool = false;
+
     fn debug_ipc_msg(prefix: &str, msg: &IpcMsg) {
+        if !TRACE_SHELL_IPC {
+            return;
+        }
         debug_log(&alloc::format!(
             "{} label={} badge={} word_count={} w0={} w1={}",
             prefix,
@@ -2017,7 +2023,7 @@ mod sunlight {
         debug_log("[TTY]  Shell: sshl v0.1.0 running");
 
         let ep = endpoint_create();
-        debug_log("[SSHL-IPC] endpoint created");
+        if TRACE_SHELL_IPC { debug_log("[SSHL-IPC] endpoint created"); }
         let mut name_buf = [0u8; 16];
         let name = shell_name(shell_id, &mut name_buf);
         nameserver_register(name, ep);
@@ -2025,7 +2031,7 @@ mod sunlight {
             nameserver_register("sshl", ep);
         }
         debug_log("[TTY]  sunshell registered as 'sshl'");
-        debug_log("[SSHL-IPC] registered with nameserver");
+        if TRACE_SHELL_IPC { debug_log("[SSHL-IPC] registered with nameserver"); }
 
         let mut shell = Shell::new();
         // Load real user info from VFS by uid (GETPWUID returns uid, gid, AND username)
@@ -2064,7 +2070,10 @@ mod sunlight {
         long_out_push_str("Type commands at the prompt below.\n");
         long_out_push_str("\n");
 
-        debug_log("[SSHL-IPC] before first ipc_recv");
+        // First receive must be plain ipc_recv().
+        // Do not replace this with ipc_reply_and_wait(): at startup there is no current
+        // caller to reply to yet. Using reply_wait here previously caused the shell and
+        // TTY handshake to wedge after sshl registration — both sides waited forever.
         let mut msg = ipc_recv(ep);
         debug_ipc_msg("[SSHL-IPC] after first ipc_recv", &msg);
         loop {
@@ -2077,7 +2086,6 @@ mod sunlight {
                     // Nothing more — return empty marker
                     let reply = IpcMsg::with_label(OUTPUT_LABEL).word(0, 0).word(1, 0);
                     debug_ipc_msg("[SSHL-IPC] returning empty output", &reply);
-                    debug_log("[SSHL-IPC] before reply_wait");
                     msg = ipc_reply_and_wait(ep, reply);
                     debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
                     continue;
@@ -2091,7 +2099,6 @@ mod sunlight {
                 let more_remaining = remaining.saturating_sub(chunk_size);
                 let chunk_reply = pack_long_output(&tmp[..chunk_size], more_remaining);
                 debug_ipc_msg("[SSHL-IPC] replying OUTPUT_LABEL", &chunk_reply);
-                debug_log("[SSHL-IPC] before reply_wait");
                 msg = ipc_reply_and_wait(ep, chunk_reply);
                 debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
                 continue;
@@ -2112,7 +2119,6 @@ mod sunlight {
                 }
                 shell.env.set("?", &alloc::format!("{}", code));
                 long_out_reset();
-                debug_log("[SSHL-IPC] before reply_wait");
                 msg = ipc_reply_and_wait(ep, pack_output(&[]));
                 debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
                 continue;
@@ -2182,16 +2188,12 @@ mod sunlight {
                     let more_remaining = out_len.saturating_sub(chunk_size);
                     pack_long_output(&out[..chunk_size], more_remaining)
                 } else {
-                    debug_log("[SSHL-IPC] returning empty output");
                     pack_output(&out[..out_len])
                 }
             } else {
                 IpcMsg::with_label(0)
             };
-            if reply.label == OUTPUT_LABEL {
-                debug_ipc_msg("[SSHL-IPC] replying OUTPUT_LABEL", &reply);
-            }
-            debug_log("[SSHL-IPC] before reply_wait");
+            debug_ipc_msg("[SSHL-IPC] replying", &reply);
             msg = ipc_reply_and_wait(ep, reply);
             debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
         }

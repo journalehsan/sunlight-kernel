@@ -923,9 +923,22 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
 
     serial_println!("[SUNLIGHT-KV] Entering IPC loop");
 
+    // IPC invariant: every request path through the match below must produce
+    // exactly one reply. A missing key must reply with KV_ERROR (not silence),
+    // an unsupported opcode must reply with KV_ERROR — otherwise clients
+    // block forever waiting for a reply that never comes.
+    //
+    // Persistence is best-effort: the in-memory store (LIVE) is updated first
+    // so the reply is prompt. If sunlight-sm cannot persist the record the
+    // volatile store remains correct and keeps serving GET/PUT/DELETE.
+    //
+    // Set TRACE_KV=true only when debugging KV protocol; otherwise every
+    // calculator history save/load produces multiple serial log lines.
+    const TRACE_KV: bool = false;
+
     let mut msg = ipc_recv(ep);
     loop {
-        serial_println!("[KV] request label={:#x}", msg.label);
+        if TRACE_KV { serial_println!("[KV] request label={:#x}", msg.label); }
 
         let mut reply = IpcMsg::empty();
         reply.label = KV_REPLY;
@@ -939,7 +952,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 } else {
                     let caller = "root";
                     if do_put(&key, &val, caller) {
-                        serial_println!("[KV] put key={} len={} ok (inline)", key, val.len());
+                        if TRACE_KV { serial_println!("[KV] put key={} len={} ok (inline)", key, val.len()); }
                         reply.words[0] = 0;
                     } else {
                         reply.label = KV_ERROR;
@@ -955,7 +968,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     let caller = "root";
                     match do_get(&key, caller) {
                         Ok(v) => {
-                            serial_println!("[KV] get key={} len={} hit", key, v.len());
+                            if TRACE_KV { serial_println!("[KV] get key={} len={} hit", key, v.len()); }
                             reply.label = KV_VALUE;
                             reply.words[0] = v.len() as u64;
                             let mut bi = 0usize;
@@ -973,7 +986,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                             }
                         }
                         Err(()) => {
-                            serial_println!("[KV] get key={} not-found", key);
+                            if TRACE_KV { serial_println!("[KV] get key={} not-found", key); }
                             reply.label = KV_ERROR;
                             reply.words[0] = 2;
                         }
@@ -994,7 +1007,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                             let val = unsafe { core::slice::from_raw_parts(ptr, vlen) }.to_vec();
                             let _ = shm_free(tok);
                             if do_put(&key, &val, "root") {
-                                serial_println!("[KV] put key={} len={} ok (shm)", key, vlen);
+                                if TRACE_KV { serial_println!("[KV] put key={} len={} ok (shm)", key, vlen); }
                                 reply.words[0] = 0;
                             } else {
                                 reply.label = KV_ERROR;
@@ -1075,7 +1088,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
             }
         }
 
-        serial_println!("[KV] reply label={:#x} w0={}", reply.label, reply.words[0]);
+        if TRACE_KV { serial_println!("[KV] reply label={:#x} w0={}", reply.label, reply.words[0]); }
         if let Some(next) = ipc_reply_and_try_recv(ep, reply) {
             msg = next;
             continue;

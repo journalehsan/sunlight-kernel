@@ -987,6 +987,11 @@ pub mod history {
     //   const KV_REPLY = 0x4BFF; const KV_ERROR = 0x4BEE;
     // All match. Non-SHM KV ops exist on the service but history uses SHM for values.
 
+    // Keep these keys short. KV_SHM packs keys into register IPC words starting
+    // at word 2 (2 words × 8 bytes = 16 bytes max). raw_syscall_ipc carries only
+    // words[0..4], so a key at word 2 has at most 16 transmitted bytes.
+    // "calc.hist.idx" = 13 bytes and "calc.h." + 8 hex = 15 bytes, both fit.
+    // Do NOT extend these keys beyond 16 bytes without adding SHM-key opcodes.
     const INDEX_KEY: &str = "calc.hist.idx";
     const RECORD_PREFIX: &str = "calc.h.";
     #[cfg_attr(feature = "sunlight", allow(dead_code))]
@@ -1214,13 +1219,13 @@ pub mod history {
         0
     }
 
-    /// Checked KV call wrapper.
-    ///
-    /// Timeout-safe wrapper for KV IPC.
-    ///
-    /// All calculator history must go through this (or directly use the
-    /// timeout primitives). Plain `ipc_call` is forbidden from interactive
-    /// shell history paths because it can block forever.
+    // History is a best-effort side effect. The calculator result must be returned
+    // even when KV is missing, slow, or broken. Do not call blocking ipc_call()
+    // here — this runs inside the interactive shell command path, which is called
+    // synchronously by tty_server. A hang here freezes all keyboard input.
+    //
+    // Do not use sunlight-sm directly from calculator history. KV handles its own
+    // persistence as a background operation; callers only talk to KV.
     #[cfg(feature = "sunlight")]
     const KV_TIMEOUT_MS: u64 = 50;
 

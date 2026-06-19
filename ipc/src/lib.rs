@@ -443,6 +443,13 @@ unsafe fn raw_syscall_ipc(num: SunlightSyscall, object: u64, msg: IpcMsg) -> (u6
     // r8/r9/r10/r12. r13/r14 carry capability tokens; the
     // generic syscall wrapper cannot do that because normal syscalls do not
     // pass cap registers.
+    //
+    // TRANSPORT LIMIT: IpcMsg has 8 logical words but this ABI only carries
+    // words[0..4] (32 bytes). words[4..7] are silently dropped. Protocols
+    // that pack strings into register words (e.g. KV keys at word 2) are
+    // therefore limited to 16 transmitted bytes for the key. Extend via
+    // shared memory (shm_alloc/shm_map) or add new SHM-key opcodes if
+    // longer keys are needed.
     unsafe {
         core::arch::asm!(
             "syscall",

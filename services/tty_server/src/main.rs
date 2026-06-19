@@ -519,10 +519,12 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 }
 
                 if let Some(ascii) = key_ascii_from_msg(&msg) {
-                    debug_log(&alloc::format!(
-                        "[TTY-IPC] keyboard event converted to KBD_LABEL byte={}",
-                        ascii
-                    ));
+                    if TRACE_TTY_IPC {
+                        debug_log(&alloc::format!(
+                            "[TTY-IPC] keyboard event converted to KBD_LABEL byte={}",
+                            ascii
+                        ));
+                    }
                     // Reset scrollback on any normal keypress (return to live view)
                     unsafe {
                         SCROLLBACK_STATE[active_tab].viewport_offset = 0;
@@ -1167,6 +1169,13 @@ enum ShellKeyResult {
     ForegroundStarted(u64, [u8; 24], usize),
 }
 
+/// Send a keystroke to the sshl shell over synchronous IPC.
+///
+/// tty_server calls sshl synchronously: this thread blocks until sshl replies.
+/// sshl MUST reply promptly. Any slow or unbounded operation in the shell
+/// command path (e.g. KV/history) must use timeout IPC so it cannot stall here.
+/// Putting blocking work in sshl's KBD_LABEL handler causes tty_server to freeze,
+/// which stops all keyboard input processing for the active tab.
 fn send_key_to_shell(
     cap: CapabilityToken,
     byte: u8,
@@ -1509,7 +1518,13 @@ fn fmt_u64(buf: &mut [u8], val: u64) -> usize {
     n
 }
 
+// Set to true only during IPC debugging; each keystroke produces two log lines otherwise.
+const TRACE_TTY_IPC: bool = false;
+
 fn debug_ipc_msg(prefix: &str, msg: &IpcMsg) {
+    if !TRACE_TTY_IPC {
+        return;
+    }
     debug_log(&alloc::format!(
         "{} label={} badge={} word_count={} w0={} w1={}",
         prefix,
