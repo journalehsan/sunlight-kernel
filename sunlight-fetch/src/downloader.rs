@@ -237,11 +237,30 @@ fn platform_rename(from: &str, to: &str) -> FetchResult<()> {
     std::fs::rename(from, to).map_err(|e| FetchError::IoError(e.to_string()))
 }
 
+/// Resolve a download output name to an absolute, writable path.
+///
+/// SunlightOS has no current-working-directory concept and an immutable root
+/// filesystem — only the home trees (`/root`, `/home/<user>`) are writable. A
+/// bare/relative name like the default `index.html` would resolve against the
+/// read-only root and fail with an I/O error, so anchor relative names in
+/// root's home. Callers that pass an absolute `-o /path` are left untouched.
+#[cfg(not(feature = "host-linux"))]
+fn resolve_out_path(path: &str) -> String {
+    if path.starts_with('/') {
+        String::from(path)
+    } else {
+        format!("/root/{path}")
+    }
+}
+
 #[cfg(not(feature = "host-linux"))]
 fn platform_write_file(path: &str, data: &[u8]) -> FetchResult<()> {
     use sunlight_libc::{self as libc, Errno};
 
-    let fd = libc::open(path.as_bytes()).map_err(|e| FetchError::IoError(errno_str(e)))?;
+    // Use create() (O_WRONLY | O_CREAT), not open() — open() passes flags=0 and
+    // cannot create a new file, so every download failed with an I/O error.
+    let abs = resolve_out_path(path);
+    let fd = libc::create(abs.as_bytes()).map_err(|e| FetchError::IoError(errno_str(e)))?;
     let mut off = 0usize;
     while off < data.len() {
         match libc::write(fd, &data[off..]) {
@@ -270,7 +289,10 @@ fn platform_rename(from: &str, to: &str) -> FetchResult<()> {
 fn read_file_all(path: &str) -> FetchResult<Vec<u8>> {
     use sunlight_libc::{self as libc, Errno};
 
-    let fd = libc::open(path.as_bytes()).map_err(|e| FetchError::IoError(errno_str(e)))?;
+    // Match the anchoring done by platform_write_file so the rename read-back
+    // finds the `.part` file it just wrote.
+    let abs = resolve_out_path(path);
+    let fd = libc::open(abs.as_bytes()).map_err(|e| FetchError::IoError(errno_str(e)))?;
     let mut out = Vec::new();
     let mut buf = [0u8; 4096];
     loop {
