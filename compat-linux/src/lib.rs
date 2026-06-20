@@ -366,6 +366,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         20 => -14, // writev → special Linux ABI shim
         2 => 40,   // open → SunlightOS Open(40)
         3 => 41,   // close → SunlightOS Close(41)
+        24 => 21,  // sched_yield → SunlightOS ProcessYield(21)
         7 => -7,   // poll → special bounded readiness stub
         16 => -13, // ioctl → stub as ENOTTY for tty probing
         60 => 20,  // exit(code) → SunlightOS ProcessExit(20)
@@ -435,6 +436,7 @@ mod tests {
         assert_eq!(translate_syscall(20), -14); // writev
         assert_eq!(translate_syscall(0), 42); // read
         assert_eq!(translate_syscall(60), 20); // exit
+        assert_eq!(translate_syscall(24), 21); // sched_yield
         assert_eq!(translate_syscall(12), -2); // brk
         assert_eq!(translate_syscall(158), -3); // arch_prctl
         assert_eq!(translate_syscall(186), 33); // gettid

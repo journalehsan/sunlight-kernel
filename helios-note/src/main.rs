@@ -5,8 +5,6 @@ use crossterm::{
 use std::{
     env, fs, io,
     io::Read,
-    thread,
-    time::Duration,
 };
 use tui::{
     backend::CrosstermBackend,
@@ -74,10 +72,14 @@ fn read_byte(stdin: &mut io::Stdin) -> io::Result<u8> {
 
     loop {
         match stdin.read(&mut buf) {
-            Ok(0) => thread::sleep(Duration::from_millis(10)),
+            Ok(0) => unsafe {
+                libc::sched_yield();
+            },
             Ok(_) => return Ok(buf[0]),
             Err(e) if matches!(e.kind(), io::ErrorKind::Interrupted | io::ErrorKind::WouldBlock) => {
-                thread::sleep(Duration::from_millis(10));
+                unsafe {
+                    libc::sched_yield();
+                }
             }
             Err(e) => return Err(e),
         }
