@@ -28,7 +28,7 @@ pub mod mman;
 pub mod alloc;
 /// File descriptor helpers: `lseek`, `fstat`, `isatty`.
 pub mod fd;
-/// Minimal time support: `clock_gettime` backed by `sysinfo`.
+/// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
 pub mod time;
 
 pub use rand::{getrandom, GRND_NONCRYPTO};

@@ -25,7 +25,9 @@ pub unsafe extern "C" fn fstat(fd: i32, out: *mut Stat) -> i32 {
 
     match libc_fstat(Fd(fd as u32)) {
         Ok(stat) => {
-            core::ptr::write(out, stat);
+            unsafe {
+                core::ptr::write(out, stat);
+            }
             0
         }
         Err(e) => {

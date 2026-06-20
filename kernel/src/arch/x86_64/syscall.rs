@@ -80,6 +80,7 @@ pub enum SunlightSyscall {
     /// Raw hardware seed entropy (one u64). RDRAND with a TSC-jitter fallback.
     /// Seed-grade only: userland/rand-service expands it with a CSPRNG.
     GetEntropy = 87,
+    ClockGetTime = 88,
 
     // Shared memory grant (Bite 4)
     ShmAlloc = 92,
@@ -312,6 +313,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         81 => sys_get_time_utc(),
         86 => sys_monotonic_ms(),
         87 => sys_get_entropy(),
+        88 => sys_clock_gettime(frame),
         82 => sys_sysinfo(frame),
         83 => sys_setnice(frame),
         84 => sys_getnice(frame),
@@ -2376,6 +2378,40 @@ fn sys_get_entropy() -> u64 {
     let a = unsafe { core::arch::x86_64::_rdtsc() };
     let b = unsafe { core::arch::x86_64::_rdtsc() };
     a.rotate_left(17) ^ b ^ (b << 32)
+}
+
+/// Syscall: ClockGetTime (88)
+/// rdi = clockid (0 realtime, 1 monotonic)
+/// rsi = pointer to user timespec { tv_sec, tv_nsec }
+fn sys_clock_gettime(frame: &mut SyscallFrame) -> u64 {
+    let clockid = frame.rdi as i32;
+    let tp_ptr = frame.rsi as *mut u64;
+
+    if !is_user_address(tp_ptr as u64) || !is_user_address(tp_ptr as u64 + 15) {
+        return u64::MAX;
+    }
+
+    match clockid {
+        0 => {
+            let sec = crate::arch::x86_64::rtc::unix_time();
+            unsafe {
+                *tp_ptr = sec;
+                *tp_ptr.add(1) = 0;
+            }
+            0
+        }
+        1 => {
+            let ns = crate::arch::x86_64::interrupts::now_ns();
+            let sec = ns / 1_000_000_000;
+            let nsec = ns % 1_000_000_000;
+            unsafe {
+                *tp_ptr = sec;
+                *tp_ptr.add(1) = nsec;
+            }
+            0
+        }
+        _ => u64::MAX,
+    }
 }
 
 /// Syscall: sysinfo (82)

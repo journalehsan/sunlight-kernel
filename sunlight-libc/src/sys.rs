@@ -29,6 +29,7 @@ pub const SYS_SETNICE: u64 = 83;
 pub const SYS_GETNICE: u64 = 84;
 pub const SYS_SWAPCTL: u64 = 85;
 pub const SYS_GET_ENTROPY: u64 = 87;
+pub const SYS_CLOCK_GETTIME: u64 = 88;
 pub const SYS_DEBUG_LOG: u64 = 99;
 
 /// Raw error return from the kernel.
