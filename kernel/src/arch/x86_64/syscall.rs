@@ -283,6 +283,21 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1006; // Internal code for Linux poll
                     }
                 }
+                -8 => {
+                    if linux_num == 13 {
+                        num = 1007; // Internal code for Linux rt_sigaction
+                    }
+                }
+                -9 => {
+                    if linux_num == 14 {
+                        num = 1008; // Internal code for Linux rt_sigprocmask
+                    }
+                }
+                -10 => {
+                    if linux_num == 200 {
+                        num = 1009; // Internal code for Linux tkill
+                    }
+                }
                 -38 => {
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
                     num = 1005; // Linux ENOSYS
@@ -368,6 +383,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1004 => sys_linux_rseq(frame),
         1005 => linux_errno(38),
         1006 => sys_linux_poll(frame),
+        1007 => sys_linux_rt_sigaction(frame),
+        1008 => sys_linux_rt_sigprocmask(frame),
+        1009 => sys_linux_tkill(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1764,6 +1782,80 @@ fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
     }
 
     0
+}
+
+fn sys_linux_rt_sigaction(frame: &mut SyscallFrame) -> u64 {
+    let sig = frame.rdi as u32;
+    let act = frame.rsi;
+    let oldact = frame.rdx;
+    let sigset_size = frame.r10;
+
+    if sig == 0 || sig > 64 {
+        return linux_errno(22); // EINVAL
+    }
+    if sigset_size != 8 && sigset_size != 16 {
+        return linux_errno(22); // EINVAL
+    }
+    if act != 0 && (!is_user_address(act) || !is_user_address(act + 31)) {
+        return linux_errno(14); // EFAULT
+    }
+    if oldact != 0 {
+        if !is_user_address(oldact) || !is_user_address(oldact + 31) {
+            return linux_errno(14); // EFAULT
+        }
+        unsafe {
+            let old = oldact as *mut u64;
+            *old.add(0) = 0; // default handler
+            *old.add(1) = 0; // flags
+            *old.add(2) = 0; // restorer
+            *old.add(3) = 0; // mask
+        }
+    }
+
+    0
+}
+
+fn sys_linux_rt_sigprocmask(frame: &mut SyscallFrame) -> u64 {
+    let how = frame.rdi;
+    let set = frame.rsi;
+    let oldset = frame.rdx;
+    let sigset_size = frame.r10;
+
+    if how > 2 {
+        return linux_errno(22); // EINVAL
+    }
+    if sigset_size != 8 && sigset_size != 16 {
+        return linux_errno(22); // EINVAL
+    }
+    if set != 0 && (!is_user_address(set) || !is_user_address(set + sigset_size - 1)) {
+        return linux_errno(14); // EFAULT
+    }
+    if oldset != 0 {
+        if !is_user_address(oldset) || !is_user_address(oldset + sigset_size - 1) {
+            return linux_errno(14); // EFAULT
+        }
+        unsafe {
+            core::ptr::write_bytes(oldset as *mut u8, 0, sigset_size as usize);
+        }
+    }
+
+    0
+}
+
+fn sys_linux_tkill(frame: &mut SyscallFrame) -> u64 {
+    let tid = frame.rdi as usize;
+    let sig = frame.rsi as i32;
+    let current_pid = sched::with_scheduler(|s| s.current_process().pid);
+
+    if tid != current_pid || sig < 0 || sig > 64 {
+        return linux_errno(22); // EINVAL
+    }
+    if sig == 0 {
+        return 0;
+    }
+
+    let code = 128 + sig;
+    process_exit(code);
 }
 
 /// Syscall: ReadDir (60)

@@ -375,8 +375,10 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         158 => -3, // arch_prctl → special handling for TLS setup
 
         // Tier 5: signals
-        13 => 72, // kill → SunlightOS Kill(72)
-        14 => 71, // sigprocmask → SunlightOS Sigprocmask(71)
+        13 => -8,   // rt_sigaction → special Linux ABI shim
+        14 => -9,   // rt_sigprocmask → special Linux ABI shim
+        62 => 72,   // kill → SunlightOS Kill(72)
+        200 => -10, // tkill → special Linux ABI shim
 
         // Process information
         4 => 48, // stat → Fstat (approximation)
@@ -389,7 +391,10 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
 
 /// Helper to determine if a syscall requires special handling.
 pub fn needs_special_handling(linux_nr: u64) -> bool {
-    matches!(linux_nr, 7 | 60 | 231 | 12 | 158 | 218 | 273 | 334)
+    matches!(
+        linux_nr,
+        7 | 13 | 14 | 60 | 200 | 231 | 12 | 158 | 218 | 273 | 334
+    )
 }
 
 #[cfg(test)]
@@ -408,6 +413,10 @@ mod tests {
         assert_eq!(translate_syscall(273), -5); // set_robust_list
         assert_eq!(translate_syscall(334), -6); // rseq
         assert_eq!(translate_syscall(7), -7); // poll
+        assert_eq!(translate_syscall(13), -8); // rt_sigaction
+        assert_eq!(translate_syscall(14), -9); // rt_sigprocmask
+        assert_eq!(translate_syscall(62), 72); // kill
+        assert_eq!(translate_syscall(200), -10); // tkill
     }
 
     #[test]
@@ -423,6 +432,9 @@ mod tests {
         assert!(needs_special_handling(273));
         assert!(needs_special_handling(334));
         assert!(needs_special_handling(7));
+        assert!(needs_special_handling(13));
+        assert!(needs_special_handling(14));
+        assert!(needs_special_handling(200));
         assert!(!needs_special_handling(1));
     }
 
