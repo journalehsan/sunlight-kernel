@@ -1,13 +1,11 @@
 [package]
-name = "sunlight-zoxide"
+name = "sunlight-dict"
 version = "0.1.178"
-
-
 
 edition = "2021"
 
 [[bin]]
-name = "z"
+name = "dict"
 path = "src/main.rs"
 
 [dependencies]

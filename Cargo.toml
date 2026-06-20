@@ -40,6 +40,7 @@ members = [
     "services/sunlight-sm",
     "std-proof/sunlight-sunsay",
     "std-proof/sunlight-zoxide",
+    "std-proof/sunlight-dict",
 ]
 
 [workspace.dependencies]
