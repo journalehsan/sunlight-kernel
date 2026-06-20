@@ -1,9 +1,13 @@
 use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{env, fs, io};
+use std::{
+    env, fs, io,
+    io::Read,
+    thread,
+    time::Duration,
+};
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
@@ -17,6 +21,18 @@ struct App {
     filename: String,
     lines: Vec<String>,
     scroll_y: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Key {
+    Char(u8),
+    ArrowUp,
+    ArrowDown,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    Unknown,
 }
 
 impl App {
@@ -53,6 +69,58 @@ impl App {
     }
 }
 
+fn read_byte(stdin: &mut io::Stdin) -> io::Result<u8> {
+    let mut buf = [0u8; 1];
+
+    loop {
+        match stdin.read(&mut buf) {
+            Ok(0) => thread::sleep(Duration::from_millis(10)),
+            Ok(_) => return Ok(buf[0]),
+            Err(e) if matches!(e.kind(), io::ErrorKind::Interrupted | io::ErrorKind::WouldBlock) => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+fn read_key(stdin: &mut io::Stdin) -> io::Result<Key> {
+    let b0 = read_byte(stdin)?;
+    if b0 != b'\x1b' {
+        return Ok(Key::Char(b0));
+    }
+
+    let b1 = read_byte(stdin)?;
+    if b1 != b'[' {
+        return Ok(Key::Unknown);
+    }
+
+    let b2 = read_byte(stdin)?;
+    let key = match b2 {
+        b'A' => Key::ArrowUp,
+        b'B' => Key::ArrowDown,
+        b'H' => Key::Home,
+        b'F' => Key::End,
+        b'1' | b'4' | b'5' | b'6' | b'7' | b'8' => {
+            let b3 = read_byte(stdin)?;
+            if b3 != b'~' {
+                Key::Unknown
+            } else {
+                match b2 {
+                    b'1' | b'7' => Key::Home,
+                    b'4' | b'8' => Key::End,
+                    b'5' => Key::PageUp,
+                    b'6' => Key::PageDown,
+                    _ => Key::Unknown,
+                }
+            }
+        }
+        _ => Key::Unknown,
+    };
+
+    Ok(key)
+}
+
 fn main() -> io::Result<()> {
     let filename = env::args().nth(1).unwrap_or_else(|| {
         eprintln!("usage: viewer <file>");
@@ -73,6 +141,8 @@ fn main() -> io::Result<()> {
 }
 
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> io::Result<()> {
+    let mut stdin = io::stdin();
+
     loop {
         terminal.draw(|f| {
             let size = f.size();
@@ -129,28 +199,18 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
             );
         })?;
 
-        if let Event::Key(key) = event::read()? {
-            let h = terminal.size()?.height as usize - 2;
-            match (key.modifiers, key.code) {
-                (_, KeyCode::Char('q')) | (KeyModifiers::CONTROL, KeyCode::Char('q')) => break,
-                (_, KeyCode::Up)
-                | (KeyModifiers::NONE, KeyCode::Char('k'))
-                | (KeyModifiers::NONE, KeyCode::Char('h')) => app.up(),
-                (_, KeyCode::Down)
-                | (KeyModifiers::NONE, KeyCode::Char('j'))
-                | (KeyModifiers::NONE, KeyCode::Char('l')) => app.down(h),
-                (KeyModifiers::CONTROL, KeyCode::Char('b')) | (_, KeyCode::PageUp) => {
-                    app.page_up(h)
-                }
-                (KeyModifiers::CONTROL, KeyCode::Char('f')) | (_, KeyCode::PageDown) => {
-                    app.page_down(h)
-                }
-                (KeyModifiers::CONTROL, KeyCode::Char('u')) => app.page_up(h / 2),
-                (KeyModifiers::CONTROL, KeyCode::Char('d')) => app.page_down(h / 2),
-                (_, KeyCode::Home) | (KeyModifiers::NONE, KeyCode::Char('g')) => app.top(),
-                (_, KeyCode::End) | (KeyModifiers::NONE, KeyCode::Char('G')) => app.bottom(h),
-                _ => {}
-            }
+        let h = terminal.size()?.height as usize - 2;
+        match read_key(&mut stdin)? {
+            Key::Char(b'q') => break,
+            Key::ArrowUp | Key::Char(b'k') | Key::Char(b'h') => app.up(),
+            Key::ArrowDown | Key::Char(b'j') | Key::Char(b'l') => app.down(h),
+            Key::PageUp | Key::Char(0x02) => app.page_up(h),
+            Key::PageDown | Key::Char(0x06) => app.page_down(h),
+            Key::Char(0x15) => app.page_up(h / 2),
+            Key::Char(0x04) => app.page_down(h / 2),
+            Key::Home | Key::Char(b'g') => app.top(),
+            Key::End | Key::Char(b'G') => app.bottom(h),
+            Key::Unknown | Key::Char(_) => {}
         }
     }
     Ok(())
