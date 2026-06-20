@@ -1,58 +1,13 @@
 [package]
-name = "sunlight-utils"
+name = "sunlight-hangman"
 version = "0.1.179"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
 edition = "2021"
 
 [[bin]]
-name = "sunlight-utils"
+name = "hangman"
 path = "src/main.rs"
 
 [dependencies]
