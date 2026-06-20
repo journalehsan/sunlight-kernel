@@ -120,6 +120,9 @@ pub struct Process {
     /// TSC-derived monotonic timestamp when this process last started running on CPU.
     /// 0 when not currently accruing (descheduled or never started).
     pub last_start_ns: u64,
+
+    /// Current working directory, used to resolve relative paths in sys_open/chdir/getcwd.
+    pub cwd: alloc::string::String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -231,6 +234,7 @@ impl Process {
             quantum_override: None,
             cpu_runtime_ns: 0,
             last_start_ns: 0,
+            cwd: alloc::string::String::from("/"),
         }
     }
 
@@ -371,6 +375,7 @@ impl Process {
             quantum_override: None,
             cpu_runtime_ns: 0,
             last_start_ns: 0,
+            cwd: alloc::string::String::from("/"),
         }
     }
 

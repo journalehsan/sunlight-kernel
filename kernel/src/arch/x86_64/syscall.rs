@@ -1550,8 +1550,14 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             }
         } else {
             match vfs.open(path) {
-                Ok(h) => h,
-                Err(_) => return u64::MAX,
+                Ok(h) => {
+                    crate::serial_println!("[HELIOS] open({}) -> ok", path);
+                    h
+                }
+                Err(e) => {
+                    crate::serial_println!("[HELIOS] open({}) -> err {:?}", path, e);
+                    return u64::MAX;
+                }
             }
         }
     };
@@ -2450,7 +2456,10 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     let to_read = count.min(256);
                     let n = crate::process::tty_io::read_stdin(tab, &mut kbuf[..to_read]);
                     if n == 0 {
-                        return EAGAIN; // no keystrokes buffered → try again later
+                        // Return Linux-compatible EAGAIN (errno 11) for compat processes
+                        // so musl retries rather than treating it as ENOENT (errno 2).
+                        let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat);
+                        return if is_linux { linux_errno(11) } else { EAGAIN };
                     }
                     // SAFETY: buf_ptr..buf_ptr+count validated as user memory above.
                     unsafe {
@@ -2459,9 +2468,10 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     n as u64
                 } else {
                     // Placeholder stdio fds (0/1/2): return EAGAIN for stdin, error for stdout/stderr
+                    let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat);
                     match fd {
-                        0 => EAGAIN, // stdin placeholder: would block
-                        _ => 0,      // stdout/stderr: invalid for read, silent
+                        0 => if is_linux { linux_errno(11) } else { EAGAIN },
+                        _ => 0, // stdout/stderr: invalid for read, silent
                     }
                 }
             } else {
@@ -2710,17 +2720,27 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
 }
 
 /// Syscall: fstat (48)
-/// rdi = fd, rsi = pointer to 24-byte Stat buffer in user space.
-/// Stat layout (matches `sys_stat_path` and `libc::Stat`):
+/// rdi = fd, rsi = pointer to stat buffer in user space.
+///
+/// For native SunlightOS processes: 24-byte custom layout
 ///   [0..8]  size u64, [8..12] uid u32, [12..16] gid u32,
 ///   [16..18] mode u16, [18] file_type u8, [19] pad, [20..24] nlinks u32.
+///
+/// For Linux-compat processes: standard Linux x86_64 struct stat (144 bytes)
+///   [0..8]   st_dev, [8..16] st_ino, [16..24] st_nlink,
+///   [24..28] st_mode, [28..32] st_uid, [32..36] st_gid, [36..40] __pad0,
+///   [40..48] st_rdev, [48..56] st_size, [56..64] st_blksize, [64..72] st_blocks,
+///   [72..120] timestamps (atim/mtim/ctim), [120..144] __unused
 fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     use sunlight_fs::vfs::{FileHandle as VfsHandle, FileType};
 
     let fd = frame.rdi as i32;
     let buf_ptr = frame.rsi;
 
-    if !is_user_address(buf_ptr) || !is_user_address(buf_ptr + 23) {
+    let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat);
+    let buf_end_offset = if is_linux { 143u64 } else { 23u64 };
+
+    if !is_user_address(buf_ptr) || !is_user_address(buf_ptr + buf_end_offset) {
         return u64::MAX;
     }
 
@@ -2745,19 +2765,52 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
         }
     };
 
-    let mut record = [0u8; 24];
-    record[0..8].copy_from_slice(&(stat.size as u64).to_le_bytes());
-    record[8..12].copy_from_slice(&stat.uid.to_le_bytes());
-    record[12..16].copy_from_slice(&stat.gid.to_le_bytes());
-    record[16..18].copy_from_slice(&stat.mode.to_le_bytes());
-    record[18] = match stat.file_type {
-        FileType::File => 1,
-        FileType::Directory => 2,
-    };
-    record[20..24].copy_from_slice(&stat.nlinks.to_le_bytes());
-    // SAFETY: buf_ptr..buf_ptr+23 validated as user memory above.
-    unsafe {
-        core::ptr::copy_nonoverlapping(record.as_ptr(), buf_ptr as *mut u8, 24);
+    if is_linux {
+        // Linux x86_64 struct stat (144 bytes) — field offsets per ABI.
+        let mut record = [0u8; 144];
+        // st_dev at 0 (fake device 1)
+        record[0..8].copy_from_slice(&1u64.to_le_bytes());
+        // st_ino at 8 (use vfs handle as proxy inode)
+        record[8..16].copy_from_slice(&(vfs_handle as u64).to_le_bytes());
+        // st_nlink at 16
+        record[16..24].copy_from_slice(&(stat.nlinks as u64).to_le_bytes());
+        // st_mode at 24: set file-type bits S_IFREG/S_IFDIR and permission bits
+        let linux_mode: u32 = match stat.file_type {
+            FileType::File => 0o100000 | (stat.mode as u32 & 0o7777),
+            FileType::Directory => 0o040000 | (stat.mode as u32 & 0o7777),
+        };
+        record[24..28].copy_from_slice(&linux_mode.to_le_bytes());
+        // st_uid at 28, st_gid at 32
+        record[28..32].copy_from_slice(&stat.uid.to_le_bytes());
+        record[32..36].copy_from_slice(&stat.gid.to_le_bytes());
+        // st_rdev at 40: 0 (not a device)
+        // st_size at 48
+        record[48..56].copy_from_slice(&(stat.size as u64).to_le_bytes());
+        // st_blksize at 56: 4096
+        record[56..64].copy_from_slice(&4096u64.to_le_bytes());
+        // st_blocks at 64: in 512-byte units
+        let blocks = (stat.size as u64 + 511) / 512;
+        record[64..72].copy_from_slice(&blocks.to_le_bytes());
+        // timestamps (atim/mtim/ctim) at 72/88/104: zero (no time tracking yet)
+        // SAFETY: buf_ptr..buf_ptr+143 validated as user memory above.
+        unsafe {
+            core::ptr::copy_nonoverlapping(record.as_ptr(), buf_ptr as *mut u8, 144);
+        }
+    } else {
+        let mut record = [0u8; 24];
+        record[0..8].copy_from_slice(&(stat.size as u64).to_le_bytes());
+        record[8..12].copy_from_slice(&stat.uid.to_le_bytes());
+        record[12..16].copy_from_slice(&stat.gid.to_le_bytes());
+        record[16..18].copy_from_slice(&stat.mode.to_le_bytes());
+        record[18] = match stat.file_type {
+            FileType::File => 1,
+            FileType::Directory => 2,
+        };
+        record[20..24].copy_from_slice(&stat.nlinks.to_le_bytes());
+        // SAFETY: buf_ptr..buf_ptr+23 validated as user memory above.
+        unsafe {
+            core::ptr::copy_nonoverlapping(record.as_ptr(), buf_ptr as *mut u8, 24);
+        }
     }
     0
 }

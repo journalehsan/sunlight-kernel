@@ -73,6 +73,7 @@ pub fn fork_current_process(
     let parent_is_linux_compat = sched.current_process().is_linux_compat;
     let parent_brk_base = sched.current_process().brk_base;
     let parent_brk_current = sched.current_process().brk_current;
+    let parent_cwd = sched.current_process().cwd.clone();
 
     // Clone the parent's address space with CoW
     let child_address_space = unsafe {
@@ -138,6 +139,7 @@ pub fn fork_current_process(
             quantum_override: None,
             cpu_runtime_ns: 0,
             last_start_ns: 0,
+            cwd: parent_cwd,
         };
 
         // Setup kernel stack top
@@ -250,6 +252,7 @@ fn sys_fork(
             quantum_override: None,
             cpu_runtime_ns: 0,
             last_start_ns: 0,
+            cwd: parent.cwd.clone(),
         };
 
         // Setup kernel stack top

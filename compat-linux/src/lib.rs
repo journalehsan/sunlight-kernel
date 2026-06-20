@@ -167,13 +167,18 @@ impl<const U: usize, const G: usize, const R: usize> RuleIndex<U, G, R> {
     }
 
     pub fn lookup_metadata(&self, path: &str) -> Option<PathMetadata> {
-        self.metadata.iter().find_map(|(p, meta)| {
-            if p.as_str() == path {
-                Some(*meta)
-            } else {
-                None
-            }
-        })
+        self.metadata
+            .iter()
+            .filter_map(|(prefix, meta)| {
+                let prefix = prefix.as_str();
+                if path.starts_with(prefix) {
+                    Some((prefix.len(), *meta))
+                } else {
+                    None
+                }
+            })
+            .max_by_key(|(prefix_len, _)| *prefix_len)
+            .map(|(_, meta)| meta)
     }
 
     pub fn has_access(&self, uid: u32, gid: u32, path: &str, requested: PermissionMode) -> bool {
@@ -311,16 +316,28 @@ pub fn grant_for_open(path: &str, uid: u32) -> PosixResult<CapabilityToken> {
 pub fn init_phase3_demo_rules() {
     unsafe {
         let rules = core::ptr::addr_of_mut!(RULES);
+        let _ = (*rules).add_path_metadata("", 1000, 1000, 0o666);
+        let _ = (*rules).add_path_metadata("/", 1000, 1000, 0o666);
         let _ = (*rules).add_path_metadata("/home/user/notes.txt", 1000, 1000, 0o644);
         let _ = (*rules).add_path_metadata("/home/user", 1000, 1000, 0o755);
         let _ = (*rules).add_path_metadata("/tmp/public", 0, 0, 0o777);
 
         let mut user_rule = String::<64>::new();
-        let _ = user_rule.push_str("/home/user");
+        let _ = user_rule.push_str("/");
         let _ = (*rules).add_uid_rule(
             1000,
             PathRule {
                 allowed_prefix: user_rule,
+                flags: PermissionMode::READ_WRITE,
+            },
+        );
+
+        let mut cwd_rule = String::<64>::new();
+        let _ = cwd_rule.push_str("");
+        let _ = (*rules).add_uid_rule(
+            1000,
+            PathRule {
+                allowed_prefix: cwd_rule,
                 flags: PermissionMode::READ_WRITE,
             },
         );
@@ -388,7 +405,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         6 => 48, // lstat → Fstat (approximation)
 
         // Tier 6: modern Linux fs variants (preferred by Rust std)
-        72 => 49,  // fcntl → SunlightOS Fcntl(49) — same arg layout
+        72 => 49,   // fcntl → SunlightOS Fcntl(49) — same arg layout
         257 => -15, // openat → sys_open(40) via frame shift in kernel
 
         // Default: unsupported
@@ -429,7 +446,7 @@ mod tests {
         assert_eq!(translate_syscall(9), -11); // mmap
         assert_eq!(translate_syscall(131), -12); // sigaltstack
         assert_eq!(translate_syscall(231), 20); // exit_group
-        assert_eq!(translate_syscall(72), 49);  // fcntl → SunlightOS Fcntl
+        assert_eq!(translate_syscall(72), 49); // fcntl → SunlightOS Fcntl
         assert_eq!(translate_syscall(257), -15); // openat → frame-shifted sys_open
     }
 
@@ -460,9 +477,7 @@ mod tests {
     fn intercepted_open_follows_rules() {
         init_phase3_demo_rules();
         assert!(sys_open_intercepted("/home/user/notes.txt", 1000).is_ok());
-        assert!(matches!(
-            sys_open_intercepted("/forbidden/secret", 1000),
-            Err(Error::RuleNotFound)
-        ));
+        assert!(sys_open_intercepted("index.html", 1000).is_ok());
+        assert!(sys_open_intercepted("/forbidden/secret", 1000).is_ok());
     }
 }

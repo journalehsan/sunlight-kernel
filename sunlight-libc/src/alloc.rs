@@ -3,8 +3,8 @@
 //!
 //! # Phase 1 limitations
 //! - `free()` is a no-op: memory is never returned to the pool.
-//! - `realloc()` (C ABI) copies without knowing the old size — safe for
-//!   grow-only patterns but not general use.
+//! - `realloc()` (C ABI) cannot know the old size, so it returns a fresh
+//!   allocation without copying to avoid out-of-bounds reads.
 //! - Rust `GlobalAlloc::realloc` is correct because the old layout is passed.
 //! - Allocation uses atomics for concurrent bumps but is still a simple
 //!   bump-only allocator with no reclamation.
@@ -46,7 +46,9 @@ mod backend {
 mod backend {
     use core::sync::atomic::{AtomicUsize, Ordering};
 
-    use crate::mman::{mmap, munmap, MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, PROT_READ, PROT_WRITE};
+    use crate::mman::{
+        mmap, munmap, MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, PROT_READ, PROT_WRITE,
+    };
 
     const HEAP_SIZE: usize = 1024 * 1024;
     static HEAP_BASE: AtomicUsize = AtomicUsize::new(0);
@@ -140,11 +142,10 @@ pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut u8 {
 
 /// Resize an allocation.
 ///
-/// Phase 1 limitation: the C ABI does not carry the old allocation size, so
-/// this implementation always copies `new_size` bytes from `ptr`, which may
-/// read past the original allocation if `new_size > old_size`. This is safe
-/// only for grow-then-copy patterns (typical Rust Vec growth). Do not use for
-/// shrink-in-place patterns.
+/// Phase 1 limitation: the C ABI does not carry the old allocation size. To
+/// avoid reading past the original allocation when growing a buffer, this
+/// implementation does not copy from `ptr`; it returns a fresh allocation and
+/// leaks the old one because `free()` is currently a no-op.
 ///
 /// `realloc(NULL, n)` behaves like `malloc(n)`.
 /// `realloc(p, 0)` frees `p` and returns null.
@@ -158,11 +159,6 @@ pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
         return core::ptr::null_mut();
     }
     let new_ptr = malloc(new_size);
-    if !new_ptr.is_null() {
-        // Copy conservatively — caller is responsible for not passing new_size
-        // larger than the original allocation in Phase 1.
-        core::ptr::copy_nonoverlapping(ptr, new_ptr, new_size);
-    }
     new_ptr
 }
 
@@ -192,11 +188,10 @@ unsafe impl core::alloc::GlobalAlloc for SunlightBumpAlloc {
         old_layout: core::alloc::Layout,
         new_size: usize,
     ) -> *mut u8 {
-        let new_layout =
-            match core::alloc::Layout::from_size_align(new_size, old_layout.align()) {
-                Ok(l) => l,
-                Err(_) => return core::ptr::null_mut(),
-            };
+        let new_layout = match core::alloc::Layout::from_size_align(new_size, old_layout.align()) {
+            Ok(l) => l,
+            Err(_) => return core::ptr::null_mut(),
+        };
         let new_ptr = self.alloc(new_layout);
         if !new_ptr.is_null() {
             // Copy the minimum of old and new sizes — always correct.
