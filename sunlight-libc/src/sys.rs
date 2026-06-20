@@ -17,6 +17,10 @@ pub const SYS_WRITE: u64 = 43;
 pub const SYS_LSEEK: u64 = 44;
 pub const SYS_PIPE: u64 = 47;
 pub const SYS_FSTAT: u64 = 48;
+pub const SYS_MMAP: u64 = 50;
+pub const SYS_MUNMAP: u64 = 51;
+pub const SYS_MPROTECT: u64 = 52;
+pub const SYS_MREMAP: u64 = 53;
 pub const SYS_READDIR: u64 = 60;
 pub const SYS_STAT: u64 = 61;
 pub const SYS_MKDIR: u64 = 62;
@@ -108,6 +112,38 @@ pub unsafe fn syscall3(n: u64, a1: u64, a2: u64, a3: u64) -> u64 {
         in("rdi") a1,
         in("rsi") a2,
         in("rdx") a3,
+        lateout("rax") ret,
+        out("rcx") _,
+        out("r11") _,
+        options(nostack),
+    );
+    ret
+}
+
+/// # Safety
+/// SYSCALL clobbers rcx (return RIP) and r11 (RFLAGS); the kernel preserves
+/// the remaining GPRs by saving a full frame on entry.
+/// The SysV AMD64 syscall ABI passes the 4th argument in r10, not rcx.
+#[inline]
+pub unsafe fn syscall6(
+    n: u64,
+    a1: u64,
+    a2: u64,
+    a3: u64,
+    a4: u64,
+    a5: u64,
+    a6: u64,
+) -> u64 {
+    let ret: u64;
+    core::arch::asm!(
+        "syscall",
+        in("rax") n,
+        in("rdi") a1,
+        in("rsi") a2,
+        in("rdx") a3,
+        in("r10") a4,
+        in("r8") a5,
+        in("r9") a6,
         lateout("rax") ret,
         out("rcx") _,
         out("r11") _,

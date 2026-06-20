@@ -1,47 +1,114 @@
-//! Phase 1 allocator: static bump allocator backed by a 256 KiB BSS region.
+//! Phase 1 allocator: static bump allocator backed by a BSS region, or
+//! dynamically backed via `mmap` if the `dynamic-heap` feature is enabled.
 //!
 //! # Phase 1 limitations
 //! - `free()` is a no-op: memory is never returned to the pool.
 //! - `realloc()` (C ABI) copies without knowing the old size — safe for
 //!   grow-only patterns but not general use.
 //! - Rust `GlobalAlloc::realloc` is correct because the old layout is passed.
-//! - Not thread-safe; a single `AtomicUsize` bump pointer guards against
-//!   concurrent allocs on the same core but is not sufficient for SMP.
-//! - 256 KiB is enough for Phase 1 proof binaries. Increase or replace with
-//!   `mmap` when larger allocation patterns are needed.
+//! - Allocation uses atomics for concurrent bumps but is still a simple
+//!   bump-only allocator with no reclamation.
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+// ── Variant A: Static BSS Backing (Legacy/Micro-services) ───────────────────
 
-const HEAP_SIZE: usize = 256 * 1024;
+#[cfg(not(feature = "dynamic-heap"))]
+mod backend {
+    use core::sync::atomic::{AtomicUsize, Ordering};
 
-// Static backing store lives in .bss (zero-initialized).
-static mut HEAP: [u8; HEAP_SIZE] = [0u8; HEAP_SIZE];
-// Bump pointer: byte offset of the next free byte in HEAP.
-static HEAP_NEXT: AtomicUsize = AtomicUsize::new(0);
+    const HEAP_SIZE: usize = 256 * 1024;
+    static mut HEAP: [u8; HEAP_SIZE] = [0u8; HEAP_SIZE];
+    static HEAP_NEXT: AtomicUsize = AtomicUsize::new(0);
 
-/// Allocate `size` bytes with `align`-byte alignment from the static pool.
-/// Returns a null pointer on exhaustion or if `size == 0`.
-fn bump_alloc(size: usize, align: usize) -> *mut u8 {
-    if size == 0 {
-        return core::ptr::null_mut();
-    }
-    loop {
-        let current = HEAP_NEXT.load(Ordering::Relaxed);
-        let aligned = (current + align - 1) & !(align - 1);
-        let end = match aligned.checked_add(size) {
-            Some(e) if e <= HEAP_SIZE => e,
-            _ => return core::ptr::null_mut(),
-        };
-        match HEAP_NEXT.compare_exchange(current, end, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => {
-                // SAFETY: aligned < HEAP_SIZE (checked above); single-threaded
-                // Phase 1 binary — no concurrent access to HEAP.
-                return unsafe { core::ptr::addr_of_mut!(HEAP).cast::<u8>().add(aligned) };
+    pub fn bump_alloc(size: usize, align: usize) -> *mut u8 {
+        if size == 0 {
+            return core::ptr::null_mut();
+        }
+        loop {
+            let current = HEAP_NEXT.load(Ordering::Relaxed);
+            let aligned = (current + align - 1) & !(align - 1);
+            let end = match aligned.checked_add(size) {
+                Some(e) if e <= HEAP_SIZE => e,
+                _ => return core::ptr::null_mut(),
+            };
+            match HEAP_NEXT.compare_exchange(current, end, Ordering::Relaxed, Ordering::Relaxed) {
+                Ok(_) => {
+                    return unsafe { core::ptr::addr_of_mut!(HEAP).cast::<u8>().add(aligned) };
+                }
+                Err(_) => continue,
             }
-            Err(_) => continue,
         }
     }
 }
+
+// ── Variant B: Dynamic mmap Backing (New Applications) ──────────────────────
+
+#[cfg(feature = "dynamic-heap")]
+mod backend {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    use crate::mman::{mmap, munmap, MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, PROT_READ, PROT_WRITE};
+
+    const HEAP_SIZE: usize = 1024 * 1024;
+    static HEAP_BASE: AtomicUsize = AtomicUsize::new(0);
+    static HEAP_NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    pub fn bump_alloc(size: usize, align: usize) -> *mut u8 {
+        if size == 0 {
+            return core::ptr::null_mut();
+        }
+
+        let mut base = HEAP_BASE.load(Ordering::Acquire);
+        if base == 0 {
+            let ptr = mmap(
+                core::ptr::null_mut(),
+                HEAP_SIZE,
+                PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS,
+                -1,
+                0,
+            )
+            .unwrap_or(MAP_FAILED);
+
+            if ptr == MAP_FAILED {
+                return core::ptr::null_mut();
+            }
+
+            match HEAP_BASE.compare_exchange(0, ptr as usize, Ordering::Release, Ordering::Acquire)
+            {
+                Ok(_) => {
+                    base = ptr as usize;
+                    HEAP_NEXT.store(base, Ordering::Release);
+                }
+                Err(existing_base) => {
+                    let _ = munmap(ptr, HEAP_SIZE);
+                    base = existing_base;
+                }
+            }
+        }
+
+        loop {
+            let current = HEAP_NEXT.load(Ordering::Relaxed);
+            if current == 0 {
+                continue;
+            }
+
+            let aligned = (current + align - 1) & !(align - 1);
+            let end = match aligned.checked_add(size) {
+                Some(e) if e <= base + HEAP_SIZE => e,
+                _ => return core::ptr::null_mut(),
+            };
+
+            if HEAP_NEXT
+                .compare_exchange(current, end, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                return aligned as *mut u8;
+            }
+        }
+    }
+}
+
+use backend::bump_alloc;
 
 // ── C ABI allocator symbols ─────────────────────────────────────────────────
 

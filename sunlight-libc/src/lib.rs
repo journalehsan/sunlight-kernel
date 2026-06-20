@@ -21,6 +21,8 @@ pub mod errno;
 pub mod env;
 /// Memory utility functions (memcpy, memmove, memset, memcmp).
 pub mod mem;
+/// POSIX memory mapping wrappers (`mmap`, `munmap`).
+pub mod mman;
 /// Phase 1 allocator: static bump allocator + C ABI malloc/free/realloc/calloc.
 /// Enable `#[global_allocator]` for the `alloc` crate via the `global-alloc` feature.
 pub mod alloc;
