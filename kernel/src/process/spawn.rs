@@ -64,8 +64,28 @@ pub fn exec_into_process(
         }
     }
 
-    // Setup stack with argv/envp
-    let stack = setup_exec_stack(argv, envp, process, hhdm_offset)?;
+    // Build auxv for Linux-compat processes so musl's _start doesn't scan
+    // past the stack top looking for AT_NULL and fault at USER_STACK_TOP.
+    // Also provides AT_PHDR/AT_PHNUM so musl can locate PT_TLS for TLS init.
+    let auxv: alloc::vec::Vec<(u64, u64)> = if process.is_linux_compat {
+        match sunlight_elf::parse_elf_header(bytes) {
+            Ok(hdr) => {
+                let at_phdr = compute_at_phdr(bytes, &hdr);
+                alloc::vec![
+                    (3,  at_phdr),              // AT_PHDR
+                    (5,  hdr.phnum as u64),     // AT_PHNUM
+                    (6,  4096u64),              // AT_PAGESZ
+                    (9,  hdr.entry),            // AT_ENTRY
+                ]
+            }
+            Err(_) => alloc::vec![],
+        }
+    } else {
+        alloc::vec![]
+    };
+
+    // Setup stack with argv/envp/auxv
+    let stack = setup_exec_stack(argv, envp, &auxv, process, hhdm_offset)?;
 
     process.init_context(entry, stack.rsp);
     // SysV-style register convenience on top of the canonical stack layout:
@@ -121,14 +141,18 @@ fn copy_to_user(
     Ok(())
 }
 
-/// Marshal argc/argv/envp onto the user stack per the SysV x86_64 ABI.
+/// Marshal argc/argv/envp/auxv onto the user stack per the SysV x86_64 ABI.
 ///
-/// Layout (high → low): NUL-terminated string data, padding, then the
-/// pointer table `[argc][argv0..argvN][NULL][envp0..envpM][NULL]` with the
-/// final RSP 16-byte aligned and pointing at argc.
+/// Layout (high → low): 16 random bytes, NUL-terminated string data, then
+/// the pointer table `[argc][argv..][NULL][envp..][NULL][auxv pairs][AT_RANDOM][AT_NULL]`
+/// with RSP 16-byte aligned pointing at argc.
+///
+/// `auxv` contains the caller-provided (type, value) pairs (not including
+/// AT_RANDOM or AT_NULL, which are appended here).
 fn setup_exec_stack(
     argv: &[&[u8]],
     envp: &[&[u8]],
+    auxv: &[(u64, u64)],
     process: &mut Process,
     hhdm_offset: VirtAddr,
 ) -> Result<ExecStack, SpawnError> {
@@ -146,6 +170,17 @@ fn setup_exec_stack(
         Ok(*cursor)
     };
 
+    // Write 16 bytes for AT_RANDOM just below the top of the stack.
+    cursor = cursor
+        .checked_sub(16)
+        .filter(|&c| c >= stack_floor)
+        .ok_or(SpawnError::NoMemory)?;
+    copy_to_user(process, hhdm_offset, cursor, &[0u8; 16])?;
+    let at_random_ptr = cursor;
+
+    // Align cursor down to 8 bytes before the string data.
+    cursor &= !0x7;
+
     let mut argv_addrs = alloc::vec::Vec::with_capacity(argv.len());
     for arg in argv {
         argv_addrs.push(copy_string(&mut cursor, arg)?);
@@ -155,8 +190,10 @@ fn setup_exec_stack(
         envp_addrs.push(copy_string(&mut cursor, env)?);
     }
 
-    // Pointer table: argc + argv pointers + NULL + envp pointers + NULL.
-    let table_words = 1 + argv.len() + 1 + envp.len() + 1;
+    // Pointer table: argc + argv ptrs + NULL + envp ptrs + NULL
+    //                + caller auxv pairs + AT_RANDOM pair + AT_NULL pair.
+    let auxv_words = (auxv.len() + 2) * 2; // +1 AT_RANDOM, +1 AT_NULL
+    let table_words = 1 + argv.len() + 1 + envp.len() + 1 + auxv_words;
     let mut rsp = (cursor & !0x7)
         .checked_sub(table_words as u64 * 8)
         .ok_or(SpawnError::NoMemory)?;
@@ -170,17 +207,29 @@ fn setup_exec_stack(
     for addr in &argv_addrs {
         table.extend_from_slice(&addr.to_le_bytes());
     }
-    table.extend_from_slice(&0u64.to_le_bytes());
+    table.extend_from_slice(&0u64.to_le_bytes()); // argv NULL
     for addr in &envp_addrs {
         table.extend_from_slice(&addr.to_le_bytes());
     }
+    table.extend_from_slice(&0u64.to_le_bytes()); // envp NULL
+    // caller-supplied auxv entries
+    for &(atype, aval) in auxv {
+        table.extend_from_slice(&atype.to_le_bytes());
+        table.extend_from_slice(&aval.to_le_bytes());
+    }
+    // AT_RANDOM (25)
+    table.extend_from_slice(&25u64.to_le_bytes());
+    table.extend_from_slice(&at_random_ptr.to_le_bytes());
+    // AT_NULL (0) — musl stops scanning auxv here
+    table.extend_from_slice(&0u64.to_le_bytes());
     table.extend_from_slice(&0u64.to_le_bytes());
     copy_to_user(process, hhdm_offset, rsp, &table)?;
 
     crate::serial_println!(
-        "[EXEC] Stack: argc={} envc={} rsp={:#x}",
+        "[EXEC] Stack: argc={} envc={} auxv={} rsp={:#x}",
         argv.len(),
         envp.len(),
+        auxv.len() + 2,
         rsp
     );
 
@@ -189,6 +238,34 @@ fn setup_exec_stack(
         argv_ptr: rsp + 8,
         envp_ptr: rsp + 8 + (argv.len() as u64 + 1) * 8,
     })
+}
+
+/// Find the virtual address of the ELF program headers in the loaded image.
+///
+/// Scans PT_LOAD segments for the one that covers `phoff` in the file.
+/// Returns `p_vaddr + (phoff - p_offset)` for that segment, or 0 on failure.
+/// Used to populate AT_PHDR in the auxv so musl can locate PT_TLS.
+fn compute_at_phdr(elf_bytes: &[u8], header: &sunlight_elf::ElfHeader) -> u64 {
+    let phoff = header.phoff;
+    let phentsize = header.phentsize as usize;
+    for i in 0..header.phnum as usize {
+        let ph_start = header.phoff as usize + i * phentsize;
+        let ph_end = ph_start + phentsize;
+        if ph_end > elf_bytes.len() || phentsize < 48 {
+            break;
+        }
+        let p_type = u32::from_le_bytes(elf_bytes[ph_start..ph_start + 4].try_into().unwrap());
+        if p_type != 1 {
+            continue; // PT_LOAD = 1
+        }
+        let p_offset = u64::from_le_bytes(elf_bytes[ph_start + 8..ph_start + 16].try_into().unwrap());
+        let p_vaddr  = u64::from_le_bytes(elf_bytes[ph_start + 16..ph_start + 24].try_into().unwrap());
+        let p_filesz = u64::from_le_bytes(elf_bytes[ph_start + 32..ph_start + 40].try_into().unwrap());
+        if p_offset <= phoff && phoff < p_offset + p_filesz {
+            return p_vaddr + (phoff - p_offset);
+        }
+    }
+    0
 }
 
 /// Spawn a new process from a static ELF binary on the filesystem.
@@ -363,6 +440,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         }
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.
         "/bin/hello-linux" | "/usr/bin/hello-linux" => Ok(crate::HELLO_LINUX_ELF_BYTES),
+        // helios-note: std+libc terminal note editor (Helios Linux compat).
+        "/bin/note" | "/usr/bin/note" => Ok(crate::HELIOS_NOTE_ELF_BYTES),
         // Phase 6.5 Step 3: PATH entries under these directories are applets
         // of the embedded multi-call binaries (argv[0] picks the applet).
         p if p.starts_with("/sunlight-utils/") => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),

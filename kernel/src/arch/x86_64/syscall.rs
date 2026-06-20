@@ -307,6 +307,17 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1013; // Internal code for Linux writev
                     }
                 }
+                -15 => {
+                    if linux_num == 257 {
+                        // openat(dirfd, path, flags, mode) → sys_open(path, flags)
+                        // Rust std (and musl) prefer openat over open. Dirfd is
+                        // almost always AT_FDCWD (-100); we ignore it and treat
+                        // all paths as CWD-relative / absolute, matching our VFS.
+                        frame.rdi = frame.rsi; // path pointer
+                        frame.rsi = frame.rdx; // flags
+                        num = 40;              // sys_open
+                    }
+                }
                 -38 => {
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
                     num = 1005; // Linux ENOSYS

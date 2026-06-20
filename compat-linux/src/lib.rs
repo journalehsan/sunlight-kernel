@@ -387,6 +387,10 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         4 => 48, // stat → Fstat (approximation)
         6 => 48, // lstat → Fstat (approximation)
 
+        // Tier 6: modern Linux fs variants (preferred by Rust std)
+        72 => 49,  // fcntl → SunlightOS Fcntl(49) — same arg layout
+        257 => -15, // openat → sys_open(40) via frame shift in kernel
+
         // Default: unsupported
         _ => -38, // ENOSYS
     }
@@ -396,7 +400,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
 pub fn needs_special_handling(linux_nr: u64) -> bool {
     matches!(
         linux_nr,
-        7 | 9 | 13 | 14 | 16 | 20 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 334
+        7 | 9 | 13 | 14 | 16 | 20 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 334 | 257
     )
 }
 
@@ -425,6 +429,8 @@ mod tests {
         assert_eq!(translate_syscall(9), -11); // mmap
         assert_eq!(translate_syscall(131), -12); // sigaltstack
         assert_eq!(translate_syscall(231), 20); // exit_group
+        assert_eq!(translate_syscall(72), 49);  // fcntl → SunlightOS Fcntl
+        assert_eq!(translate_syscall(257), -15); // openat → frame-shifted sys_open
     }
 
     #[test]

@@ -112,6 +112,9 @@ static SUNLIGHT_HANGMAN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/hangman");
 // hello-linux: static musl Rust binary for Helios Linux-compat smoke test.
 static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-linux.elf");
+// helios-note: std+libc Rust terminal note editor, runs via Helios Linux compat.
+static HELIOS_NOTE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-linux-musl/release/helios-note");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;

@@ -447,6 +447,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         &mut phase3_6_done,
                                     ) {
                                         needs_render = true;
+                                    } else if fg_active {
+                                        // Not a tty shortcut: forward as control byte
+                                        // (Ctrl+Q=0x11, Ctrl+S=0x13, Ctrl+C=0x03, …).
+                                        let ctrl_byte = a & 0x1f;
+                                        if let Some(tab) = active_shell_tab(&tabs, active_tab) {
+                                            let _ = tty_stdin_push(tab.shell_id as u32, &[ctrl_byte]);
+                                        }
                                     }
                                 }
                             }
@@ -504,6 +511,27 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 }
                             }
                             _ => {}
+                        }
+                    } else if pressed && fg_active {
+                        // Raw-mode pass-through: translate special keys to VT100
+                        // escape sequences and push them directly into the fg
+                        // process's stdin ring.
+                        let seq: &[u8] = match keycode {
+                            0x01 => b"\x1b",        // Escape
+                            0x48 => b"\x1b[A",      // Up
+                            0x50 => b"\x1b[B",      // Down
+                            0x4D => b"\x1b[C",      // Right
+                            0x4B => b"\x1b[D",      // Left
+                            0x47 => b"\x1b[H",      // Home
+                            0x4F => b"\x1b[F",      // End
+                            0x49 => b"\x1b[5~",     // Page Up
+                            0x51 => b"\x1b[6~",     // Page Down
+                            _ => b"",
+                        };
+                        if !seq.is_empty() {
+                            if let Some(tab) = active_shell_tab(&tabs, active_tab) {
+                                let _ = tty_stdin_push(tab.shell_id as u32, seq);
+                            }
                         }
                     }
                 }

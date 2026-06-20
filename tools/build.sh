@@ -49,6 +49,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sunsay --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dict --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
+RUSTFLAGS="-C relocation-model=static" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
 
 # --- Step 2: Build the kernel ELF ---
 echo "[build] Building kernel..."

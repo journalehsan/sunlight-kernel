@@ -754,6 +754,13 @@ max_ttys = 6
         b"#!/helios/hello-linux\n",
     ),
     RamEntry::file(
+        "/bin/note",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/helios/note\n",
+    ),
+    RamEntry::file(
         "/bin/sunlight-kvctl",
         0,
         0,
@@ -1190,6 +1197,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/helios/hello-linux\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/note",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/helios/note\n",
     ),
 ];
 
