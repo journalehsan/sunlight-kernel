@@ -1,8 +1,8 @@
 //! Dependency graph and topological sort using Kahn's algorithm
 //! Fixed-capacity, no heap allocations
 
-use heapless::Vec;
 use crate::unit::{UnitName, MAX_UNITS};
+use heapless::Vec;
 
 #[derive(Debug)]
 pub enum GraphError {
@@ -13,7 +13,7 @@ pub enum GraphError {
 
 pub struct DepGraph {
     units: [Option<UnitName>; MAX_UNITS],
-    edges: [[bool; MAX_UNITS]; MAX_UNITS],  // edges[a][b] = a must start before b
+    edges: [[bool; MAX_UNITS]; MAX_UNITS], // edges[a][b] = a must start before b
     count: usize,
 }
 
@@ -69,7 +69,7 @@ impl DepGraph {
     /// Returns unit indices in startup order using topological sort (Kahn's algorithm)
     pub fn topological_order(&self) -> Result<Vec<usize, MAX_UNITS>, GraphError> {
         let mut in_degree = [0u32; MAX_UNITS];
-        
+
         // Calculate in-degrees
         for i in 0..self.count {
             for j in 0..self.count {

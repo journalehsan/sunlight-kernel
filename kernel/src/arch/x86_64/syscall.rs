@@ -274,7 +274,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         11 => endpoint_bind(frame.rdi),
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
-        22 => thread_spawn(),
+        22 => thread_spawn(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
         25 => sys_process_is_alive(frame),
@@ -747,8 +747,91 @@ fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
     alive as u64
 }
 
-fn thread_spawn() -> u64 {
-    IpcError::InvalidArgument as u64
+/// Syscall: ThreadSpawn (22)
+/// rdi = trampoline entry point (userland thread_trampoline fn ptr)
+/// rsi = aligned top of the thread's user stack
+/// rdx = TLS base pointer (written to the new thread's FS_BASE MSR)
+///
+/// The two u64 values at [rsi+0] and [rsi+8] must be the actual function
+/// pointer and argument; the kernel reads them and loads them into
+/// RDI/RSI of the new thread's initial context so `thread_trampoline`
+/// receives them as normal C arguments.
+fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
+    let trampoline     = frame.rdi;
+    let user_stack_top = frame.rsi;
+    let tls_ptr        = frame.rdx;
+
+    if !is_user_address(trampoline)
+        || !is_user_address(user_stack_top)
+        || !is_user_address(tls_ptr)
+    {
+        return u64::MAX;
+    }
+    // user_stack_top must have room for the two u64 values libc wrote there.
+    if !is_user_address(user_stack_top + 8) {
+        return u64::MAX;
+    }
+
+    // Read func and arg from the top of the user stack (written by libc before
+    // the syscall so we don't need extra syscall arguments).
+    // SAFETY: user_stack_top and +8 were validated as user addresses above;
+    // CR3 has not changed since syscall_entry, so these virtual addresses
+    // are accessible from kernel mode.
+    let (func, arg) = unsafe {
+        let base = user_stack_top as *const u64;
+        (*base, *base.add(1))
+    };
+
+    if !is_user_address(func) {
+        crate::serial_println!("[SYSCALL] thread_spawn: func not in user space");
+        return u64::MAX;
+    }
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+
+    // Collect everything we need from the parent in one borrow scope so
+    // we can release it before calling clone_boxed (which also borrows sched).
+    let (parent_pid, parent_pml4, uid, gid, nice, env, caps, tty_tab, parent_name) = {
+        let p = sched.current_process();
+        (
+            p.pid,
+            p.address_space.pml4_phys,
+            p.uid,
+            p.gid,
+            p.nice,
+            crate::process::env::EnvMap::inherit(&p.env),
+            p.capabilities.clone(),
+            p.tty_tab,
+            p.name,
+        )
+    };
+    let thread_fd = sched.current_process().fd_table.clone_boxed();
+
+    let new_tid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
+
+    let name_len = parent_name.iter().position(|&b| b == 0).unwrap_or(32);
+    let name_str = core::str::from_utf8(&parent_name[..name_len]).unwrap_or("thread");
+
+    let mut thread = crate::process::Process::new_thread(
+        new_tid, parent_pid, name_str,
+        parent_pml4, thread_fd,
+        env, uid, gid, nice, caps, tty_tab,
+    );
+
+    // Set up the iretq frame: RIP = trampoline, RSP = user_stack_top,
+    // then override RDI/RSI so the trampoline receives func and arg.
+    thread.init_context(trampoline, user_stack_top);
+    thread.set_initial_args(func, arg, 0, 0);
+    thread.fs_base = tls_ptr;
+
+    let idx = sched.add_process(thread);
+    sched.enqueue_process(idx);
+
+    crate::serial_println!(
+        "[SYSCALL] thread_spawn: parent={} tid={} trampoline={:#x}",
+        parent_pid, new_tid, trampoline
+    );
+    new_tid as u64
 }
 
 /// Syscall: DebugLog

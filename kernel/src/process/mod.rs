@@ -276,6 +276,91 @@ impl Process {
         }
     }
 
+    /// Create a new thread that shares `parent_pml4`'s address space.
+    ///
+    /// Unlike `Process::new`, this does not allocate a new page table —
+    /// `AddressSpace::from_pml4` wraps the existing one.  The caller is
+    /// responsible for calling `init_context` + `set_initial_args` afterwards.
+    ///
+    /// # Phase 1 note
+    /// The address space is shared by raw pointer identity (same pml4_phys).
+    /// There is no reference count on AddressSpace; if the owner process exits
+    /// first the PML4 page is not freed (currently leaked), which keeps the
+    /// thread's page tables accessible.  Arc-based ownership is Phase 2.
+    pub fn new_thread(
+        pid: usize,
+        ppid: usize,
+        name: &str,
+        parent_pml4: x86_64::PhysAddr,
+        fd_table: alloc::boxed::Box<fd_table::FdTable>,
+        env: env::EnvMap,
+        uid: u32,
+        gid: u32,
+        nice: i8,
+        capabilities: Vec<Capability>,
+        tty_tab: Option<u8>,
+    ) -> Self {
+        let address_space = address_space::AddressSpace::from_pml4(parent_pml4);
+        let kernel_stack = new_kernel_stack();
+        let kernel_stack_top =
+            core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
+
+        let mut name_arr = [0u8; 32];
+        let nb = name.as_bytes();
+        let nlen = nb.len().min(31);
+        name_arr[..nlen].copy_from_slice(&nb[..nlen]);
+
+        Self {
+            pid,
+            ppid,
+            name: name_arr,
+            state: ProcessState::Ready,
+            address_space,
+            capabilities,
+            kernel_stack,
+            kernel_stack_top,
+            user_stack_top: 0,
+            entry_point: 0,
+            context_rsp: 0,
+            fs_base: 0,
+            uid,
+            gid,
+            nice,
+            exit_code: 0,
+            env,
+            ipc_queue: VecDeque::new(),
+            ipc_endpoint: None,
+            ipc_reply: None,
+            pending_call: None,
+            pending_reply_wait: None,
+            ipc_reply_target: None,
+            fd_table,
+            capability_mode: false,
+            signal_state: signal::SignalState::new(),
+            is_linux_compat: false,
+            sched_type: 0,
+            weight: 1024,
+            cpu_mask: 0xFF,
+            burst_score: 256,
+            timeslice_used: 0,
+            last_run_tick: 0,
+            io_wait_time: 0,
+            interactive_bonus: 20,
+            block_start_tick: 0,
+            aging_counter: 0,
+            wait_child: None,
+            tty_tab,
+            owned_shared: Vec::new(),
+            mapped_shared: Vec::new(),
+            wd_period_ticks: None,
+            counter: 0,
+            aging_boosted_this_pick: false,
+            quantum_override: None,
+            cpu_runtime_ns: 0,
+            last_start_ns: 0,
+        }
+    }
+
     /// Set initial userspace argument registers for a freshly initialized context.
     pub fn set_initial_args(&mut self, rdi: u64, rsi: u64, rdx: u64, rcx: u64) {
         unsafe {

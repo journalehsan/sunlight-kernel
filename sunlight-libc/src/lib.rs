@@ -32,6 +32,8 @@ pub mod fd;
 pub mod time;
 /// Thread-Local Storage bootstrap: `Tcb` layout + `init_tls()`.
 pub mod tls;
+/// Native thread spawning.
+pub mod thread;
 
 pub use rand::{getrandom, GRND_NONCRYPTO};
 pub use sys::{Errno, EAGAIN_RAW, ERR_RAW};

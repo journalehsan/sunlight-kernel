@@ -339,6 +339,24 @@ impl FdTable {
         Ok(new_fd)
     }
 
+    /// Deep-copy this table into a new heap allocation.
+    /// Used by `Process::new_thread` so a thread inherits the parent's open
+    /// file descriptors without sharing the same Box (Phase 1; Arc sharing is
+    /// deferred to Phase 2).
+    pub fn clone_boxed(&self) -> alloc::boxed::Box<Self> {
+        // Use new_uninit to avoid placing a 256-slot array on the kernel stack.
+        let mut table = alloc::boxed::Box::<Self>::new_uninit();
+        let ptr = table.as_mut_ptr();
+        unsafe {
+            let entries = core::ptr::addr_of_mut!((*ptr).entries) as *mut Option<FileDescriptor>;
+            for idx in 0..256 {
+                entries.add(idx).write(self.entries[idx]);
+            }
+            core::ptr::addr_of_mut!((*ptr).next_fd).write(self.next_fd);
+            table.assume_init()
+        }
+    }
+
     /// Reduce rights on a file descriptor (can never increase)
     pub fn reduce_rights(&mut self, fd: i32, new_rights: CapRights) -> Result<(), FdError> {
         let fd_entry = self.get_mut(fd).ok_or(FdError::InvalidFd)?;
