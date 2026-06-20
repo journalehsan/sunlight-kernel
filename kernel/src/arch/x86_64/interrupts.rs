@@ -671,6 +671,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
 
             // Save current context.
             sched.processes[current].context_rsp = saved_rsp;
+            sched.processes[current].fs_base =
+                unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
 
             // Phase 2: maintain runnable-only invariant in tier queues.
             let was_runnable = matches!(
@@ -701,6 +703,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
             if let Some(next) = sched.pick_next() {
                 let next_rsp = sched.processes[next].context_rsp;
                 let next_stack_top = sched.processes[next].kernel_stack_top;
+                let next_fs_base = sched.processes[next].fs_base;
                 sched.current = next;
                 sched.processes[next].state = crate::process::ProcessState::Running;
                 sched.processes[next].last_run_tick = sched.global_tick;
@@ -711,6 +714,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 // Switch address space.
                 unsafe {
                     sched.processes[next].address_space.activate();
+                    x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
                 }
 
                 // Update TSS RSP0 for next interrupt.

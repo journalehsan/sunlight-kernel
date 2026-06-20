@@ -1163,7 +1163,7 @@ where
 /// Enter the first ready user process without holding the scheduler lock across
 /// the privilege transition.
 pub fn enter_first_process() -> ! {
-    let (rsp, pml4_phys) = {
+    let (rsp, pml4_phys, fs_base) = {
         let mut sched = SCHEDULER.lock();
         let mut first = None;
         for (i, p) in sched.processes.iter().enumerate() {
@@ -1187,13 +1187,14 @@ pub fn enter_first_process() -> ! {
             sched.seed_ready_queues_except(idx);
             let rsp = sched.processes[idx].context_rsp;
             let pml4_phys = sched.processes[idx].address_space.pml4_phys;
+            let fs_base = sched.processes[idx].fs_base;
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",
                 idx,
                 sched.processes[idx].name_str(),
                 rsp
             );
-            (rsp, pml4_phys)
+            (rsp, pml4_phys, fs_base)
         } else {
             serial_println!("[SCHED] No user processes, entering idle");
             drop(sched);
@@ -1206,6 +1207,7 @@ pub fn enter_first_process() -> ! {
             x86_64::structures::paging::PhysFrame::from_start_address_unchecked(pml4_phys),
             x86_64::registers::control::Cr3Flags::empty(),
         );
+        x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);
         context::iretq_to_context(rsp);
     }
 }

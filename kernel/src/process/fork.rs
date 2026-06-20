@@ -67,6 +67,7 @@ pub fn fork_current_process(
     let parent_nice = sched.current_process().nice;
     let parent_entry_point = sched.current_process().entry_point;
     let parent_user_stack_top = sched.current_process().user_stack_top;
+    let parent_fs_base = sched.current_process().fs_base;
     let parent_capabilities = sched.current_process().capabilities.clone();
     let parent_env = super::env::EnvMap::inherit(&sched.current_process().env);
 
@@ -95,6 +96,7 @@ pub fn fork_current_process(
             user_stack_top: parent_user_stack_top,
             entry_point: parent_entry_point,
             context_rsp: 0,
+            fs_base: parent_fs_base,
             uid: parent_uid,
             gid: parent_gid,
             nice: parent_nice,
@@ -203,6 +205,7 @@ fn sys_fork(
             user_stack_top: parent.user_stack_top,
             entry_point: parent.entry_point,
             context_rsp: 0,
+            fs_base: parent.fs_base,
             uid: parent_uid,
             gid: parent_gid,
             nice: parent.nice,

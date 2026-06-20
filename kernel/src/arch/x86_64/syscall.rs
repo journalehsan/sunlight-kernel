@@ -88,6 +88,7 @@ pub enum SunlightSyscall {
     ShmFree = 94,
     MapTelemetry = 95,
     GrantCapability = 100,
+    SetFsBase = 101,
 
     DebugLog = 99,
 }
@@ -325,6 +326,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         94 => sys_shm_free(frame),
         95 => sys_map_telemetry(frame),
         100 => sys_grant_capability_syscall(frame),
+        101 => sys_set_fs_base(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1498,6 +1500,23 @@ fn sys_grant_capability_syscall(frame: &mut SyscallFrame) -> u64 {
         Err(crate::capability::CapError::CapabilityStoreFull) => u64::MAX,
         Err(_) => u64::MAX,
     }
+}
+
+fn sys_set_fs_base(frame: &mut SyscallFrame) -> u64 {
+    let base = frame.rdi;
+    if !is_user_address(base) {
+        return u64::MAX;
+    }
+
+    unsafe {
+        x86_64::registers::model_specific::Msr::new(0xC0000100).write(base);
+    }
+
+    crate::sched::with_scheduler(|sched| {
+        sched.current_process_mut().fs_base = base;
+    });
+
+    0
 }
 
 /// Syscall: ReadDir (60)
