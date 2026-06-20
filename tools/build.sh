@@ -50,6 +50,12 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dict --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
 RUSTFLAGS="-C relocation-model=static" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
+# Patch EI_OSABI (byte 7) to ELFOSABI_LINUX (3) so the kernel's is_linux_elf()
+# recognizes this musl binary as a Linux-compat process. Rust/musl outputs
+# ELFOSABI_NONE (0) by default; we stamp it to 3 post-link, matching the
+# treatment applied to hello-linux.elf.
+printf '\x03' | dd of="$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note" \
+    bs=1 seek=7 conv=notrunc 2>/dev/null
 
 # --- Step 2: Build the kernel ELF ---
 echo "[build] Building kernel..."
