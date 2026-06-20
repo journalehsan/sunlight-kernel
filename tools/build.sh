@@ -49,7 +49,10 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sunsay --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dict --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
-RUSTFLAGS="-C relocation-model=static" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
+# Force a non-PIE static link so e_type is ET_EXEC (not ET_DYN). The kernel ELF
+# loader (sunlight-elf parse_elf_header) only accepts ET_EXEC; -no-pie + crt-static
+# is required because musl otherwise emits a static-PIE that loads as DYN.
+RUSTFLAGS="-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
 # Patch EI_OSABI (byte 7) to ELFOSABI_LINUX (3) so the kernel's is_linux_elf()
 # recognizes this musl binary as a Linux-compat process. Rust/musl outputs
 # ELFOSABI_NONE (0) by default; we stamp it to 3 post-link, matching the

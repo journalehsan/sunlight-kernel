@@ -44,7 +44,7 @@ impl Terminal {
 
         let mut out = io::stdout();
         write!(out, "\x1b[?1049h")?; // alternate screen
-        write!(out, "\x1b[?25l")?;   // hide cursor
+        write!(out, "\x1b[?25l")?; // hide cursor
         out.flush()?;
 
         Ok(Self { original })
@@ -60,7 +60,7 @@ impl Drop for Terminal {
         }
 
         let mut out = io::stdout();
-        let _ = write!(out, "\x1b[?25h");   // show cursor
+        let _ = write!(out, "\x1b[?25h"); // show cursor
         let _ = write!(out, "\x1b[?1049l"); // leave alternate screen
         let _ = out.flush();
     }
@@ -161,10 +161,7 @@ impl App {
     fn open(filename: String) -> io::Result<Self> {
         let content = fs::read_to_string(&filename)?;
 
-        let mut lines: Vec<String> = content
-            .lines()
-            .map(|line| line.to_string())
-            .collect();
+        let mut lines: Vec<String> = content.lines().map(|line| line.to_string()).collect();
 
         if lines.is_empty() {
             lines.push(String::new());
@@ -201,8 +198,8 @@ impl App {
 
         let mut out = io::stdout();
 
-        write!(out, "\x1b[H")?;      // cursor home
-        write!(out, "\x1b[2J")?;     // clear screen
+        write!(out, "\x1b[H")?; // cursor home
+        write!(out, "\x1b[2J")?; // clear screen
 
         for screen_row in 0..content_rows {
             let file_row = self.scroll_y + screen_row;
@@ -288,14 +285,76 @@ fn main() -> io::Result<()> {
         let (_, rows) = terminal_size()?;
         let content_rows = rows.saturating_sub(1);
 
-        match read_key()? {
-            Key::Char(b'q') => break,
-            Key::Char(3) => break, // Ctrl-C, although ISIG disabled
-            Key::ArrowUp => app.scroll_up(),
-            Key::ArrowDown => app.scroll_down(content_rows),
-            Key::PageUp => app.page_up(content_rows),
-            Key::PageDown => app.page_down(content_rows),
-            _ => {}
+        fn read_key() -> io::Result<Key> {
+            let mut stdin = io::stdin();
+            let mut buf = [0u8; 1];
+
+            // 1. Robust polling loop for the first byte
+            loop {
+                match stdin.read(&mut buf) {
+                    Ok(1) => break, // Key pressed!
+                    Ok(0) => {
+                        // TTY returned 0 bytes (no data ready). Sleep briefly to prevent a CPU spin-loop.
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+
+            if buf[0] != b'\x1b' {
+                return Ok(Key::Char(buf[0]));
+            }
+
+            let mut seq = [0u8; 3];
+
+            // 2. Safe non-blocking reads for escape sequence bytes
+            match stdin.read(&mut seq[0..1]) {
+                Ok(0) | Err(_) => return Ok(Key::Escape),
+                Ok(1) => {}
+                _ => return Ok(Key::Escape),
+            }
+
+            if seq[0] == b'[' {
+                match stdin.read(&mut seq[1..2]) {
+                    Ok(0) | Err(_) => return Ok(Key::Escape),
+                    Ok(1) => {}
+                    _ => return Ok(Key::Escape),
+                }
+
+                match seq[1] {
+                    b'A' => return Ok(Key::ArrowUp),
+                    b'B' => return Ok(Key::ArrowDown),
+                    b'C' => return Ok(Key::ArrowRight),
+                    b'D' => return Ok(Key::ArrowLeft),
+                    b'H' => return Ok(Key::Home),
+                    b'F' => return Ok(Key::End),
+
+                    b'1' | b'4' | b'5' | b'6' | b'7' | b'8' => {
+                        match stdin.read(&mut seq[2..3]) {
+                            Ok(0) | Err(_) => return Ok(Key::Unknown),
+                            Ok(1) => {}
+                            _ => return Ok(Key::Unknown),
+                        }
+
+                        if seq[2] == b'~' {
+                            return Ok(match seq[1] {
+                                b'1' | b'7' => Key::Home,
+                                b'4' | b'8' => Key::End,
+                                b'5' => Key::PageUp,
+                                b'6' => Key::PageDown,
+                                _ => Key::Unknown,
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            Ok(Key::Unknown)
         }
 
         app.render()?;
