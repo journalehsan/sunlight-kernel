@@ -52,12 +52,16 @@ pub enum FocusArea {
     UserSlot(usize), // 0 up to active_count - 1
     Password,
     Dropdown,
+    Reboot,
+    Shutdown,
 }
 
 pub enum LoginResult {
     Pending,
     Success { username: [u8; 64], username_len: usize, uid: u32, gid: u32 },
     Locked,
+    Reboot,
+    Shutdown,
 }
 
 pub struct LoginScreen {
@@ -128,6 +132,8 @@ impl LoginScreen {
                             LoginResult::Pending
                         }
                     }
+                    FocusArea::Reboot => LoginResult::Reboot,
+                    FocusArea::Shutdown => LoginResult::Shutdown,
                 }
             }
             b'\t' => {
@@ -168,7 +174,9 @@ impl LoginScreen {
                 }
             }
             FocusArea::Password => self.focus = FocusArea::Dropdown,
-            FocusArea::Dropdown => self.focus = FocusArea::UserSlot(0), // Loop back to the first user
+            FocusArea::Dropdown => self.focus = FocusArea::Reboot,
+            FocusArea::Reboot => self.focus = FocusArea::Shutdown,
+            FocusArea::Shutdown => self.focus = FocusArea::UserSlot(0),
         }
     }
 

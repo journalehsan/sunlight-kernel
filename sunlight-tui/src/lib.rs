@@ -400,6 +400,8 @@ pub enum LoginFocus {
     UserSlot(usize),
     Password,
     Dropdown,
+    Reboot,
+    Shutdown,
 }
 
 /// Draw a circular avatar with the first letter of `name`, or '+' when empty.
@@ -646,7 +648,52 @@ pub unsafe fn render_login_grid(
         );
     }
 
-    let footer = "Select user, Enter, type password, Enter";
+    // Reboot / Shutdown buttons — small, bottom-right of the panel
+    const BTN_W: u32 = 72;
+    const BTN_H: u32 = 22;
+    const BTN_GAP: u32 = 8;
+    let btn_y = panel_y + panel_h - BTN_H - 10;
+    let shutdown_x = panel_x + panel_w - BTN_W - 12;
+    let reboot_x = shutdown_x - BTN_W - BTN_GAP;
+
+    let reboot_focused = focus == LoginFocus::Reboot;
+    let shutdown_focused = focus == LoginFocus::Shutdown;
+
+    // Reboot button
+    draw::rect_outline(
+        &mut fb, reboot_x, btn_y, BTN_W, BTN_H,
+        if reboot_focused { 2 } else { 1 },
+        if reboot_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+    );
+    let rb_label = "Reboot";
+    let rb_lw = font::text_width(rb_label, 1);
+    font::draw_str(
+        &mut fb,
+        reboot_x + BTN_W.saturating_sub(rb_lw) / 2,
+        btn_y + 4,
+        rb_label,
+        if reboot_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+        1,
+    );
+
+    // Shutdown button
+    draw::rect_outline(
+        &mut fb, shutdown_x, btn_y, BTN_W, BTN_H,
+        if shutdown_focused { 2 } else { 1 },
+        if shutdown_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+    );
+    let sd_label = "Shutdown";
+    let sd_lw = font::text_width(sd_label, 1);
+    font::draw_str(
+        &mut fb,
+        shutdown_x + BTN_W.saturating_sub(sd_lw) / 2,
+        btn_y + 4,
+        sd_label,
+        if shutdown_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+        1,
+    );
+
+    let footer = "Tab to navigate  Enter to select";
     let footer_w = font::text_width(footer, 1);
     font::draw_str(
         &mut fb,

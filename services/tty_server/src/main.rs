@@ -336,6 +336,28 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
                     let result = login.handle_key_ascii(ascii);
                     match result {
+                        LoginResult::Reboot => {
+                            debug_log("[TTY]  Reboot requested from login screen");
+                            unsafe {
+                                core::arch::asm!(
+                                    "mov rax, 80",
+                                    "mov rdi, 1",
+                                    "syscall",
+                                    options(nomem, nostack)
+                                );
+                            }
+                        }
+                        LoginResult::Shutdown => {
+                            debug_log("[TTY]  Shutdown requested from login screen");
+                            unsafe {
+                                core::arch::asm!(
+                                    "mov rax, 80",
+                                    "mov rdi, 0",
+                                    "syscall",
+                                    options(nomem, nostack)
+                                );
+                            }
+                        }
                         LoginResult::Success {
                             username,
                             username_len,
@@ -837,6 +859,8 @@ fn render_login_fb(login: &LoginScreen, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p
         FocusArea::UserSlot(i) => sunlight_tui::LoginFocus::UserSlot(i),
         FocusArea::Password => sunlight_tui::LoginFocus::Password,
         FocusArea::Dropdown => sunlight_tui::LoginFocus::Dropdown,
+        FocusArea::Reboot => sunlight_tui::LoginFocus::Reboot,
+        FocusArea::Shutdown => sunlight_tui::LoginFocus::Shutdown,
     };
 
     unsafe {
