@@ -318,6 +318,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 40;              // sys_open
                     }
                 }
+                -16 => {
+                    if linux_num == 318 {
+                        num = 1014; // Internal code for Linux getrandom
+                    }
+                }
                 -38 => {
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
                     num = 1005; // Linux ENOSYS
@@ -412,6 +417,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1011 => sys_linux_sigaltstack(frame),
         1012 => sys_linux_ioctl(frame),
         1013 => sys_linux_writev(frame),
+        1014 => sys_linux_getrandom(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1870,6 +1876,42 @@ fn sys_linux_set_robust_list(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_linux_rseq(_frame: &mut SyscallFrame) -> u64 {
     linux_errno(38) // ENOSYS: libc should continue with rseq disabled.
+}
+
+fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
+    let buf_ptr = frame.rdi as *mut u8;
+    let len = frame.rsi as usize;
+    let _flags = frame.rdx;
+
+    if len == 0 {
+        return 0;
+    }
+    if buf_ptr.is_null() || len > isize::MAX as usize {
+        return linux_errno(14); // EFAULT
+    }
+
+    let end = match frame.rdi.checked_add((len - 1) as u64) {
+        Some(end) => end,
+        None => return linux_errno(14), // EFAULT
+    };
+    if !is_user_address(frame.rdi) || !is_user_address(end) {
+        return linux_errno(14); // EFAULT
+    }
+
+    // Compatibility shim: enough for musl/std hash seeding and similar callers.
+    // For now this is backed by the same kernel entropy source that seeds the
+    // native libc fast path, so it is always non-blocking.
+    let mut written = 0usize;
+    while written < len {
+        let chunk = sys_get_entropy().to_le_bytes();
+        let n = (len - written).min(chunk.len());
+        unsafe {
+            core::ptr::copy_nonoverlapping(chunk.as_ptr(), buf_ptr.add(written), n);
+        }
+        written += n;
+    }
+
+    len as u64
 }
 
 fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {

@@ -409,6 +409,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         257 => -15, // openat → sys_open(40) via frame shift in kernel
         79 => 64,   // getcwd → SunlightOS Getcwd(64)
         80 => 63,   // chdir → SunlightOS Chdir(63)
+        318 => -16, // getrandom → Linux ABI shim backed by kernel entropy
 
         // Default: unsupported
         _ => -38, // ENOSYS
@@ -419,7 +420,8 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
 pub fn needs_special_handling(linux_nr: u64) -> bool {
     matches!(
         linux_nr,
-        7 | 9 | 13 | 14 | 16 | 20 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 334 | 257
+        7 | 9 | 13 | 14 | 16 | 20 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 318 | 334
+            | 257
     )
 }
 
@@ -450,6 +452,7 @@ mod tests {
         assert_eq!(translate_syscall(231), 20); // exit_group
         assert_eq!(translate_syscall(72), 49); // fcntl → SunlightOS Fcntl
         assert_eq!(translate_syscall(257), -15); // openat → frame-shifted sys_open
+        assert_eq!(translate_syscall(318), -16); // getrandom
     }
 
     #[test]
@@ -472,6 +475,7 @@ mod tests {
         assert!(needs_special_handling(200));
         assert!(needs_special_handling(9));
         assert!(needs_special_handling(131));
+        assert!(needs_special_handling(318));
         assert!(!needs_special_handling(1));
     }
 

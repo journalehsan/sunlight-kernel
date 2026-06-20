@@ -8,6 +8,8 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2"
+tui = { version = "0.19", default-features = false, features = ["crossterm"] }
+crossterm = "0.25"
 
 [profile.release]
 panic = "abort"
