@@ -62,6 +62,10 @@ pub struct Process {
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
     pub is_linux_compat: bool, // Phase 4.5: true if running Linux ELF binary
+    /// Linux compatibility heap base for `brk(2)`.
+    pub brk_base: u64,
+    /// Current Linux compatibility heap break.
+    pub brk_current: u64,
     pub sched_type: u8,        // SCHED_NORMAL=0, SCHED_FIFO=1 for real-time bypass
     pub weight: u32,           // CFS weight (default 1024)
     pub cpu_mask: u64,         // CPU affinity mask
@@ -201,6 +205,8 @@ impl Process {
             capability_mode: false,
             signal_state: signal::SignalState::new(),
             is_linux_compat: false, // default to native SunlightOS
+            brk_base: 0,
+            brk_current: 0,
             sched_type: 0,          // SCHED_NORMAL
             weight: 1024,           // default CFS weight
             cpu_mask: 0xFF,         // all CPUs
@@ -338,6 +344,8 @@ impl Process {
             capability_mode: false,
             signal_state: signal::SignalState::new(),
             is_linux_compat: false,
+            brk_base: 0,
+            brk_current: 0,
             sched_type: 0,
             weight: 1024,
             cpu_mask: 0xFF,

@@ -70,6 +70,9 @@ pub fn fork_current_process(
     let parent_fs_base = sched.current_process().fs_base;
     let parent_capabilities = sched.current_process().capabilities.clone();
     let parent_env = super::env::EnvMap::inherit(&sched.current_process().env);
+    let parent_is_linux_compat = sched.current_process().is_linux_compat;
+    let parent_brk_base = sched.current_process().brk_base;
+    let parent_brk_current = sched.current_process().brk_current;
 
     // Clone the parent's address space with CoW
     let child_address_space = unsafe {
@@ -111,7 +114,9 @@ pub fn fork_current_process(
             fd_table: super::fd_table::FdTable::new_boxed(),
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
-            is_linux_compat: false,
+            is_linux_compat: parent_is_linux_compat,
+            brk_base: parent_brk_base,
+            brk_current: parent_brk_current,
             sched_type: 0,         // inherit SCHED_NORMAL
             weight: 1024,          // inherit default weight
             cpu_mask: 0xFF,        // inherit all CPUs
@@ -221,6 +226,8 @@ fn sys_fork(
             capability_mode: false,
             signal_state: super::signal::SignalState::new(),
             is_linux_compat: parent.is_linux_compat, // inherit from parent
+            brk_base: parent.brk_base,
+            brk_current: parent.brk_current,
             sched_type: parent.sched_type,           // inherit scheduling type
             weight: parent.weight,                   // inherit CFS weight
             cpu_mask: parent.cpu_mask,               // inherit CPU mask

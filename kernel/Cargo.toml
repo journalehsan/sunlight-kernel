@@ -1,6 +1,10 @@
 [package]
 name = "sunlight-kernel"
-version = "0.1.189"
+version = "0.1.194"
+
+build = "build.rs"
+
+
 
 
 

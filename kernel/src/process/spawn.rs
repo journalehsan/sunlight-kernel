@@ -39,6 +39,8 @@ pub fn exec_into_process(
 
     // Phase 4.5: Detect if this is a Linux-compatible ELF binary
     process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
+    process.brk_base = 0;
+    process.brk_current = 0;
     if process.is_linux_compat {
         crate::serial_println!("[EXEC] Linux ELF detected");
     }

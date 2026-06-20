@@ -3,6 +3,7 @@
 [VFS]  Test open /etc/motd
 [VFS]  Test read /etc/motd
 [VFS]  Read: "Welcome to SunlightOS\n"
+[VFS]  Fstat OK
 [VFS]  ENOENT test OK
 [VFS]  Bad handle test OK
 [VFS]  Stat OK

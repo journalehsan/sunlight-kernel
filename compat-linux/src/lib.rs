@@ -365,8 +365,9 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         // Tier 4: memory management
         9 => 50,    // mmap → SunlightOS Mmap(50)
         11 => 51,   // munmap → SunlightOS Munmap(51)
-        12 => -2,   // brk → special handling (not implemented yet)
+        12 => -2,   // brk → special handling
         10 => 52,   // mprotect → SunlightOS Mprotect(52)
+        158 => -3,  // arch_prctl → special handling for TLS setup
 
         // Tier 5: signals
         13 => 72,   // kill → SunlightOS Kill(72)
@@ -383,7 +384,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
 
 /// Helper to determine if a syscall requires special handling.
 pub fn needs_special_handling(linux_nr: u64) -> bool {
-    matches!(linux_nr, 60 | 231 | 12) // exit, exit_group, brk
+    matches!(linux_nr, 60 | 231 | 12 | 158) // exit, exit_group, brk, arch_prctl
 }
 
 #[cfg(test)]
@@ -395,11 +396,20 @@ mod tests {
         assert_eq!(translate_syscall(1), 43); // write
         assert_eq!(translate_syscall(0), 42); // read
         assert_eq!(translate_syscall(60), -1); // exit
+        assert_eq!(translate_syscall(12), -2); // brk
+        assert_eq!(translate_syscall(158), -3); // arch_prctl
     }
 
     #[test]
     fn unsupported_returns_enosys() {
         assert_eq!(translate_syscall(999), -38);
+    }
+
+    #[test]
+    fn special_handling_is_flagged() {
+        assert!(needs_special_handling(12));
+        assert!(needs_special_handling(158));
+        assert!(!needs_special_handling(1));
     }
 
     #[test]

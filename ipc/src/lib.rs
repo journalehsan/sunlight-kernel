@@ -198,6 +198,7 @@ pub mod VfsMsg {
     pub const GETPWNAM: u64 = 11; // Get user info by username
     pub const GETGRGID: u64 = 12; // Get group info by gid
     pub const GETPWUID: u64 = 13; // Get user info by uid
+    pub const FSTAT: u64 = 14; // Stat an open file handle
     pub const DATA_SHARED: u64 = 31; // large read reply carries cap in caps[0]
 }
 

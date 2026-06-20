@@ -139,6 +139,28 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ "$DISPLAY_TYPE" == "gtk" || "$DISPLAY_TYPE" == "sdl" ]]; then
+    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+        echo -e "${RED}✗ Error: graphical QEMU should not be run as root${NC}"
+        echo -e "${YELLOW}  The GUI needs your user display session; running via sudo loses X11/Wayland auth and XDG_RUNTIME_DIR.${NC}"
+        echo -e "${YELLOW}  Run as your normal user: ./tools/run.sh${NC}"
+        echo -e "${YELLOW}  For root/headless runs, use: ./tools/run.sh --vnc  or  ./tools/run.sh --no-display${NC}"
+        exit 1
+    fi
+
+    if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+        echo -e "${RED}✗ Error: no graphical display session detected${NC}"
+        echo -e "${YELLOW}  Set DISPLAY/WAYLAND_DISPLAY or use --vnc/--no-display.${NC}"
+        exit 1
+    fi
+
+    if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+        echo -e "${RED}✗ Error: XDG_RUNTIME_DIR is not set${NC}"
+        echo -e "${YELLOW}  Launch from your desktop user session or use --vnc/--no-display.${NC}"
+        exit 1
+    fi
+fi
+
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}  SunlightOS — QEMU Runner${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

@@ -253,6 +253,16 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 20; // ProcessExit
                     }
                 }
+                -2 => {
+                    if linux_num == 12 {
+                        num = 1000; // Internal code for sys_brk
+                    }
+                }
+                -3 => {
+                    if linux_num == 158 {
+                        num = 1001; // Internal code for sys_arch_prctl
+                    }
+                }
                 _ => {
                     // Unknown or unsupported syscall
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
@@ -327,6 +337,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         95 => sys_map_telemetry(frame),
         100 => sys_grant_capability_syscall(frame),
         101 => sys_set_fs_base(frame),
+        1000 => sys_brk(frame),
+        1001 => sys_arch_prctl(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1600,6 +1612,97 @@ fn sys_set_fs_base(frame: &mut SyscallFrame) -> u64 {
     });
 
     0
+}
+
+/// Emulate Linux `brk(2)` for Linux-compatible binaries.
+///
+/// Linux returns the current break on success. On failure, it returns the
+/// previous break rather than a raw error code.
+fn sys_brk(frame: &mut SyscallFrame) -> u64 {
+    let requested_brk = frame.rdi;
+    let heap_base = crate::process::layout::USER_HEAP_START;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let pid = sched.current_process().pid;
+
+    // Lazy heap initialization: the first brk call establishes the process-local
+    // Linux heap range.
+    {
+        let process = sched.current_process_mut();
+        if process.brk_base == 0 {
+            process.brk_base = heap_base;
+            process.brk_current = heap_base;
+        }
+
+        if requested_brk == 0 {
+            return process.brk_current;
+        }
+
+        if requested_brk < process.brk_base {
+            return process.brk_current;
+        }
+    }
+
+    let current_brk = sched.current_process().brk_current;
+    let current_page_end = (current_brk + 0xFFF) & !0xFFF;
+    let target_page_end = (requested_brk + 0xFFF) & !0xFFF;
+
+    if target_page_end > current_page_end {
+        let size_to_map = target_page_end - current_page_end;
+        let mut pmm = crate::PMM.lock();
+        let flags = crate::process::mmap::MAP_FIXED
+            | crate::process::mmap::MAP_PRIVATE
+            | crate::process::mmap::MAP_ANONYMOUS;
+        let prot = crate::process::mmap::PROT_READ | crate::process::mmap::PROT_WRITE;
+
+        let result = crate::process::mmap::sys_mmap(
+            current_page_end,
+            size_to_map,
+            prot,
+            flags,
+            -1,
+            0,
+            &mut *pmm,
+            &mut *sched,
+        );
+
+        match result {
+            Ok(_) => {
+                sched.current_process_mut().brk_current = requested_brk;
+            }
+            Err(_) => {
+                let previous = sched
+                    .processes
+                    .iter()
+                    .find(|p| p.pid == pid)
+                    .map(|p| p.brk_current)
+                    .unwrap_or(current_brk);
+                return previous;
+            }
+        }
+    } else if target_page_end < current_page_end {
+        let size_to_unmap = current_page_end - target_page_end;
+        let _ = crate::process::mmap::sys_munmap(target_page_end, size_to_unmap);
+        sched.current_process_mut().brk_current = requested_brk;
+    } else {
+        sched.current_process_mut().brk_current = requested_brk;
+    }
+
+    sched.current_process().brk_current
+}
+
+const ARCH_SET_FS: u64 = 0x1002;
+
+fn sys_arch_prctl(frame: &mut SyscallFrame) -> u64 {
+    let code = frame.rdi;
+    let addr = frame.rsi;
+
+    if code == ARCH_SET_FS {
+        frame.rdi = addr;
+        return sys_set_fs_base(frame);
+    }
+
+    u64::MAX
 }
 
 /// Syscall: ReadDir (60)

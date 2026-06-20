@@ -149,6 +149,22 @@ impl BootFs {
         Ok(())
     }
 
+    fn fstat(&self, local_handle: FileHandle) -> Result<sunlight_fs::FileStat, FsError> {
+        let h = local_handle.0.checked_sub(1).ok_or(FsError::BadHandle)? as usize;
+        let slot = self.handles.get(h).ok_or(FsError::BadHandle)?;
+        if !slot.in_use {
+            return Err(FsError::BadHandle);
+        }
+        Ok(sunlight_fs::FileStat {
+            file_type: FileType::File,
+            size: self.share.files[slot.file_idx as usize].data_len as usize,
+            uid: 0,
+            gid: 0,
+            mode: sunlight_fs::mode::FILE_755,
+            nlinks: 1,
+        })
+    }
+
     fn stat(&self, local_path: &str) -> Result<(usize, FileType), FsError> {
         let idx = self.find_file(local_path).ok_or(FsError::NotFound)?;
         Ok((self.share.files[idx].data_len as usize, FileType::File))
@@ -314,6 +330,7 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             Some(pb) => stat_path(state, pb.as_str()),
             None => error_reply(FsError::InvalidPath),
         },
+        VfsMsg::FSTAT => fstat_handle(state, FileHandle(msg.words[0] as u32)),
         VfsMsg::MKDIR => match decoded_path(&msg.words) {
             Some(pb) => mkdir_path(
                 state,
@@ -452,6 +469,25 @@ fn stat_path(state: &mut State, path: &str) -> IpcMsg {
             Err(e) => error_reply(e),
         }
     }
+}
+
+fn fstat_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
+    let (mount, local) = unpack_handle(raw);
+    let stat = match mount {
+        MOUNT_BOOT => match state.boot.as_ref() {
+            Some(boot) => match boot.fstat(local) {
+                Ok(stat) => stat,
+                Err(e) => return error_reply(e),
+            },
+            None => return error_reply(FsError::BadHandle),
+        },
+        MOUNT_RAM => match state.vfs.fstat_handle(local) {
+            Ok(stat) => stat,
+            Err(e) => return error_reply(e),
+        },
+        _ => return error_reply(FsError::BadHandle),
+    };
+    stat_reply(stat)
 }
 
 fn write_handle(state: &mut State, raw: FileHandle, offset: usize, buf: &[u8]) -> IpcMsg {
@@ -675,6 +711,16 @@ fn run_phase30_tests(state: &mut State) {
     unpack_data(&second, &mut buf[first_len..first_len + second_len]);
     if &buf[..first_len + second_len] == b"Welcome to SunlightOS\n" {
         debug_log("[VFS]  Read: \"Welcome to SunlightOS\\n\"");
+    } else {
+        return;
+    }
+    let fstat = handle_request(state, IpcMsg::with_label(VfsMsg::FSTAT).word(0, motd.0 as u64));
+    if fstat.label == VfsMsg::REPLY
+        && fstat.words[0] == STATUS_OK
+        && fstat.words[1] == 22
+        && ((fstat.words[3] >> 16) & 0xff) == file_type_code(FileType::File)
+    {
+        debug_log("[VFS]  Fstat OK");
     } else {
         return;
     }
@@ -1038,6 +1084,18 @@ fn unpack_handle(handle: FileHandle) -> (u32, FileHandle) {
 
 fn ok_reply() -> IpcMsg {
     IpcMsg::with_label(VfsMsg::REPLY).word(0, STATUS_OK)
+}
+
+fn stat_reply(stat: sunlight_fs::FileStat) -> IpcMsg {
+    ok_reply()
+        .word(1, stat.size as u64)
+        .word(2, ((stat.uid as u64) << 32) | stat.gid as u64)
+        .word(
+            3,
+            (stat.mode as u64)
+                | (file_type_code(stat.file_type) << 16)
+                | ((stat.nlinks as u64) << 32),
+        )
 }
 
 fn error_reply(err: FsError) -> IpcMsg {
