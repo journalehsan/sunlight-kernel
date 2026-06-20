@@ -477,6 +477,7 @@ mod sunlight {
 
             let out: &[u8] = match cmd {
                 "cd" => self.cmd_cd(&args),
+                "z" => self.cmd_z(&args),
                 "pwd" => self.cmd_pwd(),
                 "ls" => self.run_ls_external(&args),
                 "useradd" => self.cmd_useradd(&args),
@@ -918,6 +919,8 @@ mod sunlight {
             self.env.set("OLDPWD", &self.cwd);
             self.cwd = next;
             self.env.set("PWD", &self.cwd);
+            let cwd_copy = self.cwd.clone();
+            self.z_spawn_add(&cwd_copy);
             b""
         }
 
@@ -1453,6 +1456,128 @@ mod sunlight {
                 );
             }
         }
+
+        fn cmd_z(&mut self, args: &[&str]) -> &[u8] {
+            if args.is_empty() {
+                return self.cmd_cd(&[]);
+            }
+
+            // `z --add PATH` invoked as a built-in (shell-integration parity)
+            if args.first() == Some(&"--add") {
+                let path = args.get(1).copied().unwrap_or("");
+                if !path.is_empty() {
+                    self.z_spawn_add(path);
+                }
+                return b"";
+            }
+
+            // If the single arg looks like an existing absolute directory, cd there.
+            if args.len() == 1 && args[0].starts_with('/') && args[0].len() <= 32 {
+                if let Some(vfs_cap) = nameserver_lookup("vfs") {
+                    if stat_is_dir(vfs_cap, args[0]) {
+                        self.env.set("OLDPWD", &self.cwd);
+                        self.cwd = alloc::string::String::from(args[0]);
+                        self.env.set("PWD", &self.cwd);
+                        let p = self.cwd.clone();
+                        self.z_spawn_add(&p);
+                        return b"";
+                    }
+                }
+            }
+
+            // Search the zoxide history database.
+            let db_bytes = self.z_read_db();
+            let db_str = match core::str::from_utf8(&db_bytes) {
+                Ok(s) => s,
+                Err(_) => return b"z: no match found\n",
+            };
+
+            let terms: alloc::vec::Vec<alloc::string::String> =
+                args.iter().map(|t| z_to_lower(t)).collect();
+
+            let mut best_score: i64 = i64::MIN;
+            let mut best_path: Option<alloc::string::String> = None;
+
+            for line in db_str.lines() {
+                let tab = match line.find('\t') {
+                    Some(i) => i,
+                    None => continue,
+                };
+                let visit: u64 = match z_parse_u64(&line[..tab]) {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let path = &line[tab + 1..];
+                let path_lower = z_to_lower(path);
+                if !terms.iter().all(|t| path_lower.contains(t.as_str())) {
+                    continue;
+                }
+                let score = (visit as i64) * 100 - path.len() as i64;
+                if best_path.is_none() || score > best_score {
+                    best_score = score;
+                    best_path = Some(alloc::string::String::from(path));
+                }
+            }
+
+            match best_path {
+                Some(path) => {
+                    self.env.set("OLDPWD", &self.cwd);
+                    self.cwd = path.clone();
+                    self.env.set("PWD", &self.cwd);
+                    self.z_spawn_add(&path);
+                    b""
+                }
+                None => b"z: no match found\n",
+            }
+        }
+
+        fn z_read_db(&self) -> alloc::vec::Vec<u8> {
+            use sunlight_libc as ulibc;
+            let home = self.env.get("HOME").unwrap_or("/root");
+            let mut path = alloc::string::String::from(home);
+            path.push_str("/.config/sunlight-zoxide/db.txt");
+            let fd = match ulibc::open(path.as_bytes()) {
+                Ok(f) => f,
+                Err(_) => return alloc::vec::Vec::new(),
+            };
+            let mut out = alloc::vec::Vec::new();
+            let mut chunk = [0u8; 512];
+            loop {
+                match ulibc::read(fd, &mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => out.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            let _ = ulibc::close(fd);
+            out
+        }
+
+        fn z_spawn_add(&self, path: &str) {
+            use sunlight_libc as ulibc;
+            let argv: [&[u8]; 3] = [b"z", b"--add", path.as_bytes()];
+            let _ = ulibc::spawn(b"/bin/z", &argv, None);
+        }
+    }
+
+    fn z_to_lower(s: &str) -> alloc::string::String {
+        s.chars()
+            .map(|c| if c.is_ascii_uppercase() { (c as u8 + 32) as char } else { c })
+            .collect()
+    }
+
+    fn z_parse_u64(s: &str) -> Option<u64> {
+        if s.is_empty() {
+            return None;
+        }
+        let mut v = 0u64;
+        for b in s.bytes() {
+            if !b.is_ascii_digit() {
+                return None;
+            }
+            v = v.checked_mul(10)?.checked_add((b - b'0') as u64)?;
+        }
+        Some(v)
     }
 
     fn copy_out(data: &[u8]) -> ([u8; MAX_OUT], usize) {

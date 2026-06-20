@@ -1,15 +1,13 @@
 [package]
-name = "sunlight-sunsay"
+name = "sunlight-zoxide"
 version = "0.1.175"
-
 
 
 edition = "2021"
 
 [[bin]]
-name = "sunlight-sunsay"
+name = "z"
 path = "src/main.rs"
 
 [dependencies]
-# Enable the global allocator so we can use Vec<String> via `extern crate alloc`.
 sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc"] }

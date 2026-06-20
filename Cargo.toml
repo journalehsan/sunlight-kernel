@@ -39,6 +39,7 @@ members = [
     "services/rand_service",
     "services/sunlight-sm",
     "std-proof/sunlight-sunsay",
+    "std-proof/sunlight-zoxide",
 ]
 
 [workspace.dependencies]

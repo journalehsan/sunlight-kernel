@@ -17,6 +17,8 @@ pub mod sys;
 pub mod crt0;
 /// POSIX errno storage and `__errno_location()`.
 pub mod errno;
+/// Environment variable access via the SysV envp pointer.
+pub mod env;
 /// Memory utility functions (memcpy, memmove, memset, memcmp).
 pub mod mem;
 /// Phase 1 allocator: static bump allocator + C ABI malloc/free/realloc/calloc.
@@ -43,9 +45,12 @@ pub const MAX_PATH: usize = 256;
 /// Maximum argv entries the kernel reads in `sys_exec` (one slot is the NULL).
 pub const MAX_ARGS: usize = 15;
 const ARG_ARENA: usize = 1024;
+pub const O_RDONLY: u64 = 0x0;
 pub const O_WRONLY: u64 = 0x1;
 pub const O_RDWR: u64 = 0x2;
 pub const O_CREAT: u64 = 0x40;
+pub const O_TRUNC: u64 = 0x200;
+pub const O_APPEND: u64 = 0x400;
 
 /// Copy `bytes` into `buf` as a NUL-terminated C string.
 fn cstr<'a>(buf: &'a mut [u8], bytes: &[u8]) -> Result<*const u8, Errno> {
@@ -363,6 +368,34 @@ pub fn waitpid(pid: u64) -> Result<u64, Errno> {
             None => yield_now(),
         }
     }
+}
+
+/// Write all bytes in `buf` to `fd`, looping over partial writes.
+pub fn write_all(fd: Fd, mut buf: &[u8]) -> Result<(), Errno> {
+    while !buf.is_empty() {
+        let n = write(fd, buf)?;
+        if n == 0 {
+            return Err(Errno::Failed);
+        }
+        buf = &buf[n..];
+    }
+    Ok(())
+}
+
+/// Create all missing directory components of `path` (create_dir_all semantics).
+/// Failures on intermediate components are silently ignored (they likely exist).
+pub fn mkdir_recursive(path: &[u8]) -> Result<(), Errno> {
+    if path.is_empty() {
+        return Err(Errno::Inval);
+    }
+    let mut i = 1usize;
+    while i <= path.len() {
+        if i == path.len() || path[i] == b'/' {
+            let _ = mkdir(&path[..i], 0o755);
+        }
+        i += 1;
+    }
+    Ok(())
 }
 
 pub fn exit(code: u64) -> ! {

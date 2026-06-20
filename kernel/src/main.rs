@@ -103,6 +103,9 @@ static SUNLIGHT_SM_ELF_BYTES: &[u8] =
 // sunlight-sunsay: native Rust proof-of-life binary (std smoke test, Phase 1).
 static SUNLIGHT_SUNSAY_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sunsay");
+// sunlight-zoxide: directory jump utility (Phase 2 std validation).
+static SUNLIGHT_ZOXIDE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/z");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;

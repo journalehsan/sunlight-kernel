@@ -221,6 +221,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --releas
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sunsay --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release >>"$BUILD_LOG" 2>&1
 
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
 if [[ "$NEED_DISK" == "true" ]]; then
