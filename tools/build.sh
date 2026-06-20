@@ -48,6 +48,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features s
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sunsay --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dict --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
 
 # --- Step 2: Build the kernel ELF ---
 echo "[build] Building kernel..."

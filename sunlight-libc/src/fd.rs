@@ -1,31 +1,38 @@
-//! File descriptor helpers and Phase 1 stubs.
-//!
-//! `lseek` and `fstat` are not yet implemented in SunlightOS VFS (Phase 1).
-//! Both return -1 / ENOSYS so callers get a clean unsupported error rather
-//! than a crash or silent misbehavior.
+//! File descriptor helpers and C ABI exports.
 
-use crate::errno::{set_errno, EINVAL, ENOSYS};
-use crate::Stat;
-
-// POSIX lseek `whence` constants.
-pub const SEEK_SET: i32 = 0;
-pub const SEEK_CUR: i32 = 1;
-pub const SEEK_END: i32 = 2;
+use crate::errno::{set_errno, EINVAL};
+use crate::{fstat as libc_fstat, lseek as libc_lseek, Fd, Stat};
 
 /// Reposition the read/write offset of an open file descriptor.
-/// Phase 1: not implemented — returns -1 / ENOSYS.
 #[no_mangle]
-pub unsafe extern "C" fn lseek(_fd: i32, _offset: i64, _whence: i32) -> i64 {
-    set_errno(ENOSYS);
-    -1
+pub unsafe extern "C" fn lseek(fd: i32, offset: i64, whence: i32) -> i64 {
+    match libc_lseek(Fd(fd as u32), offset, whence as u64) {
+        Ok(pos) => pos as i64,
+        Err(e) => {
+            crate::errno::set_from_errno(e);
+            -1
+        }
+    }
 }
 
 /// Get file status by open file descriptor.
-/// Phase 1: not implemented — returns -1 / ENOSYS.
 #[no_mangle]
-pub unsafe extern "C" fn fstat(_fd: i32, _out: *mut Stat) -> i32 {
-    set_errno(ENOSYS);
-    -1
+pub unsafe extern "C" fn fstat(fd: i32, out: *mut Stat) -> i32 {
+    if out.is_null() {
+        set_errno(EINVAL);
+        return -1;
+    }
+
+    match libc_fstat(Fd(fd as u32)) {
+        Ok(stat) => {
+            core::ptr::write(out, stat);
+            0
+        }
+        Err(e) => {
+            crate::errno::set_from_errno(e);
+            -1
+        }
+    }
 }
 
 /// Test whether an open file descriptor refers to a terminal.

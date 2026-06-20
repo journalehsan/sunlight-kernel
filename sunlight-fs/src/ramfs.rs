@@ -520,6 +520,7 @@ max_ttys = 6
     RamEntry::file("/bin/sunlight-sunsay", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-sunsay\n"),
     RamEntry::file("/bin/z", 0, 0, mode::FILE_755, b"#!/sunlight/z\n"),
     RamEntry::file("/bin/dict", 0, 0, mode::FILE_755, b"#!/sunlight/dict\n"),
+    RamEntry::file("/bin/hangman", 0, 0, mode::FILE_755, b"#!/sunlight/hangman\n"),
     RamEntry::file("/bin/sunlight-kvctl", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-kvctl\n"),
     RamEntry::file("/bin/certificatectl", 0, 0, mode::FILE_755, b"#!/sunlight/certificatectl\n"),
     // sunlight-sm binary stub (real ELF embedded in kernel for spawn; entry for FS visibility/stat)
@@ -624,6 +625,7 @@ StandardOutput=journal\nStandardError=journal\n\n\
     RamEntry::file("/usr/bin/tzctl", 0, 0, mode::FILE_755, b"#!/sunlight/tzctl\n"),
     RamEntry::file("/usr/bin/top", 0, 0, mode::FILE_755, b"#!/sunlight/top\n"),
     RamEntry::file("/usr/bin/fetch", 0, 0, mode::FILE_755, b"#!/sunlight/fetch\n"),
+    RamEntry::file("/usr/bin/hangman", 0, 0, mode::FILE_755, b"#!/sunlight/hangman\n"),
 ];
 
 #[cfg(test)]

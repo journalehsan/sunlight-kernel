@@ -109,6 +109,9 @@ static SUNLIGHT_ZOXIDE_ELF_BYTES: &[u8] =
 // sunlight-dict: offline dictionary lookup (Phase 3 std validation).
 static SUNLIGHT_DICT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/dict");
+// sunlight-hangman: interactive no_std smoke test for stdin/stdout/libc.
+static SUNLIGHT_HANGMAN_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/hangman");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;

@@ -71,6 +71,13 @@ The file content is a cosmetic marker — resolution is path-based via spot 4 �
 the entry **must exist** or the command is reported as not found. Add `/bin/...`;
 add `/usr/bin/...` too only if you want it reachable there as well.
 
+For `sunlight-hangman`, wire both PATH-visible locations so the shell can find
+it no matter which directory comes first:
+```rust
+RamEntry::file("/bin/hangman", 0, 0, mode::FILE_755, b"#!/sunlight/hangman\n"),
+RamEntry::file("/usr/bin/hangman", 0, 0, mode::FILE_755, b"#!/sunlight/hangman\n"),
+```
+
 ### 6. Service unit + spawn — `services/sunlightd/src/main.rs`  *(daemons)*
 For a daemon that `sunlightd` should launch, add a unit string in `load_units()`
 (with `ExecStart=/sbin/<name>`, plus `After=`/`Requires=` as needed) **and** add

@@ -24,7 +24,7 @@ pub mod mem;
 /// Phase 1 allocator: static bump allocator + C ABI malloc/free/realloc/calloc.
 /// Enable `#[global_allocator]` for the `alloc` crate via the `global-alloc` feature.
 pub mod alloc;
-/// File descriptor helpers: `lseek`, `fstat`, `isatty` stubs.
+/// File descriptor helpers: `lseek`, `fstat`, `isatty`.
 pub mod fd;
 /// Minimal time support: `clock_gettime` backed by `sysinfo`.
 pub mod time;
@@ -51,6 +51,9 @@ pub const O_RDWR: u64 = 0x2;
 pub const O_CREAT: u64 = 0x40;
 pub const O_TRUNC: u64 = 0x200;
 pub const O_APPEND: u64 = 0x400;
+pub const SEEK_SET: u64 = 0;
+pub const SEEK_CUR: u64 = 1;
+pub const SEEK_END: u64 = 2;
 
 /// Copy `bytes` into `buf` as a NUL-terminated C string.
 fn cstr<'a>(buf: &'a mut [u8], bytes: &[u8]) -> Result<*const u8, Errno> {
@@ -108,6 +111,19 @@ pub fn write(fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
         )
     };
     sys::check(ret).map(|n| n as usize)
+}
+
+pub fn lseek(fd: Fd, offset: i64, whence: u64) -> Result<u64, Errno> {
+    let ret = unsafe { sys::syscall3(sys::SYS_LSEEK, fd.0 as u64, offset as u64, whence) };
+    sys::check(ret)
+}
+
+pub fn fstat(fd: Fd) -> Result<Stat, Errno> {
+    let mut out = Stat::zeroed();
+    let ret = unsafe {
+        sys::syscall2(sys::SYS_FSTAT, fd.0 as u64, (&mut out as *mut Stat) as u64)
+    };
+    sys::check(ret).map(|_| out)
 }
 
 /// Replace the current process image. On success the kernel switches to the
@@ -221,6 +237,20 @@ pub struct Stat {
     pub file_type: u8,
     _pad: u8,
     pub nlinks: u32,
+}
+
+impl Stat {
+    pub const fn zeroed() -> Self {
+        Self {
+            size: 0,
+            uid: 0,
+            gid: 0,
+            mode: 0,
+            file_type: 0,
+            _pad: 0,
+            nlinks: 0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

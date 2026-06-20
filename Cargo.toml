@@ -41,6 +41,7 @@ members = [
     "std-proof/sunlight-sunsay",
     "std-proof/sunlight-zoxide",
     "std-proof/sunlight-dict",
+    "sunlight-hangman",
 ]
 
 [workspace.dependencies]
