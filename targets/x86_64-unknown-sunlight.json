@@ -1,0 +1,43 @@
+{
+  "comment": [
+    "SunlightOS native userland target (Phase 1).",
+    "",
+    "This target is used for documentation and future -Z build-std use.",
+    "Phase 1 binaries are built against x86_64-unknown-none with RUSTFLAGS",
+    "pointing at services/user-space.ld; this JSON describes the intended ABI.",
+    "",
+    "ABI notes:",
+    "  - Entry symbol: _start (see sunlight_libc::crt0 for register convention)",
+    "  - argc in rdi, argv in rsi, envp in rdx",
+    "  - Stack 16-byte aligned at entry; argc also placed at [rsp]",
+    "  - No dynamic linking; all binaries are statically linked",
+    "  - No red zone (kernel syscall entry does not guarantee red zone safety)",
+    "  - SSE/MMX disabled (kernel runs with soft-float RUSTFLAGS)",
+    "  - panic=abort (no unwinding runtime)"
+  ],
+  "llvm-target": "x86_64-unknown-none",
+  "arch": "x86_64",
+  "os": "sunlight",
+  "vendor": "unknown",
+  "env": "",
+  "target-endian": "little",
+  "target-pointer-width": "64",
+  "target-c-int-width": "32",
+  "data-layout": "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
+  "executables": true,
+  "linker-flavor": "ld.lld",
+  "linker": "rust-lld",
+  "pre-link-args": {
+    "ld.lld": ["-Tservices/user-space.ld"]
+  },
+  "panic-strategy": "abort",
+  "disable-redzone": true,
+  "features": "-mmx,-sse,+soft-float",
+  "relocation-model": "static",
+  "code-model": "small",
+  "dynamic-linking": false,
+  "position-independent-executables": false,
+  "needs-plt": false,
+  "has-rpath": false,
+  "is-builtin": false
+}

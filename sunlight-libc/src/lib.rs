@@ -7,8 +7,25 @@
 //! error; `u64::MAX - 1` means try again (EAGAIN). Syscall numbers must stay
 //! in sync with `SunlightSyscall` in `kernel/src/arch/x86_64/syscall.rs`.
 
+// ── Core syscall layer ───────────────────────────────────────────────────────
 pub mod rand;
 pub mod sys;
+
+// ── libc extension modules ───────────────────────────────────────────────────
+
+/// Program startup ABI documentation and raw argv helpers.
+pub mod crt0;
+/// POSIX errno storage and `__errno_location()`.
+pub mod errno;
+/// Memory utility functions (memcpy, memmove, memset, memcmp).
+pub mod mem;
+/// Phase 1 allocator: static bump allocator + C ABI malloc/free/realloc/calloc.
+/// Enable `#[global_allocator]` for the `alloc` crate via the `global-alloc` feature.
+pub mod alloc;
+/// File descriptor helpers: `lseek`, `fstat`, `isatty` stubs.
+pub mod fd;
+/// Minimal time support: `clock_gettime` backed by `sysinfo`.
+pub mod time;
 
 pub use rand::{getrandom, GRND_NONCRYPTO};
 pub use sys::{Errno, EAGAIN_RAW, ERR_RAW};

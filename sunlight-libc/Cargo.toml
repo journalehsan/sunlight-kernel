@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-libc"
-version = "0.1.162"
+version = "0.1.169"
+
 
 
 
@@ -48,5 +49,12 @@ edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
+
+[features]
+# Enable #[global_allocator] for `extern crate alloc` (Vec, String, Box, …).
+# Only one crate in a binary may declare a global allocator, so this feature
+# must not be enabled in libraries — only in top-level binary crates.
+default = []
+global-alloc = []
 
 [lib]

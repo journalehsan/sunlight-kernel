@@ -1,0 +1,13 @@
+[package]
+name = "sunlight-sunsay"
+version = "0.1.169"
+
+edition = "2021"
+
+[[bin]]
+name = "sunlight-sunsay"
+path = "src/main.rs"
+
+[dependencies]
+# Enable the global allocator so we can use Vec<String> via `extern crate alloc`.
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc"] }
