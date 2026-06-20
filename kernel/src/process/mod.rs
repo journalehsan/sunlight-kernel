@@ -96,6 +96,9 @@ pub struct Process {
     /// route to that tab's kernel stdin/stdout rings (see process::tty_io).
     pub tty_tab: Option<u8>,
 
+    /// Saved Linux terminal settings for ioctl(TCGETS/TCSETS) emulation.
+    pub linux_termios: crate::arch::x86_64::syscall::LinuxTermios,
+
     /// Shared memory pages this process owns (via shm_alloc).
     pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedPage>,
     /// Shared memory pages this process currently has mapped via tokens (owner + receivers).
@@ -219,6 +222,7 @@ impl Process {
             aging_counter: 0,       // No aging yet
             wait_child: None,       // Not waiting on a child
             tty_tab: None,          // Attached to a TTY tab only when spawned for one
+            linux_termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
             wd_period_ticks: None,
@@ -358,6 +362,7 @@ impl Process {
             aging_counter: 0,
             wait_child: None,
             tty_tab,
+            linux_termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
             owned_shared: Vec::new(),
             mapped_shared: Vec::new(),
             wd_period_ticks: None,

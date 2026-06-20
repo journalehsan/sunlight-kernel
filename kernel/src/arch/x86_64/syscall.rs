@@ -1919,8 +1919,116 @@ fn sys_linux_sigaltstack(frame: &mut SyscallFrame) -> u64 {
     0
 }
 
-fn sys_linux_ioctl(_frame: &mut SyscallFrame) -> u64 {
-    linux_errno(25) // ENOTTY
+// ── Linux terminal ioctl constants ──────────────────────────────────────────
+const TCGETS: u64 = 0x5401;
+const TCSETS: u64 = 0x5402;
+const TCSETSW: u64 = 0x5403;
+const TCSETSF: u64 = 0x5404;
+const TIOCGWINSZ: u64 = 0x5413;
+const TIOCSWINSZ: u64 = 0x5414;
+
+pub const ICANON: u32 = 0x00000002;
+pub const ECHO: u32 = 0x00000008;
+
+/// Linux `struct termios` (x86-64 ABI).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LinuxTermios {
+    pub c_iflag: u32,
+    pub c_oflag: u32,
+    pub c_cflag: u32,
+    pub c_lflag: u32,
+    pub c_line: u8,
+    pub c_cc: [u8; 32],
+    pub c_ispeed: u32,
+    pub c_ospeed: u32,
+}
+
+impl LinuxTermios {
+    /// Sensible cooked-mode defaults (canonical + echo, 38400 baud).
+    pub const fn default_cooked() -> Self {
+        let mut cc = [0u8; 32];
+        cc[4] = 4;   // VEOF  = ^D
+        cc[7] = 0;   // VSTART
+        cc[8] = 0;   // VSTOP
+        cc[10] = 0;  // VEOL
+        Self {
+            c_iflag: 0x0500, // ICRNL | IXON
+            c_oflag: 0x0005, // OPOST | ONLCR
+            c_cflag: 0x00BF, // CS8 | CREAD | CLOCAL (B38400)
+            c_lflag: ICANON | ECHO | 0x8000, // ICANON | ECHO | ISIG
+            c_line: 0,
+            c_cc: cc,
+            c_ispeed: 15, // B38400
+            c_ospeed: 15,
+        }
+    }
+}
+
+/// Linux `struct winsize`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LinuxWinsize {
+    pub ws_row: u16,
+    pub ws_col: u16,
+    pub ws_xpixel: u16,
+    pub ws_ypixel: u16,
+}
+
+fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let request = frame.rsi;
+    let argp = frame.rdx;
+
+    match request {
+        TCGETS | TCSETS | TCSETSW | TCSETSF => {
+            // Only honour on stdin/stdout/stderr; any other fd is not a tty.
+            if fd != 0 && fd != 1 && fd != 2 {
+                return linux_errno(25); // ENOTTY
+            }
+            if !is_user_address(argp) {
+                return linux_errno(14); // EFAULT
+            }
+            if request == TCGETS {
+                let sched = crate::sched::SCHEDULER.lock();
+                let termios = sched.current_process().linux_termios;
+                drop(sched);
+                unsafe { core::ptr::write(argp as *mut LinuxTermios, termios); }
+            } else {
+                // TCSETS / TCSETSW / TCSETSF — all treated the same (no drain/flush needed)
+                let new_termios = unsafe { core::ptr::read(argp as *const LinuxTermios) };
+                let mut sched = crate::sched::SCHEDULER.lock();
+                let process = sched.current_process_mut();
+                let was_raw = (process.linux_termios.c_lflag & ICANON) == 0;
+                let is_raw  = (new_termios.c_lflag & ICANON) == 0;
+                process.linux_termios = new_termios;
+                if was_raw != is_raw {
+                    crate::serial_println!(
+                        "[HELIOS] TTY mode → {} (pid={})",
+                        if is_raw { "raw" } else { "cooked" },
+                        process.pid
+                    );
+                }
+            }
+            0
+        }
+        TIOCGWINSZ => {
+            if !is_user_address(argp) {
+                return linux_errno(14); // EFAULT
+            }
+            let ws = LinuxWinsize { ws_row: 25, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0 };
+            unsafe { core::ptr::write(argp as *mut LinuxWinsize, ws); }
+            0
+        }
+        TIOCSWINSZ => {
+            // Accept but ignore; we have a fixed 80×25 terminal for now.
+            0
+        }
+        _ => {
+            crate::serial_println!("[HELIOS] Unhandled ioctl fd={} req={:#x}", fd, request);
+            linux_errno(22) // EINVAL
+        }
+    }
 }
 
 #[repr(C)]

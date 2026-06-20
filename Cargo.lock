@@ -174,7 +174,7 @@ dependencies = [
 
 [[package]]
 name = "certificatectl"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -985,7 +985,7 @@ dependencies = [
 
 [[package]]
 name = "rand_service"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
 ]
@@ -1334,40 +1334,40 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sunlight-block"
-version = "0.1.205"
+version = "0.1.206"
 
 [[package]]
 name = "sunlight-compat-linux"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
 ]
 
 [[package]]
 name = "sunlight-dict"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-drivers"
-version = "0.1.205"
+version = "0.1.206"
 
 [[package]]
 name = "sunlight-elf"
-version = "0.1.205"
+version = "0.1.206"
 
 [[package]]
 name = "sunlight-fat"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-block",
 ]
 
 [[package]]
 name = "sunlight-fetch"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "log",
  "rustls",
@@ -1379,7 +1379,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-fs"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-block",
  "sunlight-fat",
@@ -1387,7 +1387,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-gcd"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1395,25 +1395,25 @@ dependencies = [
 
 [[package]]
 name = "sunlight-hangman"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-init"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-ipc"
-version = "0.1.205"
+version = "0.1.206"
 
 [[package]]
 name = "sunlight-kernel"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
  "limine",
@@ -1434,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-kv"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "bincode",
  "crc32fast",
@@ -1451,7 +1451,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-kvctl"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "bincode",
  "heapless",
@@ -1465,14 +1465,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-libc"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-net"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "log",
  "smoltcp",
@@ -1483,7 +1483,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-server"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "smoltcp",
  "sunlight-ipc",
@@ -1493,7 +1493,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-utils"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -1501,7 +1501,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-niced"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1510,7 +1510,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-sm"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1519,28 +1519,28 @@ dependencies = [
 
 [[package]]
 name = "sunlight-sunsay"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-timed"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-timer-server"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-tls"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "getrandom 0.2.17",
  "heapless",
@@ -1554,14 +1554,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-top"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-tty"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -1570,7 +1570,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tty-server"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -1580,18 +1580,18 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tui"
-version = "0.1.205"
+version = "0.1.206"
 
 [[package]]
 name = "sunlight-tz"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-uac"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1600,14 +1600,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-utils"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-vfs-server"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-fat",
  "sunlight-fs",
@@ -1616,18 +1616,18 @@ dependencies = [
 
 [[package]]
 name = "sunlight-virtio"
-version = "0.1.205"
+version = "0.1.206"
 
 [[package]]
 name = "sunlight-zoxide"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlightctl"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1636,7 +1636,7 @@ dependencies = [
 
 [[package]]
 name = "sunlightd"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "heapless",
  "sunlight-fs",
@@ -1645,7 +1645,7 @@ dependencies = [
 
 [[package]]
 name = "sunshell"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "libm",
  "sunlight-ipc",
@@ -1699,7 +1699,7 @@ dependencies = [
 
 [[package]]
 name = "timezone_service"
-version = "0.1.205"
+version = "0.1.206"
 dependencies = [
  "sunlight-ipc",
  "sunlight-tz",

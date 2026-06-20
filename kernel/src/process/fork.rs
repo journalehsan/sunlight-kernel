@@ -129,6 +129,7 @@ pub fn fork_current_process(
             aging_counter: 0,      // No aging yet
             wait_child: None,      // Not waiting on a child
             tty_tab: None,         // fork() children are not part of the TTY spawn flow
+            linux_termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
             wd_period_ticks: None,
@@ -240,6 +241,7 @@ fn sys_fork(
             aging_counter: 0,                        // No aging yet
             wait_child: None,                        // Not waiting on a child
             tty_tab: None, // fork() children are not part of the TTY spawn flow
+            linux_termios: parent.linux_termios,     // inherit terminal settings from parent
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
             wd_period_ticks: None,
