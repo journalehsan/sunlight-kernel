@@ -61,6 +61,13 @@ static GDT: spin::Lazy<(GlobalDescriptorTable, Selectors)> = spin::Lazy::new(|| 
     )
 });
 
+pub fn set_tss_rsp0(stack_top: u64) {
+    unsafe {
+        let tss_ptr = &*TSS as *const TaskStateSegment as *mut TaskStateSegment;
+        (*tss_ptr).privilege_stack_table[0] = VirtAddr::new(stack_top);
+    }
+}
+
 /// Initialize IDT, GDT, PIC, and PIT.
 pub fn init() {
     serial_println!("[IDT] Loading interrupt descriptor table...");
@@ -126,6 +133,22 @@ pub fn init() {
 
     serial_println!("[IDT] PIC remapped, timer IRQ0 enabled at ~100Hz");
     serial_println!("[IDT] OK");
+}
+
+fn is_user_frame(stack_frame: &InterruptStackFrame) -> bool {
+    stack_frame.code_segment.0 & 0x3 == 0x3
+}
+
+fn terminate_current_user_process(reason: &str, code: i32) -> ! {
+    let kstack_top = crate::sched::finish_current_process(code, reason);
+    crate::sched::request_reschedule();
+
+    unsafe {
+        if kstack_top != 0 {
+            core::arch::asm!("mov rsp, {}", in(reg) kstack_top);
+        }
+        core::arch::asm!("sti", "2:", "hlt", "jmp 2b", options(noreturn),);
+    }
 }
 
 fn io_wait() {
@@ -286,6 +309,9 @@ extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame)
         0u64
     );
     serial_println!("[INT] Divide Error: {:?}", stack_frame);
+    if is_user_frame(&stack_frame) {
+        terminate_current_user_process("divide-error", 128 + 8);
+    }
     loop {
         x86_64::instructions::hlt();
     }
@@ -303,6 +329,9 @@ extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFram
         0u64
     );
     serial_println!("[INT] Invalid Opcode: {:?}", stack_frame);
+    if is_user_frame(&stack_frame) {
+        terminate_current_user_process("invalid-opcode", 128 + 4);
+    }
     loop {
         x86_64::instructions::hlt();
     }
@@ -343,6 +372,9 @@ extern "x86-interrupt" fn gpf_handler(stack_frame: InterruptStackFrame, error_co
         stack_frame,
         error_code
     );
+    if is_user_frame(&stack_frame) {
+        terminate_current_user_process("general-protection", 128 + 11);
+    }
     loop {
         x86_64::instructions::hlt();
     }
@@ -383,6 +415,9 @@ extern "x86-interrupt" fn page_fault_handler(
 
     // Not a CoW fault — unrecoverable
     serial_println!("[FAULT] Page Fault at {:#x}: code={:?}", vaddr, error_code);
+    if is_user_frame(&_stack_frame) {
+        terminate_current_user_process("page-fault", 128 + 11);
+    }
     loop {
         x86_64::instructions::hlt();
     }
@@ -721,10 +756,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 // SAFETY: timer handler runs with interrupts disabled; no concurrent TSS access.
                 // Note: ltr is NOT needed here — the CPU reads RSP0 from the TSS memory
                 // on each privilege-level stack switch. We only need to update the TSS contents.
-                unsafe {
-                    let tss_ptr = &*TSS as *const TaskStateSegment as *mut TaskStateSegment;
-                    (*tss_ptr).privilege_stack_table[0] = VirtAddr::new(next_stack_top);
-                }
+                set_tss_rsp0(next_stack_top);
 
                 next_rsp
             } else {

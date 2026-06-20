@@ -1149,6 +1149,60 @@ pub fn note_process_finished(pid: usize, name: &str) {
     serial_println!("[SCHED] FINISHED process pid={} name='{}'", pid, name);
 }
 
+/// Mark the current process finished and release resources shared with the
+/// normal exit path. Returns the process kernel stack top for the final idle
+/// loop before the timer switches away.
+pub fn finish_current_process(code: i32, reason: &str) -> u64 {
+    let mut sched = SCHEDULER.lock();
+    if sched.current >= sched.processes.len() {
+        return 0;
+    }
+
+    let cur = sched.current;
+    let kstack_top = sched.processes[cur].kernel_stack_top;
+    if sched.processes[cur].state == crate::process::ProcessState::Finished {
+        return kstack_top;
+    }
+
+    sched.account_current_runtime();
+    {
+        let process = &mut sched.processes[cur];
+        process.exit_code = code;
+        process.state = crate::process::ProcessState::Finished;
+    }
+    sched.remove_from_ready_queues(cur);
+
+    let my_pid = sched.processes[cur].pid;
+    let parent_pid = sched.processes[cur].ppid;
+    crate::memory::swap::untrack_process(my_pid);
+    serial_println!(
+        "[SCHED] terminating pid={} name='{}' reason={}",
+        my_pid,
+        sched.processes[cur].name_str(),
+        reason
+    );
+    note_process_finished(my_pid, sched.processes[cur].name_str());
+
+    {
+        let mut pmm = crate::PMM.lock();
+        let mut caps = crate::capability::CAP_BROKER.lock();
+        crate::memory::shared::cleanup_shared_pages(
+            &mut sched.processes[cur],
+            &mut *pmm,
+            &mut *caps,
+        );
+    }
+
+    let parent_waiting = sched
+        .process_mut_by_pid(parent_pid)
+        .is_some_and(|parent| parent.wait_child == Some(my_pid));
+    if parent_waiting {
+        sched.wake_pid(parent_pid);
+    }
+
+    kstack_top
+}
+
 /// Global scheduler instance.
 pub static SCHEDULER: spin::Mutex<Scheduler> = spin::Mutex::new(Scheduler::new());
 
@@ -1163,7 +1217,7 @@ where
 /// Enter the first ready user process without holding the scheduler lock across
 /// the privilege transition.
 pub fn enter_first_process() -> ! {
-    let (rsp, pml4_phys, fs_base) = {
+    let (rsp, pml4_phys, fs_base, kernel_stack_top) = {
         let mut sched = SCHEDULER.lock();
         let mut first = None;
         for (i, p) in sched.processes.iter().enumerate() {
@@ -1188,13 +1242,14 @@ pub fn enter_first_process() -> ! {
             let rsp = sched.processes[idx].context_rsp;
             let pml4_phys = sched.processes[idx].address_space.pml4_phys;
             let fs_base = sched.processes[idx].fs_base;
+            let kernel_stack_top = sched.processes[idx].kernel_stack_top;
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",
                 idx,
                 sched.processes[idx].name_str(),
                 rsp
             );
-            (rsp, pml4_phys, fs_base)
+            (rsp, pml4_phys, fs_base, kernel_stack_top)
         } else {
             serial_println!("[SCHED] No user processes, entering idle");
             drop(sched);
@@ -1208,6 +1263,7 @@ pub fn enter_first_process() -> ! {
             x86_64::registers::control::Cr3Flags::empty(),
         );
         x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);
+        crate::arch::x86_64::interrupts::set_tss_rsp0(kernel_stack_top);
         context::iretq_to_context(rsp);
     }
 }

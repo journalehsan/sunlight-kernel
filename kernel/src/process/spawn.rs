@@ -361,6 +361,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/hangman" | "/usr/bin/hangman" | "/usr/local/bin/hangman" => {
             Ok(crate::SUNLIGHT_HANGMAN_ELF_BYTES)
         }
+        // hello-linux: musl Rust binary for Helios Linux-compat smoke test.
+        "/bin/hello-linux" | "/usr/bin/hello-linux" => Ok(crate::HELLO_LINUX_ELF_BYTES),
         // Phase 6.5 Step 3: PATH entries under these directories are applets
         // of the embedded multi-call binaries (argv[0] picks the applet).
         p if p.starts_with("/sunlight-utils/") => Ok(crate::SUNLIGHT_UTILS_ELF_BYTES),

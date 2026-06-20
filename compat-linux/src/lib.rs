@@ -71,9 +71,7 @@ impl PermissionMode {
     }
 
     pub const fn allows(self, rhs: Self) -> bool {
-        (!rhs.read || self.read)
-            && (!rhs.write || self.write)
-            && (!rhs.execute || self.execute)
+        (!rhs.read || self.read) && (!rhs.write || self.write) && (!rhs.execute || self.execute)
     }
 }
 
@@ -103,9 +101,7 @@ impl<const N: usize> RuleSet<N> {
     }
 
     pub fn add_rule(&mut self, rule: PathRule) -> Result<(), Error> {
-        self.rules
-            .push(rule)
-            .map_err(|_| Error::RuleNotFound)
+        self.rules.push(rule).map_err(|_| Error::RuleNotFound)
     }
 }
 
@@ -171,9 +167,13 @@ impl<const U: usize, const G: usize, const R: usize> RuleIndex<U, G, R> {
     }
 
     pub fn lookup_metadata(&self, path: &str) -> Option<PathMetadata> {
-        self.metadata
-            .iter()
-            .find_map(|(p, meta)| if p.as_str() == path { Some(*meta) } else { None })
+        self.metadata.iter().find_map(|(p, meta)| {
+            if p.as_str() == path {
+                Some(*meta)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn has_access(&self, uid: u32, gid: u32, path: &str, requested: PermissionMode) -> bool {
@@ -344,47 +344,52 @@ pub fn init_phase3_demo_rules() {
 pub fn translate_syscall(linux_nr: u64) -> i64 {
     match linux_nr {
         // Tier 1: minimal I/O (needed for all musl programs)
-        0 => 42,    // read → SunlightOS Read(42)
-        1 => 43,    // write → SunlightOS Write(43)
-        2 => 40,    // open → SunlightOS Open(40)
-        3 => 41,    // close → SunlightOS Close(41)
-        60 => -1,   // exit(code) → special handling (process termination)
-        231 => -1,  // exit_group(code) → special handling
+        0 => 42,   // read → SunlightOS Read(42)
+        1 => 43,   // write → SunlightOS Write(43)
+        2 => 40,   // open → SunlightOS Open(40)
+        3 => 41,   // close → SunlightOS Close(41)
+        7 => -7,   // poll → special bounded readiness stub
+        60 => -1,  // exit(code) → special handling (process termination)
+        231 => -1, // exit_group(code) → special handling
 
         // Tier 2: file descriptor operations
-        5 => 48,    // fstat → SunlightOS Fstat(48)
-        8 => 44,    // lseek → SunlightOS Lseek(44)
-        32 => 46,   // dup2 → SunlightOS Dup2(46)
+        5 => 48,  // fstat → SunlightOS Fstat(48)
+        8 => 44,  // lseek → SunlightOS Lseek(44)
+        32 => 46, // dup2 → SunlightOS Dup2(46)
 
         // Tier 3: process management
-        39 => 33,   // getpid → SunlightOS Getpid(33)
-        57 => 30,   // fork → SunlightOS Fork(30)
-        59 => 31,   // execve → SunlightOS Exec(31)
-        61 => 32,   // wait4 → SunlightOS Waitpid(32)
+        39 => 33,  // getpid → SunlightOS Getpid(33)
+        186 => 33, // gettid → current pid as single-thread tid
+        57 => 30,  // fork → SunlightOS Fork(30)
+        59 => 31,  // execve → SunlightOS Exec(31)
+        61 => 32,  // wait4 → SunlightOS Waitpid(32)
+        218 => -4, // set_tid_address → special single-thread emulation
+        273 => -5, // set_robust_list → accepted no-op for musl startup
+        334 => -6, // rseq → Linux ENOSYS so libc disables rseq
 
         // Tier 4: memory management
-        9 => 50,    // mmap → SunlightOS Mmap(50)
-        11 => 51,   // munmap → SunlightOS Munmap(51)
-        12 => -2,   // brk → special handling
-        10 => 52,   // mprotect → SunlightOS Mprotect(52)
-        158 => -3,  // arch_prctl → special handling for TLS setup
+        9 => 50,   // mmap → SunlightOS Mmap(50)
+        11 => 51,  // munmap → SunlightOS Munmap(51)
+        12 => -2,  // brk → special handling
+        10 => 52,  // mprotect → SunlightOS Mprotect(52)
+        158 => -3, // arch_prctl → special handling for TLS setup
 
         // Tier 5: signals
-        13 => 72,   // kill → SunlightOS Kill(72)
-        14 => 71,   // sigprocmask → SunlightOS Sigprocmask(71)
+        13 => 72, // kill → SunlightOS Kill(72)
+        14 => 71, // sigprocmask → SunlightOS Sigprocmask(71)
 
         // Process information
-        4 => 48,    // stat → Fstat (approximation)
-        6 => 48,    // lstat → Fstat (approximation)
+        4 => 48, // stat → Fstat (approximation)
+        6 => 48, // lstat → Fstat (approximation)
 
         // Default: unsupported
-        _ => -38,   // ENOSYS
+        _ => -38, // ENOSYS
     }
 }
 
 /// Helper to determine if a syscall requires special handling.
 pub fn needs_special_handling(linux_nr: u64) -> bool {
-    matches!(linux_nr, 60 | 231 | 12 | 158) // exit, exit_group, brk, arch_prctl
+    matches!(linux_nr, 7 | 60 | 231 | 12 | 158 | 218 | 273 | 334)
 }
 
 #[cfg(test)]
@@ -398,6 +403,11 @@ mod tests {
         assert_eq!(translate_syscall(60), -1); // exit
         assert_eq!(translate_syscall(12), -2); // brk
         assert_eq!(translate_syscall(158), -3); // arch_prctl
+        assert_eq!(translate_syscall(186), 33); // gettid
+        assert_eq!(translate_syscall(218), -4); // set_tid_address
+        assert_eq!(translate_syscall(273), -5); // set_robust_list
+        assert_eq!(translate_syscall(334), -6); // rseq
+        assert_eq!(translate_syscall(7), -7); // poll
     }
 
     #[test]
@@ -409,6 +419,10 @@ mod tests {
     fn special_handling_is_flagged() {
         assert!(needs_special_handling(12));
         assert!(needs_special_handling(158));
+        assert!(needs_special_handling(218));
+        assert!(needs_special_handling(273));
+        assert!(needs_special_handling(334));
+        assert!(needs_special_handling(7));
         assert!(!needs_special_handling(1));
     }
 

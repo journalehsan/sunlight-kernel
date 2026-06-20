@@ -17,12 +17,12 @@ mod process;
 mod sched;
 mod telemetry;
 
-use arch::x86_64::{acpi, interrupts, serial, syscall, keyboard};
+use arch::x86_64::{acpi, cpu, interrupts, keyboard, serial, syscall};
 use memory::{heap, pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
 use process::{layout, Process};
 use x86_64::{
-    PhysAddr, VirtAddr,
     structures::paging::{Page, PageTableFlags, PhysFrame},
+    PhysAddr, VirtAddr,
 };
 
 static PMM: spin::Mutex<PhysicalMemoryManager> = spin::Mutex::new(PhysicalMemoryManager::new());
@@ -58,8 +58,7 @@ static TIMEZONE_SERVICE_ELF_BYTES: &[u8] =
 // Random service (ChaCha20 CSPRNG) launched by sunlightd.
 static RAND_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/rand_service");
-static SUNSHELL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sshl");
+static SUNSHELL_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/sshl");
 // Phase 6.5 Step 3: busybox-style multi-call userland binaries. PATH entries
 // under /sunlight-utils and /sunlight-net-utils all exec one of these; the
 // applet is selected by argv[0].
@@ -95,8 +94,7 @@ static UAC_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
 static CAPABILITYCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
-static RUNAS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/runas");
+static RUNAS_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/runas");
 // Storage Manager (sunlight-sm) for controlled protected writes.
 static SUNLIGHT_SM_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sm");
@@ -112,6 +110,8 @@ static SUNLIGHT_DICT_ELF_BYTES: &[u8] =
 // sunlight-hangman: interactive no_std smoke test for stdin/stdout/libc.
 static SUNLIGHT_HANGMAN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/hangman");
+// hello-linux: static musl Rust binary for Helios Linux-compat smoke test.
+static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-linux.elf");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -125,10 +125,14 @@ pub extern "C" fn _start() -> ! {
     x86_64::instructions::interrupts::disable();
 
     serial::init();
+    cpu::init_cpu_features();
 
     // Initialize TUI from framebuffer (before PMM, no heap needed)
     let fb_resp = FB_REQ.response().expect("no framebuffer");
-    let fb = fb_resp.framebuffers().first().expect("no framebuffer available");
+    let fb = fb_resp
+        .framebuffers()
+        .first()
+        .expect("no framebuffer available");
     let mut splash = unsafe {
         sunlight_tui::SplashScreen::init(
             fb.address() as *mut u32,
@@ -136,7 +140,7 @@ pub extern "C" fn _start() -> ! {
             fb.height as u32,
             fb.pitch as u32,
             sunlight_tui::BootMode::Debug,
-            0,  // RAM unknown yet, updated after PMM
+            0, // RAM unknown yet, updated after PMM
         )
     };
 
@@ -156,7 +160,9 @@ pub extern "C" fn _start() -> ! {
     let hhdm_offset = VirtAddr::new(hhdm_response.offset);
     {
         let mut pmm = PMM.lock();
-        unsafe { pmm.init(entries); }
+        unsafe {
+            pmm.init(entries);
+        }
         let (total, free) = pmm.stats();
         serial_println!("[PMM] {}/{} MiB free", free * 4 / 1024, total * 4 / 1024);
         splash.set_ram((total * 4 / 1024) as u32);
@@ -166,7 +172,7 @@ pub extern "C" fn _start() -> ! {
     memory::zram::init();
     serial_println!("[PMM] OK");
     splash.log("[PMM] OK");
-    splash.set_progress(100);  // 10%
+    splash.set_progress(100); // 10%
     splash.redraw();
 
     // 2. VMM
@@ -177,16 +183,14 @@ pub extern "C" fn _start() -> ! {
     let mut vmm = unsafe { VirtualMemoryManager::init(hhdm_offset) };
     serial_println!("[VMM] OK");
     splash.log("[VMM] OK");
-    splash.set_progress(200);  // 20%
+    splash.set_progress(200); // 20%
     splash.redraw();
 
     // 2.5. ACPI
     splash.set_status("Discovering ACPI power management");
     splash.log("[ACPI] Initializing...");
     splash.redraw();
-    let rsdp_phys = RSDP_REQ.response()
-        .map(|r| r.address as u64)
-        .unwrap_or(0);
+    let rsdp_phys = RSDP_REQ.response().map(|r| r.address as u64).unwrap_or(0);
     if let Err(e) = unsafe { acpi::init(rsdp_phys) } {
         serial_println!("[ACPI] Warning: initialization failed: {}", e);
         splash.log("[ACPI] Warning: initialization failed");
@@ -194,7 +198,7 @@ pub extern "C" fn _start() -> ! {
         serial_println!("[ACPI] OK");
         splash.log("[ACPI] OK");
     }
-    splash.set_progress(250);  // 25%
+    splash.set_progress(250); // 25%
     splash.redraw();
 
     // 3. IDT + PIC + PIT
@@ -206,7 +210,7 @@ pub extern "C" fn _start() -> ! {
     splash.log("[IDT] OK");
     arch::x86_64::rtc::init();
     splash.log("[RTC] OK");
-    splash.set_progress(300);  // 30%
+    splash.set_progress(300); // 30%
     splash.redraw();
 
     // 4. Heap
@@ -228,7 +232,7 @@ pub extern "C" fn _start() -> ! {
     }
     serial_println!("[HEAP] OK");
     splash.log("[HEAP] OK");
-    splash.set_progress(400);  // 40%
+    splash.set_progress(400); // 40%
     splash.redraw();
 
     // Perform a tiny smoke-fill so swap space is visible from day 1 in
@@ -253,14 +257,14 @@ pub extern "C" fn _start() -> ! {
     }
     serial_println!("[SYSCALL] OK");
     splash.log("[SYSCALL] OK");
-    splash.set_progress(500);  // 50%
+    splash.set_progress(500); // 50%
     splash.redraw();
 
     // 7. Capability broker
     splash.set_status("Initializing capability broker");
     serial_println!("[CAP]  Capability broker initialized");
     splash.log("[CAP] Capability broker initialized");
-    splash.set_progress(600);  // 60%
+    splash.set_progress(600); // 60%
     splash.redraw();
     capability::init_token_seed();
 
@@ -281,7 +285,7 @@ pub extern "C" fn _start() -> ! {
     serial_println!("[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait");
     serial_println!("[IPC]  Fastpath check: enabled (stub)");
     splash.log("[IPC] IPC bus initialized");
-    splash.set_progress(700);  // 70%
+    splash.set_progress(700); // 70%
     splash.redraw();
 
     // KBD — initialize PS/2 keyboard
@@ -291,7 +295,7 @@ pub extern "C" fn _start() -> ! {
     splash.redraw();
     keyboard::init();
     splash.log("[KBD] OK");
-    splash.set_progress(750);  // 75%
+    splash.set_progress(750); // 75%
     splash.redraw();
 
     // Set up key injection for test automation (when feature is enabled)
@@ -305,10 +309,11 @@ pub extern "C" fn _start() -> ! {
     splash.redraw();
     {
         let mut pmm = PMM.lock();
-        let mut init = unsafe {
-            Process::new(1, 0, "init", &mut pmm, hhdm_offset)
-        };
-        serial_println!("[PROC] Loading init ELF ({} bytes)...", INIT_ELF_BYTES.len());
+        let mut init = unsafe { Process::new(1, 0, "init", &mut pmm, hhdm_offset) };
+        serial_println!(
+            "[PROC] Loading init ELF ({} bytes)...",
+            INIT_ELF_BYTES.len()
+        );
         let entry = process::elf_loader::load_elf(INIT_ELF_BYTES, &mut init, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
             let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
@@ -316,17 +321,22 @@ pub extern "C" fn _start() -> ! {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
                 let frame_addr = pmm.alloc_frame().expect("stack alloc");
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let phys = unsafe {
+                    x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
+                };
                 let flags = x86_64::structures::paging::PageTableFlags::PRESENT
                     | x86_64::structures::paging::PageTableFlags::WRITABLE
                     | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
                 unsafe {
-                    init.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                    init.address_space
+                        .map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
             }
             init.init_context(entry, layout::USER_STACK_TOP);
             init.set_initial_args(capability::SPAWN_TOKEN.0, 0, 0, 0);
-            sched::with_scheduler(|s| { s.add_process(init); });
+            sched::with_scheduler(|s| {
+                s.add_process(init);
+            });
             splash.log("[PROC] init pid=1");
         } else {
             serial_println!("[PROC] Failed to load init ELF");
@@ -334,7 +344,7 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
-    splash.set_progress(800);  // 80%
+    splash.set_progress(800); // 80%
     splash.redraw();
 
     // 10. Spawn vfs_server (pid=3) with the FAT32 share page mapped
@@ -345,10 +355,9 @@ pub extern "C" fn _start() -> ! {
     {
         let mut pmm = PMM.lock();
         // SAFETY: hhdm_offset was provided by Limine and initialized before user process creation.
-        let mut vfs = unsafe {
-            Process::new(3, 0, "vfs_server", &mut pmm, hhdm_offset)
-        };
-        let entry = process::elf_loader::load_elf(VFS_SERVER_ELF_BYTES, &mut vfs, &mut pmm, hhdm_offset);
+        let mut vfs = unsafe { Process::new(3, 0, "vfs_server", &mut pmm, hhdm_offset) };
+        let entry =
+            process::elf_loader::load_elf(VFS_SERVER_ELF_BYTES, &mut vfs, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
             let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
             for i in 0..stack_pages {
@@ -356,13 +365,16 @@ pub extern "C" fn _start() -> ! {
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
                 let frame_addr = pmm.alloc_frame().expect("stack alloc");
                 // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let phys = unsafe {
+                    x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
+                };
                 let flags = x86_64::structures::paging::PageTableFlags::PRESENT
                     | x86_64::structures::paging::PageTableFlags::WRITABLE
                     | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
                 // SAFETY: page and frame are valid user-stack mappings for this process address space.
                 unsafe {
-                    vfs.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                    vfs.address_space
+                        .map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
             }
 
@@ -372,17 +384,24 @@ pub extern "C" fn _start() -> ! {
             {
                 let share_page = Page::from_start_address(VirtAddr::new(FAT_SHARE_VADDR))
                     .expect("FAT_SHARE_VADDR is not page-aligned");
-                let share_frame = unsafe {
-                    PhysFrame::from_start_address_unchecked(fat_share_phys)
-                };
+                let share_frame =
+                    unsafe { PhysFrame::from_start_address_unchecked(fat_share_phys) };
                 let share_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
                 unsafe {
-                    vfs.address_space.map_page(share_page, share_frame, share_flags, &mut pmm, hhdm_offset);
+                    vfs.address_space.map_page(
+                        share_page,
+                        share_frame,
+                        share_flags,
+                        &mut pmm,
+                        hhdm_offset,
+                    );
                 }
             }
 
             vfs.init_context(entry, layout::USER_STACK_TOP);
-            sched::with_scheduler(|s| { s.add_process(vfs); });
+            sched::with_scheduler(|s| {
+                s.add_process(vfs);
+            });
             splash.log("[PROC] vfs_server pid=3");
         } else {
             serial_println!("[PROC] Failed to load vfs_server ELF");
@@ -390,13 +409,13 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
-    splash.set_progress(900);  // 90%
+    splash.set_progress(900); // 90%
     splash.redraw();
 
     // NOTE: timer_server is no longer spawned by the kernel. It needs no
     // privileged memory setup, so init (pid=1) launches it via the spawn cap.
 
-    splash.set_progress(950);  // 95%
+    splash.set_progress(950); // 95%
     splash.redraw();
 
     // 12. Spawn tty_server (pid=4)
@@ -407,10 +426,9 @@ pub extern "C" fn _start() -> ! {
     {
         let mut pmm = PMM.lock();
         // SAFETY: hhdm_offset was provided by Limine and initialized before user process creation.
-        let mut tty = unsafe {
-            Process::new(4, 0, "tty_server", &mut pmm, hhdm_offset)
-        };
-        let entry = process::elf_loader::load_elf(TTY_SERVER_ELF_BYTES, &mut tty, &mut pmm, hhdm_offset);
+        let mut tty = unsafe { Process::new(4, 0, "tty_server", &mut pmm, hhdm_offset) };
+        let entry =
+            process::elf_loader::load_elf(TTY_SERVER_ELF_BYTES, &mut tty, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
             let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
             for i in 0..stack_pages {
@@ -418,13 +436,16 @@ pub extern "C" fn _start() -> ! {
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
                 let frame_addr = pmm.alloc_frame().expect("stack alloc");
                 // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
-                let phys = unsafe { x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr) };
+                let phys = unsafe {
+                    x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
+                };
                 let flags = x86_64::structures::paging::PageTableFlags::PRESENT
                     | x86_64::structures::paging::PageTableFlags::WRITABLE
                     | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
                 // SAFETY: page and frame are valid user-stack mappings for this process address space.
                 unsafe {
-                    tty.address_space.map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                    tty.address_space
+                        .map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
             }
             map_tty_framebuffer(
@@ -442,7 +463,9 @@ pub extern "C" fn _start() -> ! {
                 fb.height as u64,
                 fb.pitch as u64,
             );
-            sched::with_scheduler(|s| { s.add_process(tty); });
+            sched::with_scheduler(|s| {
+                s.add_process(tty);
+            });
             splash.log("[PROC] tty_server pid=4");
         } else {
             serial_println!("[PROC] Failed to load tty_server ELF");
@@ -450,7 +473,7 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
-    splash.set_progress(975);  // 97.5%
+    splash.set_progress(975); // 97.5%
     splash.redraw();
 
     // Ensure the kernel-owned virtio-net device is initialized for normal boots
@@ -459,9 +482,11 @@ pub extern "C" fn _start() -> ! {
     if NET_DEVICE.lock().is_none() {
         let net_init_result = {
             let mut pmm = PMM.lock();
-            let rx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+            let rx_q_phys = pmm
+                .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
                 .map(|f| f.as_u64());
-            let tx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+            let tx_q_phys = pmm
+                .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
                 .map(|f| f.as_u64());
             // Allocate multiple RX data buffers so the virtio device can have several
             // descriptors armed. This prevents packet loss ("net lost") while the
@@ -472,7 +497,15 @@ pub extern "C" fn _start() -> ! {
             let rx_buf3 = pmm.alloc_frame().map(|f| f.as_u64());
             let tx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
 
-            match (rx_q_phys, tx_q_phys, rx_buf0, rx_buf1, rx_buf2, rx_buf3, tx_buf_phys) {
+            match (
+                rx_q_phys,
+                tx_q_phys,
+                rx_buf0,
+                rx_buf1,
+                rx_buf2,
+                rx_buf3,
+                tx_buf_phys,
+            ) {
                 (Some(rp), Some(tp), Some(b0), Some(b1), Some(b2), Some(b3), Some(xp)) => {
                     let h = hhdm_offset.as_u64();
                     let rx_q_virt = h + rp;
@@ -511,7 +544,9 @@ pub extern "C" fn _start() -> ! {
                 *NET_DEVICE.lock() = Some(dev);
             }
             None => {
-                serial_println!("[NET]  virtio-net not found for frame proxy (no -device or alloc failure)");
+                serial_println!(
+                    "[NET]  virtio-net not found for frame proxy (no -device or alloc failure)"
+                );
             }
         }
     }
@@ -528,7 +563,7 @@ pub extern "C" fn _start() -> ! {
     // All service ELFs remain embedded (see *_ELF_BYTES above) and are resolved
     // for the spawn path by process::spawn::embedded_bytes_for_path.
 
-    splash.set_progress(1000);  // 100%
+    splash.set_progress(1000); // 100%
     splash.set_phase("Phase 3");
     splash.set_status("SunlightOS ready — login");
     splash.set_kernel_status("OK");
@@ -567,9 +602,11 @@ pub extern "C" fn _start() -> ! {
             // identity-mapped via HHDM for virt addresses.
             let net_init_result = {
                 let mut pmm = PMM.lock();
-                let rx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+                let rx_q_phys = pmm
+                    .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
                     .map(|f| f.as_u64());
-                let tx_q_phys = pmm.alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+                let tx_q_phys = pmm
+                    .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
                     .map(|f| f.as_u64());
                 // Allocate multiple RX data buffers (see first net init site for rationale).
                 let rx_buf0 = pmm.alloc_frame().map(|f| f.as_u64());
@@ -578,7 +615,15 @@ pub extern "C" fn _start() -> ! {
                 let rx_buf3 = pmm.alloc_frame().map(|f| f.as_u64());
                 let tx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
 
-                match (rx_q_phys, tx_q_phys, rx_buf0, rx_buf1, rx_buf2, rx_buf3, tx_buf_phys) {
+                match (
+                    rx_q_phys,
+                    tx_q_phys,
+                    rx_buf0,
+                    rx_buf1,
+                    rx_buf2,
+                    rx_buf3,
+                    tx_buf_phys,
+                ) {
                     (Some(rp), Some(tp), Some(b0), Some(b1), Some(b2), Some(b3), Some(xp)) => {
                         let h = hhdm_offset.as_u64();
                         let rx_q_virt = h + rp;
@@ -795,8 +840,7 @@ pub type KernelDisk = sunlight_block::CachedBlockDevice<KernelBlkDev, 16>;
 /// Kernel-global VFS (Phase 6.5 Step 3): ramfs `/` plus the FAT boot volume at
 /// `/boot` when a disk is present. Backs exec-from-VFS and the file syscalls.
 /// Lock order: never acquire SCHEDULER or PMM while holding this lock.
-pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> =
-    spin::Mutex::new(None);
+pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> = spin::Mutex::new(None);
 
 /// Kernel-owned virtio-net device (Phase 3.4: net_server frame proxy).
 /// Only ring-0 can touch the device's I/O ports; net_server (identified by
@@ -871,7 +915,8 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     // Allocate virtio queue and request buffer only when device is present.
     let (queue_phys, req_phys) = {
         let mut pmm = PMM.lock();
-        let q = pmm.alloc_frames(sunlight_virtio::QUEUE_PAGES)
+        let q = pmm
+            .alloc_frames(sunlight_virtio::QUEUE_PAGES)
             .expect("virtio queue alloc");
         let r = pmm.alloc_frame().expect("virtio req alloc");
         (q, r)
@@ -1011,7 +1056,11 @@ fn map_tty_framebuffer(
     fb_height: u64,
 ) {
     let hhdm = hhdm_offset.as_u64();
-    let fb_phys_base = if fb_addr >= hhdm { fb_addr - hhdm } else { fb_addr };
+    let fb_phys_base = if fb_addr >= hhdm {
+        fb_addr - hhdm
+    } else {
+        fb_addr
+    };
     let fb_page_offset = fb_phys_base & 0xfff;
     let page_count = ((fb_page_offset + fb_pitch * fb_height) + 4095) / 4096;
     let flags = PageTableFlags::PRESENT
@@ -1020,9 +1069,8 @@ fn map_tty_framebuffer(
         | PageTableFlags::NO_EXECUTE;
 
     for page_idx in 0..page_count {
-        let user_page =
-            Page::from_start_address(VirtAddr::new(TTY_FB_VADDR + page_idx * 4096))
-                .expect("TTY_FB_VADDR is page-aligned");
+        let user_page = Page::from_start_address(VirtAddr::new(TTY_FB_VADDR + page_idx * 4096))
+            .expect("TTY_FB_VADDR is page-aligned");
         let fb_phys = PhysAddr::new((fb_phys_base & !0xfff) + page_idx * 4096);
         let fb_frame = unsafe { PhysFrame::from_start_address_unchecked(fb_phys) };
         unsafe {
@@ -1047,7 +1095,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             Err(CapError::NotFound) => {
                 serial_println!("[SEC]  Token forge attempt: REJECTED (CapError::NotFound)");
             }
-            other => { serial_println!("[SEC]  Token forge attempt: UNEXPECTED {:?}", other); }
+            other => {
+                serial_println!("[SEC]  Token forge attempt: UNEXPECTED {:?}", other);
+            }
         }
     }
 
@@ -1063,7 +1113,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                     msg.word_count
                 );
             }
-            other => { serial_println!("[SEC]  word_count overflow: UNEXPECTED {:?}", other); }
+            other => {
+                serial_println!("[SEC]  word_count overflow: UNEXPECTED {:?}", other);
+            }
         }
     }
 
@@ -1078,7 +1130,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             Err(PtrError::KernelAddress) => {
                 serial_println!("[SEC]  kernel ptr attempt: REJECTED (PtrError::KernelAddress)");
             }
-            other => { serial_println!("[SEC]  kernel ptr attempt: UNEXPECTED {:?}", other); }
+            other => {
+                serial_println!("[SEC]  kernel ptr attempt: UNEXPECTED {:?}", other);
+            }
         }
     }
 
@@ -1091,11 +1145,16 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         msg.badge = 0x1337; // forged badge — must be discarded
         let real_caller_pid = 0x4242;
         bus.enqueue_call(0, msg, real_caller_pid, &mut sched, real_caller_pid);
-        let delivered = bus.pop_pending(0).expect("enqueued message must be present");
+        let delivered = bus
+            .pop_pending(0)
+            .expect("enqueued message must be present");
         if delivered.badge == real_caller_pid as u64 && delivered.badge != 0x1337 {
             serial_println!("[SEC]  badge forge attempt: REJECTED (overwritten by kernel)");
         } else {
-            serial_println!("[SEC]  badge forge attempt: UNEXPECTED badge={:#x}", delivered.badge);
+            serial_println!(
+                "[SEC]  badge forge attempt: UNEXPECTED badge={:#x}",
+                delivered.badge
+            );
         }
     }
 
@@ -1107,8 +1166,20 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let server_pid = 0x5000;
         let first_pid = 0x5101;
         let second_pid = 0x5102;
-        bus.enqueue_call(0, IpcMsg::with_label(0x4B07), first_pid, &mut sched, server_pid);
-        bus.enqueue_call(0, IpcMsg::with_label(0x4B07), second_pid, &mut sched, server_pid);
+        bus.enqueue_call(
+            0,
+            IpcMsg::with_label(0x4B07),
+            first_pid,
+            &mut sched,
+            server_pid,
+        );
+        bus.enqueue_call(
+            0,
+            IpcMsg::with_label(0x4B07),
+            second_pid,
+            &mut sched,
+            server_pid,
+        );
         let first = bus.pop_pending(0).expect("first queued IPC call");
         let second = bus.pop_pending(0).expect("second queued IPC call");
         let first_waiter = bus.reply_waiter_pop_front(0).expect("first reply waiter");
@@ -1137,7 +1208,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             Err(CapError::Revoked) => {
                 serial_println!("[SEC]  dead process cap: REJECTED (CapError::Revoked)");
             }
-            other => { serial_println!("[SEC]  dead process cap: UNEXPECTED {:?}", other); }
+            other => {
+                serial_println!("[SEC]  dead process cap: UNEXPECTED {:?}", other);
+            }
         }
         // Clean up: remove the grant entirely and free the frame.
         caps.revoke_shared(token);
@@ -1197,7 +1270,11 @@ fn setup_key_injection() {
         keyboard::KEY_INJECT_ENABLED = true;
     }
 
-    serial_println!("[KBD]  Key injection enabled (phase={}, {} scancodes)", phase, len);
+    serial_println!(
+        "[KBD]  Key injection enabled (phase={}, {} scancodes)",
+        phase,
+        len
+    );
 }
 
 /// Phase 3.8 injection: login + whoami + id + useradd/id/userdel.
@@ -1218,10 +1295,9 @@ fn build_phase3_8_sequence() -> [u8; 256] {
         0x1D, 0x14, 0x94, 0x9D, // Ctrl+T (phase 3.6 marker)
         0x17, 0x20, 0x1C, // id+Enter
         0x16, 0x1F, 0x12, 0x13, 0x1E, 0x20, 0x20, 0x39, // useradd testuser
-        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
-        0x17, 0x20, 0x39, // id testuser
-        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
-        0x16, 0x1F, 0x12, 0x13, 0x20, 0x12, 0x26, 0x39, // userdel testuser
+        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C, 0x17, 0x20, 0x39, // id testuser
+        0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C, 0x16, 0x1F, 0x12, 0x13, 0x20, 0x12,
+        0x26, 0x39, // userdel testuser
         0x14, 0x12, 0x1F, 0x14, 0x16, 0x1F, 0x12, 0x13, 0x1C,
     ];
     s[..codes.len()].copy_from_slice(&codes);
@@ -1239,7 +1315,8 @@ fn build_phase3_9_sequence() -> [u8; 256] {
     // Append sysfetch + Enter after phase 3.8 commands
     let extra: [u8; 27] = [
         0x1F, 0x15, 0x1F, 0x21, 0x12, 0x14, 0x2E, 0x23, 0x1C, // sysfetch + Enter
-        0x23, 0x18, 0x1F, 0x14, 0x31, 0x1E, 0x32, 0x12, 0x2E, 0x14, 0x26, 0x1C, // hostnamectl + Enter
+        0x23, 0x18, 0x1F, 0x14, 0x31, 0x1E, 0x32, 0x12, 0x2E, 0x14, 0x26,
+        0x1C, // hostnamectl + Enter
         0x1F, 0x15, 0x1F, 0x21, 0x12, 0x14, // sysfetch + (no Enter; we are done)
     ];
     s[p38_len..p38_len + extra.len()].copy_from_slice(&extra);
@@ -1285,9 +1362,10 @@ fn build_dns_test_sequence() -> [u8; 256] {
     let codes: [u8; 37] = [
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
         // ping google.com + Enter
-        0x19, 0x17, 0x31, 0x22, 0x39, 0x22, 0x18, 0x18, 0x22, 0x26, 0x12, 0x34, 0x2E, 0x18, 0x32, 0x1C,
-        // ping google.com + Enter (again, exercise cache)
-        0x19, 0x17, 0x31, 0x22, 0x39, 0x22, 0x18, 0x18, 0x22, 0x26, 0x12, 0x34, 0x2E, 0x18, 0x32, 0x1C,
+        0x19, 0x17, 0x31, 0x22, 0x39, 0x22, 0x18, 0x18, 0x22, 0x26, 0x12, 0x34, 0x2E, 0x18, 0x32,
+        0x1C, // ping google.com + Enter (again, exercise cache)
+        0x19, 0x17, 0x31, 0x22, 0x39, 0x22, 0x18, 0x18, 0x22, 0x26, 0x12, 0x34, 0x2E, 0x18, 0x32,
+        0x1C,
     ];
     s[..codes.len()].copy_from_slice(&codes);
     s

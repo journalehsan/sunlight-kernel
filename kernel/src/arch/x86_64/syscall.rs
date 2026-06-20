@@ -263,6 +263,30 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1001; // Internal code for sys_arch_prctl
                     }
                 }
+                -4 => {
+                    if linux_num == 218 {
+                        num = 1002; // Internal code for Linux set_tid_address
+                    }
+                }
+                -5 => {
+                    if linux_num == 273 {
+                        num = 1003; // Internal code for Linux set_robust_list
+                    }
+                }
+                -6 => {
+                    if linux_num == 334 {
+                        num = 1004; // Internal code for Linux rseq
+                    }
+                }
+                -7 => {
+                    if linux_num == 7 {
+                        num = 1006; // Internal code for Linux poll
+                    }
+                }
+                -38 => {
+                    crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
+                    num = 1005; // Linux ENOSYS
+                }
                 _ => {
                     // Unknown or unsupported syscall
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
@@ -339,6 +363,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         101 => sys_set_fs_base(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
+        1002 => sys_linux_set_tid_address(frame),
+        1003 => sys_linux_set_robust_list(frame),
+        1004 => sys_linux_rseq(frame),
+        1005 => linux_errno(38),
+        1006 => sys_linux_poll(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -626,41 +655,7 @@ fn endpoint_bind(token: u64) -> u64 {
 /// Syscall: ProcessExit
 /// rdi = exit code
 fn process_exit(code: i32) -> ! {
-    sched::with_scheduler(|s| {
-        let cur = s.current;
-        s.account_current_runtime();
-        {
-            let p = &mut s.processes[cur];
-            p.exit_code = code;
-            p.state = ProcessState::Finished;
-        }
-        s.remove_from_ready_queues(cur);
-        let my_pid = s.processes[cur].pid;
-        let parent_pid = s.processes[cur].ppid;
-        crate::memory::swap::untrack_process(my_pid);
-        crate::sched::note_process_finished(my_pid, s.processes[cur].name_str());
-
-        // Shared memory grant cleanup (owner frees frames, everyone unmaps views)
-        {
-            let mut pmm = crate::PMM.lock();
-            let mut caps = crate::capability::CAP_BROKER.lock();
-            crate::memory::shared::cleanup_shared_pages(
-                &mut s.processes[cur],
-                &mut *pmm,
-                &mut *caps,
-            );
-        }
-
-        // Wake a parent that is blocked in waitpid() on this child. wake_pid
-        // only acts on BlockedOnIpc processes, and we gate on wait_child so a
-        // parent blocked for any other reason is left untouched.
-        let parent_waiting = s
-            .process_mut_by_pid(parent_pid)
-            .is_some_and(|parent| parent.wait_child == Some(my_pid));
-        if parent_waiting {
-            s.wake_pid(parent_pid);
-        }
-    });
+    let kstack_top = sched::finish_current_process(code, "exit");
     sched::request_reschedule();
 
     // We currently run on the process's *user* stack (syscall_entry builds
@@ -669,7 +664,6 @@ fn process_exit(code: i32) -> ! {
     // to the process's kernel stack (kernel heap — mapped in every address
     // space), then re-enable interrupts (syscall_entry ran `cli`) and wait
     // to be switched away from; this context is never resumed.
-    let kstack_top = sched::with_scheduler(|s| s.current_process().kernel_stack_top);
     unsafe {
         core::arch::asm!(
             "mov rsp, {0}",
@@ -769,13 +763,11 @@ fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
 /// RDI/RSI of the new thread's initial context so `thread_trampoline`
 /// receives them as normal C arguments.
 fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
-    let trampoline     = frame.rdi;
+    let trampoline = frame.rdi;
     let user_stack_top = frame.rsi;
-    let tls_ptr        = frame.rdx;
+    let tls_ptr = frame.rdx;
 
-    if !is_user_address(trampoline)
-        || !is_user_address(user_stack_top)
-        || !is_user_address(tls_ptr)
+    if !is_user_address(trampoline) || !is_user_address(user_stack_top) || !is_user_address(tls_ptr)
     {
         return u64::MAX;
     }
@@ -825,9 +817,17 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     let name_str = core::str::from_utf8(&parent_name[..name_len]).unwrap_or("thread");
 
     let mut thread = crate::process::Process::new_thread(
-        new_tid, parent_pid, name_str,
-        parent_pml4, thread_fd,
-        env, uid, gid, nice, caps, tty_tab,
+        new_tid,
+        parent_pid,
+        name_str,
+        parent_pml4,
+        thread_fd,
+        env,
+        uid,
+        gid,
+        nice,
+        caps,
+        tty_tab,
     );
 
     // Set up the iretq frame: RIP = trampoline, RSP = user_stack_top,
@@ -841,7 +841,9 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
 
     crate::serial_println!(
         "[SYSCALL] thread_spawn: parent={} tid={} trampoline={:#x}",
-        parent_pid, new_tid, trampoline
+        parent_pid,
+        new_tid,
+        trampoline
     );
     new_tid as u64
 }
@@ -1705,6 +1707,65 @@ fn sys_arch_prctl(frame: &mut SyscallFrame) -> u64 {
     u64::MAX
 }
 
+fn linux_errno(errno: u64) -> u64 {
+    0u64.wrapping_sub(errno)
+}
+
+fn sys_linux_set_tid_address(frame: &mut SyscallFrame) -> u64 {
+    let tidptr = frame.rdi;
+    if tidptr != 0 && !is_user_address(tidptr) {
+        return linux_errno(14); // EFAULT
+    }
+
+    sched::with_scheduler(|s| s.current_process().pid as u64)
+}
+
+fn sys_linux_set_robust_list(frame: &mut SyscallFrame) -> u64 {
+    let head = frame.rdi;
+    if head != 0 && !is_user_address(head) {
+        return linux_errno(14); // EFAULT
+    }
+
+    0
+}
+
+fn sys_linux_rseq(_frame: &mut SyscallFrame) -> u64 {
+    linux_errno(38) // ENOSYS: libc should continue with rseq disabled.
+}
+
+fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
+    let fds_ptr = frame.rdi as *mut u8;
+    let nfds = frame.rsi;
+
+    if nfds == 0 {
+        return 0;
+    }
+
+    let Some(bytes) = nfds.checked_mul(8) else {
+        return linux_errno(22); // EINVAL
+    };
+    if bytes > 8192 {
+        return linux_errno(22); // keep the early compat shim bounded
+    }
+
+    let start = fds_ptr as u64;
+    let Some(end) = start.checked_add(bytes - 1) else {
+        return linux_errno(14); // EFAULT
+    };
+    if !is_user_address(start) || !is_user_address(end) {
+        return linux_errno(14); // EFAULT
+    }
+
+    for idx in 0..nfds {
+        let revents = unsafe { fds_ptr.add((idx as usize * 8) + 6) as *mut i16 };
+        unsafe {
+            *revents = 0;
+        }
+    }
+
+    0
+}
+
 /// Syscall: ReadDir (60)
 /// rdi = pathname (user-space pointer)
 /// rsi = output buffer (array of 80-byte records)
@@ -2130,9 +2191,9 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
 fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
     use sunlight_fs::vfs::FileHandle as VfsHandle;
 
-    let fd      = frame.rdi as i32;
-    let offset  = frame.rsi as i64;
-    let whence  = frame.rdx as i32;
+    let fd = frame.rdi as i32;
+    let offset = frame.rsi as i64;
+    let whence = frame.rdx as i32;
 
     let mut sched = crate::sched::SCHEDULER.lock();
 
@@ -2140,13 +2201,15 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
     let (current_offset, vfs_handle) = match sched.current_process().fd_table.get(fd) {
         Some(e) if e.handle.is_vfs() => (e.offset, e.handle.vfs_handle()),
         Some(_) => return u64::MAX, // ESPIPE: pipes and TTY fds are not seekable
-        None    => return u64::MAX, // EBADF
+        None => return u64::MAX,    // EBADF
     };
 
     match whence {
         // SEEK_SET ─────────────────────────────────────────────────────────
         0 => {
-            if offset < 0 { return u64::MAX; } // EINVAL
+            if offset < 0 {
+                return u64::MAX;
+            } // EINVAL
             let new_off = offset as usize;
             if let Some(e) = sched.current_process_mut().fd_table.get_mut(fd) {
                 e.offset = new_off;
@@ -2175,7 +2238,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
                 let mut guard = crate::KERNEL_VFS.lock();
                 match guard.as_mut() {
                     Some(vfs) => match vfs.fstat_handle(VfsHandle(vfs_handle)) {
-                        Ok(s)  => s.size,
+                        Ok(s) => s.size,
                         Err(_) => return u64::MAX,
                     },
                     None => return u64::MAX,
@@ -2242,7 +2305,7 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
 fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     use sunlight_fs::vfs::{FileHandle as VfsHandle, FileType};
 
-    let fd      = frame.rdi as i32;
+    let fd = frame.rdi as i32;
     let buf_ptr = frame.rsi;
 
     if !is_user_address(buf_ptr) || !is_user_address(buf_ptr + 23) {
@@ -2255,15 +2318,17 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
         match sched.current_process().fd_table.get(fd) {
             Some(e) if e.handle.is_vfs() => e.handle.vfs_handle(),
             Some(_) => return u64::MAX, // ESPIPE
-            None    => return u64::MAX, // EBADF
+            None => return u64::MAX,    // EBADF
         }
     };
 
     let stat = {
         let mut guard = crate::KERNEL_VFS.lock();
-        let Some(vfs) = guard.as_mut() else { return u64::MAX; };
+        let Some(vfs) = guard.as_mut() else {
+            return u64::MAX;
+        };
         match vfs.fstat_handle(VfsHandle(vfs_handle)) {
-            Ok(s)  => s,
+            Ok(s) => s,
             Err(_) => return u64::MAX,
         }
     };
@@ -2274,7 +2339,7 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     record[12..16].copy_from_slice(&stat.gid.to_le_bytes());
     record[16..18].copy_from_slice(&stat.mode.to_le_bytes());
     record[18] = match stat.file_type {
-        FileType::File      => 1,
+        FileType::File => 1,
         FileType::Directory => 2,
     };
     record[20..24].copy_from_slice(&stat.nlinks.to_le_bytes());

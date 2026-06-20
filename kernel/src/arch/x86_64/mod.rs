@@ -1,5 +1,6 @@
 pub mod acpi;
 pub mod boot;
+pub mod cpu;
 pub mod interrupts;
 pub mod keyboard;
 pub mod rtc;
