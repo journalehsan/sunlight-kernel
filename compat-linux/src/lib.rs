@@ -349,8 +349,8 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         2 => 40,   // open → SunlightOS Open(40)
         3 => 41,   // close → SunlightOS Close(41)
         7 => -7,   // poll → special bounded readiness stub
-        60 => -1,  // exit(code) → special handling (process termination)
-        231 => -1, // exit_group(code) → special handling
+        60 => 20,  // exit(code) → SunlightOS ProcessExit(20)
+        231 => 20, // exit_group(code) → SunlightOS ProcessExit(20)
 
         // Tier 2: file descriptor operations
         5 => 48,  // fstat → SunlightOS Fstat(48)
@@ -368,7 +368,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         334 => -6, // rseq → Linux ENOSYS so libc disables rseq
 
         // Tier 4: memory management
-        9 => 50,   // mmap → SunlightOS Mmap(50)
+        9 => -11,  // mmap → special Linux ABI flag scrubber
         11 => 51,  // munmap → SunlightOS Munmap(51)
         12 => -2,  // brk → special handling
         10 => 52,  // mprotect → SunlightOS Mprotect(52)
@@ -378,6 +378,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         13 => -8,   // rt_sigaction → special Linux ABI shim
         14 => -9,   // rt_sigprocmask → special Linux ABI shim
         62 => 72,   // kill → SunlightOS Kill(72)
+        131 => -12, // sigaltstack → special Linux ABI shim
         200 => -10, // tkill → special Linux ABI shim
 
         // Process information
@@ -393,7 +394,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
 pub fn needs_special_handling(linux_nr: u64) -> bool {
     matches!(
         linux_nr,
-        7 | 13 | 14 | 60 | 200 | 231 | 12 | 158 | 218 | 273 | 334
+        7 | 9 | 13 | 14 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 334
     )
 }
 
@@ -405,7 +406,7 @@ mod tests {
     fn basic_syscalls_translate() {
         assert_eq!(translate_syscall(1), 43); // write
         assert_eq!(translate_syscall(0), 42); // read
-        assert_eq!(translate_syscall(60), -1); // exit
+        assert_eq!(translate_syscall(60), 20); // exit
         assert_eq!(translate_syscall(12), -2); // brk
         assert_eq!(translate_syscall(158), -3); // arch_prctl
         assert_eq!(translate_syscall(186), 33); // gettid
@@ -417,6 +418,9 @@ mod tests {
         assert_eq!(translate_syscall(14), -9); // rt_sigprocmask
         assert_eq!(translate_syscall(62), 72); // kill
         assert_eq!(translate_syscall(200), -10); // tkill
+        assert_eq!(translate_syscall(9), -11); // mmap
+        assert_eq!(translate_syscall(131), -12); // sigaltstack
+        assert_eq!(translate_syscall(231), 20); // exit_group
     }
 
     #[test]
@@ -435,6 +439,8 @@ mod tests {
         assert!(needs_special_handling(13));
         assert!(needs_special_handling(14));
         assert!(needs_special_handling(200));
+        assert!(needs_special_handling(9));
+        assert!(needs_special_handling(131));
         assert!(!needs_special_handling(1));
     }
 

@@ -242,17 +242,6 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 native_num if native_num >= 0 => {
                     num = native_num as u64;
                 }
-                -1 => {
-                    // exit(code) — store code in rdi for process_exit handler
-                    if linux_num == 60 || linux_num == 231 {
-                        crate::serial_println!(
-                            "[HELIOS] Linux exit({}) pid={}",
-                            frame.rdi,
-                            sched.current_process().pid
-                        );
-                        num = 20; // ProcessExit
-                    }
-                }
                 -2 => {
                     if linux_num == 12 {
                         num = 1000; // Internal code for sys_brk
@@ -296,6 +285,16 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 -10 => {
                     if linux_num == 200 {
                         num = 1009; // Internal code for Linux tkill
+                    }
+                }
+                -11 => {
+                    if linux_num == 9 {
+                        num = 1010; // Internal code for Linux mmap
+                    }
+                }
+                -12 => {
+                    if linux_num == 131 {
+                        num = 1011; // Internal code for Linux sigaltstack
                     }
                 }
                 -38 => {
@@ -386,6 +385,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1007 => sys_linux_rt_sigaction(frame),
         1008 => sys_linux_rt_sigprocmask(frame),
         1009 => sys_linux_tkill(frame),
+        1010 => sys_linux_mmap(frame),
+        1011 => sys_linux_sigaltstack(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1858,6 +1859,54 @@ fn sys_linux_tkill(frame: &mut SyscallFrame) -> u64 {
     process_exit(code);
 }
 
+fn sys_linux_mmap(frame: &mut SyscallFrame) -> u64 {
+    const LINUX_MAP_SHARED: u64 = 0x01;
+    const LINUX_MAP_PRIVATE: u64 = 0x02;
+    const LINUX_MAP_FIXED: u64 = 0x10;
+    const LINUX_MAP_ANONYMOUS: u64 = 0x20;
+
+    let mut flags = frame.r10;
+    let fd = frame.r8 as i32;
+
+    // Keep only the subset understood by the native mmap implementation.
+    // Linux-only flags such as MAP_DENYWRITE, MAP_EXECUTABLE, MAP_GROWSDOWN,
+    // MAP_NORESERVE, and MAP_STACK are advisory for this early compat layer.
+    flags &= LINUX_MAP_SHARED | LINUX_MAP_PRIVATE | LINUX_MAP_FIXED | LINUX_MAP_ANONYMOUS;
+
+    if flags & LINUX_MAP_ANONYMOUS == 0 && fd < 0 {
+        flags |= LINUX_MAP_ANONYMOUS;
+    }
+    if flags & (LINUX_MAP_SHARED | LINUX_MAP_PRIVATE) == 0 {
+        flags |= LINUX_MAP_PRIVATE;
+    }
+
+    frame.r10 = flags;
+    sys_mmap(frame)
+}
+
+fn sys_linux_sigaltstack(frame: &mut SyscallFrame) -> u64 {
+    let new_ss = frame.rdi;
+    let old_ss = frame.rsi;
+
+    if new_ss != 0 && (!is_user_address(new_ss) || !is_user_address(new_ss + 23)) {
+        return linux_errno(14); // EFAULT
+    }
+
+    if old_ss != 0 {
+        if !is_user_address(old_ss) || !is_user_address(old_ss + 23) {
+            return linux_errno(14); // EFAULT
+        }
+        unsafe {
+            let old = old_ss as *mut u64;
+            *old.add(0) = 0; // ss_sp
+            *old.add(1) = 2; // ss_flags = SS_DISABLE
+            *old.add(2) = 0; // ss_size
+        }
+    }
+
+    0
+}
+
 /// Syscall: ReadDir (60)
 /// rdi = pathname (user-space pointer)
 /// rsi = output buffer (array of 80-byte records)
@@ -2455,14 +2504,14 @@ fn sys_fcntl(_frame: &mut SyscallFrame) -> u64 {
 /// rdi = addr (hint, 0 = kernel chooses)
 /// rsi = length
 /// rdx = prot (PROT_READ | PROT_WRITE | PROT_EXEC)
-/// rcx = flags (MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED)
+/// r10 = flags (MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED)
 /// r8 = fd (-1 for anonymous)
 /// r9 = offset
 fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
     let addr = frame.rdi;
     let length = frame.rsi;
     let prot = frame.rdx as u32;
-    let flags = frame.rcx as u32;
+    let flags = frame.r10 as u32;
     let fd = frame.r8 as i32;
     let offset = frame.r9;
 
@@ -2527,12 +2576,12 @@ fn sys_mprotect(frame: &mut SyscallFrame) -> u64 {
 /// rdi = old_addr
 /// rsi = old_size
 /// rdx = new_size
-/// rcx = flags
+/// r10 = flags
 fn sys_mremap(frame: &mut SyscallFrame) -> u64 {
     let old_addr = frame.rdi;
     let old_size = frame.rsi;
     let new_size = frame.rdx;
-    let flags = frame.rcx as u32;
+    let flags = frame.r10 as u32;
 
     match crate::process::mmap::sys_mremap(old_addr, old_size, new_size, flags) {
         Ok(addr) => addr,
