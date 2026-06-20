@@ -37,7 +37,7 @@ use sunlight_ipc::{
     nameserver_lookup, process_is_alive, process_yield, sysinfo, tty_stdin_push, tty_stdout_pull,
     unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg, TzMsg,
 };
-use sunlight_tty::login::{LoginField, LoginResult, LoginScreen};
+use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, MAX_USERS};
 use sunlight_tty::TerminalGrid;
 use sunlight_tui::ANSI_COLORS;
 
@@ -315,7 +315,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     debug_log("[TTY]  Login screen ready");
 
     let mut login = LoginScreen::new();
-    prefill_root_login(&mut login);
 
     let mut state = TtyState::Login;
     let mut spawn_cap: Option<CapabilityToken> = None;
@@ -332,7 +331,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             TtyState::Login => {
                 let mut logged_in = false;
                 if let Some(ascii) = key_ascii_from_msg(&msg) {
-                    if login.focused == LoginField::Password {
+                    if login.focus == FocusArea::Password {
                         debug_log_kbd_byte("[TTY] Key received in password field: ", ascii);
                     }
                     let result = login.handle_key_ascii(ascii);
@@ -824,15 +823,35 @@ pub fn get_viewport_offset(tab_idx: usize) -> usize {
 }
 
 fn render_login_fb(login: &LoginScreen, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32) {
+    let mut user_bufs = [[0u8; 64]; MAX_USERS];
+    let mut user_lens = [0usize; MAX_USERS];
+    let mut is_custom = [false; MAX_USERS];
+    for i in 0..login.active_count.min(MAX_USERS) {
+        let len = login.users[i].len.min(64);
+        user_bufs[i][..len].copy_from_slice(&login.users[i].buf[..len]);
+        user_lens[i] = len;
+        is_custom[i] = login.is_custom_slot[i];
+    }
+
+    let focus = match login.focus {
+        FocusArea::UserSlot(i) => sunlight_tui::LoginFocus::UserSlot(i),
+        FocusArea::Password => sunlight_tui::LoginFocus::Password,
+        FocusArea::Dropdown => sunlight_tui::LoginFocus::Dropdown,
+    };
+
     unsafe {
-        sunlight_tui::render_login_dynamic(
+        sunlight_tui::render_login_grid(
             fb_addr as *mut u32,
             fb_w,
             fb_h,
             fb_p,
-            &login.username.buf[..login.username.len],
+            &user_bufs,
+            &user_lens[..login.active_count],
+            &is_custom[..login.active_count],
+            login.active_count,
+            login.selected_user_idx,
+            focus,
             login.password.len,
-            login.focused == LoginField::Password,
             login.message,
         );
     }
@@ -970,15 +989,7 @@ fn render_active_shell_fb(
 
 fn reset_login(login: &mut LoginScreen) {
     *login = LoginScreen::new();
-    prefill_root_login(login);
     login.message = "Logged out. Please log in.";
-}
-
-fn prefill_root_login(login: &mut LoginScreen) {
-    for &b in b"root" {
-        login.username.push(b);
-    }
-    login.focused = LoginField::Password;
 }
 
 fn reset_tabs(tabs: &mut [ShellTab; MAX_TABS], tab_count: &mut usize, active_tab: &mut usize) {

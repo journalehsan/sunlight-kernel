@@ -1,13 +1,16 @@
 //! Login screen state machine.
 //!
-//! Renders a simple login form with username/password fields, authenticates
-//! against /etc/passwd + /etc/shadow via VFS IPC.
+//! Renders a modern grid-based login form with selectable user avatars,
+//! a password field, and an environment dropdown. Authenticates against
+//! /etc/passwd + /etc/shadow via VFS IPC.
 
 use sunlight_ipc::{IpcMsg, VfsMsg, nameserver_lookup, ipc_call};
 use sunlight_fs::{parse_passwd, parse_shadow, lookup_by_name};
 
 pub const MAX_FIELD_LEN: usize = 64;
+pub const MAX_USERS: usize = 6;
 
+#[derive(Clone, Copy)]
 pub struct InputField {
     pub buf: [u8; MAX_FIELD_LEN],
     pub len: usize,
@@ -45,9 +48,10 @@ impl InputField {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LoginField {
-    Username,
+pub enum FocusArea {
+    UserSlot(usize), // 0 up to active_count - 1
     Password,
+    Dropdown,
 }
 
 pub enum LoginResult {
@@ -57,9 +61,12 @@ pub enum LoginResult {
 }
 
 pub struct LoginScreen {
-    pub username: InputField,
+    pub users: [InputField; MAX_USERS],
+    pub is_custom_slot: [bool; MAX_USERS],
+    pub active_count: usize,      // How many slots are currently displayed
+    pub focus: FocusArea,         // Where the keyboard input is currently directed
+    pub selected_user_idx: usize, // The user locked in for the login attempt
     pub password: InputField,
-    pub focused: LoginField,
     pub message: &'static str,
     pub attempts: u8,
     pub locked_ticks: u32,
@@ -67,10 +74,29 @@ pub struct LoginScreen {
 
 impl LoginScreen {
     pub fn new() -> Self {
+        let mut users = [InputField::new(); MAX_USERS];
+        let mut is_custom_slot = [false; MAX_USERS];
+
+        // Slot 0: root
+        let root_str = b"root";
+        users[0].buf[..root_str.len()].copy_from_slice(root_str);
+        users[0].len = root_str.len();
+
+        // Slot 1: Ehsan Tork
+        let ehsan_str = b"Ehsan Tork";
+        users[1].buf[..ehsan_str.len()].copy_from_slice(ehsan_str);
+        users[1].len = ehsan_str.len();
+
+        // Slot 2: The dynamic "More / Custom" slot
+        is_custom_slot[2] = true;
+
         Self {
-            username: InputField::new(),
+            users,
+            is_custom_slot,
+            active_count: 3,
+            focus: FocusArea::UserSlot(0),
+            selected_user_idx: 0,
             password: InputField::new(),
-            focused: LoginField::Username,
             message: "Welcome. Please log in.",
             attempts: 0,
             locked_ticks: 0,
@@ -78,10 +104,6 @@ impl LoginScreen {
     }
 
     /// Handle a key event. Returns the login result.
-    /// For printable chars (ascii Some), route to the focused field.
-    /// For Enter, attempt login.
-    /// For Backspace, delete from focused field.
-    /// For Tab, switch focus.
     pub fn handle_key_ascii(&mut self, ascii: u8) -> LoginResult {
         if self.locked_ticks > 0 {
             return LoginResult::Locked;
@@ -89,34 +111,46 @@ impl LoginScreen {
 
         match ascii {
             b'\n' | b'\r' => {
-                if self.focused == LoginField::Username && self.username.len > 0 {
-                    self.focused = LoginField::Password;
-                    LoginResult::Pending
-                } else if self.focused == LoginField::Password && self.password.len > 0 {
-                    self.attempt_login()
-                } else {
-                    LoginResult::Pending
+                match self.focus {
+                    FocusArea::UserSlot(idx) => {
+                        // Enter on a user box commits the selection and moves to password
+                        if self.users[idx].len > 0 {
+                            self.selected_user_idx = idx;
+                            self.focus = FocusArea::Password;
+                        }
+                        LoginResult::Pending
+                    }
+                    FocusArea::Password | FocusArea::Dropdown => {
+                        // Enter on password or dropdown triggers the login attempt
+                        if self.password.len > 0 {
+                            self.attempt_login()
+                        } else {
+                            LoginResult::Pending
+                        }
+                    }
                 }
             }
             b'\t' => {
-                if self.focused == LoginField::Username {
-                    self.focused = LoginField::Password;
-                } else {
-                    self.focused = LoginField::Username;
-                }
+                self.cycle_focus_forward();
                 LoginResult::Pending
             }
-            0x08 => {
-                match self.focused {
-                    LoginField::Username => self.username.backspace(),
-                    LoginField::Password => self.password.backspace(),
+            0x08 | 0x7F => {
+                // Handle Backspace or DEL
+                match self.focus {
+                    FocusArea::UserSlot(idx) if self.is_custom_slot[idx] => {
+                        self.users[idx].backspace()
+                    }
+                    FocusArea::Password => self.password.backspace(),
+                    _ => {} // Read-only user boxes ignore backspace
                 }
                 LoginResult::Pending
             }
             c if c >= 0x20 && c <= 0x7E => {
-                match self.focused {
-                    LoginField::Username => self.username.push(c),
-                    LoginField::Password => self.password.push(c),
+                // Printable characters
+                match self.focus {
+                    FocusArea::UserSlot(idx) if self.is_custom_slot[idx] => self.users[idx].push(c),
+                    FocusArea::Password => self.password.push(c),
+                    _ => {} // Read-only user boxes ignore typing
                 }
                 LoginResult::Pending
             }
@@ -124,19 +158,39 @@ impl LoginScreen {
         }
     }
 
+    fn cycle_focus_forward(&mut self) {
+        match self.focus {
+            FocusArea::UserSlot(idx) => {
+                if idx + 1 < self.active_count {
+                    self.focus = FocusArea::UserSlot(idx + 1);
+                } else {
+                    self.focus = FocusArea::Password;
+                }
+            }
+            FocusArea::Password => self.focus = FocusArea::Dropdown,
+            FocusArea::Dropdown => self.focus = FocusArea::UserSlot(0), // Loop back to the first user
+        }
+    }
+
     fn attempt_login(&mut self) -> LoginResult {
-        let user = &self.username.buf[..self.username.len];
+        let u_idx = self.selected_user_idx;
+        let user = &self.users[u_idx].buf[..self.users[u_idx].len];
         let pass = &self.password.buf[..self.password.len];
 
         let cred = verify_login(user, pass);
 
         if let Some((uid, gid)) = cred {
-            let ulen = self.username.len.min(63);
+            let ulen = self.users[u_idx].len.min(63);
             let mut uname = [0u8; 64];
-            uname[..ulen].copy_from_slice(&self.username.buf[..ulen]);
+            uname[..ulen].copy_from_slice(&self.users[u_idx].buf[..ulen]);
             self.message = "Login successful.";
             self.attempts = 0;
-            LoginResult::Success { username: uname, username_len: ulen, uid, gid }
+            LoginResult::Success {
+                username: uname,
+                username_len: ulen,
+                uid,
+                gid,
+            }
         } else {
             self.attempts += 1;
             self.password.clear();
@@ -146,12 +200,13 @@ impl LoginScreen {
                 LoginResult::Locked
             } else {
                 self.message = "Invalid username or password.";
+                // Kick focus back to the password field so they can try again quickly
+                self.focus = FocusArea::Password;
                 LoginResult::Pending
             }
         }
     }
 
-    /// Decrement lockout timer. Called on each timer tick.
     pub fn tick(&mut self) {
         if self.locked_ticks > 0 {
             self.locked_ticks -= 1;

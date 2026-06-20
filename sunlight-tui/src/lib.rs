@@ -394,6 +394,270 @@ pub unsafe fn render_terminal_grid(
     }
 }
 
+/// Which login widget has keyboard focus (mirrors `sunlight_tty::login::FocusArea`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoginFocus {
+    UserSlot(usize),
+    Password,
+    Dropdown,
+}
+
+/// Draw a circular avatar with the first letter of `name`, or '+' when empty.
+fn draw_user_avatar(
+    fb: &mut framebuffer::Framebuffer,
+    cx: u32,
+    cy: u32,
+    radius: u32,
+    name: &[u8],
+    is_custom: bool,
+    selected: bool,
+    focused: bool,
+) {
+    let fill = if selected {
+        layout::palette::ACCENT_DIM
+    } else {
+        layout::palette::SURFACE
+    };
+    let ring = if focused {
+        layout::palette::ACCENT
+    } else if selected {
+        layout::palette::ACCENT
+    } else {
+        layout::palette::SEPARATOR
+    };
+
+    let d = radius * 2;
+    fb.fill_rect(cx - radius, cy - radius, d, d, fill);
+    draw::rect_outline(fb, cx - radius, cy - radius, d, d, if focused { 2 } else { 1 }, ring);
+
+    let ch = if name.is_empty() {
+        if is_custom {
+            b'+'
+        } else {
+            b'?'
+        }
+    } else {
+        let c = name[0];
+        if c >= b'a' && c <= b'z' {
+            c - 32
+        } else {
+            c
+        }
+    };
+    font::draw_char(
+        fb,
+        cx - 4,
+        cy - 7,
+        ch,
+        layout::palette::TEXT,
+        1,
+    );
+}
+
+/// Render the grid-based login screen with user avatars, password, and session dropdown.
+///
+/// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
+pub unsafe fn render_login_grid(
+    fb_addr: *mut u32,
+    fb_width: u32,
+    fb_height: u32,
+    fb_pitch: u32,
+    user_bufs: &[[u8; 64]],
+    user_lens: &[usize],
+    is_custom: &[bool],
+    active_count: usize,
+    selected_user_idx: usize,
+    focus: LoginFocus,
+    password_len: usize,
+    message: &str,
+) {
+    let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
+    let layout = layout::Layout::new(fb_width, fb_height);
+    layout.draw_chrome(&mut fb);
+
+    font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
+    font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
+    let mode = "TTY Login";
+    let mode_w = font::text_width(mode, 1);
+    font::draw_str(
+        &mut fb,
+        fb_width.saturating_sub(mode_w + 16),
+        16,
+        mode,
+        layout::palette::TEXT_DIM,
+        1,
+    );
+
+    let main = &layout.main;
+    let panel_w = 480u32.min(main.w.saturating_sub(32));
+    let panel_h = 320u32;
+    let panel_x = main.x + main.w.saturating_sub(panel_w) / 2;
+    let panel_y = main.y + main.h.saturating_sub(panel_h) / 2;
+
+    fb.fill_rect(panel_x, panel_y, panel_w, panel_h, layout::palette::BG);
+    draw::rect_outline(
+        &mut fb,
+        panel_x,
+        panel_y,
+        panel_w,
+        panel_h,
+        1,
+        layout::palette::SEPARATOR,
+    );
+
+    let title = "Welcome to SunlightOS";
+    let title_w = font::text_width(title, 2);
+    font::draw_str(
+        &mut fb,
+        panel_x + panel_w.saturating_sub(title_w) / 2,
+        panel_y + 16,
+        title,
+        layout::palette::ACCENT,
+        2,
+    );
+
+    // User avatar row — starts below title (title is scale-2, ~32px tall, ends ~panel_y+48)
+    const SLOT_W: u32 = 96;
+    const AVATAR_R: u32 = 24;
+    let row_y = panel_y + 88;
+    let row_w = active_count as u32 * SLOT_W;
+    let row_x = panel_x + panel_w.saturating_sub(row_w) / 2;
+
+    for i in 0..active_count.min(user_bufs.len()).min(user_lens.len()).min(is_custom.len()) {
+        let slot_x = row_x + i as u32 * SLOT_W + SLOT_W / 2;
+        let name = &user_bufs[i][..user_lens[i]];
+        let focused = focus == LoginFocus::UserSlot(i);
+        let selected = i == selected_user_idx;
+        draw_user_avatar(
+            &mut fb,
+            slot_x,
+            row_y,
+            AVATAR_R,
+            name,
+            is_custom[i],
+            selected,
+            focused,
+        );
+
+        let label = if name.is_empty() && is_custom[i] {
+            "Other"
+        } else {
+            // SAFETY: login names are ASCII from keyboard or preset bytes.
+            unsafe { core::str::from_utf8_unchecked(name) }
+        };
+        let label_w = font::text_width(label, 1);
+        font::draw_str(
+            &mut fb,
+            slot_x.saturating_sub(label_w / 2),
+            row_y + AVATAR_R + 12,
+            label,
+            if selected {
+                layout::palette::TEXT
+            } else {
+                layout::palette::TEXT_DIM
+            },
+            1,
+        );
+    }
+
+    // Password row
+    let field_x = panel_x + 40;
+    let pass_y = panel_y + 184;
+    font::draw_str(
+        &mut fb,
+        field_x,
+        pass_y,
+        "Password:",
+        layout::palette::TEXT_DIM,
+        1,
+    );
+    let pass_val_x = field_x + font::text_width("Password: ", 1);
+    let dot_count = password_len.min(24) as u32;
+    for i in 0..dot_count {
+        font::draw_char(
+            &mut fb,
+            pass_val_x + i * 8,
+            pass_y,
+            b'*',
+            layout::palette::TEXT,
+            1,
+        );
+    }
+    if focus == LoginFocus::Password {
+        let cx = pass_val_x + dot_count * 8;
+        fb.fill_rect(cx, pass_y, 8, 14, layout::palette::ACCENT);
+    }
+
+    // Session / environment dropdown
+    let drop_y = panel_y + 220;
+    font::draw_str(
+        &mut fb,
+        field_x,
+        drop_y,
+        "Session:",
+        layout::palette::TEXT_DIM,
+        1,
+    );
+    let drop_val_x = field_x + font::text_width("Session: ", 1);
+    let drop_w = 120u32;
+    let drop_h = 22u32;
+    let drop_focused = focus == LoginFocus::Dropdown;
+    draw::rect_outline(
+        &mut fb,
+        drop_val_x,
+        drop_y - 4,
+        drop_w,
+        drop_h,
+        if drop_focused { 2 } else { 1 },
+        if drop_focused {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::SEPARATOR
+        },
+    );
+    font::draw_str(
+        &mut fb,
+        drop_val_x + 8,
+        drop_y,
+        "TTY",
+        layout::palette::TEXT,
+        1,
+    );
+    font::draw_str(
+        &mut fb,
+        drop_val_x + drop_w - 16,
+        drop_y,
+        "v",
+        layout::palette::TEXT_DIM,
+        1,
+    );
+
+    // Status message
+    if !message.is_empty() {
+        let msg_y = panel_y + 268;
+        let msg_w = font::text_width(message, 1);
+        font::draw_str(
+            &mut fb,
+            panel_x + panel_w.saturating_sub(msg_w) / 2,
+            msg_y,
+            message,
+            layout::palette::TEXT_DIM,
+            1,
+        );
+    }
+
+    let footer = "Select user, Enter, type password, Enter";
+    let footer_w = font::text_width(footer, 1);
+    font::draw_str(
+        &mut fb,
+        fb_width.saturating_sub(footer_w + 16),
+        fb_height.saturating_sub(24),
+        footer,
+        layout::palette::TEXT_DIM,
+        1,
+    );
+}
+
 /// Render the login screen with live state (username typed, password dots, cursor, message).
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
@@ -531,18 +795,23 @@ pub unsafe fn render_login_dynamic(
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping with
 /// the provided dimensions and pitch.
 pub unsafe fn render_login_screen(fb_addr: *mut u32, fb_width: u32, fb_height: u32, fb_pitch: u32) {
-    // Delegate to the dynamic renderer with the pre-filled "root" username
-    // (matching the static display users see on first boot) and focus on password.
-    unsafe {
-        render_login_dynamic(
-            fb_addr,
-            fb_width,
-            fb_height,
-            fb_pitch,
-            b"root",
-            0,
-            true,
-            "Welcome. Please log in.",
-        );
-    }
+    let mut users = [[0u8; 64]; 6];
+    users[0][..4].copy_from_slice(b"root");
+    users[1][..10].copy_from_slice(b"Ehsan Tork");
+    let user_lens = [4usize, 10, 0, 0, 0, 0];
+    let is_custom = [false, false, true, false, false, false];
+    render_login_grid(
+        fb_addr,
+        fb_width,
+        fb_height,
+        fb_pitch,
+        &users,
+        &user_lens,
+        &is_custom,
+        3,
+        0,
+        LoginFocus::UserSlot(0),
+        0,
+        "Welcome. Please log in.",
+    );
 }
