@@ -195,6 +195,13 @@ if [ "$BUILD_FIRST" = true ]; then
     # Force x86_64-unknown-none target (override sunshell's Linux-only config)
     # This ensures it loads into 0x400000+ (user VAs), not kernel VAs (0xffffffff8...)
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --release --features sunlight --no-default-features --target x86_64-unknown-none
+    # helios-note: Linux-compat musl binary embedded by the kernel. Must be a
+    # non-PIE static ET_EXEC (-no-pie + crt-static) or the loader rejects it with
+    # NotStaticExecutable; then stamp EI_OSABI (byte 7) to ELFOSABI_LINUX (3) so
+    # is_linux_elf() routes it through the Helios compat layer. Mirrors build.sh.
+    RUSTFLAGS="-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
+    printf '\x03' | dd of="$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note" \
+        bs=1 seek=7 conv=notrunc 2>/dev/null
     cargo build --package sunlight-kernel
 
     # Download and build Limine bootloader if needed

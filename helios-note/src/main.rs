@@ -292,11 +292,11 @@ fn main() -> io::Result<()> {
             // 1. Robust polling loop for the first byte
             loop {
                 match stdin.read(&mut buf) {
-                    Ok(1) => break, // Key pressed!
                     Ok(0) => {
                         // TTY returned 0 bytes (no data ready). Sleep briefly to prevent a CPU spin-loop.
                         std::thread::sleep(std::time::Duration::from_millis(10));
                     }
+                    Ok(_) => break, // Key pressed! (This satisfies the compiler for 1, 2, 3...)
                     Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                         std::thread::sleep(std::time::Duration::from_millis(10));
