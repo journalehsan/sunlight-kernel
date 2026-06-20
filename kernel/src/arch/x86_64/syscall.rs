@@ -374,6 +374,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         60 => sys_readdir(frame),
         61 => sys_stat_path(frame),
         62 => sys_mkdir(frame),
+        63 => sys_chdir(frame),
+        64 => sys_getcwd(frame),
         70 => sys_sigaction(frame),
         71 => sys_sigprocmask(frame),
         72 => sys_kill(frame),
@@ -837,7 +839,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
 
     // Collect everything we need from the parent in one borrow scope so
     // we can release it before calling clone_boxed (which also borrows sched).
-    let (parent_pid, parent_pml4, uid, gid, nice, env, caps, tty_tab, parent_name) = {
+    let (parent_pid, parent_pml4, uid, gid, nice, env, caps, tty_tab, parent_name, parent_cwd) = {
         let p = sched.current_process();
         (
             p.pid,
@@ -849,6 +851,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
             p.capabilities.clone(),
             p.tty_tab,
             p.name,
+            p.cwd.clone(),
         )
     };
     let thread_fd = sched.current_process().fd_table.clone_boxed();
@@ -872,6 +875,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
         tty_tab,
     );
 
+    thread.cwd = parent_cwd;
     // Set up the iretq frame: RIP = trampoline, RSP = user_stack_top,
     // then override RDI/RSI so the trampoline receives func and arg.
     thread.init_context(trampoline, user_stack_top);
@@ -1229,6 +1233,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let env = crate::process::env::EnvMap::inherit(&parent.env);
     let capabilities = parent.capabilities.clone();
     let parent_tty_tab = parent.tty_tab;
+    let parent_cwd = parent.cwd.clone();
     let stdout_entry = if stdout_fd != u64::MAX {
         parent.fd_table.get(stdout_fd as i32).copied()
     } else {
@@ -1244,6 +1249,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.uid = uid;
     child.gid = gid;
     child.env = env;
+    child.cwd = parent_cwd;
     child.capabilities = capabilities;
     // Inherit the TTY tab so a shell-spawned app's stdio routes to that tab's
     // kernel rings (foreground input routing).
@@ -1501,10 +1507,25 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         Some(b) => b,
         None => return u64::MAX,
     };
-    let path = match core::str::from_utf8(&path_bytes) {
+    let raw = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
         Err(_) => return u64::MAX,
     };
+
+    // Resolve relative paths against the process CWD.
+    let resolved_buf;
+    let path: &str = if raw.starts_with('/') {
+        raw
+    } else {
+        let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
+        resolved_buf = if cwd == "/" {
+            alloc::format!("/{}", raw)
+        } else {
+            alloc::format!("{}/{}", cwd, raw)
+        };
+        resolved_buf.as_str()
+    };
+
     let flags = frame.rsi;
     let wants_write = flags & 0b11 != 0;
     let wants_create = flags & 0x40 != 0;
@@ -1584,6 +1605,68 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             u64::MAX
         }
     }
+}
+
+fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+
+    // Resolve against current CWD if relative.
+    let resolved_buf;
+    let abs_path: &str = if path.starts_with('/') {
+        path
+    } else {
+        let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
+        resolved_buf = if cwd == "/" {
+            alloc::format!("/{}", path)
+        } else {
+            alloc::format!("{}/{}", cwd, path)
+        };
+        resolved_buf.as_str()
+    };
+
+    // Verify the path exists in VFS.
+    {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return u64::MAX;
+        };
+        match vfs.open(abs_path) {
+            Ok(h) => { let _ = vfs.close(h); }
+            Err(_) => {
+                crate::serial_println!("[HELIOS] chdir({}) -> not found", abs_path);
+                return u64::MAX;
+            }
+        }
+    }
+
+    crate::sched::with_scheduler(|s| {
+        s.current_process_mut().cwd = alloc::string::String::from(abs_path);
+    });
+    crate::serial_println!("[HELIOS] chdir({}) -> ok", abs_path);
+    0
+}
+
+fn sys_getcwd(frame: &mut SyscallFrame) -> u64 {
+    let buf_ptr = frame.rdi as *mut u8;
+    let buf_len = frame.rsi as usize;
+    if buf_ptr.is_null() || buf_len == 0 {
+        return u64::MAX;
+    }
+    let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
+    let bytes = cwd.as_bytes();
+    let copy_len = bytes.len().min(buf_len - 1);
+    unsafe {
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), buf_ptr, copy_len);
+        buf_ptr.add(copy_len).write(0);
+    }
+    frame.rdi // return buf pointer per Linux getcwd ABI
 }
 
 fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
@@ -2458,7 +2541,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     if n == 0 {
                         // Return Linux-compatible EAGAIN (errno 11) for compat processes
                         // so musl retries rather than treating it as ENOENT (errno 2).
-                        let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat);
+                        let is_linux = sched.current_process().is_linux_compat;
                         return if is_linux { linux_errno(11) } else { EAGAIN };
                     }
                     // SAFETY: buf_ptr..buf_ptr+count validated as user memory above.
@@ -2468,7 +2551,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     n as u64
                 } else {
                     // Placeholder stdio fds (0/1/2): return EAGAIN for stdin, error for stdout/stderr
-                    let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat);
+                    let is_linux = sched.current_process().is_linux_compat;
                     match fd {
                         0 => if is_linux { linux_errno(11) } else { EAGAIN },
                         _ => 0, // stdout/stderr: invalid for read, silent
@@ -2815,9 +2898,53 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     0
 }
 
-fn sys_fcntl(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] fcntl requested");
-    u64::MAX
+/// Syscall: fcntl (49)
+/// rdi = fd, rsi = cmd, rdx = arg
+///
+/// Minimal implementation covering the commands musl/libc issue during
+/// startup and stdio setup. Returning -1 for everything (as the old stub
+/// did) made `read_to_string` and friends believe the descriptor was
+/// broken, so files appeared empty.
+fn sys_fcntl(frame: &mut SyscallFrame) -> u64 {
+    // Linux fcntl command numbers.
+    const F_DUPFD: u64 = 0;
+    const F_GETFD: u64 = 1;
+    const F_SETFD: u64 = 2;
+    const F_GETFL: u64 = 3;
+    const F_SETFL: u64 = 4;
+    const F_DUPFD_CLOEXEC: u64 = 1030;
+
+    let fd = frame.rdi as i32;
+    let cmd = frame.rsi;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let proc = sched.current_process_mut();
+
+    // Validate the descriptor exists; read its open flags for F_GETFL.
+    let open_flags = match proc.fd_table.get(fd) {
+        Some(desc) => desc.flags,
+        None => return u64::MAX, // EBADF
+    };
+
+    match cmd {
+        // No CLOEXEC tracking yet: report cleared and accept sets as no-ops.
+        F_GETFD => 0,
+        F_SETFD => 0,
+        // Access mode lives in the low bits of `flags` (O_RDONLY=0,
+        // O_WRONLY=1, O_RDWR=2), matching Linux's O_ACCMODE encoding.
+        F_GETFL => open_flags as u64,
+        // We don't honour O_NONBLOCK/O_APPEND changes; accept silently.
+        F_SETFL => 0,
+        // Duplication of descriptors isn't supported yet.
+        F_DUPFD | F_DUPFD_CLOEXEC => {
+            crate::serial_println!("[SYSCALL] fcntl: F_DUPFD unsupported (fd={})", fd);
+            u64::MAX
+        }
+        other => {
+            crate::serial_println!("[SYSCALL] fcntl: unsupported cmd={} (fd={})", other, fd);
+            u64::MAX
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -118,6 +118,7 @@ pub fn fork_current_process(
             is_linux_compat: parent_is_linux_compat,
             brk_base: parent_brk_base,
             brk_current: parent_brk_current,
+            mmap_next: 0,
             sched_type: 0,         // inherit SCHED_NORMAL
             weight: 1024,          // inherit default weight
             cpu_mask: 0xFF,        // inherit all CPUs
@@ -231,6 +232,7 @@ fn sys_fork(
             is_linux_compat: parent.is_linux_compat, // inherit from parent
             brk_base: parent.brk_base,
             brk_current: parent.brk_current,
+            mmap_next: 0,
             sched_type: parent.sched_type,           // inherit scheduling type
             weight: parent.weight,                   // inherit CFS weight
             cpu_mask: parent.cpu_mask,               // inherit CPU mask

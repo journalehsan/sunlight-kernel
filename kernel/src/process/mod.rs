@@ -66,6 +66,11 @@ pub struct Process {
     pub brk_base: u64,
     /// Current Linux compatibility heap break.
     pub brk_current: u64,
+    /// Next free virtual address for anonymous `mmap(addr=0)` allocations.
+    /// 0 means "uninitialized"; the mmap handler lazily seeds it to the
+    /// mmap region base on first use and bumps it per mapping so successive
+    /// anonymous mappings don't alias the same VA range.
+    pub mmap_next: u64,
     pub sched_type: u8,        // SCHED_NORMAL=0, SCHED_FIFO=1 for real-time bypass
     pub weight: u32,           // CFS weight (default 1024)
     pub cpu_mask: u64,         // CPU affinity mask
@@ -213,6 +218,7 @@ impl Process {
             is_linux_compat: false, // default to native SunlightOS
             brk_base: 0,
             brk_current: 0,
+            mmap_next: 0,
             sched_type: 0,          // SCHED_NORMAL
             weight: 1024,           // default CFS weight
             cpu_mask: 0xFF,         // all CPUs
@@ -354,6 +360,7 @@ impl Process {
             is_linux_compat: false,
             brk_base: 0,
             brk_current: 0,
+            mmap_next: 0,
             sched_type: 0,
             weight: 1024,
             cpu_mask: 0xFF,

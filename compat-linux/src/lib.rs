@@ -407,6 +407,8 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         // Tier 6: modern Linux fs variants (preferred by Rust std)
         72 => 49,   // fcntl → SunlightOS Fcntl(49) — same arg layout
         257 => -15, // openat → sys_open(40) via frame shift in kernel
+        79 => 64,   // getcwd → SunlightOS Getcwd(64)
+        80 => 63,   // chdir → SunlightOS Chdir(63)
 
         // Default: unsupported
         _ => -38, // ENOSYS

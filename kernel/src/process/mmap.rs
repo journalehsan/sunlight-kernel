@@ -57,24 +57,33 @@ pub fn sys_mmap(
         return Err(MmapError::InvalidAddress);
     }
 
+    // Base of the anonymous mmap region for hint-less / hinted mappings.
+    const MMAP_REGION_BASE: u64 = 0x10_0000_0000u64;
+
     // Calculate number of pages needed
     let page_count = (length + 4095) / 4096;
+    let span = page_count * 4096;
 
-    // Determine the address to map at
-    let map_addr = if addr == 0 {
-        // Find a free address (simple allocation strategy)
-        // For now, use a fixed area starting at 0x10_0000_0000
-        // TODO: Implement proper free space tracking
-        0x10_0000_0000u64
-    } else if (flags & MAP_FIXED) != 0 {
-        // Use the provided address
+    // Determine the address to map at. For anonymous mappings without a
+    // fixed address we hand out fresh VA ranges from a per-process bump
+    // cursor; returning a fixed base for every call made successive mmaps
+    // alias the same range and corrupted userspace allocators (e.g. musl
+    // mallocng), which then page-faulted on the first free().
+    let map_addr = if (flags & MAP_FIXED) != 0 {
+        // Use the provided address (must be page-aligned).
         if addr & 0xFFF != 0 {
             return Err(MmapError::InvalidAddress);
         }
         addr
     } else {
-        // Address is a hint, but we'll ignore it for now
-        0x10_0000_0000u64
+        // addr == 0 or a non-fixed hint: allocate from the bump cursor.
+        let cur = sched.current_process_mut();
+        if cur.mmap_next < MMAP_REGION_BASE {
+            cur.mmap_next = MMAP_REGION_BASE;
+        }
+        let base = cur.mmap_next;
+        cur.mmap_next = base + span;
+        base
     };
 
     // Check that the address is in user space
