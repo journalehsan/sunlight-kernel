@@ -1,15 +1,12 @@
 //! POSIX-compatible errno support for SunlightOS.
 //!
-//! Phase 1: single global errno backed by an AtomicI32.
-//! Not thread-safe by design; when threads are added this must become
-//! thread-local storage. All callers should treat the value as volatile
-//! (it may change after any libc call).
+//! Uses TLS via the FS segment once `tls::init_tls()` has been called.
+//! Falls back to a global AtomicI32 before that (early _start only).
 
-use core::sync::atomic::{AtomicI32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::sys::Errno;
 
-// Standard POSIX errno constants.
 pub const EPERM: i32 = 1;
 pub const ENOENT: i32 = 2;
 pub const EIO: i32 = 5;
@@ -21,28 +18,43 @@ pub const EFAULT: i32 = 14;
 pub const EINVAL: i32 = 22;
 pub const ENOSYS: i32 = 38;
 
-// Phase 1: single-threaded global errno.
-static ERRNO_VAL: AtomicI32 = AtomicI32::new(0);
+static ERRNO_FALLBACK: AtomicI32 = AtomicI32::new(0);
+static TLS_READY: AtomicBool = AtomicBool::new(false);
 
-pub fn set_errno(e: i32) {
-    ERRNO_VAL.store(e, Ordering::Relaxed);
-}
-
-pub fn get_errno() -> i32 {
-    ERRNO_VAL.load(Ordering::Relaxed)
+/// Called by `tls::init_tls()` after FS_BASE is set up.
+pub(crate) fn mark_tls_ready() {
+    TLS_READY.store(true, Ordering::Release);
 }
 
 /// C ABI entry point: `int *__errno_location(void)`.
-/// Rust libc and many C-ABI callers use this to locate the errno cell.
 ///
-/// # Safety
-/// Phase 1: returns a pointer to the global errno. Not thread-safe.
+/// Returns the per-thread errno cell via `fs:8` when TLS is ready,
+/// or the global fallback before that.
 #[no_mangle]
 pub unsafe extern "C" fn __errno_location() -> *mut i32 {
-    ERRNO_VAL.as_ptr() as *mut i32
+    if !TLS_READY.load(Ordering::Acquire) {
+        return ERRNO_FALLBACK.as_ptr() as *mut i32;
+    }
+    // Read the TCB self-pointer from fs:0, then return the errno cell at +8.
+    let tcb_ptr: usize;
+    core::arch::asm!(
+        "mov {}, fs:0",
+        out(reg) tcb_ptr,
+        options(readonly, nostack, preserves_flags)
+    );
+    (tcb_ptr + 8) as *mut i32
 }
 
-/// Map a `sunlight-libc` `Errno` variant to a POSIX errno code and store it.
+pub fn set_errno(e: i32) {
+    unsafe {
+        *__errno_location() = e;
+    }
+}
+
+pub fn get_errno() -> i32 {
+    unsafe { *__errno_location() }
+}
+
 pub fn set_from_errno(e: Errno) {
     let code = match e {
         Errno::Failed => EIO,

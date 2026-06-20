@@ -30,6 +30,8 @@ pub mod alloc;
 pub mod fd;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
 pub mod time;
+/// Thread-Local Storage bootstrap: `Tcb` layout + `init_tls()`.
+pub mod tls;
 
 pub use rand::{getrandom, GRND_NONCRYPTO};
 pub use sys::{Errno, EAGAIN_RAW, ERR_RAW};
