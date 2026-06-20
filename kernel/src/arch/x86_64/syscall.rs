@@ -2022,9 +2022,77 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
-fn sys_lseek(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] lseek requested");
-    u64::MAX
+/// Syscall: lseek (44)
+/// rdi = fd, rsi = offset (i64), rdx = whence (0=SET 1=CUR 2=END)
+fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
+    use sunlight_fs::vfs::FileHandle as VfsHandle;
+
+    let fd      = frame.rdi as i32;
+    let offset  = frame.rsi as i64;
+    let whence  = frame.rdx as i32;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+
+    // Copy the two values we need before releasing the borrow.
+    let (current_offset, vfs_handle) = match sched.current_process().fd_table.get(fd) {
+        Some(e) if e.handle.is_vfs() => (e.offset, e.handle.vfs_handle()),
+        Some(_) => return u64::MAX, // ESPIPE: pipes and TTY fds are not seekable
+        None    => return u64::MAX, // EBADF
+    };
+
+    match whence {
+        // SEEK_SET ─────────────────────────────────────────────────────────
+        0 => {
+            if offset < 0 { return u64::MAX; } // EINVAL
+            let new_off = offset as usize;
+            if let Some(e) = sched.current_process_mut().fd_table.get_mut(fd) {
+                e.offset = new_off;
+            }
+            new_off as u64
+        }
+        // SEEK_CUR ─────────────────────────────────────────────────────────
+        1 => {
+            match (current_offset as i64).checked_add(offset) {
+                Some(v) if v >= 0 => {
+                    let new_off = v as usize;
+                    if let Some(e) = sched.current_process_mut().fd_table.get_mut(fd) {
+                        e.offset = new_off;
+                    }
+                    new_off as u64
+                }
+                _ => u64::MAX, // EINVAL: would underflow
+            }
+        }
+        // SEEK_END ─────────────────────────────────────────────────────────
+        // Must release SCHEDULER before taking KERNEL_VFS (lock-order rule).
+        2 => {
+            drop(sched);
+
+            let file_size = {
+                let mut guard = crate::KERNEL_VFS.lock();
+                match guard.as_mut() {
+                    Some(vfs) => match vfs.fstat_handle(VfsHandle(vfs_handle)) {
+                        Ok(s)  => s.size,
+                        Err(_) => return u64::MAX,
+                    },
+                    None => return u64::MAX,
+                }
+            };
+
+            match (file_size as i64).checked_add(offset) {
+                Some(v) if v >= 0 => {
+                    let new_off = v as usize;
+                    let mut sched2 = crate::sched::SCHEDULER.lock();
+                    if let Some(e) = sched2.current_process_mut().fd_table.get_mut(fd) {
+                        e.offset = new_off;
+                    }
+                    new_off as u64
+                }
+                _ => u64::MAX, // EINVAL: negative resulting offset
+            }
+        }
+        _ => u64::MAX, // EINVAL: unknown whence
+    }
 }
 
 fn sys_dup(_frame: &mut SyscallFrame) -> u64 {
@@ -2063,9 +2131,55 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
-fn sys_fstat(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] fstat requested");
-    u64::MAX
+/// Syscall: fstat (48)
+/// rdi = fd, rsi = pointer to 24-byte Stat buffer in user space.
+/// Stat layout (matches `sys_stat_path` and `libc::Stat`):
+///   [0..8]  size u64, [8..12] uid u32, [12..16] gid u32,
+///   [16..18] mode u16, [18] file_type u8, [19] pad, [20..24] nlinks u32.
+fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
+    use sunlight_fs::vfs::{FileHandle as VfsHandle, FileType};
+
+    let fd      = frame.rdi as i32;
+    let buf_ptr = frame.rsi;
+
+    if !is_user_address(buf_ptr) || !is_user_address(buf_ptr + 23) {
+        return u64::MAX;
+    }
+
+    // Read vfs_handle from fd table; release scheduler before taking VFS lock.
+    let vfs_handle = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_process().fd_table.get(fd) {
+            Some(e) if e.handle.is_vfs() => e.handle.vfs_handle(),
+            Some(_) => return u64::MAX, // ESPIPE
+            None    => return u64::MAX, // EBADF
+        }
+    };
+
+    let stat = {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else { return u64::MAX; };
+        match vfs.fstat_handle(VfsHandle(vfs_handle)) {
+            Ok(s)  => s,
+            Err(_) => return u64::MAX,
+        }
+    };
+
+    let mut record = [0u8; 24];
+    record[0..8].copy_from_slice(&(stat.size as u64).to_le_bytes());
+    record[8..12].copy_from_slice(&stat.uid.to_le_bytes());
+    record[12..16].copy_from_slice(&stat.gid.to_le_bytes());
+    record[16..18].copy_from_slice(&stat.mode.to_le_bytes());
+    record[18] = match stat.file_type {
+        FileType::File      => 1,
+        FileType::Directory => 2,
+    };
+    record[20..24].copy_from_slice(&stat.nlinks.to_le_bytes());
+    // SAFETY: buf_ptr..buf_ptr+23 validated as user memory above.
+    unsafe {
+        core::ptr::copy_nonoverlapping(record.as_ptr(), buf_ptr as *mut u8, 24);
+    }
+    0
 }
 
 fn sys_fcntl(_frame: &mut SyscallFrame) -> u64 {

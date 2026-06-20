@@ -6,7 +6,11 @@ use crate::{fstat as libc_fstat, lseek as libc_lseek, Fd, Stat};
 /// Reposition the read/write offset of an open file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn lseek(fd: i32, offset: i64, whence: i32) -> i64 {
-    match libc_lseek(Fd(fd as u32), offset, whence as u64) {
+    if whence < 0 || whence > 2 {
+        set_errno(EINVAL);
+        return -1;
+    }
+    match libc_lseek(Fd(fd as u32), offset, whence) {
         Ok(pos) => pos as i64,
         Err(e) => {
             crate::errno::set_from_errno(e);

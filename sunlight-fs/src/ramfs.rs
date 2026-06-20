@@ -280,6 +280,19 @@ impl FileSystem for RamFs {
         Ok(())
     }
 
+    fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
+        let idx = self.handle_entry_idx(handle)?;
+        let ft = if self.is_dir(idx) { FileType::Directory } else { FileType::File };
+        Ok(FileStat {
+            file_type: ft,
+            size: if ft == FileType::Directory { 0 } else { self.entry_data_len(idx) },
+            uid: self.entry_uid(idx),
+            gid: self.entry_gid(idx),
+            mode: self.entry_mode(idx),
+            nlinks: if ft == FileType::Directory { 2 } else { 1 },
+        })
+    }
+
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
         let entry_idx = self.entry_idx(path)?;
         let ft = if self.is_dir(entry_idx) {

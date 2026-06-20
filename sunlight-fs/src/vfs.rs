@@ -96,6 +96,9 @@ pub trait FileSystem {
         -> Result<usize, FsError>;
     fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError>;
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError>;
+    /// Return metadata for an open handle without a path round-trip.
+    /// Used by `sys_fstat` and `sys_lseek(SEEK_END)`.
+    fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError>;
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError>;
     fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError>;
     fn chmod(&mut self, path: &str, mode: u16) -> Result<(), FsError>;
@@ -205,6 +208,18 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         }
         *slot = None;
         Ok(())
+    }
+
+    fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
+        let open = self.handle_slot(handle)?;
+        Ok(FileStat {
+            file_type: FileType::File,
+            size: open.size as usize,
+            uid: 0,
+            gid: 0,
+            mode: mode::FILE_755,
+            nlinks: 1,
+        })
     }
 
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
@@ -329,6 +344,13 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         match self {
             Self::Ram(fs) => fs.close(handle),
             Self::Fat(fs) => fs.close(handle),
+        }
+    }
+
+    fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
+        match self {
+            Self::Ram(fs) => fs.fstat_handle(handle),
+            Self::Fat(fs) => fs.fstat_handle(handle),
         }
     }
 
@@ -478,6 +500,18 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::BadHandle)?
             .fs
             .close(local_handle)
+    }
+
+    /// Return metadata for an open handle.  Used by `sys_fstat` and
+    /// `sys_lseek(SEEK_END)` so they can avoid a path round-trip.
+    pub fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
+        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        self.mounts
+            .get_mut(mount_idx)
+            .and_then(Option::as_mut)
+            .ok_or(FsError::BadHandle)?
+            .fs
+            .fstat_handle(local_handle)
     }
 
     pub fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {

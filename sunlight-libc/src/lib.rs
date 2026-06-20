@@ -57,9 +57,9 @@ pub const O_RDWR: u64 = 0x2;
 pub const O_CREAT: u64 = 0x40;
 pub const O_TRUNC: u64 = 0x200;
 pub const O_APPEND: u64 = 0x400;
-pub const SEEK_SET: u64 = 0;
-pub const SEEK_CUR: u64 = 1;
-pub const SEEK_END: u64 = 2;
+pub const SEEK_SET: i32 = 0;
+pub const SEEK_CUR: i32 = 1;
+pub const SEEK_END: i32 = 2;
 
 /// Copy `bytes` into `buf` as a NUL-terminated C string.
 fn cstr<'a>(buf: &'a mut [u8], bytes: &[u8]) -> Result<*const u8, Errno> {
@@ -119,8 +119,8 @@ pub fn write(fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
     sys::check(ret).map(|n| n as usize)
 }
 
-pub fn lseek(fd: Fd, offset: i64, whence: u64) -> Result<u64, Errno> {
-    let ret = unsafe { sys::syscall3(sys::SYS_LSEEK, fd.0 as u64, offset as u64, whence) };
+pub fn lseek(fd: Fd, offset: i64, whence: i32) -> Result<u64, Errno> {
+    let ret = unsafe { sys::syscall3(sys::SYS_LSEEK, fd.0 as u64, offset as u64, whence as u64) };
     sys::check(ret)
 }
 
