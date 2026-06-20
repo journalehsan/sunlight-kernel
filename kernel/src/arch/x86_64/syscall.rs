@@ -1281,6 +1281,14 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             CapRights::new(CapRights::WRITE | CapRights::FSTAT),
             1,
         );
+        // Wire stderr to the same TTY ring as stdout so eprintln!/write!(stderr)
+        // output appears in the shell rather than falling through to serial only.
+        let _ = child.fd_table.install_at(
+            2,
+            FileHandle::tty_stdout(tab),
+            CapRights::new(CapRights::WRITE | CapRights::FSTAT),
+            2,
+        );
     }
 
     if let Some(entry) = stdout_entry {
