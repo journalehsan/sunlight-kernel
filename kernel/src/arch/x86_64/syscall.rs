@@ -297,6 +297,16 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1011; // Internal code for Linux sigaltstack
                     }
                 }
+                -13 => {
+                    if linux_num == 16 {
+                        num = 1012; // Internal code for Linux ioctl
+                    }
+                }
+                -14 => {
+                    if linux_num == 20 {
+                        num = 1013; // Internal code for Linux writev
+                    }
+                }
                 -38 => {
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
                     num = 1005; // Linux ENOSYS
@@ -387,6 +397,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1009 => sys_linux_tkill(frame),
         1010 => sys_linux_mmap(frame),
         1011 => sys_linux_sigaltstack(frame),
+        1012 => sys_linux_ioctl(frame),
+        1013 => sys_linux_writev(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1905,6 +1917,138 @@ fn sys_linux_sigaltstack(frame: &mut SyscallFrame) -> u64 {
     }
 
     0
+}
+
+fn sys_linux_ioctl(_frame: &mut SyscallFrame) -> u64 {
+    linux_errno(25) // ENOTTY
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct LinuxIovec {
+    iov_base: u64,
+    iov_len: u64,
+}
+
+fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
+    const EAGAIN: u64 = u64::MAX - 1;
+
+    let fd = frame.rdi as i32;
+    let iov_ptr = frame.rsi;
+    let iovcnt = frame.rdx as usize;
+
+    if iovcnt == 0 {
+        return 0;
+    }
+    if !is_user_address(iov_ptr) {
+        return u64::MAX;
+    }
+
+    let iov_bytes = match (iovcnt as u64).checked_mul(core::mem::size_of::<LinuxIovec>() as u64) {
+        Some(bytes) => bytes,
+        None => return u64::MAX,
+    };
+    let iov_end = match iov_ptr.checked_add(iov_bytes.saturating_sub(1)) {
+        Some(end) => end,
+        None => return u64::MAX,
+    };
+    if !is_user_address(iov_end) {
+        return u64::MAX;
+    }
+
+    let mut total_written = 0u64;
+    let iovecs = iov_ptr as *const LinuxIovec;
+
+    for idx in 0..iovcnt {
+        let iov = unsafe { *iovecs.add(idx) };
+        if iov.iov_len == 0 {
+            continue;
+        }
+
+        let mut remaining = iov.iov_len;
+        let mut offset = 0u64;
+
+        while remaining > 0 {
+            let chunk = remaining.min(4096);
+            let base = match iov.iov_base.checked_add(offset) {
+                Some(addr) => addr,
+                None => {
+                    return if total_written == 0 {
+                        u64::MAX
+                    } else {
+                        total_written
+                    }
+                }
+            };
+            let end = match base.checked_add(chunk.saturating_sub(1)) {
+                Some(addr) => addr,
+                None => {
+                    return if total_written == 0 {
+                        u64::MAX
+                    } else {
+                        total_written
+                    }
+                }
+            };
+            if !is_user_address(base) || !is_user_address(end) {
+                return if total_written == 0 {
+                    u64::MAX
+                } else {
+                    total_written
+                };
+            }
+
+            let mut temp_frame = SyscallFrame {
+                rax: 43,
+                rbx: frame.rbx,
+                rcx: frame.rcx,
+                rdx: chunk,
+                rsi: base,
+                rdi: fd as u64,
+                rbp: frame.rbp,
+                r8: frame.r8,
+                r9: frame.r9,
+                r10: frame.r10,
+                r11: frame.r11,
+                r12: frame.r12,
+                r13: frame.r13,
+                r14: frame.r14,
+                r15: frame.r15,
+            };
+
+            let res = sys_write(&mut temp_frame);
+            if res == u64::MAX {
+                return if total_written == 0 {
+                    u64::MAX
+                } else {
+                    total_written
+                };
+            }
+            if res == EAGAIN {
+                return if total_written == 0 {
+                    EAGAIN
+                } else {
+                    total_written
+                };
+            }
+            if res == 0 {
+                return total_written;
+            }
+
+            total_written = total_written.saturating_add(res);
+            if res < chunk {
+                return total_written;
+            }
+
+            offset = match offset.checked_add(res) {
+                Some(next) => next,
+                None => return total_written,
+            };
+            remaining -= res;
+        }
+    }
+
+    total_written
 }
 
 /// Syscall: ReadDir (60)

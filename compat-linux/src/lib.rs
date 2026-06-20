@@ -346,9 +346,11 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         // Tier 1: minimal I/O (needed for all musl programs)
         0 => 42,   // read → SunlightOS Read(42)
         1 => 43,   // write → SunlightOS Write(43)
+        20 => -14, // writev → special Linux ABI shim
         2 => 40,   // open → SunlightOS Open(40)
         3 => 41,   // close → SunlightOS Close(41)
         7 => -7,   // poll → special bounded readiness stub
+        16 => -13, // ioctl → stub as ENOTTY for tty probing
         60 => 20,  // exit(code) → SunlightOS ProcessExit(20)
         231 => 20, // exit_group(code) → SunlightOS ProcessExit(20)
 
@@ -394,7 +396,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
 pub fn needs_special_handling(linux_nr: u64) -> bool {
     matches!(
         linux_nr,
-        7 | 9 | 13 | 14 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 334
+        7 | 9 | 13 | 14 | 16 | 20 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 334
     )
 }
 
@@ -405,6 +407,7 @@ mod tests {
     #[test]
     fn basic_syscalls_translate() {
         assert_eq!(translate_syscall(1), 43); // write
+        assert_eq!(translate_syscall(20), -14); // writev
         assert_eq!(translate_syscall(0), 42); // read
         assert_eq!(translate_syscall(60), 20); // exit
         assert_eq!(translate_syscall(12), -2); // brk
@@ -414,6 +417,7 @@ mod tests {
         assert_eq!(translate_syscall(273), -5); // set_robust_list
         assert_eq!(translate_syscall(334), -6); // rseq
         assert_eq!(translate_syscall(7), -7); // poll
+        assert_eq!(translate_syscall(16), -13); // ioctl
         assert_eq!(translate_syscall(13), -8); // rt_sigaction
         assert_eq!(translate_syscall(14), -9); // rt_sigprocmask
         assert_eq!(translate_syscall(62), 72); // kill
@@ -436,6 +440,8 @@ mod tests {
         assert!(needs_special_handling(273));
         assert!(needs_special_handling(334));
         assert!(needs_special_handling(7));
+        assert!(needs_special_handling(16));
+        assert!(needs_special_handling(20));
         assert!(needs_special_handling(13));
         assert!(needs_special_handling(14));
         assert!(needs_special_handling(200));
