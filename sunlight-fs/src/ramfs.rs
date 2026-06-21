@@ -706,6 +706,27 @@ max_ttys = 6
         mode::FILE_755,
         b"#!/sunlight/sunlight-utils\n",
     ),
+    RamEntry::file(
+        "/bin/kill",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/killall",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/pkill",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
     RamEntry::file("/bin/top", 0, 0, mode::FILE_755, b"#!/sunlight/top\n"),
     RamEntry::file(
         "/bin/sunlightctl",

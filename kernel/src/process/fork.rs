@@ -141,6 +141,7 @@ pub fn fork_current_process(
             cpu_runtime_ns: 0,
             last_start_ns: 0,
             cwd: parent_cwd,
+            exit_cleanup_pending: false,
         };
 
         // Setup kernel stack top
@@ -255,6 +256,7 @@ fn sys_fork(
             cpu_runtime_ns: 0,
             last_start_ns: 0,
             cwd: parent.cwd.clone(),
+            exit_cleanup_pending: false,
         };
 
         // Setup kernel stack top

@@ -100,7 +100,7 @@ pub fn sys_mmap(
         let page_vaddr = VirtAddr::new(map_addr + i * 4096);
         let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
 
-        let frame_addr = match pmm.alloc_frame() {
+        let frame_addr = match pmm.alloc_frame_owned(pid as u32) {
             Some(addr) => addr,
             None => {
                 // Memory pressure: try to evict one anonymous page to ZRAM
@@ -120,7 +120,7 @@ pub fn sys_mmap(
                 if evicted == 0 {
                     return Err(MmapError::NoMemory);
                 }
-                pmm.alloc_frame().ok_or(MmapError::NoMemory)?
+                pmm.alloc_frame_owned(pid as u32).ok_or(MmapError::NoMemory)?
             }
         };
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };

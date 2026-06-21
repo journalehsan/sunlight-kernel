@@ -9,6 +9,13 @@ pub struct AddressSpace {
     shared_bump: u64,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReclaimStats {
+    pub user_frames: usize,
+    pub page_tables: usize,
+    pub swap_blocks: usize,
+}
+
 impl AddressSpace {
     /// Create a new address space, copying kernel higher-half mappings.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
@@ -290,6 +297,80 @@ impl AddressSpace {
         let phys = p1e.addr();
         p1e.set_unused();
         Some(phys)
+    }
+
+    /// Free all lower-half user mappings and page tables. The root PML4 frame
+    /// is freed when `free_root` is true; callers must ensure CR3 no longer
+    /// points at this address space before setting that flag.
+    pub unsafe fn reclaim_user_space(
+        &mut self,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+        free_root: bool,
+    ) -> ReclaimStats {
+        let mut stats = ReclaimStats::default();
+        let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
+
+        for p4_idx in 0..256 {
+            let p4e = &mut pml4[p4_idx];
+            if p4e.is_unused() {
+                continue;
+            }
+
+            let p3_phys = p4e.addr();
+            let p3 = &mut *((hhdm_offset + p3_phys.as_u64()).as_mut_ptr::<PageTable>());
+            for p3e in p3.iter_mut() {
+                if p3e.is_unused() {
+                    continue;
+                }
+
+                let p2_phys = p3e.addr();
+                let p2 = &mut *((hhdm_offset + p2_phys.as_u64()).as_mut_ptr::<PageTable>());
+                for p2e in p2.iter_mut() {
+                    if p2e.is_unused() {
+                        continue;
+                    }
+
+                    let p1_phys = p2e.addr();
+                    let p1 = &mut *((hhdm_offset + p1_phys.as_u64()).as_mut_ptr::<PageTable>());
+                    for p1e in p1.iter_mut() {
+                        if p1e.is_unused() {
+                            continue;
+                        }
+                        if p1e.flags().contains(PageTableFlags::PRESENT) {
+                            let phys = p1e.addr();
+                            crate::memory::swap::untrack(phys);
+                            pmm.free_frame(phys);
+                            stats.user_frames += 1;
+                        } else if p1e.addr().as_u64() != 0 {
+                            let _ =
+                                crate::memory::zram::discard_block((p1e.addr().as_u64() >> 12) as usize);
+                            stats.swap_blocks += 1;
+                        }
+                        p1e.set_unused();
+                    }
+
+                    p2e.set_unused();
+                    pmm.free_frame(p1_phys);
+                    stats.page_tables += 1;
+                }
+
+                p3e.set_unused();
+                pmm.free_frame(p2_phys);
+                stats.page_tables += 1;
+            }
+
+            p4e.set_unused();
+            pmm.free_frame(p3_phys);
+            stats.page_tables += 1;
+        }
+
+        if free_root {
+            pmm.free_frame(self.pml4_phys);
+            stats.page_tables += 1;
+        }
+
+        stats
     }
 
     /// Count the number of present user-space 4 KiB pages mapped in this

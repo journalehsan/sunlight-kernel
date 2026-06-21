@@ -26,6 +26,7 @@ pub enum SunlightSyscall {
     TtyStdinPush = 23,
     TtyStdoutPull = 24,
     ProcessIsAlive = 25,
+    Kill = 72,
     // NOTE: 50 belongs to sys_mmap in the kernel dispatcher — GetTimeUtc
     // previously sat there and silently invoked mmap.
     GetTimeUtc = 81,
@@ -788,6 +789,11 @@ pub fn process_is_alive(pid: u64) -> bool {
     // SAFETY: ProcessIsAlive takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ProcessIsAlive, pid, 0, 0, 0, 0, 0, 0) };
     ret == 1
+}
+
+pub fn kill(pid: u64, sig: u32) -> bool {
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::Kill, pid, sig as u64, 0, 0, 0, 0, 0) };
+    ret == 0
 }
 
 /// Set the nice value (-10..=10) for `pid` (0 = current process).

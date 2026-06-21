@@ -60,6 +60,10 @@ impl Signal {
     pub fn as_u32(self) -> u32 {
         self as u32
     }
+
+    pub fn default_exit_code(self) -> i32 {
+        128 + self.as_u32() as i32
+    }
 }
 
 /// How a signal is handled

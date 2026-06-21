@@ -7,6 +7,7 @@ const MAX_FRAMES: usize = 4 * 1024 * 1024; // 16 GiB (bitmap-tracked region)
 const BITMAP_SIZE: usize = MAX_FRAMES / 8;
 
 static mut BITMAP: [u8; BITMAP_SIZE] = [0; BITMAP_SIZE];
+static mut FRAME_OWNER: [u32; MAX_FRAMES] = [u32::MAX; MAX_FRAMES];
 static mut TOTAL_FRAMES: usize = 0;
 static mut FREE_FRAMES: usize = 0;
 
@@ -21,6 +22,9 @@ extern "C" {
 
 pub struct PhysicalMemoryManager;
 
+pub const PMM_OWNER_FREE: u32 = u32::MAX;
+pub const PMM_OWNER_KERNEL: u32 = 0;
+
 impl PhysicalMemoryManager {
     pub const fn new() -> Self {
         Self
@@ -31,6 +35,7 @@ impl PhysicalMemoryManager {
     pub unsafe fn init(&mut self, entries: &[&Entry]) {
         // Mark all as used initially.
         BITMAP.fill(0xFF);
+        FRAME_OWNER.fill(PMM_OWNER_KERNEL);
 
         let mut total = 0usize;
         let mut free = 0usize;
@@ -50,6 +55,7 @@ impl PhysicalMemoryManager {
                     // machines with more than MAX_FRAMES of RAM.
                     if f < MAX_FRAMES {
                         BITMAP[f / 8] &= !(1 << (f % 8));
+                        FRAME_OWNER[f] = PMM_OWNER_FREE;
                         free += 1;
                         total += 1;
                     }
@@ -73,6 +79,7 @@ impl PhysicalMemoryManager {
                     free -= 1;
                 }
                 BITMAP[f / 8] |= 1 << (f % 8);
+                FRAME_OWNER[f] = PMM_OWNER_KERNEL;
             }
         }
 
@@ -82,6 +89,11 @@ impl PhysicalMemoryManager {
 
     /// Allocate one 4 KiB physical frame. Returns physical address.
     pub fn alloc_frame(&mut self) -> Option<PhysAddr> {
+        self.alloc_frame_owned(PMM_OWNER_KERNEL)
+    }
+
+    /// Allocate one 4 KiB physical frame and record an owner PID.
+    pub fn alloc_frame_owned(&mut self, owner_pid: u32) -> Option<PhysAddr> {
         let free = unsafe { FREE_FRAMES };
         if free == 0 {
             return None;
@@ -94,6 +106,7 @@ impl PhysicalMemoryManager {
                         if *byte & (1 << bit) == 0 {
                             let frame = byte_idx * 8 + bit;
                             *byte |= 1 << bit;
+                            FRAME_OWNER[frame] = owner_pid;
                             FREE_FRAMES -= 1;
                             let count = ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
                             if count % 100 == 0 || count < 10 {
@@ -117,6 +130,11 @@ impl PhysicalMemoryManager {
     /// Allocate `count` physically-contiguous 4 KiB frames.
     /// Returns the physical address of the first frame on success.
     pub fn alloc_frames(&mut self, count: usize) -> Option<PhysAddr> {
+        self.alloc_frames_owned(count, PMM_OWNER_KERNEL)
+    }
+
+    /// Allocate `count` physically-contiguous 4 KiB frames and record an owner PID.
+    pub fn alloc_frames_owned(&mut self, count: usize, owner_pid: u32) -> Option<PhysAddr> {
         if count == 0 {
             return None;
         }
@@ -138,6 +156,7 @@ impl PhysicalMemoryManager {
                 // SAFETY: same as above.
                 unsafe {
                     BITMAP[f / 8] |= 1 << (f % 8);
+                    FRAME_OWNER[f] = owner_pid;
                     FREE_FRAMES -= 1;
                 }
             }
@@ -153,6 +172,7 @@ impl PhysicalMemoryManager {
         if frame < MAX_FRAMES {
             unsafe {
                 BITMAP[frame / 8] &= !(1 << (frame % 8));
+                FRAME_OWNER[frame] = PMM_OWNER_FREE;
                 FREE_FRAMES += 1;
             }
             let count = FREE_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -170,6 +190,27 @@ impl PhysicalMemoryManager {
     /// Return (total_frames, free_frames) for diagnostics.
     pub fn stats(&self) -> (usize, usize) {
         unsafe { (TOTAL_FRAMES, FREE_FRAMES) }
+    }
+
+    pub fn owner_of(&self, addr: PhysAddr) -> Option<u32> {
+        let frame = (addr.as_u64() / FRAME_SIZE as u64) as usize;
+        if frame >= MAX_FRAMES {
+            return None;
+        }
+        let owner = unsafe { FRAME_OWNER[frame] };
+        (owner != PMM_OWNER_FREE).then_some(owner)
+    }
+
+    pub fn owned_frame_count(&self, owner_pid: u32) -> usize {
+        unsafe { FRAME_OWNER.iter().filter(|&&owner| owner == owner_pid).count() }
+    }
+
+    pub fn diagnostic_report_pid(&self, owner_pid: u32) {
+        crate::serial_println!(
+            "[PMM-DIAG] pid={} owned_frames={}",
+            owner_pid,
+            self.owned_frame_count(owner_pid)
+        );
     }
 
     /// Print diagnostic information about memory allocation

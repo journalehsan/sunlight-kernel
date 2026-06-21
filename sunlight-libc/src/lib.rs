@@ -406,6 +406,16 @@ pub fn waitpid(pid: u64) -> Result<u64, Errno> {
     }
 }
 
+pub fn kill(pid: u64, sig: u32) -> Result<(), Errno> {
+    let ret = unsafe { sys::syscall2(sys::SYS_KILL, pid, sig as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn map_telemetry() -> Result<*const u8, Errno> {
+    let ret = unsafe { sys::syscall0(sys::SYS_MAP_TELEMETRY) };
+    sys::check(ret).map(|addr| addr as *const u8)
+}
+
 /// Write all bytes in `buf` to `fd`, looping over partial writes.
 pub fn write_all(fd: Fd, mut buf: &[u8]) -> Result<(), Errno> {
     while !buf.is_empty() {

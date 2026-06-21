@@ -83,6 +83,9 @@ fn run(args: &[&str]) -> i32 {
         "echo" => cmd_echo(rest),
         "whoami" => cmd_whoami(),
         "id" => cmd_id(rest),
+        "kill" => cmd_kill(rest),
+        "killall" => cmd_killall(rest, false),
+        "pkill" => cmd_killall(rest, true),
         "free" => cmd_free(rest),
         "freezram" => cmd_freezram(rest),
         "nice" => cmd_nice(rest),
@@ -219,6 +222,175 @@ fn cmd_mkdir(args: &[&str]) -> i32 {
         }
     }
     0
+}
+
+const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
+const TELEMETRY_MAX_PROCS: usize = 64;
+const SIGTERM: u32 = 15;
+const SIGKILL: u32 = 9;
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Default)]
+struct TelemetryProcessStat {
+    pid: u32,
+    ppid: u32,
+    state: u8,
+    _pad: [u8; 3],
+    name: [u8; 32],
+    cpu_ticks: u64,
+    mem_pages: u32,
+    _pad2: u32,
+}
+
+#[repr(C)]
+struct TelemetryPage {
+    magic: u64,
+    version: u32,
+    sequence: u32,
+    uptime_secs: u64,
+    total_ram_kb: u64,
+    used_ram_kb: u64,
+    zram_orig_kb: u64,
+    zram_comp_kb: u64,
+    net_rx_bytes: u64,
+    net_tx_bytes: u64,
+    tick_hz: u32,
+    cpu_count: u8,
+    _pad: [u8; 3],
+    sample_time_ns: u64,
+    proc_count: u32,
+    procs: [TelemetryProcessStat; TELEMETRY_MAX_PROCS],
+}
+
+fn telemetry_page() -> Option<&'static TelemetryPage> {
+    let ptr = libc::map_telemetry().ok()? as *const TelemetryPage;
+    if ptr.is_null() {
+        return None;
+    }
+    let page = unsafe { &*ptr };
+    (page.magic == TELEMETRY_MAGIC).then_some(page)
+}
+
+fn parse_signal(args: &[&str]) -> Result<(u32, usize), i32> {
+    if args.is_empty() {
+        return Ok((SIGTERM, 0));
+    }
+    let sig = match args[0] {
+        "-9" | "-KILL" | "-SIGKILL" => Some(SIGKILL),
+        "-15" | "-TERM" | "-SIGTERM" => Some(SIGTERM),
+        _ => None,
+    };
+    match sig {
+        Some(signal) => Ok((signal, 1)),
+        None => Ok((SIGTERM, 0)),
+    }
+}
+
+fn cmd_kill(args: &[&str]) -> i32 {
+    let (signal, start) = match parse_signal(args) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
+    if start >= args.len() {
+        let _ = write_all(b"kill: missing pid\n");
+        return 1;
+    }
+    let Some(pid) = parse_u64(args[start]) else {
+        let _ = write_all(b"kill: invalid pid\n");
+        return 1;
+    };
+    if libc::kill(pid, signal).is_err() {
+        let _ = write_all(b"kill: signal delivery failed\n");
+        return 1;
+    }
+    0
+}
+
+fn cmd_killall(args: &[&str], substring: bool) -> i32 {
+    let (signal, start) = match parse_signal(args) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
+    if start >= args.len() {
+        let msg: &[u8] = if substring {
+            b"pkill: missing pattern\n"
+        } else {
+            b"killall: missing name\n"
+        };
+        let _ = write_all(msg);
+        return 1;
+    }
+
+    let pattern = args[start].as_bytes();
+    let Some(page) = telemetry_page() else {
+        let _ = write_all(b"killall: telemetry unavailable\n");
+        return 1;
+    };
+
+    let count = unsafe { core::ptr::read_volatile(core::ptr::addr_of!(page.proc_count)) as usize }
+        .min(TELEMETRY_MAX_PROCS);
+    let mut matched = 0usize;
+    let mut delivered = 0usize;
+    for i in 0..count {
+        let stat = unsafe { core::ptr::read_unaligned(core::ptr::addr_of!(page.procs[i])) };
+        if stat.pid == 0 || stat.state == 3 {
+            continue;
+        }
+        let name = process_name_bytes(&stat.name);
+        let is_match = if substring {
+            contains_bytes(name, pattern)
+        } else {
+            name == pattern
+        };
+        if !is_match {
+            continue;
+        }
+        matched += 1;
+        if libc::kill(stat.pid as u64, signal).is_ok() {
+            delivered += 1;
+        }
+    }
+
+    if matched == 0 {
+        let msg: &[u8] = if substring {
+            b"pkill: no matching process\n"
+        } else {
+            b"killall: no matching process\n"
+        };
+        let _ = write_all(msg);
+        return 1;
+    }
+    if delivered != matched {
+        let _ = write_all(b"killall: partial delivery failure\n");
+        return 1;
+    }
+    0
+}
+
+fn process_name_bytes(name: &[u8; 32]) -> &[u8] {
+    let mut len = 0usize;
+    while len < name.len() && name[len] != 0 {
+        len += 1;
+    }
+    &name[..len]
+}
+
+fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    if needle.len() > haystack.len() {
+        return false;
+    }
+    let last = haystack.len() - needle.len();
+    let mut i = 0usize;
+    while i <= last {
+        if &haystack[i..i + needle.len()] == needle {
+            return true;
+        }
+        i += 1;
+    }
+    false
 }
 
 fn cmd_touch(args: &[&str]) -> i32 {

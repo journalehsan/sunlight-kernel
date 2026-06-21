@@ -128,6 +128,9 @@ pub struct Process {
 
     /// Current working directory, used to resolve relative paths in sys_open/chdir/getcwd.
     pub cwd: alloc::string::String,
+    /// True while a finished task still has kernel-side resources pending
+    /// final reclamation after its address space is no longer active.
+    pub exit_cleanup_pending: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -241,6 +244,7 @@ impl Process {
             cpu_runtime_ns: 0,
             last_start_ns: 0,
             cwd: alloc::string::String::from("/"),
+            exit_cleanup_pending: false,
         }
     }
 
@@ -383,6 +387,7 @@ impl Process {
             cpu_runtime_ns: 0,
             last_start_ns: 0,
             cwd: alloc::string::String::from("/"),
+            exit_cleanup_pending: false,
         }
     }
 

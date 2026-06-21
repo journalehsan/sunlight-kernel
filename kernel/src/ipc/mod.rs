@@ -193,6 +193,20 @@ impl IpcBus {
         self.queue_for(endpoint_id).push_back(msg);
         sched.wake_pid(server_pid);
     }
+
+    pub fn remove_endpoint(&mut self, endpoint_id: u32) {
+        self.queues.retain(|(id, _)| *id != endpoint_id);
+        self.reply_waiters.retain(|(id, _)| *id != endpoint_id);
+    }
+
+    pub fn remove_pid_references(&mut self, pid: usize) {
+        for (_, queue) in self.queues.iter_mut() {
+            queue.retain(|msg| msg.badge != pid as u64);
+        }
+        for (_, waiters) in self.reply_waiters.iter_mut() {
+            waiters.retain(|waiter| *waiter != pid);
+        }
+    }
 }
 
 fn set_reply_target(sched: &mut Scheduler, server_pid: usize, endpoint_id: u32, caller_pid: usize) {

@@ -109,7 +109,7 @@ fn map_segment(
 
         let (frame_addr, existing_flags) = match existing {
             Some((phys, old_flags)) => (phys, Some(old_flags)),
-            None => (pmm.alloc_frame()?, None),
+            None => (pmm.alloc_frame_owned(process.pid as u32)?, None),
         };
 
         let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };

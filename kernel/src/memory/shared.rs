@@ -28,7 +28,9 @@ pub fn alloc_shared_page(
     caps: &mut CapabilityBroker,
     hhdm_offset: VirtAddr,
 ) -> Result<(VirtAddr, CapabilityToken), SharedMemError> {
-    let phys = pmm.alloc_frame().ok_or(SharedMemError::OutOfMemory)?;
+    let phys = pmm
+        .alloc_frame_owned(caller.pid as u32)
+        .ok_or(SharedMemError::OutOfMemory)?;
 
     let virt = unsafe { caller.address_space.map_shared_page(phys, pmm, hhdm_offset) }?;
 

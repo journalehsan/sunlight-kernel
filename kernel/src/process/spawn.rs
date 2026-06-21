@@ -53,7 +53,9 @@ pub fn exec_into_process(
     for i in 0..stack_pages {
         let page_addr = VirtAddr::new(super::layout::USER_STACK_TOP - (i + 1) * 4096);
         let page = Page::from_start_address(page_addr).unwrap();
-        let frame_addr = pmm.alloc_frame().ok_or(SpawnError::NoMemory)?;
+        let frame_addr = pmm
+            .alloc_frame_owned(process.pid as u32)
+            .ok_or(SpawnError::NoMemory)?;
         let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
         let flags =
             PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
@@ -364,13 +366,15 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/bin/rmdir" | "/bin/touch" | "/bin/find" | "/bin/grep" | "/bin/head" | "/bin/tail"
         | "/bin/wc" | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file" | "/bin/stat"
         | "/bin/pwd" | "/bin/date" | "/bin/whoami" | "/bin/id" | "/bin/uname" | "/bin/echo"
-        | "/bin/nice" | "/bin/renice" | "/bin/free" | "/bin/freezram" | "/usr/bin/ls"
+        | "/bin/nice" | "/bin/renice" | "/bin/free" | "/bin/freezram" | "/bin/kill"
+        | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls"
         | "/usr/bin/cat" | "/usr/bin/cp" | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir"
         | "/usr/bin/rmdir" | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep"
         | "/usr/bin/head" | "/usr/bin/tail" | "/usr/bin/wc" | "/usr/bin/sort" | "/usr/bin/uniq"
         | "/usr/bin/cut" | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd" | "/usr/bin/date"
         | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname" | "/usr/bin/echo"
-        | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" | "/usr/bin/freezram" => {
+        | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" | "/usr/bin/freezram"
+        | "/usr/bin/kill" | "/usr/bin/killall" | "/usr/bin/pkill" => {
             Ok(crate::SUNLIGHT_UTILS_ELF_BYTES)
         }
         "/bin/ping"

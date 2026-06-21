@@ -512,7 +512,7 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
     };
 
     // Allocate a new frame for the copy
-    let new_phys = match pmm.alloc_frame() {
+    let new_phys = match pmm.alloc_frame_owned(process.pid as u32) {
         Some(phys) => phys,
         None => return false,
     };
@@ -739,6 +739,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 let next_rsp = sched.processes[next].context_rsp;
                 let next_stack_top = sched.processes[next].kernel_stack_top;
                 let next_fs_base = sched.processes[next].fs_base;
+                let prev = current;
                 sched.current = next;
                 sched.processes[next].state = crate::process::ProcessState::Running;
                 sched.processes[next].last_run_tick = sched.global_tick;
@@ -757,6 +758,10 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 // Note: ltr is NOT needed here — the CPU reads RSP0 from the TSS memory
                 // on each privilege-level stack switch. We only need to update the TSS contents.
                 set_tss_rsp0(next_stack_top);
+
+                if sched.processes[prev].state == crate::process::ProcessState::Finished {
+                    sched.reap_process_resources(prev);
+                }
 
                 next_rsp
             } else {

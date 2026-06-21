@@ -901,6 +901,140 @@ impl Scheduler {
         self.processes.iter_mut().find(|p| p.pid == pid)
     }
 
+    pub fn process_index_by_pid(&self, pid: usize) -> Option<usize> {
+        self.processes.iter().position(|p| p.pid == pid)
+    }
+
+    pub fn wake_for_signal(&mut self, pid: usize) {
+        let Some(idx) = self.process_index_by_pid(pid) else {
+            return;
+        };
+        match self.processes[idx].state {
+            ProcessState::BlockedOnIpc
+            | ProcessState::BlockedOnTimer
+            | ProcessState::BlockedOnIo
+            | ProcessState::Suspended => {
+                self.processes[idx].state = ProcessState::Ready;
+                self.processes[idx].block_start_tick = self.global_tick;
+                self.remove_from_ready_queues(idx);
+                self.enqueue_process(idx);
+            }
+            _ => {}
+        }
+    }
+
+    fn address_space_is_shared(&self, idx: usize) -> bool {
+        let pml4 = self.processes[idx].address_space.pml4_phys;
+        self.processes
+            .iter()
+            .enumerate()
+            .any(|(other_idx, proc)| other_idx != idx && proc.state != ProcessState::Finished && proc.address_space.pml4_phys == pml4)
+    }
+
+    pub fn reap_process_resources(&mut self, idx: usize) {
+        if idx >= self.processes.len() || !self.processes[idx].exit_cleanup_pending {
+            return;
+        }
+
+        let pid = self.processes[idx].pid;
+        let free_root = !self.address_space_is_shared(idx);
+        let hhdm_offset = match crate::HHDM_REQ.response() {
+            Some(resp) => x86_64::VirtAddr::new(resp.offset),
+            None => return,
+        };
+
+        crate::memory::swap::untrack_process(pid);
+
+        let endpoint_ids = {
+            let caps = crate::capability::CAP_BROKER.lock();
+            caps.endpoints_owned_by(pid)
+        };
+
+        {
+            let mut bus = crate::ipc::IPC_BUS.lock();
+            bus.remove_pid_references(pid);
+            for endpoint_id in &endpoint_ids {
+                bus.remove_endpoint(*endpoint_id);
+            }
+        }
+
+        {
+            let mut pmm = crate::PMM.lock();
+            let mut caps = crate::capability::CAP_BROKER.lock();
+            caps.revoke_endpoints_owned_by(pid);
+            crate::memory::shared::cleanup_shared_pages(
+                &mut self.processes[idx],
+                &mut *pmm,
+                &mut *caps,
+            );
+        }
+
+        for proc in self.processes.iter_mut() {
+            if proc.ipc_reply_target.is_some_and(|(_, client_pid)| client_pid == pid) {
+                proc.ipc_reply_target = None;
+            }
+        }
+
+        let reclaim = {
+            let mut pmm = crate::PMM.lock();
+            unsafe {
+                self.processes[idx]
+                    .address_space
+                    .reclaim_user_space(&mut *pmm, hhdm_offset, free_root)
+            }
+        };
+
+        self.processes[idx].ipc_queue.clear();
+        self.processes[idx].ipc_reply = None;
+        self.processes[idx].ipc_endpoint = None;
+        self.processes[idx].pending_call = None;
+        self.processes[idx].pending_reply_wait = None;
+        self.processes[idx].ipc_reply_target = None;
+        self.processes[idx].capabilities.clear();
+        self.processes[idx].exit_cleanup_pending = false;
+
+        serial_println!(
+            "[SCHED] reaped pid={} user_frames={} page_tables={} swap_blocks={}",
+            pid,
+            reclaim.user_frames,
+            reclaim.page_tables,
+            reclaim.swap_blocks
+        );
+        crate::PMM.lock().diagnostic_report_pid(pid as u32);
+    }
+
+    pub fn terminate_process_by_pid(&mut self, pid: usize, code: i32, reason: &str) -> bool {
+        let Some(idx) = self.process_index_by_pid(pid) else {
+            return false;
+        };
+        if idx == self.current || self.processes[idx].state == ProcessState::Finished {
+            return false;
+        }
+
+        self.processes[idx].exit_code = code;
+        self.processes[idx].state = ProcessState::Finished;
+        self.processes[idx].exit_cleanup_pending = true;
+        self.remove_from_ready_queues(idx);
+        note_process_finished(pid, self.processes[idx].name_str());
+        serial_println!(
+            "[SCHED] terminating pid={} name='{}' reason={}",
+            pid,
+            self.processes[idx].name_str(),
+            reason
+        );
+
+        let parent_pid = self.processes[idx].ppid;
+        let parent_waiting = self
+            .process_mut_by_pid(parent_pid)
+            .is_some_and(|parent| parent.wait_child == Some(pid));
+        if parent_waiting {
+            self.wake_pid(parent_pid);
+        }
+
+        self.reap_process_resources(idx);
+        true
+    }
+
     /// Get BORE diagnostics for a process
     pub fn get_process_burst_info(&self, pid: usize) -> Option<(u32, ProcessState)> {
         self.processes
@@ -1169,12 +1303,12 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         let process = &mut sched.processes[cur];
         process.exit_code = code;
         process.state = crate::process::ProcessState::Finished;
+        process.exit_cleanup_pending = true;
     }
     sched.remove_from_ready_queues(cur);
 
     let my_pid = sched.processes[cur].pid;
     let parent_pid = sched.processes[cur].ppid;
-    crate::memory::swap::untrack_process(my_pid);
     serial_println!(
         "[SCHED] terminating pid={} name='{}' reason={}",
         my_pid,
@@ -1182,16 +1316,6 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         reason
     );
     note_process_finished(my_pid, sched.processes[cur].name_str());
-
-    {
-        let mut pmm = crate::PMM.lock();
-        let mut caps = crate::capability::CAP_BROKER.lock();
-        crate::memory::shared::cleanup_shared_pages(
-            &mut sched.processes[cur],
-            &mut *pmm,
-            &mut *caps,
-        );
-    }
 
     let parent_waiting = sched
         .process_mut_by_pid(parent_pid)

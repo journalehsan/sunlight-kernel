@@ -32,20 +32,11 @@ impl KernelOps for RealKernelOps {
     }
 
     fn send_signal(&self, pid: usize, sig: u8) -> bool {
-        serial_println!(
-            "[NICED] TODO: kernel syscall — send_signal: pid={} sig={}",
-            pid,
-            sig
-        );
-        false
+        sunlight_ipc::kill(pid as u64, sig as u32)
     }
 
     fn force_terminate(&self, pid: usize) -> bool {
-        serial_println!(
-            "[NICED] TODO: kernel syscall — force_terminate: pid={}",
-            pid
-        );
-        false
+        sunlight_ipc::kill(pid as u64, 9)
     }
 
     fn reap(&self, pid: usize) -> bool {

@@ -323,7 +323,7 @@ pub extern "C" fn _start() -> ! {
             for i in 0..stack_pages {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                let frame_addr = pmm.alloc_frame_owned(1).expect("stack alloc");
                 let phys = unsafe {
                     x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
                 };
@@ -366,7 +366,7 @@ pub extern "C" fn _start() -> ! {
             for i in 0..stack_pages {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                let frame_addr = pmm.alloc_frame_owned(3).expect("stack alloc");
                 // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
                 let phys = unsafe {
                     x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
@@ -437,7 +437,7 @@ pub extern "C" fn _start() -> ! {
             for i in 0..stack_pages {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame().expect("stack alloc");
+                let frame_addr = pmm.alloc_frame_owned(4).expect("stack alloc");
                 // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
                 let phys = unsafe {
                     x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)

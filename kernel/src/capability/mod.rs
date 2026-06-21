@@ -446,6 +446,21 @@ impl CapabilityBroker {
             .collect()
     }
 
+    pub fn endpoints_owned_by(&self, owner_pid: usize) -> alloc::vec::Vec<u32> {
+        self.endpoints
+            .iter()
+            .filter(|endpoint| endpoint.owner_pid == owner_pid)
+            .map(|endpoint| endpoint.id)
+            .collect()
+    }
+
+    pub fn revoke_endpoints_owned_by(&mut self, owner_pid: usize) {
+        let endpoint_ids = self.endpoints_owned_by(owner_pid);
+        self.endpoints.retain(|endpoint| endpoint.owner_pid != owner_pid);
+        self.capabilities
+            .retain(|(_, endpoint_id, _)| !endpoint_ids.iter().any(|id| id == endpoint_id));
+    }
+
     /// Mint a capability token granting access to map a shared physical frame.
     pub fn mint_shared_page(&mut self, phys: PhysAddr, owner_pid: usize) -> CapabilityToken {
         let token = generate_token(CapabilityToken::TAG_VFS);

@@ -184,8 +184,12 @@ pub struct SyscallRegs {
 
 pub type SyscallFrame = SyscallRegs;
 
+enum SignalPostAction {
+    Exit(i32),
+}
+
 /// Deliver pending signals before returning to user space
-fn deliver_pending_signals(process: &mut crate::process::Process) {
+fn deliver_pending_signals(process: &mut crate::process::Process) -> Option<SignalPostAction> {
     use crate::process::signal::{SigHandler, Signal};
 
     // Check for pending signals (in priority order)
@@ -204,12 +208,8 @@ fn deliver_pending_signals(process: &mut crate::process::Process) {
                         crate::serial_println!("[SIG] {} ignored", sig_num);
                     }
                     SigHandler::Default => {
-                        // Default action: terminate. Accounting + queue cleanup will happen
-                        // on next timer-driven deschedule (process will be Running->Finished).
                         crate::serial_println!("[SIG] {} delivered: terminating process", sig_num);
-                        crate::sched::note_process_finished(process.pid, process.name_str());
-                        process.state = crate::process::ProcessState::Finished;
-                        crate::sched::request_reschedule();
+                        return Some(SignalPostAction::Exit(sig.default_exit_code()));
                     }
                     SigHandler::UserHandler(_handler_addr) => {
                         // Would need to setup signal frame on user stack
@@ -224,6 +224,37 @@ fn deliver_pending_signals(process: &mut crate::process::Process) {
             }
         }
     }
+
+    None
+}
+
+fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(), ()> {
+    use crate::process::signal::Signal;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let Some(idx) = sched.process_index_by_pid(pid) else {
+        return Err(());
+    };
+
+    if sched.processes[idx].state == crate::process::ProcessState::Finished {
+        return Err(());
+    }
+
+    if idx == sched.current && matches!(signal, Signal::SIGKILL) {
+        drop(sched);
+        process_exit(signal.default_exit_code());
+    }
+
+    if matches!(signal, Signal::SIGKILL) {
+        if !sched.terminate_process_by_pid(pid, signal.default_exit_code(), "signal(SIGKILL)") {
+            return Err(());
+        }
+        return Ok(());
+    }
+
+    sched.processes[idx].signal_state.deliver_signal(signal);
+    sched.wake_for_signal(pid);
+    Ok(())
 }
 
 /// Syscall dispatch — called from assembly with pointer to saved frame.
@@ -426,9 +457,12 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     };
 
     // Deliver pending signals before returning to user space
-    crate::sched::with_scheduler(|sched| {
-        deliver_pending_signals(sched.current_process_mut());
+    let post_signal = crate::sched::with_scheduler(|sched| {
+        deliver_pending_signals(sched.current_process_mut())
     });
+    if let Some(SignalPostAction::Exit(code)) = post_signal {
+        process_exit(code);
+    }
 
     result
 }
@@ -2016,9 +2050,13 @@ fn sys_linux_tkill(frame: &mut SyscallFrame) -> u64 {
     if sig == 0 {
         return 0;
     }
-
-    let code = 128 + sig;
-    process_exit(code);
+    let Some(signal) = crate::process::signal::Signal::try_from_u32(sig as u32) else {
+        return linux_errno(22);
+    };
+    match send_signal(tid, signal) {
+        Ok(()) => 0,
+        Err(()) => linux_errno(22),
+    }
 }
 
 fn sys_linux_mmap(frame: &mut SyscallFrame) -> u64 {
@@ -3107,9 +3145,28 @@ fn sys_sigprocmask(_frame: &mut SyscallFrame) -> u64 {
 /// Syscall: kill (72)
 /// rdi = pid
 /// rsi = signal number
-fn sys_kill(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] kill requested");
-    u64::MAX
+fn sys_kill(frame: &mut SyscallFrame) -> u64 {
+    let pid = frame.rdi as usize;
+    let sig = frame.rsi as u32;
+
+    if pid == 0 {
+        return u64::MAX;
+    }
+    if sig == 0 {
+        return crate::sched::SCHEDULER
+            .lock()
+            .processes
+            .iter()
+            .any(|p| p.pid == pid && p.state != ProcessState::Finished) as u64;
+    }
+
+    let Some(signal) = crate::process::signal::Signal::try_from_u32(sig) else {
+        return u64::MAX;
+    };
+    match send_signal(pid, signal) {
+        Ok(()) => 0,
+        Err(()) => u64::MAX,
+    }
 }
 
 /// Syscall: pause (73)
