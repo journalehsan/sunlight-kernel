@@ -100,6 +100,10 @@ pub enum SunlightSyscall {
     KbdPopScancode = 112,
     KbdGetStats = 113,
 
+    // Mouse driver (Ring 3)
+    MouseRegister = 114,
+    MousePopByte = 115,
+
     DebugLog = 99,
 }
 
@@ -452,6 +456,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         111 => sys_kbd_unregister(),
         112 => sys_kbd_pop_scancode(),
         113 => sys_kbd_get_stats(frame),
+        114 => sys_mouse_register(frame),
+        115 => sys_mouse_pop_byte(),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -3761,6 +3767,24 @@ fn sys_kbd_get_stats(frame: &mut SyscallFrame) -> u64 {
         core::ptr::write(ptr.add(2), capacity as u64);
     }
     0
+}
+
+// ---------------------------------------------------------------------------
+// Mouse driver syscalls (Ring 3 migration)
+// ---------------------------------------------------------------------------
+
+/// Syscall: mouse_register (114)
+fn sys_mouse_register(frame: &mut SyscallFrame) -> u64 {
+    let endpoint_id = frame.rdi as u32;
+    crate::arch::x86_64::mouse::register_mouse_driver(endpoint_id);
+    0
+}
+
+/// Syscall: mouse_pop_byte (115)
+fn sys_mouse_pop_byte() -> u64 {
+    crate::arch::x86_64::mouse::pop_mouse_byte()
+        .map(|b| b as u64)
+        .unwrap_or(u64::MAX)
 }
 
 /// Syscall: powerctl (80)

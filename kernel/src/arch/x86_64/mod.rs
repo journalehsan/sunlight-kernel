@@ -3,6 +3,7 @@ pub mod boot;
 pub mod cpu;
 pub mod interrupts;
 pub mod keyboard;
+pub mod mouse;
 pub mod rtc;
 pub mod serial;
 pub mod syscall;

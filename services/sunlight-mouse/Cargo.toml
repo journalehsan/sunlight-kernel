@@ -1,78 +1,6 @@
 [package]
-name = "sunlight-timed"
+name = "sunlight-mouse"
 version = "0.1.240"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
@@ -80,5 +8,5 @@ edition = "2021"
 sunlight-ipc = { path = "../../ipc" }
 
 [[bin]]
-name = "timed"
+name = "sunlight-mouse"
 path = "src/main.rs"

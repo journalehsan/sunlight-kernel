@@ -109,6 +109,9 @@ pub fn init() {
     // Keyboard IRQ1 handler (vector 0x21)
     idt[0x21].set_handler_fn(keyboard_entry);
 
+    // Mouse IRQ12 handler (vector 0x2C = 32 + 12)
+    idt[0x2C].set_handler_fn(mouse_entry);
+
     idt.load();
 
     remap_pic();
@@ -117,8 +120,8 @@ pub fn init() {
     let mut pic1_data: Port<u8> = Port::new(0x21);
     let mut pic2_data: Port<u8> = Port::new(0xA1);
     unsafe {
-        pic1_data.write(0xFC); // enable IRQ0 (timer) and IRQ1 (keyboard)
-        pic2_data.write(0xFF);
+        pic1_data.write(0xFC); // enable IRQ0 (timer) and IRQ1 (keyboard) on PIC1
+        pic2_data.write(0xEF); // enable IRQ12 (mouse) on PIC2 (bit 4 = IRQ12)
     }
 
     // Calibrate TSC against PIT for accurate per-process CPU accounting.
@@ -812,4 +815,10 @@ extern "x86-interrupt" fn keyboard_entry(_stack_frame: InterruptStackFrame) {
         cmd1.write(0x20);
         crate::serial_println!("[IRQ1] Keyboard interrupt - EOI sent to PIC");
     }
+}
+
+// Mouse IRQ12 handler
+extern "x86-interrupt" fn mouse_entry(_stack_frame: InterruptStackFrame) {
+    use crate::arch::x86_64::mouse;
+    mouse::handle_irq12();
 }

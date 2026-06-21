@@ -10,9 +10,9 @@ use sunlight_ipc::{
 /// holds the spawn token. These need no privileged memory setup (unlike
 /// vfs_server/tty_server, which the kernel spawns directly). sunlightd in turn
 /// launches the user-level daemons (timezone_service, niced, gcd).
-/// sunlight-kbd is spawned AFTER timer_server (so IPC is stable) but BEFORE
-/// tty_server (which depends on keyboard input routing).
-const INIT_SERVICES: [&str; 4] = ["/sbin/timer_server", "/sbin/sunlight-kbd", "/sbin/net_server", "/sbin/sunlightd"];
+/// sunlight-kbd and sunlight-mouse are spawned AFTER timer_server (so IPC is stable)
+/// but BEFORE tty_server (which depends on input routing).
+const INIT_SERVICES: [&str; 5] = ["/sbin/timer_server", "/sbin/sunlight-kbd", "/sbin/sunlight-mouse", "/sbin/net_server", "/sbin/sunlightd"];
 
 
 /// Spawn a service by absolute path using the kernel spawn capability.
