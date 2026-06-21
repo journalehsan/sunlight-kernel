@@ -42,6 +42,7 @@ members = [
     "std-proof/sunlight-zoxide",
     "std-proof/sunlight-dict",
     "sunlight-hangman", "helios-note",
+    "cpu-utils",
 ]
 
 [workspace.dependencies]

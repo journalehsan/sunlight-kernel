@@ -7,7 +7,15 @@ KERNEL_ELF="target/x86_64-unknown-none/debug/sunlight-kernel"
 ISO_PATH="target/sunlightos.iso"
 LIMINE_BRANCH="v8.x"
 LIMINE_DIR="target/limine"
-SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+
+# Kernel flags: conservative, no SIMD assumptions (x86-64 baseline only).
+# The kernel target (x86_64-unknown-none) already disables SSE/AVX via soft-float.
+KERNEL_RUSTFLAGS="-C link-arg=-Tkernel/src/arch/x86_64/linker.ld -C relocation-model=static"
+
+# Userspace baseline: x86-64-v2 (SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CMPXCHG16B).
+# v2 enables better code generation for userspace services without requiring AVX.
+# v3 (AVX/AVX2) is runtime-only for selected apps until kernel adds XSAVE/YMM switching.
+SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2"
 BUILD_LOG=$(mktemp)
 PHASE="${1:-phase3.0}"
 
@@ -225,6 +233,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release >
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dict --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release >>"$BUILD_LOG" 2>&1
 
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package cpu-utils --release >>"$BUILD_LOG" 2>&1
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
 if [[ "$NEED_DISK" == "true" ]]; then
     bash tools/disk.sh >>"$BUILD_LOG" 2>&1

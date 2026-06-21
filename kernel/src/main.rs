@@ -110,6 +110,9 @@ static SUNLIGHT_DICT_ELF_BYTES: &[u8] =
 // sunlight-hangman: interactive no_std smoke test for stdin/stdout/libc.
 static SUNLIGHT_HANGMAN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/hangman");
+// cpufeat: x86-64-v2/v3 CPU feature detection and microarchitecture level reporting.
+static CPUFEAT_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/cpufeat");
 // hello-linux: static musl Rust binary for Helios Linux-compat smoke test.
 static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-linux.elf");
 // helios-note: std+libc Rust terminal note editor, runs via Helios Linux compat.

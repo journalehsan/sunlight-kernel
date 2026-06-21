@@ -1,8 +1,14 @@
+# Workspace default target for kernel build.
+# Userspace crates override via RUSTFLAGS in build scripts.
 [build]
 target = "x86_64-unknown-none"
 
+# Kernel-only flags: conservative baseline (x86-64), no SIMD.
+# Userspace uses -C target-cpu=x86-64-v2 via SERVICE_RUSTFLAGS in build scripts,
+# which overrides these when RUSTFLAGS env is set.
 [target.x86_64-unknown-none]
 rustflags = [
     "-C", "link-arg=-Tkernel/src/arch/x86_64/linker.ld",
     "-C", "relocation-model=static",
+    # No target-cpu here — kernel stays at x86-64 baseline (soft-float, no SSE)
 ]

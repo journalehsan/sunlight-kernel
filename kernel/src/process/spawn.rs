@@ -442,6 +442,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/hangman" | "/usr/bin/hangman" | "/usr/local/bin/hangman" => {
             Ok(crate::SUNLIGHT_HANGMAN_ELF_BYTES)
         }
+        // cpufeat: x86-64 microarchitecture level detection (v2/v3 capability reporting).
+        "/bin/cpufeat" | "/usr/bin/cpufeat" => Ok(crate::CPUFEAT_ELF_BYTES),
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.
         "/bin/hello-linux" | "/usr/bin/hello-linux" => Ok(crate::HELLO_LINUX_ELF_BYTES),
         // helios-note: std+libc terminal note editor (Helios Linux compat).

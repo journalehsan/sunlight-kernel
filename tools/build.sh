@@ -15,10 +15,21 @@ KERNEL_ELF="target/x86_64-unknown-none/debug/sunlight-kernel"
 ISO_PATH="target/sunlightos.iso"
 LIMINE_BRANCH="v8.x"
 LIMINE_DIR="target/limine"
-SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+
+# Kernel flags: conservative, no SIMD assumptions (x86-64 baseline only).
+# The kernel target (x86_64-unknown-none) already disables SSE/AVX via soft-float.
+KERNEL_RUSTFLAGS="-C link-arg=-Tkernel/src/arch/x86_64/linker.ld -C relocation-model=static"
+
+# Userspace baseline: x86-64-v2 (SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CMPXCHG16B).
+# v2 enables better code generation for userspace services without requiring AVX.
+# v3 (AVX/AVX2) is runtime-only for selected apps until kernel adds XSAVE/YMM switching.
+SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2"
+
 # sunlight-tls links a pure-Rust rustls stack. x86_64-unknown-none disables SSE,
-# so the RustCrypto SIMD backends must be forced to their software paths (they
-# otherwise emit 128-bit vector intrinsics that LLVM cannot lower). See the
+# but x86-64-v2 re-enables SSE/SSE2. The RustCrypto crates still need soft backend
+# forcing because their auto-detection triggers AVX2/AES-NI backends that require
+# runtime feature checks or OS state the kernel doesn't provide yet (XSAVE/YMM).
+# See the Phase-0 TLS build recipe.
 # Phase-0 TLS build recipe.
 TLS_RUSTFLAGS="$SERVICE_RUSTFLAGS --cfg aes_force_soft --cfg polyval_force_soft --cfg poly1305_force_soft --cfg chacha20_force_soft --cfg curve25519_dalek_backend=\"serial\""
 
@@ -49,6 +60,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sunsay --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dict --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package cpu-utils --release
 # Force a non-PIE static link so e_type is ET_EXEC (not ET_DYN). The kernel ELF
 # loader (sunlight-elf parse_elf_header) only accepts ET_EXEC; -no-pie + crt-static
 # is required because musl otherwise emits a static-PIE that loads as DYN.

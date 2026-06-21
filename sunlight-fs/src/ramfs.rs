@@ -768,6 +768,13 @@ max_ttys = 6
         b"#!/sunlight/hangman\n",
     ),
     RamEntry::file(
+        "/bin/cpufeat",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/cpu-utils/cpufeat\n",
+    ),
+    RamEntry::file(
         "/bin/hello-linux",
         0,
         0,
@@ -1211,6 +1218,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/hangman\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/cpufeat",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/cpu-utils/cpufeat\n",
     ),
     RamEntry::file(
         "/usr/bin/hello-linux",

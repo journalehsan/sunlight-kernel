@@ -1,0 +1,12 @@
+[package]
+name = "cpu-utils"
+version = "0.1.226"
+
+edition = "2021"
+
+[[bin]]
+name = "cpufeat"
+path = "src/cpufeat.rs"
+
+[dependencies]
+sunlight-libc = { path = "../sunlight-libc" }
