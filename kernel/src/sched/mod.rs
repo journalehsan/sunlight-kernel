@@ -925,10 +925,11 @@ impl Scheduler {
 
     fn address_space_is_shared(&self, idx: usize) -> bool {
         let pml4 = self.processes[idx].address_space.pml4_phys;
-        self.processes
-            .iter()
-            .enumerate()
-            .any(|(other_idx, proc)| other_idx != idx && proc.state != ProcessState::Finished && proc.address_space.pml4_phys == pml4)
+        self.processes.iter().enumerate().any(|(other_idx, proc)| {
+            other_idx != idx
+                && proc.state != ProcessState::Finished
+                && proc.address_space.pml4_phys == pml4
+        })
     }
 
     pub fn reap_process_resources(&mut self, idx: usize) {
@@ -970,7 +971,10 @@ impl Scheduler {
         }
 
         for proc in self.processes.iter_mut() {
-            if proc.ipc_reply_target.is_some_and(|(_, client_pid)| client_pid == pid) {
+            if proc
+                .ipc_reply_target
+                .is_some_and(|(_, client_pid)| client_pid == pid)
+            {
                 proc.ipc_reply_target = None;
             }
         }
@@ -978,9 +982,11 @@ impl Scheduler {
         let reclaim = {
             let mut pmm = crate::PMM.lock();
             unsafe {
-                self.processes[idx]
-                    .address_space
-                    .reclaim_user_space(&mut *pmm, hhdm_offset, free_root)
+                self.processes[idx].address_space.reclaim_user_space(
+                    &mut *pmm,
+                    hhdm_offset,
+                    free_root,
+                )
             }
         };
 

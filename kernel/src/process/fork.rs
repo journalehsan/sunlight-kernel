@@ -234,19 +234,19 @@ fn sys_fork(
             brk_base: parent.brk_base,
             brk_current: parent.brk_current,
             mmap_next: 0,
-            sched_type: parent.sched_type,           // inherit scheduling type
-            weight: parent.weight,                   // inherit CFS weight
-            cpu_mask: parent.cpu_mask,               // inherit CPU mask
-            burst_score: 256,                        // Start at MEDIUM tier
-            timeslice_used: 0,                       // Fresh quantum
-            last_run_tick: 0,                        // Will be set on first run
-            io_wait_time: 0,                         // No wait yet
-            interactive_bonus: 20,                   // Assume interactive initially
-            block_start_tick: 0,                     // Not blocked yet
-            aging_counter: 0,                        // No aging yet
-            wait_child: None,                        // Not waiting on a child
-            tty_tab: None, // fork() children are not part of the TTY spawn flow
-            linux_termios: parent.linux_termios,     // inherit terminal settings from parent
+            sched_type: parent.sched_type, // inherit scheduling type
+            weight: parent.weight,         // inherit CFS weight
+            cpu_mask: parent.cpu_mask,     // inherit CPU mask
+            burst_score: 256,              // Start at MEDIUM tier
+            timeslice_used: 0,             // Fresh quantum
+            last_run_tick: 0,              // Will be set on first run
+            io_wait_time: 0,               // No wait yet
+            interactive_bonus: 20,         // Assume interactive initially
+            block_start_tick: 0,           // Not blocked yet
+            aging_counter: 0,              // No aging yet
+            wait_child: None,              // Not waiting on a child
+            tty_tab: None,                 // fork() children are not part of the TTY spawn flow
+            linux_termios: parent.linux_termios, // inherit terminal settings from parent
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
             wd_period_ticks: None,

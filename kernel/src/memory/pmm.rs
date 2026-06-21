@@ -202,7 +202,12 @@ impl PhysicalMemoryManager {
     }
 
     pub fn owned_frame_count(&self, owner_pid: u32) -> usize {
-        unsafe { FRAME_OWNER.iter().filter(|&&owner| owner == owner_pid).count() }
+        unsafe {
+            FRAME_OWNER
+                .iter()
+                .filter(|&&owner| owner == owner_pid)
+                .count()
+        }
     }
 
     pub fn diagnostic_report_pid(&self, owner_pid: u32) {

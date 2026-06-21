@@ -120,7 +120,8 @@ pub fn sys_mmap(
                 if evicted == 0 {
                     return Err(MmapError::NoMemory);
                 }
-                pmm.alloc_frame_owned(pid as u32).ok_or(MmapError::NoMemory)?
+                pmm.alloc_frame_owned(pid as u32)
+                    .ok_or(MmapError::NoMemory)?
             }
         };
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };

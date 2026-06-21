@@ -45,6 +45,8 @@ static INIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-init");
 static TIMER_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
+static SUNLIGHT_KBD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kbd");
 static VFS_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
 static TTY_SERVER_ELF_BYTES: &[u8] =
@@ -294,13 +296,11 @@ pub extern "C" fn _start() -> ! {
     splash.set_progress(700); // 70%
     splash.redraw();
 
-    // KBD — initialize PS/2 keyboard
-    serial_println!("[KBD]  Initializing PS/2 keyboard...");
-    splash.set_status("Initializing PS/2 keyboard");
-    splash.log("[KBD] Initializing PS/2 keyboard...");
+    // KBD — IRQ1 router ready (driver runs in user-space)
+    serial_println!("[KBD]  IRQ1 router initialized (driver: sunlight-kbd)");
+    splash.set_status("Keyboard driver ready");
+    splash.log("[KBD] IRQ1 router ready");
     splash.redraw();
-    keyboard::init();
-    splash.log("[KBD] OK");
     splash.set_progress(750); // 75%
     splash.redraw();
 

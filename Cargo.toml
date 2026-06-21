@@ -43,6 +43,7 @@ members = [
     "std-proof/sunlight-dict",
     "sunlight-hangman", "helios-note",
     "cpu-utils",
+    "services/sunlight-kbd",
 ]
 
 [workspace.dependencies]

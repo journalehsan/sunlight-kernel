@@ -71,9 +71,9 @@ pub struct Process {
     /// mmap region base on first use and bumps it per mapping so successive
     /// anonymous mappings don't alias the same VA range.
     pub mmap_next: u64,
-    pub sched_type: u8,        // SCHED_NORMAL=0, SCHED_FIFO=1 for real-time bypass
-    pub weight: u32,           // CFS weight (default 1024)
-    pub cpu_mask: u64,         // CPU affinity mask
+    pub sched_type: u8, // SCHED_NORMAL=0, SCHED_FIFO=1 for real-time bypass
+    pub weight: u32,    // CFS weight (default 1024)
+    pub cpu_mask: u64,  // CPU affinity mask
 
     // === BORE Scheduling Metrics (Phase 3.0) ===
     /// Burst score: 0-1024 (0=interactive, 1024=CPU-bound)
@@ -222,18 +222,18 @@ impl Process {
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,
-            sched_type: 0,          // SCHED_NORMAL
-            weight: 1024,           // default CFS weight
-            cpu_mask: 0xFF,         // all CPUs
-            burst_score: 256,       // Start at MEDIUM tier (interactive bias)
-            timeslice_used: 0,      // Fresh quantum
-            last_run_tick: 0,       // Will be set on first run
-            io_wait_time: 0,        // No wait yet
-            interactive_bonus: 20,  // Assume interactive initially
-            block_start_tick: 0,    // Not blocked yet
-            aging_counter: 0,       // No aging yet
-            wait_child: None,       // Not waiting on a child
-            tty_tab: None,          // Attached to a TTY tab only when spawned for one
+            sched_type: 0,         // SCHED_NORMAL
+            weight: 1024,          // default CFS weight
+            cpu_mask: 0xFF,        // all CPUs
+            burst_score: 256,      // Start at MEDIUM tier (interactive bias)
+            timeslice_used: 0,     // Fresh quantum
+            last_run_tick: 0,      // Will be set on first run
+            io_wait_time: 0,       // No wait yet
+            interactive_bonus: 20, // Assume interactive initially
+            block_start_tick: 0,   // Not blocked yet
+            aging_counter: 0,      // No aging yet
+            wait_child: None,      // Not waiting on a child
+            tty_tab: None,         // Attached to a TTY tab only when spawned for one
             linux_termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
@@ -326,8 +326,7 @@ impl Process {
     ) -> Self {
         let address_space = address_space::AddressSpace::from_pml4(parent_pml4);
         let kernel_stack = new_kernel_stack();
-        let kernel_stack_top =
-            core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
+        let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
 
         let mut name_arr = [0u8; 32];
         let nb = name.as_bytes();

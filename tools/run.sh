@@ -174,6 +174,7 @@ if [ "$BUILD_FIRST" = true ]; then
     SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release

@@ -456,7 +456,8 @@ impl CapabilityBroker {
 
     pub fn revoke_endpoints_owned_by(&mut self, owner_pid: usize) {
         let endpoint_ids = self.endpoints_owned_by(owner_pid);
-        self.endpoints.retain(|endpoint| endpoint.owner_pid != owner_pid);
+        self.endpoints
+            .retain(|endpoint| endpoint.owner_pid != owner_pid);
         self.capabilities
             .retain(|(_, endpoint_id, _)| !endpoint_ids.iter().any(|id| id == endpoint_id));
     }
@@ -476,9 +477,13 @@ impl CapabilityBroker {
 
     /// Resolve a shared-page capability token to its physical frame (if valid and not revoked).
     pub fn resolve_shared_page(&self, token: CapabilityToken) -> Option<PhysAddr> {
-        self.shared_grants
-            .iter()
-            .find_map(|(t, phys, _, revoked)| if *t == token && !*revoked { Some(*phys) } else { None })
+        self.shared_grants.iter().find_map(|(t, phys, _, revoked)| {
+            if *t == token && !*revoked {
+                Some(*phys)
+            } else {
+                None
+            }
+        })
     }
 
     /// Validate a shared-page token, distinguishing "never existed" (forged/guessed)
@@ -498,7 +503,11 @@ impl CapabilityBroker {
 
     /// Revoke a shared-page grant token (called on owner free or cleanup).
     pub fn revoke_shared(&mut self, token: CapabilityToken) {
-        if let Some(idx) = self.shared_grants.iter().position(|(t, _, _, _)| *t == token) {
+        if let Some(idx) = self
+            .shared_grants
+            .iter()
+            .position(|(t, _, _, _)| *t == token)
+        {
             self.shared_grants.swap_remove(idx);
             serial_println!("[CAP] Revoked shared-page token {:#x}", token.as_u64());
         }
@@ -531,17 +540,18 @@ impl CapabilityBroker {
     }
 
     /// Resolve an issued VFS capability token for runtime checks.
-    pub fn resolve_vfs_capability(
-        &self,
-        token: CapabilityToken,
-    ) -> Option<(VfsCapability, usize)> {
+    pub fn resolve_vfs_capability(&self, token: CapabilityToken) -> Option<(VfsCapability, usize)> {
         // O(1) reject of anything not tagged as a VFS capability.
         if !token.is_vfs() {
             return None;
         }
-        self.vfs_caps
-            .iter()
-            .find_map(|(t, cap, pid)| if *t == token { Some((cap.clone(), *pid)) } else { None })
+        self.vfs_caps.iter().find_map(|(t, cap, pid)| {
+            if *t == token {
+                Some((cap.clone(), *pid))
+            } else {
+                None
+            }
+        })
     }
 
     /// Check whether an issued VFS capability `token` authorizes `access` on
@@ -610,7 +620,8 @@ pub fn sys_grant_capability(
     if caller_pid != CAPABILITY_BROKER_PID {
         serial_println!(
             "[SEC] Capability mint denied: caller_pid={} is not broker {}",
-            caller_pid, CAPABILITY_BROKER_PID
+            caller_pid,
+            CAPABILITY_BROKER_PID
         );
         return Err(CapError::InvalidCaller);
     }

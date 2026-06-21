@@ -363,8 +363,9 @@ impl AddressSpace {
                             pmm.free_frame(phys);
                             stats.user_frames += 1;
                         } else if p1e.addr().as_u64() != 0 {
-                            let _ =
-                                crate::memory::zram::discard_block((p1e.addr().as_u64() >> 12) as usize);
+                            let _ = crate::memory::zram::discard_block(
+                                (p1e.addr().as_u64() >> 12) as usize,
+                            );
                             stats.swap_blocks += 1;
                         }
                         p1e.set_unused();

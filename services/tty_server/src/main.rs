@@ -34,8 +34,9 @@ static BUMP: BumpAllocator = BumpAllocator;
 use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_try_recv,
-    nameserver_lookup, process_is_alive, process_yield, sysinfo, tty_stdin_push, tty_stdout_pull,
-    unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg, TzMsg,
+    nameserver_lookup, nameserver_register, process_is_alive, process_yield, sysinfo,
+    tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
+    TzMsg,
 };
 use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, MAX_USERS};
 use sunlight_tty::proc::{ProcOp, SIGKILL};
@@ -314,6 +315,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     let ep = endpoint_create();
     debug_log("[TTY]  endpoint created");
 
+    // Register with init's name server so the user-space keyboard driver
+    // (sunlight-kbd) can resolve "tty" and forward key events here. Without
+    // this, nameserver_lookup("tty") returns DENY and the kbd driver spins
+    // forever, so the keyboard appears dead.
+    nameserver_register("tty", ep);
     debug_log("[TTY]  Registered as 'tty'");
     debug_log("[TTY]  Login screen ready");
 

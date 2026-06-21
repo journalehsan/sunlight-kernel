@@ -1,57 +1,13 @@
 [package]
-name = "rand_service"
+name = "sunlight-kbd"
 version = "0.1.228"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
+
+[[bin]]
+name = "sunlight-kbd"
+path = "src/main.rs"

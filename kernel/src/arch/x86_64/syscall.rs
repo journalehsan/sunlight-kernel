@@ -90,6 +90,12 @@ pub enum SunlightSyscall {
     GrantCapability = 100,
     SetFsBase = 101,
 
+    // Keyboard driver (Ring 3 migration)
+    KbdRegister = 110,
+    KbdUnregister = 111,
+    KbdPopScancode = 112,
+    KbdGetStats = 113,
+
     DebugLog = 99,
 }
 
@@ -346,7 +352,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         // all paths as CWD-relative / absolute, matching our VFS.
                         frame.rdi = frame.rsi; // path pointer
                         frame.rsi = frame.rdx; // flags
-                        num = 40;              // sys_open
+                        num = 40; // sys_open
                     }
                 }
                 -16 => {
@@ -434,6 +440,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         95 => sys_map_telemetry(frame),
         100 => sys_grant_capability_syscall(frame),
         101 => sys_set_fs_base(frame),
+        110 => sys_kbd_register(frame),
+        111 => sys_kbd_unregister(),
+        112 => sys_kbd_pop_scancode(),
+        113 => sys_kbd_get_stats(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -457,9 +467,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     };
 
     // Deliver pending signals before returning to user space
-    let post_signal = crate::sched::with_scheduler(|sched| {
-        deliver_pending_signals(sched.current_process_mut())
-    });
+    let post_signal =
+        crate::sched::with_scheduler(|sched| deliver_pending_signals(sched.current_process_mut()));
     if let Some(SignalPostAction::Exit(code)) = post_signal {
         process_exit(code);
     }
@@ -1678,7 +1687,9 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
             return u64::MAX;
         };
         match vfs.open(abs_path) {
-            Ok(h) => { let _ = vfs.close(h); }
+            Ok(h) => {
+                let _ = vfs.close(h);
+            }
             Err(_) => {
                 crate::serial_println!("[HELIOS] chdir({}) -> not found", abs_path);
                 return u64::MAX;
@@ -2136,14 +2147,14 @@ impl LinuxTermios {
     /// Sensible cooked-mode defaults (canonical + echo, 38400 baud).
     pub const fn default_cooked() -> Self {
         let mut cc = [0u8; 32];
-        cc[4] = 4;   // VEOF  = ^D
-        cc[7] = 0;   // VSTART
-        cc[8] = 0;   // VSTOP
-        cc[10] = 0;  // VEOL
+        cc[4] = 4; // VEOF  = ^D
+        cc[7] = 0; // VSTART
+        cc[8] = 0; // VSTOP
+        cc[10] = 0; // VEOL
         Self {
-            c_iflag: 0x0500, // ICRNL | IXON
-            c_oflag: 0x0005, // OPOST | ONLCR
-            c_cflag: 0x00BF, // CS8 | CREAD | CLOCAL (B38400)
+            c_iflag: 0x0500,                 // ICRNL | IXON
+            c_oflag: 0x0005,                 // OPOST | ONLCR
+            c_cflag: 0x00BF,                 // CS8 | CREAD | CLOCAL (B38400)
             c_lflag: ICANON | ECHO | 0x8000, // ICANON | ECHO | ISIG
             c_line: 0,
             c_cc: cc,
@@ -2181,14 +2192,16 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
                 let sched = crate::sched::SCHEDULER.lock();
                 let termios = sched.current_process().linux_termios;
                 drop(sched);
-                unsafe { core::ptr::write(argp as *mut LinuxTermios, termios); }
+                unsafe {
+                    core::ptr::write(argp as *mut LinuxTermios, termios);
+                }
             } else {
                 // TCSETS / TCSETSW / TCSETSF — all treated the same (no drain/flush needed)
                 let new_termios = unsafe { core::ptr::read(argp as *const LinuxTermios) };
                 let mut sched = crate::sched::SCHEDULER.lock();
                 let process = sched.current_process_mut();
                 let was_raw = (process.linux_termios.c_lflag & ICANON) == 0;
-                let is_raw  = (new_termios.c_lflag & ICANON) == 0;
+                let is_raw = (new_termios.c_lflag & ICANON) == 0;
                 process.linux_termios = new_termios;
                 if was_raw != is_raw {
                     crate::serial_println!(
@@ -2204,8 +2217,15 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
             if !is_user_address(argp) {
                 return linux_errno(14); // EFAULT
             }
-            let ws = LinuxWinsize { ws_row: 25, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0 };
-            unsafe { core::ptr::write(argp as *mut LinuxWinsize, ws); }
+            let ws = LinuxWinsize {
+                ws_row: 25,
+                ws_col: 80,
+                ws_xpixel: 0,
+                ws_ypixel: 0,
+            };
+            unsafe {
+                core::ptr::write(argp as *mut LinuxWinsize, ws);
+            }
             0
         }
         TIOCSWINSZ => {
@@ -2633,7 +2653,13 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     // Placeholder stdio fds (0/1/2): return EAGAIN for stdin, error for stdout/stderr
                     let is_linux = sched.current_process().is_linux_compat;
                     match fd {
-                        0 => if is_linux { linux_errno(11) } else { EAGAIN },
+                        0 => {
+                            if is_linux {
+                                linux_errno(11)
+                            } else {
+                                EAGAIN
+                            }
+                        }
                         _ => 0, // stdout/stderr: invalid for read, silent
                     }
                 }
@@ -3548,6 +3574,67 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
             .unwrap_or(u64::MAX),
         _ => u64::MAX,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Keyboard driver syscalls (Ring 3 migration)
+// ---------------------------------------------------------------------------
+
+/// Syscall: kbd_register (110)
+/// rdi = endpoint_id
+/// Register the calling process as the keyboard driver.
+fn sys_kbd_register(frame: &mut SyscallFrame) -> u64 {
+    // rdi carries the full endpoint capability token. Resolve it to the real
+    // internal endpoint id so IRQ1 keyboard events are queued on the same
+    // endpoint the driver receives on via ipc_recv. Storing the raw token here
+    // (truncated to u32) queues events on a non-existent endpoint, so the
+    // driver's ipc_recv never returns and the keyboard appears dead.
+    let token = CapabilityToken(frame.rdi);
+    let caps = crate::capability::CAP_BROKER.lock();
+    let endpoint_id = match caps.check(token, CapabilityRights::RECV_ONLY) {
+        Ok(id) => id,
+        Err(_) => return u64::MAX,
+    };
+    drop(caps);
+    crate::arch::x86_64::keyboard::register_kbd_driver(endpoint_id);
+    0
+}
+
+/// Syscall: kbd_unregister (111)
+/// Unregister the keyboard driver.
+fn sys_kbd_unregister() -> u64 {
+    crate::arch::x86_64::keyboard::unregister_kbd_driver();
+    0
+}
+
+/// Syscall: kbd_pop_scancode (112)
+/// Pop one raw scancode from the kernel's ring buffer.
+/// Returns the scancode in the low byte, or u64::MAX if none available.
+fn sys_kbd_pop_scancode() -> u64 {
+    crate::arch::x86_64::keyboard::pop_scancode()
+        .map(|sc| sc as u64)
+        .unwrap_or(u64::MAX)
+}
+
+/// Syscall: kbd_get_stats (113)
+/// rdi = pointer to [u64; 3] buffer for stats
+/// Returns 0 on success, u64::MAX on error.
+fn sys_kbd_get_stats(frame: &mut SyscallFrame) -> u64 {
+    let ptr = frame.rdi as *mut u64;
+    if !is_user_address(ptr as u64) || !is_user_address((ptr as u64) + 24) {
+        return u64::MAX;
+    }
+    let (pending, dropped, capacity) = crate::arch::x86_64::keyboard::get_stats();
+    unsafe {
+        core::ptr::write(ptr, pending as u64);
+    }
+    unsafe {
+        core::ptr::write(ptr.add(1), dropped as u64);
+    }
+    unsafe {
+        core::ptr::write(ptr.add(2), capacity as u64);
+    }
+    0
 }
 
 /// Syscall: powerctl (80)

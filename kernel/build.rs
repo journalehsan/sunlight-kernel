@@ -43,6 +43,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-kbd",
+            output: "sunlight-kbd",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-vfs-server",
             output: "sunlight-vfs-server",
             rustflags: service_rustflags,
