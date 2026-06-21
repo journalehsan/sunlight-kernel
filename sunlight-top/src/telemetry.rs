@@ -233,6 +233,23 @@ impl Telemetry {
             };
         }
 
+        // Filter out finished processes and update proc_count
+        let mut write_idx = 0;
+        for read_idx in 0..snap.proc_count {
+            if snap.procs[read_idx].state != ProcessState::Finished {
+                if write_idx != read_idx {
+                    snap.procs[write_idx] = snap.procs[read_idx];
+                }
+                write_idx += 1;
+            }
+        }
+        // Clear the remaining slots
+        for i in write_idx..snap.proc_count {
+            snap.procs[i] = ProcessSnapshot::default();
+        }
+        // Update the actual count to exclude finished processes
+        snap.proc_count = write_idx;
+
         snap
     }
 

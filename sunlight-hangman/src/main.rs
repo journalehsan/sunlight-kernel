@@ -155,7 +155,8 @@ fn render(word: &[u8; WORD_MAX_LEN], guessed: &[bool; 26], misses: usize) {
     // ---- Word ----
     puts(b"Word: ");
     let wlen = word_len(word);
-    for i in 0..wlen {
+    let iter = 0..wlen;
+    for i in iter {
         let ch = word[i];
         let idx = (ch - b'A') as usize;
         if guessed[idx] {

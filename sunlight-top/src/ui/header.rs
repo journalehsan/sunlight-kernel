@@ -42,107 +42,75 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
     }
     c.clear_eol();
 
-    // CPU line: machine-normalized used/idle with two decimals.
-    // 10000 basis points = 100.00%. Do not show raw capacity as "100% used".
+    // CPU and MEM on same line to save space
     c.move_to(3, 1);
     c.fg_orange();
     c.push_str(" CPU: ");
     c.reset();
 
-    // Progress bar driven by used (0..100 coarse).
     let used_pct_coarse = (snap.cpu_used_bp as u32 / 100) as u8;
-    c.progress_bar(used_pct_coarse, term_width.saturating_sub(28));
+    c.progress_bar(used_pct_coarse, 20);
 
     c.fg_white();
-    // used: AB.CD
     push_bp_as_pct(c, snap.cpu_used_bp);
     c.reset();
     c.fg_dim();
-    c.push_str(" used, ");
+    c.push_str("u ");
     c.reset();
-    // idle: AB.CD
     push_bp_as_pct(c, snap.cpu_idle_bp);
     c.fg_dim();
-    c.push_str(" idle");
+    c.push(b'i');
     c.reset();
 
-    // Show CPU count and normalization note.
-    c.fg_dim();
-    c.push_str("  cpus:");
+    // MEM on same line
+    c.push_str("  ");
+    c.fg_orange();
+    c.push_str("MEM:");
     c.reset();
-    c.fg_white();
-    c.push_u64(snap.cpu_count as u64);
-    c.reset();
-    c.clear_eol();
-
-    c.move_to(4, 1);
     let mem_pct = if snap.total_ram_kb > 0 {
         ((snap.used_ram_kb.saturating_mul(100)) / snap.total_ram_kb).min(100) as u8
     } else {
         0
     };
-    c.fg_orange();
-    c.push_str(" MEM  [");
-    c.reset();
-    c.progress_bar(mem_pct, term_width.saturating_sub(14));
-    c.push_str("] ");
+    c.push(b'[');
+    c.progress_bar(mem_pct, 15);
+    c.push(b']');
     push_kb_human(c, snap.used_ram_kb);
     c.fg_dim();
-    c.push_str(" / ");
+    c.push(b'/');
     c.reset();
     push_kb_human(c, snap.total_ram_kb);
-    c.fg_dim();
-    c.push_str(" (");
-    c.reset();
-    push_pct(c, mem_pct);
-    c.fg_dim();
-    c.push(b')');
-    c.reset();
     c.clear_eol();
 
-    c.move_to(5, 1);
+    // ZRAM and NET on row 4
+    c.move_to(4, 1);
+    c.fg_orange();
+    c.push_str(" ZRAM:");
+    c.reset();
     if snap.zram_orig_kb > 0 {
-        let zram_pct = ((snap.zram_comp_kb.saturating_mul(100)) / snap.zram_orig_kb.max(1)).min(100) as u8;
-        let ratio = snap.zram_orig_kb / snap.zram_comp_kb.max(1);
-        c.fg_orange();
-        c.push_str(" ZRAM [");
-        c.reset();
-        c.progress_bar(zram_pct, term_width.saturating_sub(14));
-        c.push_str("] ");
         push_kb_human(c, snap.zram_comp_kb);
         c.fg_dim();
-        c.push_str(" -> ");
+        c.push_str("->");
         c.reset();
         push_kb_human(c, snap.zram_orig_kb);
-        c.fg_dim();
-        c.push_str(" (ratio ");
-        c.reset();
-        c.push_u64(ratio);
-        c.fg_dim();
-        c.push_str("x)");
-        c.reset();
     } else {
-        c.fg_orange();
-        c.push_str(" ZRAM ");
-        c.reset();
         c.fg_dim();
-        c.push_str(" no compressed memory");
+        c.push_str("none");
         c.reset();
     }
-    c.clear_eol();
-
-    c.move_to(6, 1);
+    
+    c.push_str("  ");
     c.fg_orange();
-    c.push_str(" NET   Rx ");
+    c.push_str("NET:");
+    c.reset();
+    c.fg_dim();
+    c.push_str("Rx ");
     c.reset();
     push_bytes_human(c, snap.net_rx_bytes);
-    c.fg_orange();
-    c.push_str("  Tx ");
+    c.fg_dim();
+    c.push_str(" Tx ");
     c.reset();
     push_bytes_human(c, snap.net_tx_bytes);
-    c.fg_dim();
-    c.push_str("  (eth0)");
-    c.reset();
     c.clear_eol();
 }
 

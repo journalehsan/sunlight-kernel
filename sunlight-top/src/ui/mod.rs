@@ -28,16 +28,16 @@ impl ViewState {
     pub fn render(&self, c: &mut Canvas, snap: &SystemSnapshot, my_pid: u32) {
         header::render_header(c, snap, self.term_cols);
 
-        c.move_to(7, 1);
+        c.move_to(5, 1);
         c.fg_dim();
         for _ in 0..self.term_cols {
             c.push(b'-');
         }
         c.reset();
 
-        table::render_table_header(c, 8);
+        table::render_table_header(c, 6);
 
-        let table_start = 9u16;
+        let table_start = 7u16;
         let table_rows = self.term_rows.saturating_sub(table_start + 1);
         table::render_table(
             c,
