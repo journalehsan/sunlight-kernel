@@ -349,6 +349,14 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             Some(pb) => chown_path(state, pb.as_str(), msg.words[4] as u32, msg.words[5] as u32),
             None => error_reply(FsError::InvalidPath),
         },
+        VfsMsg::UNLINK => match decoded_path(&msg.words) {
+            Some(pb) => unlink_path(state, pb.as_str()),
+            None => error_reply(FsError::InvalidPath),
+        },
+        VfsMsg::RENAME => match (decoded_path(&msg.words), decoded_path_hi(&msg.words)) {
+            (Some(src), Some(dst)) => rename_path(state, src.as_str(), dst.as_str()),
+            _ => error_reply(FsError::InvalidPath),
+        },
         VfsMsg::GETPWNAM => match decoded_path(&msg.words) {
             Some(pb) => getpwnam(state, pb.as_str()),
             None => error_reply(FsError::InvalidPath),
@@ -572,6 +580,26 @@ fn chown_path(state: &mut State, path: &str, uid: u32, gid: u32) -> IpcMsg {
         return error_reply(FsError::Unsupported);
     }
     match state.vfs.chown(path, uid, gid) {
+        Ok(()) => ok_reply(),
+        Err(e) => error_reply(e),
+    }
+}
+
+fn unlink_path(state: &mut State, path: &str) -> IpcMsg {
+    if strip_boot_prefix(state, path).is_some() {
+        return error_reply(FsError::ReadOnlyFilesystem);
+    }
+    match state.vfs.unlink(path) {
+        Ok(()) => ok_reply(),
+        Err(e) => error_reply(e),
+    }
+}
+
+fn rename_path(state: &mut State, old: &str, new: &str) -> IpcMsg {
+    if strip_boot_prefix(state, old).is_some() || strip_boot_prefix(state, new).is_some() {
+        return error_reply(FsError::ReadOnlyFilesystem);
+    }
+    match state.vfs.rename(old, new) {
         Ok(()) => ok_reply(),
         Err(e) => error_reply(e),
     }
@@ -1138,6 +1166,25 @@ fn decoded_path(words: &[u64; 8]) -> Option<PathBuf> {
     let mut idx = 0;
     while idx < 4 {
         bytes[idx * 8..idx * 8 + 8].copy_from_slice(&words[idx].to_le_bytes());
+        idx += 1;
+    }
+    let len = bytes
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(MAX_PATH_BYTES);
+    if len == 0 {
+        return None;
+    }
+    core::str::from_utf8(&bytes[..len]).ok()?;
+    Some(PathBuf { bytes, len })
+}
+
+/// Decode a path from the upper 4 words (words[4..8]) — used for rename dst.
+fn decoded_path_hi(words: &[u64; 8]) -> Option<PathBuf> {
+    let mut bytes = [0u8; MAX_PATH_BYTES];
+    let mut idx = 0;
+    while idx < 4 {
+        bytes[idx * 8..idx * 8 + 8].copy_from_slice(&words[idx + 4].to_le_bytes());
         idx += 1;
     }
     let len = bytes

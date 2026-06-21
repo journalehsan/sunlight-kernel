@@ -103,6 +103,8 @@ pub trait FileSystem {
     fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError>;
     fn chmod(&mut self, path: &str, mode: u16) -> Result<(), FsError>;
     fn chown(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), FsError>;
+    fn unlink(&mut self, path: &str) -> Result<(), FsError>;
+    fn rename(&mut self, old: &str, new: &str) -> Result<(), FsError>;
     /// Call `f` once per entry in the directory at `path`; `f` returns false
     /// to stop early. Non-allocating: entries are built on the stack.
     fn read_dir(
@@ -261,6 +263,14 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         Err(FsError::Unsupported)
     }
 
+    fn unlink(&mut self, _path: &str) -> Result<(), FsError> {
+        Err(FsError::ReadOnlyFilesystem)
+    }
+
+    fn rename(&mut self, _old: &str, _new: &str) -> Result<(), FsError> {
+        Err(FsError::ReadOnlyFilesystem)
+    }
+
     fn read_dir(
         &mut self,
         path: &str,
@@ -379,6 +389,20 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         match self {
             Self::Ram(fs) => fs.chown(path, uid, gid),
             Self::Fat(fs) => fs.chown(path, uid, gid),
+        }
+    }
+
+    fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.unlink(path),
+            Self::Fat(fs) => fs.unlink(path),
+        }
+    }
+
+    fn rename(&mut self, old: &str, new: &str) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.rename(old, new),
+            Self::Fat(fs) => fs.rename(old, new),
         }
     }
 
@@ -548,6 +572,28 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::NotFound)?
             .fs
             .chown(local_path, uid, gid)
+    }
+
+    pub fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+        let (mount_idx, local_path) = self.resolve_mount(path)?;
+        self.mounts[mount_idx]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs
+            .unlink(local_path)
+    }
+
+    pub fn rename(&mut self, old_path: &str, new_path: &str) -> Result<(), FsError> {
+        let (old_mount, old_local) = self.resolve_mount(old_path)?;
+        let (new_mount, new_local) = self.resolve_mount_for_create(new_path)?;
+        if old_mount != new_mount {
+            return Err(FsError::Unsupported);
+        }
+        self.mounts[old_mount]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs
+            .rename(old_local, new_local)
     }
 
     pub fn read_dir(

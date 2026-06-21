@@ -315,6 +315,38 @@ pub fn mkdir(path: &[u8], mode: u16) -> Result<(), Errno> {
     sys::check(ret).map(|_| ())
 }
 
+pub fn unlink(path: &[u8]) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall1(sys::SYS_UNLINK, path_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn rename(old: &[u8], new: &[u8]) -> Result<(), Errno> {
+    let mut old_buf = [0u8; MAX_PATH];
+    let mut new_buf = [0u8; MAX_PATH];
+    let old_ptr = cstr(&mut old_buf, old)?;
+    let new_ptr = cstr(&mut new_buf, new)?;
+    let ret = unsafe { sys::syscall2(sys::SYS_RENAME, old_ptr as u64, new_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn chmod(path: &[u8], mode: u16) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall2(sys::SYS_CHMOD, path_ptr as u64, mode as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn chown(path: &[u8], uid: u32, gid: u32) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe {
+        sys::syscall3(sys::SYS_CHOWN, path_ptr as u64, uid as u64, gid as u64)
+    };
+    sys::check(ret).map(|_| ())
+}
+
 pub fn sysinfo() -> Result<SysInfo, Errno> {
     let mut raw = [0u64; 7];
     let ret = unsafe { sys::syscall1(sys::SYS_SYSINFO, raw.as_mut_ptr() as u64) };

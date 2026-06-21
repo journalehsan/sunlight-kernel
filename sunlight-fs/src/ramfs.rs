@@ -361,6 +361,67 @@ impl FileSystem for RamFs {
         Ok(())
     }
 
+    fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+        path::validate_absolute(path)?;
+        let entry_idx = self.entry_idx(path)?;
+        if self.is_dir(entry_idx) {
+            return Err(FsError::IsDir);
+        }
+        if entry_idx < self.entries.len() {
+            return Err(FsError::ReadOnlyFilesystem);
+        }
+        let dyn_idx = entry_idx - self.entries.len();
+        // Invalidate any open handles pointing at this entry or at entries
+        // that shifted past it.
+        for slot in self.handles.iter_mut() {
+            if let Some(h) = *slot {
+                if h == entry_idx {
+                    *slot = None;
+                } else if h > entry_idx {
+                    *slot = Some(h - 1);
+                }
+            }
+        }
+        self.dynamic.remove(dyn_idx);
+        Ok(())
+    }
+
+    fn rename(&mut self, old: &str, new: &str) -> Result<(), FsError> {
+        path::validate_absolute(old)?;
+        path::validate_absolute(new)?;
+        let entry_idx = self.entry_idx(old)?;
+        if entry_idx < self.entries.len() {
+            return Err(FsError::ReadOnlyFilesystem);
+        }
+        let dyn_idx = entry_idx - self.entries.len();
+        // If destination exists (and is a file), remove it first.
+        if let Ok(dst_idx) = self.entry_idx(new) {
+            if self.is_dir(dst_idx) {
+                return Err(FsError::IsDir);
+            }
+            if dst_idx >= self.entries.len() {
+                let ddyn = dst_idx - self.entries.len();
+                for slot in self.handles.iter_mut() {
+                    if let Some(h) = *slot {
+                        if h == dst_idx {
+                            *slot = None;
+                        } else if h > dst_idx {
+                            *slot = Some(h - 1);
+                        }
+                    }
+                }
+                self.dynamic.remove(ddyn);
+                // dyn_idx may have shifted if dst came before src in the vec
+                let dyn_idx = self.entry_idx(old)? - self.entries.len();
+                self.dynamic[dyn_idx].path = Vec::from(new.as_bytes());
+                return Ok(());
+            }
+            return Err(FsError::ReadOnlyFilesystem);
+        }
+        self.dynamic[dyn_idx].path = Vec::from(new.as_bytes());
+        Ok(())
+    }
+
     fn read_dir(
         &mut self,
         path: &str,

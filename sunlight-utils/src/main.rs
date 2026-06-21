@@ -97,10 +97,12 @@ fn run(args: &[&str]) -> i32 {
         "wc" => cmd_wc(rest),
         "uname" => cmd_uname(rest),
         "touch" => cmd_touch(rest),
-        "rm" | "rmdir" | "cp" | "mv" | "chmod" | "chown" => {
-            print2(applet, ": filesystem is read-only from utils (Step 4)\n");
-            1
-        }
+        "rm" => cmd_rm(rest),
+        "rmdir" => cmd_rmdir(rest),
+        "cp" => cmd_cp(rest),
+        "mv" => cmd_mv(rest),
+        "chmod" => cmd_chmod(rest),
+        "chown" => cmd_chown(rest),
         "find" | "grep" | "sort" | "uniq" | "cut" | "tail" | "date" => {
             print2(applet, ": not implemented yet\n");
             1
@@ -411,6 +413,377 @@ fn cmd_touch(args: &[&str]) -> i32 {
         }
     }
     0
+}
+
+// ---------------------------------------------------------------------------
+// Progress bar helper
+// ---------------------------------------------------------------------------
+
+/// Print a simple progress bar: `####---------- 40%`  (bar_width=10 chars)
+fn print_progress(done: u64, total: u64) {
+    const W: usize = 40;
+    let pct = if total == 0 { 100u64 } else { done * 100 / total };
+    let filled = if total == 0 { W } else { (done * W as u64 / total) as usize }.min(W);
+    let _ = write_all(b"\r[");
+    for _ in 0..filled {
+        let _ = write_all(b"#");
+    }
+    for _ in filled..W {
+        let _ = write_all(b"-");
+    }
+    let _ = write_all(b"] ");
+    print_u64(pct);
+    let _ = write_all(b"%");
+}
+
+// ---------------------------------------------------------------------------
+// rm / rmdir
+// ---------------------------------------------------------------------------
+
+fn cmd_rm(args: &[&str]) -> i32 {
+    if args.is_empty() {
+        let _ = write_all(b"rm: missing operand\n");
+        return 1;
+    }
+    let mut recursive = false;
+    let mut paths: [&str; MAX_ARGS] = [""; MAX_ARGS];
+    let mut path_count = 0usize;
+
+    for arg in args {
+        if *arg == "-r" || *arg == "-rf" || *arg == "-R" {
+            recursive = true;
+        } else if arg.starts_with('-') {
+            for &b in arg.as_bytes().iter().skip(1) {
+                match b {
+                    b'r' | b'R' => recursive = true,
+                    b'f' => {}
+                    _ => {
+                        let _ = write_all(b"rm: invalid option\n");
+                        return 1;
+                    }
+                }
+            }
+        } else if path_count < MAX_ARGS {
+            paths[path_count] = arg;
+            path_count += 1;
+        }
+    }
+
+    if path_count == 0 {
+        let _ = write_all(b"rm: missing operand\n");
+        return 1;
+    }
+
+    let mut code = 0i32;
+    for &path in &paths[..path_count] {
+        code |= rm_path(path, recursive);
+    }
+    code
+}
+
+fn rm_path(path: &str, recursive: bool) -> i32 {
+    match libc::stat(path.as_bytes()) {
+        Ok(st) => {
+            if st.file_type == libc::FT_DIR {
+                if !recursive {
+                    print2("rm: cannot remove '", path);
+                    let _ = write_all(b"': Is a directory\n");
+                    return 1;
+                }
+                rm_dir_recursive(path)
+            } else {
+                match libc::unlink(path.as_bytes()) {
+                    Ok(()) => 0,
+                    Err(_) => {
+                        print2("rm: cannot remove '", path);
+                        let _ = write_all(b"': Permission denied\n");
+                        1
+                    }
+                }
+            }
+        }
+        Err(_) => {
+            print2("rm: cannot remove '", path);
+            let _ = write_all(b"': No such file or directory\n");
+            1
+        }
+    }
+}
+
+fn rm_dir_recursive(path: &str) -> i32 {
+    let mut entries = [libc::DirEntry::zeroed(); MAX_DIR_ENTRIES];
+    let n = match libc::read_dir(path.as_bytes(), &mut entries) {
+        Ok(n) => n,
+        Err(_) => {
+            print2("rm: cannot read dir '", path);
+            let _ = write_all(b"'\n");
+            return 1;
+        }
+    };
+
+    let mut code = 0i32;
+    for entry in &entries[..n] {
+        let name = entry.name_bytes();
+        if name == b"." || name == b".." {
+            continue;
+        }
+        let mut child = [0u8; 256];
+        let child_path = join_path(&mut child, path, name);
+        let child_str = match core::str::from_utf8(child_path) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        code |= rm_path(child_str, true);
+    }
+
+    if code == 0 {
+        match libc::unlink(path.as_bytes()) {
+            Ok(()) => {}
+            Err(_) => {
+                print2("rm: cannot remove dir '", path);
+                let _ = write_all(b"'\n");
+                code = 1;
+            }
+        }
+    }
+    code
+}
+
+fn cmd_rmdir(args: &[&str]) -> i32 {
+    if args.is_empty() {
+        let _ = write_all(b"rmdir: missing operand\n");
+        return 1;
+    }
+    let mut code = 0i32;
+    for path in args {
+        match libc::stat(path.as_bytes()) {
+            Ok(st) if st.file_type == libc::FT_DIR => {
+                match libc::unlink(path.as_bytes()) {
+                    Ok(()) => {}
+                    Err(_) => {
+                        print2("rmdir: failed to remove '", path);
+                        let _ = write_all(b"'\n");
+                        code = 1;
+                    }
+                }
+            }
+            Ok(_) => {
+                print2("rmdir: '", path);
+                let _ = write_all(b"' is not a directory\n");
+                code = 1;
+            }
+            Err(_) => {
+                print2("rmdir: '", path);
+                let _ = write_all(b"': No such file or directory\n");
+                code = 1;
+            }
+        }
+    }
+    code
+}
+
+// ---------------------------------------------------------------------------
+// cp / mv
+// ---------------------------------------------------------------------------
+
+fn cmd_cp(args: &[&str]) -> i32 {
+    if args.len() < 2 {
+        let _ = write_all(b"cp: missing destination file operand\n");
+        return 1;
+    }
+    let src = args[args.len() - 2];
+    let dst = args[args.len() - 1];
+    cp_file(src, dst, true)
+}
+
+fn cp_file(src: &str, dst: &str, show_progress: bool) -> i32 {
+    let src_fd = match libc::open(src.as_bytes()) {
+        Ok(fd) => fd,
+        Err(_) => {
+            print2("cp: cannot open '", src);
+            let _ = write_all(b"'\n");
+            return 1;
+        }
+    };
+
+    // Get size for progress bar
+    let file_size = match libc::fstat(src_fd) {
+        Ok(st) => st.size as u64,
+        Err(_) => 0,
+    };
+
+    let dst_fd = match libc::create(dst.as_bytes()) {
+        Ok(fd) => fd,
+        Err(_) => {
+            let _ = libc::close(src_fd);
+            print2("cp: cannot create '", dst);
+            let _ = write_all(b"': Permission denied\n");
+            return 1;
+        }
+    };
+
+    let mut buf = [0u8; 512];
+    let mut total_copied = 0u64;
+    let mut dst_offset = 0usize;
+    let mut code = 0i32;
+
+    loop {
+        match read_retry(src_fd, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                let chunk = &buf[..n];
+                match libc::write(dst_fd, chunk) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        let _ = write_all(b"\ncp: write error\n");
+                        code = 1;
+                        break;
+                    }
+                }
+                // Advance dst offset (simplified: sequential write)
+                dst_offset += n;
+                total_copied += n as u64;
+                if show_progress && file_size > 0 {
+                    print_progress(total_copied, file_size);
+                }
+            }
+            Err(_) => {
+                let _ = write_all(b"\ncp: read error\n");
+                code = 1;
+                break;
+            }
+        }
+    }
+
+    let _ = libc::close(src_fd);
+    let _ = libc::close(dst_fd);
+
+    if show_progress && file_size > 0 {
+        print_progress(total_copied, file_size.max(total_copied));
+        let _ = write_all(b"\n");
+    }
+
+    let _ = dst_offset; // suppress warning
+    code
+}
+
+fn cmd_mv(args: &[&str]) -> i32 {
+    if args.len() < 2 {
+        let _ = write_all(b"mv: missing destination file operand\n");
+        return 1;
+    }
+    let src = args[args.len() - 2];
+    let dst = args[args.len() - 1];
+
+    // Try rename first (fast path, same mount).
+    if libc::rename(src.as_bytes(), dst.as_bytes()).is_ok() {
+        return 0;
+    }
+
+    // Fall back to copy + delete.
+    let code = cp_file(src, dst, true);
+    if code == 0 {
+        if libc::unlink(src.as_bytes()).is_err() {
+            print2("mv: warning: could not remove source '", src);
+            let _ = write_all(b"'\n");
+        }
+    }
+    code
+}
+
+// ---------------------------------------------------------------------------
+// chmod / chown
+// ---------------------------------------------------------------------------
+
+fn cmd_chmod(args: &[&str]) -> i32 {
+    let [mode_s, path] = args else {
+        let _ = write_all(b"usage: chmod MODE FILE\n");
+        return 2;
+    };
+    let Some(mode) = parse_octal(mode_s) else {
+        let _ = write_all(b"chmod: invalid mode\n");
+        return 1;
+    };
+    match libc::chmod(path.as_bytes(), mode as u16) {
+        Ok(()) => 0,
+        Err(_) => {
+            print2("chmod: cannot change mode of '", path);
+            let _ = write_all(b"': Permission denied\n");
+            1
+        }
+    }
+}
+
+fn cmd_chown(args: &[&str]) -> i32 {
+    let [owner_s, path] = args else {
+        let _ = write_all(b"usage: chown OWNER[:GROUP] FILE\n");
+        return 2;
+    };
+    // Parse "uid" or "uid:gid"
+    let (uid_s, gid_s) = match owner_s.find(':') {
+        Some(idx) => (&owner_s[..idx], Some(&owner_s[idx + 1..])),
+        None => (*owner_s, None),
+    };
+    let Some(uid) = parse_u64(uid_s) else {
+        let _ = write_all(b"chown: invalid user\n");
+        return 1;
+    };
+    let gid = match gid_s {
+        Some(s) => match parse_u64(s) {
+            Some(g) => g,
+            None => {
+                let _ = write_all(b"chown: invalid group\n");
+                return 1;
+            }
+        },
+        None => uid, // default gid = uid
+    };
+    match libc::chown(path.as_bytes(), uid as u32, gid as u32) {
+        Ok(()) => 0,
+        Err(_) => {
+            print2("chown: cannot change owner of '", path);
+            let _ = write_all(b"': Permission denied\n");
+            1
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Path helpers
+// ---------------------------------------------------------------------------
+
+/// Build `parent/name` into `buf`. Returns the filled slice.
+fn join_path<'a>(buf: &'a mut [u8], parent: &str, name: &[u8]) -> &'a [u8] {
+    let mut pos = 0usize;
+    let pb = parent.as_bytes();
+    let plen = pb.len().min(buf.len().saturating_sub(2));
+    buf[..plen].copy_from_slice(&pb[..plen]);
+    pos += plen;
+    if pos < buf.len() && buf.get(pos.saturating_sub(1)) != Some(&b'/') {
+        buf[pos] = b'/';
+        pos += 1;
+    }
+    let nlen = name.len().min(buf.len().saturating_sub(pos + 1));
+    buf[pos..pos + nlen].copy_from_slice(&name[..nlen]);
+    pos += nlen;
+    if pos < buf.len() {
+        buf[pos] = 0;
+    }
+    &buf[..pos]
+}
+
+fn parse_octal(s: &str) -> Option<u64> {
+    if s.is_empty() {
+        return None;
+    }
+    let mut out = 0u64;
+    for &b in s.as_bytes() {
+        if b < b'0' || b > b'7' {
+            return None;
+        }
+        out = out.checked_mul(8)?.checked_add((b - b'0') as u64)?;
+    }
+    Some(out)
 }
 
 fn cmd_echo(args: &[&str]) -> i32 {

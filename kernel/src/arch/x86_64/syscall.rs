@@ -65,6 +65,10 @@ pub enum SunlightSyscall {
     ReadDir = 60,
     StatPath = 61,
     Mkdir = 62,
+    Unlink = 65,
+    Rename = 66,
+    Chmod = 67,
+    Chown = 68,
 
     // Signal handling (Phase 4.3)
     Sigaction = 70,
@@ -418,6 +422,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         62 => sys_mkdir(frame),
         63 => sys_chdir(frame),
         64 => sys_getcwd(frame),
+        65 => sys_unlink(frame),
+        66 => sys_rename(frame),
+        67 => sys_chmod(frame),
+        68 => sys_chown(frame),
         70 => sys_sigaction(frame),
         71 => sys_sigprocmask(frame),
         72 => sys_kill(frame),
@@ -2520,6 +2528,124 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     };
     match vfs.mkdir(path, uid, gid, sunlight_fs::vfs::mode::S_IFDIR | mode) {
+        Ok(()) => 0,
+        Err(_) => u64::MAX,
+    }
+}
+
+/// Syscall: unlink (65) — remove a file.
+/// rdi = NUL-terminated path
+fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+
+    let (_, _, actor) = current_fs_actor();
+    let decision = sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Delete, None, false);
+    if !decision.allowed {
+        return u64::MAX;
+    }
+
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else { return u64::MAX };
+    match vfs.unlink(path) {
+        Ok(()) => 0,
+        Err(_) => u64::MAX,
+    }
+}
+
+/// Syscall: rename (66) — rename/move a file.
+/// rdi = NUL-terminated old path, rsi = NUL-terminated new path
+fn sys_rename(frame: &mut SyscallFrame) -> u64 {
+    let old_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let new_bytes = match unsafe { read_user_cstr(frame.rsi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let old_path = match core::str::from_utf8(&old_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+    let new_path = match core::str::from_utf8(&new_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+
+    let (_, _, actor) = current_fs_actor();
+    // Require Delete permission on source and Create permission on destination.
+    let del_ok = sunlight_fs::can_write(actor, old_path, sunlight_fs::FsOperation::Delete, None, false);
+    let cre_ok = sunlight_fs::can_write(actor, new_path, sunlight_fs::FsOperation::Create, None, false);
+    if !del_ok.allowed || !cre_ok.allowed {
+        return u64::MAX;
+    }
+
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else { return u64::MAX };
+    match vfs.rename(old_path, new_path) {
+        Ok(()) => 0,
+        Err(_) => u64::MAX,
+    }
+}
+
+/// Syscall: chmod (67) — change file mode.
+/// rdi = NUL-terminated path, rsi = mode (u16)
+fn sys_chmod(frame: &mut SyscallFrame) -> u64 {
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+    let mode = frame.rsi as u16;
+
+    // Only owner or root can chmod — policy allows if write is allowed.
+    let (_, _, actor) = current_fs_actor();
+    let decision = sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Write, None, false);
+    if !decision.allowed {
+        return u64::MAX;
+    }
+
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else { return u64::MAX };
+    match vfs.chmod(path, mode) {
+        Ok(()) => 0,
+        Err(_) => u64::MAX,
+    }
+}
+
+/// Syscall: chown (68) — change file owner/group.
+/// rdi = NUL-terminated path, rsi = uid, rdx = gid
+fn sys_chown(frame: &mut SyscallFrame) -> u64 {
+    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
+        Some(b) => b,
+        None => return u64::MAX,
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(s) => s,
+        Err(_) => return u64::MAX,
+    };
+    let uid = frame.rsi as u32;
+    let gid = frame.rdx as u32;
+
+    // Only root can chown.
+    let (caller_uid, _, _) = current_fs_actor();
+    if caller_uid != 0 {
+        return u64::MAX;
+    }
+
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else { return u64::MAX };
+    match vfs.chown(path, uid, gid) {
         Ok(()) => 0,
         Err(_) => u64::MAX,
     }
