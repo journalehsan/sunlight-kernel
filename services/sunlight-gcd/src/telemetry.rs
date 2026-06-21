@@ -46,6 +46,7 @@ pub struct TelemetryPage {
 #[derive(Clone, Copy, Default)]
 pub struct ProcSample {
     pub pid: usize,
+    pub ppid: usize,
     pub name: [u8; 32],
     pub state: u8,
 }
@@ -146,6 +147,7 @@ impl Telemetry {
             let raw = unsafe { vread(core::ptr::addr_of!(page.procs[i])) };
             samples[i] = ProcSample {
                 pid: raw.pid as usize,
+                ppid: raw.ppid as usize,
                 name: raw.name,
                 state: raw.state,
             };

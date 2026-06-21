@@ -6,6 +6,7 @@ pub mod console;  // Simple ANSI stream-based terminal
 pub mod grid;    // Terminal grid with VT100 support
 pub mod login;
 pub mod mux;
+pub mod proc;
 pub mod session;
 pub mod shell;
 pub mod vt100;

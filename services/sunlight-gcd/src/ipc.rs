@@ -13,6 +13,14 @@ pub mod GcdOp {
     pub const REPLY: u64 = 0x91FF;
 }
 
+/// proc manager IPC opcodes served by gcd for now.
+pub mod ProcOp {
+    /// word(0)=session root pid, word(1)=signal.
+    pub const TERMINATE_SESSION: u64 = 0x9201;
+    /// reply.words[0] = number of tasks targeted.
+    pub const REPLY: u64 = 0x92FF;
+}
+
 /// niced's IPC opcode namespace (0x9000 range), mirrored here so gcd can
 /// notify niced without a cross-crate dependency. Only the opcode used by
 /// gcd is listed.

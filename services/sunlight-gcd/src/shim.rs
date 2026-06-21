@@ -1,21 +1,17 @@
 //! Kernel operation shims (gcd side).
 //!
-//! `set_nice` is REAL — it wraps syscall 83 (SetNice) via `sunlight_ipc::set_nice`
-//! (gcd doesn't currently call it, but it's included for symmetry/future use).
-//! `send_signal`, `force_terminate`, and `reap` do NOT have corresponding
-//! kernel syscalls yet. They are implemented as logging no-ops that return
-//! `false`.
+//! `set_nice`, `send_signal`, and `force_terminate` are real wrappers over the
+//! current syscall surface. `reap` remains a stub because the scheduler reaps
+//! finished tasks internally on deschedule.
 
 pub trait KernelOps {
     /// REAL: wraps syscall 83 (SetNice).
     fn set_nice(&self, pid: usize, nice: i8) -> bool;
 
-    /// SHIM — TODO: kernel syscall — send_signal: deliver a POSIX-style
-    /// signal to `pid`. No such syscall exists.
+    /// REAL: wraps syscall 72 (Kill).
     fn send_signal(&self, pid: usize, sig: u8) -> bool;
 
-    /// SHIM — TODO: kernel syscall — force_terminate: unconditionally tear
-    /// down a process's address space and PCB. No such syscall exists.
+    /// REAL: forceful termination is `kill(pid, SIGKILL)`.
     fn force_terminate(&self, pid: usize) -> bool;
 
     /// SHIM — TODO: kernel syscall — reap: release a Finished (zombie)
@@ -31,20 +27,11 @@ impl KernelOps for RealKernelOps {
     }
 
     fn send_signal(&self, pid: usize, sig: u8) -> bool {
-        serial_println!(
-            "[GCD] TODO: kernel syscall — send_signal: pid={} sig={}",
-            pid,
-            sig
-        );
-        false
+        sunlight_ipc::kill(pid as u64, sig as u32)
     }
 
     fn force_terminate(&self, pid: usize) -> bool {
-        serial_println!(
-            "[GCD] TODO: kernel syscall — force_terminate: pid={}",
-            pid
-        );
-        false
+        sunlight_ipc::kill(pid as u64, 9)
     }
 
     fn reap(&self, pid: usize) -> bool {

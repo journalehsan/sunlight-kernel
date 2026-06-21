@@ -38,6 +38,7 @@ use sunlight_ipc::{
     unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg, TzMsg,
 };
 use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, MAX_USERS};
+use sunlight_tty::proc::{ProcOp, SIGKILL};
 use sunlight_tty::TerminalGrid;
 use sunlight_tui::ANSI_COLORS;
 
@@ -122,6 +123,7 @@ static mut TERMINAL_GEOMETRY: [TerminalGeometry; MAX_TABS] = [TerminalGeometry {
 struct ShellTab {
     shell_id: u64,
     pid: u64,
+    session_pid: u64,
     cap: Option<CapabilityToken>,
     output: [u8; TERM_OUTPUT_MAX],
     output_len: usize,
@@ -271,6 +273,7 @@ impl ShellTab {
         Self {
             shell_id: 0,
             pid: 0,
+            session_pid: 0,
             cap: None,
             output: [0; TERM_OUTPUT_MAX],
             output_len: 0,
@@ -1098,6 +1101,7 @@ fn spawn_tab(
     tabs[index] = ShellTab::empty();
     tabs[index].shell_id = shell_id;
     tabs[index].pid = spawn_reply.words[0];
+    tabs[index].session_pid = spawn_reply.words[0];
     *active_tab = index;
     *tab_count += 1;
     true
@@ -1154,6 +1158,16 @@ fn close_active_tab(
 ) {
     if *tab_count <= 1 {
         return;
+    }
+
+    let session_pid = tabs[*active_tab].session_pid;
+    if session_pid != 0 {
+        if let Some(proc_cap) = nameserver_lookup("proc") {
+            let kill_msg = IpcMsg::with_label(ProcOp::TERMINATE_SESSION)
+                .word(0, session_pid)
+                .word(1, SIGKILL);
+            let _ = ipc_call(proc_cap, kill_msg);
+        }
     }
 
     for i in *active_tab..(*tab_count - 1) {

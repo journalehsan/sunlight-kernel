@@ -5,13 +5,15 @@
 //! active shell.
 
 use crate::shell::{BuiltinShell, ShellOutput};
-use sunlight_ipc::CapabilityToken;
+use crate::proc::{ProcOp, SIGKILL};
+use sunlight_ipc::{ipc_call, CapabilityToken, IpcMsg};
 
 const MAX_TABS: usize = 10;
 
 pub struct Tab {
     pub title: [u8; 32],
     pub title_len: usize,
+    pub session_pid: u64,
     pub shell: BuiltinShell,
     /// Last output from this tab's shell (for display)
     pub output: [u8; 512],
@@ -19,13 +21,14 @@ pub struct Tab {
 }
 
 impl Tab {
-    fn new(title: &[u8], username: &[u8]) -> Self {
+    fn new(title: &[u8], username: &[u8], session_pid: u64) -> Self {
         let mut t = [0u8; 32];
         let tlen = title.len().min(32);
         t[..tlen].copy_from_slice(&title[..tlen]);
         Self {
             title: t,
             title_len: tlen,
+            session_pid,
             shell: BuiltinShell::new(username),
             output: [0; 512],
             output_len: 0,
@@ -65,7 +68,7 @@ impl TermMux {
         let mut tabs: [Option<Tab>; MAX_TABS] = [
             None, None, None, None, None, None, None, None, None, None,
         ];
-        tabs[0] = Some(Tab::new(b"shell", username));
+        tabs[0] = Some(Tab::new(b"shell", username, 0));
         Self {
             tabs,
             active: 0,
@@ -160,7 +163,7 @@ impl TermMux {
                 .as_ref()
                 .map(|t| &t.shell.username[..t.shell.username_len])
                 .unwrap_or(&[]);
-            self.tabs[self.count] = Some(Tab::new(b"shell", uname_bytes));
+            self.tabs[self.count] = Some(Tab::new(b"shell", uname_bytes, 0));
             self.active = self.count;
             self.count += 1;
         }
@@ -169,6 +172,9 @@ impl TermMux {
     fn close_tab(&mut self) {
         if self.count <= 1 {
             return; // must have at least one tab
+        }
+        if let Some(tab) = self.tabs[self.active].as_ref() {
+            request_session_terminate(tab.session_pid);
         }
         // Shift tabs down
         for i in self.active..self.count - 1 {
@@ -202,4 +208,17 @@ impl TermMux {
 
 fn nameserver_lookup_vfs() -> CapabilityToken {
     sunlight_ipc::nameserver_lookup("vfs").unwrap_or(CapabilityToken(0))
+}
+
+fn request_session_terminate(session_pid: u64) {
+    if session_pid == 0 {
+        return;
+    }
+    let Some(proc_cap) = sunlight_ipc::nameserver_lookup("proc") else {
+        return;
+    };
+    let msg = IpcMsg::with_label(ProcOp::TERMINATE_SESSION)
+        .word(0, session_pid)
+        .word(1, SIGKILL);
+    let _ = ipc_call(proc_cap, msg);
 }

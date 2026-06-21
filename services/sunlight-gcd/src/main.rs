@@ -48,8 +48,9 @@ mod shim;
 mod telemetry;
 
 use sunlight_ipc::{endpoint_create, get_time_utc, ipc_reply_and_try_recv, nameserver_register, IpcMsg};
+use sunlight_tty::proc::SIGKILL;
 
-use ipc::GcdOp;
+use ipc::{GcdOp, ProcOp};
 use reaper::Reaper;
 use shim::RealKernelOps;
 use telemetry::{ProcSample, Telemetry, MAX_PROCS};
@@ -66,7 +67,9 @@ pub extern "C" fn _start() -> ! {
 
     let ep = endpoint_create();
     nameserver_register("gcd", ep);
+    nameserver_register("proc", ep);
     serial_println!("[GCD] Registered as 'gcd'");
+    serial_println!("[GCD] Registered as 'proc'");
 
     // No PROC_EXIT pub/sub exists in the kernel. "Subscribed to PROC_EXIT"
     // here means: poll the TelemetryPage every tick for entries with
@@ -106,7 +109,7 @@ pub extern "C" fn _start() -> ! {
 
         match ipc_reply_and_try_recv(ep, reply) {
             Some(msg) => {
-                reply = handle_message(&mut reaper, &shim, &msg, now);
+                reply = handle_message(&mut reaper, &shim, tel.as_ref(), &msg, now);
             }
             None => {
                 reply = IpcMsg::empty();
@@ -116,7 +119,13 @@ pub extern "C" fn _start() -> ! {
     }
 }
 
-fn handle_message<K: shim::KernelOps>(reaper: &mut Reaper, shim: &K, msg: &IpcMsg, _now: u64) -> IpcMsg {
+fn handle_message<K: shim::KernelOps>(
+    reaper: &mut Reaper,
+    shim: &K,
+    tel: Option<&Telemetry>,
+    msg: &IpcMsg,
+    _now: u64,
+) -> IpcMsg {
     match msg.label {
         GcdOp::REAP_ZOMBIE => {
             let pid = msg.words[0] as usize;
@@ -129,6 +138,82 @@ fn handle_message<K: shim::KernelOps>(reaper: &mut Reaper, shim: &K, msg: &IpcMs
             IpcMsg::with_label(GcdOp::REPLY)
         }
         GcdOp::MEM_PRESSURE => IpcMsg::with_label(GcdOp::REPLY),
+        ProcOp::TERMINATE_SESSION => {
+            let session_pid = msg.words[0] as usize;
+            let signal = if msg.words[1] == 0 {
+                SIGKILL as u8
+            } else {
+                msg.words[1] as u8
+            };
+            let killed = terminate_session_tree(shim, tel, session_pid, signal);
+            let mut reply = IpcMsg::with_label(ProcOp::REPLY);
+            reply.words[0] = killed as u64;
+            reply
+        }
         _ => IpcMsg::with_label(GcdOp::REPLY),
     }
+}
+
+fn terminate_session_tree<K: shim::KernelOps>(
+    shim: &K,
+    tel: Option<&Telemetry>,
+    session_pid: usize,
+    signal: u8,
+) -> usize {
+    if session_pid == 0 {
+        return 0;
+    }
+
+    let mut targeted = [0usize; MAX_PROCS];
+    targeted[0] = session_pid;
+    let mut targeted_count = 1usize;
+
+    if let Some(tel) = tel {
+        let mut samples = [ProcSample::default(); MAX_PROCS];
+        let count = tel.snapshot(&mut samples);
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for sample in samples.iter().take(count) {
+                if sample.pid == 0 || sample.state == 3 {
+                    continue;
+                }
+                if !contains_pid(&targeted[..targeted_count], sample.ppid) {
+                    continue;
+                }
+                if contains_pid(&targeted[..targeted_count], sample.pid) || targeted_count >= MAX_PROCS
+                {
+                    continue;
+                }
+                targeted[targeted_count] = sample.pid;
+                targeted_count += 1;
+                changed = true;
+            }
+        }
+    }
+
+    let mut killed = 0usize;
+    for pid in targeted[..targeted_count].iter().rev() {
+        // The proc service resolves the session tree in user space; the
+        // actual run-queue removal and page-table reclamation happen in the
+        // kernel's kill/exit path for each pid we target here.
+        if shim.send_signal(*pid, signal) {
+            killed += 1;
+        } else if signal == SIGKILL as u8 && shim.force_terminate(*pid) {
+            killed += 1;
+        }
+    }
+
+    serial_println!(
+        "[GCD] terminate_session root_pid={} signal={} targeted={} killed={}",
+        session_pid,
+        signal,
+        targeted_count,
+        killed
+    );
+    killed
+}
+
+fn contains_pid(pids: &[usize], pid: usize) -> bool {
+    pids.iter().any(|entry| *entry == pid)
 }
