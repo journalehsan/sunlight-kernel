@@ -52,6 +52,11 @@ impl AddressSpace {
         }
     }
 
+    /// True after the address space root has been freed during process teardown.
+    pub fn is_reclaimed(&self) -> bool {
+        self.pml4_phys.as_u64() == 0
+    }
+
     /// Map a page in this address space.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
     pub unsafe fn map_page(
@@ -94,6 +99,9 @@ impl AddressSpace {
         page: Page<Size4KiB>,
         hhdm_offset: VirtAddr,
     ) -> Option<(PhysAddr, PageTableFlags)> {
+        if self.is_reclaimed() {
+            return None;
+        }
         let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
         let p4_entry = &pml4[page.p4_index()];
         if p4_entry.is_unused() {
@@ -126,6 +134,9 @@ impl AddressSpace {
         flags: PageTableFlags,
         hhdm_offset: VirtAddr,
     ) -> bool {
+        if self.is_reclaimed() {
+            return false;
+        }
         let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
         let p4_entry = &mut pml4[page.p4_index()];
         if p4_entry.is_unused() {
@@ -160,6 +171,9 @@ impl AddressSpace {
         page: Page<Size4KiB>,
         hhdm_offset: VirtAddr,
     ) -> Option<*mut x86_64::structures::paging::page_table::PageTableEntry> {
+        if self.is_reclaimed() {
+            return None;
+        }
         let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
         let p4_entry = &pml4[page.p4_index()];
         if p4_entry.is_unused() {
@@ -274,6 +288,9 @@ impl AddressSpace {
         page: Page<Size4KiB>,
         hhdm_offset: VirtAddr,
     ) -> Option<PhysAddr> {
+        if self.is_reclaimed() {
+            return None;
+        }
         let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
         let p4e = &mut pml4[page.p4_index()];
         if p4e.is_unused() {
@@ -309,6 +326,9 @@ impl AddressSpace {
         free_root: bool,
     ) -> ReclaimStats {
         let mut stats = ReclaimStats::default();
+        if self.is_reclaimed() {
+            return stats;
+        }
         let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
 
         for p4_idx in 0..256 {
@@ -368,6 +388,7 @@ impl AddressSpace {
         if free_root {
             pmm.free_frame(self.pml4_phys);
             stats.page_tables += 1;
+            self.pml4_phys = PhysAddr::new(0);
         }
 
         stats
@@ -381,6 +402,9 @@ impl AddressSpace {
     /// SAFETY: `hhdm_offset` must be the correct HHDM base and the page tables
     /// must be quiescent (caller holds the scheduler lock).
     pub unsafe fn count_user_pages(&self, hhdm_offset: VirtAddr) -> usize {
+        if self.is_reclaimed() {
+            return 0;
+        }
         let mut total = 0usize;
         let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
         for p4e in pml4.iter().take(256) {

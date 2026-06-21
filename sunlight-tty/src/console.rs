@@ -34,8 +34,14 @@ pub struct Console {
     // Main display buffer (row-major: row 0 col 0..cols, row 1 col 0..cols, etc.)
     cells: Vec<Cell>,
 
-    // Scrollback history: each element is a complete row
-    scrollback: Vec<Vec<Cell>>,
+    // Scrollback history as a fixed ring buffer of SCROLLBACK_MAX rows
+    // (cols cells each), allocated once in new().
+    scrollback: Vec<Cell>,
+    scrollback_head: usize,
+    scrollback_count: usize,
+
+    // Reusable render buffer (cols * rows), allocated once in new().
+    term_cells: Vec<TermCell>,
 
     // Viewport scroll offset: 0 = live view, 1..N = viewing history
     scroll_offset: usize,
@@ -69,11 +75,20 @@ impl Console {
         let mut cells = Vec::new();
         cells.resize(cols * rows, Cell::blank());
 
+        let mut scrollback = Vec::new();
+        scrollback.resize(SCROLLBACK_MAX * cols, Cell::blank());
+
+        let mut term_cells = Vec::new();
+        term_cells.resize(cols * rows, TermCell { ch: b' ', fg: 0, bg: 0 });
+
         Self {
             cols,
             rows,
             cells,
-            scrollback: Vec::new(),
+            scrollback,
+            scrollback_head: 0,
+            scrollback_count: 0,
+            term_cells,
             scroll_offset: 0,
             cursor_x: 0,
             cursor_y: 0,
@@ -93,11 +108,20 @@ impl Console {
         let mut cells = Vec::new();
         cells.resize(cols * total_rows, Cell::blank());
 
+        let mut scrollback = Vec::new();
+        scrollback.resize(SCROLLBACK_MAX * cols, Cell::blank());
+
+        let mut term_cells = Vec::new();
+        term_cells.resize(cols * total_rows, TermCell { ch: b' ', fg: 0, bg: 0 });
+
         Self {
             cols,
             rows: total_rows,  // Use total rows internally
             cells,
-            scrollback: Vec::new(),
+            scrollback,
+            scrollback_head: 0,
+            scrollback_count: 0,
+            term_cells,
             scroll_offset: 0,
             cursor_x: 0,
             cursor_y: top_margin_rows,  // Start cursor below the margin
@@ -292,28 +316,23 @@ impl Console {
             return;
         }
 
-        // Save top row to scrollback
-        let mut top_row = Vec::with_capacity(self.cols);
-        top_row.extend_from_slice(&self.cells[..self.cols]);
-
-        if self.scrollback.len() >= SCROLLBACK_MAX {
-            self.scrollback.remove(0);
+        // Copy the top row into the preallocated scrollback ring.
+        let slot = if self.scrollback_count == SCROLLBACK_MAX {
+            let oldest = self.scrollback_head;
+            self.scrollback_head = (self.scrollback_head + 1) % SCROLLBACK_MAX;
+            oldest
+        } else {
+            let next = (self.scrollback_head + self.scrollback_count) % SCROLLBACK_MAX;
+            self.scrollback_count += 1;
+            next
+        };
+        let dst = slot * self.cols;
+        for i in 0..self.cols {
+            self.scrollback[dst + i] = self.cells[i];
         }
-        self.scrollback.push(top_row);
 
-        // Shift rows up (collect source before borrowing destination)
-        for i in 0..(self.rows - 1) {
-            let src_start = (i + 1) * self.cols;
-            let src_end = src_start + self.cols;
-            let dst_start = i * self.cols;
-            let dst_end = dst_start + self.cols;
-
-            if src_end <= self.cells.len() && dst_end <= self.cells.len() {
-                // Copy into a temp vec to avoid borrow checker issues
-                let temp: Vec<Cell> = self.cells[src_start..src_end].to_vec();
-                self.cells[dst_start..dst_end].copy_from_slice(&temp);
-            }
-        }
+        // Shift rows up in place.
+        self.cells.copy_within(self.cols.., 0);
 
         // Clear bottom row
         let bottom_start = (self.rows - 1) * self.cols;
@@ -372,18 +391,18 @@ impl Console {
 
     /// Get scrollback line count
     pub fn scrollback_len(&self) -> usize {
-        self.scrollback.len()
+        self.scrollback_count
     }
 
     /// Set scroll offset (0 = live view, 1..N = history lines)
     pub fn set_scroll_offset(&mut self, offset: usize) {
-        self.scroll_offset = offset.min(self.scrollback.len());
+        self.scroll_offset = offset.min(self.scrollback_count);
         self.dirty = true;
     }
 
     /// Scroll up (increase offset, view older history)
     pub fn scroll_up_viewport(&mut self) {
-        if self.scroll_offset < self.scrollback.len() {
+        if self.scroll_offset < self.scrollback_count {
             self.scroll_offset += 1;
             self.dirty = true;
         }
@@ -421,70 +440,62 @@ impl Console {
     }
 
     /// Convert to TermCell array for rendering (no scrollback offset)
-    pub fn to_term_cells(&self, ansi_colors: &[u32; 16]) -> Vec<TermCell> {
-        let mut result = Vec::with_capacity(self.cells.len());
-        for cell in &self.cells {
-            let fg_idx = if cell.bold && cell.fg < 8 {
-                cell.fg + 8
-            } else {
-                cell.fg
-            };
-            let fg = ansi_colors[fg_idx as usize % 16];
-            let bg = ansi_colors[cell.bg as usize % 16];
-
-            result.push(TermCell {
-                ch: cell.ch,
-                fg,
-                bg,
-            });
+    pub fn to_term_cells(&mut self, ansi_colors: &[u32; 16]) -> &[TermCell] {
+        for i in 0..self.cells.len() {
+            self.term_cells[i] = resolve_cell(self.cells[i], ansi_colors);
         }
-        result
+        &self.term_cells
     }
 
     /// Convert with viewport offset for scrollback viewing
     /// viewport_offset: 0 = live view, 1..N = viewing history
-    pub fn to_term_cells_with_offset(&self, ansi_colors: &[u32; 16], viewport_offset: usize) -> Vec<TermCell> {
+    pub fn to_term_cells_with_offset(
+        &mut self,
+        ansi_colors: &[u32; 16],
+        viewport_offset: usize,
+    ) -> &[TermCell] {
         if viewport_offset == 0 {
             return self.to_term_cells(ansi_colors);
         }
 
-        let mut result = Vec::new();
-
         // For each screen row, render from scrollback history or live cells
         for screen_row in 0..self.rows {
-            let history_row_idx = if self.scrollback.len() > viewport_offset {
-                self.scrollback.len() - viewport_offset + screen_row
+            let history_row_idx = if self.scrollback_count > viewport_offset {
+                self.scrollback_count - viewport_offset + screen_row
             } else {
                 screen_row
             };
 
-            let cells_to_render = if history_row_idx < self.scrollback.len() {
-                &self.scrollback[history_row_idx]
-            } else if screen_row < self.rows {
-                // Fallback to live cells if out of scrollback range
-                let live_idx = screen_row * self.cols;
-                &self.cells[live_idx..core::cmp::min(live_idx + self.cols, self.cells.len())]
+            let dst_start = screen_row * self.cols;
+            if history_row_idx < self.scrollback_count {
+                let src_start =
+                    ((self.scrollback_head + history_row_idx) % SCROLLBACK_MAX) * self.cols;
+                for col in 0..self.cols {
+                    self.term_cells[dst_start + col] =
+                        resolve_cell(self.scrollback[src_start + col], ansi_colors);
+                }
             } else {
-                &[]
-            };
-
-            for cell in cells_to_render {
-                let fg_idx = if cell.bold && cell.fg < 8 {
-                    cell.fg + 8
-                } else {
-                    cell.fg
-                };
-                let fg = ansi_colors[fg_idx as usize % 16];
-                let bg = ansi_colors[cell.bg as usize % 16];
-                result.push(TermCell { ch: cell.ch, fg, bg });
-            }
-
-            // Pad row if needed
-            while result.len() % self.cols != 0 {
-                result.push(TermCell { ch: b' ', fg: ansi_colors[7], bg: ansi_colors[0] });
+                let src_start = screen_row * self.cols;
+                for col in 0..self.cols {
+                    self.term_cells[dst_start + col] =
+                        resolve_cell(self.cells[src_start + col], ansi_colors);
+                }
             }
         }
 
-        result
+        &self.term_cells
+    }
+}
+
+fn resolve_cell(cell: Cell, ansi_colors: &[u32; 16]) -> TermCell {
+    let fg_idx = if cell.bold && cell.fg < 8 {
+        cell.fg + 8
+    } else {
+        cell.fg
+    };
+    TermCell {
+        ch: cell.ch,
+        fg: ansi_colors[fg_idx as usize % 16],
+        bg: ansi_colors[cell.bg as usize % 16],
     }
 }

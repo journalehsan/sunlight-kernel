@@ -162,7 +162,7 @@ pub unsafe fn update_telemetry(
         let entry = unsafe { &mut TELEMETRY.procs[count] };
         entry.pid = proc.pid as u32;
         entry.ppid = proc.ppid as u32;
-        entry.state = match proc.state {
+        let proc_state = match proc.state {
             crate::process::ProcessState::Ready => 0,
             crate::process::ProcessState::Running => 1,
             crate::process::ProcessState::BlockedOnIpc => 2,
@@ -171,22 +171,28 @@ pub unsafe fn update_telemetry(
             crate::process::ProcessState::BlockedOnTimer => 5,
             crate::process::ProcessState::BlockedOnIo => 6,
         };
+        entry.state = proc_state;
         // Publish effective runtime (includes uncommitted time for Running tasks).
         // sunlight-top maintains previous samples locally and computes deltas + %.
         entry.cpu_ticks = runtime_for_telemetry;
         // Per-process resident memory: count present user-space pages in this
         // process's address space. hhdm_offset comes from the Limine response;
         // if unavailable, fall back to 0.
-        entry.mem_pages = match crate::HHDM_REQ.response() {
-            Some(resp) => {
-                let hhdm = x86_64::VirtAddr::new(resp.offset);
-                // SAFETY: caller holds the scheduler lock, so page tables are
-                // quiescent; hhdm is the bootloader-provided HHDM base.
-                let pages = unsafe { proc.address_space.count_user_pages(hhdm) };
-                pages.min(u32::MAX as usize) as u32
-            }
-            None => 0,
-        };
+        entry.mem_pages =
+            if proc_state == 3 || proc.exit_cleanup_pending || proc.address_space.is_reclaimed() {
+                0
+            } else {
+                match crate::HHDM_REQ.response() {
+                    Some(resp) => {
+                        let hhdm = x86_64::VirtAddr::new(resp.offset);
+                        // SAFETY: caller holds the scheduler lock, so page tables are
+                        // quiescent; hhdm is the bootloader-provided HHDM base.
+                        let pages = unsafe { proc.address_space.count_user_pages(hhdm) };
+                        pages.min(u32::MAX as usize) as u32
+                    }
+                    None => 0,
+                }
+            };
         entry._pad = [0; 3];
         entry._pad2 = 0;
         entry.name = proc.name;
