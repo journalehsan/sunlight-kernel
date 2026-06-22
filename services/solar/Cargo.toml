@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-solar"
-version = "0.1.285"
+version = "0.1.287"
+
+
 
 edition = "2021"
 description = "Solar HTTP/1.1 server with SBSP (Solar Basic Server Pages) scripting engine for SunlightOS"

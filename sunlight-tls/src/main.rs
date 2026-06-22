@@ -138,7 +138,10 @@ mod sunlightos_impl {
     const NET_RECV: u64 = 7;
     const NET_CLOSE: u64 = 8;
 
-    const NET_CHUNK: usize = 48; // net_server caps each SEND/RECV at 48 bytes
+    // The register-IPC ABI only carries words[0..3], so net_server can move at
+    // most 16 payload bytes (words[2..4]) per SEND/RECV. Requesting more just
+    // wastes packing — the excess words are dropped by the kernel ABI.
+    const NET_CHUNK: usize = 16;
     const SHM_PAGE: usize = 4096; // one shared page per plaintext/cert transfer
     const OUT_SCRATCH: usize = 18 * 1024; // > max TLS record (16 KiB + overhead)
     const MAX_INCOMING: usize = 256 * 1024; // guard against runaway buffering

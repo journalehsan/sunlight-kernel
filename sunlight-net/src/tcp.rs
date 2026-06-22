@@ -3,7 +3,7 @@
 //! Project Antigravity: Dynamic allocation + async polling + garbage collection
 
 extern crate alloc;
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, VecDeque};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 
@@ -46,6 +46,13 @@ pub struct TcpManager {
 /// Each slot only exists when a socket is active, freeing memory when closed
 struct TcpSlot {
     handle: SocketHandle,
+    // Decrypted/plaintext bytes already drained from the smoltcp socket buffer
+    // but not yet handed to the client. The IPC ABI only carries a few bytes of
+    // payload per RECV reply, so a single segment (up to RX_BUF) must be served
+    // across many RECV calls. Draining the socket into this backlog (instead of
+    // returning the whole segment and dropping everything past one IPC chunk) is
+    // what makes large HTTP responses and TLS handshakes survive intact.
+    rx_backlog: VecDeque<u8>,
     // Keep buffers alive by storing them (even though they're not directly accessed)
     _rx_buffer: Box<[u8]>,
     _tx_buffer: Box<[u8]>,
@@ -96,6 +103,7 @@ impl TcpManager {
 
         let slot = TcpSlot {
             handle,
+            rx_backlog: VecDeque::new(),
             _rx_buffer: rx_boxed,
             _tx_buffer: tx_boxed,
         };
@@ -217,18 +225,31 @@ impl TcpManager {
         Ok(data.len())
     }
 
+    /// Receive up to `max_len` bytes. Any bytes drained from the socket beyond
+    /// `max_len` are retained in the slot's `rx_backlog` and returned by later
+    /// calls, so no data is ever dropped between the socket buffer and the
+    /// (small) IPC reply. Returns an empty Vec on a clean peer close.
     pub fn recv<D: Device>(
         &mut self,
         socket_id: u32,
+        max_len: usize,
         iface: &mut Interface,
         sockets: &mut SocketSet<'static>,
         device: &mut D,
         yield_fn: Option<fn()>,
     ) -> Result<Vec<u8>, TcpError> {
-        let handle = self
-            .slots.get(&socket_id)
-            .map(|s| s.handle)
-            .ok_or(TcpError::InvalidSocket)?;
+        let take = max_len.max(1);
+
+        let handle = {
+            let slot = self.slots.get_mut(&socket_id).ok_or(TcpError::InvalidSocket)?;
+            // Serve buffered bytes first — never re-poll while data is pending,
+            // and never lose what we already drained from the socket.
+            if !slot.rx_backlog.is_empty() {
+                let n = slot.rx_backlog.len().min(take);
+                return Ok(slot.rx_backlog.drain(..n).collect());
+            }
+            slot.handle
+        };
 
         let start = sunlight_ipc::monotonic_millis();
         let deadline = start.wrapping_add(RECV_TIMEOUT_MS);
@@ -239,16 +260,23 @@ impl TcpManager {
 
             let socket = sockets.get_mut::<tcp::Socket>(handle);
             if socket.can_recv() {
-                let mut out = Vec::new();
+                let mut drained = Vec::new();
                 socket
                     .recv(|buf| {
-                        out.extend_from_slice(buf);
+                        drained.extend_from_slice(buf);
                         (buf.len(), ())
                     })
                     .map_err(|_| TcpError::SocketError)?;
 
-                if !out.is_empty() {
-                    return Ok(out);
+                if !drained.is_empty() {
+                    // Stash the full segment, hand back at most `take` bytes.
+                    let slot = self
+                        .slots
+                        .get_mut(&socket_id)
+                        .ok_or(TcpError::InvalidSocket)?;
+                    slot.rx_backlog.extend(drained);
+                    let n = slot.rx_backlog.len().min(take);
+                    return Ok(slot.rx_backlog.drain(..n).collect());
                 }
             }
 

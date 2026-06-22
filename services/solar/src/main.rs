@@ -272,7 +272,7 @@ pub extern "C" fn _start() -> ! {
                                     // Parse and handle HTTP request
                                     match handle_http_request(&buffer, bytes_read, &ctx) {
                                         Ok(response) => {
-                                            let _ = active_streams[i].write_all(response);
+                                            let _ = active_streams[i].write_all(response, &ctx.shm_pool);
                                         }
                                         Err(e) => {
                                             solar_log!("[SOLAR] ⚠️  Parse error: {}", e);

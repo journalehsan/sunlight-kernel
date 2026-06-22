@@ -203,14 +203,24 @@ impl TcpStream {
     /// # Returns
     /// * `Ok(())` - All data sent successfully
     /// * `Err(&str)` - If send fails or connection error
-    pub fn write_all(&mut self, data: &[u8]) -> Result<(), &'static str> {
+    pub fn write_all(&mut self, data: &[u8], shm_pool: &crate::ShmPagePool) -> Result<(), &'static str> {
+        // For small payloads (≤48 bytes), send inline in IPC registers
+        if data.len() <= 48 {
+            return self.write_inline(data);
+        }
+        
+        // For larger payloads, use SHM
+        self.write_shm(data, shm_pool)
+    }
+    
+    /// Write small data inline (≤48 bytes) in IPC registers
+    fn write_inline(&mut self, data: &[u8]) -> Result<(), &'static str> {
         let mut msg = IpcMsg::with_label(NetOp::SEND);
         msg = msg.word(0, self.socket_id as u64);
         msg = msg.word(1, data.len() as u64);
         
-        // Pack data into IPC registers (up to 48 bytes in words[2..7])
-        let inline_len = data.len().min(48);
-        for i in 0..inline_len {
+        // Pack data into words[2..7] (6 words × 8 bytes = 48 bytes max)
+        for i in 0..data.len() {
             let word_idx = 2 + (i / 8);
             let byte_idx = i % 8;
             if word_idx < msg.words.len() {
@@ -219,10 +229,42 @@ impl TcpStream {
             }
         }
         
-        // TODO: Phase 1.6 - For data > 48 bytes, allocate SHM page from pool,
-        // copy data into it, and pass as msg.caps[0]
+        let reply = ipc_call(self.net_endpoint, msg);
+        
+        let bytes_sent = reply.words[0] as usize;
+        if bytes_sent == 0 {
+            return Err("Send failed - connection may be closed");
+        }
+        
+        Ok(())
+    }
+    
+    /// Write large data (>48 bytes) via shared memory
+    fn write_shm(&mut self, data: &[u8], shm_pool: &crate::ShmPagePool) -> Result<(), &'static str> {
+        // Acquire a shared memory page from the pool
+        let shm_token = shm_pool.acquire().ok_or("SHM pool exhausted")?;
+        
+        // Map the SHM page to get a pointer
+        let shm_ptr = sunlight_ipc::shm_map(shm_token)
+            .map_err(|_| "Failed to map SHM page")?;
+        
+        // Copy data to SHM (max 4096 bytes per page)
+        let copy_len = data.len().min(4096);
+        unsafe {
+            core::ptr::copy_nonoverlapping(data.as_ptr(), shm_ptr as *mut u8, copy_len);
+        }
+        
+        // Send via IPC with SHM capability
+        let mut msg = IpcMsg::with_label(NetOp::SEND);
+        msg = msg.word(0, self.socket_id as u64);
+        msg = msg.word(1, copy_len as u64);
+        msg = msg.with_cap(0, shm_token);
         
         let reply = ipc_call(self.net_endpoint, msg);
+        
+        // Free and release the SHM page back to the pool
+        let _ = sunlight_ipc::shm_free(shm_token);
+        // Note: The page is freed, pool tracking updated implicitly
         
         // reply.words[0] contains bytes sent (0 = error)
         let bytes_sent = reply.words[0] as usize;

@@ -192,13 +192,16 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
         }
         NetOp::RECV => {
             let socket_id = msg.words[0] as u32;
-            let max_len = msg.words[1] as usize;
+            // The IPC reply can only carry IPC_CHUNK bytes of payload, so never
+            // pull more than that from the socket per call. The TcpManager keeps
+            // any excess in its per-socket backlog for the next RECV.
+            let max_len = (msg.words[1] as usize).min(IPC_CHUNK).max(1);
             let data = unsafe {
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) => TCP_MANAGER
                         .as_mut()
                         .and_then(|tcp| tcp.recv(
-                            socket_id, iface, sockets, device, None
+                            socket_id, max_len, iface, sockets, device, None
                         ).ok())
                         .unwrap_or_default(),
                     _ => alloc::vec::Vec::new(),
