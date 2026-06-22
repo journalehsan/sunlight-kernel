@@ -1,18 +1,23 @@
 //! Native Function Bindings for SBSP
 //!
-//! Phase 4: Database integration via sunlight-kv IPC
-//!
-//! This module bridges SBSP template expressions to native Rust functions,
-//! particularly focusing on key-value database access via Unix domain socket.
+//! Phase 4: Database integration via sunlight-kv IPC over capability-based SHM
 //!
 //! Architecture:
-//! - Lazy-loads KV socket only on first database call
-//! - Length-prefixed Bincode frames over UDS (/tmp/sunlight/kv.sock)
-//! - Type conversions: SbspValue ↔ Vec<u8> with error handling
-//! - SO_PEERCRED ensures www user cannot escalate permissions
+//! - Looks up the sunlight_kv daemon via the kernel nameserver
+//! - Allocates SHM pages for request/response payloads (no heap allocations)
+//! - Sends IPC messages with the SHM capability token in caps[0]
+//! - Reads response data from the SHM page after the IPC call returns
+//! - Falls back to stub errors when the KV daemon is not registered
 
 use crate::sbsp::value::SbspValue;
 use heapless::String;
+use sunlight_ipc::{ipc_call, nameserver_lookup, shm_alloc, shm_free, CapabilityToken, IpcMsg};
+
+/// KV operation codes (must match sunlight-kv daemon protocol)
+const DB_OP_GET: u64 = 1;
+const DB_OP_PUT: u64 = 2;
+const DB_OP_DELETE: u64 = 3;
+const DB_OP_SCAN: u64 = 4;
 
 /// KV Request types (minimal protocol for Solar)
 #[derive(Debug, Clone)]
@@ -44,49 +49,177 @@ pub enum KvResponse {
     ScanResult(heapless::Vec<String<256>, 64>),
 }
 
-/// Maximum size for a single KV operation (prevents runaway allocations)
-const MAX_KV_VALUE_SIZE: usize = 256; // 256 bytes per value in Phase 4
+/// Maximum size for a single KV operation
+const MAX_KV_VALUE_SIZE: usize = 256;
 
-/// Perform a KV operation via IPC to sunlight-kv daemon
+/// Name of the KV daemon in the kernel nameserver
+const KV_DAEMON_NAME: &str = "sunlight_kv";
+
+/// Perform a KV operation via capability-based IPC to the sunlight-kv daemon.
 ///
-/// # Arguments
-/// * `req` - The Request to send (KV_GET, KV_PUT, etc.)
-///
-/// # Returns
-/// - `Ok(KvResponse)` - Server response
-/// - `Err(msg)` - IPC error (socket failure, protocol error, etc.)
-///
-/// NOTE: In this no_std environment, this is a stub pending Phase 4.5 (Socket IPC integration).
-/// The full implementation will require:
-/// 1. Open UDS socket to /tmp/sunlight/kv.sock
-/// 2. Serialize request and send u32 LE length prefix + payload
-/// 3. Read u32 LE response length + payload
-/// 4. Deserialize and return
-pub fn kv_ipc_call(_req: &KvRequest) -> Result<KvResponse, String<256>> {
-    // PHASE 4.5 TODO: Integrate with sunlight-kv daemon over UDS
-    // For now, return stub error to show architecture is in place
-    let mut msg = String::new();
-    let _ = core::fmt::write(&mut msg, format_args!(
-        "KV IPC socket integration pending (Phase 4.5)"
-    ));
-    Err(msg)
+/// Uses SHM pages for payload transfer (key, value, scan prefix).
+/// The IPC flow:
+///   1. `shm_alloc()` — get a SHM page and its capability token
+///   2. Write the request payload (key/value) into the SHM page
+///   3. Build an `IpcMsg` with the operation label and SHM cap
+///   4. `ipc_call(db_endpoint, msg)` — send to KV daemon
+///   5. Read the response from the SHM page (daemon writes result in-place)
+///   6. `shm_free()` — release the SHM page
+pub fn kv_ipc_call(req: &KvRequest) -> Result<KvResponse, String<256>> {
+    let db_cap = nameserver_lookup(KV_DAEMON_NAME)
+        .ok_or_else(|| {
+            let mut msg = String::new();
+            let _ = core::fmt::write(
+                &mut msg,
+                format_args!("Database service '{}' is offline", KV_DAEMON_NAME),
+            );
+            msg
+        })?;
+
+    let (ptr, shm_cap) = shm_alloc().map_err(|_| String::from("SHM allocation failed"))?;
+
+    let result = match req {
+        KvRequest::Get { key } => {
+            if key.len() > MAX_KV_VALUE_SIZE {
+                shm_free(shm_cap).ok();
+                let mut msg = String::new();
+                let _ = core::fmt::write(
+                    &mut msg,
+                    format_args!("KV_GET key too long: {} bytes", key.len()),
+                );
+                return Err(msg);
+            }
+
+            let bytes = key.as_bytes();
+            unsafe {
+                core::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
+            }
+
+            let mut msg = IpcMsg::with_label(DB_OP_GET);
+            msg.caps[0] = shm_cap;
+            msg.words[0] = bytes.len() as u64;
+
+            let reply = ipc_call(db_cap, msg);
+            let result_len = reply.words[0] as usize;
+
+            if result_len == 0 {
+                Ok(KvResponse::NotFound)
+            } else if result_len > MAX_KV_VALUE_SIZE {
+                Ok(KvResponse::Error({
+                    let mut m = String::new();
+                    let _ = core::fmt::write(
+                        &mut m,
+                        format_args!("KV response too large: {} bytes", result_len),
+                    );
+                    m
+                }))
+            } else {
+                let data = unsafe { core::slice::from_raw_parts(ptr, result_len) };
+                let mut vec = heapless::Vec::new();
+                for &b in data {
+                    let _ = vec.push(b);
+                }
+                Ok(KvResponse::Value(vec))
+            }
+        }
+
+        KvRequest::Put { key, value } => {
+            let payload_len = key.len() + 1 + value.len();
+            if payload_len > 4096 {
+                shm_free(shm_cap).ok();
+                return Err(String::from("KV_PUT payload exceeds SHM page size (4096)"));
+            }
+
+            unsafe {
+                core::ptr::copy_nonoverlapping(key.as_ptr(), ptr, key.len());
+                *ptr.add(key.len()) = 0;
+                core::ptr::copy_nonoverlapping(value.as_ptr(), ptr.add(key.len() + 1), value.len());
+            }
+
+            let mut msg = IpcMsg::with_label(DB_OP_PUT);
+            msg.caps[0] = shm_cap;
+            msg.words[0] = payload_len as u64;
+
+            let reply = ipc_call(db_cap, msg);
+            match reply.words[0] {
+                0 => Ok(KvResponse::Ok),
+                1 => Ok(KvResponse::PermissionDenied),
+                _ => {
+                    let err_data = unsafe { core::slice::from_raw_parts(ptr, 256.min(MAX_KV_VALUE_SIZE)) };
+                    let err_str = core::str::from_utf8(err_data).unwrap_or("KV_PUT failed");
+                    Ok(KvResponse::Error(String::from(err_str)))
+                }
+            }
+        }
+
+        KvRequest::Delete { key } => {
+            let bytes = key.as_bytes();
+            unsafe {
+                core::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
+            }
+
+            let mut msg = IpcMsg::with_label(DB_OP_DELETE);
+            msg.caps[0] = shm_cap;
+            msg.words[0] = bytes.len() as u64;
+
+            let reply = ipc_call(db_cap, msg);
+            match reply.words[0] {
+                0 => Ok(KvResponse::Ok),
+                1 => Ok(KvResponse::PermissionDenied),
+                _ => Ok(KvResponse::Error(String::from("KV_DELETE failed"))),
+            }
+        }
+
+        KvRequest::Scan { prefix } => {
+            let bytes = prefix.as_bytes();
+            unsafe {
+                core::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
+            }
+
+            let mut msg = IpcMsg::with_label(DB_OP_SCAN);
+            msg.caps[0] = shm_cap;
+            msg.words[0] = bytes.len() as u64;
+
+            let reply = ipc_call(db_cap, msg);
+            let result_len = reply.words[0] as usize;
+
+            if result_len == 0 {
+                Ok(KvResponse::ScanResult(heapless::Vec::new()))
+            } else if result_len > 4096 {
+                Ok(KvResponse::Error(String::from(
+                    "KV_SCAN response too large",
+                )))
+            } else {
+                let data = unsafe { core::slice::from_raw_parts(ptr, result_len) };
+                let text = core::str::from_utf8(data).unwrap_or("");
+                let mut keys: heapless::Vec<String<256>, 64> = heapless::Vec::new();
+                for token in text.split(',') {
+                    if !token.is_empty() {
+                        let _ = keys.push(String::from(token));
+                    }
+                }
+                Ok(KvResponse::ScanResult(keys))
+            }
+        }
+    };
+
+    shm_free(shm_cap).ok();
+    result
 }
 
 /// Native function dispatcher
 ///
 /// Maps SBSP function calls to native implementations.
-/// Supports: REQUEST (HTTP form data), KV_GET, KV_PUT, KV_DELETE, KV_SCAN
+/// Supports: KV_GET, KV_PUT, KV_DELETE, KV_SCAN
 ///
 /// # Arguments
-/// * `func_name` - Function name (e.g., "REQUEST")
+/// * `func_name` - Function name (e.g., "KV_GET")
 /// * `args` - Arguments as SbspValue array
 ///
 /// # Returns
 /// - `Ok(SbspValue)` - Return value
 /// - `Err(msg)` - Type error or function error
 pub fn call_native(func_name: &str, args: &[SbspValue]) -> Result<SbspValue, String<256>> {
-    // REQUEST() is special — it needs context, so it's handled in SbspContext itself
-    // This dispatcher handles pure functions that don't need form data
     match func_name {
         "KV_GET" => {
             if args.len() != 1 {
@@ -110,27 +243,23 @@ pub fn call_native(func_name: &str, args: &[SbspValue]) -> Result<SbspValue, Str
                 }
             };
 
-            // Convert to KvRequest
             let key = String::from(key_str.as_str());
             let req = KvRequest::Get { key };
 
             match kv_ipc_call(&req) {
                 Ok(KvResponse::Value(bytes)) => {
-                    // Convert Vec<u8> → String
                     let value_str = core::str::from_utf8(&bytes).map_err(|_| {
                         String::from("KV value is not valid UTF-8")
                     })?;
                     Ok(SbspValue::String(String::from(value_str)))
                 }
                 Ok(KvResponse::NotFound) => {
-                    Ok(SbspValue::String(String::new())) // Empty string on miss
+                    Ok(SbspValue::String(String::new()))
                 }
                 Ok(KvResponse::PermissionDenied) => {
                     Err(String::from("Permission denied: cannot read this key"))
                 }
-                Ok(KvResponse::Error(e)) => {
-                    Err(e)
-                }
+                Ok(KvResponse::Error(e)) => Err(e),
                 Ok(_) => Err(String::from("Unexpected response from KV_GET")),
                 Err(e) => Err(e),
             }
@@ -158,7 +287,6 @@ pub fn call_native(func_name: &str, args: &[SbspValue]) -> Result<SbspValue, Str
                 }
             };
 
-            // Auto-convert Integer → String for storage
             let value_str = match &args[1] {
                 SbspValue::String(s) => s.clone(),
                 SbspValue::Number(n) => {
@@ -176,7 +304,6 @@ pub fn call_native(func_name: &str, args: &[SbspValue]) -> Result<SbspValue, Str
                 }
             };
 
-            // Size check
             if value_str.len() > MAX_KV_VALUE_SIZE {
                 let mut msg = String::new();
                 let _ = core::fmt::write(&mut msg, format_args!(
@@ -187,7 +314,6 @@ pub fn call_native(func_name: &str, args: &[SbspValue]) -> Result<SbspValue, Str
                 return Err(msg);
             }
 
-            // Convert to KvRequest
             let key = String::from(key_str.as_str());
             let mut value = heapless::Vec::new();
             for byte in value_str.as_bytes() {
@@ -269,7 +395,6 @@ pub fn call_native(func_name: &str, args: &[SbspValue]) -> Result<SbspValue, Str
 
             match kv_ipc_call(&req) {
                 Ok(KvResponse::ScanResult(keys)) => {
-                    // Format as comma-separated for now
                     let mut result = String::new();
                     for (i, key) in keys.iter().enumerate() {
                         if i > 0 {
@@ -330,8 +455,7 @@ mod tests {
                 SbspValue::Number(42),
             ],
         );
-        // Currently returns "not yet linked" error, but type check passes
-        assert!(result.is_err()); // IPC not available in no_std
+        assert!(result.is_err());
     }
 
     #[test]
@@ -343,7 +467,6 @@ mod tests {
     #[test]
     fn test_kv_scan_correct_args() {
         let result = call_native("KV_SCAN", &[SbspValue::String(String::from("user:"))]);
-        // Currently returns "not yet linked" error
         assert!(result.is_err());
     }
 

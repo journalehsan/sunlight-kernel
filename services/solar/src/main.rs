@@ -18,11 +18,12 @@ extern crate alloc;
 pub mod shm_pool;
 mod net;
 mod http;
+mod file_handler;
 
 use core::cell::RefCell;
 use heapless::Vec;
 use net::{TcpListener, TcpStream, MAX_ACTIVE_CONNS};
-use http::{parse_request, response::quick};
+use http::parse_request;
 
 /// Allocator: Simple bump allocator for service memory
 struct BumpAllocator;
@@ -129,52 +130,26 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-/// Phase 1.2: Handle a single HTTP request
+/// Handle a parsed HTTP request by routing to the appropriate handler.
 ///
-/// This function demonstrates the complete request/response cycle:
-/// 1. Parse raw TCP buffer into structured Request (zero-copy)
-/// 2. Extract method, path, headers (all string slices into original buffer)
-/// 3. Route to handler (file or SBSP)
-/// 4. Return response
-/// 5. Write back to TCP connection
-///
-/// # Arguments
-/// * `buffer` - Raw bytes from TCP socket (e.g., 8 KB stack buffer)
-/// * `len` - Actual bytes received
-/// * `_ctx` - Solar execution context (VFS cap, SHM pool, etc.)
-///
-/// # Returns
-/// HTTP response bytes, or error on parse failure
-fn handle_http_request(
-    buffer: &[u8],
-    len: usize,
+/// - `.sbsp` files → SBSP engine (TODO: Phase 3)
+/// - Everything else → static file streaming via `file_handler::serve_static_file`
+fn route_request(
+    stream: &mut TcpStream,
+    req_path: &str,
     ctx: &SolarContext,
-) -> Result<&'static [u8], heapless::String<256>> {
-    // 1. Parse the raw buffer into a structured Request
-    // This is zero-copy: all slices point back to the buffer
-    let req = parse_request(&buffer[..len]).map_err(|_e| {
-        let mut msg: heapless::String<256> = heapless::String::new();
-        let _ = msg.push_str("HTTP parse error");
-        msg
-    })?;
+) {
+    solar_log!("[SOLAR] Serving {}", req_path);
 
-    solar_log!("[SOLAR] {} {} HTTP/{}", req.method, req.path, req.version);
-
-    // 2. Route based on path
-    let response = if req.path.ends_with(".sbsp") {
-        // SBSP template: delegate to executor
-        // TODO: Phase 3 - Load SBSP file, execute engine, return HTML
-        quick::not_found_response()
-    } else if req.path == "/" || req.path.ends_with(".html") || req.path.ends_with(".css") {
-        // Static file: use VFS capability to read
-        // TODO: Phase 2 - Read from VFS using www_read_cap, return file content
-        quick::not_found_response()
+    if req_path.ends_with(".sbsp") {
+        // TODO: Phase 3 - SBSP Engine
+        let _ = stream.write_all(
+            b"HTTP/1.1 501 Not Implemented\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            &ctx.shm_pool,
+        );
     } else {
-        // Unknown path
-        quick::not_found_response()
-    };
-
-    Ok(response)
+        file_handler::serve_static_file(stream, req_path, ctx.www_read_cap, &ctx.shm_pool);
+    }
 }
 
 /// Service entry point
@@ -269,13 +244,23 @@ pub extern "C" fn _start() -> ! {
                             let read_result = active_streams[i].read(&mut buffer);
                             match read_result {
                                 Ok(bytes_read) if bytes_read > 0 => {
-                                    // Parse and handle HTTP request
-                                    match handle_http_request(&buffer, bytes_read, &ctx) {
-                                        Ok(response) => {
-                                            let _ = active_streams[i].write_all(response, &ctx.shm_pool);
+                                    // Parse HTTP request (zero-copy into buffer slices)
+                                    match parse_request(&buffer[..bytes_read]) {
+                                        Ok(request) => {
+                                            solar_log!("[SOLAR] {} {}", request.method, request.path);
+                                            
+                                            route_request(
+                                                &mut active_streams[i],
+                                                request.path,
+                                                &ctx,
+                                            );
                                         }
                                         Err(e) => {
-                                            solar_log!("[SOLAR] ⚠️  Parse error: {}", e);
+                                            solar_log!("[SOLAR] ⚠️  Parse error: {:?}", e);
+                                            let _ = active_streams[i].write_all(
+                                                b"HTTP/1.1 400 Bad Request\r\nContent-Length: 11\r\nConnection: close\r\n\r\nBad Request",
+                                                &ctx.shm_pool,
+                                            );
                                         }
                                     }
                                     

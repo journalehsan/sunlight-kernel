@@ -16,12 +16,15 @@
 //! - Loop rewinding via SbspLexer cloning (O(1) cost)
 //! - Nested loops and IF blocks fully supported via depth tracking
 
-use crate::sbsp::control::{evaluate_condition, skip_to_control_point, ControlFlowState};
+use crate::sbsp::control::{
+    evaluate_condition, evaluate_condition_with_shm, skip_to_control_point,
+    skip_to_else_or_endif, ControlFlowState,
+};
 use crate::sbsp::lexer::SbspLexer;
-use crate::sbsp::math::evaluate_math;
+use crate::sbsp::math::{evaluate_math, evaluate_math_with_shm};
 use crate::sbsp::runtime::{ForLoopState, SbspContext};
-use crate::sbsp::token::SbspToken;
 use crate::sbsp::value::SbspValue;
+use crate::ShmPagePool;
 use heapless::{String, Vec};
 
 /// Maximum nesting depth for loops (prevents infinite recursion on malformed templates)
@@ -39,6 +42,8 @@ pub struct SbspExecutor<'a> {
     ctx: &'a mut SbspContext,
     /// Current loop stack (for nested FOR loops)
     loop_stack: Vec<ForLoopState<'a>, MAX_LOOP_DEPTH>,
+    /// Shared memory page pool for native function IPC (KV_GET, KV_PUT, etc.)
+    shm_pool: Option<&'a ShmPagePool>,
 }
 
 impl<'a> SbspExecutor<'a> {
@@ -47,6 +52,29 @@ impl<'a> SbspExecutor<'a> {
         Self {
             ctx,
             loop_stack: Vec::new(),
+            shm_pool: None,
+        }
+    }
+
+    /// Attach a SHM pool for native function dispatch (KV_GET, KV_PUT, etc.)
+    pub fn with_shm_pool(mut self, pool: &'a ShmPagePool) -> Self {
+        self.shm_pool = Some(pool);
+        self
+    }
+
+    /// Evaluate a math expression, using SHM pool when available.
+    fn evaluate_expr(&self, expr: &str) -> Result<SbspValue, heapless::String<256>> {
+        match self.shm_pool {
+            Some(pool) => evaluate_math_with_shm(expr, self.ctx, pool),
+            None => evaluate_math(expr, self.ctx),
+        }
+    }
+
+    /// Evaluate a condition, using SHM pool when available.
+    fn eval_condition(&self, condition: &str) -> Result<bool, heapless::String<256>> {
+        match self.shm_pool {
+            Some(pool) => evaluate_condition_with_shm(condition, self.ctx, pool),
+            None => evaluate_condition(condition, self.ctx),
         }
     }
 
@@ -131,7 +159,7 @@ impl<'a> SbspExecutor<'a> {
             // Shorthand output: {%| expr %}
             SbspToken::Output(expr) => {
                 if matches!(current_control_state, ControlFlowState::Executing) {
-                    let value = evaluate_math(expr, self.ctx)?;
+                    let value = self.evaluate_expr(expr)?;
                     let html_safe = value.html_escape();
                     let mut s = heapless::String::new();
                     s.push_str(&html_safe)
@@ -145,7 +173,7 @@ impl<'a> SbspExecutor<'a> {
             SbspToken::DimDecl { var, typ, init } => {
                 if matches!(current_control_state, ControlFlowState::Executing) {
                     let initial_value = if let Some(init_expr) = init {
-                        evaluate_math(init_expr, self.ctx)?
+                        self.evaluate_expr(init_expr)?
                     } else {
                         // Default initialization
                         match typ {
@@ -171,20 +199,42 @@ impl<'a> SbspExecutor<'a> {
             // IF condition: {% IF x > 5 THEN %}
             SbspToken::If(condition) => {
                 let is_true = if matches!(current_control_state, ControlFlowState::Executing) {
-                    evaluate_condition(condition, self.ctx)?
+                    self.eval_condition(condition)?
                 } else {
                     false
                 };
 
-                let new_state = if is_true {
-                    ControlFlowState::Executing
+                if is_true {
+                    control_stack
+                        .push(ControlFlowState::Executing)
+                        .map_err(|_| heapless::String::from("Control nesting too deep."))?;
+                } else if matches!(current_control_state, ControlFlowState::Executing) {
+                    // Fast-forward lexer past the false branch (zero-allocation)
+                    match skip_to_else_or_endif(lexer) {
+                        Some(true) => {
+                            // Stopped at ELSE: execute the ELSE body
+                            control_stack
+                                .push(ControlFlowState::Executing)
+                                .map_err(|_| {
+                                    heapless::String::from("Control nesting too deep.")
+                                })?;
+                        }
+                        Some(false) => {
+                            // No ELSE, IF body fully consumed
+                        }
+                        None => {
+                            return Err(heapless::String::from(
+                                "Unmatched IF: missing END IF",
+                            ));
+                        }
+                    }
                 } else {
-                    ControlFlowState::Skipping
-                };
-
-                control_stack
-                    .push(new_state)
-                    .map_err(|_| heapless::String::from("Control nesting too deep."))?;
+                    // Already in non-Executing state (Skipping or ExecutingElse):
+                    // push Skipping so the inner END IF pops this instead of the outer state
+                    control_stack
+                        .push(ControlFlowState::Skipping)
+                        .map_err(|_| heapless::String::from("Control nesting too deep."))?;
+                }
 
                 Ok(TokenResult::default())
             }
@@ -210,8 +260,8 @@ impl<'a> SbspExecutor<'a> {
             // FOR loop: {% FOR i = 1 TO 10 %}
             SbspToken::For { var, start, end } => {
                 if matches!(current_control_state, ControlFlowState::Executing) {
-                    let start_val = evaluate_math(start, self.ctx)?;
-                    let end_val = evaluate_math(end, self.ctx)?;
+                    let start_val = self.evaluate_expr(start)?;
+                    let end_val = self.evaluate_expr(end)?;
 
                     match (start_val, end_val) {
                         (SbspValue::Number(s), SbspValue::Number(e)) => {
@@ -316,7 +366,7 @@ impl<'a> SbspExecutor<'a> {
                         let var_name = expr[..eq_pos].trim();
                         let value_expr = expr[eq_pos + 1..].trim();
 
-                        let new_value = evaluate_math(value_expr, self.ctx)?;
+                        let new_value = self.evaluate_expr(value_expr)?;
                         self.ctx.assign(var_name, new_value)?;
                     }
                 }
@@ -466,3 +516,4 @@ mod tests {
         assert_eq!(executor.loop_stack.capacity(), MAX_LOOP_DEPTH);
     }
 }
+
