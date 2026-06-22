@@ -103,6 +103,8 @@ pub enum SunlightSyscall {
     // Mouse driver (Ring 3)
     MouseRegister = 114,
     MousePopByte = 115,
+    MouseInit = 116,
+    MousePortRead = 117,
 
     DebugLog = 99,
 }
@@ -458,6 +460,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         113 => sys_kbd_get_stats(frame),
         114 => sys_mouse_register(frame),
         115 => sys_mouse_pop_byte(),
+        116 => sys_mouse_init(),
+        117 => sys_mouse_port_read(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -3775,7 +3779,13 @@ fn sys_kbd_get_stats(frame: &mut SyscallFrame) -> u64 {
 
 /// Syscall: mouse_register (114)
 fn sys_mouse_register(frame: &mut SyscallFrame) -> u64 {
-    let endpoint_id = frame.rdi as u32;
+    let token = CapabilityToken(frame.rdi);
+    let caps = crate::capability::CAP_BROKER.lock();
+    let endpoint_id = match caps.check(token, CapabilityRights::RECV_ONLY) {
+        Ok(id) => id,
+        Err(_) => return u64::MAX,
+    };
+    drop(caps);
     crate::arch::x86_64::mouse::register_mouse_driver(endpoint_id);
     0
 }
@@ -3785,6 +3795,41 @@ fn sys_mouse_pop_byte() -> u64 {
     crate::arch::x86_64::mouse::pop_mouse_byte()
         .map(|b| b as u64)
         .unwrap_or(u64::MAX)
+}
+
+fn current_process_is_mouse_driver() -> bool {
+    crate::sched::SCHEDULER.lock().current_process().name_str() == "sunlight-mouse"
+}
+
+fn is_mouse_port(port: u16) -> bool {
+    port == 0x60 || port == 0x64
+}
+
+/// Syscall: mouse_init (116)
+/// Restricted to sunlight-mouse. Performs PS/2 controller setup atomically in kernel mode.
+fn sys_mouse_init() -> u64 {
+    if !current_process_is_mouse_driver() {
+        return u64::MAX;
+    }
+    if crate::arch::x86_64::mouse::init_ps2_mouse() {
+        0
+    } else {
+        u64::MAX
+    }
+}
+
+/// Syscall: mouse_port_read (117)
+/// Restricted debug helper for sunlight-mouse and PS/2 data/status ports.
+fn sys_mouse_port_read(frame: &mut SyscallFrame) -> u64 {
+    let port = frame.rdi as u16;
+    if !current_process_is_mouse_driver() || !is_mouse_port(port) {
+        return u64::MAX;
+    }
+    unsafe {
+        let mut p: x86_64::instructions::port::Port<u8> =
+            x86_64::instructions::port::Port::new(port);
+        p.read() as u64
+    }
 }
 
 /// Syscall: powerctl (80)

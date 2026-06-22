@@ -47,6 +47,8 @@ static TIMER_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
 static SUNLIGHT_KBD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kbd");
+static SUNLIGHT_MOUSE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-mouse");
 static VFS_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
 static TTY_SERVER_ELF_BYTES: &[u8] =

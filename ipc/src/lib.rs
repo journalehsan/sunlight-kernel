@@ -43,6 +43,10 @@ pub enum SunlightSyscall {
     ShmMap = 93,
     ShmFree = 94,
     MapTelemetry = 95,
+    MouseRegister = 114,
+    MousePopByte = 115,
+    MouseInit = 116,
+    MousePortRead = 117,
     DebugLog = 99,
 }
 

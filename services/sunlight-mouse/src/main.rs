@@ -8,8 +8,8 @@
 #![no_main]
 
 use sunlight_ipc::{
-    endpoint_create, ipc_recv, nameserver_lookup, nameserver_register,
-    CapabilityToken, IpcMsg,
+    endpoint_create, ipc_call, ipc_recv, nameserver_lookup, nameserver_register, process_yield,
+    IpcMsg, ProcessExit,
 };
 
 /// PS/2 mouse packet state machine
@@ -116,9 +116,23 @@ struct MouseEvent {
 
 /// Syscall wrappers for mouse-specific operations
 mod syscall {
+    const SYS_MOUSE_INIT: u64 = 116;
     const SYS_MOUSE_REGISTER: u64 = 114;
     const SYS_MOUSE_POP_BYTE: u64 = 115;
     const SYS_DEBUG_LOG: u64 = 99;
+
+    pub fn mouse_init() -> bool {
+        let ret: u64;
+        unsafe {
+            core::arch::asm!(
+                "syscall",
+                inlateout("rax") SYS_MOUSE_INIT => ret,
+                lateout("rcx") _, lateout("r11") _,
+                options(nostack)
+            );
+        }
+        ret == 0
+    }
 
     pub fn mouse_register(endpoint_id: u32) {
         unsafe {
@@ -159,125 +173,20 @@ mod syscall {
     }
 }
 
-/// Port I/O helpers (will be called via privileged syscall in production)
-mod port_io {
-    const SYS_PORT_WRITE: u64 = 116;
-    const SYS_PORT_READ: u64 = 117;
-
-    pub fn outb(port: u16, value: u8) {
-        unsafe {
-            core::arch::asm!(
-                "syscall",
-                inlateout("rax") SYS_PORT_WRITE => _,
-                in("rdi") port as u64,
-                in("rsi") value as u64,
-                lateout("rcx") _, lateout("r11") _,
-                options(nostack)
-            );
-        }
-    }
-
-    pub fn inb(port: u16) -> u8 {
-        let ret: u64;
-        unsafe {
-            core::arch::asm!(
-                "syscall",
-                inlateout("rax") SYS_PORT_READ => ret,
-                in("rdi") port as u64,
-                lateout("rcx") _, lateout("r11") _,
-                options(nostack)
-            );
-        }
-        ret as u8
-    }
-
-    pub fn wait_input_buffer() {
-        for _ in 0..1000 {
-            if (inb(0x64) & 0x02) == 0 {
-                return;
-            }
-        }
-    }
-
-    pub fn wait_output_buffer() -> bool {
-        for _ in 0..1000 {
-            if (inb(0x64) & 0x01) != 0 {
-                return true;
-            }
-        }
-        false
-    }
-}
-
 /// Phase 1: Initialize the PS/2 mouse (8042 controller auxiliary port)
 fn init_ps2_mouse() -> Result<(), ()> {
-    use port_io::*;
-
-    syscall::debug_log("[MOUSE] Initializing PS/2 mouse hardware\n");
-
-    // 1. Enable auxiliary device (mouse port)
-    wait_input_buffer();
-    outb(0x64, 0xA8); // Enable auxiliary device
-    
-    // 2. Read and modify Compaq status byte to enable IRQ12
-    wait_input_buffer();
-    outb(0x64, 0x20); // Read command byte
-    if !wait_output_buffer() {
-        syscall::debug_log("[MOUSE] ERROR: Failed to read status byte\n");
-        return Err(());
+    if syscall::mouse_init() {
+        Ok(())
+    } else {
+        syscall::debug_log("[MOUSE] ERROR: Kernel PS/2 mouse init failed\n");
+        Err(())
     }
-    let mut status = inb(0x60);
-    
-    status |= 0x02;  // Enable IRQ12 (bit 1)
-    status &= !0x20; // Clear "disable mouse clock" bit (bit 5)
-    
-    wait_input_buffer();
-    outb(0x64, 0x60); // Write command byte
-    wait_input_buffer();
-    outb(0x60, status);
-    
-    // 3. Send "Enable Data Reporting" command to mouse
-    wait_input_buffer();
-    outb(0x64, 0xD4); // Next byte goes to mouse
-    wait_input_buffer();
-    outb(0x60, 0xF4); // Enable data reporting
-    
-    // 4. Wait for ACK (0xFA)
-    if !wait_output_buffer() {
-        syscall::debug_log("[MOUSE] ERROR: No ACK from mouse\n");
-        return Err(());
-    }
-    let ack = inb(0x60);
-    if ack != 0xFA {
-        syscall::debug_log("[MOUSE] ERROR: Mouse did not ACK (got byte)\n");
-        return Err(());
-    }
-    
-    syscall::debug_log("[MOUSE] PS/2 mouse initialized successfully\n");
-    Ok(())
-}
-
-fn ipc_call_oneshot(cap: CapabilityToken, msg: IpcMsg) {
-    let reply_buf = IpcMsg::empty();
-    let ret: u64;
-    unsafe {
-        core::arch::asm!(
-            "syscall",
-            inlateout("rax") 1u64 => ret,
-            in("rdi") cap.0,
-            in("rsi") &msg as *const IpcMsg,
-            in("rdx") &reply_buf as *const IpcMsg,
-            lateout("rcx") _, lateout("r11") _,
-            options(nostack)
-        );
-    }
-    let _ = ret;
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     syscall::debug_log("[MOUSE] PANIC\n");
-    loop {}
+    ProcessExit::exit(101);
 }
 
 #[no_mangle]
@@ -286,8 +195,8 @@ pub extern "C" fn _start() -> ! {
 
     // Phase 1: Initialize PS/2 mouse hardware
     if init_ps2_mouse().is_err() {
-        syscall::debug_log("[MOUSE] FATAL: Hardware initialization failed\n");
-        loop {}
+        syscall::debug_log("[MOUSE] FATAL: Hardware initialization failed; exiting driver\n");
+        ProcessExit::exit(1);
     }
 
     // Create IPC endpoint and register with nameserver
@@ -298,15 +207,12 @@ pub extern "C" fn _start() -> ! {
 
     // Lookup tty_server capability
     let tty_token = loop {
-        if let Some(t) = nameserver_lookup("tty_server") {
+        if let Some(t) = nameserver_lookup("tty") {
             break t;
         }
-        // Yield and retry
-        unsafe {
-            core::arch::asm!("syscall", inlateout("rax") 21u64 => _, lateout("rcx") _, lateout("r11") _, options(nostack));
-        }
+        process_yield();
     };
-    syscall::debug_log("[MOUSE] found tty_server, ready to process mouse events\n");
+    syscall::debug_log("[MOUSE] found tty, ready to process mouse events\n");
 
     // Phase 2: Main event loop with packet parsing
     let mut mouse_state = MouseState::new(1024, 768);
@@ -325,7 +231,7 @@ pub extern "C" fn _start() -> ! {
                 
                 // Send to tty_server (label 0x2 for mouse event)
                 let msg = IpcMsg::with_label(0x2).word(0, event_val);
-                ipc_call_oneshot(tty_token, msg);
+                let _ = ipc_call(tty_token, msg);
             }
         }
         

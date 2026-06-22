@@ -54,6 +54,7 @@ enum TtyState {
 }
 
 const KBD_LABEL: u64 = 1;
+const MOUSE_LABEL: u64 = 2;
 const OUTPUT_LABEL: u64 = 2;
 const EXIT_LABEL: u64 = 3;
 const DRAIN_LABEL: u64 = 4;
@@ -69,6 +70,149 @@ const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
 const PENDING_INPUT_MAX: usize = 128;
 const MAX_TABS: usize = 10;
+
+const CURSOR_W: usize = 10;
+const CURSOR_H: usize = 15;
+const CURSOR_PIXELS: usize = CURSOR_W * CURSOR_H;
+const CURSOR_WHITE: u32 = 0x00ff_ffff;
+const CURSOR_BLACK: u32 = 0x0000_0000;
+const CURSOR_TRANSPARENT: u8 = 0;
+const CURSOR_OUTLINE: u8 = 1;
+
+const ARROW_CURSOR: [u8; CURSOR_PIXELS] = [
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 2, 2, 0, 0, 0, 0, 0, 0, 0,
+    1, 2, 2, 2, 0, 0, 0, 0, 0, 0,
+    1, 2, 2, 2, 2, 0, 0, 0, 0, 0,
+    1, 2, 2, 2, 2, 2, 0, 0, 0, 0,
+    1, 2, 2, 2, 2, 2, 2, 0, 0, 0,
+    1, 2, 2, 2, 2, 2, 2, 2, 0, 0,
+    1, 2, 2, 2, 2, 1, 1, 1, 1, 0,
+    1, 2, 2, 1, 2, 2, 0, 0, 0, 0,
+    1, 2, 1, 0, 1, 2, 2, 0, 0, 0,
+    1, 1, 0, 0, 1, 2, 2, 0, 0, 0,
+    1, 0, 0, 0, 0, 1, 2, 2, 0, 0,
+    0, 0, 0, 0, 0, 1, 2, 2, 0, 0,
+    0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
+];
+
+struct MouseState {
+    x: u32,
+    y: u32,
+    saved_x: u32,
+    saved_y: u32,
+    saved_bg: [u32; CURSOR_PIXELS],
+    saved_mask: [bool; CURSOR_PIXELS],
+    has_saved: bool,
+    left_button: bool,
+    right_button: bool,
+    middle_button: bool,
+}
+
+impl MouseState {
+    const fn new() -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            saved_x: 0,
+            saved_y: 0,
+            saved_bg: [0; CURSOR_PIXELS],
+            saved_mask: [false; CURSOR_PIXELS],
+            has_saved: false,
+            left_button: false,
+            right_button: false,
+            middle_button: false,
+        }
+    }
+
+    fn center_if_unset(&mut self, fb_w: u32, fb_h: u32) {
+        if self.x == 0 && self.y == 0 && !self.has_saved {
+            self.x = fb_w / 2;
+            self.y = fb_h / 2;
+        }
+    }
+
+    fn update_from_event(&mut self, event: u64, fb_w: u32, fb_h: u32) {
+        let max_x = fb_w.saturating_sub(1);
+        let max_y = fb_h.saturating_sub(1);
+        self.x = ((event & 0xffff) as u32).min(max_x);
+        self.y = (((event >> 16) & 0xffff) as u32).min(max_y);
+        let buttons = ((event >> 32) & 0xff) as u8;
+        self.left_button = (buttons & 0x01) != 0;
+        self.right_button = (buttons & 0x02) != 0;
+        self.middle_button = (buttons & 0x04) != 0;
+    }
+
+    fn erase_overlay(&mut self, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32) {
+        if !self.has_saved || fb_addr == 0 || fb_w == 0 || fb_h == 0 || fb_p == 0 {
+            return;
+        }
+        let fb = fb_addr as *mut u32;
+        let stride = (fb_p as usize) / core::mem::size_of::<u32>();
+        for row in 0..CURSOR_H {
+            let y = self.saved_y + row as u32;
+            if y >= fb_h {
+                continue;
+            }
+            for col in 0..CURSOR_W {
+                let idx = row * CURSOR_W + col;
+                if !self.saved_mask[idx] {
+                    continue;
+                }
+                let x = self.saved_x + col as u32;
+                if x >= fb_w {
+                    continue;
+                }
+                let offset = y as usize * stride + x as usize;
+                unsafe {
+                    fb.add(offset).write_volatile(self.saved_bg[idx]);
+                }
+            }
+        }
+        self.has_saved = false;
+    }
+
+    fn draw_overlay(&mut self, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32) {
+        if fb_addr == 0 || fb_w == 0 || fb_h == 0 || fb_p == 0 {
+            return;
+        }
+        self.center_if_unset(fb_w, fb_h);
+        let fb = fb_addr as *mut u32;
+        let stride = (fb_p as usize) / core::mem::size_of::<u32>();
+        self.saved_x = self.x.min(fb_w.saturating_sub(1));
+        self.saved_y = self.y.min(fb_h.saturating_sub(1));
+        self.saved_mask = [false; CURSOR_PIXELS];
+        for row in 0..CURSOR_H {
+            let y = self.saved_y + row as u32;
+            if y >= fb_h {
+                continue;
+            }
+            for col in 0..CURSOR_W {
+                let idx = row * CURSOR_W + col;
+                let pixel = ARROW_CURSOR[idx];
+                if pixel == CURSOR_TRANSPARENT {
+                    continue;
+                }
+                let x = self.saved_x + col as u32;
+                if x >= fb_w {
+                    continue;
+                }
+                let offset = y as usize * stride + x as usize;
+                unsafe {
+                    self.saved_bg[idx] = fb.add(offset).read_volatile();
+                    fb.add(offset).write_volatile(if pixel == CURSOR_OUTLINE {
+                        CURSOR_BLACK
+                    } else {
+                        CURSOR_WHITE
+                    });
+                }
+                self.saved_mask[idx] = true;
+            }
+        }
+        self.has_saved = true;
+    }
+}
 
 /// Per-tab scrollback viewport state
 #[derive(Clone, Copy)]
@@ -303,12 +447,14 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     let fb32_w = fb_width as u32;
     let fb32_h = fb_height as u32;
     let fb32_p = fb_pitch as u32;
+    let mut mouse = MouseState::new();
 
     if has_fb {
         debug_log("[TTY] Framebuffer acquired");
         unsafe {
             sunlight_tui::render_login_screen(fb_addr as *mut u32, fb32_w, fb32_h, fb32_p);
         }
+        mouse.draw_overlay(fb_addr, fb32_w, fb32_h, fb32_p);
         debug_log("[TTY] Login rendered");
     }
 
@@ -416,7 +562,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             if has_fb {
                                 render_active_shell_fb(
                                     fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
-                                    true,
+                                    true, &mut mouse,
                                 );
                             }
                             logged_in = true;
@@ -428,8 +574,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
                 }
                 login.tick();
+                if msg.label == MOUSE_LABEL {
+                    mouse.update_from_event(msg.words[0], fb32_w, fb32_h);
+                }
                 if has_fb && !logged_in {
-                    render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p);
+                    render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
                 }
             }
             TtyState::Shell => {
@@ -437,6 +586,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 let prev_output_len = active_shell_tab(&tabs, active_tab)
                     .map(|tab| tab.output_len)
                     .unwrap_or(0);
+
+                if msg.label == MOUSE_LABEL {
+                    mouse.update_from_event(msg.words[0], fb32_w, fb32_h);
+                    needs_render = true;
+                }
 
                 // Lazy lookup: try to find sshl once it registers after being spawned.
                 if msg.label == KbdMsg::KEY_EVENT {
@@ -658,7 +812,12 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 logged_initial_spawn = false;
                                                 if has_fb {
                                                     render_login_fb(
-                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                        &login,
+                                                        fb_addr,
+                                                        fb32_w,
+                                                        fb32_h,
+                                                        fb32_p,
+                                                        &mut mouse,
                                                     );
                                                 }
                                                 continue;
@@ -738,10 +897,15 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 // wiping the app's frame. The idle loop renders the app instead.
                 let active_fg =
                     active_shell_tab(&tabs, active_tab).map_or(false, |t| t.fg_pid.is_some());
-                if has_fb && needs_render && !active_fg {
-                    render_active_shell_fb(
-                        fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
-                    );
+                if has_fb && needs_render {
+                    if active_fg {
+                        redraw_mouse_overlay(fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
+                    } else {
+                        render_active_shell_fb(
+                            fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
+                            &mut mouse,
+                        );
+                    }
                 }
             }
         }
@@ -804,11 +968,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         }
                         render_active_shell_fb(
                             fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
+                            &mut mouse,
                         );
                     } else if drained {
                         // Foreground app owns the screen: render without a prompt.
                         render_active_shell_fb(
                             fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, false,
+                            &mut mouse,
                         );
                     }
                 } else {
@@ -819,7 +985,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if now_min != LAST_POLL_MIN {
                             LAST_POLL_MIN = now_min;
                             render_active_shell_fb(
-                                fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
+                                fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
+                                true, &mut mouse,
                             );
                         }
                     }
@@ -853,7 +1020,21 @@ pub fn get_viewport_offset(tab_idx: usize) -> usize {
     }
 }
 
-fn render_login_fb(login: &LoginScreen, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32) {
+fn redraw_mouse_overlay(fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32, mouse: &mut MouseState) {
+    mouse.erase_overlay(fb_addr, fb_w, fb_h, fb_p);
+    mouse.draw_overlay(fb_addr, fb_w, fb_h, fb_p);
+}
+
+fn render_login_fb(
+    login: &LoginScreen,
+    fb_addr: u64,
+    fb_w: u32,
+    fb_h: u32,
+    fb_p: u32,
+    mouse: &mut MouseState,
+) {
+    mouse.erase_overlay(fb_addr, fb_w, fb_h, fb_p);
+
     let mut user_bufs = [[0u8; 64]; MAX_USERS];
     let mut user_lens = [0usize; MAX_USERS];
     let mut is_custom = [false; MAX_USERS];
@@ -888,6 +1069,7 @@ fn render_login_fb(login: &LoginScreen, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p
             login.message,
         );
     }
+    mouse.draw_overlay(fb_addr, fb_w, fb_h, fb_p);
 }
 
 fn render_active_shell_fb(
@@ -899,7 +1081,10 @@ fn render_active_shell_fb(
     tab_count: usize,
     active_tab: usize,
     show_prompt: bool,
+    mouse: &mut MouseState,
 ) {
+    mouse.erase_overlay(fb_addr, fb_w, fb_h, fb_p);
+
     // Size the grid with the exact same formula the renderer uses, so every
     // row is shown from the top of the content area with no clipping. Computing
     // this independently here (it previously used a different glyph height and
@@ -1014,6 +1199,7 @@ fn render_active_shell_fb(
             input_cursor,
         );
     }
+    mouse.draw_overlay(fb_addr, fb_w, fb_h, fb_p);
 
     // NOTE: Grid is NOT dropped here - it's cached in GRID_CACHE for reuse on next render
     // This prevents the 400KB+ allocation that was exhausting the bump allocator heap

@@ -22,6 +22,106 @@ static DROPPED_COUNT: AtomicUsize = AtomicUsize::new(0);
 /// Endpoint ID of the registered user-space mouse driver (sunlight-mouse).
 static MOUSE_DRIVER_ENDPOINT: AtomicU32 = AtomicU32::new(0);
 
+fn wait_input_buffer_clear() -> bool {
+    unsafe {
+        let mut status: Port<u8> = Port::new(0x64);
+        for _ in 0..100_000 {
+            if status.read() & 0x02 == 0 {
+                return true;
+            }
+            core::hint::spin_loop();
+        }
+    }
+    false
+}
+
+fn wait_output_buffer_full() -> bool {
+    unsafe {
+        let mut status: Port<u8> = Port::new(0x64);
+        for _ in 0..100_000 {
+            if status.read() & 0x01 != 0 {
+                return true;
+            }
+            core::hint::spin_loop();
+        }
+    }
+    false
+}
+
+unsafe fn write_cmd(cmd: u8) -> bool {
+    if !wait_input_buffer_clear() {
+        return false;
+    }
+    let mut port: Port<u8> = Port::new(0x64);
+    port.write(cmd);
+    true
+}
+
+unsafe fn write_data(data: u8) -> bool {
+    if !wait_input_buffer_clear() {
+        return false;
+    }
+    let mut port: Port<u8> = Port::new(0x60);
+    port.write(data);
+    true
+}
+
+unsafe fn read_data() -> Option<u8> {
+    if !wait_output_buffer_full() {
+        return None;
+    }
+    let mut port: Port<u8> = Port::new(0x60);
+    Some(port.read())
+}
+
+/// Initialize the PS/2 auxiliary mouse port in ring 0 so keyboard IRQ handling
+/// cannot consume the controller command-byte response while user space waits.
+pub fn init_ps2_mouse() -> bool {
+    serial_println!("[MOUSE] Initializing PS/2 mouse hardware");
+    unsafe {
+        if !write_cmd(0xA8) {
+            serial_println!("[MOUSE] init failed: aux enable timeout");
+            return false;
+        }
+
+        if !write_cmd(0x20) {
+            serial_println!("[MOUSE] init failed: command-byte read timeout");
+            return false;
+        }
+        let Some(mut status) = read_data() else {
+            serial_println!("[MOUSE] init failed: no command-byte response");
+            return false;
+        };
+        status |= 0x02;
+        status &= !0x20;
+
+        if !write_cmd(0x60) || !write_data(status) {
+            serial_println!("[MOUSE] init failed: command-byte write timeout");
+            return false;
+        }
+
+        if !write_cmd(0xD4) || !write_data(0xF4) {
+            serial_println!("[MOUSE] init failed: enable-reporting timeout");
+            return false;
+        }
+
+        match read_data() {
+            Some(0xFA) => {
+                serial_println!("[MOUSE] PS/2 mouse initialized successfully");
+                true
+            }
+            Some(byte) => {
+                serial_println!("[MOUSE] init failed: expected ACK, got {:#x}", byte);
+                false
+            }
+            None => {
+                serial_println!("[MOUSE] init failed: no ACK");
+                false
+            }
+        }
+    }
+}
+
 /// Register the user-space mouse driver endpoint.
 pub fn register_mouse_driver(endpoint_id: u32) {
     MOUSE_DRIVER_ENDPOINT.store(endpoint_id, Ordering::Release);

@@ -405,6 +405,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         // These need no privileged memory setup (unlike vfs/tty).
         "/sbin/timer_server" | "/usr/sbin/timer_server" => Ok(crate::TIMER_SERVER_ELF_BYTES),
         "/sbin/sunlight-kbd" | "/usr/sbin/sunlight-kbd" => Ok(crate::SUNLIGHT_KBD_ELF_BYTES),
+        "/sbin/sunlight-mouse" | "/usr/sbin/sunlight-mouse" => {
+            Ok(crate::SUNLIGHT_MOUSE_ELF_BYTES)
+        }
         "/sbin/net_server" | "/usr/sbin/net_server" => Ok(crate::NET_SERVER_ELF_BYTES),
         "/sbin/sunlightd" | "/usr/sbin/sunlightd" => Ok(crate::SUNLIGHTD_ELF_BYTES),
         // User-level daemons spawned by sunlightd (not hardcoded in kernel boot).
