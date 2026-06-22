@@ -5,13 +5,6 @@
   "last_total_lines": 63397,
   "history": [
     {
-      "timestamp": "2026-06-21T19:40:16.052494",
-      "version": "0.1.224",
-      "total_lines": 55843,
-      "new_lines": 8,
-      "patch_increment": 1
-    },
-    {
       "timestamp": "2026-06-21T19:46:05.301344",
       "version": "0.1.224",
       "total_lines": 55873,
@@ -349,6 +342,13 @@
     },
     {
       "timestamp": "2026-06-22T14:03:30.160937",
+      "version": "0.1.299",
+      "total_lines": 63397,
+      "new_lines": -38,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-22T14:07:19.795609",
       "version": "0.1.299",
       "total_lines": 63397,
       "new_lines": -38,
