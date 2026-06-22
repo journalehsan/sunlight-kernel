@@ -21,7 +21,7 @@ mod http;
 
 use core::cell::RefCell;
 use heapless::Vec;
-use net::{TcpListener, TcpStream};
+use net::{TcpListener, TcpStream, MAX_ACTIVE_CONNS};
 use http::{parse_request, response::quick};
 
 /// Allocator: Simple bump allocator for service memory
@@ -218,34 +218,98 @@ pub extern "C" fn _start() -> ! {
         }
     };
     
-    solar_log!("[SOLAR] ☀️ Listening on port 80... Ready to serve HTTP! :)");
+    let net_endpoint = listener.net_endpoint();
+    solar_log!("[SOLAR] ☀️ Listening on port 80... Async event loop ready! :)");
 
-    // Main event loop: accept connections and handle HTTP requests
+    // Phase 1.6: Async event loop with NetOp::POLL
+    // Handles up to MAX_ACTIVE_CONNS (64) concurrent connections without blocking
+    let mut active_streams: Vec<TcpStream, MAX_ACTIVE_CONNS> = Vec::new();
+    let mut loop_count = 0u32;
+
     loop {
-        match listener.accept() {
-            Ok(mut stream) => {
-                solar_log!("[SOLAR] 📥 Incoming connection accepted");
-                
-                // Read HTTP request from the stream
-                let mut buffer = [0u8; 8192];
-                if let Ok(bytes_read) = stream.read(&mut buffer) {
-                    if bytes_read > 0 {
-                        // Parse and handle the HTTP request
-                        match handle_http_request(&buffer, bytes_read, &ctx) {
-                            Ok(response) => {
-                                let _ = stream.write_all(response);
-                            }
-                            Err(e) => {
-                                solar_log!("[SOLAR] ⚠️  Parse error: {}", e);
-                            }
-                        }
-                    }
+        loop_count = loop_count.wrapping_add(1);
+        
+        // 1. Try to accept new connections (non-blocking)
+        match listener.try_accept() {
+            Ok(Some(stream)) => {
+                if active_streams.push(stream).is_err() {
+                    solar_log!("[SOLAR] ⚠️  Max concurrent connections ({}) reached!", MAX_ACTIVE_CONNS);
+                    // Close the connection we couldn't accept
+                    // (it will be handled on next iteration)
+                } else {
+                    solar_log!("[SOLAR] 📥 New connection accepted ({} active)", active_streams.len());
                 }
             }
+            Ok(None) => {
+                // No pending connections, continue to poll
+            }
             Err(e) => {
-                solar_log!("[SOLAR] ❌ Accept error: {}", e);
+                solar_log!("[SOLAR] ⚠️  Accept error: {}", e);
             }
         }
+        
+        // 2. Poll active sockets to see which have data ready
+        if !active_streams.is_empty() {
+            let mut socket_ids = [0u32; 8];
+            let poll_count = active_streams.len().min(8);
+            for (i, stream) in active_streams.iter().take(8).enumerate() {
+                socket_ids[i] = stream.socket_id;
+            }
+            
+            match net::poll_sockets(net_endpoint, &socket_ids[..poll_count]) {
+                Ok(ready) => {
+                    // 3. Process only the sockets that are ready
+                    let mut i = 0;
+                    while i < active_streams.len() {
+                        let socket_id = active_streams[i].socket_id;
+                        
+                        if net::is_socket_ready(socket_id, &ready) {
+                            // This socket has data! Read and handle it.
+                            let mut buffer = [0u8; 8192];
+                            let read_result = active_streams[i].read(&mut buffer);
+                            match read_result {
+                                Ok(bytes_read) if bytes_read > 0 => {
+                                    // Parse and handle HTTP request
+                                    match handle_http_request(&buffer, bytes_read, &ctx) {
+                                        Ok(response) => {
+                                            let _ = active_streams[i].write_all(response);
+                                        }
+                                        Err(e) => {
+                                            solar_log!("[SOLAR] ⚠️  Parse error: {}", e);
+                                        }
+                                    }
+                                    
+                                    // Close and remove the stream (HTTP/1.0 style for now)
+                                    solar_log!("[SOLAR] ✅ Request handled, closing connection");
+                                    active_streams.swap_remove(i);
+                                    continue; // Don't increment i, swap_remove shifted elements
+                                }
+                                Ok(_) => {
+                                    // Connection closed by peer
+                                    solar_log!("[SOLAR] 📤 Client closed connection (0 bytes)");
+                                    active_streams.swap_remove(i);
+                                    continue;
+                                }
+                                Err(_) => {
+                                    // Read error
+                                    solar_log!("[SOLAR] ❌ Read error, closing connection");
+                                    active_streams.swap_remove(i);
+                                    continue;
+                                }
+                            }
+                        }
+                
+                        i += 1;
+                    }
+                }
+                Err(e) => {
+                    solar_log!("[SOLAR] ⚠️  Poll error: {}", e);
+                }
+            }
+        }
+        
+        // 4. Yield CPU to let other services run
+        sunlight_ipc::process_yield();
     }
 }
 

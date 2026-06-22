@@ -9,8 +9,12 @@
 //! - All operations use sunlight_ipc to communicate with net_server
 //! - Errors are propagated as &'static str for no_std compatibility
 
+use core::convert::TryInto;
 use sunlight_ipc::{ipc_call, nameserver_lookup, CapabilityToken, IpcMsg};
 use sunlight_net::netop::NetOp;
+
+/// Maximum concurrent connections Solar can handle per event loop
+pub const MAX_ACTIVE_CONNS: usize = 64;
 
 /// A TCP socket server that listens for incoming connections.
 pub struct TcpListener {
@@ -101,15 +105,49 @@ impl TcpListener {
             net_endpoint: self.net_endpoint,
         })
     }
+
+    /// Non-blocking accept: returns None if no pending connections
+    ///
+    /// This is useful for event loops that want to accept new connections
+    /// without blocking when there are no clients waiting.
+    pub fn try_accept(&self) -> Result<Option<TcpStream>, &'static str> {
+        let mut msg = IpcMsg::with_label(NetOp::ACCEPT);
+        msg = msg.word(0, self.socket_id as u64);
+        
+        let reply = ipc_call(self.net_endpoint, msg);
+        
+        // net_server returns the new client socket_id in reply.words[0]
+        let client_socket_id = reply.words[0] as u32;
+        
+        if client_socket_id == 0 {
+            // No pending connections (non-blocking mode)
+            return Ok(None);
+        }
+
+        Ok(Some(TcpStream {
+            socket_id: client_socket_id,
+            net_endpoint: self.net_endpoint,
+        }))
+    }
+
+    /// Get the net_endpoint for polling operations
+    pub fn net_endpoint(&self) -> CapabilityToken {
+        self.net_endpoint
+    }
 }
 
 /// A connected TCP stream for reading and writing data.
 pub struct TcpStream {
-    socket_id: u32,
-    net_endpoint: CapabilityToken,
+    pub socket_id: u32,
+    pub net_endpoint: CapabilityToken,
 }
 
 impl TcpStream {
+    /// Get the socket ID for this stream
+    pub fn socket_id(&self) -> u32 {
+        self.socket_id
+    }
+
     /// Reads data from the TCP stream into the provided buffer.
     ///
     /// This calls NetOp::RECV and copies the received data into `buffer`.
@@ -207,6 +245,55 @@ impl TcpStream {
         // Mark socket as closed
         self.socket_id = 0;
     }
+}
+
+/// Poll multiple sockets to check which ones are ready for I/O
+///
+/// This is the core of Solar's async event loop. It sends a list of socket IDs
+/// to net_server via NetOp::POLL and receives back which ones are ready.
+///
+/// # Arguments
+/// * `net_endpoint` - The net_server capability token
+/// * `socket_ids` - Slice of socket IDs to check (up to 8)
+///
+/// # Returns
+/// Array of ready socket IDs (0 = no more ready sockets)
+pub fn poll_sockets(
+    net_endpoint: CapabilityToken,
+    socket_ids: &[u32],
+) -> Result<[u32; 8], &'static str> {
+    let count = socket_ids.len().min(8);
+    
+    let mut msg = IpcMsg::with_label(NetOp::POLL);
+    msg = msg.word(0, count as u64);
+    
+    for (i, &socket_id) in socket_ids.iter().take(8).enumerate() {
+        msg = msg.word(i + 1, socket_id as u64);
+    }
+    
+    let reply = ipc_call(net_endpoint, msg);
+    
+    let ready_count = reply.words[0] as usize;
+    let mut ready = [0u32; 8];
+    
+    for i in 0..ready_count.min(8) {
+        ready[i] = reply.words[i + 1] as u32;
+    }
+    
+    Ok(ready)
+}
+
+/// Check if a socket ID is in the ready list
+pub fn is_socket_ready(socket_id: u32, ready: &[u32; 8]) -> bool {
+    for &id in ready.iter() {
+        if id == 0 {
+            break; // End of ready list
+        }
+        if id == socket_id {
+            return true;
+        }
+    }
+    false
 }
 
 impl Drop for TcpStream {
