@@ -1227,20 +1227,45 @@ pub mod history {
     // Do not use sunlight-sm directly from calculator history. KV handles its own
     // persistence as a background operation; callers only talk to KV.
     #[cfg(feature = "sunlight")]
-    const KV_TIMEOUT_MS: u64 = 50;
+    const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
+    const KV_OP_TIMEOUT_MS: u64 = 250;
+    static mut KV_CAP_CACHE: sunlight_ipc::CapabilityToken = sunlight_ipc::CapabilityToken::INVALID;
+
+    #[cfg(feature = "sunlight")]
+    fn kv_cap() -> Result<sunlight_ipc::CapabilityToken, String> {
+        use sunlight_ipc::{nameserver_lookup_timeout, CapabilityToken};
+
+        let cached = unsafe { KV_CAP_CACHE };
+        if cached != CapabilityToken::INVALID {
+            return Ok(cached);
+        }
+
+        match nameserver_lookup_timeout("sunlight-kv", KV_LOOKUP_TIMEOUT_MS) {
+            Some(cap) => {
+                unsafe {
+                    KV_CAP_CACHE = cap;
+                }
+                Ok(cap)
+            }
+            None => {
+                sunlight_ipc::debug_log("[CALC-KV] lookup sunlight-kv failed/timeout");
+                Err("sunlight-kv unavailable".to_string())
+            }
+        }
+    }
 
     #[cfg(feature = "sunlight")]
     fn kv_call_checked(
         cap: sunlight_ipc::CapabilityToken,
         msg: sunlight_ipc::IpcMsg,
     ) -> Result<sunlight_ipc::IpcMsg, String> {
-        sunlight_ipc::ipc_call_timeout(cap, msg, KV_TIMEOUT_MS)
+        sunlight_ipc::ipc_call_timeout(cap, msg, KV_OP_TIMEOUT_MS)
             .map_err(|e| format!("kv ipc failed: {:?}", e))
     }
 
     #[cfg(feature = "sunlight")]
     fn kv_put(key: &str, value: &[u8]) -> Result<(), String> {
-        use sunlight_ipc::{nameserver_lookup_timeout, shm_alloc, shm_free, IpcMsg};
+        use sunlight_ipc::{shm_alloc, shm_free, IpcMsg};
         const KV_PUT_SHM: u64 = 0x4B06;
         const KV_REPLY: u64 = 0x4BFF;
         const SHM_PAGE: usize = 4096;
@@ -1255,13 +1280,7 @@ pub mod history {
             return Err("value too large".to_string());
         }
 
-        let cap = match nameserver_lookup_timeout("sunlight-kv", KV_TIMEOUT_MS) {
-            Some(c) => c,
-            None => {
-                sunlight_ipc::debug_log("[CALC-KV] lookup sunlight-kv failed/timeout");
-                return Err("sunlight-kv unavailable".to_string());
-            }
-        };
+        let cap = kv_cap()?;
 
         let (ptr, tok) = match shm_alloc() {
             Ok(v) => v,
@@ -1306,7 +1325,7 @@ pub mod history {
 
     #[cfg(feature = "sunlight")]
     fn kv_get(key: &str) -> Result<Vec<u8>, String> {
-        use sunlight_ipc::{nameserver_lookup_timeout, shm_free, shm_map, CapabilityToken, IpcMsg};
+        use sunlight_ipc::{shm_free, shm_map, CapabilityToken, IpcMsg};
         const KV_GET_SHM: u64 = 0x4B07;
         const KV_VALUE: u64 = 0x4B05;
         const SHM_PAGE: usize = 4096;
@@ -1318,13 +1337,7 @@ pub mod history {
         // current 16-byte register-IPC key limit.
         ensure_register_key_len(2, key)?;
 
-        let cap = match nameserver_lookup_timeout("sunlight-kv", KV_TIMEOUT_MS) {
-            Some(c) => c,
-            None => {
-                sunlight_ipc::debug_log("[CALC-KV] lookup sunlight-kv failed/timeout");
-                return Err("sunlight-kv unavailable".to_string());
-            }
-        };
+        let cap = kv_cap()?;
 
         let mut msg = IpcMsg::with_label(KV_GET_SHM);
         pack_str_register_words(&mut msg, 2, key)?;
@@ -1377,20 +1390,14 @@ pub mod history {
     #[cfg(feature = "sunlight")]
     #[cfg_attr(feature = "sunlight", allow(dead_code))]
     fn kv_delete(key: &str) -> Result<(), String> {
-        use sunlight_ipc::{nameserver_lookup_timeout, IpcMsg};
+        use sunlight_ipc::IpcMsg;
         const KV_DELETE: u64 = 0x4B03;
         const KV_REPLY: u64 = 0x4BFF;
         // KV protocol constants (shell side) verified against sunlight-kv/src/main.rs:
         // KV_DELETE=0x4B03, KV_REPLY=0x4BFF
 
         ensure_register_key_len(1, key)?;
-        let cap = match nameserver_lookup_timeout("sunlight-kv", KV_TIMEOUT_MS) {
-            Some(c) => c,
-            None => {
-                sunlight_ipc::debug_log("[CALC-KV] lookup sunlight-kv failed/timeout (delete)");
-                return Err("sunlight-kv unavailable".to_string());
-            }
-        };
+        let cap = kv_cap()?;
         let mut msg = IpcMsg::with_label(KV_DELETE);
         msg.words[0] = key.len() as u64;
         pack_str_register_words(&mut msg, 1, key)?;
