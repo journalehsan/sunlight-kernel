@@ -20,6 +20,7 @@
 use crate::sbsp::runtime::SbspContext;
 use crate::sbsp::value::SbspValue;
 use heapless::{String, Vec};
+use crate::sbsp::native::call_native;
 
 /// Math token (result of tokenization)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -237,37 +238,90 @@ impl<'a, 'ctx> MathParser<'a, 'ctx> {
         Ok(left)
     }
 
-    /// Parse a factor (base values: numbers, variables, parentheses)
+    /// Parse a factor (base values: numbers, variables, parentheses, function calls)
     /// Highest precedence
     fn parse_factor(&mut self) -> Result<i64, heapless::String<256>> {
         match self.advance() {
             Some(MathToken::Number(n)) => Ok(n),
 
             Some(MathToken::Identifier(name)) => {
-                // STRICT TYPE ENFORCEMENT: Look up variable in symbol table
-                match self.ctx.get(name) {
-                    Ok(value) => match value {
-                        SbspValue::Number(n) => Ok(n),
-                        _ => {
+                // Check for function call: identifier followed by '('
+                if let Some(MathToken::LParen) = self.peek() {
+                    self.advance(); // Consume '('
+
+                    // Parse function arguments (for V1, support comma-separated expressions)
+                    let mut args: Vec<SbspValue, 8> = Vec::new();
+
+                    // Check for empty argument list
+                    if let Some(MathToken::RParen) = self.peek() {
+                        self.advance(); // Consume ')'
+                    } else {
+                        // Parse first argument as an expression
+                        let arg_val = self.parse_expression()?;
+                        args.push(SbspValue::Number(arg_val))
+                            .map_err(|_| heapless::String::from("Too many function arguments."))?;
+
+                        // Parse additional arguments (comma-separated)
+                        loop {
+                            match self.peek() {
+                                Some(MathToken::RParen) => {
+                                    self.advance(); // Consume ')'
+                                    break;
+                                }
+                                // TODO: Support comma-separated arguments in V1.1
+                                // For now, single argument only
+                                _ => {
+                                    return Err(heapless::String::from(
+                                        "Function calls with multiple arguments not yet supported.",
+                                    ))
+                                }
+                            }
+                        }
+                    }
+
+                    // Dispatch to native function
+                    match call_native(name, &args) {
+                        Ok(SbspValue::Number(n)) => Ok(n),
+                        Ok(other) => {
                             let mut msg = heapless::String::new();
                             let _ = core::fmt::write(
                                 &mut msg,
                                 format_args!(
-                                    "Type mismatch: Cannot perform math on variable '{}' of type {}.",
+                                    "Function '{}' returned {}, expected Integer for math.",
                                     name,
-                                    value.type_name()
+                                    other.type_name()
                                 ),
                             );
                             Err(msg)
                         }
-                    },
-                    Err(_) => {
-                        let mut msg = heapless::String::new();
-                        let _ = core::fmt::write(
-                            &mut msg,
-                            format_args!("Variable '{}' is not defined.", name),
-                        );
-                        Err(msg)
+                        Err(e) => Err(e),
+                    }
+                } else {
+                    // Not a function call, treat as variable
+                    match self.ctx.get(name) {
+                        Ok(value) => match value {
+                            SbspValue::Number(n) => Ok(n),
+                            _ => {
+                                let mut msg = heapless::String::new();
+                                let _ = core::fmt::write(
+                                    &mut msg,
+                                    format_args!(
+                                        "Type mismatch: Cannot perform math on variable '{}' of type {}.",
+                                        name,
+                                        value.type_name()
+                                    ),
+                                );
+                                Err(msg)
+                            }
+                        },
+                        Err(_) => {
+                            let mut msg = heapless::String::new();
+                            let _ = core::fmt::write(
+                                &mut msg,
+                                format_args!("Variable '{}' is not defined.", name),
+                            );
+                            Err(msg)
+                        }
                     }
                 }
             }
