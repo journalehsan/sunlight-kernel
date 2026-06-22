@@ -9,7 +9,6 @@
 //! - All operations use sunlight_ipc to communicate with net_server
 //! - Errors are propagated as &'static str for no_std compatibility
 
-use core::convert::TryInto;
 use sunlight_ipc::{ipc_call, nameserver_lookup, CapabilityToken, IpcMsg};
 use sunlight_net::netop::NetOp;
 
@@ -150,9 +149,7 @@ impl TcpStream {
 
     /// Reads data from the TCP stream into the provided buffer.
     ///
-    /// This calls NetOp::RECV and copies the received data into `buffer`.
-    /// For small payloads (<= 48 bytes), data is returned inline in IPC registers.
-    /// For larger payloads, we use the SHM pool (TODO: Phase 1.6).
+    /// This calls NetOp::RECV_SHM and copies the received data into `buffer`.
     ///
     /// # Arguments
     /// * `buffer` - Destination buffer to fill with received data
@@ -161,7 +158,7 @@ impl TcpStream {
     /// * `Ok(usize)` - Number of bytes read
     /// * `Err(&str)` - If recv fails or connection closed
     pub fn read(&mut self, buffer: &mut [u8]) -> Result<usize, &'static str> {
-        let mut msg = IpcMsg::with_label(NetOp::RECV);
+        let mut msg = IpcMsg::with_label(NetOp::RECV_SHM);
         msg = msg.word(0, self.socket_id as u64);
         msg = msg.word(1, buffer.len() as u64);
         
@@ -169,25 +166,24 @@ impl TcpStream {
         
         // reply.words[0] contains the number of bytes received
         let bytes_read = reply.words[0] as usize;
-        
         if bytes_read == 0 {
             // Connection closed by peer
             return Ok(0);
         }
-        
-        // For Phase 1, data comes back inline in reply.words[1..7] (up to 48 bytes).
-        // Copy data from IPC registers into the user buffer.
-        let copy_len = bytes_read.min(buffer.len()).min(48);
-        for i in 0..copy_len {
-            let word_idx = 1 + (i / 8);
-            let byte_idx = i % 8;
-            if word_idx < reply.words.len() {
-                buffer[i] = ((reply.words[word_idx] >> (byte_idx * 8)) & 0xFF) as u8;
-            }
+
+        let shm_token = reply.caps[0];
+        if shm_token == CapabilityToken::INVALID {
+            return Err("Recv failed - missing SHM page");
         }
-        
-        // TODO: Phase 1.6 - For buffers > 48 bytes, use SHM pool from reply.caps[0]
-        
+
+        let shm_ptr = sunlight_ipc::shm_map(shm_token)
+            .map_err(|_| "Failed to map received SHM page")?;
+        let copy_len = bytes_read.min(buffer.len()).min(4096);
+        unsafe {
+            core::ptr::copy_nonoverlapping(shm_ptr as *const u8, buffer.as_mut_ptr(), copy_len);
+        }
+        let _ = sunlight_ipc::shm_free(shm_token);
+
         Ok(copy_len)
     }
 
@@ -255,16 +251,14 @@ impl TcpStream {
         }
         
         // Send via IPC with SHM capability
-        let mut msg = IpcMsg::with_label(NetOp::SEND);
+        let mut msg = IpcMsg::with_label(NetOp::SEND_SHM);
         msg = msg.word(0, self.socket_id as u64);
         msg = msg.word(1, copy_len as u64);
         msg = msg.with_cap(0, shm_token);
         
         let reply = ipc_call(self.net_endpoint, msg);
-        
-        // Free and release the SHM page back to the pool
-        let _ = sunlight_ipc::shm_free(shm_token);
-        // Note: The page is freed, pool tracking updated implicitly
+
+        shm_pool.release(shm_token);
         
         // reply.words[0] contains bytes sent (0 = error)
         let bytes_sent = reply.words[0] as usize;

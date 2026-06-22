@@ -46,6 +46,7 @@ pub struct TcpManager {
 /// Each slot only exists when a socket is active, freeing memory when closed
 struct TcpSlot {
     handle: SocketHandle,
+    local_port: Option<u16>,
     // Decrypted/plaintext bytes already drained from the smoltcp socket buffer
     // but not yet handed to the client. The IPC ABI only carries a few bytes of
     // payload per RECV reply, so a single segment (up to RX_BUF) must be served
@@ -103,6 +104,7 @@ impl TcpManager {
 
         let slot = TcpSlot {
             handle,
+            local_port: None,
             rx_backlog: VecDeque::new(),
             _rx_buffer: rx_boxed,
             _tx_buffer: tx_boxed,
@@ -110,6 +112,112 @@ impl TcpManager {
 
         self.slots.insert(socket_id, slot);
         Ok(socket_id)
+    }
+
+    fn alloc_slot_with_listen(
+        &mut self,
+        sockets: &mut SocketSet<'static>,
+        port: u16,
+    ) -> Result<u32, TcpError> {
+        let socket_id = self.alloc_socket(sockets)?;
+        let handle = self
+            .slots
+            .get(&socket_id)
+            .map(|s| s.handle)
+            .ok_or(TcpError::InvalidSocket)?;
+
+        sockets
+            .get_mut::<tcp::Socket>(handle)
+            .listen(port)
+            .map_err(|_| TcpError::SocketError)?;
+
+        if let Some(slot) = self.slots.get_mut(&socket_id) {
+            slot.local_port = Some(port);
+        }
+
+        Ok(socket_id)
+    }
+
+    pub fn bind(
+        &mut self,
+        socket_id: u32,
+        port: u16,
+        sockets: &mut SocketSet<'static>,
+    ) -> Result<(), TcpError> {
+        if port == 0 {
+            return Err(TcpError::SocketError);
+        }
+
+        if self.slots.iter().any(|(&id, slot)| {
+            id != socket_id && slot.local_port == Some(port)
+        }) {
+            return Err(TcpError::SocketError);
+        }
+
+        let slot = self
+            .slots
+            .get_mut(&socket_id)
+            .ok_or(TcpError::InvalidSocket)?;
+        let socket = sockets.get::<tcp::Socket>(slot.handle);
+        if socket.is_open() {
+            return Err(TcpError::SocketError);
+        }
+
+        slot.local_port = Some(port);
+        Ok(())
+    }
+
+    pub fn listen(
+        &mut self,
+        socket_id: u32,
+        _backlog: usize,
+        sockets: &mut SocketSet<'static>,
+    ) -> Result<(), TcpError> {
+        let slot = self
+            .slots
+            .get_mut(&socket_id)
+            .ok_or(TcpError::InvalidSocket)?;
+        let port = slot.local_port.ok_or(TcpError::SocketError)?;
+        sockets
+            .get_mut::<tcp::Socket>(slot.handle)
+            .listen(port)
+            .map_err(|_| TcpError::SocketError)
+    }
+
+    pub fn accept<D: Device>(
+        &mut self,
+        socket_id: u32,
+        iface: &mut Interface,
+        sockets: &mut SocketSet<'static>,
+        device: &mut D,
+    ) -> Result<Option<u32>, TcpError> {
+        let (handle, port) = {
+            let slot = self.slots.get(&socket_id).ok_or(TcpError::InvalidSocket)?;
+            (slot.handle, slot.local_port.ok_or(TcpError::SocketError)?)
+        };
+
+        iface.poll(Instant::from_millis(0), device, sockets);
+
+        let state = sockets.get::<tcp::Socket>(handle).state();
+        if !matches!(state, tcp::State::SynReceived | tcp::State::Established) {
+            return Ok(None);
+        }
+
+        let client_id = self.alloc_slot_with_listen(sockets, port)?;
+        let mut connected_slot = self
+            .slots
+            .remove(&socket_id)
+            .ok_or(TcpError::InvalidSocket)?;
+        let listener_slot = self
+            .slots
+            .remove(&client_id)
+            .ok_or(TcpError::InvalidSocket)?;
+
+        connected_slot.local_port = None;
+        self.slots.insert(socket_id, listener_slot);
+        self.slots.insert(client_id, connected_slot);
+
+        Ok(Some(client_id))
     }
 
     pub fn connect<D: Device>(

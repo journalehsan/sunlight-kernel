@@ -284,13 +284,15 @@ if [ "$USE_DISK" = true ]; then
     echo -e "${BLUE}Disk:${NC}    $DISK_PATH"
 fi
 
-# NAT networking (virtio-net + user-mode NAT, host port 2222 -> guest 22)
+# NAT networking (virtio-net + user-mode NAT)
+#   host 2222 -> guest 22 (SSH)
+#   host 8080 -> guest 80 (Solar HTTP) — browse http://localhost:8080
 if [ "$USE_NET" = true ]; then
     QEMU_CMD+=(
-        -netdev "user,id=net0,hostfwd=tcp::2222-:22"
+        -netdev "user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80"
         -device "virtio-net-pci,disable-modern=on,netdev=net0"
     )
-    echo -e "${BLUE}Network:${NC} NAT (host 2222 -> guest 22)"
+    echo -e "${BLUE}Network:${NC} NAT (host 2222 -> guest 22, host 8080 -> guest 80)"
 fi
 
 # Audio (intel-hda; pa works with both PulseAudio and PipeWire)

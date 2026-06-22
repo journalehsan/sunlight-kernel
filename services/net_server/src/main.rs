@@ -37,7 +37,7 @@ static mut RESOLVER_CHAIN: Option<sunlight_net::ResolverChain> = None;
 static mut NET_DEVICE: Option<ProxyNetDevice> = None;
 static mut NET_IFACE: Option<Interface> = None;
 /// Backing storage for the TCP SocketSet managed by TcpManager (main loop).
-static mut SOCKET_STORAGE: [SocketStorage; 16] = [SocketStorage::EMPTY; 16];
+static mut SOCKET_STORAGE: [SocketStorage; 128] = [SocketStorage::EMPTY; 128];
 /// Separate backing storage for the DNS SocketSet (RESOLVE handler).
 /// Kept isolated so DNS UDP sockets never alias TCP slots in SOCKET_STORAGE.
 static mut DNS_SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
@@ -109,7 +109,7 @@ pub extern "C" fn _start() -> ! {
     debug_log("[NET]  smoltcp interface up over kernel frame proxy (10.0.2.15/24)");
 
     // Main service loop — one SocketSet for the process lifetime (TCP handles persist).
-    let sockets_storage: &'static mut [SocketStorage; 16] =
+    let sockets_storage: &'static mut [SocketStorage; 128] =
         unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_STORAGE) };
     let mut sockets = SocketSet::new(&mut sockets_storage[..]);
     let mut poll_counter = 0u32; // Antigravity Phase 3: Garbage collection counter
@@ -274,8 +274,41 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             };
             IpcMsg::with_label(NetOp::CLOSE).word(0, if ok { 1 } else { 0 })
         }
-        NetOp::BIND | NetOp::LISTEN | NetOp::ACCEPT => {
-            IpcMsg::with_label(msg.label).word(0, 1)
+        NetOp::BIND => {
+            let socket_id = msg.words[0] as u32;
+            let port = msg.words[1] as u16;
+            let ok = unsafe {
+                TCP_MANAGER
+                    .as_mut()
+                    .and_then(|tcp| tcp.bind(socket_id, port, sockets).ok())
+                    .is_some()
+            };
+            IpcMsg::with_label(NetOp::BIND).word(0, if ok { 0 } else { 1 })
+        }
+        NetOp::LISTEN => {
+            let socket_id = msg.words[0] as u32;
+            let backlog = msg.words[1] as usize;
+            let ok = unsafe {
+                TCP_MANAGER
+                    .as_mut()
+                    .and_then(|tcp| tcp.listen(socket_id, backlog, sockets).ok())
+                    .is_some()
+            };
+            IpcMsg::with_label(NetOp::LISTEN).word(0, if ok { 0 } else { 1 })
+        }
+        NetOp::ACCEPT => {
+            let socket_id = msg.words[0] as u32;
+            let client_id = unsafe {
+                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+                    (Some(iface), Some(device)) => TCP_MANAGER
+                        .as_mut()
+                        .and_then(|tcp| tcp.accept(socket_id, iface, sockets, device).ok())
+                        .flatten()
+                        .unwrap_or(0),
+                    _ => 0,
+                }
+            };
+            IpcMsg::with_label(NetOp::ACCEPT).word(0, client_id as u64)
         }
         NetOp::POLL => {
             // Antigravity Phase 2: Non-blocking poll for ready sockets
