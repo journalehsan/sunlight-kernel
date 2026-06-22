@@ -295,19 +295,32 @@ impl TcpManager {
 
         {
             let mut offset = 0;
+            let start = sunlight_ipc::monotonic_millis();
+            let deadline = start.wrapping_add(SEND_TIMEOUT_MS);
             while offset < data.len() {
+                let elapsed = sunlight_ipc::monotonic_millis().wrapping_sub(start);
+                iface.poll(Instant::from_millis(elapsed as i64), device, sockets);
+
                 let socket = sockets.get_mut::<tcp::Socket>(handle);
                 if !matches!(socket.state(), tcp::State::Established) {
                     return Err(TcpError::NotConnected);
                 }
                 match socket.send_slice(&data[offset..]) {
-                    Ok(0) => {}
+                    Ok(0) => {
+                        if sunlight_ipc::monotonic_millis() >= deadline {
+                            return Err(TcpError::Timeout);
+                        }
+                        if let Some(f) = yield_fn {
+                            f();
+                        } else {
+                            sunlight_ipc::process_yield();
+                        }
+                    }
                     Ok(n) => offset += n,
                     Err(tcp::SendError::InvalidState) => return Err(TcpError::NotConnected),
                 }
             }
 
-            let start = sunlight_ipc::monotonic_millis();
             let deadline = start.wrapping_add(SEND_TIMEOUT_MS);
             loop {
                 let elapsed = sunlight_ipc::monotonic_millis().wrapping_sub(start);
