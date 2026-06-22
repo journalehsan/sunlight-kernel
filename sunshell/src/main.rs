@@ -7,40 +7,59 @@ mod builtins;
 mod exec;
 #[cfg(feature = "std")]
 mod input;
-#[cfg(feature = "std")]
+mod shellenv;
 mod parser;
 
 #[cfg(any(feature = "sunlight", test))]
 mod calc;
 
 #[cfg(feature = "std")]
-use exec::{Executor, PosixExecutor};
+use exec::{execute_ast, Executor, PosixExecutor};
 #[cfg(feature = "std")]
 use input::ReadLine;
 #[cfg(feature = "std")]
 use std::env;
 
 #[cfg(feature = "std")]
-fn run_command(line: &str, executor: &dyn Executor) -> Option<i32> {
-    let tokens = parser::tokenize(line);
-    if tokens.is_empty() {
+fn run_command(line: &str, env: &mut crate::shellenv::ShellEnv, executor: &dyn Executor) -> Option<i32> {
+    let Some(ast) = parser::parse_line(line) else {
         return Some(0);
-    }
+    };
 
-    let argv: Vec<&str> = tokens.iter().map(|s| s.as_str()).collect();
-
-    match builtins::run(&argv) {
-        builtins::BuiltinResult::Done(code) => Some(code),
-        builtins::BuiltinResult::Exit(code) => {
-            std::process::exit(code);
-        }
-        builtins::BuiltinResult::NotBuiltin => match executor.run(&argv) {
-            Ok(code) => Some(code),
+    // For pipelines we always go through execute_ast (expansion + piping).
+    // Builtins are only considered for single non-pipeline commands.
+    if let parser::AstNode::Pipeline(_) = &ast {
+        match execute_ast(&ast, env) {
+            Ok(code) => return Some(code),
             Err(e) => {
                 eprintln!("sshl: {e}");
-                Some(127)
+                return Some(127);
             }
-        },
+        }
+    }
+
+    // Single command: expand then try builtins (for parity with sunlight mode and $VAR in echo etc)
+    if let parser::AstNode::Command(ref raw_args) = ast {
+        if !raw_args.is_empty() {
+            let expanded: Vec<String> = raw_args.iter().map(|a| env.expand_token(a)).collect();
+            let argv: Vec<&str> = expanded.iter().map(|s| s.as_str()).collect();
+            match builtins::run(&argv) {
+                builtins::BuiltinResult::Done(code) => return Some(code),
+                builtins::BuiltinResult::Exit(code) => {
+                    std::process::exit(code);
+                }
+                builtins::BuiltinResult::NotBuiltin => {}
+            }
+        }
+    }
+
+    // External single command (or fallthrough) via AST for $VAR expansion
+    match execute_ast(&ast, env) {
+        Ok(code) => Some(code),
+        Err(e) => {
+            eprintln!("sshl: {e}");
+            Some(127)
+        }
     }
 }
 
@@ -53,13 +72,13 @@ fn make_prompt() -> String {
 }
 
 #[cfg(feature = "std")]
-fn repl(executor: &dyn Executor) {
+fn repl(env: &mut crate::shellenv::ShellEnv, executor: &dyn Executor) {
     loop {
         let prompt = make_prompt();
         match input::readline(&prompt) {
             Ok(ReadLine::Eof) => break,
             Ok(ReadLine::Line(line)) => {
-                run_command(&line, executor);
+                run_command(&line, env, executor);
             }
             Err(e) => {
                 eprintln!("sshl: read error: {e}");
@@ -72,16 +91,32 @@ fn repl(executor: &dyn Executor) {
 #[cfg(feature = "std")]
 fn main() {
     let executor = PosixExecutor;
+    let mut env = crate::shellenv::ShellEnv::new();
+    // Seed from process environment for a pleasant dev shell experience
+    for (k, v) in env::vars() {
+        env.set(&k, &v);
+    }
+    // Ensure core vars exist if not present in host env
+    if env.get("PATH").is_none() {
+        env.set("PATH", "/usr/local/bin:/usr/bin:/bin");
+    }
+    if env.get("HOME").is_none() {
+        if let Ok(h) = env::var("HOME") { env.set("HOME", &h); } else { env.set("HOME", "/"); }
+    }
+    if env.get("USER").is_none() {
+        if let Ok(u) = env::var("USER") { env.set("USER", &u); } else { env.set("USER", "user"); }
+    }
+
     let args: Vec<String> = env::args().collect();
 
     match args.as_slice() {
         // sshl -c "command args..."
         [_, flag, cmd] if flag == "-c" => {
-            let code = run_command(cmd, &executor).unwrap_or(0);
+            let code = run_command(cmd, &mut env, &executor).unwrap_or(0);
             std::process::exit(code);
         }
         // interactive
-        [_] => repl(&executor),
+        [_] => repl(&mut env, &executor),
         _ => {
             eprintln!("Usage: sshl [-c command]");
             std::process::exit(1);
@@ -123,9 +158,6 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 #[cfg(feature = "sunlight")]
 mod sysfetch;
-
-#[cfg(feature = "sunlight")]
-mod shellenv;
 
 #[cfg(feature = "sunlight")]
 #[no_main]

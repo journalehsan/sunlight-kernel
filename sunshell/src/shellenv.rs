@@ -4,6 +4,8 @@
 //! defaults the kernel attaches to the PCB) so builtins like `export`,
 //! `env`, and `$VAR` expansion work without a syscall round-trip.
 
+extern crate alloc;
+
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
