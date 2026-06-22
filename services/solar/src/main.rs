@@ -1,18 +1,21 @@
 //! Solar HTTP/1.1 Server with SBSP Scripting Engine
 //!
 //! A high-performance, capability-based web server for SunlightOS.
-//! Phase 1: Service bootstrap, VFS capability acquisition, SHM page pool initialization.
 //!
 //! Architecture:
 //! - VFS reads: Direct capability-based file access to /var/lib/sunlight/www/
 //! - IPC writes: Mediated through sunlight-sm for /var/lib/sunlight/www/uploads/
 //! - SHM pool: Pre-allocated 16 pages (64 KB) for zero-overhead IPC in hot path
+//! - RAII Guards: Automatic resource cleanup via Drop trait (no memory leaks)
+//! - Streaming SBSP Engine: Zero-allocation template execution
 //! - Threading: (Future) Worker thread pool, one per TCP connection
 
 #![no_std]
 #![no_main]
 
 extern crate alloc;
+
+pub mod shm_pool;
 
 use core::cell::RefCell;
 use heapless::Vec;
