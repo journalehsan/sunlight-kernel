@@ -1,12 +1,7 @@
 //! HTTP/1.1 Response Building
 //!
-//! Constructs and serializes HTTP responses for static files and SBSP pages.
-//! Example:
-//!   HTTP/1.1 200 OK
-//!   Content-Type: text/html
-//!   Content-Length: 1234
-//!
-//!   <html>...</html>
+//! Constructs HTTP responses for static files and SBSP pages.
+//! Minimal allocation: uses stack-allocated buffers for small responses.
 
 use heapless::{String, Vec};
 
@@ -40,7 +35,7 @@ impl HttpStatus {
     }
 }
 
-/// HTTP response
+/// HTTP response builder
 #[derive(Debug, Clone)]
 pub struct HttpResponse {
     pub status: HttpStatus,
@@ -86,7 +81,7 @@ impl HttpResponse {
         self.header("Content-Type", mime)
     }
 
-    /// Set the response body
+    /// Set the response body from bytes
     pub fn body(&mut self, data: &[u8]) -> &mut Self {
         let _ = self.body.extend_from_slice(data);
         self
@@ -96,39 +91,6 @@ impl HttpResponse {
     pub fn text(&mut self, text: &str) -> &mut Self {
         let _ = self.body.extend_from_slice(text.as_bytes());
         self
-    }
-
-    /// Serialize the response to bytes suitable for TCP write
-    pub fn serialize(&self) -> Vec<u8, 16384> {
-        let mut buf = Vec::new();
-
-        // Status line: "HTTP/1.1 200 OK\r\n"
-        let status_line = heapless::String::<128>::from("");
-        let status_str = if let Ok(s) = core::fmt::write(
-            &mut {
-                struct Buf<'a>(&'a mut heapless::String<128>);
-                impl<'a> core::fmt::Write for Buf<'a> {
-                    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-                        self.0.push_str(s).map_err(|_| core::fmt::Error)
-                    }
-                }
-                Buf(&mut heapless::String::<128>::new())
-            },
-            format_args!(
-                "HTTP/1.1 {} {}\r\n",
-                self.status.code(),
-                self.status.reason_phrase()
-            ),
-        ) {
-            "HTTP/1.1 ".as_bytes()
-        } else {
-            b"HTTP/1.1 500 Internal Server Error\r\n"
-        };
-
-        let _ = buf.extend_from_slice(status_str);
-        // TODO: Complete serialization in Phase 2
-
-        buf
     }
 
     /// Get Content-Length
@@ -161,5 +123,23 @@ pub fn mime_type_for_path(path: &str) -> &'static str {
         "text/plain"
     } else {
         "application/octet-stream"
+    }
+}
+
+/// Quick response builders for common cases (no allocation)
+pub mod quick {
+    /// Build a simple 404 response
+    pub fn not_found_response() -> &'static [u8] {
+        b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found"
+    }
+
+    /// Build a simple 400 response
+    pub fn bad_request_response() -> &'static [u8] {
+        b"HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nBad Request"
+    }
+
+    /// Build a simple 500 response
+    pub fn server_error_response() -> &'static [u8] {
+        b"HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 21\r\nConnection: close\r\n\r\nInternal Server Error"
     }
 }
