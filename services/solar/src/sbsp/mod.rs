@@ -13,8 +13,10 @@ pub mod lexer;
 pub mod token;
 pub mod value;
 pub mod runtime;
+pub mod math;
 
 pub use lexer::SbspLexer;
 pub use token::SbspToken;
 pub use value::SbspValue;
 pub use runtime::SbspContext;
+pub use math::{evaluate_math, tokenize_math, MathParser, MathToken};
