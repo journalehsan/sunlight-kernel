@@ -169,6 +169,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-solar",
+            output: "solar",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-sunsay",
             output: "sunlight-sunsay",
             rustflags: service_rustflags,

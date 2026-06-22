@@ -100,6 +100,9 @@ static RUNAS_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none
 // Storage Manager (sunlight-sm) for controlled protected writes.
 static SUNLIGHT_SM_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sm");
+// Solar HTTP server with SBSP scripting engine.
+static SOLAR_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/solar");
 // sunlight-sunsay: native Rust proof-of-life binary (std smoke test, Phase 1).
 static SUNLIGHT_SUNSAY_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sunsay");

@@ -188,8 +188,15 @@ pub extern "C" fn _start() -> ! {
     let listener = match TcpListener::bind(80) {
         Ok(l) => l,
         Err(e) => {
-            solar_log!("[SOLAR] ❌ Failed to bind: {}", e);
-            loop {}
+            // Bind failed (today this is expected: net_server's BIND/LISTEN/ACCEPT
+            // are still stubs, so server sockets aren't supported yet). Park the
+            // service by yielding the CPU on every iteration instead of a bare
+            // `loop {}` — a High-tier process that never blocks would otherwise
+            // monopolize the scheduler and slow the whole system to a crawl.
+            solar_log!("[SOLAR] ❌ Failed to bind: {} — parking (yielding)", e);
+            loop {
+                sunlight_ipc::process_yield();
+            }
         }
     };
     

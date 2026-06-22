@@ -431,6 +431,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/fetch" | "/usr/bin/fetch" => Ok(crate::SUNLIGHT_FETCH_ELF_BYTES),
         // Storage Manager (whitelisted protected FS writes for services such as sunlight-kv).
         "/sbin/sunlight-sm" | "/usr/sbin/sunlight-sm" => Ok(crate::SUNLIGHT_SM_ELF_BYTES),
+        // Solar HTTP server with SBSP scripting engine.
+        "/sbin/solar" | "/usr/sbin/solar" => Ok(crate::SOLAR_ELF_BYTES),
         // sunlight-sunsay: native Rust proof-of-life binary (Phase 1 std smoke test).
         "/bin/sunlight-sunsay" | "/usr/bin/sunlight-sunsay" | "/usr/local/bin/sunlight-sunsay" => {
             Ok(crate::SUNLIGHT_SUNSAY_ELF_BYTES)

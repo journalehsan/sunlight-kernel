@@ -116,6 +116,27 @@ fn load_units() -> (ServiceTable, heapless::Vec<SocketUnit, 8>) {
     let mut services = ServiceTable::new();
     let sockets: heapless::Vec<SocketUnit, 8> = heapless::Vec::new();
 
+    // solar.service
+    let solar_service = r#"[Unit]
+Description=Solar HTTP Server
+After=net_server
+
+[Service]
+Type=simple
+ExecStart=/sbin/solar
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(solar_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     // timezone_service.service
     let tz_service = r#"[Unit]
 Description=SunlightOS Timezone Service
@@ -480,7 +501,7 @@ fn _start() -> ! {
         // 5=sunlight-kv, 6=rand_service, 7=sunlight-tls.
         // sm (storage manager) starts before kv so protected writes are delegated.
         // rand_service MUST precede sunlight-tls.
-        let managed: [(&str, &str); 8] = [
+        let managed: [(&str, &str); 9] = [
             ("/sbin/timezone_service", "timezone_service"),
             ("/sbin/niced",            "niced"),
             ("/sbin/gcd",              "gcd"),
@@ -489,6 +510,7 @@ fn _start() -> ! {
             ("/sbin/sunlight-kv",      "sunlight-kv"),
             ("/sbin/rand_service",     "rand_service"),
             ("/sbin/sunlight-tls",     "sunlight-tls"),
+            ("/sbin/solar",            "solar"),
         ];
         for (i, (path, name)) in managed.iter().enumerate() {
             match spawn_named(spawn_cap, path, name) {
