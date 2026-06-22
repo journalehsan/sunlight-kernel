@@ -74,17 +74,6 @@ pub fn handle_http_request(
     }
 }
 
-/// Helper macro for logging (imported from main.rs)
-#[macro_export]
-macro_rules! solar_log {
-    ($($arg:tt)*) => {{
-        use core::fmt::Write;
-        let mut buf = heapless::String::<256>::new();
-        let _ = write!(&mut buf, $($arg)*);
-        sunlight_ipc::debug_log(&buf);
-    }};
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -56,6 +56,11 @@ macro_rules! solar_log {
 
 use sunlight_ipc::{endpoint_create, nameserver_register, shm_alloc, CapabilityToken};
 
+// Import HTTP parsing infrastructure
+mod http;
+use http::parse_request;
+use http::response::quick;
+
 /// The shared context for Solar's execution.
 /// Holds the VFS read capability for the document root and the SHM pool for writes.
 pub struct SolarContext {
@@ -123,6 +128,54 @@ impl ShmPagePool {
 fn panic(info: &core::panic::PanicInfo) -> ! {
     solar_log!("[SOLAR] PANIC: {}", info);
     loop {}
+}
+
+/// Phase 1.2: Handle a single HTTP request
+///
+/// This function demonstrates the complete request/response cycle:
+/// 1. Parse raw TCP buffer into structured Request (zero-copy)
+/// 2. Extract method, path, headers (all string slices into original buffer)
+/// 3. Route to handler (file or SBSP)
+/// 4. Return response
+/// 5. Write back to TCP connection
+///
+/// # Arguments
+/// * `buffer` - Raw bytes from TCP socket (e.g., 8 KB stack buffer)
+/// * `len` - Actual bytes received
+/// * `_ctx` - Solar execution context (VFS cap, SHM pool, etc.)
+///
+/// # Returns
+/// HTTP response bytes, or error on parse failure
+fn handle_http_request(
+    buffer: &[u8],
+    len: usize,
+    _ctx: &SolarContext,
+) -> Result<&'static [u8], heapless::String<256>> {
+    // 1. Parse the raw buffer into a structured Request
+    // This is zero-copy: all slices point back to the buffer
+    let req = parse_request(&buffer[..len]).map_err(|_e| {
+        let mut msg: heapless::String<256> = heapless::String::new();
+        let _ = msg.push_str("HTTP parse error");
+        msg
+    })?;
+
+    solar_log!("[SOLAR] {} {} HTTP/{}", req.method, req.path, req.version);
+
+    // 2. Route based on path
+    let response = if req.path.ends_with(".sbsp") {
+        // SBSP template: delegate to executor
+        // TODO: Phase 3 - Load SBSP file, execute engine, return HTML
+        quick::not_found_response()
+    } else if req.path == "/" || req.path.ends_with(".html") || req.path.ends_with(".css") {
+        // Static file: use VFS capability to read
+        // TODO: Phase 2 - Read from VFS using www_read_cap, return file content
+        quick::not_found_response()
+    } else {
+        // Unknown path
+        quick::not_found_response()
+    };
+
+    Ok(response)
 }
 
 /// Service entry point

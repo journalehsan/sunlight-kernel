@@ -69,10 +69,11 @@ impl HttpResponse {
 
     /// Set a response header
     pub fn header(&mut self, key: &str, value: &str) -> &mut Self {
-        let _ = self.headers.push((
-            String::from(key),
-            String::from(value),
-        ));
+        let mut key_str: String<64> = String::new();
+        let mut val_str: String<256> = String::new();
+        let _ = key_str.push_str(key);
+        let _ = val_str.push_str(value);
+        let _ = self.headers.push((key_str, val_str));
         self
     }
 
