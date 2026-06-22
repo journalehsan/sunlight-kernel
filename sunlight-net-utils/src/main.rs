@@ -15,7 +15,7 @@ use sunlight_ipc::{CapabilityToken, IpcMsg, ipc_call, nameserver_lookup};
 
 const MAX_ARGS: usize = 16;
 const NET_LABEL_GETIP: u64 = 10;
-const NET_LABEL_PING: u64 = 11;
+const NET_LABEL_PING: u64 = 13;
 const NET_LABEL_RESOLVE: u64 = 9;  // DNS lookup(hostname) -> packed ip in word(0) or 0 on failure
 
 #[panic_handler]

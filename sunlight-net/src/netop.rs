@@ -10,5 +10,7 @@ pub mod NetOp {
     pub const CLOSE: u64 = 8;       // close(socket_id)
     pub const RESOLVE: u64 = 9;     // DNS lookup(hostname) → ip
     pub const GETIP: u64 = 10;      // get our assigned IP
+    pub const POLL: u64 = 11;       // poll([socket_ids]) → [ready_socket_ids]
     pub const RELOAD_HOSTS: u64 = 12; // re-read /etc/hosts from VFS into the resolver chain
+    pub const PING: u64 = 13;       // ICMP echo(ip, count) → (success, received, avg_rtt_ms)
 }

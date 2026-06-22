@@ -16,9 +16,13 @@
 extern crate alloc;
 
 pub mod shm_pool;
+mod net;
+mod http;
 
 use core::cell::RefCell;
 use heapless::Vec;
+use net::{TcpListener, TcpStream};
+use http::{parse_request, response::quick};
 
 /// Allocator: Simple bump allocator for service memory
 struct BumpAllocator;
@@ -55,11 +59,6 @@ macro_rules! solar_log {
 }
 
 use sunlight_ipc::{endpoint_create, nameserver_register, shm_alloc, CapabilityToken};
-
-// Import HTTP parsing infrastructure
-mod http;
-use http::parse_request;
-use http::response::quick;
 
 /// The shared context for Solar's execution.
 /// Holds the VFS read capability for the document root and the SHM pool for writes.
@@ -149,7 +148,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 fn handle_http_request(
     buffer: &[u8],
     len: usize,
-    _ctx: &SolarContext,
+    ctx: &SolarContext,
 ) -> Result<&'static [u8], heapless::String<256>> {
     // 1. Parse the raw buffer into a structured Request
     // This is zero-copy: all slices point back to the buffer
@@ -202,30 +201,51 @@ pub extern "C" fn _start() -> ! {
     solar_log!("[SOLAR] ✓ Initialized 16-page SHM pool (64 KB) for zero-overhead writes");
 
     // Phase 1.4: Build the execution context
-    let _ctx = SolarContext {
+    let ctx = SolarContext {
         www_read_cap,
         shm_pool,
     };
     solar_log!("[SOLAR] ✓ Execution context initialized");
 
-    // Phase 1.5: TODO - Bind TCP listener on 0.0.0.0:8080
-    // (Will implement HTTP/1.1 parser and thread pool in Phase 2-3)
-    solar_log!("[SOLAR] ⏳ TCP listener binding (Phase 2)");
+    // Phase 1.5: Bind TCP listener on port 80
+    solar_log!("[SOLAR] ⏳ Binding TCP listener to port 80 via net_server...");
+    
+    let listener = match TcpListener::bind(80) {
+        Ok(l) => l,
+        Err(e) => {
+            solar_log!("[SOLAR] ❌ Failed to bind: {}", e);
+            loop {}
+        }
+    };
+    
+    solar_log!("[SOLAR] ☀️ Listening on port 80... Ready to serve HTTP! :)");
 
-    // For now, just idle. In a real HTTP server, we would:
-    // 1. Bind a TCP socket
-    // 2. Accept incoming connections
-    // 3. Spawn a worker task per connection
-    // 4. Parse HTTP/1.1 requests
-    // 5. Route to file handler or SBSP engine
-    // 6. Return responses
-
-    solar_log!("[SOLAR] Ready. Waiting for Phase 2 (HTTP parser) implementation...");
-
-    // Prevent the service from exiting
+    // Main event loop: accept connections and handle HTTP requests
     loop {
-        // In a real server: accept(), handle_connection(), etc.
-        // For now, just spin to keep the service alive.
+        match listener.accept() {
+            Ok(mut stream) => {
+                solar_log!("[SOLAR] 📥 Incoming connection accepted");
+                
+                // Read HTTP request from the stream
+                let mut buffer = [0u8; 8192];
+                if let Ok(bytes_read) = stream.read(&mut buffer) {
+                    if bytes_read > 0 {
+                        // Parse and handle the HTTP request
+                        match handle_http_request(&buffer, bytes_read, &ctx) {
+                            Ok(response) => {
+                                let _ = stream.write_all(response);
+                            }
+                            Err(e) => {
+                                solar_log!("[SOLAR] ⚠️  Parse error: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                solar_log!("[SOLAR] ❌ Accept error: {}", e);
+            }
+        }
     }
 }
 

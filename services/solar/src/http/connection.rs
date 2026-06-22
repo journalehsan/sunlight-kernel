@@ -12,6 +12,7 @@
 
 use super::parser::{parse_request, HttpParseError};
 use super::response::quick;
+use crate::solar_log;
 
 /// Parse and handle a single HTTP connection
 ///

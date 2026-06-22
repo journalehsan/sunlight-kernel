@@ -49,7 +49,7 @@ static mut SOCKET_STORAGE: [SocketStorage; 16] = [SocketStorage::EMPTY; 16];
 /// Separate backing storage for the DNS SocketSet (RESOLVE handler).
 /// Kept isolated so DNS UDP sockets never alias TCP slots in SOCKET_STORAGE.
 static mut DNS_SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
-static mut TCP_MANAGER: sunlight_net::TcpManager = sunlight_net::TcpManager::new();
+static mut TCP_MANAGER: Option<sunlight_net::TcpManager> = None;
 const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [
     [8, 8, 8, 8],
     [1, 1, 1, 1],
@@ -62,6 +62,11 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    // Antigravity: Initialize TCP manager dynamically
+    unsafe {
+        TCP_MANAGER = Some(sunlight_net::TcpManager::new());
+    }
+
     // Note: Cannot do port I/O from user space (ring 3)
     // The kernel will handle PCI scanning and device initialization
     // This service registers with the name server and handles network IPC
@@ -109,8 +114,19 @@ pub extern "C" fn _start() -> ! {
     let sockets_storage: &'static mut [SocketStorage; 16] =
         unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_STORAGE) };
     let mut sockets = SocketSet::new(&mut sockets_storage[..]);
+    let mut poll_counter = 0u32; // Antigravity Phase 3: Garbage collection counter
     let mut msg = ipc_recv(ep);
     loop {
+        // Antigravity Phase 3: Periodic garbage collection every 100 messages
+        poll_counter = poll_counter.wrapping_add(1);
+        if poll_counter % 100 == 0 {
+            unsafe {
+                if let Some(tcp) = TCP_MANAGER.as_mut() {
+                    tcp.reap_closed_sockets(&mut sockets);
+                }
+            }
+        }
+
         let reply = handle_msg(msg, &mut sockets);
         msg = ipc_reply_and_wait(ep, reply);
     }
@@ -132,9 +148,10 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
         }
         NetOp::SOCKET => {
             let id = unsafe {
-                let tcp: &'static mut sunlight_net::TcpManager =
-                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
-                sunlight_net::TcpManager::alloc_socket(tcp, sockets).unwrap_or(0)
+                TCP_MANAGER
+                    .as_mut()
+                    .and_then(|tcp| tcp.alloc_socket(sockets).ok())
+                    .unwrap_or(0)
             };
             IpcMsg::with_label(NetOp::SOCKET).word(0, id as u64)
         }
@@ -143,14 +160,14 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             let ip = unpack_ipv4(msg.words[1]);
             let port = msg.words[2] as u16;
             let ok = unsafe {
-                let tcp: &'static mut sunlight_net::TcpManager =
-                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
-                    (Some(iface), Some(device)) => sunlight_net::TcpManager::connect(
-                        tcp, socket_id, ip, port, iface, sockets, device,
-                        Some(sunlight_ipc::process_yield),
-                    )
-                    .is_ok(),
+                    (Some(iface), Some(device)) => TCP_MANAGER
+                        .as_mut()
+                        .and_then(|tcp| tcp.connect(
+                            socket_id, ip, port, iface, sockets, device,
+                            Some(sunlight_ipc::process_yield),
+                        ).ok())
+                        .is_some(),
                     _ => false,
                 }
             };
@@ -161,13 +178,13 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             let len = msg.words[1] as usize;
             let data = unpack_chunk(&msg.words, len.min(IPC_CHUNK));
             let sent = unsafe {
-                let tcp: &'static mut sunlight_net::TcpManager =
-                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
-                    (Some(iface), Some(device)) => sunlight_net::TcpManager::send(
-                        tcp, socket_id, &data, iface, sockets, device,
-                    )
-                    .unwrap_or(0),
+                    (Some(iface), Some(device)) => TCP_MANAGER
+                        .as_mut()
+                        .and_then(|tcp| tcp.send(
+                            socket_id, &data, iface, sockets, device, None
+                        ).ok())
+                        .unwrap_or(0),
                     _ => 0,
                 }
             };
@@ -177,13 +194,13 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             let socket_id = msg.words[0] as u32;
             let max_len = msg.words[1] as usize;
             let data = unsafe {
-                let tcp: &'static mut sunlight_net::TcpManager =
-                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
-                    (Some(iface), Some(device)) => sunlight_net::TcpManager::recv(
-                        tcp, socket_id, max_len.min(IPC_CHUNK), iface, sockets, device,
-                    )
-                    .unwrap_or_default(),
+                    (Some(iface), Some(device)) => TCP_MANAGER
+                        .as_mut()
+                        .and_then(|tcp| tcp.recv(
+                            socket_id, iface, sockets, device, None
+                        ).ok())
+                        .unwrap_or_default(),
                     _ => alloc::vec::Vec::new(),
                 }
             };
@@ -192,14 +209,43 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
         NetOp::CLOSE => {
             let socket_id = msg.words[0] as u32;
             let ok = unsafe {
-                let tcp: &'static mut sunlight_net::TcpManager =
-                    &mut *core::ptr::addr_of_mut!(TCP_MANAGER);
-                sunlight_net::TcpManager::close(tcp, socket_id, sockets).is_ok()
+                TCP_MANAGER
+                    .as_mut()
+                    .and_then(|tcp| tcp.close(socket_id, sockets).ok())
+                    .is_some()
             };
             IpcMsg::with_label(NetOp::CLOSE).word(0, if ok { 1 } else { 0 })
         }
         NetOp::BIND | NetOp::LISTEN | NetOp::ACCEPT => {
             IpcMsg::with_label(msg.label).word(0, 1)
+        }
+        NetOp::POLL => {
+            // Antigravity Phase 2: Non-blocking poll for ready sockets
+            // Client sends list of socket_ids to check (up to 8 in words[1..8])
+            // words[0] contains the count
+            let count = msg.words[0].min(8) as usize;
+            let mut socket_ids = alloc::vec::Vec::new();
+            for i in 0..count {
+                let id = msg.words[i + 1] as u32;
+                if id != 0 {
+                    socket_ids.push(id);
+                }
+            }
+            
+            let ready = unsafe {
+                TCP_MANAGER
+                    .as_ref()
+                    .map(|tcp| tcp.poll_ready(&socket_ids, sockets))
+                    .unwrap_or_default()
+            };
+            
+            // Pack ready socket_ids into reply (up to 8 in words[1..8])
+            let mut reply = IpcMsg::with_label(NetOp::POLL);
+            reply = reply.word(0, ready.len().min(8) as u64);
+            for (i, &socket_id) in ready.iter().take(8).enumerate() {
+                reply = reply.word(i + 1, socket_id as u64);
+            }
+            reply
         }
         NetOp::RESOLVE => {
             // Phase 3.0: resolver chain - /etc/hosts -> TTL cache -> upstream DNS.
@@ -337,8 +383,8 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             }
             IpcMsg::with_label(NetOp::RELOAD_HOSTS).word(0, 1)
         }
-        11 => {
-            // Phase 5.x.3 + 6.5: ICMP echo (ping) over the real device.
+        NetOp::PING => {
+            // ICMP echo (ping) over the real device.
             // words[0] = packed IPv4, words[1] = count (1..16).
             let target = unpack_ipv4(msg.words[0]);
             let count = msg.words[1].max(1).min(16) as u32;
@@ -348,7 +394,7 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                     (Some(iface), Some(device)) => {
                         let mut sockets = SocketSet::new(&mut SOCKET_STORAGE[..]);
                         match sunlight_net::icmp::ping(target, count, iface, &mut sockets, device) {
-                            Ok(stats) => IpcMsg::with_label(11)
+                            Ok(stats) => IpcMsg::with_label(NetOp::PING)
                                 .word(0, 1)
                                 .word(1, stats.packets_received as u64)
                                 .word(2, if stats.packets_received > 0 {
@@ -356,10 +402,10 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                                 } else {
                                     0
                                 }),
-                            Err(_) => IpcMsg::with_label(11).word(0, 0),
+                            Err(_) => IpcMsg::with_label(NetOp::PING).word(0, 0),
                         }
                     }
-                    _ => IpcMsg::with_label(11).word(0, 0),
+                    _ => IpcMsg::with_label(NetOp::PING).word(0, 0),
                 }
             }
         }
