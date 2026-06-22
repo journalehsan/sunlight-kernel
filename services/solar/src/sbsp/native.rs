@@ -75,16 +75,18 @@ pub fn kv_ipc_call(_req: &KvRequest) -> Result<KvResponse, String<256>> {
 /// Native function dispatcher
 ///
 /// Maps SBSP function calls to native implementations.
-/// Supports: KV_GET, KV_PUT, KV_DELETE, KV_SCAN
+/// Supports: REQUEST (HTTP form data), KV_GET, KV_PUT, KV_DELETE, KV_SCAN
 ///
 /// # Arguments
-/// * `func_name` - Function name (e.g., "KV_GET")
+/// * `func_name` - Function name (e.g., "REQUEST")
 /// * `args` - Arguments as SbspValue array
 ///
 /// # Returns
 /// - `Ok(SbspValue)` - Return value
 /// - `Err(msg)` - Type error or function error
 pub fn call_native(func_name: &str, args: &[SbspValue]) -> Result<SbspValue, String<256>> {
+    // REQUEST() is special — it needs context, so it's handled in SbspContext itself
+    // This dispatcher handles pure functions that don't need form data
     match func_name {
         "KV_GET" => {
             if args.len() != 1 {

@@ -22,8 +22,10 @@ pub mod request;
 pub mod response;
 pub mod parser;
 pub mod connection;
+pub mod form;
 
 pub use request::{HttpRequest, RequestRouter};
 pub use response::HttpResponse;
 pub use parser::{parse_request, HttpParseError};
 pub use connection::handle_http_request;
+pub use form::parse_form_urlencoded;

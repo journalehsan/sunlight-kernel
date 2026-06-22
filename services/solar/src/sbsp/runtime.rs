@@ -31,15 +31,27 @@ struct Variable {
     value: SbspValue,
 }
 
+/// Form field entry (key-value pair from HTTP POST)
+#[derive(Debug, Clone)]
+struct FormField {
+    key: String<256>,
+    value: String<256>,
+}
+
 /// The execution context for a single SBSP request
 ///
 /// Think of this as the "workspace" for a single student's script.
 /// All variables declared in this request live here, and the context
 /// enforces strict typing rules.
+///
+/// Also stores incoming HTTP form data (POST requests) so REQUEST()
+/// can access user-submitted form fields.
 pub struct SbspContext {
     /// All variables: stored as (name, expected_type, current_value) tuples
     /// Using heapless::Vec for zero heap allocation
     variables: Vec<Variable, MAX_VARIABLES>,
+    /// HTTP form data from POST requests (key=value pairs)
+    form_data: Vec<FormField, 32>,
 }
 
 impl SbspContext {
@@ -47,7 +59,21 @@ impl SbspContext {
     pub fn new() -> Self {
         Self {
             variables: Vec::new(),
+            form_data: Vec::new(),
         }
+    }
+
+    /// Create a new execution context with form data (from HTTP POST)
+    pub fn with_form_data(form_pairs: &[(&str, &str)]) -> Self {
+        let mut ctx = Self::new();
+        for (key, value) in form_pairs {
+            let field = FormField {
+                key: String::from(key),
+                value: String::from(value),
+            };
+            let _ = ctx.form_data.push(field);
+        }
+        ctx
     }
 
     /// Handle: {% DIM var AS Type [= init] %}
@@ -217,6 +243,20 @@ impl SbspContext {
 
         // Otherwise declare new
         self.declare(name, type_name, Some(value))
+    }
+
+    /// Handle REQUEST(field_name) - retrieve HTTP form data
+    ///
+    /// Returns the value from POST form data, or empty string if not found.
+    /// This allows SBSP scripts to read user-submitted form fields.
+    pub fn request(&self, field_name: &str) -> Result<SbspValue, heapless::String<256>> {
+        for field in &self.form_data {
+            if field.key.as_str() == field_name {
+                return Ok(SbspValue::String(field.value.clone()));
+            }
+        }
+        // Field not found: return empty string (not an error)
+        Ok(SbspValue::String(heapless::String::new()))
     }
 }
 
@@ -425,5 +465,44 @@ mod tests {
         // Clone the lexer snapshot (should be O(1) pointer copy)
         let cloned_lexer = loop_state.lexer_snapshot.clone();
         assert_eq!(cloned_lexer.remainder, loop_state.lexer_snapshot.remainder);
+    }
+
+    #[test]
+    fn test_context_with_form_data() {
+        let form_pairs = [("task_name", "Build OS"), ("priority", "High")];
+        let ctx = SbspContext::with_form_data(&form_pairs);
+
+        // Context should have the form data
+        assert_eq!(ctx.form_data.len(), 2);
+        assert_eq!(ctx.form_data[0].key.as_str(), "task_name");
+        assert_eq!(ctx.form_data[0].value.as_str(), "Build OS");
+    }
+
+    #[test]
+    fn test_request_existing_field() {
+        let form_pairs = [("name", "Alice"), ("age", "30")];
+        let ctx = SbspContext::with_form_data(&form_pairs);
+
+        let result = ctx.request("name").unwrap();
+        assert_eq!(result, SbspValue::String(heapless::String::from("Alice")));
+    }
+
+    #[test]
+    fn test_request_missing_field() {
+        let form_pairs = [("name", "Alice")];
+        let ctx = SbspContext::with_form_data(&form_pairs);
+
+        // Missing field returns empty string (not an error)
+        let result = ctx.request("missing").unwrap();
+        assert_eq!(result, SbspValue::String(heapless::String::new()));
+    }
+
+    #[test]
+    fn test_request_empty_form() {
+        let ctx = SbspContext::new();
+
+        // Any field returns empty string
+        let result = ctx.request("anything").unwrap();
+        assert_eq!(result, SbspValue::String(heapless::String::new()));
     }
 }
