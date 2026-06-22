@@ -64,9 +64,14 @@ pub enum SbspToken<'a> {
 }
 
 /// Streaming SBSP lexer (zero-allocation Iterator)
+///
+/// CRITICAL: This struct must be Clone because we snapshot lexer state
+/// at the start of FOR loops and restore it at NEXT. Cloning is O(1)
+/// since it's just two pointer copies (str ptr + length).
+#[derive(Clone)]
 pub struct SbspLexer<'a> {
     /// Remaining unparsed input (advances as we yield tokens)
-    remainder: &'a str,
+    pub remainder: &'a str,
 }
 
 impl<'a> SbspLexer<'a> {

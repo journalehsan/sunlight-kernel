@@ -184,6 +184,50 @@ impl SbspContext {
     pub fn clear(&mut self) {
         self.variables.clear();
     }
+
+    /// Declare or assign a variable (used for loop counters)
+    ///
+    /// If the variable doesn't exist, declare it.
+    /// If it exists, overwrite with strict type checking.
+    pub fn declare_or_assign(
+        &mut self,
+        name: &str,
+        type_name: &str,
+        value: SbspValue,
+    ) -> Result<(), heapless::String<256>> {
+        // Check type match
+        if value.type_name() != type_name {
+            let mut msg = heapless::String::new();
+            let _ = core::fmt::write(&mut msg, format_args!(
+                "Type mismatch: Variable '{}' expects {}, got {}.",
+                name,
+                type_name,
+                value.type_name()
+            ));
+            return Err(msg);
+        }
+
+        // Find and update if exists
+        for var in &mut self.variables {
+            if var.name.as_str() == name {
+                var.value = value;
+                return Ok(());
+            }
+        }
+
+        // Otherwise declare new
+        self.declare(name, type_name, Some(value))
+    }
+}
+
+/// Loop state for FOR loops (tracks rewind point and end condition)
+pub struct ForLoopState<'a> {
+    /// Variable name for the loop counter
+    pub var_name: heapless::String<64>,
+    /// End value (when loop_var > end_val, loop exits)
+    pub end_val: i64,
+    /// Snapshot of lexer at start of loop body (for rewinding)
+    pub lexer_snapshot: crate::sbsp::lexer::SbspLexer<'a>,
 }
 
 #[cfg(test)]
@@ -322,5 +366,64 @@ mod tests {
         assert!(ctx.get("x").is_ok());
         ctx.clear();
         assert!(ctx.get("x").is_err());
+    }
+
+    #[test]
+    fn test_declare_or_assign_new_variable() {
+        let mut ctx = SbspContext::new();
+        let result = ctx.declare_or_assign("i", "Integer", SbspValue::Number(1));
+        assert!(result.is_ok());
+        assert_eq!(ctx.get("i").unwrap(), &SbspValue::Number(1));
+    }
+
+    #[test]
+    fn test_declare_or_assign_existing_variable() {
+        let mut ctx = SbspContext::new();
+        ctx.declare("i", "Integer", Some(SbspValue::Number(1)))
+            .unwrap();
+        let result = ctx.declare_or_assign("i", "Integer", SbspValue::Number(2));
+        assert!(result.is_ok());
+        assert_eq!(ctx.get("i").unwrap(), &SbspValue::Number(2));
+    }
+
+    #[test]
+    fn test_declare_or_assign_type_mismatch() {
+        let mut ctx = SbspContext::new();
+        ctx.declare("i", "Integer", Some(SbspValue::Number(1)))
+            .unwrap();
+        let result = ctx.declare_or_assign("i", "Integer", SbspValue::String(heapless::String::new()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_for_loop_state_creation() {
+        let input = "<li>Item</li>";
+        let lexer = crate::sbsp::lexer::SbspLexer::new(input);
+
+        let loop_state = ForLoopState {
+            var_name: heapless::String::from("i"),
+            end_val: 10,
+            lexer_snapshot: lexer,
+        };
+
+        assert_eq!(loop_state.var_name.as_str(), "i");
+        assert_eq!(loop_state.end_val, 10);
+        assert_eq!(loop_state.lexer_snapshot.remainder, input);
+    }
+
+    #[test]
+    fn test_for_loop_state_clone() {
+        let input = "<li>Item</li>";
+        let lexer = crate::sbsp::lexer::SbspLexer::new(input);
+
+        let loop_state = ForLoopState {
+            var_name: heapless::String::from("i"),
+            end_val: 10,
+            lexer_snapshot: lexer,
+        };
+
+        // Clone the lexer snapshot (should be O(1) pointer copy)
+        let cloned_lexer = loop_state.lexer_snapshot.clone();
+        assert_eq!(cloned_lexer.remainder, loop_state.lexer_snapshot.remainder);
     }
 }

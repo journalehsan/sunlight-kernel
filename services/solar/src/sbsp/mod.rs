@@ -15,6 +15,7 @@ pub mod value;
 pub mod runtime;
 pub mod math;
 pub mod control;
+pub mod execute;
 
 pub use lexer::SbspLexer;
 pub use token::SbspToken;
@@ -22,3 +23,4 @@ pub use value::SbspValue;
 pub use runtime::SbspContext;
 pub use math::{evaluate_math, tokenize_math, MathParser, MathToken};
 pub use control::{evaluate_condition, skip_to_control_point, ControlFlowState};
+pub use execute::SbspExecutor;
