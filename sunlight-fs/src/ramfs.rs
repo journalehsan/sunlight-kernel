@@ -3,7 +3,7 @@ use crate::{path, FsError};
 use alloc::vec::Vec;
 
 pub const RAMFS_MAX_HANDLES: usize = 32;
-pub const RAMFS_MAX_ENTRIES: usize = 128;
+pub const RAMFS_MAX_ENTRIES: usize = 256;
 
 pub struct RamEntry {
     pub path: &'static str,
@@ -495,6 +495,8 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/state/sunlight-tls", 0, 0, mode::DIR_700),
     RamEntry::dir("/state/sunlight-uac", 0, 0, mode::DIR_700),
     RamEntry::dir("/state/capability-broker", 0, 0, mode::DIR_700),
+    RamEntry::dir("/srv", 0, 0, mode::DIR_755),
+    RamEntry::dir("/srv/http", 0, 0, mode::DIR_755),
     RamEntry::dir("/var", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/lib", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/log", 0, 0, mode::DIR_755),
@@ -565,6 +567,13 @@ theme = "sunlight-dark"
 enabled = false
 max_ttys = 6
 "#,
+    ),
+    RamEntry::file(
+        "/srv/http/index.html",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/solar.html"),
     ),
     RamEntry::file("/bin/sshl", 0, 0, mode::FILE_755, b"#!/sunlight/sunshell\n"),
     RamEntry::file("/bin/sh", 0, 0, mode::FILE_755, b"#!/sunlight/builtin-sh\n"),

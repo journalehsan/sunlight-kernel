@@ -23,7 +23,7 @@ use sunlight_ipc::{ipc_call, CapabilityToken, IpcMsg, VfsMsg};
 const VFS_PATH_MAX: usize = 32;
 
 /// Document root for static file serving
-const DOCROOT: &str = "/var/lib/sunlight/www/";
+const DOCROOT: &str = "/srv/http/";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -32,7 +32,7 @@ const DOCROOT: &str = "/var/lib/sunlight/www/";
 /// Stream a static file from VFS directly to the TCP connection.
 ///
 /// 1. Sanitizes the request path (blocks `..` traversal)
-/// 2. Builds the full VFS path under `/var/lib/sunlight/www/`
+/// 2. Builds the full VFS path under `/srv/http/`
 /// 3. Opens the file via VFS IPC capability
 /// 4. Sends HTTP 200 OK with the correct Content-Type
 /// 5. Reads in 4 KB chunks and writes each to the socket
@@ -388,20 +388,18 @@ mod tests {
     #[test]
     fn test_build_vfs_path_root() {
         let path = build_vfs_path("index.html").expect("root path should fit");
-        assert_eq!(path, "/var/lib/sunlight/www/index.html");
+        assert_eq!(path, "/srv/http/index.html");
     }
 
     #[test]
     fn test_build_vfs_path_nested() {
         let path = build_vfs_path("css/style.css").expect("nested path should fit");
-        assert_eq!(path.len(), "/var/lib/sunlight/www/css/style.css".len());
-        // 22 + 14 = 36 > 32 → should not fit in register IPC
-        assert!(path.len() > VFS_PATH_MAX);
+        assert_eq!(path, "/srv/http/css/style.css");
     }
 
     #[test]
     fn test_vfs_path_too_long() {
-        let long = "a".repeat(11); // 22 + 11 = 33 > 32
+        let long = "a".repeat(23); // 10 + 23 = 33 > 32
         assert!(build_vfs_path(&long).is_none());
     }
 }

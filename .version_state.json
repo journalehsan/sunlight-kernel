@@ -2,22 +2,8 @@
   "last_known_lines": 63435,
   "accumulated_patch": 299,
   "last_version": "0.1.299",
-  "last_total_lines": 63372,
+  "last_total_lines": 63384,
   "history": [
-    {
-      "timestamp": "2026-06-21T15:28:50.537497",
-      "version": "0.1.217",
-      "total_lines": 55149,
-      "new_lines": -86,
-      "patch_increment": 0
-    },
-    {
-      "timestamp": "2026-06-21T18:47:03.181954",
-      "version": "0.1.217",
-      "total_lines": 55149,
-      "new_lines": -86,
-      "patch_increment": 0
-    },
     {
       "timestamp": "2026-06-21T19:05:21.469218",
       "version": "0.1.222",
@@ -352,6 +338,20 @@
       "version": "0.1.299",
       "total_lines": 63372,
       "new_lines": -63,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-22T12:45:29.530445",
+      "version": "0.1.299",
+      "total_lines": 63379,
+      "new_lines": -56,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-06-22T13:08:05.742923",
+      "version": "0.1.299",
+      "total_lines": 63384,
+      "new_lines": -51,
       "patch_increment": 0
     }
   ]

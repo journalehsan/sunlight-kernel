@@ -3,8 +3,8 @@
 //! A high-performance, capability-based web server for SunlightOS.
 //!
 //! Architecture:
-//! - VFS reads: Direct capability-based file access to /var/lib/sunlight/www/
-//! - IPC writes: Mediated through sunlight-sm for /var/lib/sunlight/www/uploads/
+//! - VFS reads: Direct capability-based file access to /srv/http/
+//! - IPC writes: Mediated through sunlight-sm for /srv/http/uploads/
 //! - SHM pool: Pre-allocated 16 pages (64 KB) for zero-overhead IPC in hot path
 //! - RAII Guards: Automatic resource cleanup via Drop trait (no memory leaks)
 //! - Streaming SBSP Engine: Zero-allocation template execution
@@ -59,7 +59,10 @@ macro_rules! solar_log {
     }};
 }
 
-use sunlight_ipc::{endpoint_create, nameserver_register, shm_alloc, CapabilityToken};
+use sunlight_ipc::{
+    endpoint_create, nameserver_lookup, nameserver_register, process_yield, shm_alloc,
+    CapabilityToken,
+};
 
 /// The shared context for Solar's execution.
 /// Holds the VFS read capability for the document root and the SHM pool for writes.
@@ -162,12 +165,11 @@ pub extern "C" fn _start() -> ! {
     nameserver_register("solar", ep);
     solar_log!("[SOLAR] ✓ Registered endpoint with nameserver as 'solar'");
 
-    // Phase 1.2: Acquire strict VFS Capability for the document root
-    // In a real implementation, this would IPC to sunlight-uac or the capability broker,
-    // requesting READ access for /var/lib/sunlight/www/.
-    // For now, we use a mock capability token.
-    let www_read_cap = acquire_vfs_read_capability("/var/lib/sunlight/www/");
-    solar_log!("[SOLAR] ✓ Acquired VFS read capability for /var/lib/sunlight/www/");
+    // Phase 1.2: Acquire the VFS endpoint used for document-root reads.
+    // TODO: replace this endpoint lookup with a path-scoped read capability
+    // from the capability broker once VFS capability enforcement is wired.
+    let www_read_cap = acquire_vfs_read_capability("/srv/http/");
+    solar_log!("[SOLAR] ✓ Acquired VFS read capability for /srv/http/");
 
     // Phase 1.3: Initialize the SHM Page Pool
     // 16 pages × 4 KB = 64 KB of pre-allocated shared memory.
@@ -305,16 +307,19 @@ pub extern "C" fn _start() -> ! {
     }
 }
 
-/// Helper function: Acquire VFS read capability for the document root.
+/// Helper function: Acquire VFS access for the document root.
 ///
 /// In a production system, this would:
 /// 1. Look up the capability broker via nameserver
-/// 2. Send an IPC request for READ access to /var/lib/sunlight/www/
+/// 2. Send an IPC request for READ access to /srv/http/
 /// 3. Receive a CapabilityToken from the broker
 ///
-/// For Phase 1, we return a mock token. Phase 2 will implement real capability acquisition.
+/// For now, use the real VFS service endpoint instead of a guessed/mock token.
 fn acquire_vfs_read_capability(_path: &str) -> CapabilityToken {
-    // TODO: Implement IPC to CAP_BROKER
-    // For now, return a placeholder token (will be properly wired in Phase 2)
-    CapabilityToken(1) // Mock token (non-zero to indicate "acquired")
+    loop {
+        if let Some(cap) = nameserver_lookup("vfs") {
+            return cap;
+        }
+        process_yield();
+    }
 }
