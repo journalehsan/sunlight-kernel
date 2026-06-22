@@ -21,6 +21,7 @@ static DROPPED_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 /// Endpoint ID of the registered user-space mouse driver (sunlight-mouse).
 static MOUSE_DRIVER_ENDPOINT: AtomicU32 = AtomicU32::new(0);
+static IRQ12_LOG_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn wait_input_buffer_clear() -> bool {
     unsafe {
@@ -92,8 +93,8 @@ pub fn init_ps2_mouse() -> bool {
             serial_println!("[MOUSE] init failed: no command-byte response");
             return false;
         };
-        status |= 0x02;
-        status &= !0x20;
+        status |= 0x01 | 0x02;
+        status &= !(0x10 | 0x20);
 
         if !write_cmd(0x60) || !write_data(status) {
             serial_println!("[MOUSE] init failed: command-byte write timeout");
@@ -170,6 +171,10 @@ pub fn handle_irq12() {
         let mut port: Port<u8> = Port::new(0x60);
         port.read()
     };
+    let log_count = IRQ12_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+    if log_count < 8 {
+        serial_println!("[IRQ12] Mouse byte {:#x}", byte);
+    }
 
     // 2. Push to ring buffer (non-blocking)
     let pushed = push_mouse_byte(byte);
@@ -195,9 +200,11 @@ pub fn handle_irq12() {
         }
     }
 
-    // 4. Send EOI to PIC
+    // 4. Send EOI to slave PIC first, then master PIC (IRQ12 is on PIC2).
     unsafe {
+        let mut cmd2: Port<u8> = Port::new(0xA0);
         let mut cmd1: Port<u8> = Port::new(0x20);
+        cmd2.write(0x20);
         cmd1.write(0x20);
     }
 }

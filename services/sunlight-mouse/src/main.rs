@@ -134,12 +134,12 @@ mod syscall {
         ret == 0
     }
 
-    pub fn mouse_register(endpoint_id: u32) {
+    pub fn mouse_register(endpoint_token: u64) {
         unsafe {
             core::arch::asm!(
                 "syscall",
                 inlateout("rax") SYS_MOUSE_REGISTER => _,
-                in("rdi") endpoint_id as u64,
+                in("rdi") endpoint_token,
                 lateout("rcx") _, lateout("r11") _,
                 options(nostack)
             );
@@ -202,7 +202,7 @@ pub extern "C" fn _start() -> ! {
     // Create IPC endpoint and register with nameserver
     let my_endpoint = endpoint_create();
     nameserver_register("mouse_driver", my_endpoint);
-    syscall::mouse_register(my_endpoint.0 as u32);
+    syscall::mouse_register(my_endpoint.0);
     syscall::debug_log("[MOUSE] registered with kernel IRQ12 router\n");
 
     // Lookup tty_server capability

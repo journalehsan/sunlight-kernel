@@ -120,7 +120,7 @@ pub fn init() {
     let mut pic1_data: Port<u8> = Port::new(0x21);
     let mut pic2_data: Port<u8> = Port::new(0xA1);
     unsafe {
-        pic1_data.write(0xFC); // enable IRQ0 (timer) and IRQ1 (keyboard) on PIC1
+        pic1_data.write(0xF8); // enable IRQ0, IRQ1, and IRQ2 cascade for slave PIC
         pic2_data.write(0xEF); // enable IRQ12 (mouse) on PIC2 (bit 4 = IRQ12)
     }
 
