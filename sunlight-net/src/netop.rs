@@ -13,4 +13,8 @@ pub mod NetOp {
     pub const POLL: u64 = 11;       // poll([socket_ids]) → [ready_socket_ids]
     pub const RELOAD_HOSTS: u64 = 12; // re-read /etc/hosts from VFS into the resolver chain
     pub const PING: u64 = 13;       // ICMP echo(ip, count) → (success, received, avg_rtt_ms)
+    // Bulk transfer over one shared 4 KiB page instead of the ~16 inline payload
+    // bytes the register-IPC ABI allows. Used by fetch/tls for fast TCP I/O.
+    pub const SEND_SHM: u64 = 14;   // send(socket_id, len, page_cap) → sent
+    pub const RECV_SHM: u64 = 15;   // recv(socket_id, max_len) → (len, page_cap)
 }

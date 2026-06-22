@@ -4,7 +4,8 @@
 extern crate alloc;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup, nameserver_register, CapabilityToken, IpcMsg, VfsMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
+    nameserver_register, shm_alloc, shm_map, CapabilityToken, IpcMsg, VfsMsg,
 };
 use sunlight_net::netop::NetOp;
 use sunlight_net::ProxyNetDevice;
@@ -12,28 +13,19 @@ use smoltcp::iface::{Config, Interface, SocketSet, SocketStorage};
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpCidr, Ipv4Address, Ipv4Cidr};
 
-// Simple bump allocator for the network server
-struct BumpAllocator;
+use linked_list_allocator::LockedHeap;
 
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 65536] = [0; 65536];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
+// A real freeing heap. The old never-freeing bump allocator leaked one small
+// allocation per RECV/SEND and would eventually OOM this long-running daemon
+// once it started buffering real traffic.
 #[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
+static ALLOCATOR: LockedHeap = LockedHeap::empty();
+
+const HEAP_SIZE: usize = 1024 * 1024; // 1 MiB
+static mut HEAP_MEM: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
+
+/// One shared physical page — the bulk-transfer unit for SEND_SHM / RECV_SHM.
+const SHM_PAGE: usize = 4096;
 
 /// Phase 3.0 resolver chain: /etc/hosts -> TTL cache -> upstream DNS (Phase 3.1/3.2).
 /// Populated at init from /etc/hosts; can be refreshed via NetOp::RELOAD_HOSTS.
@@ -62,6 +54,12 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    unsafe {
+        ALLOCATOR
+            .lock()
+            .init(core::ptr::addr_of_mut!(HEAP_MEM) as *mut u8, HEAP_SIZE);
+    }
+
     // Antigravity: Initialize TCP manager dynamically
     unsafe {
         TCP_MANAGER = Some(sunlight_net::TcpManager::new());
@@ -208,6 +206,63 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 }
             };
             pack_recv_reply(data)
+        }
+        NetOp::SEND_SHM => {
+            // Bulk send: client passes up to one 4 KiB page of data by cap.
+            let socket_id = msg.words[0] as u32;
+            let len = (msg.words[1] as usize).min(SHM_PAGE);
+            let tok = msg.caps[0];
+            let data = if tok != CapabilityToken::INVALID && len > 0 {
+                match shm_map(tok) {
+                    // SAFETY: kernel guarantees the mapped page is at least one
+                    // page (>= SHM_PAGE >= len) and valid for the call duration.
+                    Ok(ptr) => unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec(),
+                    Err(_) => alloc::vec::Vec::new(),
+                }
+            } else {
+                alloc::vec::Vec::new()
+            };
+            let sent = unsafe {
+                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+                    (Some(iface), Some(device)) if !data.is_empty() => TCP_MANAGER
+                        .as_mut()
+                        .and_then(|tcp| tcp.send(socket_id, &data, iface, sockets, device, None).ok())
+                        .unwrap_or(0),
+                    _ => 0,
+                }
+            };
+            IpcMsg::with_label(NetOp::SEND_SHM).word(0, sent as u64)
+        }
+        NetOp::RECV_SHM => {
+            // Bulk recv: drain up to one 4 KiB page and hand it back by cap.
+            let socket_id = msg.words[0] as u32;
+            let max_len = (msg.words[1] as usize).min(SHM_PAGE).max(1);
+            let data = unsafe {
+                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+                    (Some(iface), Some(device)) => TCP_MANAGER
+                        .as_mut()
+                        .and_then(|tcp| tcp.recv(socket_id, max_len, iface, sockets, device, None).ok())
+                        .unwrap_or_default(),
+                    _ => alloc::vec::Vec::new(),
+                }
+            };
+            if data.is_empty() {
+                // Empty (clean close / timeout) — no page, word[0] = 0 means EOF.
+                IpcMsg::with_label(NetOp::RECV_SHM).word(0, 0)
+            } else {
+                match shm_alloc() {
+                    Ok((ptr, token)) => {
+                        let n = data.len().min(SHM_PAGE);
+                        // SAFETY: freshly allocated page is >= SHM_PAGE >= n bytes.
+                        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, n); }
+                        IpcMsg::with_label(NetOp::RECV_SHM)
+                            .word(0, n as u64)
+                            .with_cap(0, token)
+                    }
+                    // Allocation failed — report EOF rather than corrupt the stream.
+                    Err(_) => IpcMsg::with_label(NetOp::RECV_SHM).word(0, 0),
+                }
+            }
         }
         NetOp::CLOSE => {
             let socket_id = msg.words[0] as u32;

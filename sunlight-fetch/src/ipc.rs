@@ -469,6 +469,10 @@ mod sunlight {
     // words[4..7] are silently dropped by the kernel ABI.
     const IPC_CHUNK: usize = 16;
 
+    // Bulk TCP I/O moves up to one shared 4 KiB page per IPC call (vs IPC_CHUNK
+    // inline bytes), via NetOp::SEND_SHM / RECV_SHM.
+    const SHM_PAGE: usize = 4096;
+
     // TLS IPC protocol labels — must match sunlight-tls/src/main.rs.
     // Design B: the daemon owns the socket + crypto; we exchange plaintext only.
     const TLS_CONNECT: u64 = 0x5401;
@@ -513,7 +517,7 @@ mod sunlight {
         pub(super) fn read_some(&mut self, buf: &mut [u8]) -> FetchResult<usize> {
             match self {
                 Self::Tcp { socket_id } => {
-                    let chunk = net_recv(*socket_id, buf.len().min(IPC_CHUNK))?;
+                    let chunk = net_recv(*socket_id, buf.len())?;
                     let n = chunk.len().min(buf.len());
                     buf[..n].copy_from_slice(&chunk[..n]);
                     Ok(n)
@@ -588,17 +592,19 @@ mod sunlight {
         let cap = net_cap()?;
         let mut offset = 0usize;
         while offset < data.len() {
-            let chunk_len = (data.len() - offset).min(IPC_CHUNK);
-            let mut msg = IpcMsg::with_label(NetOp::SEND)
-                .word(0, socket_id as u64)
-                .word(1, chunk_len as u64);
-            for i in 0..chunk_len {
-                let word_idx = 2 + i / 8;
-                let byte_idx = i % 8;
-                let byte = data[offset + i] as u64;
-                msg.words[word_idx] |= byte << (byte_idx * 8);
+            let chunk_len = (data.len() - offset).min(SHM_PAGE);
+            let (ptr, tok) = shm_alloc()
+                .map_err(|_| FetchError::IpcError(String::from("shm_alloc failed (TCP send)")))?;
+            // SAFETY: page is one full 4 KiB page >= chunk_len bytes.
+            unsafe {
+                core::ptr::copy_nonoverlapping(data[offset..].as_ptr(), ptr, chunk_len);
             }
+            let msg = IpcMsg::with_label(NetOp::SEND_SHM)
+                .word(0, socket_id as u64)
+                .word(1, chunk_len as u64)
+                .with_cap(0, tok);
             let reply = ipc_call(cap, msg);
+            let _ = shm_free(tok);
             let sent = reply.words[0] as usize;
             if sent == 0 {
                 return Err(FetchError::IoError(String::from("TCP send failed")));
@@ -610,17 +616,30 @@ mod sunlight {
 
     fn net_recv(socket_id: u32, max_len: usize) -> FetchResult<Vec<u8>> {
         let cap = net_cap()?;
+        let want = max_len.min(SHM_PAGE).max(1);
         let reply = ipc_call(
             cap,
-            IpcMsg::with_label(NetOp::RECV)
+            IpcMsg::with_label(NetOp::RECV_SHM)
                 .word(0, socket_id as u64)
-                .word(1, max_len as u64),
+                .word(1, want as u64),
         );
-        if reply.label != NetOp::RECV {
+        if reply.label != NetOp::RECV_SHM {
             return Err(FetchError::IoError(String::from("TCP recv failed")));
         }
-        let len = reply.words[0] as usize;
-        Ok(unpack_chunk(&reply.words, len))
+        let len = (reply.words[0] as usize).min(SHM_PAGE);
+        if len == 0 {
+            return Ok(Vec::new()); // EOF / no data
+        }
+        let tok = reply.caps[0];
+        if tok == CapabilityToken::INVALID {
+            return Ok(Vec::new());
+        }
+        let ptr = shm_map(tok)
+            .map_err(|_| FetchError::IoError(String::from("shm_map failed (TCP recv)")))?;
+        // SAFETY: net_server copied `len` (<= SHM_PAGE) bytes into this page.
+        let v = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+        let _ = shm_free(tok);
+        Ok(v)
     }
 
     fn net_close(socket_id: u32) -> FetchResult<()> {
@@ -816,11 +835,11 @@ mod sunlight {
         Ok(data.len())
     }
 
-    pub(super) fn recv_impl(handle: &mut TcpHandle, _max_len: usize) -> FetchResult<Vec<u8>> {
-        // Cap allocation to IPC_CHUNK — we can never receive more than that per
-        // kernel IPC call, so allocating 64 KiB would just drain the bump heap.
-        let mut buf = [0u8; IPC_CHUNK];
-        let n = handle.conn.read_some(&mut buf)?;
+    pub(super) fn recv_impl(handle: &mut TcpHandle, max_len: usize) -> FetchResult<Vec<u8>> {
+        // One shared page is the bulk-transfer unit; never ask for more per call.
+        let mut buf = [0u8; SHM_PAGE];
+        let want = max_len.min(SHM_PAGE).max(1);
+        let n = handle.conn.read_some(&mut buf[..want])?;
         Ok(buf[..n].to_vec())
     }
 
@@ -855,7 +874,7 @@ mod sunlight {
         handle.conn.send_all(&wire)?;
 
         let mut buf = Vec::with_capacity(8192);
-        let mut scratch = [0u8; IPC_CHUNK];
+        let mut scratch = [0u8; SHM_PAGE];
 
         loop {
             let n = handle.conn.read_some(&mut scratch)?;
@@ -933,7 +952,7 @@ mod sunlight {
         }
 
         loop {
-            let chunk = recv_impl(handle, IPC_CHUNK)?;
+            let chunk = recv_impl(handle, SHM_PAGE)?;
             if chunk.is_empty() {
                 break;
             }

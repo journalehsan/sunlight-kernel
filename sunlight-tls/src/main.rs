@@ -134,14 +134,11 @@ mod sunlightos_impl {
     // net_server protocol (NetOp).
     const NET_SOCKET: u64 = 1;
     const NET_CONNECT: u64 = 2;
-    const NET_SEND: u64 = 6;
-    const NET_RECV: u64 = 7;
     const NET_CLOSE: u64 = 8;
+    // Bulk TCP I/O over one shared 4 KiB page (NetOp::SEND_SHM / RECV_SHM).
+    const NET_SEND_SHM: u64 = 14;
+    const NET_RECV_SHM: u64 = 15;
 
-    // The register-IPC ABI only carries words[0..3], so net_server can move at
-    // most 16 payload bytes (words[2..4]) per SEND/RECV. Requesting more just
-    // wastes packing — the excess words are dropped by the kernel ABI.
-    const NET_CHUNK: usize = 16;
     const SHM_PAGE: usize = 4096; // one shared page per plaintext/cert transfer
     const OUT_SCRATCH: usize = 18 * 1024; // > max TLS record (16 KiB + overhead)
     const MAX_INCOMING: usize = 256 * 1024; // guard against runaway buffering
@@ -328,16 +325,20 @@ mod sunlightos_impl {
         };
         let mut off = 0usize;
         while off < data.len() {
-            let clen = (data.len() - off).min(NET_CHUNK);
-            let mut msg = IpcMsg::with_label(NET_SEND)
-                .word(0, socket_id as u64)
-                .word(1, clen as u64);
-            for i in 0..clen {
-                let wi = 2 + i / 8;
-                let bi = i % 8;
-                msg.words[wi] |= (data[off + i] as u64) << (bi * 8);
+            let clen = (data.len() - off).min(SHM_PAGE);
+            let (ptr, tok) = match shm_alloc() {
+                Ok(p) => p,
+                Err(_) => return false,
+            };
+            unsafe {
+                core::ptr::copy_nonoverlapping(data[off..].as_ptr(), ptr, clen);
             }
+            let msg = IpcMsg::with_label(NET_SEND_SHM)
+                .word(0, socket_id as u64)
+                .word(1, clen as u64)
+                .with_cap(0, tok);
             let reply = ipc_call(cap, msg);
+            let _ = shm_free(tok);
             let sent = reply.words[0] as usize;
             if sent == 0 {
                 return false;
@@ -354,20 +355,27 @@ mod sunlightos_impl {
         };
         let reply = ipc_call(
             cap,
-            IpcMsg::with_label(NET_RECV)
+            IpcMsg::with_label(NET_RECV_SHM)
                 .word(0, socket_id as u64)
-                .word(1, NET_CHUNK as u64),
+                .word(1, SHM_PAGE as u64),
         );
-        if reply.label != NET_RECV {
+        if reply.label != NET_RECV_SHM {
             return Vec::new();
         }
-        let len = (reply.words[0] as usize).min(NET_CHUNK);
-        let mut out = Vec::with_capacity(len);
-        for i in 0..len {
-            let word = reply.words[2 + i / 8];
-            let bi = i % 8;
-            out.push(((word >> (bi * 8)) & 0xff) as u8);
+        let len = (reply.words[0] as usize).min(SHM_PAGE);
+        if len == 0 {
+            return Vec::new();
         }
+        let tok = reply.caps[0];
+        if tok == CapabilityToken::INVALID {
+            return Vec::new();
+        }
+        let ptr = match shm_map(tok) {
+            Ok(p) => p,
+            Err(_) => return Vec::new(),
+        };
+        let out = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+        let _ = shm_free(tok);
         out
     }
 
