@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Solar HTTP Server - SBSP v1.0 Demo</title>
+        <!-- Include Google Fonts -->
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            /* Dark Halloween Theme (CSS Variables) */
+            :root {
+                --bg-dark: #0b0e15;
+                --bg-card: #111822;
+                --text-main: #ffffff;
+                --text-muted: #94a3b8;
+                --accent-orange: #f97316;
+                --accent-glow: rgba(249, 115, 22, 0.2);
+                --border-color: #1e293b;
+                --term-bg: #0a0a0a;
+                --code-bg: #1a1a1a;
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                font-family: "Inter", sans-serif;
+            }
+
+            body {
+                background-color: var(--bg-dark);
+                color: var(--text-main);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding: 20px;
+                background-image: radial-gradient(
+                    circle at 50% 20%,
+                    rgba(249, 115, 22, 0.08) 0%,
+                    transparent 50%
+                );
+            }
+
+            a {
+                text-decoration: none;
+                color: inherit;
+            }
+
+            .container {
+                max-width: 950px;
+                width: 100%;
+                text-align: center;
+            }
+
+            /* Logo & Branding */
+            .logo-area {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                font-weight: 700;
+                font-size: 2rem;
+                margin-bottom: 25px;
+                letter-spacing: -0.5px;
+            }
+
+            .logo-icon {
+                width: 36px;
+                height: 36px;
+                fill: var(--accent-orange);
+            }
+
+            .version-tag {
+                display: inline-block;
+                background: rgba(249, 115, 22, 0.1);
+                border: 1px solid rgba(249, 115, 22, 0.3);
+                padding: 8px 18px;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                font-weight: 600;
+                color: #fbbf24;
+                letter-spacing: 1px;
+                margin-bottom: 20px;
+            }
+
+            .hero h1 {
+                font-size: 3.2rem;
+                line-height: 1.1;
+                font-weight: 700;
+                margin-bottom: 20px;
+            }
+
+            .hero h1 .highlight {
+                color: var(--accent-orange);
+                background: linear-gradient(to right, #f97316, #fbbf24);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+
+            .hero p {
+                font-size: 1.15rem;
+                color: var(--text-muted);
+                line-height: 1.6;
+                margin-bottom: 10px;
+            }
+
+            .extension-badge {
+                display: inline-block;
+                margin-top: 15px;
+                padding: 6px 20px;
+                background: #1e293b;
+                border-radius: 30px;
+                font-family: "JetBrains Mono", monospace;
+                font-weight: 700;
+                color: var(--accent-orange);
+                border: 1px solid #334155;
+                font-size: 0.9rem;
+            }
+
+            /* Terminal / Console Mockup (Now an Interactive Demo) */
+            .terminal-wrapper {
+                margin-top: 40px;
+                width: 100%;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                text-align: left;
+            }
+
+            .terminal-header {
+                background: #1e1e1e;
+                padding: 10px 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid #333;
+            }
+
+            .terminal-dots {
+                display: flex;
+                gap: 8px;
+            }
+
+            .terminal-dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+            }
+            .dot-red {
+                background: #ff5f56;
+            }
+            .dot-yellow {
+                background: #ffbd2e;
+            }
+            .dot-green {
+                background: #27c93f;
+            }
+
+            .terminal-title {
+                color: #888;
+                font-size: 0.8rem;
+                font-weight: 500;
+            }
+            .terminal-badge {
+                background: #2a1a0a;
+                color: var(--accent-orange);
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 0.7rem;
+                font-weight: 600;
+                border: 1px solid rgba(249, 115, 22, 0.2);
+            }
+
+            /* Interactive Tabs inside Terminal */
+            .tabs-container {
+                display: flex;
+                border-bottom: 1px solid #333;
+                background: #151515;
+            }
+
+            .tab-btn {
+                padding: 12px 20px;
+                color: var(--text-muted);
+                cursor: pointer;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.8rem;
+                border-bottom: 2px solid transparent;
+                transition: all 0.2s;
+                background: transparent;
+                border-top: none;
+                border-left: none;
+                border-right: none;
+            }
+
+            .tab-btn:hover {
+                color: var(--text-main);
+            }
+            .tab-btn.active {
+                color: var(--accent-orange);
+                border-bottom: 2px solid var(--accent-orange);
+                background: rgba(249, 115, 22, 0.05);
+            }
+
+            .terminal-body {
+                background: var(--term-bg);
+                padding: 24px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 0.85rem;
+                color: #c0c0c0;
+                min-height: 400px;
+            }
+
+            .tab-content {
+                display: none;
+                animation: fadeIn 0.3s ease;
+            }
+
+            .tab-content.active {
+                display: block;
+            }
+
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(5px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            /* Code Blocks & Output inside tabs */
+            .code-block {
+                background: var(--code-bg);
+                padding: 16px;
+                border-radius: 8px;
+                border-left: 3px solid var(--accent-orange);
+                margin: 10px 0 20px 0;
+                font-size: 0.85rem;
+                overflow-x: auto;
+                line-height: 1.6;
+            }
+
+            .output-block {
+                background: #0d1117;
+                padding: 16px;
+                border-radius: 8px;
+                border: 1px solid #30363d;
+                margin: 10px 0;
+                color: #e6edf3;
+                font-family: "Inter", sans-serif;
+                font-size: 0.95rem;
+            }
+
+            /* Syntax Highlighting */
+            .code-comment {
+                color: #6a9955;
+                font-style: italic;
+            }
+            .code-keyword {
+                color: #c586c0;
+                font-weight: 700;
+            }
+            .code-string {
+                color: #ce9178;
+            }
+            .code-var {
+                color: #9cdcfe;
+            }
+            .code-func {
+                color: #dcdcaa;
+            }
+            .code-type {
+                color: #4ec9b0;
+            }
+            .code-print {
+                color: #fbbf24;
+            }
+
+            /* Form Elements inside demo */
+            .demo-form {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                max-width: 300px;
+                margin: 15px 0;
+            }
+            .demo-input {
+                background: #1e293b;
+                border: 1px solid #334155;
+                padding: 8px 12px;
+                border-radius: 6px;
+                color: white;
+                font-family: "Inter", sans-serif;
+            }
+            .demo-btn {
+                background: var(--accent-orange);
+                border: none;
+                padding: 8px;
+                border-radius: 6px;
+                color: #0b0e15;
+                font-weight: 600;
+                cursor: pointer;
+            }
+
+            .todo-list {
+                margin-top: 10px;
+            }
+            .todo-item {
+                display: flex;
+                justify-content: space-between;
+                padding: 8px 12px;
+                background: #161b22;
+                border-bottom: 1px solid #30363d;
+                border-radius: 4px;
+                margin-bottom: 4px;
+            }
+
+            .cursor {
+                display: inline-block;
+                width: 8px;
+                height: 14px;
+                background: var(--accent-orange);
+                margin-left: 2px;
+                animation: blink 1s step-start infinite;
+                vertical-align: middle;
+            }
+
+            @keyframes blink {
+                50% {
+                    opacity: 0;
+                }
+            }
+
+            @media (max-width: 768px) {
+                .hero h1 {
+                    font-size: 2.2rem;
+                }
+                .terminal-body {
+                    padding: 16px;
+                    font-size: 0.75rem;
+                }
+                .code-block {
+                    font-size: 0.7rem;
+                    padding: 12px;
+                }
+                .tab-btn {
+                    padding: 10px 14px;
+                    font-size: 0.7rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo-area">
+                <svg
+                    class="logo-icon"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    />
+                    <path
+                        d="M12 2 L12 22 M2 12 L22 12"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    />
+                    <circle cx="12" cy="12" r="3" fill="currentColor" />
+                </svg>
+                Solar HTTP Server
+            </div>
+
+            <div class="version-tag">
+                🚀 NANOFISH ENGINE · SBSP v1.0 · PHASE 4
+            </div>
+
+            <div class="hero">
+                <h1>
+                    Pure Dynamic <span class="highlight">SBSP</span> in action.
+                </h1>
+                <p>
+                    Experience the power of Solar Basic Static Pages. Simple,
+                    fast, and WYSIWYG ready.
+                </p>
+                <div class="extension-badge">
+                    .sbsp (Solar Basic Static Pages)
+                </div>
+            </div>
+
+            <!-- Interactive Terminal Demo -->
+            <div class="terminal-wrapper">
+                <div class="terminal-header">
+                    <div class="terminal-dots">
+                        <span class="terminal-dot dot-red"></span>
+                        <span class="terminal-dot dot-yellow"></span>
+                        <span class="terminal-dot dot-green"></span>
+                    </div>
+                    <span class="terminal-title"
+                        >solar · nanofish live demo</span
+                    >
+                    <span class="terminal-badge">Dynamic Output</span>
+                </div>
+
+                <div class="tabs-container">
+                    <button
+                        class="tab-btn active"
+                        onclick="openTab(event, 'bmi')"
+                    >
+                        1. BMI Calc
+                    </button>
+                    <button class="tab-btn" onclick="openTab(event, 'todo')">
+                        2. Todo List
+                    </button>
+                    <button class="tab-btn" onclick="openTab(event, 'calc')">
+                        3. Calculator
+                    </button>
+                </div>
+
+                <div class="terminal-body">
+                    <!-- TAB 1: BMI CALCULATOR -->
+                    <div id="bmi" class="tab-content active">
+                        <div class="line log-info">
+                            [SBSP] Processing request for /bmi.sbsp
+                        </div>
+                        <div class="code-block">
+                            <span class="code-comment"
+                                >' Solar Basic V1 Syntax</span
+                            ><br />
+                            <span class="code-keyword">DIM</span>
+                            <span class="code-var">weight</span>
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">Integer</span> =
+                            <span class="code-func">REQUEST</span>(<span
+                                class="code-string"
+                                >"weight"</span
+                            >)<br />
+                            <span class="code-keyword">DIM</span>
+                            <span class="code-var">height</span>
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">Integer</span> =
+                            <span class="code-func">REQUEST</span>(<span
+                                class="code-string"
+                                >"height"</span
+                            >)<br />
+                            <span class="code-keyword">DIM</span>
+                            <span class="code-var">bmi</span>
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">Integer</span> =
+                            <span class="code-var">weight</span> / (<span
+                                class="code-var"
+                                >height</span
+                            >
+                            * <span class="code-var">height</span>)<br /><br />
+                            &lt;h2&gt;Your BMI is:
+                            <span class="code-print">&lt;%| bmi %&gt;</span
+                            >&lt;/h2&gt;<br /><br />
+                            <span class="code-comment"
+                                >' Simple Authentication KV Get Demo</span
+                            ><br />
+                            <span class="code-keyword">DIM</span>
+                            <span class="code-var">user</span>
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">String</span> =
+                            <span class="code-func">REQUEST</span>(<span
+                                class="code-string"
+                                >"username"</span
+                            >)<br />
+                            <span class="code-keyword">DIM</span>
+                            <span class="code-var">stored_hash</span>
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">String</span> =
+                            <span class="code-func">KV_GET</span>(<span
+                                class="code-string"
+                                >"user_"</span
+                            >
+                            + <span class="code-var">user</span>)<br /><br />
+                            <span class="code-keyword">IF</span>
+                            <span class="code-func">HASH</span>(<span
+                                class="code-var"
+                                >pass</span
+                            >) == <span class="code-var">stored_hash</span>
+                            <span class="code-keyword">THEN</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&lt;p&gt;Welcome back,
+                            <span class="code-print">&lt;%| user %&gt;</span
+                            >!&lt;/p&gt;<br />
+                            <span class="code-keyword">ELSE</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&lt;p&gt;Invalid
+                            credentials.&lt;/p&gt;<br />
+                            <span class="code-keyword">END IF</span>
+                        </div>
+
+                        <div class="line log-ok">
+                            [NANOFISH] Variables parsed from REQUEST. Math
+                            executed.
+                        </div>
+                        <div class="output-block">
+                            <div
+                                style="
+                                    border-bottom: 1px solid #30363d;
+                                    padding-bottom: 10px;
+                                    margin-bottom: 10px;
+                                "
+                            >
+                                <h2
+                                    style="
+                                        color: var(--accent-orange);
+                                        margin-bottom: 5px;
+                                    "
+                                >
+                                    Your BMI is: 24.2
+                                </h2>
+                                <small style="color: #55cc55"
+                                    >(Healthy weight)</small
+                                >
+                            </div>
+                            <div>
+                                <form
+                                    class="demo-form"
+                                    onsubmit="event.preventDefault()"
+                                >
+                                    <p style="color: #55cc55">
+                                        ✅ User 'admin' authenticated via KV_GET
+                                        and HASH check.
+                                    </p>
+                                    <p>
+                                        Welcome back,
+                                        <strong
+                                            style="color: var(--accent-orange)"
+                                            >admin</strong
+                                        >!
+                                    </p>
+                                    <small style="color: #94a3b8"
+                                        >* Simulated Server-Side Request
+                                        data</small
+                                    >
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: TODO LIST -->
+                    <div id="todo" class="tab-content">
+                        <div class="line log-info">
+                            [SBSP] Processing request for /todo.sbsp
+                        </div>
+                        <div class="code-block">
+                            <span class="code-comment"
+                                >' In-memory Array Loop Demo</span
+                            ><br />
+                            <span class="code-keyword">DIM</span>
+                            <span class="code-var">tasks</span
+                            ><span class="code-keyword">()</span>
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">String</span> = [<span
+                                class="code-string"
+                                >"Design SBSP Syntax"</span
+                            >,
+                            <span class="code-string"
+                                >"Build Nanofish Engine"</span
+                            >,
+                            <span class="code-string">"Implement WYSIWYG"</span
+                            >]<br /><br />
+                            &lt;ul class="todo-list"&gt;<br />
+                            <span class="code-keyword">FOR</span>
+                            <span class="code-var">i</span> = 0
+                            <span class="code-keyword">TO</span>
+                            <span class="code-func">UBOUND</span>(<span
+                                class="code-var"
+                                >tasks</span
+                            >)<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&lt;li&gt;<span
+                                class="code-print"
+                                >&lt;%| tasks[i] %&gt;</span
+                            >&lt;/li&gt;<br />
+                            <span class="code-keyword">NEXT</span><br />
+                            &lt;/ul&gt;
+                        </div>
+
+                        <div class="line log-ok">
+                            [NANOFISH] Array iteration complete. 3 items
+                            rendered.
+                        </div>
+                        <div class="output-block">
+                            <div class="todo-list">
+                                <div class="todo-item">
+                                    <span>✅ Design SBSP Syntax</span>
+                                    <span style="color: #55cc55">Done</span>
+                                </div>
+                                <div class="todo-item">
+                                    <span>⏳ Build Nanofish Engine</span>
+                                    <span style="color: #fbbf24"
+                                        >In Progress</span
+                                    >
+                                </div>
+                                <div class="todo-item">
+                                    <span>📝 Implement WYSIWYG</span>
+                                    <span style="color: #94a3b8">Pending</span>
+                                </div>
+                            </div>
+                            <div
+                                style="
+                                    margin-top: 15px;
+                                    padding-top: 10px;
+                                    border-top: 1px solid #30363d;
+                                    font-size: 0.8rem;
+                                    color: #94a3b8;
+                                "
+                            >
+                                <form
+                                    class="demo-form"
+                                    style="
+                                        flex-direction: row;
+                                        gap: 8px;
+                                        max-width: 100%;
+                                    "
+                                    onsubmit="event.preventDefault()"
+                                >
+                                    <input
+                                        type="text"
+                                        class="demo-input"
+                                        placeholder="Add new task..."
+                                        style="flex: 1"
+                                    />
+                                    <button type="submit" class="demo-btn">
+                                        Add
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: CALCULATOR (Fibonacci Demo) -->
+                    <div id="calc" class="tab-content">
+                        <div class="line log-info">
+                            [SBSP] Processing request for /calc.sbsp
+                        </div>
+                        <div class="code-block">
+                            <span class="code-comment"
+                                >' Recursive Fibonacci Function</span
+                            ><br />
+                            <span class="code-keyword">FUNCTION</span>
+                            <span class="code-func">fib</span>(<span
+                                class="code-var"
+                                >n</span
+                            >
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">Integer</span>)
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">Integer</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-keyword"
+                                >IF</span
+                            >
+                            <span class="code-var">n</span> &lt;= 1
+                            <span class="code-keyword">THEN</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                class="code-keyword"
+                                >RETURN</span
+                            >
+                            <span class="code-var">n</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-keyword"
+                                >ELSE</span
+                            ><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                class="code-keyword"
+                                >RETURN</span
+                            >
+                            <span class="code-func">fib</span>(<span
+                                class="code-var"
+                                >n</span
+                            >
+                            - 1) + <span class="code-func">fib</span>(<span
+                                class="code-var"
+                                >n</span
+                            >
+                            - 2)<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-keyword"
+                                >END IF</span
+                            ><br />
+                            <span class="code-keyword">END FUNCTION</span
+                            ><br /><br />
+                            &lt;p&gt;Fibonacci of 10 is:
+                            <span class="code-print">&lt;%| fib(10) %&gt;</span
+                            >&lt;/p&gt;<br /><br />
+                            <span class="code-comment"
+                                >' Simple Math Operation</span
+                            ><br />
+                            <span class="code-keyword">DIM</span>
+                            <span class="code-var">x</span>
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">Integer</span> = 25<br />
+                            <span class="code-keyword">DIM</span>
+                            <span class="code-var">y</span>
+                            <span class="code-keyword">AS</span>
+                            <span class="code-type">Integer</span> = 4<br />
+                            &lt;p&gt;25 * 4 =
+                            <span class="code-print">&lt;%| x * y %&gt;</span
+                            >&lt;/p&gt;
+                        </div>
+
+                        <div class="line log-ok">
+                            [NANOFISH] Recursive function executed in 3ms. Math
+                            evaluated.
+                        </div>
+                        <div class="output-block">
+                            <p style="font-size: 1.1rem; margin-bottom: 10px">
+                                Fibonacci of 10 is:
+                                <strong
+                                    style="
+                                        color: var(--accent-orange);
+                                        font-size: 1.5rem;
+                                    "
+                                    >55</strong
+                                >
+                            </p>
+                            <p
+                                style="
+                                    color: #c0c0c0;
+                                    border-top: 1px solid #30363d;
+                                    padding-top: 10px;
+                                "
+                            >
+                                25 * 4 = <strong>100</strong>
+                            </p>
+
+                            <div
+                                style="
+                                    margin-top: 15px;
+                                    padding-top: 10px;
+                                    border-top: 1px solid #30363d;
+                                    font-size: 0.8rem;
+                                    color: #94a3b8;
+                                "
+                            >
+                                <form
+                                    class="demo-form"
+                                    style="
+                                        flex-direction: row;
+                                        flex-wrap: wrap;
+                                        gap: 8px;
+                                        max-width: 100%;
+                                    "
+                                    onsubmit="event.preventDefault()"
+                                >
+                                    <input
+                                        type="number"
+                                        class="demo-input"
+                                        placeholder="Num 1"
+                                        value="12"
+                                        style="width: 80px"
+                                    />
+                                    <select
+                                        class="demo-input"
+                                        style="width: 50px; padding: 8px"
+                                    >
+                                        <option>+</option>
+                                        <option>-</option>
+                                        <option>*</option>
+                                        <option>/</option>
+                                    </select>
+                                    <input
+                                        type="number"
+                                        class="demo-input"
+                                        placeholder="Num 2"
+                                        value="6"
+                                        style="width: 80px"
+                                    />
+                                    <button type="submit" class="demo-btn">
+                                        =
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="line"
+                        style="
+                            color: #fff;
+                            margin-top: 25px;
+                            text-align: center;
+                            border-top: 1px solid #333;
+                            padding-top: 15px;
+                        "
+                    >
+                        ☀️ Solar HTTP ::
+                        <span style="color: var(--accent-orange)"
+                            >Nanofish Engine v1.0 Ready</span
+                        ><span class="cursor"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simple JS for Tabs -->
+        <script>
+            function openTab(evt, tabName) {
+                var i, tabContent, tabBtns;
+                tabContent = document.getElementsByClassName("tab-content");
+                for (i = 0; i < tabContent.length; i++) {
+                    tabContent[i].className = tabContent[i].className.replace(
+                        " active",
+                        "",
+                    );
+                }
+                tabBtns = document.getElementsByClassName("tab-btn");
+                for (i = 0; i < tabBtns.length; i++) {
+                    tabBtns[i].className = tabBtns[i].className.replace(
+                        " active",
+                        "",
+                    );
+                }
+                document.getElementById(tabName).className += " active";
+                evt.currentTarget.className += " active";
+            }
+        </script>
+    </body>
+</html>

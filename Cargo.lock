@@ -1655,6 +1655,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-solar"
+version = "0.1.240"
+dependencies = [
+ "heapless",
+ "sunlight-ipc",
+ "sunlight-libc",
+]
+
+[[package]]
 name = "sunlight-sunsay"
 version = "0.1.240"
 dependencies = [

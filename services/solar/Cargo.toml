@@ -1,0 +1,14 @@
+[package]
+name = "sunlight-solar"
+version = "0.1.240"
+edition = "2021"
+description = "Solar HTTP/1.1 server with SBSP (Solar Basic Server Pages) scripting engine for SunlightOS"
+
+[[bin]]
+name = "solar"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+heapless = "0.8"
