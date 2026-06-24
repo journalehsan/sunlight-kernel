@@ -103,6 +103,22 @@ If a service genuinely needs to write outside its own state (e.g. editing
 service's `/state` (or `/run`), or add an explicit, reviewed policy exception in
 `sunlight-fs/src/policy.rs`. Do not widen `service_state_owner`.
 
+### Special case: generated compatibility files
+
+Some legacy paths are compatibility views rather than normal writable state.
+`/etc/resolv.conf` is the current example:
+
+- `resolved` owns DNS state in memory.
+- `vfs_server` materializes `/etc/resolv.conf` from `resolved` via
+  `ResolvedMsg::RENDER_RESOLV_CONF`.
+- `sunlight-fs/src/ramfs.rs` still seeds a small `/etc/resolv.conf` entry so
+  `stat`, `ls`, and early `cat` work before `vfs_server` refreshes it.
+- User tools must call `resolvectl`; direct writes to `/etc/resolv.conf` remain
+  denied in v0.
+
+Use this pattern only for reviewed compatibility facades. Do not make `/etc`
+broadly writable for a service.
+
 ## Relationship to the capability broker (currently dormant)
 
 The kernel has a capability-mint path (`GrantCapability` syscall →

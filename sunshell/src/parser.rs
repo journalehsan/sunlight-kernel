@@ -2,11 +2,11 @@
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
+use alloc::borrow::ToOwned;
+#[cfg(not(feature = "std"))]
 use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-#[cfg(not(feature = "std"))]
-use alloc::borrow::ToOwned;
 
 #[derive(Debug, Clone)]
 pub enum AstNode {

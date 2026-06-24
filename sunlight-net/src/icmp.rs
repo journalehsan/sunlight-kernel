@@ -87,7 +87,9 @@ pub fn ping<D: Device>(
         )
     };
     let mut socket = icmp::Socket::new(rx_buffer, tx_buffer);
-    socket.bind(icmp::Endpoint::Ident(ICMP_IDENT)).map_err(|_| IcmpError::SocketError)?;
+    socket
+        .bind(icmp::Endpoint::Ident(ICMP_IDENT))
+        .map_err(|_| IcmpError::SocketError)?;
     let handle = sockets.add(socket);
 
     let dst = IpAddress::Ipv4(Ipv4Address::new(target[0], target[1], target[2], target[3]));

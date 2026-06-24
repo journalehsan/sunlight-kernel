@@ -1,15 +1,15 @@
-use smoltcp::socket::dhcpv4::{Socket as DhcpSocket, Event as DhcpEvent};
 use smoltcp::iface::{Interface, SocketSet};
+use smoltcp::socket::dhcpv4::{Event as DhcpEvent, Socket as DhcpSocket};
 use smoltcp::time::Instant;
 
 /// DHCP configuration result
 #[derive(Debug, Clone)]
 pub struct DhcpConfig {
-    pub ip: [u8; 4],      // e.g. 10.0.2.15
-    pub mask: u8,         // CIDR prefix length, e.g. 24
-    pub gateway: [u8; 4], // e.g. 10.0.2.2
-    pub dns: [[u8; 4]; 2],// e.g. 10.0.2.3, 0.0.0.0
-    pub lease: u32,       // seconds
+    pub ip: [u8; 4],       // e.g. 10.0.2.15
+    pub mask: u8,          // CIDR prefix length, e.g. 24
+    pub gateway: [u8; 4],  // e.g. 10.0.2.2
+    pub dns: [[u8; 4]; 2], // e.g. 10.0.2.3, 0.0.0.0
+    pub lease: u32,        // seconds
 }
 
 #[derive(Debug)]
@@ -54,7 +54,9 @@ pub fn acquire_lease(
                 // Extract configuration
                 let ip_addr = config.address.address();
                 let ip_bytes = ip_addr.as_bytes();
-                let gateway_ip = config.router.unwrap_or(smoltcp::wire::Ipv4Address::UNSPECIFIED);
+                let gateway_ip = config
+                    .router
+                    .unwrap_or(smoltcp::wire::Ipv4Address::UNSPECIFIED);
                 let gateway_bytes = gateway_ip.as_bytes();
                 let prefix_len = config.address.prefix_len();
 
@@ -86,7 +88,12 @@ pub fn acquire_lease(
                 return Ok(DhcpConfig {
                     ip: [ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]],
                     mask: prefix_len,
-                    gateway: [gateway_bytes[0], gateway_bytes[1], gateway_bytes[2], gateway_bytes[3]],
+                    gateway: [
+                        gateway_bytes[0],
+                        gateway_bytes[1],
+                        gateway_bytes[2],
+                        gateway_bytes[3],
+                    ],
                     dns: dns_servers,
                     lease: 3600, // Default lease time
                 });
@@ -106,4 +113,3 @@ pub fn acquire_lease(
         }
     }
 }
-

@@ -3,16 +3,17 @@
 
 extern crate alloc;
 
-use sunlight_ipc::{
-    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup, nameserver_lookup_timeout, nameserver_register, shm_alloc, shm_map,
-    CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg, NetworkdMsg, VfsMsg,
-};
-use sunlight_net::netop::NetOp;
-use sunlight_net::ProxyNetDevice;
 use smoltcp::iface::{Config, Interface, SocketSet, SocketStorage};
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpCidr, Ipv4Address, Ipv4Cidr};
+use sunlight_ipc::{
+    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
+    nameserver_lookup, nameserver_lookup_timeout, nameserver_register, shm_alloc, shm_map,
+    CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg, NetworkdMsg,
+    ResolvedMsg, VfsMsg,
+};
+use sunlight_net::netop::NetOp;
+use sunlight_net::ProxyNetDevice;
 
 use linked_list_allocator::LockedHeap;
 
@@ -43,10 +44,7 @@ static mut SOCKET_STORAGE: [SocketStorage; 128] = [SocketStorage::EMPTY; 128];
 /// Kept isolated so DNS UDP sockets never alias TCP slots in SOCKET_STORAGE.
 static mut DNS_SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
 static mut TCP_MANAGER: Option<sunlight_net::TcpManager> = None;
-const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [
-    [8, 8, 8, 8],
-    [1, 1, 1, 1],
-];
+const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [[208, 67, 222, 222], [208, 67, 220, 220]];
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -85,6 +83,9 @@ pub extern "C" fn _start() -> ! {
     // QEMU user-net (slirp) built-in DNS forwarder — reliably reachable inside
     // the guest's NAT'd subnet and forwards to the host's real resolver.
     chain.upstream = [10, 0, 2, 3];
+    // v0 resolved integration: if resolved is present, prefer its first configured server.
+    // If unavailable, keep the working QEMU / prior value (graceful).
+    refresh_upstream_from_resolved(&mut chain);
     unsafe {
         // SAFETY: written exactly once, before any messages are handled (single-threaded
         // userspace service, no interrupts in this model). Subsequent reads/writes in
@@ -100,9 +101,14 @@ pub extern "C" fn _start() -> ! {
     let config = Config::new(HardwareAddress::Ethernet(mac));
     let mut iface = Interface::new(config, &mut device, Instant::from_millis(0));
     iface.update_ip_addrs(|addrs| {
-        let _ = addrs.push(IpCidr::Ipv4(Ipv4Cidr::new(Ipv4Address::new(10, 0, 2, 15), 24)));
+        let _ = addrs.push(IpCidr::Ipv4(Ipv4Cidr::new(
+            Ipv4Address::new(10, 0, 2, 15),
+            24,
+        )));
     });
-    let _ = iface.routes_mut().add_default_ipv4_route(Ipv4Address::new(10, 0, 2, 2));
+    let _ = iface
+        .routes_mut()
+        .add_default_ipv4_route(Ipv4Address::new(10, 0, 2, 2));
     unsafe {
         // SAFETY: written exactly once before the receive loop; see RESOLVER_CHAIN.
         NET_DEVICE = Some(device);
@@ -163,6 +169,33 @@ fn register_with_deviced() {
     }
 }
 
+/// Best-effort: pull first DNS server from resolved and use as our upstream.
+/// If resolved absent or returns no usable server, leave chain unchanged (old behavior).
+fn refresh_upstream_from_resolved(chain: &mut sunlight_net::ResolverChain) {
+    let Some(cap) = nameserver_lookup_timeout("resolved", 30) else {
+        return; // resolved not present — keep working config (QEMU/DHCP)
+    };
+    // Prefer first listed server via GET_SERVER(0)
+    let r = ipc_call(cap, IpcMsg::with_label(ResolvedMsg::GET_SERVER).word(0, 0));
+    if r.label == ResolvedMsg::REPLY && r.word_count >= 1 {
+        let addr = unpack_ipv4(r.words[0]);
+        if addr != [0, 0, 0, 0] {
+            chain.upstream = addr;
+            debug_log("[DNS] upstream refreshed from resolved");
+        }
+    } else {
+        // Fallback: GET_CONFIG gives first in w1
+        let r2 = ipc_call(cap, IpcMsg::with_label(ResolvedMsg::GET_CONFIG));
+        if r2.label == ResolvedMsg::REPLY && r2.word_count >= 2 {
+            let addr = unpack_ipv4(r2.words[1]);
+            if addr != [0, 0, 0, 0] {
+                chain.upstream = addr;
+                debug_log("[DNS] upstream from resolved GET_CONFIG");
+            }
+        }
+    }
+}
+
 /// Best-effort query to networkd for the current default route or eth0 config.
 /// Falls back to the classic QEMU slirp numbers if networkd is absent or has no data.
 /// This keeps existing behavior when networkd is not present.
@@ -176,7 +209,11 @@ fn try_get_config_from_networkd() -> Option<([u8; 4], u8, [u8; 4], [u8; 4])> {
         if addr != [0, 0, 0, 0] {
             // Try to get precise prefix for this id (or by name)
             let id = r.words[0];
-            if let Ok(gi) = ipc_call_timeout(cap, IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, id), 40) {
+            if let Ok(gi) = ipc_call_timeout(
+                cap,
+                IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, id),
+                40,
+            ) {
                 if let Some(s) = sunlight_ipc::unpack_iface_summary(&gi) {
                     if s.addr == addr {
                         return Some((addr, s.prefix.max(1), gw, [0, 0, 0, 0]));
@@ -190,7 +227,12 @@ fn try_get_config_from_networkd() -> Option<([u8; 4], u8, [u8; 4], [u8; 4])> {
     // Fallback: ask specifically for eth0 (or lo will be ignored by callers)
     for name in ["eth0", "eth1", "virtio"].iter() {
         let key = pack_short_name(name);
-        let r = ipc_call_timeout(cap, IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, key), 60).ok()?;
+        let r = ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, key),
+            60,
+        )
+        .ok()?;
         if r.label == NetworkdMsg::REPLY {
             if let Some(s) = sunlight_ipc::unpack_iface_summary(&r) {
                 if s.addr != [0, 0, 0, 0] || s.mode != sunlight_ipc::IpConfigMode::None {
@@ -210,8 +252,27 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
     match msg.label {
         NetOp::GETIP => {
             // Ask networkd first (policy + discovery). Preserve classic QEMU slirp if absent.
-            if let Some((ip, pfx, gw, dns_from_net)) = try_get_config_from_networkd() {
-                let dns = if dns_from_net != [0, 0, 0, 0] { dns_from_net } else { [10, 0, 2, 3] };
+            if let Some((raw_ip, raw_pfx, raw_gw, dns_from_net)) = try_get_config_from_networkd() {
+                // Sanitize: if networkd only has a discovery stub (addr/gw 0), serve the
+                // effective live QEMU numbers so that networkd.ingest can populate its model
+                // on first refresh. This lets networkctl show real addr/gw/dns and handoff
+                // DNS to resolved. Once networkd has explicit numbers they will be returned.
+                let ip = if raw_ip == [0, 0, 0, 0] {
+                    [10, 0, 2, 15]
+                } else {
+                    raw_ip
+                };
+                let pfx = if raw_pfx == 0 { 24 } else { raw_pfx };
+                let gw = if raw_gw == [0, 0, 0, 0] {
+                    [10, 0, 2, 2]
+                } else {
+                    raw_gw
+                };
+                let dns = if dns_from_net != [0, 0, 0, 0] {
+                    dns_from_net
+                } else {
+                    [10, 0, 2, 3]
+                };
                 debug_log("[NET] GETIP served from networkd policy");
                 IpcMsg::with_label(NetOp::GETIP)
                     .word(0, pack_ipv4(ip))
@@ -244,10 +305,18 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) => TCP_MANAGER
                         .as_mut()
-                        .and_then(|tcp| tcp.connect(
-                            socket_id, ip, port, iface, sockets, device,
-                            Some(sunlight_ipc::process_yield),
-                        ).ok())
+                        .and_then(|tcp| {
+                            tcp.connect(
+                                socket_id,
+                                ip,
+                                port,
+                                iface,
+                                sockets,
+                                device,
+                                Some(sunlight_ipc::process_yield),
+                            )
+                            .ok()
+                        })
                         .is_some(),
                     _ => false,
                 }
@@ -262,9 +331,10 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) => TCP_MANAGER
                         .as_mut()
-                        .and_then(|tcp| tcp.send(
-                            socket_id, &data, iface, sockets, device, None
-                        ).ok())
+                        .and_then(|tcp| {
+                            tcp.send(socket_id, &data, iface, sockets, device, None)
+                                .ok()
+                        })
                         .unwrap_or(0),
                     _ => 0,
                 }
@@ -281,9 +351,10 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) => TCP_MANAGER
                         .as_mut()
-                        .and_then(|tcp| tcp.recv(
-                            socket_id, max_len, iface, sockets, device, None
-                        ).ok())
+                        .and_then(|tcp| {
+                            tcp.recv(socket_id, max_len, iface, sockets, device, None)
+                                .ok()
+                        })
                         .unwrap_or_default(),
                     _ => alloc::vec::Vec::new(),
                 }
@@ -309,7 +380,10 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) if !data.is_empty() => TCP_MANAGER
                         .as_mut()
-                        .and_then(|tcp| tcp.send(socket_id, &data, iface, sockets, device, None).ok())
+                        .and_then(|tcp| {
+                            tcp.send(socket_id, &data, iface, sockets, device, None)
+                                .ok()
+                        })
                         .unwrap_or(0),
                     _ => 0,
                 }
@@ -324,7 +398,10 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) => TCP_MANAGER
                         .as_mut()
-                        .and_then(|tcp| tcp.recv(socket_id, max_len, iface, sockets, device, None).ok())
+                        .and_then(|tcp| {
+                            tcp.recv(socket_id, max_len, iface, sockets, device, None)
+                                .ok()
+                        })
                         .unwrap_or_default(),
                     _ => alloc::vec::Vec::new(),
                 }
@@ -337,7 +414,9 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                     Ok((ptr, token)) => {
                         let n = data.len().min(SHM_PAGE);
                         // SAFETY: freshly allocated page is >= SHM_PAGE >= n bytes.
-                        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, n); }
+                        unsafe {
+                            core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, n);
+                        }
                         IpcMsg::with_label(NetOp::RECV_SHM)
                             .word(0, n as u64)
                             .with_cap(0, token)
@@ -405,14 +484,14 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                     socket_ids.push(id);
                 }
             }
-            
+
             let ready = unsafe {
                 TCP_MANAGER
                     .as_ref()
                     .map(|tcp| tcp.poll_ready(&socket_ids, sockets))
                     .unwrap_or_default()
             };
-            
+
             // Pack ready socket_ids into reply (up to 8 in words[1..8])
             let mut reply = IpcMsg::with_label(NetOp::POLL);
             reply = reply.word(0, ready.len().min(8) as u64);
@@ -428,17 +507,27 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             let mut name_buf = [0u8; 64];
             let mut collected = 0usize;
             for wi in 1..8 {
-                if collected >= name_len { break; }
+                if collected >= name_len {
+                    break;
+                }
                 let w = msg.words[wi];
                 for j in 0..8 {
-                    if collected >= name_len { break; }
+                    if collected >= name_len {
+                        break;
+                    }
                     name_buf[collected] = ((w >> (j * 8)) & 0xff) as u8;
                     collected += 1;
                 }
             }
-            let hostname = core::str::from_utf8(&name_buf[..core::cmp::min(name_len, 63)]).unwrap_or("");
+            let hostname =
+                core::str::from_utf8(&name_buf[..core::cmp::min(name_len, 63)]).unwrap_or("");
             let now = sunlight_ipc::get_time_utc();
-            debug_log(&alloc::format!("[DNSDBG] resolve request host='{}' len={} now={}", hostname, name_len, now));
+            debug_log(&alloc::format!(
+                "[DNSDBG] resolve request host='{}' len={} now={}",
+                hostname,
+                name_len,
+                now
+            ));
 
             let ip = unsafe {
                 // SAFETY: RESOLVER_CHAIN, NET_DEVICE and NET_IFACE are each
@@ -450,7 +539,11 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                         Some(ip) => {
                             debug_log(&alloc::format!(
                                 "[DNSDBG] local hit host='{}' ip={}.{}.{}.{}",
-                                hostname, ip[0], ip[1], ip[2], ip[3]
+                                hostname,
+                                ip[0],
+                                ip[1],
+                                ip[2],
+                                ip[3]
                             ));
                             Some(ip)
                         }
@@ -463,6 +556,8 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                                 chain.upstream[2],
                                 chain.upstream[3]
                             ));
+                            // v0: consult resolved for current config (best effort)
+                            refresh_upstream_from_resolved(chain);
                             // Phase 3.1/3.4: fall through to upstream DNS-over-UDP via
                             // the kernel frame proxy.
                             match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
@@ -486,7 +581,8 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                                         Err(err) => {
                                             debug_log(&alloc::format!(
                                                 "[DNSDBG] upstream err host='{}' err={:?}",
-                                                hostname, err
+                                                hostname,
+                                                err
                                             ));
                                             if err == sunlight_net::DnsError::Timeout {
                                                 let mut resolved = None;
@@ -507,7 +603,9 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                                                                 "[DNSDBG] fallback ok host='{}' ip={}.{}.{}.{} ttl={}",
                                                                 hostname, ip[0], ip[1], ip[2], ip[3], ttl
                                                             ));
-                                                            chain.cache_insert(hostname, ip, ttl, now);
+                                                            chain.cache_insert(
+                                                                hostname, ip, ttl, now,
+                                                            );
                                                             resolved = Some(ip);
                                                             break;
                                                         }
@@ -529,7 +627,9 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                                     }
                                 }
                                 _ => {
-                                    debug_log("[DNSDBG] upstream unavailable: iface/device missing");
+                                    debug_log(
+                                        "[DNSDBG] upstream unavailable: iface/device missing",
+                                    );
                                     None // interface not yet brought up
                                 }
                             }
@@ -571,11 +671,14 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                             Ok(stats) => IpcMsg::with_label(NetOp::PING)
                                 .word(0, 1)
                                 .word(1, stats.packets_received as u64)
-                                .word(2, if stats.packets_received > 0 {
-                                    stats.total_rtt_ms / (stats.packets_received as u64)
-                                } else {
-                                    0
-                                }),
+                                .word(
+                                    2,
+                                    if stats.packets_received > 0 {
+                                        stats.total_rtt_ms / (stats.packets_received as u64)
+                                    } else {
+                                        0
+                                    },
+                                ),
                             Err(_) => IpcMsg::with_label(NetOp::PING).word(0, 0),
                         }
                     }
@@ -620,10 +723,7 @@ fn pack_recv_reply(data: alloc::vec::Vec<u8>) -> IpcMsg {
 }
 
 fn pack_ipv4(ip: [u8; 4]) -> u64 {
-    (ip[0] as u64)
-        | ((ip[1] as u64) << 8)
-        | ((ip[2] as u64) << 16)
-        | ((ip[3] as u64) << 24)
+    (ip[0] as u64) | ((ip[1] as u64) << 8) | ((ip[2] as u64) << 16) | ((ip[3] as u64) << 24)
 }
 
 /// Read `/etc/hosts` via the VFS capability and return its UTF-8 content.
@@ -668,17 +768,23 @@ fn read_file_simple(vfs_cap: CapabilityToken, path: &str) -> alloc::vec::Vec<u8>
             break;
         }
         // data packed in words[2] and [3] (up to 16 bytes)
-        let src = [reply.words.get(2).copied().unwrap_or(0), reply.words.get(3).copied().unwrap_or(0)];
+        let src = [
+            reply.words.get(2).copied().unwrap_or(0),
+            reply.words.get(3).copied().unwrap_or(0),
+        ];
         for i in 0..n {
             let word_idx = i / 8;
             let byte_idx = i % 8;
-            out.push( ((src[word_idx] >> (byte_idx * 8)) & 0xFF) as u8 );
+            out.push(((src[word_idx] >> (byte_idx * 8)) & 0xFF) as u8);
         }
         offset += n;
     }
 
     // CLOSE (best effort)
-    let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+    let _ = ipc_call(
+        vfs_cap,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+    );
     out
 }
 

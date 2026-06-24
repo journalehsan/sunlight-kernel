@@ -50,10 +50,17 @@ pub fn check_permission(stat: &FileStat, cred: &Credential, want: PermCheck) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vfs::{FileType, mode};
+    use crate::vfs::{mode, FileType};
 
     fn make_stat(uid: u32, gid: u32, mode: u16) -> FileStat {
-        FileStat { file_type: FileType::File, size: 0, uid, gid, mode, nlinks: 1 }
+        FileStat {
+            file_type: FileType::File,
+            size: 0,
+            uid,
+            gid,
+            mode,
+            nlinks: 1,
+        }
     }
 
     #[test]
@@ -68,7 +75,10 @@ mod tests {
     #[test]
     fn user_reads_world_readable_file() {
         let stat = make_stat(0, 0, mode::FILE_644);
-        let user = Credential { uid: 1000, gid: 1000 };
+        let user = Credential {
+            uid: 1000,
+            gid: 1000,
+        };
         assert!(check_permission(&stat, &user, PermCheck::Read));
         assert!(!check_permission(&stat, &user, PermCheck::Write));
     }
@@ -76,7 +86,10 @@ mod tests {
     #[test]
     fn user_denied_root_only_file() {
         let stat = make_stat(0, 0, mode::FILE_600);
-        let user = Credential { uid: 1000, gid: 1000 };
+        let user = Credential {
+            uid: 1000,
+            gid: 1000,
+        };
         assert!(!check_permission(&stat, &user, PermCheck::Read));
         assert!(!check_permission(&stat, &user, PermCheck::Write));
     }
@@ -84,7 +97,10 @@ mod tests {
     #[test]
     fn owner_has_owner_bits() {
         let stat = make_stat(1000, 1000, mode::FILE_600);
-        let user = Credential { uid: 1000, gid: 1000 };
+        let user = Credential {
+            uid: 1000,
+            gid: 1000,
+        };
         assert!(check_permission(&stat, &user, PermCheck::Read));
         assert!(check_permission(&stat, &user, PermCheck::Write));
     }

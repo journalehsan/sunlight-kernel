@@ -84,7 +84,10 @@ fn run_query<D: Device>(
         let socket = sockets.get_mut::<udp::Socket>(handle);
         if !socket.is_open() {
             socket
-                .bind(IpListenEndpoint { addr: None, port: LOCAL_PORT + attempt })
+                .bind(IpListenEndpoint {
+                    addr: None,
+                    port: LOCAL_PORT + attempt,
+                })
                 .map_err(|_| DnsError::QueryFailed)?;
         }
     }
@@ -93,7 +96,9 @@ fn run_query<D: Device>(
     let query_id = 0xD05 ^ attempt;
     let mut packet = DnsPacket::query(query_id, hostname, QueryType::A);
     let mut req_buf = BytePacketBuffer::new();
-    packet.write(&mut req_buf).map_err(|_| DnsError::QueryFailed)?;
+    packet
+        .write(&mut req_buf)
+        .map_err(|_| DnsError::QueryFailed)?;
 
     {
         let socket = sockets.get_mut::<udp::Socket>(handle);

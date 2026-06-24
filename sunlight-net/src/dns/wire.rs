@@ -32,7 +32,10 @@ pub struct BytePacketBuffer {
 
 impl BytePacketBuffer {
     pub fn new() -> BytePacketBuffer {
-        BytePacketBuffer { buf: [0; 512], pos: 0 }
+        BytePacketBuffer {
+            buf: [0; 512],
+            pos: 0,
+        }
     }
 
     pub fn from_slice(data: &[u8]) -> BytePacketBuffer {
@@ -378,12 +381,38 @@ impl DnsQuestion {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DnsRecord {
-    UNKNOWN { domain: String, qtype: u16, data_len: u16, ttl: u32 },
-    A { domain: String, addr: [u8; 4], ttl: u32 },
-    NS { domain: String, host: String, ttl: u32 },
-    CNAME { domain: String, host: String, ttl: u32 },
-    MX { domain: String, priority: u16, host: String, ttl: u32 },
-    AAAA { domain: String, addr: [u8; 16], ttl: u32 },
+    UNKNOWN {
+        domain: String,
+        qtype: u16,
+        data_len: u16,
+        ttl: u32,
+    },
+    A {
+        domain: String,
+        addr: [u8; 4],
+        ttl: u32,
+    },
+    NS {
+        domain: String,
+        host: String,
+        ttl: u32,
+    },
+    CNAME {
+        domain: String,
+        host: String,
+        ttl: u32,
+    },
+    MX {
+        domain: String,
+        priority: u16,
+        host: String,
+        ttl: u32,
+    },
+    AAAA {
+        domain: String,
+        addr: [u8; 16],
+        ttl: u32,
+    },
 }
 
 impl DnsRecord {
@@ -422,22 +451,40 @@ impl DnsRecord {
             QueryType::NS => {
                 let mut ns = String::new();
                 buffer.read_qname(&mut ns)?;
-                Ok(DnsRecord::NS { domain, host: ns, ttl })
+                Ok(DnsRecord::NS {
+                    domain,
+                    host: ns,
+                    ttl,
+                })
             }
             QueryType::CNAME => {
                 let mut cname = String::new();
                 buffer.read_qname(&mut cname)?;
-                Ok(DnsRecord::CNAME { domain, host: cname, ttl })
+                Ok(DnsRecord::CNAME {
+                    domain,
+                    host: cname,
+                    ttl,
+                })
             }
             QueryType::MX => {
                 let priority = buffer.read_u16()?;
                 let mut mx = String::new();
                 buffer.read_qname(&mut mx)?;
-                Ok(DnsRecord::MX { domain, priority, host: mx, ttl })
+                Ok(DnsRecord::MX {
+                    domain,
+                    priority,
+                    host: mx,
+                    ttl,
+                })
             }
             QueryType::UNKNOWN(_) => {
                 buffer.step(data_len as usize)?;
-                Ok(DnsRecord::UNKNOWN { domain, qtype: qtype_num, data_len, ttl })
+                Ok(DnsRecord::UNKNOWN {
+                    domain,
+                    qtype: qtype_num,
+                    data_len,
+                    ttl,
+                })
             }
         }
     }
@@ -488,7 +535,12 @@ impl DnsRecord {
                 let size = buffer.pos() - (pos + 2);
                 buffer.set_u16(pos, size as u16)?;
             }
-            DnsRecord::MX { domain, priority, host, ttl } => {
+            DnsRecord::MX {
+                domain,
+                priority,
+                host,
+                ttl,
+            } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::MX.to_num())?;
                 buffer.write_u16(1)?;
@@ -535,7 +587,9 @@ impl DnsPacket {
         packet.header.id = id;
         packet.header.questions = 1;
         packet.header.recursion_desired = true;
-        packet.questions.push(DnsQuestion::new(qname.to_string(), qtype));
+        packet
+            .questions
+            .push(DnsQuestion::new(qname.to_string(), qtype));
         packet
     }
 
@@ -622,7 +676,9 @@ mod tests {
         packet.header.response = true;
         packet.header.recursion_desired = true;
         packet.header.recursion_available = true;
-        packet.questions.push(DnsQuestion::new("example.com".to_string(), QueryType::A));
+        packet
+            .questions
+            .push(DnsQuestion::new("example.com".to_string(), QueryType::A));
         packet.answers.push(DnsRecord::A {
             domain: "example.com".to_string(),
             addr: [93, 184, 216, 34],
@@ -654,6 +710,9 @@ mod tests {
         buf2.buf[511] = 10; // claims 10-byte label starting at 511
         buf2.pos = 511;
         let mut name = String::new();
-        assert_eq!(buf2.read_qname(&mut name), Err(DnsWireError::BufferOverflow));
+        assert_eq!(
+            buf2.read_qname(&mut name),
+            Err(DnsWireError::BufferOverflow)
+        );
     }
 }

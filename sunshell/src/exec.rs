@@ -53,10 +53,7 @@ pub fn execute_ast(node: &AstNode, env: &ShellEnv) -> Result<i32, ExecError> {
             if args.is_empty() {
                 return Ok(0);
             }
-            let expanded_args: Vec<String> = args
-                .iter()
-                .map(|arg| env.expand_token(arg))
-                .collect();
+            let expanded_args: Vec<String> = args.iter().map(|arg| env.expand_token(arg)).collect();
 
             let mut cmd = Command::new(&expanded_args[0]);
             cmd.args(&expanded_args[1..]);
@@ -75,10 +72,8 @@ pub fn execute_ast(node: &AstNode, env: &ShellEnv) -> Result<i32, ExecError> {
                     continue;
                 }
                 let is_last = iter.peek().is_none();
-                let expanded_args: Vec<String> = args
-                    .iter()
-                    .map(|arg| env.expand_token(arg))
-                    .collect();
+                let expanded_args: Vec<String> =
+                    args.iter().map(|arg| env.expand_token(arg)).collect();
 
                 let mut cmd = Command::new(&expanded_args[0]);
                 cmd.args(&expanded_args[1..]);

@@ -137,7 +137,12 @@ fn user_decision(uid: u32, name: &str, path: &str, uac_approved: bool) -> Decisi
         return Decision::allow(PolicyReason::AllowedTmp);
     }
 
-    if uid == 0 && (path == "/root" || is_under(path, "/root") || path == "/home" || is_under(path, "/home")) {
+    if uid == 0
+        && (path == "/root"
+            || is_under(path, "/root")
+            || path == "/home"
+            || is_under(path, "/home"))
+    {
         return Decision::allow(PolicyReason::AllowedCurrentUserHome);
     }
 

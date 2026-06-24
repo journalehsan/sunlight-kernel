@@ -126,7 +126,10 @@ pub fn init_ps2_mouse() -> bool {
 /// Register the user-space mouse driver endpoint.
 pub fn register_mouse_driver(endpoint_id: u32) {
     MOUSE_DRIVER_ENDPOINT.store(endpoint_id, Ordering::Release);
-    serial_println!("[MOUSE] Registered user-space driver at endpoint {}", endpoint_id);
+    serial_println!(
+        "[MOUSE] Registered user-space driver at endpoint {}",
+        endpoint_id
+    );
 }
 
 /// Unregister the mouse driver.

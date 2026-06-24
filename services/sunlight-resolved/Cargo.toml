@@ -1,92 +1,6 @@
 [package]
-name = "sunlightctl"
+name = "sunlight-resolved"
 version = "0.1.343"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 edition = "2021"
@@ -97,5 +11,9 @@ sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [[bin]]
-name = "sunlightctl"
+name = "resolved"
 path = "src/main.rs"
+
+[[bin]]
+name = "resolvectl"
+path = "src/bin/resolvectl.rs"

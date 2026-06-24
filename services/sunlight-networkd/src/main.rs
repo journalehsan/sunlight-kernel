@@ -10,10 +10,10 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup_timeout, nameserver_register, pack_ipv4, pack_short_name, unpack_ipv4, AdminState,
-    DevicedMsg, IfaceSummary, InterfaceId, InterfaceKind, IpConfigMode, IpcMsg,
-    LinkState, NetOp, NetworkdMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup_timeout,
+    nameserver_register, pack_ipv4, pack_short_name, unpack_ipv4, AdminState, DevicedMsg,
+    DnsSource, IfaceSummary, InterfaceId, InterfaceKind, IpConfigMode, IpcMsg, LinkState, NetOp,
+    NetworkdMsg, ResolvedMsg,
 };
 
 const MAX_IFACES: usize = 8;
@@ -128,9 +128,7 @@ impl NetworkManager {
 
     #[allow(dead_code)]
     fn find_by_id(&self, id: InterfaceId) -> Option<usize> {
-        self.ifaces
-            .iter()
-            .position(|i| i.occupied && i.id == id)
+        self.ifaces.iter().position(|i| i.occupied && i.id == id)
     }
 
     /// Discover network capable devices from deviced (best effort, never panic).
@@ -180,10 +178,9 @@ impl NetworkManager {
             }
 
             // If we already have an iface with this driver_id or similar name, update
-            let existing = self
-                .ifaces
-                .iter()
-                .position(|i| i.occupied && (i.driver_id == driver_id || i.driver_name == name_u64));
+            let existing = self.ifaces.iter().position(|i| {
+                i.occupied && (i.driver_id == driver_id || i.driver_name == name_u64)
+            });
 
             let slot = if let Some(s) = existing {
                 s
@@ -207,7 +204,11 @@ impl NetworkManager {
             rec.driver_name = name_u64;
             rec.driver_id = driver_id;
             rec.admin = AdminState::Enabled;
-            rec.link = if state == 2 { LinkState::Carrier } else { LinkState::NoCarrier };
+            rec.link = if state == 2 {
+                LinkState::Carrier
+            } else {
+                LinkState::NoCarrier
+            };
             if !existing.is_some() {
                 rec.mode = IpConfigMode::Dhcp;
                 rec.priority = 100;
@@ -220,7 +221,10 @@ impl NetworkManager {
         }
 
         if found_net > 0 {
-            serial_println!("[NETD] discovered {} network device(s) via deviced", found_net);
+            serial_println!(
+                "[NETD] discovered {} network device(s) via deviced",
+                found_net
+            );
         }
     }
 
@@ -255,7 +259,9 @@ impl NetworkManager {
         if i.kind == InterfaceKind::Loopback || i.priority < 0 {
             return false;
         }
-        if i.admin != AdminState::Enabled || (i.link != LinkState::Up && i.link != LinkState::Carrier) {
+        if i.admin != AdminState::Enabled
+            || (i.link != LinkState::Up && i.link != LinkState::Carrier)
+        {
             return false;
         }
         // has a gateway?
@@ -270,7 +276,8 @@ impl NetworkManager {
 
     #[allow(dead_code)]
     fn choose_default_id(&self) -> Option<InterfaceId> {
-        self.compute_default_route().map(|slot| self.ifaces[slot].id)
+        self.compute_default_route()
+            .map(|slot| self.ifaces[slot].id)
     }
 
     fn reply_summary(&self, slot: usize) -> IpcMsg {
@@ -288,7 +295,9 @@ impl NetworkManager {
                 seen += 1;
             }
         }
-        IpcMsg::with_label(NetworkdMsg::ERROR).word(0, NetworkdMsg::ERR_NOT_FOUND).word(1, self.count() as u64)
+        IpcMsg::with_label(NetworkdMsg::ERROR)
+            .word(0, NetworkdMsg::ERR_NOT_FOUND)
+            .word(1, self.count() as u64)
     }
 
     fn get_by_key(&self, key: u64) -> IpcMsg {
@@ -303,7 +312,11 @@ impl NetworkManager {
 
     fn set_admin(&mut self, key: u64, enabled: bool) -> IpcMsg {
         if let Some(slot) = self.find_slot_by_key(key) {
-            self.ifaces[slot].admin = if enabled { AdminState::Enabled } else { AdminState::Disabled };
+            self.ifaces[slot].admin = if enabled {
+                AdminState::Enabled
+            } else {
+                AdminState::Disabled
+            };
             // If we just disabled the current default, recompute is implicit on queries.
             self.reply_summary(slot)
         } else {
@@ -328,14 +341,25 @@ impl NetworkManager {
             self.ifaces[slot].prefix = 0;
             self.ifaces[slot].gw = [0; 4];
             // keep existing dns[ ] for now; they may be stale until re-acquire/ingest
-            serial_println!("[NETD] {} set to dhcp (policy recorded)", self.ifaces[slot].name_str());
+            serial_println!(
+                "[NETD] {} set to dhcp (policy recorded)",
+                self.ifaces[slot].name_str()
+            );
             self.reply_summary(slot)
         } else {
             err_not_found()
         }
     }
 
-    fn set_static(&mut self, key: u64, addr: [u8; 4], prefix: u8, gw: [u8; 4], dns0: [u8; 4], dns1: [u8; 4]) -> IpcMsg {
+    fn set_static(
+        &mut self,
+        key: u64,
+        addr: [u8; 4],
+        prefix: u8,
+        gw: [u8; 4],
+        dns0: [u8; 4],
+        dns1: [u8; 4],
+    ) -> IpcMsg {
         if let Some(slot) = self.find_slot_by_key(key) {
             self.ifaces[slot].mode = IpConfigMode::Static;
             self.ifaces[slot].addr = addr;
@@ -345,9 +369,17 @@ impl NetworkManager {
             serial_println!(
                 "[NETD] {} static {}.{}.{}.{}/{} gw {}.{}.{}.{}",
                 self.ifaces[slot].name_str(),
-                addr[0], addr[1], addr[2], addr[3], prefix,
-                gw[0], gw[1], gw[2], gw[3]
+                addr[0],
+                addr[1],
+                addr[2],
+                addr[3],
+                prefix,
+                gw[0],
+                gw[1],
+                gw[2],
+                gw[3]
             );
+            self.handoff_dns_to_resolved(slot, DnsSource::Static);
             self.reply_summary(slot)
         } else {
             err_not_found()
@@ -379,7 +411,9 @@ impl NetworkManager {
         // Ingest live addressing from the executing net stack (least invasive source of truth).
         // This populates addr/gw/prefix/dns for display and default route without duplicating config.
         self.ingest_live_from_net();
-        IpcMsg::with_label(NetworkdMsg::REPLY).word(0, 0).word(1, self.count() as u64)
+        IpcMsg::with_label(NetworkdMsg::REPLY)
+            .word(0, 0)
+            .word(1, self.count() as u64)
     }
 
     /// Query the 'net' service (if present) via its NetOp::GETIP and apply observed
@@ -440,9 +474,22 @@ impl NetworkManager {
             serial_println!(
                 "[NETD] ingested live ip for {}: {}.{}.{}.{}/{} gw {}.{}.{}.{}",
                 self.ifaces[slot].name_str(),
-                addr[0], addr[1], addr[2], addr[3], self.ifaces[slot].prefix,
-                gw[0], gw[1], gw[2], gw[3]
+                addr[0],
+                addr[1],
+                addr[2],
+                addr[3],
+                self.ifaces[slot].prefix,
+                gw[0],
+                gw[1],
+                gw[2],
+                gw[3]
             );
+            let source = if self.ifaces[slot].mode == IpConfigMode::Static {
+                DnsSource::Static
+            } else {
+                DnsSource::Dhcp
+            };
+            self.handoff_dns_to_resolved(slot, source);
         }
     }
 
@@ -457,6 +504,32 @@ impl NetworkManager {
         } else {
             IpcMsg::with_label(NetworkdMsg::REPLY).word(0, 0) // id=0 means none
         }
+    }
+
+    /// Best-effort handoff of per-iface DNS to resolved.
+    /// If resolved is absent, log and continue (graceful).
+    fn handoff_dns_to_resolved(&self, slot: usize, source: DnsSource) {
+        if !self.ifaces[slot].occupied {
+            return;
+        }
+        let i = &self.ifaces[slot];
+        if i.dns[0] == [0, 0, 0, 0] {
+            return;
+        }
+        let Some(res_cap) = nameserver_lookup_timeout("resolved", 40) else {
+            // resolved not up yet or unavailable; networkd keeps working
+            return;
+        };
+        let iface_p = pack_short_name(i.name_str());
+        let mut msg = IpcMsg::with_label(ResolvedMsg::UPDATE_FROM_NETWORKD)
+            .word(0, iface_p)
+            .word(1, source as u64)
+            .word(2, pack_ipv4(i.dns[0]));
+        if i.dns[1] != [0, 0, 0, 0] {
+            msg = msg.word(3, pack_ipv4(i.dns[1]));
+        }
+        let _ = ipc_call(res_cap, msg);
+        // fire-and-forget; no hard dep
     }
 }
 
@@ -536,7 +609,12 @@ pub extern "C" fn _start() -> ! {
         if iface.occupied && iface.kind != InterfaceKind::Loopback {
             serial_println!(
                 "[NETD] iface {} kind={:?} admin={:?} link={:?} mode={:?} prio={}",
-                iface.name_str(), iface.kind, iface.admin, iface.link, iface.mode, iface.priority
+                iface.name_str(),
+                iface.kind,
+                iface.admin,
+                iface.link,
+                iface.mode,
+                iface.priority
             );
         }
     }
@@ -571,8 +649,16 @@ pub extern "C" fn _start() -> ! {
                 let addr = unpack_ipv4(msg.words[1]);
                 let gw = unpack_ipv4(msg.words[2]);
                 let prefix = (msg.words[3] & 0xff) as u8;
-                let dns0 = if msg.word_count > 4 { unpack_ipv4(msg.words[4]) } else { [0u8; 4] };
-                let dns1 = if msg.word_count > 5 { unpack_ipv4(msg.words[5]) } else { [0u8; 4] };
+                let dns0 = if msg.word_count > 4 {
+                    unpack_ipv4(msg.words[4])
+                } else {
+                    [0u8; 4]
+                };
+                let dns1 = if msg.word_count > 5 {
+                    unpack_ipv4(msg.words[5])
+                } else {
+                    [0u8; 4]
+                };
                 mgr.set_static(key, addr, prefix, gw, dns0, dns1)
             }
             NetworkdMsg::SET_PRIORITY => {

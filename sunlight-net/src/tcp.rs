@@ -3,9 +3,9 @@
 //! Project Antigravity: Dynamic allocation + async polling + garbage collection
 
 extern crate alloc;
+use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::vec::Vec;
-use alloc::boxed::Box;
 
 use smoltcp::iface::{Interface, SocketHandle, SocketSet};
 use smoltcp::phy::Device;
@@ -69,10 +69,7 @@ impl TcpManager {
     }
 
     /// Allocate a new socket with dynamically allocated buffers
-    pub fn alloc_socket(
-        &mut self,
-        sockets: &mut SocketSet<'static>,
-    ) -> Result<u32, TcpError> {
+    pub fn alloc_socket(&mut self, sockets: &mut SocketSet<'static>) -> Result<u32, TcpError> {
         if self.slots.len() >= MAX_SOCKETS {
             return Err(TcpError::NoSlots);
         }
@@ -87,7 +84,7 @@ impl TcpManager {
         let mut rx_buffer = Vec::new();
         rx_buffer.resize(RX_BUF, 0);
         let rx_boxed: Box<[u8]> = rx_buffer.into_boxed_slice();
-        
+
         let mut tx_buffer = Vec::new();
         tx_buffer.resize(TX_BUF, 0);
         let tx_boxed: Box<[u8]> = tx_buffer.into_boxed_slice();
@@ -148,9 +145,11 @@ impl TcpManager {
             return Err(TcpError::SocketError);
         }
 
-        if self.slots.iter().any(|(&id, slot)| {
-            id != socket_id && slot.local_port == Some(port)
-        }) {
+        if self
+            .slots
+            .iter()
+            .any(|(&id, slot)| id != socket_id && slot.local_port == Some(port))
+        {
             return Err(TcpError::SocketError);
         }
 
@@ -231,7 +230,8 @@ impl TcpManager {
         yield_fn: Option<fn()>,
     ) -> Result<(), TcpError> {
         let handle = self
-            .slots.get(&socket_id)
+            .slots
+            .get(&socket_id)
             .map(|s| s.handle)
             .ok_or(TcpError::InvalidSocket)?;
 
@@ -289,7 +289,8 @@ impl TcpManager {
         yield_fn: Option<fn()>,
     ) -> Result<usize, TcpError> {
         let handle = self
-            .slots.get(&socket_id)
+            .slots
+            .get(&socket_id)
             .map(|s| s.handle)
             .ok_or(TcpError::InvalidSocket)?;
 
@@ -362,7 +363,10 @@ impl TcpManager {
         let take = max_len.max(1);
 
         let handle = {
-            let slot = self.slots.get_mut(&socket_id).ok_or(TcpError::InvalidSocket)?;
+            let slot = self
+                .slots
+                .get_mut(&socket_id)
+                .ok_or(TcpError::InvalidSocket)?;
             // Serve buffered bytes first — never re-poll while data is pending,
             // and never lose what we already drained from the socket.
             if !slot.rx_backlog.is_empty() {
@@ -427,7 +431,8 @@ impl TcpManager {
         sockets: &mut SocketSet<'static>,
     ) -> Result<(), TcpError> {
         let slot = self
-            .slots.remove(&socket_id)
+            .slots
+            .remove(&socket_id)
             .ok_or(TcpError::InvalidSocket)?;
 
         sockets.get_mut::<tcp::Socket>(slot.handle).close();
@@ -440,31 +445,29 @@ impl TcpManager {
     }
 
     /// Antigravity Phase 2: Non-blocking poll for ready sockets
-    pub fn poll_ready(
-        &self,
-        socket_ids: &[u32],
-        sockets: &SocketSet<'static>,
-    ) -> Vec<u32> {
+    pub fn poll_ready(&self, socket_ids: &[u32], sockets: &SocketSet<'static>) -> Vec<u32> {
         let mut ready = Vec::new();
-        
+
         for &socket_id in socket_ids {
             if let Some(slot) = self.slots.get(&socket_id) {
                 let socket = sockets.get::<tcp::Socket>(slot.handle);
-                if socket.can_recv() 
-                    || socket.can_send() 
-                    || !matches!(socket.state(), tcp::State::Established) 
+                if socket.can_recv()
+                    || socket.can_send()
+                    || !matches!(socket.state(), tcp::State::Established)
                 {
                     ready.push(socket_id);
                 }
             }
         }
-        
+
         ready
     }
 
     /// Antigravity Phase 3: Reap closed sockets (garbage collection)
     pub fn reap_closed_sockets(&mut self, sockets: &mut SocketSet<'static>) {
-        let to_remove: Vec<u32> = self.slots.iter()
+        let to_remove: Vec<u32> = self
+            .slots
+            .iter()
             .filter_map(|(&socket_id, slot)| {
                 let socket = sockets.get::<tcp::Socket>(slot.handle);
                 if matches!(socket.state(), tcp::State::Closed | tcp::State::TimeWait) {

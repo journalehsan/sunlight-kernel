@@ -20,9 +20,9 @@ pub enum DnsError {
     QueryFailed,
 }
 
-/// Default upstream resolver (Google public DNS), used until a
-/// `/etc/resolv.conf` equivalent is implemented.
-pub const DEFAULT_UPSTREAM: [u8; 4] = [8, 8, 8, 8];
+/// Default upstream resolver (OpenDNS), used when no DHCP/static/resolved
+/// server has been learned yet.
+pub const DEFAULT_UPSTREAM: [u8; 4] = [208, 67, 222, 222];
 
 /// Ordered resolver chain: hosts -> cache -> upstream.
 ///
@@ -95,7 +95,10 @@ mod tests {
     fn hosts_take_priority_over_cache() {
         let mut chain = ResolverChain::new("127.0.0.1 example.com\n");
         chain.cache_insert("example.com", [9, 9, 9, 9], 300, 1000);
-        assert_eq!(chain.resolve_local("example.com", 1000), Some([127, 0, 0, 1]));
+        assert_eq!(
+            chain.resolve_local("example.com", 1000),
+            Some([127, 0, 0, 1])
+        );
     }
 
     #[test]
@@ -103,7 +106,10 @@ mod tests {
         let mut chain = ResolverChain::new("");
         assert_eq!(chain.resolve_local("example.com", 1000), None);
         chain.cache_insert("example.com", [93, 184, 216, 34], 300, 1000);
-        assert_eq!(chain.resolve_local("example.com", 1200), Some([93, 184, 216, 34]));
+        assert_eq!(
+            chain.resolve_local("example.com", 1200),
+            Some([93, 184, 216, 34])
+        );
         assert_eq!(chain.resolve_local("example.com", 1301), None); // expired
     }
 
@@ -112,7 +118,10 @@ mod tests {
         let mut chain = ResolverChain::new("");
         assert_eq!(chain.resolve_local("sunlight.local", 0), None);
         chain.reload_hosts("10.0.0.5 sunlight.local\n");
-        assert_eq!(chain.resolve_local("sunlight.local", 0), Some([10, 0, 0, 5]));
+        assert_eq!(
+            chain.resolve_local("sunlight.local", 0),
+            Some([10, 0, 0, 5])
+        );
     }
 
     #[test]

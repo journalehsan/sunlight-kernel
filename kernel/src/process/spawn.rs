@@ -74,10 +74,10 @@ pub fn exec_into_process(
             Ok(hdr) => {
                 let at_phdr = compute_at_phdr(bytes, &hdr);
                 alloc::vec![
-                    (3,  at_phdr),              // AT_PHDR
-                    (5,  hdr.phnum as u64),     // AT_PHNUM
-                    (6,  4096u64),              // AT_PAGESZ
-                    (9,  hdr.entry),            // AT_ENTRY
+                    (3, at_phdr),          // AT_PHDR
+                    (5, hdr.phnum as u64), // AT_PHNUM
+                    (6, 4096u64),          // AT_PAGESZ
+                    (9, hdr.entry),        // AT_ENTRY
                 ]
             }
             Err(_) => alloc::vec![],
@@ -214,7 +214,7 @@ fn setup_exec_stack(
         table.extend_from_slice(&addr.to_le_bytes());
     }
     table.extend_from_slice(&0u64.to_le_bytes()); // envp NULL
-    // caller-supplied auxv entries
+                                                  // caller-supplied auxv entries
     for &(atype, aval) in auxv {
         table.extend_from_slice(&atype.to_le_bytes());
         table.extend_from_slice(&aval.to_le_bytes());
@@ -260,9 +260,12 @@ fn compute_at_phdr(elf_bytes: &[u8], header: &sunlight_elf::ElfHeader) -> u64 {
         if p_type != 1 {
             continue; // PT_LOAD = 1
         }
-        let p_offset = u64::from_le_bytes(elf_bytes[ph_start + 8..ph_start + 16].try_into().unwrap());
-        let p_vaddr  = u64::from_le_bytes(elf_bytes[ph_start + 16..ph_start + 24].try_into().unwrap());
-        let p_filesz = u64::from_le_bytes(elf_bytes[ph_start + 32..ph_start + 40].try_into().unwrap());
+        let p_offset =
+            u64::from_le_bytes(elf_bytes[ph_start + 8..ph_start + 16].try_into().unwrap());
+        let p_vaddr =
+            u64::from_le_bytes(elf_bytes[ph_start + 16..ph_start + 24].try_into().unwrap());
+        let p_filesz =
+            u64::from_le_bytes(elf_bytes[ph_start + 32..ph_start + 40].try_into().unwrap());
         if p_offset <= phoff && phoff < p_offset + p_filesz {
             return p_vaddr + (phoff - p_offset);
         }
@@ -367,11 +370,11 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/bin/wc" | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file" | "/bin/stat"
         | "/bin/pwd" | "/bin/date" | "/bin/whoami" | "/bin/id" | "/bin/uname" | "/bin/echo"
         | "/bin/nice" | "/bin/renice" | "/bin/free" | "/bin/freezram" | "/bin/kill"
-        | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls"
-        | "/usr/bin/cat" | "/usr/bin/cp" | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir"
-        | "/usr/bin/rmdir" | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep"
-        | "/usr/bin/head" | "/usr/bin/tail" | "/usr/bin/wc" | "/usr/bin/sort" | "/usr/bin/uniq"
-        | "/usr/bin/cut" | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd" | "/usr/bin/date"
+        | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls" | "/usr/bin/cat" | "/usr/bin/cp"
+        | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
+        | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep" | "/usr/bin/head"
+        | "/usr/bin/tail" | "/usr/bin/wc" | "/usr/bin/sort" | "/usr/bin/uniq" | "/usr/bin/cut"
+        | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd" | "/usr/bin/date"
         | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname" | "/usr/bin/echo"
         | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" | "/usr/bin/freezram"
         | "/usr/bin/kill" | "/usr/bin/killall" | "/usr/bin/pkill" => {
@@ -405,12 +408,12 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         // These need no privileged memory setup (unlike vfs/tty).
         "/sbin/timer_server" | "/usr/sbin/timer_server" => Ok(crate::TIMER_SERVER_ELF_BYTES),
         "/sbin/sunlight-kbd" | "/usr/sbin/sunlight-kbd" => Ok(crate::SUNLIGHT_KBD_ELF_BYTES),
-        "/sbin/sunlight-mouse" | "/usr/sbin/sunlight-mouse" => {
-            Ok(crate::SUNLIGHT_MOUSE_ELF_BYTES)
-        }
+        "/sbin/sunlight-mouse" | "/usr/sbin/sunlight-mouse" => Ok(crate::SUNLIGHT_MOUSE_ELF_BYTES),
         "/sbin/deviced" | "/usr/sbin/deviced" => Ok(crate::DEVICED_ELF_BYTES),
         "/sbin/networkd" | "/usr/sbin/networkd" => Ok(crate::NETWORKD_ELF_BYTES),
         "/bin/networkctl" | "/usr/bin/networkctl" => Ok(crate::NETWORKCTL_ELF_BYTES),
+        "/sbin/resolved" | "/usr/sbin/resolved" => Ok(crate::RESOLVED_ELF_BYTES),
+        "/bin/resolvectl" | "/usr/bin/resolvectl" => Ok(crate::RESOLVECTL_ELF_BYTES),
         "/sbin/net_server" | "/usr/sbin/net_server" => Ok(crate::NET_SERVER_ELF_BYTES),
         "/sbin/sunlightd" | "/usr/sbin/sunlightd" => Ok(crate::SUNLIGHTD_ELF_BYTES),
         // User-level daemons spawned by sunlightd (not hardcoded in kernel boot).

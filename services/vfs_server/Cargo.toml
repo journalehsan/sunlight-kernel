@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-vfs-server"
-version = "0.1.330"
+version = "0.1.343"
+
+
 
 
 
@@ -97,3 +99,4 @@ path = "src/main.rs"
 sunlight-fs = { path = "../../sunlight-fs" }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-fat = { path = "../../sunlight-fat" }
+heapless = "0.8"

@@ -2556,13 +2556,16 @@ fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
     };
 
     let (_, _, actor) = current_fs_actor();
-    let decision = sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Delete, None, false);
+    let decision =
+        sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Delete, None, false);
     if !decision.allowed {
         return u64::MAX;
     }
 
     let mut guard = crate::KERNEL_VFS.lock();
-    let Some(vfs) = guard.as_mut() else { return u64::MAX };
+    let Some(vfs) = guard.as_mut() else {
+        return u64::MAX;
+    };
     match vfs.unlink(path) {
         Ok(()) => 0,
         Err(_) => u64::MAX,
@@ -2591,14 +2594,28 @@ fn sys_rename(frame: &mut SyscallFrame) -> u64 {
 
     let (_, _, actor) = current_fs_actor();
     // Require Delete permission on source and Create permission on destination.
-    let del_ok = sunlight_fs::can_write(actor, old_path, sunlight_fs::FsOperation::Delete, None, false);
-    let cre_ok = sunlight_fs::can_write(actor, new_path, sunlight_fs::FsOperation::Create, None, false);
+    let del_ok = sunlight_fs::can_write(
+        actor,
+        old_path,
+        sunlight_fs::FsOperation::Delete,
+        None,
+        false,
+    );
+    let cre_ok = sunlight_fs::can_write(
+        actor,
+        new_path,
+        sunlight_fs::FsOperation::Create,
+        None,
+        false,
+    );
     if !del_ok.allowed || !cre_ok.allowed {
         return u64::MAX;
     }
 
     let mut guard = crate::KERNEL_VFS.lock();
-    let Some(vfs) = guard.as_mut() else { return u64::MAX };
+    let Some(vfs) = guard.as_mut() else {
+        return u64::MAX;
+    };
     match vfs.rename(old_path, new_path) {
         Ok(()) => 0,
         Err(_) => u64::MAX,
@@ -2620,13 +2637,16 @@ fn sys_chmod(frame: &mut SyscallFrame) -> u64 {
 
     // Only owner or root can chmod — policy allows if write is allowed.
     let (_, _, actor) = current_fs_actor();
-    let decision = sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Write, None, false);
+    let decision =
+        sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Write, None, false);
     if !decision.allowed {
         return u64::MAX;
     }
 
     let mut guard = crate::KERNEL_VFS.lock();
-    let Some(vfs) = guard.as_mut() else { return u64::MAX };
+    let Some(vfs) = guard.as_mut() else {
+        return u64::MAX;
+    };
     match vfs.chmod(path, mode) {
         Ok(()) => 0,
         Err(_) => u64::MAX,
@@ -2654,7 +2674,9 @@ fn sys_chown(frame: &mut SyscallFrame) -> u64 {
     }
 
     let mut guard = crate::KERNEL_VFS.lock();
-    let Some(vfs) = guard.as_mut() else { return u64::MAX };
+    let Some(vfs) = guard.as_mut() else {
+        return u64::MAX;
+    };
     match vfs.chown(path, uid, gid) {
         Ok(()) => 0,
         Err(_) => u64::MAX,

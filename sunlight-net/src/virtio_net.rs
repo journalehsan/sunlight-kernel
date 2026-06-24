@@ -133,7 +133,10 @@ impl VirtioNet {
         // SAFETY: io_base is a valid legacy virtio I/O BAR; ring-0 required.
         pci::outb(io_base + VIRTIO_REG_DEVICE_STATUS, 0); // reset
 
-        pci::outb(io_base + VIRTIO_REG_DEVICE_STATUS, STATUS_ACKNOWLEDGE | STATUS_DRIVER);
+        pci::outb(
+            io_base + VIRTIO_REG_DEVICE_STATUS,
+            STATUS_ACKNOWLEDGE | STATUS_DRIVER,
+        );
 
         let features = pci::inl(io_base + VIRTIO_REG_DEVICE_FEATURES);
         // We only require/ack MAC + STATUS for Phase 5.0. Drop MRG/CTRL for simplicity.

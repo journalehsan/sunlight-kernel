@@ -91,6 +91,15 @@ path instead.
 
 **New sunlightd-launched daemon** → spots 1, 2, 3, 4, **6**.
 
+**New init-launched daemon** → spots 1, 2, 3, 4, plus add its absolute
+`/sbin/...` path to `services/init/src/main.rs`. If the same crate also ships a
+CLI, wire that CLI as a normal `/bin` command too.
+
+Example: `sunlight-resolved` builds both `/sbin/resolved` and `/bin/resolvectl`.
+That means one package build line, two `include_bytes!` statics, two
+`embedded_bytes_for_path` arms, an init service entry for `/sbin/resolved`, and
+RamFS stubs for `/bin/resolvectl` and `/usr/bin/resolvectl`.
+
 ## Worked example: the three "not found" binaries
 
 `nicectl`, `capabilityctl`, and `runas` all returned "not found" because they

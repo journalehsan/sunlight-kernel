@@ -215,6 +215,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release >>"$
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-mouse --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-deviced --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-networkd --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-resolved --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release >>"$BUILD_LOG" 2>&1

@@ -409,6 +409,102 @@ pub mod NetworkdMsg {
     pub const ERR_DEVICED_UNAVAILABLE: u64 = 4;
 }
 
+/// resolved v0: DNS resolver configuration management.
+/// Registered as "resolved".
+/// Owns DNS server list, search domains, and generates /etc/resolv.conf view.
+/// networkd hands DHCP/static DNS here.
+#[allow(non_snake_case)]
+pub mod ResolvedMsg {
+    pub const GET_CONFIG: u64 = 0xC001;
+    pub const GET_SERVER: u64 = 0xC002; // w0=index -> one server summary
+    pub const SET_SERVERS: u64 = 0xC010; // w0..N packed addrs; source=Manual
+    pub const ADD_SERVER: u64 = 0xC011; // w0=addr_packed, w1=source_tag
+    pub const CLEAR_SERVERS: u64 = 0xC012;
+    pub const USE_SYSTEM_DEFAULT: u64 = 0xC013;
+    pub const UPDATE_FROM_NETWORKD: u64 = 0xC014; // w0=iface_packed, w1=source_tag, w2.. dns addrs
+    pub const RENDER_RESOLV_CONF: u64 = 0xC015; // returns packed servers or text hint
+    pub const RESOLVE_NAME: u64 = 0xC016; // optional: w/hostname -> ip or 0
+    pub const FLUSH_CACHE: u64 = 0xC017;
+
+    pub const REPLY: u64 = 0xC0FF;
+    pub const ERROR: u64 = 0xC0FE;
+
+    pub const ERR_NOT_FOUND: u64 = 1;
+    pub const ERR_BAD_REQUEST: u64 = 2;
+    pub const ERR_UNAVAILABLE: u64 = 3;
+}
+
+/// DnsSource for resolver records (v0).
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DnsSource {
+    Dhcp = 0,
+    Static = 1,
+    SystemDefault = 2,
+    Vpn = 3,
+    Manual = 4,
+    Unknown = 5,
+}
+
+impl DnsSource {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            0 => Self::Dhcp,
+            1 => Self::Static,
+            2 => Self::SystemDefault,
+            3 => Self::Vpn,
+            4 => Self::Manual,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// Compact server summary for IPC (fits in one reply).
+#[derive(Debug, Clone, Copy)]
+pub struct DnsServerSummary {
+    pub address: [u8; 4],
+    pub source: DnsSource,
+    pub priority: i32,
+    pub iface: u64, // packed short name or 0
+    pub total: u16,
+}
+
+/// Pack a DnsServerSummary into a REPLY (similar style to IfaceSummary).
+pub fn pack_dns_server_summary(s: &DnsServerSummary) -> IpcMsg {
+    let src = s.source as u64;
+    let prio_u = (s.priority.clamp(-32768, 32767) as i16 as u16) as u64;
+    let tot = (s.total as u64) & 0xff;
+    let w1 = src | (prio_u << 8) | (tot << 24);
+    IpcMsg::with_label(ResolvedMsg::REPLY)
+        .word(0, pack_ipv4(s.address))
+        .word(1, w1)
+        .word(2, s.iface)
+}
+
+/// Unpack from reply.
+pub fn unpack_dns_server_summary(reply: &IpcMsg) -> Option<DnsServerSummary> {
+    if reply.label != ResolvedMsg::REPLY || reply.word_count < 2 {
+        return None;
+    }
+    let addr = unpack_ipv4(reply.words[0]);
+    let w1 = reply.words[1];
+    let src = DnsSource::from_u64(w1 & 0xff);
+    let prio = (((w1 >> 8) & 0x7fff) as u16 as i16) as i32;
+    let total = ((w1 >> 24) & 0xff) as u16;
+    let iface = if reply.word_count > 2 {
+        reply.words[2]
+    } else {
+        0
+    };
+    Some(DnsServerSummary {
+        address: addr,
+        source: src,
+        priority: prio,
+        iface,
+        total,
+    })
+}
+
 /// Interface kind reported by networkd (matches driver capabilities).
 #[repr(u64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -532,10 +628,10 @@ pub struct IfaceSummary {
     pub admin: AdminState,
     pub link: LinkState,
     pub mode: IpConfigMode,
-    pub addr: [u8; 4],    // 0.0.0.0 if none
+    pub addr: [u8; 4], // 0.0.0.0 if none
     pub prefix: u8,
     pub gw: [u8; 4],
-    pub dns: [u8; 4],     // primary DNS or 0s; full list via future/ctl
+    pub dns: [u8; 4], // primary DNS or 0s; full list via future/ctl
     pub priority: i32,
     pub is_default: bool,
     pub total: u16, // total count
@@ -589,7 +685,11 @@ pub fn unpack_iface_summary(reply: &IpcMsg) -> Option<IfaceSummary> {
 
     let addr = unpack_ipv4(w3 & 0xffff_ffff);
     let gw = unpack_ipv4((w3 >> 32) & 0xffff_ffff);
-    let dns = if reply.word_count > 4 { unpack_ipv4(reply.words[4]) } else { [0u8; 4] };
+    let dns = if reply.word_count > 4 {
+        unpack_ipv4(reply.words[4])
+    } else {
+        [0u8; 4]
+    };
 
     Some(IfaceSummary {
         id,

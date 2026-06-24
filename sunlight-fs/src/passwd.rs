@@ -30,7 +30,10 @@ pub struct GroupEntry {
 
 impl GroupEntry {
     pub const fn zeroed() -> Self {
-        Self { groupname: [0; 64], gid: 0 }
+        Self {
+            groupname: [0; 64],
+            gid: 0,
+        }
     }
 }
 
@@ -42,7 +45,10 @@ pub struct ShadowEntry {
 
 impl ShadowEntry {
     pub const fn zeroed() -> Self {
-        Self { username: [0; 64], password: [0; 128] }
+        Self {
+            username: [0; 64],
+            password: [0; 128],
+        }
     }
 }
 
@@ -55,7 +61,11 @@ pub fn parse_passwd(data: &[u8]) -> ([PasswdEntry; 16], usize) {
     while pos < data.len() && count < 16 {
         let line_end = next_newline(data, pos);
         let line = &data[pos..line_end];
-        pos = if line_end < data.len() { line_end + 1 } else { data.len() };
+        pos = if line_end < data.len() {
+            line_end + 1
+        } else {
+            data.len()
+        };
 
         if line.is_empty() || line[0] == b'#' || line[0] == 0 {
             continue;
@@ -77,17 +87,23 @@ pub fn parse_passwd(data: &[u8]) -> ([PasswdEntry; 16], usize) {
         }
 
         let f: [&[u8]; 7] = [
-            field_slice(line, 0,           fields[0]),
-            field_slice(line, fields[0]+1, fields[1]),
-            field_slice(line, fields[1]+1, fields[2]),
-            field_slice(line, fields[2]+1, fields[3]),
-            field_slice(line, fields[3]+1, fields[4]),
-            field_slice(line, fields[4]+1, fields[5]),
-            field_slice(line, fields[5]+1, fields[6]),
+            field_slice(line, 0, fields[0]),
+            field_slice(line, fields[0] + 1, fields[1]),
+            field_slice(line, fields[1] + 1, fields[2]),
+            field_slice(line, fields[2] + 1, fields[3]),
+            field_slice(line, fields[3] + 1, fields[4]),
+            field_slice(line, fields[4] + 1, fields[5]),
+            field_slice(line, fields[5] + 1, fields[6]),
         ];
 
-        let uid = match parse_u32(f[2]) { Some(v) => v, None => continue };
-        let gid = match parse_u32(f[3]) { Some(v) => v, None => continue };
+        let uid = match parse_u32(f[2]) {
+            Some(v) => v,
+            None => continue,
+        };
+        let gid = match parse_u32(f[3]) {
+            Some(v) => v,
+            None => continue,
+        };
 
         let mut entry = PasswdEntry::zeroed();
         copy_bytes(&mut entry.username, f[0]);
@@ -111,7 +127,11 @@ pub fn parse_group(data: &[u8]) -> ([GroupEntry; 32], usize) {
     while pos < data.len() && count < 32 {
         let line_end = next_newline(data, pos);
         let line = &data[pos..line_end];
-        pos = if line_end < data.len() { line_end + 1 } else { data.len() };
+        pos = if line_end < data.len() {
+            line_end + 1
+        } else {
+            data.len()
+        };
 
         if line.is_empty() || line[0] == b'#' || line[0] == 0 {
             continue;
@@ -132,10 +152,13 @@ pub fn parse_group(data: &[u8]) -> ([GroupEntry; 32], usize) {
             continue;
         }
 
-        let f0 = field_slice(line, 0,           fields[0]);
-        let f2 = field_slice(line, fields[1]+1, fields[2]);
+        let f0 = field_slice(line, 0, fields[0]);
+        let f2 = field_slice(line, fields[1] + 1, fields[2]);
 
-        let gid = match parse_u32(f2) { Some(v) => v, None => continue };
+        let gid = match parse_u32(f2) {
+            Some(v) => v,
+            None => continue,
+        };
 
         let mut entry = GroupEntry::zeroed();
         copy_bytes(&mut entry.groupname, f0);
@@ -157,7 +180,11 @@ pub fn parse_shadow(data: &[u8]) -> ([ShadowEntry; 16], usize) {
     while pos < data.len() && count < 16 {
         let line_end = next_newline(data, pos);
         let line = &data[pos..line_end];
-        pos = if line_end < data.len() { line_end + 1 } else { data.len() };
+        pos = if line_end < data.len() {
+            line_end + 1
+        } else {
+            data.len()
+        };
 
         if line.is_empty() || line[0] == b'#' || line[0] == 0 {
             continue;
@@ -168,13 +195,13 @@ pub fn parse_shadow(data: &[u8]) -> ([ShadowEntry; 16], usize) {
             Some(p) => p,
             None => continue,
         };
-        let colon2 = match line[colon1+1..].iter().position(|&b| b == b':') {
+        let colon2 = match line[colon1 + 1..].iter().position(|&b| b == b':') {
             Some(p) => colon1 + 1 + p,
             None => line.len(),
         };
 
         let username = &line[..colon1];
-        let password = &line[colon1+1..colon2];
+        let password = &line[colon1 + 1..colon2];
 
         let mut entry = ShadowEntry::zeroed();
         copy_bytes(&mut entry.username, username);
@@ -187,10 +214,7 @@ pub fn parse_shadow(data: &[u8]) -> ([ShadowEntry; 16], usize) {
 }
 
 /// Find a passwd entry by username (null-terminated match).
-pub fn lookup_by_name<'a>(
-    entries: &'a [PasswdEntry],
-    name: &[u8],
-) -> Option<&'a PasswdEntry> {
+pub fn lookup_by_name<'a>(entries: &'a [PasswdEntry], name: &[u8]) -> Option<&'a PasswdEntry> {
     for entry in entries {
         let elen = entry.username.iter().position(|&b| b == 0).unwrap_or(64);
         if elen == name.len() && &entry.username[..elen] == name {

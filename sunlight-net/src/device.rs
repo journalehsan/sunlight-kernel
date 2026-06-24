@@ -1,7 +1,7 @@
 use crate::virtio_net::VirtioNet;
-use smoltcp::phy::{Device, DeviceCapabilities, Medium, TxToken, RxToken};
-use smoltcp::time::Instant;
 use core::cell::RefCell;
+use smoltcp::phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken};
+use smoltcp::time::Instant;
 
 /// RX token carrying a buffer that was filled by VirtioNet::recv (or a scratch for simulation).
 pub struct SunlightRxToken<'a> {
@@ -43,7 +43,7 @@ impl<'a> TxToken for SunlightTxToken<'a> {
 }
 
 /// Wrapper for VirtioNet implementing smoltcp Device trait.
-/// 
+///
 /// This bridges the kernel-owned VirtioNet (ring-0 queues + port I/O) into smoltcp's
 /// poll model used by net_server (or kernel DHCP at boot).
 ///
@@ -78,8 +78,15 @@ impl Device for SunlightNetDevice {
         if n > 0 {
             let mut buf = [0u8; 1514];
             buf[..n].copy_from_slice(&tmp[..n]);
-            let rx = SunlightRxToken { buffer: buf, len: n, _marker: core::marker::PhantomData };
-            let tx = SunlightTxToken { virtio: &self.virtio, _marker: core::marker::PhantomData };
+            let rx = SunlightRxToken {
+                buffer: buf,
+                len: n,
+                _marker: core::marker::PhantomData,
+            };
+            let tx = SunlightTxToken {
+                virtio: &self.virtio,
+                _marker: core::marker::PhantomData,
+            };
             Some((rx, tx))
         } else {
             None
@@ -89,7 +96,10 @@ impl Device for SunlightNetDevice {
     fn transmit(&mut self, _timestamp: Instant) -> Option<Self::TxToken<'_>> {
         // Always allow a TX token; the consume will attempt the actual send.
         // We return a token unconditionally because the virtqueue has space in MVI model.
-        Some(SunlightTxToken { virtio: &self.virtio, _marker: core::marker::PhantomData })
+        Some(SunlightTxToken {
+            virtio: &self.virtio,
+            _marker: core::marker::PhantomData,
+        })
     }
 
     fn capabilities(&self) -> DeviceCapabilities {

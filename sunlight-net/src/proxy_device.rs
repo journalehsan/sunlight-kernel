@@ -61,7 +61,13 @@ impl Device for ProxyNetDevice {
         let mut buf = [0u8; 1514];
         let n = sunlight_ipc::net_rx(&mut buf);
         if n > 0 {
-            Some((ProxyRxToken { buffer: buf, len: n }, ProxyTxToken))
+            Some((
+                ProxyRxToken {
+                    buffer: buf,
+                    len: n,
+                },
+                ProxyTxToken,
+            ))
         } else {
             None
         }

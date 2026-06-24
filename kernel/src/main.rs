@@ -84,6 +84,10 @@ static NETWORKD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/networkd");
 static NETWORKCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/networkctl");
+static RESOLVED_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/resolved");
+static RESOLVECTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/resolvectl");
 static SUNLIGHT_NICED_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/niced");
 static NICECTL_ELF_BYTES: &[u8] =
@@ -111,8 +115,7 @@ static RUNAS_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none
 static SUNLIGHT_SM_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sm");
 // Solar HTTP server with SBSP scripting engine.
-static SOLAR_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/solar");
+static SOLAR_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/solar");
 // sunlight-sunsay: native Rust proof-of-life binary (std smoke test, Phase 1).
 static SUNLIGHT_SUNSAY_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sunsay");

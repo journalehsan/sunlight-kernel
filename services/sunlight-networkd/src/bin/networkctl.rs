@@ -29,8 +29,8 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use core::fmt::Write;
 use sunlight_ipc::{
-    ipc_call, nameserver_lookup, pack_ipv4, pack_short_name, AdminState, InterfaceKind,
-    IpConfigMode, IpcMsg, LinkState, NetworkdMsg,
+    ipc_call, nameserver_lookup, pack_ipv4, pack_short_name, AdminState, DnsSource, InterfaceKind,
+    IpConfigMode, IpcMsg, LinkState, NetworkdMsg, ResolvedMsg,
 };
 
 const MAX_ARGS: usize = 16;
@@ -172,7 +172,10 @@ fn print_list(cap: sunlight_ipc::CapabilityToken) {
     println!("IFACE  KIND        ADMIN    LINK      MODE   ADDRESS         GATEWAY     PRIO  DEF");
     let mut idx = 0u64;
     loop {
-        let reply = ipc_call(cap, IpcMsg::with_label(NetworkdMsg::LIST_INTERFACES).word(0, idx));
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(NetworkdMsg::LIST_INTERFACES).word(0, idx),
+        );
         let Some(s) = sunlight_ipc::unpack_iface_summary(&reply) else {
             break;
         };
@@ -184,7 +187,11 @@ fn print_list(cap: sunlight_ipc::CapabilityToken) {
             InterfaceKind::Tunnel => "Tunnel",
             _ => "Unknown",
         };
-        let admin_s = if matches!(s.admin, AdminState::Enabled) { "enabled" } else { "disabled" };
+        let admin_s = if matches!(s.admin, AdminState::Enabled) {
+            "enabled"
+        } else {
+            "disabled"
+        };
         let link_s = match s.link {
             LinkState::Up | LinkState::Carrier => "carrier",
             LinkState::Down => "down",
@@ -197,16 +204,24 @@ fn print_list(cap: sunlight_ipc::CapabilityToken) {
             _ => "none",
         };
         let mut addr_buf = heapless::String::<32>::new();
-        if s.addr == [0,0,0,0] {
+        if s.addr == [0, 0, 0, 0] {
             let _ = addr_buf.push_str("-");
         } else {
-            let _ = write!(&mut addr_buf, "{}.{}.{}.{}/{}", s.addr[0],s.addr[1],s.addr[2],s.addr[3], s.prefix);
+            let _ = write!(
+                &mut addr_buf,
+                "{}.{}.{}.{}/{}",
+                s.addr[0], s.addr[1], s.addr[2], s.addr[3], s.prefix
+            );
         }
         let mut gw_buf = heapless::String::<32>::new();
-        if s.gw == [0,0,0,0] {
+        if s.gw == [0, 0, 0, 0] {
             let _ = gw_buf.push_str("-");
         } else {
-            let _ = write!(&mut gw_buf, "{}.{}.{}.{}", s.gw[0],s.gw[1],s.gw[2],s.gw[3]);
+            let _ = write!(
+                &mut gw_buf,
+                "{}.{}.{}.{}",
+                s.gw[0], s.gw[1], s.gw[2], s.gw[3]
+            );
         }
         let name = name_from_packed(s.name);
         let def = if s.is_default { "yes" } else { "no" };
@@ -237,7 +252,10 @@ fn print_status_all(cap: sunlight_ipc::CapabilityToken) {
 
 fn print_status(cap: sunlight_ipc::CapabilityToken, key: &str) {
     let key_u = pack_short_name(key);
-    let reply = ipc_call(cap, IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, key_u));
+    let reply = ipc_call(
+        cap,
+        IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, key_u),
+    );
     if let Some(s) = sunlight_ipc::unpack_iface_summary(&reply) {
         let name = name_from_packed(s.name);
         println!("{}:", name);
@@ -258,7 +276,11 @@ fn print_status(cap: sunlight_ipc::CapabilityToken, key: &str) {
             _ => "-",
         };
         println!("  driver:    {}", driver_s);
-        let admin_s = if matches!(s.admin, AdminState::Enabled) { "Enabled" } else { "Disabled" };
+        let admin_s = if matches!(s.admin, AdminState::Enabled) {
+            "Enabled"
+        } else {
+            "Disabled"
+        };
         println!("  admin:     {}", admin_s);
         let link_s = match s.link {
             LinkState::Up | LinkState::Carrier => "Carrier",
@@ -274,17 +296,28 @@ fn print_status(cap: sunlight_ipc::CapabilityToken, key: &str) {
         };
         println!("  mode:      {}", mode_s);
         if s.addr != [0; 4] {
-            println!("  address:   {}.{}.{}.{}/{}", s.addr[0], s.addr[1], s.addr[2], s.addr[3], s.prefix);
+            println!(
+                "  address:   {}.{}.{}.{}/{}",
+                s.addr[0], s.addr[1], s.addr[2], s.addr[3], s.prefix
+            );
         } else {
             println!("  address:   -");
         }
         if s.gw != [0; 4] {
-            println!("  gateway:   {}.{}.{}.{}", s.gw[0], s.gw[1], s.gw[2], s.gw[3]);
+            println!(
+                "  gateway:   {}.{}.{}.{}",
+                s.gw[0], s.gw[1], s.gw[2], s.gw[3]
+            );
         } else {
             println!("  gateway:   -");
         }
-        if s.dns != [0; 4] {
-            println!("  dns:       {}.{}.{}.{}", s.dns[0], s.dns[1], s.dns[2], s.dns[3]);
+        let dns = if s.dns != [0; 4] {
+            s.dns
+        } else {
+            dns_from_resolved_for(&name).unwrap_or([0; 4])
+        };
+        if dns != [0; 4] {
+            println!("  dns:       {}.{}.{}.{}", dns[0], dns[1], dns[2], dns[3]);
         } else {
             println!("  dns:       -");
         }
@@ -295,22 +328,66 @@ fn print_status(cap: sunlight_ipc::CapabilityToken, key: &str) {
     }
 }
 
+fn dns_from_resolved_for(iface: &str) -> Option<[u8; 4]> {
+    let cap = nameserver_lookup("resolved")?;
+    let mut idx = 0u64;
+    let mut fallback = None;
+    loop {
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(ResolvedMsg::GET_SERVER).word(0, idx),
+        );
+        let Some(server) = sunlight_ipc::unpack_dns_server_summary(&reply) else {
+            break;
+        };
+        if fallback.is_none() {
+            fallback = Some(server.address);
+        }
+        let server_iface = if server.iface != 0 {
+            name_from_packed(server.iface)
+        } else {
+            alloc::string::String::new()
+        };
+        if server_iface == iface
+            || (server_iface.is_empty()
+                && matches!(server.source, DnsSource::SystemDefault | DnsSource::Manual))
+        {
+            return Some(server.address);
+        }
+        idx += 1;
+        if server.total > 0 && idx as u16 >= server.total {
+            break;
+        }
+    }
+    fallback
+}
+
 fn do_enable(cap: sunlight_ipc::CapabilityToken, key: &str, en: bool) -> i32 {
-    let op = if en { NetworkdMsg::ENABLE_INTERFACE } else { NetworkdMsg::DISABLE_INTERFACE };
+    let op = if en {
+        NetworkdMsg::ENABLE_INTERFACE
+    } else {
+        NetworkdMsg::DISABLE_INTERFACE
+    };
     let key_u = pack_short_name(key);
     let reply = ipc_call(cap, IpcMsg::with_label(op).word(0, key_u));
     if reply.label == NetworkdMsg::REPLY {
         println!("{} {}", if en { "enabled" } else { "disabled" }, key);
         0
     } else {
-        println!("networkctl: failed to change {} (err={})", key, reply.words[0]);
+        println!(
+            "networkctl: failed to change {} (err={})",
+            key, reply.words[0]
+        );
         1
     }
 }
 
 fn do_dhcp(cap: sunlight_ipc::CapabilityToken, key: &str) -> i32 {
     let key_u = pack_short_name(key);
-    let reply = ipc_call(cap, IpcMsg::with_label(NetworkdMsg::SET_DHCP).word(0, key_u));
+    let reply = ipc_call(
+        cap,
+        IpcMsg::with_label(NetworkdMsg::SET_DHCP).word(0, key_u),
+    );
     if reply.label == NetworkdMsg::REPLY {
         println!("{} configured for dhcp", key);
         0
@@ -334,7 +411,10 @@ fn do_static(cap: sunlight_ipc::CapabilityToken, args: &[&str]) -> i32 {
     };
     let addr = match parse_ipv4(addr_str) {
         Some(a) => a,
-        None => { println!("networkctl: bad address"); return 1; }
+        None => {
+            println!("networkctl: bad address");
+            return 1;
+        }
     };
     let prefix: u8 = pfx_str.parse().unwrap_or(24);
 
@@ -344,12 +424,12 @@ fn do_static(cap: sunlight_ipc::CapabilityToken, args: &[&str]) -> i32 {
     while i + 1 < args.len() {
         match args[i] {
             "gw" => {
-                gw = parse_ipv4(args[i+1]).unwrap_or([0;4]);
+                gw = parse_ipv4(args[i + 1]).unwrap_or([0; 4]);
                 i += 2;
             }
             "dns" => {
                 // support "dns 1.1.1.1,8.8.8.8" or "dns 1.1.1.1"
-                let val = args[i+1];
+                let val = args[i + 1];
                 for part in val.split(',') {
                     if let Some(d) = parse_ipv4(part.trim()) {
                         dns_list.push(d);
@@ -357,11 +437,13 @@ fn do_static(cap: sunlight_ipc::CapabilityToken, args: &[&str]) -> i32 {
                 }
                 i += 2;
             }
-            _ => { i += 1; }
+            _ => {
+                i += 1;
+            }
         }
     }
-    let dns0 = dns_list.get(0).copied().unwrap_or([0;4]);
-    let dns1 = dns_list.get(1).copied().unwrap_or([0;4]);
+    let dns0 = dns_list.get(0).copied().unwrap_or([0; 4]);
+    let dns1 = dns_list.get(1).copied().unwrap_or([0; 4]);
 
     let key_u = pack_short_name(iface);
     let msg = IpcMsg::with_label(NetworkdMsg::SET_STATIC_IPV4)
@@ -373,15 +455,34 @@ fn do_static(cap: sunlight_ipc::CapabilityToken, args: &[&str]) -> i32 {
         .word(5, pack_ipv4(dns1));
     let reply = ipc_call(cap, msg);
     if reply.label == NetworkdMsg::REPLY {
-        let gw_disp = if gw != [0;4] { alloc::format!("{}.{}.{}.{}", gw[0],gw[1],gw[2],gw[3]) } else { "-".into() };
-        let dns_disp = if dns0 != [0;4] {
-            if dns1 != [0;4] {
-                alloc::format!("{}.{}.{}.{}, {}.{}.{}.{}", dns0[0],dns0[1],dns0[2],dns0[3], dns1[0],dns1[1],dns1[2],dns1[3])
+        let gw_disp = if gw != [0; 4] {
+            alloc::format!("{}.{}.{}.{}", gw[0], gw[1], gw[2], gw[3])
+        } else {
+            "-".into()
+        };
+        let dns_disp = if dns0 != [0; 4] {
+            if dns1 != [0; 4] {
+                alloc::format!(
+                    "{}.{}.{}.{}, {}.{}.{}.{}",
+                    dns0[0],
+                    dns0[1],
+                    dns0[2],
+                    dns0[3],
+                    dns1[0],
+                    dns1[1],
+                    dns1[2],
+                    dns1[3]
+                )
             } else {
-                alloc::format!("{}.{}.{}.{}", dns0[0],dns0[1],dns0[2],dns0[3])
+                alloc::format!("{}.{}.{}.{}", dns0[0], dns0[1], dns0[2], dns0[3])
             }
-        } else { "-".into() };
-        println!("{} static {}/{} gw {} dns {}", iface, addr_str, prefix, gw_disp, dns_disp);
+        } else {
+            "-".into()
+        };
+        println!(
+            "{} static {}/{} gw {} dns {}",
+            iface, addr_str, prefix, gw_disp, dns_disp
+        );
         println!("(stored in networkd; live stack reconfigure is v0.2 - new connections will see updated GETIP)");
         0
     } else {
@@ -397,17 +498,27 @@ fn parse_ipv4(s: &str) -> Option<[u8; 4]> {
         let p = parts.next()?;
         out[i] = p.parse::<u8>().ok()?;
     }
-    if parts.next().is_some() { return None; }
+    if parts.next().is_some() {
+        return None;
+    }
     Some(out)
 }
 
 fn do_priority(cap: sunlight_ipc::CapabilityToken, key: &str, val: &str) -> i32 {
     let prio: i32 = match val.parse() {
         Ok(v) => v,
-        _ => { println!("networkctl: bad priority"); return 1; }
+        _ => {
+            println!("networkctl: bad priority");
+            return 1;
+        }
     };
     let key_u = pack_short_name(key);
-    let reply = ipc_call(cap, IpcMsg::with_label(NetworkdMsg::SET_PRIORITY).word(0, key_u).word(1, prio as u64));
+    let reply = ipc_call(
+        cap,
+        IpcMsg::with_label(NetworkdMsg::SET_PRIORITY)
+            .word(0, key_u)
+            .word(1, prio as u64),
+    );
     if reply.label == NetworkdMsg::REPLY {
         println!("{} priority -> {}", key, prio);
         0
@@ -422,9 +533,16 @@ fn print_json(cap: sunlight_ipc::CapabilityToken) {
     let mut idx = 0u64;
     let mut first = true;
     loop {
-        let reply = ipc_call(cap, IpcMsg::with_label(NetworkdMsg::LIST_INTERFACES).word(0, idx));
-        let Some(s) = sunlight_ipc::unpack_iface_summary(&reply) else { break; };
-        if !first { println!(","); }
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(NetworkdMsg::LIST_INTERFACES).word(0, idx),
+        );
+        let Some(s) = sunlight_ipc::unpack_iface_summary(&reply) else {
+            break;
+        };
+        if !first {
+            println!(",");
+        }
         first = false;
         let name = name_from_packed(s.name);
         let kind_s = match s.kind {
@@ -435,7 +553,11 @@ fn print_json(cap: sunlight_ipc::CapabilityToken) {
             InterfaceKind::Tunnel => "Tunnel",
             _ => "Unknown",
         };
-        let admin_s = if matches!(s.admin, AdminState::Enabled) { "enabled" } else { "disabled" };
+        let admin_s = if matches!(s.admin, AdminState::Enabled) {
+            "enabled"
+        } else {
+            "disabled"
+        };
         let link_s = match s.link {
             LinkState::Up | LinkState::Carrier => "carrier",
             LinkState::Down => "down",
@@ -447,20 +569,33 @@ fn print_json(cap: sunlight_ipc::CapabilityToken) {
             IpConfigMode::Static => "static",
             _ => "none",
         };
-        let addr_str = if s.addr != [0,0,0,0] {
-            alloc::format!("{}.{}.{}.{}/{}", s.addr[0],s.addr[1],s.addr[2],s.addr[3], s.prefix)
-        } else { "-".into() };
-        let gw_str = if s.gw != [0,0,0,0] {
-            alloc::format!("{}.{}.{}.{}", s.gw[0],s.gw[1],s.gw[2],s.gw[3])
-        } else { "-".into() };
+        let addr_str = if s.addr != [0, 0, 0, 0] {
+            alloc::format!(
+                "{}.{}.{}.{}/{}",
+                s.addr[0],
+                s.addr[1],
+                s.addr[2],
+                s.addr[3],
+                s.prefix
+            )
+        } else {
+            "-".into()
+        };
+        let gw_str = if s.gw != [0, 0, 0, 0] {
+            alloc::format!("{}.{}.{}.{}", s.gw[0], s.gw[1], s.gw[2], s.gw[3])
+        } else {
+            "-".into()
+        };
         let driver_s = match s.kind {
             InterfaceKind::VirtioNet => "virtio",
             _ => "-",
         };
         // dns_servers as simple array of the primary (v0); "-" if none
-        let dns_str = if s.dns != [0,0,0,0] {
-            alloc::format!("[\"{}.{}.{}.{}\"]", s.dns[0],s.dns[1],s.dns[2],s.dns[3])
-        } else { "[]".into() };
+        let dns_str = if s.dns != [0, 0, 0, 0] {
+            alloc::format!("[\"{}.{}.{}.{}\"]", s.dns[0], s.dns[1], s.dns[2], s.dns[3])
+        } else {
+            "[]".into()
+        };
         println!("  {{ \"id\": {}, \"name\": \"{}\", \"kind\": \"{}\", \"admin_state\": \"{}\", \"link_state\": \"{}\", \"mode\": \"{}\", \"address\": \"{}\", \"prefix_len\": {}, \"gateway\": \"{}\", \"dns_servers\": {}, \"priority\": {}, \"default\": {}, \"driver\": \"{}\" }}",
             s.id, name,
             kind_s, admin_s, link_s, mode_s,
@@ -472,7 +607,9 @@ fn print_json(cap: sunlight_ipc::CapabilityToken) {
             driver_s
         );
         idx += 1;
-        if s.total > 0 && idx as u16 >= s.total { break; }
+        if s.total > 0 && idx as u16 >= s.total {
+            break;
+        }
     }
     println!("\n]");
 }

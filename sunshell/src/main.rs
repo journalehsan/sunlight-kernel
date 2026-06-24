@@ -7,8 +7,8 @@ mod builtins;
 mod exec;
 #[cfg(feature = "std")]
 mod input;
-mod shellenv;
 mod parser;
+mod shellenv;
 
 #[cfg(any(feature = "sunlight", test))]
 mod calc;
@@ -21,7 +21,11 @@ use input::ReadLine;
 use std::env;
 
 #[cfg(feature = "std")]
-fn run_command(line: &str, env: &mut crate::shellenv::ShellEnv, executor: &dyn Executor) -> Option<i32> {
+fn run_command(
+    line: &str,
+    env: &mut crate::shellenv::ShellEnv,
+    executor: &dyn Executor,
+) -> Option<i32> {
     let Some(ast) = parser::parse_line(line) else {
         return Some(0);
     };
@@ -101,10 +105,18 @@ fn main() {
         env.set("PATH", "/usr/local/bin:/usr/bin:/bin");
     }
     if env.get("HOME").is_none() {
-        if let Ok(h) = env::var("HOME") { env.set("HOME", &h); } else { env.set("HOME", "/"); }
+        if let Ok(h) = env::var("HOME") {
+            env.set("HOME", &h);
+        } else {
+            env.set("HOME", "/");
+        }
     }
     if env.get("USER").is_none() {
-        if let Ok(u) = env::var("USER") { env.set("USER", &u); } else { env.set("USER", "user"); }
+        if let Ok(u) = env::var("USER") {
+            env.set("USER", &u);
+        } else {
+            env.set("USER", "user");
+        }
     }
 
     let args: Vec<String> = env::args().collect();
@@ -166,8 +178,8 @@ mod sunlight {
 
     use sunlight_ipc::{
         debug_log, endpoint_create, get_init_cap, ipc_call, ipc_recv, ipc_reply_and_wait,
-        nameserver_lookup, nameserver_register, sysinfo, CapabilityToken, InitMsg, IpcMsg,
-        SunlightSyscall, TzMsg, VfsMsg,
+        nameserver_lookup, nameserver_register, sysinfo, unpack_ipv4, CapabilityToken, InitMsg,
+        IpcMsg, ResolvedMsg, SunlightSyscall, TzMsg, VfsMsg,
     };
 
     /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
@@ -1212,6 +1224,8 @@ mod sunlight {
                     None
                 }
             });
+            let mut dns_servers = [[0u8; 4]; 3];
+            let dns_count = Self::read_dns_servers(&mut dns_servers);
 
             let mut buf = [0u8; 1024];
             let username =
@@ -1236,6 +1250,7 @@ mod sunlight {
                 (info.swap_used_kb / 1024) as u32,
                 (info.swap_total_kb / 1024) as u32,
                 net_ip,
+                &dns_servers[..dns_count],
                 &mut buf,
             );
 
@@ -1250,6 +1265,45 @@ mod sunlight {
             }
 
             b""
+        }
+
+        fn read_dns_servers(out: &mut [[u8; 4]]) -> usize {
+            if let Some(resolved_cap) = nameserver_lookup("resolved") {
+                let reply = ipc_call(
+                    resolved_cap,
+                    IpcMsg::with_label(ResolvedMsg::RENDER_RESOLV_CONF),
+                );
+                if reply.label == ResolvedMsg::REPLY && reply.word_count > 0 {
+                    let mut count = 0usize;
+                    let max = (reply.words[0] as usize).min(out.len()).min(7);
+                    for i in 0..max {
+                        let word = reply.words[1 + i];
+                        let addr = unpack_ipv4(word);
+                        if addr != [0, 0, 0, 0] {
+                            out[count] = addr;
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        return count;
+                    }
+                }
+            }
+
+            if let Some(net_cap) = nameserver_lookup("net") {
+                let reply = ipc_call(net_cap, IpcMsg::with_label(10 /* NetOp::GETIP */));
+                if reply.label == 10 && reply.word_count >= 4 {
+                    let addr = unpack_ipv4(reply.words[3]);
+                    if addr != [0, 0, 0, 0] {
+                        out[0] = addr;
+                        return 1;
+                    }
+                }
+            }
+
+            out[0] = [208, 67, 222, 222];
+            out[1] = [208, 67, 220, 220];
+            2
         }
 
         fn cmd_tzctl(&mut self, args: &[&str]) -> &[u8] {
@@ -1594,7 +1648,13 @@ mod sunlight {
 
     fn z_to_lower(s: &str) -> alloc::string::String {
         s.chars()
-            .map(|c| if c.is_ascii_uppercase() { (c as u8 + 32) as char } else { c })
+            .map(|c| {
+                if c.is_ascii_uppercase() {
+                    (c as u8 + 32) as char
+                } else {
+                    c
+                }
+            })
             .collect()
     }
 
@@ -2180,7 +2240,9 @@ mod sunlight {
         debug_log("[TTY]  Shell: sshl v0.1.0 running");
 
         let ep = endpoint_create();
-        if TRACE_SHELL_IPC { debug_log("[SSHL-IPC] endpoint created"); }
+        if TRACE_SHELL_IPC {
+            debug_log("[SSHL-IPC] endpoint created");
+        }
         let mut name_buf = [0u8; 16];
         let name = shell_name(shell_id, &mut name_buf);
         nameserver_register(name, ep);
@@ -2188,7 +2250,9 @@ mod sunlight {
             nameserver_register("sshl", ep);
         }
         debug_log("[TTY]  sunshell registered as 'sshl'");
-        if TRACE_SHELL_IPC { debug_log("[SSHL-IPC] registered with nameserver"); }
+        if TRACE_SHELL_IPC {
+            debug_log("[SSHL-IPC] registered with nameserver");
+        }
 
         let mut shell = Shell::new();
         // Load real user info from VFS by uid (GETPWUID returns uid, gid, AND username)

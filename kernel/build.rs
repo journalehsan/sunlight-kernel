@@ -106,7 +106,12 @@ fn main() {
             package: "sunshell",
             output: "sshl",
             rustflags: service_rustflags,
-            args: &["--features", "sunlight", "--no-default-features", "--release"],
+            args: &[
+                "--features",
+                "sunlight",
+                "--no-default-features",
+                "--release",
+            ],
         },
         EmbeddedBinary {
             package: "sunlight-utils",
@@ -130,7 +135,12 @@ fn main() {
             package: "sunlight-fetch",
             output: "fetch",
             rustflags: service_rustflags,
-            args: &["--features", "sunlightos", "--no-default-features", "--release"],
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
         },
         EmbeddedBinary {
             package: "sunlightctl",
@@ -166,25 +176,45 @@ fn main() {
             package: "sunlight-kv",
             output: "sunlight-kv",
             rustflags: service_rustflags,
-            args: &["--features", "sunlightos", "--no-default-features", "--release"],
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
         },
         EmbeddedBinary {
             package: "sunlight-kvctl",
             output: "sunlight-kvctl",
             rustflags: service_rustflags,
-            args: &["--features", "sunlightos", "--no-default-features", "--release"],
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
         },
         EmbeddedBinary {
             package: "sunlight-tls",
             output: "sunlight-tls",
             rustflags: tls_rustflags,
-            args: &["--features", "sunlightos", "--no-default-features", "--release"],
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
         },
         EmbeddedBinary {
             package: "certificatectl",
             output: "certificatectl",
             rustflags: service_rustflags,
-            args: &["--features", "sunlightos", "--no-default-features", "--release"],
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
         },
         EmbeddedBinary {
             package: "sunlight-uac",
@@ -256,7 +286,9 @@ fn build_package(
         bin.package
     );
 
-    let scratch_release_dir = scratch_target_dir.join("x86_64-unknown-none").join("release");
+    let scratch_release_dir = scratch_target_dir
+        .join("x86_64-unknown-none")
+        .join("release");
     fs::create_dir_all(&scratch_release_dir).expect("failed to create scratch target dir");
 
     let mut cmd = Command::new("cargo");

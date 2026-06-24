@@ -46,6 +46,7 @@ pub fn render_sysfetch_to_buffer(
     swap_used: u32,
     swap_total: u32,
     net_ip: Option<[u8; 4]>,
+    dns_servers: &[[u8; 4]],
     out: &mut [u8],
 ) -> usize {
     let mut w = CompactWriter::new(out);
@@ -188,7 +189,18 @@ pub fn render_sysfetch_to_buffer(
         );
     }
 
-    let _ = writeln!(w, "{:<24} {}DNS:{} 8.8.8.8, 1.1.1.1", next_sun(), c, r);
+    let _ = write!(w, "{:<24} {}DNS:{} ", next_sun(), c, r);
+    if dns_servers.is_empty() {
+        let _ = writeln!(w, "-");
+    } else {
+        for (idx, dns) in dns_servers.iter().enumerate() {
+            if idx > 0 {
+                let _ = write!(w, ", ");
+            }
+            let _ = write!(w, "{}.{}.{}.{}", dns[0], dns[1], dns[2], dns[3]);
+        }
+        let _ = writeln!(w);
+    }
 
     // Minimal palette: 8 color blocks
     let _ = write!(w, "{:<24} Palette: ", next_sun());

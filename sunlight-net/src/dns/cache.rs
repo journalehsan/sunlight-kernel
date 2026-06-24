@@ -22,7 +22,9 @@ pub struct DnsCache {
 
 impl DnsCache {
     pub fn new() -> Self {
-        DnsCache { entries: BTreeMap::new() }
+        DnsCache {
+            entries: BTreeMap::new(),
+        }
     }
 
     /// Look up `hostname`. Returns `None` if absent or expired.
@@ -47,7 +49,10 @@ impl DnsCache {
         }
         self.entries.insert(
             hostname.to_ascii_lowercase().to_string(),
-            CacheEntry { addr, expires_at: now + ttl_secs as u64 },
+            CacheEntry {
+                addr,
+                expires_at: now + ttl_secs as u64,
+            },
         );
     }
 
