@@ -447,8 +447,14 @@ pub extern "C" fn _start() -> ! {
     let mut msg = ipc_recv(ep);
     loop {
         let reply = match msg.label {
-            NetworkdMsg::LIST_INTERFACES => mgr.list_one(msg.words[0] as usize),
-            NetworkdMsg::GET_INTERFACE => mgr.get_by_key(msg.words[0]),
+            NetworkdMsg::LIST_INTERFACES => {
+                let _ = mgr.refresh();
+                mgr.list_one(msg.words[0] as usize)
+            }
+            NetworkdMsg::GET_INTERFACE => {
+                let _ = mgr.refresh();
+                mgr.get_by_key(msg.words[0])
+            }
             NetworkdMsg::ENABLE_INTERFACE => mgr.set_admin(msg.words[0], true),
             NetworkdMsg::DISABLE_INTERFACE => mgr.set_admin(msg.words[0], false),
             NetworkdMsg::SET_DHCP => mgr.set_dhcp(msg.words[0]),
@@ -473,7 +479,10 @@ pub extern "C" fn _start() -> ! {
                 let ac = msg.words[1] != 0;
                 mgr.set_auto_connect(key, ac)
             }
-            NetworkdMsg::GET_DEFAULT_ROUTE => mgr.get_default_route_reply(),
+            NetworkdMsg::GET_DEFAULT_ROUTE => {
+                let _ = mgr.refresh();
+                mgr.get_default_route_reply()
+            }
             NetworkdMsg::REFRESH => mgr.refresh(),
             _ => err_bad(),
         };
