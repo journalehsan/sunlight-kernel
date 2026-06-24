@@ -6,7 +6,7 @@ extern crate alloc;
 use sunlight_ipc::{
     debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
     nameserver_lookup, nameserver_lookup_timeout, nameserver_register, shm_alloc, shm_map,
-    CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg, VfsMsg,
+    CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg, NetworkdMsg, VfsMsg,
 };
 use sunlight_net::netop::NetOp;
 use sunlight_net::ProxyNetDevice;
@@ -163,6 +163,38 @@ fn register_with_deviced() {
     }
 }
 
+/// Best-effort query to networkd for the current default route or eth0 config.
+/// Falls back to the classic QEMU slirp numbers if networkd is absent or has no data.
+/// This keeps existing behavior when networkd is not present.
+fn try_get_config_from_networkd() -> Option<([u8; 4], u8, [u8; 4], [u8; 4])> {
+    let cap = nameserver_lookup_timeout("networkd", 60)?;
+    // Prefer default route info
+    let r = ipc_call_timeout(cap, IpcMsg::with_label(NetworkdMsg::GET_DEFAULT_ROUTE), 80).ok()?;
+    if r.label == NetworkdMsg::REPLY && r.words[0] != 0 {
+        let addr = unpack_ipv4(r.words[2]);
+        let gw = unpack_ipv4(r.words[3]);
+        // prefix not in default route reply; default to /24 for v0
+        if addr != [0, 0, 0, 0] {
+            return Some((addr, 24, gw, [0, 0, 0, 0]));
+        }
+    }
+    // Fallback: ask specifically for eth0 (or lo will be ignored by callers)
+    for name in ["eth0", "eth1", "virtio"].iter() {
+        let key = pack_short_name(name);
+        let r = ipc_call_timeout(cap, IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, key), 60).ok()?;
+        if r.label == NetworkdMsg::REPLY {
+            // Use unpack from our local or from summary? For now reconstruct from words conservatively.
+            // The reply for GET is an IfaceSummary packed the same way.
+            if let Some(s) = sunlight_ipc::unpack_iface_summary(&r) {
+                if s.addr != [0, 0, 0, 0] || s.mode != sunlight_ipc::IpConfigMode::None {
+                    return Some((s.addr, s.prefix.max(1), s.gw, [0,0,0,0]));
+                }
+            }
+        }
+    }
+    None
+}
+
 // Register IPC transports only words[0..4]. For SEND/RECV: words[0]=socket_id,
 // words[1]=length, so words[2..4] = 2 × 8 = 16 bytes of payload survive.
 const IPC_CHUNK: usize = 16;
@@ -170,12 +202,23 @@ const IPC_CHUNK: usize = 16;
 fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
     match msg.label {
         NetOp::GETIP => {
-            // QEMU user-net defaults (also returned by real DHCP in a full impl).
-            IpcMsg::with_label(NetOp::GETIP)
-                .word(0, pack_ipv4([10, 0, 2, 15]))
-                .word(1, 24)
-                .word(2, pack_ipv4([10, 0, 2, 2]))
-                .word(3, pack_ipv4([10, 0, 2, 3]))
+            // Ask networkd first (policy + discovery). Preserve classic QEMU slirp if absent.
+            if let Some((ip, pfx, gw, _dns)) = try_get_config_from_networkd() {
+                let dns = [10, 0, 2, 3]; // keep a sane DNS even if networkd didn't hand one
+                debug_log("[NET] GETIP served from networkd policy");
+                IpcMsg::with_label(NetOp::GETIP)
+                    .word(0, pack_ipv4(ip))
+                    .word(1, pfx as u64)
+                    .word(2, pack_ipv4(gw))
+                    .word(3, pack_ipv4(dns))
+            } else {
+                // QEMU user-net defaults (also returned by real DHCP in a full impl).
+                IpcMsg::with_label(NetOp::GETIP)
+                    .word(0, pack_ipv4([10, 0, 2, 15]))
+                    .word(1, 24)
+                    .word(2, pack_ipv4([10, 0, 2, 2]))
+                    .word(3, pack_ipv4([10, 0, 2, 3]))
+            }
         }
         NetOp::SOCKET => {
             let id = unsafe {

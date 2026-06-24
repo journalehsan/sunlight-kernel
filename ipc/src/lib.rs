@@ -374,6 +374,229 @@ pub mod DevicedMsg {
     pub const ERR_BAD_REQUEST: u64 = 3;
 }
 
+/// networkd v0 interface and config management.
+///
+/// Registered as "networkd".
+/// Uses compact 4-word register IPC. Names packed as u64 (8 bytes).
+/// Interface listing uses 0-based index like deviced LIST_*.
+#[allow(non_snake_case)]
+pub mod NetworkdMsg {
+    pub const LIST_INTERFACES: u64 = 0xB001;
+    pub const GET_INTERFACE: u64 = 0xB002;
+    pub const ENABLE_INTERFACE: u64 = 0xB010;
+    pub const DISABLE_INTERFACE: u64 = 0xB011;
+    pub const SET_DHCP: u64 = 0xB012;
+    pub const SET_STATIC_IPV4: u64 = 0xB013;
+    pub const SET_PRIORITY: u64 = 0xB014;
+    pub const SET_AUTO_CONNECT: u64 = 0xB015;
+    pub const GET_DEFAULT_ROUTE: u64 = 0xB016;
+    pub const REFRESH: u64 = 0xB017;
+    pub const RENEW_DHCP: u64 = 0xB018; // optional v0
+
+    pub const REPLY: u64 = 0xB0FF;
+    pub const ERROR: u64 = 0xB0FE;
+
+    pub const ERR_NOT_FOUND: u64 = 1;
+    pub const ERR_BAD_REQUEST: u64 = 2;
+    pub const ERR_NO_CARRIER: u64 = 3;
+    pub const ERR_DEVICED_UNAVAILABLE: u64 = 4;
+}
+
+/// Interface kind reported by networkd (matches driver capabilities).
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InterfaceKind {
+    Loopback = 0,
+    Ethernet = 1,
+    VirtioNet = 2,
+    Wireless = 3,
+    Tunnel = 4,
+    Unknown = 255,
+}
+
+impl InterfaceKind {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            0 => Self::Loopback,
+            1 => Self::Ethernet,
+            2 => Self::VirtioNet,
+            3 => Self::Wireless,
+            4 => Self::Tunnel,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// Operational link state.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkState {
+    Unknown = 0,
+    Down = 1,
+    Up = 2,
+    NoCarrier = 3,
+    Carrier = 4,
+}
+
+impl LinkState {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Down,
+            2 => Self::Up,
+            3 => Self::NoCarrier,
+            4 => Self::Carrier,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// Administrative state.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdminState {
+    Disabled = 0,
+    Enabled = 1,
+}
+
+impl AdminState {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Enabled,
+            _ => Self::Disabled,
+        }
+    }
+}
+
+/// IP configuration mode for an interface.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IpConfigMode {
+    None = 0,
+    Dhcp = 1,
+    Static = 2,
+}
+
+impl IpConfigMode {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Dhcp,
+            2 => Self::Static,
+            _ => Self::None,
+        }
+    }
+}
+
+pub type InterfaceId = u64;
+
+/// Helper to pack an IPv4 a.b.c.d into a u64 (low 32 bits).
+pub fn pack_ipv4(a: [u8; 4]) -> u64 {
+    ((a[0] as u64) << 24) | ((a[1] as u64) << 16) | ((a[2] as u64) << 8) | (a[3] as u64)
+}
+
+/// Unpack low 32 bits as IPv4 [a,b,c,d].
+pub fn unpack_ipv4(w: u64) -> [u8; 4] {
+    [
+        ((w >> 24) & 0xff) as u8,
+        ((w >> 16) & 0xff) as u8,
+        ((w >> 8) & 0xff) as u8,
+        (w & 0xff) as u8,
+    ]
+}
+
+/// Pack up to 8 bytes of a short name (e.g. "eth0", "lo") into a u64 for IPC.
+pub fn pack_short_name(name: &str) -> u64 {
+    let bytes = name.as_bytes();
+    let mut word = 0u64;
+    let mut i = 0usize;
+    while i < bytes.len().min(8) {
+        word |= (bytes[i] as u64) << (i * 8);
+        i += 1;
+    }
+    word
+}
+
+/// Structured reply summary for one interface (fits in 4 words).
+/// Clients use LIST with sequential index; non-REPLY means end.
+#[derive(Debug, Clone, Copy)]
+pub struct IfaceSummary {
+    pub id: InterfaceId,
+    pub name: u64, // packed 8-byte name (or 0)
+    pub kind: InterfaceKind,
+    pub admin: AdminState,
+    pub link: LinkState,
+    pub mode: IpConfigMode,
+    pub addr: [u8; 4],    // 0.0.0.0 if none
+    pub prefix: u8,
+    pub gw: [u8; 4],
+    pub priority: i32,
+    pub is_default: bool,
+    pub total: u16, // total count
+}
+
+/// Pack an IfaceSummary into reply words for LIST/GET.
+/// Compact wire:
+///   w0=id, w1=name_packed, w2=meta, w3=addr|gw
+pub fn pack_iface_summary(s: &IfaceSummary) -> IpcMsg {
+    let prio_u = (s.priority.clamp(-32768, 32767) as i16 as u16) as u64;
+    let tot = (s.total as u64) & 0xff;
+    let is_def = if s.is_default { 1u64 } else { 0 };
+    let w2 = (s.kind as u64)
+        | ((s.admin as u64) << 8)
+        | ((s.link as u64) << 16)
+        | ((s.mode as u64) << 24)
+        | ((s.prefix as u64) << 32)
+        | (is_def << 40)
+        | (prio_u << 41)
+        | (tot << 56);
+
+    let addr_p = pack_ipv4(s.addr);
+    let gw_p = pack_ipv4(s.gw);
+    let w3 = addr_p | (gw_p << 32);
+
+    IpcMsg::with_label(NetworkdMsg::REPLY)
+        .word(0, s.id)
+        .word(1, s.name)
+        .word(2, w2)
+        .word(3, w3)
+}
+
+pub fn unpack_iface_summary(reply: &IpcMsg) -> Option<IfaceSummary> {
+    if reply.label != NetworkdMsg::REPLY || reply.word_count < 4 {
+        return None;
+    }
+    let id = reply.words[0];
+    let name = reply.words[1];
+    let w2 = reply.words[2];
+    let w3 = reply.words[3];
+
+    let kind = InterfaceKind::from_u64(w2 & 0xff);
+    let admin = AdminState::from_u64((w2 >> 8) & 0xff);
+    let link = LinkState::from_u64((w2 >> 16) & 0xff);
+    let mode = IpConfigMode::from_u64((w2 >> 24) & 0xff);
+    let prefix = ((w2 >> 32) & 0xff) as u8;
+    let is_default = ((w2 >> 40) & 1) != 0;
+    let prio = (((w2 >> 41) & 0x7fff) as u16 as i16) as i32;
+    let total = ((w2 >> 56) & 0xff) as u16;
+
+    let addr = unpack_ipv4(w3 & 0xffff_ffff);
+    let gw = unpack_ipv4((w3 >> 32) & 0xffff_ffff);
+
+    Some(IfaceSummary {
+        id,
+        name,
+        kind,
+        admin,
+        link,
+        mode,
+        addr,
+        prefix,
+        gw,
+        priority: prio,
+        is_default,
+        total,
+    })
+}
+
 /// Structured spawn request that carries both a binary path and an explicit
 /// process name. Designed to fit within the register IPC budget.
 ///

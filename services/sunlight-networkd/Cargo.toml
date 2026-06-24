@@ -1,83 +1,6 @@
 [package]
-name = "sunlight-niced"
+name = "sunlight-networkd"
 version = "0.1.327"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
@@ -87,9 +10,9 @@ sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [[bin]]
-name = "niced"
+name = "networkd"
 path = "src/main.rs"
 
 [[bin]]
-name = "nicectl"
-path = "src/bin/nicectl.rs"
+name = "networkctl"
+path = "src/bin/networkctl.rs"

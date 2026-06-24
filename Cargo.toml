@@ -46,6 +46,7 @@ members = [
     "services/sunlight-kbd",
     "services/sunlight-mouse",
     "services/sunlight-deviced",
+    "services/sunlight-networkd",
     "services/solar",
 ]
 

@@ -111,6 +111,9 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
     c.push_str(" Tx ");
     c.reset();
     push_bytes_human(c, snap.net_tx_bytes);
+    // TODO(networkd v1): surface primary iface + IP + mode here (would require
+    // either extending TelemetryPage or a lightweight non-telemetry query to
+    // networkd from top). Current NET line shows aggregate rx/tx only.
     c.clear_eol();
 }
 

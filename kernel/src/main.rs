@@ -80,6 +80,10 @@ static SUNLIGHTCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlightctl");
 static DEVICECTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/devicectl");
+static NETWORKD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/networkd");
+static NETWORKCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/networkctl");
 static SUNLIGHT_NICED_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/niced");
 static NICECTL_ELF_BYTES: &[u8] =
