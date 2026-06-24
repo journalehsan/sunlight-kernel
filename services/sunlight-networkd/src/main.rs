@@ -422,10 +422,12 @@ impl NetworkManager {
     /// Degrades gracefully if net is absent or returns zeros.
     fn ingest_live_from_net(&mut self) {
         let Some(net_cap) = nameserver_lookup_timeout("net", 60) else {
+            self.seed_qemu_dns_for_first_network_iface();
             return;
         };
         let reply = ipc_call(net_cap, IpcMsg::with_label(NetOp::GETIP));
         if reply.label != NetOp::GETIP {
+            self.seed_qemu_dns_for_first_network_iface();
             return;
         }
         // net_server uses its own le byte-order packing for GETIP words:
@@ -451,6 +453,7 @@ impl NetworkManager {
         ];
 
         if addr == [0, 0, 0, 0] {
+            self.seed_qemu_dns_for_first_network_iface();
             return; // nothing useful yet (e.g. before stack up); degrade ok
         }
 
@@ -490,6 +493,22 @@ impl NetworkManager {
                 DnsSource::Dhcp
             };
             self.handoff_dns_to_resolved(slot, source);
+        }
+    }
+
+    fn seed_qemu_dns_for_first_network_iface(&mut self) {
+        if let Some(slot) = self
+            .ifaces
+            .iter()
+            .position(|i| i.occupied && i.kind != InterfaceKind::Loopback)
+        {
+            if self.ifaces[slot].dns[0] == [0, 0, 0, 0] {
+                self.ifaces[slot].dns[0] = [10, 0, 2, 3];
+            }
+            if self.ifaces[slot].mode == IpConfigMode::None {
+                self.ifaces[slot].mode = IpConfigMode::Dhcp;
+            }
+            self.handoff_dns_to_resolved(slot, DnsSource::Dhcp);
         }
     }
 
