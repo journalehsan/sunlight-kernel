@@ -45,8 +45,6 @@ struct Window {
 
 struct CompositorState {
     windows: Vec<Window>,
-    /// (endpoint_token_value, window_id) — we reply to these on input
-    event_waiters: Vec<(u64, u64)>,
     mouse_x: u16,
     mouse_y: u16,
     fb: *mut u32,
@@ -175,7 +173,6 @@ pub extern "C" fn _start() -> ! {
 
     let mut state = CompositorState {
         windows: Vec::new(),
-        event_waiters: Vec::new(),
         mouse_x: (fb_width / 2) as u16,
         mouse_y: (fb_height / 2) as u16,
         fb: fb_ptr as *mut u32,
@@ -207,21 +204,27 @@ pub extern "C" fn _start() -> ! {
                         let id = next_win_id;
                         next_win_id += 1;
 
+                        // Fixed placement for the demo (overlapping if many windows created).
+                        let win_x: u32 = 80;
+                        let win_y: u32 = 60;
+
                         state.windows.push(Window {
                             id,
                             _shm_cap: shm_tok,
                             buffer: our_buf,
                             width: w,
                             height: h,
-                            x: 80,
-                            y: 60,
+                            x: win_x,
+                            y: win_y,
                         });
                         redraw_scene(&state);
 
                         let mut reply = IpcMsg::with_label(SgpMsg::REPLY)
                             .word(1, id)
                             .word(2, size as u64)
-                            .word(3, (w * 4) as u64); // stride
+                            .word(3, (w * 4) as u64) // stride
+                            .word(4, win_x as u64)
+                            .word(5, win_y as u64);
                         reply.caps[0] = shm_tok;
                         reply.cap_count = 1;
 
@@ -243,12 +246,15 @@ pub extern "C" fn _start() -> ! {
             }
 
             SgpMsg::EVENT_POLL => {
-                let win_id = msg.words[0];
-                // Park the client — do not reply now. The next mouse event will wake it.
-                // (The caller's ipc_call is blocked in the kernel until we reply.)
-                state.event_waiters.push((msg.badge, win_id)); // badge or caller info if available; we use a simple token
-                // For real directed reply we would store more context.
-                // In this prototype the wake happens via the mouse path below.
+                let _win_id = msg.words[0];
+                // Reply immediately with the current mouse position.
+                // This unblocks the client (EVENT_POLL was designed to block until
+                // "next input", but with the single reply_target model we reply with
+                // latest-known here so eyes (and similar) can render and follow the cursor.
+                let packed = (state.mouse_x as u64) | ((state.mouse_y as u64) << 16);
+                let wake = IpcMsg::with_label(SgpMsg::REPLY).word(0, packed);
+                let _ = ipc_reply(wake);
+                // (We no longer park in event_waiters for this path.)
             }
 
             SgpMsg::DESTROY_WINDOW => {
@@ -265,13 +271,12 @@ pub extern "C" fn _start() -> ! {
                 state.mouse_y = ((packed >> 16) & 0xffff) as u16;
                 redraw_scene(&state);
 
-                // Wake all parked clients
-                let waiters = core::mem::take(&mut state.event_waiters);
-                for (_ctx, _wid) in waiters {
-                    let wake = IpcMsg::with_label(SgpMsg::REPLY).word(0, packed);
-                    // Best effort reply. For multiple clients a more advanced reply cap or per-client endpoint would be used.
-                    let _ = ipc_reply(wake);
-                }
+                // Unblock the mouse driver (it used ipc_call). We use the current
+                // reply target which was set when we received this 0x2 via ipc_recv.
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+
+                // (Any old parked EVENT_POLL clients are now served via immediate reply
+                // in the EVENT_POLL arm above.)
             }
 
             _ => {

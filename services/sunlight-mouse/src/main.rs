@@ -250,15 +250,10 @@ pub extern "C" fn _start() -> ! {
         process_yield();
     };
 
-    // Also lookup display_server for the new graphical stack (Phase 3+)
-    let display_token = loop {
-        if let Some(t) = nameserver_lookup("display_server") {
-            syscall::debug_log("[MOUSE] display_server found, will forward events\n");
-            break Some(t);
-        }
-        // Non-fatal: display may not be running yet
-        break None;
-    };
+    // Also lookup display_server for the new graphical stack (Phase 3+).
+    // Display may start later (e.g. on Desktop login), so we do a lazy lookup
+    // on first use and cache the result.
+    let mut display_token: Option<sunlight_ipc::CapabilityToken> = None;
 
     syscall::debug_log("[MOUSE] found tty, ready to process mouse events\n");
 
@@ -280,6 +275,15 @@ pub extern "C" fn _start() -> ! {
                 // Send packed mouse event (label 0x2) to tty (legacy) and display compositor
                 let msg = IpcMsg::with_label(0x2).word(0, event_val);
                 let _ = ipc_call(tty_token, msg);
+
+                // Lazy (re)lookup for display so we work even if display starts after us
+                // (e.g. mouse starts early in boot, Desktop/GUI later).
+                if display_token.is_none() {
+                    display_token = nameserver_lookup("display_server");
+                    if display_token.is_some() {
+                        syscall::debug_log("[MOUSE] display_server now available, forwarding mouse\n");
+                    }
+                }
                 if let Some(disp) = display_token {
                     let _ = ipc_call(disp, msg);
                 }
