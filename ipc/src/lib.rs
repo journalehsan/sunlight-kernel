@@ -434,6 +434,263 @@ pub mod ResolvedMsg {
     pub const ERR_UNAVAILABLE: u64 = 3;
 }
 
+/// powerd v0: power profile and policy service.
+/// Registered as "powerd".
+/// Owns the current selected profile and computes an effective profile + derived knobs.
+/// Future: battery/ACPI integration, scheduler bias, cache/prefetch/display hooks.
+#[allow(non_snake_case)]
+pub mod PowerdMsg {
+    pub const GET_STATUS: u64 = 0xD001;
+    pub const GET_PROFILE: u64 = 0xD002;
+    pub const SET_PROFILE: u64 = 0xD010; // w0 = profile tag
+    pub const SET_AUTO: u64 = 0xD011;
+    pub const LIST_PROFILES: u64 = 0xD003; // w0 = index -> one profile summary
+    pub const GET_POLICY: u64 = 0xD004;
+    pub const UPDATE_CONTEXT: u64 = 0xD012; // w0.. packed context fields (best effort)
+
+    // Optional custom policy hooks (v0 may return ERR_UNSUPPORTED)
+    pub const SET_CUSTOM_POLICY: u64 = 0xD020;
+    pub const GET_CUSTOM_POLICY: u64 = 0xD021;
+
+    pub const REPLY: u64 = 0xD0FF;
+    pub const ERROR: u64 = 0xD0FE;
+
+    pub const ERR_NOT_FOUND: u64 = 1;
+    pub const ERR_BAD_REQUEST: u64 = 2;
+    pub const ERR_UNAVAILABLE: u64 = 3;
+    pub const ERR_UNSUPPORTED: u64 = 4;
+}
+
+/// Power profile selection (selected by user or Auto).
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerProfile {
+    Turbo = 0,
+    Performance = 1,
+    Balanced = 2,
+    LowPower = 3,
+    Stamina = 4,
+    Custom = 5,
+    Auto = 6,
+}
+
+impl PowerProfile {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            0 => Self::Turbo,
+            1 => Self::Performance,
+            2 => Self::Balanced,
+            3 => Self::LowPower,
+            4 => Self::Stamina,
+            5 => Self::Custom,
+            6 => Self::Auto,
+            _ => Self::Balanced,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Turbo => "Turbo",
+            Self::Performance => "Performance",
+            Self::Balanced => "Balanced",
+            Self::LowPower => "LowPower",
+            Self::Stamina => "Stamina",
+            Self::Custom => "Custom",
+            Self::Auto => "Auto",
+        }
+    }
+}
+
+/// Runtime power context (best-effort; unknown fields are None / safe defaults in v0).
+#[derive(Debug, Clone, Copy)]
+pub struct PowerContext {
+    pub on_ac: Option<bool>,
+    pub battery_percent: Option<u8>,
+    pub battery_present: bool,
+    pub load_percent: Option<u8>,
+    pub user_active: bool,
+}
+
+impl Default for PowerContext {
+    fn default() -> Self {
+        Self {
+            on_ac: None,
+            battery_percent: None,
+            battery_present: false,
+            load_percent: None,
+            user_active: true,
+        }
+    }
+}
+
+/// Cache behavior hint.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheMode {
+    Minimal = 0,
+    Normal = 1,
+    Aggressive = 2,
+}
+
+impl CacheMode {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            0 => Self::Minimal,
+            1 => Self::Normal,
+            2 => Self::Aggressive,
+            _ => Self::Normal,
+        }
+    }
+}
+
+/// Prefetch behavior hint.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrefetchMode {
+    Off = 0,
+    Light = 1,
+    Normal = 2,
+    Aggressive = 3,
+}
+
+impl PrefetchMode {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            0 => Self::Off,
+            1 => Self::Light,
+            2 => Self::Normal,
+            3 => Self::Aggressive,
+            _ => Self::Normal,
+        }
+    }
+}
+
+/// Visual/effects richness hint.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectsMode {
+    Minimal = 0,
+    Normal = 1,
+    Rich = 2,
+}
+
+impl EffectsMode {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            0 => Self::Minimal,
+            1 => Self::Normal,
+            2 => Self::Rich,
+            _ => Self::Normal,
+        }
+    }
+}
+
+/// Scheduler bias hint for niced / future scheduler integration.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchedulerBias {
+    Battery = 0,
+    Balanced = 1,
+    Interactive = 2,
+    Performance = 3,
+}
+
+impl SchedulerBias {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            0 => Self::Battery,
+            1 => Self::Balanced,
+            2 => Self::Interactive,
+            3 => Self::Performance,
+            _ => Self::Balanced,
+        }
+    }
+}
+
+/// Derived policy exposed to consumers (cache, prefetch, scheduler, etc.).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PowerPolicy {
+    pub selected_profile: PowerProfile,
+    pub effective_profile: PowerProfile,
+    pub cache_mode: CacheMode,
+    pub prefetch_mode: PrefetchMode,
+    pub effects_mode: EffectsMode,
+    pub scheduler_bias: SchedulerBias,
+    pub background_work_allowed: bool,
+}
+
+impl PowerPolicy {
+    /// v0 mapping from (effective) profile to knobs.
+    pub const fn from_profile(effective: PowerProfile) -> Self {
+        match effective {
+            PowerProfile::Turbo => Self {
+                selected_profile: PowerProfile::Turbo,
+                effective_profile: PowerProfile::Turbo,
+                cache_mode: CacheMode::Aggressive,
+                prefetch_mode: PrefetchMode::Aggressive,
+                effects_mode: EffectsMode::Rich,
+                scheduler_bias: SchedulerBias::Performance,
+                background_work_allowed: true,
+            },
+            PowerProfile::Performance => Self {
+                selected_profile: PowerProfile::Performance,
+                effective_profile: PowerProfile::Performance,
+                cache_mode: CacheMode::Aggressive,
+                prefetch_mode: PrefetchMode::Normal,
+                effects_mode: EffectsMode::Normal,
+                scheduler_bias: SchedulerBias::Performance,
+                background_work_allowed: true,
+            },
+            PowerProfile::Balanced => Self {
+                selected_profile: PowerProfile::Balanced,
+                effective_profile: PowerProfile::Balanced,
+                cache_mode: CacheMode::Normal,
+                prefetch_mode: PrefetchMode::Normal,
+                effects_mode: EffectsMode::Normal,
+                scheduler_bias: SchedulerBias::Balanced,
+                background_work_allowed: true,
+            },
+            PowerProfile::LowPower => Self {
+                selected_profile: PowerProfile::LowPower,
+                effective_profile: PowerProfile::LowPower,
+                cache_mode: CacheMode::Normal,
+                prefetch_mode: PrefetchMode::Light,
+                effects_mode: EffectsMode::Minimal,
+                scheduler_bias: SchedulerBias::Balanced,
+                background_work_allowed: false,
+            },
+            PowerProfile::Stamina => Self {
+                selected_profile: PowerProfile::Stamina,
+                effective_profile: PowerProfile::Stamina,
+                cache_mode: CacheMode::Minimal,
+                prefetch_mode: PrefetchMode::Off,
+                effects_mode: EffectsMode::Minimal,
+                scheduler_bias: SchedulerBias::Battery,
+                background_work_allowed: false,
+            },
+            PowerProfile::Custom => Self {
+                selected_profile: PowerProfile::Custom,
+                effective_profile: PowerProfile::Custom,
+                cache_mode: CacheMode::Normal,
+                prefetch_mode: PrefetchMode::Normal,
+                effects_mode: EffectsMode::Normal,
+                scheduler_bias: SchedulerBias::Balanced,
+                background_work_allowed: true,
+            },
+            PowerProfile::Auto => Self {
+                // Auto should have been resolved to a concrete profile before calling.
+                selected_profile: PowerProfile::Auto,
+                effective_profile: PowerProfile::Balanced,
+                cache_mode: CacheMode::Normal,
+                prefetch_mode: PrefetchMode::Normal,
+                effects_mode: EffectsMode::Normal,
+                scheduler_bias: SchedulerBias::Balanced,
+                background_work_allowed: true,
+            },
+        }
+    }
+}
+
 /// DnsSource for resolver records (v0).
 #[repr(u64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

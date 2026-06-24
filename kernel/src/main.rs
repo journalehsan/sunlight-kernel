@@ -88,6 +88,10 @@ static RESOLVED_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/resolved");
 static RESOLVECTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/resolvectl");
+static POWERD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/powerd");
+static POWERCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/powerctl");
 static SUNLIGHT_NICED_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/niced");
 static NICECTL_ELF_BYTES: &[u8] =

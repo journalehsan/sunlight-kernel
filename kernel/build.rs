@@ -67,6 +67,12 @@ fn main() {
             args: &["--release", "--bin", "networkd"],
         },
         EmbeddedBinary {
+            package: "sunlight-powerd",
+            output: "powerd",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "powerd"],
+        },
+        EmbeddedBinary {
             package: "sunlight-vfs-server",
             output: "sunlight-vfs-server",
             rustflags: service_rustflags,
@@ -159,6 +165,12 @@ fn main() {
             output: "networkctl",
             rustflags: service_rustflags,
             args: &["--release", "--bin", "networkctl"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-powerd",
+            output: "powerctl",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "powerctl"],
         },
         EmbeddedBinary {
             package: "sunlight-niced",

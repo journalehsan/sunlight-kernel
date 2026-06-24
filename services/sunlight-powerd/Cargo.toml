@@ -1,14 +1,6 @@
 [package]
-name = "sunlight-deviced"
+name = "sunlight-powerd"
 version = "0.1.354"
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
@@ -18,9 +10,9 @@ sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [[bin]]
-name = "deviced"
+name = "powerd"
 path = "src/main.rs"
 
 [[bin]]
-name = "devicectl"
-path = "src/bin/devicectl.rs"
+name = "powerctl"
+path = "src/bin/powerctl.rs"

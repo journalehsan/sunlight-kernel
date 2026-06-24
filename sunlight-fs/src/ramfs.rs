@@ -834,6 +834,13 @@ max_ttys = 6
         b"#!/sunlight/resolvectl\n",
     ),
     RamEntry::file(
+        "/bin/powerctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/powerctl\n",
+    ),
+    RamEntry::file(
         "/bin/nicectl",
         0,
         0,
@@ -1323,6 +1330,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/resolvectl\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/powerctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/powerctl\n",
     ),
     RamEntry::file(
         "/usr/bin/fetch",

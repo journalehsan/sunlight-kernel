@@ -48,6 +48,7 @@ members = [
     "services/sunlight-deviced",
     "services/sunlight-networkd",
     "services/sunlight-resolved",
+    "services/sunlight-powerd",
     "services/solar",
 ]
 
