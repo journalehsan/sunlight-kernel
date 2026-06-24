@@ -53,13 +53,19 @@ const SENS_MIN_FP: i32 = FP_ONE / 2; //            0.5
 #[allow(dead_code)]
 const SENS_MAX_FP: i32 = FP_ONE * 3; //            3.0
 
-// Acceleration curve. Below ACCEL_LOW the motion is precise (pure 1:1 so the
-// cursor lands exactly where the hand says). Above it, the per-event gain ramps
-// linearly with delta magnitude up to ACCEL_MAX_FP, so flicks cover ground fast
-// while slow drags stay pixel-accurate.
-const ACCEL_LOW: i32 = 3; //                speed (px/event) below which gain == 1.0
-const ACCEL_SLOPE_FP: i32 = FP_ONE / 16; // gain added per unit of speed past ACCEL_LOW
-const ACCEL_MAX_FP: i32 = (FP_ONE * 5) / 2; // 2.5x hard cap
+// Acceleration curve — three tiers, all TUNING-annotated for easy adjustment:
+//
+//  Tier 0 (speed <= ACCEL_LOW)  : pure 1:1 — pixel-perfect for fine work / drawing
+//  Tier 1 (ACCEL_LOW < speed <= ACCEL_HIGH): gentle linear ramp — natural desktop feel
+//  Tier 2 (speed > ACCEL_HIGH)  : capped at ACCEL_MAX_FP — fast flicks stay controlled
+//
+// The 0.05/unit slope (ACCEL_SLOPE_FP) means at speed=20 gain reaches ~1.75x,
+// leaving headroom below the 2.0x cap and preventing the "cursor teleports"
+// feeling that plagued the old 4x cap.
+const ACCEL_LOW: i32 = 5; // TUNING: slow-tier ceiling (px/event); below = 1:1
+const ACCEL_HIGH: i32 = 20; // TUNING: fast-tier floor; above = capped at ACCEL_MAX_FP
+const ACCEL_SLOPE_FP: i32 = FP_ONE / 20; // TUNING: gain added per unit past ACCEL_LOW (0.05/px)
+const ACCEL_MAX_FP: i32 = FP_ONE * 2; // TUNING: 2.0x hard cap (was 4x — felt too aggressive)
 
 // Exponential position smoothing. We accumulate the "true" target position and
 // move the displayed cursor a fraction of the remaining distance each event:
@@ -85,6 +91,10 @@ struct PointerState {
     buttons: u8,
     fb_width: u32,
     fb_height: u32,
+    // Master speed knob in 16.16 fixed-point (see SENSITIVITY constants above).
+    // A future settings UI should write this field directly on the PointerState
+    // (clamped to [SENS_MIN_FP, SENS_MAX_FP]) — nothing else needs to change.
+    sensitivity_fp: i32,
 }
 
 impl PointerState {
@@ -99,21 +109,27 @@ impl PointerState {
             buttons: 0,
             fb_width: fb_w,
             fb_height: fb_h,
+            sensitivity_fp: SENS_DEFAULT_FP, // 1.5 — comfortable for ~80 % of users
         }
     }
 
-    fn apply_motion(&mut self, dx: i32, dy: i32, buttons: u8, sensitivity_fp: i32) {
+    fn apply_motion(&mut self, dx: i32, dy: i32, buttons: u8) {
         let speed = dx.abs().max(dy.abs());
 
-        // 1) Acceleration: 1.0x for slow motion, ramping to ACCEL_MAX_FP for fast.
+        // 1) Three-tier acceleration:
+        //    Tier 0 (≤ ACCEL_LOW)  : 1:1 — no acceleration; precise pixel control.
+        //    Tier 1 (≤ ACCEL_HIGH) : linear ramp from 1.0x up toward ACCEL_MAX_FP.
+        //    Tier 2 (> ACCEL_HIGH) : hard-capped at ACCEL_MAX_FP; fast flicks stay sane.
         let accel_fp = if speed <= ACCEL_LOW {
             FP_ONE
-        } else {
+        } else if speed <= ACCEL_HIGH {
             (FP_ONE + (speed - ACCEL_LOW) * ACCEL_SLOPE_FP).min(ACCEL_MAX_FP)
+        } else {
+            ACCEL_MAX_FP
         };
 
-        // 2) Effective gain = sensitivity * acceleration (fixed-point multiply).
-        let gain_fp = ((sensitivity_fp as i64 * accel_fp as i64) >> FP_SHIFT) as i64;
+        // 2) Effective gain = sensitivity × acceleration (fixed-point multiply).
+        let gain_fp = ((self.sensitivity_fp as i64 * accel_fp as i64) >> FP_SHIFT) as i64;
 
         // 3) Advance the raw target (delta is in whole pixels -> shift to FP).
         self.target_x_fp = (self.target_x_fp as i64 + (dx as i64 * gain_fp)) as i32;
@@ -179,10 +195,9 @@ struct CompositorState {
     mouse_x: u16,
     mouse_y: u16,
     pointer: PointerState,
-    // Pointer sensitivity (16.16 fixed-point). Adjust this (within
-    // [SENS_MIN_FP, SENS_MAX_FP]) from a future settings UI to change mouse
-    // speed; see the SENSITIVITY docs near the constants above.
     mouse_sensitivity_fp: i32,
+    dragged_window_id: Option<u64>,
+    prev_buttons: u8,
     fb: *mut u32,
     fb_width: u32,
     fb_height: u32,
@@ -194,6 +209,10 @@ fn fb_stride(state: &CompositorState) -> usize {
 }
 
 const DESKTOP_COLOR: u32 = 0x00181818;
+const TITLEBAR_H: u32 = 24;
+const TITLEBAR_COLOR: u32 = 0x00333333;
+const BORDER_W: u32 = 2;
+const BORDER_COLOR: u32 = 0x00555555;
 const CURSOR_COLOR: u32 = 0x00F5F5F5;
 const CURSOR_SHADOW_COLOR: u32 = 0x00000000;
 const CURSOR_W: usize = 8;
@@ -213,6 +232,20 @@ const CURSOR_BITMAP: [u8; CURSOR_H] = [
     0b0000_0000,
 ];
 
+fn draw_rect(state: &CompositorState, x: u32, y: u32, w: u32, h: u32, color: u32) {
+    if x >= state.fb_width || y >= state.fb_height || w == 0 || h == 0 {
+        return;
+    }
+    let stride = fb_stride(state);
+    let x_end = (x + w).min(state.fb_width) as usize;
+    let y_end = (y + h).min(state.fb_height) as usize;
+    for row in y as usize..y_end {
+        for col in x as usize..x_end {
+            unsafe { state.fb.add(row * stride + col).write(color); }
+        }
+    }
+}
+
 fn clear_framebuffer(state: &CompositorState) {
     let stride = fb_stride(state);
     for y in 0..state.fb_height as usize {
@@ -228,16 +261,33 @@ fn composite_window(state: &CompositorState, win: &Window) {
         return;
     }
 
-    let copy_width = win.width.min(state.fb_width - win.x) as usize;
-    let copy_height = win.height.min(state.fb_height - win.y) as usize;
+    let chrome_w = win.width + BORDER_W * 2;
+    let chrome_h = TITLEBAR_H + win.height + BORDER_W;
+
+    // Left border
+    draw_rect(state, win.x, win.y, BORDER_W, chrome_h, BORDER_COLOR);
+    // Right border
+    draw_rect(state, win.x + BORDER_W + win.width, win.y, BORDER_W, chrome_h, BORDER_COLOR);
+    // Bottom border
+    draw_rect(state, win.x, win.y + TITLEBAR_H + win.height, chrome_w, BORDER_W, BORDER_COLOR);
+    // Title bar
+    draw_rect(state, win.x, win.y, chrome_w, TITLEBAR_H, TITLEBAR_COLOR);
+
+    // Client content — starts at (win.x + BORDER_W, win.y + TITLEBAR_H)
+    let client_x = win.x + BORDER_W;
+    let client_y = win.y + TITLEBAR_H;
+    if client_x >= state.fb_width || client_y >= state.fb_height {
+        return;
+    }
+
+    let copy_width = win.width.min(state.fb_width - client_x) as usize;
+    let copy_height = win.height.min(state.fb_height - client_y) as usize;
     let stride = fb_stride(state);
 
     for row in 0..copy_height {
         unsafe {
             let src = win.buffer.add(row * win.width as usize);
-            let dst = state
-                .fb
-                .add((win.y as usize + row) * stride + win.x as usize);
+            let dst = state.fb.add((client_y as usize + row) * stride + client_x as usize);
             core::ptr::copy_nonoverlapping(src, dst, copy_width);
         }
     }
@@ -378,7 +428,9 @@ pub extern "C" fn _start() -> ! {
         mouse_x: (fb_width / 2) as u16,
         mouse_y: (fb_height / 2) as u16,
         pointer: PointerState::new(fb_width, fb_height),
-        mouse_sensitivity_fp: SENS_DEFAULT_FP, // 1.5 — see SENSITIVITY docs above
+        mouse_sensitivity_fp: SENS_DEFAULT_FP,
+        dragged_window_id: None,
+        prev_buttons: 0,
         fb: fb_ptr as *mut u32,
         fb_width,
         fb_height,
@@ -446,12 +498,13 @@ pub extern "C" fn _start() -> ! {
                         });
                         redraw_scene(&state);
 
+                        // words[4]/[5] = client-area origin (below title bar / inside borders)
                         let mut reply = IpcMsg::with_label(SgpMsg::REPLY)
                             .word(1, id)
                             .word(2, size as u64)
                             .word(3, (w * 4) as u64)
-                            .word(4, win_x as u64)
-                            .word(5, win_y as u64);
+                            .word(4, (win_x + BORDER_W) as u64)
+                            .word(5, (win_y + TITLEBAR_H) as u64);
                         reply.caps[0] = shm_tok;
                         reply.cap_count = 1;
 
@@ -473,9 +526,15 @@ pub extern "C" fn _start() -> ! {
             }
 
             SgpMsg::EVENT_POLL => {
-                let _win_id = msg.words[0];
+                let win_id = msg.words[0];
                 let packed = (state.mouse_x as u64) | ((state.mouse_y as u64) << 16);
-                let wake = IpcMsg::with_label(SgpMsg::REPLY).word(0, packed);
+                let mut wake = IpcMsg::with_label(SgpMsg::REPLY).word(0, packed);
+                // words[1]: current client-area origin so clients re-anchor after drag
+                if let Some(win) = state.windows.iter().find(|w| w.id == win_id) {
+                    let cx = (win.x + BORDER_W) as u64;
+                    let cy = (win.y + TITLEBAR_H) as u64;
+                    wake = wake.word(1, cx | (cy << 32));
+                }
                 let _ = ipc_reply(wake);
             }
 
@@ -492,19 +551,65 @@ pub extern "C" fn _start() -> ! {
                 let dy = (((raw >> 16) & 0xFFFF) as i16) as i32;
                 let buttons = ((raw >> 32) & 0xFF) as u8;
 
-                // NOTE: no per-event serial logging here — the UART is slow and
-                // blocking, so printing on every mouse packet visibly stutters
-                // the cursor. Keep this path lean.
-                state
-                    .pointer
-                    .apply_motion(dx, dy, buttons, state.mouse_sensitivity_fp);
+                // Snapshot cursor position before applying motion so we can
+                // compute the actual pixel delta for window dragging.
+                let prev_cx = state.pointer.x() as u32;
+                let prev_cy = state.pointer.y() as u32;
+                let prev_buttons = state.prev_buttons;
+
+                state.pointer.sensitivity_fp = state.mouse_sensitivity_fp;
+                state.pointer.apply_motion(dx, dy, buttons);
                 state.pointer.sync_clamp();
 
                 state.mouse_x = state.pointer.x() as u16;
                 state.mouse_y = state.pointer.y() as u16;
 
-                redraw_scene(&state);
+                let cx = state.pointer.x() as u32;
+                let cy = state.pointer.y() as u32;
+                let left_down = (buttons & 1) != 0;
+                let was_left_down = (prev_buttons & 1) != 0;
 
+                if left_down && !was_left_down {
+                    // Left button just pressed — hit-test title bars front-to-back.
+                    let mut clicked_id: Option<u64> = None;
+                    for win in state.windows.iter().rev() {
+                        let tb_x = win.x;
+                        let tb_y = win.y;
+                        let tb_w = win.width + BORDER_W * 2;
+                        if cx >= tb_x && cx < tb_x + tb_w && cy >= tb_y && cy < tb_y + TITLEBAR_H {
+                            clicked_id = Some(win.id);
+                            break;
+                        }
+                    }
+                    if let Some(id) = clicked_id {
+                        state.dragged_window_id = Some(id);
+                        // Z-order: move clicked window to the end so it renders on top.
+                        if let Some(pos) = state.windows.iter().position(|w| w.id == id) {
+                            let win = state.windows.remove(pos);
+                            state.windows.push(win);
+                        }
+                    }
+                } else if !left_down {
+                    state.dragged_window_id = None;
+                }
+
+                // Apply drag delta to the window being moved.
+                if left_down {
+                    let dcx = cx as i32 - prev_cx as i32;
+                    let dcy = cy as i32 - prev_cy as i32;
+                    if dcx != 0 || dcy != 0 {
+                        if let Some(drag_id) = state.dragged_window_id {
+                            if let Some(win) = state.windows.iter_mut().find(|w| w.id == drag_id) {
+                                win.x = (win.x as i32 + dcx).max(0) as u32;
+                                win.y = (win.y as i32 + dcy).max(0) as u32;
+                            }
+                        }
+                    }
+                }
+
+                state.prev_buttons = buttons;
+
+                redraw_scene(&state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 

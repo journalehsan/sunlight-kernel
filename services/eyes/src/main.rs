@@ -74,8 +74,10 @@ pub extern "C" fn _start() -> ! {
     let win_id = reply.words[1];
     let _size = reply.words[2] as usize;
     let _stride = reply.words[3] as usize; // bytes per row (width*4)
-    let win_x = reply.words[4] as i32;
-    let win_y = reply.words[5] as i32;
+    // Client-area origin (below title bar, inside borders). Mutable so dragging
+    // updates the origin on each EVENT_POLL, keeping pupil tracking correct.
+    let mut win_x = reply.words[4] as i32;
+    let mut win_y = reply.words[5] as i32;
 
     debug_log("[EYES] Window created, mapping SHM...\n");
 
@@ -134,13 +136,14 @@ pub extern "C" fn _start() -> ! {
     // screen space, take the vector to the cursor, and project the pupil along
     // that direction. This works across the ENTIRE screen — there is no
     // "inside the window" dead zone.
-    let render_eye = |cx: i32, cy: i32, mouse_gx: i32, mouse_gy: i32| {
-        // White of the eye.
+    // `wx`/`wy` are the current client-area screen origin — passed explicitly so
+    // the closure doesn't capture win_x/win_y by reference, letting us mutate
+    // them inside the loop when the window is dragged.
+    let render_eye = |cx: i32, cy: i32, mouse_gx: i32, mouse_gy: i32, wx: i32, wy: i32| {
         fill_circle(cx, cy, EYE_RADIUS, eye_color);
 
-        // Vector from this eye's screen-space center to the cursor.
-        let dx = mouse_gx - (win_x + cx);
-        let dy = mouse_gy - (win_y + cy);
+        let dx = mouse_gx - (wx + cx);
+        let dy = mouse_gy - (wy + cy);
 
         let (px, py) = {
             let d2 = (dx as i64 * dx as i64 + dy as i64 * dy as i64) as u32;
@@ -148,26 +151,21 @@ pub extern "C" fn _start() -> ! {
                 (cx, cy)
             } else {
                 let dist = isqrt(d2).max(1) as i32;
-                // If the cursor is closer than MAX_OFFSET, follow it exactly
-                // (pupil sits under the cursor); otherwise clamp to the rim.
                 let off = MAX_OFFSET.min(dist);
                 (cx + (dx * off) / dist, cy + (dy * off) / dist)
             }
         };
 
-        // Pupil (already constrained to stay inside the white by MAX_OFFSET).
         fill_circle(px, py, PUPIL_RADIUS, pupil_color);
     };
 
-    // Initial frame so the window is never solid black; pupils centered
-    // (drawn before the first EVENT_POLL so something is visible immediately).
+    // Initial frame so the window is never solid black; pupils centered.
     {
         for i in 0..(WIN_W * WIN_H) as usize {
             unsafe { buffer.add(i).write_volatile(bg_color); }
         }
-        // Point pupils at their own centers => "looking forward".
-        render_eye(LEFT_EYE_X, EYE_Y, win_x + LEFT_EYE_X, win_y + EYE_Y);
-        render_eye(RIGHT_EYE_X, EYE_Y, win_x + RIGHT_EYE_X, win_y + EYE_Y);
+        render_eye(LEFT_EYE_X, EYE_Y, win_x + LEFT_EYE_X, win_y + EYE_Y, win_x, win_y);
+        render_eye(RIGHT_EYE_X, EYE_Y, win_x + RIGHT_EYE_X, win_y + EYE_Y, win_x, win_y);
 
         let commit = IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, win_id);
         let _ = ipc_call(display_ep, commit);
@@ -184,13 +182,20 @@ pub extern "C" fn _start() -> ! {
         let mouse_x = (packed & 0xFFFF) as i32;
         let mouse_y = ((packed >> 16) & 0xFFFF) as i32;
 
+        // Update client-area origin if the window was dragged since last poll.
+        let pos_packed = event_reply.words[1];
+        if pos_packed != 0 {
+            win_x = (pos_packed & 0xFFFF_FFFF) as i32;
+            win_y = (pos_packed >> 32) as i32;
+        }
+
         // --- Zero-copy render into the shared buffer ---
         for i in 0..(WIN_W * WIN_H) as usize {
             unsafe { buffer.add(i).write_volatile(bg_color); }
         }
 
-        render_eye(LEFT_EYE_X, EYE_Y, mouse_x, mouse_y);
-        render_eye(RIGHT_EYE_X, EYE_Y, mouse_x, mouse_y);
+        render_eye(LEFT_EYE_X, EYE_Y, mouse_x, mouse_y, win_x, win_y);
+        render_eye(RIGHT_EYE_X, EYE_Y, mouse_x, mouse_y, win_x, win_y);
 
         let commit = IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, win_id);
         let _ = ipc_call(display_ep, commit);
