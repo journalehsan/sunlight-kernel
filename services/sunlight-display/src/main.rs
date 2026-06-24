@@ -314,6 +314,9 @@ enum HitZone {
     Miss,
     TitleBar,
     CloseBtn,
+    MaximizeBtn,
+    MinimizeBtn,
+    KeepOnTopBtn,
     ClientArea,
     EdgeLeft,
     EdgeRight,
@@ -326,7 +329,7 @@ impl HitZone {
     fn default_cursor(self) -> CursorShape {
         match self {
             HitZone::TitleBar | HitZone::ClientArea | HitZone::Miss => CursorShape::Pointer,
-            HitZone::CloseBtn                                        => CursorShape::Pointer,
+            HitZone::CloseBtn | HitZone::MaximizeBtn | HitZone::MinimizeBtn | HitZone::KeepOnTopBtn => CursorShape::Pointer,
             HitZone::EdgeLeft | HitZone::EdgeRight                   => CursorShape::ResizeH,
             HitZone::EdgeBottom                                      => CursorShape::ResizeV,
             HitZone::CornerBL                                        => CursorShape::ResizeCornerNW,
@@ -464,24 +467,28 @@ fn fb_stride(state: &CompositorState) -> usize {
 }
 
 // ---------------------------------------------------------------------------
-// Chrome constants
+// Chrome constants (Vortex Shell Theme)
 // ---------------------------------------------------------------------------
 
-const DESKTOP_COLOR:      u32 = 0x00181818;
-const TITLEBAR_H:         u32 = 24;
-const TITLEBAR_COLOR:     u32 = 0x00303050; // inactive titlebar (dark blue-grey)
-const TITLEBAR_ACTIVE:    u32 = 0x00445588; // active/focused window titlebar
-const TITLE_TEXT_COLOR:   u32 = 0x00DDDDDD;
-const BORDER_W:           u32 = 4;
-const BORDER_COLOR:       u32 = 0x00445588;
-const BORDER_INACTIVE:    u32 = 0x00333333;
-const CLOSE_BTN_COLOR:    u32 = 0x00BB3333;
-#[allow(dead_code)]
-const CLOSE_BTN_HOVER:    u32 = 0x00FF5555; // future: hot-track when pointer is on close btn
-const CLOSE_BTN_SIZE:     u32 = 16;
+const DESKTOP_COLOR:      u32 = 0x00121214; // Deep dark gray/black
+const TITLEBAR_H:         u32 = 32;         // Taller for Chrome-tab style
+const TITLEBAR_COLOR:     u32 = 0x002B2B36; // inactive titlebar (dark slate)
+const TITLEBAR_ACTIVE:    u32 = 0x001E1E26; // active window titlebar (darker base)
+const TITLEBAR_ACCENT:    u32 = 0x00FF7A00; // Warm/Orange accent line
+const TITLE_TEXT_COLOR:   u32 = 0x00E0E0E0; // Off-white
+const BORDER_W:           u32 = 2;          // Thinner modern border
+const BORDER_COLOR:       u32 = 0x00FF7A00; // Active window border glow
+const BORDER_INACTIVE:    u32 = 0x002B2B36; // Inactive window border
+const BTN_HOVER_BG:       u32 = 0x003A3A4A; // Hover state background for buttons
+const CLOSE_BTN_COLOR:    u32 = 0x00FF4B4B; // Standard close red
+const CLOSE_BTN_HOVER:    u32 = 0x00FF6B6B;
+const BTN_ICON_COLOR:     u32 = 0x00B0B0C0; // Icon color
+const BTN_ICON_ACTIVE:    u32 = 0x00FFFFFF; // Icon color when active/focused
+const BTN_SIZE:           u32 = 20;         // Size of control buttons
+const BTN_SPACING:        u32 = 4;
 const RESIZE_BORDER:      u32 = 6; // effective hit-test width for edges/corners
-const MIN_WIN_W:          u32 = 120;
-const MIN_WIN_H:          u32 = 60;
+const MIN_WIN_W:          u32 = 200;
+const MIN_WIN_H:          u32 = 100;
 
 // ---------------------------------------------------------------------------
 // Cursor bitmaps — 8 px wide × 12 rows, one u8 per row, MSB = leftmost pixel
@@ -806,8 +813,8 @@ fn draw_title(state: &CompositorState, title: &[u8; 64], bar_x: u32, bar_y: u32,
     let glyph_stride = 6i32;
     let text_w       = len as i32 * glyph_stride;
 
-    // Reserve left margin for close button (CLOSE_BTN_SIZE + 6) + 4px pad.
-    let left_margin  = (CLOSE_BTN_SIZE + 10) as i32;
+    // Reserve left margin for close button (BTN_SIZE + 6) + 4px pad.
+    let left_margin  = (BTN_SIZE + 10) as i32;
     let avail_w      = bar_w as i32 - left_margin - 4;
     if avail_w <= 0 { return; }
 
@@ -843,11 +850,31 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
     // Title bar zone (not present in Fullscreen or no-border Widget/Desktop).
     if !fullscreen && !no_border {
         if rel_y < TITLEBAR_H {
-            // Close button: top-right corner of title bar.
-            let close_x = chrome_w.saturating_sub(CLOSE_BTN_SIZE + 4);
-            if rel_x >= close_x && rel_x < chrome_w.saturating_sub(4) && rel_y >= 4 && rel_y < 4 + CLOSE_BTN_SIZE {
+            let mut btn_x = chrome_w.saturating_sub(BTN_SIZE + BTN_SPACING);
+
+            // Close button
+            if rel_x >= btn_x && rel_x < btn_x + BTN_SIZE && rel_y >= (TITLEBAR_H - BTN_SIZE) / 2 && rel_y < (TITLEBAR_H + BTN_SIZE) / 2 {
                 return HitZone::CloseBtn;
             }
+            btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
+
+            // Maximize/Restore button
+            if rel_x >= btn_x && rel_x < btn_x + BTN_SIZE && rel_y >= (TITLEBAR_H - BTN_SIZE) / 2 && rel_y < (TITLEBAR_H + BTN_SIZE) / 2 {
+                return HitZone::MaximizeBtn;
+            }
+            btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
+
+            // Minimize button
+            if rel_x >= btn_x && rel_x < btn_x + BTN_SIZE && rel_y >= (TITLEBAR_H - BTN_SIZE) / 2 && rel_y < (TITLEBAR_H + BTN_SIZE) / 2 {
+                return HitZone::MinimizeBtn;
+            }
+            btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
+
+            // Keep On Top button
+            if rel_x >= btn_x && rel_x < btn_x + BTN_SIZE && rel_y >= (TITLEBAR_H - BTN_SIZE) / 2 && rel_y < (TITLEBAR_H + BTN_SIZE) / 2 {
+                return HitZone::KeepOnTopBtn;
+            }
+
             return HitZone::TitleBar;
         }
     }
@@ -929,17 +956,83 @@ fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
 
         let tb_color = if is_focused { TITLEBAR_ACTIVE } else { TITLEBAR_COLOR };
         let bd_color = if is_focused { BORDER_COLOR } else { BORDER_INACTIVE };
+        let icon_col = if is_focused { BTN_ICON_ACTIVE } else { BTN_ICON_COLOR };
 
         // Title bar
         draw_rect(state, wx, wy, chrome_w, TITLEBAR_H, tb_color);
 
-        // Close button
-        let close_bx = wx + chrome_w.saturating_sub(CLOSE_BTN_SIZE + 4);
-        let close_by = wy + 4;
-        draw_rect(state, close_bx, close_by, CLOSE_BTN_SIZE, CLOSE_BTN_SIZE, CLOSE_BTN_COLOR);
+        if is_focused {
+            // Accent line below title bar
+            draw_rect(state, wx, wy + TITLEBAR_H - 2, chrome_w, 2, TITLEBAR_ACCENT);
+        }
 
-        // Title text
-        draw_title(state, &win.config.title, wx, wy, chrome_w);
+        // --- Controls (Right-aligned) ---
+        let mut btn_x = wx + chrome_w.saturating_sub(BTN_SIZE + BTN_SPACING);
+        let btn_y = wy + (TITLEBAR_H.saturating_sub(BTN_SIZE)) / 2;
+
+        // Close button (X inside standard rect)
+        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, CLOSE_BTN_COLOR);
+        // Draw X
+        let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
+        let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
+        let csize = 4;
+        for i in -csize..=csize {
+            // Diagonal \
+            draw_rect(state, (cx + i) as u32, (cy + i) as u32, 2, 2, 0x00FFFFFF);
+            // Diagonal /
+            draw_rect(state, (cx + i) as u32, (cy - i) as u32, 2, 2, 0x00FFFFFF);
+        }
+
+        btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
+
+        // Maximize/Restore button
+        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, tb_color); // Transparentish bg
+        let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
+        let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
+        if maximized {
+            // Restore: <->
+            draw_rect(state, (cx - 4) as u32, (cy) as u32, 8, 1, icon_col);
+            draw_rect(state, (cx - 4) as u32, (cy - 2) as u32, 2, 5, icon_col);
+            draw_rect(state, (cx + 3) as u32, (cy - 2) as u32, 2, 5, icon_col);
+        } else {
+            // Maximize: >-<
+            draw_rect(state, (cx - 4) as u32, (cy) as u32, 8, 1, icon_col);
+            draw_rect(state, (cx - 2) as u32, (cy - 3) as u32, 4, 1, icon_col);
+            draw_rect(state, (cx - 2) as u32, (cy + 2) as u32, 4, 1, icon_col);
+        }
+
+        btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
+
+        // Minimize button (V shape)
+        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, tb_color);
+        let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
+        let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
+        for i in 0..4 {
+            draw_rect(state, (cx - 3 + i) as u32, (cy - 1 + i) as u32, 2, 2, icon_col);
+            draw_rect(state, (cx + 3 - i) as u32, (cy - 1 + i) as u32, 2, 2, icon_col);
+        }
+
+        btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
+
+        // Keep On Top button (circle with dot)
+        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, tb_color);
+        let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
+        let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
+        // Outer ring (approximate)
+        draw_rect(state, (cx - 3) as u32, (cy - 4) as u32, 6, 1, icon_col);
+        draw_rect(state, (cx - 3) as u32, (cy + 3) as u32, 6, 1, icon_col);
+        draw_rect(state, (cx - 4) as u32, (cy - 3) as u32, 1, 6, icon_col);
+        draw_rect(state, (cx + 3) as u32, (cy - 3) as u32, 1, 6, icon_col);
+        
+        let is_on_top = win.config.z_index_type == ZIndexType::OnTop;
+        let dot_color = if is_on_top { TITLEBAR_ACCENT } else { icon_col };
+        // Inner dot
+        draw_rect(state, (cx - 1) as u32, (cy - 1) as u32, 2, 2, dot_color);
+
+
+        // Title text (Centered in remaining space)
+        let avail_w = chrome_w.saturating_sub((BTN_SIZE + BTN_SPACING) * 4);
+        draw_title(state, &win.config.title, wx, wy, avail_w);
 
         // Borders (left, right, bottom)
         draw_rect(state, wx,                       wy,  BORDER_W, chrome_h, bd_color);
@@ -1296,6 +1389,33 @@ pub extern "C" fn _start() -> ! {
             }
 
             // -------------------------------------------------------------------
+            // KEY_EVENT — Global keyboard interceptor.
+            // Ctrl + W: close currently active (focused) window.
+            // -------------------------------------------------------------------
+            sunlight_ipc::KbdMsg::KEY_EVENT => {
+                let (keycode, pressed, _, ctrl, _, _) =
+                    sunlight_ipc::unpack_key_event(msg.words[0]);
+
+                if pressed && ctrl && keycode == 0x11 { // 0x11 is 'W' in scancode set 1
+                    if let Some(focused) = state.windows.last().map(|w| w.id) {
+                        state.windows.retain(|w| w.id != focused);
+                        
+                        // Cancel any active drag on the closed window
+                        let cancel = match &state.active_drag {
+                            ActiveDrag::Move(d)   => d.window_id == focused,
+                            ActiveDrag::Resize(d) => d.window_id == focused,
+                            ActiveDrag::None      => false,
+                        };
+                        if cancel { state.active_drag = ActiveDrag::None; }
+                        
+                        state.active_cursor = cursor_for_scene(&state);
+                        redraw_scene(&state);
+                    }
+                }
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
+            // -------------------------------------------------------------------
             // RAW_MOTION — mouse driver delta + button state.
             // words[0] = dx(i16) | dy(i16)<<16 | buttons(u8)<<32
             // -------------------------------------------------------------------
@@ -1363,6 +1483,41 @@ pub extern "C" fn _start() -> ! {
                             HitZone::CloseBtn => {
                                 // Destroy the window immediately on close button click.
                                 state.windows.retain(|w| w.id != id);
+                                state.active_drag = ActiveDrag::None;
+                            }
+                            HitZone::MaximizeBtn => {
+                                if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
+                                    if win.config.state == WindowState::Normal {
+                                        win.saved_x = win.x;
+                                        win.saved_y = win.y;
+                                        win.saved_w = win.width;
+                                        win.saved_h = win.height;
+                                        win.config.state = WindowState::Maximized;
+                                    } else if win.config.state == WindowState::Maximized {
+                                        win.x      = win.saved_x;
+                                        win.y      = win.saved_y;
+                                        win.width  = win.saved_w;
+                                        win.height = win.saved_h;
+                                        win.config.state = WindowState::Normal;
+                                    }
+                                }
+                                state.active_drag = ActiveDrag::None;
+                            }
+                            HitZone::MinimizeBtn => {
+                                if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
+                                    win.config.state = WindowState::Minimized;
+                                }
+                                state.active_drag = ActiveDrag::None;
+                            }
+                            HitZone::KeepOnTopBtn => {
+                                if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
+                                    win.config.z_index_type = if win.config.z_index_type == ZIndexType::OnTop {
+                                        ZIndexType::Normal
+                                    } else {
+                                        ZIndexType::OnTop
+                                    };
+                                }
+                                // Sorting logic is handled on next click, but we could enforce it here too
                                 state.active_drag = ActiveDrag::None;
                             }
                             edge @ (HitZone::EdgeLeft | HitZone::EdgeRight |
