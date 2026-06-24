@@ -226,13 +226,43 @@ pub mod sgp {
     #[allow(non_snake_case)]
     pub mod SgpMsg {
         // Client -> Display Server Requests
-        pub const CREATE_WINDOW: u64  = 0xA101;
-        pub const COMMIT_FRAME: u64   = 0xA102;
-        pub const EVENT_POLL: u64     = 0xA103;
-        pub const DESTROY_WINDOW: u64 = 0xA104;
+        pub const CREATE_WINDOW: u64    = 0xA101;
+        pub const COMMIT_FRAME: u64     = 0xA102;
+        pub const EVENT_POLL: u64       = 0xA103;
+        pub const DESTROY_WINDOW: u64   = 0xA104;
+        /// Update window properties post-creation.
+        /// words[0]=win_id, words[1]=config_flags, words[2]=pid|ppid<<32,
+        /// words[3]=title_bytes[0..8]; SHM cap at caps[0] for full title (optional).
+        pub const CONFIGURE_WINDOW: u64 = 0xA105;
+        /// Client requests a cursor shape when its pointer is inside its client area.
+        /// words[0] = (win_id as u32) | ((CursorShape discriminant as u32) << 32)
+        pub const SET_CURSOR: u64       = 0xA106;
 
         // Display Server -> Client Replies
-        pub const REPLY: u64          = 0xA1FF;
+        pub const REPLY: u64            = 0xA1FF;
+
+        // --- config_flags word bit layout (words[1] of CREATE_WINDOW / CONFIGURE_WINDOW) ---
+        // bits [1:0]  window_type  (0=Normal 1=Dialog 2=Desktop 3=Widget)
+        // bits [3:2]  state        (0=Normal 1=Minimized 2=Maximized 3=Fullscreen)
+        // bit  [4]    border       (0=Full 1=None)
+        // bit  [5]    z_index_type (0=Normal 1=OnTop)
+        // bits [12:6] z_index_value (1-100; 0 → use default 50)
+        // bits [14:13] show_type   (0=Floating 1=Tiled 2=Scrolling)
+        // bits [16:15] group_type  (0=None 1=Stacked 2=Tabbed)
+        // bits [63:17] reserved
+        pub mod config_flags {
+            pub const WIN_TYPE_MASK:    u64 = 0x3;
+            pub const STATE_MASK:       u64 = 0x3 << 2;
+            pub const STATE_SHIFT:      u64 = 2;
+            pub const BORDER_NONE:      u64 = 1 << 4;
+            pub const Z_ON_TOP:         u64 = 1 << 5;
+            pub const Z_VAL_MASK:       u64 = 0x7F << 6;
+            pub const Z_VAL_SHIFT:      u64 = 6;
+            pub const SHOW_TYPE_MASK:   u64 = 0x3 << 13;
+            pub const SHOW_TYPE_SHIFT:  u64 = 13;
+            pub const GROUP_TYPE_MASK:  u64 = 0x3 << 15;
+            pub const GROUP_TYPE_SHIFT: u64 = 15;
+        }
     }
 }
 
