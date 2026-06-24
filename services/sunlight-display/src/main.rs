@@ -480,8 +480,6 @@ const BORDER_W:           u32 = 2;          // Thinner modern border
 const BORDER_COLOR:       u32 = 0x00FF7A00; // Active window border glow
 const BORDER_INACTIVE:    u32 = 0x002B2B36; // Inactive window border
 const BTN_HOVER_BG:       u32 = 0x003A3A4A; // Hover state background for buttons
-const CLOSE_BTN_COLOR:    u32 = 0x00FF4B4B; // Standard close red
-const CLOSE_BTN_HOVER:    u32 = 0x00FF6B6B;
 const BTN_ICON_COLOR:     u32 = 0x00B0B0C0; // Icon color
 const BTN_ICON_ACTIVE:    u32 = 0x00FFFFFF; // Icon color when active/focused
 const BTN_SIZE:           u32 = 20;         // Size of control buttons
@@ -970,17 +968,14 @@ fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
         let mut btn_x = wx + chrome_w.saturating_sub(BTN_SIZE + BTN_SPACING);
         let btn_y = wy + (TITLEBAR_H.saturating_sub(BTN_SIZE)) / 2;
 
-        // Close button (X inside standard rect)
-        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, CLOSE_BTN_COLOR);
-        // Draw X
+        // Close button (no background, orange X)
+        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, tb_color);
         let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
         let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
         let csize = 4;
         for i in -csize..=csize {
-            // Diagonal \
-            draw_rect(state, (cx + i) as u32, (cy + i) as u32, 2, 2, 0x00FFFFFF);
-            // Diagonal /
-            draw_rect(state, (cx + i) as u32, (cy - i) as u32, 2, 2, 0x00FFFFFF);
+            draw_rect(state, (cx + i) as u32, (cy + i) as u32, 2, 2, BORDER_COLOR);
+            draw_rect(state, (cx + i) as u32, (cy - i) as u32, 2, 2, BORDER_COLOR);
         }
 
         btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
@@ -1034,7 +1029,8 @@ fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
         let avail_w = chrome_w.saturating_sub((BTN_SIZE + BTN_SPACING) * 4);
         draw_title(state, &win.config.title, wx, wy, avail_w);
 
-        // Borders (left, right, bottom)
+        // Borders (top, left, right, bottom)
+        draw_rect(state, wx, wy, chrome_w, BORDER_W, bd_color);
         draw_rect(state, wx,                       wy,  BORDER_W, chrome_h, bd_color);
         draw_rect(state, wx + BORDER_W + win.width, wy, BORDER_W, chrome_h, bd_color);
         draw_rect(state, wx, wy + TITLEBAR_H + win.height, chrome_w, BORDER_W, bd_color);
