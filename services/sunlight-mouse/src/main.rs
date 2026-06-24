@@ -1,8 +1,9 @@
 //! sunlight-mouse — User-space PS/2 mouse driver for SunlightOS.
 //!
 //! Initializes the 8042 controller's auxiliary port, receives raw IRQ12 bytes
-//! from the kernel via IPC, parses 3-byte PS/2 packets, converts relative motion
-//! to absolute coordinates, and forwards mouse events to tty_server.
+//! from the kernel via IPC, parses 3-byte PS/2 packets, and forwards raw relative
+//! motion (dx/dy/buttons) to display_server when available, falling back to absolute
+//! coordinates sent to tty_server for legacy terminal UI.
 
 #![no_std]
 #![no_main]
@@ -10,7 +11,7 @@
 use sunlight_ipc::{
     endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, nameserver_lookup,
     nameserver_lookup_timeout, nameserver_register, process_yield, DevicedMsg, DriverCaps,
-    DriverKind, DriverState, IpcMsg, ProcessExit,
+    DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
 };
 
 /// PS/2 mouse packet state machine
@@ -51,10 +52,7 @@ impl MouseState {
     fn process_byte(&mut self, byte: u8) -> Option<MouseEvent> {
         match self.packet_state {
             PacketState::WaitingByte0 => {
-                // Byte 0: [Y_OVF X_OVF Y_SIGN X_SIGN 1 MID_BTN RIGHT_BTN LEFT_BTN]
-                // Bit 3 must be 1 for valid packet sync
                 if byte & 0x08 == 0 {
-                    // Not a valid start byte, stay in sync
                     return None;
                 }
                 self.byte0 = byte;
@@ -70,31 +68,33 @@ impl MouseState {
                 self.byte2 = byte;
                 self.packet_state = PacketState::WaitingByte0;
 
-                // Parse the complete packet
                 let flags = self.byte0;
                 let left_btn = (flags & 0x01) != 0;
                 let right_btn = (flags & 0x02) != 0;
                 let middle_btn = (flags & 0x04) != 0;
 
-                // Sign-extend the 9-bit relative motion values
                 let mut dx = self.byte1 as i32;
                 let mut dy = self.byte2 as i32;
 
                 if (flags & 0x10) != 0 {
-                    dx |= !0xFF; // Sign extend X
+                    dx |= !0xFF;
                 }
                 if (flags & 0x20) != 0 {
-                    dy |= !0xFF; // Sign extend Y
+                    dy |= !0xFF;
                 }
 
-                // PS/2 Y axis is inverted (positive = down)
                 dy = -dy;
 
-                // Update absolute position with clamping
+                // Save raw delta before using for absolute tracking
+                let raw_dx = dx as i16;
+                let raw_dy = dy as i16;
+
                 self.abs_x = (self.abs_x + dx).max(0).min(self.screen_width - 1);
                 self.abs_y = (self.abs_y + dy).max(0).min(self.screen_height - 1);
 
                 Some(MouseEvent {
+                    dx: raw_dx,
+                    dy: raw_dy,
                     abs_x: self.abs_x as u16,
                     abs_y: self.abs_y as u16,
                     left_button: left_btn,
@@ -108,6 +108,8 @@ impl MouseState {
 
 #[derive(Clone, Copy)]
 struct MouseEvent {
+    dx: i16,
+    dy: i16,
     abs_x: u16,
     abs_y: u16,
     left_button: bool,
@@ -257,40 +259,41 @@ pub extern "C" fn _start() -> ! {
 
     syscall::debug_log("[MOUSE] found tty, ready to process mouse events\n");
 
-    // Phase 2: Main event loop with packet parsing
     let mut mouse_state = MouseState::new(1024, 768);
 
     loop {
-        // Poll for raw bytes from kernel IRQ12 buffer
         while let Some(byte) = syscall::mouse_pop_byte() {
             if let Some(event) = mouse_state.process_byte(byte) {
-                // Pack mouse event: abs_x | abs_y<<16 | buttons<<32
-                let mut event_val = event.abs_x as u64;
-                event_val |= (event.abs_y as u64) << 16;
                 let buttons = (event.left_button as u64)
                     | ((event.right_button as u64) << 1)
                     | ((event.middle_button as u64) << 2);
-                event_val |= buttons << 32;
 
-                // Send packed mouse event (label 0x2) to tty (legacy) and display compositor
-                let msg = IpcMsg::with_label(0x2).word(0, event_val);
-                let _ = ipc_call(tty_token, msg);
-
-                // Lazy (re)lookup for display so we work even if display starts after us
-                // (e.g. mouse starts early in boot, Desktop/GUI later).
+                // Lazy lookup display so we work even if it starts after us
                 if display_token.is_none() {
                     display_token = nameserver_lookup("display_server");
                     if display_token.is_some() {
-                        syscall::debug_log("[MOUSE] display_server now available, forwarding mouse\n");
+                        syscall::debug_log("[MOUSE] display_server available, routing raw events there\n");
                     }
                 }
+
                 if let Some(disp) = display_token {
+                    // --- Graphical mode: send raw relative motion (dx/dy/buttons) ---
+                    let raw = (event.dx as u64 & 0xFFFF)
+                        | ((event.dy as u64 & 0xFFFF) << 16)
+                        | (buttons << 32);
+                    let msg = IpcMsg::with_label(MouseMsg::RAW_MOTION).word(0, raw);
                     let _ = ipc_call(disp, msg);
+                } else {
+                    // --- Legacy TTY mode: send packed absolute coordinates ---
+                    let mut abs = event.abs_x as u64;
+                    abs |= (event.abs_y as u64) << 16;
+                    abs |= buttons << 32;
+                    let msg = IpcMsg::with_label(0x2).word(0, abs);
+                    let _ = ipc_call(tty_token, msg);
                 }
             }
         }
 
-        // Block on IPC recv (kernel will wake us on IRQ12)
         let _ = ipc_recv(my_endpoint);
     }
 }

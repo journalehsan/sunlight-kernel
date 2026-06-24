@@ -92,39 +92,82 @@ pub extern "C" fn _start() -> ! {
     let eye_color: u32 = 0x00FFFFFF;
     let pupil_color: u32 = 0x00000000;
 
-    // Initial frame so the window is never solid black. Pupils centered.
-    // We do this before the first EVENT_POLL so something is visible immediately.
-    {
-        for i in 0..(400 * 300) {
-            unsafe { buffer.add(i).write_volatile(bg_color); }
-        }
-        let eye_y = 150i32;
-        let left_eye_x = 120i32;
-        let right_eye_x = 280i32;
-        let eye_radius = 40i32;
-        let pupil_radius = 10i32;
+    // Window / eye geometry (window is a fixed 400x300 surface).
+    const WIN_W: i32 = 400;
+    const WIN_H: i32 = 300;
+    const EYE_Y: i32 = 150;
+    const LEFT_EYE_X: i32 = 120;
+    const RIGHT_EYE_X: i32 = 280;
+    const EYE_RADIUS: i32 = 40;
+    const PUPIL_RADIUS: i32 = 10;
+    // How far the pupil center may travel from the eye center while staying
+    // comfortably inside the white. Real circular constraint (not a square box).
+    const MAX_OFFSET: i32 = EYE_RADIUS - PUPIL_RADIUS - 4;
 
-        let draw_centered = |cx: i32, cy: i32| {
-            // white eye square
-            for y in (cy - eye_radius)..(cy + eye_radius) {
-                if y < 0 || y >= 300 { continue; }
-                for x in (cx - eye_radius)..(cx + eye_radius) {
-                    if x < 0 || x >= 400 { continue; }
-                    unsafe { buffer.add((y * 400 + x) as usize).write_volatile(eye_color); }
+    // Filled-circle rasterizer into the window-local buffer. Integer-only:
+    // a pixel is inside when dx*dx + dy*dy <= r*r.
+    let fill_circle = |cx: i32, cy: i32, r: i32, color: u32| {
+        let r2 = r * r;
+        for y in (cy - r)..=(cy + r) {
+            if y < 0 || y >= WIN_H {
+                continue;
+            }
+            let dy = y - cy;
+            for x in (cx - r)..=(cx + r) {
+                if x < 0 || x >= WIN_W {
+                    continue;
+                }
+                let dx = x - cx;
+                if dx * dx + dy * dy <= r2 {
+                    unsafe {
+                        buffer
+                            .add((y * WIN_W + x) as usize)
+                            .write_volatile(color);
+                    }
                 }
             }
-            // pupil centered
-            for y in (cy - pupil_radius)..(cy + pupil_radius) {
-                if y < 0 || y >= 300 { continue; }
-                for x in (cx - pupil_radius)..(cx + pupil_radius) {
-                    if x < 0 || x >= 400 { continue; }
-                    unsafe { buffer.add((y * 400 + x) as usize).write_volatile(pupil_color); }
-                }
+        }
+    };
+
+    // Render one eye. `mouse_gx/gy` are GLOBAL (screen) cursor coords; `cx/cy`
+    // are the eye center in window-local coords. We translate the eye center to
+    // screen space, take the vector to the cursor, and project the pupil along
+    // that direction. This works across the ENTIRE screen — there is no
+    // "inside the window" dead zone.
+    let render_eye = |cx: i32, cy: i32, mouse_gx: i32, mouse_gy: i32| {
+        // White of the eye.
+        fill_circle(cx, cy, EYE_RADIUS, eye_color);
+
+        // Vector from this eye's screen-space center to the cursor.
+        let dx = mouse_gx - (win_x + cx);
+        let dy = mouse_gy - (win_y + cy);
+
+        let (px, py) = {
+            let d2 = (dx as i64 * dx as i64 + dy as i64 * dy as i64) as u32;
+            if d2 == 0 {
+                (cx, cy)
+            } else {
+                let dist = isqrt(d2).max(1) as i32;
+                // If the cursor is closer than MAX_OFFSET, follow it exactly
+                // (pupil sits under the cursor); otherwise clamp to the rim.
+                let off = MAX_OFFSET.min(dist);
+                (cx + (dx * off) / dist, cy + (dy * off) / dist)
             }
         };
 
-        draw_centered(left_eye_x, eye_y);
-        draw_centered(right_eye_x, eye_y);
+        // Pupil (already constrained to stay inside the white by MAX_OFFSET).
+        fill_circle(px, py, PUPIL_RADIUS, pupil_color);
+    };
+
+    // Initial frame so the window is never solid black; pupils centered
+    // (drawn before the first EVENT_POLL so something is visible immediately).
+    {
+        for i in 0..(WIN_W * WIN_H) as usize {
+            unsafe { buffer.add(i).write_volatile(bg_color); }
+        }
+        // Point pupils at their own centers => "looking forward".
+        render_eye(LEFT_EYE_X, EYE_Y, win_x + LEFT_EYE_X, win_y + EYE_Y);
+        render_eye(RIGHT_EYE_X, EYE_Y, win_x + RIGHT_EYE_X, win_y + EYE_Y);
 
         let commit = IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, win_id);
         let _ = ipc_call(display_ep, commit);
@@ -133,7 +176,7 @@ pub extern "C" fn _start() -> ! {
     debug_log("[EYES] Initial frame drawn. Entering event loop...\n");
 
     loop {
-        // 3. Block until next mouse event (zero CPU when idle)
+        // Block until next mouse event (zero CPU when idle).
         let poll_req = IpcMsg::with_label(SgpMsg::EVENT_POLL).word(0, win_id);
         let event_reply = ipc_call(display_ep, poll_req);
 
@@ -141,82 +184,19 @@ pub extern "C" fn _start() -> ! {
         let mouse_x = (packed & 0xFFFF) as i32;
         let mouse_y = ((packed >> 16) & 0xFFFF) as i32;
 
-        // Convert to window-local coords and test if cursor is inside our window
-        let rel_x = mouse_x - win_x;
-        let rel_y = mouse_y - win_y;
-        const WIN_W: i32 = 400;
-        const WIN_H: i32 = 300;
-        let inside = rel_x >= 0 && rel_x < WIN_W && rel_y >= 0 && rel_y < WIN_H;
-
         // --- Zero-copy render into the shared buffer ---
-
-        // Clear (simple solid)
-        for i in 0..(400 * 300) {
+        for i in 0..(WIN_W * WIN_H) as usize {
             unsafe { buffer.add(i).write_volatile(bg_color); }
         }
 
-        // Eyes positions (hardcoded for 400x300)
-        let eye_y = 150i32;
-        let left_eye_x = 120i32;
-        let right_eye_x = 280i32;
-        let eye_radius = 40i32;
-        let pupil_radius = 10i32;
+        render_eye(LEFT_EYE_X, EYE_Y, mouse_x, mouse_y);
+        render_eye(RIGHT_EYE_X, EYE_Y, mouse_x, mouse_y);
 
-        let render_eye = |cx: i32, cy: i32| {
-            // Default: pupils centered (looking "forward"). When cursor inside our window,
-            // compute a limited offset in the exact direction toward the cursor.
-            let (base_px, base_py) = if inside {
-                let dx = rel_x - cx;
-                let dy = rel_y - cy;
-                let max_off = eye_radius - pupil_radius - 5;
-                let d2 = (dx as i64 * dx as i64 + dy as i64 * dy as i64) as u32;
-                if d2 == 0 {
-                    (cx, cy)
-                } else {
-                    let dist = isqrt(d2).max(1);
-                    let offx = (dx * max_off) / (dist as i32);
-                    let offy = (dy * max_off) / (dist as i32);
-                    (cx + offx, cy + offy)
-                }
-            } else {
-                (cx, cy)
-            };
-
-            // Keep pupil fully inside the eye square
-            let min_p = eye_radius - pupil_radius;
-            let px = base_px.clamp(cx - min_p, cx + min_p);
-            let py = base_py.clamp(cy - min_p, cy + min_p);
-
-            // Draw eye (white rect for simplicity + speed)
-            for y in (cy - eye_radius)..(cy + eye_radius) {
-                if y < 0 || y >= 300 { continue; }
-                for x in (cx - eye_radius)..(cx + eye_radius) {
-                    if x < 0 || x >= 400 { continue; }
-                    let idx = (y * 400 + x) as usize;
-                    unsafe { buffer.add(idx).write_volatile(eye_color); }
-                }
-            }
-
-            // Draw pupil (black)
-            for y in (py - pupil_radius)..(py + pupil_radius) {
-                if y < 0 || y >= 300 { continue; }
-                for x in (px - pupil_radius)..(px + pupil_radius) {
-                    if x < 0 || x >= 400 { continue; }
-                    let idx = (y * 400 + x) as usize;
-                    unsafe { buffer.add(idx).write_volatile(pupil_color); }
-                }
-            }
-        };
-
-        render_eye(left_eye_x, eye_y);
-        render_eye(right_eye_x, eye_y);
-
-        // 4. COMMIT_FRAME
         let commit = IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, win_id);
         let _ = ipc_call(display_ep, commit);
 
-        // Small throttle so we don't spin 100% CPU on the fast immediate-reply EVENT_POLL path.
-        // 20k iterations is still very responsive for mouse following.
+        // Small throttle so we don't spin 100% CPU on the fast immediate-reply
+        // EVENT_POLL path. Still very responsive for mouse following.
         for _ in 0..20000 {
             core::hint::spin_loop();
         }

@@ -245,6 +245,12 @@ pub mod KbdMsg {
 }
 
 #[allow(non_snake_case)]
+pub mod MouseMsg {
+    /// Raw mouse motion event: dx(i16) | dy(i16)<<16 | buttons(u8)<<32
+    pub const RAW_MOTION: u64 = 0x3;
+}
+
+#[allow(non_snake_case)]
 pub mod SpawnMsg {
     pub const SPAWN: u64 = 1;
     pub const REPLY: u64 = 2;
