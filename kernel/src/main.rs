@@ -30,7 +30,7 @@ static PMM: spin::Mutex<PhysicalMemoryManager> = spin::Mutex::new(PhysicalMemory
 // Limine requests
 static MEMMAP_REQ: limine::request::MemmapRequest = limine::request::MemmapRequest::new();
 static HHDM_REQ: limine::request::HhdmRequest = limine::request::HhdmRequest::new();
-static FB_REQ: limine::request::FramebufferRequest = limine::request::FramebufferRequest::new();
+pub(crate) static FB_REQ: limine::request::FramebufferRequest = limine::request::FramebufferRequest::new();
 static RSDP_REQ: limine::request::RsdpRequest = limine::request::RsdpRequest::new();
 // 1 MiB boot stack (Limine defaults to 64 KiB). `init_kernel_vfs` and the
 // FAT bootstrap keep multi-KiB filesystem objects on the stack before the
@@ -140,6 +140,12 @@ static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-li
 // helios-note: std+libc Rust terminal note editor, runs via Helios Linux compat.
 static HELIOS_NOTE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-linux-musl/release/helios-note");
+// GUI Phase 3+: Display compositor (window manager) for the Sunlight Graphics Protocol.
+static SUNLIGHT_DISPLAY_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-display");
+// Canonical first graphical demo (Eyes Tracker).
+static EYES_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/eyes");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;

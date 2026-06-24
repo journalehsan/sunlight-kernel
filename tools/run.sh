@@ -198,6 +198,8 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features sunlightos --no-default-features --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release
     # Sunshell MUST be compiled as user-space ELF with user-space linker script
     # Force x86_64-unknown-none target (override sunshell's Linux-only config)
     # This ensures it loads into 0x400000+ (user VAs), not kernel VAs (0xffffffff8...)

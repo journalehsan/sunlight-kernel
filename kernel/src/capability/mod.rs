@@ -1,5 +1,7 @@
 use crate::serial_println;
+use alloc::sync::Arc;
 use core::sync::atomic::{AtomicU64, Ordering};
+use x86_64::structures::paging::{PhysFrame, Size4KiB};
 use x86_64::PhysAddr;
 
 /// The category a token belongs to, encoded in its high tag bits.
@@ -251,6 +253,14 @@ pub struct VfsCapability {
     pub flags: AccessFlags,
 }
 
+/// Kernel-managed shared memory object. Backing frames need not be physically contiguous;
+/// they are mapped contiguously into each client's chosen virtual window.
+#[derive(Debug)]
+pub struct ShmObject {
+    pub frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
+    pub size: usize, // requested/rounded size in bytes
+}
+
 /// Errors from the capability broker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CapError {
@@ -298,8 +308,8 @@ fn generate_token(tag: u64) -> CapabilityToken {
 pub struct CapabilityBroker {
     endpoints: alloc::vec::Vec<Endpoint>,
     capabilities: alloc::vec::Vec<(CapabilityToken, u32, CapabilityRights)>,
-    /// Shared memory grants: (token, phys_frame, owner_pid, revoked)
-    shared_grants: alloc::vec::Vec<(CapabilityToken, PhysAddr, usize, bool)>,
+    /// Shared memory regions (multi-page capable): (token, object, owner_pid, revoked)
+    shared_regions: alloc::vec::Vec<(CapabilityToken, Arc<ShmObject>, usize, bool)>,
     vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
 }
 
@@ -308,7 +318,7 @@ impl CapabilityBroker {
         Self {
             endpoints: alloc::vec::Vec::new(),
             capabilities: alloc::vec::Vec::new(),
-            shared_grants: alloc::vec::Vec::new(),
+            shared_regions: alloc::vec::Vec::new(),
             vfs_caps: alloc::vec::Vec::new(),
         }
     }
@@ -462,24 +472,43 @@ impl CapabilityBroker {
             .retain(|(_, endpoint_id, _)| !endpoint_ids.iter().any(|id| id == endpoint_id));
     }
 
-    /// Mint a capability token granting access to map a shared physical frame.
+    /// Mint a capability token granting access to map a shared physical frame (single-page compat).
     pub fn mint_shared_page(&mut self, phys: PhysAddr, owner_pid: usize) -> CapabilityToken {
+        let frame = unsafe { PhysFrame::<Size4KiB>::from_start_address_unchecked(phys) };
+        self.mint_shared_region(alloc::vec![frame], 4096, owner_pid)
+    }
+
+    /// Mint a capability token for a multi-page shared memory region.
+    /// The token represents the whole object; mapping it maps all backing frames contiguously.
+    pub fn mint_shared_region(
+        &mut self,
+        frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
+        size: usize,
+        owner_pid: usize,
+    ) -> CapabilityToken {
+        let obj = Arc::new(ShmObject { frames, size });
         let token = generate_token(CapabilityToken::TAG_VFS);
-        self.shared_grants.push((token, phys, owner_pid, false));
+        self.shared_regions.push((token, obj, owner_pid, false));
         serial_println!(
-            "[CAP] Minted shared-page token {:#x} phys={:#x} owner={}",
+            "[CAP] Minted shm-region token {:#x} size={}KiB owner={}",
             token.as_u64(),
-            phys.as_u64(),
+            size / 1024,
             owner_pid
         );
         token
     }
 
-    /// Resolve a shared-page capability token to its physical frame (if valid and not revoked).
+    /// Resolve a shared-page capability token to its physical frame (first page for compat / 1-page regions).
     pub fn resolve_shared_page(&self, token: CapabilityToken) -> Option<PhysAddr> {
-        self.shared_grants.iter().find_map(|(t, phys, _, revoked)| {
+        self.resolve_shared_region(token)
+            .and_then(|obj| obj.frames.first().map(|f| f.start_address()))
+    }
+
+    /// Resolve a (possibly multi-page) shared region capability to its object.
+    pub fn resolve_shared_region(&self, token: CapabilityToken) -> Option<Arc<ShmObject>> {
+        self.shared_regions.iter().find_map(|(t, obj, _, revoked)| {
             if *t == token && !*revoked {
-                Some(*phys)
+                Some(Arc::clone(obj))
             } else {
                 None
             }
@@ -491,32 +520,33 @@ impl CapabilityBroker {
     /// can be used by callers that need to report the precise rejection reason.
     pub fn validate_shared_page(&self, token: CapabilityToken) -> Result<PhysAddr, CapError> {
         let entry = self
-            .shared_grants
+            .shared_regions
             .iter()
             .find(|(t, _, _, _)| *t == token)
             .ok_or(CapError::NotFound)?;
         if entry.3 {
             return Err(CapError::Revoked);
         }
-        Ok(entry.1)
+        // Return first phys for compat with single-page tests
+        entry.1.frames.first().map(|f| f.start_address()).ok_or(CapError::NotFound)
     }
 
-    /// Revoke a shared-page grant token (called on owner free or cleanup).
+    /// Revoke a shared region grant token (called on owner free or cleanup).
     pub fn revoke_shared(&mut self, token: CapabilityToken) {
         if let Some(idx) = self
-            .shared_grants
+            .shared_regions
             .iter()
             .position(|(t, _, _, _)| *t == token)
         {
-            self.shared_grants.swap_remove(idx);
-            serial_println!("[CAP] Revoked shared-page token {:#x}", token.as_u64());
+            self.shared_regions.swap_remove(idx);
+            serial_println!("[CAP] Revoked shm-region token {:#x}", token.as_u64());
         }
     }
 
-    /// Mark all shared-page grants owned by `pid` as revoked, without removing
+    /// Mark all shared region grants owned by `pid` as revoked, without removing
     /// them from the table.
     pub fn revoke_all_for(&mut self, pid: usize) {
-        for entry in self.shared_grants.iter_mut() {
+        for entry in self.shared_regions.iter_mut() {
             if entry.2 == pid {
                 entry.3 = true;
             }

@@ -1,6 +1,7 @@
-use crate::capability::{CapabilityBroker, CapabilityToken};
+use crate::capability::{CapabilityBroker, CapabilityToken, ShmObject};
 use crate::memory::pmm::PhysicalMemoryManager;
 use crate::process::Process;
+use alloc::sync::Arc;
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -12,39 +13,61 @@ pub enum SharedMemError {
     OutOfMemory,
     InvalidToken,
     InvalidAddress,
+    InvalidArgument,
 }
 
-/// A shared physical page grant. Owner tracks it for exit cleanup.
-pub struct SharedPage {
-    pub phys: PhysAddr,
+/// A shared memory region grant (1 or more pages). Owner tracks for exit cleanup.
+pub struct SharedRegion {
     pub token: CapabilityToken,
     pub owner: usize,
     pub size: usize,
 }
 
+pub fn alloc_shared_region(
+    caller: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    caps: &mut CapabilityBroker,
+    hhdm_offset: VirtAddr,
+    size: usize,
+) -> Result<(VirtAddr, CapabilityToken), SharedMemError> {
+    let page_size = PAGE_SIZE;
+    let num_pages = if size == 0 { 1 } else { (size + page_size - 1) / page_size };
+    if num_pages == 0 {
+        return Err(SharedMemError::InvalidArgument);
+    }
+
+    let mut frames: alloc::vec::Vec<PhysFrame<Size4KiB>> = alloc::vec::Vec::with_capacity(num_pages);
+    for _ in 0..num_pages {
+        let phys = pmm
+            .alloc_frame_owned(caller.pid as u32)
+            .ok_or(SharedMemError::OutOfMemory)?;
+        let frame = unsafe { PhysFrame::<Size4KiB>::from_start_address_unchecked(phys) };
+        frames.push(frame);
+    }
+
+    let actual_size = num_pages * page_size;
+    let token = caps.mint_shared_region(frames.clone(), actual_size, caller.pid);
+
+    let virt = unsafe { caller.address_space.map_shared_region(&frames, pmm, hhdm_offset) }?;
+
+    caller.owned_shared.push(SharedRegion {
+        token,
+        owner: caller.pid,
+        size: actual_size,
+    });
+    caller.mapped_shared.push((token, virt, actual_size));
+
+    Ok((virt, token))
+}
+
+/// Backward-compat wrapper for single-page (4 KiB) allocations used by existing bulk IPC.
 pub fn alloc_shared_page(
     caller: &mut Process,
     pmm: &mut PhysicalMemoryManager,
     caps: &mut CapabilityBroker,
     hhdm_offset: VirtAddr,
 ) -> Result<(VirtAddr, CapabilityToken), SharedMemError> {
-    let phys = pmm
-        .alloc_frame_owned(caller.pid as u32)
-        .ok_or(SharedMemError::OutOfMemory)?;
-
-    let virt = unsafe { caller.address_space.map_shared_page(phys, pmm, hhdm_offset) }?;
-
-    let token = caps.mint_shared_page(phys, caller.pid);
-
-    caller.owned_shared.push(SharedPage {
-        phys,
-        token,
-        owner: caller.pid,
-        size: PAGE_SIZE,
-    });
-    caller.mapped_shared.push((token, virt));
-
-    Ok((virt, token))
+    alloc_shared_region(caller, pmm, caps, hhdm_offset, PAGE_SIZE)
 }
 
 pub fn map_shared_page(
@@ -54,17 +77,17 @@ pub fn map_shared_page(
     caps: &mut CapabilityBroker,
     hhdm_offset: VirtAddr,
 ) -> Result<VirtAddr, SharedMemError> {
-    let phys = caps
-        .resolve_shared_page(token)
+    let obj = caps
+        .resolve_shared_region(token)
         .ok_or(SharedMemError::InvalidToken)?;
 
     let virt = unsafe {
         receiver
             .address_space
-            .map_shared_page(phys, pmm, hhdm_offset)
+            .map_shared_region(&obj.frames, pmm, hhdm_offset)
     }?;
 
-    receiver.mapped_shared.push((token, virt));
+    receiver.mapped_shared.push((token, virt, obj.size));
 
     Ok(virt)
 }
@@ -76,21 +99,29 @@ pub fn free_shared_page(
     caps: &mut CapabilityBroker,
     hhdm_offset: VirtAddr,
 ) {
-    // Unmap any local mapping for this token
-    if let Some(pos) = process.mapped_shared.iter().position(|(t, _)| *t == token) {
-        let (_, virt) = process.mapped_shared.remove(pos);
-        unsafe {
-            if let Ok(page) = Page::<Size4KiB>::from_start_address(virt) {
-                let _ = process.address_space.unmap_page(page, hhdm_offset);
+    // Unmap any local mapping(s) for this token (multi-page aware)
+    if let Some(pos) = process.mapped_shared.iter().position(|(t, _, _)| *t == token) {
+        let (_, base_virt, sz) = process.mapped_shared.remove(pos);
+        let num_pages = if sz == 0 { 1 } else { (sz + PAGE_SIZE - 1) / PAGE_SIZE };
+        for i in 0..num_pages {
+            let v = VirtAddr::new(base_virt.as_u64() + (i * PAGE_SIZE) as u64);
+            unsafe {
+                if let Ok(page) = Page::<Size4KiB>::from_start_address(v) {
+                    let _ = process.address_space.unmap_page(page, hhdm_offset);
+                }
             }
         }
     }
 
-    // If owner of this grant, revoke and free the frame
+    // If owner of this grant, revoke the region and free all frames
     if let Some(pos) = process.owned_shared.iter().position(|sp| sp.token == token) {
         let sp = process.owned_shared.remove(pos);
+        if let Some(obj) = caps.resolve_shared_region(sp.token) {
+            for f in &obj.frames {
+                pmm.free_frame(f.start_address());
+            }
+        }
         caps.revoke_shared(sp.token);
-        pmm.free_frame(sp.phys);
     }
 }
 
@@ -102,11 +133,15 @@ pub fn cleanup_shared_pages(
 ) {
     let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().map(|r| r.offset).unwrap_or(0));
 
-    // Unmap all views this process had (owned + received)
-    for &(_, virt) in &process.mapped_shared {
-        unsafe {
-            if let Ok(page) = Page::<Size4KiB>::from_start_address(virt) {
-                let _ = process.address_space.unmap_page(page, hhdm_offset);
+    // Unmap all views this process had (owned + received). Multi-page aware.
+    for &(_, base_virt, sz) in &process.mapped_shared {
+        let num_pages = if sz == 0 { 1 } else { (sz + PAGE_SIZE - 1) / PAGE_SIZE };
+        for i in 0..num_pages {
+            let v = VirtAddr::new(base_virt.as_u64() + (i * PAGE_SIZE) as u64);
+            unsafe {
+                if let Ok(page) = Page::<Size4KiB>::from_start_address(v) {
+                    let _ = process.address_space.unmap_page(page, hhdm_offset);
+                }
             }
         }
     }
@@ -114,7 +149,11 @@ pub fn cleanup_shared_pages(
 
     // Free frames and revoke tokens for anything we owned
     for sp in process.owned_shared.drain(..) {
+        if let Some(obj) = caps.resolve_shared_region(sp.token) {
+            for f in &obj.frames {
+                pmm.free_frame(f.start_address());
+            }
+        }
         caps.revoke_shared(sp.token);
-        pmm.free_frame(sp.phys);
     }
 }

@@ -1,5 +1,6 @@
 use core::arch::naked_asm;
-use x86_64::VirtAddr;
+use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
+use x86_64::{PhysAddr, VirtAddr};
 
 /// Syscall numbers for SunlightOS
 #[repr(u64)]
@@ -105,6 +106,9 @@ pub enum SunlightSyscall {
     MousePopByte = 115,
     MouseInit = 116,
     MousePortRead = 117,
+
+    // GUI / Display (Phase 3+): allow the compositor to map the Limine physical framebuffer
+    MapFramebuffer = 118,
 
     DebugLog = 99,
 }
@@ -462,6 +466,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         115 => sys_mouse_pop_byte(),
         116 => sys_mouse_init(),
         117 => sys_mouse_port_read(frame),
+        118 => sys_map_framebuffer(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -3487,15 +3492,21 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
+    let size = frame.rdi as usize; // 0 => 4KiB (compat); >0 for multi-page regions
     let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
     let process = sched.current_process_mut();
-    match crate::memory::shared::alloc_shared_page(process, &mut *pmm, &mut *caps, hhdm_offset) {
+    match crate::memory::shared::alloc_shared_region(process, &mut *pmm, &mut *caps, hhdm_offset, size) {
         Ok((virt, token)) => {
-            crate::serial_println!("[SHM]  alloc_shared_page: OK");
-            // Return virt in rax (the fn result), token also in rdx (and r13 for ipc wrapper convenience)
+            // Preserve legacy message for test expectations when using the 1-page path
+            if size == 0 || size == 4096 {
+                crate::serial_println!("[SHM]  alloc_shared_page: OK");
+            } else {
+                crate::serial_println!("[SHM]  alloc_shared_region: OK ({} bytes)", size);
+            }
+            // Return virt in rax, token in rdx + r13 (for direct callers and ipc raw_syscall caps[0])
             frame.rdx = token.0;
             frame.r13 = token.0;
             virt.as_u64()
@@ -3506,6 +3517,7 @@ fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
     let token = crate::capability::CapabilityToken(frame.rdi);
+    // rsi may carry prot in future (SHM_READ etc); currently always RW for the mapping
     let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
@@ -3531,6 +3543,67 @@ fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
     crate::memory::shared::free_shared_page(process, token, &mut *pmm, &mut *caps, hhdm_offset);
     crate::serial_println!("[SHM]  shm_free: page unmapped OK");
     0
+}
+
+/// Map the physical Limine framebuffer into the current process for the GUI compositor.
+/// Returns user virtual address of the start of the framebuffer (or 0 on failure).
+/// The caller can read fb dimensions via other means or we pack extra info in rdx/rcx etc.
+fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
+    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+
+    let fb_resp = crate::FB_REQ.response();
+    let fb = match fb_resp.and_then(|r| r.framebuffers().first()) {
+        Some(f) => f,
+        None => return 0,
+    };
+
+    let fb_addr = fb.address() as u64;
+    let fb_pitch = fb.pitch as u64;
+    let fb_height = fb.height as u64;
+    let fb_width = fb.width as u32;
+    let fb_bpp = fb.bpp as u32; // usually 32
+
+    let hhdm = hhdm_offset.as_u64();
+    let fb_phys_base = if fb_addr >= hhdm { fb_addr - hhdm } else { fb_addr };
+    let fb_page_offset = fb_phys_base & 0xfff;
+    let bytes_per_row = fb_pitch;
+    let total_bytes = fb_page_offset + bytes_per_row * fb_height;
+    let page_count = (total_bytes + 4095) / 4096;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let process = sched.current_process_mut();
+
+    const DISPLAY_FB_VADDR: u64 = 0x0000_0004_0000_0000; // dedicated region for device FB
+
+    let flags = PageTableFlags::PRESENT
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::USER_ACCESSIBLE
+        | PageTableFlags::NO_EXECUTE;
+
+    for page_idx in 0..page_count {
+        let user_va = DISPLAY_FB_VADDR + page_idx * 4096;
+        let user_page = match Page::<Size4KiB>::from_start_address(VirtAddr::new(user_va)) {
+            Ok(p) => p,
+            Err(_) => return 0,
+        };
+        let phys = (fb_phys_base & !0xfff) + page_idx * 4096;
+        let fb_frame = unsafe { PhysFrame::from_start_address_unchecked(PhysAddr::new(phys)) };
+        unsafe {
+            process.address_space.map_page(user_page, fb_frame, flags, &mut *pmm, hhdm_offset);
+        }
+    }
+
+    // Return base VA in rax.
+    // Pack info into registers that raw_syscall surfaces in the synthetic IpcMsg words:
+    // words[0] (r8) = width | (height << 32)
+    // words[1] (r9) = pitch
+    // words[2] (r10) = bpp
+    frame.r8 = (fb_width as u64) | ((fb_height as u64) << 32);
+    frame.r9 = fb_pitch;
+    frame.r10 = fb_bpp as u64;
+
+    (DISPLAY_FB_VADDR + fb_page_offset) as u64
 }
 
 fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {

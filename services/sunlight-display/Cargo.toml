@@ -1,14 +1,6 @@
 [package]
-name = "sunlight-deviced"
+name = "sunlight-display"
 version = "0.1.360"
-
-
-
-
-
-
-
-
 
 
 edition = "2021"
@@ -16,12 +8,7 @@ edition = "2021"
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
-heapless = "0.8"
 
 [[bin]]
-name = "deviced"
+name = "sunlight-display"
 path = "src/main.rs"
-
-[[bin]]
-name = "devicectl"
-path = "src/bin/devicectl.rs"

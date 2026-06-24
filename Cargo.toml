@@ -45,6 +45,8 @@ members = [
     "cpu-utils",
     "services/sunlight-kbd",
     "services/sunlight-mouse",
+    "services/sunlight-display",
+    "services/eyes",
     "services/sunlight-deviced",
     "services/sunlight-networkd",
     "services/sunlight-resolved",

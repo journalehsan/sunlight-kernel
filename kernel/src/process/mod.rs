@@ -104,10 +104,11 @@ pub struct Process {
     /// Saved Linux terminal settings for ioctl(TCGETS/TCSETS) emulation.
     pub linux_termios: crate::arch::x86_64::syscall::LinuxTermios,
 
-    /// Shared memory pages this process owns (via shm_alloc).
-    pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedPage>,
-    /// Shared memory pages this process currently has mapped via tokens (owner + receivers).
-    pub mapped_shared: alloc::vec::Vec<(crate::capability::CapabilityToken, x86_64::VirtAddr)>,
+    /// Shared memory regions this process owns (via shm_alloc / shm_create).
+    pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedRegion>,
+    /// Shared memory regions this process currently has mapped via tokens (owner + receivers).
+    /// (token, base_virt, size_in_bytes)
+    pub mapped_shared: alloc::vec::Vec<(crate::capability::CapabilityToken, x86_64::VirtAddr, usize)>,
 
     // === Scheduler bug-fix / feature fields ===
     /// Watchdog: maximum runtime per quantum, in ticks. None = disabled. [FEAT-1]

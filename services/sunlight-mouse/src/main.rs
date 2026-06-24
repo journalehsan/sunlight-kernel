@@ -242,13 +242,24 @@ pub extern "C" fn _start() -> ! {
     syscall::mouse_register(my_endpoint.0);
     syscall::debug_log("[MOUSE] registered with kernel IRQ12 router\n");
 
-    // Lookup tty_server capability
+    // Lookup tty_server capability (for legacy TUI)
     let tty_token = loop {
         if let Some(t) = nameserver_lookup("tty") {
             break t;
         }
         process_yield();
     };
+
+    // Also lookup display_server for the new graphical stack (Phase 3+)
+    let display_token = loop {
+        if let Some(t) = nameserver_lookup("display_server") {
+            syscall::debug_log("[MOUSE] display_server found, will forward events\n");
+            break Some(t);
+        }
+        // Non-fatal: display may not be running yet
+        break None;
+    };
+
     syscall::debug_log("[MOUSE] found tty, ready to process mouse events\n");
 
     // Phase 2: Main event loop with packet parsing
@@ -266,9 +277,12 @@ pub extern "C" fn _start() -> ! {
                     | ((event.middle_button as u64) << 2);
                 event_val |= buttons << 32;
 
-                // Send to tty_server (label 0x2 for mouse event)
+                // Send packed mouse event (label 0x2) to tty (legacy) and display compositor
                 let msg = IpcMsg::with_label(0x2).word(0, event_val);
                 let _ = ipc_call(tty_token, msg);
+                if let Some(disp) = display_token {
+                    let _ = ipc_call(disp, msg);
+                }
             }
         }
 

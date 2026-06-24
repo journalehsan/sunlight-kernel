@@ -872,6 +872,8 @@ max_ttys = 6
         mode::FILE_755,
         b"#!/sunlight/hangman\n",
     ),
+    // GUI Eyes Tracker demo client
+    RamEntry::file("/bin/eyes", 0, 0, mode::FILE_755, b"#!/sunlight/eyes\n"),
     RamEntry::file(
         "/bin/cpufeat",
         0,
@@ -1352,6 +1354,8 @@ StandardOutput=journal\nStandardError=journal\n\n\
         mode::FILE_755,
         b"#!/sunlight/hangman\n",
     ),
+    // GUI Eyes Tracker demo client (usr path)
+    RamEntry::file("/usr/bin/eyes", 0, 0, mode::FILE_755, b"#!/sunlight/eyes\n"),
     RamEntry::file(
         "/usr/bin/cpufeat",
         0,

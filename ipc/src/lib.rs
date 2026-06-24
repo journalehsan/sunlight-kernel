@@ -48,6 +48,8 @@ pub enum SunlightSyscall {
     MousePopByte = 115,
     MouseInit = 116,
     MousePortRead = 117,
+    // GUI / Display: map the physical Limine framebuffer into user space for the compositor
+    MapFramebuffer = 118,
     DebugLog = 99,
 }
 
@@ -216,6 +218,26 @@ pub mod VfsMsg {
     pub const RENAME: u64 = 16; // Rename: src path words[0..3], dst path words[4..7]
     pub const DATA_SHARED: u64 = 31; // large read reply carries cap in caps[0]
 }
+
+/// Sunlight Graphics Protocol (SGP) opcodes for the display / compositor service.
+/// Registered under nameserver name "display_server".
+/// See docs/GUI/INITIALIZE_PHASE... for full spec.
+pub mod sgp {
+    #[allow(non_snake_case)]
+    pub mod SgpMsg {
+        // Client -> Display Server Requests
+        pub const CREATE_WINDOW: u64  = 0xA101;
+        pub const COMMIT_FRAME: u64   = 0xA102;
+        pub const EVENT_POLL: u64     = 0xA103;
+        pub const DESTROY_WINDOW: u64 = 0xA104;
+
+        // Display Server -> Client Replies
+        pub const REPLY: u64          = 0xA1FF;
+    }
+}
+
+// For convenience, also re-export at top level (some code uses SgpMsg directly)
+pub use sgp::SgpMsg;
 
 #[allow(non_snake_case)]
 pub mod KbdMsg {
@@ -1648,16 +1670,24 @@ pub mod process_exit {
     pub use super::ProcessExit;
 }
 
-/// Allocate a shared physical page. Returns (local virtual ptr in caller AS, capability token to send to receiver).
+pub const SHM_PAGE: usize = 4096;
+
+/// Allocate a 4 KiB shared page (legacy/bulk-IPC path). For larger regions use shm_create.
 pub fn shm_alloc() -> Result<(*mut u8, CapabilityToken), ShmError> {
-    let (ret, msg) = unsafe { raw_syscall(SunlightSyscall::ShmAlloc, 0, 0, 0, 0, 0, 0, 0) };
+    shm_create(SHM_PAGE, 0)
+}
+
+/// Create a shared memory object of the given size (bytes). Returns (base ptr, token).
+/// The kernel will round up to whole pages. Use the returned token with shm_map.
+pub fn shm_create(size: usize, flags: u64) -> Result<(*mut u8, CapabilityToken), ShmError> {
+    let (ret, msg) = unsafe { raw_syscall(SunlightSyscall::ShmAlloc, size as u64, flags, 0, 0, 0, 0, 0) };
     if ret == u64::MAX || msg.caps[0] == CapabilityToken::INVALID {
         return Err(ShmError::OutOfMemory);
     }
     Ok((ret as *mut u8, msg.caps[0]))
 }
 
-/// Map a shared page into the caller's AS using a received token. Returns local ptr.
+/// Map a shared region (any size) into the caller's AS using a received token. Returns base ptr.
 pub fn shm_map(token: CapabilityToken) -> Result<*mut u8, ShmError> {
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ShmMap, token.0, 0, 0, 0, 0, 0, 0) };
     if ret == u64::MAX {
@@ -1681,4 +1711,16 @@ pub fn map_telemetry() -> *const u8 {
     // SAFETY: MapTelemetry takes no pointers and returns a virtual address in rax.
     let (addr, _) = unsafe { raw_syscall(SunlightSyscall::MapTelemetry, 0, 0, 0, 0, 0, 0, 0) };
     addr as *const u8
+}
+
+/// Map the physical Limine framebuffer for the display compositor.
+/// Returns (base_user_va, width|height packed in u64, pitch, bpp).
+pub fn map_framebuffer() -> Option<(*mut u8, u64, u64, u64)> {
+    let (va, msg) = unsafe {
+        raw_syscall(SunlightSyscall::MapFramebuffer, 0, 0, 0, 0, 0, 0, 0)
+    };
+    if va == 0 {
+        return None;
+    }
+    Some((va as *mut u8, msg.words[0], msg.words[1], msg.words[2]))
 }

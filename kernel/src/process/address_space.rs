@@ -255,8 +255,7 @@ impl AddressSpace {
         );
     }
 
-    /// Map a shared physical frame into the dedicated shared region (0x3_0000_0000_0000+).
-    /// The caller is responsible for capability tracking and frame lifetime.
+    /// Map a single shared physical frame (compat wrapper).
     /// SAFETY: hhdm_offset must be correct HHDM base; phys must be a valid allocated frame.
     pub unsafe fn map_shared_page(
         &mut self,
@@ -264,20 +263,41 @@ impl AddressSpace {
         pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<VirtAddr, crate::memory::shared::SharedMemError> {
-        const PAGE_SIZE: u64 = 4096;
-        if self.shared_bump >= 0x0000_0004_0000_0000 {
-            return Err(crate::memory::shared::SharedMemError::OutOfMemory);
-        }
-        let virt = VirtAddr::new(self.shared_bump);
-        let page = Page::<Size4KiB>::from_start_address(virt)
-            .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
         let frame = PhysFrame::<Size4KiB>::from_start_address(phys)
             .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
+        self.map_shared_region(&[frame], pmm, hhdm_offset)
+    }
+
+    /// Map a (possibly multi-page) shared memory region contiguously into the dedicated shared area.
+    /// Returns the base virtual address of the region.
+    /// SAFETY: hhdm_offset must be correct HHDM base; frames must be valid.
+    pub unsafe fn map_shared_region(
+        &mut self,
+        frames: &[PhysFrame<Size4KiB>],
+        pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<VirtAddr, crate::memory::shared::SharedMemError> {
+        const PAGE_SIZE: u64 = 4096;
+        let n = frames.len();
+        if n == 0 {
+            return Err(crate::memory::shared::SharedMemError::InvalidArgument);
+        }
+        let total = (n as u64) * PAGE_SIZE;
+        if self.shared_bump + total > 0x0000_0004_0000_0000 {
+            return Err(crate::memory::shared::SharedMemError::OutOfMemory);
+        }
+        let base = VirtAddr::new(self.shared_bump);
         let flags =
             PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
-        self.map_page(page, frame, flags, pmm, hhdm_offset);
-        self.shared_bump += PAGE_SIZE;
-        Ok(virt)
+
+        for (i, frame) in frames.iter().enumerate() {
+            let v = VirtAddr::new(self.shared_bump + (i as u64) * PAGE_SIZE);
+            let page = Page::<Size4KiB>::from_start_address(v)
+                .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
+            self.map_page(page, *frame, flags, pmm, hhdm_offset);
+        }
+        self.shared_bump += total;
+        Ok(base)
     }
 
     /// Unmap a page previously mapped in this address space. Returns the phys addr if it was present.

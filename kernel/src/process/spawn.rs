@@ -445,6 +445,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/sbin/sunlight-sm" | "/usr/sbin/sunlight-sm" => Ok(crate::SUNLIGHT_SM_ELF_BYTES),
         // Solar HTTP server with SBSP scripting engine.
         "/sbin/solar" | "/usr/sbin/solar" => Ok(crate::SOLAR_ELF_BYTES),
+        // GUI Phase 3+ : Display server (compositor) + eyes tracker demo client.
+        "/sbin/sunlight-display" | "/usr/sbin/sunlight-display" => Ok(crate::SUNLIGHT_DISPLAY_ELF_BYTES),
+        "/bin/eyes" | "/usr/bin/eyes" => Ok(crate::EYES_ELF_BYTES),
         // sunlight-sunsay: native Rust proof-of-life binary (Phase 1 std smoke test).
         "/bin/sunlight-sunsay" | "/usr/bin/sunlight-sunsay" | "/usr/local/bin/sunlight-sunsay" => {
             Ok(crate::SUNLIGHT_SUNSAY_ELF_BYTES)

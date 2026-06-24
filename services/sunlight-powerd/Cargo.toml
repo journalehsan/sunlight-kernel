@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-powerd"
-version = "0.1.354"
+version = "0.1.360"
+
 
 edition = "2021"
 
