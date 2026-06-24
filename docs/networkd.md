@@ -88,10 +88,10 @@ networkctl json
 networkctl refresh
 ```
 
-`list`, `status`, `json`, and default-route queries refresh the in-memory
-device view before replying, so devices registered shortly after `networkd`
-startup, such as `eth0` from `net_server`, appear without a separate manual
-refresh. `networkctl refresh` remains available for explicit rescan/debug use.
+Query and interface-specific operations refresh the in-memory device view before
+replying, so devices registered shortly after `networkd` startup, such as
+`eth0` from `net_server`, appear without a separate manual refresh.
+`networkctl refresh` remains available for explicit rescan/debug use.
 
 Example:
 

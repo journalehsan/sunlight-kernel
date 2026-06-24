@@ -455,10 +455,20 @@ pub extern "C" fn _start() -> ! {
                 let _ = mgr.refresh();
                 mgr.get_by_key(msg.words[0])
             }
-            NetworkdMsg::ENABLE_INTERFACE => mgr.set_admin(msg.words[0], true),
-            NetworkdMsg::DISABLE_INTERFACE => mgr.set_admin(msg.words[0], false),
-            NetworkdMsg::SET_DHCP => mgr.set_dhcp(msg.words[0]),
+            NetworkdMsg::ENABLE_INTERFACE => {
+                let _ = mgr.refresh();
+                mgr.set_admin(msg.words[0], true)
+            }
+            NetworkdMsg::DISABLE_INTERFACE => {
+                let _ = mgr.refresh();
+                mgr.set_admin(msg.words[0], false)
+            }
+            NetworkdMsg::SET_DHCP => {
+                let _ = mgr.refresh();
+                mgr.set_dhcp(msg.words[0])
+            }
             NetworkdMsg::SET_STATIC_IPV4 => {
+                let _ = mgr.refresh();
                 // word0=key, word1=addr_packed, word2=prefix + gw_packed high?
                 // Protocol: for simplicity, word1=addr, word2= (prefix<<24 | gw_packed low? Use two words.
                 // Better compact: addr in w1, (prefix u8 | gw[4] packed somehow). For v0 use:
@@ -470,11 +480,13 @@ pub extern "C" fn _start() -> ! {
                 mgr.set_static(key, addr, prefix, gw)
             }
             NetworkdMsg::SET_PRIORITY => {
+                let _ = mgr.refresh();
                 let key = msg.words[0];
                 let prio = msg.words[1] as i32; // sign extend? caller sends i32 as u64 bits
                 mgr.set_priority(key, prio)
             }
             NetworkdMsg::SET_AUTO_CONNECT => {
+                let _ = mgr.refresh();
                 let key = msg.words[0];
                 let ac = msg.words[1] != 0;
                 mgr.set_auto_connect(key, ac)
