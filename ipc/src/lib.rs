@@ -26,6 +26,7 @@ pub enum SunlightSyscall {
     TtyStdinPush = 23,
     TtyStdoutPull = 24,
     ProcessIsAlive = 25,
+    GetPid = 33,
     Kill = 72,
     // NOTE: 50 belongs to sys_mmap in the kernel dispatcher — GetTimeUtc
     // previously sat there and silently invoked mmap.
@@ -245,6 +246,132 @@ pub mod SmMsg {
     pub const ERR_NOT_FOUND: u64 = 4;
     pub const ERR_IO: u64 = 5;
     pub const ERR_UNSUPPORTED: u64 = 6;
+}
+
+pub type DriverId = u64;
+pub type DeviceId = u64;
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DriverKind {
+    Virtio = 1,
+    Keyboard = 2,
+    Mouse = 3,
+    Network = 4,
+    Storage = 5,
+    Block = 6,
+    Display = 7,
+    Audio = 8,
+    Power = 9,
+    Unknown = 255,
+}
+
+impl DriverKind {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            1 => Self::Virtio,
+            2 => Self::Keyboard,
+            3 => Self::Mouse,
+            4 => Self::Network,
+            5 => Self::Storage,
+            6 => Self::Block,
+            7 => Self::Display,
+            8 => Self::Audio,
+            9 => Self::Power,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DriverState {
+    Starting = 1,
+    Ready = 2,
+    Blocked = 3,
+    Failed = 4,
+    Restarting = 5,
+    Stopped = 6,
+}
+
+impl DriverState {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            1 => Self::Starting,
+            2 => Self::Ready,
+            3 => Self::Blocked,
+            4 => Self::Failed,
+            5 => Self::Restarting,
+            6 => Self::Stopped,
+            _ => Self::Failed,
+        }
+    }
+}
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceKind {
+    Input = 1,
+    Network = 2,
+    Block = 3,
+    Display = 4,
+    Audio = 5,
+    Bus = 6,
+    Unknown = 255,
+}
+
+impl DeviceKind {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            1 => Self::Input,
+            2 => Self::Network,
+            3 => Self::Block,
+            4 => Self::Display,
+            5 => Self::Audio,
+            6 => Self::Bus,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+pub mod DriverCaps {
+    pub const INPUT: u64 = 1 << 0;
+    pub const KEYBOARD: u64 = 1 << 1;
+    pub const POINTER: u64 = 1 << 2;
+    pub const RELATIVE_MOTION: u64 = 1 << 3;
+    pub const VIRTIO: u64 = 1 << 4;
+    pub const BUS: u64 = 1 << 5;
+    pub const NETWORK: u64 = 1 << 6;
+    pub const BLOCK: u64 = 1 << 7;
+    pub const STORAGE: u64 = 1 << 8;
+    pub const DISPLAY: u64 = 1 << 9;
+}
+
+/// deviced v0 opcodes. Registered as "deviced".
+///
+/// Register IPC transports only four words, so v0 uses compact fixed records:
+/// - driver names are packed into one word (8 byte short name)
+/// - capabilities are a bitmask, rendered by clients
+/// - longer metadata/device paths are intentionally deferred to a shm-backed v1
+#[allow(non_snake_case)]
+pub mod DevicedMsg {
+    pub const REGISTER_DRIVER: u64 = 0xA001;
+    pub const UPDATE_DRIVER_STATE: u64 = 0xA002;
+    pub const TOUCH_DRIVER: u64 = 0xA003;
+    pub const LIST_DRIVERS: u64 = 0xA004;
+    pub const GET_DRIVER: u64 = 0xA005;
+    pub const LIST_DEVICES: u64 = 0xA006;
+    pub const GET_DEVICE: u64 = 0xA007;
+    pub const MARK_DRIVER_FAILED: u64 = 0xA008;
+    pub const UNREGISTER_DRIVER: u64 = 0xA009;
+
+    pub const REPLY: u64 = 0xA0FF;
+    pub const ERROR: u64 = 0xA0FE;
+
+    pub const ERR_NOT_FOUND: u64 = 1;
+    pub const ERR_FULL: u64 = 2;
+    pub const ERR_BAD_REQUEST: u64 = 3;
 }
 
 /// Structured spawn request that carries both a binary path and an explicit
@@ -795,6 +922,12 @@ pub fn process_is_alive(pid: u64) -> bool {
     // SAFETY: ProcessIsAlive takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ProcessIsAlive, pid, 0, 0, 0, 0, 0, 0) };
     ret == 1
+}
+
+pub fn getpid() -> u64 {
+    // SAFETY: GetPid takes no user pointers.
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetPid, 0, 0, 0, 0, 0, 0, 0) };
+    ret
 }
 
 pub fn kill(pid: u64, sig: u32) -> bool {

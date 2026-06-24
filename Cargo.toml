@@ -45,6 +45,7 @@ members = [
     "cpu-utils",
     "services/sunlight-kbd",
     "services/sunlight-mouse",
+    "services/sunlight-deviced",
     "services/solar",
 ]
 

@@ -8,7 +8,9 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, nameserver_lookup, nameserver_register, IpcMsg,
+    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, nameserver_lookup,
+    nameserver_lookup_timeout, nameserver_register, DevicedMsg, DriverCaps, DriverKind,
+    DriverState, IpcMsg,
 };
 
 /// PS/2 Scancode Set 1 keycodes
@@ -250,6 +252,37 @@ fn kbd_pop_scancode() -> Option<u8> {
     }
 }
 
+fn pack_short_name(name: &str) -> u64 {
+    let bytes = name.as_bytes();
+    let mut word = 0u64;
+    let mut i = 0usize;
+    while i < bytes.len().min(8) {
+        word |= (bytes[i] as u64) << (i * 8);
+        i += 1;
+    }
+    word
+}
+
+fn register_with_deviced() {
+    let Some(cap) = nameserver_lookup_timeout("deviced", 100) else {
+        debug_log("[KBD] deviced unavailable; continuing without registration");
+        return;
+    };
+    let meta = (DriverKind::Keyboard as u64) | ((DriverState::Ready as u64) << 16);
+    let caps = DriverCaps::INPUT | DriverCaps::KEYBOARD;
+    let msg = IpcMsg::with_label(DevicedMsg::REGISTER_DRIVER)
+        .word(0, pack_short_name("keyboard"))
+        .word(1, getpid())
+        .word(2, meta)
+        .word(3, caps);
+    match ipc_call_timeout(cap, msg, 100) {
+        Ok(reply) if reply.label == DevicedMsg::REPLY => {
+            debug_log("[KBD] registered with deviced");
+        }
+        _ => debug_log("[KBD] deviced registration failed; continuing"),
+    }
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     debug_log("[KBD] PANIC\n");
@@ -262,6 +295,7 @@ pub extern "C" fn _start() -> ! {
 
     let my_endpoint = endpoint_create();
     nameserver_register("kbd_driver", my_endpoint);
+    register_with_deviced();
 
     // Resolve tty BEFORE registering with the kernel IRQ1 router so that no
     // keyboard events (and their wake_pid) are delivered to this process while

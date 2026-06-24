@@ -8,8 +8,9 @@
 #![no_main]
 
 use sunlight_ipc::{
-    endpoint_create, ipc_call, ipc_recv, nameserver_lookup, nameserver_register, process_yield,
-    IpcMsg, ProcessExit,
+    endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, nameserver_lookup,
+    nameserver_lookup_timeout, nameserver_register, process_yield, DevicedMsg, DriverCaps,
+    DriverKind, DriverState, IpcMsg, ProcessExit,
 };
 
 /// PS/2 mouse packet state machine
@@ -68,31 +69,31 @@ impl MouseState {
             PacketState::WaitingByte2 => {
                 self.byte2 = byte;
                 self.packet_state = PacketState::WaitingByte0;
-                
+
                 // Parse the complete packet
                 let flags = self.byte0;
                 let left_btn = (flags & 0x01) != 0;
                 let right_btn = (flags & 0x02) != 0;
                 let middle_btn = (flags & 0x04) != 0;
-                
+
                 // Sign-extend the 9-bit relative motion values
                 let mut dx = self.byte1 as i32;
                 let mut dy = self.byte2 as i32;
-                
+
                 if (flags & 0x10) != 0 {
                     dx |= !0xFF; // Sign extend X
                 }
                 if (flags & 0x20) != 0 {
                     dy |= !0xFF; // Sign extend Y
                 }
-                
+
                 // PS/2 Y axis is inverted (positive = down)
                 dy = -dy;
-                
+
                 // Update absolute position with clamping
                 self.abs_x = (self.abs_x + dx).max(0).min(self.screen_width - 1);
                 self.abs_y = (self.abs_y + dy).max(0).min(self.screen_height - 1);
-                
+
                 Some(MouseEvent {
                     abs_x: self.abs_x as u16,
                     abs_y: self.abs_y as u16,
@@ -156,7 +157,11 @@ mod syscall {
                 options(nostack)
             );
         }
-        if ret == u64::MAX { None } else { Some(ret as u8) }
+        if ret == u64::MAX {
+            None
+        } else {
+            Some(ret as u8)
+        }
     }
 
     pub fn debug_log(msg: &str) {
@@ -183,6 +188,37 @@ fn init_ps2_mouse() -> Result<(), ()> {
     }
 }
 
+fn pack_short_name(name: &str) -> u64 {
+    let bytes = name.as_bytes();
+    let mut word = 0u64;
+    let mut i = 0usize;
+    while i < bytes.len().min(8) {
+        word |= (bytes[i] as u64) << (i * 8);
+        i += 1;
+    }
+    word
+}
+
+fn register_with_deviced() {
+    let Some(cap) = nameserver_lookup_timeout("deviced", 100) else {
+        syscall::debug_log("[MOUSE] deviced unavailable; continuing without registration\n");
+        return;
+    };
+    let meta = (DriverKind::Mouse as u64) | ((DriverState::Ready as u64) << 16);
+    let caps = DriverCaps::INPUT | DriverCaps::POINTER | DriverCaps::RELATIVE_MOTION;
+    let msg = IpcMsg::with_label(DevicedMsg::REGISTER_DRIVER)
+        .word(0, pack_short_name("mouse"))
+        .word(1, getpid())
+        .word(2, meta)
+        .word(3, caps);
+    match ipc_call_timeout(cap, msg, 100) {
+        Ok(reply) if reply.label == DevicedMsg::REPLY => {
+            syscall::debug_log("[MOUSE] registered with deviced\n");
+        }
+        _ => syscall::debug_log("[MOUSE] deviced registration failed; continuing\n"),
+    }
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     syscall::debug_log("[MOUSE] PANIC\n");
@@ -202,6 +238,7 @@ pub extern "C" fn _start() -> ! {
     // Create IPC endpoint and register with nameserver
     let my_endpoint = endpoint_create();
     nameserver_register("mouse_driver", my_endpoint);
+    register_with_deviced();
     syscall::mouse_register(my_endpoint.0);
     syscall::debug_log("[MOUSE] registered with kernel IRQ12 router\n");
 
@@ -216,7 +253,7 @@ pub extern "C" fn _start() -> ! {
 
     // Phase 2: Main event loop with packet parsing
     let mut mouse_state = MouseState::new(1024, 768);
-    
+
     loop {
         // Poll for raw bytes from kernel IRQ12 buffer
         while let Some(byte) = syscall::mouse_pop_byte() {
@@ -228,13 +265,13 @@ pub extern "C" fn _start() -> ! {
                     | ((event.right_button as u64) << 1)
                     | ((event.middle_button as u64) << 2);
                 event_val |= buttons << 32;
-                
+
                 // Send to tty_server (label 0x2 for mouse event)
                 let msg = IpcMsg::with_label(0x2).word(0, event_val);
                 let _ = ipc_call(tty_token, msg);
             }
         }
-        
+
         // Block on IPC recv (kernel will wake us on IRQ12)
         let _ = ipc_recv(my_endpoint);
     }

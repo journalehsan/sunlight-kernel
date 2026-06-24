@@ -1,87 +1,6 @@
 [package]
-name = "sunlightctl"
+name = "sunlight-deviced"
 version = "0.1.316"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 edition = "2021"
@@ -92,5 +11,9 @@ sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [[bin]]
-name = "sunlightctl"
+name = "deviced"
 path = "src/main.rs"
+
+[[bin]]
+name = "devicectl"
+path = "src/bin/devicectl.rs"

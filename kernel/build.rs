@@ -55,6 +55,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-deviced",
+            output: "deviced",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "deviced"],
+        },
+        EmbeddedBinary {
             package: "sunlight-vfs-server",
             output: "sunlight-vfs-server",
             rustflags: service_rustflags,
@@ -125,6 +131,12 @@ fn main() {
             output: "sunlightctl",
             rustflags: service_rustflags,
             args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-deviced",
+            output: "devicectl",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "devicectl"],
         },
         EmbeddedBinary {
             package: "sunlight-niced",

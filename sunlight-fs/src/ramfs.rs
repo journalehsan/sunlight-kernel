@@ -806,6 +806,13 @@ max_ttys = 6
         b"#!/sunlight/sunlightctl\n",
     ),
     RamEntry::file(
+        "/bin/devicectl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/devicectl\n",
+    ),
+    RamEntry::file(
         "/bin/nicectl",
         0,
         0,
@@ -1275,6 +1282,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         b"#!/sunlight/tzctl\n",
     ),
     RamEntry::file("/usr/bin/top", 0, 0, mode::FILE_755, b"#!/sunlight/top\n"),
+    RamEntry::file(
+        "/usr/bin/devicectl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/devicectl\n",
+    ),
     RamEntry::file(
         "/usr/bin/fetch",
         0,

@@ -4,8 +4,9 @@
 extern crate alloc;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
-    nameserver_register, shm_alloc, shm_map, CapabilityToken, IpcMsg, VfsMsg,
+    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
+    nameserver_lookup, nameserver_lookup_timeout, nameserver_register, shm_alloc, shm_map,
+    CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg, VfsMsg,
 };
 use sunlight_net::netop::NetOp;
 use sunlight_net::ProxyNetDevice;
@@ -73,6 +74,7 @@ pub extern "C" fn _start() -> ! {
     let ep = endpoint_create();
     nameserver_register("net", ep);
     debug_log("[NET]  Registered as 'net' with init");
+    register_with_deviced();
     debug_log("[NET]  Interface: eth0 MAC=52:54:00:12:34:56");
     debug_log("[NET]  NetOp handlers registered");
 
@@ -127,6 +129,37 @@ pub extern "C" fn _start() -> ! {
 
         let reply = handle_msg(msg, &mut sockets);
         msg = ipc_reply_and_wait(ep, reply);
+    }
+}
+
+fn pack_short_name(name: &str) -> u64 {
+    let bytes = name.as_bytes();
+    let mut word = 0u64;
+    let mut i = 0usize;
+    while i < bytes.len().min(8) {
+        word |= (bytes[i] as u64) << (i * 8);
+        i += 1;
+    }
+    word
+}
+
+fn register_with_deviced() {
+    let Some(cap) = nameserver_lookup_timeout("deviced", 100) else {
+        debug_log("[NET]  deviced unavailable; continuing without registration");
+        return;
+    };
+    let meta = (DriverKind::Virtio as u64) | ((DriverState::Ready as u64) << 16);
+    let caps = DriverCaps::VIRTIO | DriverCaps::BUS | DriverCaps::NETWORK;
+    let msg = IpcMsg::with_label(DevicedMsg::REGISTER_DRIVER)
+        .word(0, pack_short_name("virtio"))
+        .word(1, getpid())
+        .word(2, meta)
+        .word(3, caps);
+    match ipc_call_timeout(cap, msg, 100) {
+        Ok(reply) if reply.label == DevicedMsg::REPLY => {
+            debug_log("[NET]  registered virtio with deviced");
+        }
+        _ => debug_log("[NET]  deviced registration failed; continuing"),
     }
 }
 
