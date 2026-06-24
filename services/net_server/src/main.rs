@@ -168,13 +168,22 @@ fn register_with_deviced() {
 /// This keeps existing behavior when networkd is not present.
 fn try_get_config_from_networkd() -> Option<([u8; 4], u8, [u8; 4], [u8; 4])> {
     let cap = nameserver_lookup_timeout("networkd", 60)?;
-    // Prefer default route info
+    // Prefer default route info; follow up with GET_INTERFACE for accurate prefix
     let r = ipc_call_timeout(cap, IpcMsg::with_label(NetworkdMsg::GET_DEFAULT_ROUTE), 80).ok()?;
     if r.label == NetworkdMsg::REPLY && r.words[0] != 0 {
         let addr = unpack_ipv4(r.words[2]);
         let gw = unpack_ipv4(r.words[3]);
-        // prefix not in default route reply; default to /24 for v0
         if addr != [0, 0, 0, 0] {
+            // Try to get precise prefix for this id (or by name)
+            let id = r.words[0];
+            if let Ok(gi) = ipc_call_timeout(cap, IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, id), 40) {
+                if let Some(s) = sunlight_ipc::unpack_iface_summary(&gi) {
+                    if s.addr == addr {
+                        return Some((addr, s.prefix.max(1), gw, [0, 0, 0, 0]));
+                    }
+                }
+            }
+            // fallback prefix
             return Some((addr, 24, gw, [0, 0, 0, 0]));
         }
     }
@@ -183,11 +192,9 @@ fn try_get_config_from_networkd() -> Option<([u8; 4], u8, [u8; 4], [u8; 4])> {
         let key = pack_short_name(name);
         let r = ipc_call_timeout(cap, IpcMsg::with_label(NetworkdMsg::GET_INTERFACE).word(0, key), 60).ok()?;
         if r.label == NetworkdMsg::REPLY {
-            // Use unpack from our local or from summary? For now reconstruct from words conservatively.
-            // The reply for GET is an IfaceSummary packed the same way.
             if let Some(s) = sunlight_ipc::unpack_iface_summary(&r) {
                 if s.addr != [0, 0, 0, 0] || s.mode != sunlight_ipc::IpConfigMode::None {
-                    return Some((s.addr, s.prefix.max(1), s.gw, [0,0,0,0]));
+                    return Some((s.addr, s.prefix.max(1), s.gw, s.dns));
                 }
             }
         }
@@ -203,8 +210,8 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
     match msg.label {
         NetOp::GETIP => {
             // Ask networkd first (policy + discovery). Preserve classic QEMU slirp if absent.
-            if let Some((ip, pfx, gw, _dns)) = try_get_config_from_networkd() {
-                let dns = [10, 0, 2, 3]; // keep a sane DNS even if networkd didn't hand one
+            if let Some((ip, pfx, gw, dns_from_net)) = try_get_config_from_networkd() {
+                let dns = if dns_from_net != [0, 0, 0, 0] { dns_from_net } else { [10, 0, 2, 3] };
                 debug_log("[NET] GETIP served from networkd policy");
                 IpcMsg::with_label(NetOp::GETIP)
                     .word(0, pack_ipv4(ip))

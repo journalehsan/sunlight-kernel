@@ -172,6 +172,13 @@ pub mod TzMsg {
     pub const ERROR: u64 = 0x70FE;
 }
 
+/// Minimal NetOp constants for cross-service queries (e.g. networkd ingesting
+/// current addressing from net_server without taking a direct dep on sunlight-net).
+#[allow(non_snake_case)]
+pub mod NetOp {
+    pub const GETIP: u64 = 10;
+}
+
 /// Random service opcodes (registered as "rand").
 ///
 /// The crypto path is intentionally chunked: each GET asks for up to 32 bytes
@@ -515,7 +522,7 @@ pub fn pack_short_name(name: &str) -> u64 {
     word
 }
 
-/// Structured reply summary for one interface (fits in 4 words).
+/// Structured reply summary for one interface (fits in 4-5 words).
 /// Clients use LIST with sequential index; non-REPLY means end.
 #[derive(Debug, Clone, Copy)]
 pub struct IfaceSummary {
@@ -528,6 +535,7 @@ pub struct IfaceSummary {
     pub addr: [u8; 4],    // 0.0.0.0 if none
     pub prefix: u8,
     pub gw: [u8; 4],
+    pub dns: [u8; 4],     // primary DNS or 0s; full list via future/ctl
     pub priority: i32,
     pub is_default: bool,
     pub total: u16, // total count
@@ -535,7 +543,7 @@ pub struct IfaceSummary {
 
 /// Pack an IfaceSummary into reply words for LIST/GET.
 /// Compact wire:
-///   w0=id, w1=name_packed, w2=meta, w3=addr|gw
+///   w0=id, w1=name_packed, w2=meta, w3=addr|gw, w4=dns (optional)
 pub fn pack_iface_summary(s: &IfaceSummary) -> IpcMsg {
     let prio_u = (s.priority.clamp(-32768, 32767) as i16 as u16) as u64;
     let tot = (s.total as u64) & 0xff;
@@ -558,6 +566,7 @@ pub fn pack_iface_summary(s: &IfaceSummary) -> IpcMsg {
         .word(1, s.name)
         .word(2, w2)
         .word(3, w3)
+        .word(4, pack_ipv4(s.dns))
 }
 
 pub fn unpack_iface_summary(reply: &IpcMsg) -> Option<IfaceSummary> {
@@ -580,6 +589,7 @@ pub fn unpack_iface_summary(reply: &IpcMsg) -> Option<IfaceSummary> {
 
     let addr = unpack_ipv4(w3 & 0xffff_ffff);
     let gw = unpack_ipv4((w3 >> 32) & 0xffff_ffff);
+    let dns = if reply.word_count > 4 { unpack_ipv4(reply.words[4]) } else { [0u8; 4] };
 
     Some(IfaceSummary {
         id,
@@ -591,6 +601,7 @@ pub fn unpack_iface_summary(reply: &IpcMsg) -> Option<IfaceSummary> {
         addr,
         prefix,
         gw,
+        dns,
         priority: prio,
         is_default,
         total,

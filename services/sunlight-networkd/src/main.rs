@@ -13,7 +13,7 @@ use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
     nameserver_lookup_timeout, nameserver_register, pack_ipv4, pack_short_name, unpack_ipv4, AdminState,
     DevicedMsg, IfaceSummary, InterfaceId, InterfaceKind, IpConfigMode, IpcMsg,
-    LinkState, NetworkdMsg,
+    LinkState, NetOp, NetworkdMsg,
 };
 
 const MAX_IFACES: usize = 8;
@@ -109,7 +109,7 @@ impl NetworkManager {
             rec.mode = IpConfigMode::Static;
             rec.addr = [127, 0, 0, 1];
             rec.prefix = 8;
-            rec.priority = -1; // not eligible
+            rec.priority = 32767; // conventional "low" for display; ineligibility via kind check
             rec.auto_connect = true;
             rec.occupied = true;
             self.ifaces[slot] = rec;
@@ -240,6 +240,7 @@ impl NetworkManager {
             addr: i.addr,
             prefix: i.prefix,
             gw: i.gw,
+            dns: i.dns[0],
             priority: i.priority,
             is_default: self.is_default_route(idx),
             total: self.count(),
@@ -261,33 +262,15 @@ impl NetworkManager {
         i.gw != [0, 0, 0, 0]
     }
 
+    /// Small default route decision per v0.1 rules.
+    /// Returns the slot index of the chosen interface, if any.
     fn compute_default_route(&self) -> Option<usize> {
-        let mut best: Option<(i32, usize)> = None;
-        for (slot, iface) in self.ifaces.iter().enumerate() {
-            if !iface.occupied {
-                continue;
-            }
-            if iface.kind == InterfaceKind::Loopback || iface.priority < 0 {
-                continue;
-            }
-            if iface.admin != AdminState::Enabled {
-                continue;
-            }
-            if iface.link != LinkState::Up && iface.link != LinkState::Carrier {
-                continue;
-            }
-            if iface.gw == [0, 0, 0, 0] {
-                continue;
-            }
-            if let Some((bp, _)) = best {
-                if iface.priority > bp {
-                    best = Some((iface.priority, slot));
-                }
-            } else {
-                best = Some((iface.priority, slot));
-            }
-        }
-        best.map(|(_, s)| s)
+        choose_default_slot(&self.ifaces)
+    }
+
+    #[allow(dead_code)]
+    fn choose_default_id(&self) -> Option<InterfaceId> {
+        self.compute_default_route().map(|slot| self.ifaces[slot].id)
     }
 
     fn reply_summary(&self, slot: usize) -> IpcMsg {
@@ -340,10 +323,11 @@ impl NetworkManager {
     fn set_dhcp(&mut self, key: u64) -> IpcMsg {
         if let Some(slot) = self.find_slot_by_key(key) {
             self.ifaces[slot].mode = IpConfigMode::Dhcp;
-            // Clear static fields; real acquisition would be triggered here in future.
+            // Clear; future DHCP client or live ingest via net GETIP may repopulate.
             self.ifaces[slot].addr = [0; 4];
             self.ifaces[slot].prefix = 0;
             self.ifaces[slot].gw = [0; 4];
+            // keep existing dns[ ] for now; they may be stale until re-acquire/ingest
             serial_println!("[NETD] {} set to dhcp (policy recorded)", self.ifaces[slot].name_str());
             self.reply_summary(slot)
         } else {
@@ -351,12 +335,13 @@ impl NetworkManager {
         }
     }
 
-    fn set_static(&mut self, key: u64, addr: [u8; 4], prefix: u8, gw: [u8; 4]) -> IpcMsg {
+    fn set_static(&mut self, key: u64, addr: [u8; 4], prefix: u8, gw: [u8; 4], dns0: [u8; 4], dns1: [u8; 4]) -> IpcMsg {
         if let Some(slot) = self.find_slot_by_key(key) {
             self.ifaces[slot].mode = IpConfigMode::Static;
             self.ifaces[slot].addr = addr;
             self.ifaces[slot].prefix = prefix;
             self.ifaces[slot].gw = gw;
+            self.ifaces[slot].dns = [dns0, dns1];
             serial_println!(
                 "[NETD] {} static {}.{}.{}.{}/{} gw {}.{}.{}.{}",
                 self.ifaces[slot].name_str(),
@@ -391,7 +376,74 @@ impl NetworkManager {
         // Re-seed lo and re-discover (idempotent)
         self.seed_loopback();
         self.discover_from_deviced();
+        // Ingest live addressing from the executing net stack (least invasive source of truth).
+        // This populates addr/gw/prefix/dns for display and default route without duplicating config.
+        self.ingest_live_from_net();
         IpcMsg::with_label(NetworkdMsg::REPLY).word(0, 0).word(1, self.count() as u64)
+    }
+
+    /// Query the 'net' service (if present) via its NetOp::GETIP and apply observed
+    /// IPv4 config to the first non-loopback interface (typically eth0). This lets
+    /// networkd reflect the actual stack state served to clients (DHCP or static).
+    /// Degrades gracefully if net is absent or returns zeros.
+    fn ingest_live_from_net(&mut self) {
+        let Some(net_cap) = nameserver_lookup_timeout("net", 60) else {
+            return;
+        };
+        let reply = ipc_call(net_cap, IpcMsg::with_label(NetOp::GETIP));
+        if reply.label != NetOp::GETIP {
+            return;
+        }
+        // net_server uses its own le byte-order packing for GETIP words:
+        // w0=addr_le, w1=prefix, w2=gw_le, w3=dns_le
+        let addr = [
+            (reply.words[0] & 0xff) as u8,
+            ((reply.words[0] >> 8) & 0xff) as u8,
+            ((reply.words[0] >> 16) & 0xff) as u8,
+            ((reply.words[0] >> 24) & 0xff) as u8,
+        ];
+        let prefix = (reply.words[1] & 0xff) as u8;
+        let gw = [
+            (reply.words[2] & 0xff) as u8,
+            ((reply.words[2] >> 8) & 0xff) as u8,
+            ((reply.words[2] >> 16) & 0xff) as u8,
+            ((reply.words[2] >> 24) & 0xff) as u8,
+        ];
+        let dns = [
+            (reply.words[3] & 0xff) as u8,
+            ((reply.words[3] >> 8) & 0xff) as u8,
+            ((reply.words[3] >> 16) & 0xff) as u8,
+            ((reply.words[3] >> 24) & 0xff) as u8,
+        ];
+
+        if addr == [0, 0, 0, 0] {
+            return; // nothing useful yet (e.g. before stack up); degrade ok
+        }
+
+        // Apply to the first eligible non-lo interface (stable by discovery order)
+        if let Some(slot) = self
+            .ifaces
+            .iter()
+            .position(|i| i.occupied && i.kind != InterfaceKind::Loopback)
+        {
+            // Preserve mode intent (Dhcp vs Static) if already set; only fill numbers.
+            // If mode is None, treat observed as DHCP (common for QEMU path).
+            if self.ifaces[slot].mode == IpConfigMode::None {
+                self.ifaces[slot].mode = IpConfigMode::Dhcp;
+            }
+            self.ifaces[slot].addr = addr;
+            self.ifaces[slot].prefix = if prefix == 0 { 24 } else { prefix };
+            self.ifaces[slot].gw = gw;
+            if dns != [0, 0, 0, 0] {
+                self.ifaces[slot].dns[0] = dns;
+            }
+            serial_println!(
+                "[NETD] ingested live ip for {}: {}.{}.{}.{}/{} gw {}.{}.{}.{}",
+                self.ifaces[slot].name_str(),
+                addr[0], addr[1], addr[2], addr[3], self.ifaces[slot].prefix,
+                gw[0], gw[1], gw[2], gw[3]
+            );
+        }
     }
 
     fn get_default_route_reply(&self) -> IpcMsg {
@@ -410,6 +462,50 @@ impl NetworkManager {
 
 fn err_not_found() -> IpcMsg {
     IpcMsg::with_label(NetworkdMsg::ERROR).word(0, NetworkdMsg::ERR_NOT_FOUND)
+}
+
+/// choose_default_interface selects the best default route provider from a slice of records.
+/// v0.1 rules:
+/// - Loopback never chosen
+/// - Disabled interfaces never chosen
+/// - No carrier never chosen
+/// - No gateway normally not chosen
+/// - Highest priority wins
+/// - On priority tie, prefer lower id (or stable discovery order via slot)
+#[allow(dead_code)]
+fn choose_default_interface(interfaces: &[InterfaceRecord]) -> Option<InterfaceId> {
+    choose_default_slot(interfaces).map(|slot| interfaces[slot].id)
+}
+
+fn choose_default_slot(ifaces: &[InterfaceRecord]) -> Option<usize> {
+    let mut best: Option<(i32, InterfaceId, usize)> = None; // (prio, id, slot)
+    for (slot, iface) in ifaces.iter().enumerate() {
+        if !iface.occupied {
+            continue;
+        }
+        if iface.kind == InterfaceKind::Loopback || iface.priority < 0 {
+            continue;
+        }
+        if iface.admin != AdminState::Enabled {
+            continue;
+        }
+        if iface.link != LinkState::Up && iface.link != LinkState::Carrier {
+            continue;
+        }
+        if iface.gw == [0, 0, 0, 0] {
+            continue;
+        }
+        let candidate = (iface.priority, iface.id, slot);
+        match best {
+            None => best = Some(candidate),
+            Some((bp, bid, _bslot)) => {
+                if iface.priority > bp || (iface.priority == bp && iface.id < bid) {
+                    best = Some(candidate);
+                }
+            }
+        }
+    }
+    best.map(|(_, _, s)| s)
 }
 
 fn err_bad() -> IpcMsg {
@@ -433,6 +529,7 @@ pub extern "C" fn _start() -> ! {
     let mut mgr = NetworkManager::new();
     mgr.seed_loopback();
     mgr.discover_from_deviced();
+    mgr.ingest_live_from_net();
 
     // If we discovered something with DHCP intent, note it (actual stack still in net_server v0)
     for iface in mgr.ifaces.iter() {
@@ -469,15 +566,14 @@ pub extern "C" fn _start() -> ! {
             }
             NetworkdMsg::SET_STATIC_IPV4 => {
                 let _ = mgr.refresh();
-                // word0=key, word1=addr_packed, word2=prefix + gw_packed high?
-                // Protocol: for simplicity, word1=addr, word2= (prefix<<24 | gw_packed low? Use two words.
-                // Better compact: addr in w1, (prefix u8 | gw[4] packed somehow). For v0 use:
-                // w1 = addr_packed, w2 = gw_packed, w3 = prefix
+                // w0=key, w1=addr_p, w2=gw_p, w3=prefix (low), w4=dns0_p (opt), w5=dns1_p (opt)
                 let key = msg.words[0];
                 let addr = unpack_ipv4(msg.words[1]);
                 let gw = unpack_ipv4(msg.words[2]);
                 let prefix = (msg.words[3] & 0xff) as u8;
-                mgr.set_static(key, addr, prefix, gw)
+                let dns0 = if msg.word_count > 4 { unpack_ipv4(msg.words[4]) } else { [0u8; 4] };
+                let dns1 = if msg.word_count > 5 { unpack_ipv4(msg.words[5]) } else { [0u8; 4] };
+                mgr.set_static(key, addr, prefix, gw, dns0, dns1)
             }
             NetworkdMsg::SET_PRIORITY => {
                 let _ = mgr.refresh();

@@ -38,7 +38,7 @@
 `net_server` remains the executor that owns the live interface, sockets, and frame proxy syscalls (`NetTx`/`NetRx`).
 
 - `networkd` provides the *desired* configuration and policy.
-- For v0, `net_server` consults `networkd` (best-effort, with timeout) when answering `NetOp::GETIP` and when clients ask for current addressing. If `networkd` is unavailable or returns no useful data, `net_server` falls back to the previous QEMU user-net defaults. Existing downloads, TLS, and file serving continue to work.
+- For v0/v0.1, `net_server` consults `networkd` (best-effort, with timeout) when answering `NetOp::GETIP`. `networkd` in turn ingests the *effective* numbers from `net` (via GETIP) on refresh so that `networkctl` and default-route decisions see the real address/gw/dns. If either side is unavailable, the other degrades: net falls back to its built-in defaults; networkd lists interfaces with partial data (`-`). Existing downloads, TLS, and file serving continue to work.
 - Reconfiguring the live smoltcp `Interface` IP addrs/routes from a `networkctl` change is intentionally deferred (would require coordinated restart of sockets or a clean "reconfigure" path). The model + CLI + IPC are the v0 deliverable.
 
 ## Interface model (v0)
@@ -97,9 +97,14 @@ Example:
 
 ```
 IFACE  KIND        ADMIN    LINK      MODE   ADDRESS         GATEWAY     PRIO  DEF
-lo     Loopback    enabled  carrier   static 127.0.0.1/8     -             -1  no
+lo     Loopback    enabled  carrier   static 127.0.0.1/8     -           32767 no
 eth0   VirtioNet   enabled  carrier   dhcp   10.0.2.15/24    10.0.2.2     100  yes
 ```
+
+networkd v0.1 populates ADDRESS / GATEWAY / DNS for eth0 by ingesting the effective
+configuration reported by `net_server` (via NetOp::GETIP). This works for both the
+statically initialized QEMU user-net path and future static/dhcp updates stored in
+networkd. If no live data is available yet, values gracefully stay unset (`-`).
 
 ## Configuration
 
@@ -118,11 +123,27 @@ v0 keeps everything in RAM inside the daemon. A future revision can persist `Int
 - Firewall / nftables or native packet filter integration
 - Hotplug events from deviced v1 (shm path)
 
+## v0.1 additions (networkd)
+
+- DHCP/static lease/state ingestion: `networkd` queries the executing `net` service on refresh
+  to learn current IPv4 address, prefix, gateway and DNS. These are attached to the interface
+  record (mode remains the *intent*; numbers are the *current effective*).
+- Default route selection: `choose_default_interface` (internal) implements the v0 policy
+  (no lo, must be enabled+carrier, must have gw, highest prio wins, tie by lower id).
+- DNS handoff stub: primary DNS recorded from DHCP/static/ingest. Exposed in
+  `networkctl status <iface>` as `dns: x.x.x.x` (or `-`) and in `json` as `dns_servers`.
+  No resolver implemented here; future `resolved` service will consume.
+- Improved `networkctl status` and `json` (id, kind, admin_state, link_state, mode,
+  address, prefix_len, gateway, dns_servers, priority, default, driver hint).
+- `networkctl static` accepts `dns <d1[,d2]>` and stores it. Applying the new numbers to the
+  live smoltcp stack inside net_server is deferred (v0.2). A note is printed on success.
+
 ## v0 limitations & non-goals
 
 - Not a NetworkManager clone.
 - No persistent config.
 - DHCP client lives in `sunlight-net` (smoltcp); full integration of live DHCP reacquisition under networkd control is future work.
+- Live stack reconfiguration (address/routes on existing iface/sockets) is v0.2.
 - Only IPv4 for v0.
 - No kernel changes required.
 
@@ -131,9 +152,12 @@ v0 keeps everything in RAM inside the daemon. A future revision can persist `Int
 - `cargo check -p sunlight-networkd`
 - `cargo check -p sunlight-net-server`
 - Boot still succeeds with only loopback when no net device present.
-- `networkctl list` shows `lo` and any discovered ethN.
-- `networkctl status eth0` reflects mode/address/gw when set.
-- Existing `fetch`, TLS, and `solar` networking paths continue to function (via fallback in net_server).
-- `deviced` absence does not crash networkd.
+- `networkctl list` shows `lo` (127.0.0.1/8) and `eth0` with real address/gw once net reports it.
+- `networkctl status lo` and `networkctl status eth0` show the formatted fields (dns, default, - for unknowns).
+- `networkctl json` includes the extended fields.
+- `networkctl static eth0 ... dns ...` stores (prints v0.2 note for apply).
+- Existing `fetch`, TLS, and `solar` networking paths continue to function.
+- `deviced` absence does not crash networkd; it will still list lo and degrade.
+- Default route selects eth0 (when carrier + gw) over lo.
 
 This is the clean foundation for all future SunlightOS networking services.

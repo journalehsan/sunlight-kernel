@@ -145,7 +145,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
 }
 
 fn print_usage() {
-    println!("networkctl list|status [iface]|up <i>|down <i>|dhcp <i>|static <i> <ip/p> [gw g] [dns d]|priority <i> <n>|json|refresh");
+    println!("networkctl list|status [iface]|up <i>|down <i>|dhcp <i>|static <i> <ip/p> [gw g] [dns d1,d2]|priority <i> <n>|json|refresh");
 }
 
 unsafe fn collect_args(argc: u64, argv: *const *const u8, out: &mut [&str]) -> usize {
@@ -242,15 +242,51 @@ fn print_status(cap: sunlight_ipc::CapabilityToken, key: &str) {
         let name = name_from_packed(s.name);
         println!("{}:", name);
         println!("  id:        {}", s.id);
-        println!("  kind:      {:?}", s.kind);
-        println!("  admin:     {:?}", s.admin);
-        println!("  link:      {:?}", s.link);
-        println!("  mode:      {:?}", s.mode);
-        if s.addr != [0;4] {
-            println!("  address:   {}.{}.{}.{}/{}", s.addr[0],s.addr[1],s.addr[2],s.addr[3], s.prefix);
+        let kind_s = match s.kind {
+            InterfaceKind::Loopback => "Loopback",
+            InterfaceKind::Ethernet => "Ethernet",
+            InterfaceKind::VirtioNet => "VirtioNet",
+            InterfaceKind::Wireless => "Wireless",
+            InterfaceKind::Tunnel => "Tunnel",
+            _ => "Unknown",
+        };
+        println!("  kind:      {}", kind_s);
+        // driver: best-effort for v0
+        let driver_s = match s.kind {
+            InterfaceKind::VirtioNet => "virtio",
+            InterfaceKind::Ethernet => "ethernet",
+            _ => "-",
+        };
+        println!("  driver:    {}", driver_s);
+        let admin_s = if matches!(s.admin, AdminState::Enabled) { "Enabled" } else { "Disabled" };
+        println!("  admin:     {}", admin_s);
+        let link_s = match s.link {
+            LinkState::Up | LinkState::Carrier => "Carrier",
+            LinkState::Down => "Down",
+            LinkState::NoCarrier => "NoCarrier",
+            _ => "Unknown",
+        };
+        println!("  link:      {}", link_s);
+        let mode_s = match s.mode {
+            IpConfigMode::Dhcp => "Dhcp",
+            IpConfigMode::Static => "Static",
+            _ => "None",
+        };
+        println!("  mode:      {}", mode_s);
+        if s.addr != [0; 4] {
+            println!("  address:   {}.{}.{}.{}/{}", s.addr[0], s.addr[1], s.addr[2], s.addr[3], s.prefix);
+        } else {
+            println!("  address:   -");
         }
-        if s.gw != [0;4] {
-            println!("  gateway:   {}.{}.{}.{}", s.gw[0],s.gw[1],s.gw[2],s.gw[3]);
+        if s.gw != [0; 4] {
+            println!("  gateway:   {}.{}.{}.{}", s.gw[0], s.gw[1], s.gw[2], s.gw[3]);
+        } else {
+            println!("  gateway:   -");
+        }
+        if s.dns != [0; 4] {
+            println!("  dns:       {}.{}.{}.{}", s.dns[0], s.dns[1], s.dns[2], s.dns[3]);
+        } else {
+            println!("  dns:       -");
         }
         println!("  priority:  {}", s.priority);
         println!("  default:   {}", if s.is_default { "yes" } else { "no" });
@@ -303,6 +339,7 @@ fn do_static(cap: sunlight_ipc::CapabilityToken, args: &[&str]) -> i32 {
     let prefix: u8 = pfx_str.parse().unwrap_or(24);
 
     let mut gw = [0u8; 4];
+    let mut dns_list: alloc::vec::Vec<[u8; 4]> = alloc::vec::Vec::new();
     let mut i = 2;
     while i + 1 < args.len() {
         match args[i] {
@@ -311,23 +348,41 @@ fn do_static(cap: sunlight_ipc::CapabilityToken, args: &[&str]) -> i32 {
                 i += 2;
             }
             "dns" => {
-                // ignored in v0 summary, but accepted
+                // support "dns 1.1.1.1,8.8.8.8" or "dns 1.1.1.1"
+                let val = args[i+1];
+                for part in val.split(',') {
+                    if let Some(d) = parse_ipv4(part.trim()) {
+                        dns_list.push(d);
+                    }
+                }
                 i += 2;
             }
             _ => { i += 1; }
         }
     }
+    let dns0 = dns_list.get(0).copied().unwrap_or([0;4]);
+    let dns1 = dns_list.get(1).copied().unwrap_or([0;4]);
 
     let key_u = pack_short_name(iface);
     let msg = IpcMsg::with_label(NetworkdMsg::SET_STATIC_IPV4)
         .word(0, key_u)
         .word(1, pack_ipv4(addr))
         .word(2, pack_ipv4(gw))
-        .word(3, prefix as u64);
+        .word(3, prefix as u64)
+        .word(4, pack_ipv4(dns0))
+        .word(5, pack_ipv4(dns1));
     let reply = ipc_call(cap, msg);
     if reply.label == NetworkdMsg::REPLY {
-        println!("{} static {}/{} gw {}", iface, addr_str, prefix,
-            if gw != [0;4] { alloc::format!("{}.{}.{}.{}", gw[0],gw[1],gw[2],gw[3]) } else { "-".into() });
+        let gw_disp = if gw != [0;4] { alloc::format!("{}.{}.{}.{}", gw[0],gw[1],gw[2],gw[3]) } else { "-".into() };
+        let dns_disp = if dns0 != [0;4] {
+            if dns1 != [0;4] {
+                alloc::format!("{}.{}.{}.{}, {}.{}.{}.{}", dns0[0],dns0[1],dns0[2],dns0[3], dns1[0],dns1[1],dns1[2],dns1[3])
+            } else {
+                alloc::format!("{}.{}.{}.{}", dns0[0],dns0[1],dns0[2],dns0[3])
+            }
+        } else { "-".into() };
+        println!("{} static {}/{} gw {} dns {}", iface, addr_str, prefix, gw_disp, dns_disp);
+        println!("(stored in networkd; live stack reconfigure is v0.2 - new connections will see updated GETIP)");
         0
     } else {
         println!("networkctl: static failed");
@@ -372,13 +427,49 @@ fn print_json(cap: sunlight_ipc::CapabilityToken) {
         if !first { println!(","); }
         first = false;
         let name = name_from_packed(s.name);
-        println!("  {{ \"id\": {}, \"name\": \"{}\", \"kind\": \"{:?}\", \"admin\": \"{:?}\", \"link\": \"{:?}\", \"mode\": \"{:?}\", \"addr\": \"{}.{}.{}.{}/{}\", \"gw\": \"{}.{}.{}.{}\", \"priority\": {}, \"default\": {} }}",
+        let kind_s = match s.kind {
+            InterfaceKind::Loopback => "Loopback",
+            InterfaceKind::Ethernet => "Ethernet",
+            InterfaceKind::VirtioNet => "VirtioNet",
+            InterfaceKind::Wireless => "Wireless",
+            InterfaceKind::Tunnel => "Tunnel",
+            _ => "Unknown",
+        };
+        let admin_s = if matches!(s.admin, AdminState::Enabled) { "enabled" } else { "disabled" };
+        let link_s = match s.link {
+            LinkState::Up | LinkState::Carrier => "carrier",
+            LinkState::Down => "down",
+            LinkState::NoCarrier => "nocarrier",
+            _ => "unknown",
+        };
+        let mode_s = match s.mode {
+            IpConfigMode::Dhcp => "dhcp",
+            IpConfigMode::Static => "static",
+            _ => "none",
+        };
+        let addr_str = if s.addr != [0,0,0,0] {
+            alloc::format!("{}.{}.{}.{}/{}", s.addr[0],s.addr[1],s.addr[2],s.addr[3], s.prefix)
+        } else { "-".into() };
+        let gw_str = if s.gw != [0,0,0,0] {
+            alloc::format!("{}.{}.{}.{}", s.gw[0],s.gw[1],s.gw[2],s.gw[3])
+        } else { "-".into() };
+        let driver_s = match s.kind {
+            InterfaceKind::VirtioNet => "virtio",
+            _ => "-",
+        };
+        // dns_servers as simple array of the primary (v0); "-" if none
+        let dns_str = if s.dns != [0,0,0,0] {
+            alloc::format!("[\"{}.{}.{}.{}\"]", s.dns[0],s.dns[1],s.dns[2],s.dns[3])
+        } else { "[]".into() };
+        println!("  {{ \"id\": {}, \"name\": \"{}\", \"kind\": \"{}\", \"admin_state\": \"{}\", \"link_state\": \"{}\", \"mode\": \"{}\", \"address\": \"{}\", \"prefix_len\": {}, \"gateway\": \"{}\", \"dns_servers\": {}, \"priority\": {}, \"default\": {}, \"driver\": \"{}\" }}",
             s.id, name,
-            s.kind, s.admin, s.link, s.mode,
-            s.addr[0],s.addr[1],s.addr[2],s.addr[3],s.prefix,
-            s.gw[0],s.gw[1],s.gw[2],s.gw[3],
+            kind_s, admin_s, link_s, mode_s,
+            addr_str, s.prefix,
+            gw_str,
+            dns_str,
             s.priority,
-            if s.is_default { "true" } else { "false" }
+            if s.is_default { "true" } else { "false" },
+            driver_s
         );
         idx += 1;
         if s.total > 0 && idx as u16 >= s.total { break; }
