@@ -83,8 +83,11 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         }
         "set" => {
             if args.len() < 3 {
-                println!("Usage: powerctl set <turbo|performance|balanced|low-power|stamina|custom>");
+                println!("Usage: powerctl set <turbo|performance|balanced|low-power|stamina|custom|auto>");
                 1
+            } else if args[2].eq_ignore_ascii_case("auto") {
+                println!("powerctl: to set Auto mode, run 'powerctl auto' (this also works)");
+                do_auto(cap)
             } else {
                 do_set(cap, args[2])
             }
@@ -109,7 +112,7 @@ fn print_usage() {
     println!("Usage: powerctl <status|profiles|set|auto|policy> [profile]");
     println!("  powerctl status");
     println!("  powerctl profiles");
-    println!("  powerctl set <turbo|performance|balanced|low-power|stamina|custom>");
+    println!("  powerctl set <turbo|performance|balanced|low-power|stamina|custom|auto>");
     println!("  powerctl auto");
     println!("  powerctl policy");
 }
@@ -196,6 +199,7 @@ fn do_set(cap: sunlight_ipc::CapabilityToken, name: &str) -> i32 {
         None => {
             println!("powerctl: unknown profile '{}'", name);
             println!("valid: turbo, performance, balanced, low-power, stamina, custom");
+            println!("(for Auto mode: 'powerctl auto' or 'powerctl set auto')");
             return 1;
         }
     };

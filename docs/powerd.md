@@ -130,6 +130,7 @@ powerctl set balanced
 powerctl set low-power
 powerctl set stamina
 powerctl set custom
+powerctl set auto     # accepted (prefer 'powerctl auto' for clarity)
 powerctl auto
 powerctl policy
 ```
