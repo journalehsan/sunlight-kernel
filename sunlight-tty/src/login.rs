@@ -56,9 +56,37 @@ pub enum FocusArea {
     Shutdown,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionType {
+    Tty,
+    Desktop,
+}
+
+impl SessionType {
+    pub const fn toggle(self) -> Self {
+        match self {
+            Self::Tty => Self::Desktop,
+            Self::Desktop => Self::Tty,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Tty => "TTY",
+            Self::Desktop => "Desktop",
+        }
+    }
+}
+
 pub enum LoginResult {
     Pending,
-    Success { username: [u8; 64], username_len: usize, uid: u32, gid: u32 },
+    Success {
+        username: [u8; 64],
+        username_len: usize,
+        uid: u32,
+        gid: u32,
+        session: SessionType,
+    },
     Locked,
     Reboot,
     Shutdown,
@@ -70,6 +98,7 @@ pub struct LoginScreen {
     pub active_count: usize,      // How many slots are currently displayed
     pub focus: FocusArea,         // Where the keyboard input is currently directed
     pub selected_user_idx: usize, // The user locked in for the login attempt
+    pub session: SessionType,
     pub password: InputField,
     pub message: &'static str,
     pub attempts: u8,
@@ -100,6 +129,7 @@ impl LoginScreen {
             active_count: 3,
             focus: FocusArea::UserSlot(0),
             selected_user_idx: 0,
+            session: SessionType::Tty,
             password: InputField::new(),
             message: "Welcome. Please log in.",
             attempts: 0,
@@ -109,12 +139,27 @@ impl LoginScreen {
 
     /// Handle a key event. Returns the login result.
     pub fn handle_key_ascii(&mut self, ascii: u8) -> LoginResult {
+        self.handle_key_event(0, true, Some(ascii))
+    }
+
+    /// Handle a raw key event. Arrow keys are routed here so the dropdown can
+    /// be toggled without smuggling non-ASCII values through the ASCII path.
+    pub fn handle_key_event(
+        &mut self,
+        keycode: u8,
+        pressed: bool,
+        ascii: Option<u8>,
+    ) -> LoginResult {
         if self.locked_ticks > 0 {
             return LoginResult::Locked;
         }
 
+        if !pressed {
+            return LoginResult::Pending;
+        }
+
         match ascii {
-            b'\n' | b'\r' => {
+            Some(b'\n') | Some(b'\r') => {
                 match self.focus {
                     FocusArea::UserSlot(idx) => {
                         // Enter on a user box commits the selection and moves to password
@@ -136,11 +181,17 @@ impl LoginScreen {
                     FocusArea::Shutdown => LoginResult::Shutdown,
                 }
             }
-            b'\t' => {
+            Some(b'\t') => {
                 self.cycle_focus_forward();
                 LoginResult::Pending
             }
-            0x08 | 0x7F => {
+            Some(b' ') => {
+                if self.focus == FocusArea::Dropdown {
+                    self.session = self.session.toggle();
+                }
+                LoginResult::Pending
+            }
+            Some(0x08) | Some(0x7F) => {
                 // Handle Backspace or DEL
                 match self.focus {
                     FocusArea::UserSlot(idx) if self.is_custom_slot[idx] => {
@@ -151,12 +202,23 @@ impl LoginScreen {
                 }
                 LoginResult::Pending
             }
-            c if c >= 0x20 && c <= 0x7E => {
+            Some(c) if c >= 0x20 && c <= 0x7E => {
                 // Printable characters
                 match self.focus {
                     FocusArea::UserSlot(idx) if self.is_custom_slot[idx] => self.users[idx].push(c),
                     FocusArea::Password => self.password.push(c),
                     _ => {} // Read-only user boxes ignore typing
+                }
+                LoginResult::Pending
+            }
+            None => {
+                if self.focus == FocusArea::Dropdown {
+                    match keycode {
+                        0x48 | 0x50 => {
+                            self.session = self.session.toggle();
+                        }
+                        _ => {}
+                    }
                 }
                 LoginResult::Pending
             }
@@ -198,6 +260,7 @@ impl LoginScreen {
                 username_len: ulen,
                 uid,
                 gid,
+                session: self.session,
             }
         } else {
             self.attempts += 1;

@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-tty-server"
-version = "0.1.360"
+version = "0.1.363"
+
+
 
 
 
@@ -103,3 +105,4 @@ sunlight-ipc = { path = "../../ipc" }
 sunlight-fs  = { path = "../../sunlight-fs" }
 sunlight-tty = { path = "../../sunlight-tty" }
 sunlight-tui = { path = "../../sunlight-tui" }
+sunlight-libc = { path = "../../sunlight-libc" }

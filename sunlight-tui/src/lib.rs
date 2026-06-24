@@ -470,6 +470,7 @@ pub unsafe fn render_login_grid(
     active_count: usize,
     selected_user_idx: usize,
     focus: LoginFocus,
+    session_label: &str,
     password_len: usize,
     message: &str,
 ) {
@@ -621,7 +622,7 @@ pub unsafe fn render_login_grid(
         &mut fb,
         drop_val_x + 8,
         drop_y,
-        "TTY",
+        session_label,
         layout::palette::TEXT,
         1,
     );
@@ -693,7 +694,7 @@ pub unsafe fn render_login_grid(
         1,
     );
 
-    let footer = "Tab to navigate  Enter to select";
+    let footer = "Tab to navigate  Enter to select  Space/Up/Down toggle session";
     let footer_w = font::text_width(footer, 1);
     font::draw_str(
         &mut fb,
@@ -858,6 +859,7 @@ pub unsafe fn render_login_screen(fb_addr: *mut u32, fb_width: u32, fb_height: u
         3,
         0,
         LoginFocus::UserSlot(0),
+        "TTY",
         0,
         "Welcome. Please log in.",
     );

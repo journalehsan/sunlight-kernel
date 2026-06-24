@@ -6,10 +6,10 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use sunlight_ipc::{
-    endpoint_create, ipc_call, ipc_recv, ipc_reply, nameserver_register,
+    endpoint_create, ipc_recv, ipc_reply, nameserver_register,
     CapabilityToken, IpcMsg, sgp::SgpMsg,
 };
-use sunlight_ipc::{debug_log, ProcessExit};
+use sunlight_ipc::debug_log;
 
 /// Very small bump allocator so we can use Vec/alloc in the compositor.
 struct BumpAllocator;
@@ -35,7 +35,7 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 struct Window {
     id: u64,
-    shm_cap: CapabilityToken,
+    _shm_cap: CapabilityToken,
     buffer: *mut u32,   // Our mapping of the client's SHM (for composition)
     width: u32,
     height: u32,
@@ -54,6 +54,97 @@ struct CompositorState {
     fb_height: u32,
 }
 
+const DESKTOP_COLOR: u32 = 0x00181818;
+const CURSOR_COLOR: u32 = 0x00F5F5F5;
+const CURSOR_SHADOW_COLOR: u32 = 0x00000000;
+const CURSOR_W: usize = 8;
+const CURSOR_H: usize = 12;
+const CURSOR_BITMAP: [u8; CURSOR_H] = [
+    0b1000_0000,
+    0b1100_0000,
+    0b1110_0000,
+    0b1111_0000,
+    0b1111_1000,
+    0b1111_1100,
+    0b1111_1110,
+    0b1111_1000,
+    0b1101_0000,
+    0b1001_0000,
+    0b0001_0000,
+    0b0000_0000,
+];
+
+fn clear_framebuffer(state: &CompositorState) {
+    let pixels = (state.fb_width as usize).saturating_mul(state.fb_height as usize);
+    if pixels == 0 {
+        return;
+    }
+    unsafe {
+        core::ptr::write_bytes(state.fb, 0, pixels);
+        for i in 0..pixels {
+            state.fb.add(i).write(DESKTOP_COLOR);
+        }
+    }
+}
+
+fn composite_window(state: &CompositorState, win: &Window) {
+    if win.buffer.is_null() || win.x >= state.fb_width || win.y >= state.fb_height {
+        return;
+    }
+
+    let copy_width = win.width.min(state.fb_width - win.x) as usize;
+    let copy_height = win.height.min(state.fb_height - win.y) as usize;
+
+    for row in 0..copy_height {
+        unsafe {
+            let src = win.buffer.add(row * win.width as usize);
+            let dst = state
+                .fb
+                .add((win.y as usize + row) * state.fb_width as usize + win.x as usize);
+            core::ptr::copy_nonoverlapping(src, dst, copy_width);
+        }
+    }
+}
+
+fn draw_cursor(state: &CompositorState) {
+    let base_x = state.mouse_x as i32;
+    let base_y = state.mouse_y as i32;
+
+    for (row, mask) in CURSOR_BITMAP.iter().copied().enumerate() {
+        for col in 0..CURSOR_W {
+            if (mask & (1 << (7 - col))) == 0 {
+                continue;
+            }
+
+            let x = base_x + col as i32;
+            let y = base_y + row as i32;
+            if x < 0 || y < 0 || x >= state.fb_width as i32 || y >= state.fb_height as i32 {
+                continue;
+            }
+
+            let color = if col == CURSOR_W - 1 || row == CURSOR_H - 1 {
+                CURSOR_SHADOW_COLOR
+            } else {
+                CURSOR_COLOR
+            };
+            unsafe {
+                state
+                    .fb
+                    .add(y as usize * state.fb_width as usize + x as usize)
+                    .write(color);
+            }
+        }
+    }
+}
+
+fn redraw_scene(state: &CompositorState) {
+    clear_framebuffer(state);
+    for win in &state.windows {
+        composite_window(state, win);
+    }
+    draw_cursor(state);
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     debug_log("[DISPLAY] PANIC\n");
@@ -69,7 +160,7 @@ pub extern "C" fn _start() -> ! {
     debug_log("[DISPLAY] registered as display_server\n");
 
     // Map the physical framebuffer (new syscall)
-    let (fb_ptr, packed_wh, pitch, _bpp) = match sunlight_ipc::map_framebuffer() {
+    let (fb_ptr, packed_wh, _pitch, _bpp) = match sunlight_ipc::map_framebuffer() {
         Some(v) => v,
         None => {
             debug_log("[DISPLAY] Failed to map framebuffer. Exiting.\n");
@@ -91,6 +182,7 @@ pub extern "C" fn _start() -> ! {
         fb_width,
         fb_height,
     };
+    redraw_scene(&state);
 
     let mut next_win_id: u64 = 1;
 
@@ -117,13 +209,14 @@ pub extern "C" fn _start() -> ! {
 
                         state.windows.push(Window {
                             id,
-                            shm_cap: shm_tok,
+                            _shm_cap: shm_tok,
                             buffer: our_buf,
                             width: w,
                             height: h,
                             x: 80,
                             y: 60,
                         });
+                        redraw_scene(&state);
 
                         let mut reply = IpcMsg::with_label(SgpMsg::REPLY)
                             .word(1, id)
@@ -143,17 +236,8 @@ pub extern "C" fn _start() -> ! {
 
             SgpMsg::COMMIT_FRAME => {
                 let win_id = msg.words[0];
-                if let Some(win) = state.windows.iter().find(|w| w.id == win_id) {
-                    if !win.buffer.is_null() {
-                        // Immediate composition: copy client SHM region into FB
-                        for row in 0..win.height {
-                            unsafe {
-                                let src = win.buffer.add((row * win.width) as usize);
-                                let dst_base = state.fb.add(((win.y + row) * state.fb_width + win.x) as usize);
-                                core::ptr::copy_nonoverlapping(src, dst_base, win.width as usize);
-                            }
-                        }
-                    }
+                if state.windows.iter().any(|w| w.id == win_id) {
+                    redraw_scene(&state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -170,6 +254,7 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::DESTROY_WINDOW => {
                 let win_id = msg.words[0];
                 state.windows.retain(|w| w.id != win_id);
+                redraw_scene(&state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
@@ -178,6 +263,7 @@ pub extern "C" fn _start() -> ! {
                 let packed = msg.words[0];
                 state.mouse_x = (packed & 0xffff) as u16;
                 state.mouse_y = ((packed >> 16) & 0xffff) as u16;
+                redraw_scene(&state);
 
                 // Wake all parked clients
                 let waiters = core::mem::take(&mut state.event_waiters);

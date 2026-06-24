@@ -38,7 +38,8 @@ use sunlight_ipc::{
     tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
     TzMsg,
 };
-use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, MAX_USERS};
+use sunlight_libc::{spawn as libc_spawn, yield_now};
+use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, SessionType, MAX_USERS};
 use sunlight_tty::proc::{ProcOp, SIGKILL};
 use sunlight_tty::TerminalGrid;
 use sunlight_tui::ANSI_COLORS;
@@ -53,6 +54,12 @@ enum TtyState {
     Shell,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VirtualTerminal {
+    Tty = 1,
+    Desktop = 2,
+}
+
 const KBD_LABEL: u64 = 1;
 const MOUSE_LABEL: u64 = 2;
 const OUTPUT_LABEL: u64 = 2;
@@ -65,6 +72,8 @@ const FG_STARTED_LABEL: u64 = 5;
 /// tty→shell request: the foreground child has exited; the shell reaps it and
 /// redraws the prompt.
 const FG_DONE_LABEL: u64 = 6;
+const KEY_F1: u8 = 0x3B;
+const KEY_F2: u8 = 0x3C;
 const TERM_OUTPUT_MAX: usize = 4096;
 const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
@@ -96,6 +105,10 @@ const ARROW_CURSOR: [u8; CURSOR_PIXELS] = [
     0, 0, 0, 0, 0, 1, 2, 2, 0, 0,
     0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
 ];
+
+fn vt_is_active(active_vt: VirtualTerminal, vt: VirtualTerminal) -> bool {
+    active_vt == vt
+}
 
 struct MouseState {
     x: u32,
@@ -470,6 +483,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     debug_log("[TTY]  Login screen ready");
 
     let mut login = LoginScreen::new();
+    let mut active_vt = VirtualTerminal::Tty;
 
     let mut state = TtyState::Login;
     let mut spawn_cap: Option<CapabilityToken> = None;
@@ -485,100 +499,156 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         match state {
             TtyState::Login => {
                 let mut logged_in = false;
-                if let Some(ascii) = key_ascii_from_msg(&msg) {
-                    if login.focus == FocusArea::Password {
-                        debug_log_kbd_byte("[TTY] Key received in password field: ", ascii);
-                    }
-                    let result = login.handle_key_ascii(ascii);
-                    match result {
-                        LoginResult::Reboot => {
-                            debug_log("[TTY]  Reboot requested from login screen");
-                            unsafe {
-                                core::arch::asm!(
-                                    "mov rax, 80",
-                                    "mov rdi, 1",
-                                    "syscall",
-                                    options(nomem, nostack)
-                                );
-                            }
-                        }
-                        LoginResult::Shutdown => {
-                            debug_log("[TTY]  Shutdown requested from login screen");
-                            unsafe {
-                                core::arch::asm!(
-                                    "mov rax, 80",
-                                    "mov rdi, 0",
-                                    "syscall",
-                                    options(nomem, nostack)
-                                );
-                            }
-                        }
-                        LoginResult::Success {
-                            username,
-                            username_len,
-                            uid,
-                            gid,
-                        } => {
-                            debug_log_login_success(&username[..username_len], uid, gid);
-                            debug_log("[SunlightOS] Phase 3.7 OK");
-
-                            // Spawn sunshell
-                            let cap = match nameserver_lookup("spawn") {
-                                Some(c) => c,
-                                None => {
-                                    debug_log("[TTY]  spawn capability not found");
-                                    state = TtyState::Shell;
+                if msg.label == KbdMsg::KEY_EVENT {
+                    let (keycode, pressed, _shift, _ctrl, _alt, ascii_opt) =
+                        unpack_key_event(msg.words[0]);
+                    if pressed {
+                        if _ctrl {
+                            match keycode {
+                                KEY_F1 => {
+                                    active_vt = VirtualTerminal::Tty;
+                                    if has_fb {
+                                        render_login_fb(
+                                            &login,
+                                            fb_addr,
+                                            fb32_w,
+                                            fb32_h,
+                                            fb32_p,
+                                            &mut mouse,
+                                        );
+                                    }
                                     continue;
                                 }
-                            };
-                            spawn_cap = Some(cap);
+                                KEY_F2 => {
+                                    active_vt = VirtualTerminal::Desktop;
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        }
 
-                            if spawn_tab(
-                                &mut tabs,
-                                &mut tab_count,
-                                &mut active_tab,
-                                &mut next_shell_id,
-                                cap,
+                        if !vt_is_active(active_vt, VirtualTerminal::Tty) {
+                            continue;
+                        }
+
+                        if let Some(ascii) = ascii_opt {
+                            if login.focus == FocusArea::Password {
+                                debug_log_kbd_byte("[TTY] Key received in password field: ", ascii);
+                            }
+                        }
+
+                        match login.handle_key_event(keycode, pressed, ascii_opt) {
+                            LoginResult::Reboot => {
+                                debug_log("[TTY]  Reboot requested from login screen");
+                                unsafe {
+                                    core::arch::asm!(
+                                        "mov rax, 80",
+                                        "mov rdi, 1",
+                                        "syscall",
+                                        options(nomem, nostack)
+                                    );
+                                }
+                            }
+                            LoginResult::Shutdown => {
+                                debug_log("[TTY]  Shutdown requested from login screen");
+                                unsafe {
+                                    core::arch::asm!(
+                                        "mov rax, 80",
+                                        "mov rdi, 0",
+                                        "syscall",
+                                        options(nomem, nostack)
+                                    );
+                                }
+                            }
+                            LoginResult::Success {
+                                username,
+                                username_len,
                                 uid,
                                 gid,
-                            ) {
-                                // Store username in the active tab for prompt rendering
-                                if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
-                                    let len = username_len.min(tab.username.len() - 1);
-                                    tab.username[..len].copy_from_slice(&username[..len]);
-                                    tab.username_len = len;
-                                }
-                                if let Some(tab) = active_shell_tab(&tabs, active_tab) {
-                                    debug_log_spawn(&username[..username_len], tab.pid);
-                                    logged_initial_spawn = true;
-                                }
-                            }
+                                session,
+                            } => {
+                                debug_log_login_success(&username[..username_len], uid, gid);
+                                debug_log("[SunlightOS] Phase 3.7 OK");
 
-                            // Don't spin-poll here — process_yield() doesn't context-switch;
-                            // only the timer does. Instead, transition to Shell immediately
-                            // and resolve the sshl endpoint lazily on the first keyboard event.
-                            state = TtyState::Shell;
-                            debug_log("[TTY]  Built-in shell ready");
-                            if has_fb {
-                                render_active_shell_fb(
-                                    fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
-                                    true, &mut mouse,
-                                );
+                                match session {
+                                    SessionType::Tty => {
+                                        let cap = match nameserver_lookup("spawn") {
+                                            Some(c) => c,
+                                            None => {
+                                                debug_log("[TTY]  spawn capability not found");
+                                                state = TtyState::Shell;
+                                                continue;
+                                            }
+                                        };
+                                        spawn_cap = Some(cap);
+
+                                        if spawn_tab(
+                                            &mut tabs,
+                                            &mut tab_count,
+                                            &mut active_tab,
+                                            &mut next_shell_id,
+                                            cap,
+                                            uid,
+                                            gid,
+                                        ) {
+                                            if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                                                let len = username_len.min(tab.username.len() - 1);
+                                                tab.username[..len].copy_from_slice(&username[..len]);
+                                                tab.username_len = len;
+                                            }
+                                            if let Some(tab) = active_shell_tab(&tabs, active_tab) {
+                                                debug_log_spawn(&username[..username_len], tab.pid);
+                                                logged_initial_spawn = true;
+                                            }
+                                        }
+
+                                        state = TtyState::Shell;
+                                        debug_log("[TTY]  Built-in shell ready");
+                                        if has_fb {
+                                            render_active_shell_fb(
+                                                fb_addr,
+                                                fb32_w,
+                                                fb32_h,
+                                                fb32_p,
+                                                &tabs,
+                                                tab_count,
+                                                active_tab,
+                                                true,
+                                                &mut mouse,
+                                            );
+                                        }
+                                    }
+                                    SessionType::Desktop => {
+                                        active_vt = VirtualTerminal::Desktop;
+                                        let _ = libc_spawn(b"/bin/sunlight-display", &[], None);
+                                        yield_now();
+                                        yield_now();
+                                        let _ = libc_spawn(b"/bin/eyes", &[], None);
+                                        login.message = "Desktop session launched.";
+                                    }
+                                }
+                                logged_in = true;
                             }
-                            logged_in = true;
+                            LoginResult::Locked => {
+                                debug_log("[TTY]  Login locked");
+                            }
+                            LoginResult::Pending => {}
                         }
-                        LoginResult::Locked => {
-                            debug_log("[TTY]  Login locked");
-                        }
-                        LoginResult::Pending => {}
                     }
                 }
                 login.tick();
                 if msg.label == MOUSE_LABEL {
                     mouse.update_from_event(msg.words[0], fb32_w, fb32_h);
                 }
-                if has_fb && !logged_in {
-                    render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
+                if has_fb && !logged_in && vt_is_active(active_vt, VirtualTerminal::Tty) {
+                    render_login_fb(
+                        &login,
+                        fb_addr,
+                        fb32_w,
+                        fb32_h,
+                        fb32_p,
+                        &mut mouse,
+                    );
                 }
             }
             TtyState::Shell => {
@@ -596,6 +666,34 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 if msg.label == KbdMsg::KEY_EVENT {
                     let (keycode, pressed, _shift, ctrl, _alt, ctrl_ascii) =
                         unpack_key_event(msg.words[0]);
+
+                    if pressed && ctrl {
+                        match keycode {
+                            KEY_F1 => {
+                                active_vt = VirtualTerminal::Tty;
+                                if has_fb {
+                                    render_login_fb(
+                                        &login,
+                                        fb_addr,
+                                        fb32_w,
+                                        fb32_h,
+                                        fb32_p,
+                                        &mut mouse,
+                                    );
+                                }
+                                continue;
+                            }
+                            KEY_F2 => {
+                                active_vt = VirtualTerminal::Desktop;
+                                continue;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    if !vt_is_active(active_vt, VirtualTerminal::Tty) {
+                        continue;
+                    }
 
                     // Special navigation keys arrive as bare keycodes with no
                     // ASCII (the keyboard driver doesn't decode the 0xE0 prefix),
@@ -810,7 +908,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 );
                                                 spawn_cap = None;
                                                 logged_initial_spawn = false;
-                                                if has_fb {
+                                                if has_fb && vt_is_active(active_vt, VirtualTerminal::Tty) {
                                                     render_login_fb(
                                                         &login,
                                                         fb_addr,
@@ -897,7 +995,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 // wiping the app's frame. The idle loop renders the app instead.
                 let active_fg =
                     active_shell_tab(&tabs, active_tab).map_or(false, |t| t.fg_pid.is_some());
-                if has_fb && needs_render {
+                if has_fb && needs_render && vt_is_active(active_vt, VirtualTerminal::Tty) {
                     if active_fg {
                         redraw_mouse_overlay(fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
                     } else {
@@ -919,7 +1017,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 msg = m;
                 break;
             }
-            if has_fb && matches!(state, TtyState::Shell) {
+            if has_fb
+                && matches!(state, TtyState::Shell)
+                && vt_is_active(active_vt, VirtualTerminal::Tty)
+            {
                 let fg = active_shell_tab(&tabs, active_tab).and_then(|t| t.fg_pid);
                 if let Some(pid) = fg {
                     // Drain the foreground app's output (kernel stdout ring,
@@ -1065,6 +1166,7 @@ fn render_login_fb(
             login.active_count,
             login.selected_user_idx,
             focus,
+            login.session.label(),
             login.password.len,
             login.message,
         );
