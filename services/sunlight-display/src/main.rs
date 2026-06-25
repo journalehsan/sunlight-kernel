@@ -1175,9 +1175,9 @@ pub extern "C" fn _start() -> ! {
         fb_height,
         fb_pitch:             pitch as u32,
         active_cursor:        CursorShape::Pointer,
-        // Display server is spawned into an already-active Desktop session.
-        // tty_server sends SESSION_DEACTIVATE if the user switches to TTY.
-        session_active:       true,
+        // TTY session owns the framebuffer at boot; tty_server sends
+        // SESSION_ACTIVATE to hand the framebuffer to the Desktop session.
+        session_active:       false,
     };
     redraw_scene(&state);
 

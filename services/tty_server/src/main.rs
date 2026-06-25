@@ -38,7 +38,7 @@ use sunlight_ipc::{
     tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SgpMsg,
     SpawnMsg, TzMsg,
 };
-use sunlight_libc::{spawn as libc_spawn, yield_now};
+use sunlight_libc::spawn as libc_spawn;
 use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, SessionType, MAX_USERS};
 use sunlight_tty::proc::{ProcOp, SIGKILL};
 use sunlight_tty::TerminalGrid;
@@ -503,6 +503,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             TtyState::Login => {
                 let mut logged_in = false;
                 if msg.label == KbdMsg::KEY_EVENT {
+                    'kbd: {
                     let (keycode, pressed, _shift, _ctrl, _alt, ascii_opt) =
                         unpack_key_event(msg.words[0]);
                     if pressed {
@@ -529,7 +530,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             &mut mouse,
                                         );
                                     }
-                                    continue;
+                                    break 'kbd;
                                 }
                                 KEY_F2 => {
                                     if active_vt != VirtualTerminal::Desktop {
@@ -542,7 +543,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         }
                                     }
                                     active_vt = VirtualTerminal::Desktop;
-                                    continue;
+                                    break 'kbd;
                                 }
                                 _ => {}
                             }
@@ -556,7 +557,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             if let Some(cap) = display_cap {
                                 let _ = ipc_call(cap, msg);
                             }
-                            continue;
+                            break 'kbd;
                         }
 
                         if let Some(ascii) = ascii_opt {
@@ -605,7 +606,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             None => {
                                                 debug_log("[TTY]  spawn capability not found");
                                                 state = TtyState::Shell;
-                                                continue;
+                                                break 'kbd;
                                             }
                                         };
                                         spawn_cap = Some(cap);
@@ -649,11 +650,12 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     SessionType::Desktop => {
                                         debug_log("[SESSION] switched to F2 GraphicalDesktop");
                                         active_vt = VirtualTerminal::Desktop;
-                                        // display_server starts with session_active=true;
-                                        // no explicit SESSION_ACTIVATE needed here.
-                                        let _ = libc_spawn(b"/bin/sunlight-display", &[], None);
-                                        yield_now();
-                                        yield_now();
+                                        if display_cap.is_none() {
+                                            display_cap = nameserver_lookup("display_server");
+                                        }
+                                        if let Some(cap) = display_cap {
+                                            let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE));
+                                        }
                                         let _ = libc_spawn(b"/bin/eyes", &[], None);
                                         login.message = "Desktop session launched.";
                                     }
@@ -666,6 +668,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             LoginResult::Pending => {}
                         }
                     }
+                    } // end 'kbd
                 }
                 login.tick();
                 if msg.label == MOUSE_LABEL {
@@ -695,6 +698,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
                 // Lazy lookup: try to find sshl once it registers after being spawned.
                 if msg.label == KbdMsg::KEY_EVENT {
+                    'kbd: {
                     let (keycode, pressed, _shift, ctrl, _alt, ctrl_ascii) =
                         unpack_key_event(msg.words[0]);
 
@@ -718,7 +722,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         &tabs, tab_count, active_tab, true, &mut mouse,
                                     );
                                 }
-                                continue;
+                                break 'kbd;
                             }
                             KEY_F2 => {
                                 if active_vt != VirtualTerminal::Desktop {
@@ -731,7 +735,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     }
                                 }
                                 active_vt = VirtualTerminal::Desktop;
-                                continue;
+                                break 'kbd;
                             }
                             _ => {}
                         }
@@ -745,7 +749,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if let Some(cap) = display_cap {
                             let _ = ipc_call(cap, msg);
                         }
-                        continue;
+                        break 'kbd;
                     }
 
                     // Special navigation keys arrive as bare keycodes with no
@@ -869,6 +873,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             }
                         }
                     }
+                    } // end 'kbd
                 }
 
                 resolve_active_shell(&mut tabs, active_tab, &mut logged_initial_spawn);
