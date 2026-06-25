@@ -1,5 +1,4 @@
 //! sunlightctl - Control interface for sunlightd
-//! Thin IPC client for managing services
 
 #![no_std]
 #![no_main]
@@ -43,23 +42,26 @@ fn stdout_write(s: &str) {
 macro_rules! println {
     ($($arg:tt)*) => {{
         use core::fmt::Write;
-        let mut buf = heapless::String::<256>::new();
+        let mut buf = heapless::String::<512>::new();
         let _ = write!(&mut buf, $($arg)*);
         stdout_write(&buf);
         stdout_write("\n");
     }};
 }
 
-fn print_usage() {
-    println!("Usage: sunlightctl <command> [unit]");
-    println!("Commands:");
-    println!("  start <unit>    - Start a service");
-    println!("  stop <unit>     - Stop a service");
-    println!("  restart <unit>  - Restart a service");
-    println!("  status <unit>   - Show service status");
-    println!("  list            - List all services");
-    println!("  reload          - Reload service definitions");
-}
+// ── IPC opcodes (must match sunlightd/src/ipc.rs) ────────────────────────────
+const OP_START:   u64 = 1;
+const OP_STOP:    u64 = 2;
+const OP_RESTART: u64 = 3;
+const OP_ENABLE:  u64 = 5;
+const OP_DISABLE: u64 = 6;
+const OP_STATUS:  u64 = 10;
+const OP_LIST:    u64 = 11;
+
+const REPLY_OK:  u64 = 1;
+const REPLY_NOP: u64 = 2;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn pack_unit_name(msg: &mut IpcMsg, name: &str) {
     let bytes = name.as_bytes();
@@ -75,168 +77,306 @@ fn pack_unit_name(msg: &mut IpcMsg, name: &str) {
     }
 }
 
-fn extract_unit_name(msg: &IpcMsg) -> heapless::String<64> {
-    let mut name = heapless::String::new();
-    
-    for i in 0..4 {
-        let word = msg.words[i];
-        for j in 0..8 {
-            let byte = ((word >> (j * 8)) & 0xff) as u8;
-            if byte == 0 {
-                return name;
-            }
-            let _ = name.push(byte as char);
-        }
-    }
-    
-    name
-}
-
-fn cmd_status(sunlightd_cap: CapabilityToken, unit: &str) {
-    let mut msg = IpcMsg::empty();
-    msg.label = 10; // Status
-    pack_unit_name(&mut msg, unit);
-
-    let reply = ipc_call(sunlightd_cap, msg);
-    
-    if reply.label == 1 {
-        let state = reply.words[0] as u32;
-        let pid = reply.words[1] as u32;
-        let restarts = reply.words[2] as u32;
-        let started_at = reply.words[3];
-
-        println!("● {}.service", unit);
-        println!("   Active: {}", match state {
-            0 => "stopped",
-            1 => "starting",
-            2 => "running",
-            3 => "failed",
-            4 => "restarting",
-            _ => "unknown",
-        });
-        if state == 2 {
-            println!("   PID: {}", pid);
-            println!("   Started: {}", started_at);
-        }
-        println!("   Restarts: {}", restarts);
-    } else {
-        println!("ERROR: Service not found or status unavailable");
+fn state_str(state: u32) -> &'static str {
+    match state {
+        0 => "stopped",
+        1 => "starting",
+        2 => "running",
+        3 => "failed",
+        4 => "restarting",
+        _ => "unknown",
     }
 }
 
-fn cmd_list(sunlightd_cap: CapabilityToken) {
-    println!("UNIT               STATE     PID   RESTARTS");
+// ── Commands ──────────────────────────────────────────────────────────────────
+
+fn cmd_list(cap: CapabilityToken) {
+    println!("{:<18} {:<10} {:<10} {}", "NAME", "STATE", "ENABLED", "PID");
 
     let mut idx: u64 = 0;
     loop {
         let mut msg = IpcMsg::empty();
-        msg.label = 11; // List
+        msg.label = OP_LIST;
         msg.words[0] = idx;
 
-        let reply = ipc_call(sunlightd_cap, msg);
-        if reply.label != 1 {
+        let reply = ipc_call(cap, msg);
+        if reply.label != REPLY_OK {
             break;
         }
 
-        let total = reply.words[7] as u64;
-        let name = extract_unit_name(&reply);
-        let state = reply.words[4] as u32;
-        let pid = reply.words[5] as u32;
-        let restarts = reply.words[6] as u32;
+        // Decode words[0..4] (transport-safe encoding set by sunlightd ListEntry::pack)
+        let total    = (reply.words[0] & 0xFFFF_FFFF) as usize;
+        let state    = ((reply.words[0] >> 32) & 0xFF) as u32;
+        let enabled  = ((reply.words[0] >> 40) & 0x01) != 0;
+        let _restarts = ((reply.words[0] >> 48) & 0xFF) as u32;
+        let pid      = reply.words[1] as u32;
 
-        let state_str = match state {
-            0 => "stopped",
-            1 => "starting",
-            2 => "running",
-            3 => "failed",
-            4 => "restarting",
-            _ => "unknown",
-        };
+        // Name packed into words[2..4] (16 bytes)
+        let mut name = heapless::String::<32>::new();
+        for &word in &[reply.words[2], reply.words[3]] {
+            for j in 0..8u64 {
+                let byte = ((word >> (j * 8)) & 0xFF) as u8;
+                if byte == 0 { break; }
+                let _ = name.push(byte as char);
+            }
+            if name.len() > 0 && name.as_bytes()[name.len()-1] == 0 { break; }
+        }
 
-        println!("{:<18} {:<9} {:<5} {}", name, state_str, pid, restarts);
+        let enabled_s = if enabled { "enabled" } else { "disabled" };
+
+        let mut pid_s = heapless::String::<16>::new();
+        if state == 2 {
+            use core::fmt::Write;
+            let _ = write!(&mut pid_s, "{}", pid);
+        } else {
+            let _ = pid_s.push('-');
+        }
+
+        println!("{:<18} {:<10} {:<10} {}", name, state_str(state), enabled_s, pid_s);
 
         idx += 1;
-        if idx >= total {
+        if total == 0 || idx >= total as u64 {
             break;
         }
     }
 }
 
-fn cmd_start(sunlightd_cap: CapabilityToken, unit: &str) {
+fn cmd_status(cap: CapabilityToken, unit: &str) {
     let mut msg = IpcMsg::empty();
-    msg.label = 1; // Start
+    msg.label = OP_STATUS;
     pack_unit_name(&mut msg, unit);
 
-    let reply = ipc_call(sunlightd_cap, msg);
-    
-    if reply.label == 1 {
+    let reply = ipc_call(cap, msg);
+    if reply.label != REPLY_OK {
+        println!("ERROR: Service '{}' not found or sunlightd unavailable", unit);
+        return;
+    }
+
+    let state    = reply.words[0] as u32;
+    let pid      = reply.words[1] as u32;
+    let restarts = (reply.words[2] & 0xFFFF_FFFF) as u32;
+    let enabled  = (reply.words[2] >> 32) != 0;
+
+    println!("● {}.service", unit);
+    println!("   Active:   {}", state_str(state));
+    println!("   Enabled:  {}", if enabled { "enabled" } else { "disabled" });
+    if state == 2 {
+        println!("   PID:      {}", pid);
+    }
+    println!("   Restarts: {}", restarts);
+}
+
+fn cmd_start(cap: CapabilityToken, unit: &str) {
+    let mut msg = IpcMsg::empty();
+    msg.label = OP_START;
+    pack_unit_name(&mut msg, unit);
+    let reply = ipc_call(cap, msg);
+    if reply.label == REPLY_OK {
         println!("Started {}.service", unit);
     } else {
-        println!("ERROR: Failed to start service");
+        println!("ERROR: Failed to start '{}' (not found or spawn failed)", unit);
     }
 }
 
-fn cmd_stop(sunlightd_cap: CapabilityToken, unit: &str) {
+fn cmd_stop(cap: CapabilityToken, unit: &str) {
     let mut msg = IpcMsg::empty();
-    msg.label = 2; // Stop
+    msg.label = OP_STOP;
     pack_unit_name(&mut msg, unit);
-
-    let reply = ipc_call(sunlightd_cap, msg);
-    
-    if reply.label == 1 {
+    let reply = ipc_call(cap, msg);
+    if reply.label == REPLY_OK {
         println!("Stopped {}.service", unit);
     } else {
-        println!("ERROR: Failed to stop service");
+        println!("ERROR: Failed to stop '{}' (not found)", unit);
     }
 }
 
-fn cmd_restart(sunlightd_cap: CapabilityToken, unit: &str) {
+fn cmd_restart(cap: CapabilityToken, unit: &str) {
     let mut msg = IpcMsg::empty();
-    msg.label = 3; // Restart
+    msg.label = OP_RESTART;
     pack_unit_name(&mut msg, unit);
-
-    let reply = ipc_call(sunlightd_cap, msg);
-    
-    if reply.label == 1 {
+    let reply = ipc_call(cap, msg);
+    if reply.label == REPLY_OK {
         println!("Restarted {}.service", unit);
     } else {
-        println!("ERROR: Failed to restart service");
+        println!("ERROR: Failed to restart '{}' (not found or spawn failed)", unit);
     }
 }
 
-fn cmd_reload(sunlightd_cap: CapabilityToken) {
+fn cmd_enable(cap: CapabilityToken, unit: &str, now: bool) {
+    if unit.is_empty() {
+        println!("ERROR: missing service name");
+        return;
+    }
     let mut msg = IpcMsg::empty();
-    msg.label = 4; // Reload
-
-    let reply = ipc_call(sunlightd_cap, msg);
-    
-    if reply.label == 1 {
-        println!("Reloaded service definitions");
-    } else {
-        println!("ERROR: Failed to reload");
+    msg.label = OP_ENABLE;
+    pack_unit_name(&mut msg, unit);
+    let reply = ipc_call(cap, msg);
+    match reply.label {
+        REPLY_OK  => println!("Enabled {}.service", unit),
+        REPLY_NOP => println!("{}.service is already enabled", unit),
+        _         => { println!("ERROR: Service '{}' not found", unit); return; }
+    }
+    if now {
+        cmd_start(cap, unit);
     }
 }
+
+fn cmd_disable(cap: CapabilityToken, unit: &str, now: bool) {
+    if unit.is_empty() {
+        println!("ERROR: missing service name");
+        return;
+    }
+    let mut msg = IpcMsg::empty();
+    msg.label = OP_DISABLE;
+    pack_unit_name(&mut msg, unit);
+    let reply = ipc_call(cap, msg);
+    match reply.label {
+        REPLY_OK  => println!("Disabled {}.service", unit),
+        REPLY_NOP => println!("{}.service is already disabled", unit),
+        _         => { println!("ERROR: Service '{}' not found", unit); return; }
+    }
+    if now {
+        cmd_stop(cap, unit);
+    }
+}
+
+fn print_usage() {
+    println!("Usage: sunlightctl <command> [options]");
+    println!("Commands:");
+    println!("  list                       List all managed services");
+    println!("  status <service>           Show detailed service status");
+    println!("  start <service>            Start a service (even if disabled)");
+    println!("  stop <service>             Stop a running service");
+    println!("  restart <service>          Stop then start a service");
+    println!("  reboot <service>           Alias for restart");
+    println!("  enable [--now] <service>   Mark service enabled for auto-start");
+    println!("  disable [--now] <service>  Mark service disabled (no auto-start)");
+    println!("Options:");
+    println!("  --now  With enable/disable: also start/stop the service immediately");
+    println!("Examples:");
+    println!("  sunlightctl start solar");
+    println!("  sunlightctl enable --now solar");
+    println!("  sunlightctl disable --now solar");
+}
+
+// ── Argument parsing ──────────────────────────────────────────────────────────
+
+/// Collect argv strings from kernel-supplied argc/argv.
+///
+/// # Safety
+/// argc and argv must be the values provided by the kernel at process entry.
+unsafe fn collect_args<'a>(argc: u64, argv: *const *const u8, out: &mut [&'a str]) -> usize {
+    if argv.is_null() {
+        return 0;
+    }
+    let count = (argc as usize).min(out.len());
+    for i in 0..count {
+        let ptr = *argv.add(i);
+        if ptr.is_null() {
+            return i;
+        }
+        let mut len = 0usize;
+        while len < 256 && *ptr.add(len) != 0 {
+            len += 1;
+        }
+        if let Ok(s) = core::str::from_utf8(core::slice::from_raw_parts(ptr, len)) {
+            out[i] = s;
+        } else {
+            return i;
+        }
+    }
+    count
+}
+
+/// Parse `[--now] <service>` or `<service> [--now]` from a slice of args.
+/// Returns `(now_flag, service_name)`.
+fn parse_now_service<'a>(args: &[&'a str]) -> (bool, &'a str) {
+    match args {
+        ["--now", svc] => (true, svc),
+        [svc, "--now"] => (true, svc),
+        [svc]          => (false, svc),
+        _              => (false, ""),
+    }
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
 
 #[no_mangle]
-fn _start() -> ! {
-    // TODO: Parse command line arguments from argc/argv
-    // For now, hardcoded to run 'list' command for testing
-    
-    // Lookup sunlightd capability
-    let sunlightd_cap = nameserver_lookup("sunlightd");
-    let Some(sunlightd_cap) = sunlightd_cap else {
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    let mut raw: [&str; 8] = [""; 8];
+    let count = unsafe { collect_args(argc, argv, &mut raw) };
+    let args = &raw[..count];
+
+    // args[0] is the binary name; commands start at args[1]
+    let cmd = if args.len() >= 2 { args[1] } else { "" };
+
+    if cmd == "--help" || cmd == "-h" || cmd == "help" || cmd.is_empty() {
+        print_usage();
+        sunlight_libc::exit(0);
+    }
+
+    let cap = nameserver_lookup("sunlightd");
+    let Some(cap) = cap else {
         println!("ERROR: sunlightd not found (is it running?)");
         sunlight_libc::exit(1);
     };
 
-    // Run list command
-    cmd_list(sunlightd_cap);
+    match cmd {
+        "list" => cmd_list(cap),
+        "status" => {
+            let unit = args.get(2).copied().unwrap_or("");
+            if unit.is_empty() {
+                println!("ERROR: sunlightctl status <service>");
+            } else {
+                cmd_status(cap, unit);
+            }
+        }
+        "start" => {
+            let unit = args.get(2).copied().unwrap_or("");
+            if unit.is_empty() {
+                println!("ERROR: sunlightctl start <service>");
+            } else {
+                cmd_start(cap, unit);
+            }
+        }
+        "stop" => {
+            let unit = args.get(2).copied().unwrap_or("");
+            if unit.is_empty() {
+                println!("ERROR: sunlightctl stop <service>");
+            } else {
+                cmd_stop(cap, unit);
+            }
+        }
+        "restart" | "reboot" => {
+            let unit = args.get(2).copied().unwrap_or("");
+            if unit.is_empty() {
+                println!("ERROR: sunlightctl restart <service>");
+            } else {
+                cmd_restart(cap, unit);
+            }
+        }
+        "enable" => {
+            let rest = if args.len() > 2 { &args[2..] } else { &[] };
+            let (now, unit) = parse_now_service(rest);
+            cmd_enable(cap, unit, now);
+        }
+        "disable" => {
+            let rest = if args.len() > 2 { &args[2..] } else { &[] };
+            let (now, unit) = parse_now_service(rest);
+            cmd_disable(cap, unit, now);
+        }
+        _ => {
+            println!("Unknown command: '{}'", cmd);
+            print_usage();
+            sunlight_libc::exit(1);
+        }
+    }
 
     sunlight_libc::exit(0);
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    println!("sunlightctl: PANIC: {}", _info);
+    println!("sunlightctl: panic: {}", _info);
     sunlight_libc::exit(1);
 }

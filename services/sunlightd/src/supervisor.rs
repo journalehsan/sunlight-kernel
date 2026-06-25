@@ -16,6 +16,7 @@ pub struct ServiceEntry {
     pub state: ServiceState,
     pub restart_count: u32,
     pub last_restart_time: u64,
+    pub enabled: bool,
 }
 
 impl ServiceEntry {
@@ -25,6 +26,7 @@ impl ServiceEntry {
             state: ServiceState::Stopped,
             restart_count: 0,
             last_restart_time: 0,
+            enabled: true,
         }
     }
 

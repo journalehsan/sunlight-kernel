@@ -76,16 +76,12 @@ impl ServiceTable {
         Ok(idx)
     }
 
+    /// Find service index by binary name extracted from ExecStart path.
     fn find_by_name(&self, name: &str) -> Option<usize> {
         for i in 0..self.count {
             if let Some(ref entry) = self.services[i] {
-                // Extract service name from ExecStart path
-                if let Some(path_end) = entry.unit.exec_start.rfind('/') {
-                    let binary_name = &entry.unit.exec_start[(path_end + 1)..];
-                    if binary_name.starts_with(name) {
-                        return Some(i);
-                    }
-                } else if entry.unit.exec_start.starts_with(name) {
+                let bin = binary_name_of(&entry.unit.exec_start);
+                if bin == name {
                     return Some(i);
                 }
             }
@@ -110,13 +106,22 @@ impl ServiceTable {
     }
 }
 
+/// Extract binary name from an ExecStart path like "/sbin/niced" → "niced".
+fn binary_name_of(exec_start: &str) -> &str {
+    if let Some(pos) = exec_start.rfind('/') {
+        &exec_start[(pos + 1)..]
+    } else {
+        exec_start
+    }
+}
+
 /// Load unit files for services managed by sunlightd.
 /// kernel → init → sunlightd; vfs/net/tty are managed by kernel/init, not here.
 fn load_units() -> (ServiceTable, heapless::Vec<SocketUnit, 8>) {
     let mut services = ServiceTable::new();
     let sockets: heapless::Vec<SocketUnit, 8> = heapless::Vec::new();
 
-    // solar.service
+    // solar.service — disabled by default; start with: sunlightctl start solar
     let solar_service = r#"[Unit]
 Description=Solar HTTP Server
 After=net_server
@@ -134,7 +139,11 @@ StandardError=journal
 WantedBy=sunlight.target
 "#;
     if let Ok(unit) = parse_service_unit(solar_service.as_bytes()) {
-        let _ = services.add(unit);
+        if let Ok(idx) = services.add(unit) {
+            if let Some(entry) = services.get_mut(idx) {
+                entry.enabled = false;
+            }
+        }
     }
 
     // timezone_service.service
@@ -309,31 +318,19 @@ WantedBy=sunlight.target
 fn build_dep_graph(services: &ServiceTable) -> Result<heapless::Vec<usize, MAX_UNITS>, &'static str> {
     let mut graph = DepGraph::new();
 
-    // Add all services to graph
     for i in 0..services.count {
         if let Some(ref entry) = services.services[i] {
-            // Use a stable unit name (derived from ExecStart)
             let mut unit_name = heapless::String::<64>::new();
-            if let Some(pos) = entry.unit.exec_start.rfind('/') {
-                let _ = unit_name.push_str(&entry.unit.exec_start[(pos + 1)..]);
-            } else {
-                let _ = unit_name.push_str(&entry.unit.exec_start);
-            }
+            let _ = unit_name.push_str(binary_name_of(&entry.unit.exec_start));
             let _ = unit_name.push_str(".service");
-            
             graph.add_unit(&unit_name).map_err(|_| "Graph add failed")?;
         }
     }
 
-    // Add edges based on After/Requires
     for i in 0..services.count {
         if let Some(ref entry) = services.services[i] {
             let mut unit_name = heapless::String::<64>::new();
-            if let Some(pos) = entry.unit.exec_start.rfind('/') {
-                let _ = unit_name.push_str(&entry.unit.exec_start[(pos + 1)..]);
-            } else {
-                let _ = unit_name.push_str(&entry.unit.exec_start);
-            }
+            let _ = unit_name.push_str(binary_name_of(&entry.unit.exec_start));
             let _ = unit_name.push_str(".service");
 
             for dep in &entry.unit.after {
@@ -345,15 +342,7 @@ fn build_dep_graph(services: &ServiceTable) -> Result<heapless::Vec<usize, MAX_U
     graph.topological_order().map_err(|_| "Topological sort failed")
 }
 
-
 /// Spawn a named daemon via the kernel spawn capability.
-///
-/// `path` is the binary path (up to 32 bytes); `name` is the explicit process
-/// name that will appear in monitoring tools such as `top`. The name is packed
-/// into the SpawnRequest alongside the path; the kernel derives the PCB name
-/// from the path basename (register IPC only forwards words[0..3]), while the
-/// name field is preserved in the request for documentation and future
-/// memory-mapped IPC channels.
 fn spawn_named(spawn_cap: CapabilityToken, path: &str, name: &str) -> Result<u32, &'static str> {
     use sunlight_ipc::SpawnMsg;
 
@@ -369,78 +358,203 @@ fn spawn_named(spawn_cap: CapabilityToken, path: &str, name: &str) -> Result<u32
     }
 }
 
+/// Reply label codes for control operations.
+const REPLY_OK: u64 = 1;
+const REPLY_NOP: u64 = 2;   // already in desired state (enable/disable no-op)
+const REPLY_ERR: u64 = 0xff;
+
 /// Handle control IPC messages
-fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, _spawn_cap: CapabilityToken) -> IpcMsg {
+fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: CapabilityToken) -> IpcMsg {
     let mut reply = IpcMsg::empty();
 
     let op = match SunlightdOp::from_u32(msg.label as u32) {
         Some(op) => op,
         None => {
-            reply.label = 0xff; // Error
+            reply.label = REPLY_ERR;
             return reply;
         }
     };
 
     match op {
+        SunlightdOp::Start => {
+            let unit_name = extract_unit_name(msg);
+            if let Some(idx) = services.find_by_name(&unit_name) {
+                let already_running = matches!(
+                    services.get(idx).map(|e| &e.state),
+                    Some(ServiceState::Running { .. })
+                );
+                if already_running {
+                    reply.label = REPLY_OK;
+                } else {
+                    // Clone path before mutable borrow
+                    let path = services.get(idx).map(|e| {
+                        let mut p = heapless::String::<256>::new();
+                        let _ = p.push_str(&e.unit.exec_start);
+                        p
+                    });
+                    if let Some(path) = path {
+                        let bin = binary_name_of(&path);
+                        let mut name_buf = heapless::String::<64>::new();
+                        let _ = name_buf.push_str(bin);
+                        match spawn_named(spawn_cap, &path, &name_buf) {
+                            Ok(pid) => {
+                                if let Some(entry) = services.get_mut(idx) {
+                                    entry.mark_running(pid, 0);
+                                }
+                                reply.label = REPLY_OK;
+                            }
+                            Err(_) => { reply.label = REPLY_ERR; }
+                        }
+                    } else {
+                        reply.label = REPLY_ERR;
+                    }
+                }
+            } else {
+                reply.label = REPLY_ERR;
+            }
+        }
+
+        SunlightdOp::Stop => {
+            let unit_name = extract_unit_name(msg);
+            if let Some(idx) = services.find_by_name(&unit_name) {
+                if let Some(entry) = services.get_mut(idx) {
+                    match entry.state {
+                        ServiceState::Running { pid, .. } => {
+                            sunlight_ipc::kill(pid as u64, 15); // SIGTERM
+                            entry.mark_stopped();
+                            reply.label = REPLY_OK;
+                        }
+                        _ => {
+                            // Not running; still report success
+                            reply.label = REPLY_OK;
+                        }
+                    }
+                }
+            } else {
+                reply.label = REPLY_ERR;
+            }
+        }
+
+        SunlightdOp::Restart => {
+            let unit_name = extract_unit_name(msg);
+            if let Some(idx) = services.find_by_name(&unit_name) {
+                // Stop if running
+                if let Some(entry) = services.get_mut(idx) {
+                    if let ServiceState::Running { pid, .. } = entry.state {
+                        sunlight_ipc::kill(pid as u64, 15);
+                        entry.mark_stopped();
+                    }
+                }
+                // Clone path before mutable borrow
+                let path = services.get(idx).map(|e| {
+                    let mut p = heapless::String::<256>::new();
+                    let _ = p.push_str(&e.unit.exec_start);
+                    p
+                });
+                if let Some(path) = path {
+                    let bin = binary_name_of(&path);
+                    let mut name_buf = heapless::String::<64>::new();
+                    let _ = name_buf.push_str(bin);
+                    match spawn_named(spawn_cap, &path, &name_buf) {
+                        Ok(pid) => {
+                            if let Some(entry) = services.get_mut(idx) {
+                                entry.mark_running(pid, 0);
+                            }
+                            reply.label = REPLY_OK;
+                        }
+                        Err(_) => { reply.label = REPLY_ERR; }
+                    }
+                } else {
+                    reply.label = REPLY_ERR;
+                }
+            } else {
+                reply.label = REPLY_ERR;
+            }
+        }
+
+        SunlightdOp::Reload => {
+            // Unit files are compiled-in; reload is a no-op but not an error.
+            reply.label = REPLY_OK;
+        }
+
+        SunlightdOp::Enable => {
+            let unit_name = extract_unit_name(msg);
+            if let Some(idx) = services.find_by_name(&unit_name) {
+                if let Some(entry) = services.get_mut(idx) {
+                    if entry.enabled {
+                        reply.label = REPLY_NOP;
+                    } else {
+                        entry.enabled = true;
+                        reply.label = REPLY_OK;
+                    }
+                }
+            } else {
+                reply.label = REPLY_ERR;
+            }
+        }
+
+        SunlightdOp::Disable => {
+            let unit_name = extract_unit_name(msg);
+            if let Some(idx) = services.find_by_name(&unit_name) {
+                if let Some(entry) = services.get_mut(idx) {
+                    if !entry.enabled {
+                        reply.label = REPLY_NOP;
+                    } else {
+                        entry.enabled = false;
+                        reply.label = REPLY_OK;
+                    }
+                }
+            } else {
+                reply.label = REPLY_ERR;
+            }
+        }
+
         SunlightdOp::Status => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
                 if let Some(entry) = services.get(idx) {
                     let status = match entry.state {
                         ServiceState::Stopped => StatusReply {
-                            state: 0,
-                            pid: 0,
-                            restarts: entry.restart_count,
-                            started_at: 0,
+                            state: 0, pid: 0, restarts: entry.restart_count,
+                            started_at: 0, enabled: entry.enabled,
                         },
                         ServiceState::Starting => StatusReply {
-                            state: 1,
-                            pid: 0,
-                            restarts: entry.restart_count,
-                            started_at: 0,
+                            state: 1, pid: 0, restarts: entry.restart_count,
+                            started_at: 0, enabled: entry.enabled,
                         },
                         ServiceState::Running { pid, started_at } => StatusReply {
-                            state: 2,
-                            pid,
-                            restarts: entry.restart_count,
-                            started_at,
+                            state: 2, pid, restarts: entry.restart_count,
+                            started_at, enabled: entry.enabled,
                         },
                         ServiceState::Failed { exit_code, crashed_at, restarts } => StatusReply {
-                            state: 3,
-                            pid: exit_code as u32,
-                            restarts,
-                            started_at: crashed_at,
+                            state: 3, pid: exit_code as u32, restarts,
+                            started_at: crashed_at, enabled: entry.enabled,
                         },
                         ServiceState::Restarting { at } => StatusReply {
-                            state: 4,
-                            pid: 0,
-                            restarts: entry.restart_count,
-                            started_at: at,
+                            state: 4, pid: 0, restarts: entry.restart_count,
+                            started_at: at, enabled: entry.enabled,
                         },
                     };
                     status.pack(&mut reply);
-                    reply.label = 1; // Success
+                    reply.label = REPLY_OK;
                 }
             } else {
-                reply.label = 0xff; // Not found
+                reply.label = REPLY_ERR;
             }
         }
+
         SunlightdOp::List => {
-            // words[0] from client = requested index; words[7] in reply = total count
+            // words[0] from client = requested index
             let idx = msg.words[0] as usize;
             if idx < services.count {
                 if let Some(entry) = services.get(idx) {
                     let mut name = heapless::String::<64>::new();
-                    if let Some(pos) = entry.unit.exec_start.rfind('/') {
-                        let _ = name.push_str(&entry.unit.exec_start[(pos + 1)..]);
-                    } else {
-                        let _ = name.push_str(&entry.unit.exec_start);
-                    }
+                    let _ = name.push_str(binary_name_of(&entry.unit.exec_start));
                     let list_entry = ListEntry {
                         name,
                         state: match entry.state {
                             ServiceState::Running { .. } => 2,
-                            ServiceState::Starting => 1,
+                            ServiceState::Starting    => 1,
                             ServiceState::Failed { .. } => 3,
                             ServiceState::Restarting { .. } => 4,
                             _ => 0,
@@ -450,15 +564,17 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, _spawn_cap:
                             _ => 0,
                         },
                         restarts: entry.restart_count,
+                        enabled: entry.enabled,
                     };
-                    list_entry.pack(&mut reply);
-                    reply.words[7] = services.count as u64;
-                    reply.label = 1;
+                    list_entry.pack(&mut reply, services.count);
+                    reply.label = REPLY_OK;
                 }
             }
+            // label stays 0 when idx >= count → client stops iterating
         }
-        _ => {
-            reply.label = 0xff; // Unsupported
+
+        SunlightdOp::GetLog => {
+            reply.label = REPLY_ERR; // not yet implemented
         }
     }
 
@@ -467,11 +583,10 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, _spawn_cap:
 
 #[no_mangle]
 fn _start() -> ! {
-    // Diagnostic 1c: absolute first line of sunlightd main, using same debug_log mechanism as other services (vfs_server, tty_server, install_sunlightos etc.)
     sunlight_ipc::debug_log("[SUNLIGHTD] main() reached\n");
-    serial_println!("[SUNLIGHTD] Starting sunlightd v0.1");
+    serial_println!("[SUNLIGHTD] Starting sunlightd v0.2");
 
-    // Register self FIRST (before any other IPC lookups, to avoid deadlock and to match required startup sequence)
+    // Register self FIRST (before any other IPC lookups, to avoid deadlock)
     let ep = endpoint_create();
     nameserver_register("sunlightd", ep);
     serial_println!("[SUNLIGHTD] Registered as 'sunlightd'");
@@ -479,9 +594,8 @@ fn _start() -> ! {
     // Load unit files
     let (mut services, _sockets) = load_units();
     serial_println!("[SUNLIGHTD] Loaded {} service units", services.count);
-    serial_println!("[SUNLIGHTD] All units accounted for");
 
-    // Build dependency graph (result drives start order; unused directly but validates graph)
+    // Build dependency graph (validates graph; start order is fixed below)
     let _order = match build_dep_graph(&services) {
         Ok(o) => o,
         Err(e) => {
@@ -493,15 +607,12 @@ fn _start() -> ! {
     serial_println!("[SUNLIGHTD] Start order: timezone_service → niced → gcd → uac_service → sm → sunlight-kv → rand_service → sunlight-tls");
     serial_println!("[SunlightOS] sunlightd OK");
 
-    // Spawn services sunlightd owns (kernel/init own vfs/net/tty — not our job).
+    // Spawn enabled services owned by sunlightd (kernel/init own vfs/net/tty — not our job).
+    // Order matters: sm before kv, rand_service before sunlight-tls.
+    // solar is disabled by default and intentionally omitted from auto-start.
     let spawn_cap = nameserver_lookup("spawn").unwrap_or(sunlight_ipc::CapabilityToken(0));
     if spawn_cap != sunlight_ipc::CapabilityToken(0) {
-        // Indices must match the order services were added in load_units():
-        // 0=timezone_service, 1=niced, 2=gcd, 3=uac_service, 4=sm (sunlight-sm),
-        // 5=sunlight-kv, 6=rand_service, 7=sunlight-tls.
-        // sm (storage manager) starts before kv so protected writes are delegated.
-        // rand_service MUST precede sunlight-tls.
-        let managed: [(&str, &str); 9] = [
+        let managed: &[(&str, &str)] = &[
             ("/sbin/timezone_service", "timezone_service"),
             ("/sbin/niced",            "niced"),
             ("/sbin/gcd",              "gcd"),
@@ -512,14 +623,28 @@ fn _start() -> ! {
             ("/sbin/sunlight-tls",     "sunlight-tls"),
             ("/sbin/solar",            "solar"),
         ];
-        for (i, (path, name)) in managed.iter().enumerate() {
+        for &(path, name) in managed {
+            // Check enabled state before spawning
+            let enabled = services.find_by_name(name)
+                .and_then(|i| services.get(i))
+                .map(|e| e.enabled)
+                .unwrap_or(true);
+
+            if !enabled {
+                serial_println!("[SUNLIGHTD] {} is disabled, skipping auto-start", name);
+                continue;
+            }
+
             match spawn_named(spawn_cap, path, name) {
                 Ok(pid) => {
                     serial_println!("[SUNLIGHTD] spawned {} pid={}", name, pid);
-                    if let Some(entry) = services.get_mut(i) {
-                        entry.mark_running(pid, 0);
+                    // Update service table state using name-based lookup (not index)
+                    if let Some(idx) = services.find_by_name(name) {
+                        if let Some(entry) = services.get_mut(idx) {
+                            entry.mark_running(pid, 0);
+                        }
                     }
-                    if *name == "timezone_service" {
+                    if name == "timezone_service" {
                         serial_println!("[SUNLIGHTD] timezone.service: running (pid={})", pid);
                         serial_println!("[SunlightOS] timezone OK");
                     }
@@ -532,9 +657,6 @@ fn _start() -> ! {
     }
 
     // Main control loop.
-    // ipc_reply_and_wait returns the NEXT incoming message atomically with the reply.
-    // We must feed that returned message into the next iteration instead of calling
-    // ipc_recv again, otherwise the consumed message is dropped and the client deadlocks.
     let mut msg = ipc_recv(ep);
     loop {
         let reply = handle_control_message(&msg, &mut services, spawn_cap);
