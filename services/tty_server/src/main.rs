@@ -35,8 +35,8 @@ use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_try_recv,
     nameserver_lookup, nameserver_register, process_is_alive, process_yield, sysinfo,
-    tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SpawnMsg,
-    TzMsg,
+    tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SgpMsg,
+    SpawnMsg, TzMsg,
 };
 use sunlight_libc::{spawn as libc_spawn, yield_now};
 use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, SessionType, MAX_USERS};
@@ -483,7 +483,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     debug_log("[TTY]  Login screen ready");
 
     let mut login = LoginScreen::new();
+    // TTY/Login is the default session at boot; Desktop becomes active after Desktop login.
     let mut active_vt = VirtualTerminal::Tty;
+    // Lazily resolved on first Ctrl+F1/F2 press or key-forward attempt.
+    let mut display_cap: Option<CapabilityToken> = None;
 
     let mut state = TtyState::Login;
     let mut spawn_cap: Option<CapabilityToken> = None;
@@ -506,6 +509,15 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if _ctrl {
                             match keycode {
                                 KEY_F1 => {
+                                    if active_vt != VirtualTerminal::Tty {
+                                        debug_log("[SESSION] switched to F1 TTY/Login");
+                                        if display_cap.is_none() {
+                                            display_cap = nameserver_lookup("display_server");
+                                        }
+                                        if let Some(cap) = display_cap {
+                                            let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE));
+                                        }
+                                    }
                                     active_vt = VirtualTerminal::Tty;
                                     if has_fb {
                                         render_login_fb(
@@ -520,6 +532,15 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     continue;
                                 }
                                 KEY_F2 => {
+                                    if active_vt != VirtualTerminal::Desktop {
+                                        debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                        if display_cap.is_none() {
+                                            display_cap = nameserver_lookup("display_server");
+                                        }
+                                        if let Some(cap) = display_cap {
+                                            let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE));
+                                        }
+                                    }
                                     active_vt = VirtualTerminal::Desktop;
                                     continue;
                                 }
@@ -528,6 +549,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         }
 
                         if !vt_is_active(active_vt, VirtualTerminal::Tty) {
+                            // Forward keyboard event to display_server when Desktop session is active.
+                            if display_cap.is_none() {
+                                display_cap = nameserver_lookup("display_server");
+                            }
+                            if let Some(cap) = display_cap {
+                                let _ = ipc_call(cap, msg);
+                            }
                             continue;
                         }
 
@@ -619,7 +647,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         }
                                     }
                                     SessionType::Desktop => {
+                                        debug_log("[SESSION] switched to F2 GraphicalDesktop");
                                         active_vt = VirtualTerminal::Desktop;
+                                        // display_server starts with session_active=true;
+                                        // no explicit SESSION_ACTIVATE needed here.
                                         let _ = libc_spawn(b"/bin/sunlight-display", &[], None);
                                         yield_now();
                                         yield_now();
@@ -670,20 +701,35 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     if pressed && ctrl {
                         match keycode {
                             KEY_F1 => {
+                                if active_vt != VirtualTerminal::Tty {
+                                    debug_log("[SESSION] switched to F1 TTY/Login");
+                                    if display_cap.is_none() {
+                                        display_cap = nameserver_lookup("display_server");
+                                    }
+                                    if let Some(cap) = display_cap {
+                                        let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE));
+                                    }
+                                }
                                 active_vt = VirtualTerminal::Tty;
+                                // In Shell state, redraw the shell (not the login screen).
                                 if has_fb {
-                                    render_login_fb(
-                                        &login,
-                                        fb_addr,
-                                        fb32_w,
-                                        fb32_h,
-                                        fb32_p,
-                                        &mut mouse,
+                                    render_active_shell_fb(
+                                        fb_addr, fb32_w, fb32_h, fb32_p,
+                                        &tabs, tab_count, active_tab, true, &mut mouse,
                                     );
                                 }
                                 continue;
                             }
                             KEY_F2 => {
+                                if active_vt != VirtualTerminal::Desktop {
+                                    debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                    if display_cap.is_none() {
+                                        display_cap = nameserver_lookup("display_server");
+                                    }
+                                    if let Some(cap) = display_cap {
+                                        let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE));
+                                    }
+                                }
                                 active_vt = VirtualTerminal::Desktop;
                                 continue;
                             }
@@ -692,6 +738,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
 
                     if !vt_is_active(active_vt, VirtualTerminal::Tty) {
+                        // Forward keyboard event to display_server when Desktop session is active.
+                        if display_cap.is_none() {
+                            display_cap = nameserver_lookup("display_server");
+                        }
+                        if let Some(cap) = display_cap {
+                            let _ = ipc_call(cap, msg);
+                        }
                         continue;
                     }
 

@@ -460,6 +460,9 @@ struct CompositorState {
     fb_height:          u32,
     fb_pitch:           u32,
     active_cursor:      CursorShape,
+    // True when Desktop session owns the framebuffer; false when TTY/login is active.
+    // tty_server sends SESSION_ACTIVATE/SESSION_DEACTIVATE to toggle this.
+    session_active:     bool,
 }
 
 fn fb_stride(state: &CompositorState) -> usize {
@@ -1073,6 +1076,9 @@ fn draw_cursor(state: &CompositorState) {
 }
 
 fn redraw_scene(state: &CompositorState) {
+    if !state.session_active {
+        return;
+    }
     clear_framebuffer(state);
     let last_idx = state.windows.len().saturating_sub(1);
     for (i, win) in state.windows.iter().enumerate() {
@@ -1169,6 +1175,9 @@ pub extern "C" fn _start() -> ! {
         fb_height,
         fb_pitch:             pitch as u32,
         active_cursor:        CursorShape::Pointer,
+        // Display server is spawned into an already-active Desktop session.
+        // tty_server sends SESSION_DEACTIVATE if the user switches to TTY.
+        session_active:       true,
     };
     redraw_scene(&state);
 
@@ -1438,7 +1447,7 @@ pub extern "C" fn _start() -> ! {
                 let cy = state.pointer.y() as u32;
 
                 // ── Left button just pressed ────────────────────────────────
-                if left_down && !was_left_down {
+                if state.session_active && left_down && !was_left_down {
                     // Hit-test windows front-to-back to find what was clicked.
                     let mut hit_id:   Option<u64> = None;
                     let mut hit_zone: HitZone     = HitZone::Miss;
@@ -1614,6 +1623,29 @@ pub extern "C" fn _start() -> ! {
                 state.prev_buttons  = buttons;
                 state.active_cursor = cursor_for_scene(&state);
                 redraw_scene(&state);
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
+            // -------------------------------------------------------------------
+            // SESSION_ACTIVATE — tty_server hands framebuffer to Desktop session.
+            // -------------------------------------------------------------------
+            SgpMsg::SESSION_ACTIVATE => {
+                if !state.session_active {
+                    debug_log("[DISPLAY] [SESSION] activated — Desktop owns framebuffer\n");
+                    state.session_active = true;
+                    redraw_scene(&state);
+                }
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
+            // -------------------------------------------------------------------
+            // SESSION_DEACTIVATE — tty_server takes framebuffer for TTY/Login.
+            // -------------------------------------------------------------------
+            SgpMsg::SESSION_DEACTIVATE => {
+                if state.session_active {
+                    debug_log("[DISPLAY] [SESSION] deactivated — TTY owns framebuffer\n");
+                    state.session_active = false;
+                }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 

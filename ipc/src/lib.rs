@@ -238,6 +238,11 @@ pub mod sgp {
         /// words[0] = (win_id as u32) | ((CursorShape discriminant as u32) << 32)
         pub const SET_CURSOR: u64       = 0xA106;
 
+        // Session control — sent by tty_server to coordinate framebuffer ownership.
+        // words[0] = 0 (reserved)
+        pub const SESSION_ACTIVATE:   u64 = 0xA110; // Desktop session takes framebuffer
+        pub const SESSION_DEACTIVATE: u64 = 0xA111; // TTY session takes framebuffer
+
         // Display Server -> Client Replies
         pub const REPLY: u64            = 0xA1FF;
 
