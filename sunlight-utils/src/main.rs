@@ -1352,6 +1352,7 @@ fn cmd_uname(args: &[&str]) -> i32 {
     let mut show_processor = false;
     let mut show_hw_platform = false;
     let mut show_operating_system = false;
+    let mut show_all = false;
 
     if args.is_empty() {
         show_kernel_name = true;
@@ -1378,6 +1379,7 @@ fn cmd_uname(args: &[&str]) -> i32 {
                             show_hw_platform = true;
                         }
                         show_operating_system = true;
+                        show_all = true;
                     }
                     "kernel-name" => show_kernel_name = true,
                     "nodename" => show_nodename = true,
@@ -1413,6 +1415,7 @@ fn cmd_uname(args: &[&str]) -> i32 {
                                 show_hw_platform = true;
                             }
                             show_operating_system = true;
+                            show_all = true;
                         }
                         b's' => show_kernel_name = true,
                         b'n' => show_nodename = true,
@@ -1468,8 +1471,39 @@ fn cmd_uname(args: &[&str]) -> i32 {
     if show_operating_system {
         write_uname_field(&mut first, operating_system().as_bytes());
     }
+    if show_all {
+        if let Some(page) = telemetry_page() {
+            let used_mb = page.used_ram_kb / 1024;
+            let total_mb = page.total_ram_kb / 1024;
+            let mut b1 = [0u8; 20];
+            let mut b2 = [0u8; 20];
+            let _ = write_all(b" [RAM: ");
+            let _ = write_all(write_u64_dec(used_mb, &mut b1));
+            let _ = write_all(b"MB/");
+            let _ = write_all(write_u64_dec(total_mb, &mut b2));
+            let _ = write_all(b"MB - microkernel stays lean!]");
+        }
+    }
     let _ = write_all(b"\n");
     0
+}
+
+fn write_u64_dec<'a>(mut v: u64, buf: &'a mut [u8; 20]) -> &'a [u8] {
+    if v == 0 {
+        buf[0] = b'0';
+        return &buf[..1];
+    }
+    let mut tmp = [0u8; 20];
+    let mut n = 0usize;
+    while v > 0 && n < tmp.len() {
+        tmp[n] = b'0' + (v % 10) as u8;
+        n += 1;
+        v /= 10;
+    }
+    for i in 0..n {
+        buf[i] = tmp[n - 1 - i];
+    }
+    &buf[..n]
 }
 
 fn write_uname_field(first: &mut bool, value: &[u8]) {

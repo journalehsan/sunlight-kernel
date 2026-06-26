@@ -3,7 +3,6 @@
 
 extern crate alloc;
 
-use alloc::collections::VecDeque;
 use core::alloc::{GlobalAlloc, Layout};
 
 use sunlight_ipc::{
@@ -33,9 +32,6 @@ const BTN_BG_HOVER: u32 = 0x00303946;
 const BTN_BG_ACTIVE: u32 = 0x00FF7A00;
 const BTN_TEXT_ACTIVE: u32 = 0x00110A02;
 const STATUS_BG: u32 = 0x0015171C;
-const CHART_BG: u32 = 0x0017191E;
-
-const HISTORY_LEN: usize = 32;
 const EVENT_TIMEOUT_MS: u64 = 200;
 
 const KEY_BACKSPACE: u8 = 0x0E;
@@ -100,8 +96,6 @@ impl ButtonRect {
 struct AppState {
     telemetry: Telemetry,
     snapshot: SystemSnapshot,
-    cpu_history: VecDeque<u8>,
-    ram_history: VecDeque<u8>,
     selected_pid: Option<u32>,
     scroll: usize,
     show_system_info: bool,
@@ -117,8 +111,6 @@ impl AppState {
         Self {
             telemetry,
             snapshot: SystemSnapshot::default(),
-            cpu_history: VecDeque::with_capacity(HISTORY_LEN),
-            ram_history: VecDeque::with_capacity(HISTORY_LEN),
             selected_pid: None,
             scroll: 0,
             show_system_info: true,
@@ -139,15 +131,6 @@ impl AppState {
         let changed = self.telemetry.poll();
         if changed || force {
             self.snapshot = *self.telemetry.snapshot();
-            let cpu_pct = (self.snapshot.cpu_used_bp / 100).min(100) as u8;
-            let ram_pct = if self.snapshot.total_ram_kb > 0 {
-                ((self.snapshot.used_ram_kb.saturating_mul(100)) / self.snapshot.total_ram_kb)
-                    .min(100) as u8
-            } else {
-                0
-            };
-            push_bounded(&mut self.cpu_history, cpu_pct);
-            push_bounded(&mut self.ram_history, ram_pct);
             self.clamp_scroll(visible_rows(self));
         }
         changed || force
@@ -299,10 +282,10 @@ unsafe fn render(buffer: *mut u32, app: &AppState) {
     }
 
     let table_top = y + 10;
-    let table_bottom = WIN_H.saturating_sub(78);
+    let table_bottom = WIN_H.saturating_sub(30);
     let visible = ((table_bottom.saturating_sub(table_top)) / 18) as usize;
     draw_table(&mut fb, app, table_top, visible);
-    draw_histograms(&mut fb, app, table_bottom + 8);
+    draw_footer(&mut fb, app);
 }
 
 fn draw_title(fb: &mut Framebuffer) {
@@ -489,36 +472,61 @@ fn draw_task_row(fb: &mut Framebuffer, proc: &sunlight_telemetry::ProcessSnapsho
     font::draw_str(fb, 612, y + 3, "-", TEXT_MUTED, 1);
 }
 
-fn draw_histograms(fb: &mut Framebuffer, app: &AppState, y: u32) {
-    let cpu_y = y;
-    let ram_y = y + 34;
-    fb.fill_rect(12, cpu_y - 2, WIN_W - 24, 28, CHART_BG);
-    fb.fill_rect(12, ram_y - 2, WIN_W - 24, 28, CHART_BG);
-    fb.hline(12, cpu_y - 2, WIN_W - 24, PANEL_3);
-    fb.hline(12, ram_y - 2, WIN_W - 24, PANEL_3);
+fn draw_footer(fb: &mut Framebuffer, app: &AppState) {
+    let y = WIN_H - 24;
+    fb.fill_rect(0, y, WIN_W, 24, STATUS_BG);
+    fb.hline(0, y, WIN_W, SEP);
 
-    draw_history_row(fb, "CPU", &app.cpu_history, cpu_y, GOOD);
-    draw_history_row(fb, "RAM", &app.ram_history, ram_y, WARN);
-}
+    let snap = &app.snapshot;
+    let cpu_used = (snap.cpu_used_bp / 100).min(100);
+    let cpu_idle = (snap.cpu_idle_bp / 100).min(100);
+    let ram_mb_used = snap.used_ram_kb / 1024;
+    let ram_mb_total = snap.total_ram_kb / 1024;
 
-fn draw_history_row(fb: &mut Framebuffer, label: &str, history: &VecDeque<u8>, y: u32, color: u32) {
-    font::draw_str(fb, 24, y + 4, label, TEXT_DIM, 1);
-    let base_x = 80u32;
-    let bar_w = 14u32;
-    let gap = 2u32;
-    let chart_h = 20u32;
-    let mut x = base_x;
-    let start = history.len().saturating_sub(HISTORY_LEN);
-    for &sample in history.iter().skip(start) {
-        let h = ((sample as u32) * chart_h / 100).max(1);
-        fb.fill_rect(x, y + 22 - h, bar_w, h, color);
-        x += bar_w + gap;
+    let mut buf = [0u8; 128];
+    let mut pos = 0usize;
+
+    macro_rules! push_str {
+        ($s:expr) => {{
+            let b = $s.as_bytes();
+            let n = b.len().min(buf.len() - pos);
+            buf[pos..pos + n].copy_from_slice(&b[..n]);
+            pos += n;
+        }};
     }
-    let current = history.back().copied().unwrap_or(0);
-    let mut buf = [0u8; 8];
-    let n = push_pct(&mut buf, current);
-    let pct = core::str::from_utf8(&buf[..n]).unwrap_or("-");
-    font::draw_str(fb, x + 8, y + 4, pct, TEXT, 1);
+    macro_rules! push_num {
+        ($v:expr) => {{
+            let mut tmp = [0u8; 20];
+            let n = push_u64(&mut tmp, $v as u64);
+            let n = n.min(buf.len() - pos);
+            buf[pos..pos + n].copy_from_slice(&tmp[..n]);
+            pos += n;
+        }};
+    }
+
+    push_str!("CPU: ");
+    push_num!(cpu_used);
+    push_str!("% used  idle: ");
+    push_num!(cpu_idle);
+    push_str!("%   |   RAM: ");
+    push_num!(ram_mb_used);
+    push_str!(" / ");
+    push_num!(ram_mb_total);
+    push_str!(" MB   |   Kernel: ");
+
+    // sum mem of first 5 pids (kernel services) as a rough "kernel footprint"
+    let mut kernel_kb: u64 = 0;
+    let count = snap.proc_count.min(5);
+    for i in 0..count {
+        kernel_kb += snap.procs[i].mem_kb as u64;
+    }
+    push_num!(kernel_kb / 1024);
+    push_str!(" MB   |   Tasks: ");
+    push_num!(snap.proc_count as u64);
+
+    if let Ok(s) = core::str::from_utf8(&buf[..pos]) {
+        font::draw_str(fb, 16, y + 6, s, TEXT_DIM, 1);
+    }
 }
 
 fn handle_click(app: &mut AppState, x: i32, y: i32, refresh_now: &mut bool) -> bool {
@@ -635,7 +643,7 @@ fn draw_toolbar_layout() -> [ButtonRect; 4] {
 
 fn visible_rows(app: &AppState) -> usize {
     let table_top = table_top(app);
-    let max_rows = (WIN_H.saturating_sub(78).saturating_sub(table_top + 20)) / 18;
+    let max_rows = (WIN_H.saturating_sub(30).saturating_sub(table_top + 20)) / 18;
     max_rows as usize
 }
 
@@ -686,12 +694,6 @@ fn state_text(state: ProcessState) -> &'static str {
     }
 }
 
-fn push_bounded(buf: &mut VecDeque<u8>, val: u8) {
-    if buf.len() == HISTORY_LEN {
-        let _ = buf.pop_front();
-    }
-    buf.push_back(val);
-}
 
 fn copy_ascii(src: &[u8], dst: &mut [u8]) -> usize {
     let n = src.len().min(dst.len().saturating_sub(1));
