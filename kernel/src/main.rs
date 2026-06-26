@@ -30,7 +30,8 @@ static PMM: spin::Mutex<PhysicalMemoryManager> = spin::Mutex::new(PhysicalMemory
 // Limine requests
 static MEMMAP_REQ: limine::request::MemmapRequest = limine::request::MemmapRequest::new();
 static HHDM_REQ: limine::request::HhdmRequest = limine::request::HhdmRequest::new();
-pub(crate) static FB_REQ: limine::request::FramebufferRequest = limine::request::FramebufferRequest::new();
+pub(crate) static FB_REQ: limine::request::FramebufferRequest =
+    limine::request::FramebufferRequest::new();
 static RSDP_REQ: limine::request::RsdpRequest = limine::request::RsdpRequest::new();
 // 1 MiB boot stack (Limine defaults to 64 KiB). `init_kernel_vfs` and the
 // FAT bootstrap keep multi-KiB filesystem objects on the stack before the
@@ -55,6 +56,8 @@ static VFS_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
 static TTY_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
+static PTY_SERVER_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/pty_server");
 static NET_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/net_server");
 static SUNLIGHTD_ELF_BYTES: &[u8] =
@@ -88,8 +91,7 @@ static RESOLVED_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/resolved");
 static RESOLVECTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/resolvectl");
-static POWERD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/powerd");
+static POWERD_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/powerd");
 static POWERCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/powerctl");
 static SUNLIGHT_NICED_ELF_BYTES: &[u8] =
@@ -144,8 +146,7 @@ static HELIOS_NOTE_ELF_BYTES: &[u8] =
 static SUNLIGHT_DISPLAY_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-display");
 // Canonical first graphical demo (Eyes Tracker).
-static EYES_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/eyes");
+static EYES_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/eyes");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;

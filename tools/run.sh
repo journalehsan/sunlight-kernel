@@ -182,6 +182,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-powerd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release

@@ -1,0 +1,13 @@
+[package]
+name = "pty_server"
+version = "0.1.388"
+
+
+edition = "2021"
+
+[[bin]]
+name = "pty_server"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }

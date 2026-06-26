@@ -415,6 +415,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/sbin/resolved" | "/usr/sbin/resolved" => Ok(crate::RESOLVED_ELF_BYTES),
         "/bin/resolvectl" | "/usr/bin/resolvectl" => Ok(crate::RESOLVECTL_ELF_BYTES),
         "/sbin/powerd" | "/usr/sbin/powerd" => Ok(crate::POWERD_ELF_BYTES),
+        "/sbin/pty_server" | "/usr/sbin/pty_server" => Ok(crate::PTY_SERVER_ELF_BYTES),
         "/sbin/net_server" | "/usr/sbin/net_server" => Ok(crate::NET_SERVER_ELF_BYTES),
         "/sbin/sunlightd" | "/usr/sbin/sunlightd" => Ok(crate::SUNLIGHTD_ELF_BYTES),
         // User-level daemons spawned by sunlightd (not hardcoded in kernel boot).
@@ -446,7 +447,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         // Solar HTTP server with SBSP scripting engine.
         "/sbin/solar" | "/usr/sbin/solar" => Ok(crate::SOLAR_ELF_BYTES),
         // GUI Phase 3+ : Display server (compositor) + eyes tracker demo client.
-        "/sbin/sunlight-display" | "/usr/sbin/sunlight-display" => Ok(crate::SUNLIGHT_DISPLAY_ELF_BYTES),
+        "/sbin/sunlight-display" | "/usr/sbin/sunlight-display" => {
+            Ok(crate::SUNLIGHT_DISPLAY_ELF_BYTES)
+        }
         "/bin/eyes" | "/usr/bin/eyes" => Ok(crate::EYES_ELF_BYTES),
         // sunlight-sunsay: native Rust proof-of-life binary (Phase 1 std smoke test).
         "/bin/sunlight-sunsay" | "/usr/bin/sunlight-sunsay" | "/usr/local/bin/sunlight-sunsay" => {
