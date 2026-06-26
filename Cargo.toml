@@ -58,6 +58,7 @@ members = [
     "services/sunlight-resolved",
     "services/sunlight-powerd",
     "services/solar",
+    "sunlight-bench",
 ]
 
 [workspace.dependencies]

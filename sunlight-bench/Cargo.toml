@@ -1,0 +1,12 @@
+[package]
+name = "sunlight-bench"
+version = "0.1.463"
+
+edition = "2021"
+
+[[bin]]
+name = "sunbench"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
