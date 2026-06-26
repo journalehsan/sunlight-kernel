@@ -236,13 +236,18 @@ impl Telemetry {
 
     fn compute_cpu_usage(&mut self, snap: &mut SystemSnapshot) {
         let cur_sample = unsafe { vread(core::ptr::addr_of!((*self.page_ptr).sample_time_ns)) };
-        let interval_ns: u64 = if self.last_sample_time_ns != 0 && cur_sample > self.last_sample_time_ns {
-            cur_sample.saturating_sub(self.last_sample_time_ns)
-        } else {
-            0
-        };
+        let interval_ns: u64 =
+            if self.last_sample_time_ns != 0 && cur_sample > self.last_sample_time_ns {
+                cur_sample.saturating_sub(self.last_sample_time_ns)
+            } else {
+                0
+            };
 
-        let cpu_count = if snap.cpu_count > 0 { snap.cpu_count as u64 } else { 1 };
+        let cpu_count = if snap.cpu_count > 0 {
+            snap.cpu_count as u64
+        } else {
+            1
+        };
         let capacity_delta_ns: u64 = interval_ns.saturating_mul(cpu_count);
 
         let mut used_delta_ns: u64 = 0;
@@ -318,7 +323,8 @@ impl Telemetry {
 
         if capacity_delta_ns > 0 {
             for i in 0..snap.proc_count {
-                let bp = ((proc_deltas[i] as u128) * 10000u128 / (capacity_delta_ns as u128)) as u32;
+                let bp =
+                    ((proc_deltas[i] as u128) * 10000u128 / (capacity_delta_ns as u128)) as u32;
                 snap.procs[i].cpu_bp = bp.min(10000) as u16;
             }
         } else {
@@ -327,7 +333,11 @@ impl Telemetry {
             }
         }
 
-        self.last_sample_time_ns = if cur_sample != 0 { cur_sample } else { self.last_sample_time_ns };
+        self.last_sample_time_ns = if cur_sample != 0 {
+            cur_sample
+        } else {
+            self.last_sample_time_ns
+        };
 
         for j in 0..MAX_PROCESSES {
             let lp = self.last_pids[j];

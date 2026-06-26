@@ -18,14 +18,14 @@
 //! - No unwrap(), all errors handled explicitly
 //! - Malformed requests → 400 Bad Request → connection close
 
-pub mod request;
-pub mod response;
-pub mod parser;
 pub mod connection;
 pub mod form;
+pub mod parser;
+pub mod request;
+pub mod response;
 
-pub use request::{HttpRequest, RequestRouter};
-pub use response::HttpResponse;
-pub use parser::{parse_request, HttpParseError};
 pub use connection::handle_http_request;
 pub use form::parse_form_urlencoded;
+pub use parser::{parse_request, HttpParseError};
+pub use request::{HttpRequest, RequestRouter};
+pub use response::HttpResponse;

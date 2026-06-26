@@ -175,10 +175,9 @@ mod sysfetch;
 #[no_main]
 mod sunlight {
     use sunlight_ipc::{
-        debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
-        nameserver_lookup, nameserver_register, process_yield, sysinfo, tty_stdin_push,
-        tty_stdout_pull, unpack_ipv4, CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg, TzMsg,
-        VfsMsg,
+        debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
+        nameserver_register, process_yield, sysinfo, tty_stdin_push, tty_stdout_pull, unpack_ipv4,
+        CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg, TzMsg, VfsMsg,
     };
 
     /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
@@ -2343,11 +2342,7 @@ mod sunlight {
         total
     }
 
-    fn pty_write_shell_output(
-        cap: CapabilityToken,
-        session_id: u64,
-        short: &[u8],
-    ) {
+    fn pty_write_shell_output(cap: CapabilityToken, session_id: u64, short: &[u8]) {
         if unsafe { LONG_OUT_ACTIVE } {
             let len = unsafe { LONG_OUT_LEN };
             if len > 0 {

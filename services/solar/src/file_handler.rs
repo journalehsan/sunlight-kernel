@@ -47,7 +47,13 @@ pub fn serve_static_file(
     let sanitized = match sanitize_path(req_path) {
         Ok(p) => p,
         Err(SanitizePathError::Traversal) => {
-            send_error(stream, 403, "Forbidden", "Path traversal detected.", shm_pool);
+            send_error(
+                stream,
+                403,
+                "Forbidden",
+                "Path traversal detected.",
+                shm_pool,
+            );
             return;
         }
         Err(SanitizePathError::Empty) => {
@@ -60,7 +66,13 @@ pub fn serve_static_file(
     let full_path = match build_vfs_path(sanitized.as_str()) {
         Some(p) => p,
         None => {
-            send_error(stream, 414, "URI Too Long", "Request path too long.", shm_pool);
+            send_error(
+                stream,
+                414,
+                "URI Too Long",
+                "Request path too long.",
+                shm_pool,
+            );
             return;
         }
     };
@@ -69,7 +81,13 @@ pub fn serve_static_file(
     let handle = match vfs_open(vfs_cap, full_path.as_str()) {
         Some(h) => h,
         None => {
-            send_error(stream, 404, "Not Found", "The requested file does not exist.", shm_pool);
+            send_error(
+                stream,
+                404,
+                "Not Found",
+                "The requested file does not exist.",
+                shm_pool,
+            );
             return;
         }
     };
@@ -242,7 +260,11 @@ fn vfs_read_chunk(
         }
         let count = n.min(buf.len()).min(16);
         for i in 0..count {
-            let word = if i < 8 { reply.words[2] } else { reply.words[3] };
+            let word = if i < 8 {
+                reply.words[2]
+            } else {
+                reply.words[3]
+            };
             buf[i] = ((word >> ((i % 8) * 8)) & 0xFF) as u8;
         }
         Some(count)
@@ -382,7 +404,10 @@ mod tests {
 
     #[test]
     fn test_mime_type_unknown() {
-        assert_eq!(mime_type_for_path("unknown.xyz"), "application/octet-stream");
+        assert_eq!(
+            mime_type_for_path("unknown.xyz"),
+            "application/octet-stream"
+        );
     }
 
     #[test]

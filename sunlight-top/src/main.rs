@@ -118,7 +118,11 @@ pub extern "C" fn _start() -> ! {
         }
 
         if telem.poll() {
-            view.render(&mut canvas, telem.snapshot(), MY_PID.load(Ordering::Relaxed));
+            view.render(
+                &mut canvas,
+                telem.snapshot(),
+                MY_PID.load(Ordering::Relaxed),
+            );
         }
 
         sleep_ms(100);

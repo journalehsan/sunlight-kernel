@@ -4,8 +4,9 @@
 use sunlight_ipc::{debug_log, process_yield, ProcessExit};
 use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_PROCESSES};
 use sunlight_ui::{
-    App, Event, HBox, Rect, Window, WindowConfig,
+    request_close,
     widgets::{Button, ButtonState, Column, Label, Panel, StatusBar, Table},
+    App, Event, HBox, Rect, Window, WindowConfig,
 };
 
 const WIN_W: u32 = 720;
@@ -13,7 +14,7 @@ const WIN_H: u32 = 460;
 const STATUS_H: u32 = 18;
 const TITLE_H: u32 = 28;
 const TOOLBAR_H: u32 = 28;
-const INFO_H: u32 = 44;
+const INFO_H: u32 = 60;
 const CONTENT_MARGIN: i32 = 12;
 const TABLE_COLS: usize = 5;
 const CELL_BUF: usize = 32;
@@ -26,11 +27,14 @@ const KEY_HOME: u8 = 0x47;
 const KEY_END: u8 = 0x4F;
 const KEY_PGUP: u8 = 0x49;
 const KEY_PGDN: u8 = 0x51;
+const KEY_Q: u8 = 0x10;
 
 struct NoAlloc;
 
 unsafe impl core::alloc::GlobalAlloc for NoAlloc {
-    unsafe fn alloc(&self, _layout: core::alloc::Layout) -> *mut u8 { core::ptr::null_mut() }
+    unsafe fn alloc(&self, _layout: core::alloc::Layout) -> *mut u8 {
+        core::ptr::null_mut()
+    }
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
@@ -46,11 +50,31 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 }
 
 const TABLE_COLUMNS: [Column<'static>; TABLE_COLS] = [
-    Column { header: "PID", width: 70, right_align: true },
-    Column { header: "Name", width: 260, right_align: false },
-    Column { header: "State", width: 120, right_align: false },
-    Column { header: "CPU%", width: 90, right_align: true },
-    Column { header: "RAM", width: 120, right_align: true },
+    Column {
+        header: "PID",
+        width: 70,
+        right_align: true,
+    },
+    Column {
+        header: "Name",
+        width: 260,
+        right_align: false,
+    },
+    Column {
+        header: "State",
+        width: 120,
+        right_align: false,
+    },
+    Column {
+        header: "CPU%",
+        width: 90,
+        right_align: true,
+    },
+    Column {
+        header: "RAM",
+        width: 120,
+        right_align: true,
+    },
 ];
 
 const EMPTY_ROW: [&str; TABLE_COLS] = ["", "", "", "", ""];
@@ -127,11 +151,31 @@ impl TasksApp {
 
         for row in 0..self.row_count {
             let proc = &self.snapshot.procs[self.order[row]];
-            write_u32(proc.pid, &mut self.row_bufs[row][0], &mut self.row_lens[row][0]);
-            write_str(proc.name_str(), &mut self.row_bufs[row][1], &mut self.row_lens[row][1]);
-            write_str(state_text(proc.state), &mut self.row_bufs[row][2], &mut self.row_lens[row][2]);
-            write_pct((proc.cpu_bp / 100).min(100) as u32, &mut self.row_bufs[row][3], &mut self.row_lens[row][3]);
-            write_kib(proc.mem_kb, &mut self.row_bufs[row][4], &mut self.row_lens[row][4]);
+            write_u32(
+                proc.pid,
+                &mut self.row_bufs[row][0],
+                &mut self.row_lens[row][0],
+            );
+            write_str(
+                proc.name_str(),
+                &mut self.row_bufs[row][1],
+                &mut self.row_lens[row][1],
+            );
+            write_str(
+                state_text(proc.state),
+                &mut self.row_bufs[row][2],
+                &mut self.row_lens[row][2],
+            );
+            write_pct(
+                (proc.cpu_bp / 100).min(100) as u32,
+                &mut self.row_bufs[row][3],
+                &mut self.row_lens[row][3],
+            );
+            write_kib(
+                proc.mem_kb,
+                &mut self.row_bufs[row][4],
+                &mut self.row_lens[row][4],
+            );
         }
     }
 
@@ -156,7 +200,9 @@ impl TasksApp {
     fn visible_rows(&self) -> usize {
         let content = self.content_rect();
         let info_h = if self.show_system_info { INFO_H + 8 } else { 0 };
-        let usable = content.h.saturating_sub(TITLE_H + TOOLBAR_H + info_h + STATUS_H + 18);
+        let usable = content
+            .h
+            .saturating_sub(TITLE_H + TOOLBAR_H + info_h + STATUS_H + 18);
         (usable / 16).max(1) as usize
     }
 
@@ -171,7 +217,12 @@ impl TasksApp {
 
     fn toolbar_rect(&self) -> Rect {
         let content = self.content_rect();
-        Rect::new(content.x, content.y + TITLE_H as i32 + 8, content.w, TOOLBAR_H)
+        Rect::new(
+            content.x,
+            content.y + TITLE_H as i32 + 8,
+            content.w,
+            TOOLBAR_H,
+        )
     }
 
     fn table_rect(&self) -> Rect {
@@ -181,20 +232,38 @@ impl TasksApp {
             + 8
             + TOOLBAR_H as i32
             + 8
-            + if self.show_system_info { INFO_H as i32 + 8 } else { 0 };
+            + if self.show_system_info {
+                INFO_H as i32 + 8
+            } else {
+                0
+            };
         let status_h = STATUS_H + 8;
-        Rect::new(content.x, top, content.w, content.bottom().saturating_sub(top + status_h as i32) as u32)
+        Rect::new(
+            content.x,
+            top,
+            content.w,
+            content.bottom().saturating_sub(top + status_h as i32) as u32,
+        )
     }
 
     fn status_bar_rect(&self) -> Rect {
         let content = self.content_rect();
-        Rect::new(content.x, content.bottom() - STATUS_H as i32, content.w, STATUS_H)
+        Rect::new(
+            content.x,
+            content.bottom() - STATUS_H as i32,
+            content.w,
+            STATUS_H,
+        )
     }
 
     fn toolbar_buttons(&self) -> [Rect; 4] {
         let widths = [120, 120, 120, 120];
         let mut rects = [Rect::default(); 4];
-        for (idx, rect) in HBox::new(self.toolbar_rect()).with_spacing(8).layout(&widths).enumerate() {
+        for (idx, rect) in HBox::new(self.toolbar_rect())
+            .with_spacing(8)
+            .layout(&widths)
+            .enumerate()
+        {
             rects[idx] = rect;
         }
         rects
@@ -204,30 +273,31 @@ impl TasksApp {
         &self,
         uptime: &mut [u8; 24],
         tasks: &mut [u8; 24],
-        cpu: &mut [u8; 24],
-        ram: &mut [u8; 24],
+        cpu: &mut [u8; 40],
+        ram: &mut [u8; 40],
     ) {
         let mut n = copy_tail(b"Uptime ", uptime);
         n += write_num_into((self.snapshot.uptime_secs / 3600) as u32, &mut uptime[n..]);
         n += copy_tail(b"h ", &mut uptime[n..]);
-        n += write_num_into(((self.snapshot.uptime_secs % 3600) / 60) as u32, &mut uptime[n..]);
+        n += write_num_into(
+            ((self.snapshot.uptime_secs % 3600) / 60) as u32,
+            &mut uptime[n..],
+        );
         copy_tail(b"m", &mut uptime[n..]);
 
         let n = copy_tail(b"Tasks ", tasks);
         write_num_into(self.snapshot.proc_count as u32, &mut tasks[n..]);
 
         let mut n = copy_tail(b"CPU ", cpu);
-        n += write_num_into((self.snapshot.cpu_used_bp / 100).min(100) as u32, &mut cpu[n..]);
-        copy_tail(b"%", &mut cpu[n..]);
+        n += write_bp_into(self.snapshot.cpu_used_bp, &mut cpu[n..]);
+        n += copy_tail(b" used ", &mut cpu[n..]);
+        n += write_bp_into(self.snapshot.cpu_idle_bp, &mut cpu[n..]);
+        copy_tail(b" idle", &mut cpu[n..]);
 
-        let ram_pct = if self.snapshot.total_ram_kb == 0 {
-            0
-        } else {
-            ((self.snapshot.used_ram_kb.saturating_mul(100)) / self.snapshot.total_ram_kb).min(100) as u32
-        };
         let mut n = copy_tail(b"RAM ", ram);
-        n += write_num_into(ram_pct, &mut ram[n..]);
-        copy_tail(b"%", &mut ram[n..]);
+        n += write_mb_into(self.snapshot.used_ram_kb, &mut ram[n..]);
+        n += copy_tail(b" / ", &mut ram[n..]);
+        copy_tail_mb(self.snapshot.total_ram_kb, &mut ram[n..]);
     }
 }
 
@@ -240,7 +310,12 @@ impl App for TasksApp {
 
         let title_rect = Rect::new(content.x + 12, content.y + 8, 220, TITLE_H);
         Label::new(title_rect, "Tasks Monitor").draw(canvas, theme);
-        Label::new(Rect::new(content.right() - 88, content.y + 8, 76, TITLE_H), "SunlightOS").dim().draw(canvas, theme);
+        Label::new(
+            Rect::new(content.right() - 88, content.y + 8, 76, TITLE_H),
+            "SunlightOS",
+        )
+        .dim()
+        .draw(canvas, theme);
 
         let buttons = self.toolbar_buttons();
         let labels = ["End", "Charts", "Info", "Refresh"];
@@ -255,25 +330,48 @@ impl App for TasksApp {
         }
 
         if self.show_system_info {
-            let info_rect = Rect::new(content.x, self.toolbar_rect().bottom() + 8, content.w, INFO_H);
+            let info_rect = Rect::new(
+                content.x,
+                self.toolbar_rect().bottom() + 8,
+                content.w,
+                INFO_H,
+            );
             Panel::with_title(info_rect, "System").draw(canvas, theme);
 
-            let inner = Rect::new(info_rect.x + 12, info_rect.y + 22, info_rect.w.saturating_sub(24), 14);
-            let widths = [150, 130, 120, 120];
-            let mut cells = HBox::new(inner).with_spacing(12).layout(&widths);
+            let row1 = Rect::new(
+                info_rect.x + 12,
+                info_rect.y + 22,
+                info_rect.w.saturating_sub(24),
+                14,
+            );
+            let row2 = Rect::new(
+                info_rect.x + 12,
+                info_rect.y + 38,
+                info_rect.w.saturating_sub(24),
+                14,
+            );
+            let mut top_cells = HBox::new(row1).with_spacing(12).layout(&[150, 120]);
+            let mut bottom_cells = HBox::new(row2).with_spacing(12).layout(&[280, 220]);
             let mut uptime = [0u8; 24];
             let mut tasks = [0u8; 24];
-            let mut cpu = [0u8; 24];
-            let mut ram = [0u8; 24];
+            let mut cpu = [0u8; 40];
+            let mut ram = [0u8; 40];
             self.info_strings(&mut uptime, &mut tasks, &mut cpu, &mut ram);
-            let labels = [
+            let top_labels = [
                 core::str::from_utf8(trim_zeros(&uptime)).unwrap_or(""),
                 core::str::from_utf8(trim_zeros(&tasks)).unwrap_or(""),
+            ];
+            let bottom_labels = [
                 core::str::from_utf8(trim_zeros(&cpu)).unwrap_or(""),
                 core::str::from_utf8(trim_zeros(&ram)).unwrap_or(""),
             ];
-            for label in labels.iter() {
-                if let Some(rect) = cells.next() {
+            for label in top_labels.iter() {
+                if let Some(rect) = top_cells.next() {
+                    Label::new(rect, label).draw(canvas, theme);
+                }
+            }
+            for label in bottom_labels.iter() {
+                if let Some(rect) = bottom_cells.next() {
                     Label::new(rect, label).draw(canvas, theme);
                 }
             }
@@ -284,7 +382,8 @@ impl App for TasksApp {
         for row in 0..self.row_count {
             for col in 0..TABLE_COLS {
                 row_cells[row][col] =
-                    core::str::from_utf8(&self.row_bufs[row][col][..self.row_lens[row][col]]).unwrap_or("");
+                    core::str::from_utf8(&self.row_bufs[row][col][..self.row_lens[row][col]])
+                        .unwrap_or("");
             }
         }
         for row in 0..self.row_count {
@@ -321,11 +420,19 @@ impl App for TasksApp {
                 for (idx, rect) in buttons.iter().enumerate() {
                     if rect.contains(sunlight_ui::Point::new(x, y)) {
                         match idx {
-                            0 => self.set_status(if self.selected_pid.is_some() { "End process not implemented" } else { "Select a process first" }),
+                            0 => self.set_status(if self.selected_pid.is_some() {
+                                "End process not implemented"
+                            } else {
+                                "Select a process first"
+                            }),
                             1 => self.set_status("Charts view is not implemented yet"),
                             2 => {
                                 self.show_system_info = !self.show_system_info;
-                                self.set_status(if self.show_system_info { "System info shown" } else { "System info hidden" });
+                                self.set_status(if self.show_system_info {
+                                    "System info shown"
+                                } else {
+                                    "System info hidden"
+                                });
                             }
                             3 => {
                                 self.set_status("Refreshing telemetry");
@@ -356,12 +463,25 @@ impl App for TasksApp {
                 }
                 false
             }
-            Event::KeyPress { keycode, pressed: true } => {
+            Event::KeyPress {
+                keycode,
+                pressed: true,
+                ctrl,
+                ..
+            } => {
+                if ctrl && keycode == KEY_Q {
+                    request_close();
+                    return true;
+                }
                 match keycode {
                     KEY_UP => self.scroll = self.scroll.saturating_sub(1),
                     KEY_DOWN => self.scroll = self.scroll.saturating_add(1),
-                    KEY_PGUP => self.scroll = self.scroll.saturating_sub(self.visible_rows().max(1) / 2),
-                    KEY_PGDN => self.scroll = self.scroll.saturating_add(self.visible_rows().max(1) / 2),
+                    KEY_PGUP => {
+                        self.scroll = self.scroll.saturating_sub(self.visible_rows().max(1) / 2)
+                    }
+                    KEY_PGDN => {
+                        self.scroll = self.scroll.saturating_add(self.visible_rows().max(1) / 2)
+                    }
                     KEY_HOME => self.scroll = 0,
                     KEY_END => self.scroll = self.row_count.saturating_sub(self.visible_rows()),
                     KEY_ENTER => self.set_status("End process not implemented"),
@@ -401,9 +521,7 @@ pub extern "C" fn _start() -> ! {
         }
     };
     window.run(&mut app);
-    loop {
-        process_yield();
-    }
+    ProcessExit::exit(0);
 }
 
 fn state_text(state: ProcessState) -> &'static str {
@@ -433,8 +551,7 @@ fn write_pct(value: u32, dst: &mut [u8; CELL_BUF], len: &mut usize) {
 }
 
 fn write_kib(value: u32, dst: &mut [u8; CELL_BUF], len: &mut usize) {
-    *len = write_num_into(value, dst);
-    *len += copy_tail(b" KiB", &mut dst[*len..]);
+    *len = copy_tail_mb(value as u64, dst);
 }
 
 fn write_num_into(mut value: u32, dst: &mut [u8]) -> usize {
@@ -462,6 +579,45 @@ fn copy_tail(src: &[u8], dst: &mut [u8]) -> usize {
     let len = src.len().min(dst.len());
     dst[..len].copy_from_slice(&src[..len]);
     len
+}
+
+fn write_bp_into(value: u16, dst: &mut [u8]) -> usize {
+    if dst.len() < 6 {
+        return 0;
+    }
+    let whole = (value / 100) as u32;
+    let frac = (value % 100) as u32;
+    let mut n = write_num_into(whole, dst);
+    if n + 3 > dst.len() {
+        return n;
+    }
+    dst[n] = b'.';
+    dst[n + 1] = b'0' + (frac / 10) as u8;
+    dst[n + 2] = b'0' + (frac % 10) as u8;
+    n += 3;
+    if n < dst.len() {
+        dst[n] = b'%';
+        n += 1;
+    }
+    n
+}
+
+fn write_mb_into(kb: u64, dst: &mut [u8]) -> usize {
+    let mb_whole = kb / 1024;
+    let mb_tenths = ((kb % 1024) * 10) / 1024;
+    let mut n = write_num_into(mb_whole.min(u32::MAX as u64) as u32, dst);
+    if n + 3 > dst.len() {
+        return n;
+    }
+    dst[n] = b'.';
+    dst[n + 1] = b'0' + mb_tenths as u8;
+    dst[n + 2] = b' ';
+    n += 3;
+    n + copy_tail(b"MB", &mut dst[n..])
+}
+
+fn copy_tail_mb(kb: u64, dst: &mut [u8]) -> usize {
+    write_mb_into(kb, dst)
 }
 
 fn trim_zeros(bytes: &[u8]) -> &[u8] {

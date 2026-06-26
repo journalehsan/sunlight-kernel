@@ -4,8 +4,8 @@
 //! for tab creation/switching/close and routing printable characters to the
 //! active shell.
 
-use crate::shell::{BuiltinShell, ShellOutput};
 use crate::proc::{ProcOp, SIGKILL};
+use crate::shell::{BuiltinShell, ShellOutput};
 use sunlight_ipc::{ipc_call, CapabilityToken, IpcMsg};
 
 const MAX_TABS: usize = 10;
@@ -65,9 +65,8 @@ pub enum MuxAction {
 
 impl TermMux {
     pub fn new(username: &[u8]) -> Self {
-        let mut tabs: [Option<Tab>; MAX_TABS] = [
-            None, None, None, None, None, None, None, None, None, None,
-        ];
+        let mut tabs: [Option<Tab>; MAX_TABS] =
+            [None, None, None, None, None, None, None, None, None, None];
         tabs[0] = Some(Tab::new(b"shell", username, 0));
         Self {
             tabs,

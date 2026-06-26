@@ -74,7 +74,7 @@ fn read_line(buf: &mut [u8]) -> usize {
     while len < buf.len() {
         let mut byte = [0u8; 1];
         match sunlight_libc::read(sunlight_libc::STDIN, &mut byte) {
-            Ok(0) => break,                       // EOF — never block forever.
+            Ok(0) => break, // EOF — never block forever.
             Ok(_) => {
                 if byte[0] == b'\n' || byte[0] == b'\r' {
                     break;
@@ -113,7 +113,11 @@ fn report(cap: CapabilityToken) {
     m.words[1] = 0; // target uid
     let r = ipc_call(cap, m);
     if r.label == REPLY_OK {
-        let outcome = if r.words[0] == 0 { "cache-used" } else { "prompted" };
+        let outcome = if r.words[0] == 0 {
+            "cache-used"
+        } else {
+            "prompted"
+        };
         println!("runas uid=0 -> {}", outcome);
     } else {
         println!("runas: ERROR");

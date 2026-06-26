@@ -13,7 +13,7 @@ pub enum ButtonState {
 }
 
 pub struct Button<'a> {
-    pub rect:  Rect,
+    pub rect: Rect,
     pub label: &'a str,
     pub state: ButtonState,
     /// If true, render with accent fill (primary action).
@@ -23,20 +23,30 @@ pub struct Button<'a> {
 
 impl<'a> Button<'a> {
     pub fn new(rect: Rect, label: &'a str) -> Self {
-        Self { rect, label, state: ButtonState::Normal, primary: true }
+        Self {
+            rect,
+            label,
+            state: ButtonState::Normal,
+            primary: true,
+        }
     }
 
     pub fn secondary(rect: Rect, label: &'a str) -> Self {
-        Self { rect, label, state: ButtonState::Normal, primary: false }
+        Self {
+            rect,
+            label,
+            state: ButtonState::Normal,
+            primary: false,
+        }
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
         let bg = match (self.primary, self.state) {
             (_, ButtonState::Disabled) => theme.panel_alt,
-            (true,  ButtonState::Normal)  => theme.accent,
-            (true,  ButtonState::Hovered) => theme.accent_hover,
-            (true,  ButtonState::Pressed) => theme.accent.darken(40),
-            (false, ButtonState::Normal)  => theme.panel,
+            (true, ButtonState::Normal) => theme.accent,
+            (true, ButtonState::Hovered) => theme.accent_hover,
+            (true, ButtonState::Pressed) => theme.accent.darken(40),
+            (false, ButtonState::Normal) => theme.panel,
             (false, ButtonState::Hovered) => theme.panel_alt,
             (false, ButtonState::Pressed) => theme.border,
         };
@@ -69,7 +79,6 @@ impl<'a> Button<'a> {
     }
 
     pub fn hit_test(&self, x: i32, y: i32) -> bool {
-        self.state != ButtonState::Disabled
-            && self.rect.contains(crate::geom::Point::new(x, y))
+        self.state != ButtonState::Disabled && self.rect.contains(crate::geom::Point::new(x, y))
     }
 }

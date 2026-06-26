@@ -64,7 +64,7 @@ impl Default for ServiceUnit {
     fn default() -> Self {
         let mut user = String::new();
         let _ = user.push_str("root");
-        
+
         Self {
             description: String::new(),
             after: Vec::new(),
@@ -151,7 +151,7 @@ pub fn parse_service_unit(content: &[u8]) -> Result<ServiceUnit, ParseError> {
 
     for line in content_str.lines() {
         let line = line.trim();
-        
+
         // Skip comments and empty lines
         if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
             continue;
@@ -159,7 +159,7 @@ pub fn parse_service_unit(content: &[u8]) -> Result<ServiceUnit, ParseError> {
 
         // Section headers
         if line.starts_with('[') && line.ends_with(']') {
-            let section_name = &line[1..line.len()-1];
+            let section_name = &line[1..line.len() - 1];
             section = match section_name {
                 "Unit" => Section::Unit,
                 "Service" => Section::Service,
@@ -172,13 +172,13 @@ pub fn parse_service_unit(content: &[u8]) -> Result<ServiceUnit, ParseError> {
         // Key=Value pairs
         if let Some(eq_pos) = line.find('=') {
             let key = line[..eq_pos].trim();
-            let value = line[eq_pos+1..].trim();
+            let value = line[eq_pos + 1..].trim();
 
             match section {
                 Section::Unit => parse_unit_key(&mut unit, key, value)?,
                 Section::Service => parse_service_key(&mut unit, key, value)?,
                 Section::Install => parse_install_key(&mut unit, key, value)?,
-                Section::None | Section::Socket => {},
+                Section::None | Section::Socket => {}
             }
         }
     }
@@ -193,17 +193,23 @@ fn parse_unit_key(unit: &mut ServiceUnit, key: &str, value: &str) -> Result<(), 
         }
         "After" => {
             for dep in value.split_whitespace() {
-                unit.after.push(str_to_string(dep)).map_err(|_| ParseError::TooManyEntries)?;
+                unit.after
+                    .push(str_to_string(dep))
+                    .map_err(|_| ParseError::TooManyEntries)?;
             }
         }
         "Requires" => {
             for dep in value.split_whitespace() {
-                unit.requires.push(str_to_string(dep)).map_err(|_| ParseError::TooManyEntries)?;
+                unit.requires
+                    .push(str_to_string(dep))
+                    .map_err(|_| ParseError::TooManyEntries)?;
             }
         }
         "Wants" => {
             for dep in value.split_whitespace() {
-                unit.wants.push(str_to_string(dep)).map_err(|_| ParseError::TooManyEntries)?;
+                unit.wants
+                    .push(str_to_string(dep))
+                    .map_err(|_| ParseError::TooManyEntries)?;
             }
         }
         _ => {} // Unknown keys silently ignored
@@ -245,11 +251,13 @@ fn parse_service_key(unit: &mut ServiceUnit, key: &str, value: &str) -> Result<(
         "Environment" => {
             if let Some(eq_pos) = value.find('=') {
                 let env_key = &value[..eq_pos];
-                let env_val = &value[eq_pos+1..];
-                unit.environment.push(EnvPair {
-                    key: str_to_string(env_key),
-                    value: str_to_string(env_val),
-                }).map_err(|_| ParseError::TooManyEntries)?;
+                let env_val = &value[eq_pos + 1..];
+                unit.environment
+                    .push(EnvPair {
+                        key: str_to_string(env_key),
+                        value: str_to_string(env_val),
+                    })
+                    .map_err(|_| ParseError::TooManyEntries)?;
             }
         }
         "EnvironmentFile" => {
@@ -286,7 +294,9 @@ fn parse_install_key(unit: &mut ServiceUnit, key: &str, value: &str) -> Result<(
     match key {
         "WantedBy" => {
             for target in value.split_whitespace() {
-                unit.wanted_by.push(str_to_string(target)).map_err(|_| ParseError::TooManyEntries)?;
+                unit.wanted_by
+                    .push(str_to_string(target))
+                    .map_err(|_| ParseError::TooManyEntries)?;
             }
         }
         _ => {}
@@ -303,13 +313,13 @@ pub fn parse_socket_unit(content: &[u8]) -> Result<SocketUnit, ParseError> {
 
     for line in content_str.lines() {
         let line = line.trim();
-        
+
         if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
             continue;
         }
 
         if line.starts_with('[') && line.ends_with(']') {
-            let section_name = &line[1..line.len()-1];
+            let section_name = &line[1..line.len() - 1];
             section = match section_name {
                 "Unit" => Section::Unit,
                 "Socket" => Section::Socket,
@@ -321,13 +331,13 @@ pub fn parse_socket_unit(content: &[u8]) -> Result<SocketUnit, ParseError> {
 
         if let Some(eq_pos) = line.find('=') {
             let key = line[..eq_pos].trim();
-            let value = line[eq_pos+1..].trim();
+            let value = line[eq_pos + 1..].trim();
 
             match section {
                 Section::Unit => parse_socket_unit_key(&mut unit, key, value)?,
                 Section::Socket => parse_socket_key(&mut unit, key, value)?,
                 Section::Install => parse_socket_install_key(&mut unit, key, value)?,
-                Section::None | Section::Service => {},
+                Section::None | Section::Service => {}
             }
         }
     }
@@ -342,7 +352,9 @@ fn parse_socket_unit_key(unit: &mut SocketUnit, key: &str, value: &str) -> Resul
         }
         "After" => {
             for dep in value.split_whitespace() {
-                unit.after.push(str_to_string(dep)).map_err(|_| ParseError::TooManyEntries)?;
+                unit.after
+                    .push(str_to_string(dep))
+                    .map_err(|_| ParseError::TooManyEntries)?;
             }
         }
         _ => {}
@@ -369,11 +381,17 @@ fn parse_socket_key(unit: &mut SocketUnit, key: &str, value: &str) -> Result<(),
     Ok(())
 }
 
-fn parse_socket_install_key(unit: &mut SocketUnit, key: &str, value: &str) -> Result<(), ParseError> {
+fn parse_socket_install_key(
+    unit: &mut SocketUnit,
+    key: &str,
+    value: &str,
+) -> Result<(), ParseError> {
     match key {
         "WantedBy" => {
             for target in value.split_whitespace() {
-                unit.wanted_by.push(str_to_string(target)).map_err(|_| ParseError::TooManyEntries)?;
+                unit.wanted_by
+                    .push(str_to_string(target))
+                    .map_err(|_| ParseError::TooManyEntries)?;
             }
         }
         _ => {}

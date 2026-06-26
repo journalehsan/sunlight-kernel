@@ -145,7 +145,10 @@ fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
             let target_uid = msg.words[0] as u32;
             let admin = msg.caps[0];
             if admin == sunlight_ipc::CapabilityToken::INVALID {
-                serial_println!("[UAC] base-caps denied: no admin grant (uid={})", target_uid);
+                serial_println!(
+                    "[UAC] base-caps denied: no admin grant (uid={})",
+                    target_uid
+                );
                 reply.label = REPLY_ERR;
             } else {
                 // The actual kernel mint (grant_elevated_vfs) is driven by the
@@ -166,7 +169,10 @@ fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
             let target_uid = msg.words[0] as u32;
             let admin = msg.caps[0];
             if admin == sunlight_ipc::CapabilityToken::INVALID {
-                serial_println!("[UAC] delegate denied: no admin grant for uid={}", target_uid);
+                serial_println!(
+                    "[UAC] delegate denied: no admin grant for uid={}",
+                    target_uid
+                );
                 reply.label = REPLY_ERR;
             } else {
                 // The kernel-trusted mint (sys_grant_capability) runs once the

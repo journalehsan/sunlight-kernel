@@ -15,14 +15,19 @@ const SCROLLBACK_LINES: usize = 64;
 #[derive(Clone, Copy, Debug)]
 pub struct Cell {
     pub ch: u8,
-    pub fg: u8,  // ANSI palette index 0-15
+    pub fg: u8, // ANSI palette index 0-15
     pub bg: u8,
     pub bold: bool,
 }
 
 impl Cell {
     const fn blank() -> Self {
-        Cell { ch: b' ', fg: 7, bg: 0, bold: false }
+        Cell {
+            ch: b' ',
+            fg: 7,
+            bg: 0,
+            bold: false,
+        }
     }
 }
 
@@ -39,7 +44,7 @@ pub struct TerminalGrid {
     // bump allocator whose dealloc is a no-op, so per-scroll Vec allocations
     // would leak until the heap is exhausted and the server freezes.
     scrollback: Vec<Cell>,
-    scrollback_head: usize, // ring index of the oldest line
+    scrollback_head: usize,  // ring index of the oldest line
     scrollback_count: usize, // number of valid lines in the ring
 
     // Reusable render buffer (cols * rows), allocated once in new().
@@ -70,7 +75,14 @@ impl TerminalGrid {
         scrollback.resize(SCROLLBACK_LINES * cols, Cell::blank());
 
         let mut term_cells = Vec::new();
-        term_cells.resize(cols * rows, TermCell { ch: b' ', fg: 0, bg: 0 });
+        term_cells.resize(
+            cols * rows,
+            TermCell {
+                ch: b' ',
+                fg: 0,
+                bg: 0,
+            },
+        );
 
         Self {
             cols,
@@ -82,8 +94,8 @@ impl TerminalGrid {
             term_cells,
             cursor_row: 0,
             cursor_col: 0,
-            cur_fg: 7,  // default white
-            cur_bg: 0,  // default black
+            cur_fg: 7, // default white
+            cur_bg: 0, // default black
             cur_bold: false,
             parser: Vt100Parser::new(),
         }
@@ -112,7 +124,7 @@ impl TerminalGrid {
             VtOutput::SetColor { fg, bg } => self.set_color(fg, bg),
             VtOutput::ResetAttrs => self.reset_attrs(),
             VtOutput::Bold(b) => self.cur_bold = b,
-            VtOutput::Bell | VtOutput::Nothing => {},
+            VtOutput::Bell | VtOutput::Nothing => {}
         }
     }
 

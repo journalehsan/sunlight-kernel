@@ -164,7 +164,12 @@ mod host {
 
         fn log(&self, record: &log::Record) {
             if self.enabled(record.metadata()) {
-                eprintln!("[RUSTLS:{}] {}: {}", record.level(), record.target(), record.args());
+                eprintln!(
+                    "[RUSTLS:{}] {}: {}",
+                    record.level(),
+                    record.target(),
+                    record.args()
+                );
             }
         }
 
@@ -231,10 +236,9 @@ mod host {
             .map_err(|e| FetchError::DnsResolutionFailed(format!("{hostname}: {e}")))?
             .collect();
 
-        let v4 = addrs
-            .iter()
-            .find(|a| a.is_ipv4())
-            .ok_or_else(|| FetchError::DnsResolutionFailed(format!("{hostname}: no IPv4 address")))?;
+        let v4 = addrs.iter().find(|a| a.is_ipv4()).ok_or_else(|| {
+            FetchError::DnsResolutionFailed(format!("{hostname}: no IPv4 address"))
+        })?;
 
         match v4.ip() {
             std::net::IpAddr::V4(ip) => Ok(ResolvedAddr {
@@ -265,11 +269,7 @@ mod host {
         })
     }
 
-    fn connect_tls(
-        hostname: &str,
-        addr: &ResolvedAddr,
-        port: u16,
-    ) -> FetchResult<HostConnection> {
+    fn connect_tls(hostname: &str, addr: &ResolvedAddr, port: u16) -> FetchResult<HostConnection> {
         init_tls();
 
         let socket_addr = addr.socket_addr(port);
@@ -290,12 +290,13 @@ mod host {
             .map_err(|_| FetchError::InvalidUrl(format!("invalid TLS server name: {hostname}")))?
             .to_owned();
 
-        let tls = rustls::ClientConnection::new(std::sync::Arc::new(config), server_name)
-            .map_err(|e| FetchError::ConnectionFailed {
+        let tls = rustls::ClientConnection::new(std::sync::Arc::new(config), server_name).map_err(
+            |e| FetchError::ConnectionFailed {
                 host: hostname.to_string(),
                 port,
                 reason: format!("TLS setup failed: {e}"),
-            })?;
+            },
+        )?;
 
         Ok(HostConnection::Tls(rustls::StreamOwned::new(tls, tcp)))
     }
@@ -552,16 +553,17 @@ mod sunlight {
     // ── net_server helpers ────────────────────────────────────────────────────
 
     fn net_cap() -> FetchResult<CapabilityToken> {
-        nameserver_lookup("net").ok_or_else(|| {
-            FetchError::IpcError(String::from("net service unavailable"))
-        })
+        nameserver_lookup("net")
+            .ok_or_else(|| FetchError::IpcError(String::from("net service unavailable")))
     }
 
     fn net_socket() -> FetchResult<u32> {
         let cap = net_cap()?;
         let reply = ipc_call(cap, IpcMsg::with_label(NetOp::SOCKET));
         if reply.label != NetOp::SOCKET || reply.words[0] == 0 {
-            return Err(FetchError::IpcError(String::from("socket allocation failed")));
+            return Err(FetchError::IpcError(String::from(
+                "socket allocation failed",
+            )));
         }
         Ok(reply.words[0] as u32)
     }
@@ -652,10 +654,7 @@ mod sunlight {
     }
 
     fn pack_ipv4(ip: [u8; 4]) -> u64 {
-        (ip[0] as u64)
-            | ((ip[1] as u64) << 8)
-            | ((ip[2] as u64) << 16)
-            | ((ip[3] as u64) << 24)
+        (ip[0] as u64) | ((ip[1] as u64) << 8) | ((ip[2] as u64) << 16) | ((ip[3] as u64) << 24)
     }
 
     fn unpack_chunk(words: &[u64; 8], len: usize) -> Vec<u8> {
@@ -671,9 +670,8 @@ mod sunlight {
     // ── sunlight-tls IPC helpers ──────────────────────────────────────────────
 
     fn tls_cap() -> FetchResult<CapabilityToken> {
-        nameserver_lookup("sunlight-tls").ok_or_else(|| {
-            FetchError::IpcError(String::from("sunlight-tls service unavailable"))
-        })
+        nameserver_lookup("sunlight-tls")
+            .ok_or_else(|| FetchError::IpcError(String::from("sunlight-tls service unavailable")))
     }
 
     /// Open a real TLS session in the daemon: it connects the socket to
@@ -701,7 +699,10 @@ mod sunlight {
             }
         }
         msg.word_count = 8;
-        debug_log(&format!("[FETCH-TLS] connect host={} port={}\n", host, port));
+        debug_log(&format!(
+            "[FETCH-TLS] connect host={} port={}\n",
+            host, port
+        ));
         let reply = ipc_call(cap, msg);
         if reply.label == TLS_REPLY {
             let sid = reply.words[0];
@@ -710,7 +711,10 @@ mod sunlight {
         }
         if reply.label == TLS_ERROR {
             let code = reply.words[0];
-            debug_log(&format!("[FETCH-TLS] hs_FAIL host={} code={}\n", host, code));
+            debug_log(&format!(
+                "[FETCH-TLS] hs_FAIL host={} code={}\n",
+                host, code
+            ));
             return Err(match code {
                 TLS_ERR_SESSIONS_FULL => {
                     FetchError::TlsHandshakeFailed(String::from("TLS sessions full on daemon"))

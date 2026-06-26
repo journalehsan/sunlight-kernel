@@ -98,7 +98,7 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
         c.push_str("none");
         c.reset();
     }
-    
+
     c.push_str("  ");
     c.fg_orange();
     c.push_str("NET:");
@@ -126,7 +126,9 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
 }
 
 /// Cached power profile for top header. Queried once, best effort.
-static mut POWER_LABEL: [u8; 20] = [b'-', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+static mut POWER_LABEL: [u8; 20] = [
+    b'-', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
 static mut POWER_TRIED: bool = false;
 
 fn render_power_profile(c: &mut Canvas) {
@@ -144,12 +146,21 @@ fn render_power_profile(c: &mut Canvas) {
                     let mut out = [0u8; 20];
                     let mut i = 0usize;
                     for b in sel.as_str().as_bytes() {
-                        if i < 19 { out[i] = *b; i += 1; }
+                        if i < 19 {
+                            out[i] = *b;
+                            i += 1;
+                        }
                     }
                     if sel != eff {
-                        if i < 19 { out[i] = b'/'; i += 1; }
+                        if i < 19 {
+                            out[i] = b'/';
+                            i += 1;
+                        }
                         for b in eff.as_str().as_bytes() {
-                            if i < 19 { out[i] = *b; i += 1; }
+                            if i < 19 {
+                                out[i] = *b;
+                                i += 1;
+                            }
                         }
                     }
                     POWER_LABEL = out;
@@ -158,7 +169,9 @@ fn render_power_profile(c: &mut Canvas) {
         }
         // write cached label (stops at first NUL or end)
         for &b in &POWER_LABEL {
-            if b == 0 { break; }
+            if b == 0 {
+                break;
+            }
             c.push(b);
         }
     }

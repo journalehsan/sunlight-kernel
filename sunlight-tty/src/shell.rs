@@ -3,7 +3,7 @@
 //! Provides a command line interface with basic commands. All output goes
 //! through a fixed-size text buffer. Uses VFS IPC for `cat`.
 
-use sunlight_ipc::{CapabilityToken, IpcMsg, VfsMsg, nameserver_lookup, ipc_call};
+use sunlight_ipc::{ipc_call, nameserver_lookup, CapabilityToken, IpcMsg, VfsMsg};
 
 pub struct BuiltinShell {
     pub cwd: [u8; 256],
@@ -231,7 +231,10 @@ fn cmd_cat(path: &str) -> ([u8; 512], usize) {
     }
 
     // Close
-    let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+    let _ = ipc_call(
+        vfs_cap,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+    );
 
     out[total] = b'\n';
     total += 1;

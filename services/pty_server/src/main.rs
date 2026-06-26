@@ -255,7 +255,12 @@ impl LineEditor {
         }
     }
 
-    fn feed(&mut self, byte: u8, slave_in: &mut ByteRing<BUFFER_CAP>, master_out: &mut ByteRing<BUFFER_CAP>) {
+    fn feed(
+        &mut self,
+        byte: u8,
+        slave_in: &mut ByteRing<BUFFER_CAP>,
+        master_out: &mut ByteRing<BUFFER_CAP>,
+    ) {
         if !self.cooked {
             if self.echo {
                 let _ = master_out.push_slice(&[byte]);
@@ -488,7 +493,9 @@ fn write_master(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
         debug_log("[PTY] write_master\n");
     }
     for &b in bytes.iter() {
-        session.editor.feed(b, &mut session.slave_in, &mut session.master_out);
+        session
+            .editor
+            .feed(b, &mut session.slave_in, &mut session.master_out);
     }
     IpcMsg::with_label(PtyMsg::REPLY)
         .word(0, session.id)

@@ -83,7 +83,12 @@ fn run() -> u64 {
     let f7 = if max_leaf >= 7 {
         cpuid(7, 0)
     } else {
-        CpuidResult { eax: 0, ebx: 0, ecx: 0, edx: 0 }
+        CpuidResult {
+            eax: 0,
+            ebx: 0,
+            ecx: 0,
+            edx: 0,
+        }
     };
     let bmi1 = (f7.ebx & (1 << 3)) != 0;
     let avx2 = (f7.ebx & (1 << 5)) != 0;
@@ -108,14 +113,24 @@ fn run() -> u64 {
     print_str(b"\n--- Microarchitecture Levels ---\n");
 
     // x86-64-v2: SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CMPXCHG16B, LAHF/SAHF
-    let ef1 = if max_leaf >= 0x8000_0001 { cpuid(0x8000_0001, 0) } else { CpuidResult { eax: 0, ebx: 0, ecx: 0, edx: 0 } };
+    let ef1 = if max_leaf >= 0x8000_0001 {
+        cpuid(0x8000_0001, 0)
+    } else {
+        CpuidResult {
+            eax: 0,
+            ebx: 0,
+            ecx: 0,
+            edx: 0,
+        }
+    };
     let lahf_sahf = (ef1.ecx & (1 << 0)) != 0;
     let v2_capable = sse3 && ssse3 && sse41 && sse42 && popcnt && cmpxchg16b && lahf_sahf;
     print_capability(b"x86-64-v2", v2_capable);
 
     // x86-64-v3: v2 + AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT, MOVBE + OS AVX support
     let lzcnt = (ef1.ecx & (1 << 5)) != 0;
-    let v3_capable = v2_capable && avx && avx2 && bmi1 && bmi2 && f16c && fma && lzcnt && movbe && xcr0_avx;
+    let v3_capable =
+        v2_capable && avx && avx2 && bmi1 && bmi2 && f16c && fma && lzcnt && movbe && xcr0_avx;
     print_capability(b"x86-64-v3", v3_capable);
 
     if !xcr0_avx && avx {
@@ -200,7 +215,7 @@ fn cpuid_brand_string() -> &'static str {
         BRAND[40..44].copy_from_slice(&r4.ecx.to_le_bytes());
         BRAND[44..48].copy_from_slice(&r4.edx.to_le_bytes());
         BRAND[48] = 0;
-        
+
         // Trim trailing spaces/nulls
         let mut end = 48;
         while end > 0 && (BRAND[end - 1] == 0 || BRAND[end - 1] == b' ') {

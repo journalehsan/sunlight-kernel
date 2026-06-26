@@ -9,7 +9,9 @@ pub struct Point {
 
 impl Point {
     #[inline]
-    pub const fn new(x: i32, y: i32) -> Self { Self { x, y } }
+    pub const fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
 
     #[inline]
     pub fn offset(self, dx: i32, dy: i32) -> Self {
@@ -26,7 +28,9 @@ pub struct Size {
 
 impl Size {
     #[inline]
-    pub const fn new(w: u32, h: u32) -> Self { Self { w, h } }
+    pub const fn new(w: u32, h: u32) -> Self {
+        Self { w, h }
+    }
 }
 
 /// Axis-aligned rectangle.
@@ -40,7 +44,9 @@ pub struct Rect {
 
 impl Rect {
     #[inline]
-    pub const fn new(x: i32, y: i32, w: u32, h: u32) -> Self { Self { x, y, w, h } }
+    pub const fn new(x: i32, y: i32, w: u32, h: u32) -> Self {
+        Self { x, y, w, h }
+    }
 
     #[inline]
     pub fn from_point_size(p: Point, s: Size) -> Self {
@@ -48,10 +54,14 @@ impl Rect {
     }
 
     #[inline]
-    pub fn right(self) -> i32 { self.x + self.w as i32 }
+    pub fn right(self) -> i32 {
+        self.x + self.w as i32
+    }
 
     #[inline]
-    pub fn bottom(self) -> i32 { self.y + self.h as i32 }
+    pub fn bottom(self) -> i32 {
+        self.y + self.h as i32
+    }
 
     #[inline]
     pub fn contains(self, p: Point) -> bool {
@@ -90,10 +100,14 @@ impl Rect {
     }
 
     #[inline]
-    pub fn size(self) -> Size { Size::new(self.w, self.h) }
+    pub fn size(self) -> Size {
+        Size::new(self.w, self.h)
+    }
 
     #[inline]
-    pub fn origin(self) -> Point { Point::new(self.x, self.y) }
+    pub fn origin(self) -> Point {
+        Point::new(self.x, self.y)
+    }
 }
 
 /// Vertical box layout iterator.

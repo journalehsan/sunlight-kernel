@@ -28,21 +28,21 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
-mod unit;
 mod graph;
-mod supervisor;
 mod ipc;
-mod socket_act;
 mod journal;
+mod socket_act;
+mod supervisor;
+mod unit;
 
-use sunlight_ipc::{
-    CapabilityToken, IpcMsg, SpawnRequest, debug_log, endpoint_create, ipc_call, ipc_recv,
-    ipc_reply_and_wait, nameserver_lookup, nameserver_register,
-};
-use unit::{ServiceUnit, SocketUnit, parse_service_unit, MAX_UNITS};
 use graph::DepGraph;
+use ipc::{extract_unit_name, ListEntry, StatusReply, SunlightdOp};
+use sunlight_ipc::{
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
+    nameserver_register, CapabilityToken, IpcMsg, SpawnRequest,
+};
 use supervisor::{ServiceEntry, ServiceState};
-use ipc::{SunlightdOp, extract_unit_name, StatusReply, ListEntry};
+use unit::{parse_service_unit, ServiceUnit, SocketUnit, MAX_UNITS};
 
 macro_rules! serial_println {
     ($($arg:tt)*) => {{
@@ -315,7 +315,9 @@ WantedBy=sunlight.target
 }
 
 /// Build dependency graph and return topological order
-fn build_dep_graph(services: &ServiceTable) -> Result<heapless::Vec<usize, MAX_UNITS>, &'static str> {
+fn build_dep_graph(
+    services: &ServiceTable,
+) -> Result<heapless::Vec<usize, MAX_UNITS>, &'static str> {
     let mut graph = DepGraph::new();
 
     for i in 0..services.count {
@@ -339,7 +341,9 @@ fn build_dep_graph(services: &ServiceTable) -> Result<heapless::Vec<usize, MAX_U
         }
     }
 
-    graph.topological_order().map_err(|_| "Topological sort failed")
+    graph
+        .topological_order()
+        .map_err(|_| "Topological sort failed")
 }
 
 /// Spawn a named daemon via the kernel spawn capability.
@@ -360,11 +364,15 @@ fn spawn_named(spawn_cap: CapabilityToken, path: &str, name: &str) -> Result<u32
 
 /// Reply label codes for control operations.
 const REPLY_OK: u64 = 1;
-const REPLY_NOP: u64 = 2;   // already in desired state (enable/disable no-op)
+const REPLY_NOP: u64 = 2; // already in desired state (enable/disable no-op)
 const REPLY_ERR: u64 = 0xff;
 
 /// Handle control IPC messages
-fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: CapabilityToken) -> IpcMsg {
+fn handle_control_message(
+    msg: &IpcMsg,
+    services: &mut ServiceTable,
+    spawn_cap: CapabilityToken,
+) -> IpcMsg {
     let mut reply = IpcMsg::empty();
 
     let op = match SunlightdOp::from_u32(msg.label as u32) {
@@ -403,7 +411,9 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: 
                                 }
                                 reply.label = REPLY_OK;
                             }
-                            Err(_) => { reply.label = REPLY_ERR; }
+                            Err(_) => {
+                                reply.label = REPLY_ERR;
+                            }
                         }
                     } else {
                         reply.label = REPLY_ERR;
@@ -462,7 +472,9 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: 
                             }
                             reply.label = REPLY_OK;
                         }
-                        Err(_) => { reply.label = REPLY_ERR; }
+                        Err(_) => {
+                            reply.label = REPLY_ERR;
+                        }
                     }
                 } else {
                     reply.label = REPLY_ERR;
@@ -515,24 +527,43 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: 
                 if let Some(entry) = services.get(idx) {
                     let status = match entry.state {
                         ServiceState::Stopped => StatusReply {
-                            state: 0, pid: 0, restarts: entry.restart_count,
-                            started_at: 0, enabled: entry.enabled,
+                            state: 0,
+                            pid: 0,
+                            restarts: entry.restart_count,
+                            started_at: 0,
+                            enabled: entry.enabled,
                         },
                         ServiceState::Starting => StatusReply {
-                            state: 1, pid: 0, restarts: entry.restart_count,
-                            started_at: 0, enabled: entry.enabled,
+                            state: 1,
+                            pid: 0,
+                            restarts: entry.restart_count,
+                            started_at: 0,
+                            enabled: entry.enabled,
                         },
                         ServiceState::Running { pid, started_at } => StatusReply {
-                            state: 2, pid, restarts: entry.restart_count,
-                            started_at, enabled: entry.enabled,
+                            state: 2,
+                            pid,
+                            restarts: entry.restart_count,
+                            started_at,
+                            enabled: entry.enabled,
                         },
-                        ServiceState::Failed { exit_code, crashed_at, restarts } => StatusReply {
-                            state: 3, pid: exit_code as u32, restarts,
-                            started_at: crashed_at, enabled: entry.enabled,
+                        ServiceState::Failed {
+                            exit_code,
+                            crashed_at,
+                            restarts,
+                        } => StatusReply {
+                            state: 3,
+                            pid: exit_code as u32,
+                            restarts,
+                            started_at: crashed_at,
+                            enabled: entry.enabled,
                         },
                         ServiceState::Restarting { at } => StatusReply {
-                            state: 4, pid: 0, restarts: entry.restart_count,
-                            started_at: at, enabled: entry.enabled,
+                            state: 4,
+                            pid: 0,
+                            restarts: entry.restart_count,
+                            started_at: at,
+                            enabled: entry.enabled,
                         },
                     };
                     status.pack(&mut reply);
@@ -554,7 +585,7 @@ fn handle_control_message(msg: &IpcMsg, services: &mut ServiceTable, spawn_cap: 
                         name,
                         state: match entry.state {
                             ServiceState::Running { .. } => 2,
-                            ServiceState::Starting    => 1,
+                            ServiceState::Starting => 1,
                             ServiceState::Failed { .. } => 3,
                             ServiceState::Restarting { .. } => 4,
                             _ => 0,
@@ -614,18 +645,19 @@ fn _start() -> ! {
     if spawn_cap != sunlight_ipc::CapabilityToken(0) {
         let managed: &[(&str, &str)] = &[
             ("/sbin/timezone_service", "timezone_service"),
-            ("/sbin/niced",            "niced"),
-            ("/sbin/gcd",              "gcd"),
-            ("/sbin/uac_service",      "uac_service"),
-            ("/sbin/sunlight-sm",      "sunlight-sm"),
-            ("/sbin/sunlight-kv",      "sunlight-kv"),
-            ("/sbin/rand_service",     "rand_service"),
-            ("/sbin/sunlight-tls",     "sunlight-tls"),
-            ("/sbin/solar",            "solar"),
+            ("/sbin/niced", "niced"),
+            ("/sbin/gcd", "gcd"),
+            ("/sbin/uac_service", "uac_service"),
+            ("/sbin/sunlight-sm", "sunlight-sm"),
+            ("/sbin/sunlight-kv", "sunlight-kv"),
+            ("/sbin/rand_service", "rand_service"),
+            ("/sbin/sunlight-tls", "sunlight-tls"),
+            ("/sbin/solar", "solar"),
         ];
         for &(path, name) in managed {
             // Check enabled state before spawning
-            let enabled = services.find_by_name(name)
+            let enabled = services
+                .find_by_name(name)
                 .and_then(|i| services.get(i))
                 .map(|e| e.enabled)
                 .unwrap_or(true);

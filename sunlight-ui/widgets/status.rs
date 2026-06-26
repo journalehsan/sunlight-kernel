@@ -5,17 +5,22 @@ use crate::paint::Canvas;
 use crate::theme::Theme;
 
 pub struct StatusBar<'a> {
-    pub rect:   Rect,
-    pub left:   &'a str,
+    pub rect: Rect,
+    pub left: &'a str,
     pub center: &'a str,
-    pub right:  &'a str,
+    pub right: &'a str,
 }
 
 impl<'a> StatusBar<'a> {
     pub const HEIGHT: u32 = 18;
 
     pub fn new(rect: Rect, left: &'a str, center: &'a str, right: &'a str) -> Self {
-        Self { rect, left, center, right }
+        Self {
+            rect,
+            left,
+            center,
+            right,
+        }
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {

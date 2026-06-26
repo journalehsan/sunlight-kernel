@@ -9,14 +9,14 @@
 #![no_std]
 #![no_main]
 
-use sunlight_libc as libc;
 use libc::{Errno, STDOUT};
-use sunlight_ipc::{CapabilityToken, IpcMsg, ipc_call, nameserver_lookup};
+use sunlight_ipc::{ipc_call, nameserver_lookup, CapabilityToken, IpcMsg};
+use sunlight_libc as libc;
 
 const MAX_ARGS: usize = 16;
 const NET_LABEL_GETIP: u64 = 10;
 const NET_LABEL_PING: u64 = 13;
-const NET_LABEL_RESOLVE: u64 = 9;  // DNS lookup(hostname) -> packed ip in word(0) or 0 on failure
+const NET_LABEL_RESOLVE: u64 = 9; // DNS lookup(hostname) -> packed ip in word(0) or 0 on failure
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -205,7 +205,7 @@ fn cmd_ping(args: &[&str]) -> i32 {
     let base_rtt = reply.words[2];
     for seq in 0..received {
         let _ = write_all(b"64 bytes from ");
-        print_ipv4(ping_ip);  // always the dotted IP for the "from" lines (even when original target was hostname)
+        print_ipv4(ping_ip); // always the dotted IP for the "from" lines (even when original target was hostname)
         let _ = write_all(b": icmp_seq=");
         print_u64(seq);
         let _ = write_all(b" time=");
@@ -213,13 +213,17 @@ fn cmd_ping(args: &[&str]) -> i32 {
         let _ = write_all(b"ms\n");
     }
     let _ = write_all(b"--- ");
-    let _ = write_all(target.as_bytes());  // original target (name or IP) for the statistics header
+    let _ = write_all(target.as_bytes()); // original target (name or IP) for the statistics header
     let _ = write_all(b" ping statistics ---\n");
     print_u64(req_count);
     let _ = write_all(b" packets transmitted, ");
     print_u64(received);
     let _ = write_all(b" received\n");
-    if received > 0 { 0 } else { 1 }
+    if received > 0 {
+        0
+    } else {
+        1
+    }
 }
 
 fn write_all(mut data: &[u8]) -> Result<(), Errno> {
@@ -299,7 +303,8 @@ fn is_valid_hostname(s: &str) -> bool {
     if !has_letter_or_hyphen {
         return false;
     }
-    s.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
 /// Call net_server over IPC (NetOp::RESOLVE) with hostname packed into the message.
@@ -314,7 +319,9 @@ fn resolve_via_net(net_cap: CapabilityToken, hostname: &str) -> Option<[u8; 4]> 
     while b_idx < name_len && w_idx < 8 {
         let mut w = 0u64;
         for j in 0..8 {
-            if b_idx >= name_len { break; }
+            if b_idx >= name_len {
+                break;
+            }
             w |= (bytes[b_idx] as u64) << (j * 8);
             b_idx += 1;
         }
@@ -329,10 +336,7 @@ fn resolve_via_net(net_cap: CapabilityToken, hostname: &str) -> Option<[u8; 4]> 
 }
 
 fn pack_ipv4(ip: [u8; 4]) -> u64 {
-    (ip[0] as u64)
-        | ((ip[1] as u64) << 8)
-        | ((ip[2] as u64) << 16)
-        | ((ip[3] as u64) << 24)
+    (ip[0] as u64) | ((ip[1] as u64) << 8) | ((ip[2] as u64) << 16) | ((ip[3] as u64) << 24)
 }
 
 fn unpack_ipv4(v: u64) -> [u8; 4] {

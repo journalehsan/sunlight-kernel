@@ -24,7 +24,14 @@ pub enum Event {
     Key(char),
 
     /// Raw key transition for non-text controls.
-    KeyPress { keycode: u8, pressed: bool },
+    KeyPress {
+        keycode: u8,
+        pressed: bool,
+        shift: bool,
+        ctrl: bool,
+        alt: bool,
+        super_key: bool,
+    },
 
     /// Timer tick or idle poll — no user input pending.
     Tick,
@@ -51,8 +58,22 @@ impl Event {
         Self::Key(ch)
     }
 
-    pub fn key_press(keycode: u8, pressed: bool) -> Self {
-        Self::KeyPress { keycode, pressed }
+    pub fn key_press(
+        keycode: u8,
+        pressed: bool,
+        shift: bool,
+        ctrl: bool,
+        alt: bool,
+        super_key: bool,
+    ) -> Self {
+        Self::KeyPress {
+            keycode,
+            pressed,
+            shift,
+            ctrl,
+            alt,
+            super_key,
+        }
     }
 
     /// Return the mouse position if this is a pointer event.

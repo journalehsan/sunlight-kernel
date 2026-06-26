@@ -7,9 +7,9 @@
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct TimeState {
-    pub utc_epoch: u64,                // Unix timestamp from RTC (pure UTC, no tz)
-    pub ntp_synced: bool,              // Has NTP synchronized the clock?
-    pub ntp_drift_ppm: i32,            // PPM drift correction
+    pub utc_epoch: u64,     // Unix timestamp from RTC (pure UTC, no tz)
+    pub ntp_synced: bool,   // Has NTP synchronized the clock?
+    pub ntp_drift_ppm: i32, // PPM drift correction
 }
 
 impl TimeState {

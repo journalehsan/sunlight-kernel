@@ -77,8 +77,8 @@ pub extern "C" fn _start() -> ! {
                 // Always report offset=0, dst=false.
                 IpcMsg::with_label(TimeMsg::REPLY)
                     .word(0, time_state.utc_epoch)
-                    .word(1, 0u64)   // offset_secs — always 0 (UTC)
-                    .word(2, 0u64)   // dst_active  — always false
+                    .word(1, 0u64) // offset_secs — always 0 (UTC)
+                    .word(2, 0u64) // dst_active  — always false
             }
             TimeMsg::SET_TIMEZONE => {
                 // No-op: timezone is managed by timezone_service, not timed.

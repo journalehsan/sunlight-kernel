@@ -27,15 +27,13 @@
 //!
 //! get/delete: locate via index, seek, read (re-validate ACL against caller at runtime).
 
+use bincode::Error as BincodeError;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom};
-use bincode::Error as BincodeError;
 
 use crate::acl::Acl;
 use crate::storage::index::{Index, IndexEntry};
-use crate::storage::record::{
-    read_record, write_record, FLAG_DELETE, FLAG_PUT, RecordHeader,
-};
+use crate::storage::record::{read_record, write_record, RecordHeader, FLAG_DELETE, FLAG_PUT};
 
 /// Errors from the storage engine.
 #[derive(Debug, thiserror::Error)]
@@ -169,7 +167,10 @@ impl StorageEngine {
                     // EOF inside read_record
                     break;
                 }
-                Err(e) if e.kind() == io::ErrorKind::InvalidData || e.kind() == io::ErrorKind::UnexpectedEof => {
+                Err(e)
+                    if e.kind() == io::ErrorKind::InvalidData
+                        || e.kind() == io::ErrorKind::UnexpectedEof =>
+                {
                     // Corrupted or truncated record at tail: stop recovery (per spec "break").
                     // Leave any prior good records in the index.
                     break;
@@ -220,13 +221,7 @@ impl StorageEngine {
         // Append at current end.
         let write_offset = self.file.seek(SeekFrom::End(0))?;
 
-        let total_len = write_record(
-            &mut self.file,
-            FLAG_PUT,
-            key.as_bytes(),
-            value,
-            &acl_bytes,
-        )?;
+        let total_len = write_record(&mut self.file, FLAG_PUT, key.as_bytes(), value, &acl_bytes)?;
 
         self.file.sync_all()?;
 
@@ -332,7 +327,10 @@ impl StorageEngine {
 
     /// Seek to the record, read it, deserialize value + ACL.
     /// Does not perform permission check (caller does that).
-    fn read_value_and_acl_at(&mut self, entry: &IndexEntry) -> Result<(Vec<u8>, Acl), StorageError> {
+    fn read_value_and_acl_at(
+        &mut self,
+        entry: &IndexEntry,
+    ) -> Result<(Vec<u8>, Acl), StorageError> {
         self.file.seek(SeekFrom::Start(entry.offset))?;
 
         match read_record(&mut self.file) {
@@ -528,7 +526,9 @@ mod tests {
         kv.put("root-test", b"root-overwrite", "root").unwrap();
         assert_eq!(kv.get("root-test", owner).unwrap(), b"root-overwrite");
         kv.delete("root-test", "root").unwrap();
-        assert!(matches!(kv.get("root-test", owner), Err(StorageError::NotFound(_))));
+        assert!(matches!(
+            kv.get("root-test", owner),
+            Err(StorageError::NotFound(_))
+        ));
     }
 }
-

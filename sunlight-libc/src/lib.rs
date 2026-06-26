@@ -13,27 +13,27 @@ pub mod sys;
 
 // ── libc extension modules ───────────────────────────────────────────────────
 
+/// Phase 1 allocator: static bump allocator + C ABI malloc/free/realloc/calloc.
+/// Enable `#[global_allocator]` for the `alloc` crate via the `global-alloc` feature.
+pub mod alloc;
 /// Program startup ABI documentation and raw argv helpers.
 pub mod crt0;
-/// POSIX errno storage and `__errno_location()`.
-pub mod errno;
 /// Environment variable access via the SysV envp pointer.
 pub mod env;
+/// POSIX errno storage and `__errno_location()`.
+pub mod errno;
+/// File descriptor helpers: `lseek`, `fstat`, `isatty`.
+pub mod fd;
 /// Memory utility functions (memcpy, memmove, memset, memcmp).
 pub mod mem;
 /// POSIX memory mapping wrappers (`mmap`, `munmap`).
 pub mod mman;
-/// Phase 1 allocator: static bump allocator + C ABI malloc/free/realloc/calloc.
-/// Enable `#[global_allocator]` for the `alloc` crate via the `global-alloc` feature.
-pub mod alloc;
-/// File descriptor helpers: `lseek`, `fstat`, `isatty`.
-pub mod fd;
+/// Native thread spawning.
+pub mod thread;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
 pub mod time;
 /// Thread-Local Storage bootstrap: `Tcb` layout + `init_tls()`.
 pub mod tls;
-/// Native thread spawning.
-pub mod thread;
 
 pub use rand::{getrandom, GRND_NONCRYPTO};
 pub use sys::{Errno, EAGAIN_RAW, ERR_RAW};
@@ -126,9 +126,7 @@ pub fn lseek(fd: Fd, offset: i64, whence: i32) -> Result<u64, Errno> {
 
 pub fn fstat(fd: Fd) -> Result<Stat, Errno> {
     let mut out = Stat::zeroed();
-    let ret = unsafe {
-        sys::syscall2(sys::SYS_FSTAT, fd.0 as u64, (&mut out as *mut Stat) as u64)
-    };
+    let ret = unsafe { sys::syscall2(sys::SYS_FSTAT, fd.0 as u64, (&mut out as *mut Stat) as u64) };
     sys::check(ret).map(|_| out)
 }
 
@@ -341,9 +339,7 @@ pub fn chmod(path: &[u8], mode: u16) -> Result<(), Errno> {
 pub fn chown(path: &[u8], uid: u32, gid: u32) -> Result<(), Errno> {
     let mut path_buf = [0u8; MAX_PATH];
     let path_ptr = cstr(&mut path_buf, path)?;
-    let ret = unsafe {
-        sys::syscall3(sys::SYS_CHOWN, path_ptr as u64, uid as u64, gid as u64)
-    };
+    let ret = unsafe { sys::syscall3(sys::SYS_CHOWN, path_ptr as u64, uid as u64, gid as u64) };
     sys::check(ret).map(|_| ())
 }
 
@@ -395,8 +391,10 @@ pub fn openpty() -> Result<(sunlight_ipc::CapabilityToken, sunlight_ipc::Capabil
         return Err(Errno::Again);
     };
 
-    let req = sunlight_ipc::IpcMsg::with_label(sunlight_ipc::PtyMsg::CREATE)
-        .word(0, sunlight_ipc::PtyMsg::FLAG_CANONICAL | sunlight_ipc::PtyMsg::FLAG_ECHO);
+    let req = sunlight_ipc::IpcMsg::with_label(sunlight_ipc::PtyMsg::CREATE).word(
+        0,
+        sunlight_ipc::PtyMsg::FLAG_CANONICAL | sunlight_ipc::PtyMsg::FLAG_ECHO,
+    );
     let reply = match sunlight_ipc::ipc_call_timeout(pty_cap, req, 1000) {
         Ok(reply) => reply,
         Err(sunlight_ipc::IpcCallError::Timeout) => return Err(Errno::Again),

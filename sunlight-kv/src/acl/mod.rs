@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "sunlightos")]
 use alloc::string::String;
 #[cfg(feature = "sunlightos")]
-use alloc::vec::Vec;
+use alloc::vec;
 #[cfg(feature = "sunlightos")]
-use alloc::vec; // brings vec! macro into scope for no_std
+use alloc::vec::Vec; // brings vec! macro into scope for no_std
 
 /// Access control list persisted with every key record.
 #[derive(Debug, Clone, PartialEq, Eq)]

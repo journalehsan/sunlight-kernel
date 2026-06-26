@@ -4,8 +4,8 @@
 //! a password field, and an environment dropdown. Authenticates against
 //! /etc/passwd + /etc/shadow via VFS IPC.
 
-use sunlight_ipc::{IpcMsg, VfsMsg, nameserver_lookup, ipc_call};
-use sunlight_fs::{parse_passwd, parse_shadow, lookup_by_name};
+use sunlight_fs::{lookup_by_name, parse_passwd, parse_shadow};
+use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg, VfsMsg};
 
 pub const MAX_FIELD_LEN: usize = 64;
 pub const MAX_USERS: usize = 6;
@@ -391,7 +391,10 @@ fn read_vfs_bytes(
         total += n;
     }
 
-    let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+    let _ = ipc_call(
+        vfs_cap,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+    );
 
     Some((data, total))
 }

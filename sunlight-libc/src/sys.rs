@@ -134,15 +134,7 @@ pub unsafe fn syscall3(n: u64, a1: u64, a2: u64, a3: u64) -> u64 {
 /// the remaining GPRs by saving a full frame on entry.
 /// The SysV AMD64 syscall ABI passes the 4th argument in r10, not rcx.
 #[inline]
-pub unsafe fn syscall6(
-    n: u64,
-    a1: u64,
-    a2: u64,
-    a3: u64,
-    a4: u64,
-    a5: u64,
-    a6: u64,
-) -> u64 {
+pub unsafe fn syscall6(n: u64, a1: u64, a2: u64, a3: u64, a4: u64, a5: u64, a6: u64) -> u64 {
     let ret: u64;
     core::arch::asm!(
         "syscall",

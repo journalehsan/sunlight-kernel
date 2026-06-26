@@ -29,7 +29,10 @@ use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
     nameserver_register, IpcMsg, TzMsg,
 };
-use sunlight_tz::{LocalTimeCfg, TzEntry, read_localtime, write_localtime, tz_by_id, all_zones, local_now, tz_count};
+use sunlight_tz::{
+    all_zones, local_now, read_localtime, tz_by_id, tz_count, write_localtime, LocalTimeCfg,
+    TzEntry,
+};
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -38,10 +41,15 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 /// Service-local active config (loaded at start, updated on SET_ZONE)
 static mut ACTIVE_CFG: LocalTimeCfg = LocalTimeCfg {
-    id: [0;64], id_len: 0,
-    display_name: [0;128], display_name_len: 0,
-    utc_offset_hours:0, utc_offset_minutes:0, dst_offset_minutes:0,
-    dst_start_month:0, dst_end_month:0,
+    id: [0; 64],
+    id_len: 0,
+    display_name: [0; 128],
+    display_name_len: 0,
+    utc_offset_hours: 0,
+    utc_offset_minutes: 0,
+    dst_offset_minutes: 0,
+    dst_start_month: 0,
+    dst_end_month: 0,
 };
 
 #[no_mangle]
@@ -86,7 +94,7 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
         TzMsg::GET_LOCAL_TIME => {
             // Compute local time using active cfg + current UTC
             let utc = sunlight_ipc::get_time_utc(); // kernel UTC via syscall wrapper in ipc
-            // SAFETY: single-threaded service; ACTIVE_CFG only mutated in SET_ZONE handler before reply loop continues.
+                                                    // SAFETY: single-threaded service; ACTIVE_CFG only mutated in SET_ZONE handler before reply loop continues.
             let cfg = unsafe { &ACTIVE_CFG };
             // Build a TzEntry-like from cfg for math (csv may have richer but offset same)
             let entry = TzEntry {
@@ -130,13 +138,11 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
             let cfg = unsafe { &ACTIVE_CFG };
             // word(0): h | m<<8 | dst_m<<16
             let w0 = (cfg.utc_offset_hours as i64 as u64 & 0xff)
-                   | ((cfg.utc_offset_minutes as u64) << 8)
-                   | ((cfg.dst_offset_minutes as u64) << 16);
+                | ((cfg.utc_offset_minutes as u64) << 8)
+                | ((cfg.dst_offset_minutes as u64) << 16);
             let w1 = (cfg.dst_start_month as u64) | ((cfg.dst_end_month as u64) << 8);
 
-            let mut reply = IpcMsg::with_label(TzMsg::REPLY)
-                .word(0, w0)
-                .word(1, w1);
+            let mut reply = IpcMsg::with_label(TzMsg::REPLY).word(0, w0).word(1, w1);
 
             // Pack id into words starting at 2 (up to 32 bytes)
             let id_str = cfg.id_str();
@@ -148,7 +154,9 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
             // id from msg words (packed bytes, first 64 bytes worth in words[0..])
             let mut idbuf = [0u8; 64];
             unpack_id_from_words(msg, &mut idbuf);
-            let id = core::str::from_utf8(&idbuf).unwrap_or("").trim_end_matches('\0');
+            let id = core::str::from_utf8(&idbuf)
+                .unwrap_or("")
+                .trim_end_matches('\0');
             if id.is_empty() {
                 return IpcMsg::with_label(TzMsg::ERROR).word(0, 1);
             }
@@ -156,15 +164,21 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
                 Some(entry) => {
                     let new_cfg = LocalTimeCfg {
                         id: {
-                            let mut b = [0u8;64];
+                            let mut b = [0u8; 64];
                             let ib = entry.id.as_bytes();
-                            let l = ib.len().min(63); b[..l].copy_from_slice(&ib[..l]); b[l]=0; b
+                            let l = ib.len().min(63);
+                            b[..l].copy_from_slice(&ib[..l]);
+                            b[l] = 0;
+                            b
                         },
                         id_len: entry.id.len().min(63),
                         display_name: {
-                            let mut b=[0u8;128];
+                            let mut b = [0u8; 128];
                             let db = entry.display_name.as_bytes();
-                            let l = db.len().min(127); b[..l].copy_from_slice(&db[..l]); b[l]=0; b
+                            let l = db.len().min(127);
+                            b[..l].copy_from_slice(&db[..l]);
+                            b[l] = 0;
+                            b
                         },
                         display_name_len: entry.display_name.len().min(127),
                         utc_offset_hours: entry.utc_offset_hours,
@@ -178,10 +192,15 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
                     }
                     // update active
                     // SAFETY: single-threaded; mutation visible to subsequent GETs.
-                    unsafe { ACTIVE_CFG = new_cfg; }
+                    unsafe {
+                        ACTIVE_CFG = new_cfg;
+                    }
                     // best-effort notify to timed (do not block on failure)
                     if let Some(timed_cap) = nameserver_lookup("timed") {
-                        let _ = sunlight_ipc::ipc_call(timed_cap, IpcMsg::with_label(TzMsg::NOTIFY_CHANGED));
+                        let _ = sunlight_ipc::ipc_call(
+                            timed_cap,
+                            IpcMsg::with_label(TzMsg::NOTIFY_CHANGED),
+                        );
                     }
                     IpcMsg::with_label(TzMsg::REPLY).word(0, 0)
                 }
@@ -204,12 +223,10 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
 
             // offsets
             let w1 = (e.utc_offset_hours as i64 as u64 & 0xff)
-                   | ((e.utc_offset_minutes as u64) << 8)
-                   | ((e.dst_offset_minutes as u64) << 16);
+                | ((e.utc_offset_minutes as u64) << 8)
+                | ((e.dst_offset_minutes as u64) << 16);
 
-            let mut reply = IpcMsg::with_label(TzMsg::REPLY)
-                .word(0, w0)
-                .word(1, w1);
+            let mut reply = IpcMsg::with_label(TzMsg::REPLY).word(0, w0).word(1, w1);
 
             // id into words[2..] ~32 bytes
             reply = pack_str_words(reply, 2, e.id);
@@ -243,7 +260,9 @@ fn pack_str_words(mut msg: IpcMsg, base: usize, s: &str) -> IpcMsg {
             if wi < sunlight_ipc::IPC_MAX_WORDS {
                 msg = msg.word(wi, w);
             }
-            w = 0; bi = 0; wi += 1;
+            w = 0;
+            bi = 0;
+            wi += 1;
         }
     }
     if bi > 0 && wi < sunlight_ipc::IPC_MAX_WORDS {
@@ -256,14 +275,16 @@ fn pack_str_words(mut msg: IpcMsg, base: usize, s: &str) -> IpcMsg {
 fn unpack_id_from_words(msg: &IpcMsg, dst: &mut [u8; 64]) {
     let mut i = 0usize;
     for wi in 0..sunlight_ipc::IPC_MAX_WORDS {
-        if i >= 64 { break; }
+        if i >= 64 {
+            break;
+        }
         let w = msg.words[wi];
         for b in 0..8 {
-            if i >= 64 { break; }
-            dst[i] = ((w >> (b*8)) & 0xff) as u8;
+            if i >= 64 {
+                break;
+            }
+            dst[i] = ((w >> (b * 8)) & 0xff) as u8;
             i += 1;
         }
     }
 }
-
-

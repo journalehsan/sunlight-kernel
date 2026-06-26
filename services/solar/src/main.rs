@@ -15,15 +15,15 @@
 
 extern crate alloc;
 
-pub mod shm_pool;
-mod net;
-mod http;
 mod file_handler;
+mod http;
+mod net;
+pub mod shm_pool;
 
 use core::cell::RefCell;
 use heapless::Vec;
-use net::{TcpListener, TcpStream, MAX_ACTIVE_CONNS};
 use http::parse_request;
+use net::{TcpListener, TcpStream, MAX_ACTIVE_CONNS};
 
 /// Allocator: Simple bump allocator for service memory
 struct BumpAllocator;
@@ -101,7 +101,11 @@ impl ShmPagePool {
             }
         }
 
-        solar_log!("[SOLAR] Pre-allocated {} SHM pages ({} KB)", pages.len(), pages.len() * 4);
+        solar_log!(
+            "[SOLAR] Pre-allocated {} SHM pages ({} KB)",
+            pages.len(),
+            pages.len() * 4
+        );
 
         Self {
             pages: RefCell::new(pages),
@@ -137,11 +141,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 ///
 /// - `.sbsp` files → SBSP engine (TODO: Phase 3)
 /// - Everything else → static file streaming via `file_handler::serve_static_file`
-fn route_request(
-    stream: &mut TcpStream,
-    req_path: &str,
-    ctx: &SolarContext,
-) {
+fn route_request(stream: &mut TcpStream, req_path: &str, ctx: &SolarContext) {
     solar_log!("[SOLAR] Serving {}", req_path);
 
     if req_path.ends_with(".sbsp") {
@@ -186,7 +186,7 @@ pub extern "C" fn _start() -> ! {
 
     // Phase 1.5: Bind TCP listener on port 80
     solar_log!("[SOLAR] ⏳ Binding TCP listener to port 80 via net_server...");
-    
+
     let listener = match TcpListener::bind(80) {
         Ok(l) => l,
         Err(e) => {
@@ -201,7 +201,7 @@ pub extern "C" fn _start() -> ! {
             }
         }
     };
-    
+
     let net_endpoint = listener.net_endpoint();
     solar_log!("[SOLAR] ☀️ Listening on port 80... Async event loop ready! :)");
 
@@ -212,16 +212,22 @@ pub extern "C" fn _start() -> ! {
 
     loop {
         loop_count = loop_count.wrapping_add(1);
-        
+
         // 1. Try to accept new connections (non-blocking)
         match listener.try_accept() {
             Ok(Some(stream)) => {
                 if active_streams.push(stream).is_err() {
-                    solar_log!("[SOLAR] ⚠️  Max concurrent connections ({}) reached!", MAX_ACTIVE_CONNS);
+                    solar_log!(
+                        "[SOLAR] ⚠️  Max concurrent connections ({}) reached!",
+                        MAX_ACTIVE_CONNS
+                    );
                     // Close the connection we couldn't accept
                     // (it will be handled on next iteration)
                 } else {
-                    solar_log!("[SOLAR] 📥 New connection accepted ({} active)", active_streams.len());
+                    solar_log!(
+                        "[SOLAR] 📥 New connection accepted ({} active)",
+                        active_streams.len()
+                    );
                 }
             }
             Ok(None) => {
@@ -231,7 +237,7 @@ pub extern "C" fn _start() -> ! {
                 solar_log!("[SOLAR] ⚠️  Accept error: {}", e);
             }
         }
-        
+
         // 2. Poll active sockets to see which have data ready
         if !active_streams.is_empty() {
             let mut socket_ids = [0u32; 8];
@@ -239,14 +245,14 @@ pub extern "C" fn _start() -> ! {
             for (i, stream) in active_streams.iter().take(8).enumerate() {
                 socket_ids[i] = stream.socket_id;
             }
-            
+
             match net::poll_sockets(net_endpoint, &socket_ids[..poll_count]) {
                 Ok(ready) => {
                     // 3. Process only the sockets that are ready
                     let mut i = 0;
                     while i < active_streams.len() {
                         let socket_id = active_streams[i].socket_id;
-                        
+
                         if net::is_socket_ready(socket_id, &ready) {
                             // This socket has data! Read and handle it.
                             let mut buffer = [0u8; 8192];
@@ -256,8 +262,12 @@ pub extern "C" fn _start() -> ! {
                                     // Parse HTTP request (zero-copy into buffer slices)
                                     match parse_request(&buffer[..bytes_read]) {
                                         Ok(request) => {
-                                            solar_log!("[SOLAR] {} {}", request.method, request.path);
-                                            
+                                            solar_log!(
+                                                "[SOLAR] {} {}",
+                                                request.method,
+                                                request.path
+                                            );
+
                                             route_request(
                                                 &mut active_streams[i],
                                                 request.path,
@@ -272,7 +282,7 @@ pub extern "C" fn _start() -> ! {
                                             );
                                         }
                                     }
-                                    
+
                                     // Close and remove the stream (HTTP/1.0 style for now)
                                     solar_log!("[SOLAR] ✅ Request handled, closing connection");
                                     active_streams.swap_remove(i);
@@ -292,7 +302,7 @@ pub extern "C" fn _start() -> ! {
                                 }
                             }
                         }
-                
+
                         i += 1;
                     }
                 }
@@ -301,7 +311,7 @@ pub extern "C" fn _start() -> ! {
                 }
             }
         }
-        
+
         // 4. Yield CPU to let other services run
         sunlight_ipc::process_yield();
     }

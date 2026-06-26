@@ -5,15 +5,15 @@
 //! Provides CSV-embedded zone data, integer offset/DST math,
 //! LocalDateTime formatting, and /etc/localtime VFS-backed config.
 
-pub mod config;    // moved from timed — parse_offset_string, validate_offset
-pub mod csv;       // TzEntry, all_zones, tz_by_id, tz_by_display_name
-pub mod offset;    // local_offset_secs, local_now, LocalDateTime, is_dst_active
-pub mod localtime; // LocalTimeCfg, read_localtime, write_localtime, TzError
+pub mod config; // moved from timed — parse_offset_string, validate_offset
+pub mod csv; // TzEntry, all_zones, tz_by_id, tz_by_display_name
+pub mod localtime;
+pub mod offset; // local_offset_secs, local_now, LocalDateTime, is_dst_active // LocalTimeCfg, read_localtime, write_localtime, TzError
 
 // Re-export the most commonly used items at crate root
-pub use csv::{TzEntry, all_zones, tz_by_id, tz_by_display_name, tz_count};
-pub use offset::{LocalDateTime, local_now, local_offset_secs};
-pub use localtime::{LocalTimeCfg, read_localtime, write_localtime, TzError};
+pub use csv::{all_zones, tz_by_display_name, tz_by_id, tz_count, TzEntry};
+pub use localtime::{read_localtime, write_localtime, LocalTimeCfg, TzError};
+pub use offset::{local_now, local_offset_secs, LocalDateTime};
 
 /// Convenience: look up zone by id (or None), then compute LocalDateTime.
 /// If lookup fails, returns None.
@@ -56,12 +56,20 @@ mod tests {
         // seconds since 2000-01-01: compute approximately and verify fields
         // Use a known value that the decompose should handle.
         let secs = 835_505_130u64; // rough 2026-06-14 ~10:45
-        let dt = local_now(secs, &TzEntry {
-            id: "UTC", region: "UTC", city: "UTC",
-            display_name: "UTC", utc_offset_hours: 0,
-            utc_offset_minutes: 0, dst_offset_minutes: 0,
-            dst_start_month: 0, dst_end_month: 0,
-        });
+        let dt = local_now(
+            secs,
+            &TzEntry {
+                id: "UTC",
+                region: "UTC",
+                city: "UTC",
+                display_name: "UTC",
+                utc_offset_hours: 0,
+                utc_offset_minutes: 0,
+                dst_offset_minutes: 0,
+                dst_start_month: 0,
+                dst_end_month: 0,
+            },
+        );
         assert_eq!(dt.year, 2026);
         assert_eq!(dt.month, 6);
         // day/hour/min may be off by the exact epoch calc but core year/month test the calendar
@@ -72,10 +80,15 @@ mod tests {
         // November (month 11) — outside DST window (Mar-Sep)
         // Tehran UTC+3:30, no DST in November
         let entry = TzEntry {
-            id: "Asia/Tehran", region: "Asia", city: "Tehran",
+            id: "Asia/Tehran",
+            region: "Asia",
+            city: "Tehran",
             display_name: "Iran Standard Time",
-            utc_offset_hours: 3, utc_offset_minutes: 30,
-            dst_offset_minutes: 60, dst_start_month: 3, dst_end_month: 9,
+            utc_offset_hours: 3,
+            utc_offset_minutes: 30,
+            dst_offset_minutes: 60,
+            dst_start_month: 3,
+            dst_end_month: 9,
         };
         // Some UTC secs that land in November
         let utc = 847_065_600u64; // roughly 2026-11-01
@@ -88,10 +101,15 @@ mod tests {
         // June (month 6) — inside DST window (Mar-Sep)
         // Tehran in DST: UTC+3:30 + 1h = UTC+4:30
         let entry = TzEntry {
-            id: "Asia/Tehran", region: "Asia", city: "Tehran",
+            id: "Asia/Tehran",
+            region: "Asia",
+            city: "Tehran",
             display_name: "Iran Standard Time",
-            utc_offset_hours: 3, utc_offset_minutes: 30,
-            dst_offset_minutes: 60, dst_start_month: 3, dst_end_month: 9,
+            utc_offset_hours: 3,
+            utc_offset_minutes: 30,
+            dst_offset_minutes: 60,
+            dst_start_month: 3,
+            dst_end_month: 9,
         };
         let utc = 835_500_000u64; // roughly 2026-06-14
         let offset = local_offset_secs(&entry, utc);
@@ -102,9 +120,13 @@ mod tests {
     fn test_iso8601_format() {
         // verify fmt_iso8601 output shape
         let dt = LocalDateTime {
-            year: 2026, month: 6, day: 14,
-            hour: 14, minute: 15, second: 30,
-            utc_offset_secs: 16200,  // +4:30
+            year: 2026,
+            month: 6,
+            day: 14,
+            hour: 14,
+            minute: 15,
+            second: 30,
+            utc_offset_secs: 16200, // +4:30
             is_dst: true,
             abbr: *b"IRDT\0\0\0\0",
         };

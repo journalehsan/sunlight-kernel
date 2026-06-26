@@ -2,14 +2,13 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, ipc_call, nameserver_lookup, process_yield,
-    CapabilityToken, IpcMsg, PtyMsg,
+    debug_log, ipc_call, nameserver_lookup, process_yield, CapabilityToken, IpcMsg, PtyMsg,
 };
 use sunlight_libc as libc;
 use sunlight_tty::console::Console;
 use sunlight_ui::{
-    App, Canvas, Event, HBox, Rect, Window, WindowConfig,
     widgets::{Label, Panel, StatusBar},
+    App, Canvas, Event, HBox, Rect, Window, WindowConfig,
 };
 
 const WIN_W: u32 = 640;
@@ -39,10 +38,8 @@ const APP_NAME_MAX: usize = 32;
 const HIST_MAX: usize = 32;
 const READ_BUF: usize = 256;
 const ANSI_COLORS: [u32; 16] = [
-    0xFF000000, 0xFFCC241D, 0xFF98971A, 0xFFD79921,
-    0xFF458588, 0xFFB16286, 0xFF689D6A, 0xFFA89984,
-    0xFF928374, 0xFFFB4934, 0xFFB8BB26, 0xFFFABD2F,
-    0xFF83A598, 0xFFD3869B, 0xFF8EC07C, 0xFFEBDBB2,
+    0xFF000000, 0xFFCC241D, 0xFF98971A, 0xFFD79921, 0xFF458588, 0xFFB16286, 0xFF689D6A, 0xFFA89984,
+    0xFF928374, 0xFFFB4934, 0xFFB8BB26, 0xFFFABD2F, 0xFF83A598, 0xFFD3869B, 0xFF8EC07C, 0xFFEBDBB2,
 ];
 
 struct BumpAllocator;
@@ -89,7 +86,10 @@ impl PtySession {
                 .word(0, reply.words[0])
                 .word(1, 0),
         );
-        Ok(Self { id: reply.words[0], cap })
+        Ok(Self {
+            id: reply.words[0],
+            cap,
+        })
     }
 
     fn write(&self, bytes: &[u8]) {
@@ -286,7 +286,8 @@ impl Footer {
         }
         self.hist_pos -= 1;
         if self.hist_pos == 0 {
-            self.input[..self.hist_stash_len].copy_from_slice(&self.hist_stash[..self.hist_stash_len]);
+            self.input[..self.hist_stash_len]
+                .copy_from_slice(&self.hist_stash[..self.hist_stash_len]);
             self.input_len = self.hist_stash_len;
             self.input_cursor = self.hist_stash_len;
             return;
@@ -346,10 +347,20 @@ struct OscParser {
 
 impl OscParser {
     const fn new() -> Self {
-        Self { state: 0, body: [0; 256], body_len: 0 }
+        Self {
+            state: 0,
+            body: [0; 256],
+            body_len: 0,
+        }
     }
 
-    fn feed<F: FnMut(&[u8])>(&mut self, bytes: &[u8], console_out: &mut [u8], console_len: &mut usize, mut on_osc: F) {
+    fn feed<F: FnMut(&[u8])>(
+        &mut self,
+        bytes: &[u8],
+        console_out: &mut [u8],
+        console_len: &mut usize,
+        mut on_osc: F,
+    ) {
         for &b in bytes {
             match self.state {
                 0 => {
@@ -467,7 +478,12 @@ impl TerminalApp {
     }
 
     fn content_rect(&self) -> Rect {
-        Rect::new(PAD_X as i32, TAB_H as i32 + PAD_Y as i32, WIN_W - PAD_X * 2, WIN_H - TAB_H - FOOTER_H - PAD_Y * 2)
+        Rect::new(
+            PAD_X as i32,
+            TAB_H as i32 + PAD_Y as i32,
+            WIN_W - PAD_X * 2,
+            WIN_H - TAB_H - FOOTER_H - PAD_Y * 2,
+        )
     }
 
     fn footer_rect(&self) -> Rect {
@@ -485,14 +501,17 @@ impl TerminalApp {
             return false;
         }
         let mut console_len = 0usize;
-        self.osc.feed(&self.read_buf[..n], &mut self.console_buf, &mut console_len, |body| {
-            match parse_osc(body) {
+        self.osc.feed(
+            &self.read_buf[..n],
+            &mut self.console_buf,
+            &mut console_len,
+            |body| match parse_osc(body) {
                 OscCmd::Prompt(text) => self.footer.set_prompt(text),
                 OscCmd::AppStart(name) => self.footer.enter_app_mode(name),
                 OscCmd::AppDone => self.footer.exit_app_mode(),
                 OscCmd::Unknown => {}
-            }
-        });
+            },
+        );
         if console_len > 0 {
             self.console.feed(&self.console_buf[..console_len]);
         }
@@ -546,9 +565,16 @@ impl App for TerminalApp {
         let footer = self.footer_rect();
         StatusBar::new(footer, "", "", "").draw(canvas, theme);
         if self.footer.app_mode {
-            Label::new(Rect::new(8, footer.y + 4, 220, 16), self.footer.app_name_str()).draw(canvas, theme);
+            Label::new(
+                Rect::new(8, footer.y + 4, 220, 16),
+                self.footer.app_name_str(),
+            )
+            .draw(canvas, theme);
         } else {
-            let prompt_widths = [Canvas::measure_text(self.footer.prompt_str()) + 4, WIN_W - 48];
+            let prompt_widths = [
+                Canvas::measure_text(self.footer.prompt_str()) + 4,
+                WIN_W - 48,
+            ];
             let mut prompt_cells = HBox::new(Rect::new(8, footer.y + 4, WIN_W - 16, 16))
                 .with_spacing(8)
                 .layout(&prompt_widths);
@@ -590,10 +616,15 @@ impl App for TerminalApp {
                     dirty = true;
                 }
             }
-            Event::KeyPress { keycode, pressed } => {
+            Event::KeyPress {
+                keycode, pressed, ..
+            } => {
                 dirty |= self.handle_raw_key(keycode, pressed);
             }
-            Event::Click { .. } | Event::MouseDown { .. } | Event::MouseUp { .. } | Event::MouseMove { .. } => {}
+            Event::Click { .. }
+            | Event::MouseDown { .. }
+            | Event::MouseUp { .. }
+            | Event::MouseMove { .. } => {}
         }
         if dirty && self.console.dirty {
             self.console.clear_dirty();
@@ -640,10 +671,30 @@ fn translate_special_key(keycode: u8, buf: &mut [u8; 4]) -> usize {
             buf[0] = 0x08;
             1
         }
-        KEY_UP => { buf[0] = 0x1B; buf[1] = b'['; buf[2] = b'A'; 3 }
-        KEY_DOWN => { buf[0] = 0x1B; buf[1] = b'['; buf[2] = b'B'; 3 }
-        KEY_RIGHT => { buf[0] = 0x1B; buf[1] = b'['; buf[2] = b'C'; 3 }
-        KEY_LEFT => { buf[0] = 0x1B; buf[1] = b'['; buf[2] = b'D'; 3 }
+        KEY_UP => {
+            buf[0] = 0x1B;
+            buf[1] = b'[';
+            buf[2] = b'A';
+            3
+        }
+        KEY_DOWN => {
+            buf[0] = 0x1B;
+            buf[1] = b'[';
+            buf[2] = b'B';
+            3
+        }
+        KEY_RIGHT => {
+            buf[0] = 0x1B;
+            buf[1] = b'[';
+            buf[2] = b'C';
+            3
+        }
+        KEY_LEFT => {
+            buf[0] = 0x1B;
+            buf[1] = b'[';
+            buf[2] = b'D';
+            3
+        }
         _ => 0,
     }
 }
@@ -666,7 +717,11 @@ fn spawn_shell(pty: &PtySession, shell_id: u64) -> Result<u64, ()> {
     let mut apc_len = copy_ascii(b"--pty-cap=", &mut arg_cap);
     apc_len += fmt_u64(&mut arg_cap[apc_len..], pty.cap.0);
 
-    let argv = [&arg0[..a0_len], &arg_session[..aps_len], &arg_cap[..apc_len]];
+    let argv = [
+        &arg0[..a0_len],
+        &arg_session[..aps_len],
+        &arg_cap[..apc_len],
+    ];
     libc::spawn(&path_buf[..path_len], &argv, None).map_err(|_| ())
 }
 

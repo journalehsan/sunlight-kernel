@@ -10,10 +10,7 @@ pub struct SocketListener {
 
 impl SocketListener {
     pub fn new(unit: SocketUnit) -> Self {
-        Self {
-            unit,
-            fd: None,
-        }
+        Self { unit, fd: None }
     }
 
     /// Setup socket listener (TCP port)

@@ -5,13 +5,13 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
-pub mod share;
 mod fat;
+pub mod share;
 #[cfg(any(test, feature = "testutil"))]
 pub mod testimg;
 
 pub use fat::{Fat32, FatStat, MAX_NAME_83};
-pub use share::{FatSharePage, FatShareFile, FAT_SHARE_VADDR, SHARE_MAGIC};
+pub use share::{FatShareFile, FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 
 #[cfg(test)]
 mod tests {
@@ -72,12 +72,17 @@ mod tests {
 
         // Offset 700 crosses the first cluster boundary (512).
         let mut out = [0u8; 1000];
-        let n = fat.read_at(stat.first_cluster, stat.size, 700, &mut out).expect("read_at");
+        let n = fat
+            .read_at(stat.first_cluster, stat.size, 700, &mut out)
+            .expect("read_at");
         assert_eq!(n, 1000);
         assert_eq!(&out[..], &data[700..1700]);
 
         // Reading past EOF returns 0 bytes.
-        assert_eq!(fat.read_at(stat.first_cluster, stat.size, 2000, &mut out), Some(0));
+        assert_eq!(
+            fat.read_at(stat.first_cluster, stat.size, 2000, &mut out),
+            Some(0)
+        );
     }
 
     #[test]
@@ -90,7 +95,9 @@ mod tests {
 
         let mut fat = Fat32::mount(MemDisk::new(&mut image)).expect("mount");
         let mut out = [0u8; 16];
-        let n = fat.read_file(b"/BOOT/CFG/PHASE.TXT", &mut out).expect("read");
+        let n = fat
+            .read_file(b"/BOOT/CFG/PHASE.TXT", &mut out)
+            .expect("read");
         assert_eq!(&out[..n], b"nested!");
 
         assert!(fat.stat_path(b"/BOOT/CFG").expect("stat dir").is_dir);
@@ -121,6 +128,8 @@ mod tests {
         assert_eq!(listed[2], (b"NOEXT".to_vec(), false, 1));
 
         // Listing a file is an error.
-        assert!(fat.read_dir_raw(b"/HELLO.TXT", &mut |_, _, _| true).is_none());
+        assert!(fat
+            .read_dir_raw(b"/HELLO.TXT", &mut |_, _, _| true)
+            .is_none());
     }
 }

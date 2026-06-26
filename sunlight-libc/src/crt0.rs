@@ -57,11 +57,7 @@
 /// # Safety
 /// `argc` and `argv` must be the values received by `_start` from the kernel.
 /// The returned pointers remain valid for the lifetime of the process.
-pub unsafe fn collect_raw_args(
-    argc: u64,
-    argv: *const *const u8,
-    out: &mut [*const u8],
-) -> usize {
+pub unsafe fn collect_raw_args(argc: u64, argv: *const *const u8, out: &mut [*const u8]) -> usize {
     if argv.is_null() {
         return 0;
     }

@@ -423,8 +423,17 @@ fn cmd_touch(args: &[&str]) -> i32 {
 /// Print a simple progress bar: `####---------- 40%`  (bar_width=10 chars)
 fn print_progress(done: u64, total: u64) {
     const W: usize = 40;
-    let pct = if total == 0 { 100u64 } else { done * 100 / total };
-    let filled = if total == 0 { W } else { (done * W as u64 / total) as usize }.min(W);
+    let pct = if total == 0 {
+        100u64
+    } else {
+        done * 100 / total
+    };
+    let filled = if total == 0 {
+        W
+    } else {
+        (done * W as u64 / total) as usize
+    }
+    .min(W);
     let _ = write_all(b"\r[");
     for _ in 0..filled {
         let _ = write_all(b"#");
@@ -558,16 +567,14 @@ fn cmd_rmdir(args: &[&str]) -> i32 {
     let mut code = 0i32;
     for path in args {
         match libc::stat(path.as_bytes()) {
-            Ok(st) if st.file_type == libc::FT_DIR => {
-                match libc::unlink(path.as_bytes()) {
-                    Ok(()) => {}
-                    Err(_) => {
-                        print2("rmdir: failed to remove '", path);
-                        let _ = write_all(b"'\n");
-                        code = 1;
-                    }
+            Ok(st) if st.file_type == libc::FT_DIR => match libc::unlink(path.as_bytes()) {
+                Ok(()) => {}
+                Err(_) => {
+                    print2("rmdir: failed to remove '", path);
+                    let _ = write_all(b"'\n");
+                    code = 1;
                 }
-            }
+            },
             Ok(_) => {
                 print2("rmdir: '", path);
                 let _ = write_all(b"' is not a directory\n");

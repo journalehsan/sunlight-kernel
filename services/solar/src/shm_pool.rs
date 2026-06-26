@@ -58,9 +58,10 @@ impl ShmPagePool {
 
         if self.pages.is_empty() {
             let mut msg = heapless::String::new();
-            let _ = core::fmt::write(&mut msg, format_args!(
-                "SHM Pool exhausted: no pages available for concurrent operation"
-            ));
+            let _ = core::fmt::write(
+                &mut msg,
+                format_args!("SHM Pool exhausted: no pages available for concurrent operation"),
+            );
             return Err(msg);
         }
 
@@ -127,10 +128,22 @@ mod tests {
     #[test]
     fn test_pool_creation() {
         let tokens = [
-            CapabilityToken(0), CapabilityToken(1), CapabilityToken(2), CapabilityToken(3),
-            CapabilityToken(4), CapabilityToken(5), CapabilityToken(6), CapabilityToken(7),
-            CapabilityToken(8), CapabilityToken(9), CapabilityToken(10), CapabilityToken(11),
-            CapabilityToken(12), CapabilityToken(13), CapabilityToken(14), CapabilityToken(15),
+            CapabilityToken(0),
+            CapabilityToken(1),
+            CapabilityToken(2),
+            CapabilityToken(3),
+            CapabilityToken(4),
+            CapabilityToken(5),
+            CapabilityToken(6),
+            CapabilityToken(7),
+            CapabilityToken(8),
+            CapabilityToken(9),
+            CapabilityToken(10),
+            CapabilityToken(11),
+            CapabilityToken(12),
+            CapabilityToken(13),
+            CapabilityToken(14),
+            CapabilityToken(15),
         ];
         let pool = ShmPagePool::new(tokens);
 
@@ -141,10 +154,22 @@ mod tests {
     #[test]
     fn test_pool_acquire() {
         let tokens = [
-            CapabilityToken(0), CapabilityToken(1), CapabilityToken(2), CapabilityToken(3),
-            CapabilityToken(4), CapabilityToken(5), CapabilityToken(6), CapabilityToken(7),
-            CapabilityToken(8), CapabilityToken(9), CapabilityToken(10), CapabilityToken(11),
-            CapabilityToken(12), CapabilityToken(13), CapabilityToken(14), CapabilityToken(15),
+            CapabilityToken(0),
+            CapabilityToken(1),
+            CapabilityToken(2),
+            CapabilityToken(3),
+            CapabilityToken(4),
+            CapabilityToken(5),
+            CapabilityToken(6),
+            CapabilityToken(7),
+            CapabilityToken(8),
+            CapabilityToken(9),
+            CapabilityToken(10),
+            CapabilityToken(11),
+            CapabilityToken(12),
+            CapabilityToken(13),
+            CapabilityToken(14),
+            CapabilityToken(15),
         ];
         let pool = ShmPagePool::new(tokens);
 
@@ -159,10 +184,22 @@ mod tests {
     #[test]
     fn test_pool_exhaustion() {
         let tokens = [
-            CapabilityToken(0), CapabilityToken(1), CapabilityToken(2), CapabilityToken(3),
-            CapabilityToken(4), CapabilityToken(5), CapabilityToken(6), CapabilityToken(7),
-            CapabilityToken(8), CapabilityToken(9), CapabilityToken(10), CapabilityToken(11),
-            CapabilityToken(12), CapabilityToken(13), CapabilityToken(14), CapabilityToken(15),
+            CapabilityToken(0),
+            CapabilityToken(1),
+            CapabilityToken(2),
+            CapabilityToken(3),
+            CapabilityToken(4),
+            CapabilityToken(5),
+            CapabilityToken(6),
+            CapabilityToken(7),
+            CapabilityToken(8),
+            CapabilityToken(9),
+            CapabilityToken(10),
+            CapabilityToken(11),
+            CapabilityToken(12),
+            CapabilityToken(13),
+            CapabilityToken(14),
+            CapabilityToken(15),
         ];
         let pool = ShmPagePool::new(tokens);
 
@@ -182,10 +219,22 @@ mod tests {
     fn test_guard_drop_semantics() {
         // This test demonstrates that Drop is called automatically
         let tokens = [
-            CapabilityToken(0), CapabilityToken(1), CapabilityToken(2), CapabilityToken(3),
-            CapabilityToken(4), CapabilityToken(5), CapabilityToken(6), CapabilityToken(7),
-            CapabilityToken(8), CapabilityToken(9), CapabilityToken(10), CapabilityToken(11),
-            CapabilityToken(12), CapabilityToken(13), CapabilityToken(14), CapabilityToken(15),
+            CapabilityToken(0),
+            CapabilityToken(1),
+            CapabilityToken(2),
+            CapabilityToken(3),
+            CapabilityToken(4),
+            CapabilityToken(5),
+            CapabilityToken(6),
+            CapabilityToken(7),
+            CapabilityToken(8),
+            CapabilityToken(9),
+            CapabilityToken(10),
+            CapabilityToken(11),
+            CapabilityToken(12),
+            CapabilityToken(13),
+            CapabilityToken(14),
+            CapabilityToken(15),
         ];
         let pool = ShmPagePool::new(tokens);
 

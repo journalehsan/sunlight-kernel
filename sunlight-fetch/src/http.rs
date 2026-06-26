@@ -50,9 +50,9 @@ impl ParsedUrl {
         let (host, port) = if let Some(colon_idx) = host_port.rfind(':') {
             let host_part = &host_port[..colon_idx];
             let port_str = &host_port[colon_idx + 1..];
-            let port = port_str.parse::<u16>().map_err(|_| {
-                FetchError::InvalidUrl(format!("invalid port: '{port_str}'"))
-            })?;
+            let port = port_str
+                .parse::<u16>()
+                .map_err(|_| FetchError::InvalidUrl(format!("invalid port: '{port_str}'")))?;
             (host_part, port)
         } else {
             let default_port = match scheme {

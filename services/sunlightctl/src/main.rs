@@ -27,7 +27,7 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
-use sunlight_ipc::{IpcMsg, ipc_call, nameserver_lookup, CapabilityToken};
+use sunlight_ipc::{ipc_call, nameserver_lookup, CapabilityToken, IpcMsg};
 
 fn stdout_write(s: &str) {
     let mut data = s.as_bytes();
@@ -50,15 +50,15 @@ macro_rules! println {
 }
 
 // ── IPC opcodes (must match sunlightd/src/ipc.rs) ────────────────────────────
-const OP_START:   u64 = 1;
-const OP_STOP:    u64 = 2;
+const OP_START: u64 = 1;
+const OP_STOP: u64 = 2;
 const OP_RESTART: u64 = 3;
-const OP_ENABLE:  u64 = 5;
+const OP_ENABLE: u64 = 5;
 const OP_DISABLE: u64 = 6;
-const OP_STATUS:  u64 = 10;
-const OP_LIST:    u64 = 11;
+const OP_STATUS: u64 = 10;
+const OP_LIST: u64 = 11;
 
-const REPLY_OK:  u64 = 1;
+const REPLY_OK: u64 = 1;
 const REPLY_NOP: u64 = 2;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -105,21 +105,25 @@ fn cmd_list(cap: CapabilityToken) {
         }
 
         // Decode words[0..4] (transport-safe encoding set by sunlightd ListEntry::pack)
-        let total    = (reply.words[0] & 0xFFFF_FFFF) as usize;
-        let state    = ((reply.words[0] >> 32) & 0xFF) as u32;
-        let enabled  = ((reply.words[0] >> 40) & 0x01) != 0;
+        let total = (reply.words[0] & 0xFFFF_FFFF) as usize;
+        let state = ((reply.words[0] >> 32) & 0xFF) as u32;
+        let enabled = ((reply.words[0] >> 40) & 0x01) != 0;
         let _restarts = ((reply.words[0] >> 48) & 0xFF) as u32;
-        let pid      = reply.words[1] as u32;
+        let pid = reply.words[1] as u32;
 
         // Name packed into words[2..4] (16 bytes)
         let mut name = heapless::String::<32>::new();
         for &word in &[reply.words[2], reply.words[3]] {
             for j in 0..8u64 {
                 let byte = ((word >> (j * 8)) & 0xFF) as u8;
-                if byte == 0 { break; }
+                if byte == 0 {
+                    break;
+                }
                 let _ = name.push(byte as char);
             }
-            if name.len() > 0 && name.as_bytes()[name.len()-1] == 0 { break; }
+            if name.len() > 0 && name.as_bytes()[name.len() - 1] == 0 {
+                break;
+            }
         }
 
         let enabled_s = if enabled { "enabled" } else { "disabled" };
@@ -132,7 +136,13 @@ fn cmd_list(cap: CapabilityToken) {
             let _ = pid_s.push('-');
         }
 
-        println!("{:<18} {:<10} {:<10} {}", name, state_str(state), enabled_s, pid_s);
+        println!(
+            "{:<18} {:<10} {:<10} {}",
+            name,
+            state_str(state),
+            enabled_s,
+            pid_s
+        );
 
         idx += 1;
         if total == 0 || idx >= total as u64 {
@@ -148,18 +158,24 @@ fn cmd_status(cap: CapabilityToken, unit: &str) {
 
     let reply = ipc_call(cap, msg);
     if reply.label != REPLY_OK {
-        println!("ERROR: Service '{}' not found or sunlightd unavailable", unit);
+        println!(
+            "ERROR: Service '{}' not found or sunlightd unavailable",
+            unit
+        );
         return;
     }
 
-    let state    = reply.words[0] as u32;
-    let pid      = reply.words[1] as u32;
+    let state = reply.words[0] as u32;
+    let pid = reply.words[1] as u32;
     let restarts = (reply.words[2] & 0xFFFF_FFFF) as u32;
-    let enabled  = (reply.words[2] >> 32) != 0;
+    let enabled = (reply.words[2] >> 32) != 0;
 
     println!("● {}.service", unit);
     println!("   Active:   {}", state_str(state));
-    println!("   Enabled:  {}", if enabled { "enabled" } else { "disabled" });
+    println!(
+        "   Enabled:  {}",
+        if enabled { "enabled" } else { "disabled" }
+    );
     if state == 2 {
         println!("   PID:      {}", pid);
     }
@@ -174,7 +190,10 @@ fn cmd_start(cap: CapabilityToken, unit: &str) {
     if reply.label == REPLY_OK {
         println!("Started {}.service", unit);
     } else {
-        println!("ERROR: Failed to start '{}' (not found or spawn failed)", unit);
+        println!(
+            "ERROR: Failed to start '{}' (not found or spawn failed)",
+            unit
+        );
     }
 }
 
@@ -198,7 +217,10 @@ fn cmd_restart(cap: CapabilityToken, unit: &str) {
     if reply.label == REPLY_OK {
         println!("Restarted {}.service", unit);
     } else {
-        println!("ERROR: Failed to restart '{}' (not found or spawn failed)", unit);
+        println!(
+            "ERROR: Failed to restart '{}' (not found or spawn failed)",
+            unit
+        );
     }
 }
 
@@ -212,9 +234,12 @@ fn cmd_enable(cap: CapabilityToken, unit: &str, now: bool) {
     pack_unit_name(&mut msg, unit);
     let reply = ipc_call(cap, msg);
     match reply.label {
-        REPLY_OK  => println!("Enabled {}.service", unit),
+        REPLY_OK => println!("Enabled {}.service", unit),
         REPLY_NOP => println!("{}.service is already enabled", unit),
-        _         => { println!("ERROR: Service '{}' not found", unit); return; }
+        _ => {
+            println!("ERROR: Service '{}' not found", unit);
+            return;
+        }
     }
     if now {
         cmd_start(cap, unit);
@@ -231,9 +256,12 @@ fn cmd_disable(cap: CapabilityToken, unit: &str, now: bool) {
     pack_unit_name(&mut msg, unit);
     let reply = ipc_call(cap, msg);
     match reply.label {
-        REPLY_OK  => println!("Disabled {}.service", unit),
+        REPLY_OK => println!("Disabled {}.service", unit),
         REPLY_NOP => println!("{}.service is already disabled", unit),
-        _         => { println!("ERROR: Service '{}' not found", unit); return; }
+        _ => {
+            println!("ERROR: Service '{}' not found", unit);
+            return;
+        }
     }
     if now {
         cmd_stop(cap, unit);
@@ -294,8 +322,8 @@ fn parse_now_service<'a>(args: &[&'a str]) -> (bool, &'a str) {
     match args {
         ["--now", svc] => (true, svc),
         [svc, "--now"] => (true, svc),
-        [svc]          => (false, svc),
-        _              => (false, ""),
+        [svc] => (false, svc),
+        _ => (false, ""),
     }
 }
 

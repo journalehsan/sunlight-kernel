@@ -7,32 +7,32 @@ use sunlight_ipc::IpcMsg;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SunlightdOp {
     // Management
-    Start   = 1,
-    Stop    = 2,
+    Start = 1,
+    Stop = 2,
     Restart = 3,
-    Reload  = 4,
-    Enable  = 5,
+    Reload = 4,
+    Enable = 5,
     Disable = 6,
     // Query
-    Status  = 10,
-    List    = 11,
+    Status = 10,
+    List = 11,
     // Logging
-    GetLog  = 20,
+    GetLog = 20,
 }
 
 impl SunlightdOp {
     pub fn from_u32(val: u32) -> Option<Self> {
         match val {
-            1  => Some(Self::Start),
-            2  => Some(Self::Stop),
-            3  => Some(Self::Restart),
-            4  => Some(Self::Reload),
-            5  => Some(Self::Enable),
-            6  => Some(Self::Disable),
+            1 => Some(Self::Start),
+            2 => Some(Self::Stop),
+            3 => Some(Self::Restart),
+            4 => Some(Self::Reload),
+            5 => Some(Self::Enable),
+            6 => Some(Self::Disable),
             10 => Some(Self::Status),
             11 => Some(Self::List),
             20 => Some(Self::GetLog),
-            _  => None,
+            _ => None,
         }
     }
 }

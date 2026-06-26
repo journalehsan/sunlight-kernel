@@ -36,7 +36,12 @@ pub fn handle_http_request(
     // Parse the request from the buffer
     match parse_request(&buffer[..bytes_read]) {
         Ok(request) => {
-            solar_log!("[SOLAR] {} {} (body: {} bytes)", request.method, request.path, request.body.len());
+            solar_log!(
+                "[SOLAR] {} {} (body: {} bytes)",
+                request.method,
+                request.path,
+                request.body.len()
+            );
 
             // ==========================================
             // THE ROUTER

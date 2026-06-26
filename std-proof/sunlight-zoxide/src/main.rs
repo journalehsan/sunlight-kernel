@@ -202,7 +202,11 @@ fn cmd_add(target: &str) -> u64 {
             path: target.to_string(),
         });
     }
-    if save_db(&entries) { 0 } else { 1 }
+    if save_db(&entries) {
+        0
+    } else {
+        1
+    }
 }
 
 fn cmd_resolve(terms: &[&str]) -> u64 {
@@ -217,7 +221,9 @@ fn cmd_resolve(terms: &[&str]) -> u64 {
         .iter()
         .filter(|e| {
             let lower = to_lower_string(&e.path);
-            terms.iter().all(|t| lower.contains(&to_lower_string(t) as &str))
+            terms
+                .iter()
+                .all(|t| lower.contains(&to_lower_string(t) as &str))
         })
         .collect();
 
@@ -293,7 +299,14 @@ fn cmd_doctor() -> u64 {
     println_str(STDOUT, &u64_to_str(entries as u64));
 
     print(STDOUT, b"config directory writable: ");
-    println(STDOUT, if dir_writable { b"yes" } else { b"no (not yet created)" });
+    println(
+        STDOUT,
+        if dir_writable {
+            b"yes"
+        } else {
+            b"no (not yet created)"
+        },
+    );
 
     0
 }
@@ -332,10 +345,19 @@ fn usage() {
     println(STDOUT, b"sunlight-zoxide - directory jump utility");
     println(STDOUT, b"");
     println(STDOUT, b"Usage:");
-    println(STDOUT, b"  z --add PATH          Record a visited directory");
-    println(STDOUT, b"  z --resolve TERM...   Print the best matching path");
+    println(
+        STDOUT,
+        b"  z --add PATH          Record a visited directory",
+    );
+    println(
+        STDOUT,
+        b"  z --resolve TERM...   Print the best matching path",
+    );
     println(STDOUT, b"  z --list              List all database entries");
-    println(STDOUT, b"  z --doctor            Show diagnostic information");
+    println(
+        STDOUT,
+        b"  z --doctor            Show diagnostic information",
+    );
 }
 
 // ── utilities ─────────────────────────────────────────────────────────────────

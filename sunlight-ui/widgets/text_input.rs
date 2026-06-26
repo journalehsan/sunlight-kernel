@@ -34,15 +34,28 @@ impl<const N: usize> TextInput<N> {
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(self.rect, theme.panel);
-        canvas.draw_rect(self.rect, if self.active { theme.accent } else { theme.border });
+        canvas.draw_rect(
+            self.rect,
+            if self.active {
+                theme.accent
+            } else {
+                theme.border
+            },
+        );
 
         let text_x = self.rect.x + 6;
         let text_y = self.rect.y + (self.rect.h as i32 - 10) / 2;
         canvas.draw_text(text_x, text_y, self.value(), theme.text);
 
         if self.active {
-            let cursor_x = text_x + Canvas::measure_text(self.value().get(..self.cursor).unwrap_or("")) as i32;
-            canvas.vline(cursor_x, self.rect.y + 4, self.rect.h.saturating_sub(8), theme.accent);
+            let cursor_x =
+                text_x + Canvas::measure_text(self.value().get(..self.cursor).unwrap_or("")) as i32;
+            canvas.vline(
+                cursor_x,
+                self.rect.y + 4,
+                self.rect.h.saturating_sub(8),
+                theme.accent,
+            );
         }
     }
 
@@ -58,7 +71,11 @@ impl<const N: usize> TextInput<N> {
                 c if c.is_ascii_graphic() || c == ' ' => self.insert(c as u8),
                 _ => false,
             },
-            Event::KeyPress { keycode, pressed: true } if self.active => match keycode {
+            Event::KeyPress {
+                keycode,
+                pressed: true,
+                ..
+            } if self.active => match keycode {
                 0x4B => self.move_left(),
                 0x4D => self.move_right(),
                 0x47 => self.move_home(),

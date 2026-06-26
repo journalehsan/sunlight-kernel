@@ -1,5 +1,5 @@
-use core::sync::atomic::{fence, Ordering};
 use super::pci::{inl, inw, outb, outl, outw};
+use core::sync::atomic::{fence, Ordering};
 
 // Legacy virtio-blk I/O register offsets from io_base
 const REG_DEVICE_FEATURES: u16 = 0x00;
@@ -74,11 +74,17 @@ impl VirtioBlk {
         // Reset the device
         outb(io_base + REG_DEVICE_STATUS, 0);
         // Acknowledge device existence and load our driver
-        outb(io_base + REG_DEVICE_STATUS, STATUS_ACKNOWLEDGE | STATUS_DRIVER);
+        outb(
+            io_base + REG_DEVICE_STATUS,
+            STATUS_ACKNOWLEDGE | STATUS_DRIVER,
+        );
 
         // Read and echo features (we accept all; we only use basic read)
         let features = inl(io_base + REG_DEVICE_FEATURES);
-        outl(io_base + REG_DRIVER_FEATURES, features & !((1 << 5) | (1 << 7)));
+        outl(
+            io_base + REG_DRIVER_FEATURES,
+            features & !((1 << 5) | (1 << 7)),
+        );
 
         // Select queue 0
         outw(io_base + REG_QUEUE_SEL, 0);

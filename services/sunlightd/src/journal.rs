@@ -14,7 +14,7 @@ impl LogCapture {
         let _ = log_path.push_str("/var/log/");
         let _ = log_path.push_str(unit_name);
         let _ = log_path.push_str(".log");
-        
+
         let mut unit_name_str = heapless::String::new();
         let _ = unit_name_str.push_str(unit_name);
 

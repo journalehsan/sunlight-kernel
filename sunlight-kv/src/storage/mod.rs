@@ -10,6 +10,6 @@ pub mod record;
 pub use file::{StorageEngine, StorageError};
 pub use index::{Index, IndexEntry};
 pub use record::{
-    compute_crc, read_record, write_record, FLAG_DELETE, FLAG_PUT, RECORD_MAGIC, RECORD_VERSION,
-    RecordHeader,
+    compute_crc, read_record, write_record, RecordHeader, FLAG_DELETE, FLAG_PUT, RECORD_MAGIC,
+    RECORD_VERSION,
 };

@@ -22,20 +22,32 @@ impl Color {
     }
 
     #[inline]
-    pub fn r(self) -> u8 { ((self.0 >> 16) & 0xFF) as u8 }
+    pub fn r(self) -> u8 {
+        ((self.0 >> 16) & 0xFF) as u8
+    }
     #[inline]
-    pub fn g(self) -> u8 { ((self.0 >> 8) & 0xFF) as u8 }
+    pub fn g(self) -> u8 {
+        ((self.0 >> 8) & 0xFF) as u8
+    }
     #[inline]
-    pub fn b(self) -> u8 { (self.0 & 0xFF) as u8 }
+    pub fn b(self) -> u8 {
+        (self.0 & 0xFF) as u8
+    }
     #[inline]
-    pub fn a(self) -> u8 { ((self.0 >> 24) & 0xFF) as u8 }
+    pub fn a(self) -> u8 {
+        ((self.0 >> 24) & 0xFF) as u8
+    }
 
     /// Blend `self` over `dst` using `self.alpha`.
     #[inline]
     pub fn blend_over(self, dst: Color) -> Color {
         let a = self.a() as u32;
-        if a == 255 { return self; }
-        if a == 0   { return dst;  }
+        if a == 255 {
+            return self;
+        }
+        if a == 0 {
+            return dst;
+        }
         let ia = 255 - a;
         let r = (self.r() as u32 * a + dst.r() as u32 * ia) / 255;
         let g = (self.g() as u32 * a + dst.g() as u32 * ia) / 255;
@@ -93,34 +105,34 @@ impl Theme {
     /// SunlightOS default dark theme with orange accent.
     pub const fn sunlight_dark() -> Self {
         Self {
-            bg:           Color::rgb(0x12, 0x12, 0x14),
-            panel:        Color::rgb(0x1C, 0x1C, 0x1F),
-            panel_alt:    Color::rgb(0x22, 0x22, 0x26),
-            text:         Color::rgb(0xF0, 0xF0, 0xF0),
-            text_dim:     Color::rgb(0x88, 0x88, 0x99),
-            accent:       Color::rgb(0xFF, 0xA5, 0x00),  // SunlightOS orange
+            bg: Color::rgb(0x12, 0x12, 0x14),
+            panel: Color::rgb(0x1C, 0x1C, 0x1F),
+            panel_alt: Color::rgb(0x22, 0x22, 0x26),
+            text: Color::rgb(0xF0, 0xF0, 0xF0),
+            text_dim: Color::rgb(0x88, 0x88, 0x99),
+            accent: Color::rgb(0xFF, 0xA5, 0x00), // SunlightOS orange
             accent_hover: Color::rgb(0xFF, 0xBF, 0x40),
-            ok:           Color::rgb(0x4C, 0xAF, 0x50),
-            warn:         Color::rgb(0xFF, 0xC1, 0x07),
-            danger:       Color::rgb(0xF4, 0x43, 0x36),
-            border:       Color::rgb(0x35, 0x35, 0x40),
+            ok: Color::rgb(0x4C, 0xAF, 0x50),
+            warn: Color::rgb(0xFF, 0xC1, 0x07),
+            danger: Color::rgb(0xF4, 0x43, 0x36),
+            border: Color::rgb(0x35, 0x35, 0x40),
         }
     }
 
     /// Light theme variant.
     pub const fn sunlight_light() -> Self {
         Self {
-            bg:           Color::rgb(0xF2, 0xF2, 0xF5),
-            panel:        Color::rgb(0xFF, 0xFF, 0xFF),
-            panel_alt:    Color::rgb(0xEB, 0xEB, 0xEF),
-            text:         Color::rgb(0x11, 0x11, 0x11),
-            text_dim:     Color::rgb(0x66, 0x66, 0x77),
-            accent:       Color::rgb(0xE6, 0x8A, 0x00),
+            bg: Color::rgb(0xF2, 0xF2, 0xF5),
+            panel: Color::rgb(0xFF, 0xFF, 0xFF),
+            panel_alt: Color::rgb(0xEB, 0xEB, 0xEF),
+            text: Color::rgb(0x11, 0x11, 0x11),
+            text_dim: Color::rgb(0x66, 0x66, 0x77),
+            accent: Color::rgb(0xE6, 0x8A, 0x00),
             accent_hover: Color::rgb(0xFF, 0xA5, 0x00),
-            ok:           Color::rgb(0x2E, 0x7D, 0x32),
-            warn:         Color::rgb(0xF5, 0x7F, 0x17),
-            danger:       Color::rgb(0xC6, 0x28, 0x28),
-            border:       Color::rgb(0xCC, 0xCC, 0xD6),
+            ok: Color::rgb(0x2E, 0x7D, 0x32),
+            warn: Color::rgb(0xF5, 0x7F, 0x17),
+            danger: Color::rgb(0xC6, 0x28, 0x28),
+            border: Color::rgb(0xCC, 0xCC, 0xD6),
         }
     }
 }

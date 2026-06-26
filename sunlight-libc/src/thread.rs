@@ -42,10 +42,7 @@ pub struct JoinHandle {
 ///
 /// The kernel sets RDI = `func` and RSI = `arg` via `set_initial_args` before
 /// scheduling the thread, so this receives both as normal C arguments.
-extern "C" fn thread_trampoline(
-    func: extern "C" fn(*mut u8) -> *mut u8,
-    arg: *mut u8,
-) -> ! {
+extern "C" fn thread_trampoline(func: extern "C" fn(*mut u8) -> *mut u8, arg: *mut u8) -> ! {
     let _ret = func(arg);
     // Phase 1: reuse ProcessExit to terminate this thread context.
     unsafe { crate::sys::syscall1(SYS_PROCESS_EXIT, 0) };

@@ -114,7 +114,9 @@ pub fn write_record<W: Write>(
 /// On success returns (header, key, value, acl_bytes).
 /// On EOF at start returns None.
 /// Any other truncation/invalid data returns an error (caller decides to stop recovery).
-pub fn read_record<R: Read>(r: &mut R) -> io::Result<Option<(RecordHeader, Vec<u8>, Vec<u8>, Vec<u8>)>> {
+pub fn read_record<R: Read>(
+    r: &mut R,
+) -> io::Result<Option<(RecordHeader, Vec<u8>, Vec<u8>, Vec<u8>)>> {
     let mut header_buf = [0u8; RecordHeader::SIZE];
     match r.read_exact(&mut header_buf) {
         Ok(()) => {}
@@ -148,10 +150,7 @@ pub fn read_record<R: Read>(r: &mut R) -> io::Result<Option<(RecordHeader, Vec<u
 
     let actual_crc = compute_crc(&payload);
     if actual_crc != header.crc32 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "crc32 mismatch",
-        ));
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "crc32 mismatch"));
     }
 
     Ok(Some((header, key, value, acl)))

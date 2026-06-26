@@ -421,8 +421,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
 pub fn needs_special_handling(linux_nr: u64) -> bool {
     matches!(
         linux_nr,
-        7 | 9 | 13 | 14 | 16 | 20 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 318 | 334
-            | 257
+        7 | 9 | 13 | 14 | 16 | 20 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 318 | 334 | 257
     )
 }
 

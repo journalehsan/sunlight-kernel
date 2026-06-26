@@ -13,7 +13,9 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
         let align = layout.align();
         let aligned = (start + align - 1) & !(align - 1);
         let end = aligned + layout.size();
-        if end > HEAP.len() { return core::ptr::null_mut(); }
+        if end > HEAP.len() {
+            return core::ptr::null_mut();
+        }
         NEXT = end;
         HEAP.as_mut_ptr().add(aligned)
     }
@@ -23,13 +25,13 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
-use sunlight_ipc::{
-    debug_log, ipc_call, nameserver_lookup, IpcMsg, TzMsg,
-};
+use sunlight_ipc::{debug_log, ipc_call, nameserver_lookup, IpcMsg, TzMsg};
 
 #[cfg(not(test))]
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! { loop {} }
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
 
 #[cfg(not(test))]
 #[no_mangle]
@@ -42,7 +44,9 @@ pub extern "C" fn _start() -> ! {
             let r = ipc_call(cap, req);
             if r.label == TzMsg::REPLY && r.words[0] != 0xFFFF_FFFF {
                 debug_log("[tzctl] zone row received");
-            } else { break; }
+            } else {
+                break;
+            }
         }
         debug_log("[tzctl] done (list)");
     } else {

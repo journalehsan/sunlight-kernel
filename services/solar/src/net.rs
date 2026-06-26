@@ -37,13 +37,13 @@ impl TcpListener {
     /// * `Err(&str)` - If net_server lookup or any operation fails
     pub fn bind(port: u16) -> Result<Self, &'static str> {
         // 1. Look up net_server endpoint via nameserver
-        let net_endpoint = nameserver_lookup("net")
-            .ok_or("Could not find net_server in nameserver")?;
+        let net_endpoint =
+            nameserver_lookup("net").ok_or("Could not find net_server in nameserver")?;
 
         // 2. Create a new socket
         let msg = IpcMsg::with_label(NetOp::SOCKET);
         let reply = ipc_call(net_endpoint, msg);
-        
+
         // net_server returns socket_id in reply.words[0]
         let socket_id = reply.words[0] as u32;
         if socket_id == 0 {
@@ -55,7 +55,7 @@ impl TcpListener {
         msg = msg.word(0, socket_id as u64);
         msg = msg.word(1, port as u64);
         let reply = ipc_call(net_endpoint, msg);
-        
+
         // Check for bind error (reply.words[0] == 0 means success)
         if reply.words[0] != 0 {
             return Err("Bind failed - port may be in use");
@@ -66,7 +66,7 @@ impl TcpListener {
         msg = msg.word(0, socket_id as u64);
         msg = msg.word(1, 64); // Backlog size
         let reply = ipc_call(net_endpoint, msg);
-        
+
         if reply.words[0] != 0 {
             return Err("Listen failed");
         }
@@ -90,9 +90,9 @@ impl TcpListener {
     pub fn accept(&self) -> Result<TcpStream, &'static str> {
         let mut msg = IpcMsg::with_label(NetOp::ACCEPT);
         msg = msg.word(0, self.socket_id as u64);
-        
+
         let reply = ipc_call(self.net_endpoint, msg);
-        
+
         // net_server returns the new client socket_id in reply.words[0]
         let client_socket_id = reply.words[0] as u32;
         if client_socket_id == 0 {
@@ -112,12 +112,12 @@ impl TcpListener {
     pub fn try_accept(&self) -> Result<Option<TcpStream>, &'static str> {
         let mut msg = IpcMsg::with_label(NetOp::ACCEPT);
         msg = msg.word(0, self.socket_id as u64);
-        
+
         let reply = ipc_call(self.net_endpoint, msg);
-        
+
         // net_server returns the new client socket_id in reply.words[0]
         let client_socket_id = reply.words[0] as u32;
-        
+
         if client_socket_id == 0 {
             // No pending connections (non-blocking mode)
             return Ok(None);
@@ -161,9 +161,9 @@ impl TcpStream {
         let mut msg = IpcMsg::with_label(NetOp::RECV_SHM);
         msg = msg.word(0, self.socket_id as u64);
         msg = msg.word(1, buffer.len() as u64);
-        
+
         let reply = ipc_call(self.net_endpoint, msg);
-        
+
         // reply.words[0] contains the number of bytes received
         let bytes_read = reply.words[0] as usize;
         if bytes_read == 0 {
@@ -176,8 +176,8 @@ impl TcpStream {
             return Err("Recv failed - missing SHM page");
         }
 
-        let shm_ptr = sunlight_ipc::shm_map(shm_token)
-            .map_err(|_| "Failed to map received SHM page")?;
+        let shm_ptr =
+            sunlight_ipc::shm_map(shm_token).map_err(|_| "Failed to map received SHM page")?;
         let copy_len = bytes_read.min(buffer.len()).min(4096);
         unsafe {
             core::ptr::copy_nonoverlapping(shm_ptr as *const u8, buffer.as_mut_ptr(), copy_len);
@@ -199,22 +199,26 @@ impl TcpStream {
     /// # Returns
     /// * `Ok(())` - All data sent successfully
     /// * `Err(&str)` - If send fails or connection error
-    pub fn write_all(&mut self, data: &[u8], shm_pool: &crate::ShmPagePool) -> Result<(), &'static str> {
+    pub fn write_all(
+        &mut self,
+        data: &[u8],
+        shm_pool: &crate::ShmPagePool,
+    ) -> Result<(), &'static str> {
         // For small payloads (≤48 bytes), send inline in IPC registers
         if data.len() <= 48 {
             return self.write_inline(data);
         }
-        
+
         // For larger payloads, use SHM
         self.write_shm(data, shm_pool)
     }
-    
+
     /// Write small data inline (≤48 bytes) in IPC registers
     fn write_inline(&mut self, data: &[u8]) -> Result<(), &'static str> {
         let mut msg = IpcMsg::with_label(NetOp::SEND);
         msg = msg.word(0, self.socket_id as u64);
         msg = msg.word(1, data.len() as u64);
-        
+
         // Pack data into words[2..7] (6 words × 8 bytes = 48 bytes max)
         for i in 0..data.len() {
             let word_idx = 2 + (i / 8);
@@ -224,48 +228,51 @@ impl TcpStream {
                 msg = msg.word(word_idx, val);
             }
         }
-        
+
         let reply = ipc_call(self.net_endpoint, msg);
-        
+
         let bytes_sent = reply.words[0] as usize;
         if bytes_sent == 0 {
             return Err("Send failed - connection may be closed");
         }
-        
+
         Ok(())
     }
-    
+
     /// Write large data (>48 bytes) via shared memory
-    fn write_shm(&mut self, data: &[u8], shm_pool: &crate::ShmPagePool) -> Result<(), &'static str> {
+    fn write_shm(
+        &mut self,
+        data: &[u8],
+        shm_pool: &crate::ShmPagePool,
+    ) -> Result<(), &'static str> {
         // Acquire a shared memory page from the pool
         let shm_token = shm_pool.acquire().ok_or("SHM pool exhausted")?;
-        
+
         // Map the SHM page to get a pointer
-        let shm_ptr = sunlight_ipc::shm_map(shm_token)
-            .map_err(|_| "Failed to map SHM page")?;
-        
+        let shm_ptr = sunlight_ipc::shm_map(shm_token).map_err(|_| "Failed to map SHM page")?;
+
         // Copy data to SHM (max 4096 bytes per page)
         let copy_len = data.len().min(4096);
         unsafe {
             core::ptr::copy_nonoverlapping(data.as_ptr(), shm_ptr as *mut u8, copy_len);
         }
-        
+
         // Send via IPC with SHM capability
         let mut msg = IpcMsg::with_label(NetOp::SEND_SHM);
         msg = msg.word(0, self.socket_id as u64);
         msg = msg.word(1, copy_len as u64);
         msg = msg.with_cap(0, shm_token);
-        
+
         let reply = ipc_call(self.net_endpoint, msg);
 
         shm_pool.release(shm_token);
-        
+
         // reply.words[0] contains bytes sent (0 = error)
         let bytes_sent = reply.words[0] as usize;
         if bytes_sent == 0 {
             return Err("Send failed - connection may be closed");
         }
-        
+
         Ok(())
     }
 
@@ -277,7 +284,7 @@ impl TcpStream {
         let mut msg = IpcMsg::with_label(NetOp::CLOSE);
         msg = msg.word(0, self.socket_id as u64);
         let _ = ipc_call(self.net_endpoint, msg);
-        
+
         // Mark socket as closed
         self.socket_id = 0;
     }
@@ -299,23 +306,23 @@ pub fn poll_sockets(
     socket_ids: &[u32],
 ) -> Result<[u32; 8], &'static str> {
     let count = socket_ids.len().min(8);
-    
+
     let mut msg = IpcMsg::with_label(NetOp::POLL);
     msg = msg.word(0, count as u64);
-    
+
     for (i, &socket_id) in socket_ids.iter().take(8).enumerate() {
         msg = msg.word(i + 1, socket_id as u64);
     }
-    
+
     let reply = ipc_call(net_endpoint, msg);
-    
+
     let ready_count = reply.words[0] as usize;
     let mut ready = [0u32; 8];
-    
+
     for i in 0..ready_count.min(8) {
         ready[i] = reply.words[i + 1] as u32;
     }
-    
+
     Ok(ready)
 }
 

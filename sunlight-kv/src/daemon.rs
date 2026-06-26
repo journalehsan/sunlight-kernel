@@ -7,8 +7,8 @@
 //! "root" (uid 0) bypasses all ACL checks.
 
 use std::io::{self, Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::io::AsRawFd;
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -94,10 +94,7 @@ pub fn run_daemon(cfg: DaemonConfig) -> Result<(), DaemonError> {
 }
 
 /// Handle a single client connection: loop reading requests until EOF.
-fn handle_client(
-    mut stream: UnixStream,
-    storage: Arc<Mutex<StorageEngine>>,
-) -> io::Result<()> {
+fn handle_client(mut stream: UnixStream, storage: Arc<Mutex<StorageEngine>>) -> io::Result<()> {
     let caller = resolve_caller_identity(&stream);
 
     loop {
@@ -128,44 +125,38 @@ fn handle_client(
 /// Map a Request + caller into a Response using the storage engine.
 fn dispatch(storage: &mut StorageEngine, caller: &str, req: Request) -> Response {
     match req {
-        Request::KV_PUT { key, value } => {
-            match storage.put(&key, &value, caller) {
-                Ok(()) => {
-                    info!("PUT ok key={} caller={}", key, caller);
-                    Response::OK
-                }
-                Err(StorageError::PermissionDenied { .. }) => {
-                    warn!("PUT permission denied key={} caller={}", key, caller);
-                    Response::PERMISSION_DENIED
-                }
-                Err(e) => Response::ERROR(e.to_string()),
+        Request::KV_PUT { key, value } => match storage.put(&key, &value, caller) {
+            Ok(()) => {
+                info!("PUT ok key={} caller={}", key, caller);
+                Response::OK
             }
-        }
-        Request::KV_GET { key } => {
-            match storage.get(&key, caller) {
-                Ok(v) => Response::VALUE(v),
-                Err(StorageError::NotFound(_)) => Response::NOT_FOUND,
-                Err(StorageError::PermissionDenied { .. }) => {
-                    warn!("GET permission denied key={} caller={}", key, caller);
-                    Response::PERMISSION_DENIED
-                }
-                Err(e) => Response::ERROR(e.to_string()),
+            Err(StorageError::PermissionDenied { .. }) => {
+                warn!("PUT permission denied key={} caller={}", key, caller);
+                Response::PERMISSION_DENIED
             }
-        }
-        Request::KV_DELETE { key } => {
-            match storage.delete(&key, caller) {
-                Ok(()) => {
-                    info!("DELETE ok key={} caller={}", key, caller);
-                    Response::OK
-                }
-                Err(StorageError::NotFound(_)) => Response::NOT_FOUND,
-                Err(StorageError::PermissionDenied { .. }) => {
-                    warn!("DELETE permission denied key={} caller={}", key, caller);
-                    Response::PERMISSION_DENIED
-                }
-                Err(e) => Response::ERROR(e.to_string()),
+            Err(e) => Response::ERROR(e.to_string()),
+        },
+        Request::KV_GET { key } => match storage.get(&key, caller) {
+            Ok(v) => Response::VALUE(v),
+            Err(StorageError::NotFound(_)) => Response::NOT_FOUND,
+            Err(StorageError::PermissionDenied { .. }) => {
+                warn!("GET permission denied key={} caller={}", key, caller);
+                Response::PERMISSION_DENIED
             }
-        }
+            Err(e) => Response::ERROR(e.to_string()),
+        },
+        Request::KV_DELETE { key } => match storage.delete(&key, caller) {
+            Ok(()) => {
+                info!("DELETE ok key={} caller={}", key, caller);
+                Response::OK
+            }
+            Err(StorageError::NotFound(_)) => Response::NOT_FOUND,
+            Err(StorageError::PermissionDenied { .. }) => {
+                warn!("DELETE permission denied key={} caller={}", key, caller);
+                Response::PERMISSION_DENIED
+            }
+            Err(e) => Response::ERROR(e.to_string()),
+        },
         Request::KV_SCAN { prefix } => {
             let keys = storage.scan_prefix(&prefix);
             Response::SCAN_RESULT(keys)
@@ -212,8 +203,8 @@ fn resolve_caller_identity(stream: &UnixStream) -> String {
 
 #[allow(dead_code)]
 fn send_request(stream: &mut UnixStream, req: &Request) -> io::Result<()> {
-    let bytes = bincode::serialize(req)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let bytes =
+        bincode::serialize(req).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let len = bytes.len() as u32;
     stream.write_all(&len.to_le_bytes())?;
     stream.write_all(&bytes)?;
@@ -241,15 +232,15 @@ fn recv_request(stream: &mut UnixStream) -> io::Result<Option<Request>> {
 
     let mut buf = vec![0u8; len];
     stream.read_exact(&mut buf)?;
-    let req: Request = bincode::deserialize(&buf)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let req: Request =
+        bincode::deserialize(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(Some(req))
 }
 
 #[allow(dead_code)]
 fn send_response(stream: &mut UnixStream, resp: &Response) -> io::Result<()> {
-    let bytes = bincode::serialize(resp)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let bytes =
+        bincode::serialize(resp).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let len = bytes.len() as u32;
     stream.write_all(&len.to_le_bytes())?;
     stream.write_all(&bytes)?;
@@ -272,8 +263,8 @@ fn recv_response(stream: &mut UnixStream) -> io::Result<Response> {
 
     let mut buf = vec![0u8; len];
     stream.read_exact(&mut buf)?;
-    let resp: Response = bincode::deserialize(&buf)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let resp: Response =
+        bincode::deserialize(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(resp)
 }
 

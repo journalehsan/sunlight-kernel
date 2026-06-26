@@ -153,7 +153,11 @@ fn is_whitelisted(path: &str) -> bool {
     }
     // allow exact matches for parent dirs if listed without final /
     for w in WHITELIST {
-        let w2 = if w.ends_with('/') { &w[..w.len()-1] } else { w };
+        let w2 = if w.ends_with('/') {
+            &w[..w.len() - 1]
+        } else {
+            w
+        };
         if path == w2 {
             return true;
         }
@@ -241,7 +245,11 @@ fn do_write(pathb: &[u8], content: &[u8]) -> Result<usize, u64> {
     let _ = libc::close(fd);
     if off == content.len() {
         log_allow("write", norm_s, content.len());
-        serial_println!("[SM][WRITE] path={} len={} ok=true atomic=false reason=best-effort", norm_s, content.len());
+        serial_println!(
+            "[SM][WRITE] path={} len={} ok=true atomic=false reason=best-effort",
+            norm_s,
+            content.len()
+        );
         Ok(content.len())
     } else {
         Err(SmMsg::ERR_IO)
@@ -347,7 +355,10 @@ fn op_remove(msg: &IpcMsg) -> IpcMsg {
         let _ = libc::write(fd, b"");
         let _ = libc::close(fd);
     });
-    serial_println!("[SM][REMOVE] path={} ok=true (content-cleared; no unlink yet)", norm_s);
+    serial_println!(
+        "[SM][REMOVE] path={} ok=true (content-cleared; no unlink yet)",
+        norm_s
+    );
     log_allow("remove", norm_s, 0);
     reply_ok()
 }
@@ -365,12 +376,20 @@ fn op_read(msg: &IpcMsg) -> IpcMsg {
             path_buf[..path_len.min(256)].copy_from_slice(&s[0..path_len.min(256)]);
             let _ = shm_free(msg.caps[0]);
             &path_buf[..path_len.min(256)]
-        } else { &path_buf[0..0] }
+        } else {
+            &path_buf[0..0]
+        }
     } else {
-        let mut bi = 0; let mut wi=1;
+        let mut bi = 0;
+        let mut wi = 1;
         while bi < path_len && wi < 8 {
-            for j in 0..8 { if bi < path_len { path_buf[bi] = ((msg.words[wi] >> (j*8))&0xff) as u8; bi+=1; } }
-            wi +=1 ;
+            for j in 0..8 {
+                if bi < path_len {
+                    path_buf[bi] = ((msg.words[wi] >> (j * 8)) & 0xff) as u8;
+                    bi += 1;
+                }
+            }
+            wi += 1;
         }
         &path_buf[..path_len.min(256)]
     };
@@ -381,7 +400,10 @@ fn op_read(msg: &IpcMsg) -> IpcMsg {
     };
     let norm = match normalize_path(path_slice) {
         Some(n) => n,
-        None => { log_deny("read", path_str, "invalid"); return reply_err(SmMsg::ERR_INVALID_PATH); }
+        None => {
+            log_deny("read", path_str, "invalid");
+            return reply_err(SmMsg::ERR_INVALID_PATH);
+        }
     };
     let norm_s = norm.as_str();
     if !is_whitelisted(norm_s) {
@@ -397,7 +419,12 @@ fn op_read(msg: &IpcMsg) -> IpcMsg {
             loop {
                 match libc::read(fd, &mut buf[total..]) {
                     Ok(0) => break,
-                    Ok(n) => { total += n; if total >= buf.len() { break; } }
+                    Ok(n) => {
+                        total += n;
+                        if total >= buf.len() {
+                            break;
+                        }
+                    }
                     Err(_) => break,
                 }
             }
@@ -410,16 +437,24 @@ fn op_read(msg: &IpcMsg) -> IpcMsg {
                 let mut bi = 0;
                 let mut wi = 1;
                 for b in &buf[..total] {
-                    if wi >= 8 { break; }
+                    if wi >= 8 {
+                        break;
+                    }
                     let shift = (bi % 8) * 8;
-                    r.words[wi] |= ( *b as u64 ) << shift;
+                    r.words[wi] |= (*b as u64) << shift;
                     bi += 1;
-                    if bi % 8 == 0 { wi += 1; }
+                    if bi % 8 == 0 {
+                        wi += 1;
+                    }
                 }
                 serial_println!("[SM][READ] path={} len={} ok=true (inline)", norm_s, total);
                 r
             } else {
-                serial_println!("[SM][READ] path={} len={} PAYLOAD_TOO_LARGE (no reply shm in bite)", norm_s, total);
+                serial_println!(
+                    "[SM][READ] path={} len={} PAYLOAD_TOO_LARGE (no reply shm in bite)",
+                    norm_s,
+                    total
+                );
                 reply_err(SmMsg::ERR_PAYLOAD_TOO_LARGE)
             }
         }

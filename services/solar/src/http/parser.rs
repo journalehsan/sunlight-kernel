@@ -64,18 +64,17 @@ impl<'a> HttpRequest<'a> {
 
     /// Get Content-Length header parsed as usize
     pub fn content_length(&self) -> Option<usize> {
-        self.get_header("Content-Length")
-            .and_then(|s| {
-                let mut num = 0usize;
-                for ch in s.chars() {
-                    if let Some(digit) = ch.to_digit(10) {
-                        num = num * 10 + digit as usize;
-                    } else {
-                        return None;
-                    }
+        self.get_header("Content-Length").and_then(|s| {
+            let mut num = 0usize;
+            for ch in s.chars() {
+                if let Some(digit) = ch.to_digit(10) {
+                    num = num * 10 + digit as usize;
+                } else {
+                    return None;
                 }
-                Some(num)
-            })
+            }
+            Some(num)
+        })
     }
 
     /// Check if connection should remain open (HTTP/1.1 default is keep-alive)
@@ -193,7 +192,8 @@ mod tests {
 
     #[test]
     fn test_parse_sbsp_request() {
-        let buffer = b"POST /form.sbsp HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nhello";
+        let buffer =
+            b"POST /form.sbsp HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nhello";
         let req = parse_request(buffer).expect("parse failed");
 
         assert_eq!(req.method, "POST");
@@ -213,7 +213,8 @@ mod tests {
 
     #[test]
     fn test_parse_multiple_headers() {
-        let buffer = b"GET /test HTTP/1.1\r\nHost: example.com\r\nUser-Agent: curl\r\nAccept: */*\r\n\r\n";
+        let buffer =
+            b"GET /test HTTP/1.1\r\nHost: example.com\r\nUser-Agent: curl\r\nAccept: */*\r\n\r\n";
         let req = parse_request(buffer).expect("parse failed");
 
         assert_eq!(req.get_header("Host"), Some("example.com"));
@@ -224,19 +225,13 @@ mod tests {
     #[test]
     fn test_parse_invalid_utf8() {
         let buffer = &[0xFF, 0xFE, 0xFD];
-        assert_eq!(
-            parse_request(buffer),
-            Err(HttpParseError::InvalidUtf8)
-        );
+        assert_eq!(parse_request(buffer), Err(HttpParseError::InvalidUtf8));
     }
 
     #[test]
     fn test_parse_empty_request() {
         let buffer = b"";
-        assert_eq!(
-            parse_request(buffer),
-            Err(HttpParseError::EmptyRequest)
-        );
+        assert_eq!(parse_request(buffer), Err(HttpParseError::EmptyRequest));
     }
 
     #[test]
@@ -260,10 +255,7 @@ mod tests {
     #[test]
     fn test_parse_invalid_header() {
         let buffer = b"GET / HTTP/1.1\r\nBroken Header\r\n\r\n"; // No colon
-        assert_eq!(
-            parse_request(buffer),
-            Err(HttpParseError::MalformedHeader)
-        );
+        assert_eq!(parse_request(buffer), Err(HttpParseError::MalformedHeader));
     }
 
     #[test]

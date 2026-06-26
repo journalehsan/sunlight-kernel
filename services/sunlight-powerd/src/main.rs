@@ -21,8 +21,8 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register,
-    IpcMsg, PowerPolicy, PowerProfile, PowerdMsg,
+    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg,
+    PowerPolicy, PowerProfile, PowerdMsg,
 };
 
 /// Simple in-memory context. v0 treats missing data as None / safe defaults.
@@ -211,9 +211,7 @@ fn reply_policy(state: &PowerState) -> IpcMsg {
         | ((pol.effects_mode as u64) << 16)
         | ((pol.scheduler_bias as u64) << 24)
         | (if pol.background_work_allowed { 1u64 } else { 0 } << 32);
-    IpcMsg::with_label(PowerdMsg::REPLY)
-        .word(0, w0)
-        .word(1, w1)
+    IpcMsg::with_label(PowerdMsg::REPLY).word(0, w0).word(1, w1)
 }
 
 #[macro_export]
@@ -244,9 +242,7 @@ pub extern "C" fn _start() -> ! {
     let mut msg = ipc_recv(ep);
     loop {
         let reply = match msg.label {
-            PowerdMsg::GET_STATUS | PowerdMsg::GET_PROFILE => {
-                reply_ok_status(&state)
-            }
+            PowerdMsg::GET_STATUS | PowerdMsg::GET_PROFILE => reply_ok_status(&state),
             PowerdMsg::SET_PROFILE => {
                 let p = PowerProfile::from_u64(msg.words[0]);
                 state.set_profile(p);
@@ -269,9 +265,7 @@ pub extern "C" fn _start() -> ! {
                     reply_err(PowerdMsg::ERR_NOT_FOUND)
                 }
             }
-            PowerdMsg::GET_POLICY => {
-                reply_policy(&state)
-            }
+            PowerdMsg::GET_POLICY => reply_policy(&state),
             PowerdMsg::UPDATE_CONTEXT => {
                 state.update_context(&msg);
                 // Recompute is implicit on next queries.

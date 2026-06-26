@@ -69,7 +69,11 @@ impl FatImageBuilder {
     }
 
     pub fn add_file(&mut self, dir_cluster: u32, name: &str, data: &[u8]) {
-        let cluster = if data.is_empty() { 0 } else { self.alloc_chain(data) };
+        let cluster = if data.is_empty() {
+            0
+        } else {
+            self.alloc_chain(data)
+        };
         let entry = make_entry(name, 0x00, cluster, data.len() as u32);
         self.append_entry(dir_cluster, entry);
     }
@@ -85,8 +89,7 @@ impl FatImageBuilder {
     pub fn build(&self) -> Vec<u8> {
         let fat_sectors = (self.fat.len() * 4).div_ceil(SECTOR).max(1);
         let reserved = 1usize;
-        let total_sectors =
-            reserved + fat_sectors + self.clusters.len() * self.spc as usize;
+        let total_sectors = reserved + fat_sectors + self.clusters.len() * self.spc as usize;
         let mut image = vec![0u8; total_sectors * SECTOR];
 
         // BPB

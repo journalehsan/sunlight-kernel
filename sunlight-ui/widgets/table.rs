@@ -5,26 +5,22 @@ use crate::paint::Canvas;
 use crate::theme::Theme;
 
 pub struct Column<'a> {
-    pub header:    &'a str,
-    pub width:     u32,
+    pub header: &'a str,
+    pub width: u32,
     pub right_align: bool,
 }
 
 pub struct Table<'a> {
-    pub rect:        Rect,
-    pub columns:     &'a [Column<'a>],
-    pub rows:        &'a [&'a [&'a str]],
-    pub selected:    Option<usize>,
-    pub header_h:    u32,
-    pub row_h:       u32,
+    pub rect: Rect,
+    pub columns: &'a [Column<'a>],
+    pub rows: &'a [&'a [&'a str]],
+    pub selected: Option<usize>,
+    pub header_h: u32,
+    pub row_h: u32,
 }
 
 impl<'a> Table<'a> {
-    pub fn new(
-        rect: Rect,
-        columns: &'a [Column<'a>],
-        rows: &'a [&'a [&'a str]],
-    ) -> Self {
+    pub fn new(rect: Rect, columns: &'a [Column<'a>], rows: &'a [&'a [&'a str]]) -> Self {
         Self {
             rect,
             columns,
@@ -36,7 +32,11 @@ impl<'a> Table<'a> {
     }
 
     fn col_x(&self, col_idx: usize) -> i32 {
-        self.rect.x + self.columns[..col_idx].iter().map(|c| c.width as i32).sum::<i32>()
+        self.rect.x
+            + self.columns[..col_idx]
+                .iter()
+                .map(|c| c.width as i32)
+                .sum::<i32>()
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -53,7 +53,12 @@ impl<'a> Table<'a> {
 
         let mut cx = self.rect.x;
         for col in self.columns.iter() {
-            let col_rect = Rect::new(cx + 4, self.rect.y, col.width.saturating_sub(4), self.header_h);
+            let col_rect = Rect::new(
+                cx + 4,
+                self.rect.y,
+                col.width.saturating_sub(4),
+                self.header_h,
+            );
             canvas.draw_text(
                 col_rect.x,
                 col_rect.y + (self.header_h as i32 - 10) / 2,
@@ -101,7 +106,13 @@ impl<'a> Table<'a> {
             }
 
             // Row separator
-            canvas.hbar(self.rect.x, ry + self.row_h as i32 - 1, self.rect.w, 1, theme.border);
+            canvas.hbar(
+                self.rect.x,
+                ry + self.row_h as i32 - 1,
+                self.rect.w,
+                1,
+                theme.border,
+            );
         }
 
         // Outer border
@@ -111,10 +122,18 @@ impl<'a> Table<'a> {
     /// Returns the row index clicked at `(x, y)`, if any.
     pub fn hit_test(&self, x: i32, y: i32) -> Option<usize> {
         let p = crate::geom::Point::new(x, y);
-        if !self.rect.contains(p) { return None; }
+        if !self.rect.contains(p) {
+            return None;
+        }
         let rel_y = y - self.rect.y - self.header_h as i32;
-        if rel_y < 0 { return None; }
+        if rel_y < 0 {
+            return None;
+        }
         let row = (rel_y as u32) / self.row_h;
-        if row < self.rows.len() as u32 { Some(row as usize) } else { None }
+        if row < self.rows.len() as u32 {
+            Some(row as usize)
+        } else {
+            None
+        }
     }
 }

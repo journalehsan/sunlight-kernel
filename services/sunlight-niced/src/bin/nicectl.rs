@@ -132,7 +132,12 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             }
             let pid: u64 = parse_u64_or_exit(args[2]);
             let nice: i64 = parse_i64_or_exit(args[3]);
-            let reply = ipc_call(cap, IpcMsg::with_label(SET_NICE).word(0, pid).word(1, nice as u64));
+            let reply = ipc_call(
+                cap,
+                IpcMsg::with_label(SET_NICE)
+                    .word(0, pid)
+                    .word(1, nice as u64),
+            );
             print_reply("set", &reply)
         }
         "wd" => {
@@ -142,7 +147,12 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             }
             let pid: u64 = parse_u64_or_exit(args[2]);
             let period: u64 = parse_u64_or_exit(args[3]);
-            let reply = ipc_call(cap, IpcMsg::with_label(SET_WATCHDOG).word(0, pid).word(1, period));
+            let reply = ipc_call(
+                cap,
+                IpcMsg::with_label(SET_WATCHDOG)
+                    .word(0, pid)
+                    .word(1, period),
+            );
             print_reply("wd", &reply)
         }
         "status" => {
@@ -155,9 +165,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             if reply.label == REPLY {
                 println!(
                     "[nicectl] pid={} nice={} not_responding={}",
-                    pid,
-                    reply.words[0] as i64 as i8,
-                    reply.words[2]
+                    pid, reply.words[0] as i64 as i8, reply.words[2]
                 );
                 0
             } else {

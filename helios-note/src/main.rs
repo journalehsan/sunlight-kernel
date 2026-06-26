@@ -2,10 +2,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{
-    env, fs, io,
-    io::Read,
-};
+use std::{env, fs, io, io::Read};
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
@@ -76,11 +73,14 @@ fn read_byte(stdin: &mut io::Stdin) -> io::Result<u8> {
                 libc::sched_yield();
             },
             Ok(_) => return Ok(buf[0]),
-            Err(e) if matches!(e.kind(), io::ErrorKind::Interrupted | io::ErrorKind::WouldBlock) => {
-                unsafe {
-                    libc::sched_yield();
-                }
-            }
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::Interrupted | io::ErrorKind::WouldBlock
+                ) =>
+            unsafe {
+                libc::sched_yield();
+            },
             Err(e) => return Err(e),
         }
     }

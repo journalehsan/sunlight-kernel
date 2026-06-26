@@ -6,21 +6,25 @@ use crate::theme::Theme;
 use crate::widgets::button::{Button, ButtonState};
 
 pub struct ToolbarItem<'a> {
-    pub label:    &'a str,
-    pub state:    ButtonState,
+    pub label: &'a str,
+    pub state: ButtonState,
     /// Visually highlighted (e.g. active mode toggle)
-    pub active:   bool,
+    pub active: bool,
 }
 
 pub struct Toolbar<'a> {
-    pub rect:      Rect,
-    pub items:     &'a [ToolbarItem<'a>],
+    pub rect: Rect,
+    pub items: &'a [ToolbarItem<'a>],
     pub item_width: u32,
 }
 
 impl<'a> Toolbar<'a> {
     pub fn new(rect: Rect, items: &'a [ToolbarItem<'a>], item_width: u32) -> Self {
-        Self { rect, items, item_width }
+        Self {
+            rect,
+            items,
+            item_width,
+        }
     }
 
     fn item_rect(&self, idx: usize) -> Rect {
@@ -34,7 +38,13 @@ impl<'a> Toolbar<'a> {
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(self.rect, theme.panel);
-        canvas.hbar(self.rect.x, self.rect.bottom() - 1, self.rect.w, 1, theme.border);
+        canvas.hbar(
+            self.rect.x,
+            self.rect.bottom() - 1,
+            self.rect.w,
+            1,
+            theme.border,
+        );
 
         for (i, item) in self.items.iter().enumerate() {
             let r = self.item_rect(i);

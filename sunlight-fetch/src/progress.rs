@@ -94,7 +94,11 @@ impl ProgressTracker {
                 0
             };
             let total_str = format_bytes(snap.total);
-            let _ = write!(&mut info, " {}% | {} / {} | {}/s", pct, downloaded_str, total_str, speed_str);
+            let _ = write!(
+                &mut info,
+                " {}% | {} / {} | {}/s",
+                pct, downloaded_str, total_str, speed_str
+            );
         } else {
             let _ = write!(&mut info, " {} | {}/s", downloaded_str, speed_str);
         }

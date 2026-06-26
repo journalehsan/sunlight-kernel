@@ -40,15 +40,15 @@ fn run_host(args: &[String]) -> Result<(), FetchError> {
 // ── SunlightOS no_std entry ──────────────────────────────────────────────────
 
 #[cfg(feature = "sunlightos")]
+use alloc::string::String;
+#[cfg(feature = "sunlightos")]
 use core::alloc::{GlobalAlloc, Layout};
 #[cfg(feature = "sunlightos")]
 use core::panic::PanicInfo;
 #[cfg(feature = "sunlightos")]
-use alloc::string::String;
+use libc::{Errno, STDOUT};
 #[cfg(feature = "sunlightos")]
 use sunlight_libc as libc;
-#[cfg(feature = "sunlightos")]
-use libc::{Errno, STDOUT};
 
 #[cfg(feature = "sunlightos")]
 const MAX_ARGS: usize = 16;

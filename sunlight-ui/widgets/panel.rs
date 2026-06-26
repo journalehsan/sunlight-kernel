@@ -8,19 +8,27 @@ use crate::theme::{Color, Theme};
 
 /// A plain filled panel with an optional title bar.
 pub struct Panel<'a> {
-    pub rect:    Rect,
+    pub rect: Rect,
     /// If Some, a title bar is drawn at the top.
-    pub title:   Option<&'a str>,
+    pub title: Option<&'a str>,
     pub title_h: u32,
 }
 
 impl<'a> Panel<'a> {
     pub fn new(rect: Rect) -> Self {
-        Self { rect, title: None, title_h: 20 }
+        Self {
+            rect,
+            title: None,
+            title_h: 20,
+        }
     }
 
     pub fn with_title(rect: Rect, title: &'a str) -> Self {
-        Self { rect, title: Some(title), title_h: 20 }
+        Self {
+            rect,
+            title: Some(title),
+            title_h: 20,
+        }
     }
 
     /// Returns the inner content rect (below any title bar).
@@ -66,20 +74,31 @@ impl<'a> Panel<'a> {
 
 /// Horizontal progress bar, value in 0.0..=1.0.
 pub struct ProgressBar {
-    pub rect:    Rect,
-    pub value:   f32,
+    pub rect: Rect,
+    pub value: f32,
     /// Override fill color. If None, uses `theme.accent`.
-    pub color:   Option<Color>,
+    pub color: Option<Color>,
     pub show_pct: bool,
 }
 
 impl ProgressBar {
     pub fn new(rect: Rect, value: f32) -> Self {
-        Self { rect, value: value.clamp(0.0, 1.0), color: None, show_pct: false }
+        Self {
+            rect,
+            value: value.clamp(0.0, 1.0),
+            color: None,
+            show_pct: false,
+        }
     }
 
-    pub fn with_color(mut self, c: Color) -> Self { self.color = Some(c); self }
-    pub fn with_pct(mut self) -> Self { self.show_pct = true; self }
+    pub fn with_color(mut self, c: Color) -> Self {
+        self.color = Some(c);
+        self
+    }
+    pub fn with_pct(mut self) -> Self {
+        self.show_pct = true;
+        self
+    }
 
     /// Choose accent / warn / danger based on value thresholds.
     pub fn auto_color(mut self, theme: &Theme) -> Self {
@@ -120,21 +139,32 @@ impl ProgressBar {
 
 /// Rolling bar-chart histogram (e.g. CPU usage over time).
 pub struct Histogram<'a> {
-    pub rect:    Rect,
+    pub rect: Rect,
     /// Samples in chronological order (oldest first), values 0.0..=1.0.
     pub samples: &'a [f32],
-    pub color:   Option<Color>,
+    pub color: Option<Color>,
     /// Draw a horizontal line at this value (0.0..=1.0).
     pub baseline: Option<f32>,
 }
 
 impl<'a> Histogram<'a> {
     pub fn new(rect: Rect, samples: &'a [f32]) -> Self {
-        Self { rect, samples, color: None, baseline: None }
+        Self {
+            rect,
+            samples,
+            color: None,
+            baseline: None,
+        }
     }
 
-    pub fn with_color(mut self, c: Color) -> Self { self.color = Some(c); self }
-    pub fn with_baseline(mut self, v: f32) -> Self { self.baseline = Some(v); self }
+    pub fn with_color(mut self, c: Color) -> Self {
+        self.color = Some(c);
+        self
+    }
+    pub fn with_baseline(mut self, v: f32) -> Self {
+        self.baseline = Some(v);
+        self
+    }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(self.rect, theme.panel_alt);
@@ -142,14 +172,18 @@ impl<'a> Histogram<'a> {
 
         let color = self.color.unwrap_or(theme.accent);
         let n = self.samples.len();
-        if n == 0 { return; }
+        if n == 0 {
+            return;
+        }
 
         let bar_w = (self.rect.w as usize / n).max(1) as u32;
         let h = self.rect.h as f32;
 
         for (i, &v) in self.samples.iter().enumerate() {
             let bar_h = ((v.clamp(0.0, 1.0)) * h) as u32;
-            if bar_h == 0 { continue; }
+            if bar_h == 0 {
+                continue;
+            }
             let bx = self.rect.x + (i as u32 * bar_w) as i32;
             let by = self.rect.bottom() - bar_h as i32;
             canvas.fill_rect(Rect::new(bx, by, bar_w.saturating_sub(1), bar_h), color);
@@ -176,15 +210,20 @@ pub enum BadgeKind {
 
 /// Small colored dot + optional label (e.g. "ready", "blocked").
 pub struct StatusBadge<'a> {
-    pub x:     i32,
-    pub y:     i32,
-    pub kind:  BadgeKind,
+    pub x: i32,
+    pub y: i32,
+    pub kind: BadgeKind,
     pub label: Option<&'a str>,
 }
 
 impl<'a> StatusBadge<'a> {
     pub fn new(x: i32, y: i32, kind: BadgeKind) -> Self {
-        Self { x, y, kind, label: None }
+        Self {
+            x,
+            y,
+            kind,
+            label: None,
+        }
     }
 
     pub fn with_label(mut self, label: &'a str) -> Self {
@@ -194,10 +233,10 @@ impl<'a> StatusBadge<'a> {
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
         let dot_color = match self.kind {
-            BadgeKind::Ok     => theme.ok,
-            BadgeKind::Warn   => theme.warn,
+            BadgeKind::Ok => theme.ok,
+            BadgeKind::Warn => theme.warn,
             BadgeKind::Danger => theme.danger,
-            BadgeKind::Dim    => theme.text_dim,
+            BadgeKind::Dim => theme.text_dim,
             BadgeKind::Accent => theme.accent,
         };
 

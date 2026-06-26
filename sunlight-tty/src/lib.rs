@@ -2,8 +2,8 @@
 
 extern crate alloc;
 
-pub mod console;  // Simple ANSI stream-based terminal
-pub mod grid;    // Terminal grid with VT100 support
+pub mod console; // Simple ANSI stream-based terminal
+pub mod grid; // Terminal grid with VT100 support
 pub mod login;
 pub mod mux;
 pub mod proc;

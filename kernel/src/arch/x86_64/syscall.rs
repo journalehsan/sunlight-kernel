@@ -1325,9 +1325,8 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.capabilities = capabilities;
     // Inherit the TTY tab so a shell-spawned app's stdio routes to that tab's
     // kernel rings (foreground input routing).
-    child.tty_tab = parent_tty_tab.or_else(|| {
-        crate::process::spawn::shell_id_from_path(path_str).map(|id| id as u8)
-    });
+    child.tty_tab = parent_tty_tab
+        .or_else(|| crate::process::spawn::shell_id_from_path(path_str).map(|id| id as u8));
 
     let argv_refs: alloc::vec::Vec<&[u8]> = argv_bytes.iter().map(|v| v.as_slice()).collect();
     let envp_strings = child.env.to_envp();

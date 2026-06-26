@@ -122,13 +122,21 @@ fn run(args: &[String]) -> u64 {
 fn cmd_lookup(query: &str) -> u64 {
     let first = query.bytes().next().unwrap_or(0);
     let dict = select_dict(first);
-    if search_exact(dict, query.as_bytes()) { 0 } else { 1 }
+    if search_exact(dict, query.as_bytes()) {
+        0
+    } else {
+        1
+    }
 }
 
 fn cmd_prefix(prefix: &str) -> u64 {
     let first = prefix.bytes().next().unwrap_or(0);
     let dict = select_dict(first);
-    if search_prefix(dict, prefix.as_bytes()) { 0 } else { 1 }
+    if search_prefix(dict, prefix.as_bytes()) {
+        0
+    } else {
+        1
+    }
 }
 
 fn cmd_random() -> u64 {
@@ -301,7 +309,11 @@ fn find_byte(haystack: &[u8], needle: u8) -> Option<usize> {
 }
 
 fn trim_cr(b: &[u8]) -> &[u8] {
-    if b.last() == Some(&b'\r') { &b[..b.len() - 1] } else { b }
+    if b.last() == Some(&b'\r') {
+        &b[..b.len() - 1]
+    } else {
+        b
+    }
 }
 
 /// Case-insensitive ASCII equality (a lowercased, b already lowercase).
@@ -309,7 +321,9 @@ fn bytes_eq_lower(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.iter().zip(b.iter()).all(|(&x, &y)| x.to_ascii_lowercase() == y)
+    a.iter()
+        .zip(b.iter())
+        .all(|(&x, &y)| x.to_ascii_lowercase() == y)
 }
 
 /// Case-insensitive prefix check (entry word vs already-lowercase prefix).

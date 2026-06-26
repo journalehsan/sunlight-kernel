@@ -47,7 +47,9 @@ mod resources;
 mod shim;
 mod telemetry;
 
-use sunlight_ipc::{endpoint_create, get_time_utc, ipc_reply_and_try_recv, nameserver_register, IpcMsg};
+use sunlight_ipc::{
+    endpoint_create, get_time_utc, ipc_reply_and_try_recv, nameserver_register, IpcMsg,
+};
 use sunlight_tty::proc::SIGKILL;
 
 use ipc::{GcdOp, ProcOp};
@@ -181,7 +183,8 @@ fn terminate_session_tree<K: shim::KernelOps>(
                 if !contains_pid(&targeted[..targeted_count], sample.ppid) {
                     continue;
                 }
-                if contains_pid(&targeted[..targeted_count], sample.pid) || targeted_count >= MAX_PROCS
+                if contains_pid(&targeted[..targeted_count], sample.pid)
+                    || targeted_count >= MAX_PROCS
                 {
                     continue;
                 }

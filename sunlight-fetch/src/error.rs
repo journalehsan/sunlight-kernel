@@ -31,10 +31,7 @@ pub enum FetchError {
     },
 
     /// HTTP protocol error (malformed response, unexpected status)
-    HttpError {
-        status: u16,
-        message: String,
-    },
+    HttpError { status: u16, message: String },
 
     /// Server does not support Range requests (informational, triggers fallback)
     RangeNotSupported,

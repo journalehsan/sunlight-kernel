@@ -188,9 +188,7 @@ pub fn has_dynamic_section(elf_bytes: &[u8], header: &ElfHeader) -> bool {
         if ph_end > elf_bytes.len() {
             break;
         }
-        let p_type = u32::from_le_bytes(
-            elf_bytes[ph_start..ph_start + 4].try_into().unwrap()
-        );
+        let p_type = u32::from_le_bytes(elf_bytes[ph_start..ph_start + 4].try_into().unwrap());
         if p_type == PT_DYNAMIC {
             return true;
         }
@@ -352,8 +350,22 @@ mod tests {
         let elf = build_elf(
             0x40_0100,
             &[
-                Phdr { p_type: PT_LOAD, flags: PF_X | 0x4, offset: 0x200, vaddr: 0x40_0000, filesz: 0x500, memsz: 0x500 },
-                Phdr { p_type: PT_LOAD, flags: PF_W | 0x4, offset: 0x700, vaddr: 0x40_1000, filesz: 0x100, memsz: 0x2100 },
+                Phdr {
+                    p_type: PT_LOAD,
+                    flags: PF_X | 0x4,
+                    offset: 0x200,
+                    vaddr: 0x40_0000,
+                    filesz: 0x500,
+                    memsz: 0x500,
+                },
+                Phdr {
+                    p_type: PT_LOAD,
+                    flags: PF_W | 0x4,
+                    offset: 0x700,
+                    vaddr: 0x40_1000,
+                    filesz: 0x100,
+                    memsz: 0x2100,
+                },
             ],
             0x1000,
         );
@@ -394,8 +406,22 @@ mod tests {
         let elf = build_elf(
             0x40_0100,
             &[
-                Phdr { p_type: PT_LOAD, flags: PF_X | 0x4, offset: 0x200, vaddr: 0x40_0000, filesz: 0x100, memsz: 0x100 },
-                Phdr { p_type: PT_LOAD, flags: 0x4, offset: 0x200, vaddr: u64::MAX - 0xFFF, filesz: 0x100, memsz: 0x2000 },
+                Phdr {
+                    p_type: PT_LOAD,
+                    flags: PF_X | 0x4,
+                    offset: 0x200,
+                    vaddr: 0x40_0000,
+                    filesz: 0x100,
+                    memsz: 0x100,
+                },
+                Phdr {
+                    p_type: PT_LOAD,
+                    flags: 0x4,
+                    offset: 0x200,
+                    vaddr: u64::MAX - 0xFFF,
+                    filesz: 0x100,
+                    memsz: 0x2000,
+                },
             ],
             0x1000,
         );
@@ -425,8 +451,22 @@ mod tests {
         let elf = build_elf(
             0x40_1000,
             &[
-                Phdr { p_type: PT_LOAD, flags: PF_X | 0x4, offset: 0x200, vaddr: 0x40_0000, filesz: 0x100, memsz: 0x100 },
-                Phdr { p_type: PT_LOAD, flags: PF_W | 0x4, offset: 0x300, vaddr: 0x40_1000, filesz: 0x100, memsz: 0x100 },
+                Phdr {
+                    p_type: PT_LOAD,
+                    flags: PF_X | 0x4,
+                    offset: 0x200,
+                    vaddr: 0x40_0000,
+                    filesz: 0x100,
+                    memsz: 0x100,
+                },
+                Phdr {
+                    p_type: PT_LOAD,
+                    flags: PF_W | 0x4,
+                    offset: 0x300,
+                    vaddr: 0x40_1000,
+                    filesz: 0x100,
+                    memsz: 0x100,
+                },
             ],
             0x1000,
         );

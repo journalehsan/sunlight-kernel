@@ -74,8 +74,8 @@ const FG_STARTED_LABEL: u64 = 5;
 const FG_DONE_LABEL: u64 = 6;
 const KEY_F1: u8 = 0x3B;
 const KEY_F2: u8 = 0x3C;
-const KEY_E:  u8 = 0x12;
-const KEY_T:  u8 = 0x14;
+const KEY_E: u8 = 0x12;
+const KEY_T: u8 = 0x14;
 const TERM_OUTPUT_MAX: usize = 4096;
 const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
@@ -91,21 +91,11 @@ const CURSOR_TRANSPARENT: u8 = 0;
 const CURSOR_OUTLINE: u8 = 1;
 
 const ARROW_CURSOR: [u8; CURSOR_PIXELS] = [
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 2, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 2, 2, 0, 0, 0, 0, 0, 0, 0,
-    1, 2, 2, 2, 0, 0, 0, 0, 0, 0,
-    1, 2, 2, 2, 2, 0, 0, 0, 0, 0,
-    1, 2, 2, 2, 2, 2, 0, 0, 0, 0,
-    1, 2, 2, 2, 2, 2, 2, 0, 0, 0,
-    1, 2, 2, 2, 2, 2, 2, 2, 0, 0,
-    1, 2, 2, 2, 2, 1, 1, 1, 1, 0,
-    1, 2, 2, 1, 2, 2, 0, 0, 0, 0,
-    1, 2, 1, 0, 1, 2, 2, 0, 0, 0,
-    1, 1, 0, 0, 1, 2, 2, 0, 0, 0,
-    1, 0, 0, 0, 0, 1, 2, 2, 0, 0,
-    0, 0, 0, 0, 0, 1, 2, 2, 0, 0,
-    0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0, 1, 2,
+    2, 2, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 2, 0, 0, 0, 0, 1, 2, 2, 2,
+    2, 2, 2, 0, 0, 0, 1, 2, 2, 2, 2, 2, 2, 2, 0, 0, 1, 2, 2, 2, 2, 1, 1, 1, 1, 0, 1, 2, 2, 1, 2, 2,
+    0, 0, 0, 0, 1, 2, 1, 0, 1, 2, 2, 0, 0, 0, 1, 1, 0, 0, 1, 2, 2, 0, 0, 0, 1, 0, 0, 0, 0, 1, 2, 2,
+    0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
 ];
 
 fn vt_is_active(active_vt: VirtualTerminal, vt: VirtualTerminal) -> bool {
@@ -506,181 +496,198 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 let mut logged_in = false;
                 if msg.label == KbdMsg::KEY_EVENT {
                     'kbd: {
-                    let (keycode, pressed, _shift, _ctrl, _alt, _super, ascii_opt) =
-                        unpack_key_event(msg.words[0]);
-                    if pressed {
-                        if _ctrl {
-                            match keycode {
-                                KEY_F1 => {
-                                    if active_vt != VirtualTerminal::Tty {
-                                        debug_log("[SESSION] switched to F1 TTY/Login");
-                                        if display_cap.is_none() {
-                                            display_cap = nameserver_lookup("display_server");
+                        let (keycode, pressed, _shift, _ctrl, _alt, _super, ascii_opt) =
+                            unpack_key_event(msg.words[0]);
+                        if pressed {
+                            if _ctrl {
+                                match keycode {
+                                    KEY_F1 => {
+                                        if active_vt != VirtualTerminal::Tty {
+                                            debug_log("[SESSION] switched to F1 TTY/Login");
+                                            if display_cap.is_none() {
+                                                display_cap = nameserver_lookup("display_server");
+                                            }
+                                            if let Some(cap) = display_cap {
+                                                let _ = ipc_call(
+                                                    cap,
+                                                    IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
+                                                );
+                                            }
                                         }
-                                        if let Some(cap) = display_cap {
-                                            let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE));
+                                        active_vt = VirtualTerminal::Tty;
+                                        if has_fb {
+                                            render_login_fb(
+                                                &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
+                                            );
                                         }
+                                        break 'kbd;
                                     }
-                                    active_vt = VirtualTerminal::Tty;
-                                    if has_fb {
-                                        render_login_fb(
-                                            &login,
-                                            fb_addr,
-                                            fb32_w,
-                                            fb32_h,
-                                            fb32_p,
-                                            &mut mouse,
-                                        );
+                                    KEY_F2 => {
+                                        if active_vt != VirtualTerminal::Desktop {
+                                            debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                            if display_cap.is_none() {
+                                                display_cap = nameserver_lookup("display_server");
+                                            }
+                                            if let Some(cap) = display_cap {
+                                                let _ = ipc_call(
+                                                    cap,
+                                                    IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
+                                                );
+                                            }
+                                        }
+                                        active_vt = VirtualTerminal::Desktop;
+                                        break 'kbd;
                                     }
-                                    break 'kbd;
+                                    _ => {}
                                 }
-                                KEY_F2 => {
-                                    if active_vt != VirtualTerminal::Desktop {
-                                        debug_log("[SESSION] switched to F2 GraphicalDesktop");
-                                        if display_cap.is_none() {
-                                            display_cap = nameserver_lookup("display_server");
-                                        }
-                                        if let Some(cap) = display_cap {
-                                            let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE));
-                                        }
-                                    }
-                                    active_vt = VirtualTerminal::Desktop;
-                                    break 'kbd;
-                                }
-                                _ => {}
                             }
-                        }
 
-                        if !vt_is_active(active_vt, VirtualTerminal::Tty) {
-                            // Forward keyboard event to display_server when Desktop session is active.
-                            if display_cap.is_none() {
-                                display_cap = nameserver_lookup("display_server");
-                            }
-                            if let Some(cap) = display_cap {
-                                let (fwd_keycode, fwd_pressed, _fwd_shift, fwd_ctrl, _fwd_alt, _fwd_super, fwd_ascii) =
-                                    unpack_key_event(msg.words[0]);
-                                if fwd_pressed {
-                                    debug_log(&alloc::format!(
+                            if !vt_is_active(active_vt, VirtualTerminal::Tty) {
+                                // Forward keyboard event to display_server when Desktop session is active.
+                                if display_cap.is_none() {
+                                    display_cap = nameserver_lookup("display_server");
+                                }
+                                if let Some(cap) = display_cap {
+                                    let (
+                                        fwd_keycode,
+                                        fwd_pressed,
+                                        _fwd_shift,
+                                        fwd_ctrl,
+                                        _fwd_alt,
+                                        _fwd_super,
+                                        fwd_ascii,
+                                    ) = unpack_key_event(msg.words[0]);
+                                    if fwd_pressed {
+                                        debug_log(&alloc::format!(
                                         "[TTY->DISPLAY] login forward keycode={:#x} ctrl={} ascii={}\n",
                                         fwd_keycode,
                                         fwd_ctrl,
                                         fwd_ascii.unwrap_or(0)
                                     ));
+                                    }
+                                    let _ = ipc_call(cap, msg);
                                 }
-                                let _ = ipc_call(cap, msg);
+                                break 'kbd;
                             }
-                            break 'kbd;
-                        }
 
-                        if let Some(ascii) = ascii_opt {
-                            if login.focus == FocusArea::Password {
-                                debug_log_kbd_byte("[TTY] Key received in password field: ", ascii);
-                            }
-                        }
-
-                        match login.handle_key_event(keycode, pressed, ascii_opt) {
-                            LoginResult::Reboot => {
-                                debug_log("[TTY]  Reboot requested from login screen");
-                                unsafe {
-                                    core::arch::asm!(
-                                        "mov rax, 80",
-                                        "mov rdi, 1",
-                                        "syscall",
-                                        options(nomem, nostack)
+                            if let Some(ascii) = ascii_opt {
+                                if login.focus == FocusArea::Password {
+                                    debug_log_kbd_byte(
+                                        "[TTY] Key received in password field: ",
+                                        ascii,
                                     );
                                 }
                             }
-                            LoginResult::Shutdown => {
-                                debug_log("[TTY]  Shutdown requested from login screen");
-                                unsafe {
-                                    core::arch::asm!(
-                                        "mov rax, 80",
-                                        "mov rdi, 0",
-                                        "syscall",
-                                        options(nomem, nostack)
-                                    );
-                                }
-                            }
-                            LoginResult::Success {
-                                username,
-                                username_len,
-                                uid,
-                                gid,
-                                session,
-                            } => {
-                                debug_log_login_success(&username[..username_len], uid, gid);
-                                debug_log("[SunlightOS] Phase 3.7 OK");
 
-                                match session {
-                                    SessionType::Tty => {
-                                        let cap = match nameserver_lookup("spawn") {
-                                            Some(c) => c,
-                                            None => {
-                                                debug_log("[TTY]  spawn capability not found");
-                                                state = TtyState::Shell;
-                                                break 'kbd;
-                                            }
-                                        };
-                                        spawn_cap = Some(cap);
-
-                                        if spawn_tab(
-                                            &mut tabs,
-                                            &mut tab_count,
-                                            &mut active_tab,
-                                            &mut next_shell_id,
-                                            cap,
-                                            uid,
-                                            gid,
-                                        ) {
-                                            if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
-                                                let len = username_len.min(tab.username.len() - 1);
-                                                tab.username[..len].copy_from_slice(&username[..len]);
-                                                tab.username_len = len;
-                                            }
-                                            if let Some(tab) = active_shell_tab(&tabs, active_tab) {
-                                                debug_log_spawn(&username[..username_len], tab.pid);
-                                                logged_initial_spawn = true;
-                                            }
-                                        }
-
-                                        state = TtyState::Shell;
-                                        debug_log("[TTY]  Built-in shell ready");
-                                        if has_fb {
-                                            render_active_shell_fb(
-                                                fb_addr,
-                                                fb32_w,
-                                                fb32_h,
-                                                fb32_p,
-                                                &tabs,
-                                                tab_count,
-                                                active_tab,
-                                                true,
-                                                &mut mouse,
-                                            );
-                                        }
-                                    }
-                                    SessionType::Desktop => {
-                                        debug_log("[SESSION] switched to F2 GraphicalDesktop");
-                                        active_vt = VirtualTerminal::Desktop;
-                                        if display_cap.is_none() {
-                                            display_cap = nameserver_lookup("display_server");
-                                        }
-                                        if let Some(cap) = display_cap {
-                                            let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE));
-                                        }
-                                        let _ = libc_spawn(b"/bin/sunlight-terminal", &[], None);
-                                        let _ = libc_spawn(b"/bin/sunlight-tasks", &[], None);
-                                        login.message = "Desktop session launched.";
+                            match login.handle_key_event(keycode, pressed, ascii_opt) {
+                                LoginResult::Reboot => {
+                                    debug_log("[TTY]  Reboot requested from login screen");
+                                    unsafe {
+                                        core::arch::asm!(
+                                            "mov rax, 80",
+                                            "mov rdi, 1",
+                                            "syscall",
+                                            options(nomem, nostack)
+                                        );
                                     }
                                 }
-                                logged_in = true;
+                                LoginResult::Shutdown => {
+                                    debug_log("[TTY]  Shutdown requested from login screen");
+                                    unsafe {
+                                        core::arch::asm!(
+                                            "mov rax, 80",
+                                            "mov rdi, 0",
+                                            "syscall",
+                                            options(nomem, nostack)
+                                        );
+                                    }
+                                }
+                                LoginResult::Success {
+                                    username,
+                                    username_len,
+                                    uid,
+                                    gid,
+                                    session,
+                                } => {
+                                    debug_log_login_success(&username[..username_len], uid, gid);
+                                    debug_log("[SunlightOS] Phase 3.7 OK");
+
+                                    match session {
+                                        SessionType::Tty => {
+                                            let cap = match nameserver_lookup("spawn") {
+                                                Some(c) => c,
+                                                None => {
+                                                    debug_log("[TTY]  spawn capability not found");
+                                                    state = TtyState::Shell;
+                                                    break 'kbd;
+                                                }
+                                            };
+                                            spawn_cap = Some(cap);
+
+                                            if spawn_tab(
+                                                &mut tabs,
+                                                &mut tab_count,
+                                                &mut active_tab,
+                                                &mut next_shell_id,
+                                                cap,
+                                                uid,
+                                                gid,
+                                            ) {
+                                                if let Some(tab) =
+                                                    active_shell_tab_mut(&mut tabs, active_tab)
+                                                {
+                                                    let len =
+                                                        username_len.min(tab.username.len() - 1);
+                                                    tab.username[..len]
+                                                        .copy_from_slice(&username[..len]);
+                                                    tab.username_len = len;
+                                                }
+                                                if let Some(tab) =
+                                                    active_shell_tab(&tabs, active_tab)
+                                                {
+                                                    debug_log_spawn(
+                                                        &username[..username_len],
+                                                        tab.pid,
+                                                    );
+                                                    logged_initial_spawn = true;
+                                                }
+                                            }
+
+                                            state = TtyState::Shell;
+                                            debug_log("[TTY]  Built-in shell ready");
+                                            if has_fb {
+                                                render_active_shell_fb(
+                                                    fb_addr, fb32_w, fb32_h, fb32_p, &tabs,
+                                                    tab_count, active_tab, true, &mut mouse,
+                                                );
+                                            }
+                                        }
+                                        SessionType::Desktop => {
+                                            debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                            active_vt = VirtualTerminal::Desktop;
+                                            if display_cap.is_none() {
+                                                display_cap = nameserver_lookup("display_server");
+                                            }
+                                            if let Some(cap) = display_cap {
+                                                let _ = ipc_call(
+                                                    cap,
+                                                    IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
+                                                );
+                                            }
+                                            let _ =
+                                                libc_spawn(b"/bin/sunlight-terminal", &[], None);
+                                            let _ = libc_spawn(b"/bin/sunlight-tasks", &[], None);
+                                            login.message = "Desktop session launched.";
+                                        }
+                                    }
+                                    logged_in = true;
+                                }
+                                LoginResult::Locked => {
+                                    debug_log("[TTY]  Login locked");
+                                }
+                                LoginResult::Pending => {}
                             }
-                            LoginResult::Locked => {
-                                debug_log("[TTY]  Login locked");
-                            }
-                            LoginResult::Pending => {}
                         }
-                    }
                     } // end 'kbd
                 }
                 login.tick();
@@ -688,14 +695,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     mouse.update_from_event(msg.words[0], fb32_w, fb32_h);
                 }
                 if has_fb && !logged_in && vt_is_active(active_vt, VirtualTerminal::Tty) {
-                    render_login_fb(
-                        &login,
-                        fb_addr,
-                        fb32_w,
-                        fb32_h,
-                        fb32_p,
-                        &mut mouse,
-                    );
+                    render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
                 }
             }
             TtyState::Shell => {
@@ -712,204 +712,224 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 // Lazy lookup: try to find sshl once it registers after being spawned.
                 if msg.label == KbdMsg::KEY_EVENT {
                     'kbd: {
-                    let (keycode, pressed, _shift, ctrl, _alt, _super, ctrl_ascii) =
-                        unpack_key_event(msg.words[0]);
+                        let (keycode, pressed, _shift, ctrl, _alt, _super, ctrl_ascii) =
+                            unpack_key_event(msg.words[0]);
 
-                    if pressed && ctrl {
-                        match keycode {
-                            KEY_F1 => {
-                                if active_vt != VirtualTerminal::Tty {
-                                    debug_log("[SESSION] switched to F1 TTY/Login");
-                                    if display_cap.is_none() {
-                                        display_cap = nameserver_lookup("display_server");
+                        if pressed && ctrl {
+                            match keycode {
+                                KEY_F1 => {
+                                    if active_vt != VirtualTerminal::Tty {
+                                        debug_log("[SESSION] switched to F1 TTY/Login");
+                                        if display_cap.is_none() {
+                                            display_cap = nameserver_lookup("display_server");
+                                        }
+                                        if let Some(cap) = display_cap {
+                                            let _ = ipc_call(
+                                                cap,
+                                                IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
+                                            );
+                                        }
                                     }
-                                    if let Some(cap) = display_cap {
-                                        let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE));
+                                    active_vt = VirtualTerminal::Tty;
+                                    // In Shell state, redraw the shell (not the login screen).
+                                    if has_fb {
+                                        render_active_shell_fb(
+                                            fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count,
+                                            active_tab, true, &mut mouse,
+                                        );
                                     }
-                                }
-                                active_vt = VirtualTerminal::Tty;
-                                // In Shell state, redraw the shell (not the login screen).
-                                if has_fb {
-                                    render_active_shell_fb(
-                                        fb_addr, fb32_w, fb32_h, fb32_p,
-                                        &tabs, tab_count, active_tab, true, &mut mouse,
-                                    );
-                                }
-                                break 'kbd;
-                            }
-                            KEY_F2 => {
-                                if active_vt != VirtualTerminal::Desktop {
-                                    debug_log("[SESSION] switched to F2 GraphicalDesktop");
-                                    if display_cap.is_none() {
-                                        display_cap = nameserver_lookup("display_server");
-                                    }
-                                    if let Some(cap) = display_cap {
-                                        let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE));
-                                    }
-                                }
-                                active_vt = VirtualTerminal::Desktop;
-                                break 'kbd;
-                            }
-                            KEY_E => {
-                                if vt_is_active(active_vt, VirtualTerminal::Desktop) {
-                                    debug_log("[SESSION] Ctrl+E: launching eyes\n");
-                                    let _ = libc_spawn(b"/bin/eyes", &[], None);
                                     break 'kbd;
                                 }
-                            }
-                            KEY_T => {
-                                if vt_is_active(active_vt, VirtualTerminal::Desktop) {
-                                    debug_log("[SESSION] Ctrl+T: launching tasks monitor\n");
-                                    let _ = libc_spawn(b"/bin/sunlight-tasks", &[], None);
+                                KEY_F2 => {
+                                    if active_vt != VirtualTerminal::Desktop {
+                                        debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                        if display_cap.is_none() {
+                                            display_cap = nameserver_lookup("display_server");
+                                        }
+                                        if let Some(cap) = display_cap {
+                                            let _ = ipc_call(
+                                                cap,
+                                                IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
+                                            );
+                                        }
+                                    }
+                                    active_vt = VirtualTerminal::Desktop;
                                     break 'kbd;
                                 }
+                                KEY_E => {
+                                    if vt_is_active(active_vt, VirtualTerminal::Desktop) {
+                                        debug_log("[SESSION] Ctrl+E: launching eyes\n");
+                                        let _ = libc_spawn(b"/bin/eyes", &[], None);
+                                        break 'kbd;
+                                    }
+                                }
+                                KEY_T => {
+                                    if vt_is_active(active_vt, VirtualTerminal::Desktop) {
+                                        debug_log("[SESSION] Ctrl+T: launching tasks monitor\n");
+                                        let _ = libc_spawn(b"/bin/sunlight-tasks", &[], None);
+                                        break 'kbd;
+                                    }
+                                }
+                                _ => {}
                             }
-                            _ => {}
                         }
-                    }
 
-                    if !vt_is_active(active_vt, VirtualTerminal::Tty) {
-                        // Forward keyboard event to display_server when Desktop session is active.
-                        if display_cap.is_none() {
-                            display_cap = nameserver_lookup("display_server");
-                        }
-                        if let Some(cap) = display_cap {
-                            let (fwd_keycode, fwd_pressed, _fwd_shift, fwd_ctrl, _fwd_alt, _fwd_super, fwd_ascii) =
-                                unpack_key_event(msg.words[0]);
-                            if fwd_pressed {
-                                debug_log(&alloc::format!(
+                        if !vt_is_active(active_vt, VirtualTerminal::Tty) {
+                            // Forward keyboard event to display_server when Desktop session is active.
+                            if display_cap.is_none() {
+                                display_cap = nameserver_lookup("display_server");
+                            }
+                            if let Some(cap) = display_cap {
+                                let (
+                                    fwd_keycode,
+                                    fwd_pressed,
+                                    _fwd_shift,
+                                    fwd_ctrl,
+                                    _fwd_alt,
+                                    _fwd_super,
+                                    fwd_ascii,
+                                ) = unpack_key_event(msg.words[0]);
+                                if fwd_pressed {
+                                    debug_log(&alloc::format!(
                                     "[TTY->DISPLAY] shell forward keycode={:#x} ctrl={} ascii={}\n",
                                     fwd_keycode,
                                     fwd_ctrl,
                                     fwd_ascii.unwrap_or(0)
                                 ));
+                                }
+                                let _ = ipc_call(cap, msg);
                             }
-                            let _ = ipc_call(cap, msg);
+                            break 'kbd;
                         }
-                        break 'kbd;
-                    }
 
-                    // Special navigation keys arrive as bare keycodes with no
-                    // ASCII (the keyboard driver doesn't decode the 0xE0 prefix),
-                    // so they never reach the line-editor ASCII path below:
-                    //   Up=0x48 Down=0x50 Left=0x4B Right=0x4D
-                    //   PageUp=0x49 PageDown=0x51 Home=0x47 End=0x4F
-                    let fg_active =
-                        active_shell_tab(&tabs, active_tab).map_or(false, |t| t.fg_pid.is_some());
-                    let page = unsafe { TERMINAL_GEOMETRY[active_tab].rows as usize }.max(1);
+                        // Special navigation keys arrive as bare keycodes with no
+                        // ASCII (the keyboard driver doesn't decode the 0xE0 prefix),
+                        // so they never reach the line-editor ASCII path below:
+                        //   Up=0x48 Down=0x50 Left=0x4B Right=0x4D
+                        //   PageUp=0x49 PageDown=0x51 Home=0x47 End=0x4F
+                        let fg_active = active_shell_tab(&tabs, active_tab)
+                            .map_or(false, |t| t.fg_pid.is_some());
+                        let page = unsafe { TERMINAL_GEOMETRY[active_tab].rows as usize }.max(1);
 
-                    if pressed && ctrl {
-                        // Ctrl+Up/Down keep the fine-grained line scroll.
-                        match keycode {
-                            0x48 => unsafe {
-                                let s = &mut SCROLLBACK_STATE[active_tab];
-                                s.viewport_offset = (s.viewport_offset + 1).min(256);
-                                needs_render = true;
-                            },
-                            0x50 => unsafe {
-                                let s = &mut SCROLLBACK_STATE[active_tab];
-                                s.viewport_offset = s.viewport_offset.saturating_sub(1);
-                                needs_render = true;
-                            },
-                            _ => {
-                                if let Some(a) = ctrl_ascii {
-                                    if handle_ctrl_key(
-                                        a,
-                                        &mut tabs,
-                                        &mut tab_count,
-                                        &mut active_tab,
-                                        &mut next_shell_id,
-                                        spawn_cap,
-                                        &mut phase3_6_done,
-                                    ) {
-                                        needs_render = true;
-                                    } else if fg_active {
-                                        // Not a tty shortcut: forward as control byte
-                                        // (Ctrl+Q=0x11, Ctrl+S=0x13, Ctrl+C=0x03, …).
-                                        let ctrl_byte = a & 0x1f;
-                                        if let Some(tab) = active_shell_tab(&tabs, active_tab) {
-                                            let _ = tty_stdin_push(tab.shell_id as u32, &[ctrl_byte]);
+                        if pressed && ctrl {
+                            // Ctrl+Up/Down keep the fine-grained line scroll.
+                            match keycode {
+                                0x48 => unsafe {
+                                    let s = &mut SCROLLBACK_STATE[active_tab];
+                                    s.viewport_offset = (s.viewport_offset + 1).min(256);
+                                    needs_render = true;
+                                },
+                                0x50 => unsafe {
+                                    let s = &mut SCROLLBACK_STATE[active_tab];
+                                    s.viewport_offset = s.viewport_offset.saturating_sub(1);
+                                    needs_render = true;
+                                },
+                                _ => {
+                                    if let Some(a) = ctrl_ascii {
+                                        if handle_ctrl_key(
+                                            a,
+                                            &mut tabs,
+                                            &mut tab_count,
+                                            &mut active_tab,
+                                            &mut next_shell_id,
+                                            spawn_cap,
+                                            &mut phase3_6_done,
+                                        ) {
+                                            needs_render = true;
+                                        } else if fg_active {
+                                            // Not a tty shortcut: forward as control byte
+                                            // (Ctrl+Q=0x11, Ctrl+S=0x13, Ctrl+C=0x03, …).
+                                            let ctrl_byte = a & 0x1f;
+                                            if let Some(tab) = active_shell_tab(&tabs, active_tab) {
+                                                let _ = tty_stdin_push(
+                                                    tab.shell_id as u32,
+                                                    &[ctrl_byte],
+                                                );
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    } else if pressed && !fg_active {
-                        match keycode {
-                            // PageUp/PageDown: scroll the viewport by a screenful.
-                            0x49 => unsafe {
-                                let s = &mut SCROLLBACK_STATE[active_tab];
-                                s.viewport_offset = (s.viewport_offset + page).min(256);
-                                needs_render = true;
-                            },
-                            0x51 => unsafe {
-                                let s = &mut SCROLLBACK_STATE[active_tab];
-                                s.viewport_offset = s.viewport_offset.saturating_sub(page);
-                                needs_render = true;
-                            },
-                            // Home: jump to the oldest scrollback. End: live view.
-                            0x47 => unsafe {
-                                SCROLLBACK_STATE[active_tab].viewport_offset = 256;
-                                needs_render = true;
-                            },
-                            0x4F => unsafe {
-                                SCROLLBACK_STATE[active_tab].viewport_offset = 0;
-                                needs_render = true;
-                            },
-                            // Up/Down: walk command history into the edit line.
-                            0x48 => {
-                                if history_nav_up(&mut tabs, active_tab) {
+                        } else if pressed && !fg_active {
+                            match keycode {
+                                // PageUp/PageDown: scroll the viewport by a screenful.
+                                0x49 => unsafe {
+                                    let s = &mut SCROLLBACK_STATE[active_tab];
+                                    s.viewport_offset = (s.viewport_offset + page).min(256);
                                     needs_render = true;
-                                }
-                                unsafe { SCROLLBACK_STATE[active_tab].viewport_offset = 0; }
-                            }
-                            0x50 => {
-                                if history_nav_down(&mut tabs, active_tab) {
+                                },
+                                0x51 => unsafe {
+                                    let s = &mut SCROLLBACK_STATE[active_tab];
+                                    s.viewport_offset = s.viewport_offset.saturating_sub(page);
                                     needs_render = true;
-                                }
-                                unsafe { SCROLLBACK_STATE[active_tab].viewport_offset = 0; }
-                            }
-                            // Left/Right: move the edit cursor within the line.
-                            0x4B => {
-                                if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
-                                    if tab.input_cursor > 0 {
-                                        tab.input_cursor -= 1;
+                                },
+                                // Home: jump to the oldest scrollback. End: live view.
+                                0x47 => unsafe {
+                                    SCROLLBACK_STATE[active_tab].viewport_offset = 256;
+                                    needs_render = true;
+                                },
+                                0x4F => unsafe {
+                                    SCROLLBACK_STATE[active_tab].viewport_offset = 0;
+                                    needs_render = true;
+                                },
+                                // Up/Down: walk command history into the edit line.
+                                0x48 => {
+                                    if history_nav_up(&mut tabs, active_tab) {
                                         needs_render = true;
                                     }
-                                }
-                            }
-                            0x4D => {
-                                if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
-                                    if tab.input_cursor < tab.input_line_len {
-                                        tab.input_cursor += 1;
-                                        needs_render = true;
+                                    unsafe {
+                                        SCROLLBACK_STATE[active_tab].viewport_offset = 0;
                                     }
                                 }
+                                0x50 => {
+                                    if history_nav_down(&mut tabs, active_tab) {
+                                        needs_render = true;
+                                    }
+                                    unsafe {
+                                        SCROLLBACK_STATE[active_tab].viewport_offset = 0;
+                                    }
+                                }
+                                // Left/Right: move the edit cursor within the line.
+                                0x4B => {
+                                    if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                                        if tab.input_cursor > 0 {
+                                            tab.input_cursor -= 1;
+                                            needs_render = true;
+                                        }
+                                    }
+                                }
+                                0x4D => {
+                                    if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                                        if tab.input_cursor < tab.input_line_len {
+                                            tab.input_cursor += 1;
+                                            needs_render = true;
+                                        }
+                                    }
+                                }
+                                _ => {}
                             }
-                            _ => {}
-                        }
-                    } else if pressed && fg_active {
-                        // Raw-mode pass-through: translate special keys to VT100
-                        // escape sequences and push them directly into the fg
-                        // process's stdin ring.
-                        let seq: &[u8] = match keycode {
-                            0x01 => b"\x1b",        // Escape
-                            0x48 => b"\x1b[A",      // Up
-                            0x50 => b"\x1b[B",      // Down
-                            0x4D => b"\x1b[C",      // Right
-                            0x4B => b"\x1b[D",      // Left
-                            0x47 => b"\x1b[H",      // Home
-                            0x4F => b"\x1b[F",      // End
-                            0x49 => b"\x1b[5~",     // Page Up
-                            0x51 => b"\x1b[6~",     // Page Down
-                            _ => b"",
-                        };
-                        if !seq.is_empty() {
-                            if let Some(tab) = active_shell_tab(&tabs, active_tab) {
-                                let _ = tty_stdin_push(tab.shell_id as u32, seq);
+                        } else if pressed && fg_active {
+                            // Raw-mode pass-through: translate special keys to VT100
+                            // escape sequences and push them directly into the fg
+                            // process's stdin ring.
+                            let seq: &[u8] = match keycode {
+                                0x01 => b"\x1b",    // Escape
+                                0x48 => b"\x1b[A",  // Up
+                                0x50 => b"\x1b[B",  // Down
+                                0x4D => b"\x1b[C",  // Right
+                                0x4B => b"\x1b[D",  // Left
+                                0x47 => b"\x1b[H",  // Home
+                                0x4F => b"\x1b[F",  // End
+                                0x49 => b"\x1b[5~", // Page Up
+                                0x51 => b"\x1b[6~", // Page Down
+                                _ => b"",
+                            };
+                            if !seq.is_empty() {
+                                if let Some(tab) = active_shell_tab(&tabs, active_tab) {
+                                    let _ = tty_stdin_push(tab.shell_id as u32, seq);
+                                }
                             }
                         }
-                    }
                     } // end 'kbd
                 }
 
@@ -951,8 +971,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     // Snapshot the completed line.
                                     let mut line = [0u8; INPUT_LINE_MAX];
                                     let line_len = tab.input_line_len;
-                                    line[..line_len]
-                                        .copy_from_slice(&tab.input_line[..line_len]);
+                                    line[..line_len].copy_from_slice(&tab.input_line[..line_len]);
 
                                     // Echo prompt + line + newline into scrollback.
                                     let mut prompt_buf = [0u8; 32];
@@ -1003,13 +1022,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 );
                                                 spawn_cap = None;
                                                 logged_initial_spawn = false;
-                                                if has_fb && vt_is_active(active_vt, VirtualTerminal::Tty) {
+                                                if has_fb
+                                                    && vt_is_active(active_vt, VirtualTerminal::Tty)
+                                                {
                                                     render_login_fb(
-                                                        &login,
-                                                        fb_addr,
-                                                        fb32_w,
-                                                        fb32_h,
-                                                        fb32_p,
+                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
                                                         &mut mouse,
                                                     );
                                                 }
@@ -1325,7 +1342,7 @@ fn render_active_shell_fb(
                 // Grid exists - check if dimensions match
                 if cached.cols == cols && cached.rows == rows {
                     // Dimensions match - reuse grid, clear for fresh content
-                    cached.clear_screen();  // FIX: Clear previous content before reuse
+                    cached.clear_screen(); // FIX: Clear previous content before reuse
                     cached.as_mut()
                 } else {
                     // Dimensions changed - allocate new grid
@@ -1930,24 +1947,39 @@ unsafe fn try_local_clock(dst: &mut [u8], _ts: u64) -> (usize, bool) {
             let hour = ((w0 >> 24) & 0xff) as u8;
             let minute = ((w0 >> 16) & 0xff) as u8;
             // abbr from word(3) low 8 bytes
-            let abw = if reply.word_count > 3 { reply.words[3] } else { 0 };
+            let abw = if reply.word_count > 3 {
+                reply.words[3]
+            } else {
+                0
+            };
             let mut abbr = [0u8; 5]; // short for title e.g. IRDT or UTC
             for i in 0..4 {
-                let b = ((abw >> (i*8)) & 0xff) as u8;
-                if b == 0 { break; }
+                let b = ((abw >> (i * 8)) & 0xff) as u8;
+                if b == 0 {
+                    break;
+                }
                 abbr[i] = b;
             }
             // write HH:MM ABBR
             let mut p = 0usize;
-            dst[p] = b'0' + hour/10; p+=1;
-            dst[p] = b'0' + hour%10; p+=1;
-            dst[p] = b':'; p+=1;
-            dst[p] = b'0' + minute/10; p+=1;
-            dst[p] = b'0' + minute%10; p+=1;
-            dst[p] = b' '; p+=1;
+            dst[p] = b'0' + hour / 10;
+            p += 1;
+            dst[p] = b'0' + hour % 10;
+            p += 1;
+            dst[p] = b':';
+            p += 1;
+            dst[p] = b'0' + minute / 10;
+            p += 1;
+            dst[p] = b'0' + minute % 10;
+            p += 1;
+            dst[p] = b' ';
+            p += 1;
             for i in 0..4 {
-                if abbr[i] == 0 { break; }
-                dst[p] = abbr[i]; p+=1;
+                if abbr[i] == 0 {
+                    break;
+                }
+                dst[p] = abbr[i];
+                p += 1;
             }
             return (p, true);
         }

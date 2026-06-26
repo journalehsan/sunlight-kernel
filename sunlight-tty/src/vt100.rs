@@ -88,7 +88,10 @@ impl Vt100Parser {
     fn handle_csi(&mut self, byte: u8) -> VtOutput {
         match byte {
             b'0'..=b'9' => {
-                self.current_param = self.current_param.wrapping_mul(10).wrapping_add((byte - b'0') as u16);
+                self.current_param = self
+                    .current_param
+                    .wrapping_mul(10)
+                    .wrapping_add((byte - b'0') as u16);
                 self.has_digit = true;
                 VtOutput::Nothing
             }
@@ -171,7 +174,11 @@ impl Vt100Parser {
 
     fn store_param(&mut self) {
         if self.param_count < 8 {
-            self.params[self.param_count] = if self.has_digit { self.current_param } else { 0 };
+            self.params[self.param_count] = if self.has_digit {
+                self.current_param
+            } else {
+                0
+            };
             self.param_count += 1;
         }
         self.current_param = 0;
@@ -194,24 +201,18 @@ impl Vt100Parser {
         let code = self.param(0, 0);
         match code {
             1 => VtOutput::Bold(true),
-            30..=37 => {
-                VtOutput::SetColor {
-                    fg: Some((code - 30) as u8),
-                    bg: None,
-                }
-            }
-            40..=47 => {
-                VtOutput::SetColor {
-                    fg: None,
-                    bg: Some((code - 40) as u8),
-                }
-            }
-            90..=97 => {
-                VtOutput::SetColor {
-                    fg: Some((code - 90 + 8) as u8),
-                    bg: None,
-                }
-            }
+            30..=37 => VtOutput::SetColor {
+                fg: Some((code - 30) as u8),
+                bg: None,
+            },
+            40..=47 => VtOutput::SetColor {
+                fg: None,
+                bg: Some((code - 40) as u8),
+            },
+            90..=97 => VtOutput::SetColor {
+                fg: Some((code - 90 + 8) as u8),
+                bg: None,
+            },
             _ => VtOutput::Nothing,
         }
     }
@@ -293,7 +294,13 @@ mod tests {
         assert_eq!(p.feed(b'['), VtOutput::Nothing);
         assert_eq!(p.feed(b'3'), VtOutput::Nothing);
         assert_eq!(p.feed(b'1'), VtOutput::Nothing);
-        assert_eq!(p.feed(b'm'), VtOutput::SetColor { fg: Some(1), bg: None });
+        assert_eq!(
+            p.feed(b'm'),
+            VtOutput::SetColor {
+                fg: Some(1),
+                bg: None
+            }
+        );
     }
 
     #[test]
@@ -303,7 +310,13 @@ mod tests {
         assert_eq!(p.feed(b'['), VtOutput::Nothing);
         assert_eq!(p.feed(b'9'), VtOutput::Nothing);
         assert_eq!(p.feed(b'2'), VtOutput::Nothing);
-        assert_eq!(p.feed(b'm'), VtOutput::SetColor { fg: Some(10), bg: None });
+        assert_eq!(
+            p.feed(b'm'),
+            VtOutput::SetColor {
+                fg: Some(10),
+                bg: None
+            }
+        );
     }
 
     #[test]

@@ -118,11 +118,7 @@ impl<const NU: usize, const NG: usize, const NR: usize> RuleTable<NU, NG, NR> {
         }
     }
 
-    pub fn add_uid_rule(
-        &mut self,
-        uid: u32,
-        rule: PathRule,
-    ) -> Result<(), RuleError> {
+    pub fn add_uid_rule(&mut self, uid: u32, rule: PathRule) -> Result<(), RuleError> {
         match self.uid_rules.get_mut(&uid) {
             Some(set) => set.add_rule(rule),
             None => {
@@ -136,11 +132,7 @@ impl<const NU: usize, const NG: usize, const NR: usize> RuleTable<NU, NG, NR> {
         }
     }
 
-    pub fn add_gid_rule(
-        &mut self,
-        gid: u32,
-        rule: PathRule,
-    ) -> Result<(), RuleError> {
+    pub fn add_gid_rule(&mut self, gid: u32, rule: PathRule) -> Result<(), RuleError> {
         match self.gid_rules.get_mut(&gid) {
             Some(set) => set.add_rule(rule),
             None => {
@@ -170,12 +162,7 @@ impl<const NU: usize, const NG: usize, const NR: usize> RuleTable<NU, NG, NR> {
             .map_or([].iter(), |set| set.rules.iter())
     }
 
-    pub fn find_matching_rule(
-        &self,
-        uid: u32,
-        gid: u32,
-        path: &str,
-    ) -> Option<(u32, PathRule)> {
+    pub fn find_matching_rule(&self, uid: u32, gid: u32, path: &str) -> Option<(u32, PathRule)> {
         let mut merged = AccessFlags::NONE;
         let mut matched_prefix: Option<String<64>> = None;
 
@@ -186,10 +173,15 @@ impl<const NU: usize, const NG: usize, const NR: usize> RuleTable<NU, NG, NR> {
             }
         }
 
-        matched_prefix.map(|prefix| (uid, PathRule {
-            allowed_prefix: prefix,
-            flags: merged,
-        }))
+        matched_prefix.map(|prefix| {
+            (
+                uid,
+                PathRule {
+                    allowed_prefix: prefix,
+                    flags: merged,
+                },
+            )
+        })
     }
 
     pub fn has_access(&self, uid: u32, gid: u32, path: &str, required: AccessFlags) -> bool {

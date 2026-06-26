@@ -5,34 +5,51 @@ use crate::paint::Canvas;
 use crate::theme::Theme;
 
 pub struct TabBar<'a> {
-    pub rect:        Rect,
-    pub tabs:        &'a [&'a str],
-    pub active:      usize,
-    pub hovered:     Option<usize>,
+    pub rect: Rect,
+    pub tabs: &'a [&'a str],
+    pub active: usize,
+    pub hovered: Option<usize>,
     /// Width of each tab. If None, tabs share space equally.
-    pub tab_width:   Option<u32>,
+    pub tab_width: Option<u32>,
 }
 
 impl<'a> TabBar<'a> {
     pub fn new(rect: Rect, tabs: &'a [&'a str], active: usize) -> Self {
-        Self { rect, tabs, active, hovered: None, tab_width: None }
+        Self {
+            rect,
+            tabs,
+            active,
+            hovered: None,
+            tab_width: None,
+        }
     }
 
     fn tab_rect(&self, idx: usize) -> Rect {
         let n = self.tabs.len() as u32;
         let w = self.tab_width.unwrap_or_else(|| self.rect.w / n.max(1));
-        Rect::new(self.rect.x + (idx as u32 * w) as i32, self.rect.y, w, self.rect.h)
+        Rect::new(
+            self.rect.x + (idx as u32 * w) as i32,
+            self.rect.y,
+            w,
+            self.rect.h,
+        )
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
         // Background strip
         canvas.fill_rect(self.rect, theme.panel);
         // Bottom separator
-        canvas.hbar(self.rect.x, self.rect.bottom() - 1, self.rect.w, 1, theme.border);
+        canvas.hbar(
+            self.rect.x,
+            self.rect.bottom() - 1,
+            self.rect.w,
+            1,
+            theme.border,
+        );
 
         for (i, &label) in self.tabs.iter().enumerate() {
             let r = self.tab_rect(i);
-            let is_active  = i == self.active;
+            let is_active = i == self.active;
             let is_hovered = self.hovered == Some(i);
 
             let bg = if is_active {
@@ -45,7 +62,11 @@ impl<'a> TabBar<'a> {
 
             canvas.fill_rect(r, bg);
 
-            let text_color = if is_active { theme.accent } else { theme.text_dim };
+            let text_color = if is_active {
+                theme.accent
+            } else {
+                theme.text_dim
+            };
             canvas.draw_text_centered(r, label, text_color);
 
             // Active tab: accent underline

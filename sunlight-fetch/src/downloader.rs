@@ -108,12 +108,7 @@ fn execute_get(
         }
     };
 
-    let body = ipc::read_body_full(
-        &mut handle,
-        &initial_body,
-        total,
-        Some(&mut on_progress),
-    )?;
+    let body = ipc::read_body_full(&mut handle, &initial_body, total, Some(&mut on_progress))?;
 
     progress.finish();
     progress.render(&mut render_buf);
@@ -179,7 +174,12 @@ fn fetch_with_redirects(
     method: HttpMethod,
     body: Option<Vec<u8>>,
     extra_headers: Vec<(String, String)>,
-) -> FetchResult<(crate::http::HttpResponse, ipc::TcpHandle, Vec<u8>, ParsedUrl)> {
+) -> FetchResult<(
+    crate::http::HttpResponse,
+    ipc::TcpHandle,
+    Vec<u8>,
+    ParsedUrl,
+)> {
     let mut url = start_url.clone();
     let mut addr = start_addr.clone();
 

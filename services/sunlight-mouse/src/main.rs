@@ -211,13 +211,24 @@ mod syscall {
 
     pub fn debug_log_i16(v: i16) {
         let mut buf = [0u8; 7];
-        let (neg, mut n) = if v < 0 { (true, (-(v as i32)) as u32) } else { (false, v as u32) };
+        let (neg, mut n) = if v < 0 {
+            (true, (-(v as i32)) as u32)
+        } else {
+            (false, v as u32)
+        };
         let mut i = 7usize;
         loop {
-            i -= 1; buf[i] = b'0' + (n % 10) as u8; n /= 10;
-            if n == 0 { break; }
+            i -= 1;
+            buf[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+            if n == 0 {
+                break;
+            }
         }
-        if neg { i -= 1; buf[i] = b'-'; }
+        if neg {
+            i -= 1;
+            buf[i] = b'-';
+        }
         let s = unsafe { core::str::from_utf8_unchecked(&buf[i..]) };
         debug_log(s);
     }
@@ -315,7 +326,9 @@ pub extern "C" fn _start() -> ! {
                 if display_token.is_none() {
                     display_token = nameserver_lookup("display_server");
                     if display_token.is_some() {
-                        syscall::debug_log("[MOUSE] display_server available, routing raw events there\n");
+                        syscall::debug_log(
+                            "[MOUSE] display_server available, routing raw events there\n",
+                        );
                     }
                 }
 

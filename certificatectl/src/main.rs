@@ -151,9 +151,8 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         while unsafe { *ptr.add(len) } != 0 {
             len += 1;
         }
-        let s = unsafe {
-            core::str::from_utf8(core::slice::from_raw_parts(ptr, len)).unwrap_or("")
-        };
+        let s =
+            unsafe { core::str::from_utf8(core::slice::from_raw_parts(ptr, len)).unwrap_or("") };
         let _ = args.push(s);
     }
 
@@ -228,7 +227,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
             let reply = ipc_call(tls_cap, msg);
             let _ = shm_free(tok);
             if reply.label == TLS_REPLY {
-                println!("install: OK ({} bytes -> sunlight-kv tls/ca/{})", total, name);
+                println!(
+                    "install: OK ({} bytes -> sunlight-kv tls/ca/{})",
+                    total, name
+                );
             } else {
                 println!("install: ERROR (code {})", reply.words[0]);
                 sunlight_libc::exit(1);

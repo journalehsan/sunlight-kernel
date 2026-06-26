@@ -430,7 +430,15 @@ fn draw_user_avatar(
 
     let d = radius * 2;
     fb.fill_rect(cx - radius, cy - radius, d, d, fill);
-    draw::rect_outline(fb, cx - radius, cy - radius, d, d, if focused { 2 } else { 1 }, ring);
+    draw::rect_outline(
+        fb,
+        cx - radius,
+        cy - radius,
+        d,
+        d,
+        if focused { 2 } else { 1 },
+        ring,
+    );
 
     let ch = if name.is_empty() {
         if is_custom {
@@ -446,14 +454,7 @@ fn draw_user_avatar(
             c
         }
     };
-    font::draw_char(
-        fb,
-        cx - 4,
-        cy - 7,
-        ch,
-        layout::palette::TEXT,
-        1,
-    );
+    font::draw_char(fb, cx - 4, cy - 7, ch, layout::palette::TEXT, 1);
 }
 
 /// Render the grid-based login screen with user avatars, password, and session dropdown.
@@ -526,7 +527,11 @@ pub unsafe fn render_login_grid(
     let row_w = active_count as u32 * SLOT_W;
     let row_x = panel_x + panel_w.saturating_sub(row_w) / 2;
 
-    for i in 0..active_count.min(user_bufs.len()).min(user_lens.len()).min(is_custom.len()) {
+    for i in 0..active_count
+        .min(user_bufs.len())
+        .min(user_lens.len())
+        .min(is_custom.len())
+    {
         let slot_x = row_x + i as u32 * SLOT_W + SLOT_W / 2;
         let name = &user_bufs[i][..user_lens[i]];
         let focused = focus == LoginFocus::UserSlot(i);
@@ -662,9 +667,17 @@ pub unsafe fn render_login_grid(
 
     // Reboot button
     draw::rect_outline(
-        &mut fb, reboot_x, btn_y, BTN_W, BTN_H,
+        &mut fb,
+        reboot_x,
+        btn_y,
+        BTN_W,
+        BTN_H,
         if reboot_focused { 2 } else { 1 },
-        if reboot_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+        if reboot_focused {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::SEPARATOR
+        },
     );
     let rb_label = "Reboot";
     let rb_lw = font::text_width(rb_label, 1);
@@ -673,15 +686,27 @@ pub unsafe fn render_login_grid(
         reboot_x + BTN_W.saturating_sub(rb_lw) / 2,
         btn_y + 4,
         rb_label,
-        if reboot_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+        if reboot_focused {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::TEXT_DIM
+        },
         1,
     );
 
     // Shutdown button
     draw::rect_outline(
-        &mut fb, shutdown_x, btn_y, BTN_W, BTN_H,
+        &mut fb,
+        shutdown_x,
+        btn_y,
+        BTN_W,
+        BTN_H,
         if shutdown_focused { 2 } else { 1 },
-        if shutdown_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+        if shutdown_focused {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::SEPARATOR
+        },
     );
     let sd_label = "Shutdown";
     let sd_lw = font::text_width(sd_label, 1);
@@ -690,7 +715,11 @@ pub unsafe fn render_login_grid(
         shutdown_x + BTN_W.saturating_sub(sd_lw) / 2,
         btn_y + 4,
         sd_label,
-        if shutdown_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+        if shutdown_focused {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::TEXT_DIM
+        },
         1,
     );
 

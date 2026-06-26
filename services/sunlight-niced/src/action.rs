@@ -43,7 +43,12 @@ const SIGKILL: u8 = 9;
 /// `supervised`: cached result of a `SunlightdOp::Status` lookup for this
 /// process's unit name (`None` = not yet determined — treated as
 /// unsupervised for this call).
-pub fn trigger_restart_or_kill<K: KernelOps>(unit_name: &str, pid: usize, supervised: Option<bool>, shim: &K) {
+pub fn trigger_restart_or_kill<K: KernelOps>(
+    unit_name: &str,
+    pid: usize,
+    supervised: Option<bool>,
+    shim: &K,
+) {
     let is_supervised = supervised.unwrap_or(false);
 
     if is_supervised {
@@ -102,11 +107,7 @@ pub fn kill_ladder<K: KernelOps>(shim: &K, pid: usize, supervised: bool, unit_na
     // SIGKILL in the same tick since real delivery never happens yet. Once
     // send_signal is real, this should instead wait ~KILL_GRACE seconds
     // (driven by re-invocation on subsequent ticks) before escalating.
-    crate::serial_println!(
-        "[NICED] KILL pid={} '{}' step=SIGKILL",
-        pid,
-        unit_name
-    );
+    crate::serial_println!("[NICED] KILL pid={} '{}' step=SIGKILL", pid, unit_name);
     if shim.send_signal(pid, SIGKILL) {
         return;
     }
@@ -123,6 +124,9 @@ pub fn kill_ladder<K: KernelOps>(shim: &K, pid: usize, supervised: bool, unit_na
 
 fn notify_gcd_exited(pid: usize) {
     if let Some(cap) = nameserver_lookup("gcd") {
-        let _ = ipc_call(cap, IpcMsg::with_label(GcdOp::PROCESS_EXITED).word(0, pid as u64));
+        let _ = ipc_call(
+            cap,
+            IpcMsg::with_label(GcdOp::PROCESS_EXITED).word(0, pid as u64),
+        );
     }
 }

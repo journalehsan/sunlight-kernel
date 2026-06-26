@@ -7,15 +7,15 @@
 /// One entry from the timezone database
 #[derive(Clone, Copy, Debug)]
 pub struct TzEntry {
-    pub id:                 &'static str,   // "Asia/Tehran"
-    pub region:             &'static str,   // "Asia"
-    pub city:               &'static str,   // "Tehran"
-    pub display_name:       &'static str,   // "Iran Standard Time"
-    pub utc_offset_hours:   i8,             // 3  (can be negative)
-    pub utc_offset_minutes: u8,             // 30 (always 0 or 30)
-    pub dst_offset_minutes: u8,             // 60 (0 = no DST)
-    pub dst_start_month:    u8,             // 3  (0 = no DST)
-    pub dst_end_month:      u8,             // 9  (0 = no DST)
+    pub id: &'static str,           // "Asia/Tehran"
+    pub region: &'static str,       // "Asia"
+    pub city: &'static str,         // "Tehran"
+    pub display_name: &'static str, // "Iran Standard Time"
+    pub utc_offset_hours: i8,       // 3  (can be negative)
+    pub utc_offset_minutes: u8,     // 30 (always 0 or 30)
+    pub dst_offset_minutes: u8,     // 60 (0 = no DST)
+    pub dst_start_month: u8,        // 3  (0 = no DST)
+    pub dst_end_month: u8,          // 9  (0 = no DST)
 }
 
 include!(concat!(env!("OUT_DIR"), "/zones_data.rs"));
@@ -33,16 +33,24 @@ pub fn tz_by_id(id: &str) -> Option<&'static TzEntry> {
 /// Case-insensitive substring match on display_name. Byte-level, no alloc.
 pub fn tz_by_display_name(name: &str) -> Option<&'static TzEntry> {
     let needle = name.as_bytes();
-    all_zones().iter().find(|e| ci_contains(e.display_name.as_bytes(), needle))
+    all_zones()
+        .iter()
+        .find(|e| ci_contains(e.display_name.as_bytes(), needle))
 }
 
 /// Total number of loaded zones.
-pub fn tz_count() -> usize { all_zones().len() }
+pub fn tz_count() -> usize {
+    all_zones().len()
+}
 
 /// Byte-wise case-insensitive contains (ascii only). No heap, no_std.
 fn ci_contains(hay: &[u8], needle: &[u8]) -> bool {
-    if needle.is_empty() { return true; }
-    if hay.len() < needle.len() { return false; }
+    if needle.is_empty() {
+        return true;
+    }
+    if hay.len() < needle.len() {
+        return false;
+    }
     for i in 0..=hay.len() - needle.len() {
         let mut match_ok = true;
         for j in 0..needle.len() {
@@ -62,5 +70,9 @@ fn ci_contains(hay: &[u8], needle: &[u8]) -> bool {
 
 #[inline]
 fn to_ascii_lower(b: u8) -> u8 {
-    if b'A' <= b && b <= b'Z' { b + 32 } else { b }
+    if b'A' <= b && b <= b'Z' {
+        b + 32
+    } else {
+        b
+    }
 }

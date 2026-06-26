@@ -28,8 +28,8 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_ipc::{
-    ipc_call, nameserver_lookup, CacheMode, EffectsMode, IpcMsg, PowerProfile, PowerdMsg, PrefetchMode,
-    SchedulerBias,
+    ipc_call, nameserver_lookup, CacheMode, EffectsMode, IpcMsg, PowerProfile, PowerdMsg,
+    PrefetchMode, SchedulerBias,
 };
 
 const MAX_ARGS: usize = 16;
@@ -92,9 +92,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
                 do_set(cap, args[2])
             }
         }
-        "auto" => {
-            do_auto(cap)
-        }
+        "auto" => do_auto(cap),
         "policy" => {
             print_policy(cap);
             0
@@ -176,10 +174,7 @@ fn print_profiles(cap: sunlight_ipc::CapabilityToken) {
     println!("Profiles:");
     let mut i = 0u64;
     loop {
-        let reply = ipc_call(
-            cap,
-            IpcMsg::with_label(PowerdMsg::LIST_PROFILES).word(0, i),
-        );
+        let reply = ipc_call(cap, IpcMsg::with_label(PowerdMsg::LIST_PROFILES).word(0, i));
         if reply.label != PowerdMsg::REPLY {
             break;
         }
@@ -267,7 +262,11 @@ fn print_policy(cap: sunlight_ipc::CapabilityToken) {
         SchedulerBias::Interactive => "Interactive",
         SchedulerBias::Performance => "Performance",
     };
-    let bg = if (w1 >> 32) & 1 != 0 { "allowed" } else { "limited" };
+    let bg = if (w1 >> 32) & 1 != 0 {
+        "allowed"
+    } else {
+        "limited"
+    };
 
     println!("Power:");
     println!("  selected:  {}", profile_str(sel));

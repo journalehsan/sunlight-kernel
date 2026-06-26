@@ -52,7 +52,9 @@ mod shim;
 mod telemetry;
 mod watchdog;
 
-use sunlight_ipc::{endpoint_create, get_time_utc, ipc_reply_and_try_recv, nameserver_register, IpcMsg};
+use sunlight_ipc::{
+    endpoint_create, get_time_utc, ipc_reply_and_try_recv, nameserver_register, IpcMsg,
+};
 
 use config::load_defaults;
 use monitor::Table;

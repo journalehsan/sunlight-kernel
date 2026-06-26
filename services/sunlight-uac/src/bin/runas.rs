@@ -193,7 +193,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     pack_str(&mut chk, 2, path.as_str());
     let chk_reply = ipc_call(uac, chk);
     if chk_reply.label != REPLY_OK || chk_reply.words[0] == 0 {
-        println!("runas: access denied: {} not executable for root", path.as_str());
+        println!(
+            "runas: access denied: {} not executable for root",
+            path.as_str()
+        );
         sunlight_libc::exit(13); // EACCES
     }
 

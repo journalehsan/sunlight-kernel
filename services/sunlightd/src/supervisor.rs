@@ -1,14 +1,23 @@
 //! Process supervisor - tracks service lifecycle and handles restarts
 
-use crate::unit::{ServiceUnit, RestartPolicy};
+use crate::unit::{RestartPolicy, ServiceUnit};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServiceState {
     Stopped,
     Starting,
-    Running { pid: u32, started_at: u64 },
-    Failed { exit_code: i32, crashed_at: u64, restarts: u32 },
-    Restarting { at: u64 },
+    Running {
+        pid: u32,
+        started_at: u64,
+    },
+    Failed {
+        exit_code: i32,
+        crashed_at: u64,
+        restarts: u32,
+    },
+    Restarting {
+        at: u64,
+    },
 }
 
 pub struct ServiceEntry {
@@ -77,7 +86,7 @@ impl ServiceEntry {
         if current_time - self.last_restart_time > RESTART_WINDOW {
             self.restart_count = 0;
         }
-        
+
         self.restart_count += 1;
         self.last_restart_time = current_time;
         self.state = ServiceState::Restarting { at };
@@ -94,12 +103,12 @@ pub fn parse_exec_command(exec_start: &str) -> Option<(&str, heapless::Vec<&str,
     if parts.is_empty() {
         return None;
     }
-    
+
     let binary = parts[0];
     let mut args: heapless::Vec<&str, 16> = heapless::Vec::new();
     for i in 1..parts.len() {
         let _ = args.push(parts[i]);
     }
-    
+
     Some((binary, args))
 }

@@ -1,23 +1,21 @@
 //! Read/write /etc/localtime as JSON via VFS IPC
 
-use sunlight_ipc::{
-    CapabilityToken, IpcMsg, VfsMsg, debug_log, ipc_call, nameserver_lookup,
-};
+use sunlight_ipc::{debug_log, ipc_call, nameserver_lookup, CapabilityToken, IpcMsg, VfsMsg};
 
 // tz_by_id is available to callers who want to validate ids against CSV before write.
 
 /// The active timezone config read from /etc/localtime
 #[derive(Clone, Copy, Debug)]
 pub struct LocalTimeCfg {
-    pub id:                 [u8; 64],   // IANA id, null-terminated
-    pub id_len:             usize,
-    pub display_name:       [u8; 128],
-    pub display_name_len:   usize,
-    pub utc_offset_hours:   i8,
+    pub id: [u8; 64], // IANA id, null-terminated
+    pub id_len: usize,
+    pub display_name: [u8; 128],
+    pub display_name_len: usize,
+    pub utc_offset_hours: i8,
     pub utc_offset_minutes: u8,
     pub dst_offset_minutes: u8,
-    pub dst_start_month:    u8,
-    pub dst_end_month:      u8,
+    pub dst_start_month: u8,
+    pub dst_end_month: u8,
 }
 
 impl LocalTimeCfg {
@@ -41,8 +39,13 @@ impl LocalTimeCfg {
 
     /// Convert to TzEntry-compatible offset for use with offset.rs
     pub fn to_tz_entry_fields(&self) -> (i8, u8, u8, u8, u8) {
-        (self.utc_offset_hours, self.utc_offset_minutes,
-         self.dst_offset_minutes, self.dst_start_month, self.dst_end_month)
+        (
+            self.utc_offset_hours,
+            self.utc_offset_minutes,
+            self.dst_offset_minutes,
+            self.dst_start_month,
+            self.dst_end_month,
+        )
     }
 }
 
@@ -111,12 +114,16 @@ fn read_file_vfs(vfs_cap: CapabilityToken, path: &str) -> [u8; 512] {
             break;
         }
         let n = r.words[1] as usize;
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
 
         // data is packed in words[2..] little-endian bytes
         let src_words = &r.words[2..];
         for i in 0..n {
-            if out_len >= out.len() { break; }
+            if out_len >= out.len() {
+                break;
+            }
             let word_idx = i / 8;
             let byte_idx = i % 8;
             let b = ((src_words[word_idx] >> (byte_idx * 8)) & 0xFF) as u8;
@@ -124,10 +131,15 @@ fn read_file_vfs(vfs_cap: CapabilityToken, path: &str) -> [u8; 512] {
             out_len += 1;
         }
         offset += n;
-        if n < 16 { break; }
+        if n < 16 {
+            break;
+        }
     }
 
-    let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+    let _ = ipc_call(
+        vfs_cap,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+    );
     out
 }
 
@@ -166,15 +178,23 @@ fn write_file_vfs(vfs_cap: CapabilityToken, path: &str, data: &[u8]) -> Result<(
         }
         let r = ipc_call(vfs_cap, msg);
         if r.label != VfsMsg::REPLY || r.words[0] != 0 {
-            let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+            let _ = ipc_call(
+                vfs_cap,
+                IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+            );
             return Err(());
         }
         let n = r.words[1] as usize;
         offset += n;
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
     }
 
-    let _ = ipc_call(vfs_cap, IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64));
+    let _ = ipc_call(
+        vfs_cap,
+        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+    );
     Ok(())
 }
 
@@ -208,7 +228,9 @@ fn parse_localtime_json(data: &[u8]) -> Option<LocalTimeCfg> {
         cfg.id[..len].copy_from_slice(&bytes[..len]);
         cfg.id[len] = 0;
         cfg.id_len = len;
-    } else { return None; }
+    } else {
+        return None;
+    }
 
     if let Some(dn) = extract_json_string(s, "display_name") {
         let bytes = dn.as_bytes();
@@ -269,8 +291,12 @@ fn extract_json_int(s: &str, key: &str) -> Option<i32> {
             // allow optional sign and digits
             let mut end = 0usize;
             let bytes = num_str.as_bytes();
-            if !bytes.is_empty() && (bytes[0] == b'-' || bytes[0] == b'+') { end = 1; }
-            while end < bytes.len() && bytes[end].is_ascii_digit() { end += 1; }
+            if !bytes.is_empty() && (bytes[0] == b'-' || bytes[0] == b'+') {
+                end = 1;
+            }
+            while end < bytes.len() && bytes[end].is_ascii_digit() {
+                end += 1;
+            }
             if end > 0 {
                 let candidate = &num_str[..end];
                 if let Ok(v) = crate::config::parse_i32(candidate) {
@@ -294,7 +320,11 @@ fn serialize_localtime_json(cfg: &LocalTimeCfg) -> [u8; 512] {
 
     copy(&mut buf, &mut pos, &cfg.id[..cfg.id_len]);
     copy(&mut buf, &mut pos, b"\",\"display_name\":\"");
-    copy(&mut buf, &mut pos, &cfg.display_name[..cfg.display_name_len]);
+    copy(
+        &mut buf,
+        &mut pos,
+        &cfg.display_name[..cfg.display_name_len],
+    );
     copy(&mut buf, &mut pos, b"\",\"utc_offset_hours\":");
     pos += append_i32(&mut buf[pos..], cfg.utc_offset_hours as i32);
 
@@ -336,7 +366,8 @@ fn append_i32(dst: &mut [u8], v: i32) -> usize {
     }
     let mut w = 0usize;
     if v < 0 {
-        dst[w] = b'-'; w += 1;
+        dst[w] = b'-';
+        w += 1;
     }
     for i in (0..n).rev() {
         dst[w] = tmp[i];
@@ -347,7 +378,8 @@ fn append_i32(dst: &mut [u8], v: i32) -> usize {
 
 fn append_u8(dst: &mut [u8], v: u8) -> usize {
     if v == 0 {
-        dst[0] = b'0'; return 1;
+        dst[0] = b'0';
+        return 1;
     }
     let mut tmp = [0u8; 4];
     let mut n = 0usize;
@@ -359,7 +391,8 @@ fn append_u8(dst: &mut [u8], v: u8) -> usize {
     }
     let mut w = 0usize;
     for i in (0..n).rev() {
-        dst[w] = tmp[i]; w += 1;
+        dst[w] = tmp[i];
+        w += 1;
     }
     w
 }

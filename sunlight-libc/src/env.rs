@@ -31,10 +31,7 @@ pub fn getenv_bytes(key: &[u8]) -> Option<&'static [u8]> {
             len += 1;
         }
         let entry = unsafe { core::slice::from_raw_parts(entry_ptr, len) };
-        if entry.len() > key.len()
-            && entry[key.len()] == b'='
-            && &entry[..key.len()] == key
-        {
+        if entry.len() > key.len() && entry[key.len()] == b'=' && &entry[..key.len()] == key {
             return Some(&entry[key.len() + 1..]);
         }
         i += 1;

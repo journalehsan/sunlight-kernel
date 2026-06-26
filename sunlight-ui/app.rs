@@ -14,9 +14,10 @@
 //! window.run();
 //! ```
 
+use core::sync::atomic::{AtomicBool, Ordering};
 use sunlight_ipc::{
-    ipc_call, ipc_call_timeout, nameserver_lookup, shm_free, shm_map,
-    CapabilityToken, IpcMsg, SgpMsg,
+    ipc_call, ipc_call_timeout, nameserver_lookup, shm_free, shm_map, CapabilityToken, IpcMsg,
+    SgpMsg,
 };
 
 use crate::event::Event;
@@ -26,6 +27,15 @@ use crate::theme::Theme;
 /// Default timeout for `EVENT_POLL` (milliseconds).
 /// When no event arrives within this window, the loop delivers `Event::Tick`.
 const POLL_TIMEOUT_MS: u64 = 200;
+static CLOSE_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+pub fn request_close() {
+    CLOSE_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+fn take_close_requested() -> bool {
+    CLOSE_REQUESTED.swap(false, Ordering::Relaxed)
+}
 
 /// Configuration passed to [`Window::connect`].
 pub struct WindowConfig {
@@ -145,13 +155,8 @@ impl Window {
         // words[2]: packed key event (0 = none)
         let key_word = reply.words[2];
         if key_word != 0 {
-            let keycode = (key_word & 0xFF) as u8;
-            let pressed = ((key_word >> 8) & 0xFF) != 0;
-            let ascii = if ((key_word >> 24) & 0xFF) != 0 {
-                Some(((key_word >> 24) & 0xFF) as u8)
-            } else {
-                None
-            };
+            let (keycode, pressed, shift, ctrl, alt, super_key, ascii) =
+                sunlight_ipc::unpack_key_event(key_word);
             if pressed {
                 if let Some(ch) = ascii {
                     match ch {
@@ -162,7 +167,7 @@ impl Window {
                     }
                 }
             }
-            return Event::key_press(keycode, pressed);
+            return Event::key_press(keycode, pressed, shift, ctrl, alt, super_key);
         }
 
         let local_x = mouse_x.saturating_sub(self.client_x);
@@ -211,9 +216,7 @@ impl Window {
 
     /// Build a `Canvas` wrapping the shared framebuffer.
     pub fn canvas(&mut self) -> Canvas<'_> {
-        let pixels = unsafe {
-            core::slice::from_raw_parts_mut(self.buffer, self.buffer_size / 4)
-        };
+        let pixels = unsafe { core::slice::from_raw_parts_mut(self.buffer, self.buffer_size / 4) };
         Canvas::new(pixels, self.width, self.width, self.height)
     }
 
@@ -228,6 +231,7 @@ impl Window {
 
     /// Run the event loop with a custom theme.
     pub fn run_with<A: App>(&mut self, app: &mut A, theme: &Theme) {
+        take_close_requested();
         {
             let mut c = self.canvas();
             app.view(&mut c, theme);
@@ -239,6 +243,9 @@ impl Window {
 
             // Redraw requested?
             let needs_redraw = app.update(event);
+            if take_close_requested() {
+                break;
+            }
 
             if needs_redraw {
                 let mut c = self.canvas();
@@ -251,6 +258,10 @@ impl Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
+        let _ = ipc_call(
+            self.display_ep,
+            IpcMsg::with_label(SgpMsg::DESTROY_WINDOW).word(0, self.win_id),
+        );
         // Unmap the shared buffer
         let _ = shm_free(self.shm_cap);
     }

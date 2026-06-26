@@ -143,7 +143,10 @@ pub fn tick<K: KernelOps>(table: &mut Table, tel: &mut Telemetry, shim: &K, now:
                     state
                 );
                 if let Some(gcd_cap) = nameserver_lookup("gcd") {
-                    let _ = ipc_call(gcd_cap, IpcMsg::with_label(GcdOp::REAP_ZOMBIE).word(0, p.pid as u64));
+                    let _ = ipc_call(
+                        gcd_cap,
+                        IpcMsg::with_label(GcdOp::REAP_ZOMBIE).word(0, p.pid as u64),
+                    );
                 }
             }
             1 if cpu_pct >= BUSY_HANG_PCT => {

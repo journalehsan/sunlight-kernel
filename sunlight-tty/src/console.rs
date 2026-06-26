@@ -13,14 +13,19 @@ pub use sunlight_tui::TermCell;
 #[derive(Clone, Copy, Debug)]
 pub struct Cell {
     pub ch: u8,
-    pub fg: u8,  // ANSI color index 0-15
+    pub fg: u8, // ANSI color index 0-15
     pub bg: u8,
     pub bold: bool,
 }
 
 impl Cell {
     const fn blank() -> Self {
-        Cell { ch: b' ', fg: 7, bg: 0, bold: false }
+        Cell {
+            ch: b' ',
+            fg: 7,
+            bg: 0,
+            bold: false,
+        }
     }
 }
 
@@ -65,9 +70,9 @@ pub struct Console {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum EscapeState {
     Normal,
-    EscapeStart,           // saw ESC
-    CsiStart,              // saw ESC[
-    CsiParam { digits: [u8; 4], digit_count: u8 },  // collecting digits
+    EscapeStart,                                   // saw ESC
+    CsiStart,                                      // saw ESC[
+    CsiParam { digits: [u8; 4], digit_count: u8 }, // collecting digits
 }
 
 impl Console {
@@ -79,7 +84,14 @@ impl Console {
         scrollback.resize(SCROLLBACK_MAX * cols, Cell::blank());
 
         let mut term_cells = Vec::new();
-        term_cells.resize(cols * rows, TermCell { ch: b' ', fg: 0, bg: 0 });
+        term_cells.resize(
+            cols * rows,
+            TermCell {
+                ch: b' ',
+                fg: 0,
+                bg: 0,
+            },
+        );
 
         Self {
             cols,
@@ -92,8 +104,8 @@ impl Console {
             scroll_offset: 0,
             cursor_x: 0,
             cursor_y: 0,
-            fg_color: 7,     // default white
-            bg_color: 0,     // default black
+            fg_color: 7, // default white
+            bg_color: 0, // default black
             bold: false,
             escape_state: EscapeState::Normal,
             dirty: false,
@@ -112,11 +124,18 @@ impl Console {
         scrollback.resize(SCROLLBACK_MAX * cols, Cell::blank());
 
         let mut term_cells = Vec::new();
-        term_cells.resize(cols * total_rows, TermCell { ch: b' ', fg: 0, bg: 0 });
+        term_cells.resize(
+            cols * total_rows,
+            TermCell {
+                ch: b' ',
+                fg: 0,
+                bg: 0,
+            },
+        );
 
         Self {
             cols,
-            rows: total_rows,  // Use total rows internally
+            rows: total_rows, // Use total rows internally
             cells,
             scrollback,
             scrollback_head: 0,
@@ -124,7 +143,7 @@ impl Console {
             term_cells,
             scroll_offset: 0,
             cursor_x: 0,
-            cursor_y: top_margin_rows,  // Start cursor below the margin
+            cursor_y: top_margin_rows, // Start cursor below the margin
             fg_color: 7,
             bg_color: 0,
             bold: false,
@@ -208,7 +227,10 @@ impl Console {
                 // Start of parameter digits
                 let mut digits = [0u8; 4];
                 digits[0] = byte - b'0';
-                self.escape_state = EscapeState::CsiParam { digits, digit_count: 1 };
+                self.escape_state = EscapeState::CsiParam {
+                    digits,
+                    digit_count: 1,
+                };
             }
             b'H' => {
                 // Cursor home (no parameters) - go to 0,0
@@ -234,14 +256,21 @@ impl Console {
     }
 
     fn process_csi_param(&mut self, byte: u8) {
-        if let EscapeState::CsiParam { mut digits, mut digit_count } = self.escape_state {
+        if let EscapeState::CsiParam {
+            mut digits,
+            mut digit_count,
+        } = self.escape_state
+        {
             match byte {
                 b'0'..=b'9' => {
                     // Accumulate digits
                     if digit_count < 4 {
                         digits[digit_count as usize] = byte - b'0';
                         digit_count += 1;
-                        self.escape_state = EscapeState::CsiParam { digits, digit_count };
+                        self.escape_state = EscapeState::CsiParam {
+                            digits,
+                            digit_count,
+                        };
                     }
                 }
                 b'J' => {

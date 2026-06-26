@@ -109,7 +109,13 @@ impl Reaper {
     /// Per-tick: scan telemetry for Finished processes, log one-shot
     /// "cleaned" resource reports for newly-finished pids, track zombies for
     /// time-based reaping, and check memory pressure.
-    pub fn tick<K: KernelOps>(&mut self, samples: &[ProcSample; MAX_PROCS], count: usize, shim: &K, now: u64) {
+    pub fn tick<K: KernelOps>(
+        &mut self,
+        samples: &[ProcSample; MAX_PROCS],
+        count: usize,
+        shim: &K,
+        now: u64,
+    ) {
         for i in 0..count {
             let s = &samples[i];
             if s.state != 3 {

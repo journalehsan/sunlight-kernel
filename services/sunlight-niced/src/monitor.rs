@@ -234,8 +234,11 @@ pub fn tick<K: KernelOps>(
                         continue;
                     }
                     shim.set_nice(p.pid, target);
-                    let cooldown = (rule.cooldown_secs.checked_shl(p.repeat_count).unwrap_or(u64::MAX))
-                        .min(3600);
+                    let cooldown = (rule
+                        .cooldown_secs
+                        .checked_shl(p.repeat_count)
+                        .unwrap_or(u64::MAX))
+                    .min(3600);
                     crate::serial_println!(
                         "[NICED] PENALTY pid={} '{}' cpu_avg={}% nice {}->{} cooldown={}s",
                         p.pid,

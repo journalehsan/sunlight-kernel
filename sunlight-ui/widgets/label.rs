@@ -10,7 +10,11 @@ pub struct Label<'a> {
 
 impl<'a> Label<'a> {
     pub const fn new(rect: Rect, text: &'a str) -> Self {
-        Self { rect, text, dim: false }
+        Self {
+            rect,
+            text,
+            dim: false,
+        }
     }
 
     pub const fn dim(mut self) -> Self {

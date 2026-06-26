@@ -141,7 +141,7 @@ pub fn runas<const N: usize>(
     req: &RunasRequest,
     now: Timestamp,
     store: &mut SessionStore<N>,
-    ) -> AuthResult<RunasOutcome> {
+) -> AuthResult<RunasOutcome> {
     if req.command.is_empty() {
         return Err(AuthError::InvalidRequest);
     }

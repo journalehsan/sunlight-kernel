@@ -5,16 +5,15 @@
 // Provide a tiny stub allocator to satisfy the libcore requirements if any crate pulls alloc.
 struct NoAlloc;
 unsafe impl core::alloc::GlobalAlloc for NoAlloc {
-    unsafe fn alloc(&self, _layout: core::alloc::Layout) -> *mut u8 { core::ptr::null_mut() }
+    unsafe fn alloc(&self, _layout: core::alloc::Layout) -> *mut u8 {
+        core::ptr::null_mut()
+    }
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 #[global_allocator]
 static A: NoAlloc = NoAlloc;
 
-use sunlight_ipc::{
-    nameserver_lookup, ipc_call, IpcMsg, sgp::SgpMsg,
-    debug_log,
-};
+use sunlight_ipc::{debug_log, ipc_call, nameserver_lookup, sgp::SgpMsg, IpcMsg};
 
 // Simple distance helper (not strictly used but kept for future)
 fn _distance(x1: i32, y1: i32, x2: i32, y2: i32) -> i32 {
@@ -57,12 +56,13 @@ pub extern "C" fn _start() -> ! {
         // yield via a small sleep or process_yield if exposed; for now busy with timeout lookup in practice
         // Many services just loop with yield_now equivalent via ipc timeout or direct.
         // Use a simple spin for early demo (real code would use a timer service).
-        for _ in 0..100000 { core::hint::spin_loop(); }
+        for _ in 0..100000 {
+            core::hint::spin_loop();
+        }
     };
 
     // 1. CREATE_WINDOW (width=400, height=300 packed)
-    let req = IpcMsg::with_label(SgpMsg::CREATE_WINDOW)
-        .word(0, 400u64 | (300u64 << 32));
+    let req = IpcMsg::with_label(SgpMsg::CREATE_WINDOW).word(0, 400u64 | (300u64 << 32));
     let reply = ipc_call(display_ep, req);
 
     if reply.label != SgpMsg::REPLY {
@@ -74,8 +74,8 @@ pub extern "C" fn _start() -> ! {
     let win_id = reply.words[1];
     let _size = reply.words[2] as usize;
     let _stride = reply.words[3] as usize; // bytes per row (width*4)
-    // Client-area origin (below title bar, inside borders). Mutable so dragging
-    // updates the origin on each EVENT_POLL, keeping pupil tracking correct.
+                                           // Client-area origin (below title bar, inside borders). Mutable so dragging
+                                           // updates the origin on each EVENT_POLL, keeping pupil tracking correct.
     let mut win_x = reply.words[4] as i32;
     let mut win_y = reply.words[5] as i32;
 
@@ -122,9 +122,7 @@ pub extern "C" fn _start() -> ! {
                 let dx = x - cx;
                 if dx * dx + dy * dy <= r2 {
                     unsafe {
-                        buffer
-                            .add((y * WIN_W + x) as usize)
-                            .write_volatile(color);
+                        buffer.add((y * WIN_W + x) as usize).write_volatile(color);
                     }
                 }
             }
@@ -162,10 +160,26 @@ pub extern "C" fn _start() -> ! {
     // Initial frame so the window is never solid black; pupils centered.
     {
         for i in 0..(WIN_W * WIN_H) as usize {
-            unsafe { buffer.add(i).write_volatile(bg_color); }
+            unsafe {
+                buffer.add(i).write_volatile(bg_color);
+            }
         }
-        render_eye(LEFT_EYE_X, EYE_Y, win_x + LEFT_EYE_X, win_y + EYE_Y, win_x, win_y);
-        render_eye(RIGHT_EYE_X, EYE_Y, win_x + RIGHT_EYE_X, win_y + EYE_Y, win_x, win_y);
+        render_eye(
+            LEFT_EYE_X,
+            EYE_Y,
+            win_x + LEFT_EYE_X,
+            win_y + EYE_Y,
+            win_x,
+            win_y,
+        );
+        render_eye(
+            RIGHT_EYE_X,
+            EYE_Y,
+            win_x + RIGHT_EYE_X,
+            win_y + EYE_Y,
+            win_x,
+            win_y,
+        );
 
         let commit = IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, win_id);
         let _ = ipc_call(display_ep, commit);
@@ -191,7 +205,9 @@ pub extern "C" fn _start() -> ! {
 
         // --- Zero-copy render into the shared buffer ---
         for i in 0..(WIN_W * WIN_H) as usize {
-            unsafe { buffer.add(i).write_volatile(bg_color); }
+            unsafe {
+                buffer.add(i).write_volatile(bg_color);
+            }
         }
 
         render_eye(LEFT_EYE_X, EYE_Y, mouse_x, mouse_y, win_x, win_y);

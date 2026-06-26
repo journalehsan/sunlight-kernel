@@ -3,7 +3,7 @@
 //! Re-exports the zero-copy parser types and provides helper utilities
 //! for routing and handling different request types.
 
-pub use super::parser::{HttpRequest, HttpParseError, parse_request};
+pub use super::parser::{parse_request, HttpParseError, HttpRequest};
 
 /// HTTP request method enum (for quick matching without string comparisons)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

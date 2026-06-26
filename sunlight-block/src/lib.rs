@@ -176,8 +176,12 @@ impl<'a> MemDisk<'a> {
     }
 
     fn range(&self, lba: u64) -> Result<core::ops::Range<usize>, BlockError> {
-        let start = (lba as usize).checked_mul(BLOCK_SIZE).ok_or(BlockError::OutOfRange)?;
-        let end = start.checked_add(BLOCK_SIZE).ok_or(BlockError::OutOfRange)?;
+        let start = (lba as usize)
+            .checked_mul(BLOCK_SIZE)
+            .ok_or(BlockError::OutOfRange)?;
+        let end = start
+            .checked_add(BLOCK_SIZE)
+            .ok_or(BlockError::OutOfRange)?;
         if end > self.data.len() {
             return Err(BlockError::OutOfRange);
         }
@@ -228,7 +232,10 @@ mod tests {
         disk.read_block(2, &mut readback).unwrap();
         assert_eq!(readback, block);
         assert_eq!(disk.block_count(), 4);
-        assert_eq!(disk.read_block(4, &mut readback), Err(BlockError::OutOfRange));
+        assert_eq!(
+            disk.read_block(4, &mut readback),
+            Err(BlockError::OutOfRange)
+        );
     }
 
     #[test]

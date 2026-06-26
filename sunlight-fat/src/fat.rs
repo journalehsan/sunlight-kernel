@@ -104,11 +104,7 @@ impl<D: BlockDevice> Fat32<D> {
 
     /// Walk all live entries of the directory starting at `cluster`, following
     /// the FAT chain. `f` returns false to stop early. Returns None on I/O error.
-    fn walk_dir(
-        &mut self,
-        cluster: u32,
-        f: &mut dyn FnMut(&DirEntry) -> bool,
-    ) -> Option<()> {
+    fn walk_dir(&mut self, cluster: u32, f: &mut dyn FnMut(&DirEntry) -> bool) -> Option<()> {
         let mut cluster = cluster;
         let mut sec = [0u8; BLOCK_SIZE];
         loop {
@@ -155,12 +151,7 @@ impl<D: BlockDevice> Fat32<D> {
     }
 
     /// Look up `name8` + `ext3` in the directory rooted at `cluster`.
-    fn find_in_dir(
-        &mut self,
-        cluster: u32,
-        name8: &[u8; 8],
-        ext3: &[u8; 3],
-    ) -> Option<DirEntry> {
+    fn find_in_dir(&mut self, cluster: u32, name8: &[u8; 8], ext3: &[u8; 3]) -> Option<DirEntry> {
         let mut found: Option<DirEntry> = None;
         self.walk_dir(cluster, &mut |entry| {
             if &entry.name[..8] == name8 && &entry.name[8..11] == ext3 {
@@ -234,7 +225,9 @@ impl<D: BlockDevice> Fat32<D> {
         while written < total {
             let s_idx = (pos / BLOCK_SIZE) as u64;
             let s_off = pos % BLOCK_SIZE;
-            self.dev.read_block(self.cluster_lba(cluster) + s_idx, &mut sec).ok()?;
+            self.dev
+                .read_block(self.cluster_lba(cluster) + s_idx, &mut sec)
+                .ok()?;
 
             let chunk = (BLOCK_SIZE - s_off).min(total - written);
             out[written..written + chunk].copy_from_slice(&sec[s_off..s_off + chunk]);
@@ -311,8 +304,14 @@ fn parse_83(component: &[u8]) -> Option<([u8; 8], [u8; 3])> {
 
 /// Format an on-disk 11-byte name as "NAME.EXT". Returns the length used.
 fn format_83(raw: &[u8; 11], out: &mut [u8; MAX_NAME_83]) -> usize {
-    let base_len = raw[..8].iter().rposition(|&b| b != b' ').map_or(0, |i| i + 1);
-    let ext_len = raw[8..11].iter().rposition(|&b| b != b' ').map_or(0, |i| i + 1);
+    let base_len = raw[..8]
+        .iter()
+        .rposition(|&b| b != b' ')
+        .map_or(0, |i| i + 1);
+    let ext_len = raw[8..11]
+        .iter()
+        .rposition(|&b| b != b' ')
+        .map_or(0, |i| i + 1);
 
     out[..base_len].copy_from_slice(&raw[..base_len]);
     let mut len = base_len;

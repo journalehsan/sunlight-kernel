@@ -137,11 +137,19 @@ fn sort_order(order: &mut [usize], snap: &SystemSnapshot, sort: &SortKey) {
 }
 
 fn cmp_u32(a: u32, b: u32, descending: bool) -> bool {
-    if descending { a > b } else { a < b }
+    if descending {
+        a > b
+    } else {
+        a < b
+    }
 }
 
 fn cmp_u16(a: u16, b: u16, descending: bool) -> bool {
-    if descending { a > b } else { a < b }
+    if descending {
+        a > b
+    } else {
+        a < b
+    }
 }
 
 fn cmp_name(a: &ProcessSnapshot, b: &ProcessSnapshot, descending: bool) -> bool {
@@ -227,8 +235,8 @@ fn push_dec_into(out: &mut [u8], mut v: u64) -> usize {
 /// for the CPU% column. Example: 695 -> " 6.95", 10000 -> "100.00".
 fn push_bp_two_dec(c: &mut Canvas, bp: u16) {
     let bp = bp.min(10000);
-    let whole = bp / 100;      // 0..100
-    let frac = bp % 100;       // 0..99
+    let whole = bp / 100; // 0..100
+    let frac = bp % 100; // 0..99
 
     // We want a 6-char field: "  0.00" .. "100.00"
     // Build into a small buffer then right-pad.
@@ -237,24 +245,35 @@ fn push_bp_two_dec(c: &mut Canvas, bp: u16) {
 
     if whole >= 100 {
         // 100
-        tmp[pos] = b'1'; pos += 1;
-        tmp[pos] = b'0'; pos += 1;
-        tmp[pos] = b'0'; pos += 1;
+        tmp[pos] = b'1';
+        pos += 1;
+        tmp[pos] = b'0';
+        pos += 1;
+        tmp[pos] = b'0';
+        pos += 1;
     } else if whole >= 10 {
-        tmp[pos] = b'0' + (whole / 10) as u8; pos += 1;
-        tmp[pos] = b'0' + (whole % 10) as u8; pos += 1;
+        tmp[pos] = b'0' + (whole / 10) as u8;
+        pos += 1;
+        tmp[pos] = b'0' + (whole % 10) as u8;
+        pos += 1;
     } else if whole > 0 {
         // 1..9 -> one space then digit
-        tmp[pos] = b' '; pos += 1;
-        tmp[pos] = b'0' + whole as u8; pos += 1;
+        tmp[pos] = b' ';
+        pos += 1;
+        tmp[pos] = b'0' + whole as u8;
+        pos += 1;
     } else {
         // 0
-        tmp[pos] = b' '; pos += 1;
-        tmp[pos] = b'0'; pos += 1;
+        tmp[pos] = b' ';
+        pos += 1;
+        tmp[pos] = b'0';
+        pos += 1;
     }
 
-    tmp[pos] = b'.'; pos += 1;
-    tmp[pos] = b'0' + (frac / 10) as u8; pos += 1;
+    tmp[pos] = b'.';
+    pos += 1;
+    tmp[pos] = b'0' + (frac / 10) as u8;
+    pos += 1;
     tmp[pos] = b'0' + (frac % 10) as u8; // pos not needed after this
 
     // tmp now has exactly the digits; we have a 6-char slot
