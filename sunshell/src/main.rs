@@ -2369,33 +2369,66 @@ mod sunlight {
         let _ = pty_write(cap, session_id, &buf[..len]);
     }
 
-    fn pty_echo_input(cap: CapabilityToken, session_id: u64, byte: u8) {
-        match byte {
-            b'\r' | b'\n' => {
-                let _ = pty_write(cap, session_id, b"\r\n");
+    /// Send OSC 9001;prompt;TEXT sequence so the terminal emulator shows
+    /// the prompt text in its footer input bar.
+    fn send_osc_prompt(cap: CapabilityToken, session_id: u64, shell: &Shell) {
+        let mut buf = [0u8; 192];
+        let mut n = 0;
+        for &b in b"\x1b]9001;prompt;" {
+            if n < buf.len() {
+                buf[n] = b;
+                n += 1;
             }
-            0x08 | 0x7f => {
-                let _ = pty_write(cap, session_id, b"\x08 \x08");
-            }
-            b' '..=b'~' => {
-                let _ = pty_write(cap, session_id, &[byte]);
-            }
-            _ => {}
         }
+        let mut pbuf = [0u8; 128];
+        let plen = build_prompt(shell, &mut pbuf);
+        for &b in &pbuf[..plen] {
+            if n < buf.len() {
+                buf[n] = b;
+                n += 1;
+            }
+        }
+        if n < buf.len() {
+            buf[n] = 0x07; // BEL = OSC terminator
+            n += 1;
+        }
+        let _ = pty_write(cap, session_id, &buf[..n]);
+    }
+
+    /// Send OSC 9001;app_start;NAME so the terminal shows the app indicator
+    /// in the footer and routes all keystrokes directly to the PTY.
+    fn send_osc_app_start(cap: CapabilityToken, session_id: u64, name: &[u8]) {
+        let mut buf = [0u8; 64];
+        let mut n = 0;
+        for &b in b"\x1b]9001;app_start;" {
+            if n < buf.len() {
+                buf[n] = b;
+                n += 1;
+            }
+        }
+        for &b in name {
+            if n < buf.len() {
+                buf[n] = b;
+                n += 1;
+            }
+        }
+        if n < buf.len() {
+            buf[n] = 0x07;
+            n += 1;
+        }
+        let _ = pty_write(cap, session_id, &buf[..n]);
+    }
+
+    /// Send OSC 9001;app_done so the terminal exits app mode and shows the
+    /// prompt+input footer again.
+    fn send_osc_app_done(cap: CapabilityToken, session_id: u64) {
+        let _ = pty_write(cap, session_id, b"\x1b]9001;app_done\x07");
     }
 
     fn emit_welcome_banner() {
         unsafe {
             LONG_OUT_ACTIVE = true;
             LONG_OUT_LEN = 0;
-            LONG_OUT_BUF[0] = b'\x1B';
-            LONG_OUT_BUF[1] = b'[';
-            LONG_OUT_BUF[2] = b'2';
-            LONG_OUT_BUF[3] = b'J';
-            LONG_OUT_BUF[4] = b'\x1B';
-            LONG_OUT_BUF[5] = b'[';
-            LONG_OUT_BUF[6] = b'H';
-            LONG_OUT_LEN = 7;
         }
         long_out_push_str("\x1b[36m");
         long_out_push_str("Welcome to SunlightOS\n");
@@ -2432,58 +2465,80 @@ mod sunlight {
         shell.gid = gid;
         shell.init_env();
 
+        // Send welcome banner as content output, then prompt via OSC.
+        // The terminal shows content in the scroll area and the prompt in the footer.
         emit_welcome_banner();
         pty_write_shell_output(pty_cap, session_id, &[]);
-        pty_write_prompt(pty_cap, session_id, &shell);
+        send_osc_prompt(pty_cap, session_id, &shell);
 
         let shell_tab = shell_id as u32;
         let mut in_buf = [0u8; 64];
         let mut child_buf = [0u8; 128];
+        // Track what the user is typing so we can extract the app name when it launches.
+        let mut cmd_buf = [0u8; 64];
+        let mut cmd_len = 0usize;
 
         loop {
             let mut progress = false;
 
             if let Some(pid) = shell.fg_pid {
+                // Relay foreground app stdout to the terminal content area.
                 let pulled = tty_stdout_pull(shell_tab, &mut child_buf);
                 if pulled > 0 {
                     let _ = pty_write(pty_cap, session_id, &child_buf[..pulled]);
                     progress = true;
                 }
+                // Forward keystrokes from terminal (app mode) to the app's stdin.
+                let n = pty_read(pty_cap, session_id, &mut in_buf);
+                if n > 0 {
+                    let _ = tty_stdin_push(shell_tab, &in_buf[..n]);
+                    progress = true;
+                }
                 if let Ok(Some(code)) = sunlight_libc::try_waitpid(pid) {
                     shell.fg_pid = None;
                     shell.env.set("?", &alloc::format!("{}", code));
-                    pty_write_prompt(pty_cap, session_id, &shell);
+                    // Tell terminal to exit app mode, add separator, then show new prompt.
+                    send_osc_app_done(pty_cap, session_id);
+                    let _ = pty_write(pty_cap, session_id, b"\n");
+                    send_osc_prompt(pty_cap, session_id, &shell);
                     progress = true;
                 }
-            }
-
-            let n = pty_read(pty_cap, session_id, &mut in_buf);
-            if n > 0 {
-                progress = true;
-                debug_log(&alloc::format!(
-                    "[PTY-SHELL] read {} byte(s) first={:#x}\n",
-                    n,
-                    in_buf[0]
-                ));
-                if shell.fg_pid.is_some() {
-                    let _ = tty_stdin_push(shell_tab, &in_buf[..n]);
-                } else {
+            } else {
+                // Normal mode: receive complete lines from the terminal's footer input.
+                let n = pty_read(pty_cap, session_id, &mut in_buf);
+                if n > 0 {
+                    progress = true;
                     for &byte in &in_buf[..n] {
                         let is_enter = byte == b'\n' || byte == b'\r';
-                        if !is_enter {
-                            pty_echo_input(pty_cap, session_id, byte);
+
+                        // Accumulate command name for app_start OSC.
+                        if byte == 0x08 || byte == 0x7f {
+                            if cmd_len > 0 {
+                                cmd_len -= 1;
+                            }
+                        } else if !is_enter && byte >= 0x20 && byte <= 0x7e {
+                            if cmd_len < cmd_buf.len() {
+                                cmd_buf[cmd_len] = byte;
+                                cmd_len += 1;
+                            }
                         }
+
+                        let fg_before = shell.fg_pid;
                         long_out_reset();
-                        if is_enter {
-                            debug_log("[PTY-SHELL] enter received\n");
-                        }
                         let (out, out_len) = shell.handle_byte(byte);
-                        if is_enter {
-                            pty_echo_input(pty_cap, session_id, byte);
-                        }
                         pty_write_shell_output(pty_cap, session_id, &out[..out_len]);
-                        if is_enter && shell.fg_pid.is_none() {
-                            pty_write_prompt(pty_cap, session_id, &shell);
+
+                        if is_enter {
+                            if shell.fg_pid.is_some() && fg_before.is_none() {
+                                // A foreground app just launched.
+                                let (name, name_len) = fg_app_name(&cmd_buf[..cmd_len]);
+                                send_osc_app_start(pty_cap, session_id, &name[..name_len]);
+                            } else if shell.fg_pid.is_none() {
+                                // Command completed inline; separator then prompt.
+                                let _ = pty_write(pty_cap, session_id, b"\n");
+                                send_osc_prompt(pty_cap, session_id, &shell);
+                            }
+                            cmd_len = 0;
                         }
                     }
                 }
