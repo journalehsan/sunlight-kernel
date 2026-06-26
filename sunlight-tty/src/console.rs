@@ -245,13 +245,13 @@ impl Console {
                     }
                 }
                 b'J' => {
-                    // Reconstruct number from digits
-                    let param = digits[0] as usize * 10 + digits[1] as usize;
+                    let mut param = 0usize;
+                    for i in 0..digit_count as usize {
+                        param = param * 10 + digits[i] as usize;
+                    }
                     if param == 2 {
-                        // Clear screen
                         self.clear_screen();
                     } else {
-                        // Clear from cursor to end
                         self.clear_from_cursor();
                     }
                     self.escape_state = EscapeState::Normal;

@@ -766,14 +766,9 @@ pub extern "C" fn _start() -> ! {
                         if ctrl_c {
                             pty.write(&[0x03]);
                         }
-                    } else if let Some(ch) = ascii {
-                        if ch == b'\r' || ch == b'\n' || keycode == KEY_ENTER {
-                            send_line = true;
-                        } else if ch.is_ascii() && ch >= 0x20 && ch <= 0x7E {
-                            footer.insert(ch);
-                            dirty = true;
-                        }
                     } else {
+                        // Check special keys by keycode first so that control
+                        // characters like backspace (ascii=0x08) are always caught.
                         match keycode {
                             KEY_BACKSPACE => {
                                 footer.backspace();
@@ -810,7 +805,17 @@ pub extern "C" fn _start() -> ! {
                                 footer.delete_fwd();
                                 dirty = true;
                             }
-                            _ => {}
+                            _ => {
+                                // Regular printable character from ascii
+                                if let Some(ch) = ascii {
+                                    if ch == b'\r' || ch == b'\n' {
+                                        send_line = true;
+                                    } else if ch >= 0x20 && ch <= 0x7E {
+                                        footer.insert(ch);
+                                        dirty = true;
+                                    }
+                                }
+                            }
                         }
                     }
 
