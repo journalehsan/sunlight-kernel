@@ -68,6 +68,40 @@ pub fn set_tss_rsp0(stack_top: u64) {
     }
 }
 
+/// Load the BSP's shared GDT and IDT on an Application Processor.
+///
+/// Called from `smp::ap_entry_rust` during phase-0 AP bring-up.
+///
+/// The GDT and IDT are global statics initialised once by `init()` on the
+/// BSP before any AP is started, so they are safe to read concurrently.
+/// `lgdt` and `lidt` only update the CPU's internal GDTR/IDTR register —
+/// they do not modify the descriptor tables in memory.
+///
+/// **TSS is deliberately not loaded here.**  The BSP's TSS descriptor in the
+/// GDT has its Busy bit set (by `load_tss` in `init()`), and re-loading the
+/// same TSS selector on another CPU raises #GP.  Per-AP TSSes are a phase-1
+/// deliverable (LAPIC bring-up).  APs in phase 0 never execute ring-3 code,
+/// so RSP0 / IST stacks are not needed yet.
+pub fn ap_load_gdt_and_idt() {
+    use x86_64::instructions::segmentation::{Segment, CS, DS, ES, SS};
+    use x86_64::structures::gdt::SegmentSelector;
+
+    // Load the BSP's GDT.  spin::Lazy guarantees it is initialized (the BSP
+    // called init() → GDT.0.load() before start_aps() was ever invoked).
+    GDT.0.load();
+
+    unsafe {
+        // Set the code segment to the kernel 64-bit code selector.
+        CS::set_reg(GDT.1.code_selector);
+        // Null out data/stack/extra segment registers (not used in 64-bit mode).
+        SS::set_reg(SegmentSelector(0));
+        DS::set_reg(SegmentSelector(0));
+        ES::set_reg(SegmentSelector(0));
+        // Load the IDT — same pointer as the BSP; lidt is non-destructive.
+        IDT.load_unsafe();
+    }
+}
+
 /// Initialize IDT, GDT, PIC, and PIT.
 pub fn init() {
     serial_println!("[IDT] Loading interrupt descriptor table...");
@@ -303,7 +337,7 @@ pub fn now_ns() -> u64 {
 extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
     // Diagnostic 1d: log pid/rip/rsp for every fault (before existing log)
     let pid =
-        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+        crate::sched::with_scheduler(|s| s.current_pid());
     serial_println!(
         "[FAULT] #0 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
         pid,
@@ -323,7 +357,7 @@ extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame)
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
     // Diagnostic 1d: log pid/rip/rsp for #UD
     let pid =
-        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+        crate::sched::with_scheduler(|s| s.current_pid());
     serial_println!(
         "[FAULT] #6 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
         pid,
@@ -345,7 +379,7 @@ extern "x86-interrupt" fn double_fault_handler(
     _error_code: u64,
 ) -> ! {
     let pid =
-        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+        crate::sched::with_scheduler(|s| s.current_pid());
     serial_println!(
         "[FAULT] #8 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
         pid,
@@ -362,7 +396,7 @@ extern "x86-interrupt" fn double_fault_handler(
 extern "x86-interrupt" fn gpf_handler(stack_frame: InterruptStackFrame, error_code: u64) {
     // Diagnostic 1d: log pid/rip/rsp for #GP
     let pid =
-        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+        crate::sched::with_scheduler(|s| s.current_pid());
     serial_println!(
         "[FAULT] #13 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
         pid,
@@ -389,7 +423,7 @@ extern "x86-interrupt" fn page_fault_handler(
 ) {
     // Diagnostic 1d: log pid/rip/rsp for #PF (before the vaddr read)
     let pid =
-        crate::sched::with_scheduler(|s| s.processes.get(s.current).map(|p| p.pid).unwrap_or(0));
+        crate::sched::with_scheduler(|s| s.current_pid());
     let rip = _stack_frame.instruction_pointer.as_u64();
     let rsp = _stack_frame.stack_pointer.as_u64();
     serial_println!(
@@ -695,85 +729,10 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         }
     }
 
-    let result = if crate::sched::check_reschedule() {
-        let current = sched.current;
-        // Guard: processes may be empty during early boot (interrupts enabled before
-        // any process is loaded). Skip reschedule until the scheduler has entries.
-        if current >= sched.processes.len() {
-            0
-        } else {
-            // === CPU Accounting (Phase 1) + Phase 4 churn detection ===
-            // Charge exact runtime. If this was an extremely short burst, penalize
-            // burst_score temporarily to avoid scheduler/idle churn from thrashing tasks.
-            sched.account_and_apply_churn_penalty();
-
-            // Save current context.
-            sched.processes[current].context_rsp = saved_rsp;
-            sched.processes[current].fs_base =
-                unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
-
-            // Phase 2: maintain runnable-only invariant in tier queues.
-            let was_runnable = matches!(
-                sched.processes[current].state,
-                crate::process::ProcessState::Ready | crate::process::ProcessState::Running
-            );
-            if sched.processes[current].state == crate::process::ProcessState::Running {
-                sched.processes[current].state = crate::process::ProcessState::Ready;
-            }
-            // If it is still (or became) Ready, ensure it is enqueued for BORE.
-            // If it became Blocked*/Suspended/Finished, ensure it is NOT queued.
-            if matches!(
-                sched.processes[current].state,
-                crate::process::ProcessState::Ready
-            ) {
-                if crate::sched::SCHEDULER_MODE == crate::sched::SchedulerMode::Bore {
-                    sched.enqueue_process_once(current);
-                }
-            } else if !was_runnable
-                || !matches!(
-                    sched.processes[current].state,
-                    crate::process::ProcessState::Ready
-                )
-            {
-                sched.remove_from_ready_queues(current);
-            }
-
-            if let Some(next) = sched.pick_next() {
-                let next_rsp = sched.processes[next].context_rsp;
-                let next_stack_top = sched.processes[next].kernel_stack_top;
-                let next_fs_base = sched.processes[next].fs_base;
-                let prev = current;
-                sched.current = next;
-                sched.processes[next].state = crate::process::ProcessState::Running;
-                sched.processes[next].last_run_tick = sched.global_tick;
-
-                // === CPU Accounting: start charging the newly scheduled process ===
-                sched.start_charging_runtime(next);
-
-                // Switch address space.
-                unsafe {
-                    sched.processes[next].address_space.activate();
-                    x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
-                }
-
-                // Update TSS RSP0 for next interrupt.
-                // SAFETY: timer handler runs with interrupts disabled; no concurrent TSS access.
-                // Note: ltr is NOT needed here — the CPU reads RSP0 from the TSS memory
-                // on each privilege-level stack switch. We only need to update the TSS contents.
-                set_tss_rsp0(next_stack_top);
-
-                if sched.processes[prev].state == crate::process::ProcessState::Finished {
-                    sched.reap_process_resources(prev);
-                }
-
-                next_rsp
-            } else {
-                0
-            }
-        }
-    } else {
-        0
-    };
+    // Delegate all context-switch logic to the per-core schedule_tick().
+    // schedule_tick() checks NEEDS_RESCHEDULE internally, saves context,
+    // runs pick_next / steal_work, switches address spaces, and updates TSS.
+    let result = sched.schedule_tick(crate::sched::current_cpu_id(), saved_rsp);
 
     // Release scheduler lock by dropping it
     drop(sched);

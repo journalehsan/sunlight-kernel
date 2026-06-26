@@ -17,7 +17,7 @@ mod process;
 mod sched;
 mod telemetry;
 
-use arch::x86_64::{acpi, cpu, interrupts, keyboard, serial, syscall};
+use arch::x86_64::{acpi, cpu, interrupts, keyboard, serial, smp, syscall};
 use memory::{heap, pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
 use process::{layout, Process};
 use x86_64::{
@@ -33,6 +33,10 @@ static HHDM_REQ: limine::request::HhdmRequest = limine::request::HhdmRequest::ne
 pub(crate) static FB_REQ: limine::request::FramebufferRequest =
     limine::request::FramebufferRequest::new();
 static RSDP_REQ: limine::request::RsdpRequest = limine::request::RsdpRequest::new();
+/// Limine MP request: tells the bootloader to enumerate all logical processors
+/// and provide their LAPIC IDs + `MpInfo` pointers.  APs are parked by Limine
+/// until `MpInfo::bootstrap()` is called for each one in `smp::start_aps()`.
+static MP_REQ: limine::request::MpRequest = limine::request::MpRequest::new(0);
 // 1 MiB boot stack (Limine defaults to 64 KiB). `init_kernel_vfs` and the
 // FAT bootstrap keep multi-KiB filesystem objects on the stack before the
 // scheduler's per-process kernel stacks take over; overflowing the default
@@ -282,6 +286,34 @@ pub extern "C" fn _start() -> ! {
     // user-visible free/swap reporting.
     init_swap_smoke(&mut PMM.lock());
 
+    // 4.5. MADT — enumerate logical processors now that the heap is available.
+    // acpi::init() (step 2.5) runs before the heap and only handles power
+    // management; MADT parsing needs Vec so it lives here.
+    splash.set_status("Enumerating CPU topology");
+    splash.log("[ACPI] Parsing MADT...");
+    splash.redraw();
+    let madt_cores = match unsafe { acpi::parse_madt() } {
+        Ok(cores) => {
+            let usable = cores.iter().filter(|c| c.is_usable()).count().max(1);
+            serial_println!(
+                "[ACPI] MADT: {} logical processor(s) detected ({} usable)",
+                cores.len(),
+                usable
+            );
+            splash.log("[ACPI] MADT OK");
+            unsafe {
+                telemetry::TELEMETRY.cpu_count = usable.min(255) as u8;
+            }
+            cores
+        }
+        Err(e) => {
+            serial_println!("[ACPI] MADT unavailable: {} (assuming 1 CPU)", e);
+            splash.log("[ACPI] MADT unavailable");
+            alloc::vec![]
+        }
+    };
+    let _ = madt_cores; // available for SMP bring-up in a future step
+
     // 5. virtio-blk + FAT32 bootstrap
     // Initialize the block device, read FAT32 test files, and write them into a
     // shared physical page that will be mapped into the vfs_server's address space.
@@ -301,6 +333,36 @@ pub extern "C" fn _start() -> ! {
     serial_println!("[SYSCALL] OK");
     splash.log("[SYSCALL] OK");
     splash.set_progress(500); // 50%
+    splash.redraw();
+
+    // 6.5. SMP bring-up (phase 0: enumerate APs, park in idle loop).
+    // Must run after IDT (step 3) and SYSCALL MSRs (step 6) — APs call both
+    // during their init.  APs will not be scheduled until LAPIC timers are
+    // wired (phase 1 SMP, future work).
+    splash.set_status("Starting Application Processors");
+    splash.log("[SMP] Starting APs...");
+    splash.redraw();
+    match MP_REQ.response() {
+        Some(mp_resp) => {
+            let cpus = mp_resp.cpus();
+            let bsp_lapic_id = mp_resp.bsp_lapic_id;
+            serial_println!(
+                "[SMP] Limine MP response: {} CPU(s), BSP LAPIC ID={}",
+                cpus.len(),
+                bsp_lapic_id
+            );
+            smp::start_aps(cpus, bsp_lapic_id);
+            // Phase 0→1 transition: seed the per-core scheduler with the
+            // total logical CPU count so enqueue/steal logic knows all cores.
+            crate::sched::init_cores(cpus.len());
+            splash.log("[SMP] APs online");
+        }
+        None => {
+            serial_println!("[SMP] No MP response from bootloader (single-CPU mode)");
+            splash.log("[SMP] Single CPU mode");
+        }
+    }
+    splash.set_progress(550); // 55%
     splash.redraw();
 
     // 7. Capability broker

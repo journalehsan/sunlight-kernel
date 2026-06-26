@@ -1,7 +1,10 @@
-//! SunBrust RR Scheduler (SunlightOS)
+//! SunBrust Distributed Work-Stealing Scheduler (SunlightOS)
 //!
-//! This module implements the "SunBrust" round-robin scheduler with BORE-inspired
-//! burst tracking, nice-weighted counters, and tiered ready queues.
+//! This module implements the "SunBrust" per-core distributed scheduler with
+//! work-stealing. Each logical CPU owns a `CoreState` holding its local run
+//! queues and currently-executing task; when a core's local queues are empty
+//! it calls `steal_work()` to pop a task from the tail of another core's
+//! lowest-priority tier queue, respecting per-process CPU affinity masks.
 //!
 //! ## Scheduling Model
 //!
@@ -38,13 +41,11 @@
 //!
 //! quantum_override may be set by the nice promotion logic for one shot bonuses.
 //!
-//! ### Tiered Queues (BORE mode)
-//! Three ready queues (high/med/low) are maintained. pick_next_bore prefers
-//! high then medium then low. Within a tier, simple FIFO with "skip current"
-//! to avoid immediate re-run of the just-preempted task.
-//!
-//! In RoundRobin mode the tier queues are ignored; pick_next_round_robin performs
-//! a single linear scan over processes with nice-weighted promotion and skip logic.
+//! ### Per-Core Tiered Queues (BORE mode)
+//! Each `CoreState` maintains three ready queues (high/med/low). pick_next_bore
+//! prefers high then medium then low. When all local queues are empty,
+//! steal_work() attempts a try_lock-style steal from the tail of another core's
+//! lowest-priority non-empty queue, checking cpu_mask affinity before taking.
 //!
 //! ### Aging & Starvation Prevention
 //! - Every AGING_INTERVAL_TICKS, tasks that have waited > AGING_THRESHOLD_TICKS
@@ -74,21 +75,19 @@
 //! The monotonic clock is a calibrated TSC (or tick fallback) providing ns resolution
 //! with very low overhead (rdtsc + mul + shift, no floating point).
 //!
-//! sunlight-top reads cpu_ticks (effective runtime at publish) and previous values
-//! it stores locally, then computes machine-normalized deltas using:
-//!   capacity_delta = interval_ns * online_cpu_count
-//!   process_bp   = process_delta_ns * 10000 / capacity_delta
-//!   used_bp      = sum(non_idle_deltas) * 10000 / capacity_delta
-//!   idle_bp      = 10000 - used_bp (or derived from idle if tracked)
+//! ### SMP Phase 0 → Phase 1 Transition
+//! BSP brings APs online via smp::start_aps(); main.rs then calls
+//! sched::init_cores(total_cpu_count) which stores ONLINE_CORES and seeds the
+//! online_cores field of the global Scheduler. Until then only CORES[0] (BSP)
+//! is used. When per-core LAPIC timers are wired (phase 1 SMP), each AP's
+//! timer IRQ will call schedule_tick(current_cpu_id(), saved_rsp) to dispatch
+//! tasks from its own per-core queue or steal from neighbours.
 //!
 //! ## Invariants (Phase 2)
 //! - Only Ready or Running processes may reside in the tiered ready queues.
 //! - Blocking (IPC, timer, IO, waitpid, yield-to-block, exit, suspend) removes
 //!   the task from ready queues before it stops being current.
 //! - pick_next_* only returns Ready tasks (or falls back safely).
-//!
-//! Overhead in the hot path is deliberately kept minimal: the dominant cost on
-//! context switch is rdtsc + a few branches and the existing queue/tier logic.
 
 use crate::arch::x86_64::interrupts::now_ns;
 use crate::process::{Process, ProcessState, QueueTier};
@@ -177,27 +176,15 @@ static SUNLIGHTD_FIRST_SCHED: AtomicBool = AtomicBool::new(false);
 /// === Diagnostic counters for process leak detection ===
 static PROCESS_CREATED: AtomicUsize = AtomicUsize::new(0);
 static PROCESS_FINISHED: AtomicUsize = AtomicUsize::new(0);
-// Adjust the timeslice constants to your needs
+
 pub const QUANTUM_MIN: u32 = 5;
 pub const QUANTUM_MAX: u32 = 50;
 
 fn calculate_quantum_with_nice(burst_score: u32, nice: i8) -> u32 {
-    // 1. Convert to i32 for safe calculations (supports negative numbers)
-    // Each 1 nice unit is equivalent to 16 jump units in the burst graph
     let nice_modifier = (nice as i32) * 16;
-
-    // 2. Algebraic sum of dynamic score with static priority
-    // Positive nice (lower priority) -> score increases -> timeslice decreases
-    // Negative nice (higher priority) -> score decreases -> timeslice increases
     let effective_score = (burst_score as i32 + nice_modifier)
-        // With clamp, we make sure we don't go outside the allowed range [0, 1024]
         .clamp(0, BURST_SCORE_MAX as i32) as u32;
-
-    // 3. Continue calculating weight and quantum as before
-    // [FIX-4] Interactive tasks (low score) get short quanta; CPU-bound tasks
-    // (high score) get long quanta. Previously this was inverted.
     let bonus_quantum = (effective_score * (QUANTUM_MAX - QUANTUM_MIN)) / BURST_SCORE_MAX;
-
     QUANTUM_MIN + bonus_quantum
 }
 
@@ -210,19 +197,15 @@ fn quantum_ticks(process: &Process) -> u32 {
 }
 
 /// Accumulate the nice-weighted counter for a candidate process. [FEAT-3]
-/// nice == 0 tasks are pure round-robin and never have their counter touched.
 fn accumulate_counter(process: &mut Process) {
     if process.nice == 0 {
-        return; // [FEAT-3] pure RR for neutral tasks
+        return;
     }
-
-    // CPU-bound tasks feel nice value MORE strongly than interactive ones.
     let factor: i32 = if process.burst_score > BURST_SCORE_LOW {
         2
     } else {
         1
     };
-
     if process.nice < 0 {
         let gain = ((-process.nice as i32) / 4 + 1) * factor;
         process.counter = (process.counter + gain).min(MAX_CREDIT);
@@ -233,38 +216,82 @@ fn accumulate_counter(process: &mut Process) {
 }
 
 /// Post-run housekeeping for the RoundRobin counter system. [FEAT-3]
-/// Called after a process's quantum ends, before it is re-enqueued.
 fn on_task_ran(process: &mut Process, ticks_used: u64) {
-    process.aging_boosted_this_pick = false; // [FEAT-3] reset guard
-
+    process.aging_boosted_this_pick = false;
     let q = quantum_ticks(process);
-    process.quantum_override = None; // [FEAT-3] consume override
-
+    process.quantum_override = None;
     if ticks_used < (q / 2) as u64 {
-        // Interactive: used less than half the quantum. Fast decay toward
-        // neutral, preserving sign (halving doesn't flip polarity).
-        process.counter /= 2; // [FEAT-3]
+        process.counter /= 2;
     } else {
-        // CPU-bound: slow linear decay.
         if process.counter > 0 {
-            process.counter -= DECAY_RATE; // [FEAT-3]
+            process.counter -= DECAY_RATE;
         } else if process.counter < 0 {
-            process.counter += DECAY_RATE; // [FEAT-3]
+            process.counter += DECAY_RATE;
         }
     }
 }
 
+// ─── Per-Core Work-Stealing Infrastructure ───────────────────────────────────
+
+/// Maximum number of logical CPUs supported by the per-core scheduler.
+pub const MAX_CORES: usize = 64;
+
+/// Number of cores that have completed phase-0 init and can receive tasks.
+/// Initialised to 1 (BSP only); updated by init_cores() after SMP bring-up.
+pub static ONLINE_CORES: AtomicUsize = AtomicUsize::new(1);
+
+/// Per-core scheduling state: local BORE-tiered run queues and current task.
+///
+/// All fields are protected by the global `SCHEDULER` spinlock during BSP-only
+/// operation (SMP Phase 0). When per-core LAPIC timers are wired (Phase 1),
+/// each CoreState gains its own `spin::Mutex` and steal_work() uses try_lock()
+/// to avoid blocking on a busy victim — the current single-lock design is
+/// correct because only the BSP acquires SCHEDULER.
+pub struct CoreState {
+    /// Highest-priority ready tasks (burst_score 0–256, interactive).
+    pub run_queue_high: VecDeque<usize>,
+    /// Medium-priority ready tasks (burst_score 257–768).
+    pub run_queue_medium: VecDeque<usize>,
+    /// Lowest-priority ready tasks (burst_score 769–1024, CPU-bound).
+    /// Work-stealing steals from the *back* of this queue first, so the
+    /// longest-waiting, least-urgent tasks migrate preferentially.
+    pub run_queue_low: VecDeque<usize>,
+    /// Index into Scheduler::processes for the task currently running on this
+    /// core. None when the core is idle.
+    pub current_task: Option<usize>,
+    /// Ticks accumulated by current_task within its current quantum.
+    pub current_ticks: u64,
+}
+
+impl CoreState {
+    pub const fn new() -> Self {
+        Self {
+            run_queue_high: VecDeque::new(),
+            run_queue_medium: VecDeque::new(),
+            run_queue_low: VecDeque::new(),
+            current_task: None,
+            current_ticks: 0,
+        }
+    }
+
+    fn total_ready(&self) -> usize {
+        self.run_queue_high.len()
+            + self.run_queue_medium.len()
+            + self.run_queue_low.len()
+    }
+}
+
+// ─── Scheduler ───────────────────────────────────────────────────────────────
+
 pub struct Scheduler {
     pub processes: Vec<Process>,
 
-    // BORE: Tiered ready queues by priority
-    pub ready_queue_high: VecDeque<usize>, // Burst 0-256 (interactive)
-    pub ready_queue_medium: VecDeque<usize>, // Burst 257-768
-    pub ready_queue_low: VecDeque<usize>,  // Burst 769-1024 (CPU-bound)
+    /// Per-core scheduling state. Only indices 0..online_cores are active.
+    pub cores: [CoreState; MAX_CORES],
+    /// Number of online cores (1 until init_cores() is called).
+    pub online_cores: usize,
 
-    pub current: usize,
-    pub current_ticks: u64,
-    pub global_tick: u64, // Ever-incrementing counter
+    pub global_tick: u64,
     pub idle_context_rsp: u64,
 }
 
@@ -272,33 +299,37 @@ impl Scheduler {
     pub const fn new() -> Self {
         Self {
             processes: Vec::new(),
-            ready_queue_high: VecDeque::new(),
-            ready_queue_medium: VecDeque::new(),
-            ready_queue_low: VecDeque::new(),
-            current: 0,
-            current_ticks: 0,
+            cores: [const { CoreState::new() }; MAX_CORES],
+            online_cores: 1,
             global_tick: 0,
             idle_context_rsp: 0,
         }
     }
 
-    /// Add a process to the scheduler.
+    // ── Process management ───────────────────────────────────────────────────
+
     pub fn add_process(&mut self, process: Process) -> usize {
         let created_count = PROCESS_CREATED.fetch_add(1, Ordering::Relaxed);
+        let online = self.online_cores;
 
-        // Reuse a finished slot when possible so we avoid growing Vec<Process>
-        // unboundedly under spawn/exit churn. `Process` is large, so a Vec
-        // growth reallocation can fail even when only one additional process
-        // is being created.
+        // Collect which process slots are currently running on any core so we
+        // don't reclaim them while a core still has a reference.
+        let mut in_use = [usize::MAX; MAX_CORES];
+        for c in 0..online {
+            in_use[c] = self.cores[c].current_task.unwrap_or(usize::MAX);
+        }
+
         if let Some(id) = self
             .processes
             .iter()
             .enumerate()
-            .find(|(idx, p)| *idx != self.current && p.state == ProcessState::Finished)
+            .find(|(idx, p)| {
+                p.state == ProcessState::Finished
+                    && in_use[..online].iter().all(|&cur| cur != *idx)
+            })
             .map(|(idx, _)| idx)
         {
             self.remove_from_ready_queues(id);
-
             serial_println!(
                 "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused slot)",
                 created_count + 1,
@@ -321,14 +352,50 @@ impl Scheduler {
             process.get_queue_tier()
         );
         self.processes.push(process);
-
-        // Don't queue here - let enqueue_process() handle it
-        // This avoids duplicates when a process is first started in run_forever()
-
         id
     }
 
-    /// Enqueue a Ready process to the appropriate tier queue
+    /// Choose the least-loaded core that the process's cpu_mask permits.
+    fn target_core_for_process(&self, idx: usize) -> usize {
+        let online = self.online_cores;
+        let cpu_mask = if idx < self.processes.len() {
+            self.processes[idx].cpu_mask
+        } else {
+            u64::MAX
+        };
+
+        let mut best_core = 0;
+        let mut best_len = usize::MAX;
+        for core_id in 0..online {
+            if cpu_mask & (1u64 << core_id) == 0 {
+                continue;
+            }
+            let len = self.cores[core_id].total_ready();
+            if len < best_len {
+                best_len = len;
+                best_core = core_id;
+            }
+        }
+        best_core
+    }
+
+    /// Enqueue a Ready process onto a specific core's tier queue.
+    fn enqueue_process_to_core(&mut self, idx: usize, core_id: usize) {
+        if idx >= self.processes.len()
+            || !matches!(self.processes[idx].state, ProcessState::Ready)
+        {
+            return;
+        }
+        let tier = self.processes[idx].get_queue_tier();
+        let core = &mut self.cores[core_id];
+        match tier {
+            QueueTier::High => core.run_queue_high.push_back(idx),
+            QueueTier::Medium => core.run_queue_medium.push_back(idx),
+            QueueTier::Low => core.run_queue_low.push_back(idx),
+        }
+    }
+
+    /// Enqueue a Ready process to the least-loaded eligible core.
     pub fn enqueue_process(&mut self, idx: usize) {
         if idx >= self.processes.len() {
             return;
@@ -337,15 +404,11 @@ impl Scheduler {
             return;
         }
         self.remove_from_ready_queues(idx);
-        let tier = self.processes[idx].get_queue_tier();
-        match tier {
-            QueueTier::High => self.ready_queue_high.push_back(idx),
-            QueueTier::Medium => self.ready_queue_medium.push_back(idx),
-            QueueTier::Low => self.ready_queue_low.push_back(idx),
-        }
+        let core_id = self.target_core_for_process(idx);
+        self.enqueue_process_to_core(idx, core_id);
     }
 
-    /// Enqueue a Ready process once, avoiding stale duplicate queue entries.
+    /// Enqueue once, skipping if already present in any core's queue.
     pub fn enqueue_process_once(&mut self, idx: usize) {
         if idx >= self.processes.len()
             || !matches!(self.processes[idx].state, ProcessState::Ready)
@@ -356,24 +419,41 @@ impl Scheduler {
         self.enqueue_process(idx);
     }
 
+    /// Remove a process index from every core's ready queues.
     pub fn remove_from_ready_queues(&mut self, idx: usize) {
-        self.ready_queue_high.retain(|&queued| queued != idx);
-        self.ready_queue_medium.retain(|&queued| queued != idx);
-        self.ready_queue_low.retain(|&queued| queued != idx);
+        let online = self.online_cores;
+        for core_id in 0..online {
+            let core = &mut self.cores[core_id];
+            core.run_queue_high.retain(|&q| q != idx);
+            core.run_queue_medium.retain(|&q| q != idx);
+            core.run_queue_low.retain(|&q| q != idx);
+        }
     }
 
     fn is_queued(&self, idx: usize) -> bool {
-        self.ready_queue_high.iter().any(|&queued| queued == idx)
-            || self.ready_queue_medium.iter().any(|&queued| queued == idx)
-            || self.ready_queue_low.iter().any(|&queued| queued == idx)
+        let online = self.online_cores;
+        for core_id in 0..online {
+            let core = &self.cores[core_id];
+            if core.run_queue_high.iter().any(|&q| q == idx)
+                || core.run_queue_medium.iter().any(|&q| q == idx)
+                || core.run_queue_low.iter().any(|&q| q == idx)
+            {
+                return true;
+            }
+        }
+        false
     }
 
-    /// Seed all currently Ready processes except the one already running.
+    /// Clear all core queues, then distribute all Ready processes (except
+    /// `running_idx`) across the online cores.
     pub fn seed_ready_queues_except(&mut self, running_idx: usize) {
-        self.ready_queue_high.clear();
-        self.ready_queue_medium.clear();
-        self.ready_queue_low.clear();
-
+        let online = self.online_cores;
+        for core_id in 0..online {
+            let core = &mut self.cores[core_id];
+            core.run_queue_high.clear();
+            core.run_queue_medium.clear();
+            core.run_queue_low.clear();
+        }
         for idx in 0..self.processes.len() {
             if idx != running_idx && matches!(self.processes[idx].state, ProcessState::Ready) {
                 self.enqueue_process(idx);
@@ -386,42 +466,47 @@ impl Scheduler {
         self.idle_context_rsp = rsp;
     }
 
-    /// Set a per-process watchdog: if a single quantum runs longer than
-    /// `period_ticks`, the process is suspended. [FEAT-1]
+    /// Set a per-process watchdog period. [FEAT-1]
     pub fn set_process_watchdog(&mut self, pid: usize, period_ticks: u64) {
         if let Some(p) = self.process_mut_by_pid(pid) {
-            p.wd_period_ticks = Some(period_ticks); // [FEAT-1]
+            p.wd_period_ticks = Some(period_ticks);
         }
     }
 
     /// Disable the per-process watchdog. [FEAT-1]
     pub fn clear_process_watchdog(&mut self, pid: usize) {
         if let Some(p) = self.process_mut_by_pid(pid) {
-            p.wd_period_ticks = None; // [FEAT-1]
+            p.wd_period_ticks = None;
         }
     }
 
-    /// Reset a process's nice-weighted counter (e.g. when nice changes at runtime). [FEAT-3]
+    /// Reset a process's nice-weighted counter. [FEAT-3]
     pub fn reset_counter(&mut self, pid: usize) {
         if let Some(p) = self.process_mut_by_pid(pid) {
-            p.counter = 0; // [FEAT-3]
+            p.counter = 0;
         }
     }
 
-    /// Sample the monotonic kernel clock (nanoseconds).
     #[inline]
     pub fn now_ns(&self) -> u64 {
         now_ns()
     }
 
-    /// Stop charging CPU time to the current process and accumulate elapsed.
-    /// Safe to call when current is valid. Returns the delta that was charged (0 if none).
+    // ── CPU accounting ───────────────────────────────────────────────────────
+
+    /// Stop charging runtime to the currently running process on this CPU and
+    /// accumulate the elapsed delta. Returns bytes charged (0 if none).
     pub fn account_current_runtime(&mut self) -> u64 {
-        let now = now_ns();
-        if self.current >= self.processes.len() {
+        let cpu_id = current_cpu_id();
+        let current = match self.cores[cpu_id].current_task {
+            Some(idx) => idx,
+            None => return 0,
+        };
+        if current >= self.processes.len() {
             return 0;
         }
-        let p = &mut self.processes[self.current];
+        let now = now_ns();
+        let p = &mut self.processes[current];
         let mut delta: u64 = 0;
         if p.last_start_ns != 0 {
             delta = now.saturating_sub(p.last_start_ns);
@@ -431,26 +516,25 @@ impl Scheduler {
         delta
     }
 
-    /// Account runtime for current and, if the just-run burst was extremely short,
-    /// apply a temporary priority penalty (increase burst_score) to reduce idle churn.
-    /// Called on the deschedule path for Phase 4.
+    /// Account runtime and apply the Phase 4 short-burst churn penalty.
     pub fn account_and_apply_churn_penalty(&mut self) -> u64 {
         let delta = self.account_current_runtime();
         if delta > 0 && delta < SHORT_BURST_NS {
-            if self.current < self.processes.len() {
-                let p = &mut self.processes[self.current];
-                // Bump burst score => appears more CPU-bound => lower scheduling priority
-                // for a while. This decays via normal full-quantum/aging paths.
-                p.burst_score = p
-                    .burst_score
-                    .saturating_add(SHORT_BURST_PENALTY)
-                    .min(BURST_SCORE_MAX);
+            let cpu_id = current_cpu_id();
+            if let Some(current) = self.cores[cpu_id].current_task {
+                if current < self.processes.len() {
+                    let p = &mut self.processes[current];
+                    p.burst_score = p
+                        .burst_score
+                        .saturating_add(SHORT_BURST_PENALTY)
+                        .min(BURST_SCORE_MAX);
+                }
             }
         }
         delta
     }
 
-    /// Begin charging CPU time to the given process (mark start time).
+    /// Begin charging CPU time to the given process.
     pub fn start_charging_runtime(&mut self, idx: usize) {
         if idx >= self.processes.len() {
             return;
@@ -458,12 +542,7 @@ impl Scheduler {
         self.processes[idx].last_start_ns = now_ns();
     }
 
-    /// Compute effective runtime for a process, including uncommitted time
-    /// if the process is currently Running on CPU.
-    ///
-    /// Per CPU accounting rules: a task's committed cpu_runtime_ns is updated
-    /// on context switch-out. If the task is currently running, add the
-    /// elapsed time since last_start_ns.
+    /// Compute effective runtime including uncommitted time for a Running task.
     #[inline]
     pub fn effective_runtime_ns(&self, idx: usize) -> u64 {
         if idx >= self.processes.len() {
@@ -479,53 +558,49 @@ impl Scheduler {
         }
     }
 
-    /// Set state and ensure ready queues only contain runnable tasks.
-    /// Non-runnable tasks are removed from all tier queues.
+    // ── State management ─────────────────────────────────────────────────────
+
     pub fn set_state(&mut self, idx: usize, new_state: ProcessState) {
         if idx >= self.processes.len() {
             return;
         }
-        let old_state = self.processes[idx].state;
         self.processes[idx].state = new_state;
-
         let runnable = matches!(new_state, ProcessState::Ready | ProcessState::Running);
         if !runnable {
             self.remove_from_ready_queues(idx);
-        } else if matches!(old_state, ProcessState::Ready | ProcessState::Running)
-            && matches!(new_state, ProcessState::Ready)
-        {
-            // Will be (re)enqueued by enqueue path as needed for tier correctness.
         }
     }
 
-    /// Called from timer IRQ — may set the reschedule flag.
+    // ── Timer tick ───────────────────────────────────────────────────────────
+
+    /// Called from the timer IRQ on each tick. Updates quantum tracking and
+    /// sets NEEDS_RESCHEDULE when the current task's quantum expires.
     pub fn tick(&mut self) {
         self.global_tick += 1;
-        self.current_ticks += 1;
+        let cpu_id = current_cpu_id();
+        self.cores[cpu_id].current_ticks += 1;
 
-        // This is the key line! We get the timeslice based on the current behavior of the process:
-        let current = self.current;
-        let quantum = quantum_ticks(&self.processes[current]) as u64; // [FEAT-3]
-                                                                      // if for sshl set to less than 5 reset to -1 :)
+        let current = match self.cores[cpu_id].current_task {
+            Some(idx) => idx,
+            None => {
+                NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
+                return;
+            }
+        };
 
-        // print quantum in serial
-        // serial_println!(
-        //     "[SCHED] Quantum {} ticks (process #{} '{}')",
-        //     quantum,
-        //     current,
-        //     self.processes[current].pid
-        // );
+        if current >= self.processes.len() {
+            return;
+        }
 
-        if self.current_ticks >= quantum {
-            // Process used full quantum
-            let ticks_used = self.current_ticks;
+        let quantum = quantum_ticks(&self.processes[current]) as u64;
+
+        if self.cores[cpu_id].current_ticks >= quantum {
+            let ticks_used = self.cores[cpu_id].current_ticks;
             let current_proc = &mut self.processes[current];
             current_proc.timeslice_used = ticks_used as u32;
 
-            // Update burst score for full quantum usage
             update_burst_score(current_proc, BurstReason::FullQuantum);
 
-            // [FEAT-3] Counter decay / override consumption is RoundRobin-only.
             if SCHEDULER_MODE == SchedulerMode::RoundRobin {
                 on_task_ran(current_proc, ticks_used);
             } else {
@@ -533,7 +608,7 @@ impl Scheduler {
                 current_proc.aging_boosted_this_pick = false;
             }
 
-            // [FEAT-1] Per-process watchdog: suspend if this quantum ran too long.
+            // [FEAT-1] Per-process watchdog.
             if let Some(wd) = current_proc.wd_period_ticks {
                 if ticks_used > wd {
                     self.account_current_runtime();
@@ -549,11 +624,8 @@ impl Scheduler {
                 }
             }
 
-            // Age processes that haven't run recently
             self.age_ready_tasks();
-
-            // Request reschedule
-            self.current_ticks = 0;
+            self.cores[cpu_id].current_ticks = 0;
             NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
         }
 
@@ -563,21 +635,14 @@ impl Scheduler {
     }
 
     fn age_ready_tasks(&mut self) {
-        // [FIX-1] Only age on multiples of AGING_INTERVAL_TICKS; previously
-        // this condition was inverted and aged on ~99% of ticks.
         if !self.global_tick.is_multiple_of(AGING_INTERVAL_TICKS) {
-            return; // [FIX-1] skip unless this is an aging tick
+            return;
         }
-
         for idx in 0..self.processes.len() {
             let p = &mut self.processes[idx];
-
-            // Only age Ready (not Running/Blocked*) processes
             if !matches!(p.state, ProcessState::Ready) {
                 continue;
             }
-
-            // Check if process has been waiting too long
             let ticks_since_run = self.global_tick - p.last_run_tick;
             if ticks_since_run > AGING_THRESHOLD_TICKS {
                 update_burst_score(p, BurstReason::Aged);
@@ -585,75 +650,169 @@ impl Scheduler {
         }
     }
 
-    /// Pick the next Ready process using BORE tiered queues
-    pub fn pick_next_bore(&mut self) -> Option<usize> {
-        // [FIX-2] Each queue pop gets its own isolated "skipped current"
-        // variable so a value popped from one tier doesn't leak into the
-        // re-enqueue decision for another tier.
+    // ── Work stealing ────────────────────────────────────────────────────────
+
+    /// Search a queue (back to front) for a process whose cpu_mask permits
+    /// `thief_id`. Returns the queue index (not process index) if found.
+    fn find_stealable(
+        queue: &VecDeque<usize>,
+        processes: &[Process],
+        thief_id: usize,
+    ) -> Option<usize> {
+        for i in (0..queue.len()).rev() {
+            let pidx = queue[i];
+            if pidx < processes.len()
+                && matches!(processes[pidx].state, ProcessState::Ready)
+                && processes[pidx].cpu_mask & (1u64 << thief_id) != 0
+            {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Iterate all other online cores and steal one task from the tail of their
+    /// lowest-priority non-empty queue. Respects cpu_mask affinity.
+    ///
+    /// In a future SMP Phase 1 design each CoreState will have its own
+    /// `spin::Mutex`; stealing will use `try_lock()` to skip busy victims
+    /// without blocking the thief's timer handler. Under the current
+    /// single-lock design (all CoreState under SCHEDULER's lock) the
+    /// "skip if empty or insufficient" check plays the same role.
+    pub fn steal_work(&mut self, thief_id: usize) -> Option<usize> {
+        let online = self.online_cores;
+        for victim_id in 0..online {
+            if victim_id == thief_id {
+                continue;
+            }
+            // Phase 1: inspect victim's queues under shared SCHEDULER lock.
+            // We need separate borrows of cores[victim_id] and processes.
+            let low_pos = {
+                let core = &self.cores[victim_id];
+                // Only steal if victim has more than one task (leave them work).
+                if core.total_ready() <= 1 {
+                    None
+                } else {
+                    Self::find_stealable(&core.run_queue_low, &self.processes, thief_id)
+                        .map(|p| (2u8, p))
+                        .or_else(|| {
+                            Self::find_stealable(
+                                &core.run_queue_medium,
+                                &self.processes,
+                                thief_id,
+                            )
+                            .map(|p| (1u8, p))
+                        })
+                        .or_else(|| {
+                            Self::find_stealable(
+                                &core.run_queue_high,
+                                &self.processes,
+                                thief_id,
+                            )
+                            .map(|p| (0u8, p))
+                        })
+                }
+            };
+
+            // Phase 2: perform the steal.
+            if let Some((tier, pos)) = low_pos {
+                let core = &mut self.cores[victim_id];
+                let stolen = match tier {
+                    2 => core.run_queue_low.remove(pos),
+                    1 => core.run_queue_medium.remove(pos),
+                    _ => core.run_queue_high.remove(pos),
+                };
+                if let Some(pidx) = stolen {
+                    serial_println!(
+                        "[WS] core {} stole proc idx={} (pid={}) from core {} tier {}",
+                        thief_id,
+                        pidx,
+                        self.processes.get(pidx).map_or(0, |p| p.pid),
+                        victim_id,
+                        tier,
+                    );
+                    return Some(pidx);
+                }
+            }
+        }
+        None
+    }
+
+    // ── Pick-next ────────────────────────────────────────────────────────────
+
+    /// Pick the next Ready process using BORE tiered queues for `cpu_id`.
+    /// Falls back to work-stealing if local queues are empty.
+    pub fn pick_next_bore(&mut self, cpu_id: usize) -> Option<usize> {
+        let current = self.cores[cpu_id].current_task.unwrap_or(usize::MAX);
         let mut skipped_high: Option<usize> = None;
         let mut skipped_medium: Option<usize> = None;
         let mut skipped_low: Option<usize> = None;
 
         if let Some(idx) = pop_ready_excluding_current(
-            &mut self.ready_queue_high,
+            &mut self.cores[cpu_id].run_queue_high,
             &self.processes,
-            self.current,
+            current,
             &mut skipped_high,
         ) {
-            if let Some(current) = skipped_high {
-                self.enqueue_process_once(current);
+            if let Some(c) = skipped_high {
+                self.enqueue_process_once(c);
             }
             return Some(idx);
         }
 
         if let Some(idx) = pop_ready_excluding_current(
-            &mut self.ready_queue_medium,
+            &mut self.cores[cpu_id].run_queue_medium,
             &self.processes,
-            self.current,
+            current,
             &mut skipped_medium,
         ) {
-            if let Some(current) = skipped_high {
-                self.enqueue_process_once(current);
+            if let Some(c) = skipped_high {
+                self.enqueue_process_once(c);
             }
-            if let Some(current) = skipped_medium {
-                self.enqueue_process_once(current);
+            if let Some(c) = skipped_medium {
+                self.enqueue_process_once(c);
             }
             return Some(idx);
         }
 
         if let Some(idx) = pop_ready_excluding_current(
-            &mut self.ready_queue_low,
+            &mut self.cores[cpu_id].run_queue_low,
             &self.processes,
-            self.current,
+            current,
             &mut skipped_low,
         ) {
-            if let Some(current) = skipped_high {
-                self.enqueue_process_once(current);
+            if let Some(c) = skipped_high {
+                self.enqueue_process_once(c);
             }
-            if let Some(current) = skipped_medium {
-                self.enqueue_process_once(current);
+            if let Some(c) = skipped_medium {
+                self.enqueue_process_once(c);
             }
-            if let Some(current) = skipped_low {
-                self.enqueue_process_once(current);
+            if let Some(c) = skipped_low {
+                self.enqueue_process_once(c);
             }
             return Some(idx);
         }
 
-        if let Some(current) = skipped_high.or(skipped_medium).or(skipped_low) {
-            return Some(current);
+        if let Some(c) = skipped_high.or(skipped_medium).or(skipped_low) {
+            return Some(c);
         }
 
-        // Fallback: if queues are empty but processes exist, do a linear search (safety net)
+        // Local queues empty — attempt work stealing.
+        if let Some(stolen) = self.steal_work(cpu_id) {
+            return Some(stolen);
+        }
+
+        // Last-resort linear scan (safety net for races during queue migration).
         let len = self.processes.len();
         if len == 0 {
             return None;
         }
-        let start = (self.current + 1) % len;
+        let start = (current.wrapping_add(1)) % len;
         let mut idx = start;
         loop {
             if matches!(self.processes[idx].state, ProcessState::Ready) {
                 serial_println!(
-                    "[SCHED] WARNING: pick_next_bore fallback to linear search, idx={}",
+                    "[SCHED] WARNING: pick_next_bore fallback linear search idx={}",
                     idx
                 );
                 return Some(idx);
@@ -663,26 +822,19 @@ impl Scheduler {
                 break;
             }
         }
-
         None
     }
 
-    /// Pick the next Ready process for RoundRobin mode. [FEAT-3]
-    ///
-    /// Turn ORDER remains round-robin (every Ready task gets a turn), but
-    /// nice != 0 tasks can be promoted earlier or deferred within a cycle via
-    /// the nice-weighted counter system. nice == 0 tasks are pure RR.
-    pub fn pick_next_round_robin(&mut self) -> Option<usize> {
+    /// Pick the next Ready process for RoundRobin mode for `cpu_id`. [FEAT-3]
+    pub fn pick_next_round_robin(&mut self, cpu_id: usize) -> Option<usize> {
         let len = self.processes.len();
         if len == 0 {
             return None;
         }
 
-        // Safety bound: exactly one full pass through the queue.
-        // Do NOT use len*2. A task enqueued-back cannot be seen again
-        // within len attempts, preventing double accumulation.
+        let current = self.cores[cpu_id].current_task.unwrap_or(0);
         let mut attempts = len;
-        let start = (self.current + 1) % len;
+        let start = (current + 1) % len;
         let mut idx = start;
 
         loop {
@@ -691,7 +843,6 @@ impl Scheduler {
             }
             attempts -= 1;
 
-            // Skip non-Ready processes silently
             if !matches!(self.processes[idx].state, ProcessState::Ready) {
                 idx = (idx + 1) % len;
                 if idx == start && attempts == 0 {
@@ -700,37 +851,31 @@ impl Scheduler {
                 continue;
             }
 
-            // ── Starvation rescue BEFORE accumulate_counter ──────────────
-            // Must run before accumulate so deeply-penalized starving tasks
-            // still get rescued (otherwise skip fires before boost applies).
+            // Starvation rescue BEFORE accumulate_counter.
             let ticks_waiting = self
                 .global_tick
                 .saturating_sub(self.processes[idx].last_run_tick);
-            if ticks_waiting > AGING_THRESHOLD_TICKS && !self.processes[idx].aging_boosted_this_pick
+            if ticks_waiting > AGING_THRESHOLD_TICKS
+                && !self.processes[idx].aging_boosted_this_pick
             {
                 self.processes[idx].counter =
-                    (self.processes[idx].counter + STARVATION_BOOST).min(MAX_CREDIT); // [FEAT-3] capped
-                self.processes[idx].aging_boosted_this_pick = true; // one-shot per pick
+                    (self.processes[idx].counter + STARVATION_BOOST).min(MAX_CREDIT);
+                self.processes[idx].aging_boosted_this_pick = true;
                 update_burst_score(&mut self.processes[idx], BurstReason::Aged);
             }
 
-            // ── Accumulate counter for this candidate ────────────────────
-            accumulate_counter(&mut self.processes[idx]); // [FEAT-3]
+            accumulate_counter(&mut self.processes[idx]);
 
-            // ── High priority promotion ───────────────────────────────────
+            // High priority promotion.
             if self.processes[idx].nice < 0 && self.processes[idx].counter >= PROMOTE_LIMIT {
-                // Partial spend: keep residual credit, don't reset to zero.
                 self.processes[idx].counter =
-                    0_i32.max(self.processes[idx].counter - PROMOTE_LIMIT); // [FEAT-3]
-
-                // 10% quantum bonus via quantum_override (fixed-point: *110/100)
+                    0_i32.max(self.processes[idx].counter - PROMOTE_LIMIT);
                 let base_q = calculate_quantum_with_nice(
                     self.processes[idx].burst_score,
                     self.processes[idx].nice,
                 );
                 let quantum_override_value = ((base_q * 110) / 100).min(QUANTUM_MAX);
-                self.processes[idx].quantum_override = Some(quantum_override_value); // [FEAT-3]
-
+                self.processes[idx].quantum_override = Some(quantum_override_value);
                 serial_println!(
                     "[SCHED-RR] promoted pid={} nice={} counter={} quantum_override={}",
                     self.processes[idx].pid,
@@ -738,25 +883,20 @@ impl Scheduler {
                     self.processes[idx].counter,
                     quantum_override_value
                 );
-
                 self.processes[idx].aging_boosted_this_pick = false;
                 return Some(idx);
             }
 
-            // ── Low priority skip (debt zone) ─────────────────────────────
+            // Low priority skip.
             if self.processes[idx].nice > 0 && self.processes[idx].counter <= SKIP_LIMIT {
-                // Partial debt recovery each time we skip
-                self.processes[idx].counter += DECAY_RATE; // [FEAT-3]
-
+                self.processes[idx].counter += DECAY_RATE;
                 serial_println!(
                     "[SCHED-RR] skipped pid={} nice={} counter={}",
                     self.processes[idx].pid,
                     self.processes[idx].nice,
                     self.processes[idx].counter
                 );
-
                 self.processes[idx].aging_boosted_this_pick = false;
-                // Move to next — this task deferred for this cycle
                 idx = (idx + 1) % len;
                 if idx == start && attempts == 0 {
                     break;
@@ -764,14 +904,11 @@ impl Scheduler {
                 continue;
             }
 
-            // ── Normal pick (nice==0 or counter in neutral zone) ─────────
             self.processes[idx].aging_boosted_this_pick = false;
             return Some(idx);
         }
 
-        // ── Fallback: all tasks were skipped ─────────────────────────────
-        // Bounded debt means this is rare. Find the least-indebted Ready task.
-        // This prevents livelock when every task is in debt simultaneously.
+        // All tasks skipped — find least-indebted, or try stealing.
         let mut best_idx = None;
         let mut best_counter = i32::MIN;
         let mut scan = start;
@@ -791,17 +928,18 @@ impl Scheduler {
                 idx,
                 best_counter
             );
+            return Some(idx);
         }
 
-        best_idx // [FEAT-3] pick least-indebted rather than blind front
+        // Absolutely nothing local — try stealing.
+        self.steal_work(cpu_id)
     }
 
-    pub fn pick_next(&mut self) -> Option<usize> {
+    pub fn pick_next(&mut self, cpu_id: usize) -> Option<usize> {
         let next = match SCHEDULER_MODE {
-            SchedulerMode::RoundRobin => self.pick_next_round_robin(),
-            SchedulerMode::Bore => self.pick_next_bore(),
+            SchedulerMode::RoundRobin => self.pick_next_round_robin(cpu_id),
+            SchedulerMode::Bore => self.pick_next_bore(cpu_id),
         };
-        // Diagnostic 1b: one-time log the FIRST time sunlightd's pid is picked for execution.
         if let Some(idx) = next {
             let next_pid = self.processes[idx].pid;
             if next_pid == 6 && !SUNLIGHTD_FIRST_SCHED.swap(true, Ordering::SeqCst) {
@@ -815,13 +953,103 @@ impl Scheduler {
         next
     }
 
-    /// Get the currently running process.
+    // ── Per-core dispatch ────────────────────────────────────────────────────
+
+    /// Central per-core scheduling dispatch.
+    ///
+    /// Called from the timer handler with the ID of the CPU whose timer fired
+    /// and the kernel RSP saved by the naked interrupt entry stub. Returns the
+    /// RSP of the next process to resume (0 = stay on current context).
+    pub fn schedule_tick(&mut self, cpu_id: usize, saved_rsp: u64) -> u64 {
+        if !check_reschedule() {
+            return 0;
+        }
+
+        let current = match self.cores[cpu_id].current_task {
+            Some(idx) => idx,
+            None => return 0,
+        };
+
+        if current >= self.processes.len() {
+            return 0;
+        }
+
+        self.account_and_apply_churn_penalty();
+
+        // Save interrupted context.
+        self.processes[current].context_rsp = saved_rsp;
+        self.processes[current].fs_base =
+            unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
+
+        // Maintain runnable-only queue invariant.
+        let was_runnable = matches!(
+            self.processes[current].state,
+            ProcessState::Ready | ProcessState::Running
+        );
+        if self.processes[current].state == ProcessState::Running {
+            self.processes[current].state = ProcessState::Ready;
+        }
+        if matches!(self.processes[current].state, ProcessState::Ready) {
+            if SCHEDULER_MODE == SchedulerMode::Bore {
+                self.enqueue_process_once(current);
+            }
+        } else if !was_runnable
+            || !matches!(self.processes[current].state, ProcessState::Ready)
+        {
+            self.remove_from_ready_queues(current);
+        }
+
+        if let Some(next) = self.pick_next(cpu_id) {
+            let next_rsp = self.processes[next].context_rsp;
+            let next_stack_top = self.processes[next].kernel_stack_top;
+            let next_fs_base = self.processes[next].fs_base;
+            let prev = current;
+
+            self.cores[cpu_id].current_task = Some(next);
+            self.processes[next].state = ProcessState::Running;
+            self.processes[next].last_run_tick = self.global_tick;
+            self.start_charging_runtime(next);
+
+            unsafe {
+                self.processes[next].address_space.activate();
+                x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+            }
+            // Update TSS RSP0 so the next interrupt delivers to the correct kernel stack.
+            crate::arch::x86_64::interrupts::set_tss_rsp0(next_stack_top);
+
+            if self.processes[prev].state == ProcessState::Finished {
+                self.reap_process_resources(prev);
+            }
+
+            next_rsp
+        } else {
+            0
+        }
+    }
+
+    // ── Current process accessors ────────────────────────────────────────────
+
     pub fn current_process(&self) -> &Process {
-        &self.processes[self.current]
+        let cpu_id = current_cpu_id();
+        &self.processes[self.cores[cpu_id].current_task.unwrap_or(0)]
     }
 
     pub fn current_process_mut(&mut self) -> &mut Process {
-        &mut self.processes[self.current]
+        let cpu_id = current_cpu_id();
+        let idx = self.cores[cpu_id].current_task.unwrap_or(0);
+        &mut self.processes[idx]
+    }
+
+    // ── Wake / unblock ───────────────────────────────────────────────────────
+
+    /// Return the PID of the process currently running on this CPU (0 if none).
+    pub fn current_pid(&self) -> usize {
+        let cpu_id = current_cpu_id();
+        self.cores[cpu_id]
+            .current_task
+            .and_then(|idx| self.processes.get(idx))
+            .map(|p| p.pid)
+            .unwrap_or(0)
     }
 
     pub fn is_blocked_on_recv(&self, pid: usize) -> bool {
@@ -831,68 +1059,50 @@ impl Scheduler {
     }
 
     pub fn wake_pid(&mut self, pid: usize) {
-        // Find the process by PID and get its index
         let idx = match self.processes.iter().position(|p| p.pid == pid) {
             Some(i) => i,
             None => return,
         };
 
         if self.processes[idx].state == ProcessState::BlockedOnIpc {
-            // Calculate how long was blocked
             let ticks_blocked = self.global_tick - self.processes[idx].block_start_tick;
-
-            // Early block = high interactivity
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
-
-            // Update state and enqueue. [FIX-3] update_burst_score may change
-            // this process's queue tier, so force-remove from any tier queue
-            // before re-enqueuing at the (possibly new) correct tier — using
-            // enqueue_process_once() here could no-op if it's still queued
-            // under its old tier.
             self.processes[idx].state = ProcessState::Ready;
-            self.remove_from_ready_queues(idx); // [FIX-3] force remove from any tier
-            self.enqueue_process(idx); // then enqueue fresh at correct tier
+            self.remove_from_ready_queues(idx);
+            self.enqueue_process(idx);
         }
     }
 
-    /// Wake a process blocked on a timer/sleep. [FEAT-2]
     pub fn wake_timer_pid(&mut self, pid: usize) {
         let idx = match self.processes.iter().position(|p| p.pid == pid) {
             Some(i) => i,
             None => return,
         };
-
         if self.processes[idx].state == ProcessState::BlockedOnTimer {
             let ticks_blocked = self.global_tick - self.processes[idx].block_start_tick;
-
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
-
             self.processes[idx].state = ProcessState::Ready;
-            self.remove_from_ready_queues(idx); // [FIX-3] / [FEAT-2]
+            self.remove_from_ready_queues(idx);
             self.enqueue_process(idx);
         }
     }
 
-    /// Wake a process blocked on I/O completion. [FEAT-2]
     pub fn wake_io_pid(&mut self, pid: usize) {
         let idx = match self.processes.iter().position(|p| p.pid == pid) {
             Some(i) => i,
             None => return,
         };
-
         if self.processes[idx].state == ProcessState::BlockedOnIo {
             let ticks_blocked = self.global_tick - self.processes[idx].block_start_tick;
-
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
-
             self.processes[idx].state = ProcessState::Ready;
-            self.remove_from_ready_queues(idx); // [FIX-3] / [FEAT-2]
+            self.remove_from_ready_queues(idx);
             self.enqueue_process(idx);
         }
     }
@@ -922,6 +1132,8 @@ impl Scheduler {
             _ => {}
         }
     }
+
+    // ── Process lifecycle ────────────────────────────────────────────────────
 
     fn address_space_is_shared(&self, idx: usize) -> bool {
         let pml4 = self.processes[idx].address_space.pml4_phys;
@@ -1013,7 +1225,10 @@ impl Scheduler {
         let Some(idx) = self.process_index_by_pid(pid) else {
             return false;
         };
-        if idx == self.current || self.processes[idx].state == ProcessState::Finished {
+        // Refuse to terminate a task that is currently executing on any core.
+        let is_running_on_core = (0..self.online_cores)
+            .any(|c| self.cores[c].current_task == Some(idx));
+        if is_running_on_core || self.processes[idx].state == ProcessState::Finished {
             return false;
         }
 
@@ -1041,7 +1256,6 @@ impl Scheduler {
         true
     }
 
-    /// Get BORE diagnostics for a process
     pub fn get_process_burst_info(&self, pid: usize) -> Option<(u32, ProcessState)> {
         self.processes
             .iter()
@@ -1049,9 +1263,10 @@ impl Scheduler {
             .map(|p| (p.burst_score, p.state))
     }
 
-    /// Run the scheduler — enter the first process and never return.
+    // ── Entry point ──────────────────────────────────────────────────────────
+
+    /// Enter the first ready process; never returns.
     pub fn run_forever(&mut self) -> ! {
-        // Find first Ready process.
         let mut first = None;
         for (i, p) in self.processes.iter().enumerate() {
             serial_println!(
@@ -1067,12 +1282,11 @@ impl Scheduler {
         }
 
         if let Some(idx) = first {
-            self.current = idx;
+            self.cores[0].current_task = Some(idx);
             self.processes[idx].state = ProcessState::Running;
             self.processes[idx].last_run_tick = self.global_tick;
             self.start_charging_runtime(idx);
 
-            // Enqueue other Ready processes (idx might not be first in order)
             for i in 0..self.processes.len() {
                 if i != idx && matches!(self.processes[i].state, ProcessState::Ready) {
                     self.enqueue_process_once(i);
@@ -1086,22 +1300,20 @@ impl Scheduler {
                 self.processes[idx].name_str(),
                 rsp
             );
-            // Switch to the process's address space before entering user space.
             unsafe {
                 self.processes[idx].address_space.activate();
             }
-            // SAFETY: rsp points to a valid context frame on the process's kernel stack.
             unsafe {
                 context::iretq_to_context(rsp);
             }
         }
 
-        // No user processes — enter idle loop directly.
         serial_println!("[SCHED] No user processes, entering idle");
         idle_loop();
     }
 
-    /// Print diagnostic information about process lifecycle
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+
     pub fn diagnostic_report(&self) {
         let created = PROCESS_CREATED.load(Ordering::Relaxed);
         let finished = PROCESS_FINISHED.load(Ordering::Relaxed);
@@ -1111,11 +1323,17 @@ impl Scheduler {
             .filter(|p| p.state != ProcessState::Finished)
             .count();
         let finished_slots = self.processes.len().saturating_sub(alive);
-        let ready_high = self.ready_queue_high.len();
-        let ready_mid = self.ready_queue_medium.len();
-        let ready_low = self.ready_queue_low.len();
 
-        // [FEAT-2] Per-blocked-state diagnostics.
+        let ready_high: usize = (0..self.online_cores)
+            .map(|c| self.cores[c].run_queue_high.len())
+            .sum();
+        let ready_mid: usize = (0..self.online_cores)
+            .map(|c| self.cores[c].run_queue_medium.len())
+            .sum();
+        let ready_low: usize = (0..self.online_cores)
+            .map(|c| self.cores[c].run_queue_low.len())
+            .sum();
+
         let blocked_ipc = self
             .processes
             .iter()
@@ -1133,10 +1351,10 @@ impl Scheduler {
             .count();
 
         serial_println!(
-            "[SCHED-DIAG] created={} finished={} alive={} finished_slots={} ready_queues=({},{},{}) delta_created-finished={} blocked_ipc={} blocked_timer={} blocked_io={}",
+            "[SCHED-DIAG] created={} finished={} alive={} finished_slots={} ready_queues=({},{},{}) delta_created-finished={} blocked_ipc={} blocked_timer={} blocked_io={} online_cores={}",
             created, finished, alive, finished_slots, ready_high, ready_mid, ready_low,
             created.saturating_sub(finished),
-            blocked_ipc, blocked_timer, blocked_io
+            blocked_ipc, blocked_timer, blocked_io, self.online_cores
         );
 
         if alive > 0 && blocked_ipc == alive
@@ -1176,18 +1394,6 @@ impl Scheduler {
                     } else {
                         (u32::MAX, 0, usize::MAX, 0)
                     };
-                // Stuck rendezvous: caller is blocked calling endpoint E,
-                // the server that owns E is also blocked waiting to receive
-                // on E, yet no delivery happened. This should be impossible
-                // with a correct multi-caller queue: the kernel must match
-                // callers to a waiting receiver immediately.
-                //
-                // False positive guard: we check waiting_receiver == resolved_owner
-                // (server actively blocked on ipc_recv/reply_wait for THIS endpoint).
-                // If the server is processing a previous message or is blocked on a
-                // different endpoint, waiting_receiver != resolved_owner and this
-                // warning will not fire — so tty_server busy while sshl handles a
-                // command does NOT trigger this.
                 if pending_call_cap != 0
                     && waiting_receiver == resolved_owner
                     && endpoint_queue_len > 0
@@ -1238,6 +1444,8 @@ impl Scheduler {
     }
 }
 
+// ─── Queue helpers ────────────────────────────────────────────────────────────
+
 fn pop_ready_excluding_current(
     queue: &mut VecDeque<usize>,
     processes: &[Process],
@@ -1262,17 +1470,17 @@ fn pop_ready_excluding_current(
 
         return Some(idx);
     }
-
     None
 }
 
-/// Idle loop — runs when no user process is Ready.
 fn idle_loop() -> ! {
     loop {
         x86_64::instructions::interrupts::enable();
         x86_64::instructions::hlt();
     }
 }
+
+// ─── Scheduler flags ──────────────────────────────────────────────────────────
 
 /// Check if a reschedule is needed and clear the flag.
 pub fn check_reschedule() -> bool {
@@ -1289,16 +1497,19 @@ pub fn note_process_finished(pid: usize, name: &str) {
     serial_println!("[SCHED] FINISHED process pid={} name='{}'", pid, name);
 }
 
-/// Mark the current process finished and release resources shared with the
-/// normal exit path. Returns the process kernel stack top for the final idle
-/// loop before the timer switches away.
+/// Mark the current process finished and release resources.
+/// Returns the process kernel stack top for the final idle loop.
 pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     let mut sched = SCHEDULER.lock();
-    if sched.current >= sched.processes.len() {
+    let cpu_id = current_cpu_id();
+    let cur = match sched.cores[cpu_id].current_task {
+        Some(idx) => idx,
+        None => return 0,
+    };
+    if cur >= sched.processes.len() {
         return 0;
     }
 
-    let cur = sched.current;
     let kstack_top = sched.processes[cur].kernel_stack_top;
     if sched.processes[cur].state == crate::process::ProcessState::Finished {
         return kstack_top;
@@ -1333,10 +1544,11 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     kstack_top
 }
 
+// ─── Globals and wrappers ─────────────────────────────────────────────────────
+
 /// Global scheduler instance.
 pub static SCHEDULER: spin::Mutex<Scheduler> = spin::Mutex::new(Scheduler::new());
 
-/// Access the global scheduler.
 pub fn with_scheduler<F, R>(f: F) -> R
 where
     F: FnOnce(&mut Scheduler) -> R,
@@ -1364,7 +1576,7 @@ pub fn enter_first_process() -> ! {
         }
 
         if let Some(idx) = first {
-            sched.current = idx;
+            sched.cores[0].current_task = Some(idx);
             sched.processes[idx].state = ProcessState::Running;
             sched.processes[idx].last_run_tick = sched.global_tick;
             sched.start_charging_runtime(idx);
@@ -1398,10 +1610,47 @@ pub fn enter_first_process() -> ! {
     }
 }
 
-/// Access the global scheduler and return the current process's context_rsp.
 pub fn current_process_rsp() -> u64 {
     let sched = SCHEDULER.lock();
-    sched.processes[sched.current].context_rsp
+    let cpu_id = current_cpu_id();
+    match sched.cores[cpu_id].current_task {
+        Some(idx) => sched.processes[idx].context_rsp,
+        None => 0,
+    }
+}
+
+// ─── SMP helpers ──────────────────────────────────────────────────────────────
+
+/// Return the current logical CPU index using the initial APIC ID from CPUID.
+///
+/// BSP has APIC ID 0 on all supported platforms. APs are parked until SMP
+/// Phase 1 LAPIC timers are wired; until then this always returns 0 on the
+/// BSP. When per-core timers fire, each AP's CPUID gives its own APIC ID,
+/// mapping directly to an index into CORES[].
+#[inline]
+pub fn current_cpu_id() -> usize {
+    // CPUID leaf 1, EBX[31:24] = initial APIC ID (valid for up to 256 logical CPUs).
+    let apic_id = core::arch::x86_64::__cpuid(1).ebx as usize >> 24;
+    apic_id.min(MAX_CORES - 1)
+}
+
+/// Initialise the per-core scheduler after SMP bring-up.
+///
+/// Called from main.rs after smp::start_aps() with the total number of
+/// logical CPUs (BSP + APs). Sets ONLINE_CORES and the Scheduler's
+/// online_cores field so that enqueue_process(), steal_work(), and
+/// schedule_tick() are aware of all available cores.
+pub fn init_cores(total_cpus: usize) {
+    let count = total_cpus.min(MAX_CORES).max(1);
+    ONLINE_CORES.store(count, Ordering::Release);
+    {
+        let mut sched = SCHEDULER.lock();
+        sched.online_cores = count;
+    }
+    serial_println!(
+        "[SCHED] Per-core work-stealing scheduler: {} online core(s)",
+        count
+    );
 }
 
 pub mod context;

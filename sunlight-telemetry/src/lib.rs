@@ -1,5 +1,8 @@
 #![no_std]
 
+mod topology;
+pub use topology::{CoreSnapshot, CpuTelemetry, TaskStats, TopologyInfo, MAX_CORES};
+
 use sunlight_ipc::{ipc_call, map_telemetry, nameserver_lookup, IpcMsg, TzMsg};
 
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
@@ -88,10 +91,18 @@ pub struct SystemSnapshot {
     pub proc_count: usize,
     pub procs: [ProcessSnapshot; MAX_PROCESSES],
     pub cpu_count: u8,
+    /// Aggregate CPU utilization in basis points (10 000 = 100 %).
     pub cpu_used_bp: u16,
+    /// Aggregate CPU idle in basis points.
     pub cpu_idle_bp: u16,
     pub local_time: [u8; 16],
     pub local_time_len: usize,
+    /// Physical / logical hardware layout derived from ACPI MADT.
+    pub topology: TopologyInfo,
+    /// Per-logical-core load and scheduling state.
+    pub cpu_telemetry: CpuTelemetry,
+    /// Aggregated task-state counts (running / ready / blocked / zombie).
+    pub task_stats: TaskStats,
 }
 
 impl Default for SystemSnapshot {
@@ -112,6 +123,9 @@ impl Default for SystemSnapshot {
             cpu_idle_bp: 10000,
             local_time: [0; 16],
             local_time_len: 0,
+            topology: TopologyInfo::default(),
+            cpu_telemetry: CpuTelemetry::default(),
+            task_stats: TaskStats::default(),
         }
     }
 }
@@ -185,38 +199,71 @@ impl Telemetry {
         let page = unsafe { &*self.page_ptr };
 
         unsafe {
-            snap.sequence = vread(core::ptr::addr_of!(page.sequence));
-            snap.uptime_secs = vread(core::ptr::addr_of!(page.uptime_secs));
+            snap.sequence     = vread(core::ptr::addr_of!(page.sequence));
+            snap.uptime_secs  = vread(core::ptr::addr_of!(page.uptime_secs));
             snap.total_ram_kb = vread(core::ptr::addr_of!(page.total_ram_kb));
-            snap.used_ram_kb = vread(core::ptr::addr_of!(page.used_ram_kb));
+            snap.used_ram_kb  = vread(core::ptr::addr_of!(page.used_ram_kb));
             snap.zram_orig_kb = vread(core::ptr::addr_of!(page.zram_orig_kb));
             snap.zram_comp_kb = vread(core::ptr::addr_of!(page.zram_comp_kb));
             snap.net_rx_bytes = vread(core::ptr::addr_of!(page.net_rx_bytes));
             snap.net_tx_bytes = vread(core::ptr::addr_of!(page.net_tx_bytes));
-            snap.cpu_count = vread(core::ptr::addr_of!(page.cpu_count));
+            snap.cpu_count    = vread(core::ptr::addr_of!(page.cpu_count));
+        }
+
+        // Topology: derived from cpu_count until CPUID leaf 0x0B is wired.
+        snap.topology = TopologyInfo::from_cpu_count(snap.cpu_count);
+
+        // Bootstrap the per-core table: one CoreSnapshot per online CPU.
+        // In the uniprocessor kernel this is always exactly one entry.
+        // The SMP path will extend this once APs are brought online.
+        let logical_count = (snap.cpu_count as usize).max(1).min(MAX_CORES);
+        snap.cpu_telemetry.count = logical_count;
+        for i in 0..logical_count {
+            snap.cpu_telemetry.cores[i].core_id      = i as u8;
+            snap.cpu_telemetry.cores[i].affinity_mask = !0u64; // unrestricted
+            // load_bp is filled in compute_cpu_usage() after interval is known.
         }
 
         let raw_count = unsafe { vread(core::ptr::addr_of!(page.proc_count)) } as usize;
         snap.proc_count = raw_count.min(MAX_PROCESSES);
 
+        // Single pass: map raw ProcessStat → ProcessSnapshot AND tally TaskStats.
+        // TaskStats uses the raw kernel state byte (0-6) before the Finished
+        // filter so zombie counts are accurate.
+        let mut ts = TaskStats::default();
         for i in 0..snap.proc_count {
             let raw = unsafe { vread(core::ptr::addr_of!(page.procs[i])) };
+
+            // Tally raw state for TaskStats (must happen before ProcessState mapping).
+            ts.tally(raw.state);
+
+            // Track the first Running task's PID as the "current" task on core 0.
+            // With SMP the kernel would tell us which core each task is on.
+            if raw.state == 1
+                && snap.cpu_telemetry.cores[0].current_task_pid == 0
+            {
+                snap.cpu_telemetry.cores[0].current_task_pid = raw.pid;
+            }
+
             snap.procs[i] = ProcessSnapshot {
-                pid: raw.pid,
-                ppid: raw.ppid,
+                pid:   raw.pid,
+                ppid:  raw.ppid,
                 state: match raw.state {
                     1 => ProcessState::Running,
                     2 => ProcessState::Blocked,
                     3 => ProcessState::Finished,
                     _ => ProcessState::Ready,
                 },
-                name: raw.name,
+                name:     raw.name,
                 cpu_ticks: raw.cpu_ticks,
-                cpu_bp: 0,
-                mem_kb: raw.mem_pages.saturating_mul(4),
+                cpu_bp:   0,
+                mem_kb:   raw.mem_pages.saturating_mul(4),
             };
         }
+        ts.commit();
+        snap.task_stats = ts;
 
+        // Remove exited (Finished) processes from the visible list.
         let mut write_idx = 0;
         for read_idx in 0..snap.proc_count {
             if snap.procs[read_idx].state != ProcessState::Finished {
@@ -320,6 +367,19 @@ impl Telemetry {
 
         snap.cpu_used_bp = used_bp as u16;
         snap.cpu_idle_bp = idle_bp as u16;
+
+        // Per-core load: in the uniprocessor kernel all work runs on core 0,
+        // so core 0 mirrors the aggregate.  When SMP is added the kernel
+        // telemetry page will expose per-core counters and this loop will
+        // distribute load_bp across each CoreSnapshot individually.
+        for i in 0..snap.cpu_telemetry.count {
+            snap.cpu_telemetry.cores[i].load_bp = if i == 0 {
+                snap.cpu_used_bp
+            } else {
+                // APs are online but kernel counters not yet per-core.
+                0
+            };
+        }
 
         if capacity_delta_ns > 0 {
             for i in 0..snap.proc_count {

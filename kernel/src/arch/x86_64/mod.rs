@@ -6,5 +6,6 @@ pub mod keyboard;
 pub mod mouse;
 pub mod rtc;
 pub mod serial;
+pub mod smp;
 pub mod syscall;
 pub mod userspace;

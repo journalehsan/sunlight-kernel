@@ -260,7 +260,9 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
         return Err(());
     }
 
-    if idx == sched.current && matches!(signal, Signal::SIGKILL) {
+    let cur_cpu = crate::sched::current_cpu_id();
+    let current_idx = sched.cores[cur_cpu].current_task.unwrap_or(usize::MAX);
+    if idx == current_idx && matches!(signal, Signal::SIGKILL) {
         drop(sched);
         process_exit(signal.default_exit_code());
     }
@@ -1196,7 +1198,10 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
 
     // Child still running: park the caller until the child exits.
     let global_tick = sched.global_tick;
-    let cur = sched.current;
+    let cur = {
+        let cpu_id = crate::sched::current_cpu_id();
+        sched.cores[cpu_id].current_task.unwrap_or(0)
+    };
     // Phase 1 + 4: account + possible churn penalty for short work before wait
     sched.account_and_apply_churn_penalty();
     {

@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::mem;
 use x86_64::PhysAddr;
 
@@ -126,6 +127,10 @@ pub struct ACPIState {
     pub reset_value: u8,
     pub slp_typea: u8,
     pub slp_typeb: u8,
+    /// Physical address of the MADT table (0 = not yet parsed).
+    pub madt_phys: u64,
+    /// Physical base address of the Local APIC MMIO region from MADT.
+    pub lapic_base: u64,
 }
 
 impl ACPIState {
@@ -147,6 +152,8 @@ impl ACPIState {
             reset_value: 0,
             slp_typea: 0,
             slp_typeb: 0,
+            madt_phys: 0,
+            lapic_base: 0,
         }
     }
 }
@@ -672,4 +679,357 @@ pub fn shutdown() -> ! {
 /// Query current ACPI state
 pub fn get_state() -> ACPIState {
     *ACPI_STATE.lock()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MADT (Multiple APIC Description Table) parser
+//
+// Must be called AFTER the kernel heap is initialized (acpi::init runs before
+// the heap; parse_madt is a separate call made from main after heap setup).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// MADT entry type codes (ACPI spec §5.2.12).
+const MADT_TYPE_LOCAL_APIC: u8 = 0;
+const MADT_TYPE_IO_APIC: u8 = 1;
+const MADT_TYPE_INT_SRC_OVERRIDE: u8 = 2;
+const MADT_TYPE_LOCAL_APIC_NMI: u8 = 4;
+const MADT_TYPE_X2APIC: u8 = 9;
+
+/// Processor Local APIC entry (type 0, length = 8).
+/// One entry per logical processor detected by firmware.
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+pub struct MadtLocalApic {
+    pub entry_type: u8,
+    pub length: u8,
+    pub acpi_proc_uid: u8,
+    pub apic_id: u8,
+    /// Bit 0: Enabled. Bit 1: Online Capable (ACPI 6.3+).
+    pub flags: u32,
+}
+
+/// I/O APIC entry (type 1, length = 12).
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+pub struct MadtIoApic {
+    pub entry_type: u8,
+    pub length: u8,
+    pub io_apic_id: u8,
+    pub _reserved: u8,
+    pub io_apic_addr: u32,
+    pub global_sys_int_base: u32,
+}
+
+/// Interrupt Source Override entry (type 2, length = 10).
+/// Describes how ISA IRQs map to Global System Interrupts.
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+pub struct MadtIntSourceOverride {
+    pub entry_type: u8,
+    pub length: u8,
+    pub bus: u8,
+    pub source: u8,
+    pub global_sys_int: u32,
+    pub flags: u16,
+}
+
+/// Local APIC NMI connection entry (type 4, length = 6).
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+pub struct MadtLocalApicNmi {
+    pub entry_type: u8,
+    pub length: u8,
+    pub acpi_proc_uid: u8,
+    pub flags: u16,
+    pub lint: u8,
+}
+
+/// Processor Local x2APIC entry (type 9, length = 16).
+/// Used on systems with more than 255 logical processors.
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+pub struct MadtX2Apic {
+    pub entry_type: u8,
+    pub length: u8,
+    pub _reserved: u16,
+    pub x2apic_id: u32,
+    pub flags: u32,
+    pub acpi_proc_uid: u32,
+}
+
+/// A parsed MADT entry yielded by `MadtParser`.
+pub enum MadtEntry {
+    LocalApic(MadtLocalApic),
+    IoApic(MadtIoApic),
+    IntSourceOverride(MadtIntSourceOverride),
+    LocalApicNmi(MadtLocalApicNmi),
+    X2Apic(MadtX2Apic),
+    /// Any entry type this parser does not model; carried as (type, length).
+    Unknown(u8, u8),
+}
+
+/// Per-logical-processor info extracted from MADT Local APIC / x2APIC entries.
+#[derive(Clone, Copy, Debug)]
+pub struct CoreInfo {
+    /// APIC ID used to address this processor in IPI / LAPIC operations.
+    /// For xAPIC entries this fits in u8; for x2APIC entries it is a full u32.
+    pub apic_id: u32,
+    /// ACPI processor UID (matches `_UID` in the DSDT namespace).
+    pub acpi_proc_uid: u32,
+    /// Raw MADT flags word. Bit 0 = Enabled. Bit 1 = Online Capable.
+    pub flags: u32,
+    /// True when this entry came from a type-9 x2APIC record.
+    pub is_x2apic: bool,
+}
+
+impl CoreInfo {
+    /// Returns `true` if firmware reports this processor as currently enabled.
+    #[inline]
+    pub fn is_enabled(self) -> bool {
+        self.flags & 1 != 0
+    }
+
+    /// Returns `true` if firmware can bring this processor online at runtime
+    /// (ACPI 6.3+ "Online Capable" flag, bit 1).
+    #[inline]
+    pub fn is_online_capable(self) -> bool {
+        self.flags & 2 != 0
+    }
+
+    /// A processor is usable if it is either already enabled or can be brought
+    /// online. This is the correct predicate for counting available cores.
+    #[inline]
+    pub fn is_usable(self) -> bool {
+        self.is_enabled() || self.is_online_capable()
+    }
+}
+
+/// Bounds-checked iterator over MADT variable-length entries.
+///
+/// Holds a raw pointer to the first byte after the MADT fixed header and
+/// walks forward by each entry's own `length` field. Iteration stops when
+/// fewer than 2 bytes remain or a malformed length is detected.
+///
+/// SAFETY invariant: `base` and `table_end` must point into a single
+/// contiguous, readable mapping that lives at least as long as this iterator.
+pub struct MadtParser {
+    base: *const u8,
+    table_end: *const u8,
+    offset: usize,
+}
+
+impl MadtParser {
+    /// Construct a parser for the MADT whose first byte is at `madt_phys`.
+    ///
+    /// Returns `None` if the table is smaller than the fixed MADT header or if
+    /// the physical address is null.
+    ///
+    /// SAFETY: `madt_phys` must be a valid physical address (identity-mapped
+    /// in the HHDM) pointing to a complete, readable MADT.
+    pub unsafe fn new(madt_phys: u64) -> Option<Self> {
+        if madt_phys == 0 {
+            return None;
+        }
+        let hdr = unsafe { (madt_phys as *const ACPIMADT).as_ref()? };
+        let total_len = hdr.header.length as usize;
+        let fixed = mem::size_of::<ACPIMADT>(); // header (36) + local_apic_addr (4) + flags (4) = 44
+        if total_len < fixed {
+            return None;
+        }
+        Some(MadtParser {
+            base: unsafe { (madt_phys as *const u8).add(fixed) },
+            table_end: unsafe { (madt_phys as *const u8).add(total_len) },
+            offset: 0,
+        })
+    }
+
+    #[inline]
+    fn remaining_bytes(&self) -> usize {
+        let cur = unsafe { self.base.add(self.offset) } as usize;
+        (self.table_end as usize).saturating_sub(cur)
+    }
+}
+
+impl Iterator for MadtParser {
+    type Item = MadtEntry;
+
+    fn next(&mut self) -> Option<MadtEntry> {
+        // Every entry has at least an (entry_type: u8, length: u8) header.
+        if self.remaining_bytes() < 2 {
+            return None;
+        }
+
+        let ptr = unsafe { self.base.add(self.offset) };
+        let entry_type = unsafe { ptr.read() };
+        let length = unsafe { ptr.add(1).read() };
+
+        // Malformed: length field is too small or overruns the table.
+        if length < 2 || (length as usize) > self.remaining_bytes() {
+            return None;
+        }
+
+        let entry = match (entry_type, length) {
+            (MADT_TYPE_LOCAL_APIC, 8) => {
+                MadtEntry::LocalApic(unsafe { (ptr as *const MadtLocalApic).read_unaligned() })
+            }
+            (MADT_TYPE_IO_APIC, 12) => {
+                MadtEntry::IoApic(unsafe { (ptr as *const MadtIoApic).read_unaligned() })
+            }
+            (MADT_TYPE_INT_SRC_OVERRIDE, 10) => MadtEntry::IntSourceOverride(unsafe {
+                (ptr as *const MadtIntSourceOverride).read_unaligned()
+            }),
+            (MADT_TYPE_LOCAL_APIC_NMI, 6) => {
+                MadtEntry::LocalApicNmi(unsafe {
+                    (ptr as *const MadtLocalApicNmi).read_unaligned()
+                })
+            }
+            (MADT_TYPE_X2APIC, 16) => {
+                MadtEntry::X2Apic(unsafe { (ptr as *const MadtX2Apic).read_unaligned() })
+            }
+            _ => MadtEntry::Unknown(entry_type, length),
+        };
+
+        self.offset += length as usize;
+        Some(entry)
+    }
+}
+
+/// Parse the MADT to enumerate all logical processors and the I/O APIC.
+///
+/// Returns a `Vec<CoreInfo>` containing one entry per Local APIC / x2APIC
+/// record found in the table, regardless of enabled/disabled status. Callers
+/// should filter on `CoreInfo::is_usable()` to count schedulable cores.
+///
+/// Also stores the MADT physical address and Local APIC MMIO base in
+/// `ACPI_STATE` for use by the LAPIC driver.
+///
+/// SAFETY: must be called after the kernel heap is initialized (this function
+/// allocates). The ACPI RSDP / XSDT / RSDT must already have been mapped by
+/// `acpi::init()`.
+pub unsafe fn parse_madt() -> Result<Vec<CoreInfo>, &'static str> {
+    let madt_phys = find_table_by_signature(b"APIC")?;
+
+    // Validate checksum over the entire table.
+    let hdr = unsafe { (madt_phys as *const ACPIMADT).as_ref() }.ok_or("Failed to map MADT")?;
+    let table_bytes = unsafe {
+        core::slice::from_raw_parts(madt_phys as *const u8, hdr.header.length as usize)
+    };
+    if !verify_checksum(table_bytes) {
+        return Err("MADT checksum invalid");
+    }
+
+    // Snapshot the Local APIC MMIO base from the fixed header.
+    let lapic_base = hdr.local_apic_addr as u64;
+
+    crate::serial_println!(
+        "[ACPI] MADT: Local APIC base = {:#x}, flags = {:#x}",
+        lapic_base,
+        { hdr.flags }
+    );
+
+    // Commit to ACPI state so lapic_base_addr() is usable even if we return early.
+    {
+        let mut state = ACPI_STATE.lock();
+        state.madt_phys = madt_phys;
+        state.lapic_base = lapic_base;
+    }
+
+    let parser = unsafe { MadtParser::new(madt_phys) }.ok_or("MADT too small to parse")?;
+    let mut cores: Vec<CoreInfo> = Vec::new();
+
+    for entry in parser {
+        match entry {
+            MadtEntry::LocalApic(apic) => {
+                let flags = apic.flags;
+                crate::serial_println!(
+                    "[ACPI] MADT:  Local APIC  proc_uid={:3}  apic_id={:3}  flags={:#x}{}",
+                    apic.acpi_proc_uid,
+                    apic.apic_id,
+                    flags,
+                    if flags & 1 != 0 { "  [enabled]" } else { "  [disabled]" }
+                );
+                cores.push(CoreInfo {
+                    apic_id: apic.apic_id as u32,
+                    acpi_proc_uid: apic.acpi_proc_uid as u32,
+                    flags,
+                    is_x2apic: false,
+                });
+            }
+
+            MadtEntry::IoApic(io) => {
+                crate::serial_println!(
+                    "[ACPI] MADT:  I/O APIC    id={:3}  addr={:#x}  gsi_base={}",
+                    io.io_apic_id,
+                    { io.io_apic_addr },
+                    { io.global_sys_int_base }
+                );
+            }
+
+            MadtEntry::IntSourceOverride(iso) => {
+                crate::serial_println!(
+                    "[ACPI] MADT:  IRQ override bus={}  src={:3}  gsi={:3}  flags={:#x}",
+                    iso.bus,
+                    iso.source,
+                    { iso.global_sys_int },
+                    { iso.flags }
+                );
+            }
+
+            MadtEntry::LocalApicNmi(nmi) => {
+                crate::serial_println!(
+                    "[ACPI] MADT:  LAPIC NMI   proc_uid={}  lint={}  flags={:#x}",
+                    nmi.acpi_proc_uid,
+                    nmi.lint,
+                    { nmi.flags }
+                );
+            }
+
+            MadtEntry::X2Apic(x2) => {
+                let flags = x2.flags;
+                // x2APIC IDs < 255 are also represented as type-0 entries on
+                // well-formed firmware; skip duplicates (same proc_uid).
+                let proc_uid = x2.acpi_proc_uid;
+                let already_listed = cores.iter().any(|c| c.acpi_proc_uid == proc_uid);
+                crate::serial_println!(
+                    "[ACPI] MADT:  x2APIC      proc_uid={:3}  x2apic_id={:5}  flags={:#x}{}{}",
+                    proc_uid,
+                    { x2.x2apic_id },
+                    flags,
+                    if flags & 1 != 0 { "  [enabled]" } else { "  [disabled]" },
+                    if already_listed { "  (dup, skipped)" } else { "" }
+                );
+                if !already_listed {
+                    cores.push(CoreInfo {
+                        apic_id: x2.x2apic_id,
+                        acpi_proc_uid: proc_uid,
+                        flags,
+                        is_x2apic: true,
+                    });
+                }
+            }
+
+            MadtEntry::Unknown(t, l) => {
+                crate::serial_println!(
+                    "[ACPI] MADT:  Unknown entry  type={}  length={}",
+                    t,
+                    l
+                );
+            }
+        }
+    }
+
+    let usable = cores.iter().filter(|c| c.is_usable()).count();
+    crate::serial_println!(
+        "[ACPI] MADT: {} logical processor(s) found, {} usable",
+        cores.len(),
+        usable
+    );
+
+    Ok(cores)
+}
+
+/// Returns the Local APIC MMIO base address recorded during `parse_madt()`.
+/// Returns 0 if `parse_madt()` has not been called yet.
+pub fn lapic_base_addr() -> u64 {
+    ACPI_STATE.lock().lapic_base
 }
