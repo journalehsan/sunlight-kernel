@@ -1366,16 +1366,19 @@ pub extern "C" fn _start() -> ! {
                             win.config.apply_shm_title(p as *const u8, 4096);
                         }
                     }
-                    // Re-position Tasks Monitor to bottom-right once its title is known.
-                    // Title is set here (CONFIGURE_WINDOW), not at CREATE_WINDOW, so this
-                    // is the earliest we can detect the window by name.
-                    if win.config.title.starts_with(b"Tasks Mo") && win.config.state == WindowState::Normal {
-                        let new_x = state.fb_width.saturating_sub(win.width).saturating_sub(24);
-                        let new_y = state.fb_height.saturating_sub(win.height).saturating_sub(48);
-                        win.x = new_x;
-                        win.y = new_y;
-                        win.saved_x = new_x;
-                        win.saved_y = new_y;
+                    // Re-position windows to their designated screen areas once the title
+                    // is known (title arrives via CONFIGURE_WINDOW, not CREATE_WINDOW).
+                    if win.config.state == WindowState::Normal {
+                        if win.config.title.starts_with(b"Tasks Mo") {
+                            // Tasks Monitor → bottom-right
+                            let new_x = state.fb_width.saturating_sub(win.width).saturating_sub(24);
+                            let new_y = state.fb_height.saturating_sub(win.height).saturating_sub(48);
+                            win.x = new_x; win.saved_x = new_x;
+                            win.y = new_y; win.saved_y = new_y;
+                        } else if win.config.title.starts_with(b"Sunlight Te") {
+                            // Sunlight Terminal → left side, keep y
+                            win.x = 24; win.saved_x = 24;
+                        }
                     }
                 }
                 redraw_scene(&state);
