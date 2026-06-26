@@ -1,26 +1,20 @@
 //! Pi calculation via Machin's formula with u128 fixed-point arithmetic.
-//!
-//! π/4 = 4·arctan(1/5) − arctan(1/239)
-//!
-//! arctan(1/x) = Σₖ₌₀..∞  (−1)ᵏ / ((2k+1) · x^(2k+1))
-//!
-//! Scale factor S = 2^60 keeps 18 significant bits while staying inside u128.
-//! The loop runs ITERATIONS times so the TSC measurement is meaningful.
 
-use crate::bench::{rdtsc, Benchmark};
+use crate::bench::rdtsc;
 use core::hint::black_box;
+
+pub const NAME: &str = "Pi (Machin fixed-pt, 200k iters)";
 
 const SCALE: u128 = 1u128 << 60;
 const ITERATIONS: u64 = 200_000;
+const STEP_ITERS: u64 = 5_000;
 
-/// arctan(1/x) · SCALE  using integer long division.
 fn arctan_recip(x: u128) -> u128 {
     let x2 = x * x;
     let mut term = SCALE / x;
     let mut sum = term;
     let mut k: u32 = 1;
     loop {
-        // term_{k} = term_{k-1} / x²
         term /= x2;
         if term == 0 {
             break;
@@ -39,31 +33,58 @@ fn arctan_recip(x: u128) -> u128 {
     sum
 }
 
-/// One computation of π (fixed-point, returns scaled result).
 #[inline(never)]
 fn compute_pi_once() -> u128 {
     let a = arctan_recip(5);
     let b = arctan_recip(239);
-    // π/4 = 4·arctan(1/5) − arctan(1/239)  →  π = 4·(4a − b)
     4 * (4 * a - b)
 }
 
-pub struct PiBench;
+pub struct PiRunner {
+    iter: u64,
+    acc: u128,
+    cycles: u64,
+}
 
-impl Benchmark for PiBench {
-    fn name(&self) -> &'static str {
-        "Pi (Machin fixed-pt, 200k iters)"
+impl PiRunner {
+    pub fn new() -> Self {
+        Self {
+            iter: 0,
+            acc: 0,
+            cycles: 0,
+        }
     }
 
-    fn run(&self) -> u64 {
-        let start = rdtsc();
-        let mut acc: u128 = 0;
-        for _ in 0..ITERATIONS {
-            acc = acc.wrapping_add(black_box(compute_pi_once()));
+    pub fn name(&self) -> &'static str {
+        NAME
+    }
+
+    pub fn cycles(&self) -> u64 {
+        self.cycles
+    }
+
+    pub fn progress_bp(&self) -> u16 {
+        ((self.iter.saturating_mul(10_000)) / ITERATIONS) as u16
+    }
+
+    pub fn step(&mut self) -> bool {
+        if self.iter >= ITERATIONS {
+            return true;
         }
-        let elapsed = rdtsc() - start;
-        // Prevent optimizer from discarding acc.
-        black_box(acc);
-        elapsed
+
+        let end = (self.iter + STEP_ITERS).min(ITERATIONS);
+        let start = rdtsc();
+        while self.iter < end {
+            self.acc = self.acc.wrapping_add(black_box(compute_pi_once()));
+            self.iter += 1;
+        }
+        self.cycles = self.cycles.saturating_add(rdtsc() - start);
+
+        if self.iter >= ITERATIONS {
+            black_box(self.acc);
+            true
+        } else {
+            false
+        }
     }
 }

@@ -1,9 +1,3 @@
-/// Core benchmark trait. `run` returns elapsed TSC cycles for the workload.
-pub trait Benchmark {
-    fn name(&self) -> &'static str;
-    fn run(&self) -> u64;
-}
-
 /// Serializing RDTSC: LFENCE drains the out-of-order pipeline first.
 #[inline(always)]
 pub fn rdtsc() -> u64 {

@@ -1,13 +1,11 @@
 [package]
-name = "sunlight-bench"
+name = "sunlight-calculator"
 version = "0.1.472"
-
-
 
 edition = "2021"
 
 [[bin]]
-name = "sunbench"
+name = "calculator"
 path = "src/main.rs"
 
 [dependencies]

@@ -470,6 +470,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         }
         // sunbench: SunLight-Bench CPU/multi-core performance benchmarking suite.
         "/bin/sunbench" | "/usr/bin/sunbench" => Ok(crate::SUNLIGHT_BENCH_ELF_BYTES),
+        // calculator: lightweight graphical calculator.
+        "/bin/calculator" | "/usr/bin/calculator" => Ok(crate::SUNLIGHT_CALCULATOR_ELF_BYTES),
         // cpufeat: x86-64 microarchitecture level detection (v2/v3 capability reporting).
         "/bin/cpufeat" | "/usr/bin/cpufeat" => Ok(crate::CPUFEAT_ELF_BYTES),
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.

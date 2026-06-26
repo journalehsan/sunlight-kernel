@@ -881,6 +881,8 @@ max_ttys = 6
     RamEntry::file("/bin/sunlight-tasks", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-tasks\n"),
     // SunLight-Bench: CPU/multi-core performance benchmark
     RamEntry::file("/bin/sunbench", 0, 0, mode::FILE_755, b"#!/sunlight/sunbench\n"),
+    // GUI calculator client
+    RamEntry::file("/bin/calculator", 0, 0, mode::FILE_755, b"#!/sunlight/calculator\n"),
     RamEntry::file(
         "/bin/cpufeat",
         0,
@@ -1390,6 +1392,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/sunbench\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/calculator",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/calculator\n",
     ),
     RamEntry::file(
         "/usr/bin/cpufeat",

@@ -294,6 +294,12 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release"],
         },
+        EmbeddedBinary {
+            package: "sunlight-calculator",
+            output: "calculator",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
     ];
 
     for bin in binaries {
