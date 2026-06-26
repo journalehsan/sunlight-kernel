@@ -426,6 +426,7 @@ struct Window {
     config:    WindowConfig,
     /// Cursor shape the client wants when the pointer is in its client area.
     client_cursor: CursorShape,
+    pending_keys: KeyEventQueue,
 }
 
 impl Window {
@@ -440,6 +441,45 @@ impl Window {
                 TITLEBAR_H + self.height + BORDER_W,
             ),
         }
+    }
+}
+
+const KEY_EVENT_QUEUE_CAP: usize = 32;
+
+#[derive(Clone, Copy)]
+struct KeyEventQueue {
+    buf: [u64; KEY_EVENT_QUEUE_CAP],
+    head: usize,
+    len: usize,
+}
+
+impl KeyEventQueue {
+    const fn new() -> Self {
+        Self {
+            buf: [0; KEY_EVENT_QUEUE_CAP],
+            head: 0,
+            len: 0,
+        }
+    }
+
+    fn push(&mut self, event: u64) {
+        if self.len == KEY_EVENT_QUEUE_CAP {
+            self.head = (self.head + 1) % KEY_EVENT_QUEUE_CAP;
+            self.len -= 1;
+        }
+        let tail = (self.head + self.len) % KEY_EVENT_QUEUE_CAP;
+        self.buf[tail] = event;
+        self.len += 1;
+    }
+
+    fn pop(&mut self) -> Option<u64> {
+        if self.len == 0 {
+            return None;
+        }
+        let event = self.buf[self.head];
+        self.head = (self.head + 1) % KEY_EVENT_QUEUE_CAP;
+        self.len -= 1;
+        Some(event)
     }
 }
 
@@ -1244,6 +1284,7 @@ pub extern "C" fn _start() -> ! {
                             saved_h:  h,
                             config,
                             client_cursor: CursorShape::Pointer,
+                            pending_keys: KeyEventQueue::new(),
                         });
                         redraw_scene(&state);
 
@@ -1363,14 +1404,19 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::EVENT_POLL => {
                 let win_id = msg.words[0];
                 let packed = (state.mouse_x as u64) | ((state.mouse_y as u64) << 16);
-                let mut wake = IpcMsg::with_label(SgpMsg::REPLY).word(0, packed);
-                if let Some(win) = state.windows.iter().find(|w| w.id == win_id) {
+                let mut wake = IpcMsg::with_label(SgpMsg::REPLY)
+                    .word(0, packed)
+                    .word(3, state.prev_buttons as u64);
+                if let Some(win) = state.windows.iter_mut().find(|w| w.id == win_id) {
                     let (cx, cy) = match win.config.state {
                         WindowState::Fullscreen => (0u64, 0u64),
                         WindowState::Maximized  => (BORDER_W as u64, TITLEBAR_H as u64),
                         _                       => ((win.x + BORDER_W) as u64, (win.y + TITLEBAR_H) as u64),
                     };
                     wake = wake.word(1, cx | (cy << 32));
+                    if let Some(key_event) = win.pending_keys.pop() {
+                        wake = wake.word(2, key_event);
+                    }
                 }
                 let _ = ipc_reply(wake);
             }
@@ -1398,8 +1444,9 @@ pub extern "C" fn _start() -> ! {
             // Ctrl + W: close currently active (focused) window.
             // -------------------------------------------------------------------
             sunlight_ipc::KbdMsg::KEY_EVENT => {
+                let packed = msg.words[0];
                 let (keycode, pressed, _, ctrl, _, _) =
-                    sunlight_ipc::unpack_key_event(msg.words[0]);
+                    sunlight_ipc::unpack_key_event(packed);
 
                 if pressed && ctrl && keycode == 0x11 { // 0x11 is 'W' in scancode set 1
                     if let Some(focused) = state.windows.last().map(|w| w.id) {
@@ -1415,6 +1462,10 @@ pub extern "C" fn _start() -> ! {
                         
                         state.active_cursor = cursor_for_scene(&state);
                         redraw_scene(&state);
+                    }
+                } else if state.session_active {
+                    if let Some(win) = state.windows.last_mut() {
+                        win.pending_keys.push(packed);
                     }
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));

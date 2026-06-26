@@ -8,8 +8,8 @@
 
 mod draw;
 pub mod fmt;
-mod font;
-mod framebuffer;
+pub mod font;
+pub mod framebuffer;
 pub mod layout;
 mod modes;
 mod splash;

@@ -47,6 +47,7 @@ members = [
     "services/sunlight-mouse",
     "services/sunlight-display",
     "services/eyes",
+    "services/sunlight-terminal",
     "services/pty_server",
     "services/sunlight-deviced",
     "services/sunlight-networkd",

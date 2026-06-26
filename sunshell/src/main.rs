@@ -174,12 +174,11 @@ mod sysfetch;
 #[cfg(feature = "sunlight")]
 #[no_main]
 mod sunlight {
-    use core::fmt::Write;
-
     use sunlight_ipc::{
-        debug_log, endpoint_create, get_init_cap, ipc_call, ipc_recv, ipc_reply_and_wait,
-        nameserver_lookup, nameserver_register, sysinfo, unpack_ipv4, CapabilityToken, InitMsg,
-        IpcMsg, ResolvedMsg, SunlightSyscall, TzMsg, VfsMsg,
+        debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
+        nameserver_lookup, nameserver_register, process_yield, sysinfo, tty_stdin_push,
+        tty_stdout_pull, unpack_ipv4, CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg, TzMsg,
+        VfsMsg,
     };
 
     /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
@@ -2012,6 +2011,20 @@ mod sunlight {
         Some(result)
     }
 
+    fn parse_u64_bytes(bytes: &[u8]) -> Option<u64> {
+        if bytes.is_empty() {
+            return None;
+        }
+        let mut result = 0u64;
+        for &b in bytes {
+            if !b.is_ascii_digit() {
+                return None;
+            }
+            result = result.checked_mul(10)?.checked_add((b - b'0') as u64)?;
+        }
+        Some(result)
+    }
+
     fn parse_mode(s: &str) -> Option<u16> {
         let mut result = 0u16;
         for &b in s.as_bytes() {
@@ -2235,8 +2248,286 @@ mod sunlight {
         }
     }
 
-    #[no_mangle]
-    pub extern "C" fn _start(shell_id: u64, uid: u64, gid: u64) -> ! {
+    fn build_prompt(shell: &Shell, out: &mut [u8; 128]) -> usize {
+        let user = &shell.username[..shell.username_len.min(shell.username.len())];
+        let cwd = if shell.cwd.as_str() == shell.env.get("HOME").unwrap_or("") {
+            "~"
+        } else {
+            shell.cwd.as_str()
+        };
+        let mut n = 0usize;
+        for &b in user {
+            if b == 0 || n >= out.len() {
+                break;
+            }
+            out[n] = b;
+            n += 1;
+        }
+        for &b in b"@sunlight:" {
+            if n >= out.len() {
+                break;
+            }
+            out[n] = b;
+            n += 1;
+        }
+        for &b in cwd.as_bytes() {
+            if n >= out.len() {
+                break;
+            }
+            out[n] = b;
+            n += 1;
+        }
+        for &b in b"$ " {
+            if n >= out.len() {
+                break;
+            }
+            out[n] = b;
+            n += 1;
+        }
+        n
+    }
+
+    fn pty_write(cap: CapabilityToken, session_id: u64, bytes: &[u8]) -> usize {
+        let mut written = 0usize;
+        while written < bytes.len() {
+            let chunk = (bytes.len() - written).min(16);
+            let mut msg = IpcMsg::with_label(PtyMsg::WRITE_SLAVE)
+                .word(0, session_id)
+                .word(1, chunk as u64);
+            for (word_idx, chunk_bytes) in bytes[written..written + chunk].chunks(8).enumerate() {
+                let mut word = 0u64;
+                for (byte_idx, &b) in chunk_bytes.iter().enumerate() {
+                    word |= (b as u64) << (byte_idx * 8);
+                }
+                msg = msg.word(2 + word_idx, word);
+            }
+            let reply = ipc_call(cap, msg);
+            if reply.label != PtyMsg::REPLY {
+                break;
+            }
+            let accepted = (reply.words[1] as usize).min(chunk);
+            if accepted == 0 {
+                break;
+            }
+            written += accepted;
+        }
+        written
+    }
+
+    fn pty_read(cap: CapabilityToken, session_id: u64, out: &mut [u8]) -> usize {
+        let mut total = 0usize;
+        while total < out.len() {
+            let chunk = (out.len() - total).min(16);
+            let reply = ipc_call(
+                cap,
+                IpcMsg::with_label(PtyMsg::READ_SLAVE)
+                    .word(0, session_id)
+                    .word(1, chunk as u64),
+            );
+            if reply.label != PtyMsg::REPLY {
+                break;
+            }
+            let n = (reply.words[1] as usize).min(chunk);
+            if n == 0 {
+                break;
+            }
+            for i in 0..n {
+                let word = reply.words[2 + (i / 8)];
+                out[total + i] = ((word >> ((i % 8) * 8)) & 0xFF) as u8;
+            }
+            total += n;
+            if n < chunk {
+                break;
+            }
+        }
+        total
+    }
+
+    fn pty_write_shell_output(
+        cap: CapabilityToken,
+        session_id: u64,
+        short: &[u8],
+    ) {
+        if unsafe { LONG_OUT_ACTIVE } {
+            let len = unsafe { LONG_OUT_LEN };
+            if len > 0 {
+                unsafe {
+                    let _ = pty_write(cap, session_id, &LONG_OUT_BUF[..len]);
+                }
+            }
+            long_out_reset();
+            return;
+        }
+        if !short.is_empty() {
+            let _ = pty_write(cap, session_id, short);
+        }
+    }
+
+    fn pty_write_prompt(cap: CapabilityToken, session_id: u64, shell: &Shell) {
+        let mut buf = [0u8; 128];
+        let len = build_prompt(shell, &mut buf);
+        let _ = pty_write(cap, session_id, &buf[..len]);
+    }
+
+    fn pty_echo_input(cap: CapabilityToken, session_id: u64, byte: u8) {
+        match byte {
+            b'\r' | b'\n' => {
+                let _ = pty_write(cap, session_id, b"\r\n");
+            }
+            0x08 | 0x7f => {
+                let _ = pty_write(cap, session_id, b"\x08 \x08");
+            }
+            b' '..=b'~' => {
+                let _ = pty_write(cap, session_id, &[byte]);
+            }
+            _ => {}
+        }
+    }
+
+    fn emit_welcome_banner() {
+        unsafe {
+            LONG_OUT_ACTIVE = true;
+            LONG_OUT_LEN = 0;
+            LONG_OUT_BUF[0] = b'\x1B';
+            LONG_OUT_BUF[1] = b'[';
+            LONG_OUT_BUF[2] = b'2';
+            LONG_OUT_BUF[3] = b'J';
+            LONG_OUT_BUF[4] = b'\x1B';
+            LONG_OUT_BUF[5] = b'[';
+            LONG_OUT_BUF[6] = b'H';
+            LONG_OUT_LEN = 7;
+        }
+        long_out_push_str("\x1b[36m");
+        long_out_push_str("Welcome to SunlightOS\n");
+        long_out_push_str("\x1b[0m");
+        long_out_push_str("Type commands at the prompt below.\n");
+        long_out_push_str("\n");
+    }
+
+    fn parse_shell_id_token(token: &[u8]) -> Option<u64> {
+        let base_start = token
+            .iter()
+            .rposition(|&b| b == b'/')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let base = &token[base_start..];
+        if !base.starts_with(b"sshl") {
+            return None;
+        }
+        parse_u64_bytes(&base[4..])
+    }
+
+    fn start_pty_shell(
+        shell_id: u64,
+        uid: u32,
+        gid: u32,
+        session_id: u64,
+        pty_cap: CapabilityToken,
+    ) -> ! {
+        debug_log("[PTY-SHELL] starting PTY slave mode");
+
+        let mut shell = Shell::new();
+        shell.load_user_by_uid(uid);
+        shell.uid = uid;
+        shell.gid = gid;
+        shell.init_env();
+
+        emit_welcome_banner();
+        pty_write_shell_output(pty_cap, session_id, &[]);
+        pty_write_prompt(pty_cap, session_id, &shell);
+
+        let shell_tab = shell_id as u32;
+        let mut in_buf = [0u8; 64];
+        let mut child_buf = [0u8; 128];
+
+        loop {
+            let mut progress = false;
+
+            if let Some(pid) = shell.fg_pid {
+                let pulled = tty_stdout_pull(shell_tab, &mut child_buf);
+                if pulled > 0 {
+                    let _ = pty_write(pty_cap, session_id, &child_buf[..pulled]);
+                    progress = true;
+                }
+                if let Ok(Some(code)) = sunlight_libc::try_waitpid(pid) {
+                    shell.fg_pid = None;
+                    shell.env.set("?", &alloc::format!("{}", code));
+                    pty_write_prompt(pty_cap, session_id, &shell);
+                    progress = true;
+                }
+            }
+
+            let n = pty_read(pty_cap, session_id, &mut in_buf);
+            if n > 0 {
+                progress = true;
+                if shell.fg_pid.is_some() {
+                    let _ = tty_stdin_push(shell_tab, &in_buf[..n]);
+                } else {
+                    for &byte in &in_buf[..n] {
+                        let is_enter = byte == b'\n' || byte == b'\r';
+                        if !is_enter {
+                            pty_echo_input(pty_cap, session_id, byte);
+                        }
+                        long_out_reset();
+                        let (out, out_len) = shell.handle_byte(byte);
+                        if is_enter {
+                            pty_echo_input(pty_cap, session_id, byte);
+                        }
+                        pty_write_shell_output(pty_cap, session_id, &out[..out_len]);
+                        if is_enter && shell.fg_pid.is_none() {
+                            pty_write_prompt(pty_cap, session_id, &shell);
+                        }
+                    }
+                }
+            }
+
+            if !progress {
+                process_yield();
+            }
+        }
+    }
+
+    fn start_from_argv(argc: u64, argv: *const *const u8, envp: *const *const u8) -> ! {
+        sunlight_libc::env::init(envp);
+
+        let mut raw = [core::ptr::null::<u8>(); 8];
+        let raw_count = unsafe { sunlight_libc::crt0::collect_raw_args(argc, argv, &mut raw) };
+        let mut shell_id = 0u64;
+        let mut pty_session = None;
+        let mut pty_cap = None;
+
+        for (idx, ptr) in raw[..raw_count].iter().copied().enumerate() {
+            if ptr.is_null() {
+                continue;
+            }
+            let len = unsafe { sunlight_libc::crt0::cstr_len(ptr, 128) };
+            let bytes = unsafe { core::slice::from_raw_parts(ptr, len) };
+            if idx == 0 {
+                shell_id = parse_shell_id_token(bytes).unwrap_or(0);
+            } else if let Some(rest) = bytes.strip_prefix(b"--shell-id=") {
+                shell_id = parse_u64_bytes(rest).unwrap_or(shell_id);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-session=") {
+                pty_session = parse_u64_bytes(rest);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-cap=") {
+                pty_cap = parse_u64_bytes(rest).map(CapabilityToken);
+            }
+        }
+
+        if let (Some(session_id), Some(cap)) = (pty_session, pty_cap) {
+            start_pty_shell(
+                shell_id,
+                sunlight_libc::getuid() as u32,
+                sunlight_libc::getgid() as u32,
+                session_id,
+                cap,
+            );
+        }
+
+        debug_log("[PTY-SHELL] missing PTY argv, exiting");
+        sunlight_ipc::process_exit::ProcessExit::exit(1);
+    }
+
+    fn start_tty_shell(shell_id: u64, uid: u64, gid: u64) -> ! {
         debug_log("[TTY]  Shell: sshl v0.1.0 running");
 
         let ep = endpoint_create();
@@ -2261,35 +2552,7 @@ mod sunlight {
         // Seed PATH/USER/HOME/SHELL now that the user identity is resolved
         shell.init_env();
 
-        // Send welcome banner with system stats (clear screen first)
-        unsafe {
-            LONG_OUT_ACTIVE = true;
-            LONG_OUT_LEN = 0;
-        }
-
-        // Write clear screen + home cursor to LONG_OUT_BUF
-        unsafe {
-            LONG_OUT_BUF[0] = b'\x1B';
-            LONG_OUT_BUF[1] = b'[';
-            LONG_OUT_BUF[2] = b'2';
-            LONG_OUT_BUF[3] = b'J';
-            LONG_OUT_BUF[4] = b'\x1B';
-            LONG_OUT_BUF[5] = b'[';
-            LONG_OUT_BUF[6] = b'H';
-            LONG_OUT_LEN = 7;
-        }
-
-        // Simple, fast greeting. The CPU/RAM stats banner was removed from the
-        // shell startup: every tab spawned its own shell, and each did a sysinfo
-        // syscall on launch — extra latency/IPC churn per tab. Live CPU/RAM now
-        // lives in the TUI title bar (rendered once by tty_server, see
-        // build_titlebar in services/tty_server). Keep this greeting minimal so
-        // a new tab paints instantly.
-        long_out_push_str("\x1b[36m"); // cyan
-        long_out_push_str("Welcome to SunlightOS\n");
-        long_out_push_str("\x1b[0m"); // reset
-        long_out_push_str("Type commands at the prompt below.\n");
-        long_out_push_str("\n");
+        emit_welcome_banner();
 
         // First receive must be plain ipc_recv().
         // Do not replace this with ipc_reply_and_wait(): at startup there is no current
@@ -2420,6 +2683,14 @@ mod sunlight {
         }
     }
 
+    #[no_mangle]
+    pub extern "C" fn _start(a: u64, b: u64, c: u64) -> ! {
+        if b > 0x1000 {
+            start_from_argv(a, b as *const *const u8, c as *const *const u8);
+        }
+        start_tty_shell(a, b, c);
+    }
+
     /// Extract the application name shown in the tab bar from a command line:
     /// the first whitespace-delimited token, reduced to its basename
     /// (text after the last '/'). Returns a fixed buffer + length.
@@ -2474,9 +2745,6 @@ mod sunlight {
         }
     }
 }
-
-#[cfg(feature = "sunlight")]
-use sunlight::*;
 
 #[cfg(feature = "sunlight")]
 #[panic_handler]

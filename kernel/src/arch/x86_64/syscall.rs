@@ -1325,7 +1325,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.capabilities = capabilities;
     // Inherit the TTY tab so a shell-spawned app's stdio routes to that tab's
     // kernel rings (foreground input routing).
-    child.tty_tab = parent_tty_tab;
+    child.tty_tab = parent_tty_tab.or_else(|| {
+        crate::process::spawn::shell_id_from_path(path_str).map(|id| id as u8)
+    });
 
     let argv_refs: alloc::vec::Vec<&[u8]> = argv_bytes.iter().map(|v| v.as_slice()).collect();
     let envp_strings = child.env.to_envp();
@@ -1345,7 +1347,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // tab's kernel rings so keyboard input reaches the app and its output is
     // rendered by tty_server. An explicit stdout_fd (e.g. a pipe write end for
     // `a | b`) still overrides fd1 below.
-    if let Some(tab) = parent_tty_tab {
+    if let Some(tab) = child.tty_tab {
         use crate::process::fd_table::{CapRights, FileHandle};
         let _ = child.fd_table.install_at(
             0,

@@ -451,6 +451,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
             Ok(crate::SUNLIGHT_DISPLAY_ELF_BYTES)
         }
         "/bin/eyes" | "/usr/bin/eyes" => Ok(crate::EYES_ELF_BYTES),
+        "/bin/sunlight-terminal" | "/usr/bin/sunlight-terminal" => {
+            Ok(crate::SUNLIGHT_TERMINAL_ELF_BYTES)
+        }
         // sunlight-sunsay: native Rust proof-of-life binary (Phase 1 std smoke test).
         "/bin/sunlight-sunsay" | "/usr/bin/sunlight-sunsay" | "/usr/local/bin/sunlight-sunsay" => {
             Ok(crate::SUNLIGHT_SUNSAY_ELF_BYTES)
@@ -477,7 +480,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
     }
 }
 
-fn shell_id_from_path(path: &str) -> Option<u64> {
+pub fn shell_id_from_path(path: &str) -> Option<u64> {
     match path {
         "/bin/sh" | "/bin/ssh" | "/bin/sshl" => Some(0),
         p if p.starts_with("/bin/sshl") => parse_u64(&p[9..]),

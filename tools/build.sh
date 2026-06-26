@@ -71,6 +71,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package cpu-utils --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
 # Force a non-PIE static link so e_type is ET_EXEC (not ET_DYN). The kernel ELF
 # loader (sunlight-elf parse_elf_header) only accepts ET_EXEC; -no-pie + crt-static
 # is required because musl otherwise emits a static-PIE that loads as DYN.

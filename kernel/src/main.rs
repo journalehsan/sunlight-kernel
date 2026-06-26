@@ -147,6 +147,9 @@ static SUNLIGHT_DISPLAY_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-display");
 // Canonical first graphical demo (Eyes Tracker).
 static EYES_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/eyes");
+// First PTY-backed graphical terminal client.
+static SUNLIGHT_TERMINAL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-terminal");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
