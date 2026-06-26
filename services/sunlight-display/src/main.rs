@@ -1250,10 +1250,10 @@ pub extern "C" fn _start() -> ! {
                         let id = next_win_id;
                         next_win_id += 1;
 
-                        // Initial position: cascade from center.
+                        // Initial position: cascade from center of screen.
                         let cascade = ((id.saturating_sub(1)) % 8) as u32 * 28;
-                        let win_x   = state.fb_width.saturating_sub(w).saturating_div(2).saturating_add(cascade);
-                        let win_y   = (state.fb_height / 4).saturating_sub(h / 2).saturating_add(cascade);
+                        let win_x = state.fb_width.saturating_sub(w).saturating_div(2).saturating_add(cascade);
+                        let win_y = (state.fb_height / 4).saturating_sub(h / 2).saturating_add(cascade);
 
                         debug_log("[DISPLAY] create_window id=");
                         debug_dec(id as u32);
@@ -1365,6 +1365,17 @@ pub extern "C" fn _start() -> ! {
                         if let Ok(p) = sunlight_ipc::shm_map(msg.caps[0]) {
                             win.config.apply_shm_title(p as *const u8, 4096);
                         }
+                    }
+                    // Re-position Tasks Monitor to bottom-right once its title is known.
+                    // Title is set here (CONFIGURE_WINDOW), not at CREATE_WINDOW, so this
+                    // is the earliest we can detect the window by name.
+                    if win.config.title.starts_with(b"Tasks Mo") && win.config.state == WindowState::Normal {
+                        let new_x = state.fb_width.saturating_sub(win.width).saturating_sub(24);
+                        let new_y = state.fb_height.saturating_sub(win.height).saturating_sub(48);
+                        win.x = new_x;
+                        win.y = new_y;
+                        win.saved_x = new_x;
+                        win.saved_y = new_y;
                     }
                 }
                 redraw_scene(&state);

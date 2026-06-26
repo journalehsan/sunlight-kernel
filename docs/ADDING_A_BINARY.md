@@ -89,6 +89,8 @@ path instead.
 
 **New `/bin` command** → spots 1, 2, 3, 4, **5**.
 
+For graphical desktop apps such as `eyes`, `sunlight-terminal`, and `sunlight-tasks`, the same rule applies: they still need workspace membership, build wiring, kernel embed bytes, resolver arms, and the `/bin` stubs.
+
 **New sunlightd-launched daemon** → spots 1, 2, 3, 4, **6**.
 
 **New init-launched daemon** → spots 1, 2, 3, 4, plus add its absolute
