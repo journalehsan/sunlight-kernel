@@ -1,0 +1,15 @@
+[package]
+name = "sunlight-terminal"
+version = "0.1.395"
+
+edition = "2021"
+
+[[bin]]
+name = "sunlight-terminal"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-tui = { path = "../../sunlight-tui" }
+sunlight-tty = { path = "../../sunlight-tty" }
