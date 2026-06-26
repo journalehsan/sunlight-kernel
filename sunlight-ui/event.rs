@@ -6,8 +6,19 @@ use crate::geom::Point;
 /// reply can deliver: mouse position, keyboard state, and button clicks.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Event {
-    /// Mouse button click at window-local coordinates.
+    /// Mouse button released (click complete) at window-local coordinates.
     Click { x: i32, y: i32 },
+
+    /// Mouse button pressed down at window-local coordinates.
+    /// `button`: 0 = left, 1 = right, 2 = middle.
+    MouseDown { x: i32, y: i32, button: u8 },
+
+    /// Mouse button released at window-local coordinates.
+    /// `button`: 0 = left, 1 = right, 2 = middle.
+    MouseUp { x: i32, y: i32, button: u8 },
+
+    /// Pointer moved (no button change). Coordinates are window-local.
+    MouseMove { x: i32, y: i32 },
 
     /// Decoded character input.
     Key(char),
@@ -24,6 +35,18 @@ impl Event {
         Self::Click { x, y }
     }
 
+    pub fn mouse_down(x: i32, y: i32, button: u8) -> Self {
+        Self::MouseDown { x, y, button }
+    }
+
+    pub fn mouse_up(x: i32, y: i32, button: u8) -> Self {
+        Self::MouseUp { x, y, button }
+    }
+
+    pub fn mouse_move(x: i32, y: i32) -> Self {
+        Self::MouseMove { x, y }
+    }
+
     pub fn key(ch: char) -> Self {
         Self::Key(ch)
     }
@@ -32,10 +55,13 @@ impl Event {
         Self::KeyPress { keycode, pressed }
     }
 
-    /// Return the mouse position if this is a click event.
+    /// Return the mouse position if this is a pointer event.
     pub fn pos(&self) -> Option<Point> {
         match self {
-            Self::Click { x, y } => Some(Point::new(*x, *y)),
+            Self::Click { x, y }
+            | Self::MouseDown { x, y, .. }
+            | Self::MouseUp { x, y, .. }
+            | Self::MouseMove { x, y } => Some(Point::new(*x, *y)),
             _ => None,
         }
     }

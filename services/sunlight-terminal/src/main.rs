@@ -593,7 +593,7 @@ impl App for TerminalApp {
             Event::KeyPress { keycode, pressed } => {
                 dirty |= self.handle_raw_key(keycode, pressed);
             }
-            Event::Click { .. } => {}
+            Event::Click { .. } | Event::MouseDown { .. } | Event::MouseUp { .. } | Event::MouseMove { .. } => {}
         }
         if dirty && self.console.dirty {
             self.console.clear_dirty();

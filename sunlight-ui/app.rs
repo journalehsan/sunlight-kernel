@@ -50,6 +50,12 @@ pub struct Window {
     /// Client-area origin reported by the display server (updated each poll).
     pub client_x: i32,
     pub client_y: i32,
+
+    /// Previous poll button state, for detecting press/release transitions.
+    prev_buttons: u8,
+    /// Previous cursor position (screen coordinates), for detecting movement.
+    prev_mouse_x: i32,
+    prev_mouse_y: i32,
 }
 
 // SAFETY: the buffer pointer is valid for the lifetime of the Window.
@@ -101,6 +107,9 @@ impl Window {
             shm_cap,
             client_x: 0,
             client_y: 0,
+            prev_buttons: 0,
+            prev_mouse_x: 0,
+            prev_mouse_y: 0,
         })
     }
 
@@ -156,11 +165,37 @@ impl Window {
             return Event::key_press(keycode, pressed);
         }
 
-        // If left button was pressed, deliver a click event
-        if buttons & 1 != 0 {
-            let local_x = mouse_x.saturating_sub(self.client_x);
-            let local_y = mouse_y.saturating_sub(self.client_y);
-            return Event::click(local_x, local_y);
+        let local_x = mouse_x.saturating_sub(self.client_x);
+        let local_y = mouse_y.saturating_sub(self.client_y);
+        let changed = buttons ^ self.prev_buttons;
+
+        // Detect button transitions (press/release) for each of the 3 buttons.
+        // Priority: left > right > middle.
+        for btn in 0..3u8 {
+            let mask = 1u8 << btn;
+            if changed & mask != 0 {
+                let now_down = buttons & mask != 0;
+                self.prev_buttons = buttons;
+                self.prev_mouse_x = mouse_x;
+                self.prev_mouse_y = mouse_y;
+                return if now_down {
+                    Event::mouse_down(local_x, local_y, btn)
+                } else {
+                    // Emit Click on left-button release for backwards compatibility.
+                    if btn == 0 {
+                        Event::click(local_x, local_y)
+                    } else {
+                        Event::mouse_up(local_x, local_y, btn)
+                    }
+                };
+            }
+        }
+
+        // No button change — report movement if cursor moved.
+        if mouse_x != self.prev_mouse_x || mouse_y != self.prev_mouse_y {
+            self.prev_mouse_x = mouse_x;
+            self.prev_mouse_y = mouse_y;
+            return Event::mouse_move(local_x, local_y);
         }
 
         Event::Tick

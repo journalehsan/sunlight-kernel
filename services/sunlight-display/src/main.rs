@@ -49,19 +49,23 @@ fn launch_runner() {
 const FP_SHIFT: i32 = 16;
 const FP_ONE: i32 = 1 << FP_SHIFT;
 
-const SENS_DEFAULT_FP: i32 = (FP_ONE * 3) / 2;
+/// Set to true to log every RAW_MOTION packet (dx/dy, cursor before/after).
+const MOUSE_DEBUG: bool = false;
+
+const SENS_DEFAULT_FP: i32 = FP_ONE * 2;
 #[allow(dead_code)]
 const SENS_MIN_FP: i32 = FP_ONE / 2;
 #[allow(dead_code)]
-const SENS_MAX_FP: i32 = FP_ONE * 3;
+const SENS_MAX_FP: i32 = FP_ONE * 4;
 
-const ACCEL_LOW: i32 = 5;
-const ACCEL_HIGH: i32 = 20;
-const ACCEL_SLOPE_FP: i32 = FP_ONE / 20;
-const ACCEL_MAX_FP: i32 = FP_ONE * 2;
+const ACCEL_LOW: i32 = 4;
+const ACCEL_HIGH: i32 = 15;
+const ACCEL_SLOPE_FP: i32 = FP_ONE / 15;
+const ACCEL_MAX_FP: i32 = FP_ONE * 3;
 
-const SMOOTH_SNAP_SPEED: i32 = 3;
-const SMOOTH_ALPHA_FP: i32 = (FP_ONE * 45) / 100;
+// Alpha close to 1.0 = snappy tracking; lower = smoother but laggier.
+const SMOOTH_SNAP_SPEED: i32 = 2;
+const SMOOTH_ALPHA_FP: i32 = (FP_ONE * 75) / 100;
 
 const EDGE_MARGIN: i32 = 2;
 const KEY_R: u8 = 0x13;
@@ -1513,13 +1517,20 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             MouseMsg::RAW_MOTION => {
                 let raw      = msg.words[0];
-                let dx       =  ((raw & 0xFFFF) as i16) as i32;
-                let dy       = -((((raw >> 16) & 0xFFFF) as i16) as i32); // PS/2 Y inverted
+                // Driver already inverted Y (PS/2 up→negative screen delta). Do NOT negate again.
+                let dx       = ((raw & 0xFFFF) as i16) as i32;
+                let dy       = (((raw >> 16) & 0xFFFF) as i16) as i32;
                 let buttons  = ((raw >> 32) & 0xFF) as u8;
 
                 let prev_cx      = state.pointer.x() as u32;
                 let prev_cy      = state.pointer.y() as u32;
                 let prev_buttons = state.prev_buttons;
+
+                if MOUSE_DEBUG {
+                    debug_log("[DISPLAY] raw_motion dx=");
+                    debug_i32(dx); debug_log(" dy="); debug_i32(dy);
+                    debug_log(" before=("); debug_dec(prev_cx); debug_log(","); debug_dec(prev_cy); debug_log(")\n");
+                }
                 let left_down    = (buttons     & 1) != 0;
                 let was_left_down= (prev_buttons & 1) != 0;
 
@@ -1705,6 +1716,12 @@ pub extern "C" fn _start() -> ! {
                         }
                         ActiveDrag::None => {}
                     }
+                }
+
+                if MOUSE_DEBUG {
+                    debug_log("[DISPLAY] cursor=(");
+                    debug_dec(state.pointer.x() as u32); debug_log(",");
+                    debug_dec(state.pointer.y() as u32); debug_log(")\n");
                 }
 
                 state.prev_buttons  = buttons;

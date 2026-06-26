@@ -14,6 +14,9 @@ use sunlight_ipc::{
     DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
 };
 
+/// Set to true to print raw packet bytes and decoded dx/dy on every complete packet.
+const MOUSE_DEBUG: bool = false;
+
 /// PS/2 mouse packet state machine
 #[derive(Clone, Copy, PartialEq)]
 enum PacketState {
@@ -69,10 +72,20 @@ impl MouseState {
                 self.packet_state = PacketState::WaitingByte0;
 
                 let flags = self.byte0;
+
+                // Discard overflow packets — data is unreliable when either overflow bit is set.
+                if (flags & 0x40) != 0 || (flags & 0x80) != 0 {
+                    if MOUSE_DEBUG {
+                        syscall::debug_log("[MOUSE] overflow packet discarded\n");
+                    }
+                    return None;
+                }
+
                 let left_btn = (flags & 0x01) != 0;
                 let right_btn = (flags & 0x02) != 0;
                 let middle_btn = (flags & 0x04) != 0;
 
+                // Sign-extend dx/dy from 9-bit two's complement (sign bit in byte0).
                 let mut dx = self.byte1 as i32;
                 let mut dy = self.byte2 as i32;
 
@@ -83,11 +96,21 @@ impl MouseState {
                     dy |= !0xFF;
                 }
 
+                // Invert Y: PS/2 defines up as positive; screen Y grows downward.
                 dy = -dy;
 
-                // Save raw delta before using for absolute tracking
                 let raw_dx = dx as i16;
                 let raw_dy = dy as i16;
+
+                if MOUSE_DEBUG {
+                    syscall::debug_log("[MOUSE] pkt b0=");
+                    syscall::debug_log_byte(flags);
+                    syscall::debug_log(" dx=");
+                    syscall::debug_log_i16(raw_dx);
+                    syscall::debug_log(" dy=");
+                    syscall::debug_log_i16(raw_dy);
+                    syscall::debug_log("\n");
+                }
 
                 self.abs_x = (self.abs_x + dx).max(0).min(self.screen_width - 1);
                 self.abs_y = (self.abs_y + dy).max(0).min(self.screen_height - 1);
@@ -177,6 +200,26 @@ mod syscall {
                 options(nostack)
             );
         }
+    }
+
+    pub fn debug_log_byte(v: u8) {
+        let hex = b"0123456789ABCDEF";
+        let buf = [b'0', b'x', hex[(v >> 4) as usize], hex[(v & 0xF) as usize]];
+        let s = unsafe { core::str::from_utf8_unchecked(&buf) };
+        debug_log(s);
+    }
+
+    pub fn debug_log_i16(v: i16) {
+        let mut buf = [0u8; 7];
+        let (neg, mut n) = if v < 0 { (true, (-(v as i32)) as u32) } else { (false, v as u32) };
+        let mut i = 7usize;
+        loop {
+            i -= 1; buf[i] = b'0' + (n % 10) as u8; n /= 10;
+            if n == 0 { break; }
+        }
+        if neg { i -= 1; buf[i] = b'-'; }
+        let s = unsafe { core::str::from_utf8_unchecked(&buf[i..]) };
+        debug_log(s);
     }
 }
 
