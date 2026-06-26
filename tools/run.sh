@@ -33,6 +33,8 @@ Display Options:
 
 QEMU Options:
   -m, --memory MB    Set RAM size (default: 2048)
+  --cpus N           Set virtual CPU count (default: 1)
+  --cpu MODEL        Set QEMU CPU model. Use x86_64-v3 to map to Haswell-v1
   --disk PATH        Disk image to attach (default: ~/vmware/sunlight.qcow2,
                      auto-created as 10G qcow2 if missing)
   --no-disk          Don't attach a disk
@@ -58,6 +60,8 @@ USAGE
 # Default options
 DISPLAY_TYPE="gtk"
 MEMORY="2048"
+CPU_COUNT="4"
+CPU_MODEL=""
 DISK_PATH="$HOME/vmware/sunlight.qcow2"
 DISK_SIZE="10G"
 USE_DISK=true
@@ -101,6 +105,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         -m|--memory)
             MEMORY="$2"
+            shift 2
+            ;;
+        --cpus)
+            CPU_COUNT="$2"
+            shift 2
+            ;;
+        --cpu)
+            CPU_MODEL="$2"
             shift 2
             ;;
         --disk)
@@ -270,6 +282,26 @@ fi
 echo -e "${GREEN}✓${NC} QEMU: $(qemu-system-x86_64 --version | head -1)"
 echo ""
 
+case "$CPU_MODEL" in
+    x86_64-v3|x86-64-v3)
+        # QEMU does not expose an x86_64-v3 CPU name directly; Haswell-v1 is a
+        # portable v3-class model that provides AVX2/FMA/BMI* under both TCG and KVM.
+        CPU_MODEL="Haswell-v1"
+        CPU_MODEL_LABEL="Haswell-v1 (x86-64-v3 class)"
+        ;;
+    "")
+        CPU_MODEL_LABEL="QEMU default"
+        ;;
+    *)
+        CPU_MODEL_LABEL="$CPU_MODEL"
+        ;;
+esac
+
+CPU_ARGS=()
+if [ -n "$CPU_MODEL" ]; then
+    CPU_ARGS=(-cpu "$CPU_MODEL")
+fi
+
 # Create disk image if missing (qcow2 — QEMU's native format)
 if [ "$USE_DISK" = true ] && [ ! -f "$DISK_PATH" ]; then
     echo -e "${YELLOW}Disk image not found, creating ${DISK_SIZE} qcow2 at $DISK_PATH${NC}"
@@ -282,6 +314,8 @@ QEMU_CMD=(
     qemu-system-x86_64
     -cdrom "$ISO_PATH"
     -m "${MEMORY}M"
+    -smp "$CPU_COUNT"
+    "${CPU_ARGS[@]}"
     -vga std
     -serial stdio
     -no-reboot
@@ -343,6 +377,8 @@ case $DISPLAY_TYPE in
 esac
 
 echo -e "${BLUE}Memory:${NC}  ${MEMORY} MiB"
+echo -e "${BLUE}vCPUs:${NC}   ${CPU_COUNT}"
+echo -e "${BLUE}CPU:${NC}     ${CPU_MODEL_LABEL}"
 
 # Add debug options
 if [ "$DEBUG_MODE" = true ]; then
@@ -361,27 +397,29 @@ echo ""
 if [ "$SCREENSHOT_MODE" = true ]; then
     SCREENSHOT_PATH="$PROJECT_ROOT/target/boot_screenshot.ppm"
     echo -e "${YELLOW}Screenshot mode - capturing display after 4s...${NC}"
-    
+
     timeout 8 qemu-system-x86_64 \
         -cdrom "$ISO_PATH" \
         -m "${MEMORY}M" \
+        -smp "$CPU_COUNT" \
+        "${CPU_ARGS[@]}" \
         -vga std \
         -display none \
         -serial stdio \
         -monitor telnet:127.0.0.1:55555,server,nowait \
         2>&1 &
-    
+
     QEMU_PID=$!
     sleep 4
-    
+
     (echo "screendump $SCREENSHOT_PATH"; sleep 1) | nc localhost 55555 2>/dev/null || true
     sleep 1
     kill $QEMU_PID 2>/dev/null || true
     wait $QEMU_PID 2>/dev/null || true
-    
+
     if [ -f "$SCREENSHOT_PATH" ]; then
         echo -e "${GREEN}✓ Screenshot saved:${NC} $SCREENSHOT_PATH"
-        
+
         if command -v convert &> /dev/null; then
             PNG_PATH="${SCREENSHOT_PATH%.ppm}.png"
             convert "$SCREENSHOT_PATH" "$PNG_PATH" 2>/dev/null && \

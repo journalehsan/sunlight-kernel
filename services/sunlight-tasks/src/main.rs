@@ -84,6 +84,8 @@ struct TasksApp {
     snapshot: SystemSnapshot,
     status: [u8; 96],
     status_len: usize,
+    hw_info: [u8; 40],
+    hw_info_len: usize,
     selected_pid: Option<u32>,
     scroll: usize,
     show_system_info: bool,
@@ -100,6 +102,8 @@ impl TasksApp {
             snapshot: SystemSnapshot::default(),
             status: [0; 96],
             status_len: 0,
+            hw_info: [0; 40],
+            hw_info_len: 0,
             selected_pid: None,
             scroll: 0,
             show_system_info: true,
@@ -123,11 +127,24 @@ impl TasksApp {
         core::str::from_utf8(&self.status[..self.status_len]).unwrap_or("")
     }
 
+    fn rebuild_hw_info(&mut self) {
+        let mut n = copy_tail(b"Cores: ", &mut self.hw_info);
+        n += write_num_into(self.snapshot.cpu_count as u32, &mut self.hw_info[n..]);
+        n += copy_tail(b"  GPU: ", &mut self.hw_info[n..]);
+        n += write_num_into(self.snapshot.gpu_count as u32, &mut self.hw_info[n..]);
+        self.hw_info_len = n;
+    }
+
+    fn hw_info_str(&self) -> &str {
+        core::str::from_utf8(&self.hw_info[..self.hw_info_len]).unwrap_or("")
+    }
+
     fn refresh(&mut self, force: bool) -> bool {
         let changed = self.telemetry.poll();
         if changed || force {
             self.snapshot = *self.telemetry.snapshot();
             self.rebuild_rows();
+            self.rebuild_hw_info();
             self.clamp_scroll();
             return true;
         }
@@ -409,7 +426,7 @@ impl App for TasksApp {
         };
         table.draw(canvas, theme);
 
-        StatusBar::new(self.status_bar_rect(), self.status_str(), "", "").draw(canvas, theme);
+        StatusBar::new(self.status_bar_rect(), self.status_str(), "", self.hw_info_str()).draw(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {

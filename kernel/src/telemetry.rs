@@ -38,7 +38,8 @@ pub struct TelemetryPage {
     pub net_tx_bytes: u64,
     pub tick_hz: u32,
     pub cpu_count: u8,
-    pub _pad: [u8; 3],
+    pub gpu_count: u8,
+    pub _pad: [u8; 2],
 
     /// Monotonic kernel time (ns) when this telemetry sample was captured.
     /// Used by sunlight-top for accurate interval-based CPU % computation.
@@ -79,7 +80,8 @@ pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
     net_tx_bytes: 0,
     tick_hz: 100,
     cpu_count: 1,
-    _pad: [0; 3],
+    gpu_count: 0,
+    _pad: [0; 2],
 
     sample_time_ns: 0,
 

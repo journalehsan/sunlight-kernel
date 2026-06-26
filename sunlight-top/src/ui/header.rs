@@ -34,6 +34,18 @@ pub fn render_header(c: &mut Canvas, snap: &SystemSnapshot, term_width: u16) {
     c.fg_white();
     c.push_u64(snap.proc_count as u64);
     c.reset();
+    c.fg_orange();
+    c.push_str("  cores: ");
+    c.reset();
+    c.fg_white();
+    c.push_u64(snap.cpu_count as u64);
+    c.reset();
+    c.fg_orange();
+    c.push_str("  gpu: ");
+    c.reset();
+    c.fg_white();
+    c.push_u64(snap.gpu_count as u64);
+    c.reset();
     if snap.local_time_len > 0 {
         c.fg_orange();
         c.push_str("  local: ");

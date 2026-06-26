@@ -314,6 +314,14 @@ pub extern "C" fn _start() -> ! {
     };
     let _ = madt_cores; // available for SMP bring-up in a future step
 
+    // 4.5. PCI GPU count (class 0x03 = display controller)
+    // SAFETY: PCI port I/O requires ring-0; performed before user-space starts.
+    let gpu_count = unsafe { count_pci_class(0x03) };
+    serial_println!("[PCI]  {} GPU device(s) detected", gpu_count);
+    unsafe {
+        telemetry::TELEMETRY.gpu_count = gpu_count;
+    }
+
     // 5. virtio-blk + FAT32 bootstrap
     // Initialize the block device, read FAT32 test files, and write them into a
     // shared physical page that will be mapped into the vfs_server's address space.
@@ -1479,4 +1487,30 @@ fn build_dns_test_sequence() -> [u8; 256] {
 fn splash_log_string(msg: &str) {
     // The splash.log() requires &'static str. For runtime strings we use serial.
     crate::serial_println!("{}", msg);
+}
+
+/// Count PCI devices whose base class matches `target_class` (byte at offset 0x0B).
+/// Scans buses 0-7, slots 0-31, function 0 only (multi-function probing not needed here).
+///
+/// SAFETY: Caller must be at ring 0; PCI port I/O requires privilege.
+unsafe fn count_pci_class(target_class: u8) -> u8 {
+    use sunlight_virtio::pci::pci_read32;
+    let mut count: u8 = 0;
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            // SAFETY: ring-0 caller requirement propagated from this fn's safety contract.
+            let ids = unsafe { pci_read32(bus, slot, 0, 0x00) };
+            if ids == 0xFFFF_FFFF {
+                continue;
+            }
+            // Class register at offset 0x08: bits 31..24 = base class.
+            // SAFETY: same as above.
+            let class_reg = unsafe { pci_read32(bus, slot, 0, 0x08) };
+            let base_class = (class_reg >> 24) as u8;
+            if base_class == target_class {
+                count = count.saturating_add(1);
+            }
+        }
+    }
+    count
 }

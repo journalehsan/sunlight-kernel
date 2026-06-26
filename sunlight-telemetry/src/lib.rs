@@ -36,7 +36,8 @@ pub struct TelemetryPage {
     pub net_tx_bytes: u64,
     pub tick_hz: u32,
     pub cpu_count: u8,
-    pub _pad: [u8; 3],
+    pub gpu_count: u8,
+    pub _pad: [u8; 2],
     pub sample_time_ns: u64,
     pub proc_count: u32,
     pub procs: [ProcessStat; MAX_PROCESSES],
@@ -91,6 +92,8 @@ pub struct SystemSnapshot {
     pub proc_count: usize,
     pub procs: [ProcessSnapshot; MAX_PROCESSES],
     pub cpu_count: u8,
+    /// Number of PCI display-class (0x03) devices detected at boot.
+    pub gpu_count: u8,
     /// Aggregate CPU utilization in basis points (10 000 = 100 %).
     pub cpu_used_bp: u16,
     /// Aggregate CPU idle in basis points.
@@ -119,6 +122,7 @@ impl Default for SystemSnapshot {
             proc_count: 0,
             procs: [ProcessSnapshot::default(); MAX_PROCESSES],
             cpu_count: 1,
+            gpu_count: 0,
             cpu_used_bp: 0,
             cpu_idle_bp: 10000,
             local_time: [0; 16],
@@ -208,6 +212,7 @@ impl Telemetry {
             snap.net_rx_bytes = vread(core::ptr::addr_of!(page.net_rx_bytes));
             snap.net_tx_bytes = vread(core::ptr::addr_of!(page.net_tx_bytes));
             snap.cpu_count    = vread(core::ptr::addr_of!(page.cpu_count));
+            snap.gpu_count    = vread(core::ptr::addr_of!(page.gpu_count));
         }
 
         // Topology: derived from cpu_count until CPUID leaf 0x0B is wired.
