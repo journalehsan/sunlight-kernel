@@ -198,6 +198,24 @@ pub mod RandMsg {
     pub const MAX_CHUNK: usize = 32;
 }
 
+/// PTY service opcodes (registered as "pty").
+#[allow(non_snake_case)]
+pub mod PtyMsg {
+    pub const CREATE: u64 = 0x7301;
+    pub const READ_MASTER: u64 = 0x7302;
+    pub const WRITE_MASTER: u64 = 0x7303;
+    pub const READ_SLAVE: u64 = 0x7304;
+    pub const WRITE_SLAVE: u64 = 0x7305;
+    pub const SET_MODE: u64 = 0x7306;
+    pub const CLOSE: u64 = 0x7307;
+    pub const REPLY: u64 = 0x73FF;
+    pub const ERROR: u64 = 0x73FE;
+    /// Bit 0: canonical/cooked mode.
+    /// Bit 1: local echo.
+    pub const FLAG_CANONICAL: u64 = 1 << 0;
+    pub const FLAG_ECHO: u64 = 1 << 1;
+}
+
 #[allow(non_snake_case)]
 pub mod VfsMsg {
     pub const OPEN: u64 = 1;

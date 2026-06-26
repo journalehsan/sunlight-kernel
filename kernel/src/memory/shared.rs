@@ -31,12 +31,17 @@ pub fn alloc_shared_region(
     size: usize,
 ) -> Result<(VirtAddr, CapabilityToken), SharedMemError> {
     let page_size = PAGE_SIZE;
-    let num_pages = if size == 0 { 1 } else { (size + page_size - 1) / page_size };
+    let num_pages = if size == 0 {
+        1
+    } else {
+        (size + page_size - 1) / page_size
+    };
     if num_pages == 0 {
         return Err(SharedMemError::InvalidArgument);
     }
 
-    let mut frames: alloc::vec::Vec<PhysFrame<Size4KiB>> = alloc::vec::Vec::with_capacity(num_pages);
+    let mut frames: alloc::vec::Vec<PhysFrame<Size4KiB>> =
+        alloc::vec::Vec::with_capacity(num_pages);
     for _ in 0..num_pages {
         let phys = pmm
             .alloc_frame_owned(caller.pid as u32)
@@ -48,7 +53,11 @@ pub fn alloc_shared_region(
     let actual_size = num_pages * page_size;
     let token = caps.mint_shared_region(frames.clone(), actual_size, caller.pid);
 
-    let virt = unsafe { caller.address_space.map_shared_region(&frames, pmm, hhdm_offset) }?;
+    let virt = unsafe {
+        caller
+            .address_space
+            .map_shared_region(&frames, pmm, hhdm_offset)
+    }?;
 
     caller.owned_shared.push(SharedRegion {
         token,
@@ -100,9 +109,17 @@ pub fn free_shared_page(
     hhdm_offset: VirtAddr,
 ) {
     // Unmap any local mapping(s) for this token (multi-page aware)
-    if let Some(pos) = process.mapped_shared.iter().position(|(t, _, _)| *t == token) {
+    if let Some(pos) = process
+        .mapped_shared
+        .iter()
+        .position(|(t, _, _)| *t == token)
+    {
         let (_, base_virt, sz) = process.mapped_shared.remove(pos);
-        let num_pages = if sz == 0 { 1 } else { (sz + PAGE_SIZE - 1) / PAGE_SIZE };
+        let num_pages = if sz == 0 {
+            1
+        } else {
+            (sz + PAGE_SIZE - 1) / PAGE_SIZE
+        };
         for i in 0..num_pages {
             let v = VirtAddr::new(base_virt.as_u64() + (i * PAGE_SIZE) as u64);
             unsafe {
@@ -135,7 +152,11 @@ pub fn cleanup_shared_pages(
 
     // Unmap all views this process had (owned + received). Multi-page aware.
     for &(_, base_virt, sz) in &process.mapped_shared {
-        let num_pages = if sz == 0 { 1 } else { (sz + PAGE_SIZE - 1) / PAGE_SIZE };
+        let num_pages = if sz == 0 {
+            1
+        } else {
+            (sz + PAGE_SIZE - 1) / PAGE_SIZE
+        };
         for i in 0..num_pages {
             let v = VirtAddr::new(base_virt.as_u64() + (i * PAGE_SIZE) as u64);
             unsafe {

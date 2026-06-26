@@ -108,7 +108,8 @@ pub struct Process {
     pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedRegion>,
     /// Shared memory regions this process currently has mapped via tokens (owner + receivers).
     /// (token, base_virt, size_in_bytes)
-    pub mapped_shared: alloc::vec::Vec<(crate::capability::CapabilityToken, x86_64::VirtAddr, usize)>,
+    pub mapped_shared:
+        alloc::vec::Vec<(crate::capability::CapabilityToken, x86_64::VirtAddr, usize)>,
 
     // === Scheduler bug-fix / feature fields ===
     /// Watchdog: maximum runtime per quantum, in ticks. None = disabled. [FEAT-1]

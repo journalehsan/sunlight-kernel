@@ -381,6 +381,39 @@ pub fn pipe() -> Result<(Fd, Fd), Errno> {
     sys::check(ret).map(|_| (Fd(fds[0] as u32), Fd(fds[1] as u32)))
 }
 
+/// Create a pseudo-terminal pair by asking `pty_server` for a fresh session.
+///
+/// Returns `(master_cap, slave_cap)`:
+/// - `master_cap` is used by the GUI terminal emulator.
+/// - `slave_cap` is the endpoint `sshl` should attach to as its stdio.
+///
+/// The current IPC transport can carry two capability tokens in the reply
+/// message, which is enough for the PTY broker to hand out both ends without
+/// a second round trip.
+pub fn openpty() -> Result<(sunlight_ipc::CapabilityToken, sunlight_ipc::CapabilityToken), Errno> {
+    let Some(pty_cap) = sunlight_ipc::nameserver_lookup_timeout("pty", 100) else {
+        return Err(Errno::Again);
+    };
+
+    let req = sunlight_ipc::IpcMsg::with_label(sunlight_ipc::PtyMsg::CREATE)
+        .word(0, sunlight_ipc::PtyMsg::FLAG_CANONICAL | sunlight_ipc::PtyMsg::FLAG_ECHO);
+    let reply = match sunlight_ipc::ipc_call_timeout(pty_cap, req, 1000) {
+        Ok(reply) => reply,
+        Err(sunlight_ipc::IpcCallError::Timeout) => return Err(Errno::Again),
+        Err(_) => return Err(Errno::Failed),
+    };
+
+    if reply.label != sunlight_ipc::PtyMsg::REPLY
+        || reply.cap_count < 2
+        || reply.caps[0] == sunlight_ipc::CapabilityToken::INVALID
+        || reply.caps[1] == sunlight_ipc::CapabilityToken::INVALID
+    {
+        return Err(Errno::Failed);
+    }
+
+    Ok((reply.caps[0], reply.caps[1]))
+}
+
 /// Spawn a new process running `path` (posix_spawn-style). `stdout` becomes
 /// the child's fd 1 when given (e.g. a pipe write end). Returns the child pid.
 pub fn spawn(path: &[u8], argv: &[&[u8]], stdout: Option<Fd>) -> Result<u64, Errno> {

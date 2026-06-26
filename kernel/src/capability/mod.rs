@@ -528,7 +528,12 @@ impl CapabilityBroker {
             return Err(CapError::Revoked);
         }
         // Return first phys for compat with single-page tests
-        entry.1.frames.first().map(|f| f.start_address()).ok_or(CapError::NotFound)
+        entry
+            .1
+            .frames
+            .first()
+            .map(|f| f.start_address())
+            .ok_or(CapError::NotFound)
     }
 
     /// Revoke a shared region grant token (called on owner free or cleanup).

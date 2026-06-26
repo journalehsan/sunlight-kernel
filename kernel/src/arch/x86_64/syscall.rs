@@ -3498,7 +3498,13 @@ fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
     let process = sched.current_process_mut();
-    match crate::memory::shared::alloc_shared_region(process, &mut *pmm, &mut *caps, hhdm_offset, size) {
+    match crate::memory::shared::alloc_shared_region(
+        process,
+        &mut *pmm,
+        &mut *caps,
+        hhdm_offset,
+        size,
+    ) {
         Ok((virt, token)) => {
             // Preserve legacy message for test expectations when using the 1-page path
             if size == 0 || size == 4096 {
@@ -3564,7 +3570,11 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     let fb_bpp = fb.bpp as u32; // usually 32
 
     let hhdm = hhdm_offset.as_u64();
-    let fb_phys_base = if fb_addr >= hhdm { fb_addr - hhdm } else { fb_addr };
+    let fb_phys_base = if fb_addr >= hhdm {
+        fb_addr - hhdm
+    } else {
+        fb_addr
+    };
     let fb_page_offset = fb_phys_base & 0xfff;
     let bytes_per_row = fb_pitch;
     let total_bytes = fb_page_offset + bytes_per_row * fb_height;
@@ -3590,7 +3600,9 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
         let phys = (fb_phys_base & !0xfff) + page_idx * 4096;
         let fb_frame = unsafe { PhysFrame::from_start_address_unchecked(PhysAddr::new(phys)) };
         unsafe {
-            process.address_space.map_page(user_page, fb_frame, flags, &mut *pmm, hhdm_offset);
+            process
+                .address_space
+                .map_page(user_page, fb_frame, flags, &mut *pmm, hhdm_offset);
         }
     }
 
