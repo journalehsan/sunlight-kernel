@@ -2460,6 +2460,11 @@ mod sunlight {
             let n = pty_read(pty_cap, session_id, &mut in_buf);
             if n > 0 {
                 progress = true;
+                debug_log(&alloc::format!(
+                    "[PTY-SHELL] read {} byte(s) first={:#x}\n",
+                    n,
+                    in_buf[0]
+                ));
                 if shell.fg_pid.is_some() {
                     let _ = tty_stdin_push(shell_tab, &in_buf[..n]);
                 } else {
@@ -2469,6 +2474,9 @@ mod sunlight {
                             pty_echo_input(pty_cap, session_id, byte);
                         }
                         long_out_reset();
+                        if is_enter {
+                            debug_log("[PTY-SHELL] enter received\n");
+                        }
                         let (out, out_len) = shell.handle_byte(byte);
                         if is_enter {
                             pty_echo_input(pty_cap, session_id, byte);

@@ -74,6 +74,7 @@ const FG_STARTED_LABEL: u64 = 5;
 const FG_DONE_LABEL: u64 = 6;
 const KEY_F1: u8 = 0x3B;
 const KEY_F2: u8 = 0x3C;
+const KEY_E:  u8 = 0x12;
 const TERM_OUTPUT_MAX: usize = 4096;
 const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
@@ -555,6 +556,16 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 display_cap = nameserver_lookup("display_server");
                             }
                             if let Some(cap) = display_cap {
+                                let (fwd_keycode, fwd_pressed, _fwd_shift, fwd_ctrl, _fwd_alt, fwd_ascii) =
+                                    unpack_key_event(msg.words[0]);
+                                if fwd_pressed {
+                                    debug_log(&alloc::format!(
+                                        "[TTY->DISPLAY] login forward keycode={:#x} ctrl={} ascii={}\n",
+                                        fwd_keycode,
+                                        fwd_ctrl,
+                                        fwd_ascii.unwrap_or(0)
+                                    ));
+                                }
                                 let _ = ipc_call(cap, msg);
                             }
                             break 'kbd;
@@ -656,7 +667,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         if let Some(cap) = display_cap {
                                             let _ = ipc_call(cap, IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE));
                                         }
-                                        let _ = libc_spawn(b"/bin/eyes", &[], None);
                                         let _ = libc_spawn(b"/bin/sunlight-terminal", &[], None);
                                         login.message = "Desktop session launched.";
                                     }
@@ -738,6 +748,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 active_vt = VirtualTerminal::Desktop;
                                 break 'kbd;
                             }
+                            KEY_E => {
+                                if vt_is_active(active_vt, VirtualTerminal::Desktop) {
+                                    debug_log("[SESSION] Ctrl+E: launching eyes\n");
+                                    let _ = libc_spawn(b"/bin/eyes", &[], None);
+                                    break 'kbd;
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -748,6 +765,16 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             display_cap = nameserver_lookup("display_server");
                         }
                         if let Some(cap) = display_cap {
+                            let (fwd_keycode, fwd_pressed, _fwd_shift, fwd_ctrl, _fwd_alt, fwd_ascii) =
+                                unpack_key_event(msg.words[0]);
+                            if fwd_pressed {
+                                debug_log(&alloc::format!(
+                                    "[TTY->DISPLAY] shell forward keycode={:#x} ctrl={} ascii={}\n",
+                                    fwd_keycode,
+                                    fwd_ctrl,
+                                    fwd_ascii.unwrap_or(0)
+                                ));
+                            }
                             let _ = ipc_call(cap, msg);
                         }
                         break 'kbd;

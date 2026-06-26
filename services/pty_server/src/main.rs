@@ -484,6 +484,9 @@ fn write_master(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
         return IpcMsg::with_label(PtyMsg::ERROR).word(0, 10);
     };
     let bytes = unpack_payload(msg);
+    if !bytes.is_empty() {
+        debug_log("[PTY] write_master\n");
+    }
     for &b in bytes.iter() {
         session.editor.feed(b, &mut session.slave_in, &mut session.master_out);
     }
@@ -514,6 +517,9 @@ fn read_slave(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
     let Some(session) = server.session_mut(msg.words[0]) else {
         return IpcMsg::with_label(PtyMsg::ERROR).word(0, 13);
     };
+    if session.slave_in.peek_len() > 0 {
+        debug_log("[PTY] read_slave\n");
+    }
     read_from_ring(session.id, &mut session.slave_in, msg.words[1] as usize)
 }
 
@@ -532,8 +538,8 @@ fn pack_reply(id: u64, bytes: &[u8]) -> IpcMsg {
     IpcMsg::with_label(PtyMsg::REPLY)
         .word(0, id)
         .word(1, bytes.len() as u64)
-        .word(2, pack_u64(bytes.get(0..8).unwrap_or(&[])))
-        .word(3, pack_u64(bytes.get(8..16).unwrap_or(&[])))
+        .word(2, pack_u64(bytes))
+        .word(3, pack_u64(bytes.get(8..).unwrap_or(&[])))
 }
 
 fn unpack_payload(msg: &IpcMsg) -> &[u8] {

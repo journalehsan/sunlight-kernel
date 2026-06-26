@@ -874,6 +874,8 @@ max_ttys = 6
     ),
     // GUI Eyes Tracker demo client
     RamEntry::file("/bin/eyes", 0, 0, mode::FILE_755, b"#!/sunlight/eyes\n"),
+    // GUI Terminal emulator
+    RamEntry::file("/bin/sunlight-terminal", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-terminal\n"),
     RamEntry::file(
         "/bin/cpufeat",
         0,

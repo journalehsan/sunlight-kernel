@@ -12,9 +12,9 @@
 
 use spin::Mutex;
 
-/// Maximum number of TTY tabs the kernel will route for. Matches (and bounds)
-/// the tab count tty_server manages.
-pub const MAX_TTY_TABS: usize = 16;
+/// Maximum number of TTY tabs the kernel will route for. Must cover the full
+/// u8 range since tty_tab is stored as u8 (shell_id cast via `as u8`).
+pub const MAX_TTY_TABS: usize = 256;
 
 const STDIN_CAP: usize = 1024;
 const STDOUT_CAP: usize = 8192;

@@ -392,8 +392,23 @@ pub extern "C" fn _start() -> ! {
         let mut dirty = false;
         let poll = ipc_call(display, IpcMsg::with_label(SgpMsg::EVENT_POLL).word(0, win_id));
         if poll.label == SgpMsg::REPLY && poll.words[2] != 0 {
+            let (polled_keycode, polled_pressed, _polled_shift, polled_ctrl, _polled_alt, polled_ascii) =
+                unpack_key_event(poll.words[2]);
+            if polled_pressed {
+                debug_log(&alloc::format!(
+                    "[TERM] polled key keycode={:#x} ctrl={} ascii={}\n",
+                    polled_keycode,
+                    polled_ctrl,
+                    polled_ascii.unwrap_or(0)
+                ));
+            }
             let n = translate_key(poll.words[2], &mut key_buf);
             if n > 0 {
+                debug_log(&alloc::format!(
+                    "[TERM] write_input bytes={} first={:#x}\n",
+                    n,
+                    key_buf[0]
+                ));
                 let _ = tab.pty.write_input(&key_buf[..n]);
             }
         }

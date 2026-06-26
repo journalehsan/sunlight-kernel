@@ -1465,6 +1465,17 @@ pub extern "C" fn _start() -> ! {
                     }
                 } else if state.session_active {
                     if let Some(win) = state.windows.last_mut() {
+                        let (queued_keycode, queued_pressed, _queued_shift, queued_ctrl, _queued_alt, queued_ascii) =
+                            sunlight_ipc::unpack_key_event(packed);
+                        if queued_pressed {
+                            debug_log(&alloc::format!(
+                                "[DISPLAY] queued key win={} keycode={:#x} ctrl={} ascii={}\n",
+                                win.id,
+                                queued_keycode,
+                                queued_ctrl,
+                                queued_ascii.unwrap_or(0)
+                            ));
+                        }
                         win.pending_keys.push(packed);
                     }
                 }
