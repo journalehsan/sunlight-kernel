@@ -454,6 +454,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunlight-terminal" | "/usr/bin/sunlight-terminal" => {
             Ok(crate::SUNLIGHT_TERMINAL_ELF_BYTES)
         }
+        "/bin/sunlight-tasks" | "/usr/bin/sunlight-tasks" => Ok(crate::SUNLIGHT_TASKS_ELF_BYTES),
         // sunlight-sunsay: native Rust proof-of-life binary (Phase 1 std smoke test).
         "/bin/sunlight-sunsay" | "/usr/bin/sunlight-sunsay" | "/usr/local/bin/sunlight-sunsay" => {
             Ok(crate::SUNLIGHT_SUNSAY_ELF_BYTES)

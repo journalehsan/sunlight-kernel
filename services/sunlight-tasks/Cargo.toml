@@ -1,31 +1,16 @@
 [package]
-name = "sunlight-display"
+name = "sunlight-tasks"
 version = "0.1.410"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-tui = { path = "../../sunlight-tui" }
+sunlight-telemetry = { path = "../../sunlight-telemetry" }
 
 [[bin]]
-name = "sunlight-display"
+name = "sunlight-tasks"
 path = "src/main.rs"
+

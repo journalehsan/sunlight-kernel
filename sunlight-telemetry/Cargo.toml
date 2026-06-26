@@ -1,0 +1,9 @@
+[package]
+name = "sunlight-telemetry"
+version = "0.1.410"
+
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
+

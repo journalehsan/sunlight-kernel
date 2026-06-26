@@ -75,6 +75,7 @@ const FG_DONE_LABEL: u64 = 6;
 const KEY_F1: u8 = 0x3B;
 const KEY_F2: u8 = 0x3C;
 const KEY_E:  u8 = 0x12;
+const KEY_T:  u8 = 0x14;
 const TERM_OUTPUT_MAX: usize = 4096;
 const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
@@ -752,6 +753,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 if vt_is_active(active_vt, VirtualTerminal::Desktop) {
                                     debug_log("[SESSION] Ctrl+E: launching eyes\n");
                                     let _ = libc_spawn(b"/bin/eyes", &[], None);
+                                    break 'kbd;
+                                }
+                            }
+                            KEY_T => {
+                                if vt_is_active(active_vt, VirtualTerminal::Desktop) {
+                                    debug_log("[SESSION] Ctrl+T: launching tasks monitor\n");
+                                    let _ = libc_spawn(b"/bin/sunlight-tasks", &[], None);
                                     break 'kbd;
                                 }
                             }

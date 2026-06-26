@@ -876,6 +876,8 @@ max_ttys = 6
     RamEntry::file("/bin/eyes", 0, 0, mode::FILE_755, b"#!/sunlight/eyes\n"),
     // GUI Terminal emulator
     RamEntry::file("/bin/sunlight-terminal", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-terminal\n"),
+    // GUI Task Monitor
+    RamEntry::file("/bin/sunlight-tasks", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-tasks\n"),
     RamEntry::file(
         "/bin/cpufeat",
         0,
@@ -1358,6 +1360,20 @@ StandardOutput=journal\nStandardError=journal\n\n\
     ),
     // GUI Eyes Tracker demo client (usr path)
     RamEntry::file("/usr/bin/eyes", 0, 0, mode::FILE_755, b"#!/sunlight/eyes\n"),
+    RamEntry::file(
+        "/usr/bin/sunlight-terminal",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-terminal\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sunlight-tasks",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-tasks\n",
+    ),
     RamEntry::file(
         "/usr/bin/cpufeat",
         0,
