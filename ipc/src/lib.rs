@@ -247,7 +247,12 @@ pub mod sgp {
         pub const CREATE_WINDOW: u64 = 0xA101;
         pub const COMMIT_FRAME: u64 = 0xA102;
         pub const EVENT_POLL: u64 = 0xA103;
-        pub const DESTROY_WINDOW: u64 = 0xA104;
+        /// Normal window lifecycle cleanup. Clients should send this before
+        /// releasing their local SHM mapping so the compositor can drop its
+        /// window metadata and display-side SHM ownership.
+        pub const CLOSE_WINDOW: u64 = 0xA104;
+        /// Back-compat alias for older callers.
+        pub const DESTROY_WINDOW: u64 = CLOSE_WINDOW;
         /// Update window properties post-creation.
         /// words[0]=win_id, words[1]=config_flags, words[2]=pid|ppid<<32,
         /// words[3]=title_bytes[0..8]; SHM cap at caps[0] for full title (optional).

@@ -458,7 +458,7 @@ impl PointerState {
 
 struct Window {
     id: u64,
-    _shm_cap: CapabilityToken,
+    shm_cap: CapabilityToken,
     buffer: *mut u32,
     width: u32,  // current client area width
     height: u32, // current client area height
@@ -469,6 +469,7 @@ struct Window {
     saved_y: u32,
     saved_w: u32,
     saved_h: u32,
+    owner_pid: u64,
     config: WindowConfig,
     /// Cursor shape the client wants when the pointer is in its client area.
     client_cursor: CursorShape,
@@ -562,8 +563,16 @@ fn is_focusable_window(win: &Window) -> bool {
         && win.config.window_type != WindowType::Widget
 }
 
+fn focused_window_idx(state: &CompositorState) -> Option<usize> {
+    state.windows.iter().rposition(is_focusable_window)
+}
+
+fn focused_window_id(state: &CompositorState) -> Option<u64> {
+    focused_window_idx(state).map(|idx| state.windows[idx].id)
+}
+
 fn cycle_focus(state: &mut CompositorState) -> bool {
-    let Some(focused_idx) = state.windows.iter().rposition(is_focusable_window) else {
+    let Some(focused_idx) = focused_window_idx(state) else {
         return false;
     };
     let z_group = state.windows[focused_idx].config.z_index_type;
@@ -583,6 +592,38 @@ fn cycle_focus(state: &mut CompositorState) -> bool {
         .position(|other| is_focusable_window(other) && other.config.z_index_type == z_group)
         .unwrap_or(state.windows.len());
     state.windows.insert(insert_idx, win);
+    true
+}
+
+fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<u64>) -> bool {
+    let Some(pos) = state.windows.iter().position(|w| w.id == win_id) else {
+        return false;
+    };
+
+    if let Some(pid) = requester_pid {
+        if state.windows[pos].owner_pid != pid {
+            return false;
+        }
+    }
+
+    let win = state.windows.remove(pos);
+
+    // The display server owns the SHM object created at CREATE_WINDOW time, so
+    // normal close must explicitly release that ownership.
+    let _ = sunlight_ipc::shm_free(win.shm_cap);
+    // TODO: Harden forced-close paths so SHM revocation is coordinated more
+    // explicitly with process-exit cleanup and stale clients.
+
+    let cancel = match &state.active_drag {
+        ActiveDrag::Move(d) => d.window_id == win_id,
+        ActiveDrag::Resize(d) => d.window_id == win_id,
+        ActiveDrag::None => false,
+    };
+    if cancel {
+        state.active_drag = ActiveDrag::None;
+    }
+
+    state.active_cursor = cursor_for_scene(state);
     true
 }
 
@@ -1325,9 +1366,9 @@ fn redraw_scene(state: &CompositorState) {
         return;
     }
     clear_framebuffer(state);
-    let last_idx = state.windows.len().saturating_sub(1);
+    let focused_idx = focused_window_idx(state);
     for (i, win) in state.windows.iter().enumerate() {
-        let is_focused = i == last_idx;
+        let is_focused = focused_idx == Some(i);
         composite_window(state, win, is_focused);
     }
     draw_cursor(state);
@@ -1464,6 +1505,7 @@ pub extern "C" fn _start() -> ! {
                 let h = (msg.words[0] >> 32) as u32;
                 let size = (w as usize * h as usize * 4).max(4096);
                 let config = WindowConfig::from_ipc_words(&msg.words);
+                let owner_pid = msg.badge;
 
                 match sunlight_ipc::shm_create(size, 0) {
                     Ok((_, shm_tok)) => {
@@ -1514,7 +1556,7 @@ pub extern "C" fn _start() -> ! {
                             insert_at,
                             Window {
                                 id,
-                                _shm_cap: shm_tok,
+                                shm_cap: shm_tok,
                                 buffer: our_buf,
                                 width: w,
                                 height: h,
@@ -1524,6 +1566,10 @@ pub extern "C" fn _start() -> ! {
                                 saved_y: win_y,
                                 saved_w: w,
                                 saved_h: h,
+                                // Authoritative creator PID from the kernel IPC badge.
+                                // TODO: Use this for process-exit-driven cleanup in the
+                                // later hardening phase.
+                                owner_pid,
                                 config,
                                 client_cursor: CursorShape::Pointer,
                                 pending_keys: KeyEventQueue::new(),
@@ -1705,22 +1751,13 @@ pub extern "C" fn _start() -> ! {
             }
 
             // -------------------------------------------------------------------
-            // DESTROY_WINDOW
+            // CLOSE_WINDOW / DESTROY_WINDOW
             // -------------------------------------------------------------------
-            SgpMsg::DESTROY_WINDOW => {
+            SgpMsg::CLOSE_WINDOW => {
                 let win_id = msg.words[0];
-                state.windows.retain(|w| w.id != win_id);
-                // Cancel any drag on the destroyed window.
-                let cancel = match &state.active_drag {
-                    ActiveDrag::Move(d) => d.window_id == win_id,
-                    ActiveDrag::Resize(d) => d.window_id == win_id,
-                    ActiveDrag::None => false,
-                };
-                if cancel {
-                    state.active_drag = ActiveDrag::None;
+                if close_window(&mut state, win_id, Some(msg.badge)) {
+                    redraw_scene(&state);
                 }
-                state.active_cursor = cursor_for_scene(&state);
-                redraw_scene(&state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
@@ -1743,24 +1780,14 @@ pub extern "C" fn _start() -> ! {
                         redraw_scene(&state);
                     }
                 } else if pressed && ctrl && keycode == KEY_W {
-                    if let Some(focused) = state.windows.last().map(|w| w.id) {
-                        state.windows.retain(|w| w.id != focused);
-
-                        // Cancel any active drag on the closed window
-                        let cancel = match &state.active_drag {
-                            ActiveDrag::Move(d) => d.window_id == focused,
-                            ActiveDrag::Resize(d) => d.window_id == focused,
-                            ActiveDrag::None => false,
-                        };
-                        if cancel {
-                            state.active_drag = ActiveDrag::None;
+                    if let Some(focused) = focused_window_id(&state) {
+                        if close_window(&mut state, focused, None) {
+                            redraw_scene(&state);
                         }
-
-                        state.active_cursor = cursor_for_scene(&state);
-                        redraw_scene(&state);
                     }
                 } else if state.session_active {
-                    if let Some(win) = state.windows.last_mut() {
+                    if let Some(focused_idx) = focused_window_idx(&state) {
+                        let win = &mut state.windows[focused_idx];
                         let (
                             queued_keycode,
                             queued_pressed,
@@ -1873,8 +1900,7 @@ pub extern "C" fn _start() -> ! {
                                 state.active_drag = ActiveDrag::Move(MoveDrag { window_id: id });
                             }
                             HitZone::CloseBtn => {
-                                // Destroy the window immediately on close button click.
-                                state.windows.retain(|w| w.id != id);
+                                let _ = close_window(&mut state, id, None);
                                 state.active_drag = ActiveDrag::None;
                             }
                             HitZone::MaximizeBtn => {

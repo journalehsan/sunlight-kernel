@@ -258,11 +258,14 @@ impl Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
+        // Normal window lifecycle cleanup: tell the compositor to forget this
+        // window before we release our local SHM mapping. Drop must stay best-effort.
         let _ = ipc_call(
             self.display_ep,
-            IpcMsg::with_label(SgpMsg::DESTROY_WINDOW).word(0, self.win_id),
+            IpcMsg::with_label(SgpMsg::CLOSE_WINDOW).word(0, self.win_id),
         );
-        // Unmap the shared buffer
+        // Client-side SHM cleanup still happens even if the display server is
+        // already gone or the process is exiting.
         let _ = shm_free(self.shm_cap);
     }
 }
