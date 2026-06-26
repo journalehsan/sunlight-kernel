@@ -49,6 +49,7 @@ members = [
     "services/sunlight-display",
     "services/eyes",
     "services/sunlight-terminal",
+    "sunlight-ui",
     "services/sunlight-tasks",
     "services/pty_server",
     "services/sunlight-deviced",
