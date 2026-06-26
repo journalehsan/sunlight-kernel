@@ -95,3 +95,97 @@ impl Rect {
     #[inline]
     pub fn origin(self) -> Point { Point::new(self.x, self.y) }
 }
+
+/// Vertical box layout iterator.
+#[derive(Debug, Clone, Copy)]
+pub struct VBox {
+    pub rect: Rect,
+    pub spacing: u32,
+}
+
+impl VBox {
+    pub const fn new(rect: Rect) -> Self {
+        Self { rect, spacing: 4 }
+    }
+
+    pub const fn with_spacing(mut self, spacing: u32) -> Self {
+        self.spacing = spacing;
+        self
+    }
+
+    pub fn layout<'a>(self, heights: &'a [u32]) -> AxisLayout<'a> {
+        AxisLayout::vertical(self.rect, self.spacing, heights)
+    }
+}
+
+/// Horizontal box layout iterator.
+#[derive(Debug, Clone, Copy)]
+pub struct HBox {
+    pub rect: Rect,
+    pub spacing: u32,
+}
+
+impl HBox {
+    pub const fn new(rect: Rect) -> Self {
+        Self { rect, spacing: 4 }
+    }
+
+    pub const fn with_spacing(mut self, spacing: u32) -> Self {
+        self.spacing = spacing;
+        self
+    }
+
+    pub fn layout<'a>(self, widths: &'a [u32]) -> AxisLayout<'a> {
+        AxisLayout::horizontal(self.rect, self.spacing, widths)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AxisLayout<'a> {
+    rect: Rect,
+    spacing: u32,
+    dims: &'a [u32],
+    index: usize,
+    cursor: i32,
+    vertical: bool,
+}
+
+impl<'a> AxisLayout<'a> {
+    const fn vertical(rect: Rect, spacing: u32, dims: &'a [u32]) -> Self {
+        Self {
+            rect,
+            spacing,
+            dims,
+            index: 0,
+            cursor: rect.y,
+            vertical: true,
+        }
+    }
+
+    const fn horizontal(rect: Rect, spacing: u32, dims: &'a [u32]) -> Self {
+        Self {
+            rect,
+            spacing,
+            dims,
+            index: 0,
+            cursor: rect.x,
+            vertical: false,
+        }
+    }
+}
+
+impl<'a> Iterator for AxisLayout<'a> {
+    type Item = Rect;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let dim = *self.dims.get(self.index)?;
+        let rect = if self.vertical {
+            Rect::new(self.rect.x, self.cursor, self.rect.w, dim)
+        } else {
+            Rect::new(self.cursor, self.rect.y, dim, self.rect.h)
+        };
+        self.index += 1;
+        self.cursor += dim as i32 + self.spacing as i32;
+        Some(rect)
+    }
+}

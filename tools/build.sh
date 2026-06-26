@@ -71,6 +71,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package cpu-utils --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-runner --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
 # Force a non-PIE static link so e_type is ET_EXEC (not ET_DYN). The kernel ELF

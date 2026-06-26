@@ -71,7 +71,10 @@ mod keycode {
     pub const LEFT_SHIFT: u8 = 0x2A;
     pub const LEFT_ALT: u8 = 0x38;
     pub const RIGHT_SHIFT: u8 = 0x36;
+    pub const LEFT_SUPER: u8 = 0x5B;
+    pub const RIGHT_SUPER: u8 = 0x5C;
     pub const RELEASE_MASK: u8 = 0x80;
+    pub const EXTENDED_PREFIX: u8 = 0xE0;
 }
 
 /// Modifier state tracker
@@ -80,6 +83,7 @@ struct Modifiers {
     ctrl: bool,
     alt: bool,
     shift: bool,
+    super_key: bool,
 }
 
 /// Translate PS/2 scancode to ASCII (US QWERTY layout)
@@ -184,21 +188,30 @@ fn scancode_to_ascii(scancode: u8, mods: &Modifiers) -> Option<u8> {
 }
 
 /// Process one raw scancode into a packed event value.
-fn process_scancode(scancode: u8, mods: &mut Modifiers) -> Option<u64> {
+fn process_scancode(scancode: u8, extended: bool, mods: &mut Modifiers) -> Option<u64> {
     let (pressed, code) = if scancode & keycode::RELEASE_MASK != 0 {
         (false, scancode & !keycode::RELEASE_MASK)
     } else {
         (true, scancode)
     };
 
-    match code {
-        keycode::LEFT_SHIFT | keycode::RIGHT_SHIFT => mods.shift = pressed,
-        keycode::LEFT_CTRL => mods.ctrl = pressed,
-        keycode::LEFT_ALT => mods.alt = pressed,
-        _ => {}
+    if extended {
+        match code {
+            keycode::LEFT_CTRL => mods.ctrl = pressed,
+            keycode::LEFT_ALT => mods.alt = pressed,
+            keycode::LEFT_SUPER | keycode::RIGHT_SUPER => mods.super_key = pressed,
+            _ => {}
+        }
+    } else {
+        match code {
+            keycode::LEFT_SHIFT | keycode::RIGHT_SHIFT => mods.shift = pressed,
+            keycode::LEFT_CTRL => mods.ctrl = pressed,
+            keycode::LEFT_ALT => mods.alt = pressed,
+            _ => {}
+        }
     }
 
-    let ascii = if pressed {
+    let ascii = if pressed && !extended {
         scancode_to_ascii(code, mods)
     } else {
         None
@@ -207,8 +220,10 @@ fn process_scancode(scancode: u8, mods: &mut Modifiers) -> Option<u64> {
     // Pack: keycode | pressed<<8 | mods<<16 | ascii<<24
     let mut val = code as u64;
     val |= (pressed as u64) << 8;
-    let mods_byte =
-        ((mods.shift as u64) << 0) | ((mods.ctrl as u64) << 1) | ((mods.alt as u64) << 2);
+    let mods_byte = ((mods.shift as u64) << 0)
+        | ((mods.ctrl as u64) << 1)
+        | ((mods.alt as u64) << 2)
+        | ((mods.super_key as u64) << 3);
     val |= mods_byte << 16;
     val |= (ascii.unwrap_or(0) as u64) << 24;
     Some(val)
@@ -312,12 +327,18 @@ pub extern "C" fn _start() -> ! {
     debug_log("[KBD] registered with kernel IRQ1 router");
 
     let mut modifiers = Modifiers::default();
+    let mut extended_prefix = false;
     loop {
         while let Some(scancode) = kbd_pop_scancode() {
-            if let Some(event_val) = process_scancode(scancode, &mut modifiers) {
+            if scancode == keycode::EXTENDED_PREFIX {
+                extended_prefix = true;
+                continue;
+            }
+            if let Some(event_val) = process_scancode(scancode, extended_prefix, &mut modifiers) {
                 let msg = IpcMsg::with_label(0x1).word(0, event_val);
                 let _ = ipc_call(tty_token, msg);
             }
+            extended_prefix = false;
         }
         let _ = ipc_recv(my_endpoint);
     }

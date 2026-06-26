@@ -6,7 +6,7 @@
 //! struct MyApp { ... }
 //!
 //! impl App for MyApp {
-//!     fn view(&self, canvas: &mut Canvas, theme: &Theme) { ... }
+//!     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) { ... }
 //!     fn update(&mut self, event: Event) -> bool { ... }
 //! }
 //!
@@ -72,7 +72,7 @@ impl Window {
         }
 
         let win_id = reply.words[0];
-        let buffer_size = reply.words[2] as usize;
+        let buffer_size = reply.words[1] as usize;
         let shm_cap = reply.caps[0];
 
         // Map the shared framebuffer
@@ -143,7 +143,17 @@ impl Window {
             } else {
                 None
             };
-            return Event::key(keycode, pressed, ascii);
+            if pressed {
+                if let Some(ch) = ascii {
+                    match ch {
+                        0x20..=0x7E => return Event::key(ch as char),
+                        0x08 => return Event::key('\u{8}'),
+                        b'\r' | b'\n' => return Event::key('\n'),
+                        _ => {}
+                    }
+                }
+            }
+            return Event::key_press(keycode, pressed);
         }
 
         // If left button was pressed, deliver a click event
@@ -183,6 +193,12 @@ impl Window {
 
     /// Run the event loop with a custom theme.
     pub fn run_with<A: App>(&mut self, app: &mut A, theme: &Theme) {
+        {
+            let mut c = self.canvas();
+            app.view(&mut c, theme);
+            self.commit();
+        }
+
         loop {
             let event = self.poll_event();
 
@@ -213,7 +229,7 @@ pub trait App {
     /// Draw the current application state into the canvas.
     ///
     /// Called whenever `update()` returns `true`.
-    fn view(&self, canvas: &mut Canvas, theme: &Theme);
+    fn view(&mut self, canvas: &mut Canvas, theme: &Theme);
 
     /// Handle an incoming event.
     ///

@@ -451,6 +451,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
             Ok(crate::SUNLIGHT_DISPLAY_ELF_BYTES)
         }
         "/bin/eyes" | "/usr/bin/eyes" => Ok(crate::EYES_ELF_BYTES),
+        "/bin/sunlight-runner" | "/usr/bin/sunlight-runner" => Ok(crate::SUNLIGHT_RUNNER_ELF_BYTES),
         "/bin/sunlight-terminal" | "/usr/bin/sunlight-terminal" => {
             Ok(crate::SUNLIGHT_TERMINAL_ELF_BYTES)
         }

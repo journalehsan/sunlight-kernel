@@ -1137,30 +1137,35 @@ pub fn pack_key_event(
     shift: bool,
     ctrl: bool,
     alt: bool,
+    super_key: bool,
     ascii: Option<u8>,
 ) -> u64 {
     let mut val = keycode as u64;
     val |= (pressed as u64) << 8;
-    let mods = ((shift as u64) << 0) | ((ctrl as u64) << 1) | ((alt as u64) << 2);
+    let mods = ((shift as u64) << 0)
+        | ((ctrl as u64) << 1)
+        | ((alt as u64) << 2)
+        | ((super_key as u64) << 3);
     val |= mods << 16;
     val |= (ascii.unwrap_or(0) as u64) << 24;
     val
 }
 
 /// Unpack a key event from a u64 word.
-pub fn unpack_key_event(val: u64) -> (u8, bool, bool, bool, bool, Option<u8>) {
+pub fn unpack_key_event(val: u64) -> (u8, bool, bool, bool, bool, bool, Option<u8>) {
     let keycode = (val & 0xFF) as u8;
     let pressed = ((val >> 8) & 0xFF) != 0;
     let mods = (val >> 16) & 0xFF;
     let shift = (mods & 1) != 0;
     let ctrl = (mods & 2) != 0;
     let alt = (mods & 4) != 0;
+    let super_key = (mods & 8) != 0;
     let ascii = if (val >> 24) & 0xFF != 0 {
         Some(((val >> 24) & 0xFF) as u8)
     } else {
         None
     };
-    (keycode, pressed, shift, ctrl, alt, ascii)
+    (keycode, pressed, shift, ctrl, alt, super_key, ascii)
 }
 
 /// Errors returned by IPC operations.

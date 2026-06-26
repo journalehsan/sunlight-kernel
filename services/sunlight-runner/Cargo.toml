@@ -1,20 +1,13 @@
 [package]
-name = "sunlight-terminal"
+name = "sunlight-runner"
 version = "0.1.425"
-
-
-
-
-
 
 edition = "2021"
 
 [[bin]]
-name = "sunlight-terminal"
+name = "sunlight-runner"
 path = "src/main.rs"
 
 [dependencies]
-sunlight-libc = { path = "../../sunlight-libc" }
-sunlight-tty = { path = "../../sunlight-tty" }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }

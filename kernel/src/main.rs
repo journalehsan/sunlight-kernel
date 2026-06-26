@@ -147,6 +147,8 @@ static SUNLIGHT_DISPLAY_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-display");
 // Canonical first graphical demo (Eyes Tracker).
 static EYES_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/eyes");
+static SUNLIGHT_RUNNER_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-runner");
 // First PTY-backed graphical terminal client.
 static SUNLIGHT_TERMINAL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-terminal");

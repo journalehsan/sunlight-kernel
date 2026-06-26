@@ -4,7 +4,7 @@
 //! with a known stride. Widgets call these helpers; nothing here knows about
 //! themes or widget state.
 
-use crate::geom::{Point, Rect};
+use crate::geom::Rect;
 use crate::theme::Color;
 
 /// A mutable view over a region of a framebuffer.

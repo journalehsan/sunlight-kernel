@@ -51,6 +51,7 @@ members = [
     "services/sunlight-terminal",
     "sunlight-ui",
     "services/sunlight-tasks",
+    "services/sunlight-runner",
     "services/pty_server",
     "services/sunlight-deviced",
     "services/sunlight-networkd",

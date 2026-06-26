@@ -506,7 +506,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 let mut logged_in = false;
                 if msg.label == KbdMsg::KEY_EVENT {
                     'kbd: {
-                    let (keycode, pressed, _shift, _ctrl, _alt, ascii_opt) =
+                    let (keycode, pressed, _shift, _ctrl, _alt, _super, ascii_opt) =
                         unpack_key_event(msg.words[0]);
                     if pressed {
                         if _ctrl {
@@ -557,7 +557,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 display_cap = nameserver_lookup("display_server");
                             }
                             if let Some(cap) = display_cap {
-                                let (fwd_keycode, fwd_pressed, _fwd_shift, fwd_ctrl, _fwd_alt, fwd_ascii) =
+                                let (fwd_keycode, fwd_pressed, _fwd_shift, fwd_ctrl, _fwd_alt, _fwd_super, fwd_ascii) =
                                     unpack_key_event(msg.words[0]);
                                 if fwd_pressed {
                                     debug_log(&alloc::format!(
@@ -712,7 +712,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 // Lazy lookup: try to find sshl once it registers after being spawned.
                 if msg.label == KbdMsg::KEY_EVENT {
                     'kbd: {
-                    let (keycode, pressed, _shift, ctrl, _alt, ctrl_ascii) =
+                    let (keycode, pressed, _shift, ctrl, _alt, _super, ctrl_ascii) =
                         unpack_key_event(msg.words[0]);
 
                     if pressed && ctrl {
@@ -774,7 +774,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             display_cap = nameserver_lookup("display_server");
                         }
                         if let Some(cap) = display_cap {
-                            let (fwd_keycode, fwd_pressed, _fwd_shift, fwd_ctrl, _fwd_alt, fwd_ascii) =
+                            let (fwd_keycode, fwd_pressed, _fwd_shift, fwd_ctrl, _fwd_alt, _fwd_super, fwd_ascii) =
                                 unpack_key_event(msg.words[0]);
                             if fwd_pressed {
                                 debug_log(&alloc::format!(
@@ -1610,7 +1610,7 @@ fn resolve_active_shell(
 
 fn key_ascii_from_msg(msg: &IpcMsg) -> Option<u8> {
     if msg.label == KbdMsg::KEY_EVENT {
-        let (_keycode, pressed, _shift, ctrl, _alt, ascii) = unpack_key_event(msg.words[0]);
+        let (_keycode, pressed, _shift, ctrl, _alt, _super, ascii) = unpack_key_event(msg.words[0]);
         // Suppress ctrl combos: Ctrl+T, Ctrl+1 etc. are handled by tty_server
         // itself and must NOT be forwarded as bare ASCII to the shell (which
         // would corrupt its line buffer, e.g. turning "id" into "1id").

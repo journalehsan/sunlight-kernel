@@ -9,8 +9,11 @@ pub enum Event {
     /// Mouse button click at window-local coordinates.
     Click { x: i32, y: i32 },
 
-    /// Keyboard event with optional decoded ASCII byte.
-    Key { keycode: u8, pressed: bool, ascii: Option<u8> },
+    /// Decoded character input.
+    Key(char),
+
+    /// Raw key transition for non-text controls.
+    KeyPress { keycode: u8, pressed: bool },
 
     /// Timer tick or idle poll — no user input pending.
     Tick,
@@ -21,8 +24,12 @@ impl Event {
         Self::Click { x, y }
     }
 
-    pub fn key(keycode: u8, pressed: bool, ascii: Option<u8>) -> Self {
-        Self::Key { keycode, pressed, ascii }
+    pub fn key(ch: char) -> Self {
+        Self::Key(ch)
+    }
+
+    pub fn key_press(keycode: u8, pressed: bool) -> Self {
+        Self::KeyPress { keycode, pressed }
     }
 
     /// Return the mouse position if this is a click event.

@@ -4,6 +4,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use sunlight_libc as libc;
 
 use sunlight_ipc::debug_log;
 use sunlight_ipc::{
@@ -37,6 +38,10 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
+fn launch_runner() {
+    let _ = libc::spawn(b"/bin/sunlight-runner", &[b"sunlight-runner"], None);
+}
+
 // ---------------------------------------------------------------------------
 // Fixed-point pointer acceleration (unchanged from Phase 1)
 // ---------------------------------------------------------------------------
@@ -59,6 +64,9 @@ const SMOOTH_SNAP_SPEED: i32 = 3;
 const SMOOTH_ALPHA_FP: i32 = (FP_ONE * 45) / 100;
 
 const EDGE_MARGIN: i32 = 2;
+const KEY_R: u8 = 0x13;
+const KEY_W: u8 = 0x11;
+const KEY_SPACE: u8 = 0x39;
 
 // ---------------------------------------------------------------------------
 // Window property enums
@@ -1456,13 +1464,16 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             // KEY_EVENT — Global keyboard interceptor.
             // Ctrl + W: close currently active (focused) window.
+            // Super + R or Ctrl + Space: launch the Run dialog.
             // -------------------------------------------------------------------
             sunlight_ipc::KbdMsg::KEY_EVENT => {
                 let packed = msg.words[0];
-                let (keycode, pressed, _, ctrl, _, _) =
+                let (keycode, pressed, _, ctrl, _, super_key, _) =
                     sunlight_ipc::unpack_key_event(packed);
 
-                if pressed && ctrl && keycode == 0x11 { // 0x11 is 'W' in scancode set 1
+                if pressed && ((super_key && keycode == KEY_R) || (ctrl && keycode == KEY_SPACE)) {
+                    launch_runner();
+                } else if pressed && ctrl && keycode == KEY_W {
                     if let Some(focused) = state.windows.last().map(|w| w.id) {
                         state.windows.retain(|w| w.id != focused);
                         
@@ -1479,7 +1490,7 @@ pub extern "C" fn _start() -> ! {
                     }
                 } else if state.session_active {
                     if let Some(win) = state.windows.last_mut() {
-                        let (queued_keycode, queued_pressed, _queued_shift, queued_ctrl, _queued_alt, queued_ascii) =
+                        let (queued_keycode, queued_pressed, _queued_shift, queued_ctrl, _queued_alt, _queued_super, queued_ascii) =
                             sunlight_ipc::unpack_key_event(packed);
                         if queued_pressed {
                             debug_log(&alloc::format!(
