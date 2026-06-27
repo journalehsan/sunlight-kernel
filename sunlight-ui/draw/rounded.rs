@@ -73,13 +73,7 @@ impl<'fb> Canvas<'fb> {
         }
     }
 
-    pub fn stroke_rounded_rect(
-        &mut self,
-        rect: Rect,
-        radius: u32,
-        thickness: u32,
-        color: Color,
-    ) {
+    pub fn stroke_rounded_rect(&mut self, rect: Rect, radius: u32, thickness: u32, color: Color) {
         if rect.w == 0 || rect.h == 0 {
             return;
         }

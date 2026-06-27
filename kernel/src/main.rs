@@ -682,23 +682,29 @@ pub extern "C" fn _start() -> ! {
             // Allocate: 2 pages control queue, 2 pages cursor queue,
             //           1 page cmd buf, 4 pages scatter-gather, 4 pages cursor backing.
             let mut pmm = PMM.lock();
-            let ctrl_q   = pmm.alloc_frames(2).map(|f| f.as_u64());
-            let cur_q    = pmm.alloc_frames(2).map(|f| f.as_u64());
-            let cmd      = pmm.alloc_frame().map(|f| f.as_u64());
-            let sg       = pmm.alloc_frames(4).map(|f| f.as_u64());
-            let cursor   = pmm.alloc_frames(4).map(|f| f.as_u64());
+            let ctrl_q = pmm.alloc_frames(2).map(|f| f.as_u64());
+            let cur_q = pmm.alloc_frames(2).map(|f| f.as_u64());
+            let cmd = pmm.alloc_frame().map(|f| f.as_u64());
+            let sg = pmm.alloc_frames(4).map(|f| f.as_u64());
+            let cursor = pmm.alloc_frames(4).map(|f| f.as_u64());
             drop(pmm);
 
             match (ctrl_q, cur_q, cmd, sg, cursor) {
                 (Some(cqp), Some(cuqp), Some(cmdp), Some(sgp), Some(curp)) => {
                     let gpu = unsafe {
                         sunlight_virtio::VirtioGpu::init(
-                            info, hhdm,
-                            cqp, hhdm + cqp,
-                            cuqp, hhdm + cuqp,
-                            cmdp, hhdm + cmdp,
-                            sgp, hhdm + sgp,
-                            curp, hhdm + curp,
+                            info,
+                            hhdm,
+                            cqp,
+                            hhdm + cqp,
+                            cuqp,
+                            hhdm + cuqp,
+                            cmdp,
+                            hhdm + cmdp,
+                            sgp,
+                            hhdm + sgp,
+                            curp,
+                            hhdm + curp,
                         )
                     };
                     match gpu {

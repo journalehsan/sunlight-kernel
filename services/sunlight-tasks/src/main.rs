@@ -426,7 +426,13 @@ impl App for TasksApp {
         };
         table.draw(canvas, theme);
 
-        StatusBar::new(self.status_bar_rect(), self.status_str(), "", self.hw_info_str()).draw(canvas, theme);
+        StatusBar::new(
+            self.status_bar_rect(),
+            self.status_str(),
+            "",
+            self.hw_info_str(),
+        )
+        .draw(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {

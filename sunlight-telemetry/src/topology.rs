@@ -62,9 +62,7 @@ impl TopologyInfo {
     /// Total logical cores as `u32` (convenience for arithmetic).
     #[inline]
     pub fn total(self) -> u32 {
-        self.physical_sockets as u32
-            * self.cores_per_socket as u32
-            * self.threads_per_core as u32
+        self.physical_sockets as u32 * self.cores_per_socket as u32 * self.threads_per_core as u32
     }
 }
 
@@ -216,10 +214,10 @@ impl TaskStats {
     #[inline]
     pub(crate) fn tally(&mut self, raw_state: u8) {
         match raw_state {
-            0 => self.ready   = self.ready.saturating_add(1),
+            0 => self.ready = self.ready.saturating_add(1),
             1 => self.running = self.running.saturating_add(1),
             2 | 4 | 5 | 6 => self.blocked = self.blocked.saturating_add(1),
-            3 => self.zombie  = self.zombie.saturating_add(1),
+            3 => self.zombie = self.zombie.saturating_add(1),
             _ => {}
         }
     }

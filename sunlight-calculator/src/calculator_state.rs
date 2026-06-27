@@ -82,11 +82,7 @@ impl CalculatorState {
             ButtonAction::MemoryRecall => self.memory_recall(),
             ButtonAction::MemoryAdd => self.memory_add(),
             ButtonAction::MemorySubtract => self.memory_subtract(),
-            ButtonAction::Sqrt => {
-                self.handle_unary(|x| {
-                    if x < 0.0 { f64::NAN } else { fsqrt(x) }
-                })
-            },
+            ButtonAction::Sqrt => self.handle_unary(|x| if x < 0.0 { f64::NAN } else { fsqrt(x) }),
             ButtonAction::Percent => self.handle_unary(|x| x / 100.0),
             ButtonAction::Reciprocal => self.handle_unary(|x| 1.0 / x),
             ButtonAction::Negate => self.negate(),

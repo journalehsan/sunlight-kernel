@@ -89,11 +89,26 @@ Mouse routing currently works like this:
 2. `sunlight-display` updates global pointer state.
 3. Clients poll the display service for mouse position and their current client origin.
 
+Current PS/2 pointer behavior:
+
+- Cursor movement uses fixed-point accumulation so subpixel motion is preserved across small deltas.
+- Pointer acceleration is deterministic and threshold-based, with explicit sensitivity/gain constants in both `sunlight-mouse` and `sunlight-display`.
+- Hardware cursor moves do not repaint the desktop back buffer when the VirtIO GPU cursor overlay is active.
+
 This means:
 
 - Global desktop/session shortcuts are still centralized.
 - GUI apps do not consume `Ctrl+F1` / `Ctrl+F2`.
 - Focused GUI clients can receive ordinary typing.
+
+## Input Backend TODOs
+
+- `VirtioInputMouse`
+  - Feed the same relative-motion policy used by PS/2 without duplicating acceleration or clamp logic again.
+- `VirtioInputTablet`
+  - Add an absolute-pointer path that bypasses relative acceleration and maps directly into compositor coordinates.
+- `UsbHidMouse`
+  - Land later behind the same backend abstraction as PS/2 and virtio-input so diagnostics and button semantics stay aligned.
 
 ## PTY State
 

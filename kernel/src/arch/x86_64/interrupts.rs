@@ -336,8 +336,7 @@ pub fn now_ns() -> u64 {
 
 extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
     // Diagnostic 1d: log pid/rip/rsp for every fault (before existing log)
-    let pid =
-        crate::sched::with_scheduler(|s| s.current_pid());
+    let pid = crate::sched::with_scheduler(|s| s.current_pid());
     serial_println!(
         "[FAULT] #0 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
         pid,
@@ -356,8 +355,7 @@ extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame)
 
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
     // Diagnostic 1d: log pid/rip/rsp for #UD
-    let pid =
-        crate::sched::with_scheduler(|s| s.current_pid());
+    let pid = crate::sched::with_scheduler(|s| s.current_pid());
     serial_println!(
         "[FAULT] #6 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
         pid,
@@ -378,8 +376,7 @@ extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame,
     _error_code: u64,
 ) -> ! {
-    let pid =
-        crate::sched::with_scheduler(|s| s.current_pid());
+    let pid = crate::sched::with_scheduler(|s| s.current_pid());
     serial_println!(
         "[FAULT] #8 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
         pid,
@@ -395,8 +392,7 @@ extern "x86-interrupt" fn double_fault_handler(
 
 extern "x86-interrupt" fn gpf_handler(stack_frame: InterruptStackFrame, error_code: u64) {
     // Diagnostic 1d: log pid/rip/rsp for #GP
-    let pid =
-        crate::sched::with_scheduler(|s| s.current_pid());
+    let pid = crate::sched::with_scheduler(|s| s.current_pid());
     serial_println!(
         "[FAULT] #13 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
         pid,
@@ -422,8 +418,7 @@ extern "x86-interrupt" fn page_fault_handler(
     error_code: PageFaultErrorCode,
 ) {
     // Diagnostic 1d: log pid/rip/rsp for #PF (before the vaddr read)
-    let pid =
-        crate::sched::with_scheduler(|s| s.current_pid());
+    let pid = crate::sched::with_scheduler(|s| s.current_pid());
     let rip = _stack_frame.instruction_pointer.as_u64();
     let rsp = _stack_frame.stack_pointer.as_u64();
     serial_println!(

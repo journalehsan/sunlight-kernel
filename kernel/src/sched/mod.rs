@@ -182,8 +182,8 @@ pub const QUANTUM_MAX: u32 = 50;
 
 fn calculate_quantum_with_nice(burst_score: u32, nice: i8) -> u32 {
     let nice_modifier = (nice as i32) * 16;
-    let effective_score = (burst_score as i32 + nice_modifier)
-        .clamp(0, BURST_SCORE_MAX as i32) as u32;
+    let effective_score =
+        (burst_score as i32 + nice_modifier).clamp(0, BURST_SCORE_MAX as i32) as u32;
     let bonus_quantum = (effective_score * (QUANTUM_MAX - QUANTUM_MIN)) / BURST_SCORE_MAX;
     QUANTUM_MIN + bonus_quantum
 }
@@ -275,9 +275,7 @@ impl CoreState {
     }
 
     fn total_ready(&self) -> usize {
-        self.run_queue_high.len()
-            + self.run_queue_medium.len()
-            + self.run_queue_low.len()
+        self.run_queue_high.len() + self.run_queue_medium.len() + self.run_queue_low.len()
     }
 }
 
@@ -324,8 +322,7 @@ impl Scheduler {
             .iter()
             .enumerate()
             .find(|(idx, p)| {
-                p.state == ProcessState::Finished
-                    && in_use[..online].iter().all(|&cur| cur != *idx)
+                p.state == ProcessState::Finished && in_use[..online].iter().all(|&cur| cur != *idx)
             })
             .map(|(idx, _)| idx)
         {
@@ -381,8 +378,7 @@ impl Scheduler {
 
     /// Enqueue a Ready process onto a specific core's tier queue.
     fn enqueue_process_to_core(&mut self, idx: usize, core_id: usize) {
-        if idx >= self.processes.len()
-            || !matches!(self.processes[idx].state, ProcessState::Ready)
+        if idx >= self.processes.len() || !matches!(self.processes[idx].state, ProcessState::Ready)
         {
             return;
         }
@@ -696,20 +692,12 @@ impl Scheduler {
                     Self::find_stealable(&core.run_queue_low, &self.processes, thief_id)
                         .map(|p| (2u8, p))
                         .or_else(|| {
-                            Self::find_stealable(
-                                &core.run_queue_medium,
-                                &self.processes,
-                                thief_id,
-                            )
-                            .map(|p| (1u8, p))
+                            Self::find_stealable(&core.run_queue_medium, &self.processes, thief_id)
+                                .map(|p| (1u8, p))
                         })
                         .or_else(|| {
-                            Self::find_stealable(
-                                &core.run_queue_high,
-                                &self.processes,
-                                thief_id,
-                            )
-                            .map(|p| (0u8, p))
+                            Self::find_stealable(&core.run_queue_high, &self.processes, thief_id)
+                                .map(|p| (0u8, p))
                         })
                 }
             };
@@ -855,8 +843,7 @@ impl Scheduler {
             let ticks_waiting = self
                 .global_tick
                 .saturating_sub(self.processes[idx].last_run_tick);
-            if ticks_waiting > AGING_THRESHOLD_TICKS
-                && !self.processes[idx].aging_boosted_this_pick
+            if ticks_waiting > AGING_THRESHOLD_TICKS && !self.processes[idx].aging_boosted_this_pick
             {
                 self.processes[idx].counter =
                     (self.processes[idx].counter + STARVATION_BOOST).min(MAX_CREDIT);
@@ -993,9 +980,7 @@ impl Scheduler {
             if SCHEDULER_MODE == SchedulerMode::Bore {
                 self.enqueue_process_once(current);
             }
-        } else if !was_runnable
-            || !matches!(self.processes[current].state, ProcessState::Ready)
-        {
+        } else if !was_runnable || !matches!(self.processes[current].state, ProcessState::Ready) {
             self.remove_from_ready_queues(current);
         }
 
@@ -1226,8 +1211,8 @@ impl Scheduler {
             return false;
         };
         // Refuse to terminate a task that is currently executing on any core.
-        let is_running_on_core = (0..self.online_cores)
-            .any(|c| self.cores[c].current_task == Some(idx));
+        let is_running_on_core =
+            (0..self.online_cores).any(|c| self.cores[c].current_task == Some(idx));
         if is_running_on_core || self.processes[idx].state == ProcessState::Finished {
             return false;
         }

@@ -121,7 +121,11 @@ pub fn free_shared_page(
         .position(|(t, _, _)| *t == token)
     {
         let (_, base_virt, sz) = process.mapped_shared.remove(pos);
-        let num_pages = if sz == 0 { 1 } else { (sz + PAGE_SIZE - 1) / PAGE_SIZE };
+        let num_pages = if sz == 0 {
+            1
+        } else {
+            (sz + PAGE_SIZE - 1) / PAGE_SIZE
+        };
         for i in 0..num_pages {
             let v = VirtAddr::new(base_virt.as_u64() + (i * PAGE_SIZE) as u64);
             unsafe {
@@ -157,7 +161,11 @@ pub fn cleanup_shared_pages(
     // count for each; if this was the last mapping, free the physical frames.
     let mapped: alloc::vec::Vec<_> = process.mapped_shared.drain(..).collect();
     for (token, base_virt, sz) in mapped {
-        let num_pages = if sz == 0 { 1 } else { (sz + PAGE_SIZE - 1) / PAGE_SIZE };
+        let num_pages = if sz == 0 {
+            1
+        } else {
+            (sz + PAGE_SIZE - 1) / PAGE_SIZE
+        };
         for i in 0..num_pages {
             let v = VirtAddr::new(base_virt.as_u64() + (i * PAGE_SIZE) as u64);
             unsafe {

@@ -67,7 +67,8 @@ impl MatrixRunner {
             let a_ik = self.a[self.i * N + self.k];
             while self.j < N && budget > 0 {
                 let idx = self.i * N + self.j;
-                self.c[idx] = self.c[idx].wrapping_add(a_ik.wrapping_mul(self.b[self.k * N + self.j]));
+                self.c[idx] =
+                    self.c[idx].wrapping_add(a_ik.wrapping_mul(self.b[self.k * N + self.j]));
                 self.j += 1;
                 self.ops_done += 1;
                 budget -= 1;

@@ -5,13 +5,11 @@ mod calculator_state;
 
 use calculator_state::{ButtonAction, CalculatorState};
 use sunlight_ipc::{debug_log, process_yield, ProcessExit};
-use sunlight_ui::{
-    request_close,
-    widgets::Label,
-    App, Event, Rect, UiSymbol, Window, WindowConfig,
-};
 use sunlight_ui::paint::Canvas;
 use sunlight_ui::theme::{Color, Theme};
+use sunlight_ui::{
+    request_close, widgets::Label, App, Event, Rect, UiSymbol, Window, WindowConfig,
+};
 
 // ── Layout constants ───────────────────────────────────────────────────────────
 
@@ -151,11 +149,31 @@ const BUTTON_ACTIONS: [ButtonAction; TOTAL_BTNS] = [
 ];
 
 const BUTTON_KINDS: [BtnKind; TOTAL_BTNS] = [
-    BtnKind::Memory, BtnKind::Memory, BtnKind::Memory, BtnKind::Memory, BtnKind::Clear,
-    BtnKind::Number, BtnKind::Number, BtnKind::Number, BtnKind::Operator, BtnKind::Func,
-    BtnKind::Number, BtnKind::Number, BtnKind::Number, BtnKind::Operator, BtnKind::Func,
-    BtnKind::Number, BtnKind::Number, BtnKind::Number, BtnKind::Operator, BtnKind::Func,
-    BtnKind::Number, BtnKind::Number, BtnKind::Negate, BtnKind::Operator, BtnKind::Equals,
+    BtnKind::Memory,
+    BtnKind::Memory,
+    BtnKind::Memory,
+    BtnKind::Memory,
+    BtnKind::Clear,
+    BtnKind::Number,
+    BtnKind::Number,
+    BtnKind::Number,
+    BtnKind::Operator,
+    BtnKind::Func,
+    BtnKind::Number,
+    BtnKind::Number,
+    BtnKind::Number,
+    BtnKind::Operator,
+    BtnKind::Func,
+    BtnKind::Number,
+    BtnKind::Number,
+    BtnKind::Number,
+    BtnKind::Operator,
+    BtnKind::Func,
+    BtnKind::Number,
+    BtnKind::Number,
+    BtnKind::Negate,
+    BtnKind::Operator,
+    BtnKind::Equals,
 ];
 
 const KEY_ESC: u8 = 0x01;
@@ -280,11 +298,13 @@ impl CalcApp {
         let header = Rect::new(0, 0, WIN_W, HEADER_H);
         canvas.fill_rect(header, theme.panel);
 
-        Label::new(Rect::new(10, 6, 200, 14), "Sunlight Calculator")
-            .draw(canvas, theme);
-        Label::new(Rect::new(10, 22, 280, 12), "Simple arithmetic with memory and chained operations")
-            .dim()
-            .draw(canvas, theme);
+        Label::new(Rect::new(10, 6, 200, 14), "Sunlight Calculator").draw(canvas, theme);
+        Label::new(
+            Rect::new(10, 22, 280, 12),
+            "Simple arithmetic with memory and chained operations",
+        )
+        .dim()
+        .draw(canvas, theme);
 
         let sunlight_label = "SunlightOS";
         let tw = Canvas::measure_text(sunlight_label);
@@ -364,7 +384,9 @@ impl App for CalcApp {
             }
             Event::Key(ch) => self.handle_keyboard(ch),
             Event::KeyPress {
-                keycode, pressed: true, ..
+                keycode,
+                pressed: true,
+                ..
             } => {
                 if keycode == KEY_ESC {
                     request_close();

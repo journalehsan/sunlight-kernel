@@ -51,12 +51,12 @@ pub enum SunlightSyscall {
     // GUI / Display: map the physical Limine framebuffer into user space for the compositor
     MapFramebuffer = 118,
     // VirtIO GPU proxy syscalls (display_server only, gated by process name)
-    GpuGetInfo       = 119,
+    GpuGetInfo = 119,
     GpuAttachBacking = 120,
-    GpuSetScanout    = 121,
-    GpuFlush         = 122,
-    GpuUpdateCursor  = 123,
-    GpuMoveCursor    = 124,
+    GpuSetScanout = 121,
+    GpuFlush = 122,
+    GpuUpdateCursor = 123,
+    GpuMoveCursor = 124,
     DebugLog = 99,
 }
 
@@ -1813,19 +1813,29 @@ pub fn gpu_get_info() -> Option<(u32, u32)> {
     let packed = msg.words[0];
     let w = (packed & 0xFFFF_FFFF) as u32;
     let h = (packed >> 32) as u32;
-    if w == 0 || h == 0 { None } else { Some((w, h)) }
+    if w == 0 || h == 0 {
+        None
+    } else {
+        Some((w, h))
+    }
 }
 
 /// Attach the display server's back_buffer pages to VirtIO GPU scanout resource 1.
 /// `buf_ptr`: pointer to the start of back_buffer memory (must be page-aligned).
 /// `num_pages`: number of 4KiB pages to attach.
 pub fn gpu_attach_backing(buf_ptr: *const u32, num_pages: usize) -> bool {
-    let (ok, _) = unsafe { raw_syscall(
-        SunlightSyscall::GpuAttachBacking,
-        buf_ptr as u64,
-        num_pages as u64,
-        0, 0, 0, 0, 0,
-    )};
+    let (ok, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::GpuAttachBacking,
+            buf_ptr as u64,
+            num_pages as u64,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
     ok != 0
 }
 
@@ -1848,12 +1858,18 @@ pub fn gpu_flush(x: u32, y: u32, w: u32, h: u32) -> bool {
 /// `hot_x`/`hot_y`: cursor hotspot in pixels.
 pub fn gpu_update_cursor(pixels: *const u32, num_pixels: usize, hot_x: u32, hot_y: u32) -> bool {
     let a3 = (hot_x as u64) | ((hot_y as u64) << 32);
-    let (ok, _) = unsafe { raw_syscall(
-        SunlightSyscall::GpuUpdateCursor,
-        pixels as u64,
-        num_pixels as u64,
-        a3, 0, 0, 0, 0,
-    )};
+    let (ok, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::GpuUpdateCursor,
+            pixels as u64,
+            num_pixels as u64,
+            a3,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
     ok != 0
 }
 

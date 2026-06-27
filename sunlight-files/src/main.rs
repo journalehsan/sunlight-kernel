@@ -542,32 +542,56 @@ impl State {
         }
 
         let desktop = self.home_path.join("Desktop");
-        if desktop.as_ref().map(|p| path_matches(current, p.as_str())).unwrap_or(false) {
+        if desktop
+            .as_ref()
+            .map(|p| path_matches(current, p.as_str()))
+            .unwrap_or(false)
+        {
             return 1;
         }
 
         let documents = self.home_path.join("Documents");
-        if documents.as_ref().map(|p| path_matches(current, p.as_str())).unwrap_or(false) {
+        if documents
+            .as_ref()
+            .map(|p| path_matches(current, p.as_str()))
+            .unwrap_or(false)
+        {
             return 2;
         }
 
         let downloads = self.home_path.join("Downloads");
-        if downloads.as_ref().map(|p| path_matches(current, p.as_str())).unwrap_or(false) {
+        if downloads
+            .as_ref()
+            .map(|p| path_matches(current, p.as_str()))
+            .unwrap_or(false)
+        {
             return 3;
         }
 
         let pictures = self.home_path.join("Pictures");
-        if pictures.as_ref().map(|p| path_matches(current, p.as_str())).unwrap_or(false) {
+        if pictures
+            .as_ref()
+            .map(|p| path_matches(current, p.as_str()))
+            .unwrap_or(false)
+        {
             return 4;
         }
 
         let music = self.home_path.join("Music");
-        if music.as_ref().map(|p| path_matches(current, p.as_str())).unwrap_or(false) {
+        if music
+            .as_ref()
+            .map(|p| path_matches(current, p.as_str()))
+            .unwrap_or(false)
+        {
             return 5;
         }
 
         let videos = self.home_path.join("Videos");
-        if videos.as_ref().map(|p| path_matches(current, p.as_str())).unwrap_or(false) {
+        if videos
+            .as_ref()
+            .map(|p| path_matches(current, p.as_str()))
+            .unwrap_or(false)
+        {
             return 6;
         }
 
@@ -690,7 +714,9 @@ impl FilesApp {
     fn home_folder_rect(inner: Rect, idx: usize) -> Rect {
         let title_y = inner.y + 40;
         let grid_top = title_y + 18;
-        let card_w = ((inner.w.saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP))
+        let card_w = ((inner
+            .w
+            .saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP))
             / HOME_COLS as u32)
             .max(120);
         let col = idx % HOME_COLS;
@@ -723,7 +749,15 @@ impl FilesApp {
             ViewMode::Directory => self.state.current_path.parent().is_none(),
         };
 
-        draw_pill(canvas, theme, back, "Back", Some(UiSymbol::Back), false, true);
+        draw_pill(
+            canvas,
+            theme,
+            back,
+            "Back",
+            Some(UiSymbol::Back),
+            false,
+            true,
+        );
         draw_pill(
             canvas,
             theme,
@@ -733,12 +767,25 @@ impl FilesApp {
             false,
             true,
         );
-        draw_pill(canvas, theme, up, "Up", Some(UiSymbol::Up), false, up_disabled);
+        draw_pill(
+            canvas,
+            theme,
+            up,
+            "Up",
+            Some(UiSymbol::Up),
+            false,
+            up_disabled,
+        );
 
         canvas.fill_rounded_rect_with_border(search, RADIUS, theme.panel_alt, theme.border, 1);
         canvas.draw_ui_symbol(search.x + 8, search.y + 9, UiSymbol::Search, theme.text_dim);
         Label::new(
-            Rect::new(search.x + 22, search.y, search.w.saturating_sub(30), search.h),
+            Rect::new(
+                search.x + 22,
+                search.y,
+                search.w.saturating_sub(30),
+                search.h,
+            ),
             "Search",
         )
         .dim()
@@ -762,12 +809,9 @@ impl FilesApp {
         let mut clipped = canvas.sub_canvas(sidebar);
         let inner = sidebar.inset(PAD);
         let inner_local = inner.translate(-sidebar.x, -sidebar.y);
-        Label::new(
-            Rect::new(inner_local.x, 10, inner_local.w, 14),
-            "Locations",
-        )
-        .dim()
-        .draw(&mut clipped, theme);
+        Label::new(Rect::new(inner_local.x, 10, inner_local.w, 14), "Locations")
+            .dim()
+            .draw(&mut clipped, theme);
 
         for idx in 0..10 {
             let rect = Self::sidebar_item_rect(sidebar, idx);
@@ -788,15 +832,14 @@ impl FilesApp {
                 );
             }
             let icon = sidebar_symbol(idx);
-            let icon_color = if selected { theme.accent } else { theme.text_dim };
+            let icon_color = if selected {
+                theme.accent
+            } else {
+                theme.text_dim
+            };
             clipped.draw_ui_symbol(local.x + 8, local.y + 10, icon, icon_color);
             Label::new(
-                Rect::new(
-                    local.x + 24,
-                    local.y + 8,
-                    local.w.saturating_sub(34),
-                    12,
-                ),
+                Rect::new(local.x + 24, local.y + 8, local.w.saturating_sub(34), 12),
                 State::sidebar_label(idx),
             )
             .draw(&mut clipped, theme);
@@ -834,8 +877,8 @@ impl FilesApp {
                 Rect::new(inner.x, inner.y + HEADER_H as i32, inner.w, 14),
                 "Name | Type | Size | Modified",
             )
-                .dim()
-                .draw(canvas, theme);
+            .dim()
+            .draw(canvas, theme);
         }
 
         self.draw_directory_rows(canvas, theme, main);
@@ -878,7 +921,12 @@ impl FilesApp {
         Label::new(Rect::new(inner.x, inner.y, inner.w, 18), "Network").draw(canvas, theme);
         let card = Rect::new(inner.x, inner.y + 28, inner.w, 72);
         canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel_alt, theme.border, 1);
-        canvas.draw_text(card.x + 12, card.y + 10, "No network mounts detected", theme.text);
+        canvas.draw_text(
+            card.x + 12,
+            card.y + 10,
+            "No network mounts detected",
+            theme.text,
+        );
         canvas.draw_text(
             card.x + 12,
             card.y + 28,
@@ -952,7 +1000,12 @@ impl FilesApp {
             canvas.draw_text(type_x + 8, row.y + 5, type_label, theme.text_dim);
 
             if entry.file_type == FT_DIR {
-                canvas.draw_text_right(Rect::new(size_x, row.y, SIZE_W, ROW_H), "--", theme.text, 8);
+                canvas.draw_text_right(
+                    Rect::new(size_x, row.y, SIZE_W, ROW_H),
+                    "--",
+                    theme.text,
+                    8,
+                );
             } else {
                 let mut scratch = [0u8; 16];
                 let len = write_size(entry.size, &mut scratch);
@@ -965,23 +1018,23 @@ impl FilesApp {
                 );
             }
 
-            canvas.draw_text(
-                mod_x + 8,
-                row.y + 5,
-                "--",
-                theme.text_dim,
-            );
+            canvas.draw_text(mod_x + 8, row.y + 5, "--", theme.text_dim);
         }
     }
 
     fn draw_home_folders(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) {
         let title_y = inner.y + 40;
-        Label::new(Rect::new(inner.x, title_y, inner.w, 14), "Important folders")
-            .dim()
-            .draw(canvas, theme);
+        Label::new(
+            Rect::new(inner.x, title_y, inner.w, 14),
+            "Important folders",
+        )
+        .dim()
+        .draw(canvas, theme);
 
         let grid_top = title_y + 18;
-        let card_w = ((inner.w.saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP))
+        let card_w = ((inner
+            .w
+            .saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP))
             / HOME_COLS as u32)
             .max(120);
         for idx in 0..HOME_FOLDER_COUNT {
@@ -1003,14 +1056,26 @@ impl FilesApp {
             };
             canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
             let icon = home_folder_symbol(idx, folder.present);
-            let icon_color = if folder.present { theme.accent } else { theme.warn };
+            let icon_color = if folder.present {
+                theme.accent
+            } else {
+                theme.warn
+            };
             canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, icon, icon_color);
             canvas.draw_text(rect.x + 28, rect.y + 8, folder.name, theme.text);
             canvas.draw_text(
                 rect.x + 28,
                 rect.y + 24,
-                if folder.present { "Available" } else { "Missing" },
-                if folder.present { theme.text_dim } else { theme.warn },
+                if folder.present {
+                    "Available"
+                } else {
+                    "Missing"
+                },
+                if folder.present {
+                    theme.text_dim
+                } else {
+                    theme.warn
+                },
             );
         }
     }
@@ -1048,12 +1113,7 @@ impl FilesApp {
                 volume.path.as_str(),
                 theme.text_dim,
             );
-            canvas.draw_text(
-                rect.right() - 168,
-                rect.y + 8,
-                "Size --",
-                theme.text_dim,
-            );
+            canvas.draw_text(rect.right() - 168, rect.y + 8, "Size --", theme.text_dim);
             canvas.draw_text(
                 rect.right() - 168,
                 rect.y + 22,
@@ -1075,7 +1135,9 @@ impl FilesApp {
     }
 
     fn draw_home_network(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect, y: i32) {
-        Label::new(Rect::new(inner.x, y, inner.w, 14), "Network").dim().draw(canvas, theme);
+        Label::new(Rect::new(inner.x, y, inner.w, 14), "Network")
+            .dim()
+            .draw(canvas, theme);
         canvas.draw_ui_symbol(inner.x, y + 18, UiSymbol::Network, theme.text_dim);
         Label::new(
             Rect::new(inner.x + 16, y + 16, inner.w.saturating_sub(16), 14),
@@ -1147,12 +1209,16 @@ impl App for FilesApp {
                     ViewMode::Home => {
                         let inner = main.inset(PAD);
                         for idx in 0..HOME_FOLDER_COUNT {
-                            if Self::home_folder_rect(inner, idx).contains(sunlight_ui::Point::new(x, y)) {
+                            if Self::home_folder_rect(inner, idx)
+                                .contains(sunlight_ui::Point::new(x, y))
+                            {
                                 return self.state.update(Message::OpenHomeFolder(idx));
                             }
                         }
                         for idx in 0..self.state.volume_count {
-                            if let Some(rect) = Self::home_volume_rect(inner, idx, self.state.volume_count) {
+                            if let Some(rect) =
+                                Self::home_volume_rect(inner, idx, self.state.volume_count)
+                            {
                                 if rect.contains(sunlight_ui::Point::new(x, y)) {
                                     return self.state.update(Message::OpenHomeVolume(idx));
                                 }
@@ -1288,8 +1354,7 @@ fn make_volume_entry(name: &str, path: PathBuf, present: bool) -> VolumeEntry {
 
 fn path_matches(current: &str, base: &str) -> bool {
     current == base
-        || (current.starts_with(base)
-            && current.as_bytes().get(base.len()) == Some(&b'/'))
+        || (current.starts_with(base) && current.as_bytes().get(base.len()) == Some(&b'/'))
 }
 
 fn sidebar_symbol(idx: usize) -> UiSymbol {
@@ -1447,7 +1512,11 @@ fn draw_pill(
     } else {
         theme.panel
     };
-    let border = if active { theme.accent_hover } else { theme.border };
+    let border = if active {
+        theme.accent_hover
+    } else {
+        theme.border
+    };
     let color = if disabled {
         theme.text_dim
     } else if active {

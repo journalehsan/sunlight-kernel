@@ -76,8 +76,7 @@ pub static AP_ONLINE: AtomicU32 = AtomicU32::new(0);
 #[repr(C, align(16))]
 struct ApStack([u8; AP_STACK_SIZE]);
 
-static mut AP_STACKS: [ApStack; MAX_APS] =
-    [const { ApStack([0u8; AP_STACK_SIZE]) }; MAX_APS];
+static mut AP_STACKS: [ApStack; MAX_APS] = [const { ApStack([0u8; AP_STACK_SIZE]) }; MAX_APS];
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -118,9 +117,7 @@ pub fn start_aps(all_cpus: &[&limine::mp::MpInfo], bsp_lapic_id: u32) {
         // so the initial RSP = base + AP_STACK_SIZE.
         // Safety: `AP_STACKS` is written only once per index (here, on BSP)
         // before the AP that will use it is started.
-        let stack_top: u64 = unsafe {
-            AP_STACKS[ap_idx].0.as_mut_ptr().add(AP_STACK_SIZE) as u64
-        };
+        let stack_top: u64 = unsafe { AP_STACKS[ap_idx].0.as_mut_ptr().add(AP_STACK_SIZE) as u64 };
 
         crate::serial_println!(
             "[SMP] Starting AP{}  proc_id={}  lapic_id={}  stack={:#x}..{:#x}",
@@ -222,9 +219,7 @@ unsafe extern "C" fn ap_entry_rust(info: &limine::mp::MpInfo) -> ! {
     // are per-core MSRs.  Each logical CPU must program them before it can
     // accept syscalls from ring-3 code.
     unsafe {
-        syscall::setup_syscall_msrs(VirtAddr::new(
-            syscall::syscall_entry as *const () as u64,
-        ));
+        syscall::setup_syscall_msrs(VirtAddr::new(syscall::syscall_entry as *const () as u64));
     }
 
     // ── Step 4: Signal the BSP ───────────────────────────────────────────────

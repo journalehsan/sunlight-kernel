@@ -493,6 +493,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         122 => sys_gpu_flush(frame),
         123 => sys_gpu_update_cursor(frame),
         124 => sys_gpu_move_cursor(frame),
+        125 => sys_mouse_get_stats(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -3969,6 +3970,26 @@ fn sys_mouse_port_read(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
+/// Syscall: mouse_get_stats (125)
+/// rdi = pointer to [u64; 3] buffer for stats
+/// Returns 0 on success, u64::MAX on error.
+fn sys_mouse_get_stats(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_mouse_driver() {
+        return u64::MAX;
+    }
+    let ptr = frame.rdi as *mut u64;
+    if !is_user_address(ptr as u64) || !is_user_address((ptr as u64) + 24) {
+        return u64::MAX;
+    }
+    let (pending, dropped, capacity) = crate::arch::x86_64::mouse::get_stats();
+    unsafe {
+        core::ptr::write(ptr, pending as u64);
+        core::ptr::write(ptr.add(1), dropped as u64);
+        core::ptr::write(ptr.add(2), capacity as u64);
+    }
+    0
+}
+
 /// Syscall: powerctl (80)
 /// Power management: shutdown (0) or reboot (1)
 fn sys_powerctl(command: u64) -> u64 {
@@ -4054,7 +4075,7 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
     if !current_process_is_display_server() {
         return 0;
     }
-    let user_va   = frame.rdi;
+    let user_va = frame.rdi;
     let num_pages = frame.rsi as usize;
     if num_pages == 0 || num_pages > 2048 {
         return 0;
@@ -4077,7 +4098,9 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
                 None => return 0,
             };
             entries.push(sunlight_virtio::VirtioGpuMemEntry {
-                addr: phys, length: 4096, padding: 0,
+                addr: phys,
+                length: 4096,
+                padding: 0,
             });
         }
     }
@@ -4094,17 +4117,21 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
         gpu.resource_create_2d(
             sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
             sunlight_virtio::gpu::VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM,
-            w, h,
+            w,
+            h,
         )
     };
     if !ok {
         crate::serial_println!("[GPU] resource_create_2d failed");
     }
 
-    let ok = unsafe { gpu.resource_attach_backing(
-        sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, &entries,
-    )};
-    if ok { 1 } else { 0 }
+    let ok =
+        unsafe { gpu.resource_attach_backing(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, &entries) };
+    if ok {
+        1
+    } else {
+        0
+    }
 }
 
 /// Syscall 121: GpuSetScanout
@@ -4119,12 +4146,19 @@ fn sys_gpu_set_scanout(_frame: &mut SyscallFrame) -> u64 {
         None => return 0,
     };
     let (w, h) = (gpu.width, gpu.height);
-    let ok = unsafe { gpu.set_scanout(
-        sunlight_virtio::gpu::SCANOUT_ID,
-        sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
-        w, h,
-    )};
-    if ok { 1 } else { 0 }
+    let ok = unsafe {
+        gpu.set_scanout(
+            sunlight_virtio::gpu::SCANOUT_ID,
+            sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
+            w,
+            h,
+        )
+    };
+    if ok {
+        1
+    } else {
+        0
+    }
 }
 
 /// Syscall 122: GpuFlush
@@ -4145,15 +4179,15 @@ fn sys_gpu_flush(frame: &mut SyscallFrame) -> u64 {
         None => return 0,
     };
     let width = gpu.width;
-    let ok1 = unsafe { gpu.transfer_to_host_2d(
-        sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
-        x, y, w, h, width,
-    )};
-    let ok2 = unsafe { gpu.resource_flush(
-        sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
-        x, y, w, h,
-    )};
-    if ok1 && ok2 { 1 } else { 0 }
+    let ok1 = unsafe {
+        gpu.transfer_to_host_2d(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, x, y, w, h, width)
+    };
+    let ok2 = unsafe { gpu.resource_flush(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, x, y, w, h) };
+    if ok1 && ok2 {
+        1
+    } else {
+        0
+    }
 }
 
 /// Syscall 123: GpuUpdateCursor
@@ -4167,10 +4201,9 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
     if !current_process_is_display_server() {
         return 0;
     }
-    let user_va    = frame.rdi;
-    let num_pixels = (frame.rsi as usize).min(
-        (sunlight_virtio::gpu::CURSOR_W * sunlight_virtio::gpu::CURSOR_H) as usize
-    );
+    let user_va = frame.rdi;
+    let num_pixels = (frame.rsi as usize)
+        .min((sunlight_virtio::gpu::CURSOR_W * sunlight_virtio::gpu::CURSOR_H) as usize);
     let hot_x = (frame.rdx & 0xFFFF_FFFF) as u32;
     let hot_y = (frame.rdx >> 32) as u32;
 
@@ -4178,10 +4211,15 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
     let cursor_pixel_bytes = num_pixels * 4;
     {
         let mut dev = crate::GPU_DEVICE.lock();
-        let gpu = match dev.as_mut() { Some(g) => g, None => return 0 };
+        let gpu = match dev.as_mut() {
+            Some(g) => g,
+            None => return 0,
+        };
         let dst = gpu.cursor_pixels_virt() as *mut u8;
         // Zero the backing first (clear any previous cursor shape)
-        unsafe { dst.write_bytes(0, 4 * 4096); }
+        unsafe {
+            dst.write_bytes(0, 4 * 4096);
+        }
         if cursor_pixel_bytes > 0 {
             if !unsafe { copy_from_user_va(user_va, dst, cursor_pixel_bytes) } {
                 return 0;
@@ -4190,51 +4228,67 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
     }
 
     let mut dev = crate::GPU_DEVICE.lock();
-    let gpu = match dev.as_mut() { Some(g) => g, None => return 0 };
+    let gpu = match dev.as_mut() {
+        Some(g) => g,
+        None => return 0,
+    };
 
     // Create cursor resource (format B8G8R8A8 for transparency)
-    let ok = unsafe { gpu.resource_create_2d(
-        sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
-        sunlight_virtio::gpu::VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM,
-        sunlight_virtio::gpu::CURSOR_W,
-        sunlight_virtio::gpu::CURSOR_H,
-    )};
+    let ok = unsafe {
+        gpu.resource_create_2d(
+            sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
+            sunlight_virtio::gpu::VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM,
+            sunlight_virtio::gpu::CURSOR_W,
+            sunlight_virtio::gpu::CURSOR_H,
+        )
+    };
     if !ok {
         crate::serial_println!("[GPU] cursor resource_create_2d failed");
     }
 
     // Attach backing (kernel-allocated cursor pages)
     let cursor_pages = gpu.cursor_pages_phys();
-    let ok = unsafe { gpu.resource_attach_backing(
-        sunlight_virtio::gpu::CURSOR_RESOURCE_ID, &cursor_pages,
-    )};
+    let ok = unsafe {
+        gpu.resource_attach_backing(sunlight_virtio::gpu::CURSOR_RESOURCE_ID, &cursor_pages)
+    };
     if !ok {
         crate::serial_println!("[GPU] cursor resource_attach_backing failed");
     }
 
     // Transfer cursor pixels to host
-    let ok = unsafe { gpu.transfer_to_host_2d(
-        sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
-        0, 0,
-        sunlight_virtio::gpu::CURSOR_W,
-        sunlight_virtio::gpu::CURSOR_H,
-        sunlight_virtio::gpu::CURSOR_W,
-    )};
+    let ok = unsafe {
+        gpu.transfer_to_host_2d(
+            sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
+            0,
+            0,
+            sunlight_virtio::gpu::CURSOR_W,
+            sunlight_virtio::gpu::CURSOR_H,
+            sunlight_virtio::gpu::CURSOR_W,
+        )
+    };
     if !ok {
         crate::serial_println!("[GPU] cursor transfer failed");
     }
 
     // Update cursor on scanout
-    let ok = unsafe { gpu.update_cursor(
-        sunlight_virtio::gpu::SCANOUT_ID,
-        sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
-        0, 0, // position — display_server will call move_cursor immediately
-        hot_x, hot_y,
-    )};
+    let ok = unsafe {
+        gpu.update_cursor(
+            sunlight_virtio::gpu::SCANOUT_ID,
+            sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
+            0,
+            0, // position — display_server will call move_cursor immediately
+            hot_x,
+            hot_y,
+        )
+    };
     if !ok {
         crate::serial_println!("[GPU] cursor UPDATE_CURSOR command failed");
     }
-    if ok { 1 } else { 0 }
+    if ok {
+        1
+    } else {
+        0
+    }
 }
 
 /// Syscall 124: GpuMoveCursor
@@ -4247,10 +4301,17 @@ fn sys_gpu_move_cursor(frame: &mut SyscallFrame) -> u64 {
     let y = (frame.rdi >> 32) as u32;
 
     let mut dev = crate::GPU_DEVICE.lock();
-    let gpu = match dev.as_mut() { Some(g) => g, None => return 0 };
+    let gpu = match dev.as_mut() {
+        Some(g) => g,
+        None => return 0,
+    };
     let ok = unsafe { gpu.move_cursor(sunlight_virtio::gpu::SCANOUT_ID, x, y) };
     if !ok {
         crate::serial_println!("[GPU] cursor MOVE_CURSOR command failed");
     }
-    if ok { 1 } else { 0 }
+    if ok {
+        1
+    } else {
+        0
+    }
 }

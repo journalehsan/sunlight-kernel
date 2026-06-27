@@ -212,7 +212,9 @@ impl BenchApp {
             multi_handle: None,
         };
         app.set_status("Ready to benchmark");
-        app.set_detail("Run starts chunked single-core stages and a live multi-core integer mix pass.");
+        app.set_detail(
+            "Run starts chunked single-core stages and a live multi-core integer mix pass.",
+        );
         app.rebuild_summary();
         app.rebuild_rows();
         app
@@ -282,13 +284,20 @@ impl BenchApp {
             stage.x,
             stage.bottom() + 10,
             stage.w,
-            content.bottom().saturating_sub(stage.bottom() + 10 + STATUS_H as i32 + 8) as u32,
+            content
+                .bottom()
+                .saturating_sub(stage.bottom() + 10 + STATUS_H as i32 + 8) as u32,
         )
     }
 
     fn status_rect(&self) -> Rect {
         let content = self.content_rect();
-        Rect::new(content.x, content.bottom() - STATUS_H as i32, content.w, STATUS_H)
+        Rect::new(
+            content.x,
+            content.bottom() - STATUS_H as i32,
+            content.w,
+            STATUS_H,
+        )
     }
 
     fn button_rects(&self) -> [Rect; BUTTON_COUNT] {
@@ -305,7 +314,10 @@ impl BenchApp {
 
     fn rebuild_summary(&mut self) {
         self.core_len = copy_bytes(b"Cores ", &mut self.core_text);
-        self.core_len += write_num_into(self.ncores.min(u32::MAX as usize) as u32, &mut self.core_text[self.core_len..]);
+        self.core_len += write_num_into(
+            self.ncores.min(u32::MAX as usize) as u32,
+            &mut self.core_text[self.core_len..],
+        );
 
         let score = total_score(&self.results);
         self.score_len = copy_bytes(b"Score ", &mut self.score_text);
@@ -326,11 +338,23 @@ impl BenchApp {
         ];
         for (idx, name) in names.iter().enumerate() {
             copy_cell(name, &mut self.row_bufs[idx][0], &mut self.row_lens[idx][0]);
-            copy_cell(self.row_state(idx), &mut self.row_bufs[idx][1], &mut self.row_lens[idx][1]);
+            copy_cell(
+                self.row_state(idx),
+                &mut self.row_bufs[idx][1],
+                &mut self.row_lens[idx][1],
+            );
 
             if let Some(entry) = self.results[idx] {
-                write_u64_cell(entry.cycles, &mut self.row_bufs[idx][2], &mut self.row_lens[idx][2]);
-                write_u64_cell(entry.score, &mut self.row_bufs[idx][3], &mut self.row_lens[idx][3]);
+                write_u64_cell(
+                    entry.cycles,
+                    &mut self.row_bufs[idx][2],
+                    &mut self.row_lens[idx][2],
+                );
+                write_u64_cell(
+                    entry.score,
+                    &mut self.row_bufs[idx][3],
+                    &mut self.row_lens[idx][3],
+                );
             } else {
                 self.row_lens[idx][2] = 0;
                 self.row_lens[idx][3] = 0;
@@ -395,10 +419,16 @@ impl BenchApp {
         match self.stage {
             Stage::Ready => "UI stays live while the single-core passes yield between work chunks.",
             Stage::Pi => "Fixed-point Machin iterations measured in chunks, then accumulated.",
-            Stage::Prime => "A compact dense sieve gives you a fast prime-focused pass before the heavy one.",
+            Stage::Prime => {
+                "A compact dense sieve gives you a fast prime-focused pass before the heavy one."
+            }
             Stage::Sieve => "Segment windows stream across the limit with cache-sized bitsets.",
-            Stage::Matrix => "Large integer matmul runs in resumable slices to avoid a frozen window.",
-            Stage::Multi => "Worker threads run a deterministic integer mixer while the window polls progress.",
+            Stage::Matrix => {
+                "Large integer matmul runs in resumable slices to avoid a frozen window."
+            }
+            Stage::Multi => {
+                "Worker threads run a deterministic integer mixer while the window polls progress."
+            }
             Stage::Finished => "Use Serial to mirror the final table into debug_log.",
         }
     }
@@ -464,7 +494,9 @@ impl BenchApp {
         self.stage = Stage::Finished;
         self.running = false;
         sunlight_ipc::set_nice(self.pid, 0);
-        self.set_detail("SunLight-Bench finished. Close the window or mirror the summary to serial.");
+        self.set_detail(
+            "SunLight-Bench finished. Close the window or mirror the summary to serial.",
+        );
         if !self.serial_reported {
             self.emit_serial_report();
         }
@@ -492,7 +524,9 @@ impl BenchApp {
             }
             Stage::Prime => {
                 let done = self.prime.step();
-                self.set_detail("Dense prime sieve is marking and counting in small UI-friendly chunks.");
+                self.set_detail(
+                    "Dense prime sieve is marking and counting in small UI-friendly chunks.",
+                );
                 if done {
                     self.record_result(1, prime_scan::NAME, self.prime.cycles());
                     self.stage = Stage::Sieve;
@@ -508,13 +542,17 @@ impl BenchApp {
                     self.record_result(2, sieve::NAME, self.sieve.cycles());
                     self.stage = Stage::Matrix;
                     self.set_status("Sieve stage complete");
-                    self.set_detail("Matrix multiply started. This is typically the longest stage.");
+                    self.set_detail(
+                        "Matrix multiply started. This is typically the longest stage.",
+                    );
                 }
                 true
             }
             Stage::Matrix => {
                 let done = self.matrix.step();
-                self.set_detail("Matrix work slices through the ikj loop nest without freezing the UI.");
+                self.set_detail(
+                    "Matrix work slices through the ikj loop nest without freezing the UI.",
+                );
                 if done {
                     self.record_result(3, matrix::NAME, self.matrix.cycles());
                     self.stage = Stage::Multi;
@@ -542,7 +580,9 @@ impl BenchApp {
                     self.finish();
                     true
                 } else {
-                    self.set_detail("Parallel mix workers are active. The window is polling completion.");
+                    self.set_detail(
+                        "Parallel mix workers are active. The window is polling completion.",
+                    );
                     true
                 }
             }
@@ -579,11 +619,13 @@ impl BenchApp {
         false
     }
 
-    fn row_refs<'a>(&'a self, rows: &'a mut [[&'a str; TABLE_COLS]; BENCH_COUNT]) -> [&'a [&'a str]; BENCH_COUNT] {
+    fn row_refs<'a>(
+        &'a self,
+        rows: &'a mut [[&'a str; TABLE_COLS]; BENCH_COUNT],
+    ) -> [&'a [&'a str]; BENCH_COUNT] {
         for row in 0..BENCH_COUNT {
             for col in 0..TABLE_COLS {
-                rows[row][col] =
-                    as_str(&self.row_bufs[row][col][..self.row_lens[row][col]]);
+                rows[row][col] = as_str(&self.row_bufs[row][col][..self.row_lens[row][col]]);
             }
         }
         let mut refs: [&[&str]; BENCH_COUNT] = [&[]; BENCH_COUNT];
@@ -604,7 +646,11 @@ impl App for BenchApp {
         let header = self.header_rect();
         canvas.fill_rect(header, theme.panel_alt);
         canvas.hbar(header.x, header.bottom() - 1, header.w, 1, theme.accent);
-        Label::new(Rect::new(header.x + 12, header.y + 8, 260, 18), "SunLight Bench").draw(canvas, theme);
+        Label::new(
+            Rect::new(header.x + 12, header.y + 8, 260, 18),
+            "SunLight Bench",
+        )
+        .draw(canvas, theme);
         Label::new(
             Rect::new(header.x + 12, header.y + 24, 520, 14),
             "Windowed performance suite with live progress, orange telemetry, and chunked long runs.",
@@ -635,18 +681,44 @@ impl App for BenchApp {
         StatusBadge::new(summary.x + 14, summary.y + 26, self.status_badge())
             .with_label(self.stage.label())
             .draw(canvas, theme);
-        Label::new(Rect::new(summary.x + 120, summary.y + 20, 180, 16), self.score_str()).draw(canvas, theme);
-        Label::new(Rect::new(summary.x + 300, summary.y + 20, 140, 16), self.core_str()).draw(canvas, theme);
-        Label::new(Rect::new(summary.x + 430, summary.y + 20, 140, 16), self.phase_str()).draw(canvas, theme);
-        Label::new(Rect::new(summary.x + 14, summary.y + 42, 240, 14), self.status_str()).draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 14, summary.y + 58, summary.w.saturating_sub(28), 14),
+            Rect::new(summary.x + 120, summary.y + 20, 180, 16),
+            self.score_str(),
+        )
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 300, summary.y + 20, 140, 16),
+            self.core_str(),
+        )
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 430, summary.y + 20, 140, 16),
+            self.phase_str(),
+        )
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 14, summary.y + 42, 240, 14),
+            self.status_str(),
+        )
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(
+                summary.x + 14,
+                summary.y + 58,
+                summary.w.saturating_sub(28),
+                14,
+            ),
             self.detail_str(),
         )
         .dim()
         .draw(canvas, theme);
         ProgressBar::new(
-            Rect::new(summary.x + 14, summary.bottom() - 28, summary.w.saturating_sub(28), 14),
+            Rect::new(
+                summary.x + 14,
+                summary.bottom() - 28,
+                summary.w.saturating_sub(28),
+                14,
+            ),
             self.global_progress(),
         )
         .with_pct()
@@ -666,7 +738,12 @@ impl App for BenchApp {
         .dim()
         .draw(canvas, theme);
         ProgressBar::new(
-            Rect::new(stage.x + 14, stage.bottom() - 34, stage.w.saturating_sub(28), 16),
+            Rect::new(
+                stage.x + 14,
+                stage.bottom() - 34,
+                stage.w.saturating_sub(28),
+                16,
+            ),
             self.stage_progress_bp() as f32 / 10_000.0,
         )
         .with_pct()
@@ -677,7 +754,12 @@ impl App for BenchApp {
         let mut rows = [EMPTY_ROW; BENCH_COUNT];
         let row_refs = self.row_refs(&mut rows);
         Table {
-            rect: Rect::new(results.x + 10, results.y + 24, results.w.saturating_sub(20), results.h.saturating_sub(34)),
+            rect: Rect::new(
+                results.x + 10,
+                results.y + 24,
+                results.w.saturating_sub(20),
+                results.h.saturating_sub(34),
+            ),
             columns: &TABLE_COLUMNS,
             rows: &row_refs,
             selected: self.current_index(),
@@ -686,7 +768,13 @@ impl App for BenchApp {
         }
         .draw(canvas, theme);
 
-        StatusBar::new(self.status_rect(), self.status_str(), self.stage.label(), self.core_str()).draw(canvas, theme);
+        StatusBar::new(
+            self.status_rect(),
+            self.status_str(),
+            self.stage.label(),
+            self.core_str(),
+        )
+        .draw(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {

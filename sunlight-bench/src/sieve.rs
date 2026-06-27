@@ -115,7 +115,11 @@ impl SieveRunner {
                 sp * sp
             } else {
                 let r = low % sp;
-                if r == 0 { low } else { low - r + sp }
+                if r == 0 {
+                    low
+                } else {
+                    low - r + sp
+                }
             };
             let mut value = start;
             while value < high {

@@ -203,16 +203,16 @@ impl Telemetry {
         let page = unsafe { &*self.page_ptr };
 
         unsafe {
-            snap.sequence     = vread(core::ptr::addr_of!(page.sequence));
-            snap.uptime_secs  = vread(core::ptr::addr_of!(page.uptime_secs));
+            snap.sequence = vread(core::ptr::addr_of!(page.sequence));
+            snap.uptime_secs = vread(core::ptr::addr_of!(page.uptime_secs));
             snap.total_ram_kb = vread(core::ptr::addr_of!(page.total_ram_kb));
-            snap.used_ram_kb  = vread(core::ptr::addr_of!(page.used_ram_kb));
+            snap.used_ram_kb = vread(core::ptr::addr_of!(page.used_ram_kb));
             snap.zram_orig_kb = vread(core::ptr::addr_of!(page.zram_orig_kb));
             snap.zram_comp_kb = vread(core::ptr::addr_of!(page.zram_comp_kb));
             snap.net_rx_bytes = vread(core::ptr::addr_of!(page.net_rx_bytes));
             snap.net_tx_bytes = vread(core::ptr::addr_of!(page.net_tx_bytes));
-            snap.cpu_count    = vread(core::ptr::addr_of!(page.cpu_count));
-            snap.gpu_count    = vread(core::ptr::addr_of!(page.gpu_count));
+            snap.cpu_count = vread(core::ptr::addr_of!(page.cpu_count));
+            snap.gpu_count = vread(core::ptr::addr_of!(page.gpu_count));
         }
 
         // Topology: derived from cpu_count until CPUID leaf 0x0B is wired.
@@ -224,9 +224,9 @@ impl Telemetry {
         let logical_count = (snap.cpu_count as usize).max(1).min(MAX_CORES);
         snap.cpu_telemetry.count = logical_count;
         for i in 0..logical_count {
-            snap.cpu_telemetry.cores[i].core_id      = i as u8;
+            snap.cpu_telemetry.cores[i].core_id = i as u8;
             snap.cpu_telemetry.cores[i].affinity_mask = !0u64; // unrestricted
-            // load_bp is filled in compute_cpu_usage() after interval is known.
+                                                               // load_bp is filled in compute_cpu_usage() after interval is known.
         }
 
         let raw_count = unsafe { vread(core::ptr::addr_of!(page.proc_count)) } as usize;
@@ -244,25 +244,23 @@ impl Telemetry {
 
             // Track the first Running task's PID as the "current" task on core 0.
             // With SMP the kernel would tell us which core each task is on.
-            if raw.state == 1
-                && snap.cpu_telemetry.cores[0].current_task_pid == 0
-            {
+            if raw.state == 1 && snap.cpu_telemetry.cores[0].current_task_pid == 0 {
                 snap.cpu_telemetry.cores[0].current_task_pid = raw.pid;
             }
 
             snap.procs[i] = ProcessSnapshot {
-                pid:   raw.pid,
-                ppid:  raw.ppid,
+                pid: raw.pid,
+                ppid: raw.ppid,
                 state: match raw.state {
                     1 => ProcessState::Running,
                     2 => ProcessState::Blocked,
                     3 => ProcessState::Finished,
                     _ => ProcessState::Ready,
                 },
-                name:     raw.name,
+                name: raw.name,
                 cpu_ticks: raw.cpu_ticks,
-                cpu_bp:   0,
-                mem_kb:   raw.mem_pages.saturating_mul(4),
+                cpu_bp: 0,
+                mem_kb: raw.mem_pages.saturating_mul(4),
             };
         }
         ts.commit();

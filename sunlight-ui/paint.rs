@@ -4,10 +4,10 @@
 //! with a known stride. Widgets call these helpers; nothing here knows about
 //! themes or widget state.
 
-use crate::geom::Rect;
-use crate::theme::Color;
 use crate::font::ui_symbols;
 use crate::font::UiSymbol;
+use crate::geom::Rect;
+use crate::theme::Color;
 
 /// A mutable view over a region of a framebuffer.
 /// Pixels are 32-bit ARGB, row-major, stride in *pixels* (not bytes).
@@ -124,14 +124,7 @@ impl<'fb> Canvas<'fb> {
     }
 
     /// Draw a glyph stored as one bitmask row per `u16`.
-    pub fn draw_glyph_rows(
-        &mut self,
-        x: i32,
-        y: i32,
-        rows: &[u16],
-        width: u32,
-        color: Color,
-    ) {
+    pub fn draw_glyph_rows(&mut self, x: i32, y: i32, rows: &[u16], width: u32, color: Color) {
         for (row_idx, &row_bits) in rows.iter().enumerate() {
             for col in 0..width as usize {
                 let bit = (row_bits >> (width as usize - 1 - col)) & 1;

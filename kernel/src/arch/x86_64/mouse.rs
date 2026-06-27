@@ -167,6 +167,19 @@ pub fn pop_mouse_byte() -> Option<u8> {
     }
 }
 
+/// Get statistics for monitoring/debugging.
+pub fn get_stats() -> (usize, usize, usize) {
+    let dropped = DROPPED_COUNT.load(Ordering::Relaxed);
+    let read = READ_IDX.load(Ordering::Relaxed);
+    let write = WRITE_IDX.load(Ordering::Relaxed);
+    let pending = if write >= read {
+        write - read
+    } else {
+        RAW_BUFFER_SIZE - read + write
+    };
+    (pending, dropped, RAW_BUFFER_SIZE)
+}
+
 /// Main IRQ12 handler: read raw byte, push to buffer, notify driver, send EOI.
 pub fn handle_irq12() {
     // 1. Read raw mouse byte from hardware

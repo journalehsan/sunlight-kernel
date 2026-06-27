@@ -79,20 +79,19 @@ const FP_ONE: i32 = 1 << FP_SHIFT;
 /// Set to true to log every RAW_MOTION packet (dx/dy, cursor before/after).
 const MOUSE_DEBUG: bool = false;
 
-const SENS_DEFAULT_FP: i32 = FP_ONE * 2;
+// Keep these cursor-motion constants in sync with sunlight-mouse until the
+// pointer policy is shared by future input backends.
+const SENS_DEFAULT_FP: i32 = FP_ONE * 5 / 4;
 #[allow(dead_code)]
-const SENS_MIN_FP: i32 = FP_ONE / 2;
+const SENS_MIN_FP: i32 = FP_ONE * 3 / 4;
 #[allow(dead_code)]
-const SENS_MAX_FP: i32 = FP_ONE * 4;
+const SENS_MAX_FP: i32 = FP_ONE * 2;
 
-const ACCEL_PRECISE_MAX_DELTA: i32 = 2;
-const ACCEL_NORMAL_MAX_DELTA: i32 = 6;
+const ACCEL_PRECISE_MAX_MAGNITUDE: i32 = 2;
+const ACCEL_NORMAL_MAX_MAGNITUDE: i32 = 8;
 const ACCEL_PRECISE_GAIN_FP: i32 = FP_ONE;
-const ACCEL_NORMAL_GAIN_FP: i32 = FP_ONE * 3 / 2;
-const ACCEL_FAST_GAIN_FP: i32 = FP_ONE * 9 / 4;
-/// On a button press (up->down edge) the pointer is held still for this many
-/// motion packets so the cursor stays put while the click lands.
-const CLICK_FREEZE_EVENTS: u32 = 4;
+const ACCEL_NORMAL_GAIN_FP: i32 = FP_ONE * 5 / 4;
+const ACCEL_FAST_GAIN_FP: i32 = FP_ONE * 7 / 4;
 const EDGE_MARGIN: i32 = 0;
 const COUNTER_LOG_INTERVAL: u64 = 64;
 const KEY_TAB: u8 = 0x0F;
@@ -405,8 +404,6 @@ struct PointerState {
     fb_width: u32,
     fb_height: u32,
     sensitivity_fp: i32,
-    /// Remaining motion packets to suppress after a click edge (stabilization).
-    freeze_events: u32,
 }
 
 impl PointerState {
@@ -420,27 +417,14 @@ impl PointerState {
             fb_width: fb_w,
             fb_height: fb_h,
             sensitivity_fp: SENS_DEFAULT_FP,
-            freeze_events: 0,
         }
     }
 
-    fn apply_motion(&mut self, dx: i32, dy: i32, buttons: u8) {
-        // Detect a button press edge (any button newly pressed) and start a
-        // short freeze so the cursor doesn't drift while the click registers.
-        let pressed_edge = buttons & !self.buttons;
-        if pressed_edge != 0 {
-            self.freeze_events = CLICK_FREEZE_EVENTS;
-        }
-        if self.freeze_events > 0 {
-            self.freeze_events -= 1;
-            self.buttons = buttons;
-            return;
-        }
-
-        let speed = dx.abs().max(dy.abs());
-        let accel_fp = if speed <= ACCEL_PRECISE_MAX_DELTA {
+    fn apply_motion(&mut self, dx: i32, dy: i32, buttons: u8) -> bool {
+        let magnitude = dx.abs().saturating_add(dy.abs());
+        let accel_fp = if magnitude <= ACCEL_PRECISE_MAX_MAGNITUDE {
             ACCEL_PRECISE_GAIN_FP
-        } else if speed <= ACCEL_NORMAL_MAX_DELTA {
+        } else if magnitude <= ACCEL_NORMAL_MAX_MAGNITUDE {
             ACCEL_NORMAL_GAIN_FP
         } else {
             ACCEL_FAST_GAIN_FP
@@ -448,8 +432,8 @@ impl PointerState {
         let gain_fp = ((self.sensitivity_fp as i64) * accel_fp) >> FP_SHIFT;
         self.x_fp += (dx as i64 * gain_fp) as i32;
         self.y_fp += (dy as i64 * gain_fp) as i32;
-        self.sync_clamp();
         self.buttons = buttons;
+        self.sync_clamp()
     }
 
     fn min_fp(&self) -> i32 {
@@ -461,9 +445,12 @@ impl PointerState {
     fn max_y_fp(&self) -> i32 {
         ((self.fb_height as i32 - 1 - EDGE_MARGIN).max(EDGE_MARGIN)) << FP_SHIFT
     }
-    fn sync_clamp(&mut self) {
+    fn sync_clamp(&mut self) -> bool {
+        let before_x = self.x_fp;
+        let before_y = self.y_fp;
         self.x_fp = self.x_fp.clamp(self.min_fp(), self.max_x_fp());
         self.y_fp = self.y_fp.clamp(self.min_fp(), self.max_y_fp());
+        self.x_fp != before_x || self.y_fp != before_y
     }
 
     fn x(&self) -> i32 {
@@ -628,6 +615,11 @@ impl SoftwareCursorState {
 #[derive(Clone, Copy)]
 struct DebugCounters {
     mouse_event_count: u64,
+    raw_dx_min: i32,
+    raw_dx_max: i32,
+    raw_dy_min: i32,
+    raw_dy_max: i32,
+    clamped_motion_count: u64,
     hw_cursor_move_count: u64,
     sw_cursor_move_count: u64,
     sw_cursor_redraw_count: u64,
@@ -644,6 +636,11 @@ impl DebugCounters {
     const fn new() -> Self {
         Self {
             mouse_event_count: 0,
+            raw_dx_min: i32::MAX,
+            raw_dx_max: i32::MIN,
+            raw_dy_min: i32::MAX,
+            raw_dy_max: i32::MIN,
+            clamped_motion_count: 0,
             hw_cursor_move_count: 0,
             sw_cursor_move_count: 0,
             sw_cursor_redraw_count: 0,
@@ -1806,6 +1803,23 @@ fn log_debug_counters(state: &CompositorState, reason: &str) {
     debug_log(reason);
     debug_log(": mouse=");
     debug_dec_u64(state.debug_counters.mouse_event_count);
+    if state.debug_counters.mouse_event_count != 0 {
+        debug_log(" raw_dx=[");
+        debug_i32(state.debug_counters.raw_dx_min);
+        debug_log("..");
+        debug_i32(state.debug_counters.raw_dx_max);
+        debug_log("] raw_dy=[");
+        debug_i32(state.debug_counters.raw_dy_min);
+        debug_log("..");
+        debug_i32(state.debug_counters.raw_dy_max);
+        debug_log("]");
+    }
+    debug_log(" cursor_x=");
+    debug_dec(state.mouse_x as u32);
+    debug_log(" cursor_y=");
+    debug_dec(state.mouse_y as u32);
+    debug_log(" clamped=");
+    debug_dec_u64(state.debug_counters.clamped_motion_count);
     debug_log(" hw_move=");
     debug_dec_u64(state.debug_counters.hw_cursor_move_count);
     debug_log(" sw_move=");
@@ -2044,7 +2058,11 @@ pub extern "C" fn _start() -> ! {
         }
     }
     debug_log("[DISPLAY] cursor_mode=");
-    debug_log(if state.hw_cursor_active { "hardware\n" } else { "software\n" });
+    debug_log(if state.hw_cursor_active {
+        "hardware\n"
+    } else {
+        "software\n"
+    });
     log_debug_counters(&state, "startup");
     redraw_scene(&mut state);
 
@@ -2436,8 +2454,13 @@ pub extern "C" fn _start() -> ! {
                 let was_left_down = (prev_buttons & 1) != 0;
 
                 state.pointer.sensitivity_fp = state.mouse_sensitivity_fp;
-                state.pointer.apply_motion(dx, dy, buttons);
-                state.pointer.sync_clamp();
+                state.debug_counters.raw_dx_min = state.debug_counters.raw_dx_min.min(dx);
+                state.debug_counters.raw_dx_max = state.debug_counters.raw_dx_max.max(dx);
+                state.debug_counters.raw_dy_min = state.debug_counters.raw_dy_min.min(dy);
+                state.debug_counters.raw_dy_max = state.debug_counters.raw_dy_max.max(dy);
+                if state.pointer.apply_motion(dx, dy, buttons) {
+                    state.debug_counters.clamped_motion_count += 1;
+                }
 
                 state.mouse_x = state.pointer.x() as u16;
                 state.mouse_y = state.pointer.y() as u16;

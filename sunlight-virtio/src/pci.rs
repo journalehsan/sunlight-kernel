@@ -65,7 +65,11 @@ pub unsafe fn read_bar_mmio_base(bus: u8, slot: u8, func: u8, bar_idx: u8) -> Op
     } else {
         bar0 as u64 & !0xF
     };
-    if base == 0 { None } else { Some(base) }
+    if base == 0 {
+        None
+    } else {
+        Some(base)
+    }
 }
 
 /// Walk the PCI capability list for a modern VirtIO GPU (device 0x1050) and return

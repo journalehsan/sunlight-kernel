@@ -64,7 +64,14 @@ impl TgaImage {
             0
         };
         let data_offset = 18 + id_len + cm_bytes;
-        Ok(Self { width, height, bpp, top_down, raw: data, data_offset })
+        Ok(Self {
+            width,
+            height,
+            bpp,
+            top_down,
+            raw: data,
+            data_offset,
+        })
     }
 
     /// Returns the XRGB8888 pixel at image coordinates `(x, y)`.

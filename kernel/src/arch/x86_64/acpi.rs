@@ -878,11 +878,9 @@ impl Iterator for MadtParser {
             (MADT_TYPE_INT_SRC_OVERRIDE, 10) => MadtEntry::IntSourceOverride(unsafe {
                 (ptr as *const MadtIntSourceOverride).read_unaligned()
             }),
-            (MADT_TYPE_LOCAL_APIC_NMI, 6) => {
-                MadtEntry::LocalApicNmi(unsafe {
-                    (ptr as *const MadtLocalApicNmi).read_unaligned()
-                })
-            }
+            (MADT_TYPE_LOCAL_APIC_NMI, 6) => MadtEntry::LocalApicNmi(unsafe {
+                (ptr as *const MadtLocalApicNmi).read_unaligned()
+            }),
             (MADT_TYPE_X2APIC, 16) => {
                 MadtEntry::X2Apic(unsafe { (ptr as *const MadtX2Apic).read_unaligned() })
             }
@@ -911,9 +909,8 @@ pub unsafe fn parse_madt() -> Result<Vec<CoreInfo>, &'static str> {
 
     // Validate checksum over the entire table.
     let hdr = unsafe { (madt_phys as *const ACPIMADT).as_ref() }.ok_or("Failed to map MADT")?;
-    let table_bytes = unsafe {
-        core::slice::from_raw_parts(madt_phys as *const u8, hdr.header.length as usize)
-    };
+    let table_bytes =
+        unsafe { core::slice::from_raw_parts(madt_phys as *const u8, hdr.header.length as usize) };
     if !verify_checksum(table_bytes) {
         return Err("MADT checksum invalid");
     }
@@ -946,7 +943,11 @@ pub unsafe fn parse_madt() -> Result<Vec<CoreInfo>, &'static str> {
                     apic.acpi_proc_uid,
                     apic.apic_id,
                     flags,
-                    if flags & 1 != 0 { "  [enabled]" } else { "  [disabled]" }
+                    if flags & 1 != 0 {
+                        "  [enabled]"
+                    } else {
+                        "  [disabled]"
+                    }
                 );
                 cores.push(CoreInfo {
                     apic_id: apic.apic_id as u32,
@@ -995,8 +996,16 @@ pub unsafe fn parse_madt() -> Result<Vec<CoreInfo>, &'static str> {
                     proc_uid,
                     { x2.x2apic_id },
                     flags,
-                    if flags & 1 != 0 { "  [enabled]" } else { "  [disabled]" },
-                    if already_listed { "  (dup, skipped)" } else { "" }
+                    if flags & 1 != 0 {
+                        "  [enabled]"
+                    } else {
+                        "  [disabled]"
+                    },
+                    if already_listed {
+                        "  (dup, skipped)"
+                    } else {
+                        ""
+                    }
                 );
                 if !already_listed {
                     cores.push(CoreInfo {
@@ -1009,11 +1018,7 @@ pub unsafe fn parse_madt() -> Result<Vec<CoreInfo>, &'static str> {
             }
 
             MadtEntry::Unknown(t, l) => {
-                crate::serial_println!(
-                    "[ACPI] MADT:  Unknown entry  type={}  length={}",
-                    t,
-                    l
-                );
+                crate::serial_println!("[ACPI] MADT:  Unknown entry  type={}  length={}", t, l);
             }
         }
     }
