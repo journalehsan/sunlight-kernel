@@ -9,19 +9,16 @@ Phase 2.5 adds a graphical boot TUI that renders directly to the framebuffer.
 # Build the kernel with TUI
 ./tools/build.sh
 
-# Run with graphical window (tries SDL, GTK, etc.)
-./tools/run-simple.sh
-
-# Or use the advanced runner with options
-./tools/run.sh --help
+# Run with the unified runner
+./tools/runs.sh --help
 ```
 
 ## Display Options
 
 ### Option 1: Graphical Window (Recommended)
 ```bash
-./tools/run.sh              # Default: GTK window
-./tools/run.sh --sdl        # SDL window
+./tools/runs.sh             # Default: GTK window
+./tools/runs.sh --sdl       # SDL window
 ```
 
 **What you'll see:**
@@ -37,7 +34,7 @@ Phase 2.5 adds a graphical boot TUI that renders directly to the framebuffer.
 
 ### Option 2: VNC Server
 ```bash
-./tools/run.sh --vnc
+./tools/runs.sh --vnc
 
 # In another terminal:
 vncviewer localhost:5900
@@ -45,12 +42,12 @@ vncviewer localhost:5900
 
 ### Option 3: Text Mode (Curses)
 ```bash
-./tools/run.sh --curses
+./tools/runs.sh --curses
 ```
 
 ### Option 4: Serial Only
 ```bash
-./tools/run.sh --no-display
+./tools/runs.sh --no-display
 ```
 The TUI still renders to the framebuffer, but you won't see it.
 
@@ -111,13 +108,13 @@ sunlight_tui::BootMode::Silent
 
 ```bash
 # Custom memory size
-./tools/run.sh --memory 512
+./tools/runs.sh --memory 512
 
 # Enable GDB debugging (waits for GDB on port 1234)
-./tools/run.sh --gdb
+./tools/runs.sh --gdb
 
 # Multiple options
-./tools/run.sh --sdl --memory 512 --debug
+./tools/runs.sh --sdl --memory 512 --debug
 ```
 
 ## Technical Details
@@ -165,7 +162,7 @@ RESOLUTION=1024x768
 ### Display initialization fails
 This is common in headless/SSH environments. Use VNC:
 ```bash
-./tools/run.sh --vnc
+./tools/runs.sh --vnc
 # Connect with: vncviewer localhost:5900
 ```
 
@@ -176,10 +173,8 @@ printed to serial.
 
 ## Files
 
-- `tools/run.sh` — Advanced runner with all options
-- `tools/run-simple.sh` — Simple runner, tries displays automatically  
-- `tools/run-gui.sh` — GTK-only runner
-- `tools/run-vnc.sh` — VNC-only runner
+- `tools/runs.sh` — Canonical runner with all options
+- `tools/run.sh` — Compatibility shim to `runs.sh`
 
 ## Verification
 

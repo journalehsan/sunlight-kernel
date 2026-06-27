@@ -1,105 +1,71 @@
-# SunlightOS QEMU Runner Scripts
+# SunlightOS QEMU Runner
 
-Created multiple scripts in `tools/` to run SunlightOS with the graphical TUI in various display modes.
+The canonical host-side launcher is `tools/runs.sh`. `tools/run.sh` remains as
+a compatibility shim that forwards to it.
 
-## Available Scripts
+## Available Entry Points
 
-### 1. `tools/run.sh` — Full-Featured Runner ⭐
+### 1. `tools/runs.sh` — Full-Featured Runner ⭐
 Advanced runner with all options and help menu.
 
 ```bash
 # Basic usage
-./tools/run.sh                  # GTK window (default)
-./tools/run.sh --help           # Show all options
+./tools/runs.sh                 # GTK window (default)
+./tools/runs.sh --help          # Show all options
 
 # Display options
-./tools/run.sh --sdl            # SDL window
-./tools/run.sh --vnc            # VNC server on port 5900
-./tools/run.sh --curses         # Text-mode display
-./tools/run.sh --no-display     # Serial only
+./tools/runs.sh --sdl           # SDL window
+./tools/runs.sh --vnc           # VNC server on port 5900
+./tools/runs.sh --curses        # Text-mode display
+./tools/runs.sh --no-display    # Serial only
+./tools/runs.sh --dual-gpu      # VGA std + explicit virtio-gpu-pci
 
 # Other options
-./tools/run.sh --memory 512     # Custom RAM size
-./tools/run.sh --gdb            # Wait for GDB on port 1234
-./tools/run.sh --screenshot     # Capture screenshot and exit
+./tools/runs.sh --memory 512    # Custom RAM size
+./tools/runs.sh --gdb           # Wait for GDB on port 1234
+./tools/runs.sh --screenshot    # Capture screenshot and exit
 ```
 
 **Features:**
 - Multiple display backends (GTK, SDL, VNC, curses)
+- `--display MODE` switch plus convenience flags
+- Old hardware-cursor runner mode via `--dual-gpu`
 - Custom memory configuration
 - GDB debugging support
 - Screenshot capture
 - Comprehensive help menu
 
-### 2. `tools/run-simple.sh` — Auto-Detect Display
-Tries multiple display backends automatically.
+### 2. `tools/run.sh` — Compatibility Wrapper
 
 ```bash
-./tools/run-simple.sh
+./tools/run.sh --vnc
 ```
 
-**How it works:**
-1. Tries SDL
-2. Falls back to GTK
-3. Falls back to Cocoa (macOS)
-4. Falls back to Curses
-5. Falls back to serial-only
-
-Great for quick testing when you don't know which display backend works.
-
-### 3. `tools/run-gui.sh` — GTK Only
-Launches with GTK window (requires X11/Wayland).
-
-```bash
-./tools/run-gui.sh
-```
-
-### 4. `tools/run-vnc.sh` — VNC Only
-Launches VNC server on port 5900.
-
-```bash
-./tools/run-vnc.sh
-
-# In another terminal:
-vncviewer localhost:5900
-```
-
-Perfect for headless/SSH environments.
-
-### 5. `tools/run-screenshot.sh` — Screenshot Capture
-Attempts to capture a screenshot of the boot TUI.
-
-```bash
-./tools/run-screenshot.sh
-```
-
-**Note:** May require additional permissions for QEMU monitor access.
+This simply forwards to `tools/runs.sh` so older commands still work.
 
 ## Recommended Usage
 
 ### For Development (with display)
 ```bash
-./tools/run.sh --sdl
-# or
-./tools/run-simple.sh
+./tools/runs.sh --sdl
 ```
 
 ### For Headless/SSH Environments
 ```bash
-./tools/run.sh --vnc
+./tools/runs.sh --vnc
 # Then connect with VNC viewer
 ```
 
 ### For Quick Tests
 ```bash
-./tools/run.sh --no-display
+./tools/runs.sh --no-display
 # Serial output shows all TUI log messages
 ```
 
 ### For Debugging
 ```bash
 # Terminal 1: Start kernel with GDB wait
-./tools/run.sh --gdb --no-display
+./tools/runs.sh --gdb --no-display
 
 # Terminal 2: Connect GDB
 gdb target/x86_64-unknown-none/debug/sunlight-kernel
@@ -147,10 +113,7 @@ When running with a graphical display, the TUI shows:
 ./tools/build.sh
 
 # 2. Run with TUI
-./tools/run-simple.sh
-
-# Or use specific display
-./tools/run.sh --sdl
+./tools/runs.sh
 ```
 
 ## Documentation
@@ -166,32 +129,22 @@ See `docs/README_TUI.md` for detailed TUI documentation including:
 ### Display fails in SSH/headless
 Use VNC:
 ```bash
-./tools/run.sh --vnc
+./tools/runs.sh --vnc
 ```
 
 ### "gtk initialization failed"
 Your environment doesn't have X11/Wayland. Try:
 ```bash
-./tools/run.sh --sdl
+./tools/runs.sh --sdl
 # or
-./tools/run.sh --vnc
+./tools/runs.sh --vnc
 ```
 
 ### Want to verify TUI works without display
 ```bash
-./tools/run.sh --no-display
+./tools/runs.sh --no-display
 ```
 All TUI log messages appear in serial output, so you can verify the TUI is updating correctly.
-
-## All Scripts Summary
-
-| Script | Purpose | Best For |
-|--------|---------|----------|
-| `run.sh` | Full-featured with options | Development, debugging |
-| `run-simple.sh` | Auto-detect display | Quick testing |
-| `run-gui.sh` | GTK only | Desktop with X11 |
-| `run-vnc.sh` | VNC only | Headless/SSH |
-| `run-screenshot.sh` | Screenshot capture | Documentation |
 
 ## Next Steps
 
