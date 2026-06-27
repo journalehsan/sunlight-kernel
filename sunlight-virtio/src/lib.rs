@@ -2,7 +2,9 @@
 #![allow(dead_code)]
 
 mod blk;
+pub mod gpu;
 pub mod pci;
 
 pub use blk::{BlkError, VirtioBlk, QUEUE_PAGES};
-pub use pci::{find_virtio_blk, find_virtio_net};
+pub use gpu::{VirtioGpu, VirtioGpuMemEntry};
+pub use pci::{find_virtio_blk, find_virtio_net, find_virtio_gpu};

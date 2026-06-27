@@ -18,6 +18,7 @@ use sunlight_ui::image::TgaImage;
 /// Embedded directly so the compositor can decode without a VFS read at startup.
 static WALLPAPER_TGA_BYTES: &[u8] = include_bytes!("../../../docs/images/wallpaper.tga");
 
+mod backend;
 mod blend;
 mod dirty;
 mod mask;
@@ -543,6 +544,13 @@ struct CompositorState {
     fb_height: u32,
     fb_pitch: u32,
     back_buffer: Vec<u32>,
+    /// Display backend: Limine memcpy or VirtIO GPU flush.
+    display_backend: backend::DisplayBackend,
+    /// When true, the hardware cursor is active (VirtIO GPU backend) and
+    /// cursor moves do not repaint the back_buffer.
+    hw_cursor_active: bool,
+    /// Last cursor shape that was uploaded to the GPU (avoid redundant uploads).
+    last_hw_cursor_shape: Option<CursorShape>,
     active_cursor: CursorShape,
     // True when Desktop session owns the framebuffer; false when TTY/login is active.
     // tty_server sends SESSION_ACTIVATE/SESSION_DEACTIVATE to toggle this.
@@ -897,18 +905,24 @@ fn back_buffer_canvas<'a>(state: &CompositorState, pixels: &'a mut [u32]) -> Can
 }
 
 fn present_back_buffer(state: &CompositorState) {
-    unsafe {
-        core::ptr::copy_nonoverlapping(
-            state.back_buffer.as_ptr(),
-            state.fb,
-            state.back_buffer.len(),
-        );
+    match &state.display_backend {
+        backend::DisplayBackend::Limine { fb, .. } => {
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    state.back_buffer.as_ptr(),
+                    *fb,
+                    state.back_buffer.len(),
+                );
+            }
+        }
+        backend::DisplayBackend::VirtioGpu { width, height } => {
+            sunlight_ipc::gpu_flush(0, 0, *width, *height);
+        }
     }
 }
 
 /// Blit only the pixels within `r` from the back buffer to the framebuffer.
 fn present_rect(state: &CompositorState, r: Rect) {
-    let stride = fb_stride(state);
     let x0 = r.x.max(0) as usize;
     let y0 = r.y.max(0) as usize;
     let x1 = (r.right() as usize).min(state.fb_width as usize);
@@ -916,14 +930,26 @@ fn present_rect(state: &CompositorState, r: Rect) {
     if x0 >= x1 || y0 >= y1 {
         return;
     }
-    let len = x1 - x0;
-    for y in y0..y1 {
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                state.back_buffer.as_ptr().add(y * stride + x0),
-                state.fb.add(y * stride + x0),
-                len,
-            );
+    match &state.display_backend {
+        backend::DisplayBackend::Limine { fb, pitch_words } => {
+            let stride = *pitch_words;
+            let len = x1 - x0;
+            for y in y0..y1 {
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        state.back_buffer.as_ptr().add(y * stride + x0),
+                        fb.add(y * stride + x0),
+                        len,
+                    );
+                }
+            }
+        }
+        backend::DisplayBackend::VirtioGpu { .. } => {
+            let x = x0 as u32;
+            let y = y0 as u32;
+            let w = (x1 - x0) as u32;
+            let h = (y1 - y0) as u32;
+            sunlight_ipc::gpu_flush(x, y, w, h);
         }
     }
 }
@@ -1300,6 +1326,10 @@ fn composite_window(
 }
 
 fn draw_cursor(state: &CompositorState, back_buffer: &mut [u32]) {
+    // Software cursor: only used in Limine framebuffer mode.
+    if state.hw_cursor_active {
+        return;
+    }
     let bitmap = cursor_bitmap(state.active_cursor);
     let base_x = state.mouse_x as i32;
     let base_y = state.mouse_y as i32;
@@ -1329,10 +1359,67 @@ fn draw_cursor(state: &CompositorState, back_buffer: &mut [u32]) {
     }
 }
 
+/// Upload a hardware cursor to the GPU if the shape changed.
+/// Converts the 1-bit 8×12 cursor bitmap to a 64×64 BGRA pixel image.
+fn upload_hw_cursor_if_needed(state: &mut CompositorState) {
+    if !state.hw_cursor_active {
+        return;
+    }
+    if state.last_hw_cursor_shape == Some(state.active_cursor) {
+        return; // already uploaded
+    }
+    state.last_hw_cursor_shape = Some(state.active_cursor);
+
+    // Build a 64×64 BGRA buffer (transparent background, white foreground).
+    // We upscale the 8×12 bitmap by 4× to fill the 32×48 center of the 64×64 canvas.
+    static mut CURSOR_PIXELS: [u32; 64 * 64] = [0; 64 * 64];
+    let pixels = unsafe { &mut *(&raw mut CURSOR_PIXELS) };
+    for p in pixels.iter_mut() {
+        *p = 0x00000000; // transparent
+    }
+
+    let bitmap = cursor_bitmap(state.active_cursor);
+    let scale = 4usize;
+    // Offset within 64×64 canvas to center the upscaled 8×12 glyph (32×48)
+    let off_x = (64 - CURSOR_W * scale) / 2;
+    let off_y = (64 - CURSOR_H * scale) / 2;
+
+    const FG_BGRA: u32     = 0xFFF5F5F5; // opaque white (BGRA: B=F5, G=F5, R=F5, A=FF)
+    const SHADOW_BGRA: u32 = 0xFF303030; // opaque dark shadow
+
+    for (row, &mask) in bitmap.iter().enumerate() {
+        for col in 0..CURSOR_W {
+            if (mask & (1 << (7 - col))) == 0 {
+                continue;
+            }
+            let color = if col == CURSOR_W - 1 || row == CURSOR_H - 1 {
+                SHADOW_BGRA
+            } else {
+                FG_BGRA
+            };
+            for dy in 0..scale {
+                for dx in 0..scale {
+                    let px = off_x + col * scale + dx;
+                    let py = off_y + row * scale + dy;
+                    if px < 64 && py < 64 {
+                        pixels[py * 64 + px] = color;
+                    }
+                }
+            }
+        }
+    }
+
+    // Hotspot is top-left corner (0, 0) for all cursors currently.
+    sunlight_ipc::gpu_update_cursor(pixels.as_ptr(), 64 * 64, 0, 0);
+}
+
 fn redraw_scene(state: &mut CompositorState) {
     if !state.session_active {
         return;
     }
+    // Upload a new hardware cursor image if the shape changed (no-op when sw cursor).
+    upload_hw_cursor_if_needed(state);
+
     clear_back_buffer(state);
     let focused_idx = focused_window_idx(state);
     let windows = &state.windows;
@@ -1341,6 +1428,7 @@ fn redraw_scene(state: &mut CompositorState) {
         let is_focused = focused_idx == Some(i);
         composite_window(state, &mut back_buffer, win, is_focused);
     }
+    // Software cursor only: the GPU backend uses a hardware cursor overlay.
     draw_cursor(state, &mut back_buffer);
     state.back_buffer = back_buffer;
     // Present only the dirty regions to reduce framebuffer write bandwidth.
@@ -1450,6 +1538,53 @@ pub extern "C" fn _start() -> ! {
     debug_dec(bpp as u32);
     debug_log("\n");
 
+    // Try to use VirtIO GPU backend; fall back to Limine framebuffer.
+    let (disp_backend, hw_cursor) = match sunlight_ipc::gpu_get_info() {
+        Some((gw, gh)) => {
+            debug_log("[DISPLAY] VirtIO GPU detected ");
+            debug_dec(gw);
+            debug_log("x");
+            debug_dec(gh);
+            debug_log("\n");
+            let backend = backend::DisplayBackend::VirtioGpu { width: gw, height: gh };
+            (backend, true)
+        }
+        None => {
+            debug_log("[DISPLAY] VirtIO GPU not found, using Limine framebuffer\n");
+            let backend = backend::DisplayBackend::Limine {
+                fb: fb_ptr as *mut u32,
+                pitch_words: (pitch as usize / 4),
+            };
+            (backend, false)
+        }
+    };
+
+    let back_buffer = {
+        let mut pixels = Vec::new();
+        pixels.resize((pitch as usize / 4) * fb_height as usize, DESKTOP_COLOR);
+        pixels
+    };
+
+    // If VirtIO GPU: attach the back_buffer pages as the scanout resource backing.
+    if hw_cursor {
+        // Page-align the back_buffer pointer and count pages.
+        let buf_start = back_buffer.as_ptr();
+        let buf_bytes = back_buffer.len() * 4;
+        let num_pages = (buf_bytes + 4095) / 4096;
+        let ok = sunlight_ipc::gpu_attach_backing(buf_start, num_pages);
+        if ok {
+            debug_log("[DISPLAY] gpu_attach_backing OK\n");
+            let ok2 = sunlight_ipc::gpu_set_scanout();
+            if ok2 {
+                debug_log("[DISPLAY] gpu_set_scanout OK\n");
+            } else {
+                debug_log("[DISPLAY] gpu_set_scanout FAILED\n");
+            }
+        } else {
+            debug_log("[DISPLAY] gpu_attach_backing FAILED\n");
+        }
+    }
+
     let mut state = CompositorState {
         windows: Vec::new(),
         mouse_x: (fb_width / 2) as u16,
@@ -1462,11 +1597,10 @@ pub extern "C" fn _start() -> ! {
         fb_width,
         fb_height,
         fb_pitch: pitch as u32,
-        back_buffer: {
-            let mut pixels = Vec::new();
-            pixels.resize((pitch as usize / 4) * fb_height as usize, DESKTOP_COLOR);
-            pixels
-        },
+        back_buffer,
+        display_backend: disp_backend,
+        hw_cursor_active: hw_cursor,
+        last_hw_cursor_shape: None,
         active_cursor: CursorShape::Pointer,
         // TTY session owns the framebuffer at boot; tty_server sends
         // SESSION_ACTIVATE to hand the framebuffer to the Desktop session.
@@ -1476,6 +1610,10 @@ pub extern "C" fn _start() -> ! {
         wallpaper: TgaImage::parse(WALLPAPER_TGA_BYTES).ok(),
         vortex_launch_pending: false,
     };
+    // Initial cursor position for the hardware cursor.
+    if state.hw_cursor_active {
+        sunlight_ipc::gpu_move_cursor(state.mouse_x as u32, state.mouse_y as u32);
+    }
     redraw_scene(&mut state);
 
     let mut next_win_id: u64 = 1;
@@ -2069,22 +2207,34 @@ pub extern "C" fn _start() -> ! {
                 state.prev_buttons = buttons;
                 state.active_cursor = cursor_for_scene(&state);
 
-                // If a window was moved/resized, a button changed, or a drag
-                // just started/ended, the entire scene needs presenting.
-                // For cursor-only moves mark just the old + new cursor rects so
-                // the compositor only blits those small regions to the framebuffer.
                 let new_cx = state.mouse_x as u32;
                 let new_cy = state.mouse_y as u32;
                 let button_changed = buttons != prev_buttons;
                 let now_dragging = !matches!(state.active_drag, ActiveDrag::None);
                 let window_changed = button_changed || had_active_drag || now_dragging;
-                if window_changed {
-                    state.dirty.mark_full();
+
+                if state.hw_cursor_active && !window_changed {
+                    // Hardware cursor path: just move the GPU cursor overlay.
+                    // No back_buffer repaint or framebuffer flush needed for a bare cursor move.
+                    sunlight_ipc::gpu_move_cursor(new_cx, new_cy);
+                    // Still call redraw_scene in case cursor shape changed (upload_hw_cursor_if_needed).
+                    if state.last_hw_cursor_shape != Some(state.active_cursor) {
+                        redraw_scene(&mut state);
+                    }
                 } else {
-                    state.dirty.mark(cursor_dirty_rect(prev_cx, prev_cy));
-                    state.dirty.mark(cursor_dirty_rect(new_cx, new_cy));
+                    // Software cursor or window geometry changed: full dirty-rect path.
+                    if window_changed {
+                        state.dirty.mark_full();
+                    } else if !state.hw_cursor_active {
+                        state.dirty.mark(cursor_dirty_rect(prev_cx, prev_cy));
+                        state.dirty.mark(cursor_dirty_rect(new_cx, new_cy));
+                    }
+                    redraw_scene(&mut state);
+                    // After redraw, move hardware cursor to new position.
+                    if state.hw_cursor_active {
+                        sunlight_ipc::gpu_move_cursor(new_cx, new_cy);
+                    }
                 }
-                redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 

@@ -674,6 +674,59 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    // --- VirtIO GPU init (optional; display_server uses proxy syscalls 119-124) ---
+    {
+        let hhdm = hhdm_offset.as_u64();
+        let pci_info = unsafe { sunlight_virtio::find_virtio_gpu() };
+        if let Some(ref info) = pci_info {
+            // Allocate: 2 pages control queue, 2 pages cursor queue,
+            //           1 page cmd buf, 4 pages scatter-gather, 4 pages cursor backing.
+            let mut pmm = PMM.lock();
+            let ctrl_q   = pmm.alloc_frames(2).map(|f| f.as_u64());
+            let cur_q    = pmm.alloc_frames(2).map(|f| f.as_u64());
+            let cmd      = pmm.alloc_frame().map(|f| f.as_u64());
+            let sg       = pmm.alloc_frames(4).map(|f| f.as_u64());
+            let cursor   = pmm.alloc_frames(4).map(|f| f.as_u64());
+            drop(pmm);
+
+            match (ctrl_q, cur_q, cmd, sg, cursor) {
+                (Some(cqp), Some(cuqp), Some(cmdp), Some(sgp), Some(curp)) => {
+                    let gpu = unsafe {
+                        sunlight_virtio::VirtioGpu::init(
+                            info, hhdm,
+                            cqp, hhdm + cqp,
+                            cuqp, hhdm + cuqp,
+                            cmdp, hhdm + cmdp,
+                            sgp, hhdm + sgp,
+                            curp, hhdm + curp,
+                        )
+                    };
+                    match gpu {
+                        Some(mut dev) => {
+                            // Probe display info immediately and cache dimensions
+                            if let Some((w, h)) = unsafe { dev.get_display_info() } {
+                                dev.width = w;
+                                dev.height = h;
+                                serial_println!("[GPU]  VirtIO GPU ready {}x{}", w, h);
+                            } else {
+                                serial_println!("[GPU]  VirtIO GPU: GET_DISPLAY_INFO failed");
+                            }
+                            *GPU_DEVICE.lock() = Some(dev);
+                        }
+                        None => {
+                            serial_println!("[GPU]  VirtIO GPU init handshake failed");
+                        }
+                    }
+                }
+                _ => {
+                    serial_println!("[GPU]  VirtIO GPU PMM alloc failed");
+                }
+            }
+        } else {
+            serial_println!("[GPU]  VirtIO GPU not present (no -device virtio-gpu-pci)");
+        }
+    }
+
     // NOTE: net_server and sunlightd are no longer spawned by the kernel.
     // Neither needs privileged memory setup, so init (pid=1) launches them via
     // the spawn cap (the kernel-owned virtio-net device above is still set up
@@ -970,6 +1023,11 @@ pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> = spin:
 /// process name in the syscall gate) exchanges raw Ethernet frames with it via
 /// the NetTx/NetRx syscalls below.
 pub static NET_DEVICE: spin::Mutex<Option<sunlight_net::VirtioNet>> = spin::Mutex::new(None);
+
+/// Kernel-owned VirtIO GPU device. display_server drives it through
+/// GpuGetInfo/GpuAttachBacking/GpuSetScanout/GpuFlush/GpuUpdateCursor/GpuMoveCursor
+/// proxy syscalls (119-124), gated by process name "display_server".
+pub static GPU_DEVICE: spin::Mutex<Option<sunlight_virtio::VirtioGpu>> = spin::Mutex::new(None);
 
 /// BlockDevice adapter over the kernel's virtio-blk driver (read-only:
 /// VirtioBlk has no write path yet, and the boot volume is never written).

@@ -110,6 +110,24 @@ pub enum SunlightSyscall {
     // GUI / Display (Phase 3+): allow the compositor to map the Limine physical framebuffer
     MapFramebuffer = 118,
 
+    // VirtIO GPU proxy syscalls (Phase VirtIO-GPU). Only display_server (by process name) can call.
+    /// Returns (width u32, height u32) from cached GET_DISPLAY_INFO, packed in rax and frame.r8.
+    GpuGetInfo = 119,
+    /// Walk back_buffer VA → phys pages and send RESOURCE_ATTACH_BACKING for the scanout resource.
+    /// rdi = user VA of back_buffer start, rsi = number of 4KiB pages.
+    GpuAttachBacking = 120,
+    /// Send SET_SCANOUT to wire resource 1 to scanout 0.
+    GpuSetScanout = 121,
+    /// TRANSFER_TO_HOST_2D + RESOURCE_FLUSH for a dirty rect.
+    /// rdi = x | (y << 32), rsi = w | (h << 32).
+    GpuFlush = 122,
+    /// Upload cursor pixels and issue UPDATE_CURSOR.
+    /// rdi = user VA of 64×64 BGRA pixels, rsi = num_pixels (≤4096),
+    /// rdx = hot_x | (hot_y << 32).
+    GpuUpdateCursor = 123,
+    /// MOVE_CURSOR to new position. rdi = x | (y << 32).
+    GpuMoveCursor = 124,
+
     DebugLog = 99,
 }
 
@@ -469,6 +487,12 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         116 => sys_mouse_init(),
         117 => sys_mouse_port_read(frame),
         118 => sys_map_framebuffer(frame),
+        119 => sys_gpu_get_info(frame),
+        120 => sys_gpu_attach_backing(frame),
+        121 => sys_gpu_set_scanout(frame),
+        122 => sys_gpu_flush(frame),
+        123 => sys_gpu_update_cursor(frame),
+        124 => sys_gpu_move_cursor(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -3964,4 +3988,258 @@ fn sys_powerctl(command: u64) -> u64 {
             return u64::MAX;
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// VirtIO GPU proxy syscalls (119-124)
+// All gated by process name "display_server".
+// ---------------------------------------------------------------------------
+
+fn current_process_is_display_server() -> bool {
+    crate::sched::SCHEDULER.lock().current_process().name_str() == "display_server"
+}
+
+/// Helper: copy `len` bytes from the current process's user VA `src_va` to `dst` (kernel ptr).
+/// Returns false if any page is not mapped.
+unsafe fn copy_from_user_va(src_va: u64, dst: *mut u8, len: usize) -> bool {
+    use x86_64::{structures::paging::Page, VirtAddr};
+    let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
+    let hhdm = VirtAddr::new(hhdm);
+    let process = crate::sched::SCHEDULER.lock();
+    let process = process.current_process();
+    let mut copied = 0usize;
+    while copied < len {
+        let va = src_va + copied as u64;
+        let page = Page::containing_address(VirtAddr::new(va));
+        let phys = match unsafe { process.address_space.lookup_phys(page, hhdm) } {
+            Some(p) => p.as_u64(),
+            None => return false,
+        };
+        let offset_in_page = (va & 0xFFF) as usize;
+        let bytes_this_page = (4096 - offset_in_page).min(len - copied);
+        let src = (hhdm.as_u64() + phys + offset_in_page as u64) as *const u8;
+        core::ptr::copy_nonoverlapping(src, dst.add(copied), bytes_this_page);
+        copied += bytes_this_page;
+    }
+    true
+}
+
+/// Syscall 119: GpuGetInfo
+/// Returns 1 in rax if GPU present, 0 otherwise.
+/// frame.r8 = width | (height << 32)
+fn sys_gpu_get_info(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let dev = crate::GPU_DEVICE.lock();
+    match dev.as_ref() {
+        Some(gpu) if gpu.width > 0 && gpu.height > 0 => {
+            frame.r8 = (gpu.width as u64) | ((gpu.height as u64) << 32);
+            1
+        }
+        _ => 0,
+    }
+}
+
+/// Syscall 120: GpuAttachBacking
+/// rdi = user VA of back_buffer start, rsi = number of 4KiB pages.
+/// Walks the process page table, builds scatter-gather list, sends RESOURCE_ATTACH_BACKING
+/// for SCANOUT_RESOURCE_ID (1).
+fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let user_va   = frame.rdi;
+    let num_pages = frame.rsi as usize;
+    if num_pages == 0 || num_pages > 2048 {
+        return 0;
+    }
+
+    use x86_64::{structures::paging::Page, VirtAddr};
+    let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
+    let hhdm_va = VirtAddr::new(hhdm);
+
+    // Build scatter-gather entries from the process's page table
+    let mut entries = alloc::vec::Vec::with_capacity(num_pages);
+    {
+        let sched = crate::sched::SCHEDULER.lock();
+        let process = sched.current_process();
+        for i in 0..num_pages {
+            let va = user_va + (i as u64) * 4096;
+            let page = Page::containing_address(VirtAddr::new(va));
+            let phys = match unsafe { process.address_space.lookup_phys(page, hhdm_va) } {
+                Some(p) => p.as_u64(),
+                None => return 0,
+            };
+            entries.push(sunlight_virtio::VirtioGpuMemEntry {
+                addr: phys, length: 4096, padding: 0,
+            });
+        }
+    }
+
+    let mut dev = crate::GPU_DEVICE.lock();
+    let gpu = match dev.as_mut() {
+        Some(g) => g,
+        None => return 0,
+    };
+
+    // First create the scanout resource (idempotent if already created, but safe)
+    let (w, h) = (gpu.width, gpu.height);
+    let ok = unsafe {
+        gpu.resource_create_2d(
+            sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
+            sunlight_virtio::gpu::VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM,
+            w, h,
+        )
+    };
+    if !ok {
+        crate::serial_println!("[GPU] resource_create_2d failed");
+    }
+
+    let ok = unsafe { gpu.resource_attach_backing(
+        sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, &entries,
+    )};
+    if ok { 1 } else { 0 }
+}
+
+/// Syscall 121: GpuSetScanout
+/// Sends SET_SCANOUT to wire resource 1 to scanout 0.
+fn sys_gpu_set_scanout(_frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let mut dev = crate::GPU_DEVICE.lock();
+    let gpu = match dev.as_mut() {
+        Some(g) => g,
+        None => return 0,
+    };
+    let (w, h) = (gpu.width, gpu.height);
+    let ok = unsafe { gpu.set_scanout(
+        sunlight_virtio::gpu::SCANOUT_ID,
+        sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
+        w, h,
+    )};
+    if ok { 1 } else { 0 }
+}
+
+/// Syscall 122: GpuFlush
+/// rdi = x | (y << 32), rsi = w | (h << 32)
+/// Issues TRANSFER_TO_HOST_2D then RESOURCE_FLUSH for the dirty rect.
+fn sys_gpu_flush(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let x = (frame.rdi & 0xFFFF_FFFF) as u32;
+    let y = (frame.rdi >> 32) as u32;
+    let w = (frame.rsi & 0xFFFF_FFFF) as u32;
+    let h = (frame.rsi >> 32) as u32;
+
+    let mut dev = crate::GPU_DEVICE.lock();
+    let gpu = match dev.as_mut() {
+        Some(g) => g,
+        None => return 0,
+    };
+    let width = gpu.width;
+    let ok1 = unsafe { gpu.transfer_to_host_2d(
+        sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
+        x, y, w, h, width,
+    )};
+    let ok2 = unsafe { gpu.resource_flush(
+        sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
+        x, y, w, h,
+    )};
+    if ok1 && ok2 { 1 } else { 0 }
+}
+
+/// Syscall 123: GpuUpdateCursor
+/// rdi = user VA of 64×64 BGRA pixels
+/// rsi = num_pixels (≤ 64*64 = 4096)
+/// rdx = hot_x | (hot_y << 32)
+///
+/// Copies pixels from user VA into kernel cursor backing, creates the cursor
+/// resource (if needed), attaches backing, then calls UPDATE_CURSOR.
+fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let user_va    = frame.rdi;
+    let num_pixels = (frame.rsi as usize).min(
+        (sunlight_virtio::gpu::CURSOR_W * sunlight_virtio::gpu::CURSOR_H) as usize
+    );
+    let hot_x = (frame.rdx & 0xFFFF_FFFF) as u32;
+    let hot_y = (frame.rdx >> 32) as u32;
+
+    // Copy pixels from user VA into kernel cursor backing
+    let cursor_pixel_bytes = num_pixels * 4;
+    {
+        let mut dev = crate::GPU_DEVICE.lock();
+        let gpu = match dev.as_mut() { Some(g) => g, None => return 0 };
+        let dst = gpu.cursor_pixels_virt() as *mut u8;
+        // Zero the backing first (clear any previous cursor shape)
+        unsafe { dst.write_bytes(0, 4 * 4096); }
+        if cursor_pixel_bytes > 0 {
+            if !unsafe { copy_from_user_va(user_va, dst, cursor_pixel_bytes) } {
+                return 0;
+            }
+        }
+    }
+
+    let mut dev = crate::GPU_DEVICE.lock();
+    let gpu = match dev.as_mut() { Some(g) => g, None => return 0 };
+
+    // Create cursor resource (format B8G8R8A8 for transparency)
+    let ok = unsafe { gpu.resource_create_2d(
+        sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
+        sunlight_virtio::gpu::VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM,
+        sunlight_virtio::gpu::CURSOR_W,
+        sunlight_virtio::gpu::CURSOR_H,
+    )};
+    if !ok {
+        crate::serial_println!("[GPU] cursor resource_create_2d failed");
+    }
+
+    // Attach backing (kernel-allocated cursor pages)
+    let cursor_pages = gpu.cursor_pages_phys();
+    let ok = unsafe { gpu.resource_attach_backing(
+        sunlight_virtio::gpu::CURSOR_RESOURCE_ID, &cursor_pages,
+    )};
+    if !ok {
+        crate::serial_println!("[GPU] cursor resource_attach_backing failed");
+    }
+
+    // Transfer cursor pixels to host
+    let ok = unsafe { gpu.transfer_to_host_2d(
+        sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
+        0, 0,
+        sunlight_virtio::gpu::CURSOR_W,
+        sunlight_virtio::gpu::CURSOR_H,
+        sunlight_virtio::gpu::CURSOR_W,
+    )};
+    if !ok {
+        crate::serial_println!("[GPU] cursor transfer failed");
+    }
+
+    // Update cursor on scanout
+    let ok = unsafe { gpu.update_cursor(
+        sunlight_virtio::gpu::SCANOUT_ID,
+        sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
+        0, 0, // position — display_server will call move_cursor immediately
+        hot_x, hot_y,
+    )};
+    if ok { 1 } else { 0 }
+}
+
+/// Syscall 124: GpuMoveCursor
+/// rdi = x | (y << 32)
+fn sys_gpu_move_cursor(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let x = (frame.rdi & 0xFFFF_FFFF) as u32;
+    let y = (frame.rdi >> 32) as u32;
+
+    let mut dev = crate::GPU_DEVICE.lock();
+    let gpu = match dev.as_mut() { Some(g) => g, None => return 0 };
+    let ok = unsafe { gpu.move_cursor(sunlight_virtio::gpu::SCANOUT_ID, x, y) };
+    if ok { 1 } else { 0 }
 }
