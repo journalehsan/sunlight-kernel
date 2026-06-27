@@ -498,77 +498,65 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     'kbd: {
                         let (keycode, pressed, _shift, _ctrl, _alt, _super, ascii_opt) =
                             unpack_key_event(msg.words[0]);
-                        if pressed {
-                            if _ctrl {
-                                match keycode {
-                                    KEY_F1 => {
-                                        if active_vt != VirtualTerminal::Tty {
-                                            debug_log("[SESSION] switched to F1 TTY/Login");
-                                            if display_cap.is_none() {
-                                                display_cap = nameserver_lookup("display_server");
-                                            }
-                                            if let Some(cap) = display_cap {
-                                                let _ = ipc_call(
-                                                    cap,
-                                                    IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
-                                                );
-                                            }
+
+                        // Session-switch hotkeys (Ctrl+F1/F2) are intercepted on
+                        // press only, before anything else.
+                        if pressed && _ctrl {
+                            match keycode {
+                                KEY_F1 => {
+                                    if active_vt != VirtualTerminal::Tty {
+                                        debug_log("[SESSION] switched to F1 TTY/Login");
+                                        if display_cap.is_none() {
+                                            display_cap = nameserver_lookup("display_server");
                                         }
-                                        active_vt = VirtualTerminal::Tty;
-                                        if has_fb {
-                                            render_login_fb(
-                                                &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
+                                        if let Some(cap) = display_cap {
+                                            let _ = ipc_call(
+                                                cap,
+                                                IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
                                             );
                                         }
-                                        break 'kbd;
                                     }
-                                    KEY_F2 => {
-                                        if active_vt != VirtualTerminal::Desktop {
-                                            debug_log("[SESSION] switched to F2 GraphicalDesktop");
-                                            if display_cap.is_none() {
-                                                display_cap = nameserver_lookup("display_server");
-                                            }
-                                            if let Some(cap) = display_cap {
-                                                let _ = ipc_call(
-                                                    cap,
-                                                    IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
-                                                );
-                                            }
+                                    active_vt = VirtualTerminal::Tty;
+                                    if has_fb {
+                                        render_login_fb(
+                                            &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
+                                        );
+                                    }
+                                    break 'kbd;
+                                }
+                                KEY_F2 => {
+                                    if active_vt != VirtualTerminal::Desktop {
+                                        debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                        if display_cap.is_none() {
+                                            display_cap = nameserver_lookup("display_server");
                                         }
-                                        active_vt = VirtualTerminal::Desktop;
-                                        break 'kbd;
+                                        if let Some(cap) = display_cap {
+                                            let _ = ipc_call(
+                                                cap,
+                                                IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
+                                            );
+                                        }
                                     }
-                                    _ => {}
+                                    active_vt = VirtualTerminal::Desktop;
+                                    break 'kbd;
                                 }
+                                _ => {}
                             }
+                        }
 
-                            if !vt_is_active(active_vt, VirtualTerminal::Tty) {
-                                // Forward keyboard event to display_server when Desktop session is active.
-                                if display_cap.is_none() {
-                                    display_cap = nameserver_lookup("display_server");
-                                }
-                                if let Some(cap) = display_cap {
-                                    let (
-                                        fwd_keycode,
-                                        fwd_pressed,
-                                        _fwd_shift,
-                                        fwd_ctrl,
-                                        _fwd_alt,
-                                        _fwd_super,
-                                        fwd_ascii,
-                                    ) = unpack_key_event(msg.words[0]);
-                                    if fwd_pressed {
-                                        debug_log(&alloc::format!(
-                                        "[TTY->DISPLAY] login forward keycode={:#x} ctrl={} ascii={}\n",
-                                        fwd_keycode,
-                                        fwd_ctrl,
-                                        fwd_ascii.unwrap_or(0)
-                                    ));
-                                    }
-                                    let _ = ipc_call(cap, msg);
-                                }
-                                break 'kbd;
+                        if !vt_is_active(active_vt, VirtualTerminal::Tty) {
+                            // Desktop mode: forward ALL events (presses AND releases) to
+                            // display_server so it can track key-up for Alt+Tab chord end.
+                            if display_cap.is_none() {
+                                display_cap = nameserver_lookup("display_server");
                             }
+                            if let Some(cap) = display_cap {
+                                let _ = ipc_call(cap, msg);
+                            }
+                            break 'kbd;
+                        }
+
+                        if pressed {
 
                             if let Some(ascii) = ascii_opt {
                                 if login.focus == FocusArea::Password {
