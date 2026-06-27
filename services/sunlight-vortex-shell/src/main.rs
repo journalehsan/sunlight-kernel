@@ -611,8 +611,10 @@ const ICON16_W: u32 = 16;
 #[derive(Clone, Copy)]
 enum DockAction {
     None,
+    LaunchTerminal,
     LaunchCalc,
     LaunchFiles,
+    LaunchSettings,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -694,6 +696,8 @@ struct VortexShell {
     next_status_poll_ms: u64,
     /// Bounds of the power button for future click handling.
     power_zone: Rect,
+    /// Bounds of the settings button in the left cluster.
+    settings_zone: Rect,
     /// TGA icon theme for desktop shortcuts.
     desktop_theme: DesktopTheme,
     /// TGA icon theme for the bottom dock.
@@ -727,6 +731,7 @@ impl VortexShell {
             status_net_up: false,
             next_status_poll_ms: 0,
             power_zone: Rect::new(0, 0, 0, 0),
+            settings_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
             dock_theme,
         };
@@ -1528,7 +1533,8 @@ fn bot_y(screen_h: u32) -> i32 {
 }
 
 /// Draw the bottom-left cluster: overview | sidebar | settings.
-fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32, settings_icon: Option<TgaImage>) {
+/// Returns the settings button rect for click-zone registration.
+fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32, settings_icon: Option<TgaImage>) -> Rect {
     let icons: &[&[u16; 16]] = &[
         &OVERVIEW_ROWS,
         &SIDEBAR_ROWS,
@@ -1540,6 +1546,7 @@ fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32, settings_icon: Opt
     draw_panel(canvas, cluster, theme.panel, theme.border);
 
     let mut cx = cluster.x + CLUSTER_PAD;
+    let mut settings_cell = Rect::new(0, 0, 0, 0);
     for (i, rows) in icons.iter().enumerate() {
         let cell = Rect::new(
             cx,
@@ -1549,6 +1556,7 @@ fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32, settings_icon: Opt
         );
         // Slot 2 = settings icon — use TGA if available.
         if i == 2 {
+            settings_cell = cell;
             if let Some(tga) = settings_icon {
                 canvas.draw_tga_icon(&tga, cell.inset(2));
             } else {
@@ -1559,6 +1567,7 @@ fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32, settings_icon: Opt
         }
         cx += ICON_BTN as i32 + ICON_GAP;
     }
+    settings_cell
 }
 
 /// Draw the bottom-center dock and return the clickable zone rects
@@ -1679,14 +1688,14 @@ impl App for VortexShell {
 
         // ── Bottom panels ────────────────────────────────────────────────────
         let by = bot_y(ch);
-        draw_bot_left(canvas, theme, by, self.dock_theme.settings);
+        self.settings_zone = draw_bot_left(canvas, theme, by, self.dock_theme.settings);
         let dock_cells = draw_bot_center(canvas, theme, by, cw, self.hover, self.dock_theme);
         draw_bot_right(canvas, theme, by, cw);
 
         // Record clickable zones (terminal, tasks, calc, files).
         self.dock_zones = [
-            (dock_cells[0], DockAction::None), // terminal — TODO(phase2-launch)
-            (dock_cells[1], DockAction::None), // tasks    — TODO(phase2-launch)
+            (dock_cells[0], DockAction::LaunchTerminal),
+            (dock_cells[1], DockAction::None), // tasks — placeholder
             (dock_cells[2], DockAction::LaunchCalc),
             (dock_cells[3], DockAction::LaunchFiles),
         ];
@@ -1722,6 +1731,10 @@ impl App for VortexShell {
                 // Real actions must go through sunlight-powerd; do not implement here.
                 if self.power_zone.contains(point) {
                     debug_log("[VORTEX] power clicked (no-op; TODO menu)\n");
+                    return false;
+                }
+                if self.settings_zone.contains(point) {
+                    spawn_app(DockAction::LaunchSettings);
                     return false;
                 }
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
@@ -1779,8 +1792,10 @@ impl App for VortexShell {
 
 fn spawn_app(action: DockAction) {
     let path = match action {
+        DockAction::LaunchTerminal => "/bin/sunlight-terminal",
         DockAction::LaunchCalc => "/bin/calculator",
         DockAction::LaunchFiles => "/bin/sunlight-files",
+        DockAction::LaunchSettings => "/bin/control-panel",
         DockAction::None => return,
     };
     spawn_path(path);
