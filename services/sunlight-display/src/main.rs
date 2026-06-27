@@ -69,7 +69,7 @@ fn launch_vortex_shell() -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Fixed-point pointer acceleration (unchanged from Phase 1)
+// Fixed-point pointer motion
 // ---------------------------------------------------------------------------
 
 const FP_SHIFT: i32 = 16;
@@ -83,15 +83,6 @@ const SENS_DEFAULT_FP: i32 = FP_ONE * 2;
 const SENS_MIN_FP: i32 = FP_ONE / 2;
 #[allow(dead_code)]
 const SENS_MAX_FP: i32 = FP_ONE * 4;
-
-const ACCEL_LOW: i32 = 4;
-const ACCEL_HIGH: i32 = 15;
-const ACCEL_SLOPE_FP: i32 = FP_ONE / 15;
-const ACCEL_MAX_FP: i32 = FP_ONE * 3;
-
-// Alpha close to 1.0 = snappy tracking; lower = smoother but laggier.
-const SMOOTH_SNAP_SPEED: i32 = 2;
-const SMOOTH_ALPHA_FP: i32 = (FP_ONE * 75) / 100;
 
 const EDGE_MARGIN: i32 = 2;
 const KEY_TAB: u8 = 0x0F;
@@ -400,8 +391,6 @@ impl HitZone {
 struct PointerState {
     x_fp: i32,
     y_fp: i32,
-    target_x_fp: i32,
-    target_y_fp: i32,
     buttons: u8,
     fb_width: u32,
     fb_height: u32,
@@ -415,8 +404,6 @@ impl PointerState {
         Self {
             x_fp: cx,
             y_fp: cy,
-            target_x_fp: cx,
-            target_y_fp: cy,
             buttons: 0,
             fb_width: fb_w,
             fb_height: fb_h,
@@ -425,25 +412,12 @@ impl PointerState {
     }
 
     fn apply_motion(&mut self, dx: i32, dy: i32, buttons: u8) {
-        let speed = dx.abs().max(dy.abs());
-        let accel_fp = if speed <= ACCEL_LOW {
-            FP_ONE
-        } else if speed <= ACCEL_HIGH {
-            (FP_ONE + (speed - ACCEL_LOW) * ACCEL_SLOPE_FP).min(ACCEL_MAX_FP)
-        } else {
-            ACCEL_MAX_FP
-        };
-        let gain_fp = ((self.sensitivity_fp as i64 * accel_fp as i64) >> FP_SHIFT) as i64;
-        self.target_x_fp = (self.target_x_fp as i64 + (dx as i64 * gain_fp)) as i32;
-        self.target_y_fp = (self.target_y_fp as i64 + (dy as i64 * gain_fp)) as i32;
-        self.clamp_target();
-        let alpha_fp = if speed <= SMOOTH_SNAP_SPEED {
-            FP_ONE
-        } else {
-            SMOOTH_ALPHA_FP
-        };
-        self.x_fp += (((self.target_x_fp - self.x_fp) as i64 * alpha_fp as i64) >> FP_SHIFT) as i32;
-        self.y_fp += (((self.target_y_fp - self.y_fp) as i64 * alpha_fp as i64) >> FP_SHIFT) as i32;
+        // Apply deltas immediately. The previous eased target-following made the
+        // pointer continue moving after the hand stopped or reversed direction.
+        let gain_fp = self.sensitivity_fp as i64;
+        self.x_fp += (dx as i64 * gain_fp) as i32;
+        self.y_fp += (dy as i64 * gain_fp) as i32;
+        self.sync_clamp();
         self.buttons = buttons;
     }
 
@@ -456,12 +430,6 @@ impl PointerState {
     fn max_y_fp(&self) -> i32 {
         ((self.fb_height as i32 - 1 - EDGE_MARGIN).max(EDGE_MARGIN)) << FP_SHIFT
     }
-
-    fn clamp_target(&mut self) {
-        self.target_x_fp = self.target_x_fp.clamp(self.min_fp(), self.max_x_fp());
-        self.target_y_fp = self.target_y_fp.clamp(self.min_fp(), self.max_y_fp());
-    }
-
     fn sync_clamp(&mut self) {
         self.x_fp = self.x_fp.clamp(self.min_fp(), self.max_x_fp());
         self.y_fp = self.y_fp.clamp(self.min_fp(), self.max_y_fp());
