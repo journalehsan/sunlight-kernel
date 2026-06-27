@@ -91,8 +91,21 @@ const ACCEL_PRECISE_MAX_MAGNITUDE: i32 = 2;
 const ACCEL_NORMAL_MAX_MAGNITUDE: i32 = 8;
 const ACCEL_PRECISE_GAIN_FP: i32 = FP_ONE;
 const ACCEL_NORMAL_GAIN_FP: i32 = FP_ONE * 5 / 4;
-const ACCEL_FAST_GAIN_FP: i32 = FP_ONE * 7 / 4;
+const ACCEL_FAST_GAIN_FP: i32 = FP_ONE * 3 / 2;
 const EDGE_MARGIN: i32 = 0;
+
+// --- Pointer policy constants -------------------------------------------
+/// Number of recent deltas kept for direction hysteresis.
+const HYSTERESIS_WINDOW: usize = 4;
+/// An opposite delta whose magnitude is <= this is suppressed as jitter.
+const JITTER_SUPPRESS_THRESHOLD: i32 = 1;
+/// PS/2 packets to hold in the stabilization window after a button press.
+/// At ~100 Hz this is roughly 50 ms.
+const CLICK_STABILIZE_PACKETS: u32 = 5;
+/// Motion that stays <= this (Manhattan) is suppressed during stabilization.
+const CLICK_STABILIZE_THRESHOLD: i32 = 2;
+/// Manhattan pixel distance before a pending window-move drag is confirmed.
+const DRAG_THRESHOLD_PX: i32 = 4;
 const COUNTER_LOG_INTERVAL: u64 = 64;
 const KEY_TAB: u8 = 0x0F;
 const KEY_R: u8 = 0x13;
@@ -394,19 +407,29 @@ impl HitZone {
 }
 
 // ---------------------------------------------------------------------------
-// PointerState (unchanged from Phase 1)
+// PointerPolicy — fixed-point cursor accumulation with hysteresis,
+// click stabilization, and tunable acceleration.
 // ---------------------------------------------------------------------------
 
-struct PointerState {
+struct PointerPolicy {
     x_fp: i32,
     y_fp: i32,
     buttons: u8,
     fb_width: u32,
     fb_height: u32,
     sensitivity_fp: i32,
+    // Direction hysteresis: ring buffer of recent filtered deltas + running sums.
+    hyst_dx: [i32; HYSTERESIS_WINDOW],
+    hyst_dy: [i32; HYSTERESIS_WINDOW],
+    hyst_sum_dx: i32,
+    hyst_sum_dy: i32,
+    hyst_head: usize,
+    hyst_count: usize,
+    // Click stabilization: number of packets remaining in the quiet window.
+    stabilize_ticks: u32,
 }
 
-impl PointerState {
+impl PointerPolicy {
     fn new(fb_w: u32, fb_h: u32) -> Self {
         let cx = ((fb_w as i32 / 2).max(0)) << FP_SHIFT;
         let cy = ((fb_h as i32 / 2).max(0)) << FP_SHIFT;
@@ -417,23 +440,109 @@ impl PointerState {
             fb_width: fb_w,
             fb_height: fb_h,
             sensitivity_fp: SENS_DEFAULT_FP,
+            hyst_dx: [0; HYSTERESIS_WINDOW],
+            hyst_dy: [0; HYSTERESIS_WINDOW],
+            hyst_sum_dx: 0,
+            hyst_sum_dy: 0,
+            hyst_head: 0,
+            hyst_count: 0,
+            stabilize_ticks: 0,
         }
     }
 
-    fn apply_motion(&mut self, dx: i32, dy: i32, buttons: u8) -> bool {
+    /// Returns the filtered delta for one axis, and whether it was suppressed.
+    /// A tiny opposite-to-trend delta is treated as jitter and zeroed.
+    fn hyst_filter_axis(sum: i32, delta: i32) -> (i32, bool) {
+        if delta == 0 {
+            return (0, false);
+        }
+        let trend: i32 = if sum > 0 { 1 } else if sum < 0 { -1 } else { 0 };
+        let d_sign: i32 = if delta > 0 { 1 } else { -1 };
+        if trend != 0 && d_sign != trend && delta.abs() <= JITTER_SUPPRESS_THRESHOLD {
+            (0, true)
+        } else {
+            (delta, false)
+        }
+    }
+
+    /// Push filtered deltas into the hysteresis ring buffer (O(1)).
+    fn update_hyst(&mut self, fdx: i32, fdy: i32) {
+        let old_dx = self.hyst_dx[self.hyst_head];
+        let old_dy = self.hyst_dy[self.hyst_head];
+        self.hyst_sum_dx = self.hyst_sum_dx.wrapping_sub(old_dx).wrapping_add(fdx);
+        self.hyst_sum_dy = self.hyst_sum_dy.wrapping_sub(old_dy).wrapping_add(fdy);
+        self.hyst_dx[self.hyst_head] = fdx;
+        self.hyst_dy[self.hyst_head] = fdy;
+        self.hyst_head = (self.hyst_head + 1) % HYSTERESIS_WINDOW;
+        if self.hyst_count < HYSTERESIS_WINDOW {
+            self.hyst_count += 1;
+        }
+    }
+
+    /// Apply the full pointer policy for one raw motion packet.
+    ///
+    /// Returns `(clamped, suppressed_jitter, accepted_reversal, click_stabilized)`.
+    fn apply_motion(
+        &mut self,
+        dx: i32,
+        dy: i32,
+        buttons: u8,
+    ) -> (bool, bool, bool, bool) {
+        let prev_buttons = self.buttons;
+        let button_just_pressed = (buttons & 0x07) != 0 && (prev_buttons & 0x07) == 0;
+
+        // Start stabilization window on any button press.
+        if button_just_pressed {
+            self.stabilize_ticks = CLICK_STABILIZE_PACKETS;
+        }
+
+        let in_stabilization = self.stabilize_ticks > 0;
+        if self.stabilize_ticks > 0 {
+            self.stabilize_ticks -= 1;
+        }
+
+        // Suppress small motion during click stabilization window.
         let magnitude = dx.abs().saturating_add(dy.abs());
-        let accel_fp = if magnitude <= ACCEL_PRECISE_MAX_MAGNITUDE {
+        if in_stabilization && magnitude <= CLICK_STABILIZE_THRESHOLD {
+            self.buttons = buttons;
+            return (false, false, false, true);
+        }
+
+        // --- Hysteresis filter (anti-jitter) ---------------------------------
+        let (fdx, suppressed_x) = Self::hyst_filter_axis(self.hyst_sum_dx, dx);
+        let (fdy, suppressed_y) = Self::hyst_filter_axis(self.hyst_sum_dy, dy);
+        let suppressed = suppressed_x || suppressed_y;
+
+        // Detect accepted direction reversal: delta opposes trend but large enough.
+        let trend_x: i32 = if self.hyst_sum_dx > 0 { 1 } else if self.hyst_sum_dx < 0 { -1 } else { 0 };
+        let trend_y: i32 = if self.hyst_sum_dy > 0 { 1 } else if self.hyst_sum_dy < 0 { -1 } else { 0 };
+        let dx_sign: i32 = if dx > 0 { 1 } else if dx < 0 { -1 } else { 0 };
+        let dy_sign: i32 = if dy > 0 { 1 } else if dy < 0 { -1 } else { 0 };
+        let is_reversal = (trend_x != 0 && dx_sign != 0 && dx_sign != trend_x)
+            || (trend_y != 0 && dy_sign != 0 && dy_sign != trend_y);
+        let accepted_reversal = is_reversal && !suppressed;
+
+        // Update ring buffer with filtered values so suppressed jitter never
+        // shifts the trend.
+        self.update_hyst(fdx, fdy);
+
+        // --- Acceleration ----------------------------------------------------
+        let eff_magnitude = fdx.abs().saturating_add(fdy.abs());
+        let accel_fp = if eff_magnitude <= ACCEL_PRECISE_MAX_MAGNITUDE {
             ACCEL_PRECISE_GAIN_FP
-        } else if magnitude <= ACCEL_NORMAL_MAX_MAGNITUDE {
+        } else if eff_magnitude <= ACCEL_NORMAL_MAX_MAGNITUDE {
             ACCEL_NORMAL_GAIN_FP
         } else {
             ACCEL_FAST_GAIN_FP
         } as i64;
         let gain_fp = ((self.sensitivity_fp as i64) * accel_fp) >> FP_SHIFT;
-        self.x_fp += (dx as i64 * gain_fp) as i32;
-        self.y_fp += (dy as i64 * gain_fp) as i32;
+
+        self.x_fp += (fdx as i64 * gain_fp) as i32;
+        self.y_fp += (fdy as i64 * gain_fp) as i32;
         self.buttons = buttons;
-        self.sync_clamp()
+
+        let clamped = self.sync_clamp();
+        (clamped, suppressed, accepted_reversal, false)
     }
 
     fn min_fp(&self) -> i32 {
@@ -552,9 +661,13 @@ struct CompositorState {
     windows: Vec<Window>,
     mouse_x: u16,
     mouse_y: u16,
-    pointer: PointerState,
+    pointer: PointerPolicy,
     mouse_sensitivity_fp: i32,
     active_drag: ActiveDrag,
+    /// Pending window-move drag: (window_id, press_x, press_y).
+    /// Set when a TitleBar click lands; promoted to ActiveDrag::Move once
+    /// the cursor travels more than DRAG_THRESHOLD_PX from the press point.
+    pending_move_drag: Option<(u64, i32, i32)>,
     prev_buttons: u8,
     fb: *mut u32,
     fb_width: u32,
@@ -630,6 +743,17 @@ struct DebugCounters {
     /// GPU partial-rect flushes (VirtIO present_rect).
     present_rect_count: u64,
     framebuffer_copy_count: u64,
+    // --- Pointer policy diagnostics -----------------------------------------
+    /// Packets where hysteresis or stabilization altered the effective delta.
+    filtered_mouse_packet_count: u64,
+    /// Tiny opposite-direction deltas dropped by hysteresis.
+    suppressed_jitter_count: u64,
+    /// Direction reversals that were large enough to pass hysteresis.
+    accepted_reversal_count: u64,
+    /// Packets suppressed in the post-click stabilization window.
+    click_stabilized_motion_count: u64,
+    /// Window move drags that started after exceeding the drag threshold.
+    drag_started_count: u64,
 }
 
 impl DebugCounters {
@@ -649,6 +773,11 @@ impl DebugCounters {
             full_present_count: 0,
             present_rect_count: 0,
             framebuffer_copy_count: 0,
+            filtered_mouse_packet_count: 0,
+            suppressed_jitter_count: 0,
+            accepted_reversal_count: 0,
+            click_stabilized_motion_count: 0,
+            drag_started_count: 0,
         }
     }
 }
@@ -1838,6 +1967,16 @@ fn log_debug_counters(state: &CompositorState, reason: &str) {
     debug_dec_u64(state.debug_counters.framebuffer_copy_count);
     debug_log(" hw_cursor=");
     debug_dec(if state.hw_cursor_active { 1 } else { 0 });
+    debug_log(" filtered=");
+    debug_dec_u64(state.debug_counters.filtered_mouse_packet_count);
+    debug_log(" jitter_suppressed=");
+    debug_dec_u64(state.debug_counters.suppressed_jitter_count);
+    debug_log(" reversal_accepted=");
+    debug_dec_u64(state.debug_counters.accepted_reversal_count);
+    debug_log(" click_stabilized=");
+    debug_dec_u64(state.debug_counters.click_stabilized_motion_count);
+    debug_log(" drag_started=");
+    debug_dec_u64(state.debug_counters.drag_started_count);
     debug_log("\n");
 }
 
@@ -2022,9 +2161,10 @@ pub extern "C" fn _start() -> ! {
         windows: Vec::new(),
         mouse_x: (render_width / 2) as u16,
         mouse_y: (render_height / 2) as u16,
-        pointer: PointerState::new(render_width, render_height),
+        pointer: PointerPolicy::new(render_width, render_height),
         mouse_sensitivity_fp: SENS_DEFAULT_FP,
         active_drag: ActiveDrag::None,
+        pending_move_drag: None,
         prev_buttons: 0,
         fb: fb_ptr as *mut u32,
         fb_width: render_width,
@@ -2458,8 +2598,22 @@ pub extern "C" fn _start() -> ! {
                 state.debug_counters.raw_dx_max = state.debug_counters.raw_dx_max.max(dx);
                 state.debug_counters.raw_dy_min = state.debug_counters.raw_dy_min.min(dy);
                 state.debug_counters.raw_dy_max = state.debug_counters.raw_dy_max.max(dy);
-                if state.pointer.apply_motion(dx, dy, buttons) {
+                let (clamped, suppressed, accepted_reversal, click_stabilized) =
+                    state.pointer.apply_motion(dx, dy, buttons);
+                if clamped {
                     state.debug_counters.clamped_motion_count += 1;
+                }
+                if suppressed || click_stabilized {
+                    state.debug_counters.filtered_mouse_packet_count += 1;
+                }
+                if suppressed {
+                    state.debug_counters.suppressed_jitter_count += 1;
+                }
+                if accepted_reversal {
+                    state.debug_counters.accepted_reversal_count += 1;
+                }
+                if click_stabilized {
+                    state.debug_counters.click_stabilized_motion_count += 1;
                 }
 
                 state.mouse_x = state.pointer.x() as u16;
@@ -2514,7 +2668,10 @@ pub extern "C" fn _start() -> ! {
 
                         match hit_zone {
                             HitZone::TitleBar => {
-                                state.active_drag = ActiveDrag::Move(MoveDrag { window_id: id });
+                                // Don't start window move immediately; wait for the cursor
+                                // to exceed DRAG_THRESHOLD_PX so tiny PS/2 jitter during
+                                // a click doesn't accidentally move the window.
+                                state.pending_move_drag = Some((id, cx as i32, cy as i32));
                             }
                             HitZone::CloseBtn => {
                                 let _ = close_window(&mut state, id, None);
@@ -2586,9 +2743,22 @@ pub extern "C" fn _start() -> ! {
                     }
                 }
 
+                // ── Promote pending move drag once threshold is exceeded ─────
+                if left_down {
+                    if let Some((win_id, press_x, press_y)) = state.pending_move_drag {
+                        let dist = (cx as i32 - press_x).abs() + (cy as i32 - press_y).abs();
+                        if dist > DRAG_THRESHOLD_PX {
+                            state.active_drag = ActiveDrag::Move(MoveDrag { window_id: win_id });
+                            state.pending_move_drag = None;
+                            state.debug_counters.drag_started_count += 1;
+                        }
+                    }
+                }
+
                 // ── Left button released ─────────────────────────────────────
                 if !left_down {
                     state.active_drag = ActiveDrag::None;
+                    state.pending_move_drag = None;
                 }
 
                 // ── Drag / resize in progress ───────────────────────────────
