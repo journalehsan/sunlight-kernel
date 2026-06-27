@@ -192,6 +192,7 @@ pub fn tick<K: KernelOps>(
         let pname = s.name_str();
         for c in configs.iter() {
             if c.name.as_str() == pname {
+                let _ = shim.set_nice(s.pid, c.nice);
                 table.insert(s.pid, pname, c.clone(), now);
                 break;
             }

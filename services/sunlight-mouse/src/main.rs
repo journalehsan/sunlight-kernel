@@ -16,6 +16,9 @@ use sunlight_ipc::{
 
 /// Set to true to print raw packet bytes and decoded dx/dy on every complete packet.
 const MOUSE_DEBUG: bool = false;
+const NICED_SET_NICE: u64 = 0x9010;
+const NICED_REPLY: u64 = 0x90FF;
+const MOUSE_INPUT_NICE: i8 = -10;
 
 /// PS/2 mouse packet state machine
 #[derive(Clone, Copy, PartialEq)]
@@ -275,6 +278,27 @@ fn register_with_deviced() {
     }
 }
 
+fn request_priority_boost(boosted: &mut bool) {
+    if *boosted {
+        return;
+    }
+
+    let Some(niced) = nameserver_lookup("niced") else {
+        return;
+    };
+
+    let msg = IpcMsg::with_label(NICED_SET_NICE)
+        .word(0, getpid())
+        .word(1, MOUSE_INPUT_NICE as i64 as u64);
+    match ipc_call_timeout(niced, msg, 50) {
+        Ok(reply) if reply.label == NICED_REPLY => {
+            *boosted = true;
+            syscall::debug_log("[MOUSE] boosted to critical scheduler priority via niced\n");
+        }
+        _ => {}
+    }
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     syscall::debug_log("[MOUSE] PANIC\n");
@@ -310,12 +334,15 @@ pub extern "C" fn _start() -> ! {
     // Display may start later (e.g. on Desktop login), so we do a lazy lookup
     // on first use and cache the result.
     let mut display_token: Option<sunlight_ipc::CapabilityToken> = None;
+    let mut priority_boosted = false;
 
     syscall::debug_log("[MOUSE] found tty, ready to process mouse events\n");
 
     let mut mouse_state = MouseState::new(1024, 768);
 
     loop {
+        request_priority_boost(&mut priority_boosted);
+
         while let Some(byte) = syscall::mouse_pop_byte() {
             if let Some(event) = mouse_state.process_byte(byte) {
                 let buttons = (event.left_button as u64)
