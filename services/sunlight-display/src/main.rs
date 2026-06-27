@@ -633,7 +633,10 @@ struct DebugCounters {
     sw_cursor_redraw_count: u64,
     desktop_redraw_count: u64,
     dirty_rect_count: u64,
-    gpu_flush_count: u64,
+    /// GPU full-screen flushes (VirtIO present_back_buffer).
+    full_present_count: u64,
+    /// GPU partial-rect flushes (VirtIO present_rect).
+    present_rect_count: u64,
     framebuffer_copy_count: u64,
 }
 
@@ -646,7 +649,8 @@ impl DebugCounters {
             sw_cursor_redraw_count: 0,
             desktop_redraw_count: 0,
             dirty_rect_count: 0,
-            gpu_flush_count: 0,
+            full_present_count: 0,
+            present_rect_count: 0,
             framebuffer_copy_count: 0,
         }
     }
@@ -656,9 +660,25 @@ fn fb_stride(state: &CompositorState) -> usize {
     (state.fb_pitch / 4) as usize
 }
 
+fn clip_to_screen(r: Rect, w: u32, h: u32) -> Rect {
+    let x0 = r.x.max(0);
+    let y0 = r.y.max(0);
+    let x1 = r.right().min(w as i32);
+    let y1 = r.bottom().min(h as i32);
+    if x1 <= x0 || y1 <= y0 {
+        Rect::new(0, 0, 0, 0)
+    } else {
+        Rect::new(x0, y0, (x1 - x0) as u32, (y1 - y0) as u32)
+    }
+}
+
 fn mark_dirty_rect(state: &mut CompositorState, rect: Rect) {
+    let clipped = clip_to_screen(rect, state.fb_width, state.fb_height);
+    if clipped.w == 0 || clipped.h == 0 {
+        return;
+    }
     state.debug_counters.dirty_rect_count += 1;
-    state.dirty.mark(rect);
+    state.dirty.mark(clipped);
 }
 
 fn mark_dirty_full(state: &mut CompositorState) {
@@ -1037,7 +1057,7 @@ fn present_back_buffer(state: &mut CompositorState) {
             }
         }
         backend::DisplayBackend::VirtioGpu { width, height } => {
-            state.debug_counters.gpu_flush_count += 1;
+            state.debug_counters.full_present_count += 1;
             sunlight_ipc::gpu_flush(0, 0, *width, *height);
         }
     }
@@ -1072,7 +1092,7 @@ fn present_rect(state: &mut CompositorState, r: Rect) {
             let y = y0 as u32;
             let w = (x1 - x0) as u32;
             let h = (y1 - y0) as u32;
-            state.debug_counters.gpu_flush_count += 1;
+            state.debug_counters.present_rect_count += 1;
             sunlight_ipc::gpu_flush(x, y, w, h);
         }
     }
@@ -1796,8 +1816,10 @@ fn log_debug_counters(state: &CompositorState, reason: &str) {
     debug_dec_u64(state.debug_counters.desktop_redraw_count);
     debug_log(" dirty=");
     debug_dec_u64(state.debug_counters.dirty_rect_count);
-    debug_log(" gpu_flush=");
-    debug_dec_u64(state.debug_counters.gpu_flush_count);
+    debug_log(" full_present=");
+    debug_dec_u64(state.debug_counters.full_present_count);
+    debug_log(" rect_present=");
+    debug_dec_u64(state.debug_counters.present_rect_count);
     debug_log(" fb_copy=");
     debug_dec_u64(state.debug_counters.framebuffer_copy_count);
     debug_log(" hw_cursor=");
@@ -2021,6 +2043,8 @@ pub extern "C" fn _start() -> ! {
             );
         }
     }
+    debug_log("[DISPLAY] cursor_mode=");
+    debug_log(if state.hw_cursor_active { "hardware\n" } else { "software\n" });
     log_debug_counters(&state, "startup");
     redraw_scene(&mut state);
 
@@ -2661,14 +2685,9 @@ pub extern "C" fn _start() -> ! {
                         redraw_scene(&mut state);
                     }
                 } else {
-                    // Software cursor or window geometry changed: full dirty-rect path.
+                    // Window geometry changed or mixed hw/sw state: full dirty-rect path.
                     if window_changed {
                         mark_dirty_full(&mut state);
-                    } else if !state.hw_cursor_active
-                        && (cursor_pixel_changed || sw_cursor_shape_changed)
-                    {
-                        mark_dirty_rect(&mut state, cursor_dirty_rect(prev_cx, prev_cy));
-                        mark_dirty_rect(&mut state, cursor_dirty_rect(new_cx, new_cy));
                     }
                     if window_changed
                         || state.hw_cursor_active
