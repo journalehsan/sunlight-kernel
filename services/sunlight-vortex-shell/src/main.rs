@@ -8,7 +8,8 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, get_init_cap, ipc_call, process_yield, IpcMsg, ProcessExit, SpawnRequest,
+    debug_log, get_init_cap, ipc_call, nameserver_lookup, process_yield, IpcMsg, ProcessExit,
+    SgpMsg, SpawnRequest,
 };
 use sunlight_ui::{
     image::TgaImage, App, Canvas, Color, Event, Rect, Theme, Window, WindowConfig,
@@ -25,8 +26,9 @@ const FALLBACK_BG: u32 = 0x00121214;
 // Window geometry
 // ---------------------------------------------------------------------------
 
-const SHELL_W: u32 = 1920;
-const SHELL_H: u32 = 1080;
+// Fallback if GET_SCREEN_INFO fails (display server not yet ready on first poll).
+const FALLBACK_W: u32 = 1280;
+const FALLBACK_H: u32 = 720;
 
 // Desktop-layer config flags (see app.rs WindowConfig docs).
 // bits[1:0]=2 Desktop, bits[3:2]=3 Fullscreen, bit[4]=1 NoChrome → 0x1E
@@ -548,10 +550,38 @@ pub extern "C" fn _start() -> ! {
 
     let mut shell = VortexShell::new();
 
+    // Resolve display_server endpoint (spin until ready).
+    let display_ep = loop {
+        if let Some(ep) = nameserver_lookup("display_server") {
+            break ep;
+        }
+        process_yield();
+    };
+
+    // Query physical framebuffer dimensions before allocating the SHM window.
+    // This ensures the shell canvas matches the actual screen, not the image size.
+    let packed = ipc_call(display_ep, IpcMsg::with_label(SgpMsg::GET_SCREEN_INFO));
+    let (screen_w, screen_h) = if packed.label == SgpMsg::REPLY && packed.words[0] != 0 {
+        let w = (packed.words[0] & 0xFFFF_FFFF) as u32;
+        let h = (packed.words[0] >> 32) as u32;
+        (w.max(320), h.max(240)) // clamp to sanity minimums
+    } else {
+        debug_log("[VORTEX] GET_SCREEN_INFO failed, using fallback resolution\n");
+        (FALLBACK_W, FALLBACK_H)
+    };
+
+    debug_log("[VORTEX] screen ");
+    debug_log_u32(screen_w);
+    debug_log("x");
+    debug_log_u32(screen_h);
+    debug_log("\n");
+
+    // Create window at the exact physical screen size.
+    // The SHM buffer will match canvas.width/height so panel positions are correct.
     let mut window = loop {
         match Window::connect(WindowConfig {
-            width: SHELL_W,
-            height: SHELL_H,
+            width: screen_w,
+            height: screen_h,
             title: "Vortex Shell",
         }) {
             Some(w) => break w,
@@ -564,6 +594,29 @@ pub extern "C" fn _start() -> ! {
 
     window.run(&mut shell);
     ProcessExit::exit(0);
+}
+
+/// Minimal decimal logger for u32 (avoids pulling in format!/alloc).
+fn debug_log_u32(mut n: u32) {
+    let mut buf = [0u8; 10];
+    let mut len = 0usize;
+    if n == 0 {
+        debug_log("0");
+        return;
+    }
+    while n > 0 {
+        buf[len] = b'0' + (n % 10) as u8;
+        n /= 10;
+        len += 1;
+    }
+    // buf is reversed — print digits in correct order
+    let mut s = [0u8; 11];
+    for i in 0..len {
+        s[i] = buf[len - 1 - i];
+    }
+    if let Ok(text) = core::str::from_utf8(&s[..len]) {
+        debug_log(text);
+    }
 }
 
 #[panic_handler]

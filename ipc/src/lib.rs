@@ -260,6 +260,9 @@ pub mod sgp {
         /// Client requests a cursor shape when its pointer is inside its client area.
         /// words[0] = (win_id as u32) | ((CursorShape discriminant as u32) << 32)
         pub const SET_CURSOR: u64 = 0xA106;
+        /// Query the physical framebuffer dimensions before creating a window.
+        /// No words required. Reply: words[0] = width | (height << 32).
+        pub const GET_SCREEN_INFO: u64 = 0xA107;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)

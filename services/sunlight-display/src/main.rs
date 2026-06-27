@@ -1698,6 +1698,15 @@ pub extern "C" fn _start() -> ! {
             }
 
             // -------------------------------------------------------------------
+            // GET_SCREEN_INFO — reply with physical framebuffer dimensions.
+            // No input words needed.
+            // Reply: words[0] = fb_width | (fb_height << 32)
+            // -------------------------------------------------------------------
+            SgpMsg::GET_SCREEN_INFO => {
+                let packed = state.fb_width as u64 | ((state.fb_height as u64) << 32);
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, packed));
+            }
+
             // SET_CURSOR — client declares preferred cursor for its client area.
             // words[0] = (win_id as u32) | ((CursorShape discriminant as u32) << 32)
             // -------------------------------------------------------------------
