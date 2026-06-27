@@ -3,13 +3,14 @@
 
 extern crate alloc;
 
+use alloc::string::String;
 use alloc::vec::Vec;
 use sunlight_libc as libc;
 
 use sunlight_ipc::debug_log;
 use sunlight_ipc::{
-    endpoint_create, ipc_recv, ipc_reply, monotonic_millis, nameserver_register, sgp::SgpMsg,
-    CapabilityToken, IpcMsg, MouseMsg,
+    endpoint_create, ipc_recv, ipc_recv_timeout, ipc_reply, monotonic_millis, nameserver_register,
+    sgp::SgpMsg, CapabilityToken, IpcMsg, MouseMsg, NotificationKind,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
@@ -48,11 +49,22 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
-fn launch_runner() {
-    let _ = libc::spawn(b"/bin/sunlight-runner", &[b"sunlight-runner"], None);
+fn launch_runner(state: &mut CompositorState) {
+    if libc::spawn(b"/bin/sunlight-runner", &[b"sunlight-runner"], None).is_err() {
+        debug_log("[DISPLAY] failed to launch runner\n");
+        push_notification(
+            state,
+            NotificationKind::Error,
+            String::from("Launch failed"),
+            String::from("Could not start /bin/sunlight-runner"),
+            NOTIFICATION_TIMEOUT_MS,
+        );
+        mark_dirty_full(state);
+        redraw_scene(state);
+    }
 }
 
-fn launch_vortex_shell() -> bool {
+fn launch_vortex_shell(state: &mut CompositorState) -> bool {
     match libc::spawn(
         b"/bin/sunlight-vortex-shell",
         &[b"sunlight-vortex-shell"],
@@ -64,6 +76,15 @@ fn launch_vortex_shell() -> bool {
         }
         Err(_) => {
             debug_log("[DISPLAY] failed to launch Vortex Shell\n");
+            push_notification(
+                state,
+                NotificationKind::Error,
+                String::from("Launch failed"),
+                String::from("Could not start /bin/sunlight-vortex-shell"),
+                NOTIFICATION_TIMEOUT_MS,
+            );
+            mark_dirty_full(state);
+            redraw_scene(state);
             false
         }
     }
@@ -101,6 +122,16 @@ const KEY_SPACE: u8 = 0x39;
 const KEY_LEFT_SUPER: u8 = 0x5B;
 const KEY_RIGHT_SUPER: u8 = 0x5C;
 const ALT_TAB_REPEAT_MS: u64 = 120;
+const NOTIFICATION_MAX_COUNT: usize = 4;
+const NOTIFICATION_WIDTH: u32 = 320;
+const NOTIFICATION_HEIGHT: u32 = 54;
+const NOTIFICATION_MARGIN_X: i32 = 12;
+const NOTIFICATION_MARGIN_Y: i32 = 12;
+const NOTIFICATION_GAP: i32 = 8;
+const NOTIFICATION_TIMEOUT_MS: u64 = 30_000;
+const NOTIFICATION_POLL_MS: u64 = 100;
+const NOTIFICATION_TEXT_MARGIN_X: i32 = 12;
+const NOTIFICATION_TEXT_MARGIN_Y: i32 = 10;
 
 // ---------------------------------------------------------------------------
 // Window property enums
@@ -628,6 +659,27 @@ impl KeyEventQueue {
     }
 }
 
+#[derive(Clone)]
+struct Notification {
+    id: u64,
+    title: String,
+    body: String,
+    kind: NotificationKind,
+    created_at: u64,
+    timeout_ms: u64,
+}
+
+#[repr(C)]
+struct NotificationWire {
+    kind: u8,
+    _pad0: [u8; 7],
+    timeout_ms: u64,
+    title_len: u32,
+    body_len: u32,
+    title: [u8; 96],
+    body: [u8; 256],
+}
+
 #[derive(Clone, Copy)]
 struct KeyboardState {
     pressed: [bool; 256],
@@ -689,6 +741,7 @@ struct CompositorState {
     /// the cursor travels more than DRAG_THRESHOLD_PX from the press point.
     pending_move_drag: Option<(u64, i32, i32)>,
     prev_buttons: u8,
+    #[allow(dead_code)]
     fb: *mut u32,
     fb_width: u32,
     fb_height: u32,
@@ -716,6 +769,8 @@ struct CompositorState {
     /// Decoded-on-demand wallpaper view.  `None` when the asset was absent or
     /// could not be parsed; the compositor falls back to DESKTOP_COLOR fill.
     wallpaper: Option<TgaImage>,
+    notifications: Vec<Notification>,
+    next_notification_id: u64,
     /// True after spawning Vortex and before a Desktop-layer window appears.
     vortex_launch_pending: bool,
     last_mouse_generation: u32,
@@ -861,7 +916,144 @@ fn ensure_vortex_shell(state: &mut CompositorState) {
     if has_desktop_window(state) || state.vortex_launch_pending {
         return;
     }
-    state.vortex_launch_pending = launch_vortex_shell();
+    state.vortex_launch_pending = launch_vortex_shell(state);
+}
+
+fn notification_color(kind: NotificationKind) -> Color {
+    match kind {
+        NotificationKind::Info => Color(TITLEBAR_ACCENT),
+        NotificationKind::Warning => Color(0x00FFC107),
+        NotificationKind::Error => Color(0x00F44336),
+    }
+}
+
+fn notification_text(bytes: &[u8], len: usize) -> String {
+    let len = len.min(bytes.len());
+    String::from_utf8_lossy(&bytes[..len]).into_owned()
+}
+
+fn notification_fit(text: &str, max_chars: usize) -> String {
+    let chars = text.chars().count();
+    if chars <= max_chars {
+        return String::from(text);
+    }
+    let keep = max_chars.saturating_sub(3);
+    let mut out = String::with_capacity(max_chars);
+    for ch in text.chars().take(keep) {
+        out.push(ch);
+    }
+    out.push('.');
+    out.push('.');
+    out.push('.');
+    out
+}
+
+fn push_notification(
+    state: &mut CompositorState,
+    kind: NotificationKind,
+    title: String,
+    body: String,
+    timeout_ms: u64,
+) {
+    if state.notifications.len() >= NOTIFICATION_MAX_COUNT {
+        state.notifications.remove(0);
+    }
+    state.notifications.push(Notification {
+        id: state.next_notification_id,
+        title,
+        body,
+        kind,
+        created_at: monotonic_millis(),
+        timeout_ms,
+    });
+    state.next_notification_id = state.next_notification_id.saturating_add(1);
+}
+
+fn prune_notifications(state: &mut CompositorState, now: u64) -> bool {
+    let before = state.notifications.len();
+    state
+        .notifications
+        .retain(|n| now.saturating_sub(n.created_at) < n.timeout_ms);
+    before != state.notifications.len()
+}
+
+fn ingest_notification(state: &mut CompositorState, msg: &IpcMsg) {
+    if msg.cap_count == 0 || msg.caps[0] == CapabilityToken::INVALID {
+        return;
+    }
+    let Ok(ptr) = sunlight_ipc::shm_map(msg.caps[0]) else {
+        return;
+    };
+
+    let wire = unsafe { &*(ptr as *const NotificationWire) };
+    let title_len = (wire.title_len as usize).min(wire.title.len());
+    let body_len = (wire.body_len as usize).min(wire.body.len());
+    let title = notification_text(&wire.title, title_len);
+    let body = notification_text(&wire.body, body_len);
+    let kind = match wire.kind {
+        1 => NotificationKind::Warning,
+        2 => NotificationKind::Error,
+        _ => NotificationKind::Info,
+    };
+    let timeout_ms = if wire.timeout_ms == 0 {
+        NOTIFICATION_TIMEOUT_MS
+    } else {
+        wire.timeout_ms
+    };
+    push_notification(state, kind, title, body, timeout_ms);
+}
+
+fn draw_notifications(canvas: &mut Canvas<'_>, state: &CompositorState) {
+    if state.notifications.is_empty() {
+        return;
+    }
+
+    let max_width = NOTIFICATION_WIDTH.min(
+        canvas
+            .width
+            .saturating_sub(2 * NOTIFICATION_MARGIN_X as u32),
+    );
+    if max_width <= 120 {
+        return;
+    }
+
+    let box_x = canvas.width as i32 - NOTIFICATION_MARGIN_X - max_width as i32;
+    let title_max_chars = ((max_width as i32 - NOTIFICATION_TEXT_MARGIN_X * 2) / 7).max(8) as usize;
+    let body_max_chars = ((max_width as i32 - NOTIFICATION_TEXT_MARGIN_X * 2) / 7).max(12) as usize;
+    let title_y = NOTIFICATION_TEXT_MARGIN_Y;
+    let body_y = title_y + 16;
+    let total_h = NOTIFICATION_HEIGHT as i32;
+
+    for (idx, note) in state.notifications.iter().rev().enumerate() {
+        let y = NOTIFICATION_MARGIN_Y + idx as i32 * (total_h + NOTIFICATION_GAP);
+        if y >= canvas.height as i32 {
+            break;
+        }
+
+        let _ = note.id;
+        let rect = Rect::new(box_x, y, max_width, NOTIFICATION_HEIGHT);
+        let accent = notification_color(note.kind);
+        let panel = Color(0x001E1E26);
+        let border = accent.darken(30);
+        canvas.fill_rounded_rect(rect, 8, panel);
+        canvas.stroke_rounded_rect(rect, 8, 1, border);
+        canvas.fill_rect(Rect::new(rect.x, rect.y, 5, rect.h), accent);
+
+        let title = notification_fit(&note.title, title_max_chars);
+        let body = notification_fit(&note.body, body_max_chars);
+        canvas.draw_text(
+            rect.x + NOTIFICATION_TEXT_MARGIN_X,
+            rect.y + title_y,
+            &title,
+            Color(TITLE_TEXT_COLOR),
+        );
+        canvas.draw_text(
+            rect.x + NOTIFICATION_TEXT_MARGIN_X,
+            rect.y + body_y,
+            &body,
+            Color(0x00888899),
+        );
+    }
 }
 
 fn cycle_focus(state: &mut CompositorState) -> bool {
@@ -1904,6 +2096,10 @@ fn redraw_scene(state: &mut CompositorState) {
         let is_focused = focused_idx == Some(i);
         composite_window(state, &mut back_buffer, win, is_focused);
     }
+    {
+        let mut canvas = back_buffer_canvas(state, &mut back_buffer);
+        draw_notifications(&mut canvas, state);
+    }
     // Software cursor only: the GPU backend uses a hardware cursor overlay.
     draw_cursor(state, &mut back_buffer);
     state.back_buffer = back_buffer;
@@ -2245,6 +2441,8 @@ pub extern "C" fn _start() -> ! {
         dirty: dirty::DirtyList::new(),
         debug_counters: DebugCounters::new(),
         wallpaper: TgaImage::parse(WALLPAPER_TGA_BYTES).ok(),
+        notifications: Vec::new(),
+        next_notification_id: 1,
         vortex_launch_pending: false,
         last_mouse_generation: 0,
     };
@@ -2272,7 +2470,18 @@ pub extern "C" fn _start() -> ! {
     let mut next_win_id: u64 = 1;
 
     loop {
-        let msg = ipc_recv(my_ep);
+        let msg = if state.notifications.is_empty() {
+            ipc_recv(my_ep)
+        } else if let Some(msg) = ipc_recv_timeout(my_ep, NOTIFICATION_POLL_MS) {
+            msg
+        } else {
+            let now = monotonic_millis();
+            if prune_notifications(&mut state, now) {
+                mark_dirty_full(&mut state);
+                redraw_scene(&mut state);
+            }
+            continue;
+        };
 
         match msg.label {
             // -------------------------------------------------------------------
@@ -2499,6 +2708,19 @@ pub extern "C" fn _start() -> ! {
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, packed));
             }
 
+            // -------------------------------------------------------------------
+            // SHOW_NOTIFICATION — transient top-right toast overlay.
+            // words[0] = NotificationKind discriminant
+            // words[1] = timeout_ms
+            // caps[0]  = SHM page containing the notification payload
+            // -------------------------------------------------------------------
+            SgpMsg::SHOW_NOTIFICATION => {
+                ingest_notification(&mut state, &msg);
+                mark_dirty_full(&mut state);
+                redraw_scene(&mut state);
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
             // SET_CURSOR — client declares preferred cursor for its client area.
             // words[0] = (win_id as u32) | ((CursorShape discriminant as u32) << 32)
             // -------------------------------------------------------------------
@@ -2609,10 +2831,10 @@ pub extern "C" fn _start() -> ! {
                     state.keyboard.clear_alt_tab_repeat();
                     consumed = true;
                 } else if pressed && !was_down && super_down && keycode == KEY_R {
-                    launch_runner();
+                    launch_runner(&mut state);
                     consumed = true;
                 } else if pressed && !was_down && ctrl_down && keycode == KEY_SPACE {
-                    launch_runner();
+                    launch_runner(&mut state);
                     consumed = true;
                 } else if pressed && !was_down && ctrl_down && keycode == KEY_W {
                     if let Some(focused) = focused_window_id(&state) {

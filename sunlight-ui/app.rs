@@ -237,6 +237,24 @@ impl Window {
         );
     }
 
+    /// Tell the compositor to remove this window.
+    ///
+    /// Best-effort and idempotent: the display server simply ignores a
+    /// `CLOSE_WINDOW` for a window it no longer tracks, so calling this more
+    /// than once (e.g. from the event loop and again from `Drop`) is harmless.
+    ///
+    /// This must be sent explicitly because apps terminate via
+    /// `ProcessExit::exit`, which diverges and therefore never runs the
+    /// `Window` destructor. Without this the process dies but its window stays
+    /// registered in the compositor — visible, frozen, and unable to receive
+    /// input — until something force-closes it (Ctrl+W).
+    fn notify_close(&self) {
+        let _ = ipc_call(
+            self.display_ep,
+            IpcMsg::with_label(SgpMsg::CLOSE_WINDOW).word(0, self.win_id),
+        );
+    }
+
     /// Send a `CONFIGURE_WINDOW` message to update window type, state, and border
     /// flags after the window has been created.
     ///
@@ -295,6 +313,11 @@ impl Window {
             // Redraw requested?
             let needs_redraw = app.update(event);
             if take_close_requested() {
+                // Remove our window from the compositor before returning. The
+                // caller will `ProcessExit::exit`, which skips `Drop`, so this
+                // is the only point the close actually reaches the display
+                // server on a normal self-close.
+                self.notify_close();
                 break;
             }
 

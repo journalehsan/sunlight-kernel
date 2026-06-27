@@ -270,6 +270,11 @@ pub mod sgp {
         /// Query the physical framebuffer dimensions before creating a window.
         /// No words required. Reply: words[0] = width | (height << 32).
         pub const GET_SCREEN_INFO: u64 = 0xA107;
+        /// Show a transient desktop notification.
+        /// words[0] = NotificationKind discriminant
+        /// words[1] = timeout_ms
+        /// caps[0]  = SHM page containing the notification payload
+        pub const SHOW_NOTIFICATION: u64 = 0xA108;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)
@@ -306,6 +311,50 @@ pub mod sgp {
 
 // For convenience, also re-export at top level (some code uses SgpMsg directly)
 pub use sgp::SgpMsg;
+
+/// Notification severity used by the compositor overlay.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationKind {
+    Info = 0,
+    Warning = 1,
+    Error = 2,
+}
+
+#[repr(C)]
+struct NotificationWire {
+    kind: u8,
+    _pad0: [u8; 7],
+    timeout_ms: u64,
+    title_len: u32,
+    body_len: u32,
+    title: [u8; 96],
+    body: [u8; 256],
+}
+
+impl NotificationWire {
+    fn new(kind: NotificationKind, title: &str, body: &str, timeout_ms: u64) -> Self {
+        let mut wire = Self {
+            kind: kind as u8,
+            _pad0: [0; 7],
+            timeout_ms,
+            title_len: 0,
+            body_len: 0,
+            title: [0; 96],
+            body: [0; 256],
+        };
+
+        let title_bytes = title.as_bytes();
+        let body_bytes = body.as_bytes();
+        let title_len = title_bytes.len().min(wire.title.len());
+        let body_len = body_bytes.len().min(wire.body.len());
+        wire.title[..title_len].copy_from_slice(&title_bytes[..title_len]);
+        wire.body[..body_len].copy_from_slice(&body_bytes[..body_len]);
+        wire.title_len = title_len as u32;
+        wire.body_len = body_len as u32;
+        wire
+    }
+}
 
 #[allow(non_snake_case)]
 pub mod KbdMsg {
@@ -1429,6 +1478,25 @@ pub fn ipc_recv(ep: EndpointId) -> IpcMsg {
     }
 }
 
+/// Receive a message with a best-effort timeout.
+///
+/// Returns `None` if no message arrives before `timeout_ms` elapses.
+pub fn ipc_recv_timeout(ep: EndpointId, timeout_ms: u64) -> Option<IpcMsg> {
+    let start = monotonic_millis();
+    loop {
+        // SAFETY: ipc_recv_timeout passes the endpoint owner token; kernel validates receive rights.
+        let (ret, msg) =
+            unsafe { raw_syscall_ipc(SunlightSyscall::IpcRecv, ep.0, IpcMsg::empty()) };
+        if !would_block(ret) {
+            return Some(msg);
+        }
+        if monotonic_millis().saturating_sub(start) >= timeout_ms {
+            return None;
+        }
+        process_yield();
+    }
+}
+
 pub fn ipc_reply(reply: IpcMsg) {
     // SAFETY: ipc_reply sends a fixed register IPC message to the current reply waiter.
     unsafe {
@@ -1522,6 +1590,43 @@ pub fn nameserver_lookup_timeout(name: &str, timeout_ms: u64) -> Option<Capabili
         Ok(reply) if reply.label == InitMsg::GRANT => Some(CapabilityToken(reply.words[0])),
         _ => None,
     }
+}
+
+/// Best-effort desktop notification helper.
+pub fn show_notification(kind: NotificationKind, title: &str, body: &str, timeout_ms: u64) -> bool {
+    let Some((payload_ptr, payload_cap)) =
+        shm_create(core::mem::size_of::<NotificationWire>(), 0).ok()
+    else {
+        debug_log("[IPC] notification shm alloc failed\n");
+        return false;
+    };
+
+    let wire = NotificationWire::new(kind, title, body, timeout_ms);
+    unsafe {
+        core::ptr::write(payload_ptr as *mut NotificationWire, wire);
+    }
+
+    let Some(display_ep) = nameserver_lookup_timeout("display_server", 100) else {
+        let _ = shm_free(payload_cap);
+        debug_log("[IPC] notification display lookup failed\n");
+        return false;
+    };
+
+    let msg = IpcMsg::with_label(SgpMsg::SHOW_NOTIFICATION)
+        .word(0, kind as u64)
+        .word(1, timeout_ms)
+        .with_cap(0, payload_cap);
+
+    let ok = matches!(
+        ipc_call_timeout(display_ep, msg, 100),
+        Ok(reply) if reply.label == SgpMsg::REPLY
+    );
+    if !ok {
+        debug_log("[IPC] notification send failed\n");
+    }
+
+    let _ = shm_free(payload_cap);
+    ok
 }
 
 pub fn name_to_u64(name: &str) -> u64 {

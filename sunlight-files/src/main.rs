@@ -4,7 +4,7 @@
 use core::alloc::GlobalAlloc;
 use core::cmp::Ordering;
 
-use sunlight_ipc::{debug_log, process_yield, ProcessExit};
+use sunlight_ipc::{debug_log, process_yield, show_notification, NotificationKind, ProcessExit};
 use sunlight_libc::{self as libc, env, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::widgets::Label;
 use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
@@ -31,11 +31,14 @@ const MOD_W: u32 = 152;
 const MAX_ENTRIES: usize = 64;
 const PATH_LEN: usize = 256;
 const ERROR_LEN: usize = 96;
-const HOME_FOLDER_COUNT: usize = 6;
+const HOME_FOLDER_COUNT: usize = 8;
 const HOME_CARD_H: u32 = 50;
 const HOME_VOLUME_H: u32 = 44;
 const HOME_CARD_GAP: u32 = 10;
 const HOME_COLS: usize = 3;
+const HOME_GRID_ROWS: usize = (HOME_FOLDER_COUNT + HOME_COLS - 1) / HOME_COLS;
+/// Total sidebar entries: 8 std folders + Home + Root + Volumes + Network
+const SIDEBAR_COUNT: usize = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Message {
@@ -341,7 +344,7 @@ impl State {
 
     fn show_volumes(&mut self) -> bool {
         self.view_mode = ViewMode::Volumes;
-        self.selected_sidebar = 8;
+        self.selected_sidebar = 10;
         self.selected_row = None;
         self.clear_error();
         self.refresh_home_volumes();
@@ -350,7 +353,7 @@ impl State {
 
     fn show_network(&mut self) -> bool {
         self.view_mode = ViewMode::Network;
-        self.selected_sidebar = 9;
+        self.selected_sidebar = 11;
         self.selected_row = None;
         self.clear_error();
         true
@@ -365,10 +368,16 @@ impl State {
             Some(SidebarTarget::Volumes) => self.show_volumes(),
             Some(SidebarTarget::Network) => self.show_network(),
             Some(SidebarTarget::Path(target)) => {
-                if (1..=6).contains(&idx) && !self.home_folders[idx - 1].present {
+                if (1..=HOME_FOLDER_COUNT).contains(&idx) && !self.home_folders[idx - 1].present {
                     self.selected_sidebar = idx;
-                    self.set_error("Folder is missing. Create folder TODO.");
-                    false
+                    self.set_error("Folder is missing or could not be created.");
+                    let _ = show_notification(
+                        NotificationKind::Error,
+                        "Folder unavailable",
+                        self.home_folders[idx - 1].name,
+                        10_000,
+                    );
+                    true
                 } else {
                     self.selected_sidebar = idx;
                     self.navigate_to(target)
@@ -393,8 +402,14 @@ impl State {
             return false;
         };
         if !folder.present {
-            self.set_error("Folder is missing. Create folder TODO.");
-            return false;
+            self.set_error("Folder is missing or could not be created.");
+            let _ = show_notification(
+                NotificationKind::Error,
+                "Folder unavailable",
+                folder.name,
+                10_000,
+            );
+            return true;
         }
         if self.navigate_to(folder.path) {
             self.selected_sidebar = self.sidebar_index_for_path();
@@ -503,12 +518,14 @@ impl State {
             1 => self.home_path.join("Desktop").map(SidebarTarget::Path),
             2 => self.home_path.join("Documents").map(SidebarTarget::Path),
             3 => self.home_path.join("Downloads").map(SidebarTarget::Path),
-            4 => self.home_path.join("Pictures").map(SidebarTarget::Path),
-            5 => self.home_path.join("Music").map(SidebarTarget::Path),
+            4 => self.home_path.join("Music").map(SidebarTarget::Path),
+            5 => self.home_path.join("Pictures").map(SidebarTarget::Path),
             6 => self.home_path.join("Videos").map(SidebarTarget::Path),
-            7 => Some(SidebarTarget::Path(PathBuf::root())),
-            8 => Some(SidebarTarget::Volumes),
-            9 => Some(SidebarTarget::Network),
+            7 => self.home_path.join("Templates").map(SidebarTarget::Path),
+            8 => self.home_path.join("Public").map(SidebarTarget::Path),
+            9 => Some(SidebarTarget::Path(PathBuf::root())),
+            10 => Some(SidebarTarget::Volumes),
+            11 => Some(SidebarTarget::Network),
             _ => None,
         }
     }
@@ -519,11 +536,13 @@ impl State {
             1 => "Desktop",
             2 => "Documents",
             3 => "Downloads",
-            4 => "Pictures",
-            5 => "Music",
+            4 => "Music",
+            5 => "Pictures",
             6 => "Videos",
-            7 => "Root",
-            8 => "Volumes",
+            7 => "Templates",
+            8 => "Public",
+            9 => "Root",
+            10 => "Volumes",
             _ => "Network",
         }
     }
@@ -531,8 +550,8 @@ impl State {
     fn sidebar_index_for_path(&self) -> usize {
         match self.view_mode {
             ViewMode::Home => return 0,
-            ViewMode::Volumes => return 8,
-            ViewMode::Network => return 9,
+            ViewMode::Volumes => return 10,
+            ViewMode::Network => return 11,
             ViewMode::Directory => {}
         }
 
@@ -541,74 +560,52 @@ impl State {
             return 0;
         }
 
-        let desktop = self.home_path.join("Desktop");
-        if desktop
-            .as_ref()
-            .map(|p| path_matches(current, p.as_str()))
-            .unwrap_or(false)
-        {
-            return 1;
-        }
+        let check = |name: &str, idx: usize| -> Option<usize> {
+            self.home_path
+                .join(name)
+                .filter(|p| path_matches(current, p.as_str()))
+                .map(|_| idx)
+        };
 
-        let documents = self.home_path.join("Documents");
-        if documents
-            .as_ref()
-            .map(|p| path_matches(current, p.as_str()))
-            .unwrap_or(false)
-        {
-            return 2;
+        if let Some(i) = check("Desktop", 1) {
+            return i;
         }
-
-        let downloads = self.home_path.join("Downloads");
-        if downloads
-            .as_ref()
-            .map(|p| path_matches(current, p.as_str()))
-            .unwrap_or(false)
-        {
-            return 3;
+        if let Some(i) = check("Documents", 2) {
+            return i;
         }
-
-        let pictures = self.home_path.join("Pictures");
-        if pictures
-            .as_ref()
-            .map(|p| path_matches(current, p.as_str()))
-            .unwrap_or(false)
-        {
-            return 4;
+        if let Some(i) = check("Downloads", 3) {
+            return i;
         }
-
-        let music = self.home_path.join("Music");
-        if music
-            .as_ref()
-            .map(|p| path_matches(current, p.as_str()))
-            .unwrap_or(false)
-        {
-            return 5;
+        if let Some(i) = check("Music", 4) {
+            return i;
         }
-
-        let videos = self.home_path.join("Videos");
-        if videos
-            .as_ref()
-            .map(|p| path_matches(current, p.as_str()))
-            .unwrap_or(false)
-        {
-            return 6;
+        if let Some(i) = check("Pictures", 5) {
+            return i;
+        }
+        if let Some(i) = check("Videos", 6) {
+            return i;
+        }
+        if let Some(i) = check("Templates", 7) {
+            return i;
+        }
+        if let Some(i) = check("Public", 8) {
+            return i;
         }
 
         if current == "/" {
-            return 7;
-        }
-        if current == "/mnt" || current.starts_with("/mnt/") {
-            return 8;
-        }
-        if current == "/boot" || current.starts_with("/boot/") {
-            return 8;
-        }
-        if current == "/network" || current.starts_with("/network/") {
             return 9;
         }
+        if current == "/mnt" || current.starts_with("/mnt/") {
+            return 10;
+        }
+        if current == "/boot" || current.starts_with("/boot/") {
+            return 10;
+        }
+        if current == "/network" || current.starts_with("/network/") {
+            return 11;
+        }
 
-        7
+        9
     }
 
     fn clear_error(&mut self) {
@@ -673,7 +670,7 @@ impl FilesApp {
 
     fn sidebar_item_rect(sidebar: Rect, idx: usize) -> Rect {
         let inner = sidebar.inset(PAD);
-        let heights = [SIDEBAR_ITEM_H; 10];
+        let heights = [SIDEBAR_ITEM_H; SIDEBAR_COUNT];
         let mut rows = VBox::new(inner)
             .with_spacing(SIDEBAR_ITEM_GAP)
             .layout(&heights);
@@ -682,7 +679,7 @@ impl FilesApp {
 
     fn hit_test_sidebar(sidebar: Rect, x: i32, y: i32) -> Option<usize> {
         let point = sunlight_ui::Point::new(x, y);
-        for idx in 0..10 {
+        for idx in 0..SIDEBAR_COUNT {
             if Self::sidebar_item_rect(sidebar, idx).contains(point) {
                 return Some(idx);
             }
@@ -730,7 +727,8 @@ impl FilesApp {
         if idx >= volume_count {
             return None;
         }
-        let title_y = inner.y + 40 + 18 + 2 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 14;
+        let title_y =
+            inner.y + 40 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 14;
         let mut y = title_y + 18;
         for _ in 0..idx {
             y += HOME_VOLUME_H as i32 + 8;
@@ -813,7 +811,7 @@ impl FilesApp {
             .dim()
             .draw(&mut clipped, theme);
 
-        for idx in 0..10 {
+        for idx in 0..SIDEBAR_COUNT {
             let rect = Self::sidebar_item_rect(sidebar, idx);
             let selected = idx == self.state.selected_sidebar;
             let fill = if selected {
@@ -1087,7 +1085,8 @@ impl FilesApp {
         inner: Rect,
         section_title: &'static str,
     ) -> i32 {
-        let title_y = inner.y + 40 + 18 + 2 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 14;
+        let title_y =
+            inner.y + 40 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 14;
         let section_y = title_y + 18;
         Label::new(Rect::new(inner.x, title_y, inner.w, 14), section_title)
             .dim()
@@ -1270,26 +1269,31 @@ fn detect_home_path() -> PathBuf {
 }
 
 fn build_home_folders(home_path: PathBuf) -> [HomeFolder; HOME_FOLDER_COUNT] {
-    let names = [
+    let names: [&'static str; HOME_FOLDER_COUNT] = [
         "Desktop",
         "Documents",
         "Downloads",
-        "Pictures",
         "Music",
+        "Pictures",
         "Videos",
+        "Templates",
+        "Public",
     ];
     let mut folders = [HomeFolder::empty(); HOME_FOLDER_COUNT];
     let mut i = 0usize;
     while i < HOME_FOLDER_COUNT {
         let path = home_path.join(names[i]).unwrap_or_else(PathBuf::root);
-        let present = if names[i] == "Desktop" {
-            if libc::stat(path.as_str().as_bytes()).is_ok() {
-                true
-            } else {
-                libc::mkdir_recursive(path.as_str().as_bytes()).is_ok()
-            }
+        // Try to create each standard folder if it does not exist yet.
+        let present = if libc::stat(path.as_str().as_bytes()).is_ok() {
+            true
         } else {
-            libc::stat(path.as_str().as_bytes()).is_ok()
+            let ok = libc::mkdir_recursive(path.as_str().as_bytes()).is_ok();
+            if !ok {
+                debug_log("[FILES] could not create standard folder: ");
+                debug_log(names[i]);
+                debug_log("\n");
+            }
+            ok
         };
         folders[i] = HomeFolder {
             name: names[i],
@@ -1363,11 +1367,12 @@ fn sidebar_symbol(idx: usize) -> UiSymbol {
         1 => UiSymbol::Desktop,
         2 => UiSymbol::Documents,
         3 => UiSymbol::Downloads,
-        4 => UiSymbol::Pictures,
-        5 => UiSymbol::Music,
+        4 => UiSymbol::Music,
+        5 => UiSymbol::Pictures,
         6 => UiSymbol::Videos,
-        7 => UiSymbol::RootFs,
-        8 => UiSymbol::Volume,
+        7 | 8 => UiSymbol::Folder,
+        9 => UiSymbol::RootFs,
+        10 => UiSymbol::Volume,
         _ => UiSymbol::Network,
     }
 }
@@ -1380,8 +1385,8 @@ fn home_folder_symbol(idx: usize, present: bool) -> UiSymbol {
         0 => UiSymbol::Desktop,
         1 => UiSymbol::Documents,
         2 => UiSymbol::Downloads,
-        3 => UiSymbol::Pictures,
-        4 => UiSymbol::Music,
+        3 => UiSymbol::Music,
+        4 => UiSymbol::Pictures,
         5 => UiSymbol::Videos,
         _ => UiSymbol::Folder,
     }

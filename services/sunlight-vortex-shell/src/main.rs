@@ -49,9 +49,9 @@ extern crate alloc;
 
 use alloc::{string::String, vec::Vec};
 use sunlight_ipc::{
-    debug_log, get_init_cap, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup,
-    process_yield, unpack_iface_summary, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
-    ProcessExit, SgpMsg, SpawnRequest, TzMsg,
+    debug_log, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_yield,
+    show_notification, unpack_iface_summary, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
+    NotificationKind, ProcessExit, SgpMsg, TzMsg,
 };
 use sunlight_libc::{self as libc, DirEntry, FT_DIR};
 use sunlight_ui::{
@@ -1390,12 +1390,17 @@ fn fmt_u32_ascii(mut value: u32, out: &mut [u8; 10]) -> usize {
     n
 }
 
-fn spawn_path(path: &str) {
-    let init_cap = get_init_cap();
-    let req = SpawnRequest::new(path, "");
-    let mut msg = IpcMsg::with_label(0);
-    req.pack_into(&mut msg);
-    let _ = ipc_call(init_cap, msg);
+fn spawn_path(path: &str) -> bool {
+    match libc::spawn(path.as_bytes(), &[path.as_bytes()], None) {
+        Ok(_) => true,
+        Err(_) => {
+            debug_log("[VORTEX] spawn failed\n");
+            let mut body = String::from("Could not start ");
+            body.push_str(path);
+            let _ = show_notification(NotificationKind::Error, "Launch failed", &body, 30_000);
+            false
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

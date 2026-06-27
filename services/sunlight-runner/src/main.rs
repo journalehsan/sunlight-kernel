@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use sunlight_ipc::{debug_log, process_yield, ProcessExit};
+use sunlight_ipc::{debug_log, process_yield, show_notification, NotificationKind, ProcessExit};
 use sunlight_libc as libc;
 use sunlight_ui::{
     request_close,
@@ -54,6 +54,19 @@ impl RunnerApp {
         }
     }
 
+    fn finish(&mut self) {
+        self.open.active = false;
+        self.elevated.active = false;
+        request_close();
+    }
+
+    fn fail(&mut self, status: &'static str, body: &str) -> bool {
+        self.status = status;
+        let _ = show_notification(NotificationKind::Error, "Launch failed", body, 30_000);
+        self.finish();
+        true
+    }
+
     fn layout(&self) -> (Rect, Rect, Rect, Rect, Rect, Rect, Rect) {
         let root = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
         let row_heights = [18, 28, 18, 28];
@@ -88,41 +101,34 @@ impl RunnerApp {
 
     fn launch(&mut self) -> bool {
         if self.elevated.checked {
-            self.status = "Elevated launch is not available here";
-            return true;
+            return self.fail(
+                "Elevated launch is not available here",
+                "Elevated launch is not available here",
+            );
         }
 
         let input = trim_ascii(self.open.value().as_bytes());
         if input.is_empty() {
-            self.status = "Enter an application name";
-            return true;
+            return self.fail("Enter an application name", "Enter an application name");
         }
 
         let mut args_buf = [[0u8; MAX_ARG_LEN]; MAX_ARGS];
         let mut arg_lens = [0usize; MAX_ARGS];
         let arg_count = match parse_args(input, &mut args_buf, &mut arg_lens) {
-            Ok(0) => {
-                self.status = "Enter an application name";
-                return true;
-            }
+            Ok(0) => return self.fail("Enter an application name", "Enter an application name"),
             Ok(count) => count,
             Err(LaunchParseError::TooManyArgs) => {
-                self.status = "Too many arguments";
-                return true;
+                return self.fail("Too many arguments", "Too many arguments")
             }
             Err(LaunchParseError::ArgTooLong) => {
-                self.status = "Argument is too long";
-                return true;
+                return self.fail("Argument is too long", "Argument is too long")
             }
         };
 
         let mut path_buf = [0u8; MAX_PATH_LEN];
         let path_len = match resolve_path(&args_buf[0][..arg_lens[0]], &mut path_buf) {
             Some(len) => len,
-            None => {
-                self.status = "Executable path is too long";
-                return true;
-            }
+            None => return self.fail("Executable path is too long", "Executable path is too long"),
         };
 
         let mut argv: [&[u8]; MAX_ARGS] = [&[]; MAX_ARGS];
@@ -132,12 +138,22 @@ impl RunnerApp {
 
         match libc::spawn(&path_buf[..path_len], &argv[..arg_count], None) {
             Ok(_) => {
-                request_close();
+                self.finish();
                 true
             }
             Err(_) => {
-                self.status = "Launch failed";
-                true
+                let command = core::str::from_utf8(&args_buf[0][..arg_lens[0]]).unwrap_or("app");
+                let mut body = [0u8; 64];
+                let prefix = b"Could not start ";
+                let mut len = 0usize;
+                body[..prefix.len()].copy_from_slice(prefix);
+                len += prefix.len();
+                let command_bytes = command.as_bytes();
+                let take = command_bytes.len().min(body.len().saturating_sub(len));
+                body[len..len + take].copy_from_slice(&command_bytes[..take]);
+                len += take;
+                let body = core::str::from_utf8(&body[..len]).unwrap_or("Could not start app");
+                self.fail("Launch failed", body)
             }
         }
     }

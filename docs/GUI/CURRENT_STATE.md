@@ -1,7 +1,7 @@
 # SunlightOS GUI Current State
 
 **Status:** Implemented a stable graphical desktop stack with rounded window chrome, symbol glyphs, and flicker-free presentation.  
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-28
 
 ## Overview
 
@@ -65,6 +65,22 @@ Day 22 polish checklist:
 - [x] Calculator operator/function symbols fixed to use the new glyph set
 - [x] Window controls updated to the improved rounded dark/orange style
 - [x] Flicker/blinking fixed by staged client commits plus off-screen desktop composition
+- [x] Minimal top-right notifications added to the compositor overlay
+- [x] Runner launch failures report visible notifications instead of silent status text
+- [x] Runner closes cleanly after launch success/failure so it can be spawned again
+- [x] `sunlight-ui` event loop now sends `CLOSE_WINDOW` on self-close so apps no
+      longer leave a frozen, process-less window behind (apps exit via
+      `ProcessExit::exit`, which skips `Window::Drop`)
+- [x] File manager creates all 8 standard home folders on startup (Desktop,
+      Documents, Downloads, Music, Pictures, Videos, Templates, Public); all are
+      clickable and navigable in the sidebar and home grid
+- [x] File manager sidebar expanded to 12 entries (+ Templates, Public, shifted
+      Root/Volumes/Network indices); sidebar hit-test and item layout use the
+      new count via `SIDEBAR_COUNT`
+- [x] File manager error paths now return `true` so the status bar redraws
+      immediately to show the error; failures also fire a notification toast
+- [x] `draw_home_volumes`/`home_volume_rect` use dynamic `HOME_GRID_ROWS` for
+      correct volume-section position regardless of folder count
 
 Current limitations:
 
@@ -72,6 +88,8 @@ Current limitations:
 - No damage tracking; redraws are effectively full-window
 - No async pushed events; clients poll
 - No richer widget toolkit yet
+- Compositor does not yet reap windows on process death/panic; a crashed GUI app
+  (whose panic handler just parks) still leaves a stale window until Ctrl+W
 
 ## Input Routing State
 

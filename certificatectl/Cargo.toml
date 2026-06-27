@@ -1,6 +1,7 @@
 [package]
 name = "certificatectl"
-version = "0.1.559"
+version = "0.1.563"
+
 
 
 
