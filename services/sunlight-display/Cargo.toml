@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-display"
-version = "0.1.483"
+version = "0.1.486"
+
 
 
 
@@ -34,6 +35,7 @@ edition = "2021"
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-ui = { path = "../../sunlight-ui" }
 
 [[bin]]
 name = "sunlight-display"

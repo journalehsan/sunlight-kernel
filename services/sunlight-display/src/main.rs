@@ -11,6 +11,7 @@ use sunlight_ipc::{
     endpoint_create, ipc_recv, ipc_reply, nameserver_register, sgp::SgpMsg, CapabilityToken,
     IpcMsg, MouseMsg,
 };
+use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
 
 // ---------------------------------------------------------------------------
 // Allocator
@@ -645,9 +646,35 @@ const BTN_ICON_COLOR: u32 = 0x00B0B0C0; // Icon color
 const BTN_ICON_ACTIVE: u32 = 0x00FFFFFF; // Icon color when active/focused
 const BTN_SIZE: u32 = 20; // Size of control buttons
 const BTN_SPACING: u32 = 4;
+const CHROME_RADIUS: u32 = 10;
+const CONTROL_RADIUS: u32 = 6;
 const RESIZE_BORDER: u32 = 6; // effective hit-test width for edges/corners
 const MIN_WIN_W: u32 = 200;
 const MIN_WIN_H: u32 = 100;
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WindowControlKind {
+    Help,
+    Pin,
+    Minimize,
+    Maximize,
+    Restore,
+    Close,
+}
+
+impl WindowControlKind {
+    fn symbol(self) -> UiSymbol {
+        match self {
+            WindowControlKind::Help => UiSymbol::Help,
+            WindowControlKind::Pin => UiSymbol::Pin,
+            WindowControlKind::Minimize => UiSymbol::Minimize,
+            WindowControlKind::Maximize => UiSymbol::Maximize,
+            WindowControlKind::Restore => UiSymbol::Restore,
+            WindowControlKind::Close => UiSymbol::Close,
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Cursor bitmaps — 8 px wide × 12 rows, one u8 per row, MSB = leftmost pixel
@@ -815,128 +842,8 @@ fn cursor_bitmap(shape: CursorShape) -> &'static [u8; CURSOR_H] {
 }
 
 // ---------------------------------------------------------------------------
-// 5×7 pixel font for title text (column format, LSB = top row)
-// 96 glyphs starting at ASCII 0x20 (space).
-// ---------------------------------------------------------------------------
-
-static FONT_5X7: [[u8; 5]; 96] = [
-    [0x00, 0x00, 0x00, 0x00, 0x00], // ' '
-    [0x00, 0x00, 0x5F, 0x00, 0x00], // '!'
-    [0x00, 0x07, 0x00, 0x07, 0x00], // '"'
-    [0x14, 0x7F, 0x14, 0x7F, 0x14], // '#'
-    [0x24, 0x2A, 0x7F, 0x2A, 0x12], // '$'
-    [0x23, 0x13, 0x08, 0x64, 0x62], // '%'
-    [0x36, 0x49, 0x55, 0x22, 0x50], // '&'
-    [0x00, 0x05, 0x03, 0x00, 0x00], // '\''
-    [0x00, 0x1C, 0x22, 0x41, 0x00], // '('
-    [0x00, 0x41, 0x22, 0x1C, 0x00], // ')'
-    [0x14, 0x08, 0x3E, 0x08, 0x14], // '*'
-    [0x08, 0x08, 0x3E, 0x08, 0x08], // '+'
-    [0x00, 0x50, 0x30, 0x00, 0x00], // ','
-    [0x08, 0x08, 0x08, 0x08, 0x08], // '-'
-    [0x00, 0x60, 0x60, 0x00, 0x00], // '.'
-    [0x20, 0x10, 0x08, 0x04, 0x02], // '/'
-    [0x3E, 0x51, 0x49, 0x45, 0x3E], // '0'
-    [0x00, 0x42, 0x7F, 0x40, 0x00], // '1'
-    [0x42, 0x61, 0x51, 0x49, 0x46], // '2'
-    [0x21, 0x41, 0x45, 0x4B, 0x31], // '3'
-    [0x18, 0x14, 0x12, 0x7F, 0x10], // '4'
-    [0x27, 0x45, 0x45, 0x45, 0x39], // '5'
-    [0x3C, 0x4A, 0x49, 0x49, 0x30], // '6'
-    [0x01, 0x71, 0x09, 0x05, 0x03], // '7'
-    [0x36, 0x49, 0x49, 0x49, 0x36], // '8'
-    [0x06, 0x49, 0x49, 0x29, 0x1E], // '9'
-    [0x00, 0x36, 0x36, 0x00, 0x00], // ':'
-    [0x00, 0x56, 0x36, 0x00, 0x00], // ';'
-    [0x08, 0x14, 0x22, 0x41, 0x00], // '<'
-    [0x14, 0x14, 0x14, 0x14, 0x14], // '='
-    [0x00, 0x41, 0x22, 0x14, 0x08], // '>'
-    [0x02, 0x01, 0x51, 0x09, 0x06], // '?'
-    [0x32, 0x49, 0x79, 0x41, 0x3E], // '@'
-    [0x7E, 0x11, 0x11, 0x11, 0x7E], // 'A'
-    [0x7F, 0x49, 0x49, 0x49, 0x36], // 'B'
-    [0x3E, 0x41, 0x41, 0x41, 0x22], // 'C'
-    [0x7F, 0x41, 0x41, 0x22, 0x1C], // 'D'
-    [0x7F, 0x49, 0x49, 0x49, 0x41], // 'E'
-    [0x7F, 0x09, 0x09, 0x09, 0x01], // 'F'
-    [0x3E, 0x41, 0x49, 0x49, 0x7A], // 'G'
-    [0x7F, 0x08, 0x08, 0x08, 0x7F], // 'H'
-    [0x00, 0x41, 0x7F, 0x41, 0x00], // 'I'
-    [0x20, 0x40, 0x41, 0x3F, 0x01], // 'J'
-    [0x7F, 0x08, 0x14, 0x22, 0x41], // 'K'
-    [0x7F, 0x40, 0x40, 0x40, 0x40], // 'L'
-    [0x7F, 0x02, 0x0C, 0x02, 0x7F], // 'M'
-    [0x7F, 0x04, 0x08, 0x10, 0x7F], // 'N'
-    [0x3E, 0x41, 0x41, 0x41, 0x3E], // 'O'
-    [0x7F, 0x09, 0x09, 0x09, 0x06], // 'P'
-    [0x3E, 0x41, 0x51, 0x21, 0x5E], // 'Q'
-    [0x7F, 0x09, 0x19, 0x29, 0x46], // 'R'
-    [0x46, 0x49, 0x49, 0x49, 0x31], // 'S'
-    [0x01, 0x01, 0x7F, 0x01, 0x01], // 'T'
-    [0x3F, 0x40, 0x40, 0x40, 0x3F], // 'U'
-    [0x1F, 0x20, 0x40, 0x20, 0x1F], // 'V'
-    [0x3F, 0x40, 0x38, 0x40, 0x3F], // 'W'
-    [0x63, 0x14, 0x08, 0x14, 0x63], // 'X'
-    [0x07, 0x08, 0x70, 0x08, 0x07], // 'Y'
-    [0x61, 0x51, 0x49, 0x45, 0x43], // 'Z'
-    [0x00, 0x7F, 0x41, 0x41, 0x00], // '['
-    [0x02, 0x04, 0x08, 0x10, 0x20], // '\\'
-    [0x00, 0x41, 0x41, 0x7F, 0x00], // ']'
-    [0x04, 0x02, 0x01, 0x02, 0x04], // '^'
-    [0x40, 0x40, 0x40, 0x40, 0x40], // '_'
-    [0x00, 0x01, 0x02, 0x04, 0x00], // '`'
-    [0x20, 0x54, 0x54, 0x54, 0x78], // 'a'
-    [0x7F, 0x48, 0x44, 0x44, 0x38], // 'b'
-    [0x38, 0x44, 0x44, 0x44, 0x20], // 'c'
-    [0x38, 0x44, 0x44, 0x48, 0x7F], // 'd'
-    [0x38, 0x54, 0x54, 0x54, 0x18], // 'e'
-    [0x08, 0x7E, 0x09, 0x01, 0x02], // 'f'
-    [0x0C, 0x52, 0x52, 0x52, 0x3E], // 'g'
-    [0x7F, 0x08, 0x04, 0x04, 0x78], // 'h'
-    [0x00, 0x44, 0x7D, 0x40, 0x00], // 'i'
-    [0x20, 0x40, 0x44, 0x3D, 0x00], // 'j'
-    [0x7F, 0x10, 0x28, 0x44, 0x00], // 'k'
-    [0x00, 0x41, 0x7F, 0x40, 0x00], // 'l'
-    [0x7C, 0x04, 0x18, 0x04, 0x78], // 'm'
-    [0x7C, 0x08, 0x04, 0x04, 0x78], // 'n'
-    [0x38, 0x44, 0x44, 0x44, 0x38], // 'o'
-    [0x7C, 0x14, 0x14, 0x14, 0x08], // 'p'
-    [0x08, 0x14, 0x14, 0x18, 0x7C], // 'q'
-    [0x7C, 0x08, 0x04, 0x04, 0x08], // 'r'
-    [0x48, 0x54, 0x54, 0x54, 0x20], // 's'
-    [0x04, 0x3F, 0x44, 0x40, 0x20], // 't'
-    [0x3C, 0x40, 0x40, 0x20, 0x7C], // 'u'
-    [0x1C, 0x20, 0x40, 0x20, 0x1C], // 'v'
-    [0x3C, 0x40, 0x30, 0x40, 0x3C], // 'w'
-    [0x44, 0x28, 0x10, 0x28, 0x44], // 'x'
-    [0x0C, 0x50, 0x50, 0x50, 0x3C], // 'y'
-    [0x44, 0x64, 0x54, 0x4C, 0x44], // 'z'
-    [0x00, 0x08, 0x36, 0x41, 0x00], // '{'
-    [0x00, 0x00, 0x7F, 0x00, 0x00], // '|'
-    [0x00, 0x41, 0x36, 0x08, 0x00], // '}'
-    [0x10, 0x08, 0x08, 0x10, 0x08], // '~'
-    [0x00, 0x00, 0x00, 0x00, 0x00], // DEL
-];
-
-// ---------------------------------------------------------------------------
 // Drawing primitives
 // ---------------------------------------------------------------------------
-
-fn draw_rect(state: &CompositorState, x: u32, y: u32, w: u32, h: u32, color: u32) {
-    if x >= state.fb_width || y >= state.fb_height || w == 0 || h == 0 {
-        return;
-    }
-    let stride = fb_stride(state);
-    let x_end = (x + w).min(state.fb_width) as usize;
-    let y_end = (y + h).min(state.fb_height) as usize;
-    for row in y as usize..y_end {
-        for col in x as usize..x_end {
-            unsafe {
-                state.fb.add(row * stride + col).write(color);
-            }
-        }
-    }
-}
 
 fn clear_framebuffer(state: &CompositorState) {
     let stride = fb_stride(state);
@@ -949,67 +856,67 @@ fn clear_framebuffer(state: &CompositorState) {
     }
 }
 
-/// Draw a single 5×7 glyph. Each column byte: LSB = top pixel.
-fn draw_char(state: &CompositorState, x: i32, y: i32, ch: u8, fg: u32) {
-    let idx = ch.saturating_sub(0x20).min(95) as usize;
-    let glyph = &FONT_5X7[idx];
+fn framebuffer_canvas(state: &CompositorState) -> Canvas<'_> {
     let stride = fb_stride(state);
-    for col in 0..5usize {
-        for row in 0..7usize {
-            if (glyph[col] >> row) & 1 == 0 {
-                continue;
-            }
-            let px = x + col as i32;
-            let py = y + row as i32;
-            if px < 0 || py < 0 || px >= state.fb_width as i32 || py >= state.fb_height as i32 {
-                continue;
-            }
-            unsafe {
-                state.fb.add(py as usize * stride + px as usize).write(fg);
-            }
-        }
-    }
+    let len = stride * state.fb_height as usize;
+    let pixels = unsafe { core::slice::from_raw_parts_mut(state.fb, len) };
+    Canvas::new(pixels, stride as u32, state.fb_width, state.fb_height)
 }
 
-/// Draw a null-terminated title string centered vertically in the title bar.
-fn draw_title(state: &CompositorState, title: &[u8; 64], bar_x: u32, bar_y: u32, bar_w: u32) {
-    // Measure length (stop at null).
-    let mut len = 0usize;
-    for &b in title.iter() {
-        if b == 0 {
-            break;
-        }
-        len += 1;
-    }
+fn title_len(title: &[u8; 64]) -> usize {
+    title.iter().position(|&b| b == 0).unwrap_or(title.len())
+}
+
+fn control_rect(wx: u32, wy: u32, chrome_w: u32, slot_from_right: u32) -> Rect {
+    let x = wx + chrome_w.saturating_sub((BTN_SIZE + BTN_SPACING) * (slot_from_right + 1));
+    let y = wy as i32 + (TITLEBAR_H.saturating_sub(BTN_SIZE)) as i32 / 2;
+    Rect::new(x as i32, y, BTN_SIZE, BTN_SIZE)
+}
+
+fn draw_title(canvas: &mut Canvas<'_>, title: &[u8; 64], rect: Rect, color: Color) {
+    let len = title_len(title);
     if len == 0 {
         return;
     }
 
-    // Each glyph is 5px wide + 1px gap = 6px; clamp to available bar width.
     let glyph_stride = 6i32;
-    let text_w = len as i32 * glyph_stride;
-
-    // Reserve left margin for close button (BTN_SIZE + 6) + 4px pad.
-    let left_margin = (BTN_SIZE + 10) as i32;
-    let avail_w = bar_w as i32 - left_margin - 4;
-    if avail_w <= 0 {
-        return;
+    let max_chars = (rect.w as i32 / glyph_stride).max(0) as usize;
+    let ty = rect.y + (rect.h as i32 - 7) / 2;
+    let mut tx = rect.x;
+    for &b in title.iter().take(len.min(max_chars)) {
+        tx = canvas.draw_char(tx, ty, b as char, color);
     }
+}
 
-    // Center horizontally in the available space.
-    let text_start_x = bar_x as i32 + left_margin + (avail_w - text_w).max(0) / 2;
-    let text_start_y = bar_y as i32 + (TITLEBAR_H as i32 - 7) / 2;
+fn draw_window_control(
+    canvas: &mut Canvas<'_>,
+    rect: Rect,
+    control: WindowControlKind,
+    icon_color: Color,
+    chrome_fill: Color,
+    hovered: bool,
+    accent_active: bool,
+) {
+    let fill = if hovered && control == WindowControlKind::Close {
+        Color(BORDER_COLOR).darken(24)
+    } else if hovered {
+        Color(BTN_HOVER_BG)
+    } else if accent_active {
+        chrome_fill.lighten(16)
+    } else {
+        chrome_fill
+    };
 
-    let max_chars = (avail_w / glyph_stride) as usize;
-    for (i, &b) in title.iter().take(len.min(max_chars)).enumerate() {
-        draw_char(
-            state,
-            text_start_x + i as i32 * glyph_stride,
-            text_start_y,
-            b,
-            TITLE_TEXT_COLOR,
-        );
-    }
+    let border = if hovered {
+        Color(TITLEBAR_ACCENT)
+    } else if accent_active {
+        Color(TITLEBAR_ACCENT).darken(20)
+    } else {
+        Color(BORDER_INACTIVE)
+    };
+
+    canvas.fill_rounded_rect_with_border(rect, CONTROL_RADIUS, fill, border, 1);
+    canvas.draw_ui_symbol_centered(rect, control.symbol(), icon_color);
 }
 
 // ---------------------------------------------------------------------------
@@ -1034,44 +941,22 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
     // Title bar zone (not present in Fullscreen or no-border Widget/Desktop).
     if !fullscreen && !no_border {
         if rel_y < TITLEBAR_H {
-            let mut btn_x = chrome_w.saturating_sub(BTN_SIZE + BTN_SPACING);
+            let close_rect = control_rect(wx, wy, chrome_w, 0);
+            let maximize_rect = control_rect(wx, wy, chrome_w, 1);
+            let minimize_rect = control_rect(wx, wy, chrome_w, 2);
+            let pin_rect = control_rect(wx, wy, chrome_w, 3);
+            let point = sunlight_ui::Point::new(cx as i32, cy as i32);
 
-            // Close button
-            if rel_x >= btn_x
-                && rel_x < btn_x + BTN_SIZE
-                && rel_y >= (TITLEBAR_H - BTN_SIZE) / 2
-                && rel_y < (TITLEBAR_H + BTN_SIZE) / 2
-            {
+            if close_rect.contains(point) {
                 return HitZone::CloseBtn;
             }
-            btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
-
-            // Maximize/Restore button
-            if rel_x >= btn_x
-                && rel_x < btn_x + BTN_SIZE
-                && rel_y >= (TITLEBAR_H - BTN_SIZE) / 2
-                && rel_y < (TITLEBAR_H + BTN_SIZE) / 2
-            {
+            if maximize_rect.contains(point) {
                 return HitZone::MaximizeBtn;
             }
-            btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
-
-            // Minimize button
-            if rel_x >= btn_x
-                && rel_x < btn_x + BTN_SIZE
-                && rel_y >= (TITLEBAR_H - BTN_SIZE) / 2
-                && rel_y < (TITLEBAR_H + BTN_SIZE) / 2
-            {
+            if minimize_rect.contains(point) {
                 return HitZone::MinimizeBtn;
             }
-            btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
-
-            // Keep On Top button
-            if rel_x >= btn_x
-                && rel_x < btn_x + BTN_SIZE
-                && rel_y >= (TITLEBAR_H - BTN_SIZE) / 2
-                && rel_y < (TITLEBAR_H + BTN_SIZE) / 2
-            {
+            if pin_rect.contains(point) {
                 return HitZone::KeepOnTopBtn;
             }
 
@@ -1203,112 +1088,90 @@ fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
         } else {
             BTN_ICON_COLOR
         };
-
-        // Title bar
-        draw_rect(state, wx, wy, chrome_w, TITLEBAR_H, tb_color);
-
-        if is_focused {
-            // Accent line below title bar
-            draw_rect(state, wx, wy + TITLEBAR_H - 2, chrome_w, 2, TITLEBAR_ACCENT);
-        }
-
-        // --- Controls (Right-aligned) ---
-        let mut btn_x = wx + chrome_w.saturating_sub(BTN_SIZE + BTN_SPACING);
-        let btn_y = wy + (TITLEBAR_H.saturating_sub(BTN_SIZE)) / 2;
-
-        // Close button (no background, orange X)
-        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, tb_color);
-        let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
-        let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
-        let csize = 4;
-        for i in -csize..=csize {
-            draw_rect(state, (cx + i) as u32, (cy + i) as u32, 2, 2, BORDER_COLOR);
-            draw_rect(state, (cx + i) as u32, (cy - i) as u32, 2, 2, BORDER_COLOR);
-        }
-
-        btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
-
-        // Maximize/Restore button
-        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, tb_color); // Transparentish bg
-        let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
-        let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
-        if maximized {
-            // Restore: <->
-            draw_rect(state, (cx - 4) as u32, (cy) as u32, 8, 1, icon_col);
-            draw_rect(state, (cx - 4) as u32, (cy - 2) as u32, 2, 5, icon_col);
-            draw_rect(state, (cx + 3) as u32, (cy - 2) as u32, 2, 5, icon_col);
-        } else {
-            // Maximize: >-<
-            draw_rect(state, (cx - 4) as u32, (cy) as u32, 8, 1, icon_col);
-            draw_rect(state, (cx - 2) as u32, (cy - 3) as u32, 4, 1, icon_col);
-            draw_rect(state, (cx - 2) as u32, (cy + 2) as u32, 4, 1, icon_col);
-        }
-
-        btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
-
-        // Minimize button (V shape)
-        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, tb_color);
-        let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
-        let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
-        for i in 0..4 {
-            draw_rect(
-                state,
-                (cx - 3 + i) as u32,
-                (cy - 1 + i) as u32,
-                2,
-                2,
-                icon_col,
-            );
-            draw_rect(
-                state,
-                (cx + 3 - i) as u32,
-                (cy - 1 + i) as u32,
-                2,
-                2,
-                icon_col,
-            );
-        }
-
-        btn_x = btn_x.saturating_sub(BTN_SIZE + BTN_SPACING);
-
-        // Keep On Top button (circle with dot)
-        draw_rect(state, btn_x, btn_y, BTN_SIZE, BTN_SIZE, tb_color);
-        let cx = btn_x as i32 + (BTN_SIZE as i32) / 2;
-        let cy = btn_y as i32 + (BTN_SIZE as i32) / 2;
-        // Outer ring (approximate)
-        draw_rect(state, (cx - 3) as u32, (cy - 4) as u32, 6, 1, icon_col);
-        draw_rect(state, (cx - 3) as u32, (cy + 3) as u32, 6, 1, icon_col);
-        draw_rect(state, (cx - 4) as u32, (cy - 3) as u32, 1, 6, icon_col);
-        draw_rect(state, (cx + 3) as u32, (cy - 3) as u32, 1, 6, icon_col);
-
-        let is_on_top = win.config.z_index_type == ZIndexType::OnTop;
-        let dot_color = if is_on_top { TITLEBAR_ACCENT } else { icon_col };
-        // Inner dot
-        draw_rect(state, (cx - 1) as u32, (cy - 1) as u32, 2, 2, dot_color);
-
-        // Title text (Centered in remaining space)
-        let avail_w = chrome_w.saturating_sub((BTN_SIZE + BTN_SPACING) * 4);
-        draw_title(state, &win.config.title, wx, wy, avail_w);
-
-        // Borders (top, left, right, bottom)
-        draw_rect(state, wx, wy, chrome_w, BORDER_W, bd_color);
-        draw_rect(state, wx, wy, BORDER_W, chrome_h, bd_color);
-        draw_rect(
-            state,
-            wx + BORDER_W + win.width,
-            wy,
-            BORDER_W,
-            chrome_h,
-            bd_color,
+        let hover_zone = hit_test_window(
+            win,
+            state.mouse_x as u32,
+            state.mouse_y as u32,
+            state.fb_width,
+            state.fb_height,
         );
-        draw_rect(
-            state,
-            wx,
-            wy + TITLEBAR_H + win.height,
-            chrome_w,
-            BORDER_W,
-            bd_color,
+        let outer = Rect::new(wx as i32, wy as i32, chrome_w, chrome_h);
+        let inner = outer.inset(BORDER_W as i32);
+        let outer_radius = if maximized { 0 } else { CHROME_RADIUS };
+        let inner_radius = outer_radius.saturating_sub(BORDER_W);
+        let pin_rect = control_rect(wx, wy, chrome_w, 3);
+        let minimize_rect = control_rect(wx, wy, chrome_w, 2);
+        let maximize_rect = control_rect(wx, wy, chrome_w, 1);
+        let close_rect = control_rect(wx, wy, chrome_w, 0);
+        let control_strip_w = (BTN_SIZE + BTN_SPACING) * 4;
+        let title_rect = Rect::new(
+            wx as i32 + 14,
+            wy as i32 + 2,
+            chrome_w.saturating_sub(control_strip_w + 28),
+            TITLEBAR_H.saturating_sub(4),
         );
+
+        {
+            let mut canvas = framebuffer_canvas(state);
+            canvas.fill_rounded_rect(outer, outer_radius, Color(bd_color));
+            canvas.fill_rounded_rect(inner, inner_radius, Color(tb_color));
+
+            if is_focused {
+                let accent_rect = Rect::new(
+                    inner.x + 10,
+                    wy as i32 + TITLEBAR_H as i32 - 4,
+                    inner.w.saturating_sub(20),
+                    2,
+                );
+                canvas.fill_rounded_rect(accent_rect, 1, Color(TITLEBAR_ACCENT));
+            }
+
+            draw_window_control(
+                &mut canvas,
+                pin_rect,
+                WindowControlKind::Pin,
+                if win.config.z_index_type == ZIndexType::OnTop {
+                    Color(TITLEBAR_ACCENT)
+                } else {
+                    Color(icon_col)
+                },
+                Color(tb_color),
+                hover_zone == HitZone::KeepOnTopBtn,
+                win.config.z_index_type == ZIndexType::OnTop,
+            );
+            draw_window_control(
+                &mut canvas,
+                minimize_rect,
+                WindowControlKind::Minimize,
+                Color(icon_col),
+                Color(tb_color),
+                hover_zone == HitZone::MinimizeBtn,
+                false,
+            );
+            draw_window_control(
+                &mut canvas,
+                maximize_rect,
+                if maximized {
+                    WindowControlKind::Restore
+                } else {
+                    WindowControlKind::Maximize
+                },
+                Color(icon_col),
+                Color(tb_color),
+                hover_zone == HitZone::MaximizeBtn,
+                maximized,
+            );
+            draw_window_control(
+                &mut canvas,
+                close_rect,
+                WindowControlKind::Close,
+                Color(BORDER_COLOR),
+                Color(tb_color),
+                hover_zone == HitZone::CloseBtn,
+                is_focused,
+            );
+            draw_title(&mut canvas, &win.config.title, title_rect, Color(TITLE_TEXT_COLOR));
+        }
     }
 
     // Blit client buffer.

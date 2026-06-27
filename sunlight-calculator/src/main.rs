@@ -8,7 +8,7 @@ use sunlight_ipc::{debug_log, process_yield, ProcessExit};
 use sunlight_ui::{
     request_close,
     widgets::Label,
-    App, Event, Rect, Window, WindowConfig,
+    App, Event, Rect, UiSymbol, Window, WindowConfig,
 };
 use sunlight_ui::paint::Canvas;
 use sunlight_ui::theme::{Color, Theme};
@@ -50,6 +50,8 @@ const EQUALS_PRESSED: Color = Color::rgb(0xAA, 0x6E, 0x00);
 const DISPLAY_BG: Color = Color::rgb(0x28, 0x28, 0x30);
 const BTN_TEXT: Color = Color::rgb(0xF0, 0xF0, 0xF0);
 const BTN_TEXT_DARK: Color = Color::rgb(0x00, 0x00, 0x00);
+const BUTTON_RADIUS: u32 = 8;
+const DISPLAY_RADIUS: u32 = 10;
 
 // ── No-Alloc Stub ──────────────────────────────────────────────────────────────
 
@@ -84,14 +86,40 @@ enum BtnKind {
     Negate,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ButtonFace {
+    Text(&'static str),
+    Symbol(UiSymbol),
+}
+
 // ── Button data ────────────────────────────────────────────────────────────────
 
-const BUTTON_LABELS: [&str; TOTAL_BTNS] = [
-    "MC", "MR", "M+", "M-", "CE",
-    "7",  "8",  "9",  "÷",  "√",
-    "4",  "5",  "6",  "×",  "%",
-    "1",  "2",  "3",  "−",  "1/x",
-    "0",  ".",  "+/−", "+", "=",
+const BUTTON_FACES: [ButtonFace; TOTAL_BTNS] = [
+    ButtonFace::Text("MC"),
+    ButtonFace::Text("MR"),
+    ButtonFace::Text("M+"),
+    ButtonFace::Text("M-"),
+    ButtonFace::Text("CE"),
+    ButtonFace::Text("7"),
+    ButtonFace::Text("8"),
+    ButtonFace::Text("9"),
+    ButtonFace::Symbol(UiSymbol::Divide),
+    ButtonFace::Symbol(UiSymbol::SquareRoot),
+    ButtonFace::Text("4"),
+    ButtonFace::Text("5"),
+    ButtonFace::Text("6"),
+    ButtonFace::Symbol(UiSymbol::Multiply),
+    ButtonFace::Text("%"),
+    ButtonFace::Text("1"),
+    ButtonFace::Text("2"),
+    ButtonFace::Text("3"),
+    ButtonFace::Symbol(UiSymbol::Minus),
+    ButtonFace::Text("1/x"),
+    ButtonFace::Text("0"),
+    ButtonFace::Text("."),
+    ButtonFace::Symbol(UiSymbol::PlusMinus),
+    ButtonFace::Text("+"),
+    ButtonFace::Text("="),
 ];
 
 const BUTTON_ACTIONS: [ButtonAction; TOTAL_BTNS] = [
@@ -173,7 +201,7 @@ impl CalcApp {
     fn draw_button(canvas: &mut Canvas, idx: usize, hovered: bool, pressed: bool, theme: &Theme) {
         let rect = Self::btn_rect(idx);
         let kind = BUTTON_KINDS[idx];
-        let label = BUTTON_LABELS[idx];
+        let face = BUTTON_FACES[idx];
 
         let (bg, text_color) = match (kind, hovered || pressed, pressed) {
             (BtnKind::Number, false, _) => (NUM_BG, BTN_TEXT),
@@ -205,9 +233,27 @@ impl CalcApp {
             (BtnKind::Equals, _, true) => (EQUALS_PRESSED, BTN_TEXT_DARK),
         };
 
-        canvas.fill_rect(rect, bg);
-        canvas.draw_rect(rect, theme.accent);
-        canvas.draw_text_centered(rect, label, text_color);
+        let border = if pressed {
+            theme.accent
+        } else if hovered {
+            theme.accent_hover
+        } else if kind == BtnKind::Equals {
+            theme.accent
+        } else {
+            theme.border.lighten(24)
+        };
+
+        canvas.fill_rounded_rect_with_border(rect, BUTTON_RADIUS, bg, border, 1);
+
+        if hovered && !pressed {
+            let sheen = Rect::new(rect.x + 4, rect.y + 3, rect.w.saturating_sub(8), 2);
+            canvas.fill_rounded_rect(sheen, 1, Color::rgba(255, 255, 255, 48));
+        }
+
+        match face {
+            ButtonFace::Text(label) => canvas.draw_text_centered(rect, label, text_color),
+            ButtonFace::Symbol(symbol) => canvas.draw_ui_symbol_centered(rect, symbol, text_color),
+        }
     }
 
     fn handle_keyboard(&mut self, ch: char) -> bool {
@@ -242,16 +288,22 @@ impl CalcApp {
 
         let sunlight_label = "SunlightOS";
         let tw = Canvas::measure_text(sunlight_label);
-        let sx = (WIN_W as i32) - (tw as i32) - 10;
-        canvas.draw_text(sx, 6, sunlight_label, theme.accent);
+        let pill_rect = Rect::new((WIN_W as i32) - (tw as i32) - 24, 6, tw + 14, 16);
+        canvas.fill_rounded_rect(pill_rect, 8, theme.panel_alt);
+        canvas.draw_text(pill_rect.x + 7, 10, sunlight_label, theme.accent);
 
-        canvas.hbar(0, 48, WIN_W, 2, theme.accent);
+        canvas.fill_rounded_rect(Rect::new(10, 46, WIN_W - 20, 3), 1, theme.accent);
     }
 
     fn draw_display(canvas: &mut Canvas, app: &Self, theme: &Theme) {
         let display_rect = Rect::new(10, 54, WIN_W - 20, DISPLAY_H);
-        canvas.fill_rect(display_rect, DISPLAY_BG);
-        canvas.draw_rect(display_rect, theme.accent);
+        canvas.fill_rounded_rect_with_border(
+            display_rect,
+            DISPLAY_RADIUS,
+            DISPLAY_BG,
+            theme.accent,
+            2,
+        );
 
         let text = app.state.display_str();
         let text_color = if app.state.error || text == "Error" {
@@ -267,7 +319,9 @@ impl CalcApp {
         canvas.draw_text(tx, ty, text, text_color);
 
         if app.state.memory_value() != 0.0 {
-            canvas.draw_text(display_rect.x + 4, ty, "M", theme.accent);
+            let memory_rect = Rect::new(display_rect.x + 6, display_rect.y + 7, 16, 18);
+            canvas.fill_rounded_rect(memory_rect, 6, theme.panel_alt);
+            canvas.draw_text(memory_rect.x + 5, ty, "M", theme.accent);
         }
     }
 }

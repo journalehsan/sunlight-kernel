@@ -4,7 +4,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```ignore
 //! use sunlight_ui::{Theme, Canvas, widgets::*};
 //! use sunlight_ui::geom::Rect;
 //!
@@ -29,9 +29,11 @@
 extern crate alloc;
 
 pub mod event;
+pub mod font;
 pub mod geom;
 pub mod layout;
 pub mod paint;
+pub mod draw;
 pub mod theme;
 pub mod widgets;
 
@@ -41,6 +43,7 @@ pub mod app;
 
 // Top-level re-exports for convenience
 pub use event::Event;
+pub use font::{UiGlyph, UiSymbol};
 pub use geom::{Point, Rect, Size};
 pub use layout::{HBox, VBox};
 pub use paint::Canvas;

@@ -6,6 +6,8 @@
 
 use crate::geom::Rect;
 use crate::theme::Color;
+use crate::font::ui_symbols;
+use crate::font::UiSymbol;
 
 /// A mutable view over a region of a framebuffer.
 /// Pixels are 32-bit ARGB, row-major, stride in *pixels* (not bytes).
@@ -121,6 +123,25 @@ impl<'fb> Canvas<'fb> {
         }
     }
 
+    /// Draw a glyph stored as one bitmask row per `u16`.
+    pub fn draw_glyph_rows(
+        &mut self,
+        x: i32,
+        y: i32,
+        rows: &[u16],
+        width: u32,
+        color: Color,
+    ) {
+        for (row_idx, &row_bits) in rows.iter().enumerate() {
+            for col in 0..width as usize {
+                let bit = (row_bits >> (width as usize - 1 - col)) & 1;
+                if bit != 0 {
+                    self.put_pixel(x + col as i32, y + row_idx as i32, color);
+                }
+            }
+        }
+    }
+
     /// Render ASCII text using the embedded 6×10 bitmap font.
     /// Returns the x position after the last character.
     pub fn draw_text(&mut self, x: i32, y: i32, text: &str, color: Color) -> i32 {
@@ -145,9 +166,27 @@ impl<'fb> Canvas<'fb> {
         x + font::GLYPH_W as i32 + 1
     }
 
+    /// Draw a built-in UI symbol glyph; returns x after the glyph.
+    pub fn draw_ui_symbol(&mut self, x: i32, y: i32, symbol: UiSymbol, color: Color) -> i32 {
+        let glyph = ui_symbols::glyph(symbol);
+        self.draw_glyph_rows(x, y, glyph.rows(), glyph.width as u32, color);
+        x + glyph.advance as i32
+    }
+
+    pub fn measure_ui_symbol(symbol: UiSymbol) -> u32 {
+        ui_symbols::glyph(symbol).advance as u32
+    }
+
+    pub fn draw_ui_symbol_centered(&mut self, rect: Rect, symbol: UiSymbol, color: Color) {
+        let glyph = ui_symbols::glyph(symbol);
+        let tx = rect.x + (rect.w as i32 - glyph.width as i32) / 2;
+        let ty = rect.y + (rect.h as i32 - glyph.height as i32) / 2;
+        self.draw_ui_symbol(tx, ty, symbol, color);
+    }
+
     /// Measure pixel width of `text`.
     pub fn measure_text(text: &str) -> u32 {
-        text.len() as u32 * (font::GLYPH_W + 1)
+        text.chars().count() as u32 * (font::GLYPH_W + 1)
     }
 
     /// Draw text centered in `rect`.
