@@ -79,7 +79,7 @@ const FP_ONE: i32 = 1 << FP_SHIFT;
 /// Set to true to log every RAW_MOTION packet (dx/dy, cursor before/after).
 const MOUSE_DEBUG: bool = false;
 
-const SENS_DEFAULT_FP: i32 = FP_ONE;
+const SENS_DEFAULT_FP: i32 = FP_ONE * 2;
 #[allow(dead_code)]
 const SENS_MIN_FP: i32 = FP_ONE / 2;
 #[allow(dead_code)]
@@ -90,6 +90,9 @@ const ACCEL_NORMAL_MAX_DELTA: i32 = 6;
 const ACCEL_PRECISE_GAIN_FP: i32 = FP_ONE;
 const ACCEL_NORMAL_GAIN_FP: i32 = FP_ONE * 3 / 2;
 const ACCEL_FAST_GAIN_FP: i32 = FP_ONE * 9 / 4;
+/// On a button press (up->down edge) the pointer is held still for this many
+/// motion packets so the cursor stays put while the click lands.
+const CLICK_FREEZE_EVENTS: u32 = 4;
 const EDGE_MARGIN: i32 = 0;
 const COUNTER_LOG_INTERVAL: u64 = 64;
 const KEY_TAB: u8 = 0x0F;
@@ -402,6 +405,8 @@ struct PointerState {
     fb_width: u32,
     fb_height: u32,
     sensitivity_fp: i32,
+    /// Remaining motion packets to suppress after a click edge (stabilization).
+    freeze_events: u32,
 }
 
 impl PointerState {
@@ -415,10 +420,23 @@ impl PointerState {
             fb_width: fb_w,
             fb_height: fb_h,
             sensitivity_fp: SENS_DEFAULT_FP,
+            freeze_events: 0,
         }
     }
 
     fn apply_motion(&mut self, dx: i32, dy: i32, buttons: u8) {
+        // Detect a button press edge (any button newly pressed) and start a
+        // short freeze so the cursor doesn't drift while the click registers.
+        let pressed_edge = buttons & !self.buttons;
+        if pressed_edge != 0 {
+            self.freeze_events = CLICK_FREEZE_EVENTS;
+        }
+        if self.freeze_events > 0 {
+            self.freeze_events -= 1;
+            self.buttons = buttons;
+            return;
+        }
+
         let speed = dx.abs().max(dy.abs());
         let accel_fp = if speed <= ACCEL_PRECISE_MAX_DELTA {
             ACCEL_PRECISE_GAIN_FP
@@ -742,6 +760,25 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
 // ---------------------------------------------------------------------------
 // Chrome constants (Vortex Shell Theme)
 // ---------------------------------------------------------------------------
+
+// Safe fallback resolution if neither the VirtIO GPU nor the Limine framebuffer
+// report a usable size. Used so the compositor never allocates a 0×0 buffer.
+const SAFE_FALLBACK_W: u32 = 1280;
+const SAFE_FALLBACK_H: u32 = 800;
+// Upper sanity bound on any reported dimension. Guards against a garbage VirtIO
+// GPU reply (e.g. uninitialized registers) sizing a multi-GB back buffer.
+const MAX_DIM: u32 = 16384;
+
+/// Validate a backend-reported `(width, height)`: both must be non-zero and
+/// within `MAX_DIM`. Returns `None` for a zero/garbage size so the caller can
+/// fall back instead of allocating a bogus buffer.
+fn validate_size(w: u32, h: u32) -> Option<(u32, u32)> {
+    if w == 0 || h == 0 || w > MAX_DIM || h > MAX_DIM {
+        None
+    } else {
+        Some((w, h))
+    }
+}
 
 const DESKTOP_COLOR: u32 = 0x00121214; // Deep dark gray/black
 const TITLEBAR_H: u32 = 32; // Taller for Chrome-tab style
@@ -1632,6 +1669,11 @@ fn move_hw_cursor(state: &mut CompositorState, x: u32, y: u32) -> bool {
     if !state.hw_cursor_active {
         return false;
     }
+    // Defensively clamp to the current selected screen size so a stray coordinate
+    // can never push the hardware cursor off the scanout. Moving the cursor never
+    // touches the back buffer, so this does not trigger a compositor redraw.
+    let x = x.min(state.fb_width.saturating_sub(1));
+    let y = y.min(state.fb_height.saturating_sub(1));
     let ok = sunlight_ipc::gpu_move_cursor(x, y);
     if ok {
         state.debug_counters.hw_cursor_move_count += 1;
@@ -1812,18 +1854,35 @@ pub extern "C" fn _start() -> ! {
     };
 
     // Try to use VirtIO GPU backend; fall back to Limine framebuffer.
+    //
+    // TODO(live-resize): the VirtIO GPU size is sampled exactly once here, at
+    // startup. If the host window is resized later, the kernel can signal a new
+    // scanout size; the compositor would then need to resize back_buffer,
+    // recreate the GPU resource, re-attach backing, set scanout, mark the whole
+    // screen dirty and redraw. Until that path exists we pin the initial size.
     let detected_backend = match sunlight_ipc::gpu_get_info() {
-        Some((gw, gh)) => {
-            debug_log("[DISPLAY] VirtIO GPU detected ");
-            debug_dec(gw);
-            debug_log("x");
-            debug_dec(gh);
-            debug_log("\n");
-            backend::DisplayBackend::VirtioGpu {
-                width: gw,
-                height: gh,
+        Some((gw, gh)) => match validate_size(gw, gh) {
+            Some((gw, gh)) => {
+                debug_log("[DISPLAY] VirtIO GPU reported ");
+                debug_dec(gw);
+                debug_log("x");
+                debug_dec(gh);
+                debug_log("\n");
+                backend::DisplayBackend::VirtioGpu {
+                    width: gw,
+                    height: gh,
+                }
             }
-        }
+            None => {
+                // Garbage/zero size — ignore the GPU and use Limine instead.
+                debug_log("[DISPLAY] VirtIO GPU reported invalid size ");
+                debug_dec(gw);
+                debug_log("x");
+                debug_dec(gh);
+                debug_log(", ignoring GPU\n");
+                limine_backend
+            }
+        },
         None => {
             debug_log("[DISPLAY] VirtIO GPU not found, using Limine framebuffer\n");
             limine_backend
@@ -1835,10 +1894,19 @@ pub extern "C" fn _start() -> ! {
     // virtio-gpu to the host window). The back buffer and compositor MUST match
     // the GPU's dimensions, tightly packed (stride = width*4) to match the
     // kernel's resource_create_2d — otherwise the GPU reads past the buffer and
-    // the screen is black. Default to the Limine framebuffer dimensions.
-    let mut render_width = fb_width;
-    let mut render_height = fb_height;
-    let mut render_pitch = pitch as u32;
+    // the screen is black. Default to the Limine framebuffer dimensions, then to
+    // a safe fallback if even those are unusable (never allocate a 0×0 buffer).
+    let (limine_render_w, limine_render_h, limine_render_pitch) =
+        match validate_size(fb_width, fb_height) {
+            Some((w, h)) => (w, h, pitch as u32),
+            None => {
+                debug_log("[DISPLAY] Limine framebuffer size invalid, using safe fallback\n");
+                (SAFE_FALLBACK_W, SAFE_FALLBACK_H, SAFE_FALLBACK_W * 4)
+            }
+        };
+    let mut render_width = limine_render_w;
+    let mut render_height = limine_render_h;
+    let mut render_pitch = limine_render_pitch;
     if let backend::DisplayBackend::VirtioGpu { width, height } = detected_backend {
         render_width = width;
         render_height = height;
@@ -1881,9 +1949,9 @@ pub extern "C" fn _start() -> ! {
         // If GPU setup failed, the back buffer was sized for the GPU; revert it
         // and the render dimensions to the Limine framebuffer for software present.
         if !hw_cursor {
-            render_width = fb_width;
-            render_height = fb_height;
-            render_pitch = pitch as u32;
+            render_width = limine_render_w;
+            render_height = limine_render_h;
+            render_pitch = limine_render_pitch;
             back_buffer = {
                 let mut pixels = Vec::new();
                 pixels.resize(
@@ -1894,6 +1962,25 @@ pub extern "C" fn _start() -> ! {
             };
         }
     }
+
+    // Startup summary: single source of truth for the compositor's geometry.
+    match display_backend {
+        backend::DisplayBackend::VirtioGpu { .. } => debug_log("[DISPLAY] backend=VirtioGpu\n"),
+        backend::DisplayBackend::Limine { .. } => debug_log("[DISPLAY] backend=Limine\n"),
+    }
+    debug_log("[DISPLAY] compositor size ");
+    debug_dec(render_width);
+    debug_log("x");
+    debug_dec(render_height);
+    debug_log(" pitch=");
+    debug_dec(render_pitch);
+    debug_log("\n");
+    let expected_back_len = (render_pitch as usize / 4) * render_height as usize;
+    debug_log("[DISPLAY] back_buffer expected_len=");
+    debug_dec(expected_back_len as u32);
+    debug_log(" actual_len=");
+    debug_dec(back_buffer.len() as u32);
+    debug_log("\n");
 
     let mut state = CompositorState {
         windows: Vec::new(),

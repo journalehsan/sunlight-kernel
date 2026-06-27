@@ -71,7 +71,7 @@ const FALLBACK_BG: u32 = 0x00121214;
 
 // Fallback if GET_SCREEN_INFO fails (display server not yet ready on first poll).
 const FALLBACK_W: u32 = 1280;
-const FALLBACK_H: u32 = 720;
+const FALLBACK_H: u32 = 800;
 
 // Desktop-layer config flags (see app.rs WindowConfig docs).
 // bits[1:0]=2 Desktop, bits[3:2]=3 Fullscreen, bit[4]=1 NoChrome → 0x1E
