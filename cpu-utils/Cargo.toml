@@ -1,6 +1,8 @@
 [package]
 name = "cpu-utils"
-version = "0.1.487"
+version = "0.1.490"
+
+
 
 
 

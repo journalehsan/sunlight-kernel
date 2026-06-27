@@ -13,6 +13,10 @@ use sunlight_ipc::{
 };
 use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
 
+mod blend;
+mod dirty;
+mod mask;
+
 // ---------------------------------------------------------------------------
 // Allocator
 // ---------------------------------------------------------------------------
@@ -553,6 +557,10 @@ struct CompositorState {
     // True when Desktop session owns the framebuffer; false when TTY/login is active.
     // tty_server sends SESSION_ACTIVATE/SESSION_DEACTIVATE to toggle this.
     session_active: bool,
+    /// Precomputed anti-aliased corner coverage for the inner chrome radius.
+    inner_corner_mask: mask::CornerMask,
+    /// Regions that need to be presented to the framebuffer this frame.
+    dirty: dirty::DirtyList,
 }
 
 fn fb_stride(state: &CompositorState) -> usize {
@@ -866,6 +874,38 @@ fn present_back_buffer(state: &CompositorState) {
     }
 }
 
+/// Blit only the pixels within `r` from the back buffer to the framebuffer.
+fn present_rect(state: &CompositorState, r: Rect) {
+    let stride = fb_stride(state);
+    let x0 = r.x.max(0) as usize;
+    let y0 = r.y.max(0) as usize;
+    let x1 = (r.right() as usize).min(state.fb_width as usize);
+    let y1 = (r.bottom() as usize).min(state.fb_height as usize);
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let len = x1 - x0;
+    for y in y0..y1 {
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                state.back_buffer.as_ptr().add(y * stride + x0),
+                state.fb.add(y * stride + x0),
+                len,
+            );
+        }
+    }
+}
+
+/// Dirty rect that covers the cursor bitmap plus a 1-px border for clean erasure.
+fn cursor_dirty_rect(cx: u32, cy: u32) -> Rect {
+    Rect::new(
+        cx as i32 - 1,
+        cy as i32 - 1,
+        CURSOR_W as u32 + 2,
+        CURSOR_H as u32 + 2,
+    )
+}
+
 fn title_len(title: &[u8; 64]) -> usize {
     title.iter().position(|&b| b == 0).unwrap_or(title.len())
 }
@@ -920,44 +960,6 @@ fn draw_window_control(
 
     canvas.fill_rounded_rect_with_border(rect, CONTROL_RADIUS, fill, border, 1);
     canvas.draw_ui_symbol_centered(rect, control.symbol(), icon_color);
-}
-
-fn rounded_clip_allows_pixel(rect: Rect, radius: i32, x: i32, y: i32) -> bool {
-    if rect.w == 0 || rect.h == 0 {
-        return false;
-    }
-    if x < rect.x || y < rect.y || x >= rect.right() || y >= rect.bottom() {
-        return false;
-    }
-    if radius <= 0 {
-        return true;
-    }
-
-    let local_x = x - rect.x;
-    let local_y = y - rect.y;
-    let w = rect.w as i32;
-    let h = rect.h as i32;
-
-    let dx = if local_x < radius {
-        radius - 1 - local_x
-    } else if local_x >= w - radius {
-        local_x - (w - radius)
-    } else {
-        0
-    };
-    let dy = if local_y < radius {
-        radius - 1 - local_y
-    } else if local_y >= h - radius {
-        local_y - (h - radius)
-    } else {
-        0
-    };
-
-    if dx == 0 || dy == 0 {
-        return true;
-    }
-
-    dx * dx + dy * dy < radius * radius
 }
 
 // ---------------------------------------------------------------------------
@@ -1221,15 +1223,13 @@ fn composite_window(
     let copy_h = client_h.min(state.fb_height - canvas_y) as usize;
     let stride = fb_stride(state);
     let back_ptr = back_buffer.as_mut_ptr();
+    // Inner content area used for anti-aliased rounded-corner clipping.
     let clip_rect = if !no_chrome && !maximized {
-        Some((
-            Rect::new(
-                win.x as i32 + BORDER_W as i32,
-                win.y as i32 + BORDER_W as i32,
-                win.width,
-                TITLEBAR_H + win.height,
-            ),
-            CHROME_RADIUS.saturating_sub(BORDER_W) as i32,
+        Some(Rect::new(
+            win.x as i32 + BORDER_W as i32,
+            win.y as i32 + BORDER_W as i32,
+            win.width,
+            TITLEBAR_H + win.height,
         ))
     } else {
         None
@@ -1238,12 +1238,26 @@ fn composite_window(
         unsafe {
             let src_row = win.buffer.add(row * win.width as usize);
             let dst_row = back_ptr.add((canvas_y as usize + row) * stride + canvas_x as usize);
-            if let Some((rect, radius)) = clip_rect {
-                let dst_y = canvas_y as i32 + row as i32;
+            if let Some(rect) = clip_rect {
+                // Rect-local Y coordinate for this row.
+                let ly = canvas_y as i32 + row as i32 - rect.y;
+                // Base rect-local X for col 0 of this blit row.
+                let lx_base = canvas_x as i32 - rect.x;
+                let rw = rect.w as i32;
+                let rh = rect.h as i32;
                 for col in 0..copy_w {
-                    let dst_x = canvas_x as i32 + col as i32;
-                    if rounded_clip_allows_pixel(rect, radius, dst_x, dst_y) {
-                        dst_row.add(col).write(src_row.add(col).read());
+                    let lx = lx_base + col as i32;
+                    let cov = state.inner_corner_mask.coverage(lx, ly, rw, rh);
+                    match cov {
+                        0 => {}
+                        255 => {
+                            dst_row.add(col).write(src_row.add(col).read());
+                        }
+                        a => {
+                            let src_px = src_row.add(col).read();
+                            let dst_px = dst_row.add(col).read();
+                            dst_row.add(col).write(blend::blend_pixel(src_px, dst_px, a));
+                        }
                     }
                 }
             } else {
@@ -1297,7 +1311,17 @@ fn redraw_scene(state: &mut CompositorState) {
     }
     draw_cursor(state, &mut back_buffer);
     state.back_buffer = back_buffer;
-    present_back_buffer(state);
+    // Present only the dirty regions to reduce framebuffer write bandwidth.
+    if state.dirty.needs_full_present() {
+        present_back_buffer(state);
+    } else {
+        let count = state.dirty.count;
+        let rects = state.dirty.rects;
+        for i in 0..count {
+            present_rect(state, rects[i]);
+        }
+    }
+    state.dirty.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -1415,6 +1439,8 @@ pub extern "C" fn _start() -> ! {
         // TTY session owns the framebuffer at boot; tty_server sends
         // SESSION_ACTIVATE to hand the framebuffer to the Desktop session.
         session_active: false,
+        inner_corner_mask: mask::CornerMask::new(CHROME_RADIUS.saturating_sub(BORDER_W)),
+        dirty: dirty::DirtyList::new(),
     };
     redraw_scene(&mut state);
 
@@ -1507,6 +1533,7 @@ pub extern "C" fn _start() -> ! {
                                 pending_keys: KeyEventQueue::new(),
                             },
                         );
+                        state.dirty.mark_full();
                         redraw_scene(&mut state);
 
                         let client_x = win_x + BORDER_W;
@@ -1628,6 +1655,7 @@ pub extern "C" fn _start() -> ! {
                         }
                     }
                 }
+                state.dirty.mark_full();
                 redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -1642,8 +1670,9 @@ pub extern "C" fn _start() -> ! {
                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == win_id) {
                     win.client_cursor = CursorShape::from_u8(shape_byte);
                 }
-                // Re-evaluate active cursor immediately.
+                // Re-evaluate active cursor immediately; only the cursor rect changes.
                 state.active_cursor = cursor_for_scene(&state);
+                state.dirty.mark(cursor_dirty_rect(state.mouse_x as u32, state.mouse_y as u32));
                 redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -1653,7 +1682,9 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             SgpMsg::COMMIT_FRAME => {
                 let win_id = msg.words[0];
-                if state.windows.iter().any(|w| w.id == win_id) {
+                if let Some(win) = state.windows.iter().find(|w| w.id == win_id) {
+                    let (wx, wy, ww, wh) = win.chrome_rect(state.fb_width, state.fb_height);
+                    state.dirty.mark(Rect::new(wx as i32, wy as i32, ww, wh));
                     redraw_scene(&mut state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
@@ -1688,6 +1719,7 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::CLOSE_WINDOW => {
                 let win_id = msg.words[0];
                 if close_window(&mut state, win_id, Some(msg.badge)) {
+                    state.dirty.mark_full();
                     redraw_scene(&mut state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
@@ -1709,11 +1741,13 @@ pub extern "C" fn _start() -> ! {
                 } else if pressed && alt && keycode == KEY_TAB {
                     if cycle_focus(&mut state) {
                         state.active_cursor = cursor_for_scene(&state);
+                        state.dirty.mark_full();
                         redraw_scene(&mut state);
                     }
                 } else if pressed && ctrl && keycode == KEY_W {
                     if let Some(focused) = focused_window_id(&state) {
                         if close_window(&mut state, focused, None) {
+                            state.dirty.mark_full();
                             redraw_scene(&mut state);
                         }
                     }
@@ -1758,6 +1792,8 @@ pub extern "C" fn _start() -> ! {
                 let prev_cx = state.pointer.x() as u32;
                 let prev_cy = state.pointer.y() as u32;
                 let prev_buttons = state.prev_buttons;
+                // Snapshot drag state before processing to detect window-geometry changes.
+                let had_active_drag = !matches!(state.active_drag, ActiveDrag::None);
 
                 if MOUSE_DEBUG {
                     debug_log("[DISPLAY] raw_motion dx=");
@@ -1985,6 +2021,22 @@ pub extern "C" fn _start() -> ! {
 
                 state.prev_buttons = buttons;
                 state.active_cursor = cursor_for_scene(&state);
+
+                // If a window was moved/resized, a button changed, or a drag
+                // just started/ended, the entire scene needs presenting.
+                // For cursor-only moves mark just the old + new cursor rects so
+                // the compositor only blits those small regions to the framebuffer.
+                let new_cx = state.mouse_x as u32;
+                let new_cy = state.mouse_y as u32;
+                let button_changed = buttons != prev_buttons;
+                let now_dragging = !matches!(state.active_drag, ActiveDrag::None);
+                let window_changed = button_changed || had_active_drag || now_dragging;
+                if window_changed {
+                    state.dirty.mark_full();
+                } else {
+                    state.dirty.mark(cursor_dirty_rect(prev_cx, prev_cy));
+                    state.dirty.mark(cursor_dirty_rect(new_cx, new_cy));
+                }
                 redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -1996,6 +2048,7 @@ pub extern "C" fn _start() -> ! {
                 if !state.session_active {
                     debug_log("[DISPLAY] [SESSION] activated — Desktop owns framebuffer\n");
                     state.session_active = true;
+                    state.dirty.mark_full();
                     redraw_scene(&mut state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
