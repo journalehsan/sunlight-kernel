@@ -513,6 +513,7 @@ const ICON16_W: u32 = 16;
 enum DockAction {
     None,
     LaunchCalc,
+    LaunchFiles,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -580,10 +581,10 @@ struct VortexShell {
     screen_w: u32,
     screen_h: u32,
     /// Bounds of each clickable dock button (local coords), plus the action.
-    dock_zones: [(Rect, DockAction); 3],
+    dock_zones: [(Rect, DockAction); 4],
     selected_icon: Option<usize>,
     context_menu: Option<ContextMenuState>,
-    /// Tracks whether mouse is hovering over a dock icon (index 0..3).
+    /// Tracks whether mouse is hovering over a dock icon (index 0..4).
     hover: Option<usize>,
     /// Cached local hour/min for the status clock.
     status_hour: u8,
@@ -612,7 +613,7 @@ impl VortexShell {
             desktop_icons: Vec::new(),
             screen_w: FALLBACK_W,
             screen_h: FALLBACK_H,
-            dock_zones: [(Rect::new(0, 0, 0, 0), DockAction::None); 3],
+            dock_zones: [(Rect::new(0, 0, 0, 0), DockAction::None); 4],
             selected_icon: None,
             context_menu: None,
             hover: None,
@@ -1431,16 +1432,22 @@ fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32) {
     }
 }
 
-/// Draw the bottom-center dock and return the three clickable zone rects
-/// (terminal, tasks, calc).
+/// Draw the bottom-center dock and return the clickable zone rects
+/// (terminal, tasks, calc, files).
 fn draw_bot_center(
     canvas: &mut Canvas,
     theme: &Theme,
     by: i32,
     screen_w: u32,
     hover: Option<usize>,
-) -> [Rect; 3] {
-    let icons: &[&[u16; 16]; 4] = &[&GRID_ROWS, &TERMINAL_ROWS, &TASKS_ROWS, &CALC_ROWS];
+) -> [Rect; 4] {
+    let icons: &[&[u16; 16]; 5] = &[
+        &GRID_ROWS,
+        &TERMINAL_ROWS,
+        &TASKS_ROWS,
+        &CALC_ROWS,
+        &FOLDER_ROWS,
+    ];
     let n = icons.len() as u32;
     let cluster_w = CLUSTER_PAD as u32 * 2 + n * ICON_BTN + (n - 1) * ICON_GAP as u32;
     let cx_start = (screen_w as i32 - cluster_w as i32) / 2;
@@ -1448,7 +1455,7 @@ fn draw_bot_center(
     draw_panel(canvas, cluster, theme.panel, theme.border);
 
     let mut x = cluster.x + CLUSTER_PAD;
-    let mut clickable = [Rect::new(0, 0, 0, 0); 3];
+    let mut clickable = [Rect::new(0, 0, 0, 0); 4];
     for (i, rows) in icons.iter().enumerate() {
         let cell = Rect::new(
             x,
@@ -1460,7 +1467,8 @@ fn draw_bot_center(
             .map(|h| h == i.saturating_sub(1) && i > 0)
             .unwrap_or(false);
         draw_icon_btn(canvas, cell, rows, theme, false, is_hover);
-        // Icons 1,2,3 are clickable (terminal, tasks, calc); icon 0 (grid) is placeholder
+        // Icons 1,2,3 are clickable (terminal, tasks, calc); icon 0 (grid) is placeholder.
+        // Icon 4 is Sunlight Files.
         if i >= 1 {
             clickable[i - 1] = cell;
         }
@@ -1533,11 +1541,12 @@ impl App for VortexShell {
         let dock_cells = draw_bot_center(canvas, theme, by, cw, self.hover);
         draw_bot_right(canvas, theme, by, cw);
 
-        // Record clickable zones (terminal, tasks, calc).
+        // Record clickable zones (terminal, tasks, calc, files).
         self.dock_zones = [
             (dock_cells[0], DockAction::None), // terminal — TODO(phase2-launch)
             (dock_cells[1], DockAction::None), // tasks    — TODO(phase2-launch)
             (dock_cells[2], DockAction::LaunchCalc),
+            (dock_cells[3], DockAction::LaunchFiles),
         ];
 
         if let Some(menu) = &self.context_menu {
@@ -1629,6 +1638,7 @@ impl App for VortexShell {
 fn spawn_app(action: DockAction) {
     let path = match action {
         DockAction::LaunchCalc => "/bin/calculator",
+        DockAction::LaunchFiles => "/bin/sunlight-files",
         DockAction::None => return,
     };
     spawn_path(path);

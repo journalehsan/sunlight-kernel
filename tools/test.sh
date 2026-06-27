@@ -248,6 +248,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release >>"$BUILD_LOG" 2>&1
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
 if [[ "$NEED_DISK" == "true" ]]; then
     bash tools/disk.sh >>"$BUILD_LOG" 2>&1

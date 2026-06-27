@@ -61,6 +61,7 @@ members = [
     "services/solar",
     "sunlight-bench",
     "sunlight-calculator",
+    "sunlight-files",
 ]
 
 [workspace.dependencies]
@@ -85,4 +86,7 @@ opt-level = "z"
 opt-level = "z"
 
 [profile.release.package.sunshell]
+opt-level = "z"
+
+[profile.release.package.sunlight-files]
 opt-level = "z"

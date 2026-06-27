@@ -893,6 +893,14 @@ max_ttys = 6
     RamEntry::file("/bin/sunbench", 0, 0, mode::FILE_755, b"#!/sunlight/sunbench\n"),
     // GUI calculator client
     RamEntry::file("/bin/calculator", 0, 0, mode::FILE_755, b"#!/sunlight/calculator\n"),
+    // GUI file manager client
+    RamEntry::file(
+        "/bin/sunlight-files",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-files\n",
+    ),
     RamEntry::file(
         "/bin/cpufeat",
         0,
@@ -1409,6 +1417,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/calculator\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sunlight-files",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-files\n",
     ),
     RamEntry::file(
         "/usr/bin/cpufeat",

@@ -1,27 +1,15 @@
 [package]
-name = "sunlight-calculator"
+name = "sunlight-files"
 version = "0.1.524"
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 edition = "2021"
 
 [[bin]]
-name = "calculator"
+name = "sunlight-files"
 path = "src/main.rs"
 
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }

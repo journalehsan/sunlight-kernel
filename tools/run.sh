@@ -219,6 +219,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release
     # Sunshell MUST be compiled as user-space ELF with user-space linker script
     # Force x86_64-unknown-none target (override sunshell's Linux-only config)
     # This ensures it loads into 0x400000+ (user VAs), not kernel VAs (0xffffffff8...)

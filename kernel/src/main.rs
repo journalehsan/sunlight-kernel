@@ -165,6 +165,9 @@ static SUNLIGHT_BENCH_ELF_BYTES: &[u8] =
 // Sunlight Calculator: lightweight graphical calculator.
 static SUNLIGHT_CALCULATOR_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/calculator");
+// Sunlight Files: native file manager.
+static SUNLIGHT_FILES_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-files");
 // Vortex Shell: SunlightOS desktop surface (Phase 1 — wallpaper + desktop layer).
 static SUNLIGHT_VORTEX_SHELL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vortex-shell");
