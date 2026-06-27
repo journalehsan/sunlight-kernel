@@ -3996,7 +3996,12 @@ fn sys_powerctl(command: u64) -> u64 {
 // ---------------------------------------------------------------------------
 
 fn current_process_is_display_server() -> bool {
-    crate::sched::SCHEDULER.lock().current_process().name_str() == "display_server"
+    // The display server's *process* name is "sunlight-display" (its binary at
+    // /sbin/sunlight-display); "display_server" is only its nameserver
+    // registration string. Accept both so the GPU proxy syscalls aren't denied.
+    let sched = crate::sched::SCHEDULER.lock();
+    let name = sched.current_process().name_str();
+    name == "sunlight-display" || name == "display_server"
 }
 
 /// Helper: copy `len` bytes from the current process's user VA `src_va` to `dst` (kernel ptr).

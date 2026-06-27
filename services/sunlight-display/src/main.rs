@@ -1699,9 +1699,24 @@ pub extern "C" fn _start() -> ! {
         }
     };
 
-    let back_buffer = {
+    // Render dimensions. The VirtIO GPU scans out at its own resolution (gw×gh),
+    // which often differs from the Limine framebuffer (e.g. QEMU auto-resizes the
+    // virtio-gpu to the host window). The back buffer and compositor MUST match
+    // the GPU's dimensions, tightly packed (stride = width*4) to match the
+    // kernel's resource_create_2d — otherwise the GPU reads past the buffer and
+    // the screen is black. Default to the Limine framebuffer dimensions.
+    let mut render_width = fb_width;
+    let mut render_height = fb_height;
+    let mut render_pitch = pitch as u32;
+    if let backend::DisplayBackend::VirtioGpu { width, height } = detected_backend {
+        render_width = width;
+        render_height = height;
+        render_pitch = width * 4;
+    }
+
+    let mut back_buffer = {
         let mut pixels = Vec::new();
-        pixels.resize((pitch as usize / 4) * fb_height as usize, DESKTOP_COLOR);
+        pixels.resize((render_pitch as usize / 4) * render_height as usize, DESKTOP_COLOR);
         pixels
     };
 
@@ -1729,20 +1744,32 @@ pub extern "C" fn _start() -> ! {
             debug_log("[DISPLAY] falling back to Limine framebuffer backend\n");
             display_backend = limine_backend;
         }
+        // If GPU setup failed, the back buffer was sized for the GPU; revert it
+        // and the render dimensions to the Limine framebuffer for software present.
+        if !hw_cursor {
+            render_width = fb_width;
+            render_height = fb_height;
+            render_pitch = pitch as u32;
+            back_buffer = {
+                let mut pixels = Vec::new();
+                pixels.resize((render_pitch as usize / 4) * render_height as usize, DESKTOP_COLOR);
+                pixels
+            };
+        }
     }
 
     let mut state = CompositorState {
         windows: Vec::new(),
-        mouse_x: (fb_width / 2) as u16,
-        mouse_y: (fb_height / 2) as u16,
-        pointer: PointerState::new(fb_width, fb_height),
+        mouse_x: (render_width / 2) as u16,
+        mouse_y: (render_height / 2) as u16,
+        pointer: PointerState::new(render_width, render_height),
         mouse_sensitivity_fp: SENS_DEFAULT_FP,
         active_drag: ActiveDrag::None,
         prev_buttons: 0,
         fb: fb_ptr as *mut u32,
-        fb_width,
-        fb_height,
-        fb_pitch: pitch as u32,
+        fb_width: render_width,
+        fb_height: render_height,
+        fb_pitch: render_pitch,
         back_buffer,
         display_backend,
         hw_cursor_active: hw_cursor,

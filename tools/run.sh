@@ -320,7 +320,11 @@ QEMU_CMD=(
     -m "${MEMORY}M"
     -smp "$CPU_COUNT"
     "${CPU_ARGS[@]}"
-    -vga std
+    # virtio-vga (device 0x1af4:0x1050) exposes a modern VirtIO-GPU the kernel
+    # driver can drive (hardware cursor + scanout) AND a VGA-compatible linear
+    # framebuffer Limine uses for boot/login. `-vga std` gave only the latter,
+    # so the display server fell back to software compositing (laggy cursor).
+    -vga virtio
     -serial stdio
     -no-reboot
 )
@@ -407,7 +411,7 @@ if [ "$SCREENSHOT_MODE" = true ]; then
         -m "${MEMORY}M" \
         -smp "$CPU_COUNT" \
         "${CPU_ARGS[@]}" \
-        -vga std \
+        -vga vmvga \
         -display none \
         -serial stdio \
         -monitor telnet:127.0.0.1:55555,server,nowait \
