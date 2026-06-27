@@ -3379,6 +3379,21 @@ pub extern "C" fn _start() -> ! {
             }
 
             // -------------------------------------------------------------------
+            // SET_MOUSE_SETTINGS — control panel adjusts pointer sensitivity/accel.
+            // words[0] = sensitivity_fp (i32 as u64)
+            // words[1] = acceleration_enabled (0=off, 1=on)
+            // -------------------------------------------------------------------
+            SgpMsg::SET_MOUSE_SETTINGS => {
+                let sens = msg.words[0] as i32;
+                let accel = msg.words[1] != 0;
+                if sens > 0 {
+                    state.pointer.motion.sensitivity_fp = sens;
+                }
+                state.pointer.motion.acceleration_enabled = accel;
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, 0));
+            }
+
+            // -------------------------------------------------------------------
             // SESSION_ACTIVATE — tty_server hands framebuffer to Desktop session.
             // -------------------------------------------------------------------
             SgpMsg::SESSION_ACTIVATE => {

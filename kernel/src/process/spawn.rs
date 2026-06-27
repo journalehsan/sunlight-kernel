@@ -477,6 +477,10 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunlight-vortex-shell" | "/usr/bin/sunlight-vortex-shell" => {
             Ok(crate::SUNLIGHT_VORTEX_SHELL_ELF_BYTES)
         }
+        // control-panel: System Preferences (Mouse + Monitor settings).
+        "/bin/control-panel" | "/usr/bin/control-panel" => {
+            Ok(crate::SUNLIGHT_CONTROL_PANEL_ELF_BYTES)
+        }
         // cpufeat: x86-64 microarchitecture level detection (v2/v3 capability reporting).
         "/bin/cpufeat" | "/usr/bin/cpufeat" => Ok(crate::CPUFEAT_ELF_BYTES),
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.

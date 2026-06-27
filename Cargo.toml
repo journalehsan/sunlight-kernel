@@ -62,6 +62,7 @@ members = [
     "sunlight-bench",
     "sunlight-calculator",
     "sunlight-files",
+    "services/sunlight-control-panel",
 ]
 
 [workspace.dependencies]

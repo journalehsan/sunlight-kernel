@@ -1,0 +1,14 @@
+[package]
+name = "sunlight-control-panel"
+version = "0.1.573"
+
+edition = "2021"
+
+[[bin]]
+name = "control-panel"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }

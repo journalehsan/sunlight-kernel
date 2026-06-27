@@ -275,6 +275,11 @@ pub mod sgp {
         /// words[1] = timeout_ms
         /// caps[0]  = SHM page containing the notification payload
         pub const SHOW_NOTIFICATION: u64 = 0xA108;
+        /// Update pointer motion settings at runtime (from Control Panel or similar).
+        /// words[0] = sensitivity_fp (i32 cast to u64; FP_ONE=65536 → 1.0×)
+        /// words[1] = acceleration_enabled (0 = off, 1 = on)
+        /// Reply: SgpMsg::REPLY with words[0]=0 on success.
+        pub const SET_MOUSE_SETTINGS: u64 = 0xA109;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)

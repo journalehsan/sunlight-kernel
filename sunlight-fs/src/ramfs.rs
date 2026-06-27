@@ -901,6 +901,8 @@ max_ttys = 6
         mode::FILE_755,
         b"#!/sunlight/sunlight-files\n",
     ),
+    // System Preferences (Control Panel)
+    RamEntry::file("/bin/control-panel", 0, 0, mode::FILE_755, b"#!/sunlight/control-panel\n"),
     RamEntry::file(
         "/bin/cpufeat",
         0,
@@ -1424,6 +1426,14 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/sunlight-files\n",
+    ),
+    // System Preferences (Control Panel)
+    RamEntry::file(
+        "/usr/bin/control-panel",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/control-panel\n",
     ),
     RamEntry::file(
         "/usr/bin/cpufeat",

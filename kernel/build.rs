@@ -306,6 +306,12 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release"],
         },
+        EmbeddedBinary {
+            package: "sunlight-control-panel",
+            output: "control-panel",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
     ];
 
     for bin in binaries {
