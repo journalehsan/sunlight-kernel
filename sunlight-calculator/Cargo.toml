@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-calculator"
-version = "0.1.472"
+version = "0.1.483"
+
 
 edition = "2021"
 
