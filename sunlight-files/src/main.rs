@@ -7,7 +7,7 @@ use core::cmp::Ordering;
 use sunlight_ipc::{debug_log, process_yield, ProcessExit};
 use sunlight_libc::{self as libc, env, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::widgets::Label;
-use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, VBox, Window, WindowConfig};
+use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
 
 const WIN_W: u32 = 960;
 const WIN_H: u32 = 620;
@@ -723,13 +723,22 @@ impl FilesApp {
             ViewMode::Directory => self.state.current_path.parent().is_none(),
         };
 
-        draw_pill(canvas, theme, back, "Back", false, true);
-        draw_pill(canvas, theme, forward, "Forward", false, true);
-        draw_pill(canvas, theme, up, "Up", false, up_disabled);
+        draw_pill(canvas, theme, back, "Back", Some(UiSymbol::Back), false, true);
+        draw_pill(
+            canvas,
+            theme,
+            forward,
+            "Forward",
+            Some(UiSymbol::Forward),
+            false,
+            true,
+        );
+        draw_pill(canvas, theme, up, "Up", Some(UiSymbol::Up), false, up_disabled);
 
         canvas.fill_rounded_rect_with_border(search, RADIUS, theme.panel_alt, theme.border, 1);
+        canvas.draw_ui_symbol(search.x + 8, search.y + 9, UiSymbol::Search, theme.text_dim);
         Label::new(
-            Rect::new(search.x + 8, search.y, search.w.saturating_sub(16), search.h),
+            Rect::new(search.x + 22, search.y, search.w.saturating_sub(30), search.h),
             "Search",
         )
         .dim()
@@ -778,11 +787,14 @@ impl FilesApp {
                     theme.accent,
                 );
             }
+            let icon = sidebar_symbol(idx);
+            let icon_color = if selected { theme.accent } else { theme.text_dim };
+            clipped.draw_ui_symbol(local.x + 8, local.y + 10, icon, icon_color);
             Label::new(
                 Rect::new(
-                    local.x + 12,
+                    local.x + 24,
                     local.y + 8,
-                    local.w.saturating_sub(24),
+                    local.w.saturating_sub(34),
                     12,
                 ),
                 State::sidebar_label(idx),
@@ -831,7 +843,12 @@ impl FilesApp {
 
     fn draw_home_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
-        Label::new(Rect::new(inner.x, inner.y, inner.w, 18), "Home").draw(canvas, theme);
+        canvas.draw_ui_symbol(inner.x, inner.y + 1, UiSymbol::FilesApp, theme.accent);
+        Label::new(
+            Rect::new(inner.x + 16, inner.y, inner.w.saturating_sub(16), 18),
+            "Home",
+        )
+        .draw(canvas, theme);
         Label::new(
             Rect::new(inner.x, inner.y + 18, inner.w, 14),
             "Drives and folders will appear here",
@@ -911,19 +928,19 @@ impl FilesApp {
             canvas.fill_rect(row, fill);
 
             let icon = if entry.file_type == FT_DIR {
-                "[DIR]"
+                UiSymbol::Folder
             } else {
-                "[FILE]"
+                UiSymbol::File
             };
             let icon_color = if entry.file_type == FT_DIR {
                 theme.accent
             } else {
                 theme.text_dim
             };
-            canvas.draw_text(row.x + 8, row.y + 5, icon, icon_color);
+            canvas.draw_ui_symbol(row.x + 8, row.y + 6, icon, icon_color);
 
             let name = entry_name_str(&entry);
-            canvas.draw_text(row.x + 58, row.y + 5, name, theme.text);
+            canvas.draw_text(row.x + 24, row.y + 5, name, theme.text);
 
             let type_label = if entry.file_type == FT_DIR {
                 "Directory"
@@ -985,10 +1002,12 @@ impl FilesApp {
                 theme.border.darken(32)
             };
             canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
-            canvas.draw_text(rect.x + 10, rect.y + 8, "[DIR]", theme.accent);
-            canvas.draw_text(rect.x + 46, rect.y + 8, folder.name, theme.text);
+            let icon = home_folder_symbol(idx, folder.present);
+            let icon_color = if folder.present { theme.accent } else { theme.warn };
+            canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, icon, icon_color);
+            canvas.draw_text(rect.x + 28, rect.y + 8, folder.name, theme.text);
             canvas.draw_text(
-                rect.x + 46,
+                rect.x + 28,
                 rect.y + 24,
                 if folder.present { "Available" } else { "Missing" },
                 if folder.present { theme.text_dim } else { theme.warn },
@@ -1020,10 +1039,11 @@ impl FilesApp {
                 theme.panel.darken(14)
             };
             canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, theme.border, 1);
-            canvas.draw_text(rect.x + 10, rect.y + 8, "[VOL]", theme.accent);
-            canvas.draw_text(rect.x + 48, rect.y + 8, volume.name_str(), theme.text);
+            let icon = volume_symbol(&volume);
+            canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, icon, theme.text_dim);
+            canvas.draw_text(rect.x + 28, rect.y + 8, volume.name_str(), theme.text);
             canvas.draw_text(
-                rect.x + 48,
+                rect.x + 28,
                 rect.y + 24,
                 volume.path.as_str(),
                 theme.text_dim,
@@ -1056,8 +1076,9 @@ impl FilesApp {
 
     fn draw_home_network(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect, y: i32) {
         Label::new(Rect::new(inner.x, y, inner.w, 14), "Network").dim().draw(canvas, theme);
+        canvas.draw_ui_symbol(inner.x, y + 18, UiSymbol::Network, theme.text_dim);
         Label::new(
-            Rect::new(inner.x, y + 16, inner.w, 14),
+            Rect::new(inner.x + 16, y + 16, inner.w.saturating_sub(16), 14),
             "No network mounts detected",
         )
         .dim()
@@ -1271,6 +1292,49 @@ fn path_matches(current: &str, base: &str) -> bool {
             && current.as_bytes().get(base.len()) == Some(&b'/'))
 }
 
+fn sidebar_symbol(idx: usize) -> UiSymbol {
+    match idx {
+        0 => UiSymbol::Home,
+        1 => UiSymbol::Desktop,
+        2 => UiSymbol::Documents,
+        3 => UiSymbol::Downloads,
+        4 => UiSymbol::Pictures,
+        5 => UiSymbol::Music,
+        6 => UiSymbol::Videos,
+        7 => UiSymbol::RootFs,
+        8 => UiSymbol::Volume,
+        _ => UiSymbol::Network,
+    }
+}
+
+fn home_folder_symbol(idx: usize, present: bool) -> UiSymbol {
+    if !present {
+        return UiSymbol::MissingFolder;
+    }
+    match idx {
+        0 => UiSymbol::Desktop,
+        1 => UiSymbol::Documents,
+        2 => UiSymbol::Downloads,
+        3 => UiSymbol::Pictures,
+        4 => UiSymbol::Music,
+        5 => UiSymbol::Videos,
+        _ => UiSymbol::Folder,
+    }
+}
+
+fn volume_symbol(volume: &VolumeEntry) -> UiSymbol {
+    let path = volume.path.as_str();
+    if path == "/" {
+        UiSymbol::RootFs
+    } else if path == "/boot" {
+        UiSymbol::Volume
+    } else if path.starts_with("/mnt/") {
+        UiSymbol::Volume
+    } else {
+        UiSymbol::Network
+    }
+}
+
 fn dir_readable(path: &str) -> bool {
     let mut probe = [DirEntry::zeroed(); 1];
     libc::read_dir(path.as_bytes(), &mut probe).is_ok()
@@ -1367,7 +1431,15 @@ fn write_number(value: u64, out: &mut [u8], suffix: &[u8]) -> usize {
     pos
 }
 
-fn draw_pill(canvas: &mut Canvas, theme: &Theme, rect: Rect, text: &str, active: bool, disabled: bool) {
+fn draw_pill(
+    canvas: &mut Canvas,
+    theme: &Theme,
+    rect: Rect,
+    text: &str,
+    icon: Option<UiSymbol>,
+    active: bool,
+    disabled: bool,
+) {
     let fill = if disabled {
         theme.panel_alt
     } else if active {
@@ -1384,7 +1456,12 @@ fn draw_pill(canvas: &mut Canvas, theme: &Theme, rect: Rect, text: &str, active:
         theme.text
     };
     canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
-    canvas.draw_text_centered(rect, text, color);
+    if let Some(icon) = icon {
+        canvas.draw_ui_symbol(rect.x + 8, rect.y + 9, icon, color);
+        canvas.draw_text(rect.x + 22, rect.y + 9, text, color);
+    } else {
+        canvas.draw_text_centered(rect, text, color);
+    }
 }
 
 #[no_mangle]
