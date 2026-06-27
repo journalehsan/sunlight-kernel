@@ -4,17 +4,12 @@
 /// With `Limine`, we memcpy it to the mapped FB on present.
 /// With `VirtioGpu`, the back_buffer pages are pinned as the scanout resource backing;
 /// present calls `gpu_flush()` (kernel issues TRANSFER_TO_HOST_2D + RESOURCE_FLUSH).
+#[derive(Clone, Copy)]
 pub enum DisplayBackend {
     /// Limine physical framebuffer mapped via syscall 118. Fallback when no VirtIO GPU.
-    Limine {
-        fb: *mut u32,
-        pitch_words: usize,
-    },
+    Limine { fb: *mut u32, pitch_words: usize },
     /// VirtIO GPU scanout driven via kernel proxy syscalls (119-124).
-    VirtioGpu {
-        width:  u32,
-        height: u32,
-    },
+    VirtioGpu { width: u32, height: u32 },
 }
 
 // SAFETY: The raw pointer is only ever used by the single-threaded compositor.

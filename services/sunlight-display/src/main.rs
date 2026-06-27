@@ -11,8 +11,8 @@ use sunlight_ipc::{
     endpoint_create, ipc_recv, ipc_reply, nameserver_register, sgp::SgpMsg, CapabilityToken,
     IpcMsg, MouseMsg,
 };
-use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
 use sunlight_ui::image::TgaImage;
+use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
 
 /// Wallpaper asset staged at /var/sunlightos/wallpapers/wallpaper.tga.
 /// Embedded directly so the compositor can decode without a VFS read at startup.
@@ -79,13 +79,19 @@ const FP_ONE: i32 = 1 << FP_SHIFT;
 /// Set to true to log every RAW_MOTION packet (dx/dy, cursor before/after).
 const MOUSE_DEBUG: bool = false;
 
-const SENS_DEFAULT_FP: i32 = FP_ONE * 2;
+const SENS_DEFAULT_FP: i32 = FP_ONE;
 #[allow(dead_code)]
 const SENS_MIN_FP: i32 = FP_ONE / 2;
 #[allow(dead_code)]
 const SENS_MAX_FP: i32 = FP_ONE * 4;
 
-const EDGE_MARGIN: i32 = 2;
+const ACCEL_PRECISE_MAX_DELTA: i32 = 2;
+const ACCEL_NORMAL_MAX_DELTA: i32 = 6;
+const ACCEL_PRECISE_GAIN_FP: i32 = FP_ONE;
+const ACCEL_NORMAL_GAIN_FP: i32 = FP_ONE * 3 / 2;
+const ACCEL_FAST_GAIN_FP: i32 = FP_ONE * 9 / 4;
+const EDGE_MARGIN: i32 = 0;
+const COUNTER_LOG_INTERVAL: u64 = 64;
 const KEY_TAB: u8 = 0x0F;
 const KEY_R: u8 = 0x13;
 const KEY_W: u8 = 0x11;
@@ -413,9 +419,15 @@ impl PointerState {
     }
 
     fn apply_motion(&mut self, dx: i32, dy: i32, buttons: u8) {
-        // Apply deltas immediately. The previous eased target-following made the
-        // pointer continue moving after the hand stopped or reversed direction.
-        let gain_fp = self.sensitivity_fp as i64;
+        let speed = dx.abs().max(dy.abs());
+        let accel_fp = if speed <= ACCEL_PRECISE_MAX_DELTA {
+            ACCEL_PRECISE_GAIN_FP
+        } else if speed <= ACCEL_NORMAL_MAX_DELTA {
+            ACCEL_NORMAL_GAIN_FP
+        } else {
+            ACCEL_FAST_GAIN_FP
+        } as i64;
+        let gain_fp = ((self.sensitivity_fp as i64) * accel_fp) >> FP_SHIFT;
         self.x_fp += (dx as i64 * gain_fp) as i32;
         self.y_fp += (dy as i64 * gain_fp) as i32;
         self.sync_clamp();
@@ -559,6 +571,8 @@ struct CompositorState {
     inner_corner_mask: mask::CornerMask,
     /// Regions that need to be presented to the framebuffer this frame.
     dirty: dirty::DirtyList,
+    /// Focused diagnostics for cursor motion vs. redraw behavior.
+    debug_counters: DebugCounters,
     /// Decoded-on-demand wallpaper view.  `None` when the asset was absent or
     /// could not be parsed; the compositor falls back to DESKTOP_COLOR fill.
     wallpaper: Option<TgaImage>,
@@ -566,8 +580,43 @@ struct CompositorState {
     vortex_launch_pending: bool,
 }
 
+#[derive(Clone, Copy)]
+struct DebugCounters {
+    mouse_event_count: u64,
+    hw_cursor_move_count: u64,
+    sw_cursor_redraw_count: u64,
+    desktop_redraw_count: u64,
+    dirty_rect_count: u64,
+    gpu_flush_count: u64,
+    framebuffer_copy_count: u64,
+}
+
+impl DebugCounters {
+    const fn new() -> Self {
+        Self {
+            mouse_event_count: 0,
+            hw_cursor_move_count: 0,
+            sw_cursor_redraw_count: 0,
+            desktop_redraw_count: 0,
+            dirty_rect_count: 0,
+            gpu_flush_count: 0,
+            framebuffer_copy_count: 0,
+        }
+    }
+}
+
 fn fb_stride(state: &CompositorState) -> usize {
     (state.fb_pitch / 4) as usize
+}
+
+fn mark_dirty_rect(state: &mut CompositorState, rect: Rect) {
+    state.debug_counters.dirty_rect_count += 1;
+    state.dirty.mark(rect);
+}
+
+fn mark_dirty_full(state: &mut CompositorState) {
+    state.debug_counters.dirty_rect_count += 1;
+    state.dirty.mark_full();
 }
 
 fn is_focusable_window(win: &Window) -> bool {
@@ -901,12 +950,18 @@ fn clear_back_buffer(state: &mut CompositorState) {
 }
 
 fn back_buffer_canvas<'a>(state: &CompositorState, pixels: &'a mut [u32]) -> Canvas<'a> {
-    Canvas::new(pixels, fb_stride(state) as u32, state.fb_width, state.fb_height)
+    Canvas::new(
+        pixels,
+        fb_stride(state) as u32,
+        state.fb_width,
+        state.fb_height,
+    )
 }
 
-fn present_back_buffer(state: &CompositorState) {
+fn present_back_buffer(state: &mut CompositorState) {
     match &state.display_backend {
         backend::DisplayBackend::Limine { fb, .. } => {
+            state.debug_counters.framebuffer_copy_count += 1;
             unsafe {
                 core::ptr::copy_nonoverlapping(
                     state.back_buffer.as_ptr(),
@@ -916,13 +971,14 @@ fn present_back_buffer(state: &CompositorState) {
             }
         }
         backend::DisplayBackend::VirtioGpu { width, height } => {
+            state.debug_counters.gpu_flush_count += 1;
             sunlight_ipc::gpu_flush(0, 0, *width, *height);
         }
     }
 }
 
 /// Blit only the pixels within `r` from the back buffer to the framebuffer.
-fn present_rect(state: &CompositorState, r: Rect) {
+fn present_rect(state: &mut CompositorState, r: Rect) {
     let x0 = r.x.max(0) as usize;
     let y0 = r.y.max(0) as usize;
     let x1 = (r.right() as usize).min(state.fb_width as usize);
@@ -932,6 +988,7 @@ fn present_rect(state: &CompositorState, r: Rect) {
     }
     match &state.display_backend {
         backend::DisplayBackend::Limine { fb, pitch_words } => {
+            state.debug_counters.framebuffer_copy_count += 1;
             let stride = *pitch_words;
             let len = x1 - x0;
             for y in y0..y1 {
@@ -949,6 +1006,7 @@ fn present_rect(state: &CompositorState, r: Rect) {
             let y = y0 as u32;
             let w = (x1 - x0) as u32;
             let h = (y1 - y0) as u32;
+            state.debug_counters.gpu_flush_count += 1;
             sunlight_ipc::gpu_flush(x, y, w, h);
         }
     }
@@ -1269,7 +1327,12 @@ fn composite_window(
                 hover_zone == HitZone::CloseBtn,
                 is_focused,
             );
-            draw_title(&mut canvas, &win.config.title, title_rect, Color(TITLE_TEXT_COLOR));
+            draw_title(
+                &mut canvas,
+                &win.config.title,
+                title_rect,
+                Color(TITLE_TEXT_COLOR),
+            );
         }
     }
 
@@ -1314,7 +1377,9 @@ fn composite_window(
                         a => {
                             let src_px = src_row.add(col).read();
                             let dst_px = dst_row.add(col).read();
-                            dst_row.add(col).write(blend::blend_pixel(src_px, dst_px, a));
+                            dst_row
+                                .add(col)
+                                .write(blend::blend_pixel(src_px, dst_px, a));
                         }
                     }
                 }
@@ -1325,11 +1390,12 @@ fn composite_window(
     }
 }
 
-fn draw_cursor(state: &CompositorState, back_buffer: &mut [u32]) {
+fn draw_cursor(state: &mut CompositorState, back_buffer: &mut [u32]) {
     // Software cursor: only used in Limine framebuffer mode.
     if state.hw_cursor_active {
         return;
     }
+    state.debug_counters.sw_cursor_redraw_count += 1;
     let bitmap = cursor_bitmap(state.active_cursor);
     let base_x = state.mouse_x as i32;
     let base_y = state.mouse_y as i32;
@@ -1361,14 +1427,13 @@ fn draw_cursor(state: &CompositorState, back_buffer: &mut [u32]) {
 
 /// Upload a hardware cursor to the GPU if the shape changed.
 /// Converts the 1-bit 8×12 cursor bitmap to a 64×64 BGRA pixel image.
-fn upload_hw_cursor_if_needed(state: &mut CompositorState) {
+fn upload_hw_cursor_if_needed(state: &mut CompositorState) -> bool {
     if !state.hw_cursor_active {
-        return;
+        return false;
     }
     if state.last_hw_cursor_shape == Some(state.active_cursor) {
-        return; // already uploaded
+        return true;
     }
-    state.last_hw_cursor_shape = Some(state.active_cursor);
 
     // Build a 64×64 BGRA buffer (transparent background, white foreground).
     // We upscale the 8×12 bitmap by 4× to fill the 32×48 center of the 64×64 canvas.
@@ -1384,7 +1449,7 @@ fn upload_hw_cursor_if_needed(state: &mut CompositorState) {
     let off_x = (64 - CURSOR_W * scale) / 2;
     let off_y = (64 - CURSOR_H * scale) / 2;
 
-    const FG_BGRA: u32     = 0xFFF5F5F5; // opaque white (BGRA: B=F5, G=F5, R=F5, A=FF)
+    const FG_BGRA: u32 = 0xFFF5F5F5; // opaque white (BGRA: B=F5, G=F5, R=F5, A=FF)
     const SHADOW_BGRA: u32 = 0xFF303030; // opaque dark shadow
 
     for (row, &mask) in bitmap.iter().enumerate() {
@@ -1410,15 +1475,45 @@ fn upload_hw_cursor_if_needed(state: &mut CompositorState) {
     }
 
     // Hotspot is top-left corner (0, 0) for all cursors currently.
-    sunlight_ipc::gpu_update_cursor(pixels.as_ptr(), 64 * 64, 0, 0);
+    let ok = sunlight_ipc::gpu_update_cursor(pixels.as_ptr(), 64 * 64, 0, 0);
+    if ok {
+        state.last_hw_cursor_shape = Some(state.active_cursor);
+        true
+    } else {
+        debug_log(
+            "[DISPLAY] hardware cursor UPDATE_CURSOR failed, falling back to software cursor\n",
+        );
+        state.hw_cursor_active = false;
+        state.last_hw_cursor_shape = None;
+        false
+    }
+}
+
+fn move_hw_cursor(state: &mut CompositorState, x: u32, y: u32) -> bool {
+    if !state.hw_cursor_active {
+        return false;
+    }
+    let ok = sunlight_ipc::gpu_move_cursor(x, y);
+    if ok {
+        state.debug_counters.hw_cursor_move_count += 1;
+        true
+    } else {
+        debug_log(
+            "[DISPLAY] hardware cursor MOVE_CURSOR failed, falling back to software cursor\n",
+        );
+        state.hw_cursor_active = false;
+        state.last_hw_cursor_shape = None;
+        false
+    }
 }
 
 fn redraw_scene(state: &mut CompositorState) {
     if !state.session_active {
         return;
     }
+    state.debug_counters.desktop_redraw_count += 1;
     // Upload a new hardware cursor image if the shape changed (no-op when sw cursor).
-    upload_hw_cursor_if_needed(state);
+    let _ = upload_hw_cursor_if_needed(state);
 
     clear_back_buffer(state);
     let focused_idx = focused_window_idx(state);
@@ -1485,6 +1580,26 @@ fn debug_dec(val: u32) {
     }
 }
 
+fn debug_dec_u64(val: u64) {
+    let mut buf = [0u8; 20];
+    let mut n = val;
+    let mut i = buf.len();
+    loop {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+        if n == 0 {
+            break;
+        }
+    }
+    unsafe {
+        core::arch::asm!("syscall",
+            inlateout("rax") 99u64 => _,
+            in("rdi") buf.as_ptr().add(i) as u64, in("rsi") (buf.len() - i) as u64,
+            lateout("rcx") _, lateout("r11") _, options(nostack));
+    }
+}
+
 #[allow(dead_code)]
 fn debug_i32(val: i32) {
     if val < 0 {
@@ -1493,6 +1608,28 @@ fn debug_i32(val: i32) {
     } else {
         debug_dec(val as u32);
     }
+}
+
+fn log_debug_counters(state: &CompositorState, reason: &str) {
+    debug_log("[DISPLAY] counters ");
+    debug_log(reason);
+    debug_log(": mouse=");
+    debug_dec_u64(state.debug_counters.mouse_event_count);
+    debug_log(" hw_move=");
+    debug_dec_u64(state.debug_counters.hw_cursor_move_count);
+    debug_log(" sw_redraw=");
+    debug_dec_u64(state.debug_counters.sw_cursor_redraw_count);
+    debug_log(" desktop_redraw=");
+    debug_dec_u64(state.debug_counters.desktop_redraw_count);
+    debug_log(" dirty=");
+    debug_dec_u64(state.debug_counters.dirty_rect_count);
+    debug_log(" gpu_flush=");
+    debug_dec_u64(state.debug_counters.gpu_flush_count);
+    debug_log(" fb_copy=");
+    debug_dec_u64(state.debug_counters.framebuffer_copy_count);
+    debug_log(" hw_cursor=");
+    debug_dec(if state.hw_cursor_active { 1 } else { 0 });
+    debug_log("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -1538,24 +1675,27 @@ pub extern "C" fn _start() -> ! {
     debug_dec(bpp as u32);
     debug_log("\n");
 
+    let limine_backend = backend::DisplayBackend::Limine {
+        fb: fb_ptr as *mut u32,
+        pitch_words: pitch as usize / 4,
+    };
+
     // Try to use VirtIO GPU backend; fall back to Limine framebuffer.
-    let (disp_backend, hw_cursor) = match sunlight_ipc::gpu_get_info() {
+    let detected_backend = match sunlight_ipc::gpu_get_info() {
         Some((gw, gh)) => {
             debug_log("[DISPLAY] VirtIO GPU detected ");
             debug_dec(gw);
             debug_log("x");
             debug_dec(gh);
             debug_log("\n");
-            let backend = backend::DisplayBackend::VirtioGpu { width: gw, height: gh };
-            (backend, true)
+            backend::DisplayBackend::VirtioGpu {
+                width: gw,
+                height: gh,
+            }
         }
         None => {
             debug_log("[DISPLAY] VirtIO GPU not found, using Limine framebuffer\n");
-            let backend = backend::DisplayBackend::Limine {
-                fb: fb_ptr as *mut u32,
-                pitch_words: (pitch as usize / 4),
-            };
-            (backend, false)
+            limine_backend
         }
     };
 
@@ -1565,8 +1705,9 @@ pub extern "C" fn _start() -> ! {
         pixels
     };
 
-    // If VirtIO GPU: attach the back_buffer pages as the scanout resource backing.
-    if hw_cursor {
+    let mut display_backend = detected_backend;
+    let mut hw_cursor = false;
+    if let backend::DisplayBackend::VirtioGpu { .. } = display_backend {
         // Page-align the back_buffer pointer and count pages.
         let buf_start = back_buffer.as_ptr();
         let buf_bytes = back_buffer.len() * 4;
@@ -1577,11 +1718,16 @@ pub extern "C" fn _start() -> ! {
             let ok2 = sunlight_ipc::gpu_set_scanout();
             if ok2 {
                 debug_log("[DISPLAY] gpu_set_scanout OK\n");
+                hw_cursor = true;
             } else {
                 debug_log("[DISPLAY] gpu_set_scanout FAILED\n");
+                debug_log("[DISPLAY] falling back to Limine framebuffer backend\n");
+                display_backend = limine_backend;
             }
         } else {
             debug_log("[DISPLAY] gpu_attach_backing FAILED\n");
+            debug_log("[DISPLAY] falling back to Limine framebuffer backend\n");
+            display_backend = limine_backend;
         }
     }
 
@@ -1598,7 +1744,7 @@ pub extern "C" fn _start() -> ! {
         fb_height,
         fb_pitch: pitch as u32,
         back_buffer,
-        display_backend: disp_backend,
+        display_backend,
         hw_cursor_active: hw_cursor,
         last_hw_cursor_shape: None,
         active_cursor: CursorShape::Pointer,
@@ -1607,13 +1753,18 @@ pub extern "C" fn _start() -> ! {
         session_active: false,
         inner_corner_mask: mask::CornerMask::new(CHROME_RADIUS.saturating_sub(BORDER_W)),
         dirty: dirty::DirtyList::new(),
+        debug_counters: DebugCounters::new(),
         wallpaper: TgaImage::parse(WALLPAPER_TGA_BYTES).ok(),
         vortex_launch_pending: false,
     };
     // Initial cursor position for the hardware cursor.
     if state.hw_cursor_active {
-        sunlight_ipc::gpu_move_cursor(state.mouse_x as u32, state.mouse_y as u32);
+        let init_mouse_x = state.mouse_x as u32;
+        let init_mouse_y = state.mouse_y as u32;
+        let _ = upload_hw_cursor_if_needed(&mut state);
+        let _ = move_hw_cursor(&mut state, init_mouse_x, init_mouse_y);
     }
+    log_debug_counters(&state, "startup");
     redraw_scene(&mut state);
 
     let mut next_win_id: u64 = 1;
@@ -1709,7 +1860,7 @@ pub extern "C" fn _start() -> ! {
                         if is_desktop_window {
                             state.vortex_launch_pending = false;
                         }
-                        state.dirty.mark_full();
+                        mark_dirty_full(&mut state);
                         redraw_scene(&mut state);
 
                         let client_x = win_x + BORDER_W;
@@ -1831,7 +1982,7 @@ pub extern "C" fn _start() -> ! {
                         }
                     }
                 }
-                state.dirty.mark_full();
+                mark_dirty_full(&mut state);
                 redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -1855,10 +2006,18 @@ pub extern "C" fn _start() -> ! {
                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == win_id) {
                     win.client_cursor = CursorShape::from_u8(shape_byte);
                 }
-                // Re-evaluate active cursor immediately; only the cursor rect changes.
+                // Re-evaluate active cursor immediately.
                 state.active_cursor = cursor_for_scene(&state);
-                state.dirty.mark(cursor_dirty_rect(state.mouse_x as u32, state.mouse_y as u32));
-                redraw_scene(&mut state);
+                let cursor_rect = cursor_dirty_rect(state.mouse_x as u32, state.mouse_y as u32);
+                if state.hw_cursor_active {
+                    if !upload_hw_cursor_if_needed(&mut state) {
+                        mark_dirty_rect(&mut state, cursor_rect);
+                        redraw_scene(&mut state);
+                    }
+                } else {
+                    mark_dirty_rect(&mut state, cursor_rect);
+                    redraw_scene(&mut state);
+                }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
@@ -1869,7 +2028,7 @@ pub extern "C" fn _start() -> ! {
                 let win_id = msg.words[0];
                 if let Some(win) = state.windows.iter().find(|w| w.id == win_id) {
                     let (wx, wy, ww, wh) = win.chrome_rect(state.fb_width, state.fb_height);
-                    state.dirty.mark(Rect::new(wx as i32, wy as i32, ww, wh));
+                    mark_dirty_rect(&mut state, Rect::new(wx as i32, wy as i32, ww, wh));
                     redraw_scene(&mut state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
@@ -1904,7 +2063,7 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::CLOSE_WINDOW => {
                 let win_id = msg.words[0];
                 if close_window(&mut state, win_id, Some(msg.badge)) {
-                    state.dirty.mark_full();
+                    mark_dirty_full(&mut state);
                     redraw_scene(&mut state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
@@ -1926,13 +2085,13 @@ pub extern "C" fn _start() -> ! {
                 } else if pressed && alt && keycode == KEY_TAB {
                     if cycle_focus(&mut state) {
                         state.active_cursor = cursor_for_scene(&state);
-                        state.dirty.mark_full();
+                        mark_dirty_full(&mut state);
                         redraw_scene(&mut state);
                     }
                 } else if pressed && ctrl && keycode == KEY_W {
                     if let Some(focused) = focused_window_id(&state) {
                         if close_window(&mut state, focused, None) {
-                            state.dirty.mark_full();
+                            mark_dirty_full(&mut state);
                             redraw_scene(&mut state);
                         }
                     }
@@ -1977,6 +2136,7 @@ pub extern "C" fn _start() -> ! {
                 let prev_cx = state.pointer.x() as u32;
                 let prev_cy = state.pointer.y() as u32;
                 let prev_buttons = state.prev_buttons;
+                state.debug_counters.mouse_event_count += 1;
                 // Snapshot drag state before processing to detect window-geometry changes.
                 let had_active_drag = !matches!(state.active_drag, ActiveDrag::None);
 
@@ -2212,28 +2372,46 @@ pub extern "C" fn _start() -> ! {
                 let button_changed = buttons != prev_buttons;
                 let now_dragging = !matches!(state.active_drag, ActiveDrag::None);
                 let window_changed = button_changed || had_active_drag || now_dragging;
+                let cursor_shape_changed = state.last_hw_cursor_shape != Some(state.active_cursor);
+                let cursor_pixel_changed = new_cx != prev_cx || new_cy != prev_cy;
 
                 if state.hw_cursor_active && !window_changed {
-                    // Hardware cursor path: just move the GPU cursor overlay.
-                    // No back_buffer repaint or framebuffer flush needed for a bare cursor move.
-                    sunlight_ipc::gpu_move_cursor(new_cx, new_cy);
-                    // Still call redraw_scene in case cursor shape changed (upload_hw_cursor_if_needed).
-                    if state.last_hw_cursor_shape != Some(state.active_cursor) {
+                    let mut fell_back = false;
+                    if cursor_shape_changed && !upload_hw_cursor_if_needed(&mut state) {
+                        fell_back = true;
+                    }
+                    if !fell_back
+                        && cursor_pixel_changed
+                        && !move_hw_cursor(&mut state, new_cx, new_cy)
+                    {
+                        fell_back = true;
+                    }
+                    if fell_back {
+                        mark_dirty_rect(&mut state, cursor_dirty_rect(prev_cx, prev_cy));
+                        mark_dirty_rect(&mut state, cursor_dirty_rect(new_cx, new_cy));
                         redraw_scene(&mut state);
                     }
                 } else {
                     // Software cursor or window geometry changed: full dirty-rect path.
                     if window_changed {
-                        state.dirty.mark_full();
+                        mark_dirty_full(&mut state);
                     } else if !state.hw_cursor_active {
-                        state.dirty.mark(cursor_dirty_rect(prev_cx, prev_cy));
-                        state.dirty.mark(cursor_dirty_rect(new_cx, new_cy));
+                        mark_dirty_rect(&mut state, cursor_dirty_rect(prev_cx, prev_cy));
+                        mark_dirty_rect(&mut state, cursor_dirty_rect(new_cx, new_cy));
                     }
                     redraw_scene(&mut state);
                     // After redraw, move hardware cursor to new position.
-                    if state.hw_cursor_active {
-                        sunlight_ipc::gpu_move_cursor(new_cx, new_cy);
+                    if state.hw_cursor_active
+                        && cursor_pixel_changed
+                        && !move_hw_cursor(&mut state, new_cx, new_cy)
+                    {
+                        mark_dirty_rect(&mut state, cursor_dirty_rect(prev_cx, prev_cy));
+                        mark_dirty_rect(&mut state, cursor_dirty_rect(new_cx, new_cy));
+                        redraw_scene(&mut state);
                     }
+                }
+                if state.debug_counters.mouse_event_count % COUNTER_LOG_INTERVAL == 0 {
+                    log_debug_counters(&state, "mouse");
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -2245,7 +2423,7 @@ pub extern "C" fn _start() -> ! {
                 if !state.session_active {
                     debug_log("[DISPLAY] [SESSION] activated — Desktop owns framebuffer\n");
                     state.session_active = true;
-                    state.dirty.mark_full();
+                    mark_dirty_full(&mut state);
                     redraw_scene(&mut state);
                 }
                 // Keep the desktop surface present across logins/restarts.
