@@ -602,6 +602,11 @@ struct Window {
     /// Cursor shape the client wants when the pointer is in its client area.
     client_cursor: CursorShape,
     pending_keys: KeyEventQueue,
+    /// When true the window is collapsed to its titlebar only (shade/roll-up).
+    /// Client content is not blitted. A second titlebar double-click restores it.
+    rolled_up: bool,
+    /// Client height saved before rolling up so it can be restored on un-roll.
+    saved_unrolled_h: u32,
 }
 
 impl Window {
@@ -609,13 +614,28 @@ impl Window {
     fn chrome_rect(&self, fb_w: u32, fb_h: u32) -> (u32, u32, u32, u32) {
         match self.config.state {
             WindowState::Fullscreen => (0, 0, fb_w, fb_h),
-            WindowState::Maximized => (0, 0, fb_w, fb_h),
-            _ => (
-                self.x,
-                self.y,
-                self.width + BORDER_W * 2,
-                TITLEBAR_H + self.height + BORDER_W,
+            // Maximized windows are confined below the top panel so the panel
+            // remains accessible and visually unobscured.
+            WindowState::Maximized => (
+                0,
+                PANEL_TOP_RESERVED_H,
+                fb_w,
+                fb_h.saturating_sub(PANEL_TOP_RESERVED_H),
             ),
+            _ => {
+                // Rolled-up (shaded) windows collapse to titlebar + border only.
+                let client_h = if self.rolled_up {
+                    0
+                } else {
+                    self.height
+                };
+                (
+                    self.x,
+                    self.y,
+                    self.width + BORDER_W * 2,
+                    TITLEBAR_H + client_h + BORDER_W,
+                )
+            }
         }
     }
 }
@@ -774,6 +794,10 @@ struct CompositorState {
     /// True after spawning Vortex and before a Desktop-layer window appears.
     vortex_launch_pending: bool,
     last_mouse_generation: u32,
+    /// Window ID that received the most recent titlebar click (for double-click detection).
+    last_titlebar_click_win_id: u64,
+    /// Monotonic timestamp (ms) of the most recent titlebar click.
+    last_titlebar_click_ms: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -1192,6 +1216,26 @@ const RESIZE_BORDER: u32 = 6; // effective hit-test width for edges/corners
 const MIN_WIN_W: u32 = 200;
 const MIN_WIN_H: u32 = 100;
 
+// Top panel reserved height: Vortex Shell top-bar occupies approximately
+// y=6..42 (TOP_Y=6, TOP_H=36). We reserve 50px so normal windows cannot
+// be placed or dragged over the panel, and maximized windows start below it.
+// Fullscreen windows are intentionally exempt (they cover everything).
+const PANEL_TOP_RESERVED_H: u32 = 50;
+
+// Maximum time between two titlebar clicks to be treated as a double-click
+// (roll-up / shade gesture, like old FVWM/CDE desktops).
+const DOUBLE_CLICK_MS: u64 = 400;
+
+// TODO(snap): Super+Left / Super+Right window snapping is planned but currently
+// disabled because the app-side resize protocol is not yet robust — sending a
+// new window size without a handshake causes some apps to hang or break their
+// layout. Re-enable once resize is negotiated properly (e.g. a RESIZE_ACK IPC
+// round-trip or the client polls the new geometry on the next EVENT_POLL).
+//
+// Bottom panel: Vortex Shell's bottom dock panels are drawn as part of the
+// Desktop-layer window and therefore sit behind normal app windows in z-order.
+// This is acceptable for now; a future Widget-type overlay panel would fix it.
+
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum WindowControlKind {
@@ -1599,6 +1643,13 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
         return HitZone::ClientArea;
     }
 
+    // Rolled-up windows have no visible client area; treat any hit below the
+    // titlebar strip (e.g. the 2-px border bottom) as titlebar so the user
+    // can still drag, and suppress all edge-resize zones.
+    if win.rolled_up {
+        return HitZone::TitleBar;
+    }
+
     // Corner zones (checked before edge zones — larger grab target wins).
     let corner_size = RESIZE_BORDER + 4;
     let bottom_zone = rel_y >= TITLEBAR_H + win.height.saturating_sub(corner_size);
@@ -1673,27 +1724,30 @@ fn composite_window(
     let maximized = win.config.state == WindowState::Maximized;
     let no_chrome = fullscreen || win.config.border == BorderStyle::None;
 
-    let (canvas_x, canvas_y, client_w, client_h) = if fullscreen || maximized {
-        let cw = if no_chrome {
-            state.fb_width
-        } else {
-            state.fb_width.saturating_sub(BORDER_W * 2)
-        };
-        let ch = if no_chrome {
-            state.fb_height
-        } else {
-            state.fb_height.saturating_sub(TITLEBAR_H + BORDER_W)
-        };
+    // Rolled-up windows render chrome only; skip client blit entirely.
+    let skip_client = win.rolled_up && !fullscreen && !maximized;
+
+    let (canvas_x, canvas_y, client_w, client_h) = if fullscreen {
+        // Fullscreen: truly full-screen, covers panel intentionally.
+        let cw = if no_chrome { state.fb_width } else { state.fb_width.saturating_sub(BORDER_W * 2) };
+        let ch = if no_chrome { state.fb_height } else { state.fb_height.saturating_sub(TITLEBAR_H + BORDER_W) };
         let ox = if no_chrome { 0 } else { BORDER_W };
         let oy = if no_chrome { 0 } else { TITLEBAR_H };
         (ox, oy, cw, ch)
+    } else if maximized {
+        // Maximized: confined below the top panel so it doesn't cover the shell bar.
+        let cw = state.fb_width.saturating_sub(BORDER_W * 2);
+        let ch = state.fb_height
+            .saturating_sub(PANEL_TOP_RESERVED_H)
+            .saturating_sub(TITLEBAR_H + BORDER_W);
+        (BORDER_W, PANEL_TOP_RESERVED_H + TITLEBAR_H, cw, ch)
     } else {
         (win.x + BORDER_W, win.y + TITLEBAR_H, win.width, win.height)
     };
 
     if !no_chrome {
         let (wx, wy) = if maximized {
-            (0u32, 0u32)
+            (0u32, PANEL_TOP_RESERVED_H)
         } else {
             (win.x, win.y)
         };
@@ -1703,7 +1757,9 @@ fn composite_window(
             win.width + BORDER_W * 2
         };
         let chrome_h = if maximized {
-            state.fb_height
+            state.fb_height.saturating_sub(PANEL_TOP_RESERVED_H)
+        } else if win.rolled_up {
+            TITLEBAR_H + BORDER_W
         } else {
             TITLEBAR_H + win.height + BORDER_W
         };
@@ -1807,7 +1863,10 @@ fn composite_window(
         }
     }
 
-    // Blit client buffer.
+    // Blit client buffer — skipped for rolled-up (shaded) windows.
+    if skip_client {
+        return;
+    }
     if canvas_x >= state.fb_width || canvas_y >= state.fb_height {
         return;
     }
@@ -2080,6 +2139,40 @@ fn move_hw_cursor(state: &mut CompositorState, x: u32, y: u32) -> bool {
     }
 }
 
+/// Re-blit the top panel strip from the Desktop window onto the back buffer
+/// after all normal windows have been composited.  This ensures the Vortex Shell
+/// top bar is never visually obscured even when a normal window manages to
+/// overlap that region.
+///
+/// The Desktop window is a full-screen no-chrome surface so its pixel buffer
+/// maps directly to screen coordinates; we just copy the first PANEL_TOP_RESERVED_H
+/// rows back on top.
+fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) {
+    let desktop = match state
+        .windows
+        .iter()
+        .find(|w| w.config.window_type == WindowType::Desktop && !w.buffer.is_null())
+    {
+        Some(w) => w,
+        None => return,
+    };
+    let strip_rows = PANEL_TOP_RESERVED_H
+        .min(state.fb_height)
+        .min(desktop.height) as usize;
+    let blit_w = (desktop.width as usize).min(state.fb_width as usize);
+    let stride = fb_stride(state);
+    for row in 0..strip_rows {
+        let src = unsafe {
+            core::slice::from_raw_parts(
+                desktop.buffer.add(row * desktop.width as usize),
+                blit_w,
+            )
+        };
+        let dst_start = row * stride;
+        back_buffer[dst_start..dst_start + blit_w].copy_from_slice(src);
+    }
+}
+
 fn redraw_scene(state: &mut CompositorState) {
     if !state.session_active {
         return;
@@ -2096,6 +2189,9 @@ fn redraw_scene(state: &mut CompositorState) {
         let is_focused = focused_idx == Some(i);
         composite_window(state, &mut back_buffer, win, is_focused);
     }
+    // Re-paint the Desktop window's top panel strip after all normal windows so
+    // the Vortex Shell bar is always visible regardless of window z-order.
+    reblit_desktop_panel_strip(state, &mut back_buffer);
     {
         let mut canvas = back_buffer_canvas(state, &mut back_buffer);
         draw_notifications(&mut canvas, state);
@@ -2445,6 +2541,8 @@ pub extern "C" fn _start() -> ! {
         next_notification_id: 1,
         vortex_launch_pending: false,
         last_mouse_generation: 0,
+        last_titlebar_click_win_id: 0,
+        last_titlebar_click_ms: 0,
     };
     // Initial cursor position for the hardware cursor.
     if state.hw_cursor_active {
@@ -2510,16 +2608,18 @@ pub extern "C" fn _start() -> ! {
                         let id = next_win_id;
                         next_win_id += 1;
 
-                        // Initial position: cascade from center of screen.
+                        // Initial position: cascade from center of screen, clamped below the
+                        // top panel so new windows don't obscure the Vortex Shell bar.
                         let cascade = ((id.saturating_sub(1)) % 8) as u32 * 28;
                         let win_x = state
                             .fb_width
                             .saturating_sub(w)
                             .saturating_div(2)
                             .saturating_add(cascade);
-                        let win_y = (state.fb_height / 4)
+                        let win_y = ((state.fb_height / 4)
                             .saturating_sub(h / 2)
-                            .saturating_add(cascade);
+                            .saturating_add(cascade))
+                        .max(PANEL_TOP_RESERVED_H);
 
                         debug_log("[DISPLAY] create_window id=");
                         debug_dec(id as u32);
@@ -2566,6 +2666,8 @@ pub extern "C" fn _start() -> ! {
                                 config,
                                 client_cursor: CursorShape::Pointer,
                                 pending_keys: KeyEventQueue::new(),
+                                rolled_up: false,
+                                saved_unrolled_h: h,
                             },
                         );
                         if is_desktop_window {
@@ -2622,6 +2724,11 @@ pub extern "C" fn _start() -> ! {
                             || new_state == WindowState::Fullscreen
                         {
                             if win.config.state == WindowState::Normal {
+                                // Unroll before expanding so client area is fully visible.
+                                if win.rolled_up {
+                                    win.height = win.saved_unrolled_h;
+                                    win.rolled_up = false;
+                                }
                                 win.saved_x = win.x;
                                 win.saved_y = win.y;
                                 win.saved_w = win.width;
@@ -2989,12 +3096,41 @@ pub extern "C" fn _start() -> ! {
                             }
                         }
 
+                        let click_now = monotonic_millis();
                         match hit_zone {
                             HitZone::TitleBar => {
-                                // Don't start window move immediately; wait for the cursor
-                                // to exceed DRAG_THRESHOLD_PX so tiny PS/2 jitter during
-                                // a click doesn't accidentally move the window.
-                                state.pending_move_drag = Some((id, cx as i32, cy as i32));
+                                // Double-click on the titlebar rolls up / unrolls the window
+                                // (shade gesture, like FVWM/Afterstep desktops).
+                                let is_dbl = state.last_titlebar_click_win_id == id
+                                    && click_now.saturating_sub(state.last_titlebar_click_ms)
+                                        < DOUBLE_CLICK_MS;
+                                if is_dbl {
+                                    if let Some(win) =
+                                        state.windows.iter_mut().find(|w| w.id == id)
+                                    {
+                                        if win.config.state == WindowState::Normal {
+                                            if win.rolled_up {
+                                                win.height = win.saved_unrolled_h;
+                                                win.rolled_up = false;
+                                            } else {
+                                                win.saved_unrolled_h = win.height;
+                                                win.rolled_up = true;
+                                            }
+                                        }
+                                    }
+                                    // Cancel any pending drag so the roll-up click doesn't
+                                    // accidentally move the window.
+                                    state.pending_move_drag = None;
+                                    state.last_titlebar_click_win_id = 0;
+                                    state.last_titlebar_click_ms = 0;
+                                } else {
+                                    // First click of a potential double-click: record it and
+                                    // start a pending drag (drag only fires if cursor moves
+                                    // more than DRAG_THRESHOLD_PX, so clicking alone is safe).
+                                    state.last_titlebar_click_win_id = id;
+                                    state.last_titlebar_click_ms = click_now;
+                                    state.pending_move_drag = Some((id, cx as i32, cy as i32));
+                                }
                             }
                             HitZone::CloseBtn => {
                                 let _ = close_window(&mut state, id, None);
@@ -3003,6 +3139,11 @@ pub extern "C" fn _start() -> ! {
                             HitZone::MaximizeBtn => {
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
                                     if win.config.state == WindowState::Normal {
+                                        // Unroll before maximizing so the client area is restored.
+                                        if win.rolled_up {
+                                            win.height = win.saved_unrolled_h;
+                                            win.rolled_up = false;
+                                        }
                                         win.saved_x = win.x;
                                         win.saved_y = win.y;
                                         win.saved_w = win.width;
@@ -3095,7 +3236,10 @@ pub extern "C" fn _start() -> ! {
                             if let Some(win) = state.windows.iter_mut().find(|w| w.id == drag_id) {
                                 if win.config.state == WindowState::Normal {
                                     win.x = (win.x as i32 + dcx).max(0) as u32;
-                                    win.y = (win.y as i32 + dcy).max(0) as u32;
+                                    // Clamp y so the titlebar cannot be dragged behind the
+                                    // top panel; the panel reserved area is always accessible.
+                                    win.y = (win.y as i32 + dcy)
+                                        .max(PANEL_TOP_RESERVED_H as i32) as u32;
                                 }
                             }
                         }

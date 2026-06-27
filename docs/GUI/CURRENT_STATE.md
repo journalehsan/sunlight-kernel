@@ -91,6 +91,41 @@ Current limitations:
 - Compositor does not yet reap windows on process death/panic; a crashed GUI app
   (whose panic handler just parks) still leaves a stale window until Ctrl+W
 
+## Vortex Shell / Window Manager TODOs
+
+### Panel layering
+
+- The Vortex Shell top panel is protected by a `reblit_desktop_panel_strip` pass
+  that re-paints the top 50 px of the Desktop-layer window after all normal windows
+  are composited, so it is always visually on top.
+- Normal windows and drag moves are clamped to `y >= PANEL_TOP_RESERVED_H (50px)`
+  so the titlebar can never be dragged behind the panel.
+- Maximized windows are confined to start at `y = PANEL_TOP_RESERVED_H`; fullscreen
+  windows still cover everything by design.
+- **Known gap:** hit-test z-order still routes clicks to the topmost window at a
+  given coordinate.  Because windows cannot be dragged or placed over the panel
+  area (clamped), this is not a practical problem in normal use, but a future
+  Widget-type overlay panel window with `ZIndexType::OnTop` would be the robust fix.
+- Bottom dock panels are part of the Desktop-layer canvas and sit behind normal
+  windows in compositor z-order; this is acceptable for now.
+
+### Titlebar double-click roll-up (shade)
+
+- Double-clicking a window titlebar within `DOUBLE_CLICK_MS (400 ms)` toggles the
+  window between its normal size and a collapsed "titlebar-only" state.
+- Dragging a rolled-up window by its titlebar still works.
+- Maximize and minimize buttons function normally regardless of roll-up state.
+- Maximizing a rolled-up window automatically unrolls it first.
+
+### Window snapping — Super+Left / Super+Right
+
+- **Status: TODO — not yet implemented.**
+- Blocked on resize protocol robustness: telling a client its window has been
+  resized currently has no handshake, and some apps hang or break layout if their
+  buffer dimensions change without a `RESIZE_ACK` round-trip.
+- Plan: implement `SgpMsg::RESIZE_WINDOW` → `SgpMsg::RESIZE_ACK` IPC, then add
+  `Super+Left` / `Super+Right` snap in the `KEY_EVENT` handler in `sunlight-display`.
+
 ## Input Routing State
 
 Keyboard routing currently works like this:
