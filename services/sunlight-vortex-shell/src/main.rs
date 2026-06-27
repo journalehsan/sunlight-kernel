@@ -45,12 +45,18 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+
+use alloc::{string::String, vec::Vec};
 use sunlight_ipc::{
     debug_log, get_init_cap, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup,
     process_yield, unpack_iface_summary, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
     ProcessExit, SgpMsg, SpawnRequest, TzMsg,
 };
-use sunlight_ui::{image::TgaImage, App, Canvas, Color, Event, Rect, Theme, Window, WindowConfig};
+use sunlight_libc::{self as libc, DirEntry, FT_DIR};
+use sunlight_ui::{
+    image::TgaImage, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
+};
 
 // ---------------------------------------------------------------------------
 // Wallpaper asset
@@ -89,7 +95,15 @@ const ICON_GAP: i32 = 4; // gap between icon buttons
 const SEARCH_W: u32 = 200; // search box width
 const SEARCH_H: u32 = 32; // search box height
 const STATUS_POLL_MS: u64 = 1000;
-const STATUS_IPC_TIMEOUT_MS: u64 = 20;
+const TIME_IPC_TIMEOUT_MS: u64 = 250;
+const NET_IPC_TIMEOUT_MS: u64 = 50;
+const DESKTOP_CELL_W: u32 = 92;
+const DESKTOP_CELL_H: u32 = 88;
+const DESKTOP_ICON_SCALE: u32 = 2;
+const DESKTOP_LABEL_CHARS: usize = 12;
+const MAX_DIR_ENTRIES: usize = 48;
+const MENU_W: u32 = 156;
+const MENU_ITEM_H: u32 = 22;
 
 // ---------------------------------------------------------------------------
 // Heap (bump allocator — no dynamic allocations used)
@@ -368,6 +382,126 @@ const BAT_ROWS: [u16; 16] = [
     0b0000000000000000,
 ];
 
+/// Folder icon.
+const FOLDER_ROWS: [u16; 16] = [
+    0b0000000000000000,
+    0b0001111000000000,
+    0b0011000111110000,
+    0b0110000000011000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0111111111111000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Generic document icon.
+const FILE_ROWS: [u16; 16] = [
+    0b0001111111000000,
+    0b0001000001100000,
+    0b0001000000110000,
+    0b0001001111110000,
+    0b0001001000010000,
+    0b0001001111110000,
+    0b0001001000010000,
+    0b0001001111110000,
+    0b0001001000010000,
+    0b0001001111110000,
+    0b0001000000010000,
+    0b0001000000010000,
+    0b0001000000010000,
+    0b0001111111110000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Computer icon.
+const COMPUTER_ROWS: [u16; 16] = [
+    0b0000000000000000,
+    0b0011111111110000,
+    0b0010000000010000,
+    0b0010111111010000,
+    0b0010100001010000,
+    0b0010100001010000,
+    0b0010100001010000,
+    0b0010111111010000,
+    0b0010000000010000,
+    0b0011111111110000,
+    0b0000011111000000,
+    0b0000001110000000,
+    0b0000011111000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Home icon.
+const HOME_ROWS: [u16; 16] = [
+    0b0000001100000000,
+    0b0000011110000000,
+    0b0000110011000000,
+    0b0001100001100000,
+    0b0011111111110000,
+    0b0011000000110000,
+    0b0011000000110000,
+    0b0011001100110000,
+    0b0011001100110000,
+    0b0011000000110000,
+    0b0011000000110000,
+    0b0011000000110000,
+    0b0011111111110000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Trash icon.
+const TRASH_ROWS: [u16; 16] = [
+    0b0000011111000000,
+    0b0001111111110000,
+    0b0000011111000000,
+    0b0000111111100000,
+    0b0000110001100000,
+    0b0000110001100000,
+    0b0000110001100000,
+    0b0000110001100000,
+    0b0000110001100000,
+    0b0000110001100000,
+    0b0000110001100000,
+    0b0000111111100000,
+    0b0000111111100000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Drive icon.
+const DRIVE_ROWS: [u16; 16] = [
+    0b0000000000000000,
+    0b0011111111110000,
+    0b0110000000011000,
+    0b0110000000011000,
+    0b0110000000011000,
+    0b0110000000011000,
+    0b0110000000011000,
+    0b0111111111111000,
+    0b0110000000011000,
+    0b0110000000011000,
+    0b0110000110011000,
+    0b0110000110011000,
+    0b0111111111111000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
 // Width of the 16-pixel icon bitmap (used in draw_icon16).
 const ICON16_W: u32 = 16;
 
@@ -381,14 +515,74 @@ enum DockAction {
     LaunchCalc,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DesktopIconKind {
+    Computer,
+    Home,
+    Trash,
+    Network,
+    Drive,
+    Folder,
+    File,
+}
+
+struct DesktopIcon {
+    name: String,
+    label: String,
+    _tooltip: String,
+    _action: String,
+    kind: DesktopIconKind,
+    rect: Rect,
+}
+
+struct DesktopPaths {
+    _username: String,
+    home_dir: String,
+    desktop_dir: String,
+    trash_dir: String,
+    hostname: String,
+}
+
+#[derive(Clone, Copy)]
+enum ContextMenuAction {
+    NewFolder,
+    Refresh,
+    SortByName,
+    OpenTerminalHere,
+}
+
+#[derive(Clone, Copy)]
+struct MenuItem {
+    action: ContextMenuAction,
+    rect: Rect,
+}
+
+struct ContextMenuState {
+    rect: Rect,
+    items: [MenuItem; 4],
+}
+
+const MENU_LABELS: [(&str, ContextMenuAction); 4] = [
+    ("New Folder", ContextMenuAction::NewFolder),
+    ("Refresh", ContextMenuAction::Refresh),
+    ("Sort By Name", ContextMenuAction::SortByName),
+    ("Open Terminal", ContextMenuAction::OpenTerminalHere),
+];
+
 // ---------------------------------------------------------------------------
 // Shell application state
 // ---------------------------------------------------------------------------
 
 struct VortexShell {
     wallpaper: Option<TgaImage>,
+    desktop_paths: DesktopPaths,
+    desktop_icons: Vec<DesktopIcon>,
+    screen_w: u32,
+    screen_h: u32,
     /// Bounds of each clickable dock button (local coords), plus the action.
     dock_zones: [(Rect, DockAction); 3],
+    selected_icon: Option<usize>,
+    context_menu: Option<ContextMenuState>,
     /// Tracks whether mouse is hovering over a dock icon (index 0..3).
     hover: Option<usize>,
     /// Cached local hour/min for the status clock.
@@ -405,20 +599,57 @@ struct VortexShell {
 impl VortexShell {
     fn new() -> Self {
         let wallpaper = TgaImage::parse(WALLPAPER_TGA).ok();
+        let desktop_paths = resolve_desktop_paths();
+        ensure_directory(&desktop_paths.desktop_dir);
         if wallpaper.is_some() {
             debug_log("[VORTEX] wallpaper loaded\n");
         } else {
             debug_log("[VORTEX] wallpaper unavailable — using fallback\n");
         }
-        Self {
+        let mut shell = Self {
             wallpaper,
+            desktop_paths,
+            desktop_icons: Vec::new(),
+            screen_w: FALLBACK_W,
+            screen_h: FALLBACK_H,
             dock_zones: [(Rect::new(0, 0, 0, 0), DockAction::None); 3],
+            selected_icon: None,
+            context_menu: None,
             hover: None,
             status_hour: 0xff,
             status_min: 0xff,
             status_net_up: false,
             next_status_poll_ms: 0,
             power_zone: Rect::new(0, 0, 0, 0),
+        };
+        shell.reload_desktop_icons();
+        shell
+    }
+
+    fn refresh_status(&mut self) -> bool {
+        let mut dirty = false;
+        if let Some((h, m)) = query_local_hm() {
+            if h != self.status_hour || m != self.status_min {
+                self.status_hour = h;
+                self.status_min = m;
+                dirty = true;
+            }
+        }
+        if let Some(net_up) = query_net_up() {
+            if net_up != self.status_net_up {
+                self.status_net_up = net_up;
+                dirty = true;
+            }
+        }
+        dirty
+    }
+
+    fn reload_desktop_icons(&mut self) {
+        self.desktop_icons = load_desktop_icons(&self.desktop_paths);
+        if let Some(sel) = self.selected_icon {
+            if sel >= self.desktop_icons.len() {
+                self.selected_icon = None;
+            }
         }
     }
 }
@@ -436,6 +667,30 @@ fn draw_icon16(canvas: &mut Canvas, cell: Rect, rows: &[u16; 16], color: Color) 
             let bit = (row_bits >> (ICON16_W as usize - 1 - col)) & 1;
             if bit != 0 {
                 canvas.put_pixel(ox + col as i32, oy + row_idx as i32, color);
+            }
+        }
+    }
+}
+
+/// Draw a 16×16 pixel-art icon scaled up inside `cell`.
+fn draw_icon16_scaled(canvas: &mut Canvas, cell: Rect, rows: &[u16; 16], color: Color, scale: u32) {
+    let icon_w = ICON16_W * scale;
+    let icon_h = 16 * scale;
+    let ox = cell.x + (cell.w as i32 - icon_w as i32) / 2;
+    let oy = cell.y + (cell.h as i32 - icon_h as i32) / 2;
+    for (row_idx, &row_bits) in rows.iter().enumerate() {
+        for col in 0..ICON16_W as usize {
+            let bit = (row_bits >> (ICON16_W as usize - 1 - col)) & 1;
+            if bit != 0 {
+                canvas.fill_rect(
+                    Rect::new(
+                        ox + col as i32 * scale as i32,
+                        oy + row_idx as i32 * scale as i32,
+                        scale,
+                        scale,
+                    ),
+                    color,
+                );
             }
         }
     }
@@ -481,7 +736,7 @@ fn query_local_hm() -> Option<(u8, u8)> {
     let Ok(reply) = ipc_call_timeout(
         tz,
         IpcMsg::with_label(TzMsg::GET_LOCAL_TIME),
-        STATUS_IPC_TIMEOUT_MS,
+        TIME_IPC_TIMEOUT_MS,
     ) else {
         return None;
     };
@@ -506,7 +761,7 @@ fn query_net_up() -> Option<bool> {
         let Ok(reply) = ipc_call_timeout(
             netd,
             IpcMsg::with_label(NetworkdMsg::LIST_INTERFACES).word(0, idx),
-            STATUS_IPC_TIMEOUT_MS,
+            NET_IPC_TIMEOUT_MS,
         ) else {
             return None;
         };
@@ -680,6 +935,469 @@ fn draw_top_bar(
 }
 
 // ---------------------------------------------------------------------------
+// Desktop icons and menu
+// ---------------------------------------------------------------------------
+
+fn sanitize_ascii(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    for &b in bytes {
+        match b {
+            0 | b'\n' | b'\r' => break,
+            0x20..=0x7e => out.push(b as char),
+            _ => out.push('?'),
+        }
+    }
+    out
+}
+
+fn ellipsize_label(text: &str, max_chars: usize) -> String {
+    let chars = text.chars().count();
+    if chars <= max_chars {
+        return String::from(text);
+    }
+    let keep = max_chars.saturating_sub(3);
+    let mut out = String::with_capacity(max_chars);
+    for ch in text.chars().take(keep) {
+        out.push(ch);
+    }
+    out.push('.');
+    out.push('.');
+    out.push('.');
+    out
+}
+
+fn join_path(base: &str, leaf: &str) -> String {
+    let mut out = String::with_capacity(base.len() + leaf.len() + 1);
+    out.push_str(base);
+    if !out.ends_with('/') {
+        out.push('/');
+    }
+    out.push_str(leaf.trim_start_matches('/'));
+    out
+}
+
+fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {
+    let fd = libc::open(path).ok()?;
+    let mut out = Vec::new();
+    let mut buf = [0u8; 128];
+    loop {
+        let n = match libc::read(fd, &mut buf) {
+            Ok(n) => n,
+            Err(_) => {
+                let _ = libc::close(fd);
+                return None;
+            }
+        };
+        if n == 0 {
+            break;
+        }
+        let take = (limit - out.len()).min(n);
+        out.extend_from_slice(&buf[..take]);
+        if out.len() >= limit || take < n {
+            break;
+        }
+    }
+    let _ = libc::close(fd);
+    Some(out)
+}
+
+fn parse_u32_ascii(bytes: &[u8]) -> Option<u32> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut value = 0u32;
+    for &b in bytes {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        value = value.checked_mul(10)?.checked_add((b - b'0') as u32)?;
+    }
+    Some(value)
+}
+
+fn read_hostname() -> String {
+    if let Some(bytes) = read_file_bytes(b"/etc/hostname", 128) {
+        let host = sanitize_ascii(&bytes);
+        if !host.is_empty() {
+            return host;
+        }
+    }
+    String::from("sunlight")
+}
+
+fn root_desktop_paths(hostname: String) -> DesktopPaths {
+    DesktopPaths {
+        _username: String::from("root"),
+        home_dir: String::from("/root"),
+        desktop_dir: String::from("/root/Desktop"),
+        trash_dir: String::from("/root/.local/share/Trash"),
+        hostname,
+    }
+}
+
+fn lookup_user_by_uid(uid: u32) -> Option<(String, String)> {
+    let bytes = read_file_bytes(b"/etc/passwd", 2048)?;
+    for line in bytes.split(|&b| b == b'\n') {
+        if line.is_empty() || line[0] == b'#' {
+            continue;
+        }
+        let mut parts = line.split(|&b| b == b':');
+        let username = parts.next()?;
+        let _passwd = parts.next()?;
+        let uid_field = parts.next()?;
+        let _gid = parts.next()?;
+        let _comment = parts.next()?;
+        let home = parts.next()?;
+        if parse_u32_ascii(uid_field)? != uid {
+            continue;
+        }
+        let uname = sanitize_ascii(username);
+        if uname.is_empty() {
+            return None;
+        }
+        let home_dir = {
+            let parsed = sanitize_ascii(home);
+            if parsed.is_empty() {
+                let mut h = String::from("/home/");
+                h.push_str(&uname);
+                h
+            } else {
+                parsed
+            }
+        };
+        return Some((uname, home_dir));
+    }
+    None
+}
+
+fn resolve_desktop_paths() -> DesktopPaths {
+    let hostname = read_hostname();
+    let uid = libc::getuid() as u32;
+    if uid == 0 {
+        return root_desktop_paths(hostname);
+    }
+    if let Some((username, home_dir)) = lookup_user_by_uid(uid) {
+        let desktop_dir = join_path(&home_dir, "Desktop");
+        let trash_dir = join_path(&home_dir, ".local/share/Trash");
+        return DesktopPaths {
+            _username: username,
+            home_dir,
+            desktop_dir,
+            trash_dir,
+            hostname,
+        };
+    }
+    debug_log("[VORTEX] TODO(user): desktop path fallback to /root/Desktop\n");
+    root_desktop_paths(hostname)
+}
+
+fn ensure_directory(path: &str) {
+    if libc::stat(path.as_bytes()).is_ok() {
+        return;
+    }
+    if libc::mkdir_recursive(path.as_bytes()).is_err() {
+        debug_log("[VORTEX] desktop dir create failed\n");
+    }
+}
+
+fn make_desktop_icon(
+    name: String,
+    tooltip: &str,
+    action: String,
+    kind: DesktopIconKind,
+) -> DesktopIcon {
+    let label = ellipsize_label(&name, DESKTOP_LABEL_CHARS);
+    DesktopIcon {
+        name,
+        label,
+        _tooltip: String::from(tooltip),
+        _action: action,
+        kind,
+        rect: Rect::new(0, 0, 0, 0),
+    }
+}
+
+fn maybe_add_drive_icon(icons: &mut Vec<DesktopIcon>, path: &str, display_name: &str) {
+    if libc::stat(path.as_bytes()).is_ok() {
+        icons.push(make_desktop_icon(
+            String::from(display_name),
+            "Mounted drive",
+            String::from(path),
+            DesktopIconKind::Drive,
+        ));
+    }
+}
+
+fn load_drive_icons() -> Vec<DesktopIcon> {
+    let mut icons = Vec::new();
+    maybe_add_drive_icon(&mut icons, "/boot", "boot");
+    let mut entries = [DirEntry::zeroed(); MAX_DIR_ENTRIES];
+    if let Ok(count) = libc::read_dir(b"/mnt", &mut entries) {
+        for entry in entries.iter().take(count) {
+            if entry.file_type != FT_DIR {
+                continue;
+            }
+            let name = sanitize_ascii(entry.name_bytes());
+            if name.is_empty() {
+                continue;
+            }
+            let path = join_path("/mnt", &name);
+            icons.push(make_desktop_icon(
+                name,
+                "Mounted drive",
+                path,
+                DesktopIconKind::Drive,
+            ));
+        }
+    }
+    icons.sort_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));
+    icons
+}
+
+fn load_desktop_dir_icons(desktop_dir: &str) -> Vec<DesktopIcon> {
+    let mut icons = Vec::new();
+    let mut entries = [DirEntry::zeroed(); MAX_DIR_ENTRIES];
+    if let Ok(count) = libc::read_dir(desktop_dir.as_bytes(), &mut entries) {
+        for entry in entries.iter().take(count) {
+            let name = sanitize_ascii(entry.name_bytes());
+            if name.is_empty() {
+                continue;
+            }
+            let path = join_path(desktop_dir, &name);
+            icons.push(make_desktop_icon(
+                name,
+                "Desktop entry",
+                path,
+                if entry.file_type == FT_DIR {
+                    DesktopIconKind::Folder
+                } else {
+                    DesktopIconKind::File
+                },
+            ));
+        }
+    }
+    icons.sort_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));
+    icons
+}
+
+fn load_desktop_icons(paths: &DesktopPaths) -> Vec<DesktopIcon> {
+    let mut icons = Vec::new();
+    icons.push(make_desktop_icon(
+        paths.hostname.clone(),
+        "Computer",
+        String::from("computer:///"),
+        DesktopIconKind::Computer,
+    ));
+    icons.push(make_desktop_icon(
+        String::from("Home"),
+        "Home folder",
+        paths.home_dir.clone(),
+        DesktopIconKind::Home,
+    ));
+    icons.push(make_desktop_icon(
+        String::from("Trash"),
+        "Trash",
+        paths.trash_dir.clone(),
+        DesktopIconKind::Trash,
+    ));
+    icons.push(make_desktop_icon(
+        String::from("Network"),
+        "Network locations",
+        String::from("network:///"),
+        DesktopIconKind::Network,
+    ));
+    icons.extend(load_drive_icons());
+    icons.extend(load_desktop_dir_icons(&paths.desktop_dir));
+    icons
+}
+
+fn desktop_area(screen_w: u32, screen_h: u32) -> Rect {
+    let x = TOP_PAD + 10;
+    let y = TOP_Y + TOP_H as i32 + 14;
+    let bottom = bot_y(screen_h) - 10;
+    Rect::new(
+        x,
+        y,
+        (screen_w as i32 - x - TOP_PAD - 10).max(0) as u32,
+        (bottom - y).max(0) as u32,
+    )
+}
+
+fn layout_desktop_icons(icons: &mut [DesktopIcon], area: Rect) {
+    let rows = ((area.h / DESKTOP_CELL_H).max(1)) as usize;
+    let cols = ((area.w / DESKTOP_CELL_W).max(1)) as usize;
+    for (i, icon) in icons.iter_mut().enumerate() {
+        let col = i / rows;
+        let row = i % rows;
+        if col >= cols {
+            icon.rect = Rect::new(-1024, -1024, 0, 0);
+            continue;
+        }
+        icon.rect = Rect::new(
+            area.x + col as i32 * DESKTOP_CELL_W as i32,
+            area.y + row as i32 * DESKTOP_CELL_H as i32,
+            DESKTOP_CELL_W,
+            DESKTOP_CELL_H,
+        );
+    }
+}
+
+fn desktop_icon_visual(kind: DesktopIconKind, theme: &Theme) -> (&'static [u16; 16], Color) {
+    match kind {
+        DesktopIconKind::Computer => (&COMPUTER_ROWS, theme.accent),
+        DesktopIconKind::Home => (&HOME_ROWS, theme.ok),
+        DesktopIconKind::Trash => (&TRASH_ROWS, theme.text_dim),
+        DesktopIconKind::Network => (&NET_ON_ROWS, theme.text),
+        DesktopIconKind::Drive => (&DRIVE_ROWS, theme.warn),
+        DesktopIconKind::Folder => (&FOLDER_ROWS, theme.accent_hover),
+        DesktopIconKind::File => (&FILE_ROWS, theme.text),
+    }
+}
+
+fn draw_desktop_icons(
+    canvas: &mut Canvas,
+    theme: &Theme,
+    icons: &[DesktopIcon],
+    selected: Option<usize>,
+) {
+    for (idx, icon) in icons.iter().enumerate() {
+        if icon.rect.w == 0 {
+            continue;
+        }
+        let slot = icon.rect;
+        let is_selected = selected == Some(idx);
+        if is_selected {
+            let highlight = slot.inset(4);
+            canvas.fill_rounded_rect(highlight, 8, theme.panel);
+            canvas.stroke_rounded_rect(highlight, 8, 1, theme.accent);
+        }
+        let (rows, color) = desktop_icon_visual(icon.kind, theme);
+        let icon_rect = Rect::new(slot.x + 18, slot.y + 6, 48, 40);
+        draw_icon16_scaled(canvas, icon_rect, rows, color, DESKTOP_ICON_SCALE);
+
+        let label_w = Canvas::measure_text(&icon.label);
+        let label_x = slot.x + (slot.w as i32 - label_w as i32) / 2;
+        let label_y = slot.y + 58;
+        canvas.draw_text(
+            label_x,
+            label_y,
+            &icon.label,
+            if is_selected {
+                theme.text
+            } else {
+                theme.text_dim.lighten(90)
+            },
+        );
+    }
+}
+
+fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMenuState {
+    let menu_h = MENU_ITEM_H * MENU_LABELS.len() as u32 + 8;
+    let max_x = screen_w as i32 - MENU_W as i32 - 6;
+    let max_y = screen_h as i32 - menu_h as i32 - 6;
+    let rect = Rect::new(
+        x.clamp(6, max_x.max(6)),
+        y.clamp(6, max_y.max(6)),
+        MENU_W,
+        menu_h,
+    );
+    let mut items = [MenuItem {
+        action: ContextMenuAction::Refresh,
+        rect: Rect::new(0, 0, 0, 0),
+    }; 4];
+    for (i, (_, action)) in MENU_LABELS.iter().enumerate() {
+        items[i] = MenuItem {
+            action: *action,
+            rect: Rect::new(
+                rect.x + 4,
+                rect.y + 4 + i as i32 * MENU_ITEM_H as i32,
+                MENU_W - 8,
+                MENU_ITEM_H,
+            ),
+        };
+    }
+    ContextMenuState { rect, items }
+}
+
+fn draw_context_menu(canvas: &mut Canvas, theme: &Theme, menu: &ContextMenuState) {
+    draw_panel(canvas, menu.rect, theme.panel, theme.border);
+    for (i, (label, _)) in MENU_LABELS.iter().enumerate() {
+        let item = menu.items[i].rect;
+        let tw = Canvas::measure_text(label);
+        let tx = item.x + 8;
+        let ty = item.y + (item.h as i32 - 7) / 2;
+        if i == 0 {
+            canvas.fill_rect(Rect::new(item.x, item.y, item.w, 1), theme.border);
+        }
+        canvas.draw_text(
+            tx.min(item.x + item.w as i32 - tw as i32),
+            ty,
+            label,
+            theme.text,
+        );
+    }
+}
+
+fn icon_at(icons: &[DesktopIcon], p: Point) -> Option<usize> {
+    icons.iter().position(|icon| icon.rect.contains(p))
+}
+
+fn menu_action_at(menu: &ContextMenuState, p: Point) -> Option<ContextMenuAction> {
+    menu.items
+        .iter()
+        .find(|item| item.rect.contains(p))
+        .map(|item| item.action)
+}
+
+fn create_new_folder(desktop_dir: &str) {
+    for n in 0..100u32 {
+        let mut name = String::from("New Folder");
+        if n > 0 {
+            name.push(' ');
+            let mut digits = [0u8; 10];
+            let len = fmt_u32_ascii(n + 1, &mut digits);
+            for &b in &digits[..len] {
+                name.push(b as char);
+            }
+        }
+        let path = join_path(desktop_dir, &name);
+        if libc::stat(path.as_bytes()).is_ok() {
+            continue;
+        }
+        if libc::mkdir(path.as_bytes(), 0o755).is_err() {
+            debug_log("[VORTEX] new folder create failed\n");
+        }
+        return;
+    }
+}
+
+fn fmt_u32_ascii(mut value: u32, out: &mut [u8; 10]) -> usize {
+    if value == 0 {
+        out[0] = b'0';
+        return 1;
+    }
+    let mut rev = [0u8; 10];
+    let mut n = 0usize;
+    while value > 0 {
+        rev[n] = b'0' + (value % 10) as u8;
+        value /= 10;
+        n += 1;
+    }
+    for i in 0..n {
+        out[i] = rev[n - 1 - i];
+    }
+    n
+}
+
+fn spawn_path(path: &str) {
+    let init_cap = get_init_cap();
+    let req = SpawnRequest::new(path, "");
+    let mut msg = IpcMsg::with_label(0);
+    req.pack_into(&mut msg);
+    let _ = ipc_call(init_cap, msg);
+}
+
+// ---------------------------------------------------------------------------
 // Bottom bar layout
 // ---------------------------------------------------------------------------
 
@@ -772,8 +1490,14 @@ fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32) {
 
 impl App for VortexShell {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        if self.status_min == 0xff {
+            let _ = self.refresh_status();
+        }
+
         let cw = canvas.width;
         let ch = canvas.height;
+        self.screen_w = cw;
+        self.screen_h = ch;
 
         // ── Wallpaper ────────────────────────────────────────────────────────
         if let Some(ref wp) = self.wallpaper {
@@ -781,6 +1505,10 @@ impl App for VortexShell {
         } else {
             canvas.fill_rect(Rect::new(0, 0, cw, ch), Color(FALLBACK_BG));
         }
+
+        let desktop_rect = desktop_area(cw, ch);
+        layout_desktop_icons(&mut self.desktop_icons, desktop_rect);
+        draw_desktop_icons(canvas, theme, &self.desktop_icons, self.selected_icon);
 
         // ── Top bar ──────────────────────────────────────────────────────────
         let pwr_left = draw_top_bar(
@@ -811,34 +1539,70 @@ impl App for VortexShell {
             (dock_cells[1], DockAction::None), // tasks    — TODO(phase2-launch)
             (dock_cells[2], DockAction::LaunchCalc),
         ];
+
+        if let Some(menu) = &self.context_menu {
+            draw_context_menu(canvas, theme, menu);
+        }
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Click { x, y } => {
+                let point = Point::new(x, y);
+                if let Some(menu) = self.context_menu.take() {
+                    if let Some(action) = menu_action_at(&menu, point) {
+                        match action {
+                            ContextMenuAction::NewFolder => {
+                                create_new_folder(&self.desktop_paths.desktop_dir);
+                                self.reload_desktop_icons();
+                            }
+                            ContextMenuAction::Refresh | ContextMenuAction::SortByName => {
+                                self.reload_desktop_icons();
+                            }
+                            ContextMenuAction::OpenTerminalHere => {
+                                spawn_path("/bin/sunlight-terminal");
+                            }
+                        }
+                        return true;
+                    }
+                }
                 // Power button click: no behavior yet.
                 // TODO(power): show menu (lock, logout, reboot, shutdown).
                 // Real actions must go through sunlight-powerd; do not implement here.
-                if self
-                    .power_zone
-                    .contains(sunlight_ui::geom::Point::new(x, y))
-                {
+                if self.power_zone.contains(point) {
                     debug_log("[VORTEX] power clicked (no-op; TODO menu)\n");
                     return false;
                 }
+                if let Some(idx) = icon_at(&self.desktop_icons, point) {
+                    let changed = self.selected_icon != Some(idx);
+                    self.selected_icon = Some(idx);
+                    return changed;
+                }
+                let mut clicked_dock = false;
                 for (rect, action) in &self.dock_zones {
-                    if rect.contains(sunlight_ui::geom::Point::new(x, y)) {
+                    if rect.contains(point) {
                         spawn_app(*action);
-                        return false;
+                        clicked_dock = true;
+                        break;
                     }
                 }
-                false
+                if clicked_dock {
+                    return false;
+                }
+                let changed = self.selected_icon.take().is_some();
+                changed
+            }
+            Event::MouseDown { x, y, button } if button == 1 => {
+                let point = Point::new(x, y);
+                self.selected_icon = icon_at(&self.desktop_icons, point);
+                self.context_menu = Some(make_context_menu(x, y, self.screen_w, self.screen_h));
+                true
             }
             Event::MouseMove { x, y } => {
                 let prev = self.hover;
                 self.hover = None;
                 for (i, (rect, _)) in self.dock_zones.iter().enumerate() {
-                    if rect.contains(sunlight_ui::geom::Point::new(x, y)) {
+                    if rect.contains(Point::new(x, y)) {
                         self.hover = Some(i);
                         break;
                     }
@@ -851,22 +1615,7 @@ impl App for VortexShell {
                     return false;
                 }
                 self.next_status_poll_ms = now.saturating_add(STATUS_POLL_MS);
-
-                let mut dirty = false;
-                if let Some((h, m)) = query_local_hm() {
-                    if h != self.status_hour || m != self.status_min {
-                        self.status_hour = h;
-                        self.status_min = m;
-                        dirty = true;
-                    }
-                }
-                if let Some(net_up) = query_net_up() {
-                    if net_up != self.status_net_up {
-                        self.status_net_up = net_up;
-                        dirty = true;
-                    }
-                }
-                dirty
+                self.refresh_status()
             }
             _ => false,
         }
@@ -879,14 +1628,10 @@ impl App for VortexShell {
 
 fn spawn_app(action: DockAction) {
     let path = match action {
-        DockAction::LaunchCalc => "/bin/calc",
+        DockAction::LaunchCalc => "/bin/calculator",
         DockAction::None => return,
     };
-    let init_cap = get_init_cap();
-    let req = SpawnRequest::new(path, "");
-    let mut msg = IpcMsg::with_label(0);
-    req.pack_into(&mut msg);
-    let _ = ipc_call(init_cap, msg);
+    spawn_path(path);
 }
 
 // ---------------------------------------------------------------------------
