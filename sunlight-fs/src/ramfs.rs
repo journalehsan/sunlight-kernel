@@ -500,6 +500,16 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/var", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/lib", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/log", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/wallpapers", 0, 0, mode::DIR_755),
+    // Vortex Shell desktop wallpaper (TGA type-2, 1672×941, 24 bpp BGR).
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper.tga"),
+    ),
     // System config files (world-readable)
     RamEntry::file(
         "/etc/passwd",

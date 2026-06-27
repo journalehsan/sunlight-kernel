@@ -206,6 +206,32 @@ impl<'fb> Canvas<'fb> {
         self.draw_text(tx, ty, text, color);
     }
 
+    /// Fill the canvas by scaling `img` to cover it (nearest-neighbour, no alloc).
+    ///
+    /// Both axes are scaled independently so the image fills the canvas exactly.
+    /// For same-aspect-ratio images (e.g., a 16:9 wallpaper on a 16:9 screen)
+    /// this is identical to cover/center-crop with no cropping required.
+    pub fn draw_image_cover(&mut self, img: &crate::image::TgaImage) {
+        let fw = self.width as usize;
+        let fh = self.height as usize;
+        let iw = img.width as usize;
+        let ih = img.height as usize;
+        if iw == 0 || ih == 0 || fw == 0 || fh == 0 {
+            return;
+        }
+        for y in 0..fh {
+            let src_y = (y * ih / fh) as u32;
+            let row_off = y * self.stride as usize;
+            for x in 0..fw {
+                let src_x = (x * iw / fw) as u32;
+                let idx = row_off + x;
+                if idx < self.pixels.len() {
+                    self.pixels[idx] = img.pixel_xrgb(src_x, src_y);
+                }
+            }
+        }
+    }
+
     /// Create a sub-canvas clipped to `rect`.
     /// NOTE: This is a zero-copy view — the sub-canvas writes into the same
     /// pixel buffer, using the original stride, just starting at a different offset.

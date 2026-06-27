@@ -12,6 +12,11 @@ use sunlight_ipc::{
     IpcMsg, MouseMsg,
 };
 use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
+use sunlight_ui::image::TgaImage;
+
+/// Wallpaper asset staged at /var/sunlightos/wallpapers/wallpaper.tga.
+/// Embedded directly so the compositor can decode without a VFS read at startup.
+static WALLPAPER_TGA_BYTES: &[u8] = include_bytes!("../../../docs/images/wallpaper.tga");
 
 mod blend;
 mod dirty;
@@ -561,6 +566,9 @@ struct CompositorState {
     inner_corner_mask: mask::CornerMask,
     /// Regions that need to be presented to the framebuffer this frame.
     dirty: dirty::DirtyList,
+    /// Decoded-on-demand wallpaper view.  `None` when the asset was absent or
+    /// could not be parsed; the compositor falls back to DESKTOP_COLOR fill.
+    wallpaper: Option<TgaImage>,
 }
 
 fn fb_stride(state: &CompositorState) -> usize {
@@ -855,8 +863,24 @@ fn cursor_bitmap(shape: CursorShape) -> &'static [u8; CURSOR_H] {
 // ---------------------------------------------------------------------------
 
 fn clear_back_buffer(state: &mut CompositorState) {
-    for pixel in state.back_buffer.iter_mut() {
-        *pixel = DESKTOP_COLOR;
+    if let Some(wp) = state.wallpaper {
+        let fw = state.fb_width as usize;
+        let fh = state.fb_height as usize;
+        let iw = wp.width as usize;
+        let ih = wp.height as usize;
+        let stride = fb_stride(state);
+        for y in 0..fh {
+            let src_y = (y * ih / fh) as u32;
+            let row_off = y * stride;
+            for x in 0..fw {
+                let src_x = (x * iw / fw) as u32;
+                state.back_buffer[row_off + x] = wp.pixel_xrgb(src_x, src_y);
+            }
+        }
+    } else {
+        for pixel in state.back_buffer.iter_mut() {
+            *pixel = DESKTOP_COLOR;
+        }
     }
 }
 
@@ -1441,6 +1465,7 @@ pub extern "C" fn _start() -> ! {
         session_active: false,
         inner_corner_mask: mask::CornerMask::new(CHROME_RADIUS.saturating_sub(BORDER_W)),
         dirty: dirty::DirtyList::new(),
+        wallpaper: TgaImage::parse(WALLPAPER_TGA_BYTES).ok(),
     };
     redraw_scene(&mut state);
 

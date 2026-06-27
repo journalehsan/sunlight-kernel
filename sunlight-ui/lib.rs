@@ -31,6 +31,7 @@ extern crate alloc;
 pub mod event;
 pub mod font;
 pub mod geom;
+pub mod image;
 pub mod layout;
 pub mod paint;
 pub mod draw;
