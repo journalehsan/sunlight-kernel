@@ -10,13 +10,14 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup_timeout,
-    nameserver_register, pack_ipv4, pack_short_name, unpack_ipv4, AdminState, DevicedMsg,
-    DnsSource, IfaceSummary, InterfaceId, InterfaceKind, IpConfigMode, IpcMsg, LinkState, NetOp,
-    NetworkdMsg, ResolvedMsg,
+    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
+    nameserver_lookup_timeout, nameserver_register, pack_ipv4, pack_short_name, unpack_ipv4,
+    AdminState, DevicedMsg, DnsSource, IfaceSummary, InterfaceId, InterfaceKind, IpConfigMode,
+    IpcMsg, LinkState, NetOp, NetworkdMsg, ResolvedMsg,
 };
 
 const MAX_IFACES: usize = 8;
+const NET_GETIP_TIMEOUT_MS: u64 = 20;
 
 #[macro_export]
 macro_rules! serial_println {
@@ -425,7 +426,17 @@ impl NetworkManager {
             self.seed_qemu_dns_for_first_network_iface();
             return;
         };
-        let reply = ipc_call(net_cap, IpcMsg::with_label(NetOp::GETIP));
+        // Never block indefinitely here: request-time refreshes can be triggered by
+        // clients already in a call path that involves net_server, so an unbounded
+        // GETIP can form a circular wait (networkd -> net -> networkd).
+        let Ok(reply) = ipc_call_timeout(
+            net_cap,
+            IpcMsg::with_label(NetOp::GETIP),
+            NET_GETIP_TIMEOUT_MS,
+        ) else {
+            self.seed_qemu_dns_for_first_network_iface();
+            return;
+        };
         if reply.label != NetOp::GETIP {
             self.seed_qemu_dns_for_first_network_iface();
             return;

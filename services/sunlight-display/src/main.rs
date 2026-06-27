@@ -51,16 +51,21 @@ fn launch_runner() {
     let _ = libc::spawn(b"/bin/sunlight-runner", &[b"sunlight-runner"], None);
 }
 
-fn launch_vortex_shell() {
-    // TODO(vortex-phase2): once Vortex Shell has panels and icons, replace the
-    // manual terminal / tasks demo launch (started by users from the runner)
-    // with a single `launch_vortex_shell()` call here so it auto-starts on
-    // desktop session activation.
-    let _ = libc::spawn(
+fn launch_vortex_shell() -> bool {
+    match libc::spawn(
         b"/bin/sunlight-vortex-shell",
         &[b"sunlight-vortex-shell"],
         None,
-    );
+    ) {
+        Ok(_pid) => {
+            debug_log("[DISPLAY] launched Vortex Shell\n");
+            true
+        }
+        Err(_) => {
+            debug_log("[DISPLAY] failed to launch Vortex Shell\n");
+            false
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +586,8 @@ struct CompositorState {
     /// Decoded-on-demand wallpaper view.  `None` when the asset was absent or
     /// could not be parsed; the compositor falls back to DESKTOP_COLOR fill.
     wallpaper: Option<TgaImage>,
+    /// True after spawning Vortex and before a Desktop-layer window appears.
+    vortex_launch_pending: bool,
 }
 
 fn fb_stride(state: &CompositorState) -> usize {
@@ -599,6 +606,20 @@ fn focused_window_idx(state: &CompositorState) -> Option<usize> {
 
 fn focused_window_id(state: &CompositorState) -> Option<u64> {
     focused_window_idx(state).map(|idx| state.windows[idx].id)
+}
+
+fn has_desktop_window(state: &CompositorState) -> bool {
+    state
+        .windows
+        .iter()
+        .any(|win| win.config.window_type == WindowType::Desktop)
+}
+
+fn ensure_vortex_shell(state: &mut CompositorState) {
+    if has_desktop_window(state) || state.vortex_launch_pending {
+        return;
+    }
+    state.vortex_launch_pending = launch_vortex_shell();
 }
 
 fn cycle_focus(state: &mut CompositorState) -> bool {
@@ -637,6 +658,7 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
     }
 
     let win = state.windows.remove(pos);
+    let was_desktop = win.config.window_type == WindowType::Desktop;
 
     // The display server owns the SHM object created at CREATE_WINDOW time, so
     // normal close must explicitly release that ownership.
@@ -654,6 +676,12 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
     }
 
     state.active_cursor = cursor_for_scene(state);
+    if was_desktop {
+        state.vortex_launch_pending = false;
+        if state.session_active {
+            ensure_vortex_shell(state);
+        }
+    }
     true
 }
 
@@ -1478,6 +1506,7 @@ pub extern "C" fn _start() -> ! {
         inner_corner_mask: mask::CornerMask::new(CHROME_RADIUS.saturating_sub(BORDER_W)),
         dirty: dirty::DirtyList::new(),
         wallpaper: TgaImage::parse(WALLPAPER_TGA_BYTES).ok(),
+        vortex_launch_pending: false,
     };
     redraw_scene(&mut state);
 
@@ -1500,6 +1529,7 @@ pub extern "C" fn _start() -> ! {
                 let surface_bytes = w as usize * h as usize * 4;
                 let size = surface_bytes.saturating_mul(2).max(4096);
                 let config = WindowConfig::from_ipc_words(&msg.words);
+                let is_desktop_window = config.window_type == WindowType::Desktop;
                 let owner_pid = msg.badge;
 
                 match sunlight_ipc::shm_create(size, 0) {
@@ -1570,6 +1600,9 @@ pub extern "C" fn _start() -> ! {
                                 pending_keys: KeyEventQueue::new(),
                             },
                         );
+                        if is_desktop_window {
+                            state.vortex_launch_pending = false;
+                        }
                         state.dirty.mark_full();
                         redraw_scene(&mut state);
 
@@ -2096,11 +2129,9 @@ pub extern "C" fn _start() -> ! {
                     state.session_active = true;
                     state.dirty.mark_full();
                     redraw_scene(&mut state);
-                    // Spawn Vortex Shell as the desktop surface.  It connects as
-                    // a Desktop-layer window and draws the wallpaper from its own
-                    // canvas, sitting permanently behind all normal app windows.
-                    launch_vortex_shell();
                 }
+                // Keep the desktop surface present across logins/restarts.
+                ensure_vortex_shell(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
@@ -2112,6 +2143,7 @@ pub extern "C" fn _start() -> ! {
                     debug_log("[DISPLAY] [SESSION] deactivated — TTY owns framebuffer\n");
                     state.session_active = false;
                 }
+                state.vortex_launch_pending = false;
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 

@@ -674,9 +674,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
                                                 );
                                             }
-                                            let _ =
-                                                libc_spawn(b"/bin/sunlight-terminal", &[], None);
-                                            let _ = libc_spawn(b"/bin/sunlight-tasks", &[], None);
                                             login.message = "Desktop session launched.";
                                         }
                                     }
