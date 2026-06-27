@@ -14,6 +14,9 @@ use sunlight_ipc::{
     DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
 };
 
+mod profile;
+use profile::{select_profile, FP_SHIFT};
+
 /// Set to true to print raw packet bytes and decoded dx/dy on every complete packet.
 const MOUSE_DEBUG: bool = false;
 const DIAG_LOG_INTERVAL: u64 = 64;
@@ -21,31 +24,30 @@ const NICED_SET_NICE: u64 = 0x9010;
 const NICED_REPLY: u64 = 0x90FF;
 const MOUSE_INPUT_NICE: i8 = -10;
 
-// Keep these cursor-motion constants in sync with sunlight-display until the
-// pointer policy is split out behind a backend-agnostic input abstraction.
-const FP_SHIFT: i32 = 16;
-const FP_ONE: i32 = 1 << FP_SHIFT;
-const SENS_DEFAULT_FP: i32 = FP_ONE * 5 / 4;
-#[allow(dead_code)]
-const SENS_MIN_FP: i32 = FP_ONE * 3 / 4;
-#[allow(dead_code)]
-const SENS_MAX_FP: i32 = FP_ONE * 2;
-const ACCEL_PRECISE_MAX_MAGNITUDE: i32 = 2;
-const ACCEL_NORMAL_MAX_MAGNITUDE: i32 = 8;
-const ACCEL_PRECISE_GAIN_FP: i32 = FP_ONE;
-const ACCEL_NORMAL_GAIN_FP: i32 = FP_ONE * 5 / 4;
-const ACCEL_FAST_GAIN_FP: i32 = FP_ONE * 7 / 4;
-
 #[derive(Clone, Copy)]
 struct MouseDiagnostics {
+    /// Total PS/2 packets parsed (including button-only events).
     ps2_packet_count: u64,
     raw_dx_min: i16,
     raw_dx_max: i16,
     raw_dy_min: i16,
     raw_dy_max: i16,
+    /// Times cursor position was clamped to screen edges.
     clamped_motion_count: u64,
+    /// Overflow / mis-framed packets discarded by the packet parser.
     dropped_packet_count: u64,
+    /// Drops reported by the kernel IRQ12 ring buffer.
     kernel_raw_drop_count: u64,
+    /// Times the fast-acceleration zone (magnitude > normal_max_magnitude) was applied.
+    accel_fast_count: u64,
+    /// Times a move IPC was sent to display_server (hardware cursor moves).
+    hw_cursor_moves: u64,
+    /// Times motion was suppressed by a future jitter/click-stabilize filter (unused — future).
+    #[allow(dead_code)]
+    filtered_packets: u64,
+    /// Times post-click motion was suppressed by click_stabilize (unused — future).
+    #[allow(dead_code)]
+    click_stabilized_count: u64,
 }
 
 impl MouseDiagnostics {
@@ -59,10 +61,14 @@ impl MouseDiagnostics {
             clamped_motion_count: 0,
             dropped_packet_count: 0,
             kernel_raw_drop_count: 0,
+            accel_fast_count: 0,
+            hw_cursor_moves: 0,
+            filtered_packets: 0,
+            click_stabilized_count: 0,
         }
     }
 
-    fn record_motion(&mut self, raw_dx: i16, raw_dy: i16, clamped: bool) {
+    fn record_motion(&mut self, raw_dx: i16, raw_dy: i16, clamped: bool, accel_fast: bool) {
         self.ps2_packet_count += 1;
         self.raw_dx_min = self.raw_dx_min.min(raw_dx);
         self.raw_dx_max = self.raw_dx_max.max(raw_dx);
@@ -70,6 +76,9 @@ impl MouseDiagnostics {
         self.raw_dy_max = self.raw_dy_max.max(raw_dy);
         if clamped {
             self.clamped_motion_count += 1;
+        }
+        if accel_fast {
+            self.accel_fast_count += 1;
         }
     }
 }
@@ -92,12 +101,14 @@ struct MouseState {
     y_fp: i32,
     screen_width: i32,
     screen_height: i32,
-    sensitivity_fp: i32,
+    tuning: profile::PointerTuning,
     diagnostics: MouseDiagnostics,
 }
 
 impl MouseState {
     fn new(width: i32, height: i32) -> Self {
+        let active = select_profile();
+        log_profile_startup(active);
         Self {
             packet_state: PacketState::WaitingByte0,
             byte0: 0,
@@ -107,7 +118,7 @@ impl MouseState {
             y_fp: (height / 2).max(0) << FP_SHIFT,
             screen_width: width,
             screen_height: height,
-            sensitivity_fp: SENS_DEFAULT_FP,
+            tuning: active.tuning(),
             diagnostics: MouseDiagnostics::new(),
         }
     }
@@ -164,8 +175,8 @@ impl MouseState {
 
                 let raw_dx = dx as i16;
                 let raw_dy = dy as i16;
-                let clamped = self.apply_motion(dx, dy);
-                self.diagnostics.record_motion(raw_dx, raw_dy, clamped);
+                let (clamped, accel_fast) = self.apply_motion(dx, dy);
+                self.diagnostics.record_motion(raw_dx, raw_dy, clamped, accel_fast);
 
                 if MOUSE_DEBUG {
                     syscall::debug_log("[MOUSE] pkt b0=");
@@ -190,19 +201,21 @@ impl MouseState {
         }
     }
 
-    fn apply_motion(&mut self, dx: i32, dy: i32) -> bool {
+    fn apply_motion(&mut self, dx: i32, dy: i32) -> (bool, bool) {
         let magnitude = dx.abs().saturating_add(dy.abs());
-        let accel_fp = if magnitude <= ACCEL_PRECISE_MAX_MAGNITUDE {
-            ACCEL_PRECISE_GAIN_FP
-        } else if magnitude <= ACCEL_NORMAL_MAX_MAGNITUDE {
-            ACCEL_NORMAL_GAIN_FP
+        let t = &self.tuning;
+        let (zone_fp, accel_fast) = if magnitude <= t.precise_max_magnitude {
+            (t.low_speed_scale_fp, false)
+        } else if magnitude <= t.normal_max_magnitude {
+            (t.medium_accel_fp, false)
         } else {
-            ACCEL_FAST_GAIN_FP
-        } as i64;
-        let gain_fp = ((self.sensitivity_fp as i64) * accel_fp) >> FP_SHIFT;
+            (t.max_accel_fp, true)
+        };
+        let gain_fp = ((t.base_sensitivity_fp as i64) * (zone_fp as i64)) >> FP_SHIFT;
         self.x_fp += (dx as i64 * gain_fp) as i32;
         self.y_fp += (dy as i64 * gain_fp) as i32;
-        self.sync_clamp()
+        let clamped = self.sync_clamp();
+        (clamped, accel_fast)
     }
 
     fn cursor_x(&self) -> i32 {
@@ -239,26 +252,31 @@ impl MouseState {
             return;
         }
         self.update_kernel_drop_count();
-        syscall::debug_log("[MOUSE] stats ps2_packet_count=");
-        syscall::debug_log_u64(self.diagnostics.ps2_packet_count);
-        syscall::debug_log(" raw_dx=[");
-        syscall::debug_log_i16(self.diagnostics.raw_dx_min);
+        let d = &self.diagnostics;
+        syscall::debug_log("[MOUSE] stats ps2=");
+        syscall::debug_log_u64(d.ps2_packet_count);
+        syscall::debug_log(" hw_moves=");
+        syscall::debug_log_u64(d.hw_cursor_moves);
+        syscall::debug_log(" accel_fast=");
+        syscall::debug_log_u64(d.accel_fast_count);
+        syscall::debug_log(" clamped=");
+        syscall::debug_log_u64(d.clamped_motion_count);
+        syscall::debug_log(" dropped=");
+        syscall::debug_log_u64(d.dropped_packet_count);
+        syscall::debug_log(" kern_drop=");
+        syscall::debug_log_u64(d.kernel_raw_drop_count);
+        syscall::debug_log(" dx=[");
+        syscall::debug_log_i16(d.raw_dx_min);
         syscall::debug_log("..");
-        syscall::debug_log_i16(self.diagnostics.raw_dx_max);
-        syscall::debug_log("] raw_dy=[");
-        syscall::debug_log_i16(self.diagnostics.raw_dy_min);
+        syscall::debug_log_i16(d.raw_dx_max);
+        syscall::debug_log("] dy=[");
+        syscall::debug_log_i16(d.raw_dy_min);
         syscall::debug_log("..");
-        syscall::debug_log_i16(self.diagnostics.raw_dy_max);
-        syscall::debug_log("] cursor_x=");
+        syscall::debug_log_i16(d.raw_dy_max);
+        syscall::debug_log("] pos=");
         syscall::debug_log_i32(self.cursor_x());
-        syscall::debug_log(" cursor_y=");
+        syscall::debug_log(",");
         syscall::debug_log_i32(self.cursor_y());
-        syscall::debug_log(" clamped_motion_count=");
-        syscall::debug_log_u64(self.diagnostics.clamped_motion_count);
-        syscall::debug_log(" dropped_packet_count=");
-        syscall::debug_log_u64(self.diagnostics.dropped_packet_count);
-        syscall::debug_log(" kernel_raw_drop_count=");
-        syscall::debug_log_u64(self.diagnostics.kernel_raw_drop_count);
         syscall::debug_log("\n");
     }
 }
@@ -470,6 +488,25 @@ fn request_priority_boost(boosted: &mut bool) {
     }
 }
 
+fn log_profile_startup(p: profile::PointerProfile) {
+    let t = p.tuning();
+    syscall::debug_log("[MOUSE] pointer profile=");
+    syscall::debug_log(p.name());
+    syscall::debug_log(" base_sens=");
+    syscall::debug_log_i32(t.base_sensitivity_fp);
+    syscall::debug_log("/65536 precise_zone<=");
+    syscall::debug_log_i32(t.precise_max_magnitude);
+    syscall::debug_log(" normal_zone<=");
+    syscall::debug_log_i32(t.normal_max_magnitude);
+    syscall::debug_log(" low_gain=");
+    syscall::debug_log_i32(t.low_speed_scale_fp);
+    syscall::debug_log("/65536 mid_gain=");
+    syscall::debug_log_i32(t.medium_accel_fp);
+    syscall::debug_log("/65536 max_gain=");
+    syscall::debug_log_i32(t.max_accel_fp);
+    syscall::debug_log("/65536\n");
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     syscall::debug_log("[MOUSE] PANIC\n");
@@ -538,6 +575,7 @@ pub extern "C" fn _start() -> ! {
                         | (buttons << 32);
                     let msg = IpcMsg::with_label(MouseMsg::RAW_MOTION).word(0, raw);
                     let _ = ipc_call(disp, msg);
+                    mouse_state.diagnostics.hw_cursor_moves += 1;
                 } else {
                     // --- Legacy TTY mode: send packed absolute coordinates ---
                     let mut abs = event.abs_x as u64;

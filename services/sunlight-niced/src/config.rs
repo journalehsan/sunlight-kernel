@@ -102,6 +102,7 @@ pub fn load_defaults() -> (
     let _ = configs.push(cfg("sshl", Priority::High, true, 0));
     let _ = configs.push(cfg("net_server", Priority::High, true, 0));
     let _ = configs.push(cfg("sunlight-mouse", Priority::Critical, true, 0));
+    let _ = configs.push(cfg("display_server", Priority::Critical, true, 0));
     let _ = configs.push(cfg("vfs_server", Priority::Critical, true, 0));
     let _ = configs.push(cfg("sunlight-niced", Priority::High, true, 0));
 

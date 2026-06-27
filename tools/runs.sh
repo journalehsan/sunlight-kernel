@@ -15,14 +15,24 @@ NC='\033[0m'
 
 show_usage() {
     cat <<USAGE
-${GREEN}SunlightOS QEMU Runner${NC}
+${GREEN}SunlightOS Runner${NC}
 
 Usage: $0 [OPTIONS]
 
 Build Options:
   -b, --build           Rebuild kernel + services before launching
 
-Display Options:
+Hypervisor:
+  (default)             QEMU/KVM (all options below apply)
+  --vmware              Start existing VMware VM (no ISO needed; uses vmrun)
+                        Default VM path: ~/vmware/SunlightOS/SunlightOS.vmx
+                        Override: --vmware-vm /path/to/vm.vmx
+                            or set SUNLIGHT_VMWARE_VM env var
+  --vmware-vm PATH      Path to .vmx file (implies --vmware)
+  --vbox                Boot ISO in VirtualBox (creates/reuses VM 'SunlightOS')
+                        Override VM name: --vbox-vm NAME
+
+Display Options (QEMU only):
   --display MODE        Select display mode: gtk, sdl, vnc, curses, none
   -g, --gui             Launch with GTK window (default, requires X11/Wayland)
   -s, --sdl             Launch with SDL window
@@ -50,6 +60,11 @@ Other:
 
 Examples:
   $0 --build
+  $0 --vmware
+  $0 --vmware --build
+  $0 --vmware-vm ~/vms/SunlightOS.vmx
+  $0 --vbox
+  $0 --vbox --build
   $0 --display vnc
   $0 --dual-gpu --gui
   $0 --screenshot
@@ -71,12 +86,34 @@ GDB_MODE=false
 SCREENSHOT_MODE=false
 BUILD_FIRST=false
 DUAL_GPU_MODE=false
+VMWARE_MODE=false
+VMWARE_VM_PATH="${SUNLIGHT_VMWARE_VM:-$HOME/vmware/SunlightOS/SunlightOS.vmx}"
+VBOX_MODE=false
+VBOX_VM_NAME="SunlightOS"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -b|--build)
             BUILD_FIRST=true
             shift
+            ;;
+        --vmware)
+            VMWARE_MODE=true
+            shift
+            ;;
+        --vmware-vm)
+            VMWARE_MODE=true
+            VMWARE_VM_PATH="$2"
+            shift 2
+            ;;
+        --vbox)
+            VBOX_MODE=true
+            shift
+            ;;
+        --vbox-vm)
+            VBOX_MODE=true
+            VBOX_VM_NAME="$2"
+            shift 2
             ;;
         --display)
             case "${2:-}" in
@@ -441,6 +478,69 @@ if [ "$SCREENSHOT_MODE" = true ]; then
     exit 0
 fi
 
+# ── VMware ────────────────────────────────────────────────────────────────────
+if [ "$VMWARE_MODE" = true ]; then
+    if ! command -v vmrun &>/dev/null; then
+        echo -e "${RED}✗ vmrun not found${NC}"
+        echo -e "${YELLOW}  Install VMware Workstation or Fusion and ensure vmrun is on PATH.${NC}"
+        exit 1
+    fi
+    if [ ! -f "$VMWARE_VM_PATH" ]; then
+        echo -e "${RED}✗ VMware VM not found: $VMWARE_VM_PATH${NC}"
+        echo -e "${YELLOW}  Set SUNLIGHT_VMWARE_VM, use --vmware-vm /path/to/vm.vmx,${NC}"
+        echo -e "${YELLOW}  or place your VM at the default path above.${NC}"
+        exit 1
+    fi
+    echo -e "${BLUE}Hypervisor:${NC} VMware"
+    echo -e "${BLUE}VM:${NC}         $VMWARE_VM_PATH"
+    echo ""
+    echo -e "${YELLOW}Starting VMware VM...${NC}"
+    exec vmrun start "$VMWARE_VM_PATH" gui
+fi
+
+# ── VirtualBox ─────────────────────────────────────────────────────────────────
+if [ "$VBOX_MODE" = true ]; then
+    if ! command -v VBoxManage &>/dev/null; then
+        echo -e "${RED}✗ VBoxManage not found${NC}"
+        echo -e "${YELLOW}  Install VirtualBox and ensure VBoxManage is on PATH.${NC}"
+        exit 1
+    fi
+    echo -e "${BLUE}Hypervisor:${NC} VirtualBox"
+    echo -e "${BLUE}VM name:${NC}    $VBOX_VM_NAME"
+    echo -e "${BLUE}ISO:${NC}        $ISO_PATH"
+    echo ""
+
+    if VBoxManage showvminfo "$VBOX_VM_NAME" &>/dev/null 2>&1; then
+        echo -e "${YELLOW}Updating ISO on existing VM '$VBOX_VM_NAME'...${NC}"
+        # Detach old medium (ignore errors if none attached)
+        VBoxManage storageattach "$VBOX_VM_NAME" \
+            --storagectl "IDE Controller" --port 0 --device 0 \
+            --type dvddrive --medium emptydrive 2>/dev/null || true
+        VBoxManage storageattach "$VBOX_VM_NAME" \
+            --storagectl "IDE Controller" --port 0 --device 0 \
+            --type dvddrive --medium "$ISO_PATH"
+    else
+        echo -e "${YELLOW}Creating VirtualBox VM '$VBOX_VM_NAME'...${NC}"
+        VBoxManage createvm --name "$VBOX_VM_NAME" --register --ostype Linux_64
+        VBoxManage modifyvm "$VBOX_VM_NAME" \
+            --memory "$MEMORY" \
+            --cpus "$CPU_COUNT" \
+            --vram 128 \
+            --graphicscontroller vmsvga \
+            --audio-driver null \
+            --boot1 dvd --boot2 disk --boot3 none
+        VBoxManage storagectl "$VBOX_VM_NAME" --name "IDE Controller" --add ide
+        VBoxManage storageattach "$VBOX_VM_NAME" \
+            --storagectl "IDE Controller" --port 0 --device 0 \
+            --type dvddrive --medium "$ISO_PATH"
+        echo -e "${GREEN}✓${NC} VM created"
+    fi
+
+    echo -e "${YELLOW}Starting VirtualBox VM...${NC}"
+    exec VBoxManage startvm "$VBOX_VM_NAME" --type gui
+fi
+
+# ── QEMU ───────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}Starting QEMU...${NC}"
 echo ""
 exec "${QEMU_CMD[@]}"
