@@ -564,6 +564,8 @@ struct CompositorState {
     /// Last cursor shape that was uploaded to the GPU (avoid redundant uploads).
     last_hw_cursor_shape: Option<CursorShape>,
     active_cursor: CursorShape,
+    /// Saved-under pixels for the software cursor fast path.
+    software_cursor: SoftwareCursorState,
     // True when Desktop session owns the framebuffer; false when TTY/login is active.
     // tty_server sends SESSION_ACTIVATE/SESSION_DEACTIVATE to toggle this.
     session_active: bool,
@@ -581,9 +583,35 @@ struct CompositorState {
 }
 
 #[derive(Clone, Copy)]
+struct SoftwareCursorState {
+    pixels: [u32; CURSOR_W * CURSOR_H],
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+    shape: CursorShape,
+    valid: bool,
+}
+
+impl SoftwareCursorState {
+    const fn new() -> Self {
+        Self {
+            pixels: [0; CURSOR_W * CURSOR_H],
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+            shape: CursorShape::Pointer,
+            valid: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 struct DebugCounters {
     mouse_event_count: u64,
     hw_cursor_move_count: u64,
+    sw_cursor_move_count: u64,
     sw_cursor_redraw_count: u64,
     desktop_redraw_count: u64,
     dirty_rect_count: u64,
@@ -596,6 +624,7 @@ impl DebugCounters {
         Self {
             mouse_event_count: 0,
             hw_cursor_move_count: 0,
+            sw_cursor_move_count: 0,
             sw_cursor_redraw_count: 0,
             desktop_redraw_count: 0,
             dirty_rect_count: 0,
@@ -1022,6 +1051,19 @@ fn cursor_dirty_rect(cx: u32, cy: u32) -> Rect {
     )
 }
 
+fn cursor_rect(state: &CompositorState, cx: u32, cy: u32) -> Option<Rect> {
+    if cx >= state.fb_width || cy >= state.fb_height {
+        return None;
+    }
+    let w = (CURSOR_W as u32).min(state.fb_width - cx);
+    let h = (CURSOR_H as u32).min(state.fb_height - cy);
+    if w == 0 || h == 0 {
+        None
+    } else {
+        Some(Rect::new(cx as i32, cy as i32, w, h))
+    }
+}
+
 fn title_len(title: &[u8; 64]) -> usize {
     title.iter().position(|&b| b == 0).unwrap_or(title.len())
 }
@@ -1390,16 +1432,17 @@ fn composite_window(
     }
 }
 
-fn draw_cursor(state: &mut CompositorState, back_buffer: &mut [u32]) {
-    // Software cursor: only used in Limine framebuffer mode.
-    if state.hw_cursor_active {
-        return;
-    }
-    state.debug_counters.sw_cursor_redraw_count += 1;
-    let bitmap = cursor_bitmap(state.active_cursor);
-    let base_x = state.mouse_x as i32;
-    let base_y = state.mouse_y as i32;
+fn draw_cursor_bitmap(
+    state: &CompositorState,
+    back_buffer: &mut [u32],
+    shape: CursorShape,
+    base_x: u32,
+    base_y: u32,
+) {
+    let base_x = base_x as i32;
+    let base_y = base_y as i32;
     let stride = fb_stride(state);
+    let bitmap = cursor_bitmap(shape);
 
     const SHADOW: u32 = 0x00000000;
     const FG: u32 = 0x00F5F5F5;
@@ -1414,7 +1457,6 @@ fn draw_cursor(state: &mut CompositorState, back_buffer: &mut [u32]) {
             if x < 0 || y < 0 || x >= state.fb_width as i32 || y >= state.fb_height as i32 {
                 continue;
             }
-            // Outermost ring pixel = shadow for contrast against any background.
             let color = if col == CURSOR_W - 1 || row == CURSOR_H - 1 {
                 SHADOW
             } else {
@@ -1423,6 +1465,103 @@ fn draw_cursor(state: &mut CompositorState, back_buffer: &mut [u32]) {
             back_buffer[y as usize * stride + x as usize] = color;
         }
     }
+}
+
+fn save_software_cursor_under(state: &mut CompositorState, back_buffer: &[u32]) -> Option<Rect> {
+    let rect = cursor_rect(state, state.mouse_x as u32, state.mouse_y as u32)?;
+    let stride = fb_stride(state);
+    let saved = &mut state.software_cursor;
+    saved.x = rect.x as u32;
+    saved.y = rect.y as u32;
+    saved.w = rect.w;
+    saved.h = rect.h;
+    saved.shape = state.active_cursor;
+    saved.valid = true;
+
+    for row in 0..rect.h as usize {
+        let src = (saved.y as usize + row) * stride + saved.x as usize;
+        let dst = row * CURSOR_W;
+        saved.pixels[dst..dst + rect.w as usize]
+            .copy_from_slice(&back_buffer[src..src + rect.w as usize]);
+    }
+
+    Some(rect)
+}
+
+fn restore_software_cursor_under(
+    state: &mut CompositorState,
+    back_buffer: &mut [u32],
+) -> Option<Rect> {
+    if !state.software_cursor.valid {
+        return None;
+    }
+
+    let saved = state.software_cursor;
+    let stride = fb_stride(state);
+    for row in 0..saved.h as usize {
+        let dst = (saved.y as usize + row) * stride + saved.x as usize;
+        let src = row * CURSOR_W;
+        back_buffer[dst..dst + saved.w as usize]
+            .copy_from_slice(&saved.pixels[src..src + saved.w as usize]);
+    }
+
+    state.software_cursor.valid = false;
+    Some(Rect::new(saved.x as i32, saved.y as i32, saved.w, saved.h))
+}
+
+fn draw_cursor(state: &mut CompositorState, back_buffer: &mut [u32]) {
+    // Software cursor: only used when the hardware cursor overlay is inactive.
+    if state.hw_cursor_active {
+        state.software_cursor.valid = false;
+        return;
+    }
+    state.debug_counters.sw_cursor_redraw_count += 1;
+    let _ = save_software_cursor_under(state, back_buffer);
+    draw_cursor_bitmap(
+        state,
+        back_buffer,
+        state.active_cursor,
+        state.mouse_x as u32,
+        state.mouse_y as u32,
+    );
+}
+
+fn present_dirty_regions(state: &mut CompositorState) {
+    if state.dirty.needs_full_present() {
+        present_back_buffer(state);
+    } else {
+        let count = state.dirty.count;
+        let rects = state.dirty.rects;
+        for i in 0..count {
+            present_rect(state, rects[i]);
+        }
+    }
+    state.dirty.clear();
+}
+
+fn move_software_cursor(state: &mut CompositorState) -> bool {
+    if state.hw_cursor_active || !state.session_active || !state.software_cursor.valid {
+        return false;
+    }
+
+    state.debug_counters.sw_cursor_move_count += 1;
+    let mut back_buffer = core::mem::take(&mut state.back_buffer);
+    if let Some(old_rect) = restore_software_cursor_under(state, &mut back_buffer) {
+        mark_dirty_rect(state, old_rect);
+    }
+    if let Some(new_rect) = save_software_cursor_under(state, &back_buffer) {
+        mark_dirty_rect(state, new_rect);
+    }
+    draw_cursor_bitmap(
+        state,
+        &mut back_buffer,
+        state.active_cursor,
+        state.mouse_x as u32,
+        state.mouse_y as u32,
+    );
+    state.back_buffer = back_buffer;
+    present_dirty_regions(state);
+    true
 }
 
 /// Upload a hardware cursor to the GPU if the shape changed.
@@ -1526,17 +1665,7 @@ fn redraw_scene(state: &mut CompositorState) {
     // Software cursor only: the GPU backend uses a hardware cursor overlay.
     draw_cursor(state, &mut back_buffer);
     state.back_buffer = back_buffer;
-    // Present only the dirty regions to reduce framebuffer write bandwidth.
-    if state.dirty.needs_full_present() {
-        present_back_buffer(state);
-    } else {
-        let count = state.dirty.count;
-        let rects = state.dirty.rects;
-        for i in 0..count {
-            present_rect(state, rects[i]);
-        }
-    }
-    state.dirty.clear();
+    present_dirty_regions(state);
 }
 
 // ---------------------------------------------------------------------------
@@ -1617,6 +1746,8 @@ fn log_debug_counters(state: &CompositorState, reason: &str) {
     debug_dec_u64(state.debug_counters.mouse_event_count);
     debug_log(" hw_move=");
     debug_dec_u64(state.debug_counters.hw_cursor_move_count);
+    debug_log(" sw_move=");
+    debug_dec_u64(state.debug_counters.sw_cursor_move_count);
     debug_log(" sw_redraw=");
     debug_dec_u64(state.debug_counters.sw_cursor_redraw_count);
     debug_log(" desktop_redraw=");
@@ -1716,7 +1847,10 @@ pub extern "C" fn _start() -> ! {
 
     let mut back_buffer = {
         let mut pixels = Vec::new();
-        pixels.resize((render_pitch as usize / 4) * render_height as usize, DESKTOP_COLOR);
+        pixels.resize(
+            (render_pitch as usize / 4) * render_height as usize,
+            DESKTOP_COLOR,
+        );
         pixels
     };
 
@@ -1752,7 +1886,10 @@ pub extern "C" fn _start() -> ! {
             render_pitch = pitch as u32;
             back_buffer = {
                 let mut pixels = Vec::new();
-                pixels.resize((render_pitch as usize / 4) * render_height as usize, DESKTOP_COLOR);
+                pixels.resize(
+                    (render_pitch as usize / 4) * render_height as usize,
+                    DESKTOP_COLOR,
+                );
                 pixels
             };
         }
@@ -1775,6 +1912,7 @@ pub extern "C" fn _start() -> ! {
         hw_cursor_active: hw_cursor,
         last_hw_cursor_shape: None,
         active_cursor: CursorShape::Pointer,
+        software_cursor: SoftwareCursorState::new(),
         // TTY session owns the framebuffer at boot; tty_server sends
         // SESSION_ACTIVATE to hand the framebuffer to the Desktop session.
         session_active: false,
@@ -1790,6 +1928,11 @@ pub extern "C" fn _start() -> ! {
         let init_mouse_y = state.mouse_y as u32;
         let _ = upload_hw_cursor_if_needed(&mut state);
         let _ = move_hw_cursor(&mut state, init_mouse_x, init_mouse_y);
+        if !state.hw_cursor_active {
+            debug_log(
+                "[DISPLAY] initial hardware cursor setup failed; using software cursor on GPU scanout\n",
+            );
+        }
     }
     log_debug_counters(&state, "startup");
     redraw_scene(&mut state);
@@ -2399,12 +2542,15 @@ pub extern "C" fn _start() -> ! {
                 let button_changed = buttons != prev_buttons;
                 let now_dragging = !matches!(state.active_drag, ActiveDrag::None);
                 let window_changed = button_changed || had_active_drag || now_dragging;
-                let cursor_shape_changed = state.last_hw_cursor_shape != Some(state.active_cursor);
+                let hw_cursor_shape_changed =
+                    state.last_hw_cursor_shape != Some(state.active_cursor);
+                let sw_cursor_shape_changed = state.software_cursor.valid
+                    && state.software_cursor.shape != state.active_cursor;
                 let cursor_pixel_changed = new_cx != prev_cx || new_cy != prev_cy;
 
                 if state.hw_cursor_active && !window_changed {
                     let mut fell_back = false;
-                    if cursor_shape_changed && !upload_hw_cursor_if_needed(&mut state) {
+                    if hw_cursor_shape_changed && !upload_hw_cursor_if_needed(&mut state) {
                         fell_back = true;
                     }
                     if !fell_back
@@ -2418,15 +2564,32 @@ pub extern "C" fn _start() -> ! {
                         mark_dirty_rect(&mut state, cursor_dirty_rect(new_cx, new_cy));
                         redraw_scene(&mut state);
                     }
+                } else if !state.hw_cursor_active
+                    && !window_changed
+                    && (cursor_pixel_changed || sw_cursor_shape_changed)
+                {
+                    if !move_software_cursor(&mut state) {
+                        mark_dirty_rect(&mut state, cursor_dirty_rect(prev_cx, prev_cy));
+                        mark_dirty_rect(&mut state, cursor_dirty_rect(new_cx, new_cy));
+                        redraw_scene(&mut state);
+                    }
                 } else {
                     // Software cursor or window geometry changed: full dirty-rect path.
                     if window_changed {
                         mark_dirty_full(&mut state);
-                    } else if !state.hw_cursor_active {
+                    } else if !state.hw_cursor_active
+                        && (cursor_pixel_changed || sw_cursor_shape_changed)
+                    {
                         mark_dirty_rect(&mut state, cursor_dirty_rect(prev_cx, prev_cy));
                         mark_dirty_rect(&mut state, cursor_dirty_rect(new_cx, new_cy));
                     }
-                    redraw_scene(&mut state);
+                    if window_changed
+                        || state.hw_cursor_active
+                        || cursor_pixel_changed
+                        || sw_cursor_shape_changed
+                    {
+                        redraw_scene(&mut state);
+                    }
                     // After redraw, move hardware cursor to new position.
                     if state.hw_cursor_active
                         && cursor_pixel_changed

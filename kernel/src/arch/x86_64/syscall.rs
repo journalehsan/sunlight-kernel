@@ -4231,6 +4231,9 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
         0, 0, // position — display_server will call move_cursor immediately
         hot_x, hot_y,
     )};
+    if !ok {
+        crate::serial_println!("[GPU] cursor UPDATE_CURSOR command failed");
+    }
     if ok { 1 } else { 0 }
 }
 
@@ -4246,5 +4249,8 @@ fn sys_gpu_move_cursor(frame: &mut SyscallFrame) -> u64 {
     let mut dev = crate::GPU_DEVICE.lock();
     let gpu = match dev.as_mut() { Some(g) => g, None => return 0 };
     let ok = unsafe { gpu.move_cursor(sunlight_virtio::gpu::SCANOUT_ID, x, y) };
+    if !ok {
+        crate::serial_println!("[GPU] cursor MOVE_CURSOR command failed");
+    }
     if ok { 1 } else { 0 }
 }
