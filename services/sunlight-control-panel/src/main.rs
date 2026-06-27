@@ -5,6 +5,10 @@
 //!     Sends SET_MOUSE_SETTINGS to display_server on Apply.
 //!   • Monitor — shows current screen resolution; mode switching is TODO.
 //!
+//! Icons: SunlightOS icon theme (Breeze-inspired, TGA format).
+//!   Cards display the preferences-desktop-mouse and preferences-desktop-display
+//!   icons from /var/sunlightos/icons/SunlightOS (embedded at compile time).
+//!
 //! TODO: Persist settings via sunlight-kv once persistent config is available.
 //! TODO: Monitor mode switching (VMware/QEMU virtual display mode-set).
 
@@ -16,10 +20,22 @@ use sunlight_ipc::{
     IpcMsg, NotificationKind, ProcessExit, SgpMsg,
 };
 use sunlight_ui::{
+    image::TgaImage,
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, Slider},
     App, Canvas, Color, Event, HBox, Point, Rect, Theme, VBox, Window, WindowConfig,
 };
+
+// ---------------------------------------------------------------------------
+// Icon theme assets (embedded at compile time)
+// ---------------------------------------------------------------------------
+
+static ICON_MOUSE_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/input-mouse.tga");
+static ICON_MONITOR_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/video-display.tga");
+static ICON_SETTINGS_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
 
 const WIN_W: u32 = 500;
 const WIN_H: u32 = 330;
@@ -47,6 +63,10 @@ struct ControlPanelApp {
     accel_cb: Checkbox<'static>,
     status_msg: [u8; 40],
     status_len: usize,
+    /// TGA icon for the Mouse settings card / page.
+    icon_mouse: Option<TgaImage>,
+    /// TGA icon for the Monitor settings card / page.
+    icon_monitor: Option<TgaImage>,
 }
 
 impl ControlPanelApp {
@@ -65,6 +85,8 @@ impl ControlPanelApp {
             accel_cb,
             status_msg: [0u8; 40],
             status_len: 0,
+            icon_mouse: TgaImage::parse(ICON_MOUSE_TGA).ok(),
+            icon_monitor: TgaImage::parse(ICON_MONITOR_TGA).ok(),
         }
     }
 
@@ -119,18 +141,31 @@ impl ControlPanelApp {
         (r1, r2)
     }
 
-    fn draw_card(canvas: &mut Canvas, theme: &Theme, rect: Rect, icon_color: Color, label: &str, sublabel: &str) {
+    fn draw_card(
+        canvas: &mut Canvas,
+        theme: &Theme,
+        rect: Rect,
+        icon_color: Color,
+        label: &str,
+        sublabel: &str,
+        tga_icon: Option<TgaImage>,
+    ) {
         canvas.fill_rect(rect, theme.panel);
         canvas.draw_rect(rect, theme.border);
 
-        // Icon circle
         let ix = rect.x + rect.w as i32 / 2 - 24;
         let iy = rect.y + 22;
-        let icon = Rect::new(ix, iy, 48, 48);
-        canvas.fill_rect(icon, icon_color);
-        // Inner highlight
-        let inner = Rect::new(ix + 12, iy + 12, 24, 24);
-        canvas.fill_rect(inner, theme.bg);
+        let icon_rect = Rect::new(ix, iy, 48, 48);
+
+        if let Some(tga) = tga_icon {
+            // Draw TGA icon with alpha compositing over the panel background.
+            canvas.draw_tga_icon(&tga, icon_rect);
+        } else {
+            // Fallback: solid color square + inner highlight.
+            canvas.fill_rect(icon_rect, icon_color);
+            let inner = Rect::new(ix + 12, iy + 12, 24, 24);
+            canvas.fill_rect(inner, theme.bg);
+        }
 
         let label_rect = Rect::new(rect.x + 8, rect.bottom() - 42, rect.w - 16, 18);
         let sub_rect = Rect::new(rect.x + 8, rect.bottom() - 24, rect.w - 16, 14);
@@ -145,11 +180,24 @@ impl ControlPanelApp {
         let header = Rect::new(0, 0, WIN_W, 44);
         canvas.fill_rect(header, theme.panel);
         canvas.draw_rect(Rect::new(0, 43, WIN_W, 1), theme.border);
-        Label::new(Rect::new(16, 12, WIN_W - 32, 20), "System Preferences").draw(canvas, theme);
+
+        // Header: settings icon + title
+        if let Ok(tga) = TgaImage::parse(ICON_SETTINGS_TGA) {
+            canvas.draw_tga_icon(&tga, Rect::new(8, 6, 32, 32));
+        }
+        Label::new(Rect::new(46, 12, WIN_W - 58, 20), "System Preferences").draw(canvas, theme);
 
         let (c1, c2) = self.card_rects();
-        Self::draw_card(canvas, theme, c1, theme.accent, "Mouse", "Pointer & Acceleration");
-        Self::draw_card(canvas, theme, c2, Color(0xFF_50_88_CC), "Monitor", "Resolution & Display");
+        Self::draw_card(
+            canvas, theme, c1, theme.accent,
+            "Mouse", "Pointer & Acceleration",
+            self.icon_mouse,
+        );
+        Self::draw_card(
+            canvas, theme, c2, Color(0xFF_50_88_CC),
+            "Monitor", "Resolution & Display",
+            self.icon_monitor,
+        );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {

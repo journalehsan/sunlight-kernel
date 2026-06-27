@@ -18,10 +18,14 @@ pub enum TgaError {
 
 /// Zero-alloc view over a `&'static [u8]` slice containing a TGA type-2 image.
 ///
-/// Pixels are decoded on-demand via [`pixel_xrgb`]; no decoded buffer is stored.
-/// The Y axis direction is derived from bit 5 of the image descriptor byte:
+/// Pixels are decoded on-demand via [`pixel_xrgb`] / [`pixel_argb`]; no decoded
+/// buffer is stored.  The Y axis direction is derived from bit 5 of the image
+/// descriptor byte:
 /// - bit 5 = 1 (upper-left origin): row 0 in the file = top of screen, no flip.
 /// - bit 5 = 0 (lower-left origin): row 0 in the file = bottom of screen, flip applied.
+///
+/// For 32-bit TGA the stored byte order is BGRA; for 24-bit it is BGR.
+/// Both are converted to XRGB / ARGB on output.
 #[derive(Clone, Copy)]
 pub struct TgaImage {
     pub width: u32,
@@ -78,11 +82,21 @@ impl TgaImage {
     ///
     /// `y = 0` is always the **top** row in display order regardless of the
     /// stored origin.  Out-of-bounds coordinates are clamped to the image edges.
+    /// Alpha is discarded; use [`pixel_argb`] when alpha blending is needed.
     #[inline]
     pub fn pixel_xrgb(&self, x: u32, y: u32) -> u32 {
+        self.pixel_argb(x, y) & 0x00FF_FFFF
+    }
+
+    /// Returns the ARGB8888 pixel at image coordinates `(x, y)`.
+    ///
+    /// Bits 24-31 carry the alpha channel (0 = transparent, 255 = opaque).
+    /// For 24-bit TGA images alpha is always 255.
+    /// Out-of-bounds coordinates are clamped to the image edges.
+    #[inline]
+    pub fn pixel_argb(&self, x: u32, y: u32) -> u32 {
         let x = x.min(self.width.saturating_sub(1));
         let y = y.min(self.height.saturating_sub(1));
-        // Remap y to the file row according to origin flag.
         let file_row = if self.top_down {
             y
         } else {
@@ -96,6 +110,17 @@ impl TgaImage {
         let b = self.raw[idx] as u32;
         let g = self.raw[idx + 1] as u32;
         let r = self.raw[idx + 2] as u32;
-        (r << 16) | (g << 8) | b
+        let a = if self.bpp == 32 {
+            if idx + 3 < self.raw.len() { self.raw[idx + 3] as u32 } else { 0xFF }
+        } else {
+            0xFF
+        };
+        (a << 24) | (r << 16) | (g << 8) | b
+    }
+
+    /// Returns true if this image has a meaningful alpha channel (32 bpp).
+    #[inline]
+    pub fn has_alpha(&self) -> bool {
+        self.bpp == 32
     }
 }

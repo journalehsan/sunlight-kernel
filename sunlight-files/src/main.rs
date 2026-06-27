@@ -6,8 +6,53 @@ use core::cmp::Ordering;
 
 use sunlight_ipc::{debug_log, process_yield, show_notification, NotificationKind, ProcessExit};
 use sunlight_libc::{self as libc, env, DirEntry, FT_DIR, FT_FILE};
+use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::Label;
 use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
+
+// ---------------------------------------------------------------------------
+// Icon theme: home-folder place icons (256×256 BGRA TGA, embedded at compile time)
+// ---------------------------------------------------------------------------
+
+static ICON_FOLDER_DESKTOP_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-desktop.tga");
+static ICON_FOLDER_DOCUMENTS_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-documents.tga");
+static ICON_FOLDER_DOWNLOADS_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-downloads.tga");
+static ICON_FOLDER_MUSIC_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-music.tga");
+static ICON_FOLDER_PICTURES_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-pictures.tga");
+static ICON_FOLDER_VIDEOS_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-videos.tga");
+static ICON_FOLDER_HOME_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder_home.tga");
+static ICON_FOLDER_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
+static ICON_USER_TRASH_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.tga");
+
+/// Return the TGA icon for a home folder (Desktop=0 … Trash=7).  Parses the
+/// header on each call (O(1), just offset arithmetic — fine for low-fps UI).
+fn home_folder_tga(idx: usize, present: bool) -> Option<TgaImage> {
+    let bytes: &'static [u8] = if !present {
+        ICON_FOLDER_TGA
+    } else {
+        match idx {
+            0 => ICON_FOLDER_DESKTOP_TGA,
+            1 => ICON_FOLDER_DOCUMENTS_TGA,
+            2 => ICON_FOLDER_DOWNLOADS_TGA,
+            3 => ICON_FOLDER_MUSIC_TGA,
+            4 => ICON_FOLDER_PICTURES_TGA,
+            5 => ICON_FOLDER_VIDEOS_TGA,
+            6 => ICON_FOLDER_HOME_TGA,
+            7 => ICON_USER_TRASH_TGA,
+            _ => ICON_FOLDER_TGA,
+        }
+    };
+    TgaImage::parse(bytes).ok()
+}
 
 const WIN_W: u32 = 960;
 const WIN_H: u32 = 620;
@@ -1053,27 +1098,23 @@ impl FilesApp {
                 theme.border.darken(32)
             };
             canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
-            let icon = home_folder_symbol(idx, folder.present);
-            let icon_color = if folder.present {
-                theme.accent
+
+            // Draw TGA icon if available, fallback to pixel-art UiSymbol.
+            let icon_rect = Rect::new(rect.x + 6, rect.y + 6, 36, 36);
+            if let Some(tga) = home_folder_tga(idx, folder.present) {
+                canvas.draw_tga_icon(&tga, icon_rect);
             } else {
-                theme.warn
-            };
-            canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, icon, icon_color);
-            canvas.draw_text(rect.x + 28, rect.y + 8, folder.name, theme.text);
+                let sym = home_folder_symbol(idx, folder.present);
+                let sym_color = if folder.present { theme.accent } else { theme.warn };
+                canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, sym, sym_color);
+            }
+
+            canvas.draw_text(rect.x + 48, rect.y + 8, folder.name, theme.text);
             canvas.draw_text(
-                rect.x + 28,
+                rect.x + 48,
                 rect.y + 24,
-                if folder.present {
-                    "Available"
-                } else {
-                    "Missing"
-                },
-                if folder.present {
-                    theme.text_dim
-                } else {
-                    theme.warn
-                },
+                if folder.present { "Available" } else { "Missing" },
+                if folder.present { theme.text_dim } else { theme.warn },
             );
         }
     }

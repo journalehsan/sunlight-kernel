@@ -502,6 +502,19 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/var/log", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos/wallpapers", 0, 0, mode::DIR_755),
+    // SunlightOS icon theme directory structure.
+    // Icons are embedded directly in service binaries (same approach as the wallpaper).
+    // This directory tree is provided so future VFS-based icon loading works at:
+    //   /var/sunlightos/icons/SunlightOS/{category}/{size}/{name}.tga
+    RamEntry::dir("/var/sunlightos/icons", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/icons/SunlightOS", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/icons/SunlightOS/apps", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/icons/SunlightOS/places", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/icons/SunlightOS/mimetypes", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/icons/SunlightOS/devices", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/icons/SunlightOS/actions", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/icons/SunlightOS/status", 0, 0, mode::DIR_755),
+    RamEntry::dir("/var/sunlightos/icons/SunlightOS/preferences", 0, 0, mode::DIR_755),
     // Vortex Shell desktop wallpaper (TGA type-2, 1672×941, 24 bpp BGR).
     RamEntry::file(
         "/var/sunlightos/wallpapers/wallpaper.tga",

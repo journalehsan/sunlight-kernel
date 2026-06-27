@@ -66,6 +66,105 @@ static WALLPAPER_TGA: &[u8] = include_bytes!("../../../docs/images/wallpaper.tga
 const FALLBACK_BG: u32 = 0x00121214;
 
 // ---------------------------------------------------------------------------
+// Icon theme — SunlightOS icon set (Breeze-inspired, 256×256 BGRA TGA type-2)
+// Each icon is embedded at compile time; decoded on-demand via TgaImage::pixel_argb.
+// ---------------------------------------------------------------------------
+
+// Desktop icons
+static ICON_COMPUTER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/computer.tga");
+static ICON_HOME_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/16/user-home.tga");
+static ICON_TRASH_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/16/user-trash.tga");
+static ICON_FOLDER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.tga");
+static ICON_DRIVE_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/drive-harddisk.tga");
+static ICON_FILE_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
+
+// Dock icons
+static ICON_TERMINAL_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/utilities-terminal.tga");
+static ICON_CALC_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/accessories-calculator.tga");
+static ICON_FILES_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/16/system-file-manager.tga");
+static ICON_SETTINGS_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
+
+/// Theme icons for desktop shortcuts. All fields are `Copy` (TgaImage borrows `&'static [u8]`).
+#[derive(Clone, Copy)]
+struct DesktopTheme {
+    computer: Option<TgaImage>,
+    home: Option<TgaImage>,
+    trash: Option<TgaImage>,
+    folder: Option<TgaImage>,
+    drive: Option<TgaImage>,
+    file: Option<TgaImage>,
+}
+
+impl DesktopTheme {
+    fn load() -> Self {
+        Self {
+            computer: TgaImage::parse(ICON_COMPUTER_TGA).ok(),
+            home: TgaImage::parse(ICON_HOME_TGA).ok(),
+            trash: TgaImage::parse(ICON_TRASH_TGA).ok(),
+            folder: TgaImage::parse(ICON_FOLDER_TGA).ok(),
+            drive: TgaImage::parse(ICON_DRIVE_TGA).ok(),
+            file: TgaImage::parse(ICON_FILE_TGA).ok(),
+        }
+    }
+
+    fn icon_for(&self, kind: DesktopIconKind) -> Option<TgaImage> {
+        match kind {
+            DesktopIconKind::Computer => self.computer,
+            DesktopIconKind::Home => self.home,
+            DesktopIconKind::Trash => self.trash,
+            DesktopIconKind::Folder => self.folder,
+            DesktopIconKind::File => self.file,
+            DesktopIconKind::Drive => self.drive,
+            DesktopIconKind::Network => None,
+        }
+    }
+}
+
+/// Theme icons for the bottom dock.
+#[derive(Clone, Copy)]
+struct DockTheme {
+    terminal: Option<TgaImage>,
+    tasks: Option<TgaImage>,
+    calc: Option<TgaImage>,
+    files: Option<TgaImage>,
+    settings: Option<TgaImage>,
+}
+
+impl DockTheme {
+    fn load() -> Self {
+        Self {
+            terminal: TgaImage::parse(ICON_TERMINAL_TGA).ok(),
+            tasks: None, // pixel-art fallback
+            calc: TgaImage::parse(ICON_CALC_TGA).ok(),
+            files: TgaImage::parse(ICON_FILES_TGA).ok(),
+            settings: TgaImage::parse(ICON_SETTINGS_TGA).ok(),
+        }
+    }
+
+    /// Return TGA icon for dock slot index (0=grid/launcher, 1=term, 2=tasks, 3=calc, 4=files).
+    fn dock_icon(&self, idx: usize) -> Option<TgaImage> {
+        match idx {
+            0 => None, // launcher grid — keep pixel-art
+            1 => self.terminal,
+            2 => self.tasks,
+            3 => self.calc,
+            4 => self.files,
+            _ => None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Window geometry
 // ---------------------------------------------------------------------------
 
@@ -595,6 +694,10 @@ struct VortexShell {
     next_status_poll_ms: u64,
     /// Bounds of the power button for future click handling.
     power_zone: Rect,
+    /// TGA icon theme for desktop shortcuts.
+    desktop_theme: DesktopTheme,
+    /// TGA icon theme for the bottom dock.
+    dock_theme: DockTheme,
 }
 
 impl VortexShell {
@@ -607,6 +710,8 @@ impl VortexShell {
         } else {
             debug_log("[VORTEX] wallpaper unavailable — using fallback\n");
         }
+        let desktop_theme = DesktopTheme::load();
+        let dock_theme = DockTheme::load();
         let mut shell = Self {
             wallpaper,
             desktop_paths,
@@ -622,6 +727,8 @@ impl VortexShell {
             status_net_up: false,
             next_status_poll_ms: 0,
             power_zone: Rect::new(0, 0, 0, 0),
+            desktop_theme,
+            dock_theme,
         };
         shell.reload_desktop_icons();
         shell
@@ -1260,6 +1367,7 @@ fn draw_desktop_icons(
     theme: &Theme,
     icons: &[DesktopIcon],
     selected: Option<usize>,
+    dt: DesktopTheme,
 ) {
     for (idx, icon) in icons.iter().enumerate() {
         if icon.rect.w == 0 {
@@ -1272,9 +1380,16 @@ fn draw_desktop_icons(
             canvas.fill_rounded_rect(highlight, 8, theme.panel);
             canvas.stroke_rounded_rect(highlight, 8, 1, theme.accent);
         }
-        let (rows, color) = desktop_icon_visual(icon.kind, theme);
+
         let icon_rect = Rect::new(slot.x + 18, slot.y + 6, 48, 40);
-        draw_icon16_scaled(canvas, icon_rect, rows, color, DESKTOP_ICON_SCALE);
+
+        // Prefer TGA theme icon; fall back to pixel-art if not loaded.
+        if let Some(tga) = dt.icon_for(icon.kind) {
+            canvas.draw_tga_icon(&tga, icon_rect);
+        } else {
+            let (rows, color) = desktop_icon_visual(icon.kind, theme);
+            draw_icon16_scaled(canvas, icon_rect, rows, color, DESKTOP_ICON_SCALE);
+        }
 
         let label_w = Canvas::measure_text(&icon.label);
         let label_x = slot.x + (slot.w as i32 - label_w as i32) / 2;
@@ -1413,11 +1528,11 @@ fn bot_y(screen_h: u32) -> i32 {
 }
 
 /// Draw the bottom-left cluster: overview | sidebar | settings.
-fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32) {
-    let icons: &[(&[u16; 16], bool)] = &[
-        (&OVERVIEW_ROWS, false),
-        (&SIDEBAR_ROWS, false),
-        (&SETTINGS_ROWS, false),
+fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32, settings_icon: Option<TgaImage>) {
+    let icons: &[&[u16; 16]] = &[
+        &OVERVIEW_ROWS,
+        &SIDEBAR_ROWS,
+        &SETTINGS_ROWS,
     ];
     let n = icons.len() as u32;
     let cluster_w = CLUSTER_PAD as u32 * 2 + n * ICON_BTN + (n - 1) * ICON_GAP as u32;
@@ -1425,14 +1540,23 @@ fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32) {
     draw_panel(canvas, cluster, theme.panel, theme.border);
 
     let mut cx = cluster.x + CLUSTER_PAD;
-    for (rows, _accent) in icons {
+    for (i, rows) in icons.iter().enumerate() {
         let cell = Rect::new(
             cx,
             cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2,
             ICON_BTN,
             ICON_BTN,
         );
-        draw_icon_btn(canvas, cell, rows, theme, false, false);
+        // Slot 2 = settings icon — use TGA if available.
+        if i == 2 {
+            if let Some(tga) = settings_icon {
+                canvas.draw_tga_icon(&tga, cell.inset(2));
+            } else {
+                draw_icon_btn(canvas, cell, rows, theme, false, false);
+            }
+        } else {
+            draw_icon_btn(canvas, cell, rows, theme, false, false);
+        }
         cx += ICON_BTN as i32 + ICON_GAP;
     }
 }
@@ -1445,6 +1569,7 @@ fn draw_bot_center(
     by: i32,
     screen_w: u32,
     hover: Option<usize>,
+    dock: DockTheme,
 ) -> [Rect; 4] {
     let icons: &[&[u16; 16]; 5] = &[
         &GRID_ROWS,
@@ -1471,7 +1596,19 @@ fn draw_bot_center(
         let is_hover = hover
             .map(|h| h == i.saturating_sub(1) && i > 0)
             .unwrap_or(false);
-        draw_icon_btn(canvas, cell, rows, theme, false, is_hover);
+
+        // Prefer TGA icon; fall back to pixel-art for missing slots.
+        if let Some(tga) = dock.dock_icon(i) {
+            if is_hover {
+                canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
+            }
+            // Inset 2px for visual padding inside the button cell.
+            let icon_area = cell.inset(2);
+            canvas.draw_tga_icon(&tga, icon_area);
+        } else {
+            draw_icon_btn(canvas, cell, rows, theme, false, is_hover);
+        }
+
         // Icons 1,2,3 are clickable (terminal, tasks, calc); icon 0 (grid) is placeholder.
         // Icon 4 is Sunlight Files.
         if i >= 1 {
@@ -1521,7 +1658,7 @@ impl App for VortexShell {
 
         let desktop_rect = desktop_area(cw, ch);
         layout_desktop_icons(&mut self.desktop_icons, desktop_rect);
-        draw_desktop_icons(canvas, theme, &self.desktop_icons, self.selected_icon);
+        draw_desktop_icons(canvas, theme, &self.desktop_icons, self.selected_icon, self.desktop_theme);
 
         // ── Top bar ──────────────────────────────────────────────────────────
         let pwr_left = draw_top_bar(
@@ -1542,8 +1679,8 @@ impl App for VortexShell {
 
         // ── Bottom panels ────────────────────────────────────────────────────
         let by = bot_y(ch);
-        draw_bot_left(canvas, theme, by);
-        let dock_cells = draw_bot_center(canvas, theme, by, cw, self.hover);
+        draw_bot_left(canvas, theme, by, self.dock_theme.settings);
+        let dock_cells = draw_bot_center(canvas, theme, by, cw, self.hover, self.dock_theme);
         draw_bot_right(canvas, theme, by, cw);
 
         // Record clickable zones (terminal, tasks, calc, files).
