@@ -28,6 +28,10 @@ const MOUSE_INPUT_NICE: i8 = -10;
 struct MouseDiagnostics {
     /// Total PS/2 packets parsed (including button-only events).
     ps2_packet_count: u64,
+    /// Number of coalesced motion batches forwarded upstream.
+    coalesced_batch_count: u64,
+    /// Number of PS/2 packets absorbed into coalesced batches.
+    coalesced_packet_total: u64,
     raw_dx_min: i16,
     raw_dx_max: i16,
     raw_dy_min: i16,
@@ -54,6 +58,8 @@ impl MouseDiagnostics {
     const fn new() -> Self {
         Self {
             ps2_packet_count: 0,
+            coalesced_batch_count: 0,
+            coalesced_packet_total: 0,
             raw_dx_min: i16::MAX,
             raw_dx_max: i16::MIN,
             raw_dy_min: i16::MAX,
@@ -80,6 +86,11 @@ impl MouseDiagnostics {
         if accel_fast {
             self.accel_fast_count += 1;
         }
+    }
+
+    fn record_coalesced_batch(&mut self, packet_count: u32) {
+        self.coalesced_batch_count += 1;
+        self.coalesced_packet_total += packet_count as u64;
     }
 }
 
@@ -176,7 +187,8 @@ impl MouseState {
                 let raw_dx = dx as i16;
                 let raw_dy = dy as i16;
                 let (clamped, accel_fast) = self.apply_motion(dx, dy);
-                self.diagnostics.record_motion(raw_dx, raw_dy, clamped, accel_fast);
+                self.diagnostics
+                    .record_motion(raw_dx, raw_dy, clamped, accel_fast);
 
                 if MOUSE_DEBUG {
                     syscall::debug_log("[MOUSE] pkt b0=");
@@ -255,6 +267,10 @@ impl MouseState {
         let d = &self.diagnostics;
         syscall::debug_log("[MOUSE] stats ps2=");
         syscall::debug_log_u64(d.ps2_packet_count);
+        syscall::debug_log(" batches=");
+        syscall::debug_log_u64(d.coalesced_batch_count);
+        syscall::debug_log(" batch_packets=");
+        syscall::debug_log_u64(d.coalesced_packet_total);
         syscall::debug_log(" hw_moves=");
         syscall::debug_log_u64(d.hw_cursor_moves);
         syscall::debug_log(" accel_fast=");
@@ -290,6 +306,39 @@ struct MouseEvent {
     left_button: bool,
     right_button: bool,
     middle_button: bool,
+}
+
+#[derive(Clone, Copy)]
+struct PendingMotionBatch {
+    dx: i32,
+    dy: i32,
+    abs_x: u16,
+    abs_y: u16,
+    buttons: u8,
+    packet_count: u32,
+}
+
+impl PendingMotionBatch {
+    fn from_event(event: MouseEvent) -> Self {
+        Self {
+            dx: event.dx as i32,
+            dy: event.dy as i32,
+            abs_x: event.abs_x,
+            abs_y: event.abs_y,
+            buttons: (event.left_button as u8)
+                | ((event.right_button as u8) << 1)
+                | ((event.middle_button as u8) << 2),
+            packet_count: 1,
+        }
+    }
+
+    fn absorb(&mut self, event: MouseEvent) {
+        self.dx = self.dx.saturating_add(event.dx as i32);
+        self.dy = self.dy.saturating_add(event.dy as i32);
+        self.abs_x = event.abs_x;
+        self.abs_y = event.abs_y;
+        self.packet_count = self.packet_count.saturating_add(1);
+    }
 }
 
 /// Syscall wrappers for mouse-specific operations
@@ -507,6 +556,57 @@ fn log_profile_startup(p: profile::PointerProfile) {
     syscall::debug_log("/65536\n");
 }
 
+fn clamp_i32_to_i16(v: i32) -> i16 {
+    v.clamp(i16::MIN as i32, i16::MAX as i32) as i16
+}
+
+fn flush_motion_batch(
+    batch: &mut Option<PendingMotionBatch>,
+    display_token: &mut Option<sunlight_ipc::CapabilityToken>,
+    tty_token: sunlight_ipc::CapabilityToken,
+    mouse_state: &mut MouseState,
+    next_generation: &mut u32,
+) {
+    let Some(batch) = batch.take() else {
+        return;
+    };
+
+    mouse_state
+        .diagnostics
+        .record_coalesced_batch(batch.packet_count);
+
+    if display_token.is_none() {
+        *display_token = nameserver_lookup("display_server");
+        if display_token.is_some() {
+            syscall::debug_log("[MOUSE] display_server available, routing raw events there\n");
+        }
+    }
+
+    if let Some(disp) = *display_token {
+        let dx = clamp_i32_to_i16(batch.dx);
+        let dy = clamp_i32_to_i16(batch.dy);
+        let raw =
+            (dx as u64 & 0xFFFF) | ((dy as u64 & 0xFFFF) << 16) | ((batch.buttons as u64) << 32);
+        let generation = *next_generation;
+        let metadata = (batch.packet_count as u64) | ((generation as u64) << 32);
+        let msg = IpcMsg::with_label(MouseMsg::RAW_MOTION)
+            .word(0, raw)
+            .word(1, metadata);
+        let _ = ipc_call(disp, msg);
+        mouse_state.diagnostics.hw_cursor_moves += 1;
+        *next_generation = next_generation.wrapping_add(1);
+        if *next_generation == 0 {
+            *next_generation = 1;
+        }
+    } else {
+        let mut abs = batch.abs_x as u64;
+        abs |= (batch.abs_y as u64) << 16;
+        abs |= (batch.buttons as u64) << 32;
+        let msg = IpcMsg::with_label(0x2).word(0, abs);
+        let _ = ipc_call(tty_token, msg);
+    }
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     syscall::debug_log("[MOUSE] PANIC\n");
@@ -543,6 +643,7 @@ pub extern "C" fn _start() -> ! {
     // on first use and cache the result.
     let mut display_token: Option<sunlight_ipc::CapabilityToken> = None;
     let mut priority_boosted = false;
+    let mut next_motion_generation = 1u32;
 
     syscall::debug_log("[MOUSE] found tty, ready to process mouse events\n");
 
@@ -550,42 +651,41 @@ pub extern "C" fn _start() -> ! {
 
     loop {
         request_priority_boost(&mut priority_boosted);
+        let mut pending_batch: Option<PendingMotionBatch> = None;
 
         while let Some(byte) = syscall::mouse_pop_byte() {
             if let Some(event) = mouse_state.process_byte(byte) {
                 mouse_state.maybe_log_diagnostics();
-                let buttons = (event.left_button as u64)
-                    | ((event.right_button as u64) << 1)
-                    | ((event.middle_button as u64) << 2);
+                let buttons = (event.left_button as u8)
+                    | ((event.right_button as u8) << 1)
+                    | ((event.middle_button as u8) << 2);
 
-                // Lazy lookup display so we work even if it starts after us
-                if display_token.is_none() {
-                    display_token = nameserver_lookup("display_server");
-                    if display_token.is_some() {
-                        syscall::debug_log(
-                            "[MOUSE] display_server available, routing raw events there\n",
+                match pending_batch.as_mut() {
+                    Some(batch) if batch.buttons == buttons => batch.absorb(event),
+                    Some(_) => {
+                        flush_motion_batch(
+                            &mut pending_batch,
+                            &mut display_token,
+                            tty_token,
+                            &mut mouse_state,
+                            &mut next_motion_generation,
                         );
+                        pending_batch = Some(PendingMotionBatch::from_event(event));
                     }
-                }
-
-                if let Some(disp) = display_token {
-                    // --- Graphical mode: send raw relative motion (dx/dy/buttons) ---
-                    let raw = (event.dx as u64 & 0xFFFF)
-                        | ((event.dy as u64 & 0xFFFF) << 16)
-                        | (buttons << 32);
-                    let msg = IpcMsg::with_label(MouseMsg::RAW_MOTION).word(0, raw);
-                    let _ = ipc_call(disp, msg);
-                    mouse_state.diagnostics.hw_cursor_moves += 1;
-                } else {
-                    // --- Legacy TTY mode: send packed absolute coordinates ---
-                    let mut abs = event.abs_x as u64;
-                    abs |= (event.abs_y as u64) << 16;
-                    abs |= buttons << 32;
-                    let msg = IpcMsg::with_label(0x2).word(0, abs);
-                    let _ = ipc_call(tty_token, msg);
+                    None => {
+                        pending_batch = Some(PendingMotionBatch::from_event(event));
+                    }
                 }
             }
         }
+
+        flush_motion_batch(
+            &mut pending_batch,
+            &mut display_token,
+            tty_token,
+            &mut mouse_state,
+            &mut next_motion_generation,
+        );
 
         let _ = ipc_recv(my_endpoint);
     }
