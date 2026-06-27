@@ -1,7 +1,7 @@
 # SunlightOS GUI Current State
 
-**Status:** Implemented baseline graphical desktop stack with a first PTY-backed terminal client.  
-**Last updated:** 2026-06-26
+**Status:** Implemented a stable graphical desktop stack with rounded window chrome, symbol glyphs, and flicker-free presentation.  
+**Last updated:** 2026-06-27
 
 ## Overview
 
@@ -57,6 +57,14 @@ Recent extension:
 
 - Focused keyboard delivery is now buffered by the compositor and returned via `EVENT_POLL`.
 - This is enough for lightweight native GUI clients to receive text input without bypassing the existing global keyboard/session routing.
+
+Day 22 polish checklist:
+
+- [x] Rounded rectangle fill/stroke primitives added to `sunlight-ui`
+- [x] Built-in UI symbol glyphs added for calculator and window controls
+- [x] Calculator operator/function symbols fixed to use the new glyph set
+- [x] Window controls updated to the improved rounded dark/orange style
+- [x] Flicker/blinking fixed by staged client commits plus off-screen desktop composition
 
 Current limitations:
 

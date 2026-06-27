@@ -922,6 +922,44 @@ fn draw_window_control(
     canvas.draw_ui_symbol_centered(rect, control.symbol(), icon_color);
 }
 
+fn rounded_clip_allows_pixel(rect: Rect, radius: i32, x: i32, y: i32) -> bool {
+    if rect.w == 0 || rect.h == 0 {
+        return false;
+    }
+    if x < rect.x || y < rect.y || x >= rect.right() || y >= rect.bottom() {
+        return false;
+    }
+    if radius <= 0 {
+        return true;
+    }
+
+    let local_x = x - rect.x;
+    let local_y = y - rect.y;
+    let w = rect.w as i32;
+    let h = rect.h as i32;
+
+    let dx = if local_x < radius {
+        radius - 1 - local_x
+    } else if local_x >= w - radius {
+        local_x - (w - radius)
+    } else {
+        0
+    };
+    let dy = if local_y < radius {
+        radius - 1 - local_y
+    } else if local_y >= h - radius {
+        local_y - (h - radius)
+    } else {
+        0
+    };
+
+    if dx == 0 || dy == 0 {
+        return true;
+    }
+
+    dx * dx + dy * dy < radius * radius
+}
+
 // ---------------------------------------------------------------------------
 // Hit-testing
 // ---------------------------------------------------------------------------
@@ -1183,11 +1221,34 @@ fn composite_window(
     let copy_h = client_h.min(state.fb_height - canvas_y) as usize;
     let stride = fb_stride(state);
     let back_ptr = back_buffer.as_mut_ptr();
+    let clip_rect = if !no_chrome && !maximized {
+        Some((
+            Rect::new(
+                win.x as i32 + BORDER_W as i32,
+                win.y as i32 + BORDER_W as i32,
+                win.width,
+                TITLEBAR_H + win.height,
+            ),
+            CHROME_RADIUS.saturating_sub(BORDER_W) as i32,
+        ))
+    } else {
+        None
+    };
     for row in 0..copy_h {
         unsafe {
-            let src = win.buffer.add(row * win.width as usize);
-            let dst = back_ptr.add((canvas_y as usize + row) * stride + canvas_x as usize);
-            core::ptr::copy_nonoverlapping(src, dst, copy_w);
+            let src_row = win.buffer.add(row * win.width as usize);
+            let dst_row = back_ptr.add((canvas_y as usize + row) * stride + canvas_x as usize);
+            if let Some((rect, radius)) = clip_rect {
+                let dst_y = canvas_y as i32 + row as i32;
+                for col in 0..copy_w {
+                    let dst_x = canvas_x as i32 + col as i32;
+                    if rounded_clip_allows_pixel(rect, radius, dst_x, dst_y) {
+                        dst_row.add(col).write(src_row.add(col).read());
+                    }
+                }
+            } else {
+                core::ptr::copy_nonoverlapping(src_row, dst_row, copy_w);
+            }
         }
     }
 }
