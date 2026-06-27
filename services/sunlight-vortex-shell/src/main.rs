@@ -1,13 +1,15 @@
-//! Vortex Shell — SunlightOS desktop surface (Phase 1 skeleton).
+//! Vortex Shell — SunlightOS desktop surface.
 //!
-//! Renders the system wallpaper as a fullscreen Desktop-layer window that sits
-//! permanently behind all normal application windows.  No panels, icons, or
-//! transparency yet — those are Phase 2 tasks (see TODOs below).
+//! Renders the wallpaper fullscreen plus two shell panel strips:
+//!   • Top bar:    [☀ workspaces]  [App Title / SunlightOS]  [status cluster]
+//!   • Bottom bar: [overview|sidebar|settings]  [grid|term|tasks|calc]  [Search…]
 
 #![no_std]
 #![no_main]
 
-use sunlight_ipc::{debug_log, process_yield, ProcessExit};
+use sunlight_ipc::{
+    debug_log, get_init_cap, ipc_call, process_yield, IpcMsg, ProcessExit, SpawnRequest,
+};
 use sunlight_ui::{
     image::TgaImage, App, Canvas, Color, Event, Rect, Theme, Window, WindowConfig,
 };
@@ -16,46 +18,43 @@ use sunlight_ui::{
 // Wallpaper asset
 // ---------------------------------------------------------------------------
 
-// Embedded at compile time from the same asset the compositor uses.
-// TODO(phase2-wallpaper): load /var/sunlightos/wallpapers/wallpaper.tga via
-// VFS at runtime so the user can swap wallpapers without recompiling.
 static WALLPAPER_TGA: &[u8] = include_bytes!("../../../docs/images/wallpaper.tga");
-
-// Dark SunlightOS fallback used when the TGA is absent or fails to parse.
 const FALLBACK_BG: u32 = 0x00121214;
 
 // ---------------------------------------------------------------------------
 // Window geometry
 // ---------------------------------------------------------------------------
 
-// Phase 1 uses a fixed request size.  The compositor clips the blit to the
-// actual framebuffer width, so this safely covers displays up to 1920×1080.
-//
-// TODO(phase2-resolution): add a GET_SCREEN_INFO SGP call so the shell can
-// allocate its SHM buffer at the exact framebuffer dimensions and avoid any
-// partial-row artefacts on >1920-wide screens.
 const SHELL_W: u32 = 1920;
 const SHELL_H: u32 = 1080;
 
-// ---------------------------------------------------------------------------
-// Desktop-layer config flags (sent via CONFIGURE_WINDOW after creation)
-// ---------------------------------------------------------------------------
-//
-// Bit layout (see ipc/src/lib.rs SgpMsg config_flags):
-//   [1:0] = 0b10  → WindowType::Desktop   (never raised on click)
-//   [3:2] = 0b11  → WindowState::Fullscreen (compositor maps to fb_w × fb_h)
-//   [4]   = 1     → BorderStyle::None     (no title bar / chrome)
-//   [5]   = 0     → ZIndexType::Normal    (behind OnTop windows)
-//
-// Result: 0b00011110 = 0x1E = 30
+// Desktop-layer config flags (see app.rs WindowConfig docs).
+// bits[1:0]=2 Desktop, bits[3:2]=3 Fullscreen, bit[4]=1 NoChrome → 0x1E
 const DESKTOP_LAYER_FLAGS: u64 = 0x1E;
 
 // ---------------------------------------------------------------------------
-// Minimal bump allocator (required by no_std + no_main linker setup).
-// The shell itself makes no heap allocations today.
+// Panel geometry constants
 // ---------------------------------------------------------------------------
 
-const HEAP_SIZE: usize = 32 * 1024;
+const RADIUS: u32 = 7;
+const TOP_H: u32 = 36;        // top bar height
+const TOP_Y: i32 = 6;         // top bar Y offset from screen top
+const TOP_PAD: i32 = 8;       // horizontal margin from screen edge
+
+const BOT_H: u32 = 44;        // bottom cluster height
+const BOT_Y_OFF: i32 = 8;     // distance from screen bottom to bottom of cluster
+const ICON_BTN: u32 = 36;     // square size for icon buttons in clusters
+const CLUSTER_PAD: i32 = 6;   // inner horizontal padding inside clusters
+const ICON_GAP: i32 = 4;      // gap between icon buttons
+
+const SEARCH_W: u32 = 200;    // search box width
+const SEARCH_H: u32 = 32;     // search box height
+
+// ---------------------------------------------------------------------------
+// Heap (bump allocator — no dynamic allocations used)
+// ---------------------------------------------------------------------------
+
+const HEAP_SIZE: usize = 64 * 1024;
 #[repr(align(16))]
 struct BumpHeap(core::cell::UnsafeCell<[u8; HEAP_SIZE]>);
 unsafe impl Sync for BumpHeap {}
@@ -83,11 +82,194 @@ unsafe impl core::alloc::GlobalAlloc for BumpAlloc {
 static ALLOC: BumpAlloc = BumpAlloc;
 
 // ---------------------------------------------------------------------------
+// Pixel-art icon bitmaps (1 bit per pixel, u16 rows, MSB = leftmost pixel)
+// Width is the number of significant bits; stored in the MSBs of each u16.
+// All icons are 16×16 pixel fields scaled to fit an ICON_BTN×ICON_BTN cell.
+// ---------------------------------------------------------------------------
+
+/// Sun icon — filled circle + 8 short rays.
+const SUN_ROWS: [u16; 16] = [
+    0b0000001000000000,
+    0b0001001010010000,
+    0b0000100111001000,
+    0b0001000111000100,
+    0b0010011111110010,
+    0b0000011111100000,
+    0b1100011111100011,
+    0b0000011111100000,
+    0b0000011111100000,
+    0b1100011111100011,
+    0b0000011111100000,
+    0b0010011111110010,
+    0b0001000111000100,
+    0b0000100111001000,
+    0b0001001010010000,
+    0b0000001000000000,
+];
+
+/// Overview icon — 2×2 grid of rounded squares.
+const OVERVIEW_ROWS: [u16; 16] = [
+    0b0111101111000000,
+    0b0100101001000000,
+    0b0100101001000000,
+    0b0111101111000000,
+    0b0000000000000000,
+    0b0111101111000000,
+    0b0100101001000000,
+    0b0100101001000000,
+    0b0111101111000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Sidebar icon — vertical bar on left + content area.
+const SIDEBAR_ROWS: [u16; 16] = [
+    0b1111111111111100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1001000000000100,
+    0b1111111111111100,
+];
+
+/// Settings icon — gear / cogwheel approximation.
+const SETTINGS_ROWS: [u16; 16] = [
+    0b0000011000000000,
+    0b0001011010000000,
+    0b0001111110000000,
+    0b0011100011100000,
+    0b0110100010110000,
+    0b1101111111011000,
+    0b1100111110011000,
+    0b1100111110011000,
+    0b1101111111011000,
+    0b0110100010110000,
+    0b0011100011100000,
+    0b0001111110000000,
+    0b0001011010000000,
+    0b0000011000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Launcher grid icon — 3×3 dots.
+const GRID_ROWS: [u16; 16] = [
+    0b0000000000000000,
+    0b0110001100011000,
+    0b0110001100011000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0110001100011000,
+    0b0110001100011000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0110001100011000,
+    0b0110001100011000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Terminal icon — ">_" prompt shape.
+const TERMINAL_ROWS: [u16; 16] = [
+    0b0000000000000000,
+    0b0000000000000000,
+    0b1100000000000000,
+    0b0110000000000000,
+    0b0011000000000000,
+    0b0110000000000000,
+    0b1100000000000000,
+    0b0000000000000000,
+    0b0000111111100000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Tasks monitor icon — 3 horizontal bars (activity / list).
+const TASKS_ROWS: [u16; 16] = [
+    0b0000000000000000,
+    0b0000000000000000,
+    0b1111111111110000,
+    0b1111111111110000,
+    0b0000000000000000,
+    0b1111111000000000,
+    0b1111111000000000,
+    0b0000000000000000,
+    0b1111111111000000,
+    0b1111111111000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+/// Calculator icon — display + keypad grid.
+const CALC_ROWS: [u16; 16] = [
+    0b0111111111100000,
+    0b0100000000100000,
+    0b0100000000100000,
+    0b0111111111100000,
+    0b0000000000000000,
+    0b0110011001100000,
+    0b0110011001100000,
+    0b0000000000000000,
+    0b0110011001100000,
+    0b0110011001100000,
+    0b0000000000000000,
+    0b0110011001100000,
+    0b0110011001100000,
+    0b0000000000000000,
+    0b0000000000000000,
+    0b0000000000000000,
+];
+
+// Width of the 16-pixel icon bitmap (used in draw_icon16).
+const ICON16_W: u32 = 16;
+
+// ---------------------------------------------------------------------------
+// Click zone bookkeeping
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy)]
+enum DockAction {
+    None,
+    LaunchCalc,
+}
+
+// ---------------------------------------------------------------------------
 // Shell application state
 // ---------------------------------------------------------------------------
 
 struct VortexShell {
     wallpaper: Option<TgaImage>,
+    /// Bounds of each clickable dock button (local coords), plus the action.
+    dock_zones: [(Rect, DockAction); 3],
+    /// Tracks whether mouse is hovering over a dock icon (index 0..3).
+    hover: Option<usize>,
 }
 
 impl VortexShell {
@@ -98,45 +280,262 @@ impl VortexShell {
         } else {
             debug_log("[VORTEX] wallpaper unavailable — using fallback\n");
         }
-        Self { wallpaper }
+        Self {
+            wallpaper,
+            dock_zones: [(Rect::new(0, 0, 0, 0), DockAction::None); 3],
+            hover: None,
+        }
     }
 }
 
+// ---------------------------------------------------------------------------
+// Drawing helpers
+// ---------------------------------------------------------------------------
+
+/// Draw a 16×16 pixel-art icon scaled 1:1 centred inside `cell`.
+fn draw_icon16(canvas: &mut Canvas, cell: Rect, rows: &[u16; 16], color: Color) {
+    let ox = cell.x + (cell.w as i32 - ICON16_W as i32) / 2;
+    let oy = cell.y + (cell.h as i32 - 16i32) / 2;
+    for (row_idx, &row_bits) in rows.iter().enumerate() {
+        for col in 0..ICON16_W as usize {
+            let bit = (row_bits >> (ICON16_W as usize - 1 - col)) & 1;
+            if bit != 0 {
+                canvas.put_pixel(ox + col as i32, oy + row_idx as i32, color);
+            }
+        }
+    }
+}
+
+/// Draw a panel pill: filled rounded rect with a 1-px border.
+fn draw_panel(canvas: &mut Canvas, rect: Rect, fill: Color, border: Color) {
+    canvas.fill_rounded_rect(rect, RADIUS, fill);
+    canvas.stroke_rounded_rect(rect, RADIUS, 1, border);
+}
+
+/// Draw an icon button cell. `highlight` draws it with the accent tint.
+fn draw_icon_btn(
+    canvas: &mut Canvas,
+    cell: Rect,
+    rows: &[u16; 16],
+    theme: &Theme,
+    highlight: bool,
+    hover: bool,
+) {
+    if hover {
+        canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
+    }
+    let icon_color = if highlight {
+        theme.accent
+    } else if hover {
+        theme.text
+    } else {
+        theme.text_dim
+    };
+    draw_icon16(canvas, cell, rows, icon_color);
+}
+
+// ---------------------------------------------------------------------------
+// Top bar layout
+// ---------------------------------------------------------------------------
+
+fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32) {
+    let bar = Rect::new(TOP_PAD, TOP_Y, screen_w - (TOP_PAD * 2) as u32, TOP_H);
+    draw_panel(canvas, bar, theme.panel, theme.border);
+
+    // ── Left zone: sun + workspace dots ──────────────────────────────────────
+    let left_x = bar.x + 10;
+
+    // Sun icon (orange)
+    let sun_cell = Rect::new(left_x, bar.y, 28, TOP_H);
+    draw_icon16(canvas, sun_cell, &SUN_ROWS, theme.accent);
+
+    // Three workspace indicator dots
+    let dot_start_x = left_x + 34;
+    let dot_cy = bar.y + bar.h as i32 / 2;
+    for i in 0..3i32 {
+        let dot_x = dot_start_x + i * 14;
+        let dot_color = if i == 0 { theme.accent } else { theme.text_dim };
+        // 6×6 filled rounded rect as a dot
+        canvas.fill_rounded_rect(
+            Rect::new(dot_x, dot_cy - 3, 6, 6),
+            3,
+            dot_color,
+        );
+    }
+
+    // ── Center zone: current app title ───────────────────────────────────────
+    let title = "SunlightOS";
+    let title_w = Canvas::measure_text(title);
+    let title_x = bar.x + (bar.w as i32 - title_w as i32) / 2;
+    let title_y = bar.y + (bar.h as i32 - 7) / 2; // font height = 7
+    canvas.draw_text(title_x, title_y, title, theme.text);
+
+    // ── Right zone: status cluster placeholder ───────────────────────────────
+    // Show static placeholders; real data wired in a later patch.
+    let status = "NET  BAT  12:00";
+    let status_w = Canvas::measure_text(status);
+    let status_x = bar.right() - status_w as i32 - 14;
+    let status_y = bar.y + (bar.h as i32 - 7) / 2;
+    canvas.draw_text(status_x, status_y, status, theme.text_dim);
+
+    // Small indicator dots for each status icon
+    let dot_colors = [theme.ok, theme.warn, theme.text_dim];
+    for (i, &dc) in dot_colors.iter().enumerate() {
+        let dx = status_x - 12 - (dot_colors.len() as i32 - 1 - i as i32) * 10;
+        canvas.fill_rounded_rect(Rect::new(dx, dot_cy - 3, 6, 6), 3, dc);
+    }
+
+
+}
+
+// ---------------------------------------------------------------------------
+// Bottom bar layout
+// ---------------------------------------------------------------------------
+
+/// Compute y coordinate of the top of the bottom clusters.
+fn bot_y(screen_h: u32) -> i32 {
+    screen_h as i32 - BOT_Y_OFF - BOT_H as i32
+}
+
+/// Draw the bottom-left cluster: overview | sidebar | settings.
+fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32) {
+    let icons: &[(&[u16; 16], bool)] = &[
+        (&OVERVIEW_ROWS, false),
+        (&SIDEBAR_ROWS, false),
+        (&SETTINGS_ROWS, false),
+    ];
+    let n = icons.len() as u32;
+    let cluster_w = CLUSTER_PAD as u32 * 2 + n * ICON_BTN + (n - 1) * ICON_GAP as u32;
+    let cluster = Rect::new(TOP_PAD, by, cluster_w, BOT_H);
+    draw_panel(canvas, cluster, theme.panel, theme.border);
+
+    let mut cx = cluster.x + CLUSTER_PAD;
+    for (rows, _accent) in icons {
+        let cell = Rect::new(cx, cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2, ICON_BTN, ICON_BTN);
+        draw_icon_btn(canvas, cell, rows, theme, false, false);
+        cx += ICON_BTN as i32 + ICON_GAP;
+    }
+}
+
+/// Draw the bottom-center dock and return the three clickable zone rects
+/// (terminal, tasks, calc).
+fn draw_bot_center(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32, hover: Option<usize>) -> [Rect; 3] {
+    let icons: &[&[u16; 16]; 4] = &[
+        &GRID_ROWS,
+        &TERMINAL_ROWS,
+        &TASKS_ROWS,
+        &CALC_ROWS,
+    ];
+    let n = icons.len() as u32;
+    let cluster_w = CLUSTER_PAD as u32 * 2 + n * ICON_BTN + (n - 1) * ICON_GAP as u32;
+    let cx_start = (screen_w as i32 - cluster_w as i32) / 2;
+    let cluster = Rect::new(cx_start, by, cluster_w, BOT_H);
+    draw_panel(canvas, cluster, theme.panel, theme.border);
+
+    let mut x = cluster.x + CLUSTER_PAD;
+    let mut clickable = [Rect::new(0, 0, 0, 0); 3];
+    for (i, rows) in icons.iter().enumerate() {
+        let cell = Rect::new(x, cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2, ICON_BTN, ICON_BTN);
+        let is_hover = hover.map(|h| h == i.saturating_sub(1) && i > 0).unwrap_or(false);
+        draw_icon_btn(canvas, cell, rows, theme, false, is_hover);
+        // Icons 1,2,3 are clickable (terminal, tasks, calc); icon 0 (grid) is placeholder
+        if i >= 1 {
+            clickable[i - 1] = cell;
+        }
+        x += ICON_BTN as i32 + ICON_GAP;
+    }
+    clickable
+}
+
+/// Draw the bottom-right search box.
+fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32) {
+    let sx = screen_w as i32 - TOP_PAD - SEARCH_W as i32;
+    let sy = by + (BOT_H as i32 - SEARCH_H as i32) / 2;
+    let search_rect = Rect::new(sx, sy, SEARCH_W, SEARCH_H);
+    draw_panel(canvas, search_rect, theme.panel_alt, theme.border);
+
+    // Placeholder text
+    let ph = "Search...";
+    let ph_w = Canvas::measure_text(ph);
+    let ph_x = search_rect.x + (search_rect.w as i32 - ph_w as i32) / 2;
+    let ph_y = search_rect.y + (search_rect.h as i32 - 7) / 2;
+    canvas.draw_text(ph_x, ph_y, ph, theme.text_dim);
+}
+
+// ---------------------------------------------------------------------------
+// App impl
+// ---------------------------------------------------------------------------
+
 impl App for VortexShell {
-    fn view(&mut self, canvas: &mut Canvas, _theme: &Theme) {
+    fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         let cw = canvas.width;
         let ch = canvas.height;
 
-        if let Some(wp) = self.wallpaper {
-            // Bilinear-style nearest-neighbour stretch to cover the canvas.
-            // Safe: TgaImage::pixel_xrgb clamps out-of-bounds coords internally.
-            let iw = wp.width;
-            let ih = wp.height;
-            for y in 0..ch {
-                let src_y = y * ih / ch;
-                for x in 0..cw {
-                    let src_x = x * iw / cw;
-                    canvas.put_pixel(x as i32, y as i32, Color(wp.pixel_xrgb(src_x, src_y)));
-                }
-            }
+        // ── Wallpaper ────────────────────────────────────────────────────────
+        if let Some(ref wp) = self.wallpaper {
+            canvas.draw_image_cover(wp);
         } else {
-            // Solid dark fallback matching the compositor's DESKTOP_COLOR.
             canvas.fill_rect(Rect::new(0, 0, cw, ch), Color(FALLBACK_BG));
         }
 
-        // TODO(phase2-panel):   draw a top status bar (clock, power, network).
-        // TODO(phase2-dock):    draw a bottom application dock.
-        // TODO(phase2-icons):   draw desktop icon grid over the wallpaper.
+        // ── Top bar ──────────────────────────────────────────────────────────
+        draw_top_bar(canvas, theme, cw);
+
+        // ── Bottom panels ────────────────────────────────────────────────────
+        let by = bot_y(ch);
+        draw_bot_left(canvas, theme, by);
+        let dock_cells = draw_bot_center(canvas, theme, by, cw, self.hover);
+        draw_bot_right(canvas, theme, by, cw);
+
+        // Record clickable zones (terminal, tasks, calc).
+        self.dock_zones = [
+            (dock_cells[0], DockAction::None),       // terminal — TODO(phase2-launch)
+            (dock_cells[1], DockAction::None),       // tasks    — TODO(phase2-launch)
+            (dock_cells[2], DockAction::LaunchCalc),
+        ];
     }
 
-    fn update(&mut self, _event: Event) -> bool {
-        // The desktop surface is static for now — no redraws on input events.
-        //
-        // TODO(phase2-panel):   return true on Tick events to update the clock.
-        // TODO(phase2-context): return true on right-click to show context menu.
-        // TODO(phase2-wallpaper): return true on a wallpaper-change IPC signal.
-        false
+    fn update(&mut self, event: Event) -> bool {
+        match event {
+            Event::Click { x, y } => {
+                for (rect, action) in &self.dock_zones {
+                    if rect.contains(sunlight_ui::geom::Point::new(x, y)) {
+                        spawn_app(*action);
+                        return false;
+                    }
+                }
+                false
+            }
+            Event::MouseMove { x, y } => {
+                let prev = self.hover;
+                self.hover = None;
+                for (i, (rect, _)) in self.dock_zones.iter().enumerate() {
+                    if rect.contains(sunlight_ui::geom::Point::new(x, y)) {
+                        self.hover = Some(i);
+                        break;
+                    }
+                }
+                self.hover != prev
+            }
+            _ => false,
+        }
     }
+}
+
+// ---------------------------------------------------------------------------
+// App launch
+// ---------------------------------------------------------------------------
+
+fn spawn_app(action: DockAction) {
+    let path = match action {
+        DockAction::LaunchCalc => "/bin/calc",
+        DockAction::None => return,
+    };
+    let init_cap = get_init_cap();
+    let req = SpawnRequest::new(path, "");
+    let mut msg = IpcMsg::with_label(0);
+    req.pack_into(&mut msg);
+    let _ = ipc_call(init_cap, msg);
 }
 
 // ---------------------------------------------------------------------------
@@ -149,7 +548,6 @@ pub extern "C" fn _start() -> ! {
 
     let mut shell = VortexShell::new();
 
-    // Retry until the display server is up.
     let mut window = loop {
         match Window::connect(WindowConfig {
             width: SHELL_W,
@@ -161,17 +559,10 @@ pub extern "C" fn _start() -> ! {
         }
     };
 
-    // Promote to the desktop layer: fullscreen + no chrome + Desktop type.
-    // This call sends CONFIGURE_WINDOW after CREATE_WINDOW so the compositor
-    // repositions the window to (0, 0) covering the full framebuffer.
     window.configure_flags(DESKTOP_LAYER_FLAGS);
-
     debug_log("[VORTEX] desktop layer registered, entering event loop\n");
 
-    // Run the event loop.  update() always returns false (static wallpaper),
-    // so the loop idles at the 200 ms IPC poll timeout between redraws.
     window.run(&mut shell);
-
     ProcessExit::exit(0);
 }
 
