@@ -261,6 +261,17 @@ pub struct ShmObject {
     pub size: usize, // requested/rounded size in bytes
 }
 
+/// Entry in the shared-region table.
+struct ShmEntry {
+    token: CapabilityToken,
+    obj: Arc<ShmObject>,
+    owner_pid: usize,
+    revoked: bool,
+    /// Number of processes that currently have this region mapped.
+    /// Frames are only freed when this reaches zero.
+    map_count: usize,
+}
+
 /// Errors from the capability broker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CapError {
@@ -308,8 +319,7 @@ fn generate_token(tag: u64) -> CapabilityToken {
 pub struct CapabilityBroker {
     endpoints: alloc::vec::Vec<Endpoint>,
     capabilities: alloc::vec::Vec<(CapabilityToken, u32, CapabilityRights)>,
-    /// Shared memory regions (multi-page capable): (token, object, owner_pid, revoked)
-    shared_regions: alloc::vec::Vec<(CapabilityToken, Arc<ShmObject>, usize, bool)>,
+    shared_regions: alloc::vec::Vec<ShmEntry>,
     vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
 }
 
@@ -488,7 +498,13 @@ impl CapabilityBroker {
     ) -> CapabilityToken {
         let obj = Arc::new(ShmObject { frames, size });
         let token = generate_token(CapabilityToken::TAG_VFS);
-        self.shared_regions.push((token, obj, owner_pid, false));
+        self.shared_regions.push(ShmEntry {
+            token,
+            obj,
+            owner_pid,
+            revoked: false,
+            map_count: 0,
+        });
         serial_println!(
             "[CAP] Minted shm-region token {:#x} size={}KiB owner={}",
             token.as_u64(),
@@ -506,9 +522,9 @@ impl CapabilityBroker {
 
     /// Resolve a (possibly multi-page) shared region capability to its object.
     pub fn resolve_shared_region(&self, token: CapabilityToken) -> Option<Arc<ShmObject>> {
-        self.shared_regions.iter().find_map(|(t, obj, _, revoked)| {
-            if *t == token && !*revoked {
-                Some(Arc::clone(obj))
+        self.shared_regions.iter().find_map(|e| {
+            if e.token == token && !e.revoked {
+                Some(Arc::clone(&e.obj))
             } else {
                 None
             }
@@ -522,27 +538,53 @@ impl CapabilityBroker {
         let entry = self
             .shared_regions
             .iter()
-            .find(|(t, _, _, _)| *t == token)
+            .find(|e| e.token == token)
             .ok_or(CapError::NotFound)?;
-        if entry.3 {
+        if entry.revoked {
             return Err(CapError::Revoked);
         }
-        // Return first phys for compat with single-page tests
         entry
-            .1
+            .obj
             .frames
             .first()
             .map(|f| f.start_address())
             .ok_or(CapError::NotFound)
     }
 
-    /// Revoke a shared region grant token (called on owner free or cleanup).
+    /// Increment the mapping reference count for `token`.
+    /// Called each time a process maps the region into its address space.
+    pub fn increment_map_count(&mut self, token: CapabilityToken) {
+        if let Some(e) = self.shared_regions.iter_mut().find(|e| e.token == token) {
+            e.map_count += 1;
+        }
+    }
+
+    /// Decrement the mapping reference count for `token`.
+    /// Returns the backing frames when this was the last mapping, so the caller
+    /// can free the physical memory via the PMM.
+    pub fn decrement_map_count(
+        &mut self,
+        token: CapabilityToken,
+    ) -> Option<alloc::vec::Vec<PhysFrame<Size4KiB>>> {
+        let idx = self.shared_regions.iter().position(|e| e.token == token)?;
+        if self.shared_regions[idx].map_count > 0 {
+            self.shared_regions[idx].map_count -= 1;
+        }
+        if self.shared_regions[idx].map_count == 0 {
+            let entry = self.shared_regions.swap_remove(idx);
+            serial_println!(
+                "[CAP] Released shm-region {:#x} (last unmap, freeing frames)",
+                entry.token.as_u64()
+            );
+            return Some(entry.obj.frames.clone());
+        }
+        None
+    }
+
+    /// Revoke a shared region grant token (forced, e.g. security revocation).
+    /// Does NOT free physical frames — use `decrement_map_count` for normal cleanup.
     pub fn revoke_shared(&mut self, token: CapabilityToken) {
-        if let Some(idx) = self
-            .shared_regions
-            .iter()
-            .position(|(t, _, _, _)| *t == token)
-        {
+        if let Some(idx) = self.shared_regions.iter().position(|e| e.token == token) {
             self.shared_regions.swap_remove(idx);
             serial_println!("[CAP] Revoked shm-region token {:#x}", token.as_u64());
         }
@@ -552,8 +594,8 @@ impl CapabilityBroker {
     /// them from the table.
     pub fn revoke_all_for(&mut self, pid: usize) {
         for entry in self.shared_regions.iter_mut() {
-            if entry.2 == pid {
-                entry.3 = true;
+            if entry.owner_pid == pid {
+                entry.revoked = true;
             }
         }
     }
