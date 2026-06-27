@@ -487,6 +487,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     let mut active_tab = 0usize;
     let mut next_shell_id = 0u64;
     let mut logged_initial_spawn = false;
+    // Set to true only after a successful Desktop login. Ctrl+F2 is blocked
+    // while this is false so an unauthenticated user cannot bypass the login
+    // screen by switching to the graphical desktop session.
+    let mut desktop_unlocked = false;
 
     let mut msg = ipc_recv(ep);
     let mut phase3_6_done = false;
@@ -525,6 +529,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     break 'kbd;
                                 }
                                 KEY_F2 => {
+                                    if !desktop_unlocked {
+                                        debug_log("[SECURITY] Ctrl+F2 blocked: Desktop not unlocked (no authenticated session)");
+                                        break 'kbd;
+                                    }
                                     if active_vt != VirtualTerminal::Desktop {
                                         debug_log("[SESSION] switched to F2 GraphicalDesktop");
                                         if display_cap.is_none() {
@@ -652,6 +660,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         }
                                         SessionType::Desktop => {
                                             debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                            desktop_unlocked = true;
                                             active_vt = VirtualTerminal::Desktop;
                                             if display_cap.is_none() {
                                                 display_cap = nameserver_lookup("display_server");
