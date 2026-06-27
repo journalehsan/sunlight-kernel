@@ -20,7 +20,7 @@ use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
 struct BumpAllocator;
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 8 * 1024 * 1024] = [0; 8 * 1024 * 1024];
+        static mut HEAP: [u8; 16 * 1024 * 1024] = [0; 16 * 1024 * 1024];
         static mut NEXT: usize = 0;
         let start = NEXT;
         let align = layout.align();
@@ -548,6 +548,7 @@ struct CompositorState {
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
+    back_buffer: Vec<u32>,
     active_cursor: CursorShape,
     // True when Desktop session owns the framebuffer; false when TTY/login is active.
     // tty_server sends SESSION_ACTIVATE/SESSION_DEACTIVATE to toggle this.
@@ -845,22 +846,24 @@ fn cursor_bitmap(shape: CursorShape) -> &'static [u8; CURSOR_H] {
 // Drawing primitives
 // ---------------------------------------------------------------------------
 
-fn clear_framebuffer(state: &CompositorState) {
-    let stride = fb_stride(state);
-    for y in 0..state.fb_height as usize {
-        for x in 0..state.fb_width as usize {
-            unsafe {
-                state.fb.add(y * stride + x).write(DESKTOP_COLOR);
-            }
-        }
+fn clear_back_buffer(state: &mut CompositorState) {
+    for pixel in state.back_buffer.iter_mut() {
+        *pixel = DESKTOP_COLOR;
     }
 }
 
-fn framebuffer_canvas(state: &CompositorState) -> Canvas<'_> {
-    let stride = fb_stride(state);
-    let len = stride * state.fb_height as usize;
-    let pixels = unsafe { core::slice::from_raw_parts_mut(state.fb, len) };
-    Canvas::new(pixels, stride as u32, state.fb_width, state.fb_height)
+fn back_buffer_canvas<'a>(state: &CompositorState, pixels: &'a mut [u32]) -> Canvas<'a> {
+    Canvas::new(pixels, fb_stride(state) as u32, state.fb_width, state.fb_height)
+}
+
+fn present_back_buffer(state: &CompositorState) {
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            state.back_buffer.as_ptr(),
+            state.fb,
+            state.back_buffer.len(),
+        );
+    }
 }
 
 fn title_len(title: &[u8; 64]) -> usize {
@@ -902,7 +905,7 @@ fn draw_window_control(
     } else if hovered {
         Color(BTN_HOVER_BG)
     } else if accent_active {
-        chrome_fill.lighten(16)
+        chrome_fill.lighten(10)
     } else {
         chrome_fill
     };
@@ -910,7 +913,7 @@ fn draw_window_control(
     let border = if hovered {
         Color(TITLEBAR_ACCENT)
     } else if accent_active {
-        Color(TITLEBAR_ACCENT).darken(20)
+        chrome_fill.lighten(24)
     } else {
         Color(BORDER_INACTIVE)
     };
@@ -1026,7 +1029,12 @@ fn cursor_for_scene(state: &CompositorState) -> CursorShape {
 // Compositing
 // ---------------------------------------------------------------------------
 
-fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
+fn composite_window(
+    state: &CompositorState,
+    back_buffer: &mut [u32],
+    win: &Window,
+    is_focused: bool,
+) {
     if win.buffer.is_null() {
         return;
     }
@@ -1099,6 +1107,12 @@ fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
         let inner = outer.inset(BORDER_W as i32);
         let outer_radius = if maximized { 0 } else { CHROME_RADIUS };
         let inner_radius = outer_radius.saturating_sub(BORDER_W);
+        let content_backdrop = Rect::new(
+            inner.x,
+            inner.y + TITLEBAR_H as i32,
+            inner.w,
+            inner.h.saturating_sub(TITLEBAR_H),
+        );
         let pin_rect = control_rect(wx, wy, chrome_w, 3);
         let minimize_rect = control_rect(wx, wy, chrome_w, 2);
         let maximize_rect = control_rect(wx, wy, chrome_w, 1);
@@ -1112,29 +1126,16 @@ fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
         );
 
         {
-            let mut canvas = framebuffer_canvas(state);
+            let mut canvas = back_buffer_canvas(state, back_buffer);
             canvas.fill_rounded_rect(outer, outer_radius, Color(bd_color));
             canvas.fill_rounded_rect(inner, inner_radius, Color(tb_color));
-
-            if is_focused {
-                let accent_rect = Rect::new(
-                    inner.x + 10,
-                    wy as i32 + TITLEBAR_H as i32 - 4,
-                    inner.w.saturating_sub(20),
-                    2,
-                );
-                canvas.fill_rounded_rect(accent_rect, 1, Color(TITLEBAR_ACCENT));
-            }
+            canvas.fill_rect(content_backdrop, Color(0xFF1A1A20));
 
             draw_window_control(
                 &mut canvas,
                 pin_rect,
                 WindowControlKind::Pin,
-                if win.config.z_index_type == ZIndexType::OnTop {
-                    Color(TITLEBAR_ACCENT)
-                } else {
-                    Color(icon_col)
-                },
+                Color(icon_col),
                 Color(tb_color),
                 hover_zone == HitZone::KeepOnTopBtn,
                 win.config.z_index_type == ZIndexType::OnTop,
@@ -1165,7 +1166,7 @@ fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
                 &mut canvas,
                 close_rect,
                 WindowControlKind::Close,
-                Color(BORDER_COLOR),
+                Color(icon_col),
                 Color(tb_color),
                 hover_zone == HitZone::CloseBtn,
                 is_focused,
@@ -1181,18 +1182,17 @@ fn composite_window(state: &CompositorState, win: &Window, is_focused: bool) {
     let copy_w = client_w.min(state.fb_width - canvas_x) as usize;
     let copy_h = client_h.min(state.fb_height - canvas_y) as usize;
     let stride = fb_stride(state);
+    let back_ptr = back_buffer.as_mut_ptr();
     for row in 0..copy_h {
         unsafe {
             let src = win.buffer.add(row * win.width as usize);
-            let dst = state
-                .fb
-                .add((canvas_y as usize + row) * stride + canvas_x as usize);
+            let dst = back_ptr.add((canvas_y as usize + row) * stride + canvas_x as usize);
             core::ptr::copy_nonoverlapping(src, dst, copy_w);
         }
     }
 }
 
-fn draw_cursor(state: &CompositorState) {
+fn draw_cursor(state: &CompositorState, back_buffer: &mut [u32]) {
     let bitmap = cursor_bitmap(state.active_cursor);
     let base_x = state.mouse_x as i32;
     let base_y = state.mouse_y as i32;
@@ -1217,24 +1217,26 @@ fn draw_cursor(state: &CompositorState) {
             } else {
                 FG
             };
-            unsafe {
-                state.fb.add(y as usize * stride + x as usize).write(color);
-            }
+            back_buffer[y as usize * stride + x as usize] = color;
         }
     }
 }
 
-fn redraw_scene(state: &CompositorState) {
+fn redraw_scene(state: &mut CompositorState) {
     if !state.session_active {
         return;
     }
-    clear_framebuffer(state);
+    clear_back_buffer(state);
     let focused_idx = focused_window_idx(state);
-    for (i, win) in state.windows.iter().enumerate() {
+    let windows = &state.windows;
+    let mut back_buffer = core::mem::take(&mut state.back_buffer);
+    for (i, win) in windows.iter().enumerate() {
         let is_focused = focused_idx == Some(i);
-        composite_window(state, win, is_focused);
+        composite_window(state, &mut back_buffer, win, is_focused);
     }
-    draw_cursor(state);
+    draw_cursor(state, &mut back_buffer);
+    state.back_buffer = back_buffer;
+    present_back_buffer(state);
 }
 
 // ---------------------------------------------------------------------------
@@ -1343,12 +1345,17 @@ pub extern "C" fn _start() -> ! {
         fb_width,
         fb_height,
         fb_pitch: pitch as u32,
+        back_buffer: {
+            let mut pixels = Vec::new();
+            pixels.resize((pitch as usize / 4) * fb_height as usize, DESKTOP_COLOR);
+            pixels
+        },
         active_cursor: CursorShape::Pointer,
         // TTY session owns the framebuffer at boot; tty_server sends
         // SESSION_ACTIVATE to hand the framebuffer to the Desktop session.
         session_active: false,
     };
-    redraw_scene(&state);
+    redraw_scene(&mut state);
 
     let mut next_win_id: u64 = 1;
 
@@ -1366,7 +1373,8 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::CREATE_WINDOW => {
                 let w = (msg.words[0] & 0xffffffff) as u32;
                 let h = (msg.words[0] >> 32) as u32;
-                let size = (w as usize * h as usize * 4).max(4096);
+                let surface_bytes = w as usize * h as usize * 4;
+                let size = surface_bytes.saturating_mul(2).max(4096);
                 let config = WindowConfig::from_ipc_words(&msg.words);
                 let owner_pid = msg.badge;
 
@@ -1438,7 +1446,7 @@ pub extern "C" fn _start() -> ! {
                                 pending_keys: KeyEventQueue::new(),
                             },
                         );
-                        redraw_scene(&state);
+                        redraw_scene(&mut state);
 
                         let client_x = win_x + BORDER_W;
                         let client_y = win_y + TITLEBAR_H;
@@ -1559,7 +1567,7 @@ pub extern "C" fn _start() -> ! {
                         }
                     }
                 }
-                redraw_scene(&state);
+                redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
@@ -1575,7 +1583,7 @@ pub extern "C" fn _start() -> ! {
                 }
                 // Re-evaluate active cursor immediately.
                 state.active_cursor = cursor_for_scene(&state);
-                redraw_scene(&state);
+                redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
@@ -1585,7 +1593,7 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::COMMIT_FRAME => {
                 let win_id = msg.words[0];
                 if state.windows.iter().any(|w| w.id == win_id) {
-                    redraw_scene(&state);
+                    redraw_scene(&mut state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -1619,7 +1627,7 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::CLOSE_WINDOW => {
                 let win_id = msg.words[0];
                 if close_window(&mut state, win_id, Some(msg.badge)) {
-                    redraw_scene(&state);
+                    redraw_scene(&mut state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -1640,12 +1648,12 @@ pub extern "C" fn _start() -> ! {
                 } else if pressed && alt && keycode == KEY_TAB {
                     if cycle_focus(&mut state) {
                         state.active_cursor = cursor_for_scene(&state);
-                        redraw_scene(&state);
+                        redraw_scene(&mut state);
                     }
                 } else if pressed && ctrl && keycode == KEY_W {
                     if let Some(focused) = focused_window_id(&state) {
                         if close_window(&mut state, focused, None) {
-                            redraw_scene(&state);
+                            redraw_scene(&mut state);
                         }
                     }
                 } else if state.session_active {
@@ -1916,7 +1924,7 @@ pub extern "C" fn _start() -> ! {
 
                 state.prev_buttons = buttons;
                 state.active_cursor = cursor_for_scene(&state);
-                redraw_scene(&state);
+                redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
@@ -1927,7 +1935,7 @@ pub extern "C" fn _start() -> ! {
                 if !state.session_active {
                     debug_log("[DISPLAY] [SESSION] activated — Desktop owns framebuffer\n");
                     state.session_active = true;
-                    redraw_scene(&state);
+                    redraw_scene(&mut state);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }

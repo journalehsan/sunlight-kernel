@@ -14,6 +14,7 @@
 //! window.run();
 //! ```
 
+use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 use sunlight_ipc::{
     ipc_call, ipc_call_timeout, nameserver_lookup, shm_free, shm_map, CapabilityToken, IpcMsg,
@@ -73,6 +74,19 @@ unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
 impl Window {
+    fn frame_len(&self) -> usize {
+        self.width as usize * self.height as usize
+    }
+
+    fn draw_buffer_offset(&self) -> usize {
+        let frame_len = self.frame_len();
+        if self.buffer_size / 4 >= frame_len.saturating_mul(2) {
+            frame_len
+        } else {
+            0
+        }
+    }
+
     /// Look up the display server, create a window, and map the shared buffer.
     pub fn connect(config: WindowConfig) -> Option<Self> {
         let display_ep = nameserver_lookup("display_server")?;
@@ -207,7 +221,16 @@ impl Window {
     }
 
     /// Mark the current framebuffer contents as ready for composition.
-    pub fn commit(&self) {
+    pub fn commit(&mut self) {
+        let frame_len = self.frame_len();
+        let draw_offset = self.draw_buffer_offset();
+        if draw_offset != 0 {
+            unsafe {
+                // Draw into the hidden half of the shared mapping, then publish
+                // the completed frame into the compositor-visible surface.
+                ptr::copy_nonoverlapping(self.buffer.add(draw_offset), self.buffer, frame_len);
+            }
+        }
         let _ = ipc_call(
             self.display_ep,
             IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, self.win_id),
@@ -216,7 +239,9 @@ impl Window {
 
     /// Build a `Canvas` wrapping the shared framebuffer.
     pub fn canvas(&mut self) -> Canvas<'_> {
-        let pixels = unsafe { core::slice::from_raw_parts_mut(self.buffer, self.buffer_size / 4) };
+        let frame_len = self.frame_len();
+        let offset = self.draw_buffer_offset();
+        let pixels = unsafe { core::slice::from_raw_parts_mut(self.buffer.add(offset), frame_len) };
         Canvas::new(pixels, self.width, self.width, self.height)
     }
 

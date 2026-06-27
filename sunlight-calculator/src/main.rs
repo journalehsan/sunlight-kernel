@@ -291,8 +291,6 @@ impl CalcApp {
         let pill_rect = Rect::new((WIN_W as i32) - (tw as i32) - 24, 6, tw + 14, 16);
         canvas.fill_rounded_rect(pill_rect, 8, theme.panel_alt);
         canvas.draw_text(pill_rect.x + 7, 10, sunlight_label, theme.accent);
-
-        canvas.fill_rounded_rect(Rect::new(10, 46, WIN_W - 20, 3), 1, theme.accent);
     }
 
     fn draw_display(canvas: &mut Canvas, app: &Self, theme: &Theme) {
@@ -301,8 +299,8 @@ impl CalcApp {
             display_rect,
             DISPLAY_RADIUS,
             DISPLAY_BG,
-            theme.accent,
-            2,
+            theme.border.lighten(24),
+            1,
         );
 
         let text = app.state.display_str();
