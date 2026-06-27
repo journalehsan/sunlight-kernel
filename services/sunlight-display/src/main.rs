@@ -51,6 +51,18 @@ fn launch_runner() {
     let _ = libc::spawn(b"/bin/sunlight-runner", &[b"sunlight-runner"], None);
 }
 
+fn launch_vortex_shell() {
+    // TODO(vortex-phase2): once Vortex Shell has panels and icons, replace the
+    // manual terminal / tasks demo launch (started by users from the runner)
+    // with a single `launch_vortex_shell()` call here so it auto-starts on
+    // desktop session activation.
+    let _ = libc::spawn(
+        b"/bin/sunlight-vortex-shell",
+        &[b"sunlight-vortex-shell"],
+        None,
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Fixed-point pointer acceleration (unchanged from Phase 1)
 // ---------------------------------------------------------------------------
@@ -2075,6 +2087,10 @@ pub extern "C" fn _start() -> ! {
                     state.session_active = true;
                     state.dirty.mark_full();
                     redraw_scene(&mut state);
+                    // Spawn Vortex Shell as the desktop surface.  It connects as
+                    // a Desktop-layer window and draws the wallpaper from its own
+                    // canvas, sitting permanently behind all normal app windows.
+                    launch_vortex_shell();
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }

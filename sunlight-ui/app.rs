@@ -237,6 +237,32 @@ impl Window {
         );
     }
 
+    /// Send a `CONFIGURE_WINDOW` message to update window type, state, and border
+    /// flags after the window has been created.
+    ///
+    /// `flags` uses the same bit layout as the SGP `config_flags` field:
+    /// - bits [1:0]: window type (0=Normal, 1=Dialog, 2=Desktop, 3=Widget)
+    /// - bits [3:2]: state (0=Normal, 1=Minimized, 2=Maximized, 3=Fullscreen)
+    /// - bit  [4]:   border (0=Full chrome, 1=None)
+    /// - bit  [5]:   z-index type (0=Normal, 1=OnTop)
+    /// - bits [12:6]: z-index value 1–100 (0 = keep default)
+    ///
+    /// Passing `flags = 0` is a no-op (the display server interprets zero as
+    /// "no flags change").
+    pub fn configure_flags(&self, flags: u64) {
+        if flags == 0 {
+            return;
+        }
+        let _ = ipc_call(
+            self.display_ep,
+            IpcMsg::with_label(SgpMsg::CONFIGURE_WINDOW)
+                .word(0, self.win_id)
+                .word(1, flags)
+                .word(2, 0)
+                .word(3, 0),
+        );
+    }
+
     /// Build a `Canvas` wrapping the shared framebuffer.
     pub fn canvas(&mut self) -> Canvas<'_> {
         let frame_len = self.frame_len();

@@ -52,6 +52,7 @@ members = [
     "sunlight-ui",
     "services/sunlight-tasks",
     "services/sunlight-runner",
+    "services/sunlight-vortex-shell",
     "services/pty_server",
     "services/sunlight-deviced",
     "services/sunlight-networkd",

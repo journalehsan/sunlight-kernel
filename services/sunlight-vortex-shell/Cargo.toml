@@ -1,27 +1,13 @@
 [package]
-name = "sunlight-runner"
+name = "sunlight-vortex-shell"
 version = "0.1.494"
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
-[[bin]]
-name = "sunlight-runner"
-path = "src/main.rs"
-
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
-sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
+
+[[bin]]
+name = "sunlight-vortex-shell"
+path = "src/main.rs"
