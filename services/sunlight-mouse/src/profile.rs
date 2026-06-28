@@ -40,12 +40,12 @@ impl PointerProfile {
         match self {
             // Balanced baseline — works acceptably on unknown environments.
             PointerProfile::Generic => PointerTuning {
-                base_sensitivity_fp: FP_ONE * 5 / 4,   // 1.25×
+                base_sensitivity_fp: FP_ONE * 5 / 4, // 1.25×
                 precise_max_magnitude: 2,
-                low_speed_scale_fp: FP_ONE,             // 1.0×
+                low_speed_scale_fp: FP_ONE, // 1.0×
                 normal_max_magnitude: 8,
-                medium_accel_fp: FP_ONE * 5 / 4,       // 1.25×
-                max_accel_fp: FP_ONE * 7 / 4,          // 1.75×
+                medium_accel_fp: FP_ONE * 5 / 4, // 1.25×
+                max_accel_fp: FP_ONE * 7 / 4,    // 1.75×
                 reversal_threshold: 3,
                 clear_reversal_threshold: 5,
                 click_stabilize_ms: 40,
@@ -53,26 +53,26 @@ impl PointerProfile {
             },
             // QEMU/KVM PS/2: emulated PS/2 feels sluggish — boost base + fast gain.
             PointerProfile::QemuPs2 => PointerTuning {
-                base_sensitivity_fp: FP_ONE * 3 / 2,   // 1.5×
+                base_sensitivity_fp: FP_ONE * 3 / 2, // 1.5×
                 precise_max_magnitude: 2,
-                low_speed_scale_fp: FP_ONE,             // 1.0× — keep slow zone unscaled
+                low_speed_scale_fp: FP_ONE, // 1.0× — keep slow zone unscaled
                 normal_max_magnitude: 8,
-                medium_accel_fp: FP_ONE * 3 / 2,       // 1.5×
-                max_accel_fp: FP_ONE * 2,              // 2.0×
+                medium_accel_fp: FP_ONE * 3 / 2, // 1.5×
+                max_accel_fp: FP_ONE * 2,        // 2.0×
                 reversal_threshold: 3,
                 clear_reversal_threshold: 4,
-                click_stabilize_ms: 50,                 // higher latency — stabilize longer
+                click_stabilize_ms: 50, // higher latency — stabilize longer
                 drag_threshold_px: 3,
             },
             // VMware PS/2: very low latency causes overshoot — pull back sensitivity
             // and cap fast-zone gain hard.
             PointerProfile::VmwarePs2 => PointerTuning {
-                base_sensitivity_fp: FP_ONE,            // 1.0× — VMware already fast
-                precise_max_magnitude: 3,               // wider slow zone for fine clicks
-                low_speed_scale_fp: FP_ONE,             // 1.0×
+                base_sensitivity_fp: FP_ONE, // 1.0× — VMware already fast
+                precise_max_magnitude: 3,    // wider slow zone for fine clicks
+                low_speed_scale_fp: FP_ONE,  // 1.0×
                 normal_max_magnitude: 7,
-                medium_accel_fp: FP_ONE,               // 1.0× — no extra push in normal zone
-                max_accel_fp: FP_ONE * 5 / 4,         // 1.25× — hard cap on fast sweeps
+                medium_accel_fp: FP_ONE, // 1.0× — no extra push in normal zone
+                max_accel_fp: FP_ONE * 5 / 4, // 1.25× — hard cap on fast sweeps
                 reversal_threshold: 2,
                 clear_reversal_threshold: 4,
                 click_stabilize_ms: 30,
@@ -81,12 +81,12 @@ impl PointerProfile {
             // Real PS/2 hardware: conservative baseline, slightly lower fast ceiling
             // than Generic to avoid overshoot on varied hardware mice.
             PointerProfile::RealHardwarePs2 => PointerTuning {
-                base_sensitivity_fp: FP_ONE * 5 / 4,   // 1.25×
+                base_sensitivity_fp: FP_ONE * 5 / 4, // 1.25×
                 precise_max_magnitude: 2,
-                low_speed_scale_fp: FP_ONE,             // 1.0×
+                low_speed_scale_fp: FP_ONE, // 1.0×
                 normal_max_magnitude: 8,
-                medium_accel_fp: FP_ONE * 5 / 4,       // 1.25×
-                max_accel_fp: FP_ONE * 3 / 2,         // 1.5× — lower ceiling than Generic
+                medium_accel_fp: FP_ONE * 5 / 4, // 1.25×
+                max_accel_fp: FP_ONE * 3 / 2,    // 1.5× — lower ceiling than Generic
                 reversal_threshold: 3,
                 clear_reversal_threshold: 5,
                 click_stabilize_ms: 35,

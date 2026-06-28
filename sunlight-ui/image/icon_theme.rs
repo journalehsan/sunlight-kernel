@@ -49,7 +49,9 @@ pub fn icon_path(category: &str, size: u32, name: &str, buf: &mut [u8]) -> usize
     macro_rules! append {
         ($s:expr) => {{
             let s: &[u8] = $s;
-            if pos + s.len() > buf.len() { return 0; }
+            if pos + s.len() > buf.len() {
+                return 0;
+            }
             buf[pos..pos + s.len()].copy_from_slice(s);
             pos += s.len();
         }};
@@ -64,7 +66,9 @@ pub fn icon_path(category: &str, size: u32, name: &str, buf: &mut [u8]) -> usize
             i -= 1;
             size_buf[i] = b'0' + (n % 10) as u8;
             n /= 10;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
         }
         (i, 10 - i)
     };

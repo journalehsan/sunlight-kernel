@@ -565,7 +565,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         }
 
                         if pressed {
-
                             if let Some(ascii) = ascii_opt {
                                 if login.focus == FocusArea::Password {
                                     debug_log_kbd_byte(

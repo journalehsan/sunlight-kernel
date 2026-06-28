@@ -1,5 +1,8 @@
 #![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_main)]
+
+#[cfg(test)]
+extern crate std;
 
 extern crate alloc;
 
@@ -46,6 +49,7 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
+#[cfg(not(test))]
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
@@ -602,6 +606,12 @@ struct Window {
     /// Cursor shape the client wants when the pointer is in its client area.
     client_cursor: CursorShape,
     pending_keys: KeyEventQueue,
+    /// Last mouse state delivered to this window while it owned the pointer.
+    /// Non-target windows keep their own cached state so they do not synthesize
+    /// pointer transitions from someone else's clicks.
+    last_mouse_x: u16,
+    last_mouse_y: u16,
+    last_buttons: u8,
     /// When true the window is collapsed to its titlebar only (shade/roll-up).
     /// Client content is not blitted. A second titlebar double-click restores it.
     rolled_up: bool,
@@ -624,11 +634,7 @@ impl Window {
             ),
             _ => {
                 // Rolled-up (shaded) windows collapse to titlebar + border only.
-                let client_h = if self.rolled_up {
-                    0
-                } else {
-                    self.height
-                };
+                let client_h = if self.rolled_up { 0 } else { self.height };
                 (
                     self.x,
                     self.y,
@@ -927,6 +933,74 @@ fn focused_window_idx(state: &CompositorState) -> Option<usize> {
 
 fn focused_window_id(state: &CompositorState) -> Option<u64> {
     focused_window_idx(state).map(|idx| state.windows[idx].id)
+}
+
+fn pointer_eligible_window(win: &Window) -> bool {
+    // Minimized windows are never eligible. Hidden/workspace filtering will
+    // slot in here if those fields are added later.
+    win.config.state != WindowState::Minimized
+}
+
+fn topmost_window_idx_at(state: &CompositorState, cx: u32, cy: u32) -> Option<usize> {
+    state
+        .windows
+        .iter()
+        .enumerate()
+        .rev()
+        .find_map(|(idx, win)| {
+            if !pointer_eligible_window(win) {
+                return None;
+            }
+            let zone = hit_test_window(win, cx, cy, state.fb_width, state.fb_height);
+            if zone == HitZone::Miss {
+                None
+            } else {
+                Some(idx)
+            }
+        })
+}
+
+fn topmost_window_id_at(state: &CompositorState, cx: u32, cy: u32) -> Option<u64> {
+    topmost_window_idx_at(state, cx, cy).map(|idx| state.windows[idx].id)
+}
+
+fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (u64, u64) {
+    let mouse_x = state.mouse_x;
+    let mouse_y = state.mouse_y;
+    let target_id = topmost_window_id_at(&state, mouse_x as u32, mouse_y as u32);
+    let win = &mut state.windows[win_idx];
+    if target_id == Some(win.id) {
+        win.last_mouse_x = mouse_x;
+        win.last_mouse_y = mouse_y;
+        win.last_buttons = state.prev_buttons;
+        (
+            (mouse_x as u64) | ((mouse_y as u64) << 16),
+            state.prev_buttons as u64,
+        )
+    } else {
+        (
+            (win.last_mouse_x as u64) | ((win.last_mouse_y as u64) << 16),
+            win.last_buttons as u64,
+        )
+    }
+}
+
+fn raise_window_by_id(state: &mut CompositorState, id: u64) {
+    let Some(pos) = state.windows.iter().position(|w| w.id == id) else {
+        return;
+    };
+
+    let win = state.windows.remove(pos);
+    let target = if win.config.z_index_type == ZIndexType::OnTop {
+        state.windows.len()
+    } else {
+        state
+            .windows
+            .iter()
+            .position(|w| w.config.z_index_type == ZIndexType::OnTop)
+            .unwrap_or(state.windows.len())
+    };
+    state.windows.insert(target, win);
 }
 
 fn has_desktop_window(state: &CompositorState) -> bool {
@@ -1685,22 +1759,15 @@ fn cursor_for_scene(state: &CompositorState) -> CursorShape {
     let cx = state.mouse_x as u32;
     let cy = state.mouse_y as u32;
 
-    // Walk front-to-back (last window in vec = top of z-order).
-    for win in state.windows.iter().rev() {
-        if win.config.state == WindowState::Minimized {
-            continue;
-        }
-        let zone = hit_test_window(win, cx, cy, state.fb_width, state.fb_height);
-        if zone == HitZone::Miss {
-            continue;
-        }
-
-        return match zone {
-            HitZone::ClientArea => win.client_cursor,
-            other => other.default_cursor(),
-        };
+    let Some(idx) = topmost_window_idx_at(state, cx, cy) else {
+        return CursorShape::Pointer;
+    };
+    let win = &state.windows[idx];
+    let zone = hit_test_window(win, cx, cy, state.fb_width, state.fb_height);
+    match zone {
+        HitZone::ClientArea => win.client_cursor,
+        other => other.default_cursor(),
     }
-    CursorShape::Pointer
 }
 
 // ---------------------------------------------------------------------------
@@ -1729,15 +1796,24 @@ fn composite_window(
 
     let (canvas_x, canvas_y, client_w, client_h) = if fullscreen {
         // Fullscreen: truly full-screen, covers panel intentionally.
-        let cw = if no_chrome { state.fb_width } else { state.fb_width.saturating_sub(BORDER_W * 2) };
-        let ch = if no_chrome { state.fb_height } else { state.fb_height.saturating_sub(TITLEBAR_H + BORDER_W) };
+        let cw = if no_chrome {
+            state.fb_width
+        } else {
+            state.fb_width.saturating_sub(BORDER_W * 2)
+        };
+        let ch = if no_chrome {
+            state.fb_height
+        } else {
+            state.fb_height.saturating_sub(TITLEBAR_H + BORDER_W)
+        };
         let ox = if no_chrome { 0 } else { BORDER_W };
         let oy = if no_chrome { 0 } else { TITLEBAR_H };
         (ox, oy, cw, ch)
     } else if maximized {
         // Maximized: confined below the top panel so it doesn't cover the shell bar.
         let cw = state.fb_width.saturating_sub(BORDER_W * 2);
-        let ch = state.fb_height
+        let ch = state
+            .fb_height
             .saturating_sub(PANEL_TOP_RESERVED_H)
             .saturating_sub(TITLEBAR_H + BORDER_W);
         (BORDER_W, PANEL_TOP_RESERVED_H + TITLEBAR_H, cw, ch)
@@ -2163,10 +2239,7 @@ fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) 
     let stride = fb_stride(state);
     for row in 0..strip_rows {
         let src = unsafe {
-            core::slice::from_raw_parts(
-                desktop.buffer.add(row * desktop.width as usize),
-                blit_w,
-            )
+            core::slice::from_raw_parts(desktop.buffer.add(row * desktop.width as usize), blit_w)
         };
         let dst_start = row * stride;
         back_buffer[dst_start..dst_start + blit_w].copy_from_slice(src);
@@ -2334,10 +2407,181 @@ fn log_debug_counters(state: &CompositorState, reason: &str) {
     debug_log("\n");
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+
+    fn test_window(
+        id: u64,
+        x: u32,
+        y: u32,
+        w: u32,
+        h: u32,
+        window_type: WindowType,
+        state: WindowState,
+        z_index_type: ZIndexType,
+    ) -> Window {
+        Window {
+            id,
+            shm_cap: CapabilityToken::INVALID,
+            buffer: core::ptr::null_mut(),
+            width: w,
+            height: h,
+            x,
+            y,
+            saved_x: x,
+            saved_y: y,
+            saved_w: w,
+            saved_h: h,
+            owner_pid: 1,
+            config: WindowConfig {
+                title: [0; 64],
+                window_type,
+                state,
+                border: BorderStyle::Full,
+                z_index_type,
+                z_index_value: 50,
+                show_type: ShowType::Floating,
+                group_type: GroupType::None,
+                pid: 1,
+                ppid: 0,
+                group_ids: [0; 4],
+                group_id_count: 0,
+            },
+            client_cursor: CursorShape::Pointer,
+            pending_keys: KeyEventQueue::new(),
+            last_mouse_x: 0,
+            last_mouse_y: 0,
+            last_buttons: 0,
+            rolled_up: false,
+            saved_unrolled_h: h,
+        }
+    }
+
+    fn test_state(windows: Vec<Window>) -> CompositorState {
+        CompositorState {
+            windows,
+            mouse_x: 0,
+            mouse_y: 0,
+            pointer: PointerPolicy::new(800, 600),
+            keyboard: KeyboardState::new(),
+            active_drag: ActiveDrag::None,
+            pending_move_drag: None,
+            prev_buttons: 0,
+            fb: core::ptr::null_mut(),
+            fb_width: 800,
+            fb_height: 600,
+            fb_pitch: 800 * 4,
+            back_buffer: Vec::new(),
+            display_backend: backend::DisplayBackend::Limine {
+                fb: core::ptr::null_mut(),
+                pitch_words: 800,
+            },
+            hw_cursor_active: false,
+            last_hw_cursor_shape: None,
+            active_cursor: CursorShape::Pointer,
+            software_cursor: SoftwareCursorState::new(),
+            session_active: true,
+            inner_corner_mask: mask::CornerMask::new(CHROME_RADIUS.saturating_sub(BORDER_W)),
+            dirty: dirty::DirtyList::new(),
+            debug_counters: DebugCounters::new(),
+            wallpaper: None,
+            notifications: Vec::new(),
+            next_notification_id: 1,
+            vortex_launch_pending: false,
+            last_mouse_generation: 0,
+            last_titlebar_click_win_id: 0,
+            last_titlebar_click_ms: 0,
+        }
+    }
+
+    #[test]
+    fn topmost_hit_test_prefers_frontmost_visible_window() {
+        let mut state = test_state(vec![
+            test_window(
+                1,
+                40,
+                40,
+                200,
+                180,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+            test_window(
+                2,
+                60,
+                60,
+                200,
+                180,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+        ]);
+
+        assert_eq!(topmost_window_id_at(&state, 100, 100), Some(2));
+
+        state.windows[1].config.state = WindowState::Minimized;
+        assert_eq!(topmost_window_id_at(&state, 100, 100), Some(1));
+    }
+
+    #[test]
+    fn mouse_poll_isolated_to_topmost_window() {
+        let mut state = test_state(vec![
+            test_window(
+                1,
+                20,
+                20,
+                220,
+                180,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+            test_window(
+                2,
+                40,
+                40,
+                220,
+                180,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+        ]);
+        state.mouse_x = 120;
+        state.mouse_y = 90;
+        state.prev_buttons = 1;
+
+        state.windows[0].last_mouse_x = 7;
+        state.windows[0].last_mouse_y = 9;
+        state.windows[0].last_buttons = 2;
+        state.windows[1].last_mouse_x = 11;
+        state.windows[1].last_mouse_y = 13;
+        state.windows[1].last_buttons = 4;
+
+        let bottom = mouse_poll_words_for_window(&mut state, 0);
+        assert_eq!(bottom.0, 7 | (9 << 16));
+        assert_eq!(bottom.1, 2);
+        assert_eq!(state.windows[0].last_mouse_x, 7);
+        assert_eq!(state.windows[0].last_buttons, 2);
+
+        let top = mouse_poll_words_for_window(&mut state, 1);
+        assert_eq!(top.0, 120 | (90 << 16));
+        assert_eq!(top.1, 1);
+        assert_eq!(state.windows[1].last_mouse_x, 120);
+        assert_eq!(state.windows[1].last_mouse_y, 90);
+        assert_eq!(state.windows[1].last_buttons, 1);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Panic handler
 // ---------------------------------------------------------------------------
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     debug_log("[DISPLAY] PANIC\n");
@@ -2348,6 +2592,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 // Entry point
 // ---------------------------------------------------------------------------
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     debug_log("[DISPLAY] sunlight-display v2 (window manager) starting\n");
@@ -2666,6 +2911,9 @@ pub extern "C" fn _start() -> ! {
                                 config,
                                 client_cursor: CursorShape::Pointer,
                                 pending_keys: KeyEventQueue::new(),
+                                last_mouse_x: 0,
+                                last_mouse_y: 0,
+                                last_buttons: 0,
                                 rolled_up: false,
                                 saved_unrolled_h: h,
                             },
@@ -2870,18 +3118,27 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             SgpMsg::EVENT_POLL => {
                 let win_id = msg.words[0];
-                let packed = (state.mouse_x as u64) | ((state.mouse_y as u64) << 16);
-                let mut wake = IpcMsg::with_label(SgpMsg::REPLY)
-                    .word(0, packed)
-                    .word(3, state.prev_buttons as u64);
-                if let Some(win) = state.windows.iter_mut().find(|w| w.id == win_id) {
-                    let (cx, cy) = match win.config.state {
-                        WindowState::Fullscreen => (0u64, 0u64),
-                        WindowState::Maximized => (BORDER_W as u64, TITLEBAR_H as u64),
-                        _ => ((win.x + BORDER_W) as u64, (win.y + TITLEBAR_H) as u64),
+                let mut wake = IpcMsg::with_label(SgpMsg::REPLY);
+                if let Some(win_idx) = state.windows.iter().position(|w| w.id == win_id) {
+                    let (cx, cy) = {
+                        let win = &state.windows[win_idx];
+                        match win.config.state {
+                            WindowState::Fullscreen => (0u64, 0u64),
+                            WindowState::Maximized => (BORDER_W as u64, TITLEBAR_H as u64),
+                            _ => ((win.x + BORDER_W) as u64, (win.y + TITLEBAR_H) as u64),
+                        }
                     };
-                    wake = wake.word(1, cx | (cy << 32));
-                    if let Some(key_event) = win.pending_keys.pop() {
+                    let key_event = {
+                        let win = &mut state.windows[win_idx];
+                        win.pending_keys.pop()
+                    };
+                    let (mouse_word, button_word) =
+                        mouse_poll_words_for_window(&mut state, win_idx);
+                    wake = wake
+                        .word(0, mouse_word)
+                        .word(1, cx | (cy << 32))
+                        .word(3, button_word);
+                    if let Some(key_event) = key_event {
                         wake = wake.word(2, key_event);
                     }
                 }
@@ -3054,46 +3311,20 @@ pub extern "C" fn _start() -> ! {
 
                 // ── Left button just pressed ────────────────────────────────
                 if state.session_active && left_down && !was_left_down {
-                    // Hit-test windows front-to-back to find what was clicked.
-                    let mut hit_id: Option<u64> = None;
-                    let mut hit_zone: HitZone = HitZone::Miss;
+                    if let Some(hit_idx) = topmost_window_idx_at(&state, cx, cy) {
+                        let id = state.windows[hit_idx].id;
+                        let hit_zone = hit_test_window(
+                            &state.windows[hit_idx],
+                            cx,
+                            cy,
+                            state.fb_width,
+                            state.fb_height,
+                        );
 
-                    for win in state.windows.iter().rev() {
-                        if win.config.state == WindowState::Minimized {
-                            continue;
-                        }
-                        let zone = hit_test_window(win, cx, cy, state.fb_width, state.fb_height);
-                        if zone != HitZone::Miss {
-                            hit_id = Some(win.id);
-                            hit_zone = zone;
-                            break;
-                        }
-                    }
-
-                    if let Some(id) = hit_id {
                         // Raise to front (unless it's a Desktop/Widget type).
-                        let win_type = state
-                            .windows
-                            .iter()
-                            .find(|w| w.id == id)
-                            .map(|w| w.config.window_type)
-                            .unwrap_or(WindowType::Normal);
+                        let win_type = state.windows[hit_idx].config.window_type;
                         if win_type != WindowType::Desktop && win_type != WindowType::Widget {
-                            if let Some(pos) = state.windows.iter().position(|w| w.id == id) {
-                                // Keep OnTop windows at the very end; raise normal windows
-                                // to just before the first OnTop window.
-                                let win = state.windows.remove(pos);
-                                let target = if win.config.z_index_type == ZIndexType::OnTop {
-                                    state.windows.len()
-                                } else {
-                                    state
-                                        .windows
-                                        .iter()
-                                        .position(|w| w.config.z_index_type == ZIndexType::OnTop)
-                                        .unwrap_or(state.windows.len())
-                                };
-                                state.windows.insert(target, win);
-                            }
+                            raise_window_by_id(&mut state, id);
                         }
 
                         let click_now = monotonic_millis();
@@ -3105,8 +3336,7 @@ pub extern "C" fn _start() -> ! {
                                     && click_now.saturating_sub(state.last_titlebar_click_ms)
                                         < DOUBLE_CLICK_MS;
                                 if is_dbl {
-                                    if let Some(win) =
-                                        state.windows.iter_mut().find(|w| w.id == id)
+                                    if let Some(win) = state.windows.iter_mut().find(|w| w.id == id)
                                     {
                                         if win.config.state == WindowState::Normal {
                                             if win.rolled_up {
@@ -3238,8 +3468,8 @@ pub extern "C" fn _start() -> ! {
                                     win.x = (win.x as i32 + dcx).max(0) as u32;
                                     // Clamp y so the titlebar cannot be dragged behind the
                                     // top panel; the panel reserved area is always accessible.
-                                    win.y = (win.y as i32 + dcy)
-                                        .max(PANEL_TOP_RESERVED_H as i32) as u32;
+                                    win.y = (win.y as i32 + dcy).max(PANEL_TOP_RESERVED_H as i32)
+                                        as u32;
                                 }
                             }
                         }

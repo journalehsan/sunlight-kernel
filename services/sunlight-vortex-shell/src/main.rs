@@ -1534,12 +1534,13 @@ fn bot_y(screen_h: u32) -> i32 {
 
 /// Draw the bottom-left cluster: overview | sidebar | settings.
 /// Returns the settings button rect for click-zone registration.
-fn draw_bot_left(canvas: &mut Canvas, theme: &Theme, by: i32, settings_icon: Option<TgaImage>) -> Rect {
-    let icons: &[&[u16; 16]] = &[
-        &OVERVIEW_ROWS,
-        &SIDEBAR_ROWS,
-        &SETTINGS_ROWS,
-    ];
+fn draw_bot_left(
+    canvas: &mut Canvas,
+    theme: &Theme,
+    by: i32,
+    settings_icon: Option<TgaImage>,
+) -> Rect {
+    let icons: &[&[u16; 16]] = &[&OVERVIEW_ROWS, &SIDEBAR_ROWS, &SETTINGS_ROWS];
     let n = icons.len() as u32;
     let cluster_w = CLUSTER_PAD as u32 * 2 + n * ICON_BTN + (n - 1) * ICON_GAP as u32;
     let cluster = Rect::new(TOP_PAD, by, cluster_w, BOT_H);
@@ -1667,7 +1668,13 @@ impl App for VortexShell {
 
         let desktop_rect = desktop_area(cw, ch);
         layout_desktop_icons(&mut self.desktop_icons, desktop_rect);
-        draw_desktop_icons(canvas, theme, &self.desktop_icons, self.selected_icon, self.desktop_theme);
+        draw_desktop_icons(
+            canvas,
+            theme,
+            &self.desktop_icons,
+            self.selected_icon,
+            self.desktop_theme,
+        );
 
         // ── Top bar ──────────────────────────────────────────────────────────
         let pwr_left = draw_top_bar(

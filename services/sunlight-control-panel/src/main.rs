@@ -189,13 +189,21 @@ impl ControlPanelApp {
 
         let (c1, c2) = self.card_rects();
         Self::draw_card(
-            canvas, theme, c1, theme.accent,
-            "Mouse", "Pointer & Acceleration",
+            canvas,
+            theme,
+            c1,
+            theme.accent,
+            "Mouse",
+            "Pointer & Acceleration",
             self.icon_mouse,
         );
         Self::draw_card(
-            canvas, theme, c2, Color(0xFF_50_88_CC),
-            "Monitor", "Resolution & Display",
+            canvas,
+            theme,
+            c2,
+            Color(0xFF_50_88_CC),
+            "Monitor",
+            "Resolution & Display",
             self.icon_monitor,
         );
     }
@@ -227,7 +235,12 @@ impl ControlPanelApp {
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
         Panel::with_title(content, "Mouse").draw(canvas, theme);
 
-        let inner = Rect::new(content.x + 14, content.y + 32, content.w - 28, content.h - 46);
+        let inner = Rect::new(
+            content.x + 14,
+            content.y + 32,
+            content.w - 28,
+            content.h - 46,
+        );
 
         let heights = [16u32, 28, 24, 18, 28];
         let mut rows = VBox::new(inner).with_spacing(14).layout(&heights);
@@ -283,10 +296,17 @@ impl ControlPanelApp {
 
     fn mouse_action_rects(&self) -> (Rect, Rect) {
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
-        let inner = Rect::new(content.x + 14, content.y + 32, content.w - 28, content.h - 46);
+        let inner = Rect::new(
+            content.x + 14,
+            content.y + 32,
+            content.w - 28,
+            content.h - 46,
+        );
         let heights = [16u32, 28, 24, 18, 28];
         let mut rows = VBox::new(inner).with_spacing(14).layout(&heights);
-        for _ in 0..4 { rows.next(); }
+        for _ in 0..4 {
+            rows.next();
+        }
         let actions_row = rows.next().unwrap_or_default();
         let back_r = Rect::new(actions_row.x, actions_row.y, 80, actions_row.h);
         let apply_r = Rect::new(actions_row.right() - 80, actions_row.y, 80, actions_row.h);
@@ -325,7 +345,12 @@ impl ControlPanelApp {
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
         Panel::with_title(content, "Monitor").draw(canvas, theme);
 
-        let inner = Rect::new(content.x + 14, content.y + 32, content.w - 28, content.h - 46);
+        let inner = Rect::new(
+            content.x + 14,
+            content.y + 32,
+            content.w - 28,
+            content.h - 46,
+        );
         let heights = [16u32, 18, 4, 18, 18, 18, 28];
         let mut rows = VBox::new(inner).with_spacing(8).layout(&heights);
         let desc_row = rows.next().unwrap_or_default();
@@ -356,10 +381,17 @@ impl ControlPanelApp {
 
     fn monitor_back_rect(&self) -> Rect {
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
-        let inner = Rect::new(content.x + 14, content.y + 32, content.w - 28, content.h - 46);
+        let inner = Rect::new(
+            content.x + 14,
+            content.y + 32,
+            content.w - 28,
+            content.h - 46,
+        );
         let heights = [16u32, 18, 4, 18, 18, 18, 28];
         let mut rows = VBox::new(inner).with_spacing(8).layout(&heights);
-        for _ in 0..6 { rows.next(); }
+        for _ in 0..6 {
+            rows.next();
+        }
         let actions_row = rows.next().unwrap_or_default();
         Rect::new(actions_row.x, actions_row.y, 80, actions_row.h)
     }
@@ -456,7 +488,9 @@ fn fmt_cur_res<'a>(w: u32, h: u32, buf: &'a mut [u8; 48]) -> &'a str {
 
 struct NoAlloc;
 unsafe impl core::alloc::GlobalAlloc for NoAlloc {
-    unsafe fn alloc(&self, _: core::alloc::Layout) -> *mut u8 { core::ptr::null_mut() }
+    unsafe fn alloc(&self, _: core::alloc::Layout) -> *mut u8 {
+        core::ptr::null_mut()
+    }
     unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
 }
 #[global_allocator]
@@ -465,7 +499,9 @@ static ALLOC: NoAlloc = NoAlloc;
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[CONTROL-PANEL] panic\n");
-    loop { process_yield(); }
+    loop {
+        process_yield();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -500,7 +536,9 @@ pub extern "C" fn _start() -> ! {
         title: "System Preferences",
     }) {
         Some(w) => w,
-        None => loop { process_yield(); },
+        None => loop {
+            process_yield();
+        },
     };
 
     window.run(&mut app);

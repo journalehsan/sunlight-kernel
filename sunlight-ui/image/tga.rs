@@ -111,7 +111,11 @@ impl TgaImage {
         let g = self.raw[idx + 1] as u32;
         let r = self.raw[idx + 2] as u32;
         let a = if self.bpp == 32 {
-            if idx + 3 < self.raw.len() { self.raw[idx + 3] as u32 } else { 0xFF }
+            if idx + 3 < self.raw.len() {
+                self.raw[idx + 3] as u32
+            } else {
+                0xFF
+            }
         } else {
             0xFF
         };

@@ -28,8 +28,7 @@ static ICON_FOLDER_VIDEOS_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/folder-videos.tga");
 static ICON_FOLDER_HOME_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/folder_home.tga");
-static ICON_FOLDER_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
+static ICON_FOLDER_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
 static ICON_USER_TRASH_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.tga");
 
@@ -1105,7 +1104,11 @@ impl FilesApp {
                 canvas.draw_tga_icon(&tga, icon_rect);
             } else {
                 let sym = home_folder_symbol(idx, folder.present);
-                let sym_color = if folder.present { theme.accent } else { theme.warn };
+                let sym_color = if folder.present {
+                    theme.accent
+                } else {
+                    theme.warn
+                };
                 canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, sym, sym_color);
             }
 
@@ -1113,8 +1116,16 @@ impl FilesApp {
             canvas.draw_text(
                 rect.x + 48,
                 rect.y + 24,
-                if folder.present { "Available" } else { "Missing" },
-                if folder.present { theme.text_dim } else { theme.warn },
+                if folder.present {
+                    "Available"
+                } else {
+                    "Missing"
+                },
+                if folder.present {
+                    theme.text_dim
+                } else {
+                    theme.warn
+                },
             );
         }
     }
