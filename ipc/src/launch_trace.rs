@@ -15,6 +15,7 @@ pub enum LaunchSource {
     Runner = 2,
     Shortcut = 3,
     Boot = 4,
+    Shell = 5,
 }
 
 impl LaunchSource {
@@ -25,6 +26,7 @@ impl LaunchSource {
             Self::Runner => "runner",
             Self::Shortcut => "shortcut",
             Self::Boot => "boot",
+            Self::Shell => "shell",
         }
     }
 
@@ -34,6 +36,7 @@ impl LaunchSource {
             b"runner" => Self::Runner,
             b"shortcut" => Self::Shortcut,
             b"boot" => Self::Boot,
+            b"shell" => Self::Shell,
             _ => Self::Unknown,
         }
     }
@@ -93,6 +96,7 @@ impl LaunchSource {
             2 => Self::Runner,
             3 => Self::Shortcut,
             4 => Self::Boot,
+            5 => Self::Shell,
             _ => Self::Unknown,
         }
     }

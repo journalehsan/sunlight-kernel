@@ -1,57 +1,13 @@
 [package]
-name = "pty_server"
+name = "sun-exec"
 version = "0.1.599"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
 [[bin]]
-name = "pty_server"
+name = "sun-exec"
 path = "src/main.rs"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }

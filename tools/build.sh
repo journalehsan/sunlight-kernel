@@ -72,6 +72,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package cpu-utils --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-runner --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-exec --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release

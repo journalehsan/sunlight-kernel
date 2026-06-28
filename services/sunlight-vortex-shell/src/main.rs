@@ -55,7 +55,7 @@ use sunlight_ipc::{
     unpack_iface_summary, CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
     NotificationKind, ProcessExit, SgpMsg, TzMsg,
 };
-use sunlight_libc::{self as libc, DirEntry, FT_DIR};
+use sunlight_libc::{self as libc, sun_exec, DirEntry, FT_DIR};
 use sunlight_ui::{
     image::TgaImage, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
 };
@@ -203,7 +203,6 @@ struct DockAppState {
     app_id: AppId,
     display_name: &'static str,
     icon: AppId,
-    launch_path: &'static str,
     pid: Option<u64>,
     main_window_id: Option<u64>,
     state: AppLaunchState,
@@ -218,17 +217,11 @@ struct DockAppState {
 }
 
 impl DockAppState {
-    const fn new(
-        app_id: AppId,
-        display_name: &'static str,
-        launch_path: &'static str,
-        icon: AppId,
-    ) -> Self {
+    const fn new(app_id: AppId, display_name: &'static str, icon: AppId) -> Self {
         Self {
             app_id,
             display_name,
             icon,
-            launch_path,
             pid: None,
             main_window_id: None,
             state: AppLaunchState::NotRunning,
@@ -843,30 +836,10 @@ impl VortexShell {
             desktop_theme,
             dock_theme,
             apps: [
-                DockAppState::new(
-                    AppId::Terminal,
-                    "Sunlight Terminal",
-                    "/bin/sunlight-terminal",
-                    AppId::Terminal,
-                ),
-                DockAppState::new(
-                    AppId::Calculator,
-                    "Sunlight Calculator",
-                    "/bin/calculator",
-                    AppId::Calculator,
-                ),
-                DockAppState::new(
-                    AppId::Files,
-                    "Sunlight Files",
-                    "/bin/sunlight-files",
-                    AppId::Files,
-                ),
-                DockAppState::new(
-                    AppId::Settings,
-                    "System Preferences",
-                    "/bin/control-panel",
-                    AppId::Settings,
-                ),
+                DockAppState::new(AppId::Terminal, "Sunlight Terminal", AppId::Terminal),
+                DockAppState::new(AppId::Calculator, "Sunlight Calculator", AppId::Calculator),
+                DockAppState::new(AppId::Files, "Sunlight Files", AppId::Files),
+                DockAppState::new(AppId::Settings, "System Preferences", AppId::Settings),
             ],
             next_app_poll_ms: 0,
             next_launch_id: 1,
@@ -932,6 +905,15 @@ impl VortexShell {
             AppId::Calculator => "/bin/calculator",
             AppId::Files => "/bin/sunlight-files",
             AppId::Settings => "/bin/control-panel",
+        }
+    }
+
+    fn app_launch_command(app_id: AppId) -> &'static [u8] {
+        match app_id {
+            AppId::Terminal => b"terminal",
+            AppId::Calculator => b"calculator",
+            AppId::Files => b"files",
+            AppId::Settings => b"settings",
         }
     }
 
@@ -1230,11 +1212,6 @@ impl VortexShell {
             }
         }
 
-        let launch_path = Self::app_launch_path(app_id);
-        let mut trace_arg = [0u8; 64];
-        let trace_arg_len = launch_trace::format_launch_arg(trace, &mut trace_arg).unwrap_or(0);
-        let argv: [&[u8]; 2] = [launch_path.as_bytes(), &trace_arg[..trace_arg_len]];
-
         {
             let app = self.app_mut(app_id);
             app.state = AppLaunchState::Launching;
@@ -1245,37 +1222,38 @@ impl VortexShell {
         }
 
         Self::log_launch_trace(trace, app_id, "spawn_start", None, now);
-        match libc::spawn(launch_path.as_bytes(), &argv, None) {
-            Ok(pid) => {
+        let request = sun_exec::LaunchRequest::new(trace, source, Self::app_launch_command(app_id));
+        match sun_exec::launch(request) {
+            Ok(result) => {
                 Self::log_launch_trace(
                     trace,
                     app_id,
                     "spawn_returned",
-                    Some(pid),
+                    Some(result.pid),
                     monotonic_millis(),
                 );
-                self.register_launch_trace(trace, pid, app_id);
+                self.register_launch_trace(trace, result.pid, app_id);
                 let app = self.app_mut(app_id);
-                app.pid = Some(pid);
+                app.pid = Some(result.pid);
                 Self::log_launch_trace(
                     trace,
                     app_id,
                     "process_created",
-                    Some(pid),
+                    Some(result.pid),
                     monotonic_millis(),
                 );
                 debug_log("[VORTEX] app_launch_started(");
                 debug_log(app.display_name);
                 debug_log(", pid=");
-                debug_log_u32(pid as u32);
+                debug_log_u32(result.pid as u32);
                 debug_log(")\n");
                 true
             }
-            Err(_) => {
+            Err(err) => {
                 Self::log_launch_trace(trace, app_id, "spawn_failed", None, monotonic_millis());
                 let app = self.app_mut(app_id);
                 app.state = AppLaunchState::Failed;
-                app.set_error("spawn failed");
+                app.set_error(launch_error_text(err));
                 debug_log("[VORTEX] app_launch_failed(");
                 debug_log(app.display_name);
                 debug_log(")\n");
@@ -2631,6 +2609,18 @@ fn debug_log_u32(mut n: u32) {
     }
     if let Ok(text) = core::str::from_utf8(&s[..len]) {
         debug_log(text);
+    }
+}
+
+fn launch_error_text(err: sun_exec::LaunchError) -> &'static str {
+    match err {
+        sun_exec::LaunchError::AppNotFound => "app not found",
+        sun_exec::LaunchError::InvalidCommand => "invalid command",
+        sun_exec::LaunchError::SpawnFailed(_) => "spawn failed",
+        sun_exec::LaunchError::PermissionDenied => "permission denied",
+        sun_exec::LaunchError::DisplayUnavailable => "display unavailable",
+        sun_exec::LaunchError::TooManyArgs => "too many arguments",
+        sun_exec::LaunchError::ArgTooLong => "argument too long",
     }
 }
 

@@ -30,6 +30,8 @@ pub mod launch_trace;
 pub mod mem;
 /// POSIX memory mapping wrappers (`mmap`, `munmap`).
 pub mod mman;
+/// Canonical user-space app launch resolution and tracing.
+pub mod sun_exec;
 /// Native thread spawning.
 pub mod thread;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.

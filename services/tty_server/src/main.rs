@@ -34,11 +34,12 @@ static BUMP: BumpAllocator = BumpAllocator;
 use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_try_recv,
-    nameserver_lookup, nameserver_register, process_is_alive, process_yield, sysinfo,
-    tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg, SgpMsg,
-    SpawnMsg, TzMsg,
+    launch_trace::{LaunchSource, LaunchTrace},
+    monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
+    sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
+    SgpMsg, SpawnMsg, TzMsg,
 };
-use sunlight_libc::spawn as libc_spawn;
+use sunlight_libc::sun_exec;
 use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, SessionType, MAX_USERS};
 use sunlight_tty::proc::{ProcOp, SIGKILL};
 use sunlight_tty::TerminalGrid;
@@ -752,14 +753,14 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 KEY_E => {
                                     if vt_is_active(active_vt, VirtualTerminal::Desktop) {
                                         debug_log("[SESSION] Ctrl+E: launching eyes\n");
-                                        let _ = libc_spawn(b"/bin/eyes", &[], None);
+                                        let _ = launch_shortcut_app(b"eyes");
                                         break 'kbd;
                                     }
                                 }
                                 KEY_T => {
                                     if vt_is_active(active_vt, VirtualTerminal::Desktop) {
                                         debug_log("[SESSION] Ctrl+T: launching tasks monitor\n");
-                                        let _ = libc_spawn(b"/bin/sunlight-tasks", &[], None);
+                                        let _ = launch_shortcut_app(b"tasks");
                                         break 'kbd;
                                     }
                                 }
@@ -1820,6 +1821,20 @@ fn debug_log_kbd_byte(prefix: &str, byte: u8) {
     if let Ok(s) = core::str::from_utf8(&buf[..dstart + dlen]) {
         debug_log(s);
     }
+}
+
+fn launch_shortcut_app(
+    command: &'static [u8],
+) -> Result<sun_exec::LaunchResult, sun_exec::LaunchError> {
+    let now = monotonic_millis();
+    let trace = LaunchTrace::new(now, LaunchSource::Shortcut, now);
+    sun_exec::launch(sun_exec::LaunchRequest {
+        trace,
+        source: LaunchSource::Shortcut,
+        command,
+        args: &[],
+        require_display: true,
+    })
 }
 
 fn debug_log_login_success(username: &[u8], uid: u32, gid: u32) {

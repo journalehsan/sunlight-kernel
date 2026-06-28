@@ -48,6 +48,7 @@ members = [
     "services/sunlight-mouse",
     "services/sunlight-display",
     "services/eyes",
+    "services/sun-exec",
     "services/sunlight-terminal",
     "sunlight-ui",
     "services/sunlight-tasks",

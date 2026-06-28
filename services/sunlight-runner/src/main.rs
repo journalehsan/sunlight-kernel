@@ -6,7 +6,7 @@ use sunlight_ipc::{
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, show_notification, NotificationKind, ProcessExit,
 };
-use sunlight_libc as libc;
+use sunlight_libc::sun_exec;
 use sunlight_ui::{
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, TextInput},
@@ -18,7 +18,6 @@ const WIN_H: u32 = 180;
 const KEY_ENTER: u8 = 0x1C;
 const KEY_Q: u8 = 0x10;
 const MAX_ARGS: usize = 8;
-const MAX_ARG_LEN: usize = 64;
 const MAX_PATH_LEN: usize = 96;
 
 struct NoAlloc;
@@ -150,64 +149,35 @@ impl RunnerApp {
         };
         let input = &input_buf[..input_len];
 
-        let mut command_buf = [0u8; MAX_PATH_LEN];
-        let command_len = input.len().min(command_buf.len());
-        command_buf[..command_len].copy_from_slice(&input[..command_len]);
         let trace = self.next_trace();
-        let command = core::str::from_utf8(&command_buf[..command_len]).unwrap_or("command");
+        let command = core::str::from_utf8(input).unwrap_or("command");
         launch_trace::log_phase_now(trace, command, "launch_request_received", None);
         launch_trace::log_phase_now(trace, command, "duplicate_launch_check_done", None);
         launch_trace::log_phase_now(trace, command, "parse_args_start", None);
 
-        let mut args_buf = [[0u8; MAX_ARG_LEN]; MAX_ARGS];
-        let mut arg_lens = [0usize; MAX_ARGS];
-        let arg_count = match parse_args(input, &mut args_buf, &mut arg_lens) {
+        let mut words: [&[u8]; MAX_ARGS] = [&[]; MAX_ARGS];
+        let word_count = match sun_exec::split_words(input, &mut words) {
             Ok(0) => return self.fail("Enter an application name", "Enter an application name"),
             Ok(count) => count,
-            Err(LaunchParseError::TooManyArgs) => {
+            Err(sun_exec::LaunchError::TooManyArgs) => {
                 return self.fail("Too many arguments", "Too many arguments")
             }
-            Err(LaunchParseError::ArgTooLong) => {
+            Err(sun_exec::LaunchError::ArgTooLong) => {
                 return self.fail("Argument is too long", "Argument is too long")
             }
+            Err(_) => return self.fail("Invalid command", "Invalid command"),
         };
         launch_trace::log_phase_now(trace, command, "parse_args_done", None);
 
-        launch_trace::log_phase_now(trace, command, "resolve_path_start", None);
-        let mut path_buf = [0u8; MAX_PATH_LEN];
-        let path_len = match resolve_path(&args_buf[0][..arg_lens[0]], &mut path_buf) {
-            Some(len) => len,
-            None => return self.fail("Executable path is too long", "Executable path is too long"),
-        };
-        launch_trace::log_phase_now(trace, command, "resolve_path_done", None);
-
-        let mut argv: [&[u8]; MAX_ARGS] = [&[]; MAX_ARGS];
-        for idx in 0..arg_count {
-            argv[idx] = &args_buf[idx][..arg_lens[idx]];
-        }
-        let gui_target = is_trace_launchable_gui_app(&path_buf[..path_len]);
-        let mut trace_arg = [0u8; 64];
-        let mut argv_len = arg_count;
-        if gui_target && argv_len < MAX_ARGS {
-            if let Some(trace_arg_len) = launch_trace::format_launch_arg(trace, &mut trace_arg) {
-                argv[argv_len] = &trace_arg[..trace_arg_len];
-                argv_len += 1;
-            }
-        }
-
-        launch_trace::log_phase_now(trace, command, "spawn_start", None);
-        match libc::spawn(&path_buf[..path_len], &argv[..argv_len], None) {
-            Ok(pid) => {
-                launch_trace::log_phase_now(trace, command, "spawn_returned", Some(pid));
-                self.register_launch_trace(trace, pid);
-                launch_trace::log_phase_now(trace, command, "process_created", Some(pid));
+        match sun_exec::launch_from_words(trace, LaunchSource::Runner, &words[..word_count], true) {
+            Ok(result) => {
+                self.register_launch_trace(trace, result.pid);
                 self.finish();
                 true
             }
-            Err(_) => {
-                launch_trace::log_phase_now(trace, command, "spawn_failed", None);
+            Err(err) => {
                 let mut body = [0u8; 64];
-                let prefix = b"Could not start ";
+                let prefix = launch_error_prefix(err);
                 let mut len = 0usize;
                 body[..prefix.len()].copy_from_slice(prefix);
                 len += prefix.len();
@@ -320,27 +290,6 @@ pub extern "C" fn _start() -> ! {
     ProcessExit::exit(0);
 }
 
-fn is_trace_launchable_gui_app(path: &[u8]) -> bool {
-    matches!(
-        path,
-        b"/bin/calculator"
-            | b"/usr/bin/calculator"
-            | b"/bin/sunlight-files"
-            | b"/usr/bin/sunlight-files"
-            | b"/bin/control-panel"
-            | b"/usr/bin/control-panel"
-            | b"/bin/sunlight-tasks"
-            | b"/usr/bin/sunlight-tasks"
-            | b"/bin/sunlight-terminal"
-            | b"/usr/bin/sunlight-terminal"
-    )
-}
-
-enum LaunchParseError {
-    TooManyArgs,
-    ArgTooLong,
-}
-
 fn trim_ascii(bytes: &[u8]) -> &[u8] {
     let mut start = 0usize;
     let mut end = bytes.len();
@@ -353,57 +302,14 @@ fn trim_ascii(bytes: &[u8]) -> &[u8] {
     &bytes[start..end]
 }
 
-fn parse_args(
-    input: &[u8],
-    args_buf: &mut [[u8; MAX_ARG_LEN]; MAX_ARGS],
-    arg_lens: &mut [usize; MAX_ARGS],
-) -> Result<usize, LaunchParseError> {
-    let mut count = 0usize;
-    let mut pos = 0usize;
-
-    while pos < input.len() {
-        while pos < input.len() && input[pos].is_ascii_whitespace() {
-            pos += 1;
-        }
-        if pos >= input.len() {
-            break;
-        }
-        if count >= MAX_ARGS {
-            return Err(LaunchParseError::TooManyArgs);
-        }
-
-        let mut len = 0usize;
-        while pos < input.len() && !input[pos].is_ascii_whitespace() {
-            if len >= MAX_ARG_LEN {
-                return Err(LaunchParseError::ArgTooLong);
-            }
-            args_buf[count][len] = input[pos];
-            len += 1;
-            pos += 1;
-        }
-        arg_lens[count] = len;
-        count += 1;
+fn launch_error_prefix(err: sun_exec::LaunchError) -> &'static [u8] {
+    match err {
+        sun_exec::LaunchError::AppNotFound => b"App not found: ",
+        sun_exec::LaunchError::InvalidCommand => b"Invalid command: ",
+        sun_exec::LaunchError::SpawnFailed(_) => b"Spawn failed: ",
+        sun_exec::LaunchError::PermissionDenied => b"Permission denied: ",
+        sun_exec::LaunchError::DisplayUnavailable => b"Display unavailable: ",
+        sun_exec::LaunchError::TooManyArgs => b"Too many args: ",
+        sun_exec::LaunchError::ArgTooLong => b"Argument too long: ",
     }
-
-    Ok(count)
-}
-
-fn resolve_path(command: &[u8], out: &mut [u8; MAX_PATH_LEN]) -> Option<usize> {
-    if command.first() == Some(&b'/') {
-        let len = command.len().min(out.len());
-        if len != command.len() {
-            return None;
-        }
-        out[..len].copy_from_slice(command);
-        return Some(len);
-    }
-
-    const PREFIX: &[u8] = b"/bin/";
-    let total = PREFIX.len() + command.len();
-    if total > out.len() {
-        return None;
-    }
-    out[..PREFIX.len()].copy_from_slice(PREFIX);
-    out[PREFIX.len()..total].copy_from_slice(command);
-    Some(total)
 }

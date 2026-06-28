@@ -277,6 +277,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sun-exec",
+            output: "sun-exec",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-terminal",
             output: "sunlight-terminal",
             rustflags: service_rustflags,

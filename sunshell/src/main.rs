@@ -175,9 +175,11 @@ mod sysfetch;
 #[no_main]
 mod sunlight {
     use sunlight_ipc::{
-        debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
-        nameserver_register, process_yield, sysinfo, tty_stdin_push, tty_stdout_pull, unpack_ipv4,
-        CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg, TzMsg, VfsMsg,
+        debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
+        launch_trace::{LaunchSource, LaunchTrace},
+        monotonic_millis, nameserver_lookup, nameserver_register, process_yield, sysinfo,
+        tty_stdin_push, tty_stdout_pull, unpack_ipv4, CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg,
+        TzMsg, VfsMsg,
     };
 
     /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
@@ -1035,6 +1037,34 @@ mod sunlight {
         /// and sends FG_DONE with the exit code when the child exits.
         fn run_external(&mut self, cmd: &str, args: &[&str]) -> &'static [u8] {
             use sunlight_libc as ulibc;
+
+            if is_gui_launch_command(cmd) {
+                let mut argv: [&[u8]; ulibc::MAX_ARGS] = [&[]; ulibc::MAX_ARGS];
+                for (idx, arg) in args.iter().take(ulibc::MAX_ARGS - 1).enumerate() {
+                    argv[idx] = arg.as_bytes();
+                }
+                let trace =
+                    LaunchTrace::new(monotonic_millis(), LaunchSource::Shell, monotonic_millis());
+                match ulibc::sun_exec::launch(ulibc::sun_exec::LaunchRequest {
+                    trace,
+                    source: LaunchSource::Shell,
+                    command: cmd.as_bytes(),
+                    args: &argv[..args.len().min(ulibc::MAX_ARGS - 1)],
+                    require_display: true,
+                }) {
+                    Ok(result) => {
+                        debug_log(&alloc::format!("[EXEC] {} gui pid={}", cmd, result.pid));
+                    }
+                    Err(_) => {
+                        self.env.set("?", "126");
+                        unsafe {
+                            LONG_OUT_ACTIVE = true;
+                        }
+                        push_line(&alloc::format!("sshl: cannot launch {}", cmd));
+                    }
+                }
+                return b"";
+            }
 
             let path = match self.resolve_in_path(cmd) {
                 Some(p) => p,
@@ -2033,6 +2063,26 @@ mod sunlight {
             result = result * 8 + (b - b'0') as u16;
         }
         Some(result)
+    }
+
+    fn is_gui_launch_command(cmd: &str) -> bool {
+        matches!(
+            cmd.as_bytes(),
+            b"calculator"
+                | b"calc"
+                | b"terminal"
+                | b"term"
+                | b"sunlight-terminal"
+                | b"settings"
+                | b"control-panel"
+                | b"preferences"
+                | b"files"
+                | b"file-manager"
+                | b"sunlight-files"
+                | b"tasks"
+                | b"task-manager"
+                | b"sunlight-tasks"
+        )
     }
 
     fn trim_newline(data: &[u8]) -> &[u8] {
