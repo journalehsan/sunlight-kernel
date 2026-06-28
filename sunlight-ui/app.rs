@@ -331,11 +331,35 @@ impl Window {
             "first_frame_or_first_draw",
             Some(sunlight_ipc::getpid()),
         );
+        // Paint and commit the initial UI shell immediately so the window
+        // appears on screen before any deferred/expensive work starts.
         {
             let mut c = self.canvas();
             app.view(&mut c, theme);
             self.commit();
         }
+
+        // First frame is committed and visible. Fire on_ready() so the app
+        // can kick off deferred work (filesystem discovery, network probing,
+        // metadata refresh) without blocking the initial paint.
+        // If on_ready() requests a redraw we honour it right away.
+        launch_trace::log_phase_now(
+            self.launch_trace,
+            self.title,
+            "on_ready_start",
+            Some(sunlight_ipc::getpid()),
+        );
+        if app.on_ready() {
+            let mut c = self.canvas();
+            app.view(&mut c, theme);
+            self.commit();
+        }
+        launch_trace::log_phase_now(
+            self.launch_trace,
+            self.title,
+            "on_ready_done",
+            Some(sunlight_ipc::getpid()),
+        );
 
         loop {
             let event = self.poll_event();
@@ -378,14 +402,60 @@ impl Drop for Window {
 ///
 /// Implementations define what to draw each frame and how to respond to
 /// user input. The framework handles the event loop, IPC, and commit cycle.
+///
+/// # Startup responsiveness
+///
+/// The framework guarantees that `view()` is called and committed **before**
+/// `on_ready()` is invoked, so the window shell is always visible to the user
+/// before any deferred startup work begins.
+///
+/// Preferred pattern for apps that need to load data at startup:
+///
+/// ```ignore
+/// fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+///     // Draw the window skeleton / loading placeholder immediately.
+/// }
+///
+/// fn on_ready(&mut self) -> bool {
+///     // Now kick off the expensive part: scan the filesystem, probe network,
+///     // refresh metadata, etc.  Return true to request a redraw once done.
+///     self.load_directory("/home");
+///     true  // redraw with real content
+/// }
+///
+/// fn update(&mut self, event: Event) -> bool {
+///     // For work that must be chunked across ticks, do one small piece here
+///     // each time Event::Tick fires (every ~200 ms) — this avoids blocking
+///     // the event loop for long operations.
+///     if matches!(event, Event::Tick) && self.pending_scan {
+///         self.scan_next_chunk();
+///     }
+///     false
+/// }
+/// ```
 pub trait App {
     /// Draw the current application state into the canvas.
     ///
-    /// Called whenever `update()` returns `true`.
+    /// Called immediately at startup (before `on_ready`) and whenever
+    /// `update()` or `on_ready()` returns `true`.
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme);
 
     /// Handle an incoming event.
     ///
     /// Return `true` to request a redraw (your `view()` will be called).
     fn update(&mut self, event: Event) -> bool;
+
+    /// Called once after the **first frame is committed and visible** on screen.
+    ///
+    /// Use this hook to defer non-critical startup work — filesystem discovery,
+    /// volume probing, network discovery, metadata refresh — so the window
+    /// shell appears immediately even when that work is slow.
+    ///
+    /// Return `true` to request a redraw after this call completes.
+    ///
+    /// The default implementation is a no-op — existing apps that do not
+    /// override this method continue to behave exactly as before.
+    fn on_ready(&mut self) -> bool {
+        false
+    }
 }

@@ -46,7 +46,7 @@ pub mod app;
 pub use event::Event;
 pub use font::{UiGlyph, UiSymbol};
 pub use geom::{Point, Rect, Size};
-pub use layout::{HBox, VBox};
+pub use layout::{GridColIter, GridRow, HBox, VBox};
 pub use paint::Canvas;
 pub use theme::{Color, Theme};
 

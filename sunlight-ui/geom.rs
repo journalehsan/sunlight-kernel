@@ -110,6 +110,106 @@ impl Rect {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Grid layout — 10-block row system
+// ---------------------------------------------------------------------------
+
+/// A single grid row that divides its width into 10 equal blocks.
+///
+/// Each column claims 1–10 blocks of space. Gaps between columns are taken
+/// off the top before the block unit is computed, so block widths are always
+/// consistent regardless of how many columns share the row.
+///
+/// # Example
+///
+/// ```ignore
+/// // A row rect 600px wide, two columns: 3-blocks + 7-blocks
+/// let row_rect = Rect::new(0, 40, 600, 28);
+/// let grid_row = GridRow::new(row_rect).with_gap(8);
+/// for (i, col_rect) in grid_row.layout(&[3, 7]).enumerate() {
+///     // col 0: x=0,  w=172  (3 * (600-8)/10  = 3*59 = 177 — exact depends on integer div)
+///     // col 1: x=180, w=408
+/// }
+/// ```
+///
+/// # Notes on breakpoints
+///
+/// TODO: future versions may support responsive breakpoints (e.g. collapse
+/// columns on narrow screens). Not implemented — keep the API here stable.
+#[derive(Debug, Clone, Copy)]
+pub struct GridRow {
+    pub rect: Rect,
+    /// Pixel gap between adjacent columns (default 4).
+    pub gap: u32,
+}
+
+impl GridRow {
+    pub const fn new(rect: Rect) -> Self {
+        Self { rect, gap: 4 }
+    }
+
+    pub const fn with_gap(mut self, gap: u32) -> Self {
+        self.gap = gap;
+        self
+    }
+
+    /// Return an iterator that yields one [`Rect`] per entry in `blocks`.
+    ///
+    /// Each entry in `blocks` is the number of 1/10-width units that column
+    /// should occupy (clamped to 1–10). Blocks exceeding 10 in total simply
+    /// cause columns to overflow the row — callers are responsible for keeping
+    /// the sum ≤ 10.
+    pub fn layout<'a>(&self, blocks: &'a [u32]) -> GridColIter<'a> {
+        let col_count = blocks.len() as u32;
+        let total_gap = if col_count > 1 {
+            self.gap * (col_count - 1)
+        } else {
+            0
+        };
+        let available = self.rect.w.saturating_sub(total_gap);
+        // Integer block unit; the last column can absorb rounding slack if
+        // the caller uses blocks that exactly sum to 10.
+        let block_unit = available / 10;
+        GridColIter {
+            rect: self.rect,
+            blocks,
+            block_unit,
+            gap: self.gap,
+            index: 0,
+            cursor: self.rect.x,
+        }
+    }
+}
+
+/// Iterator produced by [`GridRow::layout`].
+#[derive(Debug, Clone)]
+pub struct GridColIter<'a> {
+    rect: Rect,
+    blocks: &'a [u32],
+    block_unit: u32,
+    gap: u32,
+    index: usize,
+    cursor: i32,
+}
+
+impl<'a> Iterator for GridColIter<'a> {
+    type Item = Rect;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let &b = self.blocks.get(self.index)?;
+        let blocks = b.clamp(1, 10);
+        let w = blocks * self.block_unit;
+        let r = Rect::new(self.cursor, self.rect.y, w, self.rect.h);
+        self.index += 1;
+        self.cursor += w as i32 + self.gap as i32;
+        Some(r)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Classic axis-based layouts (VBox / HBox) — unchanged
+// ---------------------------------------------------------------------------
+
 /// Vertical box layout iterator.
 #[derive(Debug, Clone, Copy)]
 pub struct VBox {
