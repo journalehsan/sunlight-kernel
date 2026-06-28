@@ -280,6 +280,16 @@ pub mod sgp {
         /// words[1] = acceleration_enabled (0 = off, 1 = on)
         /// Reply: SgpMsg::REPLY with words[0]=0 on success.
         pub const SET_MOUSE_SETTINGS: u64 = 0xA109;
+        /// Enumerate compositor-managed windows.
+        /// words[0] = window index to query (0-based, top-level order)
+        /// Reply: words[0]=win_id (0 when no more windows),
+        ///        words[1]=owner_pid,
+        ///        words[2]=window_state,
+        ///        words[3]=window_type|rolled_up metadata.
+        pub const LIST_WINDOWS: u64 = 0xA10A;
+        /// Bring the window to the front and restore it if minimized.
+        /// words[0] = win_id
+        pub const ACTIVATE_WINDOW: u64 = 0xA10B;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)

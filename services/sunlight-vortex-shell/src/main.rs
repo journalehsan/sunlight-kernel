@@ -49,9 +49,9 @@ extern crate alloc;
 
 use alloc::{string::String, vec::Vec};
 use sunlight_ipc::{
-    debug_log, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_yield,
-    show_notification, unpack_iface_summary, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
-    NotificationKind, ProcessExit, SgpMsg, TzMsg,
+    debug_log, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_is_alive,
+    process_yield, show_notification, unpack_iface_summary, CapabilityToken, InterfaceKind, IpcMsg,
+    LinkState, NetworkdMsg, NotificationKind, ProcessExit, SgpMsg, TzMsg,
 };
 use sunlight_libc::{self as libc, DirEntry, FT_DIR};
 use sunlight_ui::{
@@ -162,6 +162,102 @@ impl DockTheme {
             _ => None,
         }
     }
+
+    fn icon_for_app(&self, app_id: AppId) -> Option<TgaImage> {
+        match app_id {
+            AppId::Terminal => self.terminal,
+            AppId::Calculator => self.calc,
+            AppId::Files => self.files,
+            AppId::Settings => self.settings,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AppId {
+    Terminal,
+    Calculator,
+    Files,
+    Settings,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AppLaunchState {
+    NotRunning,
+    Launching,
+    Running,
+    Minimized,
+    Failed,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DockZone {
+    Placeholder,
+    App(AppId),
+}
+
+#[derive(Clone, Copy)]
+struct DockAppState {
+    app_id: AppId,
+    display_name: &'static str,
+    icon: AppId,
+    launch_path: &'static str,
+    pid: Option<u64>,
+    main_window_id: Option<u64>,
+    state: AppLaunchState,
+    last_launch_started_at: u64,
+    last_click_at: u64,
+    launch_error: [u8; 64],
+    launch_error_len: usize,
+    launch_attempts: u32,
+    duplicate_blocks: u32,
+}
+
+impl DockAppState {
+    const fn new(
+        app_id: AppId,
+        display_name: &'static str,
+        launch_path: &'static str,
+        icon: AppId,
+    ) -> Self {
+        Self {
+            app_id,
+            display_name,
+            icon,
+            launch_path,
+            pid: None,
+            main_window_id: None,
+            state: AppLaunchState::NotRunning,
+            last_launch_started_at: 0,
+            last_click_at: 0,
+            launch_error: [0; 64],
+            launch_error_len: 0,
+            launch_attempts: 0,
+            duplicate_blocks: 0,
+        }
+    }
+
+    fn clear_error(&mut self) {
+        self.launch_error_len = 0;
+    }
+
+    fn set_error(&mut self, text: &str) {
+        let bytes = text.as_bytes();
+        let n = bytes.len().min(self.launch_error.len());
+        self.launch_error[..n].copy_from_slice(&bytes[..n]);
+        self.launch_error_len = n;
+    }
+
+    fn error_str(&self) -> &str {
+        core::str::from_utf8(&self.launch_error[..self.launch_error_len]).unwrap_or("")
+    }
+}
+
+#[derive(Clone, Copy)]
+struct WindowSnapshot {
+    id: u64,
+    owner_pid: u64,
+    state: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +292,10 @@ const SEARCH_H: u32 = 32; // search box height
 const STATUS_POLL_MS: u64 = 1000;
 const TIME_IPC_TIMEOUT_MS: u64 = 250;
 const NET_IPC_TIMEOUT_MS: u64 = 50;
+const DISPLAY_IPC_TIMEOUT_MS: u64 = 50;
+const APP_STATE_POLL_MS: u64 = 250;
+const APP_LAUNCH_TIMEOUT_MS: u64 = 30_000;
+const APP_PRESS_MS: u64 = 140;
 const DESKTOP_CELL_W: u32 = 92;
 const DESKTOP_CELL_H: u32 = 88;
 const DESKTOP_ICON_SCALE: u32 = 2;
@@ -608,15 +708,6 @@ const ICON16_W: u32 = 16;
 // Click zone bookkeeping
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy)]
-enum DockAction {
-    None,
-    LaunchTerminal,
-    LaunchCalc,
-    LaunchFiles,
-    LaunchSettings,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DesktopIconKind {
     Computer,
@@ -677,16 +768,19 @@ const MENU_LABELS: [(&str, ContextMenuAction); 4] = [
 
 struct VortexShell {
     wallpaper: Option<TgaImage>,
+    display_ep: CapabilityToken,
     desktop_paths: DesktopPaths,
     desktop_icons: Vec<DesktopIcon>,
     screen_w: u32,
     screen_h: u32,
     /// Bounds of each clickable dock button (local coords), plus the action.
-    dock_zones: [(Rect, DockAction); 4],
+    dock_zones: [(Rect, DockZone); 4],
     selected_icon: Option<usize>,
     context_menu: Option<ContextMenuState>,
     /// Tracks whether mouse is hovering over a dock icon (index 0..4).
     hover: Option<usize>,
+    /// Tracks hover on the settings button in the left cluster.
+    settings_hover: bool,
     /// Cached local hour/min for the status clock.
     status_hour: u8,
     status_min: u8,
@@ -702,10 +796,14 @@ struct VortexShell {
     desktop_theme: DesktopTheme,
     /// TGA icon theme for the bottom dock.
     dock_theme: DockTheme,
+    /// Dock app registry used for launch/focus/restore behavior.
+    apps: [DockAppState; 4],
+    /// Next monotonic deadline for app/window registry polling.
+    next_app_poll_ms: u64,
 }
 
 impl VortexShell {
-    fn new() -> Self {
+    fn new(display_ep: CapabilityToken) -> Self {
         let wallpaper = TgaImage::parse(WALLPAPER_TGA).ok();
         let desktop_paths = resolve_desktop_paths();
         ensure_directory(&desktop_paths.desktop_dir);
@@ -718,14 +816,16 @@ impl VortexShell {
         let dock_theme = DockTheme::load();
         let mut shell = Self {
             wallpaper,
+            display_ep,
             desktop_paths,
             desktop_icons: Vec::new(),
             screen_w: FALLBACK_W,
             screen_h: FALLBACK_H,
-            dock_zones: [(Rect::new(0, 0, 0, 0), DockAction::None); 4],
+            dock_zones: [(Rect::new(0, 0, 0, 0), DockZone::Placeholder); 4],
             selected_icon: None,
             context_menu: None,
             hover: None,
+            settings_hover: false,
             status_hour: 0xff,
             status_min: 0xff,
             status_net_up: false,
@@ -734,6 +834,33 @@ impl VortexShell {
             settings_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
             dock_theme,
+            apps: [
+                DockAppState::new(
+                    AppId::Terminal,
+                    "Sunlight Terminal",
+                    "/bin/sunlight-terminal",
+                    AppId::Terminal,
+                ),
+                DockAppState::new(
+                    AppId::Calculator,
+                    "Sunlight Calculator",
+                    "/bin/calculator",
+                    AppId::Calculator,
+                ),
+                DockAppState::new(
+                    AppId::Files,
+                    "Sunlight Files",
+                    "/bin/sunlight-files",
+                    AppId::Files,
+                ),
+                DockAppState::new(
+                    AppId::Settings,
+                    "System Preferences",
+                    "/bin/control-panel",
+                    AppId::Settings,
+                ),
+            ],
+            next_app_poll_ms: 0,
         };
         shell.reload_desktop_icons();
         shell
@@ -762,6 +889,361 @@ impl VortexShell {
         if let Some(sel) = self.selected_icon {
             if sel >= self.desktop_icons.len() {
                 self.selected_icon = None;
+            }
+        }
+    }
+
+    fn app(&self, app_id: AppId) -> &DockAppState {
+        self.apps
+            .iter()
+            .find(|app| app.app_id == app_id)
+            .expect("app registry entry missing")
+    }
+
+    fn app_mut(&mut self, app_id: AppId) -> &mut DockAppState {
+        self.apps
+            .iter_mut()
+            .find(|app| app.app_id == app_id)
+            .expect("app registry entry missing")
+    }
+
+    fn app_state_name(state: AppLaunchState) -> &'static str {
+        match state {
+            AppLaunchState::NotRunning => "NotRunning",
+            AppLaunchState::Launching => "Launching",
+            AppLaunchState::Running => "Running",
+            AppLaunchState::Minimized => "Minimized",
+            AppLaunchState::Failed => "Failed",
+        }
+    }
+
+    fn app_launch_path(app_id: AppId) -> &'static str {
+        match app_id {
+            AppId::Terminal => "/bin/sunlight-terminal",
+            AppId::Calculator => "/bin/calculator",
+            AppId::Files => "/bin/sunlight-files",
+            AppId::Settings => "/bin/control-panel",
+        }
+    }
+
+    fn dock_zone_app(slot: usize) -> DockZone {
+        match slot {
+            0 => DockZone::App(AppId::Terminal),
+            1 => DockZone::Placeholder,
+            2 => DockZone::App(AppId::Calculator),
+            3 => DockZone::App(AppId::Files),
+            _ => DockZone::Placeholder,
+        }
+    }
+
+    fn log_app_click(&self, app_id: AppId) {
+        let app = self.app(app_id);
+        debug_log("[VORTEX] dock_app_click(");
+        debug_log(app.display_name);
+        debug_log(", ");
+        debug_log(Self::app_state_name(app.state));
+        if app.state == AppLaunchState::Failed {
+            let error = app.error_str();
+            if !error.is_empty() {
+                debug_log(", ");
+                debug_log(error);
+            }
+        }
+        debug_log(", attempts=");
+        debug_log_u32(app.launch_attempts);
+        debug_log(", blocked=");
+        debug_log_u32(app.duplicate_blocks);
+        debug_log(")\n");
+    }
+
+    fn fetch_window_snapshots(&self) -> Option<Vec<WindowSnapshot>> {
+        let mut windows = Vec::new();
+        let mut idx = 0u64;
+        loop {
+            let reply = ipc_call_timeout(
+                self.display_ep,
+                IpcMsg::with_label(SgpMsg::LIST_WINDOWS).word(0, idx),
+                DISPLAY_IPC_TIMEOUT_MS,
+            )
+            .ok()?;
+            if reply.label != SgpMsg::REPLY {
+                return None;
+            }
+            if reply.words[0] == 0 {
+                break;
+            }
+            windows.push(WindowSnapshot {
+                id: reply.words[0],
+                owner_pid: reply.words[1],
+                state: reply.words[2],
+            });
+            idx = idx.saturating_add(1);
+        }
+        Some(windows)
+    }
+
+    fn sync_app_registry(&mut self, now: u64, force: bool) -> bool {
+        if !force && now < self.next_app_poll_ms {
+            return false;
+        }
+        self.next_app_poll_ms = now.saturating_add(APP_STATE_POLL_MS);
+
+        let Some(windows) = self.fetch_window_snapshots() else {
+            return false;
+        };
+
+        let mut dirty = false;
+        for app in &mut self.apps {
+            let prev_state = app.state;
+            let prev_window = app.main_window_id;
+            let prev_pid = app.pid;
+            let maybe_win = app
+                .pid
+                .and_then(|pid| windows.iter().find(|win| win.owner_pid == pid).copied());
+
+            if let Some(win) = maybe_win {
+                app.pid = Some(win.owner_pid);
+                app.main_window_id = Some(win.id);
+                app.clear_error();
+                let minimized = (win.state & 0x3) == 1;
+                app.state = if minimized {
+                    AppLaunchState::Minimized
+                } else {
+                    AppLaunchState::Running
+                };
+                if prev_state == AppLaunchState::Launching {
+                    debug_log("[VORTEX] app_launch_window_attached(");
+                    debug_log(app.display_name);
+                    debug_log(", ");
+                    debug_log_u32(win.id as u32);
+                    debug_log(")\n");
+                } else if prev_state == AppLaunchState::Minimized
+                    && app.state == AppLaunchState::Running
+                {
+                    debug_log("[VORTEX] app_restore_minimized(");
+                    debug_log(app.display_name);
+                    debug_log(", ");
+                    debug_log_u32(win.id as u32);
+                    debug_log(")\n");
+                }
+                if app.state != prev_state || app.main_window_id != prev_window {
+                    dirty = true;
+                }
+                continue;
+            }
+
+            match app.state {
+                AppLaunchState::Launching => {
+                    let alive = app.pid.map(process_is_alive).unwrap_or(false);
+                    if now.saturating_sub(app.last_launch_started_at) >= APP_LAUNCH_TIMEOUT_MS {
+                        app.state = AppLaunchState::Failed;
+                        app.set_error("launch timed out");
+                        debug_log("[VORTEX] app_launch_timeout(");
+                        debug_log(app.display_name);
+                        debug_log(")\n");
+                        dirty = true;
+                    } else if app.pid.is_some() && !alive {
+                        app.state = AppLaunchState::Failed;
+                        app.set_error("process exited before window");
+                        debug_log("[VORTEX] app_launch_failed(");
+                        debug_log(app.display_name);
+                        debug_log(")\n");
+                        dirty = true;
+                    }
+                }
+                AppLaunchState::Running | AppLaunchState::Minimized => {
+                    if let Some(pid) = prev_pid {
+                        if !process_is_alive(pid) {
+                            app.state = AppLaunchState::NotRunning;
+                            app.pid = None;
+                            app.main_window_id = None;
+                            app.clear_error();
+                            debug_log("[VORTEX] app_window_closed(");
+                            debug_log(app.display_name);
+                            debug_log(")\n");
+                            dirty = true;
+                        } else {
+                            app.state = AppLaunchState::Failed;
+                            app.set_error("window disappeared");
+                            app.main_window_id = None;
+                            debug_log("[VORTEX] app_window_lost(");
+                            debug_log(app.display_name);
+                            debug_log(")\n");
+                            dirty = true;
+                        }
+                    } else {
+                        app.state = AppLaunchState::NotRunning;
+                        app.main_window_id = None;
+                        dirty = true;
+                    }
+                }
+                AppLaunchState::Failed => {
+                    if let Some(pid) = prev_pid {
+                        if !process_is_alive(pid) {
+                            app.state = AppLaunchState::NotRunning;
+                            app.pid = None;
+                            app.main_window_id = None;
+                            app.clear_error();
+                            dirty = true;
+                        }
+                    }
+                }
+                AppLaunchState::NotRunning => {
+                    if let Some(pid) = prev_pid {
+                        if process_is_alive(pid) {
+                            app.state = AppLaunchState::Failed;
+                            app.set_error("window disappeared");
+                            app.main_window_id = None;
+                        } else {
+                            app.pid = None;
+                            app.main_window_id = None;
+                            app.clear_error();
+                        }
+                        dirty = true;
+                    } else if prev_window.is_some() {
+                        app.main_window_id = None;
+                        dirty = true;
+                    }
+                }
+            }
+        }
+
+        dirty
+    }
+
+    fn launch_app(&mut self, app_id: AppId, now: u64) -> bool {
+        let app = self.app_mut(app_id);
+        app.last_click_at = now;
+        app.launch_attempts = app.launch_attempts.saturating_add(1);
+
+        if let Some(pid) = app.pid {
+            if process_is_alive(pid) {
+                app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
+                debug_log("[VORTEX] app_launch_blocked_duplicate(");
+                debug_log(app.display_name);
+                debug_log(")\n");
+                return false;
+            }
+            app.pid = None;
+            app.main_window_id = None;
+            if matches!(
+                app.state,
+                AppLaunchState::Running | AppLaunchState::Minimized | AppLaunchState::Launching
+            ) {
+                app.state = AppLaunchState::NotRunning;
+                app.clear_error();
+            }
+        }
+
+        if matches!(
+            app.state,
+            AppLaunchState::Launching | AppLaunchState::Running | AppLaunchState::Minimized
+        ) {
+            app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
+            debug_log("[VORTEX] app_launch_blocked_duplicate(");
+            debug_log(app.display_name);
+            debug_log(")\n");
+            return false;
+        }
+
+        if app.state == AppLaunchState::Failed {
+            if let Some(pid) = app.pid {
+                if process_is_alive(pid) {
+                    app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
+                    debug_log("[VORTEX] app_launch_blocked_duplicate(");
+                    debug_log(app.display_name);
+                    debug_log(")\n");
+                    return false;
+                }
+            }
+        }
+
+        app.state = AppLaunchState::Launching;
+        app.main_window_id = None;
+        app.last_launch_started_at = now;
+        app.clear_error();
+
+        match libc::spawn(
+            app.launch_path.as_bytes(),
+            &[app.launch_path.as_bytes()],
+            None,
+        ) {
+            Ok(pid) => {
+                app.pid = Some(pid);
+                debug_log("[VORTEX] app_launch_started(");
+                debug_log(app.display_name);
+                debug_log(", pid=");
+                debug_log_u32(pid as u32);
+                debug_log(")\n");
+                true
+            }
+            Err(_) => {
+                app.state = AppLaunchState::Failed;
+                app.set_error("spawn failed");
+                debug_log("[VORTEX] app_launch_failed(");
+                debug_log(app.display_name);
+                debug_log(")\n");
+                let mut body = String::from("Could not start ");
+                body.push_str(Self::app_launch_path(app_id));
+                let _ = show_notification(NotificationKind::Error, "Launch failed", &body, 30_000);
+                false
+            }
+        }
+    }
+
+    fn activate_app_window(&mut self, app_id: AppId, now: u64) -> bool {
+        let window_id = {
+            let app = self.app(app_id);
+            app.main_window_id
+        };
+        let Some(win_id) = window_id else {
+            return false;
+        };
+
+        let reply = ipc_call_timeout(
+            self.display_ep,
+            IpcMsg::with_label(SgpMsg::ACTIVATE_WINDOW).word(0, win_id),
+            DISPLAY_IPC_TIMEOUT_MS,
+        );
+        if reply.is_err() {
+            return false;
+        }
+
+        let app = self.app_mut(app_id);
+        if app.state == AppLaunchState::Minimized {
+            debug_log("[VORTEX] app_restore_minimized(");
+            debug_log(app.display_name);
+            debug_log(", ");
+            debug_log_u32(win_id as u32);
+            debug_log(")\n");
+        } else {
+            debug_log("[VORTEX] app_focus_existing(");
+            debug_log(app.display_name);
+            debug_log(", ");
+            debug_log_u32(win_id as u32);
+            debug_log(")\n");
+        }
+        app.state = AppLaunchState::Running;
+        app.last_click_at = now;
+        true
+    }
+
+    fn handle_app_click(&mut self, app_id: AppId, now: u64) -> bool {
+        self.sync_app_registry(now, true);
+        self.log_app_click(app_id);
+        let state = self.app(app_id).state;
+        match state {
+            AppLaunchState::NotRunning | AppLaunchState::Failed => self.launch_app(app_id, now),
+            AppLaunchState::Launching => {
+                let app = self.app_mut(app_id);
+                app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
+                debug_log("[VORTEX] app_launch_blocked_duplicate(");
+                debug_log(app.display_name);
+                debug_log(")\n");
+                false
+            }
+            AppLaunchState::Running | AppLaunchState::Minimized => {
+                self.activate_app_window(app_id, now)
             }
         }
     }
@@ -835,6 +1317,102 @@ fn draw_icon_btn(
         theme.text_dim
     };
     draw_icon16(canvas, cell, rows, icon_color);
+}
+
+fn draw_app_button(
+    canvas: &mut Canvas,
+    cell: Rect,
+    theme: &Theme,
+    dock: &DockTheme,
+    rows: &[u16; 16],
+    app: &DockAppState,
+    hovered: bool,
+    now: u64,
+) {
+    let pressed = now.saturating_sub(app.last_click_at) < APP_PRESS_MS;
+    let pulse = ((now / 220) & 1) == 0;
+
+    let mut fill = theme.panel;
+    let mut border = theme.border;
+    let mut icon_color = theme.text_dim;
+    let mut top_marker = false;
+    let mut bottom_marker = false;
+
+    match app.state {
+        AppLaunchState::NotRunning => {
+            if hovered {
+                fill = theme.accent.darken(78);
+                border = theme.accent_hover.darken(24);
+                icon_color = theme.text;
+            }
+        }
+        AppLaunchState::Launching => {
+            fill = if pulse {
+                theme.accent.darken(56)
+            } else {
+                theme.panel
+            };
+            border = theme.accent;
+            icon_color = if pulse {
+                theme.accent_hover
+            } else {
+                theme.text
+            };
+        }
+        AppLaunchState::Running => {
+            fill = theme.panel_alt;
+            border = theme.accent;
+            icon_color = theme.accent;
+            bottom_marker = true;
+            if hovered {
+                fill = theme.accent.darken(74);
+            }
+        }
+        AppLaunchState::Minimized => {
+            fill = theme.panel_alt;
+            border = theme.accent;
+            icon_color = theme.accent;
+            top_marker = true;
+            if hovered {
+                fill = theme.accent.darken(74);
+            }
+        }
+        AppLaunchState::Failed => {
+            fill = theme.panel_alt;
+            border = theme.warn;
+            icon_color = theme.warn;
+            if hovered {
+                fill = theme.warn.darken(72);
+            }
+        }
+    }
+
+    if pressed {
+        fill = theme.accent_hover.darken(35);
+        border = theme.accent_hover;
+        icon_color = theme.text;
+    }
+
+    canvas.fill_rounded_rect(cell, 5, fill);
+    canvas.stroke_rounded_rect(cell, 5, 1, border);
+    if top_marker {
+        canvas.fill_rect(
+            Rect::new(cell.x + 4, cell.y + 1, cell.w.saturating_sub(8), 2),
+            theme.accent,
+        );
+    }
+    if bottom_marker {
+        canvas.fill_rect(
+            Rect::new(cell.x + 4, cell.bottom() - 3, cell.w.saturating_sub(8), 2),
+            theme.accent,
+        );
+    }
+
+    if let Some(tga) = dock.icon_for_app(app.icon) {
+        canvas.draw_tga_icon(&tga, cell.inset(2));
+    } else {
+        draw_icon16(canvas, cell, rows, icon_color);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1510,19 +2088,6 @@ fn fmt_u32_ascii(mut value: u32, out: &mut [u8; 10]) -> usize {
     n
 }
 
-fn spawn_path(path: &str) -> bool {
-    match libc::spawn(path.as_bytes(), &[path.as_bytes()], None) {
-        Ok(_) => true,
-        Err(_) => {
-            debug_log("[VORTEX] spawn failed\n");
-            let mut body = String::from("Could not start ");
-            body.push_str(path);
-            let _ = show_notification(NotificationKind::Error, "Launch failed", &body, 30_000);
-            false
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Bottom bar layout
 // ---------------------------------------------------------------------------
@@ -1538,7 +2103,10 @@ fn draw_bot_left(
     canvas: &mut Canvas,
     theme: &Theme,
     by: i32,
-    settings_icon: Option<TgaImage>,
+    dock: &DockTheme,
+    settings_app: &DockAppState,
+    settings_hover: bool,
+    now: u64,
 ) -> Rect {
     let icons: &[&[u16; 16]] = &[&OVERVIEW_ROWS, &SIDEBAR_ROWS, &SETTINGS_ROWS];
     let n = icons.len() as u32;
@@ -1558,11 +2126,16 @@ fn draw_bot_left(
         // Slot 2 = settings icon — use TGA if available.
         if i == 2 {
             settings_cell = cell;
-            if let Some(tga) = settings_icon {
-                canvas.draw_tga_icon(&tga, cell.inset(2));
-            } else {
-                draw_icon_btn(canvas, cell, rows, theme, false, false);
-            }
+            draw_app_button(
+                canvas,
+                cell,
+                theme,
+                dock,
+                rows,
+                settings_app,
+                settings_hover,
+                now,
+            );
         } else {
             draw_icon_btn(canvas, cell, rows, theme, false, false);
         }
@@ -1580,6 +2153,10 @@ fn draw_bot_center(
     screen_w: u32,
     hover: Option<usize>,
     dock: DockTheme,
+    terminal_app: &DockAppState,
+    calc_app: &DockAppState,
+    files_app: &DockAppState,
+    now: u64,
 ) -> [Rect; 4] {
     let icons: &[&[u16; 16]; 5] = &[
         &GRID_ROWS,
@@ -1607,16 +2184,31 @@ fn draw_bot_center(
             .map(|h| h == i.saturating_sub(1) && i > 0)
             .unwrap_or(false);
 
-        // Prefer TGA icon; fall back to pixel-art for missing slots.
-        if let Some(tga) = dock.dock_icon(i) {
-            if is_hover {
-                canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
+        match i {
+            1 => draw_app_button(
+                canvas,
+                cell,
+                theme,
+                &dock,
+                rows,
+                terminal_app,
+                is_hover,
+                now,
+            ),
+            3 => draw_app_button(canvas, cell, theme, &dock, rows, calc_app, is_hover, now),
+            4 => draw_app_button(canvas, cell, theme, &dock, rows, files_app, is_hover, now),
+            _ => {
+                if let Some(tga) = dock.dock_icon(i) {
+                    if is_hover {
+                        canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
+                    }
+                    // Inset 2px for visual padding inside the button cell.
+                    let icon_area = cell.inset(2);
+                    canvas.draw_tga_icon(&tga, icon_area);
+                } else {
+                    draw_icon_btn(canvas, cell, rows, theme, false, is_hover);
+                }
             }
-            // Inset 2px for visual padding inside the button cell.
-            let icon_area = cell.inset(2);
-            canvas.draw_tga_icon(&tga, icon_area);
-        } else {
-            draw_icon_btn(canvas, cell, rows, theme, false, is_hover);
         }
 
         // Icons 1,2,3 are clickable (terminal, tasks, calc); icon 0 (grid) is placeholder.
@@ -1652,6 +2244,11 @@ impl App for VortexShell {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         if self.status_min == 0xff {
             let _ = self.refresh_status();
+        }
+
+        let now = monotonic_millis();
+        if now >= self.next_app_poll_ms {
+            let _ = self.sync_app_registry(now, false);
         }
 
         let cw = canvas.width;
@@ -1695,16 +2292,40 @@ impl App for VortexShell {
 
         // ── Bottom panels ────────────────────────────────────────────────────
         let by = bot_y(ch);
-        self.settings_zone = draw_bot_left(canvas, theme, by, self.dock_theme.settings);
-        let dock_cells = draw_bot_center(canvas, theme, by, cw, self.hover, self.dock_theme);
+        let dock_theme = self.dock_theme;
+        let settings_app = *self.app(AppId::Settings);
+        let terminal_app = *self.app(AppId::Terminal);
+        let calc_app = *self.app(AppId::Calculator);
+        let files_app = *self.app(AppId::Files);
+        self.settings_zone = draw_bot_left(
+            canvas,
+            theme,
+            by,
+            &dock_theme,
+            &settings_app,
+            self.settings_hover,
+            now,
+        );
+        let dock_cells = draw_bot_center(
+            canvas,
+            theme,
+            by,
+            cw,
+            self.hover,
+            dock_theme,
+            &terminal_app,
+            &calc_app,
+            &files_app,
+            now,
+        );
         draw_bot_right(canvas, theme, by, cw);
 
         // Record clickable zones (terminal, tasks, calc, files).
         self.dock_zones = [
-            (dock_cells[0], DockAction::LaunchTerminal),
-            (dock_cells[1], DockAction::None), // tasks — placeholder
-            (dock_cells[2], DockAction::LaunchCalc),
-            (dock_cells[3], DockAction::LaunchFiles),
+            (dock_cells[0], Self::dock_zone_app(0)),
+            (dock_cells[1], Self::dock_zone_app(1)), // tasks — placeholder
+            (dock_cells[2], Self::dock_zone_app(2)),
+            (dock_cells[3], Self::dock_zone_app(3)),
         ];
 
         if let Some(menu) = &self.context_menu {
@@ -1727,7 +2348,7 @@ impl App for VortexShell {
                                 self.reload_desktop_icons();
                             }
                             ContextMenuAction::OpenTerminalHere => {
-                                spawn_path("/bin/sunlight-terminal");
+                                let _ = self.handle_app_click(AppId::Terminal, monotonic_millis());
                             }
                         }
                         return true;
@@ -1741,30 +2362,51 @@ impl App for VortexShell {
                     return false;
                 }
                 if self.settings_zone.contains(point) {
-                    spawn_app(DockAction::LaunchSettings);
-                    return false;
+                    return self.handle_app_click(AppId::Settings, monotonic_millis());
                 }
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
                     let changed = self.selected_icon != Some(idx);
                     self.selected_icon = Some(idx);
                     return changed;
                 }
-                let mut clicked_dock = false;
-                for (rect, action) in &self.dock_zones {
+                for (rect, zone) in &self.dock_zones {
                     if rect.contains(point) {
-                        spawn_app(*action);
-                        clicked_dock = true;
-                        break;
+                        return match zone {
+                            DockZone::App(app_id) => {
+                                self.handle_app_click(*app_id, monotonic_millis())
+                            }
+                            DockZone::Placeholder => false,
+                        };
                     }
-                }
-                if clicked_dock {
-                    return false;
                 }
                 let changed = self.selected_icon.take().is_some();
                 changed
             }
             Event::MouseDown { x, y, button } if button == 1 => {
                 let point = Point::new(x, y);
+                self.settings_hover = self.settings_zone.contains(point);
+                if self.settings_zone.contains(point) {
+                    if let Some(app) = self
+                        .apps
+                        .iter_mut()
+                        .find(|app| app.app_id == AppId::Settings)
+                    {
+                        app.last_click_at = monotonic_millis();
+                    }
+                    return true;
+                }
+                for (rect, zone) in &self.dock_zones {
+                    if rect.contains(point) {
+                        if let DockZone::App(app_id) = zone {
+                            if let Some(app) =
+                                self.apps.iter_mut().find(|app| app.app_id == *app_id)
+                            {
+                                app.last_click_at = monotonic_millis();
+                            }
+                        }
+                        return true;
+                    }
+                }
                 self.selected_icon = icon_at(&self.desktop_icons, point);
                 self.context_menu = Some(make_context_menu(x, y, self.screen_w, self.screen_h));
                 true
@@ -1778,34 +2420,31 @@ impl App for VortexShell {
                         break;
                     }
                 }
+                let prev_settings = self.settings_hover;
+                self.settings_hover = self.settings_zone.contains(Point::new(x, y));
+                if self.settings_hover != prev_settings {
+                    return true;
+                }
                 self.hover != prev
             }
             Event::Tick => {
                 let now = monotonic_millis();
+                let mut dirty = false;
+                if self.sync_app_registry(now, false) {
+                    dirty = true;
+                }
                 if now < self.next_status_poll_ms {
-                    return false;
+                    return dirty;
                 }
                 self.next_status_poll_ms = now.saturating_add(STATUS_POLL_MS);
-                self.refresh_status()
+                if self.refresh_status() {
+                    dirty = true;
+                }
+                dirty
             }
             _ => false,
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// App launch
-// ---------------------------------------------------------------------------
-
-fn spawn_app(action: DockAction) {
-    let path = match action {
-        DockAction::LaunchTerminal => "/bin/sunlight-terminal",
-        DockAction::LaunchCalc => "/bin/calculator",
-        DockAction::LaunchFiles => "/bin/sunlight-files",
-        DockAction::LaunchSettings => "/bin/control-panel",
-        DockAction::None => return,
-    };
-    spawn_path(path);
 }
 
 // ---------------------------------------------------------------------------
@@ -1816,8 +2455,6 @@ fn spawn_app(action: DockAction) {
 pub extern "C" fn _start() -> ! {
     debug_log("[VORTEX] starting\n");
 
-    let mut shell = VortexShell::new();
-
     // Resolve display_server endpoint (spin until ready).
     let display_ep = loop {
         if let Some(ep) = nameserver_lookup("display_server") {
@@ -1825,6 +2462,8 @@ pub extern "C" fn _start() -> ! {
         }
         process_yield();
     };
+
+    let mut shell = VortexShell::new(display_ep);
 
     // Query physical framebuffer dimensions before allocating the SHM window.
     // This ensures the shell canvas matches the actual screen, not the image size.

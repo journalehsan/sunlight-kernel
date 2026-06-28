@@ -1247,6 +1247,41 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
     true
 }
 
+fn list_window_reply(win: &Window) -> IpcMsg {
+    let rolled_up = if win.rolled_up { 1u64 } else { 0u64 };
+    let window_type = win.config.window_type as u64;
+    let state = win.config.state as u64;
+    IpcMsg::with_label(SgpMsg::REPLY)
+        .word(0, win.id)
+        .word(1, win.owner_pid)
+        .word(2, state)
+        .word(3, window_type | (rolled_up << 8))
+}
+
+fn list_window_at(state: &CompositorState, idx: usize) -> IpcMsg {
+    state
+        .windows
+        .get(idx)
+        .map(list_window_reply)
+        .unwrap_or_else(|| IpcMsg::with_label(SgpMsg::REPLY))
+}
+
+fn activate_window(state: &mut CompositorState, win_id: u64) -> bool {
+    let Some(pos) = state.windows.iter().position(|w| w.id == win_id) else {
+        return false;
+    };
+
+    if state.windows[pos].config.state == WindowState::Minimized {
+        state.windows[pos].config.state = WindowState::Normal;
+    }
+
+    raise_window_by_id(state, win_id);
+    state.active_cursor = cursor_for_scene(state);
+    mark_dirty_full(state);
+    redraw_scene(state);
+    true
+}
+
 // ---------------------------------------------------------------------------
 // Chrome constants (Vortex Shell Theme)
 // ---------------------------------------------------------------------------
@@ -3050,6 +3085,30 @@ pub extern "C" fn _start() -> ! {
                 }
                 mark_dirty_full(&mut state);
                 redraw_scene(&mut state);
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
+            // -------------------------------------------------------------------
+            // LIST_WINDOWS — enumerate compositor-managed windows for shell state
+            // tracking. words[0] = 0-based index into the current window stack.
+            // -------------------------------------------------------------------
+            SgpMsg::LIST_WINDOWS => {
+                let idx = msg.words[0] as usize;
+                let reply = list_window_at(&state, idx);
+                let _ = ipc_reply(reply);
+            }
+
+            // -------------------------------------------------------------------
+            // ACTIVATE_WINDOW — raise a window and restore it if minimized.
+            // words[0] = win_id
+            // -------------------------------------------------------------------
+            SgpMsg::ACTIVATE_WINDOW => {
+                let win_id = msg.words[0];
+                if activate_window(&mut state, win_id) {
+                    debug_log("[DISPLAY] activate_window id=");
+                    debug_dec(win_id as u32);
+                    debug_log("\n");
+                }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
