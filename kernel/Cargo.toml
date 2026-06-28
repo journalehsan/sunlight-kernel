@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.1.599"
+version = "0.1.600"
+
 
 
 
@@ -175,3 +176,4 @@ lz4_flex = { version = "0.11", default-features = false }
 
 [features]
 key_inject = []
+launch_trace = []

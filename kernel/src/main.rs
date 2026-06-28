@@ -11,6 +11,7 @@ extern crate alloc;
 mod arch;
 mod capability;
 mod ipc;
+mod launch_trace;
 mod memory;
 mod panic;
 mod process;

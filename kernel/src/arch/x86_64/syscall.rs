@@ -1,4 +1,5 @@
 use core::arch::naked_asm;
+use crate::arch::x86_64::interrupts::now_ns;
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -1279,6 +1280,10 @@ fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
 /// rdx = parent fd to install as the child's stdout, or u64::MAX for none
 /// Returns the child pid, or -1 on error.
 fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
+    // [LAUNCH-TRACE] Point 1: request received
+    let launch_id = crate::launch_trace::next_launch_id();
+    let mut trace = crate::launch_trace::LaunchTrace::new(launch_id, now_ns());
+
     let path_ptr = frame.rdi;
     let argv_ptr = frame.rsi;
     let stdout_fd = frame.rdx;
@@ -1291,6 +1296,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         Ok(s) => s,
         Err(_) => return u64::MAX,
     };
+
+    // [LAUNCH-TRACE] Point 2: app resolution started
+    trace.resolve_started_ns = now_ns();
 
     let mut argv_bytes = alloc::vec::Vec::new();
     if argv_ptr != 0 {
@@ -1319,10 +1327,14 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             }
             None => {
                 crate::serial_println!("[SYSCALL] spawn: path not found: {}", path_str);
+                trace.emit(path_str, path_str, None, "failed:not_found");
                 return u64::MAX;
             }
         },
     };
+
+    // [LAUNCH-TRACE] Point 3: app resolution finished
+    trace.resolve_finished_ns = now_ns();
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
@@ -1362,12 +1374,19 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let envp_strings = child.env.to_envp();
     let envp_refs: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
 
+    // [LAUNCH-TRACE] Point 4: spawn started (about to exec_into_process)
+    trace.spawn_started_ns = now_ns();
+
     match crate::process::spawn::exec_into_process(
         bytes, &mut child, &mut pmm, hhdm, &argv_refs, &envp_refs,
     ) {
-        Ok(_) => {}
+        Ok(_) => {
+            // [LAUNCH-TRACE] Point 5: spawn returned successfully
+            trace.spawn_returned_ns = now_ns();
+        }
         Err(e) => {
             crate::serial_println!("[SYSCALL] spawn: load failed: {:?}", e);
+            trace.emit(path_str, path_str, None, "failed:elf_load");
             return u64::MAX;
         }
     }
@@ -1410,10 +1429,18 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     }
 
     let child_pid = child.pid;
+    // [LAUNCH-TRACE] Point 6: child_process_created (pid assigned)
+    trace.child_created_ns = now_ns();
+
     let idx = sched.add_process(child);
     // add_process leaves queueing to the caller; without this the child sits
     // Ready but is never picked by the BORE queues.
     sched.enqueue_process(idx);
+
+    // [LAUNCH-TRACE] Point 7: enqueue_finished (child is runnable)
+    trace.enqueue_finished_ns = now_ns();
+    trace.emit(crate::process::spawn::name_from_path(path_str), path_str, Some(child_pid), "ok");
+
     crate::serial_println!(
         "[SYSCALL] spawn: {} pid={} ppid={}",
         path_str,

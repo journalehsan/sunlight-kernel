@@ -2977,7 +2977,27 @@ pub extern "C" fn _start() -> ! {
         "software\n"
     });
     log_debug_counters(&state, "startup");
-    redraw_scene(&mut state);
+    // Initial render: clear the back_buffer and present to avoid a black screen
+    // on VirtIO GPU. The session is inactive at boot (tty_server will activate
+    // it later), but we must populate the scanout resource to display anything.
+    clear_back_buffer(&mut state);
+    if state.hw_cursor_active {
+        let _ = upload_hw_cursor_if_needed(&mut state);
+    }
+    present_back_buffer(&mut state);
+
+    // When VirtIO GPU is the active backend, the TTY login screen is drawn to
+    // the Limine framebuffer which QEMU does not display (VirtIO GPU output
+    // takes over). SESSION_ACTIVATE from tty_server would never arrive, leaving
+    // session_active=false forever and the desktop blank. Auto-activate here so
+    // the compositor draws and the Vortex Shell launches immediately.
+    if matches!(state.display_backend, backend::DisplayBackend::VirtioGpu { .. }) {
+        debug_log("[DISPLAY] VirtIO GPU backend: auto-activating Desktop session\n");
+        state.session_active = true;
+        ensure_vortex_shell(&mut state);
+        mark_dirty_full(&mut state);
+        redraw_scene(&mut state);
+    }
 
     let mut next_win_id: u64 = 1;
 
