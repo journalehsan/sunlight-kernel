@@ -11,13 +11,61 @@
 
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup_timeout, nameserver_register, pack_ipv4, pack_short_name, unpack_ipv4,
-    AdminState, DevicedMsg, DnsSource, IfaceSummary, InterfaceId, InterfaceKind, IpConfigMode,
-    IpcMsg, LinkState, NetOp, NetworkdMsg, ResolvedMsg,
+    monotonic_millis, nameserver_lookup_timeout, nameserver_register, pack_ipv4, pack_short_name,
+    unpack_ipv4, AdminState, DevicedMsg, DnsSource, IfaceSummary, InterfaceId, InterfaceKind,
+    IpConfigMode, IpcMsg, LinkState, NetOp, NetworkdMsg, ResolvedMsg,
 };
 
 const MAX_IFACES: usize = 8;
 const NET_GETIP_TIMEOUT_MS: u64 = 20;
+
+/// Exponential backoff steps (ms) when deviced is unavailable.
+/// 1 s → 2 s → 5 s → 10 s → 30 s → 60 s (cap)
+const BACKOFF_STEPS_MS: [u64; 6] = [1_000, 2_000, 5_000, 10_000, 30_000, 60_000];
+
+/// How long to wait before re-checking deviced after a successful discovery.
+/// Devices do not hot-plug after boot in this platform.
+const DISCOVERY_STABLE_INTERVAL_MS: u64 = 30_000;
+
+/// Metrics and rate-limit state for deviced discovery.
+struct DiscoveryCache {
+    /// Count of net devices found in the last successful run.
+    last_net_count: usize,
+    /// Driver IDs from the last successful run (for change detection).
+    last_driver_ids: [u64; MAX_IFACES],
+    /// Was deviced reachable on the last attempt?
+    deviced_was_available: bool,
+    /// How many consecutive failures since the last success.
+    consecutive_failures: u32,
+    /// monotonic_millis() timestamp: do not attempt discovery before this.
+    next_retry_ms: u64,
+    // --- observable metrics ---
+    pub ipc_calls_total: u64,
+    pub success_total: u64,
+    pub timeout_total: u64,
+    pub current_backoff_ms: u64,
+}
+
+impl DiscoveryCache {
+    const fn new() -> Self {
+        Self {
+            last_net_count: 0,
+            last_driver_ids: [0u64; MAX_IFACES],
+            deviced_was_available: false,
+            consecutive_failures: 0,
+            next_retry_ms: 0,
+            ipc_calls_total: 0,
+            success_total: 0,
+            timeout_total: 0,
+            current_backoff_ms: 0,
+        }
+    }
+
+    fn backoff_ms(&self) -> u64 {
+        let idx = (self.consecutive_failures as usize).min(BACKOFF_STEPS_MS.len() - 1);
+        BACKOFF_STEPS_MS[idx]
+    }
+}
 
 #[macro_export]
 macro_rules! serial_println {
@@ -85,6 +133,7 @@ impl InterfaceRecord {
 struct NetworkManager {
     ifaces: [InterfaceRecord; MAX_IFACES],
     next_id: InterfaceId,
+    discovery: DiscoveryCache,
 }
 
 impl NetworkManager {
@@ -92,6 +141,7 @@ impl NetworkManager {
         Self {
             ifaces: [InterfaceRecord::empty(); MAX_IFACES],
             next_id: 1,
+            discovery: DiscoveryCache::new(),
         }
     }
 
@@ -132,16 +182,47 @@ impl NetworkManager {
         self.ifaces.iter().position(|i| i.occupied && i.id == id)
     }
 
-    /// Discover network capable devices from deviced (best effort, never panic).
+    /// Discover network-capable devices from deviced.
+    ///
+    /// Uses a cache + exponential backoff so that:
+    /// - Repeated calls after a stable discovery are no-ops until DISCOVERY_STABLE_INTERVAL_MS.
+    /// - Failures back off exponentially (1 s → 2 s → 5 s → 10 s → 30 s → 60 s).
+    /// - Logs only on meaningful state changes, not on every tick.
     fn discover_from_deviced(&mut self) {
+        let now = monotonic_millis();
+
+        // Skip if still inside the backoff/stable window.
+        if now < self.discovery.next_retry_ms {
+            return;
+        }
+
+        self.discovery.ipc_calls_total += 1;
+
         let Some(cap) = nameserver_lookup_timeout("deviced", 80) else {
-            serial_println!("[NETD] deviced unavailable; skipping discovery");
+            self.discovery.timeout_total += 1;
+            // Log only on the first failure (deviced was available → now gone).
+            if self.discovery.deviced_was_available || self.discovery.consecutive_failures == 0 {
+                let backoff = self.discovery.backoff_ms();
+                serial_println!(
+                    "[NETD] deviced unavailable; next retry in {}ms",
+                    backoff
+                );
+                self.discovery.current_backoff_ms = backoff;
+            }
+            self.discovery.deviced_was_available = false;
+            self.discovery.consecutive_failures =
+                self.discovery.consecutive_failures.saturating_add(1);
+            let backoff = self.discovery.backoff_ms();
+            self.discovery.current_backoff_ms = backoff;
+            self.discovery.next_retry_ms = now + backoff;
             return;
         };
 
-        // Enumerate devices
+        // Enumerate devices.
         let mut idx = 0usize;
         let mut found_net = 0usize;
+        let mut new_driver_ids = [0u64; MAX_IFACES];
+
         loop {
             let reply = ipc_call(
                 cap,
@@ -152,33 +233,31 @@ impl NetworkManager {
             }
             idx += 1;
 
-            // Decode device record (see deviced reply_device_summary)
-            let dev_id = reply.words[0];
             let name_u64 = reply.words[1];
             let driver_id = reply.words[2];
             let packed = reply.words[3];
-            let kind = (packed & 0xff) as u64; // DeviceKind
+            let kind = (packed & 0xff) as u64;
             let state = ((packed >> 8) & 0xff) as u64;
 
-            // Only Network kind (DeviceKind::Network == 2)
+            // Only Network kind (DeviceKind::Network == 2).
             if kind != 2 {
                 continue;
             }
 
-            // Map to a friendly name. For v0: ethN for discovered net devices.
+            if found_net < MAX_IFACES {
+                new_driver_ids[found_net] = driver_id;
+            }
+
             let base = b"eth";
             let mut name_buf = [0u8; 8];
             name_buf[..3].copy_from_slice(base);
-            // simple index: eth0, eth1... (skip if lo collision)
             let n = found_net;
             if n < 10 {
                 name_buf[3] = b'0' + n as u8;
             } else {
-                // fall back
                 name_buf[3] = b'x';
             }
 
-            // If we already have an iface with this driver_id or similar name, update
             let existing = self.ifaces.iter().position(|i| {
                 i.occupied && (i.driver_id == driver_id || i.driver_name == name_u64)
             });
@@ -201,7 +280,7 @@ impl NetworkManager {
             };
 
             rec.name = name_buf;
-            rec.kind = InterfaceKind::VirtioNet; // Virtio is primary net today
+            rec.kind = InterfaceKind::VirtioNet;
             rec.driver_name = name_u64;
             rec.driver_id = driver_id;
             rec.admin = AdminState::Enabled;
@@ -210,7 +289,7 @@ impl NetworkManager {
             } else {
                 LinkState::NoCarrier
             };
-            if !existing.is_some() {
+            if existing.is_none() {
                 rec.mode = IpConfigMode::Dhcp;
                 rec.priority = 100;
                 rec.auto_connect = true;
@@ -221,12 +300,35 @@ impl NetworkManager {
             found_net += 1;
         }
 
-        if found_net > 0 {
+        // Detect what changed to decide what to log.
+        let was_unavailable = !self.discovery.deviced_was_available
+            && self.discovery.consecutive_failures > 0;
+        let count_changed = found_net != self.discovery.last_net_count;
+        let ids_changed = new_driver_ids[..found_net.min(MAX_IFACES)]
+            != self.discovery.last_driver_ids[..found_net.min(MAX_IFACES)];
+
+        if was_unavailable {
+            serial_println!(
+                "[NETD] deviced available again (was down for {} failure(s))",
+                self.discovery.consecutive_failures
+            );
+        }
+        if found_net > 0 && (count_changed || ids_changed || was_unavailable) {
             serial_println!(
                 "[NETD] discovered {} network device(s) via deviced",
                 found_net
             );
         }
+
+        // Update cache state.
+        self.discovery.last_net_count = found_net;
+        self.discovery.last_driver_ids = new_driver_ids;
+        self.discovery.deviced_was_available = true;
+        self.discovery.consecutive_failures = 0;
+        self.discovery.current_backoff_ms = 0;
+        self.discovery.success_total += 1;
+        // Suppress re-discovery until the stable interval elapses.
+        self.discovery.next_retry_ms = now + DISCOVERY_STABLE_INTERVAL_MS;
     }
 
     fn count(&self) -> u16 {
@@ -652,28 +754,27 @@ pub extern "C" fn _start() -> ! {
     let mut msg = ipc_recv(ep);
     loop {
         let reply = match msg.label {
-            NetworkdMsg::LIST_INTERFACES => {
-                let _ = mgr.refresh();
-                mgr.list_one(msg.words[0] as usize)
-            }
-            NetworkdMsg::GET_INTERFACE => {
-                let _ = mgr.refresh();
-                mgr.get_by_key(msg.words[0])
-            }
+            // Read-only queries: serve cached state — no discovery refresh.
+            // GET_DEFAULT_ROUTE is the hot path (net_server calls it on every GETIP);
+            // triggering discover_from_deviced() there caused circular IPC churn.
+            NetworkdMsg::LIST_INTERFACES => mgr.list_one(msg.words[0] as usize),
+            NetworkdMsg::GET_INTERFACE => mgr.get_by_key(msg.words[0]),
+            NetworkdMsg::GET_DEFAULT_ROUTE => mgr.get_default_route_reply(),
+
+            // State-changing operations: ingest live IP data (cheap, no discovery).
             NetworkdMsg::ENABLE_INTERFACE => {
-                let _ = mgr.refresh();
+                mgr.ingest_live_from_net();
                 mgr.set_admin(msg.words[0], true)
             }
             NetworkdMsg::DISABLE_INTERFACE => {
-                let _ = mgr.refresh();
+                mgr.ingest_live_from_net();
                 mgr.set_admin(msg.words[0], false)
             }
             NetworkdMsg::SET_DHCP => {
-                let _ = mgr.refresh();
+                mgr.ingest_live_from_net();
                 mgr.set_dhcp(msg.words[0])
             }
             NetworkdMsg::SET_STATIC_IPV4 => {
-                let _ = mgr.refresh();
                 // w0=key, w1=addr_p, w2=gw_p, w3=prefix (low), w4=dns0_p (opt), w5=dns1_p (opt)
                 let key = msg.words[0];
                 let addr = unpack_ipv4(msg.words[1]);
@@ -692,22 +793,29 @@ pub extern "C" fn _start() -> ! {
                 mgr.set_static(key, addr, prefix, gw, dns0, dns1)
             }
             NetworkdMsg::SET_PRIORITY => {
-                let _ = mgr.refresh();
                 let key = msg.words[0];
-                let prio = msg.words[1] as i32; // sign extend? caller sends i32 as u64 bits
+                let prio = msg.words[1] as i32;
                 mgr.set_priority(key, prio)
             }
             NetworkdMsg::SET_AUTO_CONNECT => {
-                let _ = mgr.refresh();
                 let key = msg.words[0];
                 let ac = msg.words[1] != 0;
                 mgr.set_auto_connect(key, ac)
             }
-            NetworkdMsg::GET_DEFAULT_ROUTE => {
-                let _ = mgr.refresh();
-                mgr.get_default_route_reply()
+
+            // Explicit refresh: run full discovery (cache/backoff still apply internally).
+            NetworkdMsg::REFRESH => {
+                let r = mgr.refresh();
+                serial_println!(
+                    "[NETD] metrics: ipc_calls={} success={} timeout={} backoff_ms={}",
+                    mgr.discovery.ipc_calls_total,
+                    mgr.discovery.success_total,
+                    mgr.discovery.timeout_total,
+                    mgr.discovery.current_backoff_ms,
+                );
+                r
             }
-            NetworkdMsg::REFRESH => mgr.refresh(),
+
             _ => err_bad(),
         };
         msg = ipc_reply_and_wait(ep, reply);
