@@ -1,7 +1,11 @@
 #![no_std]
 #![no_main]
 
-use sunlight_ipc::{debug_log, process_yield, show_notification, NotificationKind, ProcessExit};
+use sunlight_ipc::{
+    debug_log,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    process_yield, show_notification, NotificationKind, ProcessExit,
+};
 use sunlight_libc as libc;
 use sunlight_ui::{
     request_close,
@@ -41,6 +45,7 @@ struct RunnerApp {
     open: TextInput<128>,
     elevated: Checkbox<'static>,
     status: &'static str,
+    next_launch_id: u64,
 }
 
 impl RunnerApp {
@@ -51,6 +56,7 @@ impl RunnerApp {
             open,
             elevated: Checkbox::new(Rect::default(), "Run with elevated privileges"),
             status: "Ready",
+            next_launch_id: 1,
         }
     }
 
@@ -58,6 +64,31 @@ impl RunnerApp {
         self.open.active = false;
         self.elevated.active = false;
         request_close();
+    }
+
+    fn next_trace(&mut self) -> LaunchTrace {
+        let trace = LaunchTrace::new(
+            self.next_launch_id,
+            LaunchSource::Runner,
+            sunlight_ipc::monotonic_millis(),
+        );
+        self.next_launch_id = self.next_launch_id.saturating_add(1);
+        trace
+    }
+
+    fn register_launch_trace(&self, trace: LaunchTrace, pid: u64) {
+        let Some(display_ep) = sunlight_ipc::nameserver_lookup("display_server") else {
+            return;
+        };
+        let _ = sunlight_ipc::ipc_call_timeout(
+            display_ep,
+            sunlight_ipc::IpcMsg::with_label(sunlight_ipc::SgpMsg::LAUNCH_TRACE)
+                .word(0, trace.launch_id)
+                .word(1, trace.source as u64)
+                .word(2, pid)
+                .word(3, trace.requested_at_ms),
+            50,
+        );
     }
 
     fn fail(&mut self, status: &'static str, body: &str) -> bool {
@@ -107,10 +138,26 @@ impl RunnerApp {
             );
         }
 
-        let input = trim_ascii(self.open.value().as_bytes());
-        if input.is_empty() {
-            return self.fail("Enter an application name", "Enter an application name");
-        }
+        let mut input_buf = [0u8; MAX_PATH_LEN];
+        let input_len = {
+            let input = trim_ascii(self.open.value().as_bytes());
+            if input.is_empty() {
+                return self.fail("Enter an application name", "Enter an application name");
+            }
+            let len = input.len().min(input_buf.len());
+            input_buf[..len].copy_from_slice(&input[..len]);
+            len
+        };
+        let input = &input_buf[..input_len];
+
+        let mut command_buf = [0u8; MAX_PATH_LEN];
+        let command_len = input.len().min(command_buf.len());
+        command_buf[..command_len].copy_from_slice(&input[..command_len]);
+        let trace = self.next_trace();
+        let command = core::str::from_utf8(&command_buf[..command_len]).unwrap_or("command");
+        launch_trace::log_phase_now(trace, command, "launch_request_received", None);
+        launch_trace::log_phase_now(trace, command, "duplicate_launch_check_done", None);
+        launch_trace::log_phase_now(trace, command, "parse_args_start", None);
 
         let mut args_buf = [[0u8; MAX_ARG_LEN]; MAX_ARGS];
         let mut arg_lens = [0usize; MAX_ARGS];
@@ -124,25 +171,41 @@ impl RunnerApp {
                 return self.fail("Argument is too long", "Argument is too long")
             }
         };
+        launch_trace::log_phase_now(trace, command, "parse_args_done", None);
 
+        launch_trace::log_phase_now(trace, command, "resolve_path_start", None);
         let mut path_buf = [0u8; MAX_PATH_LEN];
         let path_len = match resolve_path(&args_buf[0][..arg_lens[0]], &mut path_buf) {
             Some(len) => len,
             None => return self.fail("Executable path is too long", "Executable path is too long"),
         };
+        launch_trace::log_phase_now(trace, command, "resolve_path_done", None);
 
         let mut argv: [&[u8]; MAX_ARGS] = [&[]; MAX_ARGS];
         for idx in 0..arg_count {
             argv[idx] = &args_buf[idx][..arg_lens[idx]];
         }
+        let gui_target = is_trace_launchable_gui_app(&path_buf[..path_len]);
+        let mut trace_arg = [0u8; 64];
+        let mut argv_len = arg_count;
+        if gui_target && argv_len < MAX_ARGS {
+            if let Some(trace_arg_len) = launch_trace::format_launch_arg(trace, &mut trace_arg) {
+                argv[argv_len] = &trace_arg[..trace_arg_len];
+                argv_len += 1;
+            }
+        }
 
-        match libc::spawn(&path_buf[..path_len], &argv[..arg_count], None) {
-            Ok(_) => {
+        launch_trace::log_phase_now(trace, command, "spawn_start", None);
+        match libc::spawn(&path_buf[..path_len], &argv[..argv_len], None) {
+            Ok(pid) => {
+                launch_trace::log_phase_now(trace, command, "spawn_returned", Some(pid));
+                self.register_launch_trace(trace, pid);
+                launch_trace::log_phase_now(trace, command, "process_created", Some(pid));
                 self.finish();
                 true
             }
             Err(_) => {
-                let command = core::str::from_utf8(&args_buf[0][..arg_lens[0]]).unwrap_or("app");
+                launch_trace::log_phase_now(trace, command, "spawn_failed", None);
                 let mut body = [0u8; 64];
                 let prefix = b"Could not start ";
                 let mut len = 0usize;
@@ -255,6 +318,22 @@ pub extern "C" fn _start() -> ! {
     };
     window.run(&mut app);
     ProcessExit::exit(0);
+}
+
+fn is_trace_launchable_gui_app(path: &[u8]) -> bool {
+    matches!(
+        path,
+        b"/bin/calculator"
+            | b"/usr/bin/calculator"
+            | b"/bin/sunlight-files"
+            | b"/usr/bin/sunlight-files"
+            | b"/bin/control-panel"
+            | b"/usr/bin/control-panel"
+            | b"/bin/sunlight-tasks"
+            | b"/usr/bin/sunlight-tasks"
+            | b"/bin/sunlight-terminal"
+            | b"/usr/bin/sunlight-terminal"
+    )
 }
 
 enum LaunchParseError {

@@ -1,7 +1,11 @@
 #![no_std]
 #![no_main]
 
-use sunlight_ipc::{debug_log, process_yield, ProcessExit};
+use sunlight_ipc::{
+    debug_log,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    process_yield, ProcessExit,
+};
 use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_PROCESSES};
 use sunlight_ui::{
     request_close,
@@ -520,7 +524,15 @@ impl App for TasksApp {
 }
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
+    sunlight_libc::launch_trace::init_from_argv(argc, argv);
+    let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+    launch_trace::log_phase_now(
+        trace,
+        "app=tasks",
+        "app_main_started",
+        Some(sunlight_ipc::getpid()),
+    );
     let telemetry = match Telemetry::init() {
         Ok(t) => t,
         Err(_) => {

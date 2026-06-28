@@ -12,8 +12,11 @@ use sunlight_libc as libc;
 
 use sunlight_ipc::debug_log;
 use sunlight_ipc::{
-    endpoint_create, ipc_recv, ipc_recv_timeout, ipc_reply, monotonic_millis, nameserver_register,
-    sgp::SgpMsg, CapabilityToken, IpcMsg, MouseMsg, NotificationKind,
+    endpoint_create, ipc_recv, ipc_recv_timeout, ipc_reply,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    monotonic_millis, nameserver_register,
+    sgp::SgpMsg,
+    CapabilityToken, IpcMsg, MouseMsg, NotificationKind,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
@@ -187,6 +190,20 @@ enum GroupType {
     None = 0,
     Stacked = 1,
     Tabbed = 2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+#[allow(dead_code)]
+/// Future System Preferences hook for Window Behavior.
+///
+/// Keep existing shade/roll-up semantics wired until the compositor UI can
+/// expose a stable user-facing setting.
+enum TitlebarDoubleClickAction {
+    MaximizeRestore = 0,
+    Minimize = 1,
+    WindowShade = 2,
+    None = 3,
 }
 
 /// Cursor shapes the compositor can render. Clients request via SGP_SET_CURSOR.
@@ -602,6 +619,9 @@ struct Window {
     saved_w: u32,
     saved_h: u32,
     owner_pid: u64,
+    /// Workspace assignment. Workspace switching UI is a later layer.
+    workspace_id: u32,
+    hidden: bool,
     config: WindowConfig,
     /// Cursor shape the client wants when the pointer is in its client area.
     client_cursor: CursorShape,
@@ -617,6 +637,13 @@ struct Window {
     rolled_up: bool,
     /// Client height saved before rolling up so it can be restored on un-roll.
     saved_unrolled_h: u32,
+    first_present_logged: bool,
+}
+
+#[derive(Clone, Copy)]
+struct LaunchTraceRecord {
+    pid: u64,
+    trace: LaunchTrace,
 }
 
 impl Window {
@@ -757,6 +784,9 @@ impl KeyboardState {
 
 struct CompositorState {
     windows: Vec<Window>,
+    launch_traces: Vec<LaunchTraceRecord>,
+    /// Current workspace. Workspace switcher / dock integration comes later.
+    active_workspace_id: u32,
     mouse_x: u16,
     mouse_y: u16,
     pointer: PointerPolicy,
@@ -804,6 +834,9 @@ struct CompositorState {
     last_titlebar_click_win_id: u64,
     /// Monotonic timestamp (ms) of the most recent titlebar click.
     last_titlebar_click_ms: u64,
+    /// Future user preference placeholder. Existing shade behavior stays wired.
+    #[allow(dead_code)]
+    titlebar_double_click_action: TitlebarDoubleClickAction,
 }
 
 #[derive(Clone, Copy)]
@@ -921,6 +954,12 @@ fn mark_dirty_full(state: &mut CompositorState) {
     state.dirty.mark_full();
 }
 
+fn is_window_visible(state: &CompositorState, win: &Window) -> bool {
+    !win.hidden
+        && win.workspace_id == state.active_workspace_id
+        && win.config.state != WindowState::Minimized
+}
+
 fn is_focusable_window(win: &Window) -> bool {
     win.config.state != WindowState::Minimized
         && win.config.window_type != WindowType::Desktop
@@ -928,17 +967,20 @@ fn is_focusable_window(win: &Window) -> bool {
 }
 
 fn focused_window_idx(state: &CompositorState) -> Option<usize> {
-    state.windows.iter().rposition(is_focusable_window)
+    state
+        .windows
+        .iter()
+        .rposition(|win| is_focusable_window(win) && is_window_visible(state, win))
 }
 
 fn focused_window_id(state: &CompositorState) -> Option<u64> {
     focused_window_idx(state).map(|idx| state.windows[idx].id)
 }
 
-fn pointer_eligible_window(win: &Window) -> bool {
-    // Minimized windows are never eligible. Hidden/workspace filtering will
-    // slot in here if those fields are added later.
+fn pointer_eligible_window(state: &CompositorState, win: &Window) -> bool {
     win.config.state != WindowState::Minimized
+        && !win.hidden
+        && win.workspace_id == state.active_workspace_id
 }
 
 fn topmost_window_idx_at(state: &CompositorState, cx: u32, cy: u32) -> Option<usize> {
@@ -948,7 +990,7 @@ fn topmost_window_idx_at(state: &CompositorState, cx: u32, cy: u32) -> Option<us
         .enumerate()
         .rev()
         .find_map(|(idx, win)| {
-            if !pointer_eligible_window(win) {
+            if !pointer_eligible_window(state, win) {
                 return None;
             }
             let zone = hit_test_window(win, cx, cy, state.fb_width, state.fb_height);
@@ -1044,6 +1086,49 @@ fn notification_fit(text: &str, max_chars: usize) -> String {
     out.push('.');
     out.push('.');
     out
+}
+
+fn register_launch_trace(
+    state: &mut CompositorState,
+    launch_id: u64,
+    source: LaunchSource,
+    pid: u64,
+    requested_at_ms: u64,
+) {
+    let trace = LaunchTrace::new(launch_id, source, requested_at_ms);
+    if let Some(existing) = state
+        .launch_traces
+        .iter_mut()
+        .find(|entry| entry.pid == pid)
+    {
+        existing.trace = trace;
+        return;
+    }
+    state.launch_traces.push(LaunchTraceRecord { pid, trace });
+}
+
+fn trace_for_pid(state: &CompositorState, pid: u64) -> LaunchTrace {
+    state
+        .launch_traces
+        .iter()
+        .find(|entry| entry.pid == pid)
+        .map(|entry| entry.trace)
+        .unwrap_or_else(|| LaunchTrace::new(0, LaunchSource::Unknown, 0))
+}
+
+fn launch_source_from_u64(value: u64) -> LaunchSource {
+    match value {
+        1 => LaunchSource::Dock,
+        2 => LaunchSource::Runner,
+        3 => LaunchSource::Shortcut,
+        4 => LaunchSource::Boot,
+        _ => LaunchSource::Unknown,
+    }
+}
+
+fn window_title_str(title: &[u8; 64]) -> &str {
+    let len = title.iter().position(|&b| b == 0).unwrap_or(title.len());
+    core::str::from_utf8(&title[..len]).unwrap_or("window")
 }
 
 fn push_notification(
@@ -1159,10 +1244,16 @@ fn cycle_focus(state: &mut CompositorState) -> bool {
         return false;
     };
     let z_group = state.windows[focused_idx].config.z_index_type;
+    let active_workspace_id = state.active_workspace_id;
     let candidate_count = state
         .windows
         .iter()
-        .filter(|win| is_focusable_window(win) && win.config.z_index_type == z_group)
+        .filter(|win| {
+            is_focusable_window(win)
+                && !win.hidden
+                && win.workspace_id == active_workspace_id
+                && win.config.z_index_type == z_group
+        })
         .count();
     if candidate_count < 2 {
         return false;
@@ -1172,7 +1263,12 @@ fn cycle_focus(state: &mut CompositorState) -> bool {
     let insert_idx = state
         .windows
         .iter()
-        .position(|other| is_focusable_window(other) && other.config.z_index_type == z_group)
+        .position(|other| {
+            is_focusable_window(other)
+                && !other.hidden
+                && other.workspace_id == active_workspace_id
+                && other.config.z_index_type == z_group
+        })
         .unwrap_or(state.windows.len());
     state.windows.insert(insert_idx, win);
     true
@@ -1256,6 +1352,8 @@ fn list_window_reply(win: &Window) -> IpcMsg {
         .word(1, win.owner_pid)
         .word(2, state)
         .word(3, window_type | (rolled_up << 8))
+        .word(4, win.workspace_id as u64)
+        .word(5, win.hidden as u64)
 }
 
 fn list_window_at(state: &CompositorState, idx: usize) -> IpcMsg {
@@ -1815,10 +1913,7 @@ fn composite_window(
     win: &Window,
     is_focused: bool,
 ) {
-    if win.buffer.is_null() {
-        return;
-    }
-    if win.config.state == WindowState::Minimized {
+    if win.buffer.is_null() || !is_window_visible(state, win) {
         return;
     }
 
@@ -2259,11 +2354,11 @@ fn move_hw_cursor(state: &mut CompositorState, x: u32, y: u32) -> bool {
 /// maps directly to screen coordinates; we just copy the first PANEL_TOP_RESERVED_H
 /// rows back on top.
 fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) {
-    let desktop = match state
-        .windows
-        .iter()
-        .find(|w| w.config.window_type == WindowType::Desktop && !w.buffer.is_null())
-    {
+    let desktop = match state.windows.iter().find(|w| {
+        w.config.window_type == WindowType::Desktop
+            && !w.buffer.is_null()
+            && is_window_visible(state, w)
+    }) {
         Some(w) => w,
         None => return,
     };
@@ -2491,12 +2586,17 @@ mod tests {
             last_buttons: 0,
             rolled_up: false,
             saved_unrolled_h: h,
+            workspace_id: 0,
+            hidden: false,
+            first_present_logged: false,
         }
     }
 
     fn test_state(windows: Vec<Window>) -> CompositorState {
         CompositorState {
             windows,
+            launch_traces: Vec::new(),
+            active_workspace_id: 0,
             mouse_x: 0,
             mouse_y: 0,
             pointer: PointerPolicy::new(800, 600),
@@ -2528,6 +2628,7 @@ mod tests {
             last_mouse_generation: 0,
             last_titlebar_click_win_id: 0,
             last_titlebar_click_ms: 0,
+            titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
         }
     }
 
@@ -2609,6 +2710,36 @@ mod tests {
         assert_eq!(state.windows[1].last_mouse_x, 120);
         assert_eq!(state.windows[1].last_mouse_y, 90);
         assert_eq!(state.windows[1].last_buttons, 1);
+    }
+
+    #[test]
+    fn inactive_workspace_windows_do_not_receive_hit_tests() {
+        let mut state = test_state(vec![
+            test_window(
+                1,
+                20,
+                20,
+                220,
+                180,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+            test_window(
+                2,
+                40,
+                40,
+                220,
+                180,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+        ]);
+        state.windows[1].workspace_id = 1;
+
+        assert_eq!(topmost_window_id_at(&state, 100, 100), Some(1));
+        assert_eq!(focused_window_id(&state), Some(1));
     }
 }
 
@@ -2793,6 +2924,8 @@ pub extern "C" fn _start() -> ! {
 
     let mut state = CompositorState {
         windows: Vec::new(),
+        launch_traces: Vec::new(),
+        active_workspace_id: 0,
         mouse_x: (render_width / 2) as u16,
         mouse_y: (render_height / 2) as u16,
         pointer: PointerPolicy::new(render_width, render_height),
@@ -2823,6 +2956,7 @@ pub extern "C" fn _start() -> ! {
         last_mouse_generation: 0,
         last_titlebar_click_win_id: 0,
         last_titlebar_click_ms: 0,
+        titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
     };
     // Initial cursor position for the hardware cursor.
     if state.hw_cursor_active {
@@ -2863,6 +2997,24 @@ pub extern "C" fn _start() -> ! {
 
         match msg.label {
             // -------------------------------------------------------------------
+            // LAUNCH_TRACE — launcher/runner tells us which pid belongs to which
+            // user-visible launch request so window creation/presentation logs can
+            // be correlated later.
+            // words[0] = launch_id, words[1] = source, words[2] = pid,
+            // words[3] = requested_at_ms
+            // -------------------------------------------------------------------
+            SgpMsg::LAUNCH_TRACE => {
+                let launch_id = msg.words[0];
+                let source = launch_source_from_u64(msg.words[1]);
+                let pid = msg.words[2];
+                let requested_at_ms = msg.words[3];
+                register_launch_trace(&mut state, launch_id, source, pid, requested_at_ms);
+                let trace = LaunchTrace::new(launch_id, source, requested_at_ms);
+                launch_trace::log_phase_now(trace, "trace", "launch_trace_registered", Some(pid));
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
+            // -------------------------------------------------------------------
             // CREATE_WINDOW
             // words[0] = client_w | client_h<<32
             // words[1] = config_flags
@@ -2877,6 +3029,14 @@ pub extern "C" fn _start() -> ! {
                 let config = WindowConfig::from_ipc_words(&msg.words);
                 let is_desktop_window = config.window_type == WindowType::Desktop;
                 let owner_pid = msg.badge;
+                let trace = trace_for_pid(&state, owner_pid);
+                let window_subject = String::from(window_title_str(&config.title));
+                launch_trace::log_phase_now(
+                    trace,
+                    window_subject.as_str(),
+                    "display_server_received_window_create",
+                    Some(owner_pid),
+                );
 
                 match sunlight_ipc::shm_create(size, 0) {
                     Ok((_, shm_tok)) => {
@@ -2951,6 +3111,9 @@ pub extern "C" fn _start() -> ! {
                                 last_buttons: 0,
                                 rolled_up: false,
                                 saved_unrolled_h: h,
+                                workspace_id: 0,
+                                hidden: false,
+                                first_present_logged: false,
                             },
                         );
                         if is_desktop_window {
@@ -2958,6 +3121,12 @@ pub extern "C" fn _start() -> ! {
                         }
                         mark_dirty_full(&mut state);
                         redraw_scene(&mut state);
+                        launch_trace::log_phase_now(
+                            trace,
+                            window_subject.as_str(),
+                            "window_registered",
+                            Some(owner_pid),
+                        );
 
                         let client_x = win_x + BORDER_W;
                         let client_y = win_y + TITLEBAR_H;
@@ -3164,10 +3333,32 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             SgpMsg::COMMIT_FRAME => {
                 let win_id = msg.words[0];
-                if let Some(win) = state.windows.iter().find(|w| w.id == win_id) {
-                    let (wx, wy, ww, wh) = win.chrome_rect(state.fb_width, state.fb_height);
+                if let Some(win_idx) = state.windows.iter().position(|w| w.id == win_id) {
+                    let (chrome_rect, owner_pid, should_log_visible, trace, subject) = {
+                        let win = &state.windows[win_idx];
+                        let trace = trace_for_pid(&state, win.owner_pid);
+                        (
+                            win.chrome_rect(state.fb_width, state.fb_height),
+                            win.owner_pid,
+                            !win.first_present_logged,
+                            trace,
+                            String::from(window_title_str(&win.config.title)),
+                        )
+                    };
+                    let (wx, wy, ww, wh) = chrome_rect;
                     mark_dirty_rect(&mut state, Rect::new(wx as i32, wy as i32, ww, wh));
                     redraw_scene(&mut state);
+                    if should_log_visible {
+                        launch_trace::log_phase_now(
+                            trace,
+                            subject.as_str(),
+                            "window_visible_on_screen",
+                            Some(owner_pid),
+                        );
+                        if let Some(win) = state.windows.get_mut(win_idx) {
+                            win.first_present_logged = true;
+                        }
+                    }
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }

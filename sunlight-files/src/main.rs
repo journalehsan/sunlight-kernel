@@ -4,7 +4,11 @@
 use core::alloc::GlobalAlloc;
 use core::cmp::Ordering;
 
-use sunlight_ipc::{debug_log, process_yield, show_notification, NotificationKind, ProcessExit};
+use sunlight_ipc::{
+    debug_log,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    process_yield, show_notification, NotificationKind, ProcessExit,
+};
 use sunlight_libc::{self as libc, env, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::Label;
@@ -1592,6 +1596,14 @@ fn draw_pill(
 
 #[no_mangle]
 pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
+    sunlight_libc::launch_trace::init_from_argv(_argc, _argv);
+    let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+    launch_trace::log_phase_now(
+        trace,
+        "app=files",
+        "app_main_started",
+        Some(sunlight_ipc::getpid()),
+    );
     env::init(envp);
 
     let mut app = FilesApp::new();

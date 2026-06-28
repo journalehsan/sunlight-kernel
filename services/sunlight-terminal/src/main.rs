@@ -2,7 +2,9 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, ipc_call, nameserver_lookup, process_yield, CapabilityToken, IpcMsg, PtyMsg,
+    debug_log, ipc_call,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    nameserver_lookup, process_yield, CapabilityToken, IpcMsg, PtyMsg,
 };
 use sunlight_libc as libc;
 use sunlight_tty::console::Console;
@@ -634,7 +636,15 @@ impl App for TerminalApp {
 }
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
+    sunlight_libc::launch_trace::init_from_argv(argc, argv);
+    let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+    launch_trace::log_phase_now(
+        trace,
+        "app=terminal",
+        "app_main_started",
+        Some(sunlight_ipc::getpid()),
+    );
     let pty = match PtySession::open() {
         Ok(pty) => pty,
         Err(_) => loop {

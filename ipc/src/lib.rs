@@ -290,6 +290,9 @@ pub mod sgp {
         /// Bring the window to the front and restore it if minimized.
         /// words[0] = win_id
         pub const ACTIVATE_WINDOW: u64 = 0xA10B;
+        /// Register launch-trace metadata for a child pid.
+        /// words[0] = launch_id, words[1] = source, words[2] = pid, words[3] = requested_at_ms
+        pub const LAUNCH_TRACE: u64 = 0xA10C;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)
@@ -323,6 +326,8 @@ pub mod sgp {
         }
     }
 }
+
+pub mod launch_trace;
 
 // For convenience, also re-export at top level (some code uses SgpMsg directly)
 pub use sgp::SgpMsg;

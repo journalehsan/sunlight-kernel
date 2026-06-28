@@ -4,6 +4,8 @@
 //!   • Mouse — pointer sensitivity slider (1-10) + acceleration toggle.
 //!     Sends SET_MOUSE_SETTINGS to display_server on Apply.
 //!   • Monitor — shows current screen resolution; mode switching is TODO.
+//!   • Window Behavior — future placeholder for titlebar double-click policy
+//!     and workspace-related preferences.
 //!
 //! Icons: SunlightOS icon theme (Breeze-inspired, TGA format).
 //!   Cards display the preferences-desktop-mouse and preferences-desktop-display
@@ -16,8 +18,10 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, ipc_call, nameserver_lookup, process_yield, show_notification, CapabilityToken,
-    IpcMsg, NotificationKind, ProcessExit, SgpMsg,
+    debug_log, ipc_call,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    nameserver_lookup, process_yield, show_notification, CapabilityToken, IpcMsg, NotificationKind,
+    ProcessExit, SgpMsg,
 };
 use sunlight_ui::{
     image::TgaImage,
@@ -509,7 +513,15 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 // ---------------------------------------------------------------------------
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
+    sunlight_libc::launch_trace::init_from_argv(argc, argv);
+    let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+    launch_trace::log_phase_now(
+        trace,
+        "app=control-panel",
+        "app_main_started",
+        Some(sunlight_ipc::getpid()),
+    );
     debug_log("[CONTROL-PANEL] starting\n");
 
     let display_ep = nameserver_lookup("display_server");

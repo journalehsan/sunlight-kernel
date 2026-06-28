@@ -49,9 +49,11 @@ extern crate alloc;
 
 use alloc::{string::String, vec::Vec};
 use sunlight_ipc::{
-    debug_log, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_is_alive,
-    process_yield, show_notification, unpack_iface_summary, CapabilityToken, InterfaceKind, IpcMsg,
-    LinkState, NetworkdMsg, NotificationKind, ProcessExit, SgpMsg, TzMsg,
+    debug_log, ipc_call, ipc_call_timeout,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    monotonic_millis, nameserver_lookup, process_is_alive, process_yield, show_notification,
+    unpack_iface_summary, CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
+    NotificationKind, ProcessExit, SgpMsg, TzMsg,
 };
 use sunlight_libc::{self as libc, DirEntry, FT_DIR};
 use sunlight_ui::{
@@ -205,6 +207,8 @@ struct DockAppState {
     pid: Option<u64>,
     main_window_id: Option<u64>,
     state: AppLaunchState,
+    last_launch_id: u64,
+    last_launch_source: LaunchSource,
     last_launch_started_at: u64,
     last_click_at: u64,
     launch_error: [u8; 64],
@@ -228,6 +232,8 @@ impl DockAppState {
             pid: None,
             main_window_id: None,
             state: AppLaunchState::NotRunning,
+            last_launch_id: 0,
+            last_launch_source: LaunchSource::Unknown,
             last_launch_started_at: 0,
             last_click_at: 0,
             launch_error: [0; 64],
@@ -800,6 +806,8 @@ struct VortexShell {
     apps: [DockAppState; 4],
     /// Next monotonic deadline for app/window registry polling.
     next_app_poll_ms: u64,
+    /// Next launch trace id assigned by this shell process.
+    next_launch_id: u64,
 }
 
 impl VortexShell {
@@ -861,6 +869,7 @@ impl VortexShell {
                 ),
             ],
             next_app_poll_ms: 0,
+            next_launch_id: 1,
         };
         shell.reload_desktop_icons();
         shell
@@ -924,6 +933,50 @@ impl VortexShell {
             AppId::Files => "/bin/sunlight-files",
             AppId::Settings => "/bin/control-panel",
         }
+    }
+
+    fn app_trace_subject(app_id: AppId) -> &'static str {
+        match app_id {
+            AppId::Terminal => "app=terminal",
+            AppId::Calculator => "app=calculator",
+            AppId::Files => "app=files",
+            AppId::Settings => "app=control-panel",
+        }
+    }
+
+    fn next_launch_trace(&mut self, source: LaunchSource) -> LaunchTrace {
+        let trace = LaunchTrace::new(self.next_launch_id, source, monotonic_millis());
+        self.next_launch_id = self.next_launch_id.saturating_add(1);
+        trace
+    }
+
+    fn register_launch_trace(&self, trace: LaunchTrace, pid: u64, app_id: AppId) {
+        let reply = ipc_call_timeout(
+            self.display_ep,
+            IpcMsg::with_label(SgpMsg::LAUNCH_TRACE)
+                .word(0, trace.launch_id)
+                .word(1, trace.source as u64)
+                .word(2, pid)
+                .word(3, trace.requested_at_ms),
+            DISPLAY_IPC_TIMEOUT_MS,
+        );
+        if reply.is_err() {
+            debug_log("[VORTEX] launch_trace_register_failed(");
+            debug_log(Self::app_trace_subject(app_id));
+            debug_log(", pid=");
+            debug_log_u32(pid as u32);
+            debug_log(")\n");
+        }
+    }
+
+    fn log_launch_trace(
+        trace: LaunchTrace,
+        app_id: AppId,
+        phase: &str,
+        pid: Option<u64>,
+        now: u64,
+    ) {
+        launch_trace::log_phase(trace, Self::app_trace_subject(app_id), phase, pid, now);
     }
 
     fn dock_zone_app(slot: usize) -> DockZone {
@@ -1017,6 +1070,17 @@ impl VortexShell {
                     debug_log(", ");
                     debug_log_u32(win.id as u32);
                     debug_log(")\n");
+                    Self::log_launch_trace(
+                        LaunchTrace::new(
+                            app.last_launch_id,
+                            app.last_launch_source,
+                            app.last_launch_started_at,
+                        ),
+                        app.app_id,
+                        "dock_state_running",
+                        Some(win.owner_pid),
+                        now,
+                    );
                 } else if prev_state == AppLaunchState::Minimized
                     && app.state == AppLaunchState::Running
                 {
@@ -1111,19 +1175,50 @@ impl VortexShell {
         dirty
     }
 
-    fn launch_app(&mut self, app_id: AppId, now: u64) -> bool {
-        let app = self.app_mut(app_id);
-        app.last_click_at = now;
-        app.launch_attempts = app.launch_attempts.saturating_add(1);
+    fn launch_app(&mut self, app_id: AppId, now: u64, source: LaunchSource) -> bool {
+        let trace = self.next_launch_trace(source);
+        Self::log_launch_trace(trace, app_id, "launch_request_received", None, now);
 
-        if let Some(pid) = app.pid {
-            if process_is_alive(pid) {
-                app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
-                debug_log("[VORTEX] app_launch_blocked_duplicate(");
-                debug_log(app.display_name);
-                debug_log(")\n");
-                return false;
+        {
+            let app = self.app_mut(app_id);
+            app.last_click_at = now;
+            app.launch_attempts = app.launch_attempts.saturating_add(1);
+            app.last_launch_id = trace.launch_id;
+            app.last_launch_source = source;
+        }
+
+        let mut clear_stale_pid = false;
+        let duplicate_blocked = {
+            let app = self.app(app_id);
+            if let Some(pid) = app.pid {
+                if process_is_alive(pid) {
+                    true
+                } else {
+                    clear_stale_pid = true;
+                    false
+                }
+            } else if matches!(
+                app.state,
+                AppLaunchState::Launching | AppLaunchState::Running | AppLaunchState::Minimized
+            ) {
+                true
+            } else if app.state == AppLaunchState::Failed {
+                app.pid.map(process_is_alive).unwrap_or(false)
+            } else {
+                false
             }
+        };
+        Self::log_launch_trace(trace, app_id, "duplicate_launch_check_done", None, now);
+        if duplicate_blocked {
+            let app = self.app_mut(app_id);
+            app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
+            debug_log("[VORTEX] app_launch_blocked_duplicate(");
+            debug_log(app.display_name);
+            debug_log(")\n");
+            return false;
+        }
+        if clear_stale_pid {
+            let app = self.app_mut(app_id);
             app.pid = None;
             app.main_window_id = None;
             if matches!(
@@ -1135,41 +1230,40 @@ impl VortexShell {
             }
         }
 
-        if matches!(
-            app.state,
-            AppLaunchState::Launching | AppLaunchState::Running | AppLaunchState::Minimized
-        ) {
-            app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
-            debug_log("[VORTEX] app_launch_blocked_duplicate(");
-            debug_log(app.display_name);
-            debug_log(")\n");
-            return false;
+        let launch_path = Self::app_launch_path(app_id);
+        let mut trace_arg = [0u8; 64];
+        let trace_arg_len = launch_trace::format_launch_arg(trace, &mut trace_arg).unwrap_or(0);
+        let argv: [&[u8]; 2] = [launch_path.as_bytes(), &trace_arg[..trace_arg_len]];
+
+        {
+            let app = self.app_mut(app_id);
+            app.state = AppLaunchState::Launching;
+            app.main_window_id = None;
+            app.last_launch_started_at = now;
+            app.clear_error();
+            Self::log_launch_trace(trace, app_id, "dock_state_launching", None, now);
         }
 
-        if app.state == AppLaunchState::Failed {
-            if let Some(pid) = app.pid {
-                if process_is_alive(pid) {
-                    app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
-                    debug_log("[VORTEX] app_launch_blocked_duplicate(");
-                    debug_log(app.display_name);
-                    debug_log(")\n");
-                    return false;
-                }
-            }
-        }
-
-        app.state = AppLaunchState::Launching;
-        app.main_window_id = None;
-        app.last_launch_started_at = now;
-        app.clear_error();
-
-        match libc::spawn(
-            app.launch_path.as_bytes(),
-            &[app.launch_path.as_bytes()],
-            None,
-        ) {
+        Self::log_launch_trace(trace, app_id, "spawn_start", None, now);
+        match libc::spawn(launch_path.as_bytes(), &argv, None) {
             Ok(pid) => {
+                Self::log_launch_trace(
+                    trace,
+                    app_id,
+                    "spawn_returned",
+                    Some(pid),
+                    monotonic_millis(),
+                );
+                self.register_launch_trace(trace, pid, app_id);
+                let app = self.app_mut(app_id);
                 app.pid = Some(pid);
+                Self::log_launch_trace(
+                    trace,
+                    app_id,
+                    "process_created",
+                    Some(pid),
+                    monotonic_millis(),
+                );
                 debug_log("[VORTEX] app_launch_started(");
                 debug_log(app.display_name);
                 debug_log(", pid=");
@@ -1178,6 +1272,8 @@ impl VortexShell {
                 true
             }
             Err(_) => {
+                Self::log_launch_trace(trace, app_id, "spawn_failed", None, monotonic_millis());
+                let app = self.app_mut(app_id);
                 app.state = AppLaunchState::Failed;
                 app.set_error("spawn failed");
                 debug_log("[VORTEX] app_launch_failed(");
@@ -1228,12 +1324,14 @@ impl VortexShell {
         true
     }
 
-    fn handle_app_click(&mut self, app_id: AppId, now: u64) -> bool {
+    fn handle_app_click(&mut self, app_id: AppId, now: u64, source: LaunchSource) -> bool {
         self.sync_app_registry(now, true);
         self.log_app_click(app_id);
         let state = self.app(app_id).state;
         match state {
-            AppLaunchState::NotRunning | AppLaunchState::Failed => self.launch_app(app_id, now),
+            AppLaunchState::NotRunning | AppLaunchState::Failed => {
+                self.launch_app(app_id, now, source)
+            }
             AppLaunchState::Launching => {
                 let app = self.app_mut(app_id);
                 app.duplicate_blocks = app.duplicate_blocks.saturating_add(1);
@@ -2348,7 +2446,11 @@ impl App for VortexShell {
                                 self.reload_desktop_icons();
                             }
                             ContextMenuAction::OpenTerminalHere => {
-                                let _ = self.handle_app_click(AppId::Terminal, monotonic_millis());
+                                let _ = self.handle_app_click(
+                                    AppId::Terminal,
+                                    monotonic_millis(),
+                                    LaunchSource::Shortcut,
+                                );
                             }
                         }
                         return true;
@@ -2362,7 +2464,11 @@ impl App for VortexShell {
                     return false;
                 }
                 if self.settings_zone.contains(point) {
-                    return self.handle_app_click(AppId::Settings, monotonic_millis());
+                    return self.handle_app_click(
+                        AppId::Settings,
+                        monotonic_millis(),
+                        LaunchSource::Shortcut,
+                    );
                 }
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
                     let changed = self.selected_icon != Some(idx);
@@ -2372,9 +2478,11 @@ impl App for VortexShell {
                 for (rect, zone) in &self.dock_zones {
                     if rect.contains(point) {
                         return match zone {
-                            DockZone::App(app_id) => {
-                                self.handle_app_click(*app_id, monotonic_millis())
-                            }
+                            DockZone::App(app_id) => self.handle_app_click(
+                                *app_id,
+                                monotonic_millis(),
+                                LaunchSource::Dock,
+                            ),
                             DockZone::Placeholder => false,
                         };
                     }

@@ -17,8 +17,9 @@
 use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 use sunlight_ipc::{
-    ipc_call, ipc_call_timeout, nameserver_lookup, shm_free, shm_map, CapabilityToken, IpcMsg,
-    SgpMsg,
+    ipc_call, ipc_call_timeout,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    nameserver_lookup, shm_free, shm_map, CapabilityToken, IpcMsg, SgpMsg,
 };
 
 use crate::event::Event;
@@ -53,10 +54,12 @@ pub struct Window {
     pub height: u32,
 
     win_id: u64,
+    title: &'static str,
     buffer: *mut u32,
     buffer_size: usize,
     display_ep: CapabilityToken,
     shm_cap: CapabilityToken,
+    launch_trace: LaunchTrace,
 
     /// Client-area origin reported by the display server (updated each poll).
     pub client_x: i32,
@@ -89,8 +92,26 @@ impl Window {
 
     /// Look up the display server, create a window, and map the shared buffer.
     pub fn connect(config: WindowConfig) -> Option<Self> {
+        let trace =
+            launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+        let pid = sunlight_ipc::getpid();
+        launch_trace::log_phase_now(trace, config.title, "display_connect_start", Some(pid));
         let display_ep = nameserver_lookup("display_server")?;
+        launch_trace::log_phase_now(trace, config.title, "display_connect_done", Some(pid));
 
+        if trace.is_active() {
+            let _ = ipc_call_timeout(
+                display_ep,
+                IpcMsg::with_label(SgpMsg::LAUNCH_TRACE)
+                    .word(0, trace.launch_id)
+                    .word(1, trace.source as u64)
+                    .word(2, pid)
+                    .word(3, trace.requested_at_ms),
+                50,
+            );
+        }
+
+        launch_trace::log_phase_now(trace, config.title, "window_create_request_sent", Some(pid));
         let reply = ipc_call(
             display_ep,
             IpcMsg::with_label(SgpMsg::CREATE_WINDOW)
@@ -120,15 +141,18 @@ impl Window {
             .word(2, 0) // pid|ppid
             .word(3, title_words[0]);
         let _ = ipc_call(display_ep, cfg);
+        launch_trace::log_phase_now(trace, config.title, "window_registered", Some(pid));
 
         Some(Self {
             width: config.width,
             height: config.height,
             win_id,
+            title: config.title,
             buffer,
             buffer_size,
             display_ep,
             shm_cap,
+            launch_trace: trace,
             client_x: 0,
             client_y: 0,
             prev_buttons: 0,
@@ -301,6 +325,12 @@ impl Window {
     /// Run the event loop with a custom theme.
     pub fn run_with<A: App>(&mut self, app: &mut A, theme: &Theme) {
         take_close_requested();
+        launch_trace::log_phase_now(
+            self.launch_trace,
+            self.title,
+            "first_frame_or_first_draw",
+            Some(sunlight_ipc::getpid()),
+        );
         {
             let mut c = self.canvas();
             app.view(&mut c, theme);

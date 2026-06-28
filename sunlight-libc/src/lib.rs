@@ -24,6 +24,8 @@ pub mod env;
 pub mod errno;
 /// File descriptor helpers: `lseek`, `fstat`, `isatty`.
 pub mod fd;
+/// Launch-trace argv parsing for GUI apps.
+pub mod launch_trace;
 /// Memory utility functions (memcpy, memmove, memset, memcmp).
 pub mod mem;
 /// POSIX memory mapping wrappers (`mmap`, `munmap`).
