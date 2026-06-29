@@ -1,0 +1,14 @@
+[package]
+name = "sunlight-thumbd"
+version = "0.1.624"
+
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-ui = { path = "../../sunlight-ui" }
+
+[[bin]]
+name = "sunlight-thumbd"
+path = "src/main.rs"

@@ -3,7 +3,7 @@ use crate::{path, FsError};
 use alloc::vec::Vec;
 
 pub const RAMFS_MAX_HANDLES: usize = 32;
-pub const RAMFS_MAX_ENTRIES: usize = 256;
+pub const RAMFS_MAX_ENTRIES: usize = 512;
 
 pub struct RamEntry {
     pub path: &'static str,
@@ -1519,6 +1519,152 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/helios/note\n",
+    ),
+    // sunlight-thumbd: asynchronous thumbnail daemon.
+    RamEntry::file(
+        "/usr/bin/sunlight-thumbd",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-thumbd\n",
+    ),
+    RamEntry::file(
+        "/sbin/sunlight-thumbd",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-thumbd\n",
+    ),
+    // ── Sample pictures ────────────────────────────────────────────────────
+    // Installed under /usr/share/sunlightos/sample-pictures/ (system-wide).
+    // Also visible to users under ~/Pictures/Sample Pictures/ (real directory,
+    // same file data — no extra memory cost since data pointers are shared).
+    RamEntry::dir("/usr/share", 0, 0, mode::DIR_755),
+    RamEntry::dir("/usr/share/sunlightos", 0, 0, mode::DIR_755),
+    RamEntry::dir("/usr/share/sunlightos/sample-pictures", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/usr/share/sunlightos/sample-pictures/01_solar_blossom.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/01_solar_blossom.simg"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/sample-pictures/02_amber_dunes.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/02_amber_dunes.simg"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/sample-pictures/03_blue_garden.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/03_blue_garden.simg"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/sample-pictures/04_lantern_jellyfish.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/04_lantern_jellyfish.simg"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/sample-pictures/05_sleepy_koala.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/05_sleepy_koala.simg"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/sample-pictures/06_sunrise_lighthouse.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/06_sunrise_lighthouse.simg"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/sample-pictures/07_penguin_walk.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/07_penguin_walk.simg"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/sample-pictures/08_orange_tulips.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/08_orange_tulips.simg"),
+    ),
+    // ~/Pictures/Sample Pictures/ for root (same file data, separate dir entry).
+    RamEntry::dir("/root/Pictures/Sample Pictures", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/root/Pictures/Sample Pictures/01_solar_blossom.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/01_solar_blossom.simg"),
+    ),
+    RamEntry::file(
+        "/root/Pictures/Sample Pictures/02_amber_dunes.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/02_amber_dunes.simg"),
+    ),
+    RamEntry::file(
+        "/root/Pictures/Sample Pictures/03_blue_garden.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/03_blue_garden.simg"),
+    ),
+    RamEntry::file(
+        "/root/Pictures/Sample Pictures/04_lantern_jellyfish.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/04_lantern_jellyfish.simg"),
+    ),
+    RamEntry::file(
+        "/root/Pictures/Sample Pictures/05_sleepy_koala.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/05_sleepy_koala.simg"),
+    ),
+    RamEntry::file(
+        "/root/Pictures/Sample Pictures/06_sunrise_lighthouse.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/06_sunrise_lighthouse.simg"),
+    ),
+    RamEntry::file(
+        "/root/Pictures/Sample Pictures/07_penguin_walk.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/07_penguin_walk.simg"),
+    ),
+    RamEntry::file(
+        "/root/Pictures/Sample Pictures/08_orange_tulips.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/08_orange_tulips.simg"),
+    ),
+    // ~/Pictures/Sample Pictures/ for the default unprivileged user.
+    RamEntry::dir("/home/user/Pictures/Sample Pictures", 1000, 1000, mode::DIR_755),
+    RamEntry::file(
+        "/home/user/Pictures/Sample Pictures/01_solar_blossom.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/01_solar_blossom.simg"),
+    ),
+    RamEntry::file(
+        "/home/user/Pictures/Sample Pictures/02_amber_dunes.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/02_amber_dunes.simg"),
+    ),
+    RamEntry::file(
+        "/home/user/Pictures/Sample Pictures/03_blue_garden.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/03_blue_garden.simg"),
+    ),
+    RamEntry::file(
+        "/home/user/Pictures/Sample Pictures/04_lantern_jellyfish.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/04_lantern_jellyfish.simg"),
+    ),
+    RamEntry::file(
+        "/home/user/Pictures/Sample Pictures/05_sleepy_koala.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/05_sleepy_koala.simg"),
+    ),
+    RamEntry::file(
+        "/home/user/Pictures/Sample Pictures/06_sunrise_lighthouse.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/06_sunrise_lighthouse.simg"),
+    ),
+    RamEntry::file(
+        "/home/user/Pictures/Sample Pictures/07_penguin_walk.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/07_penguin_walk.simg"),
+    ),
+    RamEntry::file(
+        "/home/user/Pictures/Sample Pictures/08_orange_tulips.simg",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../docs/images/Samples/08_orange_tulips.simg"),
     ),
 ];
 

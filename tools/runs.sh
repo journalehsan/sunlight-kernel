@@ -274,6 +274,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-control-panel --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --release --features sunlight --no-default-features --target x86_64-unknown-none
     RUSTFLAGS="-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
     printf '\x03' | dd of="$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note" \

@@ -244,6 +244,58 @@ pub mod VfsMsg {
     pub const DATA_SHARED: u64 = 31; // large read reply carries cap in caps[0]
 }
 
+/// Thumbnail daemon protocol (`sunlight-thumbd`).
+///
+/// Chunked-path, request/ack style IPC. Because register IPC only carries
+/// 4 × 8 = 32 bytes of payload, paths longer than 24 bytes are split across
+/// multiple messages. The File Manager sends PATH_CHUNK messages followed by
+/// exactly one PATH_END message. thumbd ACKs each message immediately, then
+/// generates the thumbnail asynchronously.
+///
+/// PATH_CHUNK (label 0x7411):
+///   words[0..3] = 32 bytes of source path (packed, zero-padded)
+///
+/// PATH_END (label 0x7412):
+///   words[0..2] = up to 24 remaining path bytes (zero-padded)
+///   words[3]    = (path_total_len as u32) | ((size as u32) << 32)
+///                 where size: 0 = SIZE_NORMAL (128 px), 1 = SIZE_LARGE (256 px)
+///
+/// After the last PATH_END for a given sender PID, thumbd resolves the full
+/// path (assembled from chunks + tail) and enqueues thumbnail generation.
+/// The File Manager polls the on-disk cache path on subsequent repaints.
+///
+/// Cache location: `<home>/.cache/sunlightos/thumbs/{normal,large}/<hex_key>.simg`
+///   where hex_key = hex(fnv1a_64(path || le64(file_size) || u8(size)))
+///
+/// Thumb sizes: `SIZE_NORMAL` = 128px, `SIZE_LARGE` = 256px.
+pub mod ThumbMsg {
+    /// Non-final path chunk (32 bytes in words[0..3]).
+    pub const PATH_CHUNK: u64 = 0x7411;
+    /// Final path chunk + metadata. After this message thumbd has the full path.
+    pub const PATH_END: u64 = 0x7412;
+    /// Immediate ACK from thumbd — generation will happen asynchronously.
+    pub const REPLY: u64 = 0x74FF;
+    /// Returned if the request is malformed or the source file is missing.
+    pub const ERROR: u64 = 0x74FE;
+
+    /// Back-compat alias (single-message short path, equivalent to PATH_END
+    /// with words[0..2] as path bytes and words[3] as len|size).
+    pub const REQUEST: u64 = PATH_END;
+
+    /// `size` field value in PATH_END words[3] selecting the 128×128 thumbnail.
+    pub const SIZE_NORMAL: u64 = 0;
+    /// `size` field value in PATH_END words[3] selecting the 256×256 thumbnail.
+    pub const SIZE_LARGE: u64 = 1;
+
+    /// Maximum supported thumbnail edge length (large).
+    pub const MAX_EDGE: u32 = 256;
+
+    /// Bytes of path payload per PATH_CHUNK message.
+    pub const CHUNK_BYTES: usize = 32;
+    /// Bytes of path payload in the tail portion of a PATH_END message.
+    pub const END_PATH_BYTES: usize = 24;
+}
+
 /// Sunlight Graphics Protocol (SGP) opcodes for the display / compositor service.
 /// Registered under nameserver name "display_server".
 /// See docs/GUI/INITIALIZE_PHASE... for full spec.

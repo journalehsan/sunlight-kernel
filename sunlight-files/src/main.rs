@@ -397,6 +397,128 @@ unsafe impl GlobalAlloc for NoAlloc {
 #[global_allocator]
 static ALLOC: NoAlloc = NoAlloc;
 
+// ---------------------------------------------------------------------------
+// Thumbnail helpers — no heap; uses a static read buffer.
+// ---------------------------------------------------------------------------
+
+// Static buffer large enough for a 128×128 BGRA24 TGA (18-byte header + pixels).
+static mut THUMB_READ_BUF: [u8; 18 + 128 * 128 * 3] = [0u8; 18 + 128 * 128 * 3];
+
+/// Returns true if the file name ends in .simg or .tga.
+fn is_image_name(name: &[u8]) -> bool {
+    let n = name.len();
+    (n >= 5 && name[n - 5..] == *b".simg")
+        || (n >= 4 && name[n - 4..] == *b".tga")
+}
+
+/// FNV-1a 64-bit hash used to derive the thumbnail cache key.
+fn thumb_fnv1a(data: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for &b in data { h ^= b as u64; h = h.wrapping_mul(0x100000001b3); }
+    h
+}
+
+/// Compute the 16-char hex cache key for a source path + size_flag (0 = normal).
+fn thumb_cache_key(src: &[u8], size_flag: u32) -> [u8; 16] {
+    const MAX: usize = 256;
+    let mut buf = [0u8; MAX + 4];
+    let n = src.len().min(MAX);
+    buf[..n].copy_from_slice(&src[..n]);
+    buf[n..n + 4].copy_from_slice(&size_flag.to_le_bytes());
+    let h = thumb_fnv1a(&buf[..n + 4]);
+    let nib = b"0123456789abcdef";
+    let mut hex = [0u8; 16];
+    for i in 0..8 {
+        let byte = ((h >> (56 - i * 8)) & 0xFF) as u8;
+        hex[i * 2] = nib[(byte >> 4) as usize];
+        hex[i * 2 + 1] = nib[(byte & 0xF) as usize];
+    }
+    hex
+}
+
+/// Build the normal-size cache path for `src_path` into `out`.
+/// Returns the byte count (without null terminator).
+fn thumb_cache_path(home: &[u8], src_path: &[u8], out: &mut [u8; 256]) -> usize {
+    let key = thumb_cache_key(src_path, 0);
+    let mut p = 0usize;
+    macro_rules! app {
+        ($s:expr) => { for &b in $s { if p < 255 { out[p] = b; p += 1; } } };
+    }
+    app!(home);
+    app!(b"/.cache/sunlightos/thumbs/normal/");
+    app!(key.as_ref());
+    app!(b".simg");
+    out[p] = 0;
+    p
+}
+
+/// Draw a raw TGA type-2 (24bpp) byte slice directly onto `canvas` at `dst`,
+/// scaling with nearest-neighbour. No allocation; reads pixel data inline.
+fn draw_tga_bytes(canvas: &mut Canvas, data: &[u8], dst: Rect) {
+    if data.len() < 18 { return; }
+    if data[2] != 2 { return; }
+    let bpp = data[16];
+    if bpp != 24 && bpp != 32 { return; }
+    let w = u16::from_le_bytes([data[12], data[13]]) as u32;
+    let h = u16::from_le_bytes([data[14], data[15]]) as u32;
+    if w == 0 || h == 0 { return; }
+    let top_down = (data[17] & 0x20) != 0;
+    let bpp_b = (bpp / 8) as u32;
+    let cm_len = u16::from_le_bytes([data[5], data[6]]) as u32;
+    let cm_entry_bits = data[7] as u32;
+    let cm_bytes = if data[1] != 0 { cm_len * ((cm_entry_bits + 7) / 8) } else { 0 };
+    let data_off = (18 + data[0] as u32 + cm_bytes) as usize;
+    let needed = data_off + (w * h * bpp_b) as usize;
+    if data.len() < needed { return; }
+
+    let cx0 = dst.x.max(0) as u32;
+    let cy0 = dst.y.max(0) as u32;
+    let cx1 = (dst.right() as u32).min(canvas.width);
+    let cy1 = (dst.bottom() as u32).min(canvas.height);
+    if cx0 >= cx1 || cy0 >= cy1 { return; }
+    let dw = cx1 - cx0;
+    let dh = cy1 - cy0;
+
+    for dy in 0..dh {
+        let src_y_scale = dy * h / dh;
+        let file_row = if top_down { src_y_scale } else { h - 1 - src_y_scale };
+        for dx in 0..dw {
+            let src_x = dx * w / dw;
+            let idx = data_off + (file_row * w + src_x) as usize * bpp_b as usize;
+            if idx + 2 >= data.len() { continue; }
+            let b = data[idx] as u32;
+            let g = data[idx + 1] as u32;
+            let r = data[idx + 2] as u32;
+            use sunlight_ui::theme::Color;
+            canvas.put_pixel((cx0 + dx) as i32, (cy0 + dy) as i32, Color((r << 16) | (g << 8) | b));
+        }
+    }
+}
+
+/// Try to draw a cached thumbnail for `src_path` at `dst`. Returns true on success.
+/// Uses the `THUMB_READ_BUF` static — must not be called recursively.
+#[allow(static_mut_refs)]
+fn try_draw_cached_thumb(canvas: &mut Canvas, home: &[u8], src_path: &[u8], dst: Rect) -> bool {
+    let mut cache_path = [0u8; 256];
+    let clen = thumb_cache_path(home, src_path, &mut cache_path);
+    let stat = match libc::stat(&cache_path[..clen]) {
+        Ok(s) if s.size > 0 => s,
+        _ => return false,
+    };
+    // SAFETY: THUMB_READ_BUF is only ever accessed here, single-threaded.
+    let buf = unsafe { &mut THUMB_READ_BUF };
+    if stat.size > buf.len() as u64 { return false; }
+    let fd = match libc::open(&cache_path[..clen]) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    let n = libc::read(fd, buf).unwrap_or(0);
+    let _ = libc::close(fd);
+    if n < 18 { return false; }
+    draw_tga_bytes(canvas, &buf[..n], dst);
+    true
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     debug_log("[FILES] panic\n");
@@ -1141,7 +1263,26 @@ impl FilesApp {
             } else {
                 (UiSymbol::File, theme.text_dim)
             };
-            canvas.draw_ui_symbol(row.x + 8, row.y + 6, icon, icon_color);
+            // For image files (.simg/.tga), try to show a cached thumbnail.
+            // Fall back to the generic file icon when not cached.
+            let showed_thumb = if entry.file_type == FT_FILE {
+                let name = entry.name_bytes();
+                if is_image_name(name) {
+                    let home = self.state.home_path.as_str().as_bytes();
+                    let mut full_path = [0u8; PATH_LEN + 64];
+                    let cp = self.state.current_path.as_str().as_bytes();
+                    let mut fp = 0usize;
+                    for &b in cp { if fp < full_path.len() - 1 { full_path[fp] = b; fp += 1; } }
+                    if fp > 0 && full_path[fp - 1] != b'/' { if fp < full_path.len() - 1 { full_path[fp] = b'/'; fp += 1; } }
+                    for &b in name { if fp < full_path.len() - 1 { full_path[fp] = b; fp += 1; } }
+                    let icon_rect = Rect::new(row.x + 2, row.y + 2, 20, 20);
+                    // SAFETY: single-threaded file manager; no reentrancy on this path.
+                    try_draw_cached_thumb(canvas, home, &full_path[..fp], icon_rect)
+                } else { false }
+            } else { false };
+            if !showed_thumb {
+                canvas.draw_ui_symbol(row.x + 8, row.y + 6, icon, icon_color);
+            }
             canvas.draw_text(row.x + 24, row.y + 5, entry_name_str(&entry), theme.text);
 
             let type_label = match entry.file_type {

@@ -177,6 +177,9 @@ static SUNLIGHT_VORTEX_SHELL_ELF_BYTES: &[u8] =
 // Control Panel: System Preferences GUI (Mouse + Monitor settings — Day 22/23).
 static SUNLIGHT_CONTROL_PANEL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/control-panel");
+// Thumbnail daemon: decodes .simg sources and caches 128/256px thumbnails.
+static SUNLIGHT_THUMBD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-thumbd");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;

@@ -653,6 +653,7 @@ fn _start() -> ! {
             ("/sbin/rand_service", "rand_service"),
             ("/sbin/sunlight-tls", "sunlight-tls"),
             ("/sbin/solar", "solar"),
+            ("/sbin/sunlight-thumbd", "sunlight-thumbd"),
         ];
         for &(path, name) in managed {
             // Check enabled state before spawning
