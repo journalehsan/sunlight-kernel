@@ -1409,7 +1409,7 @@ const TITLEBAR_COLOR: u32 = 0x002B2B36; // inactive titlebar (dark slate)
 const TITLEBAR_ACTIVE: u32 = 0x001E1E26; // active window titlebar (darker base)
 const TITLEBAR_ACCENT: u32 = 0x00FF7A00; // Warm/Orange accent line
 const TITLE_TEXT_COLOR: u32 = 0x00E0E0E0; // Off-white
-const BORDER_W: u32 = 2; // Thinner modern border
+const BORDER_W: u32 = 1;
 const BORDER_COLOR: u32 = 0x00FF7A00; // Active window border glow
 const BORDER_INACTIVE: u32 = 0x002B2B36; // Inactive window border
 const BTN_HOVER_BG: u32 = 0x003A3A4A; // Hover state background for buttons
@@ -1759,14 +1759,9 @@ fn draw_title(canvas: &mut Canvas<'_>, title: &[u8; 64], rect: Rect, color: Colo
     if len == 0 {
         return;
     }
-
-    let glyph_stride = 6i32;
-    let max_chars = (rect.w as i32 / glyph_stride).max(0) as usize;
-    let ty = rect.y + (rect.h as i32 - 7) / 2;
-    let mut tx = rect.x;
-    for &b in title.iter().take(len.min(max_chars)) {
-        tx = canvas.draw_char(tx, ty, b as char, color);
-    }
+    let s = core::str::from_utf8(&title[..len]).unwrap_or("");
+    let style = sun_font::TextStyle::new(sun_font::FontRole::UiMedium, color);
+    sun_font::draw_text_vcenter(canvas, s, rect.x + 4, rect.y, rect.h, &style);
 }
 
 fn draw_window_control(
@@ -2016,8 +2011,8 @@ fn composite_window(
 
         {
             let mut canvas = back_buffer_canvas(state, back_buffer);
-            canvas.fill_rounded_rect(outer, outer_radius, Color(bd_color));
-            canvas.fill_rounded_rect(inner, inner_radius, Color(tb_color));
+            canvas.fill_top_rounded_rect(outer, outer_radius, Color(bd_color));
+            canvas.fill_top_rounded_rect(inner, inner_radius, Color(tb_color));
             canvas.fill_rect(content_backdrop, Color(0xFF1A1A20));
 
             draw_window_control(

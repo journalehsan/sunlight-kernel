@@ -1575,6 +1575,7 @@ dependencies = [
 name = "sunlight-display"
 version = "0.1.643"
 dependencies = [
+ "sun-font",
  "sunlight-ipc",
  "sunlight-libc",
  "sunlight-ui",

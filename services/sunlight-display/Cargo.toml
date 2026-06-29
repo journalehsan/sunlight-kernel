@@ -82,6 +82,7 @@ edition = "2021"
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ui = { path = "../../sunlight-ui" }
+sun-font = { path = "../../sun-font" }
 
 [[bin]]
 name = "sunlight-display"

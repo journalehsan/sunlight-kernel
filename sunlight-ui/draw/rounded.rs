@@ -44,6 +44,39 @@ fn contains_rounded_pixel(rect: Rect, radius: i32, x: i32, y: i32) -> bool {
     dx * dx + dy * dy < radius * radius
 }
 
+/// Like `contains_rounded_pixel` but only rounds the top-left and top-right corners.
+fn contains_top_rounded_pixel(rect: Rect, radius: i32, x: i32, y: i32) -> bool {
+    if rect.w == 0 || rect.h == 0 {
+        return false;
+    }
+    if x < rect.x || y < rect.y || x >= rect.right() || y >= rect.bottom() {
+        return false;
+    }
+    if radius <= 0 {
+        return true;
+    }
+
+    let local_x = x - rect.x;
+    let local_y = y - rect.y;
+    let w = rect.w as i32;
+
+    // Only apply rounding in the top `radius` rows
+    if local_y >= radius {
+        return true;
+    }
+
+    let dx = if local_x < radius {
+        radius - 1 - local_x
+    } else if local_x >= w - radius {
+        local_x - (w - radius)
+    } else {
+        return true;
+    };
+    let dy = radius - 1 - local_y;
+
+    dx * dx + dy * dy < radius * radius
+}
+
 fn clipped_rect(canvas: &Canvas<'_>, rect: Rect) -> Option<(i32, i32, i32, i32)> {
     let x0 = rect.x.max(0).min(canvas.width as i32);
     let y0 = rect.y.max(0).min(canvas.height as i32);
@@ -97,6 +130,23 @@ impl<'fb> Canvas<'fb> {
                     continue;
                 }
                 self.pixels[row_start + x as usize] = color.0;
+            }
+        }
+    }
+
+    /// Fill a rect with radius applied only to the top-left and top-right corners.
+    pub fn fill_top_rounded_rect(&mut self, rect: Rect, radius: u32, color: Color) {
+        let Some((x0, y0, x1, y1)) = clipped_rect(self, rect) else {
+            return;
+        };
+        let radius = clamp_radius(rect, radius);
+
+        for y in y0..y1 {
+            let row_start = y as usize * self.stride as usize;
+            for x in x0..x1 {
+                if contains_top_rounded_pixel(rect, radius, x, y) {
+                    self.pixels[row_start + x as usize] = color.0;
+                }
             }
         }
     }
