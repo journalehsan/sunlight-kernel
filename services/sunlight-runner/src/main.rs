@@ -45,7 +45,7 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 }
 
 struct RunnerApp {
-    open: TextInput<128>,
+    open: TextInput<'static, 128>,
     elevated: Checkbox<'static>,
     status: &'static str,
     next_launch_id: u64,
@@ -53,7 +53,7 @@ struct RunnerApp {
 
 impl RunnerApp {
     fn new() -> Self {
-        let mut open = TextInput::new(Rect::default());
+        let mut open = TextInput::new(Rect::default()).with_font(&F_UI);
         open.active = true;
         Self {
             open,

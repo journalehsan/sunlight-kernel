@@ -1,17 +1,19 @@
 use crate::event::Event;
+use crate::font::VecText;
 use crate::geom::{Point, Rect};
 use crate::paint::Canvas;
 use crate::theme::Theme;
 
-pub struct TextInput<const N: usize> {
+pub struct TextInput<'a, const N: usize> {
     pub rect: Rect,
     pub active: bool,
     len: usize,
     cursor: usize,
     buf: [u8; N],
+    font: Option<&'a dyn VecText>,
 }
 
-impl<const N: usize> TextInput<N> {
+impl<'a, const N: usize> TextInput<'a, N> {
     pub const fn new(rect: Rect) -> Self {
         Self {
             rect,
@@ -19,7 +21,13 @@ impl<const N: usize> TextInput<N> {
             len: 0,
             cursor: 0,
             buf: [0; N],
+            font: None,
         }
+    }
+
+    pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
+        self.font = Some(font);
+        self
     }
 
     pub fn value(&self) -> &str {
@@ -44,18 +52,21 @@ impl<const N: usize> TextInput<N> {
         );
 
         let text_x = self.rect.x + 6;
-        let text_y = self.rect.y + (self.rect.h as i32 - 10) / 2;
-        canvas.draw_text(text_x, text_y, self.value(), theme.text);
+        let prefix = self.value().get(..self.cursor).unwrap_or("");
 
-        if self.active {
-            let cursor_x =
-                text_x + Canvas::measure_text(self.value().get(..self.cursor).unwrap_or("")) as i32;
-            canvas.vline(
-                cursor_x,
-                self.rect.y + 4,
-                self.rect.h.saturating_sub(8),
-                theme.accent,
-            );
+        if let Some(f) = self.font {
+            f.draw_vcenter(canvas, self.value(), text_x, self.rect.y, self.rect.h, theme.text);
+            if self.active {
+                let cursor_x = text_x + f.measure_w(prefix) as i32;
+                canvas.vline(cursor_x, self.rect.y + 4, self.rect.h.saturating_sub(8), theme.accent);
+            }
+        } else {
+            let text_y = self.rect.y + (self.rect.h as i32 - 10) / 2;
+            canvas.draw_text(text_x, text_y, self.value(), theme.text);
+            if self.active {
+                let cursor_x = text_x + Canvas::measure_text(prefix) as i32;
+                canvas.vline(cursor_x, self.rect.y + 4, self.rect.h.saturating_sub(8), theme.accent);
+            }
         }
     }
 

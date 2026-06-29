@@ -84,6 +84,8 @@ static ICON_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.tga");
 static ICON_DRIVE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/drive-harddisk.tga");
+static ICON_NETWORK_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/network-card.tga");
 static ICON_FILE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
 
@@ -96,6 +98,16 @@ static ICON_FILES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/system-file-manager.tga");
 static ICON_SETTINGS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
+static MENU_NEW_FOLDER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.tga");
+static MENU_NEW_TEXT_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/document-new.tga");
+static MENU_REFRESH_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/view-refresh.tga");
+static MENU_SORT_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/sort-name.tga");
+static MENU_TERMINAL_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/scalable/xsi-utilities-terminal-symbolic.tga");
 
 /// Theme icons for desktop shortcuts. All fields are `Copy` (TgaImage borrows `&'static [u8]`).
 #[derive(Clone, Copy)]
@@ -105,6 +117,7 @@ struct DesktopTheme {
     trash: Option<TgaImage>,
     folder: Option<TgaImage>,
     drive: Option<TgaImage>,
+    network: Option<TgaImage>,
     file: Option<TgaImage>,
 }
 
@@ -116,6 +129,7 @@ impl DesktopTheme {
             trash: TgaImage::parse(ICON_TRASH_TGA).ok(),
             folder: TgaImage::parse(ICON_FOLDER_TGA).ok(),
             drive: TgaImage::parse(ICON_DRIVE_TGA).ok(),
+            network: TgaImage::parse(ICON_NETWORK_TGA).ok(),
             file: TgaImage::parse(ICON_FILE_TGA).ok(),
         }
     }
@@ -128,7 +142,7 @@ impl DesktopTheme {
             DesktopIconKind::Folder => self.folder,
             DesktopIconKind::File => self.file,
             DesktopIconKind::Drive => self.drive,
-            DesktopIconKind::Network => None,
+            DesktopIconKind::Network => self.network,
         }
     }
 }
@@ -739,6 +753,7 @@ struct DesktopPaths {
 #[derive(Clone, Copy)]
 enum ContextMenuAction {
     NewFolder,
+    NewTextFile,
     Refresh,
     SortByName,
     OpenTerminalHere,
@@ -748,15 +763,17 @@ enum ContextMenuAction {
 struct MenuItem {
     action: ContextMenuAction,
     rect: Rect,
+    icon: Option<TgaImage>,
 }
 
 struct ContextMenuState {
     rect: Rect,
-    items: [MenuItem; 4],
+    items: [MenuItem; 5],
 }
 
-const MENU_LABELS: [(&str, ContextMenuAction); 4] = [
+const MENU_LABELS: [(&str, ContextMenuAction); 5] = [
     ("New Folder", ContextMenuAction::NewFolder),
+    ("New Text File", ContextMenuAction::NewTextFile),
     ("Refresh", ContextMenuAction::Refresh),
     ("Sort By Name", ContextMenuAction::SortByName),
     ("Open Terminal", ContextMenuAction::OpenTerminalHere),
@@ -775,8 +792,14 @@ struct VortexShell {
     screen_h: u32,
     /// Bounds of each clickable dock button (local coords), plus the action.
     dock_zones: [(Rect, DockZone); 4],
-    selected_icon: Option<usize>,
+    selected_icons: Vec<usize>,
     context_menu: Option<ContextMenuState>,
+    drag_start: Option<Point>,
+    drag_current: Option<Point>,
+    drag_selecting: bool,
+    drag_moved: bool,
+    mouse_left_down: bool,
+    suppress_next_click: bool,
     /// Tracks whether mouse is hovering over a dock icon (index 0..4).
     hover: Option<usize>,
     /// Tracks hover on the settings button in the left cluster.
@@ -824,8 +847,14 @@ impl VortexShell {
             screen_w: FALLBACK_W,
             screen_h: FALLBACK_H,
             dock_zones: [(Rect::new(0, 0, 0, 0), DockZone::Placeholder); 4],
-            selected_icon: None,
+            selected_icons: Vec::new(),
             context_menu: None,
+            drag_start: None,
+            drag_current: None,
+            drag_selecting: false,
+            drag_moved: false,
+            mouse_left_down: false,
+            suppress_next_click: false,
             hover: None,
             settings_hover: false,
             status_hour: 0xff,
@@ -869,10 +898,12 @@ impl VortexShell {
 
     fn reload_desktop_icons(&mut self) {
         self.desktop_icons = load_desktop_icons(&self.desktop_paths);
-        if let Some(sel) = self.selected_icon {
-            if sel >= self.desktop_icons.len() {
-                self.selected_icon = None;
-            }
+        self.selected_icons
+            .retain(|idx| *idx < self.desktop_icons.len());
+        if self.selected_icons.is_empty() {
+            self.drag_start = None;
+            self.drag_current = None;
+            self.drag_selecting = false;
         }
     }
 
@@ -925,6 +956,89 @@ impl VortexShell {
             AppId::Files => "app=files",
             AppId::Settings => "app=control-panel",
         }
+    }
+
+    fn desktop_icon_app(kind: DesktopIconKind) -> AppId {
+        match kind {
+            DesktopIconKind::Network => AppId::Settings,
+            DesktopIconKind::Computer
+            | DesktopIconKind::Home
+            | DesktopIconKind::Trash
+            | DesktopIconKind::Drive
+            | DesktopIconKind::Folder
+            | DesktopIconKind::File => AppId::Files,
+        }
+    }
+
+    fn select_only_desktop_icon(&mut self, idx: usize) {
+        self.selected_icons.clear();
+        self.selected_icons.push(idx);
+    }
+
+    fn clear_desktop_selection(&mut self) {
+        self.selected_icons.clear();
+    }
+
+    fn select_desktop_icons_in_rect(&mut self, rect: Rect) {
+        self.selected_icons.clear();
+        for (idx, icon) in self.desktop_icons.iter().enumerate() {
+            if icon.rect.w == 0 || icon.rect.h == 0 {
+                continue;
+            }
+            if icon.rect.intersect(rect).is_some() {
+                self.selected_icons.push(idx);
+            }
+        }
+    }
+
+    fn desktop_selection_rect(&self) -> Option<Rect> {
+        if !self.drag_selecting {
+            return None;
+        }
+        let start = self.drag_start?;
+        let cur = self.drag_current.unwrap_or(start);
+        let x = start.x.min(cur.x);
+        let y = start.y.min(cur.y);
+        let w = (start.x - cur.x).unsigned_abs().max(1);
+        let h = (start.y - cur.y).unsigned_abs().max(1);
+        Some(Rect::new(x, y, w, h))
+    }
+
+    fn launch_desktop_icon(&mut self, idx: usize, now: u64) -> bool {
+        let Some(icon) = self.desktop_icons.get(idx) else {
+            return false;
+        };
+        let app_id = Self::desktop_icon_app(icon.kind);
+        self.select_only_desktop_icon(idx);
+        self.handle_app_click(app_id, now, LaunchSource::Shortcut)
+    }
+
+    fn begin_desktop_marquee(&mut self, point: Point) {
+        self.drag_start = Some(point);
+        self.drag_current = Some(point);
+        self.drag_selecting = true;
+        self.drag_moved = false;
+        self.suppress_next_click = false;
+        self.clear_desktop_selection();
+    }
+
+    fn update_desktop_marquee(&mut self, point: Point) {
+        if !self.drag_selecting {
+            return;
+        }
+        self.drag_current = Some(point);
+        if self.drag_start != self.drag_current {
+            self.drag_moved = true;
+        }
+        if let Some(rect) = self.desktop_selection_rect() {
+            self.select_desktop_icons_in_rect(rect);
+        }
+    }
+
+    fn finish_desktop_marquee(&mut self) {
+        self.drag_start = None;
+        self.drag_current = None;
+        self.drag_selecting = false;
     }
 
     fn next_launch_trace(&mut self, source: LaunchSource) -> LaunchTrace {
@@ -2024,7 +2138,7 @@ fn draw_desktop_icons(
     canvas: &mut Canvas,
     theme: &Theme,
     icons: &[DesktopIcon],
-    selected: Option<usize>,
+    selected: &[usize],
     dt: DesktopTheme,
 ) {
     for (idx, icon) in icons.iter().enumerate() {
@@ -2032,7 +2146,7 @@ fn draw_desktop_icons(
             continue;
         }
         let slot = icon.rect;
-        let is_selected = selected == Some(idx);
+        let is_selected = selected.contains(&idx);
         if is_selected {
             let highlight = slot.inset(4);
             canvas.fill_rounded_rect(highlight, 8, theme.panel);
@@ -2059,6 +2173,37 @@ fn draw_desktop_icons(
     }
 }
 
+fn draw_desktop_marquee(canvas: &mut Canvas, theme: &Theme, rect: Rect) {
+    if rect.w == 0 || rect.h == 0 {
+        return;
+    }
+    let fill = Color::rgba(
+        theme.accent.r(),
+        theme.accent.g(),
+        theme.accent.b(),
+        48,
+    );
+    let border = Color::rgba(
+        theme.accent.r(),
+        theme.accent.g(),
+        theme.accent.b(),
+        180,
+    );
+    for y in rect.y..rect.bottom() {
+        for x in rect.x..rect.right() {
+            canvas.blend_pixel(x, y, fill);
+        }
+    }
+    for x in rect.x..rect.right() {
+        canvas.blend_pixel(x, rect.y, border);
+        canvas.blend_pixel(x, rect.bottom() - 1, border);
+    }
+    for y in rect.y..rect.bottom() {
+        canvas.blend_pixel(rect.x, y, border);
+        canvas.blend_pixel(rect.right() - 1, y, border);
+    }
+}
+
 fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMenuState {
     let menu_h = MENU_ITEM_H * MENU_LABELS.len() as u32 + 8;
     let max_x = screen_w as i32 - MENU_W as i32 - 6;
@@ -2072,8 +2217,16 @@ fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMen
     let mut items = [MenuItem {
         action: ContextMenuAction::Refresh,
         rect: Rect::new(0, 0, 0, 0),
-    }; 4];
+        icon: None,
+    }; 5];
     for (i, (_, action)) in MENU_LABELS.iter().enumerate() {
+        let icon = match action {
+            ContextMenuAction::NewFolder => TgaImage::parse(MENU_NEW_FOLDER_TGA).ok(),
+            ContextMenuAction::NewTextFile => TgaImage::parse(MENU_NEW_TEXT_TGA).ok(),
+            ContextMenuAction::Refresh => TgaImage::parse(MENU_REFRESH_TGA).ok(),
+            ContextMenuAction::SortByName => TgaImage::parse(MENU_SORT_TGA).ok(),
+            ContextMenuAction::OpenTerminalHere => TgaImage::parse(MENU_TERMINAL_TGA).ok(),
+        };
         items[i] = MenuItem {
             action: *action,
             rect: Rect::new(
@@ -2082,21 +2235,34 @@ fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMen
                 MENU_W - 8,
                 MENU_ITEM_H,
             ),
+            icon,
         };
     }
     ContextMenuState { rect, items }
 }
 
 fn draw_context_menu(canvas: &mut Canvas, theme: &Theme, menu: &ContextMenuState) {
-    draw_panel(canvas, menu.rect, theme.panel, theme.border);
+    canvas.fill_rounded_rect(menu.rect, 8, theme.panel);
+    canvas.stroke_rounded_rect(menu.rect, 8, 1, theme.border);
     for (i, (label, _)) in MENU_LABELS.iter().enumerate() {
         let item = menu.items[i].rect;
-        let tw = measure_text(label, FontRole::UiRegular).w;
-        let tx = (item.x + 8).min(item.x + item.w as i32 - tw as i32);
+        canvas.fill_rect(Rect::new(item.x, item.y, item.w, item.h), theme.panel_alt);
         if i == 0 {
             canvas.fill_rect(Rect::new(item.x, item.y, item.w, 1), theme.border);
         }
-        draw_text_vcenter(canvas, label, tx, item.y, item.h, &TextStyle::new(FontRole::UiRegular, theme.text));
+        if let Some(icon) = menu.items[i].icon {
+            canvas.draw_tga_icon(&icon, Rect::new(item.x + 4, item.y + 2, 16, 16));
+        }
+        let tw = measure_text(label, FontRole::UiRegular).w;
+        let tx = (item.x + 24).min(item.x + item.w as i32 - tw as i32);
+        draw_text_vcenter(
+            canvas,
+            label,
+            tx,
+            item.y,
+            item.h,
+            &TextStyle::new(FontRole::UiRegular, theme.text),
+        );
     }
 }
 
@@ -2128,6 +2294,29 @@ fn create_new_folder(desktop_dir: &str) {
         }
         if libc::mkdir(path.as_bytes(), 0o755).is_err() {
             debug_log("[VORTEX] new folder create failed\n");
+        }
+        return;
+    }
+}
+
+fn create_new_text_file(desktop_dir: &str) {
+    for n in 0..100u32 {
+        let mut name = String::from("New Text File");
+        if n > 0 {
+            name.push(' ');
+            let mut digits = [0u8; 10];
+            let len = fmt_u32_ascii(n + 1, &mut digits);
+            for &b in &digits[..len] {
+                name.push(b as char);
+            }
+        }
+        name.push_str(".txt");
+        let path = join_path(desktop_dir, &name);
+        if libc::stat(path.as_bytes()).is_ok() {
+            continue;
+        }
+        if libc::create(path.as_bytes()).is_err() {
+            debug_log("[VORTEX] new text file create failed\n");
         }
         return;
     }
@@ -2332,9 +2521,12 @@ impl App for VortexShell {
             canvas,
             theme,
             &self.desktop_icons,
-            self.selected_icon,
+            &self.selected_icons,
             self.desktop_theme,
         );
+        if let Some(rect) = self.desktop_selection_rect() {
+            draw_desktop_marquee(canvas, theme, rect);
+        }
 
         // ── Top bar ──────────────────────────────────────────────────────────
         let pwr_left = draw_top_bar(
@@ -2400,11 +2592,19 @@ impl App for VortexShell {
         match event {
             Event::Click { x, y } => {
                 let point = Point::new(x, y);
+                if self.suppress_next_click {
+                    self.suppress_next_click = false;
+                    return true;
+                }
                 if let Some(menu) = self.context_menu.take() {
                     if let Some(action) = menu_action_at(&menu, point) {
                         match action {
                             ContextMenuAction::NewFolder => {
                                 create_new_folder(&self.desktop_paths.desktop_dir);
+                                self.reload_desktop_icons();
+                            }
+                            ContextMenuAction::NewTextFile => {
+                                create_new_text_file(&self.desktop_paths.desktop_dir);
                                 self.reload_desktop_icons();
                             }
                             ContextMenuAction::Refresh | ContextMenuAction::SortByName => {
@@ -2420,6 +2620,7 @@ impl App for VortexShell {
                         }
                         return true;
                     }
+                    return true;
                 }
                 // Power button click: no behavior yet.
                 // TODO(power): show menu (lock, logout, reboot, shutdown).
@@ -2436,9 +2637,7 @@ impl App for VortexShell {
                     );
                 }
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
-                    let changed = self.selected_icon != Some(idx);
-                    self.selected_icon = Some(idx);
-                    return changed;
+                    return self.launch_desktop_icon(idx, monotonic_millis());
                 }
                 for (rect, zone) in &self.dock_zones {
                     if rect.contains(point) {
@@ -2452,11 +2651,13 @@ impl App for VortexShell {
                         };
                     }
                 }
-                let changed = self.selected_icon.take().is_some();
+                let changed = !self.selected_icons.is_empty();
+                self.clear_desktop_selection();
                 changed
             }
-            Event::MouseDown { x, y, button } if button == 1 => {
+            Event::MouseDown { x, y, button } if button == 0 => {
                 let point = Point::new(x, y);
+                self.mouse_left_down = true;
                 self.settings_hover = self.settings_zone.contains(point);
                 if self.settings_zone.contains(point) {
                     if let Some(app) = self
@@ -2480,11 +2681,48 @@ impl App for VortexShell {
                         return true;
                     }
                 }
-                self.selected_icon = icon_at(&self.desktop_icons, point);
+                if let Some(idx) = icon_at(&self.desktop_icons, point) {
+                    self.select_only_desktop_icon(idx);
+                } else {
+                    self.begin_desktop_marquee(point);
+                }
+                true
+            }
+            Event::MouseDown { x, y, button } if button == 1 => {
+                let point = Point::new(x, y);
+                self.settings_hover = self.settings_zone.contains(point);
+                if self.settings_zone.contains(point) {
+                    return true;
+                }
+                for (rect, zone) in &self.dock_zones {
+                    if rect.contains(point) {
+                        if let DockZone::App(app_id) = zone {
+                            if let Some(app) =
+                                self.apps.iter_mut().find(|app| app.app_id == *app_id)
+                            {
+                                app.last_click_at = monotonic_millis();
+                            }
+                        }
+                        return true;
+                    }
+                }
+                if let Some(idx) = icon_at(&self.desktop_icons, point) {
+                    self.select_only_desktop_icon(idx);
+                } else {
+                    self.clear_desktop_selection();
+                }
                 self.context_menu = Some(make_context_menu(x, y, self.screen_w, self.screen_h));
                 true
             }
             Event::MouseMove { x, y } => {
+                if self.drag_selecting && self.mouse_left_down {
+                    self.update_desktop_marquee(Point::new(x, y));
+                    return true;
+                } else if self.drag_selecting && !self.mouse_left_down {
+                    // MouseUp was missed (e.g. released outside window); cancel drag.
+                    self.finish_desktop_marquee();
+                    return true;
+                }
                 let prev = self.hover;
                 self.hover = None;
                 for (i, (rect, _)) in self.dock_zones.iter().enumerate() {
@@ -2499,6 +2737,19 @@ impl App for VortexShell {
                     return true;
                 }
                 self.hover != prev
+            }
+            Event::MouseUp { x, y, button } if button == 0 => {
+                let _ = (x, y);
+                self.mouse_left_down = false;
+                if self.drag_selecting {
+                    self.update_desktop_marquee(Point::new(x, y));
+                    if self.drag_moved {
+                        self.suppress_next_click = true;
+                    }
+                    self.finish_desktop_marquee();
+                    return true;
+                }
+                false
             }
             Event::Tick => {
                 let now = monotonic_millis();
