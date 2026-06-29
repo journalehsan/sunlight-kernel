@@ -44,7 +44,7 @@ pub mod app;
 
 // Top-level re-exports for convenience
 pub use event::Event;
-pub use font::{UiGlyph, UiSymbol};
+pub use font::{UiGlyph, UiSymbol, VecText};
 pub use geom::{Point, Rect, Size};
 pub use layout::{GridColIter, GridRow, HBox, VBox};
 pub use paint::Canvas;

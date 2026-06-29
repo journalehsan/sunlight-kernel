@@ -15,10 +15,17 @@ use sunlight_libc::{self as libc, env, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
-use sunlight_ui::widgets::Label;
 use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
-use sun_font::{FontRole, TextStyle, draw_text as sf_draw, draw_text_centered as sf_centered,
-               draw_text_right as sf_right, draw_text_vcenter as sf_vcenter, line_height as sf_lh};
+use sun_font::{FontRole, TextStyle, VecFont,
+               draw_text as sf_draw, draw_text_centered as sf_centered,
+               draw_text_right as sf_right, draw_text_vcenter as sf_vcenter,
+               line_height as sf_lh};
+
+// ── Central GUI font instance (vector / Inter) ───────────────────────────────
+// Bitmap font (paint::font) remains available for early-boot and TTY rendering.
+// Graphical desktop widgets receive this reference via with_font(); inline text
+// uses the sf_* helpers with FontRole directly.
+static FONT_UI_REG: VecFont = VecFont(FontRole::UiRegular);
 
 // ---------------------------------------------------------------------------
 // Embedded place icons (16 px TGA, nearest-neighbour scaled to 32px in widget)
@@ -1062,12 +1069,8 @@ impl FilesApp {
 
         canvas.fill_rounded_rect_with_border(search, RADIUS, theme.panel_alt, theme.border, 1);
         canvas.draw_ui_symbol(search.x + 8, search.y + 9, UiSymbol::Search, theme.text_dim);
-        Label::new(
-            Rect::new(search.x + 22, search.y, search.w.saturating_sub(30), search.h),
-            "Search",
-        )
-        .dim()
-        .draw(canvas, theme);
+        sf_vcenter(canvas, "Search", search.x + 22, search.y, search.h,
+                   &TextStyle::new(FontRole::UiRegular, theme.text_dim));
 
         canvas.fill_rounded_rect(breadcrumb, RADIUS, theme.panel);
         let crumb = match self.state.view_mode {
@@ -1086,9 +1089,8 @@ impl FilesApp {
         let inner = sidebar.inset(PAD);
 
         // Section label
-        Label::new(Rect::new(inner.x, inner.y + 3, inner.w, 14), "Places")
-            .dim()
-            .draw(canvas, theme);
+        sf_vcenter(canvas, "Places", inner.x, inner.y + 3, 14,
+                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
 
         // Items via SidebarItem widget
         let items_area = Rect::new(
@@ -1119,10 +1121,12 @@ impl FilesApp {
                 SidebarItem::new(item_rect, label)
                     .with_icon(icon)
                     .with_state(state)
+                    .with_font(&FONT_UI_REG)
                     .draw(canvas, theme);
             } else {
                 SidebarItem::new(item_rect, label)
                     .with_state(state)
+                    .with_font(&FONT_UI_REG)
                     .draw(canvas, theme);
             }
         }
@@ -1141,17 +1145,10 @@ impl FilesApp {
     fn draw_home_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
         canvas.draw_ui_symbol(inner.x, inner.y + 1, UiSymbol::FilesApp, theme.accent);
-        Label::new(
-            Rect::new(inner.x + 16, inner.y, inner.w.saturating_sub(16), 18),
-            "Home",
-        )
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(inner.x, inner.y + 18, inner.w, 14),
-            "Folders and volumes",
-        )
-        .dim()
-        .draw(canvas, theme);
+        sf_vcenter(canvas, "Home", inner.x + 16, inner.y, 18,
+                   &TextStyle::new(FontRole::UiMedium, theme.text));
+        sf_vcenter(canvas, "Folders and volumes", inner.x, inner.y + 18, 14,
+                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
 
         self.draw_home_folders(canvas, theme, inner);
         let after_volumes = self.draw_home_volumes(canvas, theme, inner);
@@ -1160,9 +1157,8 @@ impl FilesApp {
 
     fn draw_home_folders(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) {
         let title_y = inner.y + 36;
-        Label::new(Rect::new(inner.x, title_y, inner.w, 14), "Places")
-            .dim()
-            .draw(canvas, theme);
+        sf_vcenter(canvas, "Places", inner.x, title_y, 14,
+                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
 
         let card_w = (inner.w.saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
             / HOME_COLS as u32)
@@ -1199,19 +1195,14 @@ impl FilesApp {
         let title_y = inner.y + 36 + 18
             + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32
             + 12;
-        Label::new(Rect::new(inner.x, title_y, inner.w, 14), "Volumes")
-            .dim()
-            .draw(canvas, theme);
+        sf_vcenter(canvas, "Volumes", inner.x, title_y, 14,
+                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
 
         let mut y = title_y + 18;
 
         if self.state.volume_count == 0 {
-            Label::new(
-                Rect::new(inner.x, y + 4, inner.w, 14),
-                "No mounted volumes detected",
-            )
-            .dim()
-            .draw(canvas, theme);
+            sf_vcenter(canvas, "No mounted volumes detected", inner.x, y + 4, 14,
+                       &TextStyle::new(FontRole::UiSmall, theme.text_dim));
             return y + 24;
         }
 
@@ -1223,6 +1214,7 @@ impl FilesApp {
             DriveCard::new(rect, volume.name_str())
                 .with_layout(DriveCardLayout::Row)
                 .with_mount_path(volume.path.as_str())
+                .with_font(&FONT_UI_REG)
                 .draw(canvas, theme);
         }
 
@@ -1233,27 +1225,19 @@ impl FilesApp {
         if y >= inner.bottom() - 18 {
             return; // no space
         }
-        Label::new(Rect::new(inner.x, y + 4, inner.w, 14), "Network")
-            .dim()
-            .draw(canvas, theme);
+        sf_vcenter(canvas, "Network", inner.x, y + 4, 14,
+                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
         canvas.draw_ui_symbol(inner.x, y + 20, UiSymbol::Network, theme.text_dim);
-        Label::new(
-            Rect::new(inner.x + 16, y + 18, inner.w.saturating_sub(16), 14),
-            "No network mounts",
-        )
-        .dim()
-        .draw(canvas, theme);
+        sf_vcenter(canvas, "No network mounts", inner.x + 16, y + 18, 14,
+                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
     }
 
     fn draw_volumes_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
-        Label::new(Rect::new(inner.x, inner.y, inner.w, 18), "Volumes").draw(canvas, theme);
-        Label::new(
-            Rect::new(inner.x, inner.y + 18, inner.w, 14),
-            "Mounted filesystems and drives",
-        )
-        .dim()
-        .draw(canvas, theme);
+        sf_vcenter(canvas, "Volumes", inner.x, inner.y, 18,
+                   &TextStyle::new(FontRole::UiMedium, theme.text));
+        sf_vcenter(canvas, "Mounted filesystems and drives", inner.x, inner.y + 18, 14,
+                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
 
         let mut y = inner.y + 42;
         for idx in 0..self.state.volume_count {
@@ -1263,19 +1247,20 @@ impl FilesApp {
             DriveCard::new(rect, volume.name_str())
                 .with_layout(DriveCardLayout::Row)
                 .with_mount_path(volume.path.as_str())
+                .with_font(&FONT_UI_REG)
                 .draw(canvas, theme);
         }
 
         if self.state.volume_count == 0 {
-            Label::new(Rect::new(inner.x, y + 8, inner.w, 14), "No mounted volumes")
-                .dim()
-                .draw(canvas, theme);
+            sf_vcenter(canvas, "No mounted volumes", inner.x, y + 8, 14,
+                       &TextStyle::new(FontRole::UiSmall, theme.text_dim));
         }
     }
 
     fn draw_network_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
-        Label::new(Rect::new(inner.x, inner.y, inner.w, 18), "Network").draw(canvas, theme);
+        sf_vcenter(canvas, "Network", inner.x, inner.y, 18,
+                   &TextStyle::new(FontRole::UiMedium, theme.text));
         let card = Rect::new(inner.x, inner.y + 28, inner.w, 60);
         canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel_alt, theme.border, 1);
         sf_draw(canvas, "No network mounts", card.x + 12, card.y + 10,
@@ -1288,11 +1273,8 @@ impl FilesApp {
 
     fn draw_directory_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
-        Label::new(
-            Rect::new(inner.x, inner.y, inner.w, HEADER_H),
-            self.state.current_path.as_str(),
-        )
-        .draw(canvas, theme);
+        sf_vcenter(canvas, self.state.current_path.as_str(), inner.x, inner.y, HEADER_H,
+                   &TextStyle::new(FontRole::UiMedium, theme.text));
 
         let subtitle = if self.state.error_len != 0 {
             self.state.error_str()
@@ -1321,12 +1303,8 @@ impl FilesApp {
         let row_count = self.state.entry_count.min(visible_rows);
 
         if row_count == 0 {
-            Label::new(
-                Rect::new(inner.x, list_top + 8, inner.w, 14),
-                "No entries in this directory",
-            )
-            .dim()
-            .draw(canvas, theme);
+            sf_vcenter(canvas, "No entries in this directory", inner.x, list_top + 8, 14,
+                       &TextStyle::new(FontRole::UiSmall, theme.text_dim));
             return;
         }
 

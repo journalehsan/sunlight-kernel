@@ -86,6 +86,7 @@
 //! It renders a short all-caps section label — no expand/collapse logic (add
 //! that in your app state if needed).
 
+use crate::font::VecText;
 use crate::geom::{Point, Rect};
 use crate::image::TgaImage;
 use crate::paint::Canvas;
@@ -145,6 +146,8 @@ pub struct SidebarItem<'a> {
     /// [`ICON_SIZE`](Self::ICON_SIZE)x[..] on blit. Pass `None` for text rows.
     pub icon: Option<&'a TgaImage>,
     pub state: SidebarState,
+    /// Vector font for label rendering. Falls back to the 5×7 bitmap font when `None`.
+    pub font: Option<&'a dyn VecText>,
 }
 
 impl<'a> SidebarItem<'a> {
@@ -179,6 +182,7 @@ impl<'a> SidebarItem<'a> {
             badge: None,
             icon: None,
             state: SidebarState::Normal,
+            font: None,
         }
     }
 
@@ -214,6 +218,12 @@ impl<'a> SidebarItem<'a> {
     /// Convenience: set state to [`SidebarState::Selected`].
     pub fn selected(self) -> Self {
         self.with_state(SidebarState::Selected)
+    }
+
+    /// Attach a vector font renderer; falls back to 5×7 bitmap when `None`.
+    pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
+        self.font = Some(font);
+        self
     }
 
     /// The inner "card" rect — inset from [`rect`](Self::rect) on all sides.
@@ -281,7 +291,7 @@ impl<'a> SidebarItem<'a> {
         };
 
         // ── Title + hint vertical placement ───────────────────────────────
-        let font_h = crate::paint::font::GLYPH_H as i32;
+        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| f.line_height() as i32);
         let (title_y, hint_y) = if self.hint.is_some() {
             // Two lines: center the pair vertically inside the card height.
             let block_h = font_h * 2 + 3;
@@ -291,22 +301,34 @@ impl<'a> SidebarItem<'a> {
             (card.y + (card.h as i32 - font_h) / 2, None)
         };
 
-        canvas.draw_text(text_x, title_y, self.label, label_color);
-
-        if let (Some(h), Some(hy)) = (self.hint, hint_y) {
-            canvas.draw_text(text_x, hy, h, theme.text_dim);
+        if let Some(f) = self.font {
+            f.draw(canvas, self.label, text_x, title_y, label_color);
+            if let (Some(h), Some(hy)) = (self.hint, hint_y) {
+                f.draw(canvas, h, text_x, hy, theme.text_dim);
+            }
+        } else {
+            canvas.draw_text(text_x, title_y, self.label, label_color);
+            if let (Some(h), Some(hy)) = (self.hint, hint_y) {
+                canvas.draw_text(text_x, hy, h, theme.text_dim);
+            }
         }
 
         // ── Badge (right-aligned pill) ────────────────────────────────────
         if let Some(b) = self.badge {
-            // Approximate text width: GLYPH_W per char + 1px spacing.
-            let char_w = crate::paint::font::GLYPH_W as i32 + 1;
-            let w = (b.len() as i32) * char_w;
+            let w = if let Some(f) = self.font {
+                f.measure_w(b) as i32
+            } else {
+                (b.len() as i32) * (crate::paint::font::GLYPH_W as i32 + 1)
+            };
             let bx = card.right() - Self::BADGE_MARGIN - w;
             let by = card.y + (card.h as i32 - font_h) / 2;
             let pill = Rect::new(bx - 4, by - 2, w as u32 + 8, font_h as u32 + 4);
             canvas.fill_rounded_rect(pill, 6, theme.accent.darken(160));
-            canvas.draw_text(bx, by, b, theme.accent.lighten(20));
+            if let Some(f) = self.font {
+                f.draw(canvas, b, bx, by, theme.accent.lighten(20));
+            } else {
+                canvas.draw_text(bx, by, b, theme.accent.lighten(20));
+            }
         }
     }
 

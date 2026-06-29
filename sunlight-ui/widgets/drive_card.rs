@@ -49,6 +49,7 @@
 //!     .draw(&mut canvas, &theme);
 //! ```
 
+use crate::font::VecText;
 use crate::geom::{Point, Rect};
 use crate::image::TgaImage;
 use crate::paint::Canvas;
@@ -116,6 +117,8 @@ pub struct DriveCard<'a> {
     pub usage_ratio: Option<f32>,
     pub layout: DriveCardLayout,
     pub state: DriveCardState,
+    /// Vector font for name/path rendering. Falls back to 5×7 bitmap when `None`.
+    pub font: Option<&'a dyn VecText>,
 }
 
 impl<'a> DriveCard<'a> {
@@ -153,6 +156,7 @@ impl<'a> DriveCard<'a> {
             usage_ratio: None,
             layout: DriveCardLayout::Card,
             state: DriveCardState::Normal,
+            font: None,
         }
     }
 
@@ -198,6 +202,12 @@ impl<'a> DriveCard<'a> {
 
     pub fn selected(self) -> Self {
         self.with_state(DriveCardState::Selected)
+    }
+
+    /// Attach a vector font renderer; falls back to 5×7 bitmap when `None`.
+    pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
+        self.font = Some(font);
+        self
     }
 
     // ── Draw ─────────────────────────────────────────────────────────────
@@ -256,7 +266,7 @@ impl<'a> DriveCard<'a> {
     // ── Card (grid) body layout ───────────────────────────────────────────
 
     fn draw_card_body(&self, canvas: &mut Canvas, theme: &Theme, card: Rect) {
-        let font_h = crate::paint::font::GLYPH_H as i32;
+        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| f.line_height() as i32);
         let icon_size = Self::CARD_ICON_SIZE;
 
         // Icon — centered horizontally, top-padded
@@ -273,18 +283,36 @@ impl<'a> DriveCard<'a> {
         let mut cy = icon_y + icon_size as i32 + 6;
 
         // Drive name — centered
-        draw_centered(canvas, card, cy, self.name, text_color);
+        if let Some(f) = self.font {
+            let w = f.measure_w(self.name) as i32;
+            let x = (card.x + (card.w as i32 - w) / 2).max(card.x);
+            f.draw(canvas, self.name, x, cy, text_color);
+        } else {
+            draw_centered(canvas, card, cy, self.name, text_color);
+        }
         cy += font_h + 3;
 
         // Mount path — centered, dim
         if let Some(path) = self.mount_path {
-            draw_centered(canvas, card, cy, path, theme.text_dim);
+            if let Some(f) = self.font {
+                let w = f.measure_w(path) as i32;
+                let x = (card.x + (card.w as i32 - w) / 2).max(card.x);
+                f.draw(canvas, path, x, cy, theme.text_dim);
+            } else {
+                draw_centered(canvas, card, cy, path, theme.text_dim);
+            }
             cy += font_h + 2;
         }
 
         // FS type — centered, dimmer
         if let Some(fs) = self.fs_type {
-            draw_centered(canvas, card, cy, fs, theme.text_dim.darken(20));
+            if let Some(f) = self.font {
+                let w = f.measure_w(fs) as i32;
+                let x = (card.x + (card.w as i32 - w) / 2).max(card.x);
+                f.draw(canvas, fs, x, cy, theme.text_dim.darken(20));
+            } else {
+                draw_centered(canvas, card, cy, fs, theme.text_dim.darken(20));
+            }
             cy += font_h + 5;
         }
 
@@ -300,7 +328,7 @@ impl<'a> DriveCard<'a> {
     // ── Row (list) body layout ────────────────────────────────────────────
 
     fn draw_row_body(&self, canvas: &mut Canvas, theme: &Theme, card: Rect) {
-        let font_h = crate::paint::font::GLYPH_H as i32;
+        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| f.line_height() as i32);
         let icon_size = Self::ROW_ICON_SIZE;
 
         let icon_x = card.x + Self::PAD;
@@ -321,7 +349,6 @@ impl<'a> DriveCard<'a> {
         let has_cap = self.used.is_some() || self.total.is_some();
         let info_lines = has_bar as i32 + has_cap as i32;
         let total_text_h = if info_lines > 0 {
-            // name + separator line + bar/cap lines
             font_h * 2 + 4 + info_lines * (font_h + 2)
         } else {
             font_h * 2 + 3
@@ -330,20 +357,35 @@ impl<'a> DriveCard<'a> {
         let mut cy = card.y + (card.h as i32 - total_text_h) / 2;
 
         // Name
-        canvas.draw_text(text_area.x, cy, self.name, text_color);
+        if let Some(f) = self.font {
+            f.draw(canvas, self.name, text_area.x, cy, text_color);
+        } else {
+            canvas.draw_text(text_area.x, cy, self.name, text_color);
+        }
         cy += font_h + 3;
 
-        // Mount path and fs type on one line separated by space
+        // Mount path and fs type on one line
         {
             let mut lx = text_area.x;
             if let Some(path) = self.mount_path {
-                lx = canvas.draw_text(lx, cy, path, theme.text_dim);
+                lx = if let Some(f) = self.font {
+                    f.draw(canvas, path, lx, cy, theme.text_dim)
+                } else {
+                    canvas.draw_text(lx, cy, path, theme.text_dim)
+                };
                 lx += 4;
             }
             if let Some(fs) = self.fs_type {
-                // Dot separator
-                lx = canvas.draw_text(lx, cy, "· ", theme.text_dim.darken(30));
-                canvas.draw_text(lx, cy, fs, theme.text_dim.darken(20));
+                lx = if let Some(f) = self.font {
+                    f.draw(canvas, "· ", lx, cy, theme.text_dim.darken(30))
+                } else {
+                    canvas.draw_text(lx, cy, "· ", theme.text_dim.darken(30))
+                };
+                if let Some(f) = self.font {
+                    f.draw(canvas, fs, lx, cy, theme.text_dim.darken(20));
+                } else {
+                    canvas.draw_text(lx, cy, fs, theme.text_dim.darken(20));
+                }
             }
             cy += font_h + 4;
         }

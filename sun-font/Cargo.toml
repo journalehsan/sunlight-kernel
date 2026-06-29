@@ -1,6 +1,7 @@
 [package]
 name = "sun-font"
-version = "0.1.632"
+version = "0.1.633"
+
 
 edition = "2021"
 description = "SunlightOS build-time rasterized Inter/MiniType font abstraction"

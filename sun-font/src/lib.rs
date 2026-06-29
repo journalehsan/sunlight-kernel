@@ -257,6 +257,44 @@ pub fn draw_text_vcenter(
     draw_text(canvas, text, x, ty, style)
 }
 
+// ── VecFont: implements sunlight_ui::VecText ──────────────────────────────────
+
+/// Concrete `VecText` implementation wrapping a `FontRole`.
+///
+/// Create a `static` instance and pass a reference to widgets:
+/// ```ignore
+/// static LABEL_FONT: VecFont = VecFont(FontRole::UiRegular);
+/// SidebarItem::new(rect, "Home").with_font(&LABEL_FONT).draw(canvas, theme);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VecFont(pub FontRole);
+
+impl sunlight_ui::font::VecText for VecFont {
+    fn draw(&self, canvas: &mut Canvas, text: &str, x: i32, y: i32, color: Color) -> i32 {
+        draw_text(canvas, text, x, y, &TextStyle::new(self.0, color))
+    }
+
+    fn draw_vcenter(
+        &self,
+        canvas: &mut Canvas,
+        text: &str,
+        x: i32,
+        y: i32,
+        height: u32,
+        color: Color,
+    ) -> i32 {
+        draw_text_vcenter(canvas, text, x, y, height, &TextStyle::new(self.0, color))
+    }
+
+    fn measure_w(&self, text: &str) -> u32 {
+        measure_text(text, self.0).w
+    }
+
+    fn line_height(&self) -> u32 {
+        line_height(self.0)
+    }
+}
+
 // ── Utility: validate that the embedded MTF blobs look sane ──────────────────
 
 /// Panics if any embedded font blob has an invalid MTF magic header.
