@@ -17,6 +17,8 @@ use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::Label;
 use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
+use sun_font::{FontRole, TextStyle, draw_text as sf_draw, draw_text_centered as sf_centered,
+               draw_text_right as sf_right, draw_text_vcenter as sf_vcenter, line_height as sf_lh};
 
 // ---------------------------------------------------------------------------
 // Embedded place icons (16 px TGA, nearest-neighbour scaled to 32px in widget)
@@ -1074,7 +1076,8 @@ impl FilesApp {
             ViewMode::Network => "Network",
             ViewMode::Directory => self.state.current_path.as_str(),
         };
-        canvas.draw_text(breadcrumb.x + 10, breadcrumb.y + 8, crumb, theme.accent);
+        sf_vcenter(canvas, crumb, breadcrumb.x + 10, breadcrumb.y, breadcrumb.h,
+                   &TextStyle::new(FontRole::MonoRegular, theme.accent));
     }
 
     fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme, sidebar: Rect) {
@@ -1182,10 +1185,12 @@ impl FilesApp {
 
             // Name and path hint — no "Missing" labels on startup
             let text_x = rect.x + 46;
-            canvas.draw_text(text_x, rect.y + 8, folder.name, theme.text);
+            sf_draw(canvas, folder.name, text_x, rect.y + 8,
+                    &TextStyle::new(FontRole::UiRegular, theme.text));
             // Show a shortened path if there's room
             let _ = card_w; // used for layout calculation above
-            canvas.draw_text(text_x, rect.y + 24, folder.path.as_str(), theme.text_dim);
+            sf_draw(canvas, folder.path.as_str(), text_x, rect.y + 24,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim));
         }
     }
 
@@ -1273,13 +1278,12 @@ impl FilesApp {
         Label::new(Rect::new(inner.x, inner.y, inner.w, 18), "Network").draw(canvas, theme);
         let card = Rect::new(inner.x, inner.y + 28, inner.w, 60);
         canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel_alt, theme.border, 1);
-        canvas.draw_text(card.x + 12, card.y + 10, "No network mounts", theme.text);
-        canvas.draw_text(
-            card.x + 12,
-            card.y + 26,
-            "Network mounts appear here when VFS metadata is available.",
-            theme.text_dim,
-        );
+        sf_draw(canvas, "No network mounts", card.x + 12, card.y + 10,
+                &TextStyle::new(FontRole::UiRegular, theme.text));
+        sf_draw(canvas,
+                "Network mounts appear here when VFS metadata is available.",
+                card.x + 12, card.y + 28,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim));
     }
 
     fn draw_directory_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
@@ -1300,12 +1304,8 @@ impl FilesApp {
         } else {
             theme.text_dim
         };
-        canvas.draw_text(
-            inner.x,
-            inner.y + HEADER_H as i32,
-            subtitle,
-            subtitle_color,
-        );
+        sf_draw(canvas, subtitle, inner.x, inner.y + HEADER_H as i32,
+                &TextStyle::new(FontRole::UiSmall, subtitle_color));
 
         self.draw_directory_rows(canvas, theme, main);
     }
@@ -1360,13 +1360,15 @@ impl FilesApp {
             };
             // Icon area: 32×32 slot; center the glyph. No per-file decode here
             // so folder opening and scrolling stay fast.
-            let text_y = row.y + (ROW_H as i32 - 14) / 2; // vertically center 14-px text
+            let font_lh = sf_lh(FontRole::UiRegular) as i32;
+            let text_y = row.y + (ROW_H as i32 - font_lh) / 2;
             let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
             let sym_y = row.y + (ROW_H as i32 - 14) / 2;
             canvas.draw_ui_symbol(sym_x, sym_y, icon, icon_color);
             // Text starts after the icon slot + 6px gap.
             let text_x = row.x + ICON_SLOT as i32 + 6;
-            canvas.draw_text(text_x, text_y, entry_name_str(&entry), theme.text);
+            sf_draw(canvas, entry_name_str(&entry), text_x, text_y,
+                    &TextStyle::new(FontRole::UiRegular, theme.text));
 
             let type_label = match entry.file_type {
                 FT_DIR => "Directory",
@@ -1379,17 +1381,21 @@ impl FilesApp {
                 }
                 _ => "Other",
             };
-            canvas.draw_text(type_x + 8, text_y, type_label, theme.text_dim);
+            sf_draw(canvas, type_label, type_x + 8, text_y,
+                    &TextStyle::new(FontRole::UiRegular, theme.text_dim));
 
             if entry.file_type == FT_DIR {
-                canvas.draw_text_right(Rect::new(size_x, row.y, SIZE_W, ROW_H), "--", theme.text, 8);
+                sf_right(canvas, Rect::new(size_x, row.y, SIZE_W, ROW_H), "--",
+                         &TextStyle::new(FontRole::UiRegular, theme.text), 8);
             } else {
                 let mut scratch = [0u8; 16];
                 let len = write_size(entry.size, &mut scratch);
                 let size_text = core::str::from_utf8(&scratch[..len]).unwrap_or("--");
-                canvas.draw_text_right(Rect::new(size_x, row.y, SIZE_W, ROW_H), size_text, theme.text, 8);
+                sf_right(canvas, Rect::new(size_x, row.y, SIZE_W, ROW_H), size_text,
+                         &TextStyle::new(FontRole::UiRegular, theme.text), 8);
             }
-            canvas.draw_text(mod_x + 8, text_y, "--", theme.text_dim);
+            sf_draw(canvas, "--", mod_x + 8, text_y,
+                    &TextStyle::new(FontRole::UiRegular, theme.text_dim));
         }
     }
 
@@ -1420,39 +1426,42 @@ impl FilesApp {
     }
 
     fn draw_folder_summary(&self, canvas: &mut Canvas, theme: &Theme, left: Rect, preview: Rect) {
-        let mut y = left.y + 8;
-        canvas.draw_text(left.x, y, "Folder:", theme.text_dim);
-        y += 16;
+        let lh_sm = sf_lh(FontRole::UiSmall) as i32;
+        let lh_rg = sf_lh(FontRole::UiRegular) as i32;
+        let mut y = left.y + 6;
+        sf_draw(canvas, "Folder:", left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        y += lh_sm + 2;
         let folder_name = self.state.current_path.as_str().rsplit('/').next().unwrap_or("");
-        canvas.draw_text(left.x, y, folder_name, theme.text);
-        y += 20;
-        
-        canvas.draw_text(left.x, y, "Path:", theme.text_dim);
-        y += 16;
-        canvas.draw_text(left.x, y, self.state.current_path.as_str(), theme.text);
-        y += 20;
-        
+        sf_draw(canvas, folder_name, left.x, y, &TextStyle::new(FontRole::UiMedium, theme.text));
+        y += lh_rg + 6;
+
+        sf_draw(canvas, "Path:", left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        y += lh_sm + 2;
+        sf_draw(canvas, self.state.current_path.as_str(), left.x, y,
+                &TextStyle::new(FontRole::MonoRegular, theme.text));
+        y += lh_rg + 6;
+
         let mut buf = [0u8; 64];
         let mut len = 0;
-        
+
         let items = self.state.entry_count;
         len += write_to_buf(&mut buf[len..], b"Items: ");
         len += write_usize(&mut buf[len..], items);
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-            canvas.draw_text(left.x, y, s, theme.text);
+            sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
         }
-        y += 16;
-        
+        y += lh_sm + 2;
+
         len = 0;
         len += write_to_buf(&mut buf[len..], b"Files: ");
         len += write_usize(&mut buf[len..], self.state.file_count);
         len += write_to_buf(&mut buf[len..], b", Dirs: ");
         len += write_usize(&mut buf[len..], self.state.folder_count);
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-            canvas.draw_text(left.x, y, s, theme.text);
+            sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
         }
-        y += 16;
-        
+        y += lh_sm + 2;
+
         let mut image_count = 0;
         for i in 0..self.state.entry_count {
             if is_image_name(self.state.entries[i].name_bytes()) {
@@ -1464,24 +1473,26 @@ impl FilesApp {
         len += write_usize(&mut buf[len..], image_count);
         len += write_to_buf(&mut buf[len..], b" (SIMG/TGA)");
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-            canvas.draw_text(left.x, y, s, theme.text);
+            sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
         }
-        
+
         canvas.draw_ui_symbol_centered(preview, UiSymbol::Folder, theme.accent);
     }
 
     fn draw_file_details(&self, canvas: &mut Canvas, theme: &Theme, left: Rect, preview: Rect, entry: DirEntry) {
-        let mut y = left.y + 8;
+        let lh_sm = sf_lh(FontRole::UiSmall) as i32;
+        let lh_rg = sf_lh(FontRole::UiRegular) as i32;
+        let mut y = left.y + 6;
         let name_bytes = entry.name_bytes();
         if let Ok(name) = core::str::from_utf8(name_bytes) {
-            canvas.draw_text(left.x, y, name, theme.accent);
+            sf_draw(canvas, name, left.x, y, &TextStyle::new(FontRole::UiMedium, theme.accent));
         }
-        y += 20;
-        
+        y += lh_rg + 4;
+
         let type_label = image_type_label(name_bytes);
-        canvas.draw_text(left.x, y, type_label, theme.text);
-        y += 16;
-        
+        sf_draw(canvas, type_label, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
+        y += lh_sm + 4;
+
         let mut buf = [0u8; 64];
         let mut len = write_to_buf(&mut buf, b"Size: ");
         let mut size_buf = [0u8; 16];
@@ -1491,10 +1502,10 @@ impl FilesApp {
             len += size_len;
         }
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-            canvas.draw_text(left.x, y, s, theme.text);
+            sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
         }
-        y += 16;
-        
+        y += lh_sm + 4;
+
         if is_image_name(name_bytes) && self.preview_src_w > 0 && self.preview_src_h > 0 {
             len = 0;
             len += write_to_buf(&mut buf[len..], b"Dimensions: ");
@@ -1502,13 +1513,14 @@ impl FilesApp {
             len += write_to_buf(&mut buf[len..], b"x");
             len += write_usize(&mut buf[len..], self.preview_src_h as usize);
             if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-                canvas.draw_text(left.x, y, s, theme.text);
+                sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
             }
-            y += 16;
-            
-            canvas.draw_text(left.x, y, "Format: RGBA8888", theme.text);
+            y += lh_sm + 4;
+
+            sf_draw(canvas, "Format: RGBA8888", left.x, y,
+                    &TextStyle::new(FontRole::UiSmall, theme.text));
         }
-        
+
         if is_image_name(name_bytes) {
             let ready = unsafe { PREVIEW_READY };
             if ready == 1 {
@@ -1518,7 +1530,10 @@ impl FilesApp {
                 }
             } else if ready == 2 {
                 canvas.draw_ui_symbol_centered(preview, UiSymbol::MissingFolder, theme.danger);
-                canvas.draw_text(preview.x + 8, preview.y + preview.h as i32 - 20, "Preview unavailable", theme.text_dim);
+                sf_vcenter(canvas, "Preview unavailable",
+                           preview.x + 8, preview.bottom() - sf_lh(FontRole::UiSmall) as i32 - 4,
+                           sf_lh(FontRole::UiSmall),
+                           &TextStyle::new(FontRole::UiSmall, theme.text_dim));
             } else {
                 canvas.draw_ui_symbol_centered(preview, UiSymbol::Pictures, theme.accent);
             }
@@ -1542,13 +1557,11 @@ impl FilesApp {
             &mut count_buf,
         );
         let count_text = core::str::from_utf8(&count_buf[..count_len]).unwrap_or("0 items");
-        canvas.draw_text(status.x + 12, status.y + 5, count_text, theme.text);
-        canvas.draw_text(
-            status.x + 160,
-            status.y + 5,
-            summary,
-            if self.state.error_len != 0 { theme.danger } else { theme.text_dim },
-        );
+        sf_vcenter(canvas, count_text, status.x + 12, status.y, STATUS_H,
+                   &TextStyle::new(FontRole::UiSmall, theme.text));
+        let summary_color = if self.state.error_len != 0 { theme.danger } else { theme.text_dim };
+        sf_vcenter(canvas, summary, status.x + 160, status.y, STATUS_H,
+                   &TextStyle::new(FontRole::UiSmall, summary_color));
     }
 }
 
@@ -1902,9 +1915,10 @@ fn draw_pill(
     canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
     if let Some(sym) = icon {
         canvas.draw_ui_symbol(rect.x + 8, rect.y + 9, sym, color);
-        canvas.draw_text(rect.x + 22, rect.y + 9, text, color);
+        sf_vcenter(canvas, text, rect.x + 22, rect.y, rect.h,
+                   &TextStyle::new(FontRole::UiSmall, color));
     } else {
-        canvas.draw_text_centered(rect, text, color);
+        sf_centered(canvas, rect, text, &TextStyle::new(FontRole::UiSmall, color));
     }
 }
 

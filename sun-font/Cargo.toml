@@ -1,0 +1,27 @@
+[package]
+name = "sun-font"
+version = "0.1.632"
+
+edition = "2021"
+description = "SunlightOS build-time rasterized Inter/MiniType font abstraction"
+license = "MIT"
+
+[dependencies]
+sunlight-ui = { path = "../sunlight-ui" }
+
+[build-dependencies]
+fontdue = "0.7"
+
+[features]
+default = []
+# Expose std-based helpers (e.g. for the minitype-demo binary)
+std = []
+
+[lib]
+name = "sun_font"
+path = "src/lib.rs"
+
+[[bin]]
+name = "minitype-demo"
+path = "src/bin/demo.rs"
+required-features = ["std"]

@@ -60,6 +60,7 @@ members = [
     "services/sunlight-resolved",
     "services/sunlight-powerd",
     "services/solar",
+    "sun-font",
     "sunlight-bench",
     "sunlight-calculator",
     "sunlight-files",
