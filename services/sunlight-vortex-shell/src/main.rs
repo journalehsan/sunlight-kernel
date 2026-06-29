@@ -2877,8 +2877,17 @@ fn launch_error_text(err: sun_exec::LaunchError) -> &'static str {
 }
 
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    debug_log("[VORTEX] panic\n");
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    debug_log("[VORTEX] panic");
+    if let Some(loc) = info.location() {
+        debug_log(" at ");
+        debug_log(loc.file());
+        debug_log(":");
+        debug_log_u32(loc.line());
+        debug_log(":");
+        debug_log_u32(loc.column());
+    }
+    debug_log("\n");
     loop {
         process_yield();
     }
