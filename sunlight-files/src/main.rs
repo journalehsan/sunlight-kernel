@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+
 use core::alloc::GlobalAlloc;
 use core::cmp::Ordering;
 
@@ -97,13 +99,19 @@ const SIDEBAR_ITEM_GAP: u32 = 2;
 /// Sidebar section-header label height + gap below it.
 const SIDEBAR_HEADER_H: u32 = 20;
 const HEADER_H: u32 = 20;
-const ROW_H: u32 = 18;
+const ROW_H: u32 = 36;
+const ICON_SLOT: u32 = 32; // px — thumbnail / folder icon reserved width
 const TYPE_W: u32 = 116;
 const SIZE_W: u32 = 92;
 const MOD_W: u32 = 152;
 const MAX_ENTRIES: usize = 64;
 const PATH_LEN: usize = 256;
 const ERROR_LEN: usize = 96;
+/// Bottom details/preview pane height (Vista/7-style). Compact so it does not
+/// eat the file list. Below this window height the pane shrinks further.
+const DETAILS_H: u32 = 132;
+const DETAILS_MIN_H: u32 = 92;
+const DETAILS_PREVIEW_W: u32 = 132;
 
 // Home grid: 6 core folders (Desktop, Documents, Downloads, Pictures, Music, Videos).
 // Templates and Public are available via navigation but not shown on the home page.
@@ -402,8 +410,6 @@ static ALLOC: NoAlloc = NoAlloc;
 // ---------------------------------------------------------------------------
 
 // Static buffer large enough for a 128×128 BGRA24 TGA (18-byte header + pixels).
-static mut THUMB_READ_BUF: [u8; 18 + 128 * 128 * 3] = [0u8; 18 + 128 * 128 * 3];
-
 /// Returns true if the file name ends in .simg or .tga.
 fn is_image_name(name: &[u8]) -> bool {
     let n = name.len();
@@ -411,46 +417,16 @@ fn is_image_name(name: &[u8]) -> bool {
         || (n >= 4 && name[n - 4..] == *b".tga")
 }
 
-/// FNV-1a 64-bit hash used to derive the thumbnail cache key.
-fn thumb_fnv1a(data: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf29ce484222325;
-    for &b in data { h ^= b as u64; h = h.wrapping_mul(0x100000001b3); }
-    h
+/// Human-readable type label for a supported image file name.
+fn image_type_label(name: &[u8]) -> &'static str {
+    let n = name.len();
+    if n >= 5 && name[n - 5..] == *b".simg" {
+        "Sunlight Image"
+    } else {
+        "TGA Image"
+    }
 }
 
-/// Compute the 16-char hex cache key for a source path + size_flag (0 = normal).
-fn thumb_cache_key(src: &[u8], size_flag: u32) -> [u8; 16] {
-    const MAX: usize = 256;
-    let mut buf = [0u8; MAX + 4];
-    let n = src.len().min(MAX);
-    buf[..n].copy_from_slice(&src[..n]);
-    buf[n..n + 4].copy_from_slice(&size_flag.to_le_bytes());
-    let h = thumb_fnv1a(&buf[..n + 4]);
-    let nib = b"0123456789abcdef";
-    let mut hex = [0u8; 16];
-    for i in 0..8 {
-        let byte = ((h >> (56 - i * 8)) & 0xFF) as u8;
-        hex[i * 2] = nib[(byte >> 4) as usize];
-        hex[i * 2 + 1] = nib[(byte & 0xF) as usize];
-    }
-    hex
-}
-
-/// Build the normal-size cache path for `src_path` into `out`.
-/// Returns the byte count (without null terminator).
-fn thumb_cache_path(home: &[u8], src_path: &[u8], out: &mut [u8; 256]) -> usize {
-    let key = thumb_cache_key(src_path, 0);
-    let mut p = 0usize;
-    macro_rules! app {
-        ($s:expr) => { for &b in $s { if p < 255 { out[p] = b; p += 1; } } };
-    }
-    app!(home);
-    app!(b"/.cache/sunlightos/thumbs/normal/");
-    app!(key.as_ref());
-    app!(b".simg");
-    out[p] = 0;
-    p
-}
 
 /// Draw a raw TGA type-2 (24bpp) byte slice directly onto `canvas` at `dst`,
 /// scaling with nearest-neighbour. No allocation; reads pixel data inline.
@@ -495,35 +471,103 @@ fn draw_tga_bytes(canvas: &mut Canvas, data: &[u8], dst: Rect) {
     }
 }
 
-/// Try to draw a cached thumbnail for `src_path` at `dst`. Returns true on success.
-/// Uses the `THUMB_READ_BUF` static — must not be called recursively.
-#[allow(static_mut_refs)]
-fn try_draw_cached_thumb(canvas: &mut Canvas, home: &[u8], src_path: &[u8], dst: Rect) -> bool {
-    let mut cache_path = [0u8; 256];
-    let clen = thumb_cache_path(home, src_path, &mut cache_path);
-    let stat = match libc::stat(&cache_path[..clen]) {
-        Ok(s) if s.size > 0 => s,
-        _ => return false,
-    };
-    // SAFETY: THUMB_READ_BUF is only ever accessed here, single-threaded.
-    let buf = unsafe { &mut THUMB_READ_BUF };
-    if stat.size > buf.len() as u64 { return false; }
-    let fd = match libc::open(&cache_path[..clen]) {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
-    let n = libc::read(fd, buf).unwrap_or(0);
-    let _ = libc::close(fd);
-    if n < 18 { return false; }
-    draw_tga_bytes(canvas, &buf[..n], dst);
-    true
-}
-
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     debug_log("[FILES] panic\n");
     loop {
         process_yield();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Async image preview (details/preview pane)
+// ---------------------------------------------------------------------------
+//
+// Preview-on-selection is generated OFF the UI thread by a background worker.
+// The UI thread never decodes image data: on selection change it bumps a
+// generation counter and hands the path to the worker; on each Event::Tick it
+// checks a single-slot mailbox. A result is applied only if its generation
+// matches the current selection — stale results are dropped silently. Decode
+// failures flip the slot to Failed so the pane shows a broken-image glyph and
+// never retries the same selection. If the worker cannot be spawned the File
+// Manager keeps working with placeholders only.
+
+// ---------------------------------------------------------------------------
+// Synchronous image preview — no threads, no heap.
+//
+// When a .simg/.tga file is selected in the directory view, we read it
+// directly into a static source buffer and draw it in the details pane on
+// every frame using the existing draw_tga_bytes helper. No thread is spawned,
+// no atomic mailbox is needed, and the decode is zero-alloc.
+// ---------------------------------------------------------------------------
+
+/// Maximum source file size we will preview. Files larger than this show
+/// "Preview unavailable" without reading. 4 MiB covers the sample pictures.
+const PREVIEW_SRC_BUF_LEN: usize = 4 * 1024 * 1024;
+
+/// 0 = no preview, 1 = ready (SRC_BUF valid), 2 = failed / unsupported.
+static mut PREVIEW_READY: u8 = 0;
+/// Bytes of valid TGA data at the start of PREVIEW_SRC_BUF.
+static mut PREVIEW_SRC_FILLED: usize = 0;
+/// Native dimensions extracted from the TGA header.
+static mut PREVIEW_SRC_W: u32 = 0;
+static mut PREVIEW_SRC_H: u32 = 0;
+/// Raw file bytes — in BSS, costs nothing in the binary on disk.
+static mut PREVIEW_SRC_BUF: [u8; PREVIEW_SRC_BUF_LEN] = [0u8; PREVIEW_SRC_BUF_LEN];
+
+/// Load `path` synchronously into PREVIEW_SRC_BUF and validate the TGA header.
+/// Sets PREVIEW_READY to 1 on success, 2 on any failure.
+fn load_preview_sync(path: &[u8]) {
+    unsafe {
+        PREVIEW_READY = 0;
+        PREVIEW_SRC_FILLED = 0;
+        PREVIEW_SRC_W = 0;
+        PREVIEW_SRC_H = 0;
+    }
+
+    let stat = match libc::stat(path) {
+        Ok(s) => s,
+        Err(_) => { unsafe { PREVIEW_READY = 2; } return; }
+    };
+    let file_size = stat.size as usize;
+    if file_size > PREVIEW_SRC_BUF_LEN || file_size < 18 {
+        unsafe { PREVIEW_READY = 2; }
+        return;
+    }
+
+    let fd = match libc::open(path) {
+        Ok(f) => f,
+        Err(_) => { unsafe { PREVIEW_READY = 2; } return; }
+    };
+
+    let mut total = 0usize;
+    loop {
+        let remaining = file_size - total;
+        if remaining == 0 { break; }
+        let chunk = remaining.min(8192);
+        let n = unsafe {
+            libc::read(fd, &mut PREVIEW_SRC_BUF[total..total + chunk]).unwrap_or(0)
+        };
+        if n == 0 { break; }
+        total += n;
+    }
+    let _ = libc::close(fd);
+
+    unsafe {
+        PREVIEW_SRC_FILLED = total;
+        // Validate TGA type-2 header
+        if total >= 18 && PREVIEW_SRC_BUF[2] == 2 {
+            let bpp = PREVIEW_SRC_BUF[16];
+            let w = u16::from_le_bytes([PREVIEW_SRC_BUF[12], PREVIEW_SRC_BUF[13]]) as u32;
+            let h = u16::from_le_bytes([PREVIEW_SRC_BUF[14], PREVIEW_SRC_BUF[15]]) as u32;
+            if (bpp == 24 || bpp == 32) && w > 0 && h > 0 {
+                PREVIEW_SRC_W = w;
+                PREVIEW_SRC_H = h;
+                PREVIEW_READY = 1;
+                return;
+            }
+        }
+        PREVIEW_READY = 2;
     }
 }
 
@@ -834,26 +878,47 @@ impl State {
 
 struct FilesApp {
     state: State,
+    /// Cached source dimensions of the last loaded preview (for metadata display).
+    preview_src_w: u32,
+    preview_src_h: u32,
 }
 
 impl FilesApp {
     fn new() -> Self {
         Self {
             state: State::new(),
+            preview_src_w: 0,
+            preview_src_h: 0,
         }
     }
 
     // ── Layout helpers ────────────────────────────────────────────────────
 
-    fn root_layout() -> (Rect, Rect, Rect) {
+    /// Compute the details pane height, shrinking it on short windows.
+    fn details_height() -> u32 {
+        // Keep at least ~260px for the file list; otherwise clamp the pane down.
+        let reserved = TOOLBAR_H + STATUS_H + DETAILS_H;
+        if WIN_H > reserved + 260 {
+            DETAILS_H
+        } else {
+            DETAILS_MIN_H
+        }
+    }
+
+    fn root_layout() -> (Rect, Rect, Rect, Rect) {
         let root = Rect::new(0, 0, WIN_W, WIN_H);
-        let body_h = WIN_H.saturating_sub(TOOLBAR_H + STATUS_H);
-        let heights = [TOOLBAR_H, body_h, STATUS_H];
+        let details_h = Self::details_height();
+        let body_h = WIN_H
+            .saturating_sub(TOOLBAR_H)
+            .saturating_sub(STATUS_H)
+            .saturating_sub(details_h);
+        let heights = [TOOLBAR_H, body_h, details_h, STATUS_H];
         let mut rows = VBox::new(root).with_spacing(0).layout(&heights);
         let toolbar = rows.next().unwrap_or_default();
         let body = rows.next().unwrap_or_default();
+        let details = rows.next().unwrap_or_default();
         let status = rows.next().unwrap_or_default();
-        (toolbar, body, status)
+        (toolbar, body, details, status)
     }
 
     fn body_layout(body: Rect) -> (Rect, Rect) {
@@ -863,6 +928,31 @@ impl FilesApp {
         let sidebar = cols.next().unwrap_or_default();
         let main = cols.next().unwrap_or_default();
         (sidebar, main)
+    }
+
+    // ── Preview methods ───────────────────────────────────────────────────
+
+    fn update_preview_for_selection(&mut self) {
+        self.preview_src_w = 0;
+        self.preview_src_h = 0;
+        unsafe { PREVIEW_READY = 0; }
+
+        if self.state.view_mode != ViewMode::Directory { return; }
+        let Some(idx) = self.state.selected_row else { return; };
+        if idx >= self.state.entry_count { return; }
+        let entry = self.state.entries[idx];
+        if entry.file_type == FT_DIR { return; }
+        let name_bytes = entry.name_bytes();
+        if !is_image_name(name_bytes) { return; }
+        let name = match core::str::from_utf8(name_bytes) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        if let Some(full_path) = self.state.current_path.join(name) {
+            load_preview_sync(full_path.as_str().as_bytes());
+            self.preview_src_w = unsafe { PREVIEW_SRC_W };
+            self.preview_src_h = unsafe { PREVIEW_SRC_H };
+        }
     }
 
     fn toolbar_layout(toolbar: Rect) -> (Rect, Rect, Rect, Rect, Rect) {
@@ -1260,37 +1350,36 @@ impl FilesApp {
 
             let (icon, icon_color) = if entry.file_type == FT_DIR {
                 (UiSymbol::Folder, theme.accent)
+            } else if is_image_name(entry.name_bytes()) {
+                // v0: generic image-file glyph in the list. Full per-file
+                // thumbnail grid generation is deferred; image previews live
+                // in the bottom details/preview pane (see draw_details_pane).
+                (UiSymbol::Pictures, theme.accent)
             } else {
                 (UiSymbol::File, theme.text_dim)
             };
-            // For image files (.simg/.tga), try to show a cached thumbnail.
-            // Fall back to the generic file icon when not cached.
-            let showed_thumb = if entry.file_type == FT_FILE {
-                let name = entry.name_bytes();
-                if is_image_name(name) {
-                    let home = self.state.home_path.as_str().as_bytes();
-                    let mut full_path = [0u8; PATH_LEN + 64];
-                    let cp = self.state.current_path.as_str().as_bytes();
-                    let mut fp = 0usize;
-                    for &b in cp { if fp < full_path.len() - 1 { full_path[fp] = b; fp += 1; } }
-                    if fp > 0 && full_path[fp - 1] != b'/' { if fp < full_path.len() - 1 { full_path[fp] = b'/'; fp += 1; } }
-                    for &b in name { if fp < full_path.len() - 1 { full_path[fp] = b; fp += 1; } }
-                    let icon_rect = Rect::new(row.x + 2, row.y + 2, 20, 20);
-                    // SAFETY: single-threaded file manager; no reentrancy on this path.
-                    try_draw_cached_thumb(canvas, home, &full_path[..fp], icon_rect)
-                } else { false }
-            } else { false };
-            if !showed_thumb {
-                canvas.draw_ui_symbol(row.x + 8, row.y + 6, icon, icon_color);
-            }
-            canvas.draw_text(row.x + 24, row.y + 5, entry_name_str(&entry), theme.text);
+            // Icon area: 32×32 slot; center the glyph. No per-file decode here
+            // so folder opening and scrolling stay fast.
+            let text_y = row.y + (ROW_H as i32 - 14) / 2; // vertically center 14-px text
+            let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
+            let sym_y = row.y + (ROW_H as i32 - 14) / 2;
+            canvas.draw_ui_symbol(sym_x, sym_y, icon, icon_color);
+            // Text starts after the icon slot + 6px gap.
+            let text_x = row.x + ICON_SLOT as i32 + 6;
+            canvas.draw_text(text_x, text_y, entry_name_str(&entry), theme.text);
 
             let type_label = match entry.file_type {
                 FT_DIR => "Directory",
-                FT_FILE => "File",
+                FT_FILE => {
+                    if is_image_name(entry.name_bytes()) {
+                        image_type_label(entry.name_bytes())
+                    } else {
+                        "File"
+                    }
+                }
                 _ => "Other",
             };
-            canvas.draw_text(type_x + 8, row.y + 5, type_label, theme.text_dim);
+            canvas.draw_text(type_x + 8, text_y, type_label, theme.text_dim);
 
             if entry.file_type == FT_DIR {
                 canvas.draw_text_right(Rect::new(size_x, row.y, SIZE_W, ROW_H), "--", theme.text, 8);
@@ -1300,7 +1389,141 @@ impl FilesApp {
                 let size_text = core::str::from_utf8(&scratch[..len]).unwrap_or("--");
                 canvas.draw_text_right(Rect::new(size_x, row.y, SIZE_W, ROW_H), size_text, theme.text, 8);
             }
-            canvas.draw_text(mod_x + 8, row.y + 5, "--", theme.text_dim);
+            canvas.draw_text(mod_x + 8, text_y, "--", theme.text_dim);
+        }
+    }
+
+    fn draw_details_pane(&self, canvas: &mut Canvas, theme: &Theme, details: Rect) {
+        canvas.fill_rounded_rect_with_border(details, RADIUS, theme.panel_alt, theme.border, 1);
+        canvas.hline(details.x, details.right(), details.y as u32, theme.border);
+        
+        let inner = details.inset(PAD);
+        let preview_x = inner.right() - DETAILS_PREVIEW_W as i32;
+        let left_area = Rect::new(inner.x, inner.y, inner.w.saturating_sub(DETAILS_PREVIEW_W + PAD as u32), inner.h);
+        let preview_area = Rect::new(preview_x, inner.y, DETAILS_PREVIEW_W, inner.h);
+        
+        match self.state.view_mode {
+            ViewMode::Directory => {
+                if let Some(idx) = self.state.selected_row {
+                    if idx < self.state.entry_count {
+                        let entry = self.state.entries[idx];
+                        self.draw_file_details(canvas, theme, left_area, preview_area, entry);
+                        return;
+                    }
+                }
+                self.draw_folder_summary(canvas, theme, left_area, preview_area);
+            }
+            ViewMode::Home | ViewMode::Volumes | ViewMode::Network => {
+                self.draw_folder_summary(canvas, theme, left_area, preview_area);
+            }
+        }
+    }
+
+    fn draw_folder_summary(&self, canvas: &mut Canvas, theme: &Theme, left: Rect, preview: Rect) {
+        let mut y = left.y + 8;
+        canvas.draw_text(left.x, y, "Folder:", theme.text_dim);
+        y += 16;
+        let folder_name = self.state.current_path.as_str().rsplit('/').next().unwrap_or("");
+        canvas.draw_text(left.x, y, folder_name, theme.text);
+        y += 20;
+        
+        canvas.draw_text(left.x, y, "Path:", theme.text_dim);
+        y += 16;
+        canvas.draw_text(left.x, y, self.state.current_path.as_str(), theme.text);
+        y += 20;
+        
+        let mut buf = [0u8; 64];
+        let mut len = 0;
+        
+        let items = self.state.entry_count;
+        len += write_to_buf(&mut buf[len..], b"Items: ");
+        len += write_usize(&mut buf[len..], items);
+        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+            canvas.draw_text(left.x, y, s, theme.text);
+        }
+        y += 16;
+        
+        len = 0;
+        len += write_to_buf(&mut buf[len..], b"Files: ");
+        len += write_usize(&mut buf[len..], self.state.file_count);
+        len += write_to_buf(&mut buf[len..], b", Dirs: ");
+        len += write_usize(&mut buf[len..], self.state.folder_count);
+        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+            canvas.draw_text(left.x, y, s, theme.text);
+        }
+        y += 16;
+        
+        let mut image_count = 0;
+        for i in 0..self.state.entry_count {
+            if is_image_name(self.state.entries[i].name_bytes()) {
+                image_count += 1;
+            }
+        }
+        len = 0;
+        len += write_to_buf(&mut buf[len..], b"Images: ");
+        len += write_usize(&mut buf[len..], image_count);
+        len += write_to_buf(&mut buf[len..], b" (SIMG/TGA)");
+        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+            canvas.draw_text(left.x, y, s, theme.text);
+        }
+        
+        canvas.draw_ui_symbol_centered(preview, UiSymbol::Folder, theme.accent);
+    }
+
+    fn draw_file_details(&self, canvas: &mut Canvas, theme: &Theme, left: Rect, preview: Rect, entry: DirEntry) {
+        let mut y = left.y + 8;
+        let name_bytes = entry.name_bytes();
+        if let Ok(name) = core::str::from_utf8(name_bytes) {
+            canvas.draw_text(left.x, y, name, theme.accent);
+        }
+        y += 20;
+        
+        let type_label = image_type_label(name_bytes);
+        canvas.draw_text(left.x, y, type_label, theme.text);
+        y += 16;
+        
+        let mut buf = [0u8; 64];
+        let mut len = write_to_buf(&mut buf, b"Size: ");
+        let mut size_buf = [0u8; 16];
+        let size_len = write_size(entry.size, &mut size_buf);
+        if len + size_len <= buf.len() {
+            buf[len..len+size_len].copy_from_slice(&size_buf[..size_len]);
+            len += size_len;
+        }
+        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+            canvas.draw_text(left.x, y, s, theme.text);
+        }
+        y += 16;
+        
+        if is_image_name(name_bytes) && self.preview_src_w > 0 && self.preview_src_h > 0 {
+            len = 0;
+            len += write_to_buf(&mut buf[len..], b"Dimensions: ");
+            len += write_usize(&mut buf[len..], self.preview_src_w as usize);
+            len += write_to_buf(&mut buf[len..], b"x");
+            len += write_usize(&mut buf[len..], self.preview_src_h as usize);
+            if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+                canvas.draw_text(left.x, y, s, theme.text);
+            }
+            y += 16;
+            
+            canvas.draw_text(left.x, y, "Format: RGBA8888", theme.text);
+        }
+        
+        if is_image_name(name_bytes) {
+            let ready = unsafe { PREVIEW_READY };
+            if ready == 1 {
+                let filled = unsafe { PREVIEW_SRC_FILLED };
+                unsafe {
+                    draw_tga_bytes(canvas, &PREVIEW_SRC_BUF[..filled], preview);
+                }
+            } else if ready == 2 {
+                canvas.draw_ui_symbol_centered(preview, UiSymbol::MissingFolder, theme.danger);
+                canvas.draw_text(preview.x + 8, preview.y + preview.h as i32 - 20, "Preview unavailable", theme.text_dim);
+            } else {
+                canvas.draw_ui_symbol_centered(preview, UiSymbol::Pictures, theme.accent);
+            }
+        } else {
+            canvas.draw_ui_symbol_centered(preview, UiSymbol::File, theme.text);
         }
     }
 
@@ -1332,11 +1555,12 @@ impl FilesApp {
 impl App for FilesApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
-        let (toolbar, body, status) = Self::root_layout();
+        let (toolbar, body, details, status) = Self::root_layout();
         let (sidebar, main) = Self::body_layout(body);
         self.draw_toolbar(canvas, theme, toolbar);
         self.draw_sidebar(canvas, theme, sidebar);
         self.draw_main(canvas, theme, main);
+        self.draw_details_pane(canvas, theme, details);
         self.draw_status(canvas, theme, status);
     }
 
@@ -1349,7 +1573,7 @@ impl App for FilesApp {
                 log_i32(y);
                 debug_log("\n");
 
-                let (toolbar, body, _) = Self::root_layout();
+                let (toolbar, body, _details, _) = Self::root_layout();
                 let (sidebar, main) = Self::body_layout(body);
                 let (_, _, up, _, _) = Self::toolbar_layout(toolbar);
                 if up.contains(sunlight_ui::Point::new(x, y)) {
@@ -1420,7 +1644,9 @@ impl App for FilesApp {
                             debug_log("[FILES] hit_test directory_row idx=");
                             log_usize(idx);
                             debug_log("\n");
-                            return self.state.update(Message::OpenRow(idx));
+                            let changed = self.state.update(Message::OpenRow(idx));
+                            self.update_preview_for_selection();
+                            return changed;
                         }
                         debug_log("[FILES] hit_test none (directory view)\n");
                     }
@@ -1439,7 +1665,12 @@ impl App for FilesApp {
                 keycode: 0x4B,
                 pressed: true,
                 ..
-            } => self.state.update(Message::NavigateUp),
+            } => {
+                let changed = self.state.update(Message::NavigateUp);
+                self.update_preview_for_selection();
+                changed
+            }
+            Event::Tick => false,
             _ => false,
         }
     }
@@ -1570,6 +1801,32 @@ fn cmp_ascii_ci(a: &[u8], b: &[u8]) -> Ordering {
 
 fn entry_name_str(entry: &DirEntry) -> &str {
     core::str::from_utf8(entry.name_bytes()).unwrap_or("?")
+}
+
+fn write_to_buf(out: &mut [u8], data: &[u8]) -> usize {
+    let len = data.len().min(out.len());
+    out[..len].copy_from_slice(&data[..len]);
+    len
+}
+
+fn write_usize(out: &mut [u8], val: usize) -> usize {
+    let mut n = val;
+    let mut buf = [0u8; 20];
+    let mut i = 0;
+    if n == 0 {
+        buf[0] = b'0';
+        i = 1;
+    } else {
+        while n > 0 {
+            buf[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+            i += 1;
+        }
+        buf[..i].reverse();
+    }
+    let len = i.min(out.len());
+    out[..len].copy_from_slice(&buf[..len]);
+    len
 }
 
 fn write_size(size: u64, out: &mut [u8; 16]) -> usize {

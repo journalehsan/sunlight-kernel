@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-thumbd"
-version = "0.1.624"
+version = "0.1.629"
+
+
 
 edition = "2021"
 
