@@ -181,14 +181,15 @@ impl PathBuf {
             self.len = 1;
             return true;
         }
-        let mut written = 0usize;
-        if bytes[start] != b'/' {
-            if written >= PATH_LEN {
-                return false;
-            }
-            self.buf[written] = b'/';
-            written += 1;
+        // Canonical paths always start with '/'. Always write it first regardless
+        // of whether the source started with '/'. Without this, set("/root") would
+        // produce "root" (no leading slash) because the branch was skipped but the
+        // component loop then wrote at offset 0 without a separator.
+        if PATH_LEN == 0 {
+            return false;
         }
+        self.buf[0] = b'/';
+        let mut written = 1usize;
         let mut i = start;
         let mut saw_component = false;
         while i < end {
@@ -337,6 +338,50 @@ impl VolumeEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Debug logging helpers (no_std — no format!, manual integer rendering)
+// ---------------------------------------------------------------------------
+
+fn log_i32(value: i32) {
+    let mut buf = [0u8; 12];
+    let mut i = buf.len();
+    let neg = value < 0;
+    let mut n = if neg { (-(value as i64)) as u64 } else { value as u64 };
+    if n == 0 {
+        debug_log("0");
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    if neg {
+        if i == 0 { debug_log("-"); } else { i -= 1; buf[i] = b'-'; }
+    }
+    if let Ok(s) = core::str::from_utf8(&buf[i..]) {
+        debug_log(s);
+    }
+}
+
+fn log_usize(value: usize) {
+    let mut buf = [0u8; 20];
+    let mut i = buf.len();
+    let mut n = value;
+    if n == 0 {
+        debug_log("0");
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    if let Ok(s) = core::str::from_utf8(&buf[i..]) {
+        debug_log(s);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Allocator / panic
 // ---------------------------------------------------------------------------
 
@@ -453,7 +498,9 @@ impl State {
                 self.selected_sidebar = idx;
                 // Navigate; if the directory doesn't exist, load_directory
                 // sets the error message — no pre-probing needed.
-                self.navigate_to(target)
+                // Always return true: sidebar selection changed, or error needs display.
+                let _ = self.navigate_to(target);
+                true
             }
             None => false,
         }
@@ -473,26 +520,30 @@ impl State {
         let Some(folder) = self.home_folders.get(idx).copied() else {
             return false;
         };
+        debug_log("[FILES] place_card_click idx=");
+        log_usize(idx);
+        debug_log(" name=\"");
+        debug_log(folder.name);
+        debug_log("\" path=\"");
+        debug_log(folder.path.as_str());
+        debug_log("\"\n");
         // Navigate immediately; error surfaces only if the path is unreadable.
+        // Always return true: either we navigated, or error needs to be displayed.
         if self.navigate_to(folder.path) {
             self.selected_sidebar = self.sidebar_index_for_path();
-            true
-        } else {
-            false
         }
+        true
     }
 
     fn open_home_volume(&mut self, idx: usize) -> bool {
         let Some(volume) = self.volume_entries.get(idx).copied() else {
             return false;
         };
+        // Always return true: either we navigated, or error needs to be displayed.
         if self.navigate_to(volume.path) {
-            self.view_mode = ViewMode::Directory;
             self.selected_sidebar = self.sidebar_index_for_path();
-            true
-        } else {
-            false
         }
+        true
     }
 
     fn open_row(&mut self, idx: usize) -> bool {
@@ -521,14 +572,27 @@ impl State {
     }
 
     fn navigate_to(&mut self, target: PathBuf) -> bool {
+        debug_log("[FILES] navigate_start path=\"");
+        debug_log(target.as_str());
+        debug_log("\"\n");
         if self.load_directory(target) {
             self.view_mode = ViewMode::Directory;
             self.current_path = target;
             self.clear_error();
             self.selected_row = None;
             self.selected_sidebar = self.sidebar_index_for_path();
+            debug_log("[FILES] navigate_done path=\"");
+            debug_log(self.current_path.as_str());
+            debug_log("\" items=");
+            log_usize(self.entry_count);
+            debug_log("\n");
             true
         } else {
+            debug_log("[FILES] navigate_failed path=\"");
+            debug_log(target.as_str());
+            debug_log("\" error=\"");
+            debug_log(self.error_str());
+            debug_log("\"\n");
             false
         }
     }
@@ -1138,13 +1202,30 @@ impl App for FilesApp {
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Click { x, y } => {
+                debug_log("[FILES] mouse_down x=");
+                log_i32(x);
+                debug_log(" y=");
+                log_i32(y);
+                debug_log("\n");
+
                 let (toolbar, body, _) = Self::root_layout();
                 let (sidebar, main) = Self::body_layout(body);
                 let (_, _, up, _, _) = Self::toolbar_layout(toolbar);
                 if up.contains(sunlight_ui::Point::new(x, y)) {
+                    debug_log("[FILES] hit_test up_button\n");
                     return self.state.update(Message::NavigateUp);
                 }
                 if let Some(idx) = Self::hit_test_sidebar(sidebar, x, y) {
+                    debug_log("[FILES] hit_test sidebar idx=");
+                    log_usize(idx);
+                    debug_log(" label=\"");
+                    debug_log(State::sidebar_label(idx));
+                    debug_log("\"\n");
+                    debug_log("[FILES] sidebar_item_click idx=");
+                    log_usize(idx);
+                    debug_log(" label=\"");
+                    debug_log(State::sidebar_label(idx));
+                    debug_log("\"\n");
                     return if idx == 0 {
                         self.state.update(Message::ShowHome)
                     } else {
@@ -1158,33 +1239,49 @@ impl App for FilesApp {
                             if Self::home_folder_rect(inner, idx)
                                 .contains(sunlight_ui::Point::new(x, y))
                             {
+                                debug_log("[FILES] hit_test home_folder idx=");
+                                log_usize(idx);
+                                debug_log("\n");
                                 return self.state.update(Message::OpenHomeFolder(idx));
                             }
                         }
                         for idx in 0..self.state.volume_count {
                             let rect = Self::home_volume_rect(inner, idx);
                             if rect.contains(sunlight_ui::Point::new(x, y)) {
+                                debug_log("[FILES] hit_test home_volume idx=");
+                                log_usize(idx);
+                                debug_log("\n");
                                 return self.state.update(Message::OpenHomeVolume(idx));
                             }
                         }
+                        debug_log("[FILES] hit_test none (home view)\n");
                     }
                     ViewMode::Volumes => {
-                        // Click on DriveCard in full volumes view
+                        // Click on DriveCard in full volumes view.
+                        // Use row_y for layout cursor; outer y remains the click coordinate.
                         let inner = main.inset(PAD);
-                        let mut y = inner.y + 42;
+                        let mut row_y = inner.y + 42;
                         for idx in 0..self.state.volume_count {
-                            let rect = Rect::new(inner.x, y, inner.w, DriveCard::ROW_H);
-                            y += DriveCard::ROW_H as i32 + 6;
+                            let rect = Rect::new(inner.x, row_y, inner.w, DriveCard::ROW_H);
+                            row_y += DriveCard::ROW_H as i32 + 6;
                             if rect.contains(sunlight_ui::Point::new(x, y)) {
+                                debug_log("[FILES] hit_test volume_card idx=");
+                                log_usize(idx);
+                                debug_log("\n");
                                 return self.state.update(Message::OpenHomeVolume(idx));
                             }
                         }
+                        debug_log("[FILES] hit_test none (volumes view)\n");
                     }
                     ViewMode::Network => {}
                     ViewMode::Directory => {
                         if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count) {
+                            debug_log("[FILES] hit_test directory_row idx=");
+                            log_usize(idx);
+                            debug_log("\n");
                             return self.state.update(Message::OpenRow(idx));
                         }
+                        debug_log("[FILES] hit_test none (directory view)\n");
                     }
                 }
                 false
