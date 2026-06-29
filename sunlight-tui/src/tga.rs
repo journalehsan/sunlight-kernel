@@ -92,6 +92,69 @@ impl<'a> TgaImage<'a> {
         let r = self.raw[idx + 2] as u32;
         (r << 16) | (g << 8) | b
     }
+
+    /// Read pixel + alpha at (px, py). Returns (XRGB8888, alpha).
+    /// Alpha is always 0xFF for 24-bit (opaque) images.
+    pub fn pixel_alpha(&self, mut px: u32, mut py: u32) -> (u32, u8) {
+        px = px.min(self.width.saturating_sub(1));
+        py = py.min(self.height.saturating_sub(1));
+        let file_row = if self.top_down {
+            py
+        } else {
+            self.height - 1 - py
+        };
+        let bpp_bytes = (self.bpp / 8) as u32;
+        let idx = (self.data_off + (file_row * self.width + px) * bpp_bytes) as usize;
+        if idx + 2 >= self.raw.len() {
+            return (0, 0);
+        }
+        let b = self.raw[idx] as u32;
+        let g = self.raw[idx + 1] as u32;
+        let r = self.raw[idx + 2] as u32;
+        let a = if self.bpp == 32 && idx + 3 < self.raw.len() {
+            self.raw[idx + 3]
+        } else {
+            0xFF
+        };
+        ((r << 16) | (g << 8) | b, a)
+    }
+}
+
+/// Draw a TGA icon scaled to `target_w × target_h` at position `(x, y)`.
+///
+/// Pixels with alpha < 128 are treated as transparent and skipped.
+/// When `img` is `None`, draws a simple placeholder outline using `fallback_color`.
+///
+/// Framebuffer login screen uses this for user avatars and action buttons.
+/// Icon sources: docs/icons/SunlightOS/actions/32/
+pub fn draw_tga_icon(
+    fb: &mut Framebuffer,
+    img: Option<&TgaImage<'_>>,
+    x: u32,
+    y: u32,
+    target_w: u32,
+    target_h: u32,
+    fallback_color: u32,
+) {
+    let Some(img) = img else {
+        crate::draw::rect_outline(fb, x, y, target_w, target_h, 1, fallback_color);
+        return;
+    };
+    let src_w = img.width();
+    let src_h = img.height();
+    if src_w == 0 || src_h == 0 || target_w == 0 || target_h == 0 {
+        return;
+    }
+    for dy in 0..target_h {
+        let sy = (dy as u64 * src_h as u64 / target_h as u64) as u32;
+        for dx in 0..target_w {
+            let sx = (dx as u64 * src_w as u64 / target_w as u64) as u32;
+            let (rgb, alpha) = img.pixel_alpha(sx, sy);
+            if alpha >= 128 {
+                fb.put_pixel(x + dx, y + dy, rgb);
+            }
+        }
+    }
 }
 
 /// Draw `img` onto `fb` with aspect-fill behaviour:

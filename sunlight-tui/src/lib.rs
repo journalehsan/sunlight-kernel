@@ -20,6 +20,15 @@ pub use layout::ANSI_COLORS;
 pub use modes::debug::LogBuffer;
 pub use splash::{BootMode, SplashScreen};
 
+// Framebuffer login screen icons (32×32 TGA, transparent-background).
+// Source: docs/icons/SunlightOS/actions/32/
+const ICON_USERS: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/32/system-users.tga");
+const ICON_REBOOT: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/32/system-reboot.tga");
+const ICON_SHUTDOWN: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/32/system-shutdown.tga");
+
 /// A terminal cell with character and pre-resolved RGB colors.
 #[derive(Clone, Copy, Debug)]
 pub struct TermCell {
@@ -406,64 +415,60 @@ pub enum LoginFocus {
     Shutdown,
 }
 
-/// Draw a circular avatar with the first letter of `name`, or '+' when empty.
+/// Draw a user avatar tile: 32×32 TGA icon inside a 40×40 slot box.
+///
+/// Falls back to a letter glyph when `icon` is `None` (icon failed to load).
+/// Orange border on focused/selected; subtle border otherwise.
 fn draw_user_avatar(
     fb: &mut framebuffer::Framebuffer,
-    cx: u32,
-    cy: u32,
-    radius: u32,
+    cx: u32,        // horizontal center of the slot
+    icon_top: u32,  // top of the 32×32 icon area
+    icon: Option<&tga::TgaImage<'_>>,
     name: &[u8],
     is_custom: bool,
     selected: bool,
     focused: bool,
 ) {
-    let fill = if selected {
-        layout::palette::ACCENT_DIM
-    } else {
-        layout::palette::SURFACE
-    };
-    let ring = if focused {
-        layout::palette::ACCENT
-    } else if selected {
+    const ICON_SZ: u32 = 32;
+    const PAD: u32 = 4;
+    const BOX_SZ: u32 = ICON_SZ + PAD * 2; // 40×40 slot box
+
+    let box_x = cx.saturating_sub(BOX_SZ / 2);
+    let box_y = icon_top.saturating_sub(PAD);
+
+    // Subtle warm fill for selected state
+    let fill = if selected { 0x120800 } else { 0x0A0A0A };
+    fb.fill_rect(box_x, box_y, BOX_SZ, BOX_SZ, fill);
+
+    let border_color = if focused || selected {
         layout::palette::ACCENT
     } else {
         layout::palette::SEPARATOR
     };
+    draw::rect_outline(fb, box_x, box_y, BOX_SZ, BOX_SZ, if focused { 2 } else { 1 }, border_color);
 
-    let d = radius * 2;
-    fb.fill_rect(cx - radius, cy - radius, d, d, fill);
-    draw::rect_outline(
-        fb,
-        cx - radius,
-        cy - radius,
-        d,
-        d,
-        if focused { 2 } else { 1 },
-        ring,
-    );
-
-    let ch = if name.is_empty() {
-        if is_custom {
-            b'+'
-        } else {
-            b'?'
-        }
+    let icon_x = cx.saturating_sub(ICON_SZ / 2);
+    if let Some(img) = icon {
+        tga::draw_tga_icon(fb, Some(img), icon_x, icon_top, ICON_SZ, ICON_SZ, layout::palette::TEXT_DIM);
     } else {
-        let c = name[0];
-        if c >= b'a' && c <= b'z' {
-            c - 32
+        // Fallback: draw the first letter of the name
+        let ch = if name.is_empty() {
+            if is_custom { b'+' } else { b'?' }
         } else {
-            c
-        }
-    };
-    font::draw_char(fb, cx - 4, cy - 7, ch, layout::palette::TEXT, 1);
+            let c = name[0];
+            if c >= b'a' && c <= b'z' { c - 32 } else { c }
+        };
+        font::draw_char(fb, icon_x + 12, icon_top + 9, ch, layout::palette::TEXT, 1);
+    }
 }
 
 /// Render the grid-based login screen with user avatars, password, and session dropdown.
 ///
-/// If `bg_tga` is `Some(raw_tga_bytes)` the image is decoded and rendered as
-/// the background with a dark overlay.  When decoding fails the plain dark
-/// background is used as fallback.
+/// Background: TGA image with dark overlay (falls back to solid dark if decode fails).
+/// User avatars: 32×32 system-users.tga icons with orange selection ring.
+/// Action buttons: 32×32 system-reboot / system-shutdown icons with label.
+/// Password and session fields: outlined input boxes, orange border when focused.
+/// Icon source: docs/icons/SunlightOS/actions/32/
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
 pub unsafe fn render_login_grid(
@@ -482,12 +487,18 @@ pub unsafe fn render_login_grid(
     password_len: usize,
     message: &str,
 ) {
+    // Parse login icons — cheap (header-only), no heap allocation.
+    let icon_users = tga::TgaImage::parse(ICON_USERS);
+    let icon_reboot = tga::TgaImage::parse(ICON_REBOOT);
+    let icon_shutdown = tga::TgaImage::parse(ICON_SHUTDOWN);
+
     let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
     let layout = layout::Layout::new(fb_width, fb_height);
 
+    // Background: wallpaper + dark overlay, or solid dark
     if let Some(tga_data) = bg_tga {
         if let Some(img) = tga::TgaImage::parse(tga_data) {
-            tga::draw_tga_background(&mut fb, &img, 100); // ~39% dark overlay
+            tga::draw_tga_background(&mut fb, &img, 110);
         } else {
             fb.fill_rect(0, 0, fb_width, fb_height, layout::palette::BG);
         }
@@ -496,7 +507,7 @@ pub unsafe fn render_login_grid(
         layout.draw_chrome(&mut fb);
     }
 
-    // Header: Use bitmap font for logo since it's tiny and doesn't need anti-aliasing
+    // ── Top bar ─────────────────────────────────────────────────────────────
     font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
     font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
     let mode = "TTY Login";
@@ -510,24 +521,18 @@ pub unsafe fn render_login_grid(
         fontatlas::FontSize::Regular,
     );
 
+    // ── Login card ──────────────────────────────────────────────────────────
     let main = &layout.main;
-    let panel_w = 480u32.min(main.w.saturating_sub(32));
-    let panel_h = 320u32;
+    let panel_w = 520u32.min(main.w.saturating_sub(32));
+    let panel_h = 360u32;
     let panel_x = main.x + main.w.saturating_sub(panel_w) / 2;
     let panel_y = main.y + main.h.saturating_sub(panel_h) / 2;
 
+    // Card: solid dark fill + 2 px border for stronger separation
     fb.fill_rect(panel_x, panel_y, panel_w, panel_h, layout::palette::BG);
-    draw::rect_outline(
-        &mut fb,
-        panel_x,
-        panel_y,
-        panel_w,
-        panel_h,
-        1,
-        layout::palette::SEPARATOR,
-    );
+    draw::rect_outline(&mut fb, panel_x, panel_y, panel_w, panel_h, 2, 0x3A3A3A);
 
-    // Title: Use the large anti-aliased font for desktop feel
+    // ── Title ───────────────────────────────────────────────────────────────
     let title = "Welcome to SunlightOS";
     let title_w = fontatlas::measure_text(title, fontatlas::FontSize::Title);
     fontatlas::draw_text(
@@ -539,10 +544,11 @@ pub unsafe fn render_login_grid(
         fontatlas::FontSize::Title,
     );
 
-    // User avatar row
+    // ── User avatar row ─────────────────────────────────────────────────────
+    // Each slot: 96 px wide, 32×32 icon centred, name 8 px below the icon.
     const SLOT_W: u32 = 96;
-    const AVATAR_R: u32 = 24;
-    let row_y = panel_y + 90;
+    const ICON_SZ: u32 = 32;
+    let avatar_icon_top = panel_y + 72;
     let row_w = active_count as u32 * SLOT_W;
     let row_x = panel_x + panel_w.saturating_sub(row_w) / 2;
 
@@ -551,22 +557,23 @@ pub unsafe fn render_login_grid(
         .min(user_lens.len())
         .min(is_custom.len())
     {
-        let slot_x = row_x + i as u32 * SLOT_W + SLOT_W / 2;
+        let slot_cx = row_x + i as u32 * SLOT_W + SLOT_W / 2;
         let name = &user_bufs[i][..user_lens[i]];
         let focused = focus == LoginFocus::UserSlot(i);
         let selected = i == selected_user_idx;
+
         draw_user_avatar(
             &mut fb,
-            slot_x,
-            row_y,
-            AVATAR_R,
+            slot_cx,
+            avatar_icon_top,
+            icon_users.as_ref(),
             name,
             is_custom[i],
             selected,
             focused,
         );
 
-        let label = if name.is_empty() && is_custom[i] {
+        let label: &str = if name.is_empty() && is_custom[i] {
             "Other"
         } else {
             // SAFETY: login names are ASCII from keyboard or preset bytes.
@@ -576,20 +583,20 @@ pub unsafe fn render_login_grid(
         fontatlas::draw_text(
             &mut fb,
             label,
-            slot_x.saturating_sub(label_w / 2),
-            row_y + AVATAR_R + 12,
-            if selected {
-                layout::palette::TEXT
-            } else {
-                layout::palette::TEXT_DIM
-            },
+            slot_cx.saturating_sub(label_w / 2),
+            avatar_icon_top + ICON_SZ + 8,
+            if selected { layout::palette::TEXT } else { layout::palette::TEXT_DIM },
             fontatlas::FontSize::Regular,
         );
     }
 
-    // Password field
+    // ── Form fields ─────────────────────────────────────────────────────────
+    // Both password and session use the same outlined-box language.
     let field_x = panel_x + 40;
-    let pass_y = panel_y + 190;
+    let field_right = panel_x + panel_w.saturating_sub(40);
+
+    // — Password —
+    let pass_y = panel_y + 152;
     fontatlas::draw_text(
         &mut fb,
         "Password:",
@@ -598,25 +605,34 @@ pub unsafe fn render_login_grid(
         layout::palette::TEXT_DIM,
         fontatlas::FontSize::Regular,
     );
-    let pass_val_x = field_x + fontatlas::measure_text("Password: ", fontatlas::FontSize::Regular);
+    let pw_label_w = fontatlas::measure_text("Password: ", fontatlas::FontSize::Regular);
+    let pw_box_x = field_x + pw_label_w;
+    let pw_box_w = field_right.saturating_sub(pw_box_x);
+    let pw_box_h = 26u32;
+    let pw_focused = focus == LoginFocus::Password;
+
+    // Box fill: slightly brighter when active to hint at focus
+    fb.fill_rect(pw_box_x, pass_y.saturating_sub(4), pw_box_w, pw_box_h,
+        if pw_focused { 0x0E0D00 } else { 0x080808 });
+    draw::rect_outline(
+        &mut fb,
+        pw_box_x, pass_y.saturating_sub(4), pw_box_w, pw_box_h,
+        if pw_focused { 2 } else { 1 },
+        if pw_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+    );
+    // Bullet dots
     let dot_count = password_len.min(24) as u32;
     for i in 0..dot_count {
-        font::draw_char(
-            &mut fb,
-            pass_val_x + i * 8,
-            pass_y,
-            b'*',
-            layout::palette::TEXT,
-            1,
-        );
+        font::draw_char(&mut fb, pw_box_x + 6 + i * 8, pass_y, b'*', layout::palette::TEXT, 1);
     }
-    if focus == LoginFocus::Password {
-        let cx = pass_val_x + dot_count * 8;
+    // Caret
+    if pw_focused {
+        let cx = pw_box_x + 6 + dot_count * 8;
         fb.fill_rect(cx, pass_y, 8, 14, layout::palette::ACCENT);
     }
 
-    // Session dropdown
-    let drop_y = panel_y + 226;
+    // — Session selector —
+    let drop_y = panel_y + 196;
     fontatlas::draw_text(
         &mut fb,
         "Session:",
@@ -625,43 +641,35 @@ pub unsafe fn render_login_grid(
         layout::palette::TEXT_DIM,
         fontatlas::FontSize::Regular,
     );
-    let drop_val_x = field_x + fontatlas::measure_text("Session: ", fontatlas::FontSize::Regular);
-    let drop_w = 120u32;
-    let drop_h = 22u32;
+    let drop_label_w = fontatlas::measure_text("Session:  ", fontatlas::FontSize::Regular);
+    let drop_box_x = field_x + drop_label_w;
+    let drop_box_w = 130u32;
+    let drop_box_h = 26u32;
     let drop_focused = focus == LoginFocus::Dropdown;
+
+    fb.fill_rect(drop_box_x, drop_y.saturating_sub(4), drop_box_w, drop_box_h,
+        if drop_focused { 0x0E0D00 } else { 0x080808 });
     draw::rect_outline(
         &mut fb,
-        drop_val_x,
-        drop_y - 4,
-        drop_w,
-        drop_h,
+        drop_box_x, drop_y.saturating_sub(4), drop_box_w, drop_box_h,
         if drop_focused { 2 } else { 1 },
-        if drop_focused {
-            layout::palette::ACCENT
-        } else {
-            layout::palette::SEPARATOR
-        },
+        if drop_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
     );
     fontatlas::draw_text(
         &mut fb,
         session_label,
-        drop_val_x + 8,
+        drop_box_x + 8,
         drop_y,
         layout::palette::TEXT,
         fontatlas::FontSize::Regular,
     );
-    font::draw_str(
-        &mut fb,
-        drop_val_x + drop_w - 16,
-        drop_y,
-        "v",
-        layout::palette::TEXT_DIM,
-        1,
-    );
+    // Dropdown arrow indicator
+    font::draw_str(&mut fb, drop_box_x + drop_box_w.saturating_sub(16), drop_y, "v",
+        layout::palette::TEXT_DIM, 1);
 
-    // Status message
+    // ── Status message ───────────────────────────────────────────────────────
     if !message.is_empty() {
-        let msg_y = panel_y + 270;
+        let msg_y = panel_y + 248;
         let msg_w = fontatlas::measure_text(message, fontatlas::FontSize::Regular);
         fontatlas::draw_text(
             &mut fb,
@@ -673,83 +681,87 @@ pub unsafe fn render_login_grid(
         );
     }
 
-    // Reboot / Shutdown buttons
-    const BTN_W: u32 = 72;
-    const BTN_H: u32 = 22;
-    const BTN_GAP: u32 = 8;
-    let btn_y = panel_y + panel_h - BTN_H - 10;
-    let shutdown_x = panel_x + panel_w - BTN_W - 12;
-    let reboot_x = shutdown_x - BTN_W - BTN_GAP;
+    // ── Action buttons ───────────────────────────────────────────────────────
+    // Layout: icon (32×32) on the left, label centred vertically on the right.
+    // Button height = 40 px (4 px padding each side of the 32 px icon).
+    const BTN_H: u32 = 40;
+    const BTN_ICON: u32 = 32;
+    const BTN_GAP: u32 = 12; // gap between Reboot and Shutdown
+    const BTN_ICON_PAD: u32 = 4; // padding left of icon
+    const BTN_TEXT_GAP: u32 = 6; // gap between icon right edge and label
+    const BTN_RIGHT_PAD: u32 = 10; // padding right of label
 
+    let btn_y = panel_y + 286;
     let reboot_focused = focus == LoginFocus::Reboot;
     let shutdown_focused = focus == LoginFocus::Shutdown;
 
-    // Reboot button
-    draw::rect_outline(
-        &mut fb,
-        reboot_x,
-        btn_y,
-        BTN_W,
-        BTN_H,
-        if reboot_focused { 2 } else { 1 },
-        if reboot_focused {
-            layout::palette::ACCENT
-        } else {
-            layout::palette::SEPARATOR
-        },
-    );
     let rb_label = "Reboot";
     let rb_lw = fontatlas::measure_text(rb_label, fontatlas::FontSize::Regular);
-    fontatlas::draw_text(
-        &mut fb,
-        rb_label,
-        reboot_x + BTN_W.saturating_sub(rb_lw) / 2,
-        btn_y + 4,
-        if reboot_focused {
-            layout::palette::ACCENT
-        } else {
-            layout::palette::TEXT_DIM
-        },
-        fontatlas::FontSize::Regular,
-    );
+    let rb_btn_w = BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP + rb_lw + BTN_RIGHT_PAD;
 
-    // Shutdown button
-    draw::rect_outline(
-        &mut fb,
-        shutdown_x,
-        btn_y,
-        BTN_W,
-        BTN_H,
-        if shutdown_focused { 2 } else { 1 },
-        if shutdown_focused {
-            layout::palette::ACCENT
-        } else {
-            layout::palette::SEPARATOR
-        },
-    );
     let sd_label = "Shutdown";
     let sd_lw = fontatlas::measure_text(sd_label, fontatlas::FontSize::Regular);
-    fontatlas::draw_text(
-        &mut fb,
-        sd_label,
-        shutdown_x + BTN_W.saturating_sub(sd_lw) / 2,
-        btn_y + 4,
-        if shutdown_focused {
-            layout::palette::ACCENT
-        } else {
-            layout::palette::TEXT_DIM
-        },
-        fontatlas::FontSize::Regular,
-    );
+    let sd_btn_w = BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP + sd_lw + BTN_RIGHT_PAD;
 
-    // Footer hints
-    let footer = "Tab to navigate  Enter to select  Space/Up/Down toggle session";
+    let shutdown_x = panel_x + panel_w.saturating_sub(sd_btn_w + 14);
+    let reboot_x = shutdown_x.saturating_sub(rb_btn_w + BTN_GAP);
+
+    // Reboot button
+    {
+        let bg = if reboot_focused { 0x180900 } else { 0x080808 };
+        fb.fill_rect(reboot_x, btn_y, rb_btn_w, BTN_H, bg);
+        draw::rect_outline(
+            &mut fb, reboot_x, btn_y, rb_btn_w, BTN_H,
+            if reboot_focused { 2 } else { 1 },
+            if reboot_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+        );
+        tga::draw_tga_icon(
+            &mut fb, icon_reboot.as_ref(),
+            reboot_x + BTN_ICON_PAD, btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
+            BTN_ICON, BTN_ICON,
+            layout::palette::TEXT_DIM,
+        );
+        fontatlas::draw_text(
+            &mut fb, rb_label,
+            reboot_x + BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP,
+            btn_y + (BTN_H.saturating_sub(14)) / 2,
+            if reboot_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+            fontatlas::FontSize::Regular,
+        );
+    }
+
+    // Shutdown button
+    {
+        let bg = if shutdown_focused { 0x180900 } else { 0x080808 };
+        fb.fill_rect(shutdown_x, btn_y, sd_btn_w, BTN_H, bg);
+        draw::rect_outline(
+            &mut fb, shutdown_x, btn_y, sd_btn_w, BTN_H,
+            if shutdown_focused { 2 } else { 1 },
+            if shutdown_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+        );
+        tga::draw_tga_icon(
+            &mut fb, icon_shutdown.as_ref(),
+            shutdown_x + BTN_ICON_PAD, btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
+            BTN_ICON, BTN_ICON,
+            layout::palette::TEXT_DIM,
+        );
+        fontatlas::draw_text(
+            &mut fb, sd_label,
+            shutdown_x + BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP,
+            btn_y + (BTN_H.saturating_sub(14)) / 2,
+            if shutdown_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+            fontatlas::FontSize::Regular,
+        );
+    }
+
+    // ── Bottom hint bar ──────────────────────────────────────────────────────
+    let footer = "Tab to navigate   Enter to select   Space/Up/Down toggle session";
     let footer_w = fontatlas::measure_text(footer, fontatlas::FontSize::Regular);
     fontatlas::draw_text(
         &mut fb,
         footer,
-        fb_width.saturating_sub(footer_w + 16),
-        fb_height.saturating_sub(24),
+        fb_width.saturating_sub(footer_w) / 2,
+        fb_height.saturating_sub(22),
         layout::palette::TEXT_DIM,
         fontatlas::FontSize::Regular,
     );

@@ -2,15 +2,8 @@
   "last_known_lines": 97435,
   "accumulated_patch": 639,
   "last_version": "0.1.639",
-  "last_total_lines": 97347,
+  "last_total_lines": 97422,
   "history": [
-    {
-      "timestamp": "2026-06-27T19:37:21.599761",
-      "version": "0.1.553",
-      "total_lines": 88779,
-      "new_lines": 644,
-      "patch_increment": 7
-    },
     {
       "timestamp": "2026-06-27T19:54:49.731588",
       "version": "0.1.555",
@@ -353,6 +346,13 @@
       "total_lines": 97347,
       "new_lines": 212,
       "patch_increment": 3
+    },
+    {
+      "timestamp": "2026-06-29T17:53:02.114881",
+      "version": "0.1.639",
+      "total_lines": 97422,
+      "new_lines": -13,
+      "patch_increment": 0
     }
   ]
 }
