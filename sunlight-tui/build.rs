@@ -1,8 +1,10 @@
-//! Build script: rasterize Inter glyphs for framebuffer login screen.
+//! Build script: rasterize glyphs for framebuffer TTY screen.
 //!
-//! Generates two MTF font atlases:
-//! - login_regular_15.mtf (15px Inter Regular)
-//! - login_title_24.mtf (24px Inter Regular)
+//! Generates MTF font atlases:
+//! - login_regular_15.mtf  (15px Inter Regular — TTY UI chrome)
+//! - login_title_24.mtf    (24px Inter Regular — TTY titles)
+//! - tty_mono_regular_14.mtf (14px Fira Code Regular — shell/terminal grid)
+//! - tty_mono_bold_14.mtf    (14px Fira Code SemiBold — bold shell text)
 //!
 //! MTF binary layout matches sun-font format:
 //! [0..4]   magic  "MTF1"
@@ -36,20 +38,40 @@ const GLYPH_DATA_START: usize = HEADER_SIZE + OFFSET_TABLE_SIZE;
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let workspace_root = manifest_dir.parent().unwrap();
-    let font_path = workspace_root.join("docs/fonts/Inter/static/Inter_18pt-Regular.ttf");
+    let inter_path = workspace_root.join("docs/fonts/Inter/static/Inter_18pt-Regular.ttf");
+    let fira_dir = workspace_root.join("docs/fonts/FiraCode/ttf");
+    let fira_regular = fira_dir.join("FiraCode-Regular.ttf");
+    let fira_semibold = fira_dir.join("FiraCode-SemiBold.ttf");
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed={}", font_path.display());
+    println!("cargo:rerun-if-changed={}", inter_path.display());
+    println!("cargo:rerun-if-changed={}", fira_regular.display());
+    println!("cargo:rerun-if-changed={}", fira_semibold.display());
 
-    let font_bytes = fs::read(&font_path)
-        .unwrap_or_else(|e| panic!("sunlight-tui build: cannot read {}: {}", font_path.display(), e));
-    let font = Font::from_bytes(font_bytes.as_slice(), FontSettings::default())
+    let inter_bytes = fs::read(&inter_path)
+        .unwrap_or_else(|e| panic!("sunlight-tui build: cannot read {}: {}", inter_path.display(), e));
+    let inter = Font::from_bytes(inter_bytes.as_slice(), FontSettings::default())
         .expect("sunlight-tui build: failed to parse Inter Regular");
+
+    let fira_regular_bytes = fs::read(&fira_regular)
+        .unwrap_or_else(|e| panic!("sunlight-tui build: cannot read {}: {}", fira_regular.display(), e));
+    let fira_regular_font = Font::from_bytes(fira_regular_bytes.as_slice(), FontSettings::default())
+        .expect("sunlight-tui build: failed to parse Fira Code Regular");
+
+    let fira_semibold_bytes = fs::read(&fira_semibold)
+        .unwrap_or_else(|e| panic!("sunlight-tui build: cannot read {}: {}", fira_semibold.display(), e));
+    let fira_semibold_font = Font::from_bytes(fira_semibold_bytes.as_slice(), FontSettings::default())
+        .expect("sunlight-tui build: failed to parse Fira Code SemiBold");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    generate(&font, 15.0, &out_dir.join("login_regular_15.mtf"));
-    generate(&font, 24.0, &out_dir.join("login_title_24.mtf"));
+    // UI chrome fonts (Inter)
+    generate(&inter, 15.0, &out_dir.join("login_regular_15.mtf"));
+    generate(&inter, 24.0, &out_dir.join("login_title_24.mtf"));
+
+    // Shell/terminal monospace fonts (Fira Code)
+    generate(&fira_regular_font, 14.0, &out_dir.join("tty_mono_regular_14.mtf"));
+    generate(&fira_semibold_font, 14.0, &out_dir.join("tty_mono_bold_14.mtf"));
 }
 
 fn generate(font: &Font, px: f32, out_path: &PathBuf) {

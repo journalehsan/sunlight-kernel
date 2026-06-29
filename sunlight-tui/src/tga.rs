@@ -120,6 +120,43 @@ impl<'a> TgaImage<'a> {
     }
 }
 
+/// Draw a TGA icon tinted with a flat color using the icon's alpha channel as a mask.
+///
+/// Every opaque pixel (alpha >= 128) is painted with `tint_color` regardless of the
+/// icon's original RGB values.  This makes monochrome icons work correctly in dark UIs:
+/// pass muted gray for inactive state, SunlightOS orange for focused/selected state.
+///
+/// Falls back to a placeholder outline in `tint_color` when `img` is `None`.
+pub fn draw_tga_icon_tinted(
+    fb: &mut Framebuffer,
+    img: Option<&TgaImage<'_>>,
+    x: u32,
+    y: u32,
+    target_w: u32,
+    target_h: u32,
+    tint_color: u32,
+) {
+    let Some(img) = img else {
+        crate::draw::rect_outline(fb, x, y, target_w, target_h, 1, tint_color);
+        return;
+    };
+    let src_w = img.width();
+    let src_h = img.height();
+    if src_w == 0 || src_h == 0 || target_w == 0 || target_h == 0 {
+        return;
+    }
+    for dy in 0..target_h {
+        let sy = (dy as u64 * src_h as u64 / target_h as u64) as u32;
+        for dx in 0..target_w {
+            let sx = (dx as u64 * src_w as u64 / target_w as u64) as u32;
+            let (_, alpha) = img.pixel_alpha(sx, sy);
+            if alpha >= 128 {
+                fb.put_pixel(x + dx, y + dy, tint_color);
+            }
+        }
+    }
+}
+
 /// Draw a TGA icon scaled to `target_w × target_h` at position `(x, y)`.
 ///
 /// Pixels with alpha < 128 are treated as transparent and skipped.

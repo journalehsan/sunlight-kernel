@@ -77,18 +77,22 @@ pub unsafe fn render_tty_shell(
     let layout = layout::Layout::new(fb_width, fb_height);
     layout.draw_chrome(&mut fb);
 
-    // Header
-    font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
-    font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
+    // Vertically center UI text in header (48px)
+    let ui_lh = fontatlas::line_height(fontatlas::FontSize::Regular);
+    let hdr_text_y = layout::HEADER_HEIGHT.saturating_sub(ui_lh) / 2;
+
+    // Header — UI atlas for labels, bitmap "*" bullet kept as-is
+    font::draw_str(&mut fb, 16, hdr_text_y + 1, "*", layout::palette::ACCENT, 1);
+    fontatlas::draw_text(&mut fb, "SunlightOS", 32, hdr_text_y, layout::palette::TEXT, fontatlas::FontSize::Regular);
     let mode_label = "TTY";
-    let mode_w = font::text_width(mode_label, 1);
-    font::draw_str(
+    let mode_w = fontatlas::measure_text(mode_label, fontatlas::FontSize::Regular);
+    fontatlas::draw_text(
         &mut fb,
-        fb_width.saturating_sub(mode_w + 16),
-        16,
         mode_label,
+        fb_width.saturating_sub(mode_w + 16),
+        hdr_text_y,
         layout::palette::ACCENT_DIM,
-        1,
+        fontatlas::FontSize::Regular,
     );
 
     // Tab bar — 26px high strip immediately below the header separator
@@ -97,6 +101,7 @@ pub unsafe fn render_tty_shell(
     fb.fill_rect(0, tab_y, fb_width, TAB_H, layout::palette::SURFACE);
     fb.hline(0, tab_y + TAB_H, fb_width, layout::palette::SEPARATOR);
 
+    let tab_text_y = tab_y + (TAB_H.saturating_sub(ui_lh)) / 2;
     let mut tx = 8u32;
     for i in 0..tab_count.min(10) {
         let is_active = i == active_tab;
@@ -106,9 +111,9 @@ pub unsafe fn render_tty_shell(
             layout::palette::TEXT_DIM
         };
         let tab_text = " shell ";
-        let tw = font::text_width(tab_text, 1);
+        let tw = fontatlas::measure_text(tab_text, fontatlas::FontSize::Regular);
         fb.fill_rect(tx, tab_y + 3, tw + 2, TAB_H - 6, layout::palette::BG);
-        font::draw_str(&mut fb, tx + 1, tab_y + 5, tab_text, fg, 1);
+        fontatlas::draw_text(&mut fb, tab_text, tx + 1, tab_text_y, fg, fontatlas::FontSize::Regular);
         if is_active {
             // Orange underline on active tab
             fb.hline(tx, tab_y + TAB_H - 2, tw + 2, layout::palette::ACCENT);
@@ -117,7 +122,7 @@ pub unsafe fn render_tty_shell(
     }
 
     // Content area — from below tab bar to above footer
-    const CHAR_H: u32 = 18; // 16px glyph + 2px leading
+    const CHAR_H: u32 = TERM_CHAR_H; // bitmap fallback height for simple shell view
     const MARGIN: u32 = 16;
     let content_y = tab_y + TAB_H + 4;
     let avail_h = layout.footer.y.saturating_sub(content_y + 4);
@@ -221,12 +226,18 @@ pub const TERM_TAB_BAR_H: u32 = 26;
 /// Compute the (cols, rows) of the terminal content area for a framebuffer.
 /// Callers must size the grid with exactly these dimensions so the renderer
 /// shows every row from the top with no clipping.
+///
+/// Uses Fira Code mono atlas cell metrics when available; falls back to
+/// `TERM_CHAR_W`/`TERM_CHAR_H` (bitmap dimensions) if the atlas is missing.
 pub fn terminal_dims(fb_width: u32, fb_height: u32) -> (usize, usize) {
     let layout = layout::Layout::new(fb_width, fb_height);
+    let (cell_w, cell_h) = fontatlas::cell_metrics(fontatlas::FontSize::MonoRegular);
     let content_y = layout.main.y + TERM_TAB_BAR_H + 4;
     let avail_h = layout.footer.y.saturating_sub(content_y + 4);
-    let rows = (avail_h / TERM_CHAR_H) as usize;
-    let cols = (fb_width / TERM_CHAR_W) as usize;
+    let rows = (avail_h / cell_h) as usize;
+    // subtract 16px left margin + 16px right margin
+    let avail_w = fb_width.saturating_sub(32);
+    let cols = (avail_w / cell_w) as usize;
     (cols, rows)
 }
 
@@ -251,21 +262,32 @@ pub unsafe fn render_terminal_grid(
     let layout = layout::Layout::new(fb_width, fb_height);
     layout.draw_chrome(&mut fb);
 
-    // Header: logo left, clock right, mode label left of the clock
-    font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
-    font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::ACCENT, 1);
-    let clock_w = clock.len() as u32 * 8;
+    // Mono cell metrics — Fira Code atlas or bitmap fallback (8, 18).
+    // Must match terminal_dims() exactly so rows aren't clipped.
+    let (cell_w, cell_h) = fontatlas::cell_metrics(fontatlas::FontSize::MonoRegular);
+
+    // Vertically center UI text in header (48px)
+    let ui_lh = fontatlas::line_height(fontatlas::FontSize::Regular);
+    let hdr_text_y = layout::HEADER_HEIGHT.saturating_sub(ui_lh) / 2;
+
+    // Header: logo left, clock right, mode label left of the clock — UI atlas
+    font::draw_str(&mut fb, 16, hdr_text_y + 1, "*", layout::palette::ACCENT, 1);
+    fontatlas::draw_text(&mut fb, "SunlightOS", 32, hdr_text_y, layout::palette::ACCENT, fontatlas::FontSize::Regular);
+    let clock_str = core::str::from_utf8(clock).unwrap_or("");
+    let clock_w = fontatlas::measure_text(clock_str, fontatlas::FontSize::Regular);
     let clock_x = fb_width.saturating_sub(clock_w + 16);
-    tty_draw_line(&mut fb, clock_x, 16, clock, layout::palette::TEXT, 1);
+    if !clock_str.is_empty() {
+        fontatlas::draw_text(&mut fb, clock_str, clock_x, hdr_text_y, layout::palette::TEXT, fontatlas::FontSize::Regular);
+    }
     let mode_label = "TTY";
-    let mode_w = font::text_width(mode_label, 1);
-    font::draw_str(
+    let mode_w = fontatlas::measure_text(mode_label, fontatlas::FontSize::Regular);
+    fontatlas::draw_text(
         &mut fb,
-        clock_x.saturating_sub(mode_w + 24),
-        16,
         mode_label,
+        clock_x.saturating_sub(mode_w + 24),
+        hdr_text_y,
         layout::palette::ACCENT_DIM,
-        1,
+        fontatlas::FontSize::Regular,
     );
 
     // Tab bar
@@ -274,6 +296,7 @@ pub unsafe fn render_terminal_grid(
     fb.fill_rect(0, tab_y, fb_width, TAB_H, layout::palette::SURFACE);
     fb.hline(0, tab_y + TAB_H, fb_width, layout::palette::SEPARATOR);
 
+    let tab_text_y = tab_y + TAB_H.saturating_sub(ui_lh) / 2;
     let mut tx = 8u32;
     for (i, label) in tab_labels.iter().take(10).enumerate() {
         let is_active = i == active_tab;
@@ -305,22 +328,21 @@ pub unsafe fn render_terminal_grid(
         buf[n] = b' '; // trailing space
         n += 1;
         let tab_text = core::str::from_utf8(&buf[..n]).unwrap_or(" SHELL ");
-        let tw = font::text_width(tab_text, 1);
+        let tw = fontatlas::measure_text(tab_text, fontatlas::FontSize::Regular);
         fb.fill_rect(tx, tab_y + 3, tw + 2, TAB_H - 6, layout::palette::BG);
-        font::draw_str(&mut fb, tx + 1, tab_y + 5, tab_text, fg, 1);
+        fontatlas::draw_text(&mut fb, tab_text, tx + 1, tab_text_y, fg, fontatlas::FontSize::Regular);
         if is_active {
             fb.hline(tx, tab_y + TAB_H - 2, tw + 2, layout::palette::ACCENT);
         }
         tx += tw + 8;
     }
 
-    // Content area: render the grid. CHAR_H must match terminal_dims() or rows
-    // get clipped off the top of the content area.
-    const CHAR_H: u32 = TERM_CHAR_H;
+    // Content area: render the grid using Fira Code mono atlas.
+    // cell_h must match terminal_dims() exactly so rows aren't clipped off the top.
     const MARGIN: u32 = 16;
     let content_y = tab_y + TAB_H + 4;
     let avail_h = layout.footer.y.saturating_sub(content_y + 4);
-    let max_visible = (avail_h / CHAR_H) as usize;
+    let max_visible = (avail_h / cell_h) as usize;
 
     // Only show the last `max_visible` rows
     let start_row = if rows > max_visible {
@@ -330,7 +352,7 @@ pub unsafe fn render_terminal_grid(
     };
     for row in start_row..rows {
         let screen_row = row - start_row;
-        let y = content_y + (screen_row as u32) * CHAR_H;
+        let y = content_y + (screen_row as u32) * cell_h;
 
         for col in 0..cols {
             let cell_idx = row * cols + col;
@@ -338,14 +360,12 @@ pub unsafe fn render_terminal_grid(
                 break;
             }
             let cell = cells[cell_idx];
-            let x = MARGIN + (col as u32) * 8;
+            let x = MARGIN + (col as u32) * cell_w;
 
-            // Draw background — full CHAR_H to avoid 2px dark gaps between rows
-            fb.fill_rect(x, y, 8, CHAR_H, cell.bg);
-
-            // Draw character if not space
+            // Fill cell background first, then alpha-blend the glyph on top
+            fb.fill_rect(x, y, cell_w, cell_h, cell.bg);
             if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
-                font::draw_char(&mut fb, x, y, cell.ch, cell.fg, 1);
+                fontatlas::draw_mono_char(&mut fb, x, y, cell_h, cell.ch, cell.fg, fontatlas::FontSize::MonoRegular);
             }
         }
     }
@@ -354,24 +374,24 @@ pub unsafe fn render_terminal_grid(
     // prompt/input area. The TTY shell keeps the live prompt in the footer.
     if prompt.is_empty() && input_line.is_empty() && cursor_row >= start_row && cursor_row < rows {
         let screen_row = cursor_row - start_row;
-        let y = content_y + (screen_row as u32) * CHAR_H;
-        let x = MARGIN + (cursor_col as u32) * 8;
+        let y = content_y + (screen_row as u32) * cell_h;
+        let x = MARGIN + (cursor_col as u32) * cell_w;
 
         // Inverted: swap fg/bg for cursor cell
         let cell_idx = cursor_row * cols + cursor_col.min(cols - 1);
         if cell_idx < cells.len() {
             let cell = cells[cell_idx];
-            fb.fill_rect(x, y, 8, CHAR_H, cell.fg); // fg becomes bg
+            fb.fill_rect(x, y, cell_w, cell_h, cell.fg); // fg becomes bg
             if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
-                font::draw_char(&mut fb, x, y, cell.ch, cell.bg, 1); // bg becomes fg
+                fontatlas::draw_mono_char(&mut fb, x, y, cell_h, cell.ch, cell.bg, fontatlas::FontSize::MonoRegular); // bg becomes fg
             }
         } else {
             // Empty cell: just draw inverted space
-            fb.fill_rect(x, y, 8, CHAR_H, layout::palette::TEXT);
+            fb.fill_rect(x, y, cell_w, cell_h, layout::palette::TEXT);
         }
     }
 
-    // Footer: prompt + input + command cursor
+    // Footer: prompt + input + command cursor (bitmap — keeps cursor math simple)
     let footer_text_y = layout.footer.y + 8;
     tty_draw_line(
         &mut fb,
@@ -436,20 +456,31 @@ fn draw_user_avatar(
     let box_x = cx.saturating_sub(BOX_SZ / 2);
     let box_y = icon_top.saturating_sub(PAD);
 
-    // Subtle warm fill for selected state
-    let fill = if selected { 0x120800 } else { 0x0A0A0A };
+    // Tile background: warm orange tint when selected, dark when inactive.
+    let fill = if focused { 0x1C0C00 } else if selected { 0x160900 } else { 0x0A0A0A };
     fb.fill_rect(box_x, box_y, BOX_SZ, BOX_SZ, fill);
 
-    let border_color = if focused || selected {
+    let border_color = if focused {
         layout::palette::ACCENT
+    } else if selected {
+        layout::palette::ACCENT_DIM
     } else {
         layout::palette::SEPARATOR
     };
     draw::rect_outline(fb, box_x, box_y, BOX_SZ, BOX_SZ, if focused { 2 } else { 1 }, border_color);
 
+    // Icon tint: orange for focused, dimmed orange for selected, muted gray for inactive.
+    let icon_tint = if focused {
+        layout::palette::ACCENT
+    } else if selected {
+        layout::palette::ACCENT_DIM
+    } else {
+        layout::palette::TEXT_DIM
+    };
+
     let icon_x = cx.saturating_sub(ICON_SZ / 2);
     if let Some(img) = icon {
-        tga::draw_tga_icon(fb, Some(img), icon_x, icon_top, ICON_SZ, ICON_SZ, layout::palette::TEXT_DIM);
+        tga::draw_tga_icon_tinted(fb, Some(img), icon_x, icon_top, ICON_SZ, ICON_SZ, icon_tint);
     } else {
         // Fallback: draw the first letter of the name
         let ch = if name.is_empty() {
@@ -458,7 +489,7 @@ fn draw_user_avatar(
             let c = name[0];
             if c >= b'a' && c <= b'z' { c - 32 } else { c }
         };
-        font::draw_char(fb, icon_x + 12, icon_top + 9, ch, layout::palette::TEXT, 1);
+        font::draw_char(fb, icon_x + 12, icon_top + 9, ch, icon_tint, 1);
     }
 }
 
@@ -708,18 +739,18 @@ pub unsafe fn render_login_grid(
 
     // Reboot button
     {
-        let bg = if reboot_focused { 0x180900 } else { 0x080808 };
+        let bg = if reboot_focused { 0x1C0C00 } else { 0x080808 };
         fb.fill_rect(reboot_x, btn_y, rb_btn_w, BTN_H, bg);
         draw::rect_outline(
             &mut fb, reboot_x, btn_y, rb_btn_w, BTN_H,
             if reboot_focused { 2 } else { 1 },
             if reboot_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
         );
-        tga::draw_tga_icon(
+        tga::draw_tga_icon_tinted(
             &mut fb, icon_reboot.as_ref(),
             reboot_x + BTN_ICON_PAD, btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
             BTN_ICON, BTN_ICON,
-            layout::palette::TEXT_DIM,
+            if reboot_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
         );
         fontatlas::draw_text(
             &mut fb, rb_label,
@@ -732,18 +763,18 @@ pub unsafe fn render_login_grid(
 
     // Shutdown button
     {
-        let bg = if shutdown_focused { 0x180900 } else { 0x080808 };
+        let bg = if shutdown_focused { 0x1C0C00 } else { 0x080808 };
         fb.fill_rect(shutdown_x, btn_y, sd_btn_w, BTN_H, bg);
         draw::rect_outline(
             &mut fb, shutdown_x, btn_y, sd_btn_w, BTN_H,
             if shutdown_focused { 2 } else { 1 },
             if shutdown_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
         );
-        tga::draw_tga_icon(
+        tga::draw_tga_icon_tinted(
             &mut fb, icon_shutdown.as_ref(),
             shutdown_x + BTN_ICON_PAD, btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
             BTN_ICON, BTN_ICON,
-            layout::palette::TEXT_DIM,
+            if shutdown_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
         );
         fontatlas::draw_text(
             &mut fb, sd_label,
