@@ -7,7 +7,7 @@ use sunlight_ipc::{
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, ProcessExit,
 };
-use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_PROCESSES};
+use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_CORES, MAX_PROCESSES};
 use sunlight_ui::{
     request_close,
     widgets::{Button, ButtonState, Column, Label, Panel, StatusBar, Table},
@@ -26,6 +26,7 @@ const TOOLBAR_H: u32 = 28;
 const INFO_H: u32 = 60;
 const CONTENT_MARGIN: i32 = 12;
 const TABLE_COLS: usize = 5;
+const CORE_TABLE_COLS: usize = 7;
 const CELL_BUF: usize = 32;
 
 const KEY_BACKSPACE: u8 = 0x0E;
@@ -37,6 +38,12 @@ const KEY_END: u8 = 0x4F;
 const KEY_PGUP: u8 = 0x49;
 const KEY_PGDN: u8 = 0x51;
 const KEY_Q: u8 = 0x10;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ViewMode {
+    Processes,
+    Cores,
+}
 
 struct NoAlloc;
 
@@ -59,34 +66,25 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 }
 
 const TABLE_COLUMNS: [Column<'static>; TABLE_COLS] = [
-    Column {
-        header: "PID",
-        width: 70,
-        right_align: true,
-    },
-    Column {
-        header: "Name",
-        width: 260,
-        right_align: false,
-    },
-    Column {
-        header: "State",
-        width: 120,
-        right_align: false,
-    },
-    Column {
-        header: "CPU%",
-        width: 90,
-        right_align: true,
-    },
-    Column {
-        header: "RAM",
-        width: 120,
-        right_align: true,
-    },
+    Column { header: "PID",   width: 70,  right_align: true  },
+    Column { header: "Name",  width: 260, right_align: false },
+    Column { header: "State", width: 120, right_align: false },
+    Column { header: "CPU%",  width: 90,  right_align: true  },
+    Column { header: "RAM",   width: 120, right_align: true  },
+];
+
+const CORE_COLUMNS: [Column<'static>; CORE_TABLE_COLS] = [
+    Column { header: "Core",  width: 50,  right_align: true  },
+    Column { header: "PID",   width: 60,  right_align: true  },
+    Column { header: "Name",  width: 165, right_align: false },
+    Column { header: "Nice",  width: 48,  right_align: true  },
+    Column { header: "State", width: 80,  right_align: false },
+    Column { header: "Load%", width: 72,  right_align: true  },
+    Column { header: "CSw",   width: 90,  right_align: true  },
 ];
 
 const EMPTY_ROW: [&str; TABLE_COLS] = ["", "", "", "", ""];
+const EMPTY_CORE_ROW: [&str; CORE_TABLE_COLS] = ["", "", "", "", "", "", ""];
 
 struct TasksApp {
     telemetry: Telemetry,
@@ -98,10 +96,14 @@ struct TasksApp {
     selected_pid: Option<u32>,
     scroll: usize,
     show_system_info: bool,
+    view_mode: ViewMode,
     order: [usize; MAX_PROCESSES],
     row_bufs: [[[u8; CELL_BUF]; TABLE_COLS]; MAX_PROCESSES],
     row_lens: [[usize; TABLE_COLS]; MAX_PROCESSES],
     row_count: usize,
+    core_row_bufs: [[[u8; CELL_BUF]; CORE_TABLE_COLS]; MAX_CORES],
+    core_row_lens: [[usize; CORE_TABLE_COLS]; MAX_CORES],
+    core_row_count: usize,
 }
 
 impl TasksApp {
@@ -116,10 +118,14 @@ impl TasksApp {
             selected_pid: None,
             scroll: 0,
             show_system_info: true,
+            view_mode: ViewMode::Processes,
             order: [0; MAX_PROCESSES],
             row_bufs: [[[0; CELL_BUF]; TABLE_COLS]; MAX_PROCESSES],
             row_lens: [[0; TABLE_COLS]; MAX_PROCESSES],
             row_count: 0,
+            core_row_bufs: [[[0; CELL_BUF]; CORE_TABLE_COLS]; MAX_CORES],
+            core_row_lens: [[0; CORE_TABLE_COLS]; MAX_CORES],
+            core_row_count: 0,
         };
         app.set_status("Telemetry ready");
         app.refresh(true);
@@ -153,6 +159,7 @@ impl TasksApp {
         if changed || force {
             self.snapshot = *self.telemetry.snapshot();
             self.rebuild_rows();
+            self.rebuild_core_rows();
             self.rebuild_hw_info();
             self.clamp_scroll();
             return true;
@@ -205,8 +212,71 @@ impl TasksApp {
         }
     }
 
+    fn rebuild_core_rows(&mut self) {
+        let count = self.snapshot.cpu_telemetry.count.min(MAX_CORES);
+        self.core_row_count = count;
+        for i in 0..count {
+            // Copy all core fields to locals before borrowing bufs mutably.
+            let core_id          = self.snapshot.cpu_telemetry.cores[i].core_id;
+            let pid              = self.snapshot.cpu_telemetry.cores[i].current_task_pid;
+            let nice             = self.snapshot.cpu_telemetry.cores[i].nice;
+            let load_bp          = self.snapshot.cpu_telemetry.cores[i].load_bp;
+            let context_switches = self.snapshot.cpu_telemetry.cores[i].context_switches;
+
+            // Look up process name from the process table; the core snapshot
+            // is authoritative for state (if current_pid != 0 it IS running).
+            let mut pname_buf = [0u8; 32];
+            let mut pname_len = 0usize;
+            let mut found     = false;
+            if pid != 0 {
+                for j in 0..self.snapshot.proc_count {
+                    if self.snapshot.procs[j].pid == pid {
+                        let s = self.snapshot.procs[j].name_str().as_bytes();
+                        pname_len = s.len().min(32);
+                        pname_buf[..pname_len].copy_from_slice(&s[..pname_len]);
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            // Write columns (no snapshot borrow active at this point).
+            write_u32(core_id as u32, &mut self.core_row_bufs[i][0], &mut self.core_row_lens[i][0]);
+
+            if pid != 0 {
+                write_u32(pid, &mut self.core_row_bufs[i][1], &mut self.core_row_lens[i][1]);
+            } else {
+                write_str("-", &mut self.core_row_bufs[i][1], &mut self.core_row_lens[i][1]);
+            }
+
+            if pid != 0 {
+                let name = core::str::from_utf8(&pname_buf[..pname_len]).unwrap_or("?");
+                write_str(if found { name } else { "?" }, &mut self.core_row_bufs[i][2], &mut self.core_row_lens[i][2]);
+            } else {
+                write_str("idle", &mut self.core_row_bufs[i][2], &mut self.core_row_lens[i][2]);
+            }
+
+            if pid != 0 {
+                write_nice(nice, &mut self.core_row_bufs[i][3], &mut self.core_row_lens[i][3]);
+            } else {
+                write_str("-", &mut self.core_row_bufs[i][3], &mut self.core_row_lens[i][3]);
+            }
+
+            // State is authoritative from the core snapshot, not the process table.
+            write_str(
+                if pid != 0 { "running" } else { "idle" },
+                &mut self.core_row_bufs[i][4],
+                &mut self.core_row_lens[i][4],
+            );
+
+            write_pct((load_bp / 100).min(100) as u32, &mut self.core_row_bufs[i][5], &mut self.core_row_lens[i][5]);
+
+            write_compact_count(context_switches, &mut self.core_row_bufs[i][6], &mut self.core_row_lens[i][6]);
+        }
+    }
+
     fn before(&self, a: usize, b: usize) -> bool {
-        let left = &self.snapshot.procs[a];
+        let left  = &self.snapshot.procs[a];
         let right = &self.snapshot.procs[b];
         if left.cpu_bp != right.cpu_bp {
             left.cpu_bp > right.cpu_bp
@@ -217,7 +287,11 @@ impl TasksApp {
 
     fn clamp_scroll(&mut self) {
         let visible = self.visible_rows();
-        let max_scroll = self.row_count.saturating_sub(visible);
+        let max_row = match self.view_mode {
+            ViewMode::Processes => self.row_count,
+            ViewMode::Cores     => self.core_row_count,
+        };
+        let max_scroll = max_row.saturating_sub(visible);
         if self.scroll > max_scroll {
             self.scroll = max_scroll;
         }
@@ -243,12 +317,7 @@ impl TasksApp {
 
     fn toolbar_rect(&self) -> Rect {
         let content = self.content_rect();
-        Rect::new(
-            content.x,
-            content.y + TITLE_H as i32 + 8,
-            content.w,
-            TOOLBAR_H,
-        )
+        Rect::new(content.x, content.y + TITLE_H as i32 + 8, content.w, TOOLBAR_H)
     }
 
     fn table_rect(&self) -> Rect {
@@ -258,11 +327,7 @@ impl TasksApp {
             + 8
             + TOOLBAR_H as i32
             + 8
-            + if self.show_system_info {
-                INFO_H as i32 + 8
-            } else {
-                0
-            };
+            + if self.show_system_info { INFO_H as i32 + 8 } else { 0 };
         let status_h = STATUS_H + 8;
         Rect::new(
             content.x,
@@ -274,12 +339,7 @@ impl TasksApp {
 
     fn status_bar_rect(&self) -> Rect {
         let content = self.content_rect();
-        Rect::new(
-            content.x,
-            content.bottom() - STATUS_H as i32,
-            content.w,
-            STATUS_H,
-        )
+        Rect::new(content.x, content.bottom() - STATUS_H as i32, content.w, STATUS_H)
     }
 
     fn toolbar_buttons(&self) -> [Rect; 4] {
@@ -305,10 +365,7 @@ impl TasksApp {
         let mut n = copy_tail(b"Uptime ", uptime);
         n += write_num_into((self.snapshot.uptime_secs / 3600) as u32, &mut uptime[n..]);
         n += copy_tail(b"h ", &mut uptime[n..]);
-        n += write_num_into(
-            ((self.snapshot.uptime_secs % 3600) / 60) as u32,
-            &mut uptime[n..],
-        );
+        n += write_num_into(((self.snapshot.uptime_secs % 3600) / 60) as u32, &mut uptime[n..]);
         copy_tail(b"m", &mut uptime[n..]);
 
         let n = copy_tail(b"Tasks ", tasks);
@@ -345,9 +402,14 @@ impl App for TasksApp {
         .draw(canvas, theme);
 
         let buttons = self.toolbar_buttons();
-        let labels = ["End", "Charts", "Info", "Refresh"];
+        let labels = ["End", "Cores", "Info", "Refresh"];
         for (idx, rect) in buttons.iter().enumerate() {
-            let mut button = if idx == 2 && self.show_system_info {
+            let active = match idx {
+                1 => self.view_mode == ViewMode::Cores,
+                2 => self.show_system_info,
+                _ => false,
+            };
+            let mut button = if active {
                 Button::new(*rect, labels[idx]).with_font(&F_UI)
             } else {
                 Button::secondary(*rect, labels[idx]).with_font(&F_UI)
@@ -365,24 +427,14 @@ impl App for TasksApp {
             );
             Panel::with_title(info_rect, "System").draw(canvas, theme);
 
-            let row1 = Rect::new(
-                info_rect.x + 12,
-                info_rect.y + 22,
-                info_rect.w.saturating_sub(24),
-                14,
-            );
-            let row2 = Rect::new(
-                info_rect.x + 12,
-                info_rect.y + 38,
-                info_rect.w.saturating_sub(24),
-                14,
-            );
-            let mut top_cells = HBox::new(row1).with_spacing(12).layout(&[150, 120]);
+            let row1 = Rect::new(info_rect.x + 12, info_rect.y + 22, info_rect.w.saturating_sub(24), 14);
+            let row2 = Rect::new(info_rect.x + 12, info_rect.y + 38, info_rect.w.saturating_sub(24), 14);
+            let mut top_cells    = HBox::new(row1).with_spacing(12).layout(&[150, 120]);
             let mut bottom_cells = HBox::new(row2).with_spacing(12).layout(&[280, 220]);
             let mut uptime = [0u8; 24];
-            let mut tasks = [0u8; 24];
-            let mut cpu = [0u8; 40];
-            let mut ram = [0u8; 40];
+            let mut tasks  = [0u8; 24];
+            let mut cpu    = [0u8; 40];
+            let mut ram    = [0u8; 40];
             self.info_strings(&mut uptime, &mut tasks, &mut cpu, &mut ram);
             let top_labels = [
                 core::str::from_utf8(trim_zeros(&uptime)).unwrap_or(""),
@@ -404,32 +456,58 @@ impl App for TasksApp {
             }
         }
 
-        let mut row_cells = [EMPTY_ROW; MAX_PROCESSES];
-        let mut row_refs: [&[&str]; MAX_PROCESSES] = [&[]; MAX_PROCESSES];
-        for row in 0..self.row_count {
-            for col in 0..TABLE_COLS {
-                row_cells[row][col] =
-                    core::str::from_utf8(&self.row_bufs[row][col][..self.row_lens[row][col]])
+        let table_rect = self.table_rect();
+        let visible    = self.visible_rows();
+
+        match self.view_mode {
+            ViewMode::Processes => {
+                let end = (self.scroll + visible).min(self.row_count);
+                let mut row_cells = [EMPTY_ROW; MAX_PROCESSES];
+                let mut row_refs: [&[&str]; MAX_PROCESSES] = [&[]; MAX_PROCESSES];
+                for row in 0..self.row_count {
+                    for col in 0..TABLE_COLS {
+                        row_cells[row][col] = core::str::from_utf8(
+                            &self.row_bufs[row][col][..self.row_lens[row][col]],
+                        )
                         .unwrap_or("");
+                    }
+                }
+                for row in 0..self.row_count {
+                    row_refs[row] = &row_cells[row];
+                }
+                let selected = self.selected_pid.and_then(|pid| {
+                    (self.scroll..end).position(|idx| {
+                        self.snapshot.procs[self.order[idx]].pid == pid
+                    })
+                });
+                Table::new(table_rect, &TABLE_COLUMNS, &row_refs[self.scroll..end])
+                    .with_selected(selected)
+                    .with_font(&F_UI)
+                    .draw(canvas, theme);
+            }
+
+            ViewMode::Cores => {
+                let count = self.core_row_count;
+                let start = self.scroll.min(count.saturating_sub(visible));
+                let end   = (start + visible).min(count);
+                let mut core_cells = [EMPTY_CORE_ROW; MAX_CORES];
+                let mut core_refs: [&[&str]; MAX_CORES] = [&[]; MAX_CORES];
+                for i in 0..count {
+                    for col in 0..CORE_TABLE_COLS {
+                        core_cells[i][col] = core::str::from_utf8(
+                            &self.core_row_bufs[i][col][..self.core_row_lens[i][col]],
+                        )
+                        .unwrap_or("");
+                    }
+                }
+                for i in 0..count {
+                    core_refs[i] = &core_cells[i];
+                }
+                Table::new(table_rect, &CORE_COLUMNS, &core_refs[start..end])
+                    .with_font(&F_UI)
+                    .draw(canvas, theme);
             }
         }
-        for row in 0..self.row_count {
-            row_refs[row] = &row_cells[row];
-        }
-
-        let table_rect = self.table_rect();
-        let visible = self.visible_rows();
-        let end = (self.scroll + visible).min(self.row_count);
-        let selected = self.selected_pid.and_then(|pid| {
-            (self.scroll..end).position(|idx| {
-                let proc = &self.snapshot.procs[self.order[idx]];
-                proc.pid == pid
-            })
-        });
-        Table::new(table_rect, &TABLE_COLUMNS, &row_refs[self.scroll..end])
-            .with_selected(selected)
-            .with_font(&F_UI)
-            .draw(canvas, theme);
 
         StatusBar::new(
             self.status_bar_rect(),
@@ -453,7 +531,19 @@ impl App for TasksApp {
                             } else {
                                 "Select a process first"
                             }),
-                            1 => self.set_status("Charts view is not implemented yet"),
+                            1 => {
+                                self.view_mode = if self.view_mode == ViewMode::Cores {
+                                    ViewMode::Processes
+                                } else {
+                                    ViewMode::Cores
+                                };
+                                self.scroll = 0;
+                                self.set_status(if self.view_mode == ViewMode::Cores {
+                                    "Cores view"
+                                } else {
+                                    "Processes view"
+                                });
+                            }
                             2 => {
                                 self.show_system_info = !self.show_system_info;
                                 self.set_status(if self.show_system_info {
@@ -472,43 +562,42 @@ impl App for TasksApp {
                     }
                 }
 
-                let table = Table::new(self.table_rect(), &TABLE_COLUMNS, &[])
-                    .with_font(&F_UI);
-                if let Some(row) = table.hit_test(x, y) {
-                    let idx = self.scroll + row;
-                    if idx < self.row_count {
-                        let proc = &self.snapshot.procs[self.order[idx]];
-                        self.selected_pid = Some(proc.pid);
-                        self.set_status("Process selected");
-                        return true;
+                if self.view_mode == ViewMode::Processes {
+                    let table = Table::new(self.table_rect(), &TABLE_COLUMNS, &[]).with_font(&F_UI);
+                    if let Some(row) = table.hit_test(x, y) {
+                        let idx = self.scroll + row;
+                        if idx < self.row_count {
+                            let proc = &self.snapshot.procs[self.order[idx]];
+                            self.selected_pid = Some(proc.pid);
+                            self.set_status("Process selected");
+                            return true;
+                        }
                     }
                 }
                 false
             }
-            Event::KeyPress {
-                keycode,
-                pressed: true,
-                ctrl,
-                ..
-            } => {
+            Event::KeyPress { keycode, pressed: true, ctrl, .. } => {
                 if ctrl && keycode == KEY_Q {
                     request_close();
                     return true;
                 }
+                let page = self.visible_rows().max(1) / 2;
                 match keycode {
-                    KEY_UP => self.scroll = self.scroll.saturating_sub(1),
+                    KEY_UP   => self.scroll = self.scroll.saturating_sub(1),
                     KEY_DOWN => self.scroll = self.scroll.saturating_add(1),
-                    KEY_PGUP => {
-                        self.scroll = self.scroll.saturating_sub(self.visible_rows().max(1) / 2)
-                    }
-                    KEY_PGDN => {
-                        self.scroll = self.scroll.saturating_add(self.visible_rows().max(1) / 2)
-                    }
+                    KEY_PGUP => self.scroll = self.scroll.saturating_sub(page),
+                    KEY_PGDN => self.scroll = self.scroll.saturating_add(page),
                     KEY_HOME => self.scroll = 0,
-                    KEY_END => self.scroll = self.row_count.saturating_sub(self.visible_rows()),
-                    KEY_ENTER => self.set_status("End process not implemented"),
+                    KEY_END  => {
+                        let total = match self.view_mode {
+                            ViewMode::Processes => self.row_count,
+                            ViewMode::Cores     => self.core_row_count,
+                        };
+                        self.scroll = total.saturating_sub(self.visible_rows());
+                    }
+                    KEY_ENTER     => self.set_status("End process not implemented"),
                     KEY_BACKSPACE => return false,
-                    _ => return false,
+                    _             => return false,
                 }
                 self.clamp_scroll();
                 true
@@ -522,12 +611,7 @@ impl App for TasksApp {
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
     let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
-    launch_trace::log_phase_now(
-        trace,
-        "app=tasks",
-        "app_main_started",
-        Some(sunlight_ipc::getpid()),
-    );
+    launch_trace::log_phase_now(trace, "app=tasks", "app_main_started", Some(sunlight_ipc::getpid()));
     let telemetry = match Telemetry::init() {
         Ok(t) => t,
         Err(_) => {
@@ -545,9 +629,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         Some(window) => window,
         None => {
             debug_log("[TASKS] failed to connect window\n");
-            loop {
-                process_yield();
-            }
+            loop { process_yield(); }
         }
     };
     window.run(&mut app);
@@ -556,9 +638,9 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
 fn state_text(state: ProcessState) -> &'static str {
     match state {
-        ProcessState::Ready => "ready",
-        ProcessState::Running => "running",
-        ProcessState::Blocked => "blocked",
+        ProcessState::Ready    => "ready",
+        ProcessState::Running  => "running",
+        ProcessState::Blocked  => "blocked",
         ProcessState::Finished => "finished",
     }
 }
@@ -584,14 +666,39 @@ fn write_kib(value: u32, dst: &mut [u8; CELL_BUF], len: &mut usize) {
     *len = copy_tail_mb(value as u64, dst);
 }
 
-fn write_num_into(mut value: u32, dst: &mut [u8]) -> usize {
-    if dst.is_empty() {
-        return 0;
+fn write_compact_count(value: u64, dst: &mut [u8; CELL_BUF], len: &mut usize) {
+    if value < 10_000 {
+        *len = write_num_into(value as u32, dst);
+    } else if value < 10_000_000 {
+        let mut n = write_num_into((value / 1000) as u32, dst);
+        if n < dst.len() { dst[n] = b'K'; n += 1; }
+        *len = n;
+    } else {
+        let mut n = write_num_into((value / 1_000_000) as u32, dst);
+        if n < dst.len() { dst[n] = b'M'; n += 1; }
+        *len = n;
     }
+}
+
+fn write_nice(value: i8, dst: &mut [u8; CELL_BUF], len: &mut usize) {
     if value == 0 {
-        dst[0] = b'0';
-        return 1;
+        if !dst.is_empty() { dst[0] = b'0'; }
+        *len = if dst.is_empty() { 0 } else { 1 };
+        return;
     }
+    let mut n = 0usize;
+    if value < 0 {
+        if !dst.is_empty() { dst[0] = b'-'; n = 1; }
+        n += write_num_into((-(value as i16)) as u32, &mut dst[n..]);
+    } else {
+        n += write_num_into(value as u32, dst);
+    }
+    *len = n;
+}
+
+fn write_num_into(mut value: u32, dst: &mut [u8]) -> usize {
+    if dst.is_empty() { return 0; }
+    if value == 0 { dst[0] = b'0'; return 1; }
     let mut tmp = [0u8; 10];
     let mut digits = 0;
     while value > 0 && digits < tmp.len() {
@@ -612,34 +719,25 @@ fn copy_tail(src: &[u8], dst: &mut [u8]) -> usize {
 }
 
 fn write_bp_into(value: u16, dst: &mut [u8]) -> usize {
-    if dst.len() < 6 {
-        return 0;
-    }
+    if dst.len() < 6 { return 0; }
     let whole = (value / 100) as u32;
-    let frac = (value % 100) as u32;
+    let frac  = (value % 100) as u32;
     let mut n = write_num_into(whole, dst);
-    if n + 3 > dst.len() {
-        return n;
-    }
-    dst[n] = b'.';
+    if n + 3 > dst.len() { return n; }
+    dst[n]     = b'.';
     dst[n + 1] = b'0' + (frac / 10) as u8;
     dst[n + 2] = b'0' + (frac % 10) as u8;
     n += 3;
-    if n < dst.len() {
-        dst[n] = b'%';
-        n += 1;
-    }
+    if n < dst.len() { dst[n] = b'%'; n += 1; }
     n
 }
 
 fn write_mb_into(kb: u64, dst: &mut [u8]) -> usize {
-    let mb_whole = kb / 1024;
+    let mb_whole  = kb / 1024;
     let mb_tenths = ((kb % 1024) * 10) / 1024;
     let mut n = write_num_into(mb_whole.min(u32::MAX as u64) as u32, dst);
-    if n + 3 > dst.len() {
-        return n;
-    }
-    dst[n] = b'.';
+    if n + 3 > dst.len() { return n; }
+    dst[n]     = b'.';
     dst[n + 1] = b'0' + mb_tenths as u8;
     dst[n + 2] = b' ';
     n += 3;

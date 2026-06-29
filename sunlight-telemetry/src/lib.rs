@@ -31,6 +31,8 @@ pub struct RawCoreStat {
     pub current_ticks: u32,
     pub nice: i8,
     pub _pad2: [u8; 3],
+    pub timer_ticks: u64,
+    pub context_switches: u64,
 }
 
 #[repr(C)]
@@ -249,6 +251,9 @@ impl Telemetry {
             if kernel_core_count > 0 {
                 let cs = unsafe { vread(core::ptr::addr_of!(page.cores[i])) };
                 snap.cpu_telemetry.cores[i].current_task_pid = cs.current_pid;
+                snap.cpu_telemetry.cores[i].nice = cs.nice;
+                snap.cpu_telemetry.cores[i].timer_ticks = cs.timer_ticks;
+                snap.cpu_telemetry.cores[i].context_switches = cs.context_switches;
             }
             // load_bp is filled in compute_cpu_usage() after interval is known.
         }

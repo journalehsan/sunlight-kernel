@@ -32,6 +32,8 @@ pub struct CoreStat {
     pub current_ticks: u32,
     pub nice: i8,
     pub _pad2: [u8; 3],
+    pub timer_ticks: u64,
+    pub context_switches: u64,
 }
 
 #[repr(C)]
@@ -82,6 +84,8 @@ const ZERO_CORE: CoreStat = CoreStat {
     current_ticks: 0,
     nice: 0,
     _pad2: [0; 3],
+    timer_ticks: 0,
+    context_switches: 0,
 };
 
 const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 8192);
@@ -245,6 +249,8 @@ pub unsafe fn update_telemetry(
             let core = &sched.cores[c];
             let entry = &mut TELEMETRY.cores[c];
             entry.core_id = c as u8;
+            entry.timer_ticks = core.timer_ticks;
+            entry.context_switches = core.context_switches;
             if let Some(idx) = core.current_task {
                 if idx < sched.processes.len() {
                     let proc = &sched.processes[idx];

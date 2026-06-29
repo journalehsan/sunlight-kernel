@@ -86,6 +86,12 @@ pub struct CoreSnapshot {
     /// Scheduler affinity mask.  Bit N is set when the running task is
     /// allowed to execute on logical core N.  `!0u64` = unrestricted.
     pub affinity_mask: u64,
+    /// Nice value of the currently running task (-20..+19); 0 if idle.
+    pub nice: i8,
+    /// Total timer IRQ ticks counted on this core since boot.
+    pub timer_ticks: u64,
+    /// Number of task switches performed on this core since boot.
+    pub context_switches: u64,
 }
 
 impl CoreSnapshot {

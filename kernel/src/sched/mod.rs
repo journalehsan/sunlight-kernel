@@ -261,6 +261,10 @@ pub struct CoreState {
     pub current_task: Option<usize>,
     /// Ticks accumulated by current_task within its current quantum.
     pub current_ticks: u64,
+    /// Total timer IRQ ticks handled on this core.
+    pub timer_ticks: u64,
+    /// Number of times a different task was switched onto this core.
+    pub context_switches: u64,
 }
 
 impl CoreState {
@@ -271,6 +275,8 @@ impl CoreState {
             run_queue_low: VecDeque::new(),
             current_task: None,
             current_ticks: 0,
+            timer_ticks: 0,
+            context_switches: 0,
         }
     }
 
@@ -575,6 +581,7 @@ impl Scheduler {
         self.global_tick += 1;
         let cpu_id = current_cpu_id();
         self.cores[cpu_id].current_ticks += 1;
+        self.cores[cpu_id].timer_ticks += 1;
 
         let current = match self.cores[cpu_id].current_task {
             Some(idx) => idx,
@@ -980,6 +987,9 @@ impl Scheduler {
             let next_fs_base = self.processes[next].fs_base;
             let prev = current;
 
+            if next != prev {
+                self.cores[cpu_id].context_switches += 1;
+            }
             self.cores[cpu_id].current_task = Some(next);
             self.processes[next].state = ProcessState::Running;
             self.processes[next].last_run_tick = self.global_tick;
