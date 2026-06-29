@@ -580,12 +580,12 @@ unsafe fn read_user_ptr_array(ptr: u64, max_entries: usize) -> Option<Vec<u64>> 
     Some(result)
 }
 
-/// Reject IpcMsg whose counts exceed the fixed-size word/cap arrays. Registers are
+/// Reject IpcMsg whose counts exceed the register transport limits. Registers are
 /// attacker-controlled, so `IpcMsg::from_registers` clamps these defensively — but
 /// a clamp silently truncates instead of telling the caller their message was
 /// forged/malformed. This catches the out-of-range case explicitly.
 pub fn validate_ipc_msg(msg: &IpcMsg) -> Result<(), IpcError> {
-    if msg.word_count as usize > crate::ipc::message::IPC_MAX_WORDS {
+    if msg.word_count as usize > crate::ipc::message::IPC_REG_WORDS {
         return Err(IpcError::InvalidWordCount);
     }
     if msg.cap_count as usize > crate::ipc::message::IPC_MAX_CAPS {

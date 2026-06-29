@@ -70,7 +70,7 @@ impl IpcMsg {
     /// Load a compact IPC message from syscall registers.
     pub fn from_registers(regs: &SyscallRegs) -> Self {
         let counts = regs.rdx;
-        let word_count = ((counts & 0xffff_ffff) as u32).min(IPC_MAX_WORDS as u32);
+        let word_count = ((counts & 0xffff_ffff) as u32).min(IPC_REG_WORDS as u32);
         let cap_count = ((counts >> 32) as u32).min(IPC_MAX_CAPS as u32);
         let mut msg = Self {
             label: regs.rdi,

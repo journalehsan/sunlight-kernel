@@ -26,7 +26,7 @@ pub enum IpcError {
     EndpointNotFound = 2,
     WouldBlock = 3,
     InvalidArgument = 4,
-    /// `IpcMsg::word_count` exceeds `IPC_MAX_WORDS` (forged register value).
+    /// `IpcMsg::word_count` exceeds `IPC_REG_WORDS` (4) (forged register value).
     InvalidWordCount = 5,
     /// `IpcMsg::cap_count` exceeds `IPC_MAX_CAPS` (forged register value).
     InvalidCapCount = 6,

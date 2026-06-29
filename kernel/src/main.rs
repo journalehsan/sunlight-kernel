@@ -1298,7 +1298,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     }
 
     // 2. word_count overflow: a forged message claiming more words than the
-    //    fixed-size array holds must be rejected.
+    //    register transport limit (IPC_REG_WORDS=4) must be rejected.
     {
         let mut msg = IpcMsg::with_label(0);
         msg.word_count = (crate::ipc::message::IPC_MAX_WORDS as u32) + 1;

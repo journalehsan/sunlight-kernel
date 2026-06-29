@@ -1311,6 +1311,10 @@ pub enum IpcError {
     EndpointNotFound = 2,
     WouldBlock = 3,
     InvalidArgument = 4,
+    /// `word_count` exceeds `IPC_REGISTER_WORDS` (4) — forged or malformed register value.
+    InvalidWordCount = 5,
+    /// `cap_count` exceeds `IPC_MAX_CAPS` (2) — forged or malformed register value.
+    InvalidCapCount = 6,
 }
 
 /// Errors from shared memory grant syscalls.
@@ -1518,10 +1522,12 @@ pub fn ipc_call_timeout(
                 return Err(IpcCallError::InvalidCapability);
             } else if ret == IpcError::EndpointNotFound as u64 {
                 return Err(IpcCallError::EndpointNotFound);
-            } else if ret == IpcError::InvalidArgument as u64 {
+            } else if ret == IpcError::InvalidArgument as u64
+                || ret == IpcError::InvalidWordCount as u64
+                || ret == IpcError::InvalidCapCount as u64
+            {
                 return Err(IpcCallError::InvalidArgument);
             } else {
-                // Also catch word/cap count validation errors etc.
                 return Err(IpcCallError::Unknown(ret));
             }
         }
