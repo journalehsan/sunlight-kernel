@@ -469,8 +469,9 @@ fn draw_user_avatar(
     };
     draw::rect_outline(fb, box_x, box_y, BOX_SZ, BOX_SZ, if focused { 2 } else { 1 }, border_color);
 
-    // Icon tint: orange for focused, dimmed orange for selected, muted gray for inactive.
-    let icon_tint = if focused {
+    // Fallback icon color: orange for focused, dimmed orange for selected,
+    // muted gray for inactive.
+    let icon_color = if focused {
         layout::palette::ACCENT
     } else if selected {
         layout::palette::ACCENT_DIM
@@ -480,7 +481,7 @@ fn draw_user_avatar(
 
     let icon_x = cx.saturating_sub(ICON_SZ / 2);
     if let Some(img) = icon {
-        tga::draw_tga_icon_tinted(fb, Some(img), icon_x, icon_top, ICON_SZ, ICON_SZ, icon_tint);
+        tga::draw_tga_icon(fb, Some(img), icon_x, icon_top, ICON_SZ, ICON_SZ, icon_color);
     } else {
         // Fallback: draw the first letter of the name
         let ch = if name.is_empty() {
@@ -489,7 +490,7 @@ fn draw_user_avatar(
             let c = name[0];
             if c >= b'a' && c <= b'z' { c - 32 } else { c }
         };
-        font::draw_char(fb, icon_x + 12, icon_top + 9, ch, icon_tint, 1);
+        font::draw_char(fb, icon_x + 12, icon_top + 9, ch, icon_color, 1);
     }
 }
 
@@ -746,7 +747,7 @@ pub unsafe fn render_login_grid(
             if reboot_focused { 2 } else { 1 },
             if reboot_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
         );
-        tga::draw_tga_icon_tinted(
+        tga::draw_tga_icon(
             &mut fb, icon_reboot.as_ref(),
             reboot_x + BTN_ICON_PAD, btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
             BTN_ICON, BTN_ICON,
@@ -770,7 +771,7 @@ pub unsafe fn render_login_grid(
             if shutdown_focused { 2 } else { 1 },
             if shutdown_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
         );
-        tga::draw_tga_icon_tinted(
+        tga::draw_tga_icon(
             &mut fb, icon_shutdown.as_ref(),
             shutdown_x + BTN_ICON_PAD, btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
             BTN_ICON, BTN_ICON,
