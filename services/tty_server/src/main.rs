@@ -50,6 +50,12 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+/// Return the embedded login background image (TGA type-2).
+/// Compiled into the binary at build time.
+fn login_bg_data() -> &'static [u8] {
+    include_bytes!("../../../docs/images/sunlight-login-background.tga")
+}
+
 enum TtyState {
     Login,
     Shell,
@@ -458,7 +464,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     if has_fb {
         debug_log("[TTY] Framebuffer acquired");
         unsafe {
-            sunlight_tui::render_login_screen(fb_addr as *mut u32, fb32_w, fb32_h, fb32_p);
+            sunlight_tui::render_login_screen(
+                fb_addr as *mut u32,
+                fb32_w,
+                fb32_h,
+                fb32_p,
+                Some(login_bg_data()),
+            );
         }
         mouse.draw_overlay(fb_addr, fb32_w, fb32_h, fb32_p);
         debug_log("[TTY] Login rendered");
@@ -1266,6 +1278,7 @@ fn render_login_fb(
             fb_w,
             fb_h,
             fb_p,
+            Some(login_bg_data()),
             &user_bufs,
             &user_lens[..login.active_count],
             &is_custom[..login.active_count],

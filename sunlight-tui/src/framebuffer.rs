@@ -34,6 +34,16 @@ impl Framebuffer {
         }
     }
 
+    #[inline(always)]
+    pub fn get_pixel(&self, x: u32, y: u32) -> u32 {
+        if x >= self.width || y >= self.height {
+            return 0;
+        }
+        let offset = (y as usize * (self.pitch as usize / 4)) + x as usize;
+        // SAFETY: bounds checked above, caller guaranteed valid framebuffer
+        unsafe { self.addr.add(offset).read_volatile() }
+    }
+
     pub fn fill_rect(&mut self, x: u32, y: u32, w: u32, h: u32, color: u32) {
         let x_end = (x + w).min(self.width);
         let y_end = (y + h).min(self.height);

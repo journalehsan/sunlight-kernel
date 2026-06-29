@@ -1541,6 +1541,16 @@ StandardOutput=journal\nStandardError=journal\n\n\
     // same file data — no extra memory cost since data pointers are shared).
     RamEntry::dir("/usr/share", 0, 0, mode::DIR_755),
     RamEntry::dir("/usr/share/sunlightos", 0, 0, mode::DIR_755),
+    // Login background image (TGA type-2).  The tty_server also embeds this
+    // image at compile time; the VFS path is provided for other consumers.
+    RamEntry::dir("/usr/share/sunlightos/backgrounds", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/usr/share/sunlightos/backgrounds/login-background.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/sunlight-login-background.tga"),
+    ),
     RamEntry::dir("/usr/share/sunlightos/sample-pictures", 0, 0, mode::DIR_755),
     RamEntry::file(
         "/usr/share/sunlightos/sample-pictures/01_solar_blossom.simg",

@@ -192,3 +192,15 @@ The TUI updates at each boot phase:
 11. **100%** — Ready
 
 All messages appear in both the graphical TUI and serial output.
+
+## Login Background
+
+The framebuffer login screen displays an optional static background image
+behind the login card:
+
+- **VFS path:** `/usr/share/sunlightos/backgrounds/login-background.tga`
+- **Format:** TGA type 2 (uncompressed true-color, 24 bpp)
+- **Rendering:** aspect-fill (preserve ratio, fill screen, crop if needed)
+- **Overlay:** ~40 % translucent dark overlay for UI readability
+- **Fallback:** plain dark background on decode failure
+- The image is embedded in the `tty_server` binary at compile time.

@@ -96,10 +96,23 @@ impl Layout {
         }
     }
 
-    /// Draw the permanent chrome: header bg, footer bg, separator lines
+    /// Draw the permanent chrome: header bg, footer bg, separator lines.
+    /// Fills the full screen with [`palette::BG`] when `fill_bg` is true.
     pub fn draw_chrome(&self, fb: &mut Framebuffer) {
-        // Fill background
-        fb.fill_rect(0, 0, self.fb_width, self.fb_height, palette::BG);
+        self.draw_chrome_impl(fb, true)
+    }
+
+    /// Draw only the header/footer chrome, skipping the full-screen background
+    /// fill.  Use this when a background image (or other fill) has already been
+    /// painted.
+    pub fn draw_chrome_overlay(&self, fb: &mut Framebuffer) {
+        self.draw_chrome_impl(fb, false)
+    }
+
+    fn draw_chrome_impl(&self, fb: &mut Framebuffer, fill_bg: bool) {
+        if fill_bg {
+            fb.fill_rect(0, 0, self.fb_width, self.fb_height, palette::BG);
+        }
 
         // Header background
         fb.fill_rect(

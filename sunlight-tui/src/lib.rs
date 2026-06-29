@@ -9,8 +9,10 @@
 mod draw;
 pub mod fmt;
 pub mod font;
+pub mod fontatlas;
 pub mod framebuffer;
 pub mod layout;
+pub mod tga;
 mod modes;
 mod splash;
 
@@ -459,12 +461,17 @@ fn draw_user_avatar(
 
 /// Render the grid-based login screen with user avatars, password, and session dropdown.
 ///
+/// If `bg_tga` is `Some(raw_tga_bytes)` the image is decoded and rendered as
+/// the background with a dark overlay.  When decoding fails the plain dark
+/// background is used as fallback.
+///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
 pub unsafe fn render_login_grid(
     fb_addr: *mut u32,
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
+    bg_tga: Option<&[u8]>,
     user_bufs: &[[u8; 64]],
     user_lens: &[usize],
     is_custom: &[bool],
@@ -477,19 +484,30 @@ pub unsafe fn render_login_grid(
 ) {
     let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
     let layout = layout::Layout::new(fb_width, fb_height);
-    layout.draw_chrome(&mut fb);
 
+    if let Some(tga_data) = bg_tga {
+        if let Some(img) = tga::TgaImage::parse(tga_data) {
+            tga::draw_tga_background(&mut fb, &img, 100); // ~39% dark overlay
+        } else {
+            fb.fill_rect(0, 0, fb_width, fb_height, layout::palette::BG);
+        }
+        layout.draw_chrome_overlay(&mut fb);
+    } else {
+        layout.draw_chrome(&mut fb);
+    }
+
+    // Header: Use bitmap font for logo since it's tiny and doesn't need anti-aliasing
     font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
     font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
     let mode = "TTY Login";
-    let mode_w = font::text_width(mode, 1);
-    font::draw_str(
+    let mode_w = fontatlas::measure_text(mode, fontatlas::FontSize::Regular);
+    fontatlas::draw_text(
         &mut fb,
+        mode,
         fb_width.saturating_sub(mode_w + 16),
         16,
-        mode,
         layout::palette::TEXT_DIM,
-        1,
+        fontatlas::FontSize::Regular,
     );
 
     let main = &layout.main;
@@ -509,21 +527,22 @@ pub unsafe fn render_login_grid(
         layout::palette::SEPARATOR,
     );
 
+    // Title: Use the large anti-aliased font for desktop feel
     let title = "Welcome to SunlightOS";
-    let title_w = font::text_width(title, 2);
-    font::draw_str(
+    let title_w = fontatlas::measure_text(title, fontatlas::FontSize::Title);
+    fontatlas::draw_text(
         &mut fb,
-        panel_x + panel_w.saturating_sub(title_w) / 2,
-        panel_y + 16,
         title,
+        panel_x + panel_w.saturating_sub(title_w) / 2,
+        panel_y + 20,
         layout::palette::ACCENT,
-        2,
+        fontatlas::FontSize::Title,
     );
 
-    // User avatar row — starts below title (title is scale-2, ~32px tall, ends ~panel_y+48)
+    // User avatar row
     const SLOT_W: u32 = 96;
     const AVATAR_R: u32 = 24;
-    let row_y = panel_y + 88;
+    let row_y = panel_y + 90;
     let row_w = active_count as u32 * SLOT_W;
     let row_x = panel_x + panel_w.saturating_sub(row_w) / 2;
 
@@ -553,33 +572,33 @@ pub unsafe fn render_login_grid(
             // SAFETY: login names are ASCII from keyboard or preset bytes.
             unsafe { core::str::from_utf8_unchecked(name) }
         };
-        let label_w = font::text_width(label, 1);
-        font::draw_str(
+        let label_w = fontatlas::measure_text(label, fontatlas::FontSize::Regular);
+        fontatlas::draw_text(
             &mut fb,
+            label,
             slot_x.saturating_sub(label_w / 2),
             row_y + AVATAR_R + 12,
-            label,
             if selected {
                 layout::palette::TEXT
             } else {
                 layout::palette::TEXT_DIM
             },
-            1,
+            fontatlas::FontSize::Regular,
         );
     }
 
-    // Password row
+    // Password field
     let field_x = panel_x + 40;
-    let pass_y = panel_y + 184;
-    font::draw_str(
+    let pass_y = panel_y + 190;
+    fontatlas::draw_text(
         &mut fb,
+        "Password:",
         field_x,
         pass_y,
-        "Password:",
         layout::palette::TEXT_DIM,
-        1,
+        fontatlas::FontSize::Regular,
     );
-    let pass_val_x = field_x + font::text_width("Password: ", 1);
+    let pass_val_x = field_x + fontatlas::measure_text("Password: ", fontatlas::FontSize::Regular);
     let dot_count = password_len.min(24) as u32;
     for i in 0..dot_count {
         font::draw_char(
@@ -596,17 +615,17 @@ pub unsafe fn render_login_grid(
         fb.fill_rect(cx, pass_y, 8, 14, layout::palette::ACCENT);
     }
 
-    // Session / environment dropdown
-    let drop_y = panel_y + 220;
-    font::draw_str(
+    // Session dropdown
+    let drop_y = panel_y + 226;
+    fontatlas::draw_text(
         &mut fb,
+        "Session:",
         field_x,
         drop_y,
-        "Session:",
         layout::palette::TEXT_DIM,
-        1,
+        fontatlas::FontSize::Regular,
     );
-    let drop_val_x = field_x + font::text_width("Session: ", 1);
+    let drop_val_x = field_x + fontatlas::measure_text("Session: ", fontatlas::FontSize::Regular);
     let drop_w = 120u32;
     let drop_h = 22u32;
     let drop_focused = focus == LoginFocus::Dropdown;
@@ -623,13 +642,13 @@ pub unsafe fn render_login_grid(
             layout::palette::SEPARATOR
         },
     );
-    font::draw_str(
+    fontatlas::draw_text(
         &mut fb,
+        session_label,
         drop_val_x + 8,
         drop_y,
-        session_label,
         layout::palette::TEXT,
-        1,
+        fontatlas::FontSize::Regular,
     );
     font::draw_str(
         &mut fb,
@@ -642,19 +661,19 @@ pub unsafe fn render_login_grid(
 
     // Status message
     if !message.is_empty() {
-        let msg_y = panel_y + 268;
-        let msg_w = font::text_width(message, 1);
-        font::draw_str(
+        let msg_y = panel_y + 270;
+        let msg_w = fontatlas::measure_text(message, fontatlas::FontSize::Regular);
+        fontatlas::draw_text(
             &mut fb,
+            message,
             panel_x + panel_w.saturating_sub(msg_w) / 2,
             msg_y,
-            message,
             layout::palette::TEXT_DIM,
-            1,
+            fontatlas::FontSize::Regular,
         );
     }
 
-    // Reboot / Shutdown buttons — small, bottom-right of the panel
+    // Reboot / Shutdown buttons
     const BTN_W: u32 = 72;
     const BTN_H: u32 = 22;
     const BTN_GAP: u32 = 8;
@@ -680,18 +699,18 @@ pub unsafe fn render_login_grid(
         },
     );
     let rb_label = "Reboot";
-    let rb_lw = font::text_width(rb_label, 1);
-    font::draw_str(
+    let rb_lw = fontatlas::measure_text(rb_label, fontatlas::FontSize::Regular);
+    fontatlas::draw_text(
         &mut fb,
+        rb_label,
         reboot_x + BTN_W.saturating_sub(rb_lw) / 2,
         btn_y + 4,
-        rb_label,
         if reboot_focused {
             layout::palette::ACCENT
         } else {
             layout::palette::TEXT_DIM
         },
-        1,
+        fontatlas::FontSize::Regular,
     );
 
     // Shutdown button
@@ -709,40 +728,39 @@ pub unsafe fn render_login_grid(
         },
     );
     let sd_label = "Shutdown";
-    let sd_lw = font::text_width(sd_label, 1);
-    font::draw_str(
+    let sd_lw = fontatlas::measure_text(sd_label, fontatlas::FontSize::Regular);
+    fontatlas::draw_text(
         &mut fb,
+        sd_label,
         shutdown_x + BTN_W.saturating_sub(sd_lw) / 2,
         btn_y + 4,
-        sd_label,
         if shutdown_focused {
             layout::palette::ACCENT
         } else {
             layout::palette::TEXT_DIM
         },
-        1,
+        fontatlas::FontSize::Regular,
     );
 
+    // Footer hints
     let footer = "Tab to navigate  Enter to select  Space/Up/Down toggle session";
-    let footer_w = font::text_width(footer, 1);
-    font::draw_str(
+    let footer_w = fontatlas::measure_text(footer, fontatlas::FontSize::Regular);
+    fontatlas::draw_text(
         &mut fb,
+        footer,
         fb_width.saturating_sub(footer_w + 16),
         fb_height.saturating_sub(24),
-        footer,
         layout::palette::TEXT_DIM,
-        1,
+        fontatlas::FontSize::Regular,
     );
 }
 
-/// Render the login screen with live state (username typed, password dots, cursor, message).
-///
-/// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
 pub unsafe fn render_login_dynamic(
     fb_addr: *mut u32,
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
+    bg_tga: Option<&[u8]>,
     username: &[u8],
     password_len: usize,
     focused_password: bool,
@@ -750,7 +768,17 @@ pub unsafe fn render_login_dynamic(
 ) {
     let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
     let layout = layout::Layout::new(fb_width, fb_height);
-    layout.draw_chrome(&mut fb);
+
+    if let Some(tga_data) = bg_tga {
+        if let Some(img) = tga::TgaImage::parse(tga_data) {
+            tga::draw_tga_background(&mut fb, &img, 100);
+        } else {
+            fb.fill_rect(0, 0, fb_width, fb_height, layout::palette::BG);
+        }
+        layout.draw_chrome_overlay(&mut fb);
+    } else {
+        layout.draw_chrome(&mut fb);
+    }
 
     font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
     font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
@@ -869,9 +897,18 @@ pub unsafe fn render_login_dynamic(
 
 /// Render the initial static login screen (before any input).
 ///
+/// If `bg_tga` is `Some(raw_tga_bytes)` the image is decoded and rendered as
+/// the background.  Fallback is the plain dark background.
+///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping with
 /// the provided dimensions and pitch.
-pub unsafe fn render_login_screen(fb_addr: *mut u32, fb_width: u32, fb_height: u32, fb_pitch: u32) {
+pub unsafe fn render_login_screen(
+    fb_addr: *mut u32,
+    fb_width: u32,
+    fb_height: u32,
+    fb_pitch: u32,
+    bg_tga: Option<&[u8]>,
+) {
     let mut users = [[0u8; 64]; 6];
     users[0][..4].copy_from_slice(b"root");
     users[1][..10].copy_from_slice(b"Ehsan Tork");
@@ -882,6 +919,7 @@ pub unsafe fn render_login_screen(fb_addr: *mut u32, fb_width: u32, fb_height: u
         fb_width,
         fb_height,
         fb_pitch,
+        bg_tga,
         &users,
         &user_lens,
         &is_custom,
