@@ -854,7 +854,10 @@ impl Scheduler {
             accumulate_counter(&mut self.processes[idx]);
 
             // High priority promotion.
-            if self.processes[idx].nice < 0 && self.processes[idx].counter >= PROMOTE_LIMIT {
+            if self.processes[idx].nice < 0
+                && self.processes[idx].counter >= PROMOTE_LIMIT
+                && self.processes[idx].quantum_override.is_none()
+            {
                 self.processes[idx].counter =
                     0_i32.max(self.processes[idx].counter - PROMOTE_LIMIT);
                 let base_q = calculate_quantum_with_nice(

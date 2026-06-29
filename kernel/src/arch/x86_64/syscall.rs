@@ -3692,6 +3692,9 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
 fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
     let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
+    const TELEMETRY_PAGES: u64 = 2;
+    const PAGE_SIZE: u64 = 4096;
+
     let telemetry_virt =
         x86_64::VirtAddr::from_ptr(core::ptr::addr_of!(crate::telemetry::TELEMETRY));
     let telemetry_page = x86_64::structures::paging::Page::containing_address(telemetry_virt);
@@ -3707,17 +3710,6 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
     let telemetry_page_off = telemetry_virt.as_u64() & 0xFFF;
 
     let user_addr = x86_64::VirtAddr::new(0x0000_0000_0080_0000);
-    let page = match x86_64::structures::paging::Page::from_start_address(user_addr) {
-        Ok(p) => p,
-        Err(_) => return 0,
-    };
-    // SAFETY: TELEMETRY lives in static kernel memory and is page-mapped for kernel lifetime.
-    let frame = unsafe {
-        x86_64::structures::paging::PhysFrame::from_start_address_unchecked(x86_64::PhysAddr::new(
-            telemetry_phys_page,
-        ))
-    };
-
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let process = sched.current_process_mut();
@@ -3725,11 +3717,24 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
         | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE
         | x86_64::structures::paging::PageTableFlags::NO_EXECUTE;
 
-    // SAFETY: mapping user-visible read-only page into current process page tables.
-    unsafe {
-        process
-            .address_space
-            .map_page(page, frame, flags, &mut pmm, hhdm_offset);
+    // SAFETY: mapping user-visible read-only pages into current process page tables.
+    for i in 0..TELEMETRY_PAGES {
+        let user_page = match x86_64::structures::paging::Page::from_start_address(
+            user_addr + i * PAGE_SIZE,
+        ) {
+            Ok(p) => p,
+            Err(_) => return 0,
+        };
+        let phys_frame = unsafe {
+            x86_64::structures::paging::PhysFrame::from_start_address_unchecked(
+                x86_64::PhysAddr::new(telemetry_phys_page + i * PAGE_SIZE),
+            )
+        };
+        unsafe {
+            process
+                .address_space
+                .map_page(user_page, phys_frame, flags, &mut pmm, hhdm_offset);
+        }
     }
     user_addr.as_u64() + telemetry_page_off
 }

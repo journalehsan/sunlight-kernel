@@ -21,6 +21,18 @@ pub struct ProcessStat {
     pub _pad2: u32,
 }
 
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Default)]
+pub struct RawCoreStat {
+    pub core_id: u8,
+    pub _pad: [u8; 3],
+    pub current_pid: u32,
+    pub current_ticks: u32,
+    pub nice: i8,
+    pub _pad2: [u8; 3],
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TelemetryPage {
@@ -41,6 +53,9 @@ pub struct TelemetryPage {
     pub sample_time_ns: u64,
     pub proc_count: u32,
     pub procs: [ProcessStat; MAX_PROCESSES],
+
+    pub core_count: u32,
+    pub cores: [RawCoreStat; MAX_CORES],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -218,15 +233,24 @@ impl Telemetry {
         // Topology: derived from cpu_count until CPUID leaf 0x0B is wired.
         snap.topology = TopologyInfo::from_cpu_count(snap.cpu_count);
 
-        // Bootstrap the per-core table: one CoreSnapshot per online CPU.
-        // In the uniprocessor kernel this is always exactly one entry.
-        // The SMP path will extend this once APs are brought online.
-        let logical_count = (snap.cpu_count as usize).max(1).min(MAX_CORES);
+        // Bootstrap the per-core table from kernel-provided CoreStat entries.
+        // Falls back to cpu_count if the kernel hasn't written core_count yet.
+        let kernel_core_count = unsafe { vread(core::ptr::addr_of!(page.core_count)) } as usize;
+        let logical_count = if kernel_core_count > 0 {
+            kernel_core_count.min(MAX_CORES)
+        } else {
+            (snap.cpu_count as usize).max(1).min(MAX_CORES)
+        };
         snap.cpu_telemetry.count = logical_count;
         for i in 0..logical_count {
             snap.cpu_telemetry.cores[i].core_id = i as u8;
-            snap.cpu_telemetry.cores[i].affinity_mask = !0u64; // unrestricted
-                                                               // load_bp is filled in compute_cpu_usage() after interval is known.
+            snap.cpu_telemetry.cores[i].affinity_mask = !0u64;
+            // Populate current_task_pid from kernel-provided per-core snapshot.
+            if kernel_core_count > 0 {
+                let cs = unsafe { vread(core::ptr::addr_of!(page.cores[i])) };
+                snap.cpu_telemetry.cores[i].current_task_pid = cs.current_pid;
+            }
+            // load_bp is filled in compute_cpu_usage() after interval is known.
         }
 
         let raw_count = unsafe { vread(core::ptr::addr_of!(page.proc_count)) } as usize;
@@ -241,12 +265,6 @@ impl Telemetry {
 
             // Tally raw state for TaskStats (must happen before ProcessState mapping).
             ts.tally(raw.state);
-
-            // Track the first Running task's PID as the "current" task on core 0.
-            // With SMP the kernel would tell us which core each task is on.
-            if raw.state == 1 && snap.cpu_telemetry.cores[0].current_task_pid == 0 {
-                snap.cpu_telemetry.cores[0].current_task_pid = raw.pid;
-            }
 
             snap.procs[i] = ProcessSnapshot {
                 pid: raw.pid,

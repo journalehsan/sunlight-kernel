@@ -8,6 +8,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
 pub const TELEMETRY_VERSION: u32 = 1;
 pub const MAX_PROCESSES: usize = 64;
+pub const MAX_CORES: usize = 64;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Default)]
@@ -20,6 +21,17 @@ pub struct ProcessStat {
     pub cpu_ticks: u64,
     pub mem_pages: u32,
     pub _pad2: u32,
+}
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Default)]
+pub struct CoreStat {
+    pub core_id: u8,
+    pub _pad: [u8; 3],
+    pub current_pid: u32,
+    pub current_ticks: u32,
+    pub nice: i8,
+    pub _pad2: [u8; 3],
 }
 
 #[repr(C)]
@@ -47,6 +59,9 @@ pub struct TelemetryPage {
 
     pub proc_count: u32,
     pub procs: [ProcessStat; MAX_PROCESSES],
+
+    pub core_count: u32,
+    pub cores: [CoreStat; MAX_CORES],
 }
 
 const ZERO_PROC: ProcessStat = ProcessStat {
@@ -60,7 +75,16 @@ const ZERO_PROC: ProcessStat = ProcessStat {
     _pad2: 0,
 };
 
-const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 4096);
+const ZERO_CORE: CoreStat = CoreStat {
+    core_id: 0,
+    _pad: [0; 3],
+    current_pid: 0,
+    current_ticks: 0,
+    nice: 0,
+    _pad2: [0; 3],
+};
+
+const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 8192);
 
 static NET_RX_BYTES: AtomicU64 = AtomicU64::new(0);
 static NET_TX_BYTES: AtomicU64 = AtomicU64::new(0);
@@ -87,6 +111,9 @@ pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
 
     proc_count: 0,
     procs: [ZERO_PROC; MAX_PROCESSES],
+
+    core_count: 0,
+    cores: [ZERO_CORE; MAX_CORES],
 };
 
 pub fn record_net_rx(bytes: u64) {
@@ -208,6 +235,33 @@ pub unsafe fn update_telemetry(
             TELEMETRY.procs[i] = ZERO_PROC;
         }
         TELEMETRY.proc_count = count as u32;
+    }
+
+    // Populate per-core snapshots.
+    let online = sched.online_cores.min(MAX_CORES);
+    unsafe {
+        TELEMETRY.core_count = online as u32;
+        for c in 0..online {
+            let core = &sched.cores[c];
+            let entry = &mut TELEMETRY.cores[c];
+            entry.core_id = c as u8;
+            if let Some(idx) = core.current_task {
+                if idx < sched.processes.len() {
+                    let proc = &sched.processes[idx];
+                    entry.current_pid = proc.pid as u32;
+                    entry.current_ticks = core.current_ticks.min(u32::MAX as u64) as u32;
+                    entry.nice = proc.nice;
+                } else {
+                    entry.current_pid = 0;
+                    entry.current_ticks = 0;
+                    entry.nice = 0;
+                }
+            } else {
+                entry.current_pid = 0;
+                entry.current_ticks = 0;
+                entry.nice = 0;
+            }
+        }
     }
 
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
