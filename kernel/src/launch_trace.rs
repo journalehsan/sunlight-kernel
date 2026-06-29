@@ -88,9 +88,18 @@ impl LaunchTrace {
     #[cfg(feature = "launch_trace")]
     pub fn emit(&self, app_name: &str, path: &str, pid: Option<usize>, result: &str) {
         // Compute delta in ms; 0 means not yet reached or unknown.
-        let resolve_ms = ns_to_ms(self.resolve_finished_ns.saturating_sub(self.resolve_started_ns));
-        let spawn_ms   = ns_to_ms(self.enqueue_finished_ns.saturating_sub(self.spawn_started_ns));
-        let total_ms   = ns_to_ms(self.enqueue_finished_ns.saturating_sub(self.request_received_ns));
+        let resolve_ms = ns_to_ms(
+            self.resolve_finished_ns
+                .saturating_sub(self.resolve_started_ns),
+        );
+        let spawn_ms = ns_to_ms(
+            self.enqueue_finished_ns
+                .saturating_sub(self.spawn_started_ns),
+        );
+        let total_ms = ns_to_ms(
+            self.enqueue_finished_ns
+                .saturating_sub(self.request_received_ns),
+        );
 
         // Format pid as decimal string or "none"
         let mut pid_buf = [0u8; 20];
@@ -102,8 +111,14 @@ impl LaunchTrace {
         crate::serial_println!(
             "[LAUNCH-TRACE] app={} launch_id={} path={} resolve_ms={} spawn_ms={} \
              queue_or_wait_ms=unknown display_ms=unknown total_ms={} result={} pid={}",
-            app_name, self.launch_id, path,
-            resolve_ms, spawn_ms, total_ms, result, pid_str
+            app_name,
+            self.launch_id,
+            path,
+            resolve_ms,
+            spawn_ms,
+            total_ms,
+            result,
+            pid_str
         );
     }
 

@@ -88,8 +88,8 @@ pub struct CoreSnapshot {
     pub affinity_mask: u64,
     /// Nice value of the currently running task (-20..+19); 0 if idle.
     pub nice: i8,
-    /// Total timer IRQ ticks counted on this core since boot.
-    pub timer_ticks: u64,
+    /// Total local timer IRQ ticks counted on this core since boot.
+    pub local_timer_ticks: u64,
     /// Number of task switches performed on this core since boot.
     pub context_switches: u64,
 }

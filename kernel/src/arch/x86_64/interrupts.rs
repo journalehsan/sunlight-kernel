@@ -10,6 +10,17 @@ use x86_64::VirtAddr;
 
 static mut IDT: InterruptDescriptorTable = InterruptDescriptorTable::new();
 
+/// Return a shared reference to the kernel IDT for AP loading.
+///
+/// # Safety
+/// Safe to call from APs after `init()` has returned on the BSP:
+/// the IDT is fully populated and read-only at that point.
+/// APs call `load_unsafe()` which only writes the CPU-local IDTR register
+/// and does not modify the IDT itself.
+pub unsafe fn idt_ref() -> &'static InterruptDescriptorTable {
+    &IDT
+}
+
 static TSS: spin::Lazy<TaskStateSegment> = spin::Lazy::new(|| {
     let mut tss = TaskStateSegment::new();
     // RSP0: kernel stack used when entering ring 0 from ring 3.
@@ -168,7 +179,21 @@ pub fn init() {
         serial_println!("[TIME] TSC calibration unavailable; using tick-based ns fallback");
     }
 
-    serial_println!("[IDT] PIC remapped, timer IRQ0 enabled at ~100Hz");
+    // Switch BSP from PIC IRQ0 timer to per-core LAPIC timer.
+    // All cores (BSP + APs) will use the LAPIC timer at vector 0x20,
+    // which is already wired to `timer_entry` in the IDT above.
+    unsafe {
+        crate::arch::x86_64::lapic::init_lapic();
+        crate::arch::x86_64::lapic::calibrate_lapic_timer(100);
+        crate::arch::x86_64::lapic::arm_lapic_timer();
+        // Mask PIC IRQ0 (timer). IRQ1 (keyboard) and IRQ2 (cascade) stay
+        // unmasked so PS/2 keyboard interrupts continue to arrive on BSP.
+        // 0xF8 was: IRQ0+IRQ1+IRQ2 unmasked. 0xF9 masks IRQ0 only.
+        let mut pic1_data: Port<u8> = Port::new(0x21);
+        pic1_data.write(0xF9);
+    }
+
+    serial_println!("[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC");
     serial_println!("[IDT] OK");
 }
 
@@ -593,6 +618,12 @@ static TSC_ORIGIN: AtomicU64 = AtomicU64::new(0);
 static TSC_TO_NS_MUL: AtomicU64 = AtomicU64::new(0); // (dt * mul) >> 32 == nanoseconds
 static TSC_HZ_APPROX: AtomicU64 = AtomicU64::new(0);
 
+/// Return the calibrated TSC frequency in Hz, or 0 if uncalibrated.
+/// Used by `lapic::calibrate_lapic_timer` to calibrate LAPIC timer rate.
+pub fn tsc_hz() -> u64 {
+    TSC_HZ_APPROX.load(Ordering::Relaxed)
+}
+
 /// Naked timer interrupt entry. Manually saves all GPRs to match the
 /// `iretq_to_context` / `init_context` layout, calls the Rust handler,
 /// and optionally switches context.
@@ -662,13 +693,9 @@ const TTY_WAKE_INTERVAL_TICKS: u64 = 3;
 /// Returns 0 to resume the interrupted context, or a new RSP to switch.
 #[no_mangle]
 pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
-    // Send EOI immediately to reduce interrupt latency.
-    unsafe {
-        let mut cmd1: Port<u8> = Port::new(0x20);
-        cmd1.write(0x20);
-        // noisy per-tick debug log intentionally disabled
-        // crate::serial_println!("[IRQ0] Timer interrupt - EOI sent to PIC");
-    }
+    // Send LAPIC EOI. All cores (BSP and APs) now receive their timer
+    // interrupts from the per-core LAPIC, not the legacy 8259 PIC.
+    unsafe { crate::arch::x86_64::lapic::send_eoi(); }
 
     let mut ticks = TICKS.lock();
     *ticks += 1;
@@ -695,33 +722,34 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         }
     }
 
-    // Every tick, enqueue a timer notification for timer_server (if it exists).
-    let timer_endpoint = sched
-        .processes
-        .iter()
-        .find(|p| p.name_str() == "timer_server")
-        .and_then(|p| p.ipc_endpoint.map(|endpoint| (endpoint, p.pid)));
-
-    if let Some((endpoint_id, timer_pid)) = timer_endpoint {
-        crate::ipc::with_shard(endpoint_id, |bus| {
-            bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
-        });
-    }
-
-    // Wake tty_server on a render cadence. Its idle loop parks in BlockedOnIpc
-    // between events (an empty ipc_reply_wait blocks via block_on_recv), so
-    // without this it only ran — and only repainted a live foreground app like
-    // `top` — when a keyboard IRQ happened to wake it. Waking every few ticks
-    // gives a steady ~30 FPS refresh; spacing it (not every tick) leaves CPU
-    // for the foreground app to actually produce frames instead of starving it.
-    if ticks_total % TTY_WAKE_INTERVAL_TICKS == 0 {
-        if let Some(tty_pid) = sched
+    // Timer-server notifications and TTY wakeups are BSP-only.
+    // With 4 LAPIC timers firing simultaneously, all cores would otherwise
+    // send these on every tick — multiplying the effective tick rate seen by
+    // timer_server (×4) and over-waking tty_server. BSP (core 0) handles
+    // all cross-process timer signalling; AP cores only drive their own
+    // per-core scheduler tick and context-switch accounting.
+    if crate::sched::current_cpu_id() == 0 {
+        let timer_endpoint = sched
             .processes
             .iter()
-            .find(|p| p.name_str() == "tty_server")
-            .map(|p| p.pid)
-        {
-            sched.wake_pid(tty_pid);
+            .find(|p| p.name_str() == "timer_server")
+            .and_then(|p| p.ipc_endpoint.map(|endpoint| (endpoint, p.pid)));
+
+        if let Some((endpoint_id, timer_pid)) = timer_endpoint {
+            crate::ipc::with_shard(endpoint_id, |bus| {
+                bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
+            });
+        }
+
+        if ticks_total % TTY_WAKE_INTERVAL_TICKS == 0 {
+            if let Some(tty_pid) = sched
+                .processes
+                .iter()
+                .find(|p| p.name_str() == "tty_server")
+                .map(|p| p.pid)
+            {
+                sched.wake_pid(tty_pid);
+            }
         }
     }
 

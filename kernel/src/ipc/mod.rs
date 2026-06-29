@@ -20,14 +20,22 @@ pub mod SpawnMsg {
 
 /// Sharded IPC bus instances for lock-free parallelism.
 pub static IPC_BUS_SHARDS: [spin::Mutex<IpcBusShard>; NUM_SHARDS] = [
-    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
-    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
-    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
-    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
-    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
-    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
-    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
-    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()),
 ];
 
 #[inline]
@@ -65,7 +73,9 @@ impl IpcBusShard {
     }
 
     fn reply_waiters_for(&mut self, endpoint_id: u32) -> &mut VecDeque<usize> {
-        self.reply_waiters.entry(endpoint_id).or_insert_with(VecDeque::new)
+        self.reply_waiters
+            .entry(endpoint_id)
+            .or_insert_with(VecDeque::new)
     }
 
     pub fn endpoint_owner(&self, token: CapabilityToken, caps: &CapabilityBroker) -> Option<usize> {
@@ -281,7 +291,16 @@ fn deliver_reply_to_current_target(
     client.pending_call = None;
     if client.state == ProcessState::BlockedOnIpc {
         client.state = ProcessState::Ready;
-        sched.enqueue_process_once(client_idx);
+        // If the client is still the live `current_task` of a core, do not
+        // enqueue it on another core (that would run one context twice). Poke
+        // the owner CPU so its next LAPIC tick consumes the wakeup and either
+        // reselects or requeues the now-Ready task. If it is not live anywhere,
+        // enqueue normally.
+        if let Some(cpu_id) = sched.live_owner_core(client_idx) {
+            crate::sched::request_reschedule_on(cpu_id);
+        } else {
+            sched.enqueue_process_once(client_idx);
+        }
     }
     Ok(())
 }

@@ -466,6 +466,14 @@ pub extern "C" fn _start() -> ! {
             }
             init.init_context(entry, layout::USER_STACK_TOP);
             init.set_initial_args(capability::SPAWN_TOKEN.0, 0, 0, 0);
+            // Release PMM before taking the scheduler lock. Every other path in
+            // the kernel (timer_rust, reap_process_resources, the spawn syscall)
+            // acquires SCHEDULER *before* PMM. Holding PMM here while
+            // add_process() acquires SCHEDULER inverts that order and deadlocks
+            // against a concurrent AP LAPIC-timer tick (which holds SCHEDULER and
+            // then wants PMM for telemetry). Harmless before SMP phase 1 because
+            // no other core ran the timer; fatal once AP timers are live.
+            drop(pmm);
             sched::with_scheduler(|s| {
                 s.add_process(init);
             });
@@ -531,6 +539,9 @@ pub extern "C" fn _start() -> ! {
             }
 
             vfs.init_context(entry, layout::USER_STACK_TOP);
+            // Release PMM before SCHEDULER (canonical order is SCHEDULER→PMM).
+            // See the init spawn above for the full deadlock rationale.
+            drop(pmm);
             sched::with_scheduler(|s| {
                 s.add_process(vfs);
             });
@@ -595,6 +606,9 @@ pub extern "C" fn _start() -> ! {
                 fb.height as u64,
                 fb.pitch as u64,
             );
+            // Release PMM before SCHEDULER (canonical order is SCHEDULER→PMM).
+            // See the init spawn above for the full deadlock rationale.
+            drop(pmm);
             sched::with_scheduler(|s| {
                 s.add_process(tty);
             });

@@ -1632,11 +1632,21 @@ pub fn notify_wait(ep: EndpointId) {
 }
 
 pub fn nameserver_register(name: &str, ep: EndpointId) {
-    let init_cap = get_init_cap();
     let msg = IpcMsg::with_label(InitMsg::REGISTER)
         .word(0, name_to_u64(name))
         .word(1, ep.0);
-    let _ = ipc_call(init_cap, msg);
+    loop {
+        let init_cap = get_init_cap();
+        if init_cap.0 == 0 {
+            process_yield();
+            continue;
+        }
+        let reply = ipc_call(init_cap, msg);
+        if reply.label == InitMsg::GRANT {
+            return;
+        }
+        process_yield();
+    }
 }
 
 pub fn nameserver_lookup(name: &str) -> Option<CapabilityToken> {

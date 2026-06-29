@@ -94,7 +94,7 @@ use crate::process::{Process, ProcessState, QueueTier};
 use crate::serial_println;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 pub const TIME_SLICE_TICKS: u64 = 10;
 
@@ -167,8 +167,14 @@ pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
     }
 }
 
-/// Flag set by timer IRQ when a reschedule is needed.
-static NEEDS_RESCHEDULE: AtomicBool = AtomicBool::new(false);
+/// Per-core reschedule request mask.
+///
+/// A single global bit is not sufficient with per-core LAPIC timers: a timer
+/// on one CPU can consume another CPU's block/yield wakeup request, leaving the
+/// target CPU running a task that just transitioned to `BlockedOnIpc` or
+/// leaving a woken live task `Ready` but not enqueued. Each CPU consumes only
+/// its own bit; cross-core wakeups set the owner CPU's bit.
+static RESCHEDULE_MASK: AtomicU64 = AtomicU64::new(0);
 
 /// Diagnostic: track first time sunlightd (pid 6) is picked by scheduler.
 static SUNLIGHTD_FIRST_SCHED: AtomicBool = AtomicBool::new(false);
@@ -239,6 +245,24 @@ pub const MAX_CORES: usize = 64;
 /// Number of cores that have completed phase-0 init and can receive tasks.
 /// Initialised to 1 (BSP only); updated by init_cores() after SMP bring-up.
 pub static ONLINE_CORES: AtomicUsize = AtomicUsize::new(1);
+
+/// Gate that allows AP cores to begin dispatching tasks.
+///
+/// APs `sti` and arm their LAPIC timers during `smp::start_aps`, but the BSP
+/// then continues single-threaded boot (spawning init/vfs/tty, seeding the
+/// run queues) with interrupts disabled. Until the BSP finishes and calls
+/// `mark_scheduler_ready()` just before entering the first process, an AP timer
+/// tick must NOT pull a task — the run queues are not seeded yet and the BSP is
+/// still mutating process state. AP `schedule_tick` returns early until this is
+/// set. The BSP (core 0) is never gated: it runs with IF=0 during boot so its
+/// own timer cannot preempt it anyway.
+pub static SCHEDULER_READY: AtomicBool = AtomicBool::new(false);
+
+/// Signal that the BSP has finished boot and seeded the run queues, so AP
+/// cores may begin dispatching tasks on their next timer tick.
+pub fn mark_scheduler_ready() {
+    SCHEDULER_READY.store(true, Ordering::Release);
+}
 
 /// Per-core scheduling state: local BORE-tiered run queues and current task.
 ///
@@ -432,6 +456,37 @@ impl Scheduler {
         }
     }
 
+    /// True if `idx` is the live `current_task` of any online core.
+    ///
+    /// Such a task is still physically executing (or about to be descheduled)
+    /// on that core, even if its bookkeeping `state` has already flipped to
+    /// `Ready` (e.g. a cross-core wake landed between `block_on_recv` setting
+    /// `BlockedOnIpc` and the owning core's next timer tick). It must NOT be
+    /// enqueued by another core's wake path, or a second core could pick it up
+    /// and run the same context concurrently — corrupting its saved RSP. The
+    /// owning core re-enqueues it on its next `schedule_tick` deschedule.
+    pub(crate) fn is_live_on_core(&self, idx: usize) -> bool {
+        (0..self.online_cores).any(|c| self.cores[c].current_task == Some(idx))
+    }
+
+    /// Return the CPU that still owns `idx` as its current task, if any.
+    pub(crate) fn live_owner_core(&self, idx: usize) -> Option<usize> {
+        (0..self.online_cores).find(|&c| self.cores[c].current_task == Some(idx))
+    }
+
+    /// Like `is_live_on_core`, but ignores `self_cpu`. Used at pick sites: a
+    /// core may always (re)select its OWN current task, but must never select a
+    /// task that is the live `current_task` of a DIFFERENT core (that would run
+    /// the same context on two cores). Excluding a task from its own owner too
+    /// (as `is_live_on_core` would) is wrong — it strands the task `Ready` when
+    /// the owner's `pick_next` then returns `None` and only resumes whatever
+    /// context happened to be interrupted.
+    pub(crate) fn is_live_on_other_core(&self, idx: usize, self_cpu: usize) -> bool {
+        (0..self.online_cores)
+            .filter(|&c| c != self_cpu)
+            .any(|c| self.cores[c].current_task == Some(idx))
+    }
+
     fn is_queued(&self, idx: usize) -> bool {
         let online = self.online_cores;
         for core_id in 0..online {
@@ -576,7 +631,7 @@ impl Scheduler {
     // ── Timer tick ───────────────────────────────────────────────────────────
 
     /// Called from the timer IRQ on each tick. Updates quantum tracking and
-    /// sets NEEDS_RESCHEDULE when the current task's quantum expires.
+    /// requests a local reschedule when the current task's quantum expires.
     pub fn tick(&mut self) {
         self.global_tick += 1;
         let cpu_id = current_cpu_id();
@@ -586,12 +641,18 @@ impl Scheduler {
         let current = match self.cores[cpu_id].current_task {
             Some(idx) => idx,
             None => {
-                NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
+                request_reschedule_on(cpu_id);
                 return;
             }
         };
 
         if current >= self.processes.len() {
+            return;
+        }
+
+        if !matches!(self.processes[current].state, ProcessState::Running) {
+            self.cores[cpu_id].current_ticks = 0;
+            request_reschedule_on(cpu_id);
             return;
         }
 
@@ -629,7 +690,7 @@ impl Scheduler {
 
             self.age_ready_tasks();
             self.cores[cpu_id].current_ticks = 0;
-            NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
+            request_reschedule_on(cpu_id);
         }
 
         if self.global_tick.is_multiple_of(1000) {
@@ -805,7 +866,15 @@ impl Scheduler {
         let start = (current.wrapping_add(1)) % len;
         let mut idx = start;
         loop {
-            if matches!(self.processes[idx].state, ProcessState::Ready) {
+            // Skip any process that is the live `current_task` of another core.
+            // A woken-while-live task is Ready but deliberately not enqueued (it
+            // is still executing/owned by its core); the run queues won't offer
+            // it, but this raw state scan would — and dispatching it here would
+            // run the same context on two cores at once. Let its owning core
+            // re-dispatch it.
+            if matches!(self.processes[idx].state, ProcessState::Ready)
+                && !self.is_live_on_other_core(idx, cpu_id)
+            {
                 serial_println!(
                     "[SCHED] WARNING: pick_next_bore fallback linear search idx={}",
                     idx
@@ -838,7 +907,15 @@ impl Scheduler {
             }
             attempts -= 1;
 
-            if !matches!(self.processes[idx].state, ProcessState::Ready) {
+            // Not eligible if it isn't Ready, or if it is still the live
+            // `current_task` of another core. RoundRobin ignores the run queues
+            // and selects purely by state, so without the live-on-core check a
+            // process woken (set Ready) while still executing on its owning core
+            // would be dispatched here too — running the same context on two
+            // cores at once. Its owning core re-selects it on its next tick.
+            if !matches!(self.processes[idx].state, ProcessState::Ready)
+                || self.is_live_on_other_core(idx, cpu_id)
+            {
                 idx = (idx + 1) % len;
                 if idx == start && attempts == 0 {
                     break;
@@ -898,6 +975,7 @@ impl Scheduler {
         let mut scan = start;
         for _ in 0..len {
             if matches!(self.processes[scan].state, ProcessState::Ready)
+                && !self.is_live_on_other_core(scan, cpu_id)
                 && self.processes[scan].counter > best_counter
             {
                 best_counter = self.processes[scan].counter;
@@ -945,14 +1023,42 @@ impl Scheduler {
     /// and the kernel RSP saved by the naked interrupt entry stub. Returns the
     /// RSP of the next process to resume (0 = stay on current context).
     pub fn schedule_tick(&mut self, cpu_id: usize, saved_rsp: u64) -> u64 {
-        if !check_reschedule() {
+        // AP cores stay idle until the BSP has finished boot and seeded the run
+        // queues. Without this, an AP timer tick during boot would dispatch a
+        // not-yet-seeded task (and contend with the BSP's PMM-heavy boot).
+        // Core 0 (BSP) is never gated.
+        if cpu_id != 0 && !SCHEDULER_READY.load(Ordering::Acquire) {
             return 0;
         }
 
-        let current = match self.cores[cpu_id].current_task {
-            Some(idx) => idx,
-            None => return 0,
-        };
+        if !check_reschedule_on(cpu_id) {
+            return 0;
+        }
+
+        // ── Idle-AP fast path ─────────────────────────────────────────────────
+        // When an AP has no current task (it was in its idle hlt loop), try to
+        // pick a task immediately.  There is nothing to save or re-queue.
+        if self.cores[cpu_id].current_task.is_none() {
+            if let Some(next) = self.pick_next(cpu_id) {
+                let next_rsp       = self.processes[next].context_rsp;
+                let next_stack_top = self.processes[next].kernel_stack_top;
+                let next_fs_base   = self.processes[next].fs_base;
+                self.cores[cpu_id].current_task   = Some(next);
+                self.cores[cpu_id].context_switches += 1;
+                self.processes[next].state          = ProcessState::Running;
+                self.processes[next].last_run_tick  = self.global_tick;
+                self.start_charging_runtime(next);
+                unsafe {
+                    self.processes[next].address_space.activate();
+                    x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+                }
+                crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
+                return next_rsp;
+            }
+            return 0;
+        }
+
+        let current = self.cores[cpu_id].current_task.unwrap();
 
         if current >= self.processes.len() {
             return 0;
@@ -999,8 +1105,10 @@ impl Scheduler {
                 self.processes[next].address_space.activate();
                 x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
             }
-            // Update TSS RSP0 so the next interrupt delivers to the correct kernel stack.
-            crate::arch::x86_64::interrupts::set_tss_rsp0(next_stack_top);
+            // Update this core's TSS RSP0 so the next interrupt from ring-3
+            // delivers to the correct kernel stack.  Uses the per-core TSS
+            // (BSP → global TSS; APs → AP_TSS_STORE[cpu_id-1]).
+            crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
 
             if self.processes[prev].state == ProcessState::Finished {
                 self.reap_process_resources(prev);
@@ -1056,7 +1164,11 @@ impl Scheduler {
             }
             self.processes[idx].state = ProcessState::Ready;
             self.remove_from_ready_queues(idx);
-            self.enqueue_process(idx);
+            if let Some(cpu_id) = self.live_owner_core(idx) {
+                request_reschedule_on(cpu_id);
+            } else {
+                self.enqueue_process(idx);
+            }
         }
     }
 
@@ -1072,7 +1184,11 @@ impl Scheduler {
             }
             self.processes[idx].state = ProcessState::Ready;
             self.remove_from_ready_queues(idx);
-            self.enqueue_process(idx);
+            if let Some(cpu_id) = self.live_owner_core(idx) {
+                request_reschedule_on(cpu_id);
+            } else {
+                self.enqueue_process(idx);
+            }
         }
     }
 
@@ -1088,7 +1204,11 @@ impl Scheduler {
             }
             self.processes[idx].state = ProcessState::Ready;
             self.remove_from_ready_queues(idx);
-            self.enqueue_process(idx);
+            if let Some(cpu_id) = self.live_owner_core(idx) {
+                request_reschedule_on(cpu_id);
+            } else {
+                self.enqueue_process(idx);
+            }
         }
     }
 
@@ -1112,7 +1232,11 @@ impl Scheduler {
                 self.processes[idx].state = ProcessState::Ready;
                 self.processes[idx].block_start_tick = self.global_tick;
                 self.remove_from_ready_queues(idx);
-                self.enqueue_process(idx);
+                if let Some(cpu_id) = self.live_owner_core(idx) {
+                    request_reschedule_on(cpu_id);
+                } else {
+                    self.enqueue_process(idx);
+                }
             }
             _ => {}
         }
@@ -1342,6 +1466,35 @@ impl Scheduler {
             created.saturating_sub(finished),
             blocked_ipc, blocked_timer, blocked_io, self.online_cores
         );
+        for core_id in 0..self.online_cores {
+            match self.cores[core_id].current_task {
+                Some(idx) if idx < self.processes.len() => {
+                    let process = &self.processes[idx];
+                    serial_println!(
+                        "[SCHED-DIAG] core={} current_idx={} pid={} name='{}' state={:?} ticks={} queues=({},{},{})",
+                        core_id,
+                        idx,
+                        process.pid,
+                        process.name_str(),
+                        process.state,
+                        self.cores[core_id].current_ticks,
+                        self.cores[core_id].run_queue_high.len(),
+                        self.cores[core_id].run_queue_medium.len(),
+                        self.cores[core_id].run_queue_low.len()
+                    );
+                }
+                _ => {
+                    serial_println!(
+                        "[SCHED-DIAG] core={} current_idx=none ticks={} queues=({},{},{})",
+                        core_id,
+                        self.cores[core_id].current_ticks,
+                        self.cores[core_id].run_queue_high.len(),
+                        self.cores[core_id].run_queue_medium.len(),
+                        self.cores[core_id].run_queue_low.len()
+                    );
+                }
+            }
+        }
 
         if alive > 0 && blocked_ipc == alive
             || (ready_high + ready_mid + ready_low == 0 && blocked_ipc > 0)
@@ -1469,16 +1622,27 @@ fn idle_loop() -> ! {
     }
 }
 
-// ─── Scheduler flags ──────────────────────────────────────────────────────────
+// ─── Scheduler reschedule requests ────────────────────────────────────────────
 
-/// Check if a reschedule is needed and clear the flag.
-pub fn check_reschedule() -> bool {
-    NEEDS_RESCHEDULE.swap(false, Ordering::SeqCst)
+#[inline]
+fn reschedule_bit(cpu_id: usize) -> u64 {
+    1u64 << cpu_id.min(63)
 }
 
-/// Set the reschedule flag.
+/// Check if a reschedule is needed for `cpu_id` and clear only that CPU's bit.
+pub fn check_reschedule_on(cpu_id: usize) -> bool {
+    let bit = reschedule_bit(cpu_id);
+    RESCHEDULE_MASK.fetch_and(!bit, Ordering::SeqCst) & bit != 0
+}
+
+/// Set the reschedule flag for a specific CPU.
+pub fn request_reschedule_on(cpu_id: usize) {
+    RESCHEDULE_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::SeqCst);
+}
+
+/// Set the reschedule flag for the current CPU.
 pub fn request_reschedule() {
-    NEEDS_RESCHEDULE.store(true, Ordering::SeqCst);
+    request_reschedule_on(current_cpu_id());
 }
 
 pub fn note_process_finished(pid: usize, name: &str) {
@@ -1570,6 +1734,10 @@ pub fn enter_first_process() -> ! {
             sched.processes[idx].last_run_tick = sched.global_tick;
             sched.start_charging_runtime(idx);
             sched.seed_ready_queues_except(idx);
+            // Run queues are now seeded and core 0 has its first task. Release
+            // the AP cores so their next LAPIC timer tick can steal/dispatch.
+            // APs still block on SCHEDULER.lock() until this function drops it.
+            mark_scheduler_ready();
             let rsp = sched.processes[idx].context_rsp;
             let pml4_phys = sched.processes[idx].address_space.pml4_phys;
             let fs_base = sched.processes[idx].fs_base;
@@ -1594,7 +1762,7 @@ pub fn enter_first_process() -> ! {
             x86_64::registers::control::Cr3Flags::empty(),
         );
         x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);
-        crate::arch::x86_64::interrupts::set_tss_rsp0(kernel_stack_top);
+        crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(kernel_stack_top);
         context::iretq_to_context(rsp);
     }
 }

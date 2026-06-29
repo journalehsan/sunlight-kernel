@@ -25,6 +25,7 @@ use scoring::{make_entry, total_score, Entry, BENCH_COUNT};
 use sieve::SieveRunner;
 use sun_font::{FontRole, VecFont};
 use sunlight_ipc::{debug_log, process_yield, ProcessExit};
+use sunlight_telemetry::{TelemetryPage, MAX_CORES as TELEMETRY_MAX_CORES, TELEMETRY_MAGIC};
 use sunlight_ui::{
     request_close,
     widgets::{
@@ -34,8 +35,8 @@ use sunlight_ui::{
     App, Event, HBox, Point, Rect, Window, WindowConfig,
 };
 
-static F_UI:    VecFont = VecFont(FontRole::UiRegular);
-static F_MED:   VecFont = VecFont(FontRole::UiMedium);
+static F_UI: VecFont = VecFont(FontRole::UiRegular);
+static F_MED: VecFont = VecFont(FontRole::UiMedium);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 const HEAP_SIZE: usize = 32 * 1024 * 1024;
@@ -184,6 +185,9 @@ struct BenchApp {
     matrix: MatrixRunner,
     multi_started: bool,
     multi_handle: Option<AsyncHandle>,
+    telemetry_ptr: *const TelemetryPage,
+    multi_busy_verified: bool,
+    multi_busy_peak: usize,
 }
 
 impl BenchApp {
@@ -215,6 +219,9 @@ impl BenchApp {
             matrix: MatrixRunner::new(),
             multi_started: false,
             multi_handle: None,
+            telemetry_ptr: map_telemetry_page(),
+            multi_busy_verified: false,
+            multi_busy_peak: 0,
         };
         app.set_status("Ready to benchmark");
         app.set_detail(
@@ -499,6 +506,7 @@ impl BenchApp {
         self.stage = Stage::Finished;
         self.running = false;
         sunlight_ipc::set_nice(self.pid, 0);
+        self.report_multi_core_activity();
         self.set_detail(
             "SunLight-Bench finished. Close the window or mirror the summary to serial.",
         );
@@ -578,13 +586,16 @@ impl BenchApp {
                     }
                     self.set_status("Parallel mix running");
                     self.set_detail("Worker threads are running a deterministic integer mixer in the background.");
+                    self.verify_multi_core_activity();
                     true
                 } else if let Some(cycles) = multi::take_async_result() {
+                    self.verify_multi_core_activity();
                     self.record_result(4, multi::NAME, cycles);
                     self.multi_handle = None;
                     self.finish();
                     true
                 } else {
+                    self.verify_multi_core_activity();
                     self.set_detail(
                         "Parallel mix workers are active. The window is polling completion.",
                     );
@@ -597,6 +608,32 @@ impl BenchApp {
         self.rebuild_summary();
         self.rebuild_rows();
         changed
+    }
+
+    fn verify_multi_core_activity(&mut self) {
+        let busy = busy_core_count(self.telemetry_ptr);
+        self.multi_busy_peak = self.multi_busy_peak.max(busy);
+        if !self.multi_busy_verified && busy >= 2 {
+            self.multi_busy_verified = true;
+            debug_log(&alloc::format!(
+                "[BENCH] telemetry verified {} non-idle cores during Parallel Mix",
+                busy
+            ));
+        }
+    }
+
+    fn report_multi_core_activity(&self) {
+        if self.multi_busy_peak >= 2 {
+            debug_log(&alloc::format!(
+                "[BENCH] telemetry peak non-idle cores during Parallel Mix: {}",
+                self.multi_busy_peak
+            ));
+        } else {
+            debug_log(&alloc::format!(
+                "[BENCH] telemetry peak non-idle cores during Parallel Mix: {} (multi-core activity not observed)",
+                self.multi_busy_peak
+            ));
+        }
     }
 
     fn button_state(&self, idx: usize) -> ButtonState {
@@ -883,8 +920,40 @@ fn run_headless(pid: u64, ncores: usize) -> ! {
     results[3] = Some(make_entry(matrix::NAME, matrix.cycles()));
     log_entry(results[3].unwrap());
 
-    let multi = ParallelMix::new(ncores);
-    results[4] = Some(make_entry(multi::NAME, multi.run_sync()));
+    let telemetry_ptr = map_telemetry_page();
+    let mut multi_busy_peak = 0usize;
+    let mut multi_verified = false;
+    let handle = multi::start_async(ncores);
+    if let Some(_handle) = handle {
+        while results[4].is_none() {
+            let busy = busy_core_count(telemetry_ptr);
+            multi_busy_peak = multi_busy_peak.max(busy);
+            if !multi_verified && busy >= 2 {
+                multi_verified = true;
+                debug_log(&alloc::format!(
+                    "[BENCH] telemetry verified {} non-idle cores during Parallel Mix",
+                    busy
+                ));
+            }
+            if let Some(cycles) = multi::take_async_result() {
+                results[4] = Some(make_entry(multi::NAME, cycles));
+            } else {
+                process_yield();
+            }
+        }
+    } else {
+        let multi = ParallelMix::new(ncores);
+        results[4] = Some(make_entry(multi::NAME, multi.run_sync()));
+    }
+    debug_log(&alloc::format!(
+        "[BENCH] telemetry peak non-idle cores during Parallel Mix: {}{}",
+        multi_busy_peak,
+        if multi_busy_peak >= 2 {
+            ""
+        } else {
+            " (multi-core activity not observed)"
+        }
+    ));
     log_entry(results[4].unwrap());
 
     debug_log(&alloc::format!(
@@ -905,7 +974,6 @@ fn log_entry(entry: Entry) {
 }
 
 fn cpu_count() -> usize {
-    const MAGIC: u64 = 0x5355_4E4C_5449_4D45;
     const CPU_COUNT_OFFSET: usize = 76;
 
     let ptr = sunlight_ipc::map_telemetry();
@@ -913,11 +981,48 @@ fn cpu_count() -> usize {
         return 1;
     }
     let magic = unsafe { core::ptr::read_volatile(ptr as *const u64) };
-    if magic != MAGIC {
+    if magic != TELEMETRY_MAGIC {
         return 1;
     }
     let count = unsafe { core::ptr::read_volatile(ptr.add(CPU_COUNT_OFFSET)) };
     (count as usize).max(1)
+}
+
+fn map_telemetry_page() -> *const TelemetryPage {
+    let ptr = sunlight_ipc::map_telemetry() as *const TelemetryPage;
+    if ptr.is_null() {
+        return core::ptr::null();
+    }
+    let magic = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*ptr).magic)) };
+    if magic == TELEMETRY_MAGIC {
+        ptr
+    } else {
+        core::ptr::null()
+    }
+}
+
+fn busy_core_count(page: *const TelemetryPage) -> usize {
+    if page.is_null() {
+        return 0;
+    }
+
+    let sequence = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*page).sequence)) };
+    if sequence & 1 != 0 {
+        return 0;
+    }
+
+    let count =
+        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*page).core_count)) } as usize;
+    let mut busy = 0usize;
+    for idx in 0..count.min(TELEMETRY_MAX_CORES) {
+        let current_pid = unsafe {
+            core::ptr::read_volatile(core::ptr::addr_of!((*page).cores[idx].current_pid))
+        };
+        if current_pid != 0 {
+            busy += 1;
+        }
+    }
+    busy
 }
 
 fn completed_count(results: &[Option<Entry>; BENCH_COUNT]) -> usize {

@@ -1,5 +1,5 @@
-use core::arch::naked_asm;
 use crate::arch::x86_64::interrupts::now_ns;
+use core::arch::naked_asm;
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -618,7 +618,8 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     let caps = crate::capability::CAP_BROKER.lock();
     let sender_pid = sched.current_process().pid;
 
-    let (endpoint_id, _) = caps.token_owner(token, CapabilityRights::SEND)
+    let (endpoint_id, _) = caps
+        .token_owner(token, CapabilityRights::SEND)
         .map_err(|_| IpcError::InvalidCapability as u64)
         .unwrap_or((0, 0));
 
@@ -702,7 +703,11 @@ fn ipc_reply(frame: &mut SyscallFrame) -> u64 {
     let reply = IpcMsg::from_registers(frame);
     let mut sched = crate::sched::SCHEDULER.lock();
     let server_pid = sched.current_process().pid;
-    let endpoint_id = sched.current_process().ipc_reply_target.map(|(ep, _)| ep).unwrap_or(0);
+    let endpoint_id = sched
+        .current_process()
+        .ipc_reply_target
+        .map(|(ep, _)| ep)
+        .unwrap_or(0);
     crate::ipc::with_shard(endpoint_id, |bus| {
         match crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, bus) {
             Ok(()) => 0,
@@ -779,9 +784,9 @@ fn ipc_cancel() -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let caps = crate::capability::CAP_BROKER.lock();
     let caller_pid = sched.current_process().pid;
-    
+
     let endpoint_id = sched.current_process().ipc_endpoint.unwrap_or(0);
-    
+
     crate::ipc::with_shard(endpoint_id, |bus| {
         match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &caps, bus) {
             Ok(()) => 0,
@@ -803,7 +808,7 @@ fn endpoint_bind(token: u64) -> u64 {
     if token == INIT_NAMESERVER_ENDPOINT as u64 {
         let caps = crate::capability::CAP_BROKER.lock();
         return caps
-            .token_for_endpoint(INIT_NAMESERVER_ENDPOINT, CapabilityRights::SEND)
+            .token_for_owner_endpoint(1, CapabilityRights::SEND)
             .map_or(0, |cap| cap.0);
     }
     token
@@ -1452,7 +1457,12 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
 
     // [LAUNCH-TRACE] Point 7: enqueue_finished (child is runnable)
     trace.enqueue_finished_ns = now_ns();
-    trace.emit(crate::process::spawn::name_from_path(path_str), path_str, Some(child_pid), "ok");
+    trace.emit(
+        crate::process::spawn::name_from_path(path_str),
+        path_str,
+        Some(child_pid),
+        "ok",
+    );
 
     crate::serial_println!(
         "[SYSCALL] spawn: {} pid={} ppid={}",
@@ -3719,12 +3729,11 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
 
     // SAFETY: mapping user-visible read-only pages into current process page tables.
     for i in 0..TELEMETRY_PAGES {
-        let user_page = match x86_64::structures::paging::Page::from_start_address(
-            user_addr + i * PAGE_SIZE,
-        ) {
-            Ok(p) => p,
-            Err(_) => return 0,
-        };
+        let user_page =
+            match x86_64::structures::paging::Page::from_start_address(user_addr + i * PAGE_SIZE) {
+                Ok(p) => p,
+                Err(_) => return 0,
+            };
         let phys_frame = unsafe {
             x86_64::structures::paging::PhysFrame::from_start_address_unchecked(
                 x86_64::PhysAddr::new(telemetry_phys_page + i * PAGE_SIZE),

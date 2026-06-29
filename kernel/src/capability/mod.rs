@@ -411,6 +411,31 @@ impl CapabilityBroker {
             })
     }
 
+    /// Return an existing token for the first endpoint owned by `owner_pid`
+    /// that satisfies the requested IPC rights.
+    pub fn token_for_owner_endpoint(
+        &self,
+        owner_pid: usize,
+        rights: CapabilityRights,
+    ) -> Option<CapabilityToken> {
+        if !rights.is_ipc() {
+            return None;
+        }
+        self.capabilities
+            .iter()
+            .find_map(|(token, endpoint_id, token_rights)| {
+                if !token_rights.satisfies(&rights) {
+                    return None;
+                }
+                let owner = self.endpoint_owner(*endpoint_id)?;
+                if owner == owner_pid {
+                    Some(*token)
+                } else {
+                    None
+                }
+            })
+    }
+
     /// Revoke a capability token.
     pub fn revoke(&mut self, token: CapabilityToken) {
         if let Some(idx) = self.capabilities.iter().position(|(t, _, _)| *t == token) {
