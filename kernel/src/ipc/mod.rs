@@ -3,11 +3,13 @@ pub mod message;
 use crate::capability::{CapabilityBroker, CapabilityRights, CapabilityToken};
 use crate::process::ProcessState;
 use crate::sched::Scheduler;
+use alloc::collections::BTreeMap;
 use alloc::collections::VecDeque;
 
 pub use message::IpcMsg;
 
 pub const INIT_NAMESERVER_ENDPOINT: u32 = 0;
+const NUM_SHARDS: usize = 16;
 
 #[allow(non_snake_case)]
 pub mod SpawnMsg {
@@ -16,8 +18,22 @@ pub mod SpawnMsg {
     pub const ERROR: u64 = 3;
 }
 
-/// Global IPC bus instance.
-pub static IPC_BUS: spin::Mutex<IpcBus> = spin::Mutex::new(IpcBus::new());
+/// Sharded IPC bus instances for lock-free parallelism.
+pub static IPC_BUS_SHARDS: [spin::Mutex<IpcBusShard>; NUM_SHARDS] = [
+    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+    spin::Mutex::new(IpcBusShard::new()), spin::Mutex::new(IpcBusShard::new()),
+];
+
+#[inline]
+pub fn shard_for(endpoint_id: u32) -> usize {
+    (endpoint_id as usize) % NUM_SHARDS
+}
 
 /// Errors returned by IPC operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,47 +42,30 @@ pub enum IpcError {
     EndpointNotFound = 2,
     WouldBlock = 3,
     InvalidArgument = 4,
-    /// `IpcMsg::word_count` exceeds `IPC_REG_WORDS` (4) (forged register value).
     InvalidWordCount = 5,
-    /// `IpcMsg::cap_count` exceeds `IPC_MAX_CAPS` (forged register value).
     InvalidCapCount = 6,
 }
 
-/// The IPC bus manages per-endpoint message queues and call waiters.
-pub struct IpcBus {
-    queues: alloc::vec::Vec<(u32, VecDeque<IpcMsg>)>,
-    reply_waiters: alloc::vec::Vec<(u32, VecDeque<usize>)>,
+/// Per-shard IPC bus with O(1) endpoint lookup.
+pub struct IpcBusShard {
+    queues: BTreeMap<u32, VecDeque<IpcMsg>>,
+    reply_waiters: BTreeMap<u32, VecDeque<usize>>,
 }
 
-impl IpcBus {
+impl IpcBusShard {
     pub const fn new() -> Self {
         Self {
-            queues: alloc::vec::Vec::new(),
-            reply_waiters: alloc::vec::Vec::new(),
+            queues: BTreeMap::new(),
+            reply_waiters: BTreeMap::new(),
         }
     }
 
     fn queue_for(&mut self, endpoint_id: u32) -> &mut VecDeque<IpcMsg> {
-        let idx = self.queues.iter().position(|(id, _)| *id == endpoint_id);
-        if let Some(idx) = idx {
-            return &mut self.queues[idx].1;
-        }
-        self.queues.push((endpoint_id, VecDeque::new()));
-        let last = self.queues.len() - 1;
-        &mut self.queues[last].1
+        self.queues.entry(endpoint_id).or_insert_with(VecDeque::new)
     }
 
     fn reply_waiters_for(&mut self, endpoint_id: u32) -> &mut VecDeque<usize> {
-        let idx = self
-            .reply_waiters
-            .iter()
-            .position(|(id, _)| *id == endpoint_id);
-        if let Some(idx) = idx {
-            return &mut self.reply_waiters[idx].1;
-        }
-        self.reply_waiters.push((endpoint_id, VecDeque::new()));
-        let last = self.reply_waiters.len() - 1;
-        &mut self.reply_waiters[last].1
+        self.reply_waiters.entry(endpoint_id).or_insert_with(VecDeque::new)
     }
 
     pub fn endpoint_owner(&self, token: CapabilityToken, caps: &CapabilityBroker) -> Option<usize> {
@@ -105,11 +104,11 @@ impl IpcBus {
     }
 
     pub fn pop_pending(&mut self, endpoint_id: u32) -> Option<IpcMsg> {
-        self.queue_for(endpoint_id).pop_front()
+        self.queues.get_mut(&endpoint_id)?.pop_front()
     }
 
     pub fn reply_waiter_pop_front(&mut self, endpoint_id: u32) -> Option<usize> {
-        self.reply_waiters_for(endpoint_id).pop_front()
+        self.reply_waiters.get_mut(&endpoint_id)?.pop_front()
     }
 
     pub fn reply_waiter_remove(&mut self, endpoint_id: u32, caller_pid: usize) -> bool {
@@ -143,24 +142,17 @@ impl IpcBus {
     }
 
     pub fn pending_count(&self, endpoint_id: u32) -> usize {
-        self.queues
-            .iter()
-            .find(|(id, _)| *id == endpoint_id)
-            .map_or(0, |(_, q)| q.len())
+        self.queues.get(&endpoint_id).map_or(0, |q| q.len())
     }
 
     pub fn pending_callers_count(&self, endpoint_id: u32) -> usize {
-        self.reply_waiters
-            .iter()
-            .find(|(id, _)| *id == endpoint_id)
-            .map_or(0, |(_, q)| q.len())
+        self.reply_waiters.get(&endpoint_id).map_or(0, |w| w.len())
     }
 
     pub fn has_pending_call_from(&self, endpoint_id: u32, caller_pid: usize) -> bool {
         self.reply_waiters
-            .iter()
-            .find(|(id, _)| *id == endpoint_id)
-            .is_some_and(|(_, q)| q.iter().any(|pid| *pid == caller_pid))
+            .get(&endpoint_id)
+            .is_some_and(|q| q.iter().any(|pid| *pid == caller_pid))
     }
 
     pub fn waiting_receiver_pid(&self, endpoint_id: u32, sched: &Scheduler) -> Option<usize> {
@@ -195,17 +187,40 @@ impl IpcBus {
     }
 
     pub fn remove_endpoint(&mut self, endpoint_id: u32) {
-        self.queues.retain(|(id, _)| *id != endpoint_id);
-        self.reply_waiters.retain(|(id, _)| *id != endpoint_id);
+        self.queues.remove(&endpoint_id);
+        self.reply_waiters.remove(&endpoint_id);
     }
 
     pub fn remove_pid_references(&mut self, pid: usize) {
-        for (_, queue) in self.queues.iter_mut() {
+        for queue in self.queues.values_mut() {
             queue.retain(|msg| msg.badge != pid as u64);
         }
-        for (_, waiters) in self.reply_waiters.iter_mut() {
+        for waiters in self.reply_waiters.values_mut() {
             waiters.retain(|waiter| *waiter != pid);
         }
+    }
+}
+
+pub type IpcBus = IpcBusShard;
+
+/// Acquire a shard lock for a given endpoint_id.
+#[inline]
+pub fn with_shard<F, R>(endpoint_id: u32, f: F) -> R
+where
+    F: FnOnce(&mut IpcBusShard) -> R,
+{
+    let shard_idx = shard_for(endpoint_id);
+    let mut shard = IPC_BUS_SHARDS[shard_idx].lock();
+    f(&mut shard)
+}
+
+/// Execute an operation across all shards (for cleanup operations).
+pub fn for_all_shards<F>(mut f: F)
+where
+    F: FnMut(&mut IpcBusShard),
+{
+    for shard in &IPC_BUS_SHARDS {
+        f(&mut shard.lock());
     }
 }
 
@@ -304,19 +319,13 @@ pub fn handle_ipc_call(
             sched.processes[idx].pending_call = Some((target_cap.0, msg));
             should_enqueue = true;
         } else if !bus.has_pending_call_from(endpoint_id, caller_pid) {
-            // A retrying client must never be left blocked with only its
-            // per-process pending_call set. That state means no server can
-            // receive the request, so repair it by re-queueing the original
-            // call once. Duplicate retries while the message is queued are
-            // suppressed by has_pending_call_from().
             should_enqueue = true;
         }
-        // CPU accounting + churn penalty + runnable queue hygiene when blocking on IPC
         sched.account_and_apply_churn_penalty();
         sched.processes[idx].state = ProcessState::BlockedOnIpc;
+        sched.processes[idx].ipc_endpoint = Some(endpoint_id);
         sched.processes[idx].block_start_tick = global_tick;
     }
-    // Best-effort: remove the caller from queues by pid (Phase 2).
     if let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) {
         sched.remove_from_ready_queues(idx);
     }

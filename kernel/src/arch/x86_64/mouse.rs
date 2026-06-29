@@ -194,7 +194,6 @@ pub fn handle_irq12() {
     // 3. Notify user-space driver if registered
     let endpoint = MOUSE_DRIVER_ENDPOINT.load(Ordering::Acquire);
     if endpoint != 0 && pushed {
-        use crate::ipc::IPC_BUS;
         use crate::sched::SCHEDULER;
 
         let mut sched = SCHEDULER.lock();
@@ -207,8 +206,9 @@ pub fn handle_irq12() {
             .unwrap_or(0);
 
         if server_pid != 0 {
-            let mut bus = IPC_BUS.lock();
-            bus.send_keyboard_event(endpoint, byte as u64, &mut sched, server_pid);
+            crate::ipc::with_shard(endpoint, |bus| {
+                bus.send_keyboard_event(endpoint, byte as u64, &mut sched, server_pid);
+            });
         }
     }
 

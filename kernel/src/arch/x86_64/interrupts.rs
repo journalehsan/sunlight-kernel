@@ -703,8 +703,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         .and_then(|p| p.ipc_endpoint.map(|endpoint| (endpoint, p.pid)));
 
     if let Some((endpoint_id, timer_pid)) = timer_endpoint {
-        let mut bus = crate::ipc::IPC_BUS.lock();
-        bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
+        crate::ipc::with_shard(endpoint_id, |bus| {
+            bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
+        });
     }
 
     // Wake tty_server on a render cadence. Its idle loop parks in BlockedOnIpc

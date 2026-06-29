@@ -150,7 +150,6 @@ pub fn poll_inject_buffer() {
 }
 
 fn notify_driver(endpoint: u32, scancode: u8) {
-    use crate::ipc::IPC_BUS;
     use crate::sched::SCHEDULER;
 
     let mut sched = SCHEDULER.lock();
@@ -163,8 +162,9 @@ fn notify_driver(endpoint: u32, scancode: u8) {
         .unwrap_or(0);
 
     if server_pid != 0 {
-        let mut bus = IPC_BUS.lock();
-        bus.send_keyboard_event(endpoint, scancode as u64, &mut sched, server_pid);
+        crate::ipc::with_shard(endpoint, |bus| {
+            bus.send_keyboard_event(endpoint, scancode as u64, &mut sched, server_pid);
+        });
         sched.wake_pid(server_pid);
     }
 }

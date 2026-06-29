@@ -616,20 +616,25 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let caps = crate::capability::CAP_BROKER.lock();
-    let mut bus = crate::ipc::IPC_BUS.lock();
     let sender_pid = sched.current_process().pid;
 
-    match crate::ipc::handle_ipc_call(sender_pid, token, msg, &caps, &mut sched, &mut bus) {
-        Ok(reply) => {
-            reply.to_registers(frame);
-            0
+    let (endpoint_id, _) = caps.token_owner(token, CapabilityRights::SEND)
+        .map_err(|_| IpcError::InvalidCapability as u64)
+        .unwrap_or((0, 0));
+
+    crate::ipc::with_shard(endpoint_id, |bus| {
+        match crate::ipc::handle_ipc_call(sender_pid, token, msg, &caps, &mut sched, bus) {
+            Ok(reply) => {
+                reply.to_registers(frame);
+                0
+            }
+            Err(IpcError::WouldBlock) => {
+                sched::request_reschedule();
+                IpcError::WouldBlock as u64
+            }
+            Err(e) => e as u64,
         }
-        Err(IpcError::WouldBlock) => {
-            sched::request_reschedule();
-            IpcError::WouldBlock as u64
-        }
-        Err(e) => e as u64,
-    }
+    })
 }
 
 /// Handle a spawn IPC call directly in the kernel.
@@ -696,12 +701,14 @@ fn decode_path_from_words(words: &[u64; 8]) -> alloc::string::String {
 fn ipc_reply(frame: &mut SyscallFrame) -> u64 {
     let reply = IpcMsg::from_registers(frame);
     let mut sched = crate::sched::SCHEDULER.lock();
-    let mut bus = crate::ipc::IPC_BUS.lock();
     let server_pid = sched.current_process().pid;
-    match crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, &mut bus) {
-        Ok(()) => 0,
-        Err(e) => e as u64,
-    }
+    let endpoint_id = sched.current_process().ipc_reply_target.map(|(ep, _)| ep).unwrap_or(0);
+    crate::ipc::with_shard(endpoint_id, |bus| {
+        match crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, bus) {
+            Ok(()) => 0,
+            Err(e) => e as u64,
+        }
+    })
 }
 
 fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
@@ -709,46 +716,48 @@ fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
     let reply = IpcMsg::from_registers(frame);
     let mut sched = crate::sched::SCHEDULER.lock();
     let caps = crate::capability::CAP_BROKER.lock();
-    let mut bus = crate::ipc::IPC_BUS.lock();
     let server_pid = sched.current_process().pid;
     let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
         Ok(id) => id,
         Err(_) => return IpcError::InvalidCapability as u64,
     };
-    match crate::ipc::handle_ipc_reply_wait(server_pid, endpoint_id, reply, &mut sched, &mut bus) {
-        Ok(next) => {
-            next.to_registers(frame);
-            0
+    crate::ipc::with_shard(endpoint_id, |bus| {
+        match crate::ipc::handle_ipc_reply_wait(server_pid, endpoint_id, reply, &mut sched, bus) {
+            Ok(next) => {
+                next.to_registers(frame);
+                0
+            }
+            Err(IpcError::WouldBlock) => {
+                sched::request_reschedule();
+                IpcError::WouldBlock as u64
+            }
+            Err(e) => e as u64,
         }
-        Err(IpcError::WouldBlock) => {
-            sched::request_reschedule();
-            IpcError::WouldBlock as u64
-        }
-        Err(e) => e as u64,
-    }
+    })
 }
 
 fn ipc_recv(frame: &mut SyscallFrame) -> u64 {
     let endpoint_token = CapabilityToken(frame.rsi);
     let mut sched = crate::sched::SCHEDULER.lock();
     let caps = crate::capability::CAP_BROKER.lock();
-    let mut bus = crate::ipc::IPC_BUS.lock();
     let receiver_pid = sched.current_process().pid;
     let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
         Ok(id) => id,
         Err(_) => return IpcError::InvalidCapability as u64,
     };
-    match crate::ipc::handle_ipc_recv(receiver_pid, endpoint_id, &mut sched, &mut bus) {
-        Ok(msg) => {
-            msg.to_registers(frame);
-            0
+    crate::ipc::with_shard(endpoint_id, |bus| {
+        match crate::ipc::handle_ipc_recv(receiver_pid, endpoint_id, &mut sched, bus) {
+            Ok(msg) => {
+                msg.to_registers(frame);
+                0
+            }
+            Err(IpcError::WouldBlock) => {
+                sched::request_reschedule();
+                IpcError::WouldBlock as u64
+            }
+            Err(e) => e as u64,
         }
-        Err(IpcError::WouldBlock) => {
-            sched::request_reschedule();
-            IpcError::WouldBlock as u64
-        }
-        Err(e) => e as u64,
-    }
+    })
 }
 
 fn ipc_notify_send(_token: u64) -> u64 {
@@ -769,12 +778,16 @@ fn ipc_notify_wait(_endpoint_token: u64) -> u64 {
 fn ipc_cancel() -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let caps = crate::capability::CAP_BROKER.lock();
-    let mut bus = crate::ipc::IPC_BUS.lock();
     let caller_pid = sched.current_process().pid;
-    match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &caps, &mut bus) {
-        Ok(()) => 0,
-        Err(e) => e as u64,
-    }
+    
+    let endpoint_id = sched.current_process().ipc_endpoint.unwrap_or(0);
+    
+    crate::ipc::with_shard(endpoint_id, |bus| {
+        match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &caps, bus) {
+            Ok(()) => 0,
+            Err(e) => e as u64,
+        }
+    })
 }
 
 fn endpoint_create() -> u64 {

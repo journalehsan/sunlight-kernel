@@ -1136,10 +1136,11 @@ impl Scheduler {
         };
 
         {
-            let mut bus = crate::ipc::IPC_BUS.lock();
-            bus.remove_pid_references(pid);
+            crate::ipc::for_all_shards(|bus| {
+                bus.remove_pid_references(pid);
+            });
             for endpoint_id in &endpoint_ids {
-                bus.remove_endpoint(*endpoint_id);
+                crate::ipc::with_shard(*endpoint_id, |bus| bus.remove_endpoint(*endpoint_id));
             }
         }
 
@@ -1334,7 +1335,6 @@ impl Scheduler {
         {
             serial_println!("[SCHED-DIAG] IPC wait dump:");
             let caps = crate::capability::CAP_BROKER.lock();
-            let bus = crate::ipc::IPC_BUS.lock();
             for p in self
                 .processes
                 .iter()
@@ -1356,13 +1356,15 @@ impl Scheduler {
                     };
                 let (receiver_waiting_ep, endpoint_queue_len, waiting_receiver, pending_callers) =
                     if resolved_ep != u32::MAX {
-                        (
-                            resolved_ep,
-                            bus.pending_count(resolved_ep),
-                            bus.waiting_receiver_pid(resolved_ep, self)
-                                .unwrap_or(usize::MAX),
-                            bus.pending_callers_count(resolved_ep),
-                        )
+                        crate::ipc::with_shard(resolved_ep, |bus| {
+                            (
+                                resolved_ep,
+                                bus.pending_count(resolved_ep),
+                                bus.waiting_receiver_pid(resolved_ep, self)
+                                    .unwrap_or(usize::MAX),
+                                bus.pending_callers_count(resolved_ep),
+                            )
+                        })
                     } else {
                         (u32::MAX, 0, usize::MAX, 0)
                     };
@@ -1404,13 +1406,15 @@ impl Scheduler {
                 );
             }
             for (ep, owner) in caps.debug_endpoints() {
-                serial_println!(
-                    "[IPC-DIAG] ep={} owner={} waiting_receiver={} pending_callers={}",
-                    ep,
-                    owner,
-                    bus.waiting_receiver_pid(ep, self).unwrap_or(usize::MAX),
-                    bus.pending_callers_count(ep)
-                );
+                crate::ipc::with_shard(ep, |bus| {
+                    serial_println!(
+                        "[IPC-DIAG] ep={} owner={} waiting_receiver={} pending_callers={}",
+                        ep,
+                        owner,
+                        bus.waiting_receiver_pid(ep, self).unwrap_or(usize::MAX),
+                        bus.pending_callers_count(ep)
+                    );
+                });
             }
         }
     }
