@@ -38,7 +38,12 @@ pub fn spawn(func: unsafe extern "C" fn(u64), arg: u64) -> (u64, Vec<u8>) {
     // The kernel reads them from [rsi+0] and [rsi+8], then sets
     // RDI=func and RSI=arg on the new thread, so the trampoline receives
     // them as its first two arguments.
-    let top = stack.as_mut_ptr() as usize + THREAD_STACK_BYTES;
+    //
+    // A Vec<u8> is only 1-byte aligned, so round the top down to a 16-byte
+    // boundary (System V ABI requires a 16-aligned RSP at function entry, and
+    // the kernel reads these slots as aligned u64s). An unaligned stack top
+    // makes the kernel's ThreadSpawn deref a misaligned *const u64.
+    let top = (stack.as_mut_ptr() as usize + THREAD_STACK_BYTES) & !0xF;
     let write_ptr = (top - 16) as *mut u64;
     unsafe {
         *write_ptr = func as *const () as u64;

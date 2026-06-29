@@ -943,9 +943,16 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     // SAFETY: user_stack_top and +8 were validated as user addresses above;
     // CR3 has not changed since syscall_entry, so these virtual addresses
     // are accessible from kernel mode.
+    // read_unaligned: the stack top is userland-controlled and may not be
+    // 8-aligned. A plain *const u64 deref would panic the kernel on a
+    // misaligned address (UB / debug alignment check) instead of failing
+    // gracefully in userland.
     let (func, arg) = unsafe {
         let base = user_stack_top as *const u64;
-        (*base, *base.add(1))
+        (
+            core::ptr::read_unaligned(base),
+            core::ptr::read_unaligned(base.add(1)),
+        )
     };
 
     if !is_user_address(func) {
