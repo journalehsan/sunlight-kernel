@@ -479,15 +479,58 @@ fn direct_child_name<'a>(entry_path: &'a str, dir: &str) -> Option<&'a str> {
     }
 }
 
+/// The conventional per-user directory structure that the OS guarantees to
+/// exist inside every home directory (`/root` and each `/home/<user>`).
+///
+/// This is an OS-level responsibility: the kernel/filesystem seeds it at boot
+/// for `/root` and the default user (see `INITRAMFS`), and the user-creation
+/// path (`sunshell` `useradd`) reproduces it for every new account. The file
+/// manager (`sunlight-files`) deliberately does NOT create these; it only
+/// assumes they exist and surfaces an error if navigation fails.
+pub const STANDARD_HOME_DIRS: &[&str] = &[
+    "Desktop",
+    "Documents",
+    "Downloads",
+    "Pictures",
+    "Music",
+    "Videos",
+];
+
 pub static INITRAMFS: &[RamEntry] = &[
     // Directories
     RamEntry::dir("/", 0, 0, mode::DIR_755),
     RamEntry::dir("/etc", 0, 0, mode::DIR_755),
     RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
     RamEntry::dir("/bin", 0, 0, mode::DIR_755),
+
+    // -- Standard user home directory layout (OS responsibility) ------------
+    // These directories are seeded by the OS so every home directory ships
+    // with the conventional folder structure. This is intentionally done here
+    // (and in the user-creation path), NOT in the file manager: the file
+    // manager only navigates existing folders and must never be responsible
+    // for creating the standard home layout.
+    //
+    // Keep this list in sync with `STANDARD_HOME_DIRS` below.
     RamEntry::dir("/root", 0, 0, mode::DIR_700),
+    // Root's standard folders (uid 0).
+    RamEntry::dir("/root/Desktop", 0, 0, mode::DIR_700),
+    RamEntry::dir("/root/Documents", 0, 0, mode::DIR_700),
+    RamEntry::dir("/root/Downloads", 0, 0, mode::DIR_700),
+    RamEntry::dir("/root/Pictures", 0, 0, mode::DIR_700),
+    RamEntry::dir("/root/Music", 0, 0, mode::DIR_700),
+    RamEntry::dir("/root/Videos", 0, 0, mode::DIR_700),
+
     RamEntry::dir("/home", 0, 0, mode::DIR_755),
     RamEntry::dir("/home/user", 1000, 1000, mode::DIR_755),
+    // Default unprivileged user's standard folders (uid/gid 1000).
+    RamEntry::dir("/home/user/Desktop", 1000, 1000, mode::DIR_755),
+    RamEntry::dir("/home/user/Documents", 1000, 1000, mode::DIR_755),
+    RamEntry::dir("/home/user/Downloads", 1000, 1000, mode::DIR_755),
+    RamEntry::dir("/home/user/Pictures", 1000, 1000, mode::DIR_755),
+    RamEntry::dir("/home/user/Music", 1000, 1000, mode::DIR_755),
+    RamEntry::dir("/home/user/Videos", 1000, 1000, mode::DIR_755),
+    // -- End standard home directory layout ---------------------------------
+
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),
     RamEntry::dir("/state", 0, 0, mode::DIR_755),

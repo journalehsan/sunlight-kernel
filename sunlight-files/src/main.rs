@@ -7,17 +7,21 @@ use core::cmp::Ordering;
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    process_yield, show_notification, NotificationKind, ProcessExit,
+    process_yield, ProcessExit,
 };
 use sunlight_libc::{self as libc, env, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::TgaImage;
+use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
+use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::Label;
 use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
 
 // ---------------------------------------------------------------------------
-// Icon theme: home-folder place icons (256×256 BGRA TGA, embedded at compile time)
+// Embedded place icons (16 px TGA, nearest-neighbour scaled to 32px in widget)
 // ---------------------------------------------------------------------------
 
+static ICON_HOME_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/user-home.tga");
 static ICON_FOLDER_DESKTOP_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/folder-desktop.tga");
 static ICON_FOLDER_DOCUMENTS_TGA: &[u8] =
@@ -30,47 +34,68 @@ static ICON_FOLDER_PICTURES_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/folder-pictures.tga");
 static ICON_FOLDER_VIDEOS_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/folder-videos.tga");
-static ICON_FOLDER_HOME_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder_home.tga");
-static ICON_FOLDER_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
+static ICON_FOLDER_NETWORK_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-network.tga");
 static ICON_USER_TRASH_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.tga");
+static ICON_FOLDER_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
 
-/// Return the TGA icon for a home folder (Desktop=0 … Trash=7).  Parses the
-/// header on each call (O(1), just offset arithmetic — fine for low-fps UI).
-fn home_folder_tga(idx: usize, present: bool) -> Option<TgaImage> {
-    let bytes: &'static [u8] = if !present {
-        ICON_FOLDER_TGA
-    } else {
-        match idx {
-            0 => ICON_FOLDER_DESKTOP_TGA,
-            1 => ICON_FOLDER_DOCUMENTS_TGA,
-            2 => ICON_FOLDER_DOWNLOADS_TGA,
-            3 => ICON_FOLDER_MUSIC_TGA,
-            4 => ICON_FOLDER_PICTURES_TGA,
-            5 => ICON_FOLDER_VIDEOS_TGA,
-            6 => ICON_FOLDER_HOME_TGA,
-            7 => ICON_USER_TRASH_TGA,
-            _ => ICON_FOLDER_TGA,
-        }
+/// Parse a sidebar icon TGA for the given sidebar index.
+/// Returns `None` if parsing fails (the widget falls back to the UiSymbol).
+fn sidebar_tga(idx: usize) -> Option<TgaImage> {
+    let bytes: &'static [u8] = match idx {
+        0 => ICON_HOME_TGA,
+        1 => ICON_FOLDER_DESKTOP_TGA,
+        2 => ICON_FOLDER_DOCUMENTS_TGA,
+        3 => ICON_FOLDER_DOWNLOADS_TGA,
+        4 => ICON_FOLDER_PICTURES_TGA,
+        5 => ICON_FOLDER_MUSIC_TGA,
+        6 => ICON_FOLDER_VIDEOS_TGA,
+        7 => ICON_FOLDER_TGA,      // Root /
+        8 => ICON_FOLDER_TGA,      // Volumes (no device icon in places set)
+        9 => ICON_FOLDER_NETWORK_TGA,
+        10 => ICON_USER_TRASH_TGA,
+        _ => return None,
     };
     TgaImage::parse(bytes).ok()
 }
+
+/// Parse a home-grid folder icon for the given folder index (0=Desktop…5=Videos).
+fn home_folder_tga(idx: usize) -> Option<TgaImage> {
+    let bytes: &'static [u8] = match idx {
+        0 => ICON_FOLDER_DESKTOP_TGA,
+        1 => ICON_FOLDER_DOCUMENTS_TGA,
+        2 => ICON_FOLDER_DOWNLOADS_TGA,
+        3 => ICON_FOLDER_PICTURES_TGA,
+        4 => ICON_FOLDER_MUSIC_TGA,
+        5 => ICON_FOLDER_VIDEOS_TGA,
+        _ => ICON_FOLDER_TGA,
+    };
+    TgaImage::parse(bytes).ok()
+}
+
+// ---------------------------------------------------------------------------
+// Layout constants
+// ---------------------------------------------------------------------------
 
 const WIN_W: u32 = 960;
 const WIN_H: u32 = 620;
 const TOOLBAR_H: u32 = 64;
 const STATUS_H: u32 = 24;
-const SIDEBAR_W: u32 = 220;
-const GAP: u32 = 12;
-const PAD: i32 = 12;
+const SIDEBAR_W: u32 = 224;
+const GAP: u32 = 10;
+const PAD: i32 = 10;
 const RADIUS: u32 = 7;
 const NAV_BTN_W: u32 = 64;
 const NAV_BTN_H: u32 = 28;
 const SEARCH_W: u32 = 224;
 const SEARCH_H: u32 = 28;
-const SIDEBAR_ITEM_H: u32 = 30;
-const SIDEBAR_ITEM_GAP: u32 = 6;
+/// Height passed to VBox for each SidebarItem — fits inside the sidebar.
+const SIDEBAR_ITEM_H: u32 = 42;
+const SIDEBAR_ITEM_GAP: u32 = 2;
+/// Sidebar section-header label height + gap below it.
+const SIDEBAR_HEADER_H: u32 = 20;
 const HEADER_H: u32 = 20;
 const ROW_H: u32 = 18;
 const TYPE_W: u32 = 116;
@@ -79,14 +104,23 @@ const MOD_W: u32 = 152;
 const MAX_ENTRIES: usize = 64;
 const PATH_LEN: usize = 256;
 const ERROR_LEN: usize = 96;
-const HOME_FOLDER_COUNT: usize = 8;
+
+// Home grid: 6 core folders (Desktop, Documents, Downloads, Pictures, Music, Videos).
+// Templates and Public are available via navigation but not shown on the home page.
+const HOME_FOLDER_COUNT: usize = 6;
 const HOME_CARD_H: u32 = 50;
-const HOME_VOLUME_H: u32 = 44;
 const HOME_CARD_GAP: u32 = 10;
 const HOME_COLS: usize = 3;
 const HOME_GRID_ROWS: usize = (HOME_FOLDER_COUNT + HOME_COLS - 1) / HOME_COLS;
-/// Total sidebar entries: 8 std folders + Home + Root + Volumes + Network
-const SIDEBAR_COUNT: usize = 12;
+
+// Sidebar: 11 entries — trimmed to the most-used destinations.
+// 0:Home  1:Desktop  2:Documents  3:Downloads  4:Pictures  5:Music  6:Videos
+// 7:Root  8:Volumes  9:Network   10:Trash
+const SIDEBAR_COUNT: usize = 11;
+
+// ---------------------------------------------------------------------------
+// Message / View
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Message {
@@ -105,6 +139,10 @@ enum ViewMode {
     Network,
     Directory,
 }
+
+// ---------------------------------------------------------------------------
+// PathBuf — fixed-capacity path string (unchanged)
+// ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy)]
 struct PathBuf {
@@ -132,20 +170,17 @@ impl PathBuf {
         let bytes = text.as_bytes();
         let mut start = 0usize;
         let mut end = bytes.len();
-
         while start < end && bytes[start].is_ascii_whitespace() {
             start += 1;
         }
         while end > start && bytes[end - 1].is_ascii_whitespace() {
             end -= 1;
         }
-
         if start >= end {
             self.buf[0] = b'/';
             self.len = 1;
             return true;
         }
-
         let mut written = 0usize;
         if bytes[start] != b'/' {
             if written >= PATH_LEN {
@@ -154,7 +189,6 @@ impl PathBuf {
             self.buf[written] = b'/';
             written += 1;
         }
-
         let mut i = start;
         let mut saw_component = false;
         while i < end {
@@ -180,15 +214,13 @@ impl PathBuf {
                 }
             }
         }
-
         if written == 0 {
             self.buf[0] = b'/';
             self.len = 1;
-            true
         } else {
             self.len = written;
-            true
         }
+        true
     }
 
     fn join(&self, component: &str) -> Option<Self> {
@@ -257,19 +289,21 @@ impl PathBuf {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Model types
+// ---------------------------------------------------------------------------
+
 #[derive(Clone, Copy)]
 struct HomeFolder {
     name: &'static str,
     path: PathBuf,
-    present: bool,
 }
 
 impl HomeFolder {
-    const fn empty() -> Self {
+    const fn placeholder() -> Self {
         Self {
             name: "",
             path: PathBuf::root(),
-            present: false,
         }
     }
 }
@@ -286,7 +320,6 @@ struct VolumeEntry {
     name: [u8; 64],
     name_len: usize,
     path: PathBuf,
-    present: bool,
 }
 
 impl VolumeEntry {
@@ -295,7 +328,6 @@ impl VolumeEntry {
             name: [0; 64],
             name_len: 0,
             path: PathBuf::root(),
-            present: false,
         }
     }
 
@@ -304,13 +336,16 @@ impl VolumeEntry {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Allocator / panic
+// ---------------------------------------------------------------------------
+
 struct NoAlloc;
 
 unsafe impl GlobalAlloc for NoAlloc {
     unsafe fn alloc(&self, _layout: core::alloc::Layout) -> *mut u8 {
         core::ptr::null_mut()
     }
-
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
@@ -324,6 +359,10 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
         process_yield();
     }
 }
+
+// ---------------------------------------------------------------------------
+// App state
+// ---------------------------------------------------------------------------
 
 struct State {
     home_path: PathBuf,
@@ -344,8 +383,11 @@ struct State {
 
 impl State {
     fn new() -> Self {
+        // Lightweight init: trust env vars, no filesystem probing.
+        // Heavy work (directory listing, volume scan) is deferred to first
+        // navigation or explicit user action.
         let home_path = detect_home_path();
-        let mut state = Self {
+        Self {
             current_path: home_path,
             home_path,
             view_mode: ViewMode::Home,
@@ -360,12 +402,7 @@ impl State {
             volume_count: 0,
             error: [0; ERROR_LEN],
             error_len: 0,
-        };
-        state.refresh_home_volumes();
-        if !state.load_directory(state.current_path) {
-            let _ = state.load_directory(PathBuf::root());
         }
-        state
     }
 
     fn update(&mut self, message: Message) -> bool {
@@ -385,14 +422,14 @@ impl State {
         self.selected_sidebar = 0;
         self.selected_row = None;
         self.clear_error();
-        self.refresh_home_folders();
+        // Refresh volumes on demand (user navigated home explicitly).
         self.refresh_home_volumes();
         true
     }
 
     fn show_volumes(&mut self) -> bool {
         self.view_mode = ViewMode::Volumes;
-        self.selected_sidebar = 10;
+        self.selected_sidebar = 8;
         self.selected_row = None;
         self.clear_error();
         self.refresh_home_volumes();
@@ -401,35 +438,22 @@ impl State {
 
     fn show_network(&mut self) -> bool {
         self.view_mode = ViewMode::Network;
-        self.selected_sidebar = 11;
+        self.selected_sidebar = 9;
         self.selected_row = None;
         self.clear_error();
         true
     }
 
     fn go_to_sidebar(&mut self, idx: usize) -> bool {
-        if idx == 0 {
-            return self.show_home();
-        }
         match self.sidebar_target(idx) {
             Some(SidebarTarget::Home) => self.show_home(),
             Some(SidebarTarget::Volumes) => self.show_volumes(),
             Some(SidebarTarget::Network) => self.show_network(),
             Some(SidebarTarget::Path(target)) => {
-                if (1..=HOME_FOLDER_COUNT).contains(&idx) && !self.home_folders[idx - 1].present {
-                    self.selected_sidebar = idx;
-                    self.set_error("Folder is missing or could not be created.");
-                    let _ = show_notification(
-                        NotificationKind::Error,
-                        "Folder unavailable",
-                        self.home_folders[idx - 1].name,
-                        10_000,
-                    );
-                    true
-                } else {
-                    self.selected_sidebar = idx;
-                    self.navigate_to(target)
-                }
+                self.selected_sidebar = idx;
+                // Navigate; if the directory doesn't exist, load_directory
+                // sets the error message — no pre-probing needed.
+                self.navigate_to(target)
             }
             None => false,
         }
@@ -449,16 +473,7 @@ impl State {
         let Some(folder) = self.home_folders.get(idx).copied() else {
             return false;
         };
-        if !folder.present {
-            self.set_error("Folder is missing or could not be created.");
-            let _ = show_notification(
-                NotificationKind::Error,
-                "Folder unavailable",
-                folder.name,
-                10_000,
-            );
-            return true;
-        }
+        // Navigate immediately; error surfaces only if the path is unreadable.
         if self.navigate_to(folder.path) {
             self.selected_sidebar = self.sidebar_index_for_path();
             true
@@ -471,10 +486,6 @@ impl State {
         let Some(volume) = self.volume_entries.get(idx).copied() else {
             return false;
         };
-        if !volume.present {
-            self.set_error("Volume is missing. TODO: mount metadata.");
-            return false;
-        }
         if self.navigate_to(volume.path) {
             self.view_mode = ViewMode::Directory;
             self.selected_sidebar = self.sidebar_index_for_path();
@@ -488,13 +499,11 @@ impl State {
         if idx >= self.entry_count {
             return false;
         }
-
         self.selected_row = Some(idx);
         let entry = self.entries[idx];
         if entry.file_type != FT_DIR {
             return true;
         }
-
         let name = entry.name_bytes();
         let name = match core::str::from_utf8(name) {
             Ok(s) => s,
@@ -529,7 +538,6 @@ impl State {
         self.folder_count = 0;
         self.file_count = 0;
         self.selected_row = None;
-
         match libc::read_dir(path.as_str().as_bytes(), &mut self.entries) {
             Ok(count) => {
                 self.entry_count = count.min(MAX_ENTRIES);
@@ -552,10 +560,6 @@ impl State {
         }
     }
 
-    fn refresh_home_folders(&mut self) {
-        self.home_folders = build_home_folders(self.home_path);
-    }
-
     fn refresh_home_volumes(&mut self) {
         self.volume_count = build_volumes(&mut self.volume_entries);
     }
@@ -566,14 +570,13 @@ impl State {
             1 => self.home_path.join("Desktop").map(SidebarTarget::Path),
             2 => self.home_path.join("Documents").map(SidebarTarget::Path),
             3 => self.home_path.join("Downloads").map(SidebarTarget::Path),
-            4 => self.home_path.join("Music").map(SidebarTarget::Path),
-            5 => self.home_path.join("Pictures").map(SidebarTarget::Path),
+            4 => self.home_path.join("Pictures").map(SidebarTarget::Path),
+            5 => self.home_path.join("Music").map(SidebarTarget::Path),
             6 => self.home_path.join("Videos").map(SidebarTarget::Path),
-            7 => self.home_path.join("Templates").map(SidebarTarget::Path),
-            8 => self.home_path.join("Public").map(SidebarTarget::Path),
-            9 => Some(SidebarTarget::Path(PathBuf::root())),
-            10 => Some(SidebarTarget::Volumes),
-            11 => Some(SidebarTarget::Network),
+            7 => Some(SidebarTarget::Path(PathBuf::root())),
+            8 => Some(SidebarTarget::Volumes),
+            9 => Some(SidebarTarget::Network),
+            10 => self.home_path.join(".Trash").map(SidebarTarget::Path),
             _ => None,
         }
     }
@@ -584,76 +587,44 @@ impl State {
             1 => "Desktop",
             2 => "Documents",
             3 => "Downloads",
-            4 => "Music",
-            5 => "Pictures",
+            4 => "Pictures",
+            5 => "Music",
             6 => "Videos",
-            7 => "Templates",
-            8 => "Public",
-            9 => "Root",
-            10 => "Volumes",
-            _ => "Network",
+            7 => "Root",
+            8 => "Volumes",
+            9 => "Network",
+            _ => "Trash",
         }
     }
 
     fn sidebar_index_for_path(&self) -> usize {
         match self.view_mode {
             ViewMode::Home => return 0,
-            ViewMode::Volumes => return 10,
-            ViewMode::Network => return 11,
+            ViewMode::Volumes => return 8,
+            ViewMode::Network => return 9,
             ViewMode::Directory => {}
         }
-
         let current = self.current_path.as_str();
         if path_matches(current, self.home_path.as_str()) {
             return 0;
         }
-
         let check = |name: &str, idx: usize| -> Option<usize> {
             self.home_path
                 .join(name)
                 .filter(|p| path_matches(current, p.as_str()))
                 .map(|_| idx)
         };
-
-        if let Some(i) = check("Desktop", 1) {
-            return i;
-        }
-        if let Some(i) = check("Documents", 2) {
-            return i;
-        }
-        if let Some(i) = check("Downloads", 3) {
-            return i;
-        }
-        if let Some(i) = check("Music", 4) {
-            return i;
-        }
-        if let Some(i) = check("Pictures", 5) {
-            return i;
-        }
-        if let Some(i) = check("Videos", 6) {
-            return i;
-        }
-        if let Some(i) = check("Templates", 7) {
-            return i;
-        }
-        if let Some(i) = check("Public", 8) {
-            return i;
-        }
-
-        if current == "/" {
-            return 9;
-        }
-        if current == "/mnt" || current.starts_with("/mnt/") {
-            return 10;
-        }
-        if current == "/boot" || current.starts_with("/boot/") {
-            return 10;
-        }
-        if current == "/network" || current.starts_with("/network/") {
-            return 11;
-        }
-
-        9
+        if let Some(i) = check("Desktop", 1) { return i; }
+        if let Some(i) = check("Documents", 2) { return i; }
+        if let Some(i) = check("Downloads", 3) { return i; }
+        if let Some(i) = check("Pictures", 4) { return i; }
+        if let Some(i) = check("Music", 5) { return i; }
+        if let Some(i) = check("Videos", 6) { return i; }
+        if current == "/" { return 7; }
+        if current == "/mnt" || current.starts_with("/mnt/") { return 8; }
+        if current == "/boot" || current.starts_with("/boot/") { return 8; }
+        if current == "/network" || current.starts_with("/network/") { return 9; }
+        7
     }
 
     fn clear_error(&mut self) {
@@ -671,6 +642,10 @@ impl State {
     }
 }
 
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
+
 struct FilesApp {
     state: State,
 }
@@ -681,6 +656,8 @@ impl FilesApp {
             state: State::new(),
         }
     }
+
+    // ── Layout helpers ────────────────────────────────────────────────────
 
     fn root_layout() -> (Rect, Rect, Rect) {
         let root = Rect::new(0, 0, WIN_W, WIN_H);
@@ -694,7 +671,8 @@ impl FilesApp {
     }
 
     fn body_layout(body: Rect) -> (Rect, Rect) {
-        let widths = [SIDEBAR_W, body.w.saturating_sub(SIDEBAR_W + GAP)];
+        let main_w = body.w.saturating_sub(SIDEBAR_W + GAP);
+        let widths = [SIDEBAR_W, main_w];
         let mut cols = HBox::new(body).with_spacing(GAP).layout(&widths);
         let sidebar = cols.next().unwrap_or_default();
         let main = cols.next().unwrap_or_default();
@@ -716,13 +694,21 @@ impl FilesApp {
         (back, forward, up, search, breadcrumb)
     }
 
+    /// Compute the rect for sidebar item `idx` using the same VBox layout as `draw_sidebar`.
     fn sidebar_item_rect(sidebar: Rect, idx: usize) -> Rect {
         let inner = sidebar.inset(PAD);
+        let items_area = Rect::new(
+            inner.x,
+            inner.y + SIDEBAR_HEADER_H as i32,
+            inner.w,
+            inner.h.saturating_sub(SIDEBAR_HEADER_H),
+        );
         let heights = [SIDEBAR_ITEM_H; SIDEBAR_COUNT];
-        let mut rows = VBox::new(inner)
+        VBox::new(items_area)
             .with_spacing(SIDEBAR_ITEM_GAP)
-            .layout(&heights);
-        rows.nth(idx).unwrap_or_default()
+            .layout(&heights)
+            .nth(idx)
+            .unwrap_or_default()
     }
 
     fn hit_test_sidebar(sidebar: Rect, x: i32, y: i32) -> Option<usize> {
@@ -757,11 +743,9 @@ impl FilesApp {
     }
 
     fn home_folder_rect(inner: Rect, idx: usize) -> Rect {
-        let title_y = inner.y + 40;
+        let title_y = inner.y + 36;
         let grid_top = title_y + 18;
-        let card_w = ((inner
-            .w
-            .saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP))
+        let card_w = (inner.w.saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
             / HOME_COLS as u32)
             .max(120);
         let col = idx % HOME_COLS;
@@ -771,163 +755,108 @@ impl FilesApp {
         Rect::new(x, y, card_w, HOME_CARD_H)
     }
 
-    fn home_volume_rect(inner: Rect, idx: usize, volume_count: usize) -> Option<Rect> {
-        if idx >= volume_count {
-            return None;
-        }
-        let title_y =
-            inner.y + 40 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 14;
-        let mut y = title_y + 18;
-        for _ in 0..idx {
-            y += HOME_VOLUME_H as i32 + 8;
-        }
-        Some(Rect::new(inner.x, y, inner.w, HOME_VOLUME_H))
+    fn home_volume_rect(inner: Rect, idx: usize) -> Rect {
+        let section_y = Self::volumes_section_y(inner);
+        let y = section_y + idx as i32 * (DriveCard::ROW_H as i32 + 6);
+        Rect::new(inner.x, y, inner.w, DriveCard::ROW_H)
     }
+
+    fn volumes_section_y(inner: Rect) -> i32 {
+        // title_y = folder section top + grid height + gap
+        let title_y = inner.y + 36 + 18
+            + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32
+            + 12;
+        title_y + 18 // after section label
+    }
+
+    // ── Draw ──────────────────────────────────────────────────────────────
 
     fn draw_toolbar(&self, canvas: &mut Canvas, theme: &Theme, toolbar: Rect) {
         canvas.fill_rounded_rect_with_border(toolbar, RADIUS, theme.panel, theme.border, 1);
-
         let (back, forward, up, search, breadcrumb) = Self::toolbar_layout(toolbar);
         let up_disabled = match self.state.view_mode {
-            ViewMode::Home => true,
-            ViewMode::Volumes => true,
-            ViewMode::Network => true,
             ViewMode::Directory => self.state.current_path.parent().is_none(),
+            _ => true,
         };
-
-        draw_pill(
-            canvas,
-            theme,
-            back,
-            "Back",
-            Some(UiSymbol::Back),
-            false,
-            true,
-        );
-        draw_pill(
-            canvas,
-            theme,
-            forward,
-            "Forward",
-            Some(UiSymbol::Forward),
-            false,
-            true,
-        );
-        draw_pill(
-            canvas,
-            theme,
-            up,
-            "Up",
-            Some(UiSymbol::Up),
-            false,
-            up_disabled,
-        );
+        draw_pill(canvas, theme, back, "Back", Some(UiSymbol::Back), false, true);
+        draw_pill(canvas, theme, forward, "Fwd", Some(UiSymbol::Forward), false, true);
+        draw_pill(canvas, theme, up, "Up", Some(UiSymbol::Up), false, up_disabled);
 
         canvas.fill_rounded_rect_with_border(search, RADIUS, theme.panel_alt, theme.border, 1);
         canvas.draw_ui_symbol(search.x + 8, search.y + 9, UiSymbol::Search, theme.text_dim);
         Label::new(
-            Rect::new(
-                search.x + 22,
-                search.y,
-                search.w.saturating_sub(30),
-                search.h,
-            ),
+            Rect::new(search.x + 22, search.y, search.w.saturating_sub(30), search.h),
             "Search",
         )
         .dim()
         .draw(canvas, theme);
 
         canvas.fill_rounded_rect(breadcrumb, RADIUS, theme.panel);
-        let crumb = if self.state.view_mode == ViewMode::Home {
-            "Home"
-        } else if self.state.view_mode == ViewMode::Volumes {
-            "Volumes"
-        } else if self.state.view_mode == ViewMode::Network {
-            "Network"
-        } else {
-            self.state.current_path.as_str()
+        let crumb = match self.state.view_mode {
+            ViewMode::Home => "Home",
+            ViewMode::Volumes => "Volumes",
+            ViewMode::Network => "Network",
+            ViewMode::Directory => self.state.current_path.as_str(),
         };
         canvas.draw_text(breadcrumb.x + 10, breadcrumb.y + 8, crumb, theme.accent);
     }
 
     fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme, sidebar: Rect) {
         canvas.fill_rounded_rect_with_border(sidebar, RADIUS, theme.panel, theme.border, 1);
-        let mut clipped = canvas.sub_canvas(sidebar);
-        let inner = sidebar.inset(PAD);
-        let inner_local = inner.translate(-sidebar.x, -sidebar.y);
-        Label::new(Rect::new(inner_local.x, 10, inner_local.w, 14), "Locations")
-            .dim()
-            .draw(&mut clipped, theme);
 
-        for idx in 0..SIDEBAR_COUNT {
-            let rect = Self::sidebar_item_rect(sidebar, idx);
-            let selected = idx == self.state.selected_sidebar;
-            let fill = if selected {
-                theme.accent.darken(185)
-            } else {
-                theme.panel_alt
-            };
-            let border = if selected { theme.accent } else { theme.border };
-            let local = rect.translate(-sidebar.x, -sidebar.y);
-            clipped.fill_rounded_rect_with_border(local, RADIUS, fill, border, 1);
-            if selected {
-                clipped.fill_rounded_rect(
-                    Rect::new(local.x + 1, local.y + 1, 4, local.h.saturating_sub(2)),
-                    RADIUS,
-                    theme.accent,
-                );
+        let inner = sidebar.inset(PAD);
+
+        // Section label
+        Label::new(Rect::new(inner.x, inner.y + 3, inner.w, 14), "Places")
+            .dim()
+            .draw(canvas, theme);
+
+        // Items via SidebarItem widget
+        let items_area = Rect::new(
+            inner.x,
+            inner.y + SIDEBAR_HEADER_H as i32,
+            inner.w,
+            inner.h.saturating_sub(SIDEBAR_HEADER_H),
+        );
+        let heights = [SIDEBAR_ITEM_H; SIDEBAR_COUNT];
+        for (idx, item_rect) in VBox::new(items_area)
+            .with_spacing(SIDEBAR_ITEM_GAP)
+            .layout(&heights)
+            .enumerate()
+        {
+            if idx >= SIDEBAR_COUNT {
+                break;
             }
-            let icon = sidebar_symbol(idx);
-            let icon_color = if selected {
-                theme.accent
+            let state = if idx == self.state.selected_sidebar {
+                SidebarState::Selected
             } else {
-                theme.text_dim
+                SidebarState::Normal
             };
-            clipped.draw_ui_symbol(local.x + 8, local.y + 10, icon, icon_color);
-            Label::new(
-                Rect::new(local.x + 24, local.y + 8, local.w.saturating_sub(34), 12),
-                State::sidebar_label(idx),
-            )
-            .draw(&mut clipped, theme);
+            let tga = sidebar_tga(idx);
+            let label = State::sidebar_label(idx);
+
+            // Build the item — borrow tga only if it parsed
+            if let Some(ref icon) = tga {
+                SidebarItem::new(item_rect, label)
+                    .with_icon(icon)
+                    .with_state(state)
+                    .draw(canvas, theme);
+            } else {
+                SidebarItem::new(item_rect, label)
+                    .with_state(state)
+                    .draw(canvas, theme);
+            }
         }
     }
 
     fn draw_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         canvas.fill_rounded_rect_with_border(main, RADIUS, theme.panel, theme.border, 1);
-
         match self.state.view_mode {
             ViewMode::Home => self.draw_home_main(canvas, theme, main),
             ViewMode::Volumes => self.draw_volumes_main(canvas, theme, main),
             ViewMode::Network => self.draw_network_main(canvas, theme, main),
             ViewMode::Directory => self.draw_directory_main(canvas, theme, main),
         }
-    }
-
-    fn draw_directory_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
-        let inner = main.inset(PAD);
-        Label::new(
-            Rect::new(inner.x, inner.y, inner.w, HEADER_H),
-            self.state.current_path.as_str(),
-        )
-        .draw(canvas, theme);
-
-        if self.state.error_len != 0 {
-            Label::new(
-                Rect::new(inner.x, inner.y + HEADER_H as i32, inner.w, 14),
-                self.state.error_str(),
-            )
-            .dim()
-            .draw(canvas, theme);
-        } else {
-            Label::new(
-                Rect::new(inner.x, inner.y + HEADER_H as i32, inner.w, 14),
-                "Name | Type | Size | Modified",
-            )
-            .dim()
-            .draw(canvas, theme);
-        }
-
-        self.draw_directory_rows(canvas, theme, main);
     }
 
     fn draw_home_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
@@ -940,14 +869,99 @@ impl FilesApp {
         .draw(canvas, theme);
         Label::new(
             Rect::new(inner.x, inner.y + 18, inner.w, 14),
-            "Drives and folders will appear here",
+            "Folders and volumes",
         )
         .dim()
         .draw(canvas, theme);
 
         self.draw_home_folders(canvas, theme, inner);
-        let after_volumes = self.draw_home_volumes(canvas, theme, inner, "Volumes");
+        let after_volumes = self.draw_home_volumes(canvas, theme, inner);
         self.draw_home_network(canvas, theme, inner, after_volumes);
+    }
+
+    fn draw_home_folders(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) {
+        let title_y = inner.y + 36;
+        Label::new(Rect::new(inner.x, title_y, inner.w, 14), "Places")
+            .dim()
+            .draw(canvas, theme);
+
+        let card_w = (inner.w.saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
+            / HOME_COLS as u32)
+            .max(120);
+
+        for idx in 0..HOME_FOLDER_COUNT {
+            let rect = Self::home_folder_rect(inner, idx);
+            let folder = self.state.home_folders[idx];
+
+            canvas.fill_rounded_rect_with_border(rect, RADIUS, theme.panel_alt, theme.border, 1);
+
+            // Icon — TGA preferred, UiSymbol fallback
+            let icon_rect = Rect::new(rect.x + 6, rect.y + 7, 34, 34);
+            if let Some(tga) = home_folder_tga(idx) {
+                canvas.draw_tga_icon(&tga, icon_rect);
+            } else {
+                let sym = home_folder_symbol(idx);
+                canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, sym, theme.accent);
+            }
+
+            // Name and path hint — no "Missing" labels on startup
+            let text_x = rect.x + 46;
+            canvas.draw_text(text_x, rect.y + 8, folder.name, theme.text);
+            // Show a shortened path if there's room
+            let _ = card_w; // used for layout calculation above
+            canvas.draw_text(text_x, rect.y + 24, folder.path.as_str(), theme.text_dim);
+        }
+    }
+
+    /// Draw the Volumes section; returns the y coordinate directly below it.
+    fn draw_home_volumes(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) -> i32 {
+        let title_y = inner.y + 36 + 18
+            + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32
+            + 12;
+        Label::new(Rect::new(inner.x, title_y, inner.w, 14), "Volumes")
+            .dim()
+            .draw(canvas, theme);
+
+        let mut y = title_y + 18;
+
+        if self.state.volume_count == 0 {
+            Label::new(
+                Rect::new(inner.x, y + 4, inner.w, 14),
+                "No mounted volumes detected",
+            )
+            .dim()
+            .draw(canvas, theme);
+            return y + 24;
+        }
+
+        for idx in 0..self.state.volume_count {
+            let volume = self.state.volume_entries[idx];
+            let rect = Rect::new(inner.x, y, inner.w, DriveCard::ROW_H);
+            y += DriveCard::ROW_H as i32 + 6;
+
+            DriveCard::new(rect, volume.name_str())
+                .with_layout(DriveCardLayout::Row)
+                .with_mount_path(volume.path.as_str())
+                .draw(canvas, theme);
+        }
+
+        y
+    }
+
+    fn draw_home_network(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect, y: i32) {
+        if y >= inner.bottom() - 18 {
+            return; // no space
+        }
+        Label::new(Rect::new(inner.x, y + 4, inner.w, 14), "Network")
+            .dim()
+            .draw(canvas, theme);
+        canvas.draw_ui_symbol(inner.x, y + 20, UiSymbol::Network, theme.text_dim);
+        Label::new(
+            Rect::new(inner.x + 16, y + 18, inner.w.saturating_sub(16), 14),
+            "No network mounts",
+        )
+        .dim()
+        .draw(canvas, theme);
     }
 
     fn draw_volumes_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
@@ -959,26 +973,65 @@ impl FilesApp {
         )
         .dim()
         .draw(canvas, theme);
-        let _ = self.draw_home_volumes(canvas, theme, inner, "Mounted volumes");
+
+        let mut y = inner.y + 42;
+        for idx in 0..self.state.volume_count {
+            let volume = self.state.volume_entries[idx];
+            let rect = Rect::new(inner.x, y, inner.w, DriveCard::ROW_H);
+            y += DriveCard::ROW_H as i32 + 6;
+            DriveCard::new(rect, volume.name_str())
+                .with_layout(DriveCardLayout::Row)
+                .with_mount_path(volume.path.as_str())
+                .draw(canvas, theme);
+        }
+
+        if self.state.volume_count == 0 {
+            Label::new(Rect::new(inner.x, y + 8, inner.w, 14), "No mounted volumes")
+                .dim()
+                .draw(canvas, theme);
+        }
     }
 
     fn draw_network_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
         Label::new(Rect::new(inner.x, inner.y, inner.w, 18), "Network").draw(canvas, theme);
-        let card = Rect::new(inner.x, inner.y + 28, inner.w, 72);
+        let card = Rect::new(inner.x, inner.y + 28, inner.w, 60);
         canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel_alt, theme.border, 1);
+        canvas.draw_text(card.x + 12, card.y + 10, "No network mounts", theme.text);
         canvas.draw_text(
             card.x + 12,
-            card.y + 10,
-            "No network mounts detected",
-            theme.text,
-        );
-        canvas.draw_text(
-            card.x + 12,
-            card.y + 28,
-            "TODO: list network mounts when VFS metadata is available.",
+            card.y + 26,
+            "Network mounts appear here when VFS metadata is available.",
             theme.text_dim,
         );
+    }
+
+    fn draw_directory_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let inner = main.inset(PAD);
+        Label::new(
+            Rect::new(inner.x, inner.y, inner.w, HEADER_H),
+            self.state.current_path.as_str(),
+        )
+        .draw(canvas, theme);
+
+        let subtitle = if self.state.error_len != 0 {
+            self.state.error_str()
+        } else {
+            "Name | Type | Size"
+        };
+        let subtitle_color = if self.state.error_len != 0 {
+            theme.danger
+        } else {
+            theme.text_dim
+        };
+        canvas.draw_text(
+            inner.x,
+            inner.y + HEADER_H as i32,
+            subtitle,
+            subtitle_color,
+        );
+
+        self.draw_directory_rows(canvas, theme, main);
     }
 
     fn draw_directory_rows(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
@@ -990,6 +1043,7 @@ impl FilesApp {
         }
         let visible_rows = (list_h as u32 / ROW_H) as usize;
         let row_count = self.state.entry_count.min(visible_rows);
+
         if row_count == 0 {
             Label::new(
                 Rect::new(inner.x, list_top + 8, inner.w, 14),
@@ -1000,10 +1054,7 @@ impl FilesApp {
             return;
         }
 
-        let name_w = inner
-            .w
-            .saturating_sub(TYPE_W + SIZE_W + MOD_W + 24)
-            .max(180);
+        let name_w = inner.w.saturating_sub(TYPE_W + SIZE_W + MOD_W + 24).max(180);
         let type_x = inner.x + name_w as i32;
         let size_x = type_x + TYPE_W as i32;
         let mod_x = size_x + SIZE_W as i32;
@@ -1021,185 +1072,31 @@ impl FilesApp {
             };
             canvas.fill_rect(row, fill);
 
-            let icon = if entry.file_type == FT_DIR {
-                UiSymbol::Folder
+            let (icon, icon_color) = if entry.file_type == FT_DIR {
+                (UiSymbol::Folder, theme.accent)
             } else {
-                UiSymbol::File
-            };
-            let icon_color = if entry.file_type == FT_DIR {
-                theme.accent
-            } else {
-                theme.text_dim
+                (UiSymbol::File, theme.text_dim)
             };
             canvas.draw_ui_symbol(row.x + 8, row.y + 6, icon, icon_color);
+            canvas.draw_text(row.x + 24, row.y + 5, entry_name_str(&entry), theme.text);
 
-            let name = entry_name_str(&entry);
-            canvas.draw_text(row.x + 24, row.y + 5, name, theme.text);
-
-            let type_label = if entry.file_type == FT_DIR {
-                "Directory"
-            } else if entry.file_type == FT_FILE {
-                "File"
-            } else {
-                "Other"
+            let type_label = match entry.file_type {
+                FT_DIR => "Directory",
+                FT_FILE => "File",
+                _ => "Other",
             };
             canvas.draw_text(type_x + 8, row.y + 5, type_label, theme.text_dim);
 
             if entry.file_type == FT_DIR {
-                canvas.draw_text_right(
-                    Rect::new(size_x, row.y, SIZE_W, ROW_H),
-                    "--",
-                    theme.text,
-                    8,
-                );
+                canvas.draw_text_right(Rect::new(size_x, row.y, SIZE_W, ROW_H), "--", theme.text, 8);
             } else {
                 let mut scratch = [0u8; 16];
                 let len = write_size(entry.size, &mut scratch);
                 let size_text = core::str::from_utf8(&scratch[..len]).unwrap_or("--");
-                canvas.draw_text_right(
-                    Rect::new(size_x, row.y, SIZE_W, ROW_H),
-                    size_text,
-                    theme.text,
-                    8,
-                );
+                canvas.draw_text_right(Rect::new(size_x, row.y, SIZE_W, ROW_H), size_text, theme.text, 8);
             }
-
             canvas.draw_text(mod_x + 8, row.y + 5, "--", theme.text_dim);
         }
-    }
-
-    fn draw_home_folders(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) {
-        let title_y = inner.y + 40;
-        Label::new(
-            Rect::new(inner.x, title_y, inner.w, 14),
-            "Important folders",
-        )
-        .dim()
-        .draw(canvas, theme);
-
-        let grid_top = title_y + 18;
-        let card_w = ((inner
-            .w
-            .saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP))
-            / HOME_COLS as u32)
-            .max(120);
-        for idx in 0..HOME_FOLDER_COUNT {
-            let col = idx % HOME_COLS;
-            let row = idx / HOME_COLS;
-            let x = inner.x + (col as u32 * (card_w + HOME_CARD_GAP)) as i32;
-            let y = grid_top + (row as u32 * (HOME_CARD_H + HOME_CARD_GAP)) as i32;
-            let rect = Rect::new(x, y, card_w, HOME_CARD_H);
-            let folder = self.state.home_folders[idx];
-            let fill = if folder.present {
-                theme.panel_alt
-            } else {
-                theme.panel.darken(16)
-            };
-            let border = if folder.present {
-                theme.border
-            } else {
-                theme.border.darken(32)
-            };
-            canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
-
-            // Draw TGA icon if available, fallback to pixel-art UiSymbol.
-            let icon_rect = Rect::new(rect.x + 6, rect.y + 6, 36, 36);
-            if let Some(tga) = home_folder_tga(idx, folder.present) {
-                canvas.draw_tga_icon(&tga, icon_rect);
-            } else {
-                let sym = home_folder_symbol(idx, folder.present);
-                let sym_color = if folder.present {
-                    theme.accent
-                } else {
-                    theme.warn
-                };
-                canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, sym, sym_color);
-            }
-
-            canvas.draw_text(rect.x + 48, rect.y + 8, folder.name, theme.text);
-            canvas.draw_text(
-                rect.x + 48,
-                rect.y + 24,
-                if folder.present {
-                    "Available"
-                } else {
-                    "Missing"
-                },
-                if folder.present {
-                    theme.text_dim
-                } else {
-                    theme.warn
-                },
-            );
-        }
-    }
-
-    fn draw_home_volumes(
-        &self,
-        canvas: &mut Canvas,
-        theme: &Theme,
-        inner: Rect,
-        section_title: &'static str,
-    ) -> i32 {
-        let title_y =
-            inner.y + 40 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 14;
-        let section_y = title_y + 18;
-        Label::new(Rect::new(inner.x, title_y, inner.w, 14), section_title)
-            .dim()
-            .draw(canvas, theme);
-
-        let mut y = section_y;
-        for idx in 0..self.state.volume_count {
-            let volume = self.state.volume_entries[idx];
-            let rect = Rect::new(inner.x, y, inner.w, HOME_VOLUME_H);
-            y += HOME_VOLUME_H as i32 + 8;
-            let fill = if volume.present {
-                theme.panel_alt
-            } else {
-                theme.panel.darken(14)
-            };
-            canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, theme.border, 1);
-            let icon = volume_symbol(&volume);
-            canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, icon, theme.text_dim);
-            canvas.draw_text(rect.x + 28, rect.y + 8, volume.name_str(), theme.text);
-            canvas.draw_text(
-                rect.x + 28,
-                rect.y + 24,
-                volume.path.as_str(),
-                theme.text_dim,
-            );
-            canvas.draw_text(rect.right() - 168, rect.y + 8, "Size --", theme.text_dim);
-            canvas.draw_text(
-                rect.right() - 168,
-                rect.y + 22,
-                "Free --  Used --",
-                theme.text_dim,
-            );
-        }
-
-        if self.state.volume_count == 0 {
-            Label::new(
-                Rect::new(inner.x, section_y + 4, inner.w, 14),
-                "No mounted volumes detected",
-            )
-            .dim()
-            .draw(canvas, theme);
-        }
-
-        y
-    }
-
-    fn draw_home_network(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect, y: i32) {
-        Label::new(Rect::new(inner.x, y, inner.w, 14), "Network")
-            .dim()
-            .draw(canvas, theme);
-        canvas.draw_ui_symbol(inner.x, y + 18, UiSymbol::Network, theme.text_dim);
-        Label::new(
-            Rect::new(inner.x + 16, y + 16, inner.w.saturating_sub(16), 14),
-            "No network mounts detected",
-        )
-        .dim()
-        .draw(canvas, theme);
     }
 
     fn draw_status(&self, canvas: &mut Canvas, theme: &Theme, status: Rect) {
@@ -1209,7 +1106,6 @@ impl FilesApp {
         } else {
             "Ready"
         };
-
         let mut count_buf = [0u8; 24];
         let count_len = write_count(
             self.state.entry_count,
@@ -1223,11 +1119,7 @@ impl FilesApp {
             status.x + 160,
             status.y + 5,
             summary,
-            if self.state.error_len != 0 {
-                theme.danger
-            } else {
-                theme.text_dim
-            },
+            if self.state.error_len != 0 { theme.danger } else { theme.text_dim },
         );
     }
 }
@@ -1235,7 +1127,6 @@ impl FilesApp {
 impl App for FilesApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
-
         let (toolbar, body, status) = Self::root_layout();
         let (sidebar, main) = Self::body_layout(body);
         self.draw_toolbar(canvas, theme, toolbar);
@@ -1271,16 +1162,25 @@ impl App for FilesApp {
                             }
                         }
                         for idx in 0..self.state.volume_count {
-                            if let Some(rect) =
-                                Self::home_volume_rect(inner, idx, self.state.volume_count)
-                            {
-                                if rect.contains(sunlight_ui::Point::new(x, y)) {
-                                    return self.state.update(Message::OpenHomeVolume(idx));
-                                }
+                            let rect = Self::home_volume_rect(inner, idx);
+                            if rect.contains(sunlight_ui::Point::new(x, y)) {
+                                return self.state.update(Message::OpenHomeVolume(idx));
                             }
                         }
                     }
-                    ViewMode::Volumes | ViewMode::Network => {}
+                    ViewMode::Volumes => {
+                        // Click on DriveCard in full volumes view
+                        let inner = main.inset(PAD);
+                        let mut y = inner.y + 42;
+                        for idx in 0..self.state.volume_count {
+                            let rect = Rect::new(inner.x, y, inner.w, DriveCard::ROW_H);
+                            y += DriveCard::ROW_H as i32 + 6;
+                            if rect.contains(sunlight_ui::Point::new(x, y)) {
+                                return self.state.update(Message::OpenHomeVolume(idx));
+                            }
+                        }
+                    }
+                    ViewMode::Network => {}
                     ViewMode::Directory => {
                         if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count) {
                             return self.state.update(Message::OpenRow(idx));
@@ -1307,54 +1207,33 @@ impl App for FilesApp {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Pure functions
+// ---------------------------------------------------------------------------
+
+/// Determine the home path from the environment — no filesystem probing.
+/// Trusts the HOME env var; falls back to /root then /.
 fn detect_home_path() -> PathBuf {
     if let Some(home) = env::getenv(b"HOME") {
         if let Some(path) = PathBuf::from_str(home) {
-            if dir_readable(path.as_str()) {
-                return path;
-            }
+            return path;
         }
     }
-
-    let root = PathBuf::from_str("/root").unwrap_or_else(PathBuf::root);
-    if dir_readable(root.as_str()) {
-        return root;
-    }
-
-    PathBuf::root()
+    PathBuf::from_str("/root").unwrap_or_else(PathBuf::root)
 }
 
+/// Build the home folder model — paths only, no presence probing.
+/// The OS is responsible for creating standard user directories; the file
+/// manager assumes they exist and surfaces an error only if navigation fails.
 fn build_home_folders(home_path: PathBuf) -> [HomeFolder; HOME_FOLDER_COUNT] {
-    let names: [&'static str; HOME_FOLDER_COUNT] = [
-        "Desktop",
-        "Documents",
-        "Downloads",
-        "Music",
-        "Pictures",
-        "Videos",
-        "Templates",
-        "Public",
-    ];
-    let mut folders = [HomeFolder::empty(); HOME_FOLDER_COUNT];
+    let names: [&'static str; HOME_FOLDER_COUNT] =
+        ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"];
+    let mut folders = [HomeFolder::placeholder(); HOME_FOLDER_COUNT];
     let mut i = 0usize;
     while i < HOME_FOLDER_COUNT {
-        let path = home_path.join(names[i]).unwrap_or_else(PathBuf::root);
-        // Try to create each standard folder if it does not exist yet.
-        let present = if libc::stat(path.as_str().as_bytes()).is_ok() {
-            true
-        } else {
-            let ok = libc::mkdir_recursive(path.as_str().as_bytes()).is_ok();
-            if !ok {
-                debug_log("[FILES] could not create standard folder: ");
-                debug_log(names[i]);
-                debug_log("\n");
-            }
-            ok
-        };
         folders[i] = HomeFolder {
             name: names[i],
-            path,
-            present,
+            path: home_path.join(names[i]).unwrap_or_else(PathBuf::root),
         };
         i += 1;
     }
@@ -1365,23 +1244,23 @@ fn build_volumes(out: &mut [VolumeEntry; MAX_ENTRIES]) -> usize {
     let mut count = 0usize;
 
     if count < out.len() {
-        out[count] = make_volume_entry("Root Filesystem", PathBuf::root(), true);
+        out[count] = make_volume("Root Filesystem", PathBuf::root());
         count += 1;
     }
 
     if let Some(boot) = PathBuf::from_str("/boot") {
         if libc::stat(boot.as_str().as_bytes()).is_ok() && count < out.len() {
-            out[count] = make_volume_entry("Boot", boot, true);
+            out[count] = make_volume("Boot", boot);
             count += 1;
         }
     }
 
     let mut mounts = [DirEntry::zeroed(); MAX_ENTRIES];
     if let Ok(found) = libc::read_dir(b"/mnt", &mut mounts) {
-        let slice_len = found.min(MAX_ENTRIES);
-        mounts[..slice_len].sort_by(compare_entries);
+        let n = found.min(MAX_ENTRIES);
+        mounts[..n].sort_by(compare_entries);
         let mut i = 0usize;
-        while i < slice_len && count < out.len() {
+        while i < n && count < out.len() {
             let entry = mounts[i];
             i += 1;
             if entry.file_type != FT_DIR {
@@ -1391,8 +1270,8 @@ fn build_volumes(out: &mut [VolumeEntry; MAX_ENTRIES]) -> usize {
             if name.is_empty() {
                 continue;
             }
-            if let Some(path) = PathBuf::from_str("/mnt").and_then(|base| base.join(name)) {
-                out[count] = make_volume_entry(name, path, true);
+            if let Some(path) = PathBuf::from_str("/mnt").and_then(|b| b.join(name)) {
+                out[count] = make_volume(name, path);
                 count += 1;
             }
         }
@@ -1401,14 +1280,13 @@ fn build_volumes(out: &mut [VolumeEntry; MAX_ENTRIES]) -> usize {
     count
 }
 
-fn make_volume_entry(name: &str, path: PathBuf, present: bool) -> VolumeEntry {
+fn make_volume(name: &str, path: PathBuf) -> VolumeEntry {
     let mut entry = VolumeEntry::empty();
     let bytes = name.as_bytes();
     let len = bytes.len().min(entry.name.len());
     entry.name[..len].copy_from_slice(&bytes[..len]);
     entry.name_len = len;
     entry.path = path;
-    entry.present = present;
     entry
 }
 
@@ -1417,53 +1295,16 @@ fn path_matches(current: &str, base: &str) -> bool {
         || (current.starts_with(base) && current.as_bytes().get(base.len()) == Some(&b'/'))
 }
 
-fn sidebar_symbol(idx: usize) -> UiSymbol {
-    match idx {
-        0 => UiSymbol::Home,
-        1 => UiSymbol::Desktop,
-        2 => UiSymbol::Documents,
-        3 => UiSymbol::Downloads,
-        4 => UiSymbol::Music,
-        5 => UiSymbol::Pictures,
-        6 => UiSymbol::Videos,
-        7 | 8 => UiSymbol::Folder,
-        9 => UiSymbol::RootFs,
-        10 => UiSymbol::Volume,
-        _ => UiSymbol::Network,
-    }
-}
-
-fn home_folder_symbol(idx: usize, present: bool) -> UiSymbol {
-    if !present {
-        return UiSymbol::MissingFolder;
-    }
+fn home_folder_symbol(idx: usize) -> UiSymbol {
     match idx {
         0 => UiSymbol::Desktop,
         1 => UiSymbol::Documents,
         2 => UiSymbol::Downloads,
-        3 => UiSymbol::Music,
-        4 => UiSymbol::Pictures,
+        3 => UiSymbol::Pictures,
+        4 => UiSymbol::Music,
         5 => UiSymbol::Videos,
         _ => UiSymbol::Folder,
     }
-}
-
-fn volume_symbol(volume: &VolumeEntry) -> UiSymbol {
-    let path = volume.path.as_str();
-    if path == "/" {
-        UiSymbol::RootFs
-    } else if path == "/boot" {
-        UiSymbol::Volume
-    } else if path.starts_with("/mnt/") {
-        UiSymbol::Volume
-    } else {
-        UiSymbol::Network
-    }
-}
-
-fn dir_readable(path: &str) -> bool {
-    let mut probe = [DirEntry::zeroed(); 1];
-    libc::read_dir(path.as_bytes(), &mut probe).is_ok()
 }
 
 fn compare_entries(a: &DirEntry, b: &DirEntry) -> Ordering {
@@ -1510,11 +1351,7 @@ fn write_count(items: usize, folders: usize, files: usize, out: &mut [u8; 24]) -
         out[pos] = b' ';
         pos += 1;
     }
-    pos += write_number(folders as u64, &mut out[pos..], b" folders");
-    if pos < out.len() {
-        out[pos] = b',';
-        pos += 1;
-    }
+    pos += write_number(folders as u64, &mut out[pos..], b" folders,");
     if pos < out.len() {
         out[pos] = b' ';
         pos += 1;
@@ -1527,7 +1364,6 @@ fn write_number(value: u64, out: &mut [u8], suffix: &[u8]) -> usize {
     let mut n = value;
     let mut tmp = [0u8; 20];
     let mut len = 0usize;
-
     if n == 0 {
         tmp[len] = b'0';
         len += 1;
@@ -1538,7 +1374,6 @@ fn write_number(value: u64, out: &mut [u8], suffix: &[u8]) -> usize {
             n /= 10;
         }
     }
-
     let mut pos = 0usize;
     for i in (0..len).rev() {
         if pos >= out.len() {
@@ -1566,33 +1401,21 @@ fn draw_pill(
     active: bool,
     disabled: bool,
 ) {
-    let fill = if disabled {
-        theme.panel_alt
-    } else if active {
-        theme.accent
-    } else {
-        theme.panel
-    };
-    let border = if active {
-        theme.accent_hover
-    } else {
-        theme.border
-    };
-    let color = if disabled {
-        theme.text_dim
-    } else if active {
-        theme.bg
-    } else {
-        theme.text
-    };
+    let fill = if disabled { theme.panel_alt } else if active { theme.accent } else { theme.panel };
+    let border = if active { theme.accent_hover } else { theme.border };
+    let color = if disabled { theme.text_dim } else if active { theme.bg } else { theme.text };
     canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
-    if let Some(icon) = icon {
-        canvas.draw_ui_symbol(rect.x + 8, rect.y + 9, icon, color);
+    if let Some(sym) = icon {
+        canvas.draw_ui_symbol(rect.x + 8, rect.y + 9, sym, color);
         canvas.draw_text(rect.x + 22, rect.y + 9, text, color);
     } else {
         canvas.draw_text_centered(rect, text, color);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Entry point — window is opened BEFORE state init to show UI immediately
+// ---------------------------------------------------------------------------
 
 #[no_mangle]
 pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
@@ -1606,13 +1429,14 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
     );
     env::init(envp);
 
-    let mut app = FilesApp::new();
+    // Open the window first so the compositor can begin displaying the
+    // skeleton UI while the app model initialises.
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
         title: "Sunlight Files",
     }) {
-        Some(window) => window,
+        Some(w) => w,
         None => {
             debug_log("[FILES] failed to connect window\n");
             loop {
@@ -1621,6 +1445,8 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
         }
     };
 
+    // Lightweight model init — no filesystem probing, no IPC beyond env.
+    let mut app = FilesApp::new();
     window.run(&mut app);
     ProcessExit::exit(0);
 }

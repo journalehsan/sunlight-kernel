@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-vfs-server"
-version = "0.1.603"
+version = "0.1.608"
+
+
 
 
 

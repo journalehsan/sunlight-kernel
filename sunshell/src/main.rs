@@ -730,6 +730,15 @@ mod sunlight {
             let home = alloc::format!("/home/{}", username);
             let _ = mkdir(vfs_cap, &home, new_uid, 100, 0o755);
 
+            // Standard home directory layout (OS responsibility, not the file
+            // manager's). Mirrors the initramfs seed in sunlight-fs::ramfs.
+            // mkdir is idempotent here: if a folder already exists the VFS
+            // returns an error which we ignore, so re-running is safe.
+            for folder in ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"] {
+                let path = alloc::format!("{}/{}", home, folder);
+                let _ = mkdir(vfs_cap, &path, new_uid, 100, 0o755);
+            }
+
             b"OK\n"
         }
 
