@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use sun_font::{FontRole, VecFont};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -12,6 +13,10 @@ use sunlight_ui::{
     widgets::{Button, ButtonState, Column, Label, Panel, StatusBar, Table},
     App, Event, HBox, Rect, Window, WindowConfig,
 };
+
+static F_UI:    VecFont = VecFont(FontRole::UiRegular);
+static F_MED:   VecFont = VecFont(FontRole::UiMedium);
+static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 const WIN_W: u32 = 720;
 const WIN_H: u32 = 460;
@@ -330,21 +335,22 @@ impl App for TasksApp {
         Panel::new(content).draw(canvas, theme);
 
         let title_rect = Rect::new(content.x + 12, content.y + 8, 220, TITLE_H);
-        Label::new(title_rect, "Tasks Monitor").draw(canvas, theme);
+        Label::new(title_rect, "Tasks Monitor").with_font(&F_MED).draw(canvas, theme);
         Label::new(
             Rect::new(content.right() - 88, content.y + 8, 76, TITLE_H),
             "SunlightOS",
         )
         .dim()
+        .with_font(&F_SMALL)
         .draw(canvas, theme);
 
         let buttons = self.toolbar_buttons();
         let labels = ["End", "Charts", "Info", "Refresh"];
         for (idx, rect) in buttons.iter().enumerate() {
             let mut button = if idx == 2 && self.show_system_info {
-                Button::new(*rect, labels[idx])
+                Button::new(*rect, labels[idx]).with_font(&F_UI)
             } else {
-                Button::secondary(*rect, labels[idx])
+                Button::secondary(*rect, labels[idx]).with_font(&F_UI)
             };
             button.state = ButtonState::Normal;
             button.draw(canvas, theme);
@@ -388,12 +394,12 @@ impl App for TasksApp {
             ];
             for label in top_labels.iter() {
                 if let Some(rect) = top_cells.next() {
-                    Label::new(rect, label).draw(canvas, theme);
+                    Label::new(rect, label).with_font(&F_UI).draw(canvas, theme);
                 }
             }
             for label in bottom_labels.iter() {
                 if let Some(rect) = bottom_cells.next() {
-                    Label::new(rect, label).draw(canvas, theme);
+                    Label::new(rect, label).with_font(&F_UI).draw(canvas, theme);
                 }
             }
         }
@@ -420,15 +426,10 @@ impl App for TasksApp {
                 proc.pid == pid
             })
         });
-        let table = Table {
-            rect: table_rect,
-            columns: &TABLE_COLUMNS,
-            rows: &row_refs[self.scroll..end],
-            selected,
-            header_h: 18,
-            row_h: 16,
-        };
-        table.draw(canvas, theme);
+        Table::new(table_rect, &TABLE_COLUMNS, &row_refs[self.scroll..end])
+            .with_selected(selected)
+            .with_font(&F_UI)
+            .draw(canvas, theme);
 
         StatusBar::new(
             self.status_bar_rect(),
@@ -471,14 +472,8 @@ impl App for TasksApp {
                     }
                 }
 
-                let table = Table {
-                    rect: self.table_rect(),
-                    columns: &TABLE_COLUMNS,
-                    rows: &[],
-                    selected: None,
-                    header_h: 18,
-                    row_h: 16,
-                };
+                let table = Table::new(self.table_rect(), &TABLE_COLUMNS, &[])
+                    .with_font(&F_UI);
                 if let Some(row) = table.hit_test(x, y) {
                     let idx = self.scroll + row;
                     if idx < self.row_count {

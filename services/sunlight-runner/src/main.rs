@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use sun_font::{FontRole, VecFont};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -12,6 +13,9 @@ use sunlight_ui::{
     widgets::{Button, ButtonState, Checkbox, Label, Panel, TextInput},
     App, Event, HBox, Rect, VBox, Window, WindowConfig,
 };
+
+static F_UI:    VecFont = VecFont(FontRole::UiRegular);
+static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 const WIN_W: u32 = 420;
 const WIN_H: u32 = 180;
@@ -202,19 +206,19 @@ impl App for RunnerApp {
         self.open.rect = input_rect;
         self.elevated.rect = checkbox_rect;
 
-        Label::new(label_rect, "Open:").draw(canvas, theme);
+        Label::new(label_rect, "Open:").with_font(&F_UI).draw(canvas, theme);
         self.open.draw(canvas, theme);
         self.elevated.draw(canvas, theme);
 
-        let mut browse = Button::secondary(browse_rect, "Browse");
+        let mut browse = Button::secondary(browse_rect, "Browse").with_font(&F_UI);
         browse.state = ButtonState::Normal;
         browse.draw(canvas, theme);
 
-        let mut run = Button::new(run_rect, "Run");
+        let mut run = Button::new(run_rect, "Run").with_font(&F_UI);
         run.state = ButtonState::Normal;
         run.draw(canvas, theme);
 
-        let mut cancel = Button::secondary(cancel_rect, "Cancel");
+        let mut cancel = Button::secondary(cancel_rect, "Cancel").with_font(&F_UI);
         cancel.state = ButtonState::Normal;
         cancel.draw(canvas, theme);
 
@@ -222,6 +226,7 @@ impl App for RunnerApp {
             Rect::new(root.x + 12, root.bottom() - 22, 220, 14),
             self.status,
         )
+        .with_font(&F_SMALL)
         .draw(canvas, theme);
     }
 

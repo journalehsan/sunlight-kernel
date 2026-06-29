@@ -33,34 +33,47 @@ const GLYPH_DATA_START: usize = HEADER_SIZE + OFFSET_TABLE_SIZE; // 388
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let workspace_root = manifest_dir.parent().unwrap().to_owned();
-    let fonts_dir = workspace_root.join("docs/fonts/Inter/static");
+    let inter_dir = workspace_root.join("docs/fonts/Inter/static");
+    let fira_dir  = workspace_root.join("docs/fonts/FiraCode/ttf");
 
-    let regular = fonts_dir.join("Inter_18pt-Regular.ttf");
-    let medium = fonts_dir.join("Inter_18pt-Medium.ttf");
+    let inter_regular  = inter_dir.join("Inter_18pt-Regular.ttf");
+    let inter_medium   = inter_dir.join("Inter_18pt-Medium.ttf");
+    let inter_semibold = inter_dir.join("Inter_18pt-SemiBold.ttf");
+    let fira_regular   = fira_dir.join("FiraCode-Regular.ttf");
+    let fira_medium    = fira_dir.join("FiraCode-Medium.ttf");
 
-    // Inform Cargo to re-run if the TTF source files change.
+    for p in [&inter_regular, &inter_medium, &inter_semibold, &fira_regular, &fira_medium] {
+        println!("cargo:rerun-if-changed={}", p.display());
+    }
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed={}", regular.display());
-    println!("cargo:rerun-if-changed={}", medium.display());
 
-    let regular_bytes = fs::read(&regular)
-        .unwrap_or_else(|e| panic!("sun-font: cannot read {}: {}", regular.display(), e));
-    let medium_bytes = fs::read(&medium)
-        .unwrap_or_else(|e| panic!("sun-font: cannot read {}: {}", medium.display(), e));
+    let load = |p: &PathBuf| {
+        fs::read(p).unwrap_or_else(|e| panic!("sun-font: cannot read {}: {}", p.display(), e))
+    };
+    let parse = |bytes: Vec<u8>, name: &str| {
+        Font::from_bytes(bytes.as_slice(), FontSettings::default())
+            .unwrap_or_else(|_| panic!("sun-font: failed to parse {}", name))
+    };
 
-    let regular_font = Font::from_bytes(regular_bytes.as_slice(), FontSettings::default())
-        .expect("sun-font: failed to parse Inter Regular");
-    let medium_font = Font::from_bytes(medium_bytes.as_slice(), FontSettings::default())
-        .expect("sun-font: failed to parse Inter Medium");
+    let f_regular  = parse(load(&inter_regular),  "Inter Regular");
+    let f_medium   = parse(load(&inter_medium),   "Inter Medium");
+    let f_semibold = parse(load(&inter_semibold), "Inter SemiBold");
+    let f_fira_reg = parse(load(&fira_regular),   "FiraCode Regular");
+    let f_fira_med = parse(load(&fira_medium),    "FiraCode Medium");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    generate(&regular_font, 11.0, &out_dir.join("sunlight_ui_11.mtf"));
-    generate(&regular_font, 13.0, &out_dir.join("sunlight_ui_13.mtf"));
-    generate(&medium_font,  13.0, &out_dir.join("sunlight_ui_medium_13.mtf"));
-    generate(&regular_font, 16.0, &out_dir.join("sunlight_ui_16.mtf"));
-    // Mono role: use Inter Regular at 13px (JetBrains Mono can replace later)
-    generate(&regular_font, 13.0, &out_dir.join("sunlight_mono_13.mtf"));
+    // UI proportional roles (Inter)
+    generate(&f_regular,  11.0, &out_dir.join("sunlight_ui_11.mtf"));
+    generate(&f_regular,  13.0, &out_dir.join("sunlight_ui_13.mtf"));
+    generate(&f_medium,   13.0, &out_dir.join("sunlight_ui_medium_13.mtf"));
+    generate(&f_semibold, 13.0, &out_dir.join("sunlight_ui_semibold_13.mtf"));
+    generate(&f_regular,  16.0, &out_dir.join("sunlight_ui_16.mtf"));
+    generate(&f_medium,   18.0, &out_dir.join("sunlight_ui_title_18.mtf"));
+
+    // Monospace roles (Fira Code)
+    generate(&f_fira_reg, 14.0, &out_dir.join("sunlight_mono_regular_14.mtf"));
+    generate(&f_fira_med, 14.0, &out_dir.join("sunlight_mono_medium_14.mtf"));
 }
 
 fn generate(font: &Font, px: f32, out_path: &PathBuf) {

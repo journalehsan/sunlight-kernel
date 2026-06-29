@@ -23,6 +23,7 @@ use pi::PiRunner;
 use prime_scan::PrimeRunner;
 use scoring::{make_entry, total_score, Entry, BENCH_COUNT};
 use sieve::SieveRunner;
+use sun_font::{FontRole, VecFont};
 use sunlight_ipc::{debug_log, process_yield, ProcessExit};
 use sunlight_ui::{
     request_close,
@@ -32,6 +33,10 @@ use sunlight_ui::{
     },
     App, Event, HBox, Point, Rect, Window, WindowConfig,
 };
+
+static F_UI:    VecFont = VecFont(FontRole::UiRegular);
+static F_MED:   VecFont = VecFont(FontRole::UiMedium);
+static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 const HEAP_SIZE: usize = 32 * 1024 * 1024;
 
@@ -647,30 +652,33 @@ impl App for BenchApp {
         canvas.fill_rect(header, theme.panel_alt);
         canvas.hbar(header.x, header.bottom() - 1, header.w, 1, theme.accent);
         Label::new(
-            Rect::new(header.x + 12, header.y + 8, 260, 18),
+            Rect::new(header.x + 12, header.y + 6, 260, 20),
             "SunLight Bench",
         )
+        .with_font(&F_MED)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(header.x + 12, header.y + 24, 520, 14),
+            Rect::new(header.x + 12, header.y + 26, 520, 14),
             "Windowed performance suite with live progress, orange telemetry, and chunked long runs.",
         )
         .dim()
+        .with_font(&F_SMALL)
         .draw(canvas, theme);
         Label::new(
             Rect::new(header.right() - 118, header.y + 12, 106, 14),
             "SunlightOS GUI",
         )
         .dim()
+        .with_font(&F_SMALL)
         .draw(canvas, theme);
 
         let buttons = self.button_rects();
         let labels = ["Run", "Serial", "Close"];
         for (idx, rect) in buttons.iter().enumerate() {
             let mut button = if idx == 0 {
-                Button::new(*rect, labels[idx])
+                Button::new(*rect, labels[idx]).with_font(&F_UI)
             } else {
-                Button::secondary(*rect, labels[idx])
+                Button::secondary(*rect, labels[idx]).with_font(&F_UI)
             };
             button.state = self.button_state(idx);
             button.draw(canvas, theme);
@@ -685,21 +693,25 @@ impl App for BenchApp {
             Rect::new(summary.x + 120, summary.y + 20, 180, 16),
             self.score_str(),
         )
+        .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
             Rect::new(summary.x + 300, summary.y + 20, 140, 16),
             self.core_str(),
         )
+        .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
             Rect::new(summary.x + 430, summary.y + 20, 140, 16),
             self.phase_str(),
         )
+        .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
             Rect::new(summary.x + 14, summary.y + 42, 240, 14),
             self.status_str(),
         )
+        .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
             Rect::new(
@@ -711,6 +723,7 @@ impl App for BenchApp {
             self.detail_str(),
         )
         .dim()
+        .with_font(&F_SMALL)
         .draw(canvas, theme);
         ProgressBar::new(
             Rect::new(
@@ -730,12 +743,14 @@ impl App for BenchApp {
             Rect::new(stage.x + 14, stage.y + 26, stage.w.saturating_sub(28), 16),
             self.stage_name(),
         )
+        .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
             Rect::new(stage.x + 14, stage.y + 46, stage.w.saturating_sub(28), 14),
             self.stage_note(),
         )
         .dim()
+        .with_font(&F_SMALL)
         .draw(canvas, theme);
         ProgressBar::new(
             Rect::new(
@@ -753,19 +768,18 @@ impl App for BenchApp {
         Panel::with_title(results, "Results").draw(canvas, theme);
         let mut rows = [EMPTY_ROW; BENCH_COUNT];
         let row_refs = self.row_refs(&mut rows);
-        Table {
-            rect: Rect::new(
+        Table::new(
+            Rect::new(
                 results.x + 10,
                 results.y + 24,
                 results.w.saturating_sub(20),
                 results.h.saturating_sub(34),
             ),
-            columns: &TABLE_COLUMNS,
-            rows: &row_refs,
-            selected: self.current_index(),
-            header_h: 18,
-            row_h: 22,
-        }
+            &TABLE_COLUMNS,
+            &row_refs,
+        )
+        .with_selected(self.current_index())
+        .with_font(&F_UI)
         .draw(canvas, theme);
 
         StatusBar::new(

@@ -1,5 +1,6 @@
 //! Table widget — fixed-column data grid with alternating row colors.
 
+use crate::font::VecText;
 use crate::geom::Rect;
 use crate::paint::Canvas;
 use crate::theme::Theme;
@@ -17,6 +18,7 @@ pub struct Table<'a> {
     pub selected: Option<usize>,
     pub header_h: u32,
     pub row_h: u32,
+    font: Option<&'a dyn VecText>,
 }
 
 impl<'a> Table<'a> {
@@ -28,7 +30,27 @@ impl<'a> Table<'a> {
             selected: None,
             header_h: 18,
             row_h: 16,
+            font: None,
         }
+    }
+
+    pub fn with_selected(mut self, selected: Option<usize>) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    /// Enable vector font rendering and bump row heights to fit the larger glyphs.
+    pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
+        self.font = Some(font);
+        let lh = font.line_height();
+        // Ensure comfortable padding around the font.
+        if self.header_h < lh + 8 {
+            self.header_h = lh + 8;
+        }
+        if self.row_h < lh + 5 {
+            self.row_h = lh + 5;
+        }
+        self
     }
 
     fn col_x(&self, col_idx: usize) -> i32 {
@@ -59,12 +81,16 @@ impl<'a> Table<'a> {
                 col.width.saturating_sub(4),
                 self.header_h,
             );
-            canvas.draw_text(
-                col_rect.x,
-                col_rect.y + (self.header_h as i32 - 10) / 2,
-                col.header,
-                theme.text,
-            );
+            if let Some(f) = self.font {
+                f.draw_vcenter(canvas, col.header, col_rect.x, col_rect.y, self.header_h, theme.text);
+            } else {
+                canvas.draw_text(
+                    col_rect.x,
+                    col_rect.y + (self.header_h as i32 - 10) / 2,
+                    col.header,
+                    theme.text,
+                );
+            }
             cx += col.width as i32;
         }
 
@@ -97,7 +123,15 @@ impl<'a> Table<'a> {
                 let cell_rect = Rect::new(cx2, ry, col.width, self.row_h);
                 let pad = 4;
 
-                if col.right_align {
+                if let Some(f) = self.font {
+                    if col.right_align {
+                        let tw = f.measure_w(cell_text);
+                        let tx = cell_rect.right() - tw as i32 - pad;
+                        f.draw_vcenter(canvas, cell_text, tx, ry, self.row_h, text_color);
+                    } else {
+                        f.draw_vcenter(canvas, cell_text, cx2 + pad, ry, self.row_h, text_color);
+                    }
+                } else if col.right_align {
                     canvas.draw_text_right(cell_rect, cell_text, text_color, pad);
                 } else {
                     let ty = ry + (self.row_h as i32 - 10) / 2;

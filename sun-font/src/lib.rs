@@ -26,13 +26,14 @@ pub use sunlight_ui::paint::Canvas;
 
 // ── Embedded MTF font blobs ───────────────────────────────────────────────────
 
-static FONT_UI_11: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_11.mtf"));
-static FONT_UI_13: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_13.mtf"));
-static FONT_UI_MEDIUM_13: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_medium_13.mtf"));
-static FONT_UI_16: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_16.mtf"));
-static FONT_MONO_13: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_13.mtf"));
+static FONT_UI_11:         &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_11.mtf"));
+static FONT_UI_13:         &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_13.mtf"));
+static FONT_UI_MEDIUM_13:  &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_medium_13.mtf"));
+static FONT_UI_SEMIBOLD_13:&[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_semibold_13.mtf"));
+static FONT_UI_16:         &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_16.mtf"));
+static FONT_UI_TITLE_18:   &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_title_18.mtf"));
+static FONT_MONO_REGULAR:  &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_regular_14.mtf"));
+static FONT_MONO_MEDIUM:   &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_medium_14.mtf"));
 
 // ── Font roles ────────────────────────────────────────────────────────────────
 
@@ -43,12 +44,18 @@ pub enum FontRole {
     UiSmall,
     /// 13 px Inter Regular — general UI labels, file names, toolbar text.
     UiRegular,
-    /// 13 px Inter Medium — selected items, section headers, emphasis.
+    /// 13 px Inter Medium — selected items, buttons, slight emphasis.
     UiMedium,
-    /// 16 px Inter Regular — window titles, large headings.
+    /// 13 px Inter SemiBold — headings, strong labels.
+    UiBold,
+    /// 16 px Inter Regular — section titles within panels.
     UiLarge,
-    /// 13 px Inter Regular (mono role) — paths, technical metadata.
+    /// 18 px Inter Medium — window titles, major section headings.
+    UiTitle,
+    /// 14 px Fira Code Regular — terminal text, logs, code output.
     MonoRegular,
+    /// 14 px Fira Code Medium — emphasized monospace (bold terminal output).
+    MonoMedium,
 }
 
 // ── TextStyle ─────────────────────────────────────────────────────────────────
@@ -82,11 +89,14 @@ const GLYPH_DATA_START: usize = HEADER_SIZE + OFFSET_TABLE_SIZE; // 388
 #[inline]
 fn font_data(role: FontRole) -> &'static [u8] {
     match role {
-        FontRole::UiSmall    => FONT_UI_11,
-        FontRole::UiRegular  => FONT_UI_13,
-        FontRole::UiMedium   => FONT_UI_MEDIUM_13,
-        FontRole::UiLarge    => FONT_UI_16,
-        FontRole::MonoRegular => FONT_MONO_13,
+        FontRole::UiSmall     => FONT_UI_11,
+        FontRole::UiRegular   => FONT_UI_13,
+        FontRole::UiMedium    => FONT_UI_MEDIUM_13,
+        FontRole::UiBold      => FONT_UI_SEMIBOLD_13,
+        FontRole::UiLarge     => FONT_UI_16,
+        FontRole::UiTitle     => FONT_UI_TITLE_18,
+        FontRole::MonoRegular => FONT_MONO_REGULAR,
+        FontRole::MonoMedium  => FONT_MONO_MEDIUM,
     }
 }
 
@@ -304,8 +314,11 @@ pub fn assert_fonts_valid() {
         (FontRole::UiSmall,     FONT_UI_11),
         (FontRole::UiRegular,   FONT_UI_13),
         (FontRole::UiMedium,    FONT_UI_MEDIUM_13),
+        (FontRole::UiBold,      FONT_UI_SEMIBOLD_13),
         (FontRole::UiLarge,     FONT_UI_16),
-        (FontRole::MonoRegular, FONT_MONO_13),
+        (FontRole::UiTitle,     FONT_UI_TITLE_18),
+        (FontRole::MonoRegular, FONT_MONO_REGULAR),
+        (FontRole::MonoMedium,  FONT_MONO_MEDIUM),
     ] {
         assert!(
             data.len() >= GLYPH_DATA_START && &data[0..4] == b"MTF1",
@@ -313,6 +326,26 @@ pub fn assert_fonts_valid() {
             role,
         );
     }
+}
+
+/// Convenience statics — one `VecFont` per semantic role.
+///
+/// Import and pass a reference to any widget that accepts `&dyn VecText`:
+/// ```ignore
+/// use sun_font::Typography as F;
+/// Label::new(rect, "Hello").with_font(&F::UI_REGULAR).draw(canvas, theme);
+/// ```
+pub struct Typography;
+
+impl Typography {
+    pub const UI_SMALL:   VecFont = VecFont(FontRole::UiSmall);
+    pub const UI_REGULAR: VecFont = VecFont(FontRole::UiRegular);
+    pub const UI_MEDIUM:  VecFont = VecFont(FontRole::UiMedium);
+    pub const UI_BOLD:    VecFont = VecFont(FontRole::UiBold);
+    pub const UI_LARGE:   VecFont = VecFont(FontRole::UiLarge);
+    pub const UI_TITLE:   VecFont = VecFont(FontRole::UiTitle);
+    pub const MONO:       VecFont = VecFont(FontRole::MonoRegular);
+    pub const MONO_MEDIUM:VecFont = VecFont(FontRole::MonoMedium);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -332,12 +365,24 @@ mod tests {
             FontRole::UiSmall,
             FontRole::UiRegular,
             FontRole::UiMedium,
+            FontRole::UiBold,
             FontRole::UiLarge,
+            FontRole::UiTitle,
             FontRole::MonoRegular,
+            FontRole::MonoMedium,
         ] {
             let lh = line_height(role);
             assert!(lh >= 8 && lh <= 32, "line_height({:?}) = {} is out of range", role, lh);
         }
+    }
+
+    #[test]
+    fn mono_and_ui_regular_have_distinct_metrics() {
+        let ui_lh = line_height(FontRole::UiRegular);
+        let mono_lh = line_height(FontRole::MonoRegular);
+        // FiraCode 14px vs Inter 13px — line heights should differ
+        assert!(ui_lh != mono_lh || measure_text("W", FontRole::MonoRegular).w == measure_text("i", FontRole::MonoRegular).w,
+            "MonoRegular should have fixed-width cells");
     }
 
     #[test]

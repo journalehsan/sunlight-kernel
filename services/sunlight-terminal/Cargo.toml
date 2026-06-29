@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-terminal"
-version = "0.1.641"
+version = "0.1.643"
+
 
 
 
@@ -71,3 +72,4 @@ sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-tty = { path = "../../sunlight-tty" }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
+sun-font = { path = "../../sun-font" }

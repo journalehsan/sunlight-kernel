@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use sun_font::{self, FontRole, VecFont};
 use sunlight_ipc::{
     debug_log, ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -12,6 +13,9 @@ use sunlight_ui::{
     widgets::{Label, Panel, StatusBar},
     App, Canvas, Event, HBox, Rect, Window, WindowConfig,
 };
+
+static F_UI:    VecFont = VecFont(FontRole::UiRegular);
+static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 const WIN_W: u32 = 640;
 const WIN_H: u32 = 360;
@@ -560,7 +564,7 @@ impl App for TerminalApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &sunlight_ui::Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
         Panel::new(Rect::new(0, 0, WIN_W, TAB_H)).draw(canvas, theme);
-        Label::new(Rect::new(14, 8, 80, 12), "Tab 1").draw(canvas, theme);
+        Label::new(Rect::new(14, 8, 80, TAB_H - 8), "Tab 1").with_font(&F_UI).draw(canvas, theme);
 
         TerminalGrid::new(self.content_rect()).draw(canvas, &mut self.console, theme);
 
@@ -568,23 +572,22 @@ impl App for TerminalApp {
         StatusBar::new(footer, "", "", "").draw(canvas, theme);
         if self.footer.app_mode {
             Label::new(
-                Rect::new(8, footer.y + 4, 220, 16),
+                Rect::new(8, footer.y + 4, 220, FOOTER_H - 8),
                 self.footer.app_name_str(),
             )
+            .with_font(&F_SMALL)
             .draw(canvas, theme);
         } else {
-            let prompt_widths = [
-                Canvas::measure_text(self.footer.prompt_str()) + 4,
-                WIN_W - 48,
-            ];
-            let mut prompt_cells = HBox::new(Rect::new(8, footer.y + 4, WIN_W - 16, 16))
+            let prompt_w = sun_font::measure_text(self.footer.prompt_str(), FontRole::UiSmall).w + 4;
+            let prompt_widths = [prompt_w, WIN_W - 48];
+            let mut prompt_cells = HBox::new(Rect::new(8, footer.y + 4, WIN_W - 16, FOOTER_H - 8))
                 .with_spacing(8)
                 .layout(&prompt_widths);
             if let Some(prompt_rect) = prompt_cells.next() {
-                Label::new(prompt_rect, self.footer.prompt_str()).draw(canvas, theme);
+                Label::new(prompt_rect, self.footer.prompt_str()).with_font(&F_SMALL).draw(canvas, theme);
             }
             if let Some(input_rect) = prompt_cells.next() {
-                Label::new(input_rect, self.footer.input_str()).draw(canvas, theme);
+                Label::new(input_rect, self.footer.input_str()).with_font(&F_UI).draw(canvas, theme);
             }
         }
     }

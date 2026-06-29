@@ -1,5 +1,6 @@
 //! Button widget.
 
+use crate::font::VecText;
 use crate::geom::Rect;
 use crate::paint::Canvas;
 use crate::theme::Theme;
@@ -19,6 +20,7 @@ pub struct Button<'a> {
     /// If true, render with accent fill (primary action).
     /// If false, render as ghost/secondary button.
     pub primary: bool,
+    font: Option<&'a dyn VecText>,
 }
 
 impl<'a> Button<'a> {
@@ -28,6 +30,7 @@ impl<'a> Button<'a> {
             label,
             state: ButtonState::Normal,
             primary: true,
+            font: None,
         }
     }
 
@@ -37,7 +40,13 @@ impl<'a> Button<'a> {
             label,
             state: ButtonState::Normal,
             primary: false,
+            font: None,
         }
+    }
+
+    pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
+        self.font = Some(font);
+        self
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -75,7 +84,13 @@ impl<'a> Button<'a> {
             );
         }
 
-        canvas.draw_text_centered(self.rect, self.label, text_color);
+        if let Some(f) = self.font {
+            let tw = f.measure_w(self.label);
+            let tx = self.rect.x + (self.rect.w as i32 - tw as i32) / 2;
+            f.draw_vcenter(canvas, self.label, tx, self.rect.y, self.rect.h, text_color);
+        } else {
+            canvas.draw_text_centered(self.rect, self.label, text_color);
+        }
     }
 
     pub fn hit_test(&self, x: i32, y: i32) -> bool {

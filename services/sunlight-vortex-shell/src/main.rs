@@ -55,6 +55,7 @@ use sunlight_ipc::{
     unpack_iface_summary, CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
     NotificationKind, ProcessExit, SgpMsg, TzMsg,
 };
+use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_libc::{self as libc, sun_exec, DirEntry, FT_DIR};
 use sunlight_ui::{
     image::TgaImage, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
@@ -1607,10 +1608,9 @@ fn draw_status_cluster(
     let mut tbuf = [0u8; 8];
     let tlen = format_time_12h(h, m, &mut tbuf);
     let ts = core::str::from_utf8(&tbuf[..tlen]).unwrap_or("??:??");
-    let tw = Canvas::measure_text(ts);
+    let tw = measure_text(ts, FontRole::UiSmall).w;
     let clock_x = x - tw as i32;
-    let ty = bar.y + (bar.h as i32 - 7) / 2;
-    canvas.draw_text(clock_x, ty, ts, theme.text);
+    draw_text_vcenter(canvas, ts, clock_x, bar.y, bar.h, &TextStyle::new(FontRole::UiSmall, theme.text));
     x = clock_x - 8;
 
     // Battery icon (static placeholder)
@@ -1688,10 +1688,9 @@ fn draw_top_bar(
 
     // ── Center zone: current app title ───────────────────────────────────────
     let title = "SunlightOS";
-    let title_w = Canvas::measure_text(title);
+    let title_w = measure_text(title, FontRole::UiMedium).w;
     let title_x = bar.x + (bar.w as i32 - title_w as i32) / 2;
-    let title_y = bar.y + (bar.h as i32 - 7) / 2; // font height = 7
-    canvas.draw_text(title_x, title_y, title, theme.text);
+    draw_text_vcenter(canvas, title, title_x, bar.y, bar.h, &TextStyle::new(FontRole::UiMedium, theme.text));
 
     // ── Right zone: status cluster (power | net | bat | clock) ───────────────
     // Clock source: "tz" service (TzMsg::GET_LOCAL_TIME) — same path used by
@@ -2050,19 +2049,13 @@ fn draw_desktop_icons(
             draw_icon16_scaled(canvas, icon_rect, rows, color, DESKTOP_ICON_SCALE);
         }
 
-        let label_w = Canvas::measure_text(&icon.label);
+        let icon_color = if is_selected { theme.text } else { theme.text_dim.lighten(90) };
+        let label_w = measure_text(&icon.label, FontRole::UiSmall).w;
         let label_x = slot.x + (slot.w as i32 - label_w as i32) / 2;
-        let label_y = slot.y + 58;
-        canvas.draw_text(
-            label_x,
-            label_y,
-            &icon.label,
-            if is_selected {
-                theme.text
-            } else {
-                theme.text_dim.lighten(90)
-            },
-        );
+        let label_h = sun_font::line_height(FontRole::UiSmall) + 4;
+        let label_rect_y = slot.y + 58;
+        draw_text_vcenter(canvas, &icon.label, label_x, label_rect_y, label_h,
+            &TextStyle::new(FontRole::UiSmall, icon_color));
     }
 }
 
@@ -2098,18 +2091,12 @@ fn draw_context_menu(canvas: &mut Canvas, theme: &Theme, menu: &ContextMenuState
     draw_panel(canvas, menu.rect, theme.panel, theme.border);
     for (i, (label, _)) in MENU_LABELS.iter().enumerate() {
         let item = menu.items[i].rect;
-        let tw = Canvas::measure_text(label);
-        let tx = item.x + 8;
-        let ty = item.y + (item.h as i32 - 7) / 2;
+        let tw = measure_text(label, FontRole::UiRegular).w;
+        let tx = (item.x + 8).min(item.x + item.w as i32 - tw as i32);
         if i == 0 {
             canvas.fill_rect(Rect::new(item.x, item.y, item.w, 1), theme.border);
         }
-        canvas.draw_text(
-            tx.min(item.x + item.w as i32 - tw as i32),
-            ty,
-            label,
-            theme.text,
-        );
+        draw_text_vcenter(canvas, label, tx, item.y, item.h, &TextStyle::new(FontRole::UiRegular, theme.text));
     }
 }
 
@@ -2306,10 +2293,10 @@ fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32) {
 
     // Placeholder text
     let ph = "Search...";
-    let ph_w = Canvas::measure_text(ph);
+    let ph_w = measure_text(ph, FontRole::UiSmall).w;
     let ph_x = search_rect.x + (search_rect.w as i32 - ph_w as i32) / 2;
-    let ph_y = search_rect.y + (search_rect.h as i32 - 7) / 2;
-    canvas.draw_text(ph_x, ph_y, ph, theme.text_dim);
+    draw_text_vcenter(canvas, ph, ph_x, search_rect.y, search_rect.h,
+        &TextStyle::new(FontRole::UiSmall, theme.text_dim));
 }
 
 // ---------------------------------------------------------------------------
