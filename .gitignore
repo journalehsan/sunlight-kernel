@@ -12,3 +12,4 @@
 # sunlight-fetch downloaded test artifacts
 sunlight-fetch/*.zip
 sunlight-fetch/*.zip?*
+kernel/src/ipc/mod.rs.backup
