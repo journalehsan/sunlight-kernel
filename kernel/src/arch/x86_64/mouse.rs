@@ -187,10 +187,6 @@ pub fn handle_irq12() {
         let mut port: Port<u8> = Port::new(0x60);
         port.read()
     };
-    let log_count = IRQ12_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
-    if log_count < 8 {
-        serial_println!("[IRQ12] Mouse byte {:#x}", byte);
-    }
 
     // 2. Push to ring buffer (non-blocking)
     let pushed = push_mouse_byte(byte);

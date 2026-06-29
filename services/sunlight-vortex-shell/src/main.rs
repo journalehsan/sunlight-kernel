@@ -780,6 +780,19 @@ const MENU_LABELS: [(&str, ContextMenuAction); 5] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Desktop marquee-selection state machine
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy, PartialEq)]
+enum DesktopSelectState {
+    Idle,
+    /// Mouse button is down on empty desktop but hasn't moved past threshold yet.
+    Armed { anchor: Point },
+    /// Past the 4-pixel threshold — rubber-band rectangle is visible.
+    Dragging { anchor: Point, current: Point },
+}
+
+// ---------------------------------------------------------------------------
 // Shell application state
 // ---------------------------------------------------------------------------
 
@@ -794,11 +807,7 @@ struct VortexShell {
     dock_zones: [(Rect, DockZone); 4],
     selected_icons: Vec<usize>,
     context_menu: Option<ContextMenuState>,
-    drag_start: Option<Point>,
-    drag_current: Option<Point>,
-    drag_selecting: bool,
-    drag_moved: bool,
-    mouse_left_down: bool,
+    selection_state: DesktopSelectState,
     suppress_next_click: bool,
     /// Tracks whether mouse is hovering over a dock icon (index 0..4).
     hover: Option<usize>,
@@ -849,11 +858,7 @@ impl VortexShell {
             dock_zones: [(Rect::new(0, 0, 0, 0), DockZone::Placeholder); 4],
             selected_icons: Vec::new(),
             context_menu: None,
-            drag_start: None,
-            drag_current: None,
-            drag_selecting: false,
-            drag_moved: false,
-            mouse_left_down: false,
+            selection_state: DesktopSelectState::Idle,
             suppress_next_click: false,
             hover: None,
             settings_hover: false,
@@ -901,9 +906,7 @@ impl VortexShell {
         self.selected_icons
             .retain(|idx| *idx < self.desktop_icons.len());
         if self.selected_icons.is_empty() {
-            self.drag_start = None;
-            self.drag_current = None;
-            self.drag_selecting = false;
+            self.selection_state = DesktopSelectState::Idle;
         }
     }
 
@@ -992,15 +995,14 @@ impl VortexShell {
     }
 
     fn desktop_selection_rect(&self) -> Option<Rect> {
-        if !self.drag_selecting {
-            return None;
-        }
-        let start = self.drag_start?;
-        let cur = self.drag_current.unwrap_or(start);
-        let x = start.x.min(cur.x);
-        let y = start.y.min(cur.y);
-        let w = (start.x - cur.x).unsigned_abs().max(1);
-        let h = (start.y - cur.y).unsigned_abs().max(1);
+        let (anchor, current) = match self.selection_state {
+            DesktopSelectState::Dragging { anchor, current } => (anchor, current),
+            _ => return None,
+        };
+        let x = anchor.x.min(current.x);
+        let y = anchor.y.min(current.y);
+        let w = (anchor.x - current.x).unsigned_abs().max(1);
+        let h = (anchor.y - current.y).unsigned_abs().max(1);
         Some(Rect::new(x, y, w, h))
     }
 
@@ -1013,32 +1015,43 @@ impl VortexShell {
         self.handle_app_click(app_id, now, LaunchSource::Shortcut)
     }
 
-    fn begin_desktop_marquee(&mut self, point: Point) {
-        self.drag_start = Some(point);
-        self.drag_current = Some(point);
-        self.drag_selecting = true;
-        self.drag_moved = false;
+    fn arm_desktop_marquee(&mut self, anchor: Point) {
+        self.selection_state = DesktopSelectState::Armed { anchor };
         self.suppress_next_click = false;
         self.clear_desktop_selection();
     }
 
     fn update_desktop_marquee(&mut self, point: Point) {
-        if !self.drag_selecting {
-            return;
-        }
-        self.drag_current = Some(point);
-        if self.drag_start != self.drag_current {
-            self.drag_moved = true;
-        }
-        if let Some(rect) = self.desktop_selection_rect() {
-            self.select_desktop_icons_in_rect(rect);
+        const DRAG_THRESHOLD: i32 = 4;
+        match self.selection_state {
+            DesktopSelectState::Armed { anchor } => {
+                let dx = (point.x - anchor.x).abs();
+                let dy = (point.y - anchor.y).abs();
+                if dx >= DRAG_THRESHOLD || dy >= DRAG_THRESHOLD {
+                    self.selection_state = DesktopSelectState::Dragging {
+                        anchor,
+                        current: point,
+                    };
+                    if let Some(rect) = self.desktop_selection_rect() {
+                        self.select_desktop_icons_in_rect(rect);
+                    }
+                }
+            }
+            DesktopSelectState::Dragging { anchor, .. } => {
+                self.selection_state = DesktopSelectState::Dragging {
+                    anchor,
+                    current: point,
+                };
+                if let Some(rect) = self.desktop_selection_rect() {
+                    self.select_desktop_icons_in_rect(rect);
+                }
+            }
+            DesktopSelectState::Idle => {}
         }
     }
 
-    fn finish_desktop_marquee(&mut self) {
-        self.drag_start = None;
-        self.drag_current = None;
-        self.drag_selecting = false;
+    fn end_selection_gesture(&mut self) {
+        self.selection_state = DesktopSelectState::Idle;
     }
 
     fn next_launch_trace(&mut self, source: LaunchSource) -> LaunchTrace {
@@ -2657,7 +2670,6 @@ impl App for VortexShell {
             }
             Event::MouseDown { x, y, button } if button == 0 => {
                 let point = Point::new(x, y);
-                self.mouse_left_down = true;
                 self.settings_hover = self.settings_zone.contains(point);
                 if self.settings_zone.contains(point) {
                     if let Some(app) = self
@@ -2684,7 +2696,7 @@ impl App for VortexShell {
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
                     self.select_only_desktop_icon(idx);
                 } else {
-                    self.begin_desktop_marquee(point);
+                    self.arm_desktop_marquee(point);
                 }
                 true
             }
@@ -2706,6 +2718,7 @@ impl App for VortexShell {
                         return true;
                     }
                 }
+                self.end_selection_gesture();
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
                     self.select_only_desktop_icon(idx);
                 } else {
@@ -2715,12 +2728,8 @@ impl App for VortexShell {
                 true
             }
             Event::MouseMove { x, y } => {
-                if self.drag_selecting && self.mouse_left_down {
+                if self.selection_state != DesktopSelectState::Idle {
                     self.update_desktop_marquee(Point::new(x, y));
-                    return true;
-                } else if self.drag_selecting && !self.mouse_left_down {
-                    // MouseUp was missed (e.g. released outside window); cancel drag.
-                    self.finish_desktop_marquee();
                     return true;
                 }
                 let prev = self.hover;
@@ -2739,15 +2748,20 @@ impl App for VortexShell {
                 self.hover != prev
             }
             Event::MouseUp { x, y, button } if button == 0 => {
-                let _ = (x, y);
-                self.mouse_left_down = false;
-                if self.drag_selecting {
-                    self.update_desktop_marquee(Point::new(x, y));
-                    if self.drag_moved {
+                match self.selection_state {
+                    DesktopSelectState::Dragging { .. } => {
+                        self.update_desktop_marquee(Point::new(x, y));
                         self.suppress_next_click = true;
+                        self.end_selection_gesture();
+                        return true;
                     }
-                    self.finish_desktop_marquee();
-                    return true;
+                    DesktopSelectState::Armed { .. } => {
+                        // Simple click on empty desktop — clear selection.
+                        self.clear_desktop_selection();
+                        self.end_selection_gesture();
+                        return true;
+                    }
+                    DesktopSelectState::Idle => {}
                 }
                 false
             }

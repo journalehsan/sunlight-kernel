@@ -863,13 +863,6 @@ impl Scheduler {
                 );
                 let quantum_override_value = ((base_q * 110) / 100).min(QUANTUM_MAX);
                 self.processes[idx].quantum_override = Some(quantum_override_value);
-                serial_println!(
-                    "[SCHED-RR] promoted pid={} nice={} counter={} quantum_override={}",
-                    self.processes[idx].pid,
-                    self.processes[idx].nice,
-                    self.processes[idx].counter,
-                    quantum_override_value
-                );
                 self.processes[idx].aging_boosted_this_pick = false;
                 return Some(idx);
             }
@@ -877,12 +870,6 @@ impl Scheduler {
             // Low priority skip.
             if self.processes[idx].nice > 0 && self.processes[idx].counter <= SKIP_LIMIT {
                 self.processes[idx].counter += DECAY_RATE;
-                serial_println!(
-                    "[SCHED-RR] skipped pid={} nice={} counter={}",
-                    self.processes[idx].pid,
-                    self.processes[idx].nice,
-                    self.processes[idx].counter
-                );
                 self.processes[idx].aging_boosted_this_pick = false;
                 idx = (idx + 1) % len;
                 if idx == start && attempts == 0 {

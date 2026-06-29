@@ -1528,9 +1528,6 @@ pub fn ipc_call_timeout(
         let elapsed = monotonic_millis().saturating_sub(start);
         if elapsed >= timeout_ms {
             ipc_cancel_pending();
-            // Log without allocation (this crate must remain usable by
-            // early no_std binaries like sunlight-init that have no allocator).
-            debug_log("[IPC] call timeout");
             return Err(IpcCallError::Timeout);
         }
         process_yield();

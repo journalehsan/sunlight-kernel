@@ -279,7 +279,7 @@ fn pack_short_name(name: &str) -> u64 {
 }
 
 fn register_with_deviced() {
-    let Some(cap) = nameserver_lookup_timeout("deviced", 100) else {
+    let Some(cap) = nameserver_lookup_timeout("deviced", 5) else {
         debug_log("[KBD] deviced unavailable; continuing without registration");
         return;
     };
@@ -290,7 +290,7 @@ fn register_with_deviced() {
         .word(1, getpid())
         .word(2, meta)
         .word(3, caps);
-    match ipc_call_timeout(cap, msg, 100) {
+    match ipc_call_timeout(cap, msg, 20) {
         Ok(reply) if reply.label == DevicedMsg::REPLY => {
             debug_log("[KBD] registered with deviced");
         }
