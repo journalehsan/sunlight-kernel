@@ -842,7 +842,7 @@ impl Scheduler {
         // The diagnostic dump writes per-core + per-process state over the slow
         // UART while the global scheduler lock is held — every other core spins
         // on the lock for the duration. Compile it out unless explicitly enabled.
-        if cfg!(feature = "verbose_diag") && self.global_tick.is_multiple_of(1000) {
+        if cfg!(feature = "verbose_diag") && self.global_tick.is_multiple_of(100) {
             self.diagnostic_report();
         }
     }
@@ -1625,6 +1625,81 @@ impl Scheduler {
             .filter(|p| p.state == ProcessState::BlockedOnIo)
             .count();
 
+        // Minimal post-fix ownership invariant validation (diagnostics only).
+        // Reports on the five listed bad states.
+        for (_idx, p) in self.processes.iter().enumerate() {
+            if p.state == ProcessState::Finished {
+                continue;
+            }
+            let oc = p.owning_core;
+            let qc = p.queued_on_core;
+            let is_running = p.state == ProcessState::Running;
+            let is_ready = p.state == ProcessState::Ready;
+            if is_running && qc != u8::MAX {
+                // For RR mode this is currently accepted (see schedule_tick comments);
+                // for BORE pick clears it. Flag if we see owning+queued mismatch.
+            }
+            if oc != u8::MAX && qc != u8::MAX && oc != qc {
+                serial_println!(
+                    "[SCHED-INV] VIOLATION owning!=queued pid={} oc={} qc={} state={:?}",
+                    p.pid, oc, qc, p.state
+                );
+            }
+            if is_running && oc == u8::MAX {
+                serial_println!("[SCHED-INV] VIOLATION running no owner pid={}", p.pid);
+            }
+            if is_ready && qc != u8::MAX {
+                // Verify presence would require full queue scan; flag flag vs core only here.
+            }
+            if oc != u8::MAX && is_ready {
+                // A Ready with owner set means live window (pre-desched wakeup); ok if not enqueued elsewhere.
+            }
+        }
+        // Also verify no duplicates across queues by counting presence vs flag (lightweight).
+        let mut queued_flag_count = 0usize;
+        for p in self.processes.iter() {
+            if p.queued_on_core != u8::MAX {
+                queued_flag_count += 1;
+            }
+        }
+        let total_in_queues = ready_high + ready_mid + ready_low;
+        if queued_flag_count != total_in_queues {
+            serial_println!(
+                "[SCHED-INV] VIOLATION queued_flag_count={} != queues_len={}",
+                queued_flag_count, total_in_queues
+            );
+        }
+
+        // Cross check: any running task present in any queue, or queued flag pointing to wrong core's queues.
+        for (c, core) in self.cores.iter().enumerate().take(self.online_cores) {
+            for &q in core.run_queue_high.iter().chain(core.run_queue_medium.iter()).chain(core.run_queue_low.iter()) {
+                if q < self.processes.len() {
+                    let p = &self.processes[q];
+                    if p.state == ProcessState::Running {
+                        serial_println!("[SCHED-INV] VIOLATION running task in queue pid={} in_core={} owning={}", p.pid, c, p.owning_core);
+                    }
+                    if p.queued_on_core as usize != c {
+                        serial_println!("[SCHED-INV] VIOLATION queued flag mismatch pid={} flag={} actual_queue_core={}", p.pid, p.queued_on_core, c);
+                    }
+                }
+            }
+        }
+        // Check running tasks are not duplicated in foreign queues
+        for (idx, p) in self.processes.iter().enumerate() {
+            if p.state == ProcessState::Running && p.owning_core != u8::MAX {
+                let owner = p.owning_core as usize;
+                // scan other cores queues
+                for oc in 0..self.online_cores {
+                    if oc == owner { continue; }
+                    let co = &self.cores[oc];
+                    let present = co.run_queue_high.iter().chain(&co.run_queue_medium).chain(&co.run_queue_low).any(|&x| x==idx);
+                    if present {
+                        serial_println!("[SCHED-INV] VIOLATION running on {} present in foreign queue {} pid={}", owner, oc, p.pid);
+                    }
+                }
+            }
+        }
+
         serial_println!(
             "[SCHED-DIAG] created={} finished={} alive={} finished_slots={} ready_queues=({},{},{}) delta_created-finished={} blocked_ipc={} blocked_timer={} blocked_io={} online_cores={}",
             created, finished, alive, finished_slots, ready_high, ready_mid, ready_low,
@@ -1659,6 +1734,13 @@ impl Scheduler {
                     );
                 }
             }
+            // Minimal extra for runtime matrix: expose ticks/switches per core.
+            serial_println!(
+                "[SCHED-DIAG] core={} timer_ticks={} ctx_switches={}",
+                core_id,
+                self.cores[core_id].timer_ticks,
+                self.cores[core_id].context_switches
+            );
         }
 
         if alive > 0 && blocked_ipc == alive
