@@ -75,6 +75,14 @@ pub struct Process {
     pub weight: u32,    // CFS weight (default 1024)
     pub cpu_mask: u64,  // CPU affinity mask
 
+    // === SMP scheduler fast-path fields ===
+    /// Which logical CPU currently has this process as its current_task.
+    /// u8::MAX means not currently running on any core.
+    pub owning_core: u8,
+    /// Which logical CPU's run-queue this process is enqueued in.
+    /// u8::MAX means not in any ready queue.
+    pub queued_on_core: u8,
+
     // === BORE Scheduling Metrics (Phase 3.0) ===
     /// Burst score: 0-1024 (0=interactive, 1024=CPU-bound)
     /// Lower scores → moved to HIGH priority queue
@@ -226,7 +234,9 @@ impl Process {
             mmap_next: 0,
             sched_type: 0,         // SCHED_NORMAL
             weight: 1024,          // default CFS weight
-            cpu_mask: 0xFF,        // all CPUs
+            cpu_mask: u64::MAX,    // all CPUs
+            owning_core: u8::MAX,  // not running on any core
+            queued_on_core: u8::MAX, // not in any ready queue
             burst_score: 256,      // Start at MEDIUM tier (interactive bias)
             timeslice_used: 0,     // Fresh quantum
             last_run_tick: 0,      // Will be set on first run
@@ -368,7 +378,9 @@ impl Process {
             mmap_next: 0,
             sched_type: 0,
             weight: 1024,
-            cpu_mask: 0xFF,
+            cpu_mask: u64::MAX,
+            owning_core: u8::MAX,
+            queued_on_core: u8::MAX,
             burst_score: 256,
             timeslice_used: 0,
             last_run_tick: 0,

@@ -413,6 +413,7 @@ impl Scheduler {
             return;
         }
         let tier = self.processes[idx].get_queue_tier();
+        self.processes[idx].queued_on_core = core_id as u8;
         let core = &mut self.cores[core_id];
         match tier {
             QueueTier::High => core.run_queue_high.push_back(idx),
@@ -445,15 +446,26 @@ impl Scheduler {
         self.enqueue_process(idx);
     }
 
-    /// Remove a process index from every core's ready queues.
+    /// Remove a process index from ready queues.
+    ///
+    /// Uses `queued_on_core` to target the single core that owns this entry
+    /// (O(queue_len / online_cores) instead of O(cores × queue_len)).
     pub fn remove_from_ready_queues(&mut self, idx: usize) {
-        let online = self.online_cores;
-        for core_id in 0..online {
+        if idx >= self.processes.len() {
+            return;
+        }
+        let qcore = self.processes[idx].queued_on_core;
+        if qcore == u8::MAX {
+            return;
+        }
+        let core_id = qcore as usize;
+        if core_id < self.online_cores.min(MAX_CORES) {
             let core = &mut self.cores[core_id];
             core.run_queue_high.retain(|&q| q != idx);
             core.run_queue_medium.retain(|&q| q != idx);
             core.run_queue_low.retain(|&q| q != idx);
         }
+        self.processes[idx].queued_on_core = u8::MAX;
     }
 
     /// True if `idx` is the live `current_task` of any online core.
@@ -466,39 +478,31 @@ impl Scheduler {
     /// and run the same context concurrently — corrupting its saved RSP. The
     /// owning core re-enqueues it on its next `schedule_tick` deschedule.
     pub(crate) fn is_live_on_core(&self, idx: usize) -> bool {
-        (0..self.online_cores).any(|c| self.cores[c].current_task == Some(idx))
+        idx < self.processes.len() && self.processes[idx].owning_core != u8::MAX
     }
 
     /// Return the CPU that still owns `idx` as its current task, if any.
     pub(crate) fn live_owner_core(&self, idx: usize) -> Option<usize> {
-        (0..self.online_cores).find(|&c| self.cores[c].current_task == Some(idx))
+        if idx < self.processes.len() {
+            let c = self.processes[idx].owning_core;
+            if c != u8::MAX {
+                return Some(c as usize);
+            }
+        }
+        None
     }
 
-    /// Like `is_live_on_core`, but ignores `self_cpu`. Used at pick sites: a
-    /// core may always (re)select its OWN current task, but must never select a
-    /// task that is the live `current_task` of a DIFFERENT core (that would run
-    /// the same context on two cores). Excluding a task from its own owner too
-    /// (as `is_live_on_core` would) is wrong — it strands the task `Ready` when
-    /// the owner's `pick_next` then returns `None` and only resumes whatever
-    /// context happened to be interrupted.
+    /// Like `is_live_on_core`, but ignores `self_cpu`. O(1) via `owning_core`.
     pub(crate) fn is_live_on_other_core(&self, idx: usize, self_cpu: usize) -> bool {
-        (0..self.online_cores)
-            .filter(|&c| c != self_cpu)
-            .any(|c| self.cores[c].current_task == Some(idx))
+        if idx >= self.processes.len() {
+            return false;
+        }
+        let c = self.processes[idx].owning_core;
+        c != u8::MAX && c as usize != self_cpu
     }
 
     fn is_queued(&self, idx: usize) -> bool {
-        let online = self.online_cores;
-        for core_id in 0..online {
-            let core = &self.cores[core_id];
-            if core.run_queue_high.iter().any(|&q| q == idx)
-                || core.run_queue_medium.iter().any(|&q| q == idx)
-                || core.run_queue_low.iter().any(|&q| q == idx)
-            {
-                return true;
-            }
-        }
-        false
+        idx < self.processes.len() && self.processes[idx].queued_on_core != u8::MAX
     }
 
     /// Clear all core queues, then distribute all Ready processes (except
@@ -633,8 +637,14 @@ impl Scheduler {
     /// Called from the timer IRQ on each tick. Updates quantum tracking and
     /// requests a local reschedule when the current task's quantum expires.
     pub fn tick(&mut self) {
-        self.global_tick += 1;
         let cpu_id = current_cpu_id();
+        // Only the BSP (CPU 0) drives the global tick counter.
+        // With N cores each firing at 100 Hz, incrementing on every core would
+        // advance global_tick N× faster, making aging and the diagnostic report
+        // fire far too often and misrepresenting elapsed time to userland.
+        if cpu_id == 0 {
+            self.global_tick += 1;
+        }
         self.cores[cpu_id].current_ticks += 1;
         self.cores[cpu_id].timer_ticks += 1;
 
@@ -779,14 +789,9 @@ impl Scheduler {
                     _ => core.run_queue_high.remove(pos),
                 };
                 if let Some(pidx) = stolen {
-                    serial_println!(
-                        "[WS] core {} stole proc idx={} (pid={}) from core {} tier {}",
-                        thief_id,
-                        pidx,
-                        self.processes.get(pidx).map_or(0, |p| p.pid),
-                        victim_id,
-                        tier,
-                    );
+                    if let Some(p) = self.processes.get_mut(pidx) {
+                        p.queued_on_core = u8::MAX;
+                    }
                     return Some(pidx);
                 }
             }
@@ -813,6 +818,7 @@ impl Scheduler {
             if let Some(c) = skipped_high {
                 self.enqueue_process_once(c);
             }
+            self.processes[idx].queued_on_core = u8::MAX;
             return Some(idx);
         }
 
@@ -828,6 +834,7 @@ impl Scheduler {
             if let Some(c) = skipped_medium {
                 self.enqueue_process_once(c);
             }
+            self.processes[idx].queued_on_core = u8::MAX;
             return Some(idx);
         }
 
@@ -846,10 +853,13 @@ impl Scheduler {
             if let Some(c) = skipped_low {
                 self.enqueue_process_once(c);
             }
+            self.processes[idx].queued_on_core = u8::MAX;
             return Some(idx);
         }
 
         if let Some(c) = skipped_high.or(skipped_medium).or(skipped_low) {
+            // This item was popped from the queue (skipped because it's `current`),
+            // then immediately re-enqueued — queued_on_core is already set by re-enqueue.
             return Some(c);
         }
 
@@ -1047,6 +1057,12 @@ impl Scheduler {
                 self.cores[cpu_id].context_switches += 1;
                 self.processes[next].state          = ProcessState::Running;
                 self.processes[next].last_run_tick  = self.global_tick;
+                self.processes[next].owning_core    = cpu_id as u8;
+                // Do NOT clear queued_on_core here. In BORE mode pick_next_bore
+                // already cleared it when it popped the process. In RR mode the
+                // process is never popped from the queue, so queued_on_core must
+                // remain valid so remove_from_ready_queues can find and evict it
+                // when the process later blocks.
                 self.start_charging_runtime(next);
                 unsafe {
                     self.processes[next].address_space.activate();
@@ -1095,10 +1111,13 @@ impl Scheduler {
 
             if next != prev {
                 self.cores[cpu_id].context_switches += 1;
+                self.processes[prev].owning_core = u8::MAX;
             }
             self.cores[cpu_id].current_task = Some(next);
             self.processes[next].state = ProcessState::Running;
             self.processes[next].last_run_tick = self.global_tick;
+            self.processes[next].owning_core = cpu_id as u8;
+            // queued_on_core is not cleared here — see idle-fast-path comment.
             self.start_charging_runtime(next);
 
             unsafe {
@@ -1336,8 +1355,7 @@ impl Scheduler {
             return false;
         };
         // Refuse to terminate a task that is currently executing on any core.
-        let is_running_on_core =
-            (0..self.online_cores).any(|c| self.cores[c].current_task == Some(idx));
+        let is_running_on_core = self.processes[idx].owning_core != u8::MAX;
         if is_running_on_core || self.processes[idx].state == ProcessState::Finished {
             return false;
         }
@@ -1395,6 +1413,8 @@ impl Scheduler {
             self.cores[0].current_task = Some(idx);
             self.processes[idx].state = ProcessState::Running;
             self.processes[idx].last_run_tick = self.global_tick;
+            self.processes[idx].owning_core = 0;
+            self.processes[idx].queued_on_core = u8::MAX;
             self.start_charging_runtime(idx);
 
             for i in 0..self.processes.len() {
@@ -1732,6 +1752,8 @@ pub fn enter_first_process() -> ! {
             sched.cores[0].current_task = Some(idx);
             sched.processes[idx].state = ProcessState::Running;
             sched.processes[idx].last_run_tick = sched.global_tick;
+            sched.processes[idx].owning_core = 0;
+            sched.processes[idx].queued_on_core = u8::MAX;
             sched.start_charging_runtime(idx);
             sched.seed_ready_queues_except(idx);
             // Run queues are now seeded and core 0 has its first task. Release
