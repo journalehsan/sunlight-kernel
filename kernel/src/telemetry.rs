@@ -3,6 +3,7 @@
 
 use crate::memory::pmm::PhysicalMemoryManager;
 use crate::sched::Scheduler;
+use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
@@ -128,73 +129,72 @@ pub fn record_net_tx(bytes: u64) {
     NET_TX_BYTES.fetch_add(bytes, Ordering::Relaxed);
 }
 
-/// SAFETY: caller must serialize updates (timer ISR with interrupts disabled).
-pub unsafe fn update_telemetry(
-    sched: &mut Scheduler,
+// === Phase 2: telemetry snapshot for lock-free expensive work ===
+
+#[derive(Clone)]
+pub struct ProcSnap {
+    pub pid: u32,
+    pub ppid: u32,
+    pub state: u8,
+    pub name: [u8; 32],
+    pub cpu_ticks: u64,
+    pub pml4_phys: x86_64::PhysAddr,
+    pub is_finished_or_cleanup: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct CoreSnap {
+    pub core_id: u8,
+    pub local_timer_ticks: u64,
+    pub context_switches: u64,
+    pub current_pid: u32,
+    pub current_ticks: u32,
+    pub nice: i8,
+}
+
+#[derive(Clone)]
+pub struct TelemetrySnapshot {
+    pub uptime_secs: u64,
+    pub total_ram_kb: u64,
+    pub used_ram_kb: u64,
+    pub zram_orig_kb: u64,
+    pub zram_comp_kb: u64,
+    pub net_rx_bytes: u64,
+    pub net_tx_bytes: u64,
+    pub sample_time_ns: u64,
+    pub cpu_count: u8,
+    pub gpu_count: u8,
+    pub procs: Vec<ProcSnap>,
+    pub cores: Vec<CoreSnap>,
+    pub core_count: u32,
+}
+
+/// Capture only stable scalar data while holding SCHEDULER lock (cheap copy).
+pub fn capture_telemetry_snapshot(
+    sched: &Scheduler,
     pmm: &PhysicalMemoryManager,
     tick_count: u64,
-) {
-    // SAFETY: synchronized by caller; sequence field is in the shared telemetry page.
-    let seq = unsafe { TELEMETRY.sequence.wrapping_add(1) };
-    // SAFETY: synchronized by caller; begin seqlock write (odd sequence).
-    unsafe {
-        TELEMETRY.sequence = seq;
-    }
-    core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
+) -> TelemetrySnapshot {
+    let tick_hz = unsafe { TELEMETRY.tick_hz };
+    let uptime_secs = tick_count / (tick_hz as u64).max(1);
 
-    // SAFETY: synchronized by caller; writing shared telemetry fields.
-    unsafe {
-        TELEMETRY.uptime_secs = tick_count / (TELEMETRY.tick_hz as u64).max(1);
-    }
-
-    // Capture monotonic sample time for this set of CPU counters.
-    // sunlight-top uses (cur - prev) as interval_ns for capacity math.
-    let sample_now: u64 = sched.now_ns();
-    unsafe {
-        TELEMETRY.sample_time_ns = sample_now;
-    }
-
-    // Online CPU count for capacity calculations (machine-normalized %).
-    // For the current uniprocessor kernel this is 1. When SMP is added,
-    // this must reflect the number of online CPUs at the time of sampling.
-    unsafe {
-        if TELEMETRY.cpu_count == 0 {
-            TELEMETRY.cpu_count = 1;
-        }
-    }
+    let sample_now = sched.now_ns();
 
     let (total_frames, free_frames) = pmm.stats();
-    // SAFETY: synchronized by caller; writing PMM-derived counters.
-    unsafe {
-        TELEMETRY.total_ram_kb = total_frames as u64 * 4;
-        TELEMETRY.used_ram_kb = total_frames.saturating_sub(free_frames) as u64 * 4;
-    }
+    let (_swap_total, swap_used_blocks, swap_used_bytes) = crate::memory::zram::stats();
+    let net_rx = NET_RX_BYTES.load(Ordering::Relaxed);
+    let net_tx = NET_TX_BYTES.load(Ordering::Relaxed);
 
-    let (_swap_total_blocks, swap_used_blocks, swap_used_bytes) = crate::memory::zram::stats();
-    // SAFETY: synchronized by caller; writing ZRAM-derived counters.
-    unsafe {
-        TELEMETRY.zram_orig_kb = swap_used_blocks as u64 * 4;
-        TELEMETRY.zram_comp_kb = (swap_used_bytes as u64 + 1023) / 1024;
-        TELEMETRY.net_rx_bytes = NET_RX_BYTES.load(Ordering::Relaxed);
-        TELEMETRY.net_tx_bytes = NET_TX_BYTES.load(Ordering::Relaxed);
-    }
+    let cpu_count = unsafe { TELEMETRY.cpu_count.max(1) };
+    let gpu_count = unsafe { TELEMETRY.gpu_count };
 
-    let mut count = 0usize;
+    let mut procs = Vec::new();
     for idx in 0..sched.processes.len() {
-        if count >= MAX_PROCESSES {
+        if procs.len() >= MAX_PROCESSES {
             break;
         }
-
-        // Publish effective runtime: for Running tasks, include uncommitted time
-        // since last_start_ns so sunlight-top does not see 0% until deschedule.
-        let runtime_for_telemetry = sched.effective_runtime_ns(idx);
-
         let proc = &sched.processes[idx];
-
-        // SAFETY: synchronized by caller; bounded index into fixed process array.
-        let entry = unsafe { &mut TELEMETRY.procs[count] };
-        entry.pid = proc.pid as u32;
-        entry.ppid = proc.ppid as u32;
+        let runtime = sched.effective_runtime_ns(idx);
         let proc_state = match proc.state {
             crate::process::ProcessState::Ready => 0,
             crate::process::ProcessState::Running => 1,
@@ -204,75 +204,145 @@ pub unsafe fn update_telemetry(
             crate::process::ProcessState::BlockedOnTimer => 5,
             crate::process::ProcessState::BlockedOnIo => 6,
         };
-        entry.state = proc_state;
-        // Publish effective runtime (includes uncommitted time for Running tasks).
-        // sunlight-top maintains previous samples locally and computes deltas + %.
-        entry.cpu_ticks = runtime_for_telemetry;
-        // Per-process resident memory: count present user-space pages in this
-        // process's address space. hhdm_offset comes from the Limine response;
-        // if unavailable, fall back to 0.
-        entry.mem_pages =
-            if proc_state == 3 || proc.exit_cleanup_pending || proc.address_space.is_reclaimed() {
-                0
-            } else {
-                match crate::HHDM_REQ.response() {
-                    Some(resp) => {
-                        let hhdm = x86_64::VirtAddr::new(resp.offset);
-                        // SAFETY: caller holds the scheduler lock, so page tables are
-                        // quiescent; hhdm is the bootloader-provided HHDM base.
-                        let pages = unsafe { proc.address_space.count_user_pages(hhdm) };
-                        pages.min(u32::MAX as usize) as u32
+        let is_finished_or_cleanup = proc_state == 3 || proc.exit_cleanup_pending;
+        procs.push(ProcSnap {
+            pid: proc.pid as u32,
+            ppid: proc.ppid as u32,
+            state: proc_state,
+            name: proc.name,
+            cpu_ticks: runtime,
+            pml4_phys: proc.address_space.pml4_phys,
+            is_finished_or_cleanup,
+        });
+    }
+
+    let online = sched.online_cores.min(MAX_CORES);
+    let mut cores = Vec::with_capacity(online);
+    for c in 0..online {
+        let core = &sched.cores[c];
+        let mut cs = CoreSnap {
+            core_id: c as u8,
+            local_timer_ticks: core.timer_ticks,
+            context_switches: core.context_switches,
+            current_pid: 0,
+            current_ticks: 0,
+            nice: 0,
+        };
+        if let Some(idx) = core.current_task {
+            if idx < sched.processes.len() {
+                let p = &sched.processes[idx];
+                cs.current_pid = p.pid as u32;
+                cs.current_ticks = core.current_ticks.min(u32::MAX as u64) as u32;
+                cs.nice = p.nice;
+            }
+        }
+        cores.push(cs);
+    }
+
+    TelemetrySnapshot {
+        uptime_secs,
+        total_ram_kb: total_frames as u64 * 4,
+        used_ram_kb: total_frames.saturating_sub(free_frames) as u64 * 4,
+        zram_orig_kb: swap_used_blocks as u64 * 4,
+        zram_comp_kb: (swap_used_bytes as u64 + 1023) / 1024,
+        net_rx_bytes: net_rx,
+        net_tx_bytes: net_tx,
+        sample_time_ns: sample_now,
+        cpu_count,
+        gpu_count,
+        procs,
+        cores,
+        core_count: online as u32,
+    }
+}
+
+/// Write snapshot to TELEMETRY page. Performs expensive page walks here (outside lock).
+/// SAFETY: caller must ensure no concurrent writers; typically called from timer after releasing SCHEDULER lock.
+pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
+    let seq = TELEMETRY.sequence.wrapping_add(1);
+    TELEMETRY.sequence = seq;
+    core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
+
+    TELEMETRY.uptime_secs = snap.uptime_secs;
+    TELEMETRY.sample_time_ns = snap.sample_time_ns;
+    TELEMETRY.total_ram_kb = snap.total_ram_kb;
+    TELEMETRY.used_ram_kb = snap.used_ram_kb;
+    TELEMETRY.zram_orig_kb = snap.zram_orig_kb;
+    TELEMETRY.zram_comp_kb = snap.zram_comp_kb;
+    TELEMETRY.net_rx_bytes = snap.net_rx_bytes;
+    TELEMETRY.net_tx_bytes = snap.net_tx_bytes;
+
+    if TELEMETRY.cpu_count == 0 {
+        TELEMETRY.cpu_count = snap.cpu_count.max(1);
+    }
+    TELEMETRY.gpu_count = snap.gpu_count;
+
+    let hhdm_opt = crate::HHDM_REQ.response();
+
+    let mut count = 0usize;
+    for ps in &snap.procs {
+        if count >= MAX_PROCESSES {
+            break;
+        }
+        let entry = &mut TELEMETRY.procs[count];
+        entry.pid = ps.pid;
+        entry.ppid = ps.ppid;
+        entry.state = ps.state;
+        entry.name = ps.name;
+        entry.cpu_ticks = ps.cpu_ticks;
+
+        entry.mem_pages = if ps.is_finished_or_cleanup {
+            0
+        } else {
+            match hhdm_opt {
+                Some(resp) => {
+                    let hhdm = x86_64::VirtAddr::new(resp.offset);
+                    let aspace = crate::process::address_space::AddressSpace::from_pml4(ps.pml4_phys);
+                    if aspace.is_reclaimed() {
+                        0
+                    } else {
+                        // Walk happens here, outside SCHEDULER lock.
+                        unsafe { aspace.count_user_pages(hhdm) }.min(u32::MAX as usize) as u32
                     }
-                    None => 0,
                 }
-            };
+                None => 0,
+            }
+        };
         entry._pad = [0; 3];
         entry._pad2 = 0;
-        entry.name = proc.name;
 
         count += 1;
     }
 
-    // SAFETY: synchronized by caller; remaining entries are fully reset.
-    unsafe {
-        for i in count..MAX_PROCESSES {
-            TELEMETRY.procs[i] = ZERO_PROC;
-        }
-        TELEMETRY.proc_count = count as u32;
+    for i in count..MAX_PROCESSES {
+        TELEMETRY.procs[i] = ZERO_PROC;
     }
+    TELEMETRY.proc_count = count as u32;
 
-    // Populate per-core snapshots.
-    let online = sched.online_cores.min(MAX_CORES);
-    unsafe {
-        TELEMETRY.core_count = online as u32;
-        for c in 0..online {
-            let core = &sched.cores[c];
-            let entry = &mut TELEMETRY.cores[c];
-            entry.core_id = c as u8;
-            entry.local_timer_ticks = core.timer_ticks;
-            entry.context_switches = core.context_switches;
-            if let Some(idx) = core.current_task {
-                if idx < sched.processes.len() {
-                    let proc = &sched.processes[idx];
-                    entry.current_pid = proc.pid as u32;
-                    entry.current_ticks = core.current_ticks.min(u32::MAX as u64) as u32;
-                    entry.nice = proc.nice;
-                } else {
-                    entry.current_pid = 0;
-                    entry.current_ticks = 0;
-                    entry.nice = 0;
-                }
-            } else {
-                entry.current_pid = 0;
-                entry.current_ticks = 0;
-                entry.nice = 0;
-            }
-        }
+    let online = snap.core_count as usize;
+    TELEMETRY.core_count = online as u32;
+    for c in 0..online {
+        let cs = &snap.cores[c];
+        let entry = &mut TELEMETRY.cores[c];
+        entry.core_id = cs.core_id;
+        entry.local_timer_ticks = cs.local_timer_ticks;
+        entry.context_switches = cs.context_switches;
+        entry.current_pid = cs.current_pid;
+        entry.current_ticks = cs.current_ticks;
+        entry.nice = cs.nice;
     }
 
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
-    // SAFETY: synchronized by caller; end seqlock write (even sequence).
-    unsafe {
-        TELEMETRY.sequence = seq.wrapping_add(1);
-    }
+    TELEMETRY.sequence = seq.wrapping_add(1);
+}
+
+/// SAFETY: caller must serialize updates (timer ISR with interrupts disabled).
+/// Refactored for Phase 2: captures scalars under lock, heavy work (page walks) moved out.
+pub unsafe fn update_telemetry(
+    sched: &mut Scheduler,
+    pmm: &PhysicalMemoryManager,
+    tick_count: u64,
+) {
+    let snap = capture_telemetry_snapshot(sched, pmm, tick_count);
+    commit_telemetry_snapshot(&snap);
 }

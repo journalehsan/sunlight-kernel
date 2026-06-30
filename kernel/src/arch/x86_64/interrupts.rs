@@ -735,12 +735,13 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // a keyboard IRQ fires while we hold the lock (keyboard handler also locks).
     x86_64::instructions::interrupts::disable();
 
-    // ── Phase 1: brief lock — tick accounting + BSP timer work ───────────────
+    let sched_lock_start = now_ns();
+
+    // ── Phase 1: brief lock — tick accounting + BSP timer work (no heavy telemetry) ─
     //
-    // Hold the lock only long enough to:
-    //   • advance the quantum counter (tick())
-    //   • let the BSP send timer-server IPC and wake tty_server
-    // Then release it so other cores don't spin during Phase 2.
+    // Capture telemetry scalars under lock (cheap), release lock, then do expensive
+    // page counting outside the lock (Phase 2 goal).
+    let mut telemetry_snap: Option<crate::telemetry::TelemetrySnapshot> = None;
     {
         let mut sched = crate::sched::SCHEDULER.lock();
         sched.tick(cpu_id);
@@ -749,10 +750,13 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         if cpu_id == 0 {
             if ticks_total % 100 == 0 {
                 let pmm = crate::PMM.lock();
-                // SAFETY: interrupts are disabled; no re-entrant timer can fire.
-                unsafe {
-                    crate::telemetry::update_telemetry(&mut sched, &pmm, ticks_total);
-                }
+                // Capture only scalars here; expensive walks moved out.
+                telemetry_snap = Some(crate::telemetry::capture_telemetry_snapshot(
+                    &sched,
+                    &pmm,
+                    ticks_total,
+                ));
+                // pmm dropped; sched still held briefly for remaining BSP work.
             }
 
             // Timer-server notification and TTY wakeup.
@@ -784,6 +788,29 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
             }
         }
     } // Phase 1 lock released here — other cores can now proceed.
+
+    let sched_lock_end = now_ns();
+
+    // Phase 2 telemetry commit outside SCHEDULER lock (expensive page walks here).
+    if let Some(snap) = telemetry_snap {
+        let tel_start = now_ns();
+        unsafe {
+            crate::telemetry::commit_telemetry_snapshot(&snap);
+        }
+        let tel_end = now_ns();
+        if ticks_total % 100 == 0 {
+            serial_println!(
+                "[DIAG] sched_lock_hold_ns={} telemetry_update_ns={}",
+                sched_lock_end - sched_lock_start,
+                tel_end - tel_start
+            );
+        }
+    }
+
+    if cpu_id == 0 && ticks_total % 100 == 0 {
+        // Also report per-core activity and parked state via existing diag if enabled.
+        // (timer_ticks / ctx_switches already updated in tick() and visible in SCHED-DIAG)
+    }
 
     // ── Phase 2: AP lock-free early exit ─────────────────────────────────────
     //
