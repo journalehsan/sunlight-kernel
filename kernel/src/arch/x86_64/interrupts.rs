@@ -697,68 +697,113 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // interrupts from the per-core LAPIC, not the legacy 8259 PIC.
     unsafe { crate::arch::x86_64::lapic::send_eoi(); }
 
-    let mut ticks = TICKS.lock();
-    *ticks += 1;
-    let _t = *ticks;
-    drop(ticks);
-    let ticks_total = TELEMETRY_TICK_COUNT
-        .fetch_add(1, Ordering::Relaxed)
-        .wrapping_add(1);
+    // Cache CPU ID once per timer entry.
+    // current_cpu_id() issues a CPUID instruction (a full pipeline serialisation
+    // point). Calling it once and threading the result through eliminates the
+    // 2–3 redundant CPUID executions the old code did per tick per core.
+    let cpu_id = crate::sched::current_cpu_id();
 
-    // Poll key injection buffer for test automation (no IRQ1 needed)
-    keyboard::poll_inject_buffer();
+    // ── AP fast-paths (lock-free) ─────────────────────────────────────────────
 
-    // Disable interrupts while holding scheduler lock to prevent deadlock
-    // if keyboard IRQ fires while we hold the lock
-    x86_64::instructions::interrupts::disable();
-    let mut sched = crate::sched::SCHEDULER.lock();
-    sched.tick();
-
-    if ticks_total % 100 == 0 {
-        let pmm = crate::PMM.lock();
-        // SAFETY: timer handler has interrupts disabled during scheduler mutation and telemetry update.
-        unsafe {
-            crate::telemetry::update_telemetry(&mut sched, &pmm, ticks_total);
-        }
+    // AP: scheduler not yet ready — run queues not seeded, skip everything.
+    if cpu_id != 0 && !crate::sched::SCHEDULER_READY.load(core::sync::atomic::Ordering::Acquire) {
+        return 0;
     }
 
-    // Timer-server notifications and TTY wakeups are BSP-only.
-    // With 4 LAPIC timers firing simultaneously, all cores would otherwise
-    // send these on every tick — multiplying the effective tick rate seen by
-    // timer_server (×4) and over-waking tty_server. BSP (core 0) handles
-    // all cross-process timer signalling; AP cores only drive their own
-    // per-core scheduler tick and context-switch accounting.
-    if crate::sched::current_cpu_id() == 0 {
-        let timer_endpoint = sched
-            .processes
-            .iter()
-            .find(|p| p.name_str() == "timer_server")
-            .and_then(|p| p.ipc_endpoint.map(|endpoint| (endpoint, p.pid)));
+    // AP: parking check — core is above the active_cores threshold set by the
+    // smart scaling policy. No lock needed; ACTIVE_CORES is an atomic.
+    if crate::sched::is_core_parked(cpu_id) {
+        return 0;
+    }
 
-        if let Some((endpoint_id, timer_pid)) = timer_endpoint {
-            crate::ipc::with_shard(endpoint_id, |bus| {
-                bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
-            });
-        }
+    // ── BSP-only global bookkeeping ───────────────────────────────────────────
+    // APs do not touch TICKS or the key-injection buffer; both are BSP concerns
+    // and contending on TICKS.lock() from every core adds cross-core cache traffic
+    // for no AP benefit.
+    let ticks_total = if cpu_id == 0 {
+        let mut ticks = TICKS.lock();
+        *ticks += 1;
+        drop(ticks);
+        // Poll key injection buffer for test automation (no IRQ1 needed)
+        keyboard::poll_inject_buffer();
+        TELEMETRY_TICK_COUNT.fetch_add(1, Ordering::Relaxed).wrapping_add(1)
+    } else {
+        TELEMETRY_TICK_COUNT.load(Ordering::Relaxed)
+    };
 
-        if ticks_total % TTY_WAKE_INTERVAL_TICKS == 0 {
-            if let Some(tty_pid) = sched
+    // Disable interrupts while holding scheduler lock to prevent a deadlock if
+    // a keyboard IRQ fires while we hold the lock (keyboard handler also locks).
+    x86_64::instructions::interrupts::disable();
+
+    // ── Phase 1: brief lock — tick accounting + BSP timer work ───────────────
+    //
+    // Hold the lock only long enough to:
+    //   • advance the quantum counter (tick())
+    //   • let the BSP send timer-server IPC and wake tty_server
+    // Then release it so other cores don't spin during Phase 2.
+    {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        sched.tick(cpu_id);
+
+        // Telemetry and cross-process timer work are BSP-only (CPU 0).
+        if cpu_id == 0 {
+            if ticks_total % 100 == 0 {
+                let pmm = crate::PMM.lock();
+                // SAFETY: interrupts are disabled; no re-entrant timer can fire.
+                unsafe {
+                    crate::telemetry::update_telemetry(&mut sched, &pmm, ticks_total);
+                }
+            }
+
+            // Timer-server notification and TTY wakeup.
+            // With per-core LAPIC timers all firing at 100 Hz, doing this on
+            // every core would multiply the effective tick rate seen by
+            // timer_server (×N) and over-wake tty_server. BSP handles all
+            // cross-process timer signalling.
+            let timer_endpoint = sched
                 .processes
                 .iter()
-                .find(|p| p.name_str() == "tty_server")
-                .map(|p| p.pid)
-            {
-                sched.wake_pid(tty_pid);
+                .find(|p| p.name_str() == "timer_server")
+                .and_then(|p| p.ipc_endpoint.map(|ep| (ep, p.pid)));
+
+            if let Some((endpoint_id, timer_pid)) = timer_endpoint {
+                crate::ipc::with_shard(endpoint_id, |bus| {
+                    bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
+                });
+            }
+
+            if ticks_total % TTY_WAKE_INTERVAL_TICKS == 0 {
+                if let Some(tty_pid) = sched
+                    .processes
+                    .iter()
+                    .find(|p| p.name_str() == "tty_server")
+                    .map(|p| p.pid)
+                {
+                    sched.wake_pid(tty_pid);
+                }
             }
         }
+    } // Phase 1 lock released here — other cores can now proceed.
+
+    // ── Phase 2: AP lock-free early exit ─────────────────────────────────────
+    //
+    // peek_reschedule_on() reads the reschedule-mask atomic without acquiring
+    // the scheduler lock. It is safe because:
+    //   • Only this core ever clears its own bit (via check_reschedule_on).
+    //   • Other cores may only SET our bit (via request_reschedule_on).
+    // If our bit is not set, no context switch is needed; skip Phase 2 entirely
+    // and return 0 without contending on the global lock.
+    if !crate::sched::peek_reschedule_on(cpu_id) {
+        return 0;
     }
 
-    // Delegate all context-switch logic to the per-core schedule_tick().
-    // schedule_tick() checks NEEDS_RESCHEDULE internally, saves context,
-    // runs pick_next / steal_work, switches address spaces, and updates TSS.
-    let result = sched.schedule_tick(crate::sched::current_cpu_id(), saved_rsp);
-
-    // Release scheduler lock by dropping it
+    // ── Phase 2: context switch (re-acquire lock only when needed) ────────────
+    //
+    // schedule_tick() will re-check (and consume) the reschedule bit under the
+    // lock, save the interrupted context, run pick_next / steal_work, switch
+    // address spaces, and update the TSS RSP0.
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let result = sched.schedule_tick(cpu_id, saved_rsp);
     drop(sched);
 
     // IMPORTANT: do NOT re-enable interrupts here.
@@ -776,7 +821,6 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // context's saved RFLAGS has IF=1 (init_context writes 0x202; preempted
     // frames are saved with IF set and the asm OR's 0x200 into the outgoing
     // frame's RFLAGS as well). So leaving IF=0 here is correct and safe.
-
     result
 }
 

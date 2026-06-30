@@ -358,7 +358,7 @@ fn cleanup_cache(home: &[u8]) {
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[THUMBD] panic\n");
-    loop { process_yield(); }
+    sunlight_libc::exit(1);
 }
 
 #[no_mangle]

@@ -311,6 +311,30 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // sunlight-thumbd.service — disabled: thumbnail pre-warming panics on
+    // malformed simg data and leaves the process in a zombie-Ready loop.
+    let thumbd_service = r#"[Unit]
+Description=SunlightOS Thumbnail Daemon
+
+[Service]
+Type=simple
+ExecStart=/sbin/sunlight-thumbd
+Restart=no
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(thumbd_service.as_bytes()) {
+        if let Ok(idx) = services.add(unit) {
+            if let Some(entry) = services.get_mut(idx) {
+                entry.enabled = false;
+            }
+        }
+    }
+
     (services, sockets)
 }
 
