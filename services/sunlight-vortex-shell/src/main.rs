@@ -2609,6 +2609,25 @@ impl App for VortexShell {
                     self.suppress_next_click = false;
                     return true;
                 }
+                // A left-button release reaches us as `Click` (the display
+                // library aliases left-up to Click). Finish any marquee gesture
+                // armed on MouseDown here so the state machine returns to Idle:
+                //   - Dragging: commit the final selection rect and consume the
+                //     event — a drag must NOT be treated as a launch click.
+                //   - Armed (pressed but never dragged past threshold): this is
+                //     a plain click on empty desktop; reset and fall through to
+                //     normal click handling below.
+                match self.selection_state {
+                    DesktopSelectState::Dragging { .. } => {
+                        self.update_desktop_marquee(point);
+                        self.end_selection_gesture();
+                        return true;
+                    }
+                    DesktopSelectState::Armed { .. } => {
+                        self.end_selection_gesture();
+                    }
+                    DesktopSelectState::Idle => {}
+                }
                 if let Some(menu) = self.context_menu.take() {
                     if let Some(action) = menu_action_at(&menu, point) {
                         match action {
