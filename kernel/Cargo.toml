@@ -202,3 +202,7 @@ lz4_flex = { version = "0.11", default-features = false }
 [features]
 key_inject = []
 launch_trace = []
+# Verbose per-tick / per-alloc diagnostics over the serial port. OFF by default:
+# these logs are written while the global scheduler lock is held and block the
+# UART, stalling every core. Enable only for debugging.
+verbose_diag = []

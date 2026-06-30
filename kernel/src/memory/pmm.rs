@@ -109,7 +109,7 @@ impl PhysicalMemoryManager {
                             FRAME_OWNER[frame] = owner_pid;
                             FREE_FRAMES -= 1;
                             let count = ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
-                            if count % 100 == 0 || count < 10 {
+                            if cfg!(feature = "verbose_diag") && (count % 100 == 0 || count < 10) {
                                 crate::serial_println!(
                                     "[PMM] ALLOC #{} addr={:#x} free_now={}",
                                     count + 1,
@@ -176,7 +176,7 @@ impl PhysicalMemoryManager {
                 FREE_FRAMES += 1;
             }
             let count = FREE_COUNT.fetch_add(1, Ordering::Relaxed);
-            if count % 100 == 0 || count < 10 {
+            if cfg!(feature = "verbose_diag") && (count % 100 == 0 || count < 10) {
                 crate::serial_println!(
                     "[PMM] FREE #{} addr={:#x} free_now={}",
                     count + 1,

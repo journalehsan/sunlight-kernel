@@ -663,6 +663,10 @@ impl Scheduler {
     ///
     /// CPU-usage overlay: if mean usage across active cores < 50 % we halve
     /// the active count (but never below 1 or min(4, online)).
+    /// Maximum cores the scaling policy will ever activate. The single global
+    /// scheduler lock makes additional cores counter-productive beyond this.
+    const HEAVY_ACTIVE_CAP: usize = 8;
+
     pub fn maybe_scale_active_cores(&mut self) {
         let online = self.online_cores;
         // No point dynamically scaling when we only have 4 or fewer cores.
@@ -675,29 +679,41 @@ impl Scheduler {
         }
 
         // Count tasks eligible to run.
-        let active_tasks = self.processes.iter()
+        let active_tasks = self
+            .processes
+            .iter()
             .filter(|p| matches!(p.state, ProcessState::Ready | ProcessState::Running))
             .count();
 
         // Estimate mean CPU usage from the busy/total tick accumulators.
         let active = self.active_cores.max(1);
         let total_ticks: u64 = (0..active).map(|c| self.core_total_ticks[c]).sum();
-        let busy_ticks: u64  = (0..active).map(|c| self.core_busy_ticks[c]).sum();
+        let busy_ticks: u64 = (0..active).map(|c| self.core_busy_ticks[c]).sum();
         let usage_pct = if total_ticks > 0 {
             (busy_ticks * 100) / total_ticks
         } else {
             0
         };
         // Reset accumulators for next window.
-        for c in 0..online { self.core_busy_ticks[c] = 0; self.core_total_ticks[c] = 0; }
+        for c in 0..online {
+            self.core_busy_ticks[c] = 0;
+            self.core_total_ticks[c] = 0;
+        }
 
-        // Three-tier core target.
-        let tier_target = if active_tasks > online * 2 {
-            online                          // heavy: all cores
-        } else if active_tasks > 8 {
-            4.max(online / 2)               // medium: half (≥4)
-        } else {
-            4.min(online)                   // light: at most 4
+        // Load-ratio core target. The fraction of cores we activate rises with
+        // the runnable-tasks-per-core ratio, following n/(n+1):
+        //   ratio 0 (tasks < online) → small fixed set (light idle)
+        //   ratio 1 (≈1 task/core)   → 1/2 of cores
+        //   ratio 2 (≈2 tasks/core)  → 2/3 of cores
+        //   ratio 3 (≈3 tasks/core)  → 3/4 of cores
+        //   ratio ≥ 4               → all cores
+        let ratio = active_tasks / online;
+        let tier_target = match ratio {
+            0 => 4.min(online),    // light: at most 4
+            1 => online / 2,       // 1/2
+            2 => (online * 1) / 3, // 2/3
+            3 => (online * 2) / 4, // 3/4
+            _ => online,           // heavy: all cores
         };
 
         // CPU-usage overlay: < 50 % utilisation → halve (but floor at 4 or 1).
@@ -708,11 +724,21 @@ impl Scheduler {
             tier_target
         };
 
-        let new_active = scaled.clamp(1, online);
+        // Contention cap. All cores share a single global scheduler spin-lock,
+        // so every active core takes that lock 100×/sec. Past ~8 active cores
+        // the lock convoy costs more than the added parallelism buys, which is
+        // exactly the >8-core slowdown. Never un-park more than HEAVY_ACTIVE_CAP
+        // cores (but always honour the light-load floor on smaller machines).
+        let capped = scaled.min(Self::HEAVY_ACTIVE_CAP.max(floor));
+
+        let new_active = capped.max(floor).clamp(1, online);
         if new_active != self.active_cores {
             serial_println!(
                 "[SCHED] core-scale {} → {} (tasks={} usage={}%)",
-                self.active_cores, new_active, active_tasks, usage_pct
+                self.active_cores,
+                new_active,
+                active_tasks,
+                usage_pct
             );
             self.active_cores = new_active;
             ACTIVE_CORES.store(new_active, Ordering::Release);
@@ -751,9 +777,7 @@ impl Scheduler {
         }
 
         // BSP drives the periodic core-scaling decision.
-        if cpu_id == 0
-            && self.global_tick > 0
-            && self.global_tick % Self::SCALE_INTERVAL_TICKS == 0
+        if cpu_id == 0 && self.global_tick > 0 && self.global_tick % Self::SCALE_INTERVAL_TICKS == 0
         {
             self.maybe_scale_active_cores();
         }
@@ -813,7 +837,10 @@ impl Scheduler {
             request_reschedule_on(cpu_id);
         }
 
-        if self.global_tick.is_multiple_of(1000) {
+        // The diagnostic dump writes per-core + per-process state over the slow
+        // UART while the global scheduler lock is held — every other core spins
+        // on the lock for the duration. Compile it out unless explicitly enabled.
+        if cfg!(feature = "verbose_diag") && self.global_tick.is_multiple_of(1000) {
             self.diagnostic_report();
         }
     }
@@ -1166,14 +1193,14 @@ impl Scheduler {
         // pick a task immediately.  There is nothing to save or re-queue.
         if self.cores[cpu_id].current_task.is_none() {
             if let Some(next) = self.pick_next(cpu_id) {
-                let next_rsp       = self.processes[next].context_rsp;
+                let next_rsp = self.processes[next].context_rsp;
                 let next_stack_top = self.processes[next].kernel_stack_top;
-                let next_fs_base   = self.processes[next].fs_base;
-                self.cores[cpu_id].current_task   = Some(next);
+                let next_fs_base = self.processes[next].fs_base;
+                self.cores[cpu_id].current_task = Some(next);
                 self.cores[cpu_id].context_switches += 1;
-                self.processes[next].state          = ProcessState::Running;
-                self.processes[next].last_run_tick  = self.global_tick;
-                self.processes[next].owning_core    = cpu_id as u8;
+                self.processes[next].state = ProcessState::Running;
+                self.processes[next].last_run_tick = self.global_tick;
+                self.processes[next].owning_core = cpu_id as u8;
                 // Do NOT clear queued_on_core here. In BORE mode pick_next_bore
                 // already cleared it when it popped the process. In RR mode the
                 // process is never popped from the queue, so queued_on_core must
