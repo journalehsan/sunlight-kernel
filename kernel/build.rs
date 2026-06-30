@@ -324,6 +324,12 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release"],
         },
+        EmbeddedBinary {
+            package: "cpu-utils",
+            output: "cpufeat",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
     ];
 
     for bin in binaries {
