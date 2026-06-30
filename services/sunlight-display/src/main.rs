@@ -1317,12 +1317,29 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
 
     let win = state.windows.remove(pos);
     let was_desktop = win.config.window_type == WindowType::Desktop;
+    let owner_pid = win.owner_pid;
 
     // The display server owns the SHM object created at CREATE_WINDOW time, so
     // normal close must explicitly release that ownership.
     let _ = sunlight_ipc::shm_free(win.shm_cap);
     // TODO: Harden forced-close paths so SHM revocation is coordinated more
     // explicitly with process-exit cleanup and stale clients.
+
+    // Terminate the owning application once its last window closes. Without this
+    // a closed app lingers headless (its EVENT_POLL loop keeps spinning on a
+    // window that no longer exists), and the shell reports it as "window
+    // disappeared" rather than restoring the not-running dock icon. SIGTERM lets
+    // the process exit cleanly; the shell's process_is_alive poll then flips the
+    // app back to NotRunning. The desktop shell (Desktop type) is exempt so the
+    // compositor never kills its own backdrop, and pids 0/1 (kernel/init) are
+    // never signalled.
+    const SIGTERM: u32 = 15;
+    if !was_desktop
+        && owner_pid > 1
+        && !state.windows.iter().any(|w| w.owner_pid == owner_pid)
+    {
+        let _ = sunlight_ipc::kill(owner_pid, SIGTERM);
+    }
 
     let cancel = match &state.active_drag {
         ActiveDrag::Move(d) => d.window_id == win_id,
