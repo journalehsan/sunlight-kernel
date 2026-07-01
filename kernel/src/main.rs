@@ -213,7 +213,7 @@ pub extern "C" fn _start() -> ! {
     };
 
     serial_println!("══════════════════════════════════════");
-    serial_println!("  SunlightOS — Phase 3 Boot Sequence  ");
+    serial_println!("  SunlightOS — Kernel Stable Boot    ");
     serial_println!("══════════════════════════════════════");
 
     // 1. PMM
@@ -769,7 +769,7 @@ pub extern "C" fn _start() -> ! {
     // for the spawn path by process::spawn::embedded_bytes_for_path.
 
     splash.set_progress(1000); // 100%
-    splash.set_phase("Phase 3");
+    splash.set_phase("Kernel stable");
     splash.set_status("SunlightOS ready — login");
     splash.set_kernel_status("OK");
     splash.log("[SunlightOS] Phase 3 OK");

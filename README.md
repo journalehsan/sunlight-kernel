@@ -10,6 +10,28 @@
 - **User-space (Ring 3):** Drivers, filesystems, networking, and services.
 - **Helios Subsystem:** Linux binary compatibility — translates Linux syscalls to IPC messages.
 
+## Milestone
+
+SunlightOS has reached the point where the kernel core is stable. The remaining work is primarily in Ring 3: drivers, services, userland tools, and polish.
+
+Latest code metrics from Day 25:
+
+- Rust code: 100,362 total lines / 90,640 non-blank
+- Documentation: 38,845 total lines / 30,760 non-blank
+- All tracked files: 152,228 total lines / 124,879 non-blank
+- Rust files: 305
+- Cargo manifests: 69
+- All tracked files: 529
+
+Microkernel split:
+
+- Kernel Rust: 17,717 lines / 15,954 non-blank
+- Non-kernel Rust: 82,645 lines / 74,686 non-blank
+- Non-kernel to kernel ratio: 4.66:1 by lines, 4.68:1 by non-blank lines
+- Cargo crate ratio: 68 non-kernel manifests to 1 kernel manifest
+
+This is the point where SunlightOS is growing mostly through user-space services, apps, UI, shell, filesystem, networking, and libraries while the kernel stays compact.
+
 ## Prerequisites
 
 - **Rust** (nightly toolchain — managed by `rust-toolchain.toml`)
@@ -97,7 +119,7 @@ sunlightos/
 | Phase 5 | Networking | **Done** (TLS via rustls pending) |
 | Phase 6 | Userland, zram swap, and polish | **In Progress** |
 
-**Polish remaining:** `nicectl` CLI (Ring 3 companion to `sunlight-niced`) — daemon and scheduler integration are done.
+**Current focus:** Ring 3 growth. Kernel work is in maintenance mode while drivers, services, and userland tools continue to expand.
 
 ## What's Working
 

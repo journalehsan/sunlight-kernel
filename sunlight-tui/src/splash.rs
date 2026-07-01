@@ -59,7 +59,7 @@ impl SplashScreen {
                 ram_mib,
             },
             version: "v0.1.0",
-            phase: "Phase 2",
+            phase: "Kernel stable",
             tick: 0,
         };
 
@@ -225,7 +225,7 @@ impl SplashScreen {
             1,
         );
 
-        // Right: version | phase | mode
+        // Right: version | milestone | mode
         let mode_str = match self.mode {
             BootMode::Silent => "SILENT",
             BootMode::Debug => "DEBUG",
@@ -234,7 +234,7 @@ impl SplashScreen {
         let mut right_text = [0u8; 64];
         let mut pos = 0;
 
-        // Build right text: "v0.1.0 | Phase 2 | DEBUG"
+        // Build right text: "v0.1.0 | Kernel stable | DEBUG"
         for &b in self.version.as_bytes() {
             right_text[pos] = b;
             pos += 1;
