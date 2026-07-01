@@ -363,7 +363,9 @@ pub mod sgp {
         // bits [12:6] z_index_value (1-100; 0 → use default 50)
         // bits [14:13] show_type   (0=Floating 1=Tiled 2=Scrolling)
         // bits [16:15] group_type  (0=None 1=Stacked 2=Tabbed)
-        // bits [63:17] reserved
+        // bits [18:17] decoration  (0=Normal 1=CompactClose 2=CompactCloseMinimize
+        //                           3=HiddenOverlay)
+        // bits [63:19] reserved
         pub mod config_flags {
             pub const WIN_TYPE_MASK: u64 = 0x3;
             pub const STATE_MASK: u64 = 0x3 << 2;
@@ -376,6 +378,8 @@ pub mod sgp {
             pub const SHOW_TYPE_SHIFT: u64 = 13;
             pub const GROUP_TYPE_MASK: u64 = 0x3 << 15;
             pub const GROUP_TYPE_SHIFT: u64 = 15;
+            pub const DECORATION_MASK: u64 = 0x3 << 17;
+            pub const DECORATION_SHIFT: u64 = 17;
         }
     }
 }

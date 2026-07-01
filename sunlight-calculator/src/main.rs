@@ -16,6 +16,7 @@ use sunlight_ui::paint::Canvas;
 use sunlight_ui::theme::{Color, Theme};
 use sunlight_ui::{
     request_close, widgets::Label, App, Event, Rect, UiSymbol, Window, WindowConfig,
+    WindowDecoration,
 };
 
 static F_MED: VecFont = VecFont(FontRole::UiMedium);
@@ -459,7 +460,8 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
-        title: "Sunlight Calculator",
+        title: "Calculator",
+        decoration: WindowDecoration::CompactCloseMinimize,
     }) {
         Some(w) => w,
         None => {

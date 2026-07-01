@@ -26,6 +26,7 @@ A typical window follows this sequence:
 
 1. **CREATE_WINDOW**  
    Client requests a new window (width, height, config flags, initial title hint, pid/ppid context).
+   Decoration style now lives in `config_flags` and defaults to `Normal` when omitted by older clients.
 
 2. **Allocate WindowEntry**  
    Compositor creates internal tracking state for the window.
@@ -45,7 +46,7 @@ A typical window follows this sequence:
 7. **Lifetime operations**  
    - `EVENT_POLL` — client blocks or polls for input (mouse, keys, etc.).
    - `COMMIT_FRAME` — client signals that its SHM buffer is ready for composition.
-   - `CONFIGURE_WINDOW` — title, state (min/max), flags, etc. are updated.
+   - `CONFIGURE_WINDOW` — title, state (min/max), decoration flags, etc. are updated.
    - Drag / resize gestures are handled inside the compositor (no client SHM mutation required for geometry).
 
 8. **CLOSE_WINDOW / DESTROY_WINDOW**  

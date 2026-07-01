@@ -3583,6 +3583,7 @@ pub extern "C" fn _start() -> ! {
             width: screen_w,
             height: screen_h,
             title: "Vortex Shell",
+            decoration: sunlight_ui::WindowDecoration::Normal,
         }) {
             Some(w) => break w,
             None => process_yield(),

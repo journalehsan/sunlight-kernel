@@ -2313,6 +2313,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
         width: WIN_W,
         height: WIN_H,
         title: "Sunlight Files",
+        decoration: sunlight_ui::WindowDecoration::Normal,
     }) {
         Some(w) => w,
         None => {

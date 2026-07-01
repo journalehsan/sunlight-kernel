@@ -137,6 +137,8 @@ const NOTIFICATION_MARGIN_Y: i32 = 12;
 const NOTIFICATION_GAP: i32 = 8;
 const NOTIFICATION_TIMEOUT_MS: u64 = 30_000;
 const NOTIFICATION_POLL_MS: u64 = 100;
+const OVERLAY_DECORATION_POLL_MS: u64 = 100;
+const OVERLAY_DECORATION_IDLE_TIMEOUT_MS: u64 = 2_500;
 const NOTIFICATION_TEXT_MARGIN_X: i32 = 12;
 const NOTIFICATION_TEXT_MARGIN_Y: i32 = 10;
 
@@ -167,6 +169,37 @@ enum WindowState {
 enum BorderStyle {
     Full = 0,
     None = 1,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum WindowDecoration {
+    Normal = 0,
+    CompactClose = 1,
+    CompactCloseMinimize = 2,
+    HiddenOverlay = 3,
+}
+
+impl WindowDecoration {
+    fn from_flags(flags: u64) -> Self {
+        match ((flags & SgpMsg::config_flags::DECORATION_MASK)
+            >> SgpMsg::config_flags::DECORATION_SHIFT) as u8
+        {
+            1 => Self::CompactClose,
+            2 => Self::CompactCloseMinimize,
+            3 => Self::HiddenOverlay,
+            _ => Self::Normal,
+        }
+    }
+
+    const fn titlebar_height(self) -> u32 {
+        match self {
+            Self::Normal => TITLEBAR_H,
+            Self::CompactClose | Self::CompactCloseMinimize | Self::HiddenOverlay => {
+                COMPACT_TITLEBAR_H
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -242,7 +275,8 @@ impl CursorShape {
 //
 // IPC encoding (CREATE_WINDOW / CONFIGURE_WINDOW):
 //   words[0] = (client_w as u32) | ((client_h as u32) << 32)   [CREATE only]
-//   words[1] = config_flags  (see SgpMsg::config_flags bit layout)
+//   words[1] = config_flags  (see SgpMsg::config_flags bit layout, including
+//              decoration style/defaulting)
 //   words[2] = (pid as u32)  | ((ppid as u32) << 32)
 //   words[3] = title bytes [0..8]  (first 8 ASCII chars, LE u64)
 //
@@ -252,10 +286,12 @@ impl CursorShape {
 // ---------------------------------------------------------------------------
 
 #[allow(dead_code)]
+#[derive(Clone, Copy)]
 struct WindowConfig {
     title: [u8; 64],
     window_type: WindowType,
     state: WindowState,
+    decoration: WindowDecoration,
     border: BorderStyle,
     z_index_type: ZIndexType,
     z_index_value: u8,
@@ -277,6 +313,7 @@ impl WindowConfig {
             title,
             window_type: WindowType::Normal,
             state: WindowState::Normal,
+            decoration: WindowDecoration::Normal,
             border: BorderStyle::Full,
             z_index_type: ZIndexType::Normal,
             z_index_value: 50,
@@ -306,6 +343,7 @@ impl WindowConfig {
             3 => WindowState::Fullscreen,
             _ => WindowState::Normal,
         };
+        let decoration = WindowDecoration::from_flags(flags);
         let border = if (flags >> 4) & 1 != 0 {
             BorderStyle::None
         } else {
@@ -345,6 +383,7 @@ impl WindowConfig {
             title,
             window_type,
             state,
+            decoration,
             border,
             z_index_type,
             z_index_value,
@@ -362,16 +401,15 @@ impl WindowConfig {
         if shm_ptr.is_null() {
             return;
         }
+        self.title = [0; 64];
         let max = shm_len.min(63);
         for i in 0..max {
             let b = unsafe { shm_ptr.add(i).read() };
             if b == 0 {
-                self.title[i] = 0;
                 break;
             }
             self.title[i] = b;
         }
-        self.title[63] = 0;
     }
 }
 
@@ -416,7 +454,7 @@ enum ActiveDrag {
 // Hit-testing
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum HitZone {
     Miss,
     TitleBar,
@@ -637,6 +675,9 @@ struct Window {
     rolled_up: bool,
     /// Client height saved before rolling up so it can be restored on un-roll.
     saved_unrolled_h: u32,
+    overlay_decorations_visible: bool,
+    overlay_last_motion_ms: u64,
+    overlay_pointer_inside: bool,
     first_present_logged: bool,
 }
 
@@ -647,6 +688,50 @@ struct LaunchTraceRecord {
 }
 
 impl Window {
+    fn decoration(&self) -> WindowDecoration {
+        self.config.decoration
+    }
+
+    fn titlebar_height(&self) -> u32 {
+        self.decoration().titlebar_height()
+    }
+
+    fn decorations_visible(&self) -> bool {
+        self.decoration() != WindowDecoration::HiddenOverlay || self.overlay_decorations_visible
+    }
+
+    fn control_layout(&self) -> WindowControlLayout {
+        match self.decoration() {
+            WindowDecoration::Normal => WindowControlLayout::Normal,
+            WindowDecoration::CompactClose => WindowControlLayout::CloseOnly,
+            WindowDecoration::CompactCloseMinimize | WindowDecoration::HiddenOverlay => {
+                WindowControlLayout::CloseMinimize
+            }
+        }
+    }
+
+    fn control_buttons(&self) -> &'static [WindowControlKind] {
+        const NORMAL: &[WindowControlKind] = &[
+            WindowControlKind::Pin,
+            WindowControlKind::Minimize,
+            WindowControlKind::Maximize,
+            WindowControlKind::Close,
+        ];
+        const CLOSE_ONLY: &[WindowControlKind] = &[WindowControlKind::Close];
+        const CLOSE_MINIMIZE: &[WindowControlKind] =
+            &[WindowControlKind::Minimize, WindowControlKind::Close];
+
+        match self.control_layout() {
+            WindowControlLayout::Normal => NORMAL,
+            WindowControlLayout::CloseOnly => CLOSE_ONLY,
+            WindowControlLayout::CloseMinimize => CLOSE_MINIMIZE,
+        }
+    }
+
+    fn client_origin(&self) -> (u32, u32) {
+        (self.x + BORDER_W, self.y + self.titlebar_height())
+    }
+
     /// Returns the chrome rectangle (x, y, w, h) accounting for state.
     fn chrome_rect(&self, fb_w: u32, fb_h: u32) -> (u32, u32, u32, u32) {
         match self.config.state {
@@ -666,7 +751,7 @@ impl Window {
                     self.x,
                     self.y,
                     self.width + BORDER_W * 2,
-                    TITLEBAR_H + client_h + BORDER_W,
+                    self.titlebar_height() + client_h + BORDER_W,
                 )
             }
         }
@@ -1429,6 +1514,7 @@ fn validate_size(w: u32, h: u32) -> Option<(u32, u32)> {
 
 const DESKTOP_COLOR: u32 = 0x00121214; // Deep dark gray/black
 const TITLEBAR_H: u32 = 32; // Taller for Chrome-tab style
+const COMPACT_TITLEBAR_H: u32 = 24;
 const TITLEBAR_COLOR: u32 = 0x002B2B36; // inactive titlebar (dark slate)
 const TITLEBAR_ACTIVE: u32 = 0x001E1E26; // active window titlebar (darker base)
 const TITLEBAR_ACCENT: u32 = 0x00FF7A00; // Warm/Orange accent line
@@ -1476,6 +1562,13 @@ enum WindowControlKind {
     Maximize,
     Restore,
     Close,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WindowControlLayout {
+    Normal,
+    CloseOnly,
+    CloseMinimize,
 }
 
 impl WindowControlKind {
@@ -1772,10 +1865,25 @@ fn title_len(title: &[u8; 64]) -> usize {
     title.iter().position(|&b| b == 0).unwrap_or(title.len())
 }
 
-fn control_rect(wx: u32, wy: u32, chrome_w: u32, slot_from_right: u32) -> Rect {
+fn control_rect(wx: u32, wy: u32, chrome_w: u32, titlebar_h: u32, slot_from_right: u32) -> Rect {
     let x = wx + chrome_w.saturating_sub((BTN_SIZE + BTN_SPACING) * (slot_from_right + 1));
-    let y = wy as i32 + (TITLEBAR_H.saturating_sub(BTN_SIZE)) as i32 / 2;
+    let y = wy as i32 + (titlebar_h.saturating_sub(BTN_SIZE)) as i32 / 2;
     Rect::new(x as i32, y, BTN_SIZE, BTN_SIZE)
+}
+
+fn control_rect_for_kind(
+    win: &Window,
+    wx: u32,
+    wy: u32,
+    chrome_w: u32,
+    control: WindowControlKind,
+) -> Option<Rect> {
+    let titlebar_h = win.titlebar_height();
+    let controls = win.control_buttons();
+    controls.iter().position(|kind| *kind == control).map(|index| {
+        let slot_from_right = controls.len().saturating_sub(1).saturating_sub(index) as u32;
+        control_rect(wx, wy, chrome_w, titlebar_h, slot_from_right)
+    })
 }
 
 fn draw_title(canvas: &mut Canvas<'_>, title: &[u8; 64], rect: Rect, color: Color) {
@@ -1826,6 +1934,7 @@ fn draw_window_control(
 fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZone {
     // Determine effective chrome origin / size based on window state.
     let (wx, wy, chrome_w, chrome_h) = win.chrome_rect(fb_w, fb_h);
+    let titlebar_h = win.titlebar_height();
 
     let fullscreen = win.config.state == WindowState::Fullscreen;
     let no_border = win.config.border == BorderStyle::None || fullscreen;
@@ -1840,24 +1949,23 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
 
     // Title bar zone (not present in Fullscreen or no-border Widget/Desktop).
     if !fullscreen && !no_border {
-        if rel_y < TITLEBAR_H {
-            let close_rect = control_rect(wx, wy, chrome_w, 0);
-            let maximize_rect = control_rect(wx, wy, chrome_w, 1);
-            let minimize_rect = control_rect(wx, wy, chrome_w, 2);
-            let pin_rect = control_rect(wx, wy, chrome_w, 3);
+        if win.decorations_visible() && rel_y < titlebar_h {
             let point = sunlight_ui::Point::new(cx as i32, cy as i32);
 
-            if close_rect.contains(point) {
-                return HitZone::CloseBtn;
-            }
-            if maximize_rect.contains(point) {
-                return HitZone::MaximizeBtn;
-            }
-            if minimize_rect.contains(point) {
-                return HitZone::MinimizeBtn;
-            }
-            if pin_rect.contains(point) {
-                return HitZone::KeepOnTopBtn;
+            for control in win.control_buttons() {
+                if let Some(rect) = control_rect_for_kind(win, wx, wy, chrome_w, *control) {
+                    if rect.contains(point) {
+                        return match control {
+                            WindowControlKind::Close => HitZone::CloseBtn,
+                            WindowControlKind::Maximize | WindowControlKind::Restore => {
+                                HitZone::MaximizeBtn
+                            }
+                            WindowControlKind::Minimize => HitZone::MinimizeBtn,
+                            WindowControlKind::Pin => HitZone::KeepOnTopBtn,
+                            WindowControlKind::Help => HitZone::TitleBar,
+                        };
+                    }
+                }
             }
 
             return HitZone::TitleBar;
@@ -1878,7 +1986,7 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
 
     // Corner zones (checked before edge zones — larger grab target wins).
     let corner_size = RESIZE_BORDER + 4;
-    let bottom_zone = rel_y >= TITLEBAR_H + win.height.saturating_sub(corner_size);
+    let bottom_zone = rel_y >= titlebar_h + win.height.saturating_sub(corner_size);
 
     if bottom_zone {
         if rel_x < corner_size {
@@ -1887,7 +1995,7 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
         if rel_x >= chrome_w.saturating_sub(corner_size) {
             return HitZone::CornerBR;
         }
-        if rel_y >= TITLEBAR_H + win.height {
+        if rel_y >= titlebar_h + win.height {
             return HitZone::EdgeBottom;
         }
     }
@@ -1899,7 +2007,7 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
     if rel_x >= chrome_w - RESIZE_BORDER {
         return HitZone::EdgeRight;
     }
-    if rel_y >= TITLEBAR_H + win.height {
+    if rel_y >= titlebar_h + win.height {
         return HitZone::EdgeBottom;
     }
 
@@ -1922,6 +2030,109 @@ fn cursor_for_scene(state: &CompositorState) -> CursorShape {
     }
 }
 
+fn refresh_cursor_after_scene_change(state: &mut CompositorState) {
+    let old_cursor = state.active_cursor;
+    state.active_cursor = cursor_for_scene(state);
+    if old_cursor == state.active_cursor {
+        return;
+    }
+    let cursor_rect = cursor_dirty_rect(state.mouse_x as u32, state.mouse_y as u32);
+    if state.hw_cursor_active {
+        if !upload_hw_cursor_if_needed(state) {
+            mark_dirty_rect(state, cursor_rect);
+        }
+    } else {
+        mark_dirty_rect(state, cursor_rect);
+    }
+}
+
+fn overlay_decoration_timeout_pending(state: &CompositorState) -> bool {
+    state.windows.iter().any(|win| {
+        win.decoration() == WindowDecoration::HiddenOverlay
+            && !win.hidden
+            && win.config.state != WindowState::Minimized
+    })
+}
+
+fn update_overlay_window_visibility(
+    state: &mut CompositorState,
+    now: u64,
+    pointer_moved: bool,
+    pointer_pressed: bool,
+) -> bool {
+    let cx = state.mouse_x as u32;
+    let cy = state.mouse_y as u32;
+    let mut changed = false;
+
+    for idx in 0..state.windows.len() {
+        let is_overlay = state.windows[idx].decoration() == WindowDecoration::HiddenOverlay;
+        if !is_overlay {
+            continue;
+        }
+
+        let inside = {
+            let win = &state.windows[idx];
+            pointer_eligible_window(state, win)
+                && hit_test_window(win, cx, cy, state.fb_width, state.fb_height) != HitZone::Miss
+        };
+
+        let dirty_rect = {
+            let win = &mut state.windows[idx];
+            let mut next_visible = win.overlay_decorations_visible;
+            if inside && (!win.overlay_pointer_inside || pointer_moved || pointer_pressed) {
+                win.overlay_last_motion_ms = now;
+                next_visible = true;
+            } else if !inside && win.overlay_pointer_inside {
+                next_visible = false;
+            } else if inside
+                && win.overlay_decorations_visible
+                && now.saturating_sub(win.overlay_last_motion_ms)
+                    >= OVERLAY_DECORATION_IDLE_TIMEOUT_MS
+            {
+                next_visible = false;
+            }
+
+            let rect = if next_visible != win.overlay_decorations_visible {
+                win.overlay_decorations_visible = next_visible;
+                let (wx, wy, ww, wh) = win.chrome_rect(state.fb_width, state.fb_height);
+                Some(Rect::new(wx as i32, wy as i32, ww, wh))
+            } else {
+                None
+            };
+            win.overlay_pointer_inside = inside;
+            rect
+        };
+        if let Some(rect) = dirty_rect {
+            mark_dirty_rect(state, rect);
+            changed = true;
+        }
+    }
+
+    if changed {
+        refresh_cursor_after_scene_change(state);
+    }
+    changed
+}
+
+fn compositor_poll_timeout_ms(state: &CompositorState) -> Option<u64> {
+    let notification_timeout = if state.notifications.is_empty() {
+        None
+    } else {
+        Some(NOTIFICATION_POLL_MS)
+    };
+    let overlay_timeout = if overlay_decoration_timeout_pending(state) {
+        Some(OVERLAY_DECORATION_POLL_MS)
+    } else {
+        None
+    };
+    match (notification_timeout, overlay_timeout) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Compositing
 // ---------------------------------------------------------------------------
@@ -1939,6 +2150,7 @@ fn composite_window(
     let fullscreen = win.config.state == WindowState::Fullscreen;
     let maximized = win.config.state == WindowState::Maximized;
     let no_chrome = fullscreen || win.config.border == BorderStyle::None;
+    let titlebar_h = win.titlebar_height();
 
     // Rolled-up windows render chrome only; skip client blit entirely.
     let skip_client = win.rolled_up && !fullscreen && !maximized;
@@ -1953,10 +2165,10 @@ fn composite_window(
         let ch = if no_chrome {
             state.fb_height
         } else {
-            state.fb_height.saturating_sub(TITLEBAR_H + BORDER_W)
+            state.fb_height.saturating_sub(titlebar_h + BORDER_W)
         };
         let ox = if no_chrome { 0 } else { BORDER_W };
-        let oy = if no_chrome { 0 } else { TITLEBAR_H };
+        let oy = if no_chrome { 0 } else { titlebar_h };
         (ox, oy, cw, ch)
     } else if maximized {
         // Maximized: confined below the top panel so it doesn't cover the shell bar.
@@ -1964,10 +2176,10 @@ fn composite_window(
         let ch = state
             .fb_height
             .saturating_sub(PANEL_TOP_RESERVED_H)
-            .saturating_sub(TITLEBAR_H + BORDER_W);
-        (BORDER_W, PANEL_TOP_RESERVED_H + TITLEBAR_H, cw, ch)
+            .saturating_sub(titlebar_h + BORDER_W);
+        (BORDER_W, PANEL_TOP_RESERVED_H + titlebar_h, cw, ch)
     } else {
-        (win.x + BORDER_W, win.y + TITLEBAR_H, win.width, win.height)
+        (win.x + BORDER_W, win.y + titlebar_h, win.width, win.height)
     };
 
     if !no_chrome {
@@ -1984,9 +2196,9 @@ fn composite_window(
         let chrome_h = if maximized {
             state.fb_height.saturating_sub(PANEL_TOP_RESERVED_H)
         } else if win.rolled_up {
-            TITLEBAR_H + BORDER_W
+            titlebar_h + BORDER_W
         } else {
-            TITLEBAR_H + win.height + BORDER_W
+            titlebar_h + win.height + BORDER_W
         };
 
         let tb_color = if is_focused {
@@ -2017,74 +2229,82 @@ fn composite_window(
         let inner_radius = outer_radius.saturating_sub(BORDER_W);
         let content_backdrop = Rect::new(
             inner.x,
-            inner.y + TITLEBAR_H as i32,
+            inner.y + if win.decorations_visible() { titlebar_h as i32 } else { 0 },
             inner.w,
-            inner.h.saturating_sub(TITLEBAR_H),
+            inner.h
+                .saturating_sub(if win.decorations_visible() { titlebar_h } else { 0 }),
         );
-        let pin_rect = control_rect(wx, wy, chrome_w, 3);
-        let minimize_rect = control_rect(wx, wy, chrome_w, 2);
-        let maximize_rect = control_rect(wx, wy, chrome_w, 1);
-        let close_rect = control_rect(wx, wy, chrome_w, 0);
-        let control_strip_w = (BTN_SIZE + BTN_SPACING) * 4;
+        let controls = win.control_buttons();
+        let control_strip_w = if controls.is_empty() {
+            0
+        } else {
+            (BTN_SIZE + BTN_SPACING) * controls.len() as u32
+        };
         let title_rect = Rect::new(
-            wx as i32 + 14,
-            wy as i32 + 2,
-            chrome_w.saturating_sub(control_strip_w + 28),
-            TITLEBAR_H.saturating_sub(4),
+            wx as i32 + 12,
+            wy as i32 + 1,
+            chrome_w.saturating_sub(control_strip_w + 24),
+            titlebar_h.saturating_sub(2),
         );
 
         {
             let mut canvas = back_buffer_canvas(state, back_buffer);
             canvas.fill_top_rounded_rect(outer, outer_radius, Color(bd_color));
-            canvas.fill_top_rounded_rect(inner, inner_radius, Color(tb_color));
-            canvas.fill_rect(content_backdrop, Color(0xFF1A1A20));
-
-            draw_window_control(
-                &mut canvas,
-                pin_rect,
-                WindowControlKind::Pin,
-                Color(icon_col),
-                Color(tb_color),
-                hover_zone == HitZone::KeepOnTopBtn,
-                win.config.z_index_type == ZIndexType::OnTop,
-            );
-            draw_window_control(
-                &mut canvas,
-                minimize_rect,
-                WindowControlKind::Minimize,
-                Color(icon_col),
-                Color(tb_color),
-                hover_zone == HitZone::MinimizeBtn,
-                false,
-            );
-            draw_window_control(
-                &mut canvas,
-                maximize_rect,
-                if maximized {
-                    WindowControlKind::Restore
+            canvas.fill_top_rounded_rect(
+                inner,
+                inner_radius,
+                Color(if win.decorations_visible() {
+                    tb_color
                 } else {
-                    WindowControlKind::Maximize
-                },
-                Color(icon_col),
-                Color(tb_color),
-                hover_zone == HitZone::MaximizeBtn,
-                maximized,
+                    0xFF1A1A20
+                }),
             );
-            draw_window_control(
-                &mut canvas,
-                close_rect,
-                WindowControlKind::Close,
-                Color(icon_col),
-                Color(tb_color),
-                hover_zone == HitZone::CloseBtn,
-                is_focused,
-            );
-            draw_title(
-                &mut canvas,
-                &win.config.title,
-                title_rect,
-                Color(TITLE_TEXT_COLOR),
-            );
+            canvas.fill_rect(content_backdrop, Color(0xFF1A1A20));
+            if win.decorations_visible() {
+                for control in controls {
+                    let Some(rect) = control_rect_for_kind(win, wx, wy, chrome_w, *control) else {
+                        continue;
+                    };
+                    let (zone, accent_active, draw_kind) = match control {
+                        WindowControlKind::Pin => (
+                            HitZone::KeepOnTopBtn,
+                            win.config.z_index_type == ZIndexType::OnTop,
+                            *control,
+                        ),
+                        WindowControlKind::Minimize => {
+                            (HitZone::MinimizeBtn, false, WindowControlKind::Minimize)
+                        }
+                        WindowControlKind::Maximize | WindowControlKind::Restore => (
+                            HitZone::MaximizeBtn,
+                            maximized,
+                            if maximized {
+                                WindowControlKind::Restore
+                            } else {
+                                WindowControlKind::Maximize
+                            },
+                        ),
+                        WindowControlKind::Close => {
+                            (HitZone::CloseBtn, is_focused, WindowControlKind::Close)
+                        }
+                        WindowControlKind::Help => continue,
+                    };
+                    draw_window_control(
+                        &mut canvas,
+                        rect,
+                        draw_kind,
+                        Color(icon_col),
+                        Color(tb_color),
+                        hover_zone == zone,
+                        accent_active,
+                    );
+                }
+                draw_title(
+                    &mut canvas,
+                    &win.config.title,
+                    title_rect,
+                    Color(TITLE_TEXT_COLOR),
+                );
+            }
         }
     }
 
@@ -2105,7 +2325,7 @@ fn composite_window(
             win.x as i32 + BORDER_W as i32,
             win.y as i32 + BORDER_W as i32,
             win.width,
-            TITLEBAR_H + win.height,
+            titlebar_h + win.height,
         ))
     } else {
         None
@@ -2588,6 +2808,7 @@ mod tests {
                 title: [0; 64],
                 window_type,
                 state,
+                decoration: WindowDecoration::Normal,
                 border: BorderStyle::Full,
                 z_index_type,
                 z_index_value: 50,
@@ -2607,6 +2828,9 @@ mod tests {
             saved_unrolled_h: h,
             workspace_id: 0,
             hidden: false,
+            overlay_decorations_visible: false,
+            overlay_last_motion_ms: 0,
+            overlay_pointer_inside: false,
             first_present_logged: false,
         }
     }
@@ -2759,6 +2983,116 @@ mod tests {
 
         assert_eq!(topmost_window_id_at(&state, 100, 100), Some(1));
         assert_eq!(focused_window_id(&state), Some(1));
+    }
+
+    #[test]
+    fn window_config_missing_decoration_defaults_to_normal() {
+        let cfg = WindowConfig::from_ipc_words(&[0; 8]);
+        assert_eq!(cfg.decoration, WindowDecoration::Normal);
+    }
+
+    #[test]
+    fn compact_close_hit_test_only_exposes_close_button() {
+        let mut win = test_window(
+            1,
+            40,
+            40,
+            220,
+            160,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        win.config.decoration = WindowDecoration::CompactClose;
+
+        let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
+        let close = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Close)
+            .expect("close rect");
+        let close_pt = sunlight_ui::Point::new(close.x + 2, close.y + 2);
+        assert_eq!(
+            hit_test_window(&win, close_pt.x as u32, close_pt.y as u32, 800, 600),
+            HitZone::CloseBtn
+        );
+
+        let normal_min_slot = control_rect(wx, wy, chrome_w, win.titlebar_height(), 2);
+        let min_pt = sunlight_ui::Point::new(normal_min_slot.x + 2, normal_min_slot.y + 2);
+        assert_eq!(
+            hit_test_window(&win, min_pt.x as u32, min_pt.y as u32, 800, 600),
+            HitZone::TitleBar
+        );
+    }
+
+    #[test]
+    fn compact_close_minimize_hit_test_exposes_minimize_and_close_only() {
+        let mut win = test_window(
+            1,
+            40,
+            40,
+            220,
+            160,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        win.config.decoration = WindowDecoration::CompactCloseMinimize;
+
+        let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
+        let min = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Minimize)
+            .expect("min rect");
+        let min_pt = sunlight_ui::Point::new(min.x + 2, min.y + 2);
+        assert_eq!(
+            hit_test_window(&win, min_pt.x as u32, min_pt.y as u32, 800, 600),
+            HitZone::MinimizeBtn
+        );
+
+        let normal_max_slot = control_rect(wx, wy, chrome_w, win.titlebar_height(), 1);
+        let max_pt = sunlight_ui::Point::new(normal_max_slot.x + 2, normal_max_slot.y + 2);
+        assert_eq!(
+            hit_test_window(&win, max_pt.x as u32, max_pt.y as u32, 800, 600),
+            HitZone::TitleBar
+        );
+    }
+
+    #[test]
+    fn hidden_overlay_transitions_on_enter_idle_and_leave() {
+        let mut state = test_state(vec![test_window(
+            1,
+            40,
+            40,
+            220,
+            160,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        )]);
+        state.windows[0].config.decoration = WindowDecoration::HiddenOverlay;
+
+        state.mouse_x = 100;
+        state.mouse_y = 80;
+        assert!(update_overlay_window_visibility(&mut state, 10, true, false));
+        assert!(state.windows[0].overlay_decorations_visible);
+
+        assert!(update_overlay_window_visibility(
+            &mut state,
+            10 + OVERLAY_DECORATION_IDLE_TIMEOUT_MS,
+            false,
+            false
+        ));
+        assert!(!state.windows[0].overlay_decorations_visible);
+
+        state.mouse_x = 10;
+        state.mouse_y = 10;
+        assert!(!update_overlay_window_visibility(&mut state, 20, false, false));
+
+        state.mouse_x = 120;
+        state.mouse_y = 90;
+        assert!(update_overlay_window_visibility(&mut state, 30, true, false));
+        assert!(state.windows[0].overlay_decorations_visible);
+
+        state.mouse_x = 5;
+        state.mouse_y = 5;
+        assert!(update_overlay_window_visibility(&mut state, 40, true, false));
+        assert!(!state.windows[0].overlay_decorations_visible);
     }
 }
 
@@ -3024,17 +3358,26 @@ pub extern "C" fn _start() -> ! {
     let mut next_win_id: u64 = 1;
 
     loop {
-        let msg = if state.notifications.is_empty() {
-            ipc_recv(my_ep)
-        } else if let Some(msg) = ipc_recv_timeout(my_ep, NOTIFICATION_POLL_MS) {
-            msg
-        } else {
-            let now = monotonic_millis();
-            if prune_notifications(&mut state, now) {
-                mark_dirty_full(&mut state);
-                redraw_scene(&mut state);
+        let msg = if let Some(timeout_ms) = compositor_poll_timeout_ms(&state) {
+            if let Some(msg) = ipc_recv_timeout(my_ep, timeout_ms) {
+                msg
+            } else {
+                let now = monotonic_millis();
+                let mut needs_redraw = false;
+                if prune_notifications(&mut state, now) {
+                    mark_dirty_full(&mut state);
+                    needs_redraw = true;
+                }
+                if update_overlay_window_visibility(&mut state, now, false, false) {
+                    needs_redraw = true;
+                }
+                if needs_redraw {
+                    redraw_scene(&mut state);
+                }
+                continue;
             }
-            continue;
+        } else {
+            ipc_recv(my_ep)
         };
 
         match msg.label {
@@ -3155,6 +3498,9 @@ pub extern "C" fn _start() -> ! {
                                 saved_unrolled_h: h,
                                 workspace_id: 0,
                                 hidden: false,
+                                overlay_decorations_visible: false,
+                                overlay_last_motion_ms: 0,
+                                overlay_pointer_inside: false,
                                 first_present_logged: false,
                             },
                         );
@@ -3171,7 +3517,7 @@ pub extern "C" fn _start() -> ! {
                         );
 
                         let client_x = win_x + BORDER_W;
-                        let client_y = win_y + TITLEBAR_H;
+                        let client_y = win_y + config.decoration.titlebar_height();
                         let mut reply = IpcMsg::with_label(SgpMsg::REPLY)
                             .word(0, id)
                             .word(1, size as u64)
@@ -3236,6 +3582,7 @@ pub extern "C" fn _start() -> ! {
                             win.height = win.saved_h;
                         }
                         win.config.state = new_state;
+                        win.config.decoration = WindowDecoration::from_flags(flags);
                         win.config.border = if (flags >> 4) & 1 != 0 {
                             BorderStyle::None
                         } else {
@@ -3417,8 +3764,13 @@ pub extern "C" fn _start() -> ! {
                         let win = &state.windows[win_idx];
                         match win.config.state {
                             WindowState::Fullscreen => (0u64, 0u64),
-                            WindowState::Maximized => (BORDER_W as u64, TITLEBAR_H as u64),
-                            _ => ((win.x + BORDER_W) as u64, (win.y + TITLEBAR_H) as u64),
+                            WindowState::Maximized => {
+                                (BORDER_W as u64, win.titlebar_height() as u64)
+                            }
+                            _ => {
+                                let (cx, cy) = win.client_origin();
+                                (cx as u64, cy as u64)
+                            }
                         }
                     };
                     let key_event = {
@@ -3601,6 +3953,13 @@ pub extern "C" fn _start() -> ! {
 
                 let cx = state.pointer.x() as u32;
                 let cy = state.pointer.y() as u32;
+                let motion_now = monotonic_millis();
+                let overlay_changed = update_overlay_window_visibility(
+                    &mut state,
+                    motion_now,
+                    cx != prev_cx || cy != prev_cy,
+                    left_down && !was_left_down,
+                );
 
                 // ── Left button just pressed ────────────────────────────────
                 if state.session_active && left_down && !was_left_down {
@@ -3620,7 +3979,7 @@ pub extern "C" fn _start() -> ! {
                             raise_window_by_id(&mut state, id);
                         }
 
-                        let click_now = monotonic_millis();
+                        let click_now = motion_now;
                         match hit_zone {
                             HitZone::TitleBar => {
                                 // Double-click on the titlebar rolls up / unrolls the window
@@ -3841,7 +4200,8 @@ pub extern "C" fn _start() -> ! {
                 let new_cy = state.mouse_y as u32;
                 let button_changed = buttons != prev_buttons;
                 let now_dragging = !matches!(state.active_drag, ActiveDrag::None);
-                let window_changed = button_changed || had_active_drag || now_dragging;
+                let window_changed =
+                    button_changed || had_active_drag || now_dragging || overlay_changed;
                 let hw_cursor_shape_changed =
                     state.last_hw_cursor_shape != Some(state.active_cursor);
                 let sw_cursor_shape_changed = state.software_cursor.valid

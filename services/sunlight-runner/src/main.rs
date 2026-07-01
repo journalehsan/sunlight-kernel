@@ -11,7 +11,7 @@ use sunlight_libc::sun_exec;
 use sunlight_ui::{
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, TextInput},
-    App, Event, HBox, Rect, VBox, Window, WindowConfig,
+    App, Event, HBox, Rect, VBox, Window, WindowConfig, WindowDecoration,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -287,6 +287,7 @@ pub extern "C" fn _start() -> ! {
         width: WIN_W,
         height: WIN_H,
         title: "Run",
+        decoration: WindowDecoration::CompactClose,
     }) {
         Some(window) => window,
         None => loop {

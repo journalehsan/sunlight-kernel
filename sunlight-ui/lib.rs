@@ -51,4 +51,4 @@ pub use paint::Canvas;
 pub use theme::{Color, Theme};
 
 #[cfg(feature = "app")]
-pub use app::{request_close, App, Window, WindowConfig};
+pub use app::{request_close, App, Window, WindowConfig, WindowDecoration};

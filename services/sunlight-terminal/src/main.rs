@@ -669,6 +669,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         width: WIN_W,
         height: WIN_H,
         title: "Sunlight Terminal",
+        decoration: sunlight_ui::WindowDecoration::Normal,
     }) {
         Some(window) => window,
         None => loop {

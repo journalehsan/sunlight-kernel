@@ -10,7 +10,12 @@
 //!     fn update(&mut self, event: Event) -> bool { ... }
 //! }
 //!
-//! let mut window = Window::connect(WindowConfig { width: 640, height: 480, title: "My App" }).unwrap();
+//! let mut window = Window::connect(WindowConfig {
+//!     width: 640,
+//!     height: 480,
+//!     title: "My App",
+//!     decoration: WindowDecoration::Normal,
+//! }).unwrap();
 //! window.run();
 //! ```
 
@@ -19,7 +24,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use sunlight_ipc::{
     ipc_call, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    nameserver_lookup, shm_free, shm_map, CapabilityToken, IpcMsg, SgpMsg,
+    nameserver_lookup, shm_create, shm_free, shm_map, CapabilityToken, IpcMsg, SgpMsg,
 };
 
 use crate::event::Event;
@@ -40,10 +45,26 @@ fn take_close_requested() -> bool {
 }
 
 /// Configuration passed to [`Window::connect`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum WindowDecoration {
+    Normal = 0,
+    CompactClose = 1,
+    CompactCloseMinimize = 2,
+    HiddenOverlay = 3,
+}
+
+impl WindowDecoration {
+    const fn config_flag_bits(self) -> u64 {
+        (self as u64) << sunlight_ipc::sgp::SgpMsg::config_flags::DECORATION_SHIFT
+    }
+}
+
 pub struct WindowConfig {
     pub width: u32,
     pub height: u32,
     pub title: &'static str,
+    pub decoration: WindowDecoration,
 }
 
 /// An event-loop–driven window connected to the display server.
@@ -115,7 +136,8 @@ impl Window {
         let reply = ipc_call(
             display_ep,
             IpcMsg::with_label(SgpMsg::CREATE_WINDOW)
-                .word(0, config.width as u64 | ((config.height as u64) << 32)),
+                .word(0, config.width as u64 | ((config.height as u64) << 32))
+                .word(1, config.decoration.config_flag_bits()),
         );
 
         if reply.label != SgpMsg::REPLY || reply.cap_count == 0 {
@@ -135,12 +157,27 @@ impl Window {
         for (i, &b) in title_bytes.iter().enumerate().take(32) {
             title_words[i / 8] |= (b as u64) << ((i % 8) * 8);
         }
-        let cfg = IpcMsg::with_label(SgpMsg::CONFIGURE_WINDOW)
+        let mut title_cap = CapabilityToken::INVALID;
+        let mut cfg = IpcMsg::with_label(SgpMsg::CONFIGURE_WINDOW)
             .word(0, win_id)
             .word(1, 0) // config_flags = 0 (no border changes)
             .word(2, 0) // pid|ppid
             .word(3, title_words[0]);
+
+        if let Ok((title_ptr, cap)) = shm_create(4096, 0) {
+            let copy_len = title_bytes.len().min(4095);
+            unsafe {
+                core::ptr::write_bytes(title_ptr, 0, 4096);
+                core::ptr::copy_nonoverlapping(title_bytes.as_ptr(), title_ptr, copy_len);
+            }
+            cfg.caps[0] = cap;
+            cfg.cap_count = 1;
+            title_cap = cap;
+        }
         let _ = ipc_call(display_ep, cfg);
+        if title_cap != CapabilityToken::INVALID {
+            let _ = shm_free(title_cap);
+        }
         launch_trace::log_phase_now(trace, config.title, "window_registered", Some(pid));
 
         Some(Self {
@@ -288,6 +325,7 @@ impl Window {
     /// - bit  [4]:   border (0=Full chrome, 1=None)
     /// - bit  [5]:   z-index type (0=Normal, 1=OnTop)
     /// - bits [12:6]: z-index value 1–100 (0 = keep default)
+    /// - bits [18:17]: decoration
     ///
     /// Passing `flags = 0` is a no-op (the display server interprets zero as
     /// "no flags change").
@@ -381,6 +419,22 @@ impl Window {
                 self.commit();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WindowDecoration;
+
+    #[test]
+    fn decoration_flag_bits_match_protocol_layout() {
+        assert_eq!(WindowDecoration::Normal.config_flag_bits(), 0);
+        assert_eq!(WindowDecoration::CompactClose.config_flag_bits(), 1 << 17);
+        assert_eq!(
+            WindowDecoration::CompactCloseMinimize.config_flag_bits(),
+            2 << 17
+        );
+        assert_eq!(WindowDecoration::HiddenOverlay.config_flag_bits(), 3 << 17);
     }
 }
 

@@ -52,11 +52,21 @@ The display stack currently supports:
 - Mouse position polling through `SgpMsg::EVENT_POLL`
 - Focus, stacking, dragging, maximize/minimize, and close handling in the compositor
 - Decorated windows with the current orange-accent theme
+- Explicit decoration styles with safe defaulting:
+  - `Normal` keeps the existing full titlebar controls.
+  - `CompactClose` uses a smaller header with only Close.
+  - `CompactCloseMinimize` uses a smaller header with Close + Minimize.
+  - `HiddenOverlay` hides decorations until hover/pointer activity, then auto-hides after `OVERLAY_DECORATION_IDLE_TIMEOUT_MS` when idle. Intended for later media/video/music/photo-style windows.
 
 Recent extension:
 
 - Focused keyboard delivery is now buffered by the compositor and returned via `EVENT_POLL`.
 - This is enough for lightweight native GUI clients to receive text input without bypassing the existing global keyboard/session routing.
+- Window decoration policy is now explicit in SGP `config_flags` and defaults to `Normal` when omitted, preserving older clients.
+- Initial app policy:
+  - `sunlight-runner` uses `CompactClose`.
+  - `calculator` uses `CompactCloseMinimize`.
+  - Other current apps remain `Normal`.
 
 Day 22 polish checklist:
 
@@ -90,6 +100,9 @@ Current limitations:
 - No richer widget toolkit yet
 - Compositor does not yet reap windows on process death/panic; a crashed GUI app
   (whose panic handler just parks) still leaves a stale window until Ctrl+W
+- `HiddenOverlay` currently keeps client layout stable by reserving the compact
+  titlebar area even while decorations are visually hidden; it does not yet
+  reclaim that strip for client content.
 
 ## Vortex Shell / Window Manager TODOs
 

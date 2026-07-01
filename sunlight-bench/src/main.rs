@@ -907,6 +907,7 @@ pub extern "C" fn _start() -> ! {
         width: WIN_W,
         height: WIN_H,
         title: "SunLight Bench",
+        decoration: sunlight_ui::WindowDecoration::Normal,
     }) {
         Some(window) => window,
         None => run_headless(pid, ncores),
