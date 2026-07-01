@@ -57,6 +57,51 @@ fn icon(bytes: &'static [u8]) -> Option<TgaImage> {
     TgaImage::parse(bytes).ok()
 }
 
+const APP_CATALOG_LEN: usize = 12;
+
+#[derive(Clone, Copy)]
+struct StartMenuIcons {
+    search: Option<TgaImage>,
+    power: [Option<TgaImage>; POWER_CAP],
+    apps: [Option<TgaImage>; APP_CATALOG_LEN],
+}
+
+impl StartMenuIcons {
+    fn load() -> Self {
+        let mut apps = [None; APP_CATALOG_LEN];
+        let mut i = 0usize;
+        while i < APP_CATALOG_LEN {
+            apps[i] = APP_CATALOG[i].icon_bytes.and_then(icon);
+            i += 1;
+        }
+        Self {
+            search: icon(ICON_SEARCH_TGA),
+            power: [
+                icon(ICON_SLEEP_TGA),
+                icon(ICON_RESTART_TGA),
+                icon(ICON_SHUTDOWN_TGA),
+            ],
+            apps,
+        }
+    }
+
+    fn app_icon(&self, entry: &AppCatalogEntry) -> Option<TgaImage> {
+        APP_CATALOG
+            .iter()
+            .position(|candidate| core::ptr::eq(candidate, entry))
+            .and_then(|idx| self.apps[idx])
+    }
+
+    fn power_icon(&self, action: PowerAction) -> Option<TgaImage> {
+        let idx = match action {
+            PowerAction::Sleep => 0,
+            PowerAction::Restart => 1,
+            PowerAction::Shutdown => 2,
+        };
+        self.power[idx]
+    }
+}
+
 // ---------------------------------------------------------------------------
 // App catalog
 // ---------------------------------------------------------------------------
@@ -78,16 +123,10 @@ pub(crate) struct AppCatalogEntry {
     pub(crate) available: bool,
 }
 
-impl AppCatalogEntry {
-    fn icon(&self) -> Option<TgaImage> {
-        self.icon_bytes.and_then(icon)
-    }
-}
-
 /// Full "All Apps" catalog — 7 real, launchable apps followed by 5
 /// placeholders (no backing binary yet; clicking shows a "coming soon"
 /// notice instead of launching). Exactly fills a 4-column × 3-row grid.
-static APP_CATALOG: [AppCatalogEntry; 12] = [
+static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
     AppCatalogEntry {
         id: CatalogId::App(AppId::Terminal),
         name: "Terminal",
@@ -232,14 +271,6 @@ impl PowerAction {
             Self::Sleep => "Sleep",
             Self::Restart => "Restart",
             Self::Shutdown => "Shut Down",
-        }
-    }
-
-    fn icon_bytes(self) -> &'static [u8] {
-        match self {
-            Self::Sleep => ICON_SLEEP_TGA,
-            Self::Restart => ICON_RESTART_TGA,
-            Self::Shutdown => ICON_SHUTDOWN_TGA,
         }
     }
 
@@ -765,6 +796,7 @@ pub(crate) enum StartMenuAction {
 
 pub(crate) struct StartMenuState {
     is_open: bool,
+    icons: StartMenuIcons,
     search: SearchField,
     selected: Option<usize>,
     hover: Option<usize>,
@@ -775,6 +807,7 @@ impl StartMenuState {
     pub(crate) fn new() -> Self {
         Self {
             is_open: false,
+            icons: StartMenuIcons::load(),
             search: SearchField::new(),
             selected: None,
             hover: None,
@@ -1102,7 +1135,14 @@ impl StartMenuState {
         for slot in layout.power.iter() {
             let confirming =
                 matches!(self.confirm, Some((a, exp)) if a == slot.action && now < exp);
-            draw_power_button(canvas, theme, slot.rect, slot.action, confirming);
+            draw_power_button(
+                canvas,
+                theme,
+                slot.rect,
+                self.icons.power_icon(slot.action),
+                slot.action,
+                confirming,
+            );
         }
     }
 
@@ -1119,7 +1159,7 @@ impl StartMenuState {
             },
         );
         let mut tx = rect.x + 12;
-        if let Some(img) = icon(ICON_SEARCH_TGA) {
+        if let Some(img) = self.icons.search {
             canvas.draw_tga_icon(
                 &img,
                 Rect::new(tx, rect.y + (rect.h as i32 - 16) / 2, 16, 16),
@@ -1184,7 +1224,7 @@ impl StartMenuState {
             icon_size,
             icon_size,
         );
-        if let Some(img) = slot.entry.icon() {
+        if let Some(img) = self.icons.app_icon(slot.entry) {
             canvas.draw_tga_icon(&img, icon_rect);
         } else {
             canvas.fill_rounded_rect(icon_rect, 6, theme.panel);
@@ -1289,6 +1329,7 @@ fn draw_power_button(
     canvas: &mut Canvas,
     theme: &Theme,
     rect: Rect,
+    icon_img: Option<TgaImage>,
     action: PowerAction,
     confirming: bool,
 ) {
@@ -1306,7 +1347,7 @@ fn draw_power_button(
         icon_size,
         icon_size,
     );
-    if let Some(img) = icon(action.icon_bytes()) {
+    if let Some(img) = icon_img {
         canvas.draw_tga_icon(&img, icon_rect);
     }
     let label_rect = Rect::new(rect.x - 10, icon_rect.bottom() + 2, rect.w + 20, 12);

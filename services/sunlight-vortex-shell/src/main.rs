@@ -307,15 +307,33 @@ struct WindowSnapshot {
 enum RunningIcon {
     Static(TgaImage),
     Runtime(Vec<u8>),
+    Missing,
 }
 
 struct RunningAppEntry {
     win_id: u64,
     pid: u64,
     display_name: String,
+    label: [u8; RUNNING_LABEL_BUF],
+    label_len: usize,
+    cell_w: u32,
     minimized: bool,
     icon: Option<RunningIcon>,
     last_click_at: u64,
+}
+
+impl RunningAppEntry {
+    fn label_str(&self) -> &str {
+        core::str::from_utf8(&self.label[..self.label_len]).unwrap_or("")
+    }
+
+    fn refresh_label_cache(&mut self) {
+        let label = truncate_label_into(&self.display_name, RUNNING_LABEL_CHARS, &mut self.label);
+        self.label_len = label.len();
+        let label_w = measure_text(label, FontRole::UiSmall).w;
+        let label_box_w = label_w.clamp(RUNNING_LABEL_MIN_W, RUNNING_LABEL_MAX_W);
+        self.cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON + 6 + label_box_w;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -352,6 +370,7 @@ const RUNNING_LABEL_CHARS: usize = 14;
 const RUNNING_NAME_BUF: usize = 64;
 const RUNNING_LABEL_BUF: usize = 32;
 const MAX_RUNNING_TRACKED: usize = 32;
+const ENABLE_RUNNING_TASKBAR: bool = true;
 
 const SEARCH_W: u32 = 200; // search box width
 const SEARCH_H: u32 = 32; // search box height
@@ -375,7 +394,7 @@ const MENU_ITEM_H: u32 = 22;
 // Heap (bump allocator — no dynamic allocations used)
 // ---------------------------------------------------------------------------
 
-const HEAP_SIZE: usize = 64 * 1024;
+const HEAP_SIZE: usize = 256 * 1024;
 #[repr(align(16))]
 struct BumpHeap(core::cell::UnsafeCell<[u8; HEAP_SIZE]>);
 unsafe impl Sync for BumpHeap {}
@@ -929,10 +948,16 @@ impl VortexShell {
         }
         let desktop_theme = DesktopTheme::load();
         let dock_theme = DockTheme::load();
-        let telemetry = Telemetry::init().ok();
-        if telemetry.is_none() {
-            debug_log("[VORTEX] telemetry unavailable for running-app names\n");
-        }
+        let telemetry = if ENABLE_RUNNING_TASKBAR {
+            let telemetry = Telemetry::init().ok();
+            if telemetry.is_none() {
+                debug_log("[VORTEX] telemetry unavailable for running-app names\n");
+            }
+            telemetry
+        } else {
+            debug_log("[VORTEX] running taskbar disabled for perf test\n");
+            None
+        };
         let mut shell = Self {
             wallpaper,
             display_ep,
@@ -1440,12 +1465,14 @@ impl VortexShell {
             }
         }
 
-        let telem_snapshot = self.telemetry.as_mut().map(|telemetry| {
-            let _ = telemetry.poll();
-            *telemetry.snapshot()
-        });
-        if self.sync_running_apps(&windows, telem_snapshot.as_ref()) {
-            dirty = true;
+        if ENABLE_RUNNING_TASKBAR {
+            let telem_snapshot = self.telemetry.as_mut().map(|telemetry| {
+                let _ = telemetry.poll();
+                *telemetry.snapshot()
+            });
+            if self.sync_running_apps(&windows, telem_snapshot.as_ref()) {
+                dirty = true;
+            }
         }
 
         dirty
@@ -1486,7 +1513,8 @@ impl VortexShell {
                 .iter_mut()
                 .find(|entry| entry.win_id == window.id)
             {
-                if entry.pid != window.owner_pid {
+                let pid_changed = entry.pid != window.owner_pid;
+                if pid_changed {
                     entry.pid = window.owner_pid;
                     dirty = true;
                 }
@@ -1497,14 +1525,12 @@ impl VortexShell {
                 if entry.display_name.as_str() != display_name {
                     entry.display_name.clear();
                     entry.display_name.push_str(display_name);
+                    entry.refresh_label_cache();
+                    entry.icon = resolve_running_icon(proc_name, entry.display_name.as_str());
                     dirty = true;
                 }
-                if entry.icon.is_none() {
-                    if let Some(icon) = resolve_running_icon(proc_name, entry.display_name.as_str())
-                    {
-                        entry.icon = Some(icon);
-                        dirty = true;
-                    }
+                if pid_changed {
+                    entry.icon = resolve_running_icon(proc_name, entry.display_name.as_str());
                 }
                 continue;
             }
@@ -1513,14 +1539,19 @@ impl VortexShell {
                 continue;
             }
 
-            self.running_apps.push(RunningAppEntry {
+            let mut entry = RunningAppEntry {
                 win_id: window.id,
                 pid: window.owner_pid,
                 display_name: String::from(display_name),
+                label: [0u8; RUNNING_LABEL_BUF],
+                label_len: 0,
+                cell_w: 0,
                 minimized,
                 icon: resolve_running_icon(proc_name, display_name),
                 last_click_at: 0,
-            });
+            };
+            entry.refresh_label_cache();
+            self.running_apps.push(entry);
             dirty = true;
         }
 
@@ -2115,7 +2146,9 @@ fn draw_running_app_button(
     match &entry.icon {
         Some(RunningIcon::Static(img)) => canvas.draw_tga_icon(img, icon_rect),
         Some(RunningIcon::Runtime(bytes)) => draw_tga_bytes(canvas, bytes, icon_rect),
-        None => draw_generic_app_icon(canvas, icon_rect, icon_color.darken(72), border),
+        Some(RunningIcon::Missing) | None => {
+            draw_generic_app_icon(canvas, icon_rect, icon_color.darken(72), border)
+        }
     }
 
     let label_x = icon_rect.right() + 6;
@@ -3066,7 +3099,7 @@ fn resolve_running_icon(proc_name: Option<&str>, display_name: &str) -> Option<R
     if let Some(bytes) = try_load_runtime_icon(hint) {
         return Some(RunningIcon::Runtime(bytes));
     }
-    None
+    Some(RunningIcon::Missing)
 }
 
 // ---------------------------------------------------------------------------
@@ -3162,12 +3195,7 @@ fn draw_bot_center(
     let fixed_w = dock_cluster_width(icons.len());
     let mut running_total_w = 0u32;
     for entry in running_apps {
-        let mut label_buf = [0u8; RUNNING_LABEL_BUF];
-        let label = truncate_label_into(&entry.display_name, RUNNING_LABEL_CHARS, &mut label_buf);
-        let label_w = measure_text(&label, FontRole::UiSmall).w;
-        let label_box_w = label_w.clamp(RUNNING_LABEL_MIN_W, RUNNING_LABEL_MAX_W);
-        let cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON + 6 + label_box_w;
-        running_total_w = running_total_w.saturating_add(cell_w);
+        running_total_w = running_total_w.saturating_add(entry.cell_w);
     }
     if !running_apps.is_empty() {
         running_total_w = running_total_w.saturating_add(
@@ -3248,12 +3276,7 @@ fn draw_bot_center(
     if !running_apps.is_empty() {
         x += ICON_GAP as i32;
         for (i, entry) in running_apps.iter().enumerate() {
-            let mut label_buf = [0u8; RUNNING_LABEL_BUF];
-            let label =
-                truncate_label_into(&entry.display_name, RUNNING_LABEL_CHARS, &mut label_buf);
-            let label_w = measure_text(&label, FontRole::UiSmall).w;
-            let label_box_w = label_w.clamp(RUNNING_LABEL_MIN_W, RUNNING_LABEL_MAX_W);
-            let cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON + 6 + label_box_w;
+            let cell_w = entry.cell_w;
             let cell = Rect::new(
                 x,
                 cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2,
@@ -3265,7 +3288,7 @@ fn draw_bot_center(
                 cell,
                 theme,
                 entry,
-                label,
+                entry.label_str(),
                 running_hover.map_or(false, |h| h == i),
                 now,
             );
@@ -3380,6 +3403,11 @@ impl App for VortexShell {
             now,
         );
         self.running_zones.clear();
+        let running_apps: &[RunningAppEntry] = if ENABLE_RUNNING_TASKBAR {
+            &self.running_apps
+        } else {
+            &[]
+        };
         let (launcher_rect, dock_cells) = draw_bot_center(
             canvas,
             theme,
@@ -3391,7 +3419,7 @@ impl App for VortexShell {
             &terminal_app,
             &calc_app,
             &files_app,
-            &self.running_apps,
+            running_apps,
             &mut self.running_zones,
             self.start_menu.is_open(),
             now,
