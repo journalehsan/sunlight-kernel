@@ -555,6 +555,10 @@ impl TerminalApp {
         Rect::new(0, WIN_H as i32 - FOOTER_H as i32, WIN_W, FOOTER_H)
     }
 
+    fn app_owns_input(&self) -> bool {
+        self.footer.app_mode || self.grid.in_alt_screen()
+    }
+
     fn shell_spawn(&self) {
         let shell_id = (libc::getpid() as u8).max(1) as u64;
         let _ = spawn_shell(&self.pty, shell_id);
@@ -590,7 +594,7 @@ impl TerminalApp {
         if !pressed {
             return false;
         }
-        if self.footer.app_mode {
+        if self.app_owns_input() {
             let mut buf = [0u8; 4];
             let n = translate_special_key(keycode, &mut buf);
             if n > 0 {
@@ -634,7 +638,7 @@ impl App for TerminalApp {
 
         let footer = self.footer_rect();
         StatusBar::new(footer, "", "", "").draw(canvas, theme);
-        if self.footer.app_mode {
+        if self.app_owns_input() {
             Label::new(
                 Rect::new(8, footer.y + 4, 220, FOOTER_H - 8),
                 self.footer.app_name_str(),
@@ -668,7 +672,7 @@ impl App for TerminalApp {
                 dirty |= self.poll_pty();
             }
             Event::Key(ch) => {
-                if self.footer.app_mode {
+                if self.app_owns_input() {
                     let byte = match ch {
                         '\n' => b'\n',
                         '\u{8}' => 0x08,

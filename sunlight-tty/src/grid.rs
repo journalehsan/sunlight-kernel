@@ -487,6 +487,10 @@ impl TerminalGrid {
         self.cursor_visible
     }
 
+    pub fn in_alt_screen(&self) -> bool {
+        self.use_alt_screen
+    }
+
     pub fn scrollback_len(&self) -> usize {
         self.scrollback_count
     }
@@ -573,33 +577,46 @@ fn map_extended_color(color: u16) -> u8 {
             map_rgb_to_ansi((r * 51) as u16, (g * 51) as u16, (b * 51) as u16)
         }
         232..=255 => {
-            if color < 244 {
-                0
-            } else {
-                7
-            }
+            let gray = 8 + (color - 232) * 10;
+            map_rgb_to_ansi(gray, gray, gray)
         }
         _ => 7,
     }
 }
 
 fn map_rgb_to_ansi(r: u16, g: u16, b: u16) -> u8 {
-    let bright = r > 127 || g > 127 || b > 127;
-    let base = match ((r > 95) as u8, (g > 95) as u8, (b > 95) as u8) {
-        (0, 0, 0) => 0,
-        (1, 0, 0) => 1,
-        (0, 1, 0) => 2,
-        (1, 1, 0) => 3,
-        (0, 0, 1) => 4,
-        (1, 0, 1) => 5,
-        (0, 1, 1) => 6,
-        _ => 7,
-    };
-    if bright && base < 8 {
-        base + 8
-    } else {
-        base
+    const ANSI_RGB: [(u16, u16, u16); 16] = [
+        (0x00, 0x00, 0x00),
+        (0xCC, 0x24, 0x1D),
+        (0x98, 0x97, 0x1A),
+        (0xD7, 0x99, 0x21),
+        (0x45, 0x85, 0x88),
+        (0xB1, 0x62, 0x86),
+        (0x68, 0x9D, 0x6A),
+        (0xA8, 0x99, 0x84),
+        (0x92, 0x83, 0x74),
+        (0xFB, 0x49, 0x34),
+        (0xB8, 0xBB, 0x26),
+        (0xFA, 0xBD, 0x2F),
+        (0x83, 0xA5, 0x98),
+        (0xD3, 0x86, 0x9B),
+        (0x8E, 0xC0, 0x7C),
+        (0xEB, 0xDB, 0xB2),
+    ];
+
+    let mut best = 7u8;
+    let mut best_dist = u32::MAX;
+    for (idx, &(pr, pg, pb)) in ANSI_RGB.iter().enumerate() {
+        let dr = pr.abs_diff(r) as u32;
+        let dg = pg.abs_diff(g) as u32;
+        let db = pb.abs_diff(b) as u32;
+        let dist = dr * dr + dg * dg + db * db;
+        if dist < best_dist {
+            best_dist = dist;
+            best = idx as u8;
+        }
     }
+    best
 }
 
 #[cfg(test)]
