@@ -48,6 +48,7 @@ impl EnvMap {
         env.set("USER", user);
         env.set("HOME", &home);
         env.set("SHELL", "/bin/sshl");
+        env.set("TERM", "vt100");
         env
     }
 

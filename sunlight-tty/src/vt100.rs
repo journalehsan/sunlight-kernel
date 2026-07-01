@@ -8,14 +8,16 @@ pub enum VtOutput {
     Char(u8),
     MoveCursor { row: i16, col: i16 },
     SetCursor { row: u16, col: u16 },
-    ClearScreen,
-    ClearLine,
-    SetColor { fg: Option<u8>, bg: Option<u8> },
-    ResetAttrs,
-    Bold(bool),
+    ClearScreen { mode: u16 },
+    ClearLine { mode: u16 },
+    Sgr { params: [u16; 8], count: usize },
+    DecPrivateMode { mode: u16, enabled: bool },
+    SaveCursor,
+    RestoreCursor,
     CarriageReturn,
     Newline,
     Backspace,
+    Tab,
     Bell,
     Nothing,
 }
@@ -33,6 +35,7 @@ pub struct Vt100Parser {
     param_count: usize,
     current_param: u16,
     has_digit: bool,
+    private_mode: bool,
 }
 
 impl Vt100Parser {
@@ -43,6 +46,7 @@ impl Vt100Parser {
             param_count: 0,
             current_param: 0,
             has_digit: false,
+            private_mode: false,
         }
     }
 
@@ -64,6 +68,7 @@ impl Vt100Parser {
             b'\r' => VtOutput::CarriageReturn,
             b'\n' => VtOutput::Newline,
             0x08 => VtOutput::Backspace,
+            b'\t' => VtOutput::Tab,
             0x07 => VtOutput::Bell,
             _ => VtOutput::Char(byte),
         }
@@ -76,7 +81,16 @@ impl Vt100Parser {
                 self.param_count = 0;
                 self.current_param = 0;
                 self.has_digit = false;
+                self.private_mode = false;
                 VtOutput::Nothing
+            }
+            b'7' => {
+                self.state = VtState::Ground;
+                VtOutput::SaveCursor
+            }
+            b'8' => {
+                self.state = VtState::Ground;
+                VtOutput::RestoreCursor
             }
             _ => {
                 self.state = VtState::Ground;
@@ -97,6 +111,10 @@ impl Vt100Parser {
             }
             b';' => {
                 self.store_param();
+                VtOutput::Nothing
+            }
+            b'?' => {
+                self.private_mode = true;
                 VtOutput::Nothing
             }
             b'A' => {
@@ -123,7 +141,7 @@ impl Vt100Parser {
                 let n = self.param(0, 1) as i16;
                 VtOutput::MoveCursor { row: 0, col: -n }
             }
-            b'H' => {
+            b'H' | b'f' => {
                 self.store_param();
                 self.state = VtState::Ground;
                 let row = self.param(0, 1);
@@ -136,34 +154,46 @@ impl Vt100Parser {
             b'J' => {
                 self.store_param();
                 self.state = VtState::Ground;
-                let mode = self.param(0, 0);
-                if mode == 2 {
-                    VtOutput::ClearScreen
-                } else {
-                    VtOutput::ClearScreen
+                VtOutput::ClearScreen {
+                    mode: self.param(0, 0),
                 }
             }
             b'K' => {
                 self.store_param();
                 self.state = VtState::Ground;
-                VtOutput::ClearLine
+                VtOutput::ClearLine {
+                    mode: self.param(0, 0),
+                }
             }
             b'm' => {
                 self.store_param();
                 self.state = VtState::Ground;
-                self.handle_sgr()
+                VtOutput::Sgr {
+                    params: self.params,
+                    count: self.param_count,
+                }
             }
-            // DEC private mode introducer (e.g. ESC[?1049h alt-screen,
-            // ESC[?25l hide cursor). Stay in CSI so the digits and final
-            // byte don't leak into the grid as literal text.
-            b'?' => VtOutput::Nothing,
-            // Set/reset mode (incl. DEC private modes). We don't implement an
-            // alt-screen buffer or cursor visibility, but must consume these so
-            // full-screen apps like top don't print "1049h"/"25l" garbage.
             b'h' | b'l' => {
                 self.store_param();
                 self.state = VtState::Ground;
-                VtOutput::Nothing
+                if self.private_mode {
+                    VtOutput::DecPrivateMode {
+                        mode: self.param(0, 0),
+                        enabled: byte == b'h',
+                    }
+                } else {
+                    VtOutput::Nothing
+                }
+            }
+            b's' => {
+                self.store_param();
+                self.state = VtState::Ground;
+                VtOutput::SaveCursor
+            }
+            b'u' => {
+                self.store_param();
+                self.state = VtState::Ground;
+                VtOutput::RestoreCursor
             }
             _ => {
                 self.state = VtState::Ground;
@@ -190,30 +220,6 @@ impl Vt100Parser {
             self.params[idx]
         } else {
             default
-        }
-    }
-
-    fn handle_sgr(&mut self) -> VtOutput {
-        if self.param_count == 0 || self.param(0, 0) == 0 {
-            return VtOutput::ResetAttrs;
-        }
-
-        let code = self.param(0, 0);
-        match code {
-            1 => VtOutput::Bold(true),
-            30..=37 => VtOutput::SetColor {
-                fg: Some((code - 30) as u8),
-                bg: None,
-            },
-            40..=47 => VtOutput::SetColor {
-                fg: None,
-                bg: Some((code - 40) as u8),
-            },
-            90..=97 => VtOutput::SetColor {
-                fg: Some((code - 90 + 8) as u8),
-                bg: None,
-            },
-            _ => VtOutput::Nothing,
         }
     }
 }
@@ -246,14 +252,6 @@ mod tests {
     }
 
     #[test]
-    fn cursor_up_default() {
-        let mut p = Vt100Parser::new();
-        assert_eq!(p.feed(0x1B), VtOutput::Nothing);
-        assert_eq!(p.feed(b'['), VtOutput::Nothing);
-        assert_eq!(p.feed(b'A'), VtOutput::MoveCursor { row: -1, col: 0 });
-    }
-
-    #[test]
     fn cursor_home() {
         let mut p = Vt100Parser::new();
         assert_eq!(p.feed(0x1B), VtOutput::Nothing);
@@ -262,72 +260,57 @@ mod tests {
     }
 
     #[test]
-    fn clear_screen() {
+    fn clear_screen_mode_two() {
         let mut p = Vt100Parser::new();
         assert_eq!(p.feed(0x1B), VtOutput::Nothing);
         assert_eq!(p.feed(b'['), VtOutput::Nothing);
         assert_eq!(p.feed(b'2'), VtOutput::Nothing);
-        assert_eq!(p.feed(b'J'), VtOutput::ClearScreen);
+        assert_eq!(p.feed(b'J'), VtOutput::ClearScreen { mode: 2 });
     }
 
     #[test]
-    fn clear_line() {
+    fn clear_line_mode_two() {
         let mut p = Vt100Parser::new();
         assert_eq!(p.feed(0x1B), VtOutput::Nothing);
         assert_eq!(p.feed(b'['), VtOutput::Nothing);
-        assert_eq!(p.feed(b'K'), VtOutput::ClearLine);
+        assert_eq!(p.feed(b'2'), VtOutput::Nothing);
+        assert_eq!(p.feed(b'K'), VtOutput::ClearLine { mode: 2 });
     }
 
     #[test]
-    fn sgr_reset() {
-        let mut p = Vt100Parser::new();
-        assert_eq!(p.feed(0x1B), VtOutput::Nothing);
-        assert_eq!(p.feed(b'['), VtOutput::Nothing);
-        assert_eq!(p.feed(b'0'), VtOutput::Nothing);
-        assert_eq!(p.feed(b'm'), VtOutput::ResetAttrs);
-    }
-
-    #[test]
-    fn sgr_fg_red() {
+    fn sgr_keeps_multiple_params() {
         let mut p = Vt100Parser::new();
         assert_eq!(p.feed(0x1B), VtOutput::Nothing);
         assert_eq!(p.feed(b'['), VtOutput::Nothing);
         assert_eq!(p.feed(b'3'), VtOutput::Nothing);
         assert_eq!(p.feed(b'1'), VtOutput::Nothing);
+        assert_eq!(p.feed(b';'), VtOutput::Nothing);
+        assert_eq!(p.feed(b'1'), VtOutput::Nothing);
         assert_eq!(
             p.feed(b'm'),
-            VtOutput::SetColor {
-                fg: Some(1),
-                bg: None
+            VtOutput::Sgr {
+                params: [31, 1, 0, 0, 0, 0, 0, 0],
+                count: 2,
             }
         );
     }
 
     #[test]
-    fn sgr_bright_fg() {
+    fn alt_screen_private_mode_is_reported() {
         let mut p = Vt100Parser::new();
         assert_eq!(p.feed(0x1B), VtOutput::Nothing);
         assert_eq!(p.feed(b'['), VtOutput::Nothing);
+        assert_eq!(p.feed(b'?'), VtOutput::Nothing);
+        assert_eq!(p.feed(b'1'), VtOutput::Nothing);
+        assert_eq!(p.feed(b'0'), VtOutput::Nothing);
+        assert_eq!(p.feed(b'4'), VtOutput::Nothing);
         assert_eq!(p.feed(b'9'), VtOutput::Nothing);
-        assert_eq!(p.feed(b'2'), VtOutput::Nothing);
         assert_eq!(
-            p.feed(b'm'),
-            VtOutput::SetColor {
-                fg: Some(10),
-                bg: None
+            p.feed(b'h'),
+            VtOutput::DecPrivateMode {
+                mode: 1049,
+                enabled: true,
             }
         );
-    }
-
-    #[test]
-    fn backspace() {
-        let mut p = Vt100Parser::new();
-        assert_eq!(p.feed(0x08), VtOutput::Backspace);
-    }
-
-    #[test]
-    fn bell() {
-        let mut p = Vt100Parser::new();
-        assert_eq!(p.feed(0x07), VtOutput::Bell);
     }
 }

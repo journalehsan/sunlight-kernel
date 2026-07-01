@@ -8,7 +8,7 @@ use sunlight_ipc::{
     nameserver_lookup, process_yield, CapabilityToken, IpcMsg, PtyMsg,
 };
 use sunlight_libc as libc;
-use sunlight_tty::console::Console;
+use sunlight_tty::TerminalGrid as ModelGrid;
 use sunlight_ui::{
     widgets::{Label, Panel, StatusBar},
     App, Canvas, Event, HBox, Rect, Window, WindowConfig,
@@ -17,8 +17,8 @@ use sunlight_ui::{
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
-const WIN_W: u32 = 640;
-const WIN_H: u32 = 360;
+const WIN_W: u32 = 656;
+const WIN_H: u32 = 468;
 const TAB_H: u32 = 28;
 const FOOTER_H: u32 = 32;
 const PAD_X: u32 = 8;
@@ -382,6 +382,8 @@ impl OscParser {
                         self.state = 2;
                         self.body_len = 0;
                     } else {
+                        push_console(console_out, console_len, 0x1B);
+                        push_console(console_out, console_len, b);
                         self.state = 0;
                     }
                 }
@@ -390,9 +392,28 @@ impl OscParser {
                         on_osc(&self.body[..self.body_len]);
                         self.body_len = 0;
                         self.state = 0;
+                    } else if b == 0x1B {
+                        self.state = 3;
                     } else if self.body_len < self.body.len() {
                         self.body[self.body_len] = b;
                         self.body_len += 1;
+                    }
+                }
+                3 => {
+                    if b == b'\\' {
+                        on_osc(&self.body[..self.body_len]);
+                        self.body_len = 0;
+                        self.state = 0;
+                    } else {
+                        if self.body_len < self.body.len() {
+                            self.body[self.body_len] = 0x1B;
+                            self.body_len += 1;
+                        }
+                        if self.body_len < self.body.len() {
+                            self.body[self.body_len] = b;
+                            self.body_len += 1;
+                        }
+                        self.state = 2;
                     }
                 }
                 _ => self.state = 0,
@@ -401,6 +422,14 @@ impl OscParser {
     }
 }
 
+fn push_console(console_out: &mut [u8], console_len: &mut usize, byte: u8) {
+    if *console_len < console_out.len() {
+        console_out[*console_len] = byte;
+        *console_len += 1;
+    }
+}
+
+#[derive(Clone, Copy)]
 enum OscCmd<'a> {
     Prompt(&'a [u8]),
     AppStart(&'a [u8]),
@@ -428,21 +457,22 @@ fn parse_osc(body: &[u8]) -> OscCmd<'_> {
     OscCmd::Unknown
 }
 
-struct TerminalGrid {
+struct TerminalViewport {
     rect: Rect,
 }
 
-impl TerminalGrid {
+impl TerminalViewport {
     const fn new(rect: Rect) -> Self {
         Self { rect }
     }
 
-    fn draw(&self, canvas: &mut Canvas, console: &mut Console, theme: &sunlight_ui::Theme) {
+    fn draw(&self, canvas: &mut Canvas, grid: &mut ModelGrid, theme: &sunlight_ui::Theme) {
         canvas.fill_rect(self.rect, theme.panel);
         canvas.draw_rect(self.rect, theme.border);
 
-        let (cols, rows) = console.dims();
-        let cells = console.to_term_cells_with_offset(&ANSI_COLORS, console.get_scroll_offset());
+        let cols = grid.cols;
+        let rows = grid.rows;
+        let cells = grid.to_term_cells(&ANSI_COLORS);
         let mut clipped = canvas.sub_canvas(self.rect.inset(1));
         for row in 0..rows {
             for col in 0..cols {
@@ -459,27 +489,56 @@ impl TerminalGrid {
                 }
             }
         }
+        if grid.cursor_visible() {
+            let (cursor_row, cursor_col) = grid.cursor();
+            if cursor_row < rows && cursor_col < cols {
+                clipped.draw_rect(
+                    Rect::new(
+                        cursor_col as i32 * CELL_W as i32,
+                        cursor_row as i32 * CELL_H as i32,
+                        CELL_W,
+                        CELL_H,
+                    ),
+                    theme.accent,
+                );
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct DebugFlags {
+    log_pty_stream: bool,
+}
+
+impl DebugFlags {
+    const fn new() -> Self {
+        Self {
+            log_pty_stream: false,
+        }
     }
 }
 
 struct TerminalApp {
     pty: PtySession,
-    console: Console,
+    grid: ModelGrid,
     footer: Footer,
     osc: OscParser,
     read_buf: [u8; READ_BUF],
     console_buf: [u8; READ_BUF],
+    debug: DebugFlags,
 }
 
 impl TerminalApp {
-    fn new(pty: PtySession) -> Self {
+    fn new(pty: PtySession, debug: DebugFlags) -> Self {
         Self {
             pty,
-            console: Console::new(CONTENT_COLS, CONTENT_ROWS),
+            grid: ModelGrid::new(CONTENT_COLS, CONTENT_ROWS),
             footer: Footer::new(),
             osc: OscParser::new(),
             read_buf: [0; READ_BUF],
             console_buf: [0; READ_BUF],
+            debug,
         }
     }
 
@@ -506,6 +565,9 @@ impl TerminalApp {
         if n == 0 {
             return false;
         }
+        if self.debug.log_pty_stream {
+            log_pty_bytes(&self.read_buf[..n]);
+        }
         let mut console_len = 0usize;
         self.osc.feed(
             &self.read_buf[..n],
@@ -519,7 +581,7 @@ impl TerminalApp {
             },
         );
         if console_len > 0 {
-            self.console.feed(&self.console_buf[..console_len]);
+            self.grid.feed(&self.console_buf[..console_len]);
         }
         true
     }
@@ -568,7 +630,7 @@ impl App for TerminalApp {
             .with_font(&F_UI)
             .draw(canvas, theme);
 
-        TerminalGrid::new(self.content_rect()).draw(canvas, &mut self.console, theme);
+        TerminalViewport::new(self.content_rect()).draw(canvas, &mut self.grid, theme);
 
         let footer = self.footer_rect();
         StatusBar::new(footer, "", "", "").draw(canvas, theme);
@@ -638,10 +700,7 @@ impl App for TerminalApp {
             | Event::MouseUp { .. }
             | Event::MouseMove { .. } => {}
         }
-        if dirty && self.console.dirty {
-            self.console.clear_dirty();
-        }
-        dirty || self.console.dirty
+        dirty
     }
 }
 
@@ -662,7 +721,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         },
     };
 
-    let mut app = TerminalApp::new(pty);
+    let mut app = TerminalApp::new(pty, parse_debug_flags(argc, argv));
     app.shell_spawn();
 
     let mut window = match Window::connect(WindowConfig {
@@ -717,6 +776,89 @@ fn translate_special_key(keycode: u8, buf: &mut [u8; 4]) -> usize {
             3
         }
         _ => 0,
+    }
+}
+
+fn parse_debug_flags(argc: u64, argv: *const *const u8) -> DebugFlags {
+    let mut flags = DebugFlags::new();
+    let mut raw = [core::ptr::null::<u8>(); 8];
+    let count = unsafe { sunlight_libc::crt0::collect_raw_args(argc, argv, &mut raw) };
+    for arg in raw[..count].iter().copied() {
+        if bytes_eq(arg, b"--debug-pty-stream") {
+            flags.log_pty_stream = true;
+        }
+    }
+    flags
+}
+
+fn bytes_eq(mut ptr: *const u8, expected: &[u8]) -> bool {
+    if ptr.is_null() {
+        return false;
+    }
+    for &byte in expected {
+        let actual = unsafe { *ptr };
+        if actual != byte {
+            return false;
+        }
+        ptr = unsafe { ptr.add(1) };
+    }
+    unsafe { *ptr == 0 }
+}
+
+fn log_pty_bytes(bytes: &[u8]) {
+    const LOG_LIMIT: usize = 96;
+    let mut buf = [0u8; 320];
+    let mut len = 0usize;
+    len += copy_ascii(b"[TERM][PTY] ", &mut buf[len..]);
+    for &byte in bytes.iter().take(LOG_LIMIT) {
+        len += escape_byte(byte, &mut buf[len..]);
+        if len >= buf.len().saturating_sub(5) {
+            break;
+        }
+    }
+    if bytes.len() > LOG_LIMIT {
+        len += copy_ascii(b"...", &mut buf[len..]);
+    }
+    if len < buf.len() {
+        buf[len] = b'\n';
+        len += 1;
+    }
+    if let Ok(text) = core::str::from_utf8(&buf[..len]) {
+        debug_log(text);
+    }
+}
+
+fn escape_byte(byte: u8, dst: &mut [u8]) -> usize {
+    match byte {
+        b'\n' => copy_ascii(b"\\n", dst),
+        b'\r' => copy_ascii(b"\\r", dst),
+        b'\t' => copy_ascii(b"\\t", dst),
+        0x1B => copy_ascii(b"\\x1b", dst),
+        0x20..=0x7E => {
+            if !dst.is_empty() {
+                dst[0] = byte;
+                1
+            } else {
+                0
+            }
+        }
+        _ => {
+            if dst.len() < 4 {
+                return 0;
+            }
+            dst[0] = b'\\';
+            dst[1] = b'x';
+            dst[2] = hex_digit(byte >> 4);
+            dst[3] = hex_digit(byte & 0x0F);
+            4
+        }
+    }
+}
+
+const fn hex_digit(nibble: u8) -> u8 {
+    match nibble & 0x0F {
+        0..=9 => b'0' + (nibble & 0x0F),
+        _ => b'a' + ((nibble & 0x0F) - 10),
     }
 }
 

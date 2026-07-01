@@ -1880,10 +1880,13 @@ fn control_rect_for_kind(
 ) -> Option<Rect> {
     let titlebar_h = win.titlebar_height();
     let controls = win.control_buttons();
-    controls.iter().position(|kind| *kind == control).map(|index| {
-        let slot_from_right = controls.len().saturating_sub(1).saturating_sub(index) as u32;
-        control_rect(wx, wy, chrome_w, titlebar_h, slot_from_right)
-    })
+    controls
+        .iter()
+        .position(|kind| *kind == control)
+        .map(|index| {
+            let slot_from_right = controls.len().saturating_sub(1).saturating_sub(index) as u32;
+            control_rect(wx, wy, chrome_w, titlebar_h, slot_from_right)
+        })
 }
 
 fn draw_title(canvas: &mut Canvas<'_>, title: &[u8; 64], rect: Rect, color: Color) {
@@ -2229,10 +2232,18 @@ fn composite_window(
         let inner_radius = outer_radius.saturating_sub(BORDER_W);
         let content_backdrop = Rect::new(
             inner.x,
-            inner.y + if win.decorations_visible() { titlebar_h as i32 } else { 0 },
+            inner.y
+                + if win.decorations_visible() {
+                    titlebar_h as i32
+                } else {
+                    0
+                },
             inner.w,
-            inner.h
-                .saturating_sub(if win.decorations_visible() { titlebar_h } else { 0 }),
+            inner.h.saturating_sub(if win.decorations_visible() {
+                titlebar_h
+            } else {
+                0
+            }),
         );
         let controls = win.control_buttons();
         let control_strip_w = if controls.is_empty() {
@@ -3069,7 +3080,9 @@ mod tests {
 
         state.mouse_x = 100;
         state.mouse_y = 80;
-        assert!(update_overlay_window_visibility(&mut state, 10, true, false));
+        assert!(update_overlay_window_visibility(
+            &mut state, 10, true, false
+        ));
         assert!(state.windows[0].overlay_decorations_visible);
 
         assert!(update_overlay_window_visibility(
@@ -3082,16 +3095,22 @@ mod tests {
 
         state.mouse_x = 10;
         state.mouse_y = 10;
-        assert!(!update_overlay_window_visibility(&mut state, 20, false, false));
+        assert!(!update_overlay_window_visibility(
+            &mut state, 20, false, false
+        ));
 
         state.mouse_x = 120;
         state.mouse_y = 90;
-        assert!(update_overlay_window_visibility(&mut state, 30, true, false));
+        assert!(update_overlay_window_visibility(
+            &mut state, 30, true, false
+        ));
         assert!(state.windows[0].overlay_decorations_visible);
 
         state.mouse_x = 5;
         state.mouse_y = 5;
-        assert!(update_overlay_window_visibility(&mut state, 40, true, false));
+        assert!(update_overlay_window_visibility(
+            &mut state, 40, true, false
+        ));
         assert!(!state.windows[0].overlay_decorations_visible);
     }
 }

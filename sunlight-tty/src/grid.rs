@@ -1,75 +1,70 @@
 //! 2D character-grid terminal emulator with VT100/ANSI escape support.
 //!
-//! Maintains a (cols x rows) grid of styled characters, plus scrollback history.
-//! Feeds bytes through the Vt100Parser, interprets output events, and updates grid state.
+//! Maintains a `(cols x rows)` grid of styled characters, plus scrollback
+//! history for the normal screen. Feeds bytes through the VT parser,
+//! interprets output events, and updates screen state.
 
 use crate::vt100::{Vt100Parser, VtOutput};
 use alloc::vec::Vec;
-// Re-export TermCell from sunlight_tui for use here
 pub use sunlight_tui::TermCell;
 
-/// Maximum scrollback lines retained (oldest pushed out beyond this).
 const SCROLLBACK_LINES: usize = 64;
 
-/// A single terminal cell: character + foreground/background colors + bold flag.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub ch: u8,
-    pub fg: u8, // ANSI palette index 0-15
+    pub fg: u8,
     pub bg: u8,
     pub bold: bool,
+    pub inverse: bool,
+    pub underline: bool,
 }
 
 impl Cell {
     const fn blank() -> Self {
-        Cell {
+        Self {
             ch: b' ',
             fg: 7,
             bg: 0,
             bold: false,
+            inverse: false,
+            underline: false,
         }
     }
 }
 
-/// 2D character grid terminal with cursor, scrollback, and ANSI parsing.
 pub struct TerminalGrid {
     pub cols: usize,
     pub rows: usize,
-
-    // Current screen cells (row-major order: row 0 col 0..cols, row 1 col 0..cols, etc.)
-    cells: Vec<Cell>,
-
-    // Scrollback history as a fixed ring buffer of SCROLLBACK_LINES rows
-    // (cols cells each), allocated once in new(). The tty_server runs on a
-    // bump allocator whose dealloc is a no-op, so per-scroll Vec allocations
-    // would leak until the heap is exhausted and the server freezes.
+    main_cells: Vec<Cell>,
+    alt_cells: Vec<Cell>,
     scrollback: Vec<Cell>,
-    scrollback_head: usize,  // ring index of the oldest line
-    scrollback_count: usize, // number of valid lines in the ring
-
-    // Reusable render buffer (cols * rows), allocated once in new().
-    // to_term_cells() fills this in place instead of allocating per frame.
+    scrollback_head: usize,
+    scrollback_count: usize,
     term_cells: Vec<TermCell>,
-
-    // Cursor position
-    cursor_row: usize,
-    cursor_col: usize,
-
-    // Current text attributes
+    main_cursor_row: usize,
+    main_cursor_col: usize,
+    alt_cursor_row: usize,
+    alt_cursor_col: usize,
+    saved_cursor: Option<(usize, usize)>,
+    saved_main_cursor: (usize, usize),
     cur_fg: u8,
     cur_bg: u8,
     cur_bold: bool,
-
-    // VT100 escape sequence parser
+    cur_inverse: bool,
+    cur_underline: bool,
+    cursor_visible: bool,
+    use_alt_screen: bool,
     parser: Vt100Parser,
 }
 
 impl TerminalGrid {
-    /// Create a new terminal grid with given dimensions.
-    /// Allocates from the global allocator (must be available in no_std context).
     pub fn new(cols: usize, rows: usize) -> Self {
-        let mut cells = Vec::new();
-        cells.resize(cols * rows, Cell::blank());
+        let mut main_cells = Vec::new();
+        main_cells.resize(cols * rows, Cell::blank());
+
+        let mut alt_cells = Vec::new();
+        alt_cells.resize(cols * rows, Cell::blank());
 
         let mut scrollback = Vec::new();
         scrollback.resize(SCROLLBACK_LINES * cols, Cell::blank());
@@ -87,22 +82,29 @@ impl TerminalGrid {
         Self {
             cols,
             rows,
-            cells,
+            main_cells,
+            alt_cells,
             scrollback,
             scrollback_head: 0,
             scrollback_count: 0,
             term_cells,
-            cursor_row: 0,
-            cursor_col: 0,
-            cur_fg: 7, // default white
-            cur_bg: 0, // default black
+            main_cursor_row: 0,
+            main_cursor_col: 0,
+            alt_cursor_row: 0,
+            alt_cursor_col: 0,
+            saved_cursor: None,
+            saved_main_cursor: (0, 0),
+            cur_fg: 7,
+            cur_bg: 0,
             cur_bold: false,
+            cur_inverse: false,
+            cur_underline: false,
+            cursor_visible: true,
+            use_alt_screen: false,
             parser: Vt100Parser::new(),
         }
     }
 
-    /// Feed raw bytes into the terminal, updating grid state.
-    /// Each byte is parsed as a potential ANSI escape sequence.
     pub fn feed(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             let output = self.parser.feed(byte);
@@ -110,222 +112,410 @@ impl TerminalGrid {
         }
     }
 
-    /// Handle a single parsed VtOutput event.
     fn handle_output(&mut self, output: VtOutput) {
         match output {
             VtOutput::Char(ch) => self.write_char(ch),
-            VtOutput::Newline => self.newline(),
-            VtOutput::CarriageReturn => self.carriage_return(),
-            VtOutput::Backspace => self.backspace(),
-            VtOutput::SetCursor { row, col } => self.set_cursor(row as usize, col as usize),
             VtOutput::MoveCursor { row, col } => self.move_cursor(row, col),
-            VtOutput::ClearScreen => self.clear_screen(),
-            VtOutput::ClearLine => self.clear_line(),
-            VtOutput::SetColor { fg, bg } => self.set_color(fg, bg),
-            VtOutput::ResetAttrs => self.reset_attrs(),
-            VtOutput::Bold(b) => self.cur_bold = b,
+            VtOutput::SetCursor { row, col } => self.set_cursor(row as usize, col as usize),
+            VtOutput::ClearScreen { mode } => self.clear_screen_mode(mode),
+            VtOutput::ClearLine { mode } => self.clear_line_mode(mode),
+            VtOutput::Sgr { params, count } => self.apply_sgr(&params, count),
+            VtOutput::DecPrivateMode { mode, enabled } => self.set_private_mode(mode, enabled),
+            VtOutput::SaveCursor => self.saved_cursor = Some(self.cursor()),
+            VtOutput::RestoreCursor => {
+                if let Some((row, col)) = self.saved_cursor {
+                    self.set_cursor(row, col);
+                }
+            }
+            VtOutput::CarriageReturn => self.carriage_return(),
+            VtOutput::Newline => self.newline(),
+            VtOutput::Backspace => self.backspace(),
+            VtOutput::Tab => self.tab(),
             VtOutput::Bell | VtOutput::Nothing => {}
         }
     }
 
-    /// Write a character at the current cursor position, advancing the cursor.
+    fn active_cells(&self) -> &[Cell] {
+        if self.use_alt_screen {
+            &self.alt_cells
+        } else {
+            &self.main_cells
+        }
+    }
+
+    fn active_cells_mut(&mut self) -> &mut [Cell] {
+        if self.use_alt_screen {
+            &mut self.alt_cells
+        } else {
+            &mut self.main_cells
+        }
+    }
+
+    fn cursor_mut(&mut self) -> (&mut usize, &mut usize) {
+        if self.use_alt_screen {
+            (&mut self.alt_cursor_row, &mut self.alt_cursor_col)
+        } else {
+            (&mut self.main_cursor_row, &mut self.main_cursor_col)
+        }
+    }
+
     fn write_char(&mut self, ch: u8) {
-        if self.cursor_row >= self.rows || self.cursor_col >= self.cols {
+        let (row, col) = self.cursor();
+        let cell = Cell {
+            ch,
+            fg: self.cur_fg,
+            bg: self.cur_bg,
+            bold: self.cur_bold,
+            inverse: self.cur_inverse,
+            underline: self.cur_underline,
+        };
+        if row >= self.rows || col >= self.cols {
             return;
         }
-
-        let idx = self.cursor_row * self.cols + self.cursor_col;
-        if idx < self.cells.len() {
-            self.cells[idx] = Cell {
-                ch,
-                fg: self.cur_fg,
-                bg: self.cur_bg,
-                bold: self.cur_bold,
-            };
+        let idx = row * self.cols + col;
+        if let Some(slot) = self.active_cells_mut().get_mut(idx) {
+            *slot = cell;
         }
 
-        self.cursor_col += 1;
-
-        // Wrap to next line if we've overflowed
-        if self.cursor_col >= self.cols {
-            self.cursor_col = 0;
-            self.cursor_row += 1;
-
-            // Scroll if we've moved past the bottom
-            if self.cursor_row >= self.rows {
+        let cols = self.cols;
+        let rows = self.rows;
+        let (cursor_row, cursor_col) = self.cursor_mut();
+        *cursor_col += 1;
+        if *cursor_col >= cols {
+            *cursor_col = 0;
+            *cursor_row += 1;
+            if *cursor_row >= rows {
                 self.scroll_up();
             }
         }
     }
 
-    /// Move cursor to the next line, scrolling if necessary.
-    /// Treats LF as CR+LF (ONLCR): nothing in this stack emits bare-LF
-    /// vertical motion on purpose, and without the column reset every
-    /// line starts where the previous one ended (staircase output).
     fn newline(&mut self) {
-        self.cursor_col = 0;
-        self.cursor_row += 1;
-        if self.cursor_row >= self.rows {
+        let (cursor_row, cursor_col) = self.cursor_mut();
+        *cursor_col = 0;
+        *cursor_row += 1;
+        if *cursor_row >= self.rows {
             self.scroll_up();
         }
     }
 
-    /// Move cursor to the start of the current line.
     fn carriage_return(&mut self) {
-        self.cursor_col = 0;
+        let (_, cursor_col) = self.cursor_mut();
+        *cursor_col = 0;
     }
 
-    /// Move cursor back one position (if not at start of line).
     fn backspace(&mut self) {
-        self.cursor_col = self.cursor_col.saturating_sub(1);
+        let (_, cursor_col) = self.cursor_mut();
+        *cursor_col = cursor_col.saturating_sub(1);
     }
 
-    /// Move cursor to an absolute position (clamped to grid bounds).
+    fn tab(&mut self) {
+        let cols = self.cols;
+        let (_, cursor_col) = self.cursor_mut();
+        let next = ((*cursor_col / 8) + 1) * 8;
+        *cursor_col = next.min(cols.saturating_sub(1));
+    }
+
     fn set_cursor(&mut self, row: usize, col: usize) {
-        self.cursor_row = row.min(self.rows.saturating_sub(1));
-        self.cursor_col = col.min(self.cols.saturating_sub(1));
+        let rows = self.rows;
+        let cols = self.cols;
+        let (cursor_row, cursor_col) = self.cursor_mut();
+        *cursor_row = row.min(rows.saturating_sub(1));
+        *cursor_col = col.min(cols.saturating_sub(1));
     }
 
-    /// Move cursor by a relative offset (clamped to grid bounds).
     fn move_cursor(&mut self, drow: i16, dcol: i16) {
-        let new_row = (self.cursor_row as i16 + drow).max(0) as usize;
-        let new_col = (self.cursor_col as i16 + dcol).max(0) as usize;
+        let (row, col) = self.cursor();
+        let new_row = (row as i16 + drow).max(0) as usize;
+        let new_col = (col as i16 + dcol).max(0) as usize;
         self.set_cursor(new_row, new_col);
     }
 
-    /// Clear the entire screen, reset cursor to origin.
-    ///
-    /// Also resets scrollback and the escape parser: the tty_server clears the
-    /// cached grid and re-feeds the full output buffer every frame, so stale
-    /// scrollback would duplicate the same history each render and a parser
-    /// left mid-escape-sequence would corrupt the next feed.
     pub fn clear_screen(&mut self) {
-        for cell in &mut self.cells {
+        for cell in &mut self.main_cells {
             *cell = Cell::blank();
         }
-        self.cursor_row = 0;
-        self.cursor_col = 0;
+        for cell in &mut self.alt_cells {
+            *cell = Cell::blank();
+        }
+        self.main_cursor_row = 0;
+        self.main_cursor_col = 0;
+        self.alt_cursor_row = 0;
+        self.alt_cursor_col = 0;
         self.scrollback_head = 0;
         self.scrollback_count = 0;
+        self.saved_cursor = None;
+        self.saved_main_cursor = (0, 0);
+        self.cursor_visible = true;
+        self.use_alt_screen = false;
+        self.reset_attrs();
         self.parser = Vt100Parser::new();
     }
 
-    /// Clear from cursor to end of line.
-    fn clear_line(&mut self) {
-        if self.cursor_row >= self.rows {
-            return;
+    fn clear_screen_mode(&mut self, mode: u16) {
+        match mode {
+            0 => self.clear_from_cursor_to_screen_end(),
+            1 => self.clear_from_screen_start_to_cursor(),
+            2 | 3 => self.clear_active_screen(),
+            _ => self.clear_active_screen(),
         }
-        let row_start = self.cursor_row * self.cols;
-        for col in self.cursor_col..self.cols {
-            let idx = row_start + col;
-            if idx < self.cells.len() {
-                self.cells[idx] = Cell::blank();
+    }
+
+    fn clear_active_screen(&mut self) {
+        for cell in self.active_cells_mut() {
+            *cell = Cell::blank();
+        }
+        self.set_cursor(0, 0);
+    }
+
+    fn clear_from_cursor_to_screen_end(&mut self) {
+        let (row, col) = self.cursor();
+        let rows = self.rows;
+        let cols = self.cols;
+        let cells = self.active_cells_mut();
+        for r in row..rows {
+            let start_col = if r == row { col } else { 0 };
+            let start = r * cols + start_col;
+            let end = (r + 1) * cols;
+            for idx in start..end {
+                cells[idx] = Cell::blank();
             }
         }
     }
 
-    /// Set foreground and/or background color (palette indices).
-    fn set_color(&mut self, fg: Option<u8>, bg: Option<u8>) {
-        if let Some(f) = fg {
-            self.cur_fg = f.min(15);
-        }
-        if let Some(b) = bg {
-            self.cur_bg = b.min(15);
+    fn clear_from_screen_start_to_cursor(&mut self) {
+        let (row, col) = self.cursor();
+        let rows = self.rows;
+        let cols = self.cols;
+        let cells = self.active_cells_mut();
+        for r in 0..=row.min(rows.saturating_sub(1)) {
+            let end_col = if r == row { col + 1 } else { cols };
+            let start = r * cols;
+            let end = start + end_col.min(cols);
+            for idx in start..end {
+                cells[idx] = Cell::blank();
+            }
         }
     }
 
-    /// Reset text attributes to defaults.
+    fn clear_line_mode(&mut self, mode: u16) {
+        match mode {
+            0 => self.clear_line_right(),
+            1 => self.clear_line_left(),
+            2 => self.clear_line_all(),
+            _ => self.clear_line_right(),
+        }
+    }
+
+    fn clear_line_right(&mut self) {
+        let (row, col) = self.cursor();
+        if row >= self.rows {
+            return;
+        }
+        let start = row * self.cols + col.min(self.cols);
+        let end = (row + 1) * self.cols;
+        for idx in start..end {
+            self.active_cells_mut()[idx] = Cell::blank();
+        }
+    }
+
+    fn clear_line_left(&mut self) {
+        let (row, col) = self.cursor();
+        if row >= self.rows {
+            return;
+        }
+        let start = row * self.cols;
+        let end = start + (col + 1).min(self.cols);
+        for idx in start..end {
+            self.active_cells_mut()[idx] = Cell::blank();
+        }
+    }
+
+    fn clear_line_all(&mut self) {
+        let (row, _) = self.cursor();
+        if row >= self.rows {
+            return;
+        }
+        let start = row * self.cols;
+        let end = start + self.cols;
+        for idx in start..end {
+            self.active_cells_mut()[idx] = Cell::blank();
+        }
+    }
+
+    fn apply_sgr(&mut self, params: &[u16; 8], count: usize) {
+        if count == 0 {
+            self.reset_attrs();
+            return;
+        }
+
+        let mut i = 0usize;
+        while i < count {
+            match params[i] {
+                0 => self.reset_attrs(),
+                1 => self.cur_bold = true,
+                4 => self.cur_underline = true,
+                7 => self.cur_inverse = true,
+                22 => self.cur_bold = false,
+                24 => self.cur_underline = false,
+                27 => self.cur_inverse = false,
+                30..=37 => self.cur_fg = (params[i] - 30) as u8,
+                39 => self.cur_fg = 7,
+                40..=47 => self.cur_bg = (params[i] - 40) as u8,
+                49 => self.cur_bg = 0,
+                90..=97 => self.cur_fg = (params[i] - 90 + 8) as u8,
+                100..=107 => self.cur_bg = (params[i] - 100 + 8) as u8,
+                38 => {
+                    if i + 2 < count && params[i + 1] == 5 {
+                        self.cur_fg = map_extended_color(params[i + 2]);
+                        i += 2;
+                    } else if i + 4 < count && params[i + 1] == 2 {
+                        self.cur_fg = map_rgb_to_ansi(params[i + 2], params[i + 3], params[i + 4]);
+                        i += 4;
+                    }
+                }
+                48 => {
+                    if i + 2 < count && params[i + 1] == 5 {
+                        self.cur_bg = map_extended_color(params[i + 2]);
+                        i += 2;
+                    } else if i + 4 < count && params[i + 1] == 2 {
+                        self.cur_bg = map_rgb_to_ansi(params[i + 2], params[i + 3], params[i + 4]);
+                        i += 4;
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+    }
+
+    fn set_private_mode(&mut self, mode: u16, enabled: bool) {
+        match mode {
+            25 => self.cursor_visible = enabled,
+            47 | 1047 | 1049 => {
+                if enabled {
+                    self.enter_alt_screen();
+                } else {
+                    self.exit_alt_screen();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn enter_alt_screen(&mut self) {
+        if self.use_alt_screen {
+            return;
+        }
+        self.saved_main_cursor = (self.main_cursor_row, self.main_cursor_col);
+        self.use_alt_screen = true;
+        self.alt_cursor_row = 0;
+        self.alt_cursor_col = 0;
+        for cell in &mut self.alt_cells {
+            *cell = Cell::blank();
+        }
+    }
+
+    fn exit_alt_screen(&mut self) {
+        if !self.use_alt_screen {
+            return;
+        }
+        self.use_alt_screen = false;
+        self.main_cursor_row = self.saved_main_cursor.0.min(self.rows.saturating_sub(1));
+        self.main_cursor_col = self.saved_main_cursor.1.min(self.cols.saturating_sub(1));
+    }
+
     fn reset_attrs(&mut self) {
         self.cur_fg = 7;
         self.cur_bg = 0;
         self.cur_bold = false;
+        self.cur_inverse = false;
+        self.cur_underline = false;
     }
 
-    /// Scroll the grid up by one line: push current top row to scrollback,
-    /// shift all rows up, clear the new bottom row, and move cursor back.
     fn scroll_up(&mut self) {
-        // Copy the top row into the preallocated scrollback ring. When the
-        // ring is full the oldest line is overwritten. No allocation here:
-        // this runs on every scrolled line of every frame.
-        let slot = if self.scrollback_count == SCROLLBACK_LINES {
-            let oldest = self.scrollback_head;
-            self.scrollback_head = (self.scrollback_head + 1) % SCROLLBACK_LINES;
-            oldest
+        let cells = if self.use_alt_screen {
+            &mut self.alt_cells
         } else {
-            let next = (self.scrollback_head + self.scrollback_count) % SCROLLBACK_LINES;
-            self.scrollback_count += 1;
-            next
+            &mut self.main_cells
         };
-        let dst = slot * self.cols;
-        for i in 0..self.cols {
-            self.scrollback[dst + i] = self.cells[i];
+
+        if !self.use_alt_screen {
+            let slot = if self.scrollback_count == SCROLLBACK_LINES {
+                let oldest = self.scrollback_head;
+                self.scrollback_head = (self.scrollback_head + 1) % SCROLLBACK_LINES;
+                oldest
+            } else {
+                let next = (self.scrollback_head + self.scrollback_count) % SCROLLBACK_LINES;
+                self.scrollback_count += 1;
+                next
+            };
+            let dst = slot * self.cols;
+            for i in 0..self.cols {
+                self.scrollback[dst + i] = cells[i];
+            }
         }
 
-        // Shift rows up
         for row in 0..self.rows.saturating_sub(1) {
             let src_start = (row + 1) * self.cols;
             let dst_start = row * self.cols;
             for col in 0..self.cols {
-                self.cells[dst_start + col] = self.cells[src_start + col];
+                cells[dst_start + col] = cells[src_start + col];
             }
         }
 
-        // Clear bottom row
-        let bottom_start = (self.rows.saturating_sub(1)) * self.cols;
+        let bottom_start = self.rows.saturating_sub(1) * self.cols;
         for i in 0..self.cols {
-            self.cells[bottom_start + i] = Cell::blank();
+            cells[bottom_start + i] = Cell::blank();
         }
 
-        // Move cursor back (if not at top)
-        if self.cursor_row > 0 {
-            self.cursor_row -= 1;
+        let (cursor_row, _) = self.cursor_mut();
+        if *cursor_row > 0 {
+            *cursor_row -= 1;
         }
     }
 
-    /// Get the cursor position (row, col).
     pub fn cursor(&self) -> (usize, usize) {
-        (self.cursor_row, self.cursor_col)
-    }
-
-    /// Get a cell at the given position.
-    pub fn cell(&self, row: usize, col: usize) -> Cell {
-        if row >= self.rows || col >= self.cols {
-            return Cell::blank();
+        if self.use_alt_screen {
+            (self.alt_cursor_row, self.alt_cursor_col)
+        } else {
+            (self.main_cursor_row, self.main_cursor_col)
         }
-        self.cells[row * self.cols + col]
     }
 
-    /// Render the grid into the cached term-cell buffer with RGB colors resolved.
-    /// Folds `bold` into the palette index (bright variants: if bold, add 8 to indices 0-7).
-    /// Fills the buffer in place — no allocation per frame (the tty_server's
-    /// bump allocator never frees, so a per-frame Vec would exhaust the heap).
-    pub fn to_term_cells(&mut self, ansi_colors: &[u32; 16]) -> &[TermCell] {
-        for i in 0..self.cells.len() {
-            self.term_cells[i] = resolve_cell(self.cells[i], ansi_colors);
-        }
-        &self.term_cells
+    pub fn cursor_visible(&self) -> bool {
+        self.cursor_visible
     }
 
-    /// Get the number of lines in scrollback history.
     pub fn scrollback_len(&self) -> usize {
         self.scrollback_count
     }
 
-    /// Render grid into the cached term-cell buffer with viewport offset for
-    /// scrollback viewing. viewport_offset: 0 = live view, 1..scrollback_len()
-    /// = viewing history. For each screen row, either pull from scrollback
-    /// (if offset > 0) or live cells. Fills in place — no allocation per frame.
+    pub fn cell(&self, row: usize, col: usize) -> Cell {
+        let cells = self.active_cells();
+        if row >= self.rows || col >= self.cols {
+            return Cell::blank();
+        }
+        cells[row * self.cols + col]
+    }
+
+    pub fn to_term_cells(&mut self, ansi_colors: &[u32; 16]) -> &[TermCell] {
+        let len = self.term_cells.len();
+        for idx in 0..len {
+            self.term_cells[idx] = resolve_cell(self.active_cells()[idx], ansi_colors);
+        }
+        &self.term_cells
+    }
+
     pub fn to_term_cells_with_offset(
         &mut self,
         ansi_colors: &[u32; 16],
         viewport_offset: usize,
     ) -> &[TermCell] {
-        if viewport_offset == 0 {
-            // Live view: return normal cells
+        if viewport_offset == 0 || self.use_alt_screen {
             return self.to_term_cells(ansi_colors);
         }
 
-        // Scrollback view: render from history
         for screen_row in 0..self.rows {
             let history_row_idx = if self.scrollback_count > viewport_offset {
                 self.scrollback_count - viewport_offset + screen_row
@@ -335,7 +525,6 @@ impl TerminalGrid {
 
             let dst_start = screen_row * self.cols;
             if history_row_idx < self.scrollback_count {
-                // Ring index: history_row_idx-th oldest line
                 let src_start =
                     ((self.scrollback_head + history_row_idx) % SCROLLBACK_LINES) * self.cols;
                 for col in 0..self.cols {
@@ -343,11 +532,10 @@ impl TerminalGrid {
                         resolve_cell(self.scrollback[src_start + col], ansi_colors);
                 }
             } else {
-                // Fallback to live cells if out of scrollback range
                 let src_start = screen_row * self.cols;
                 for col in 0..self.cols {
                     self.term_cells[dst_start + col] =
-                        resolve_cell(self.cells[src_start + col], ansi_colors);
+                        resolve_cell(self.main_cells[src_start + col], ansi_colors);
                 }
             }
         }
@@ -356,17 +544,143 @@ impl TerminalGrid {
     }
 }
 
-/// Resolve a styled cell to a TermCell with RGB colors, folding bold into
-/// the bright palette variants (indices 8-15).
 fn resolve_cell(cell: Cell, ansi_colors: &[u32; 16]) -> TermCell {
     let fg_idx = if cell.bold && cell.fg < 8 {
         cell.fg + 8
     } else {
         cell.fg
     };
+    let mut fg = ansi_colors[fg_idx as usize % 16];
+    let mut bg = ansi_colors[cell.bg as usize % 16];
+    if cell.inverse {
+        core::mem::swap(&mut fg, &mut bg);
+    }
     TermCell {
         ch: cell.ch,
-        fg: ansi_colors[fg_idx as usize % 16],
-        bg: ansi_colors[cell.bg as usize % 16],
+        fg,
+        bg,
+    }
+}
+
+fn map_extended_color(color: u16) -> u8 {
+    match color {
+        0..=15 => color as u8,
+        16..=231 => {
+            let idx = color - 16;
+            let r = idx / 36;
+            let g = (idx / 6) % 6;
+            let b = idx % 6;
+            map_rgb_to_ansi((r * 51) as u16, (g * 51) as u16, (b * 51) as u16)
+        }
+        232..=255 => {
+            if color < 244 {
+                0
+            } else {
+                7
+            }
+        }
+        _ => 7,
+    }
+}
+
+fn map_rgb_to_ansi(r: u16, g: u16, b: u16) -> u8 {
+    let bright = r > 127 || g > 127 || b > 127;
+    let base = match ((r > 95) as u8, (g > 95) as u8, (b > 95) as u8) {
+        (0, 0, 0) => 0,
+        (1, 0, 0) => 1,
+        (0, 1, 0) => 2,
+        (1, 1, 0) => 3,
+        (0, 0, 1) => 4,
+        (1, 0, 1) => 5,
+        (0, 1, 1) => 6,
+        _ => 7,
+    };
+    if bright && base < 8 {
+        base + 8
+    } else {
+        base
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ANSI_COLORS: [u32; 16] = [
+        0x000000, 0xaa0000, 0x00aa00, 0xaa5500, 0x0000aa, 0xaa00aa, 0x00aaaa, 0xaaaaaa, 0x555555,
+        0xff5555, 0x55ff55, 0xffff55, 0x5555ff, 0xff55ff, 0x55ffff, 0xffffff,
+    ];
+
+    #[test]
+    fn plain_text_writes_cells() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.feed(b"ab");
+        assert_eq!(grid.cell(0, 0).ch, b'a');
+        assert_eq!(grid.cell(0, 1).ch, b'b');
+    }
+
+    #[test]
+    fn newline_and_carriage_return_work() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.feed(b"ab\rZ\nQ");
+        assert_eq!(grid.cell(0, 0).ch, b'Z');
+        assert_eq!(grid.cell(1, 0).ch, b'Q');
+    }
+
+    #[test]
+    fn cursor_movement_updates_in_place() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.feed(b"ab\x1b[1D!");
+        assert_eq!(grid.cell(0, 0).ch, b'a');
+        assert_eq!(grid.cell(0, 1).ch, b'!');
+    }
+
+    #[test]
+    fn clear_screen_resets_cells() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.feed(b"ab\x1b[2J");
+        assert_eq!(grid.cell(0, 0).ch, b' ');
+        assert_eq!(grid.cursor(), (0, 0));
+    }
+
+    #[test]
+    fn clear_line_mode_two_clears_current_row() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.feed(b"ab\ncd\x1b[2K");
+        assert_eq!(grid.cell(1, 0).ch, b' ');
+        assert_eq!(grid.cell(1, 1).ch, b' ');
+    }
+
+    #[test]
+    fn sgr_color_reset_restores_defaults() {
+        let mut grid = TerminalGrid::new(4, 1);
+        grid.feed(b"\x1b[31mA\x1b[0mB");
+        assert_eq!(grid.cell(0, 0).fg, 1);
+        assert_eq!(grid.cell(0, 1).fg, 7);
+    }
+
+    #[test]
+    fn alternate_screen_enter_exit_restores_main_buffer() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.feed(b"main\x1b[?1049hALT\x1b[?1049l");
+        assert_eq!(grid.cell(0, 0).ch, b'm');
+        let cells = grid.to_term_cells(&ANSI_COLORS);
+        assert_eq!(cells[0].ch, b'm');
+    }
+
+    #[test]
+    fn resize_like_clear_screen_keeps_parser_sane() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.clear_screen();
+        grid.feed(b"\x1b[31mX");
+        assert_eq!(grid.cell(0, 0).ch, b'X');
+        assert_eq!(grid.cell(0, 0).fg, 1);
+    }
+
+    #[test]
+    fn unknown_escape_does_not_crash_or_print() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.feed(b"\x1b[?9999hA");
+        assert_eq!(grid.cell(0, 0).ch, b'A');
     }
 }
