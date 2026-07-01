@@ -22,13 +22,37 @@ fn main() {
         canvas.fill_rect(sunlight_ui::Rect::new(0, 0, w, h), theme.bg);
 
         let samples: &[(&str, FontRole, Color)] = &[
-            ("SunlightOS",                                    FontRole::UiLarge,    theme.accent),
-            ("The quick brown fox jumps over the lazy dog.",  FontRole::UiRegular,  theme.text),
-            ("0123456789  /root/Pictures/Sample Pictures",    FontRole::MonoRegular, theme.text),
-            ("Regular: file names, toolbar labels",           FontRole::UiRegular,  theme.text_dim),
-            ("Medium: selected items, emphasis",              FontRole::UiMedium,   theme.text),
-            ("Small: status text, captions (11px)",           FontRole::UiSmall,    theme.text_dim),
-            ("Large (16 px) - window titles",                 FontRole::UiLarge,    theme.text),
+            ("SunlightOS", FontRole::UiLarge, theme.accent),
+            (
+                "The quick brown fox jumps over the lazy dog.",
+                FontRole::UiRegular,
+                theme.text,
+            ),
+            (
+                "0123456789  /root/Pictures/Sample Pictures",
+                FontRole::MonoRegular,
+                theme.text,
+            ),
+            (
+                "Regular: file names, toolbar labels",
+                FontRole::UiRegular,
+                theme.text_dim,
+            ),
+            (
+                "Medium: selected items, emphasis",
+                FontRole::UiMedium,
+                theme.text,
+            ),
+            (
+                "Small: status text, captions (11px)",
+                FontRole::UiSmall,
+                theme.text_dim,
+            ),
+            (
+                "Large (16 px) - window titles",
+                FontRole::UiLarge,
+                theme.text,
+            ),
         ];
 
         let mut y = 24i32;
@@ -44,8 +68,8 @@ fn main() {
     let mut data = format!("P6\n{} {}\n255\n", w, h).into_bytes();
     for px in &pixels {
         data.push(((px >> 16) & 0xFF) as u8); // R
-        data.push(((px >>  8) & 0xFF) as u8); // G
-        data.push(( px        & 0xFF) as u8); // B
+        data.push(((px >> 8) & 0xFF) as u8); // G
+        data.push((px & 0xFF) as u8); // B
     }
     std::fs::write(path, &data).expect("failed to write minitype-demo.ppm");
     println!("Wrote {path}  ({w}×{h})");

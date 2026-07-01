@@ -21,19 +21,24 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 pub use sunlight_ui::geom::{Rect, Size};
-pub use sunlight_ui::theme::Color;
 pub use sunlight_ui::paint::Canvas;
+pub use sunlight_ui::theme::Color;
 
 // ── Embedded MTF font blobs ───────────────────────────────────────────────────
 
-static FONT_UI_11:         &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_11.mtf"));
-static FONT_UI_13:         &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_13.mtf"));
-static FONT_UI_MEDIUM_13:  &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_medium_13.mtf"));
-static FONT_UI_SEMIBOLD_13:&[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_semibold_13.mtf"));
-static FONT_UI_16:         &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_16.mtf"));
-static FONT_UI_TITLE_18:   &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_title_18.mtf"));
-static FONT_MONO_REGULAR:  &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_regular_14.mtf"));
-static FONT_MONO_MEDIUM:   &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_medium_14.mtf"));
+static FONT_UI_11: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_11.mtf"));
+static FONT_UI_13: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_13.mtf"));
+static FONT_UI_MEDIUM_13: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_medium_13.mtf"));
+static FONT_UI_SEMIBOLD_13: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_semibold_13.mtf"));
+static FONT_UI_16: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_16.mtf"));
+static FONT_UI_TITLE_18: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_title_18.mtf"));
+static FONT_MONO_REGULAR: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_regular_14.mtf"));
+static FONT_MONO_MEDIUM: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_medium_14.mtf"));
 
 // ── Font roles ────────────────────────────────────────────────────────────────
 
@@ -89,14 +94,14 @@ const GLYPH_DATA_START: usize = HEADER_SIZE + OFFSET_TABLE_SIZE; // 388
 #[inline]
 fn font_data(role: FontRole) -> &'static [u8] {
     match role {
-        FontRole::UiSmall     => FONT_UI_11,
-        FontRole::UiRegular   => FONT_UI_13,
-        FontRole::UiMedium    => FONT_UI_MEDIUM_13,
-        FontRole::UiBold      => FONT_UI_SEMIBOLD_13,
-        FontRole::UiLarge     => FONT_UI_16,
-        FontRole::UiTitle     => FONT_UI_TITLE_18,
+        FontRole::UiSmall => FONT_UI_11,
+        FontRole::UiRegular => FONT_UI_13,
+        FontRole::UiMedium => FONT_UI_MEDIUM_13,
+        FontRole::UiBold => FONT_UI_SEMIBOLD_13,
+        FontRole::UiLarge => FONT_UI_16,
+        FontRole::UiTitle => FONT_UI_TITLE_18,
         FontRole::MonoRegular => FONT_MONO_REGULAR,
-        FontRole::MonoMedium  => FONT_MONO_MEDIUM,
+        FontRole::MonoMedium => FONT_MONO_MEDIUM,
     }
 }
 
@@ -136,10 +141,10 @@ fn glyph_info(data: &'static [u8], ch: char) -> Option<GlyphInfo> {
     }
 
     let advance = data[glyph_start];
-    let left    = data[glyph_start + 1] as i8;
-    let top     = data[glyph_start + 2] as i8;
-    let width   = data[glyph_start + 3];
-    let height  = data[glyph_start + 4];
+    let left = data[glyph_start + 1] as i8;
+    let top = data[glyph_start + 2] as i8;
+    let width = data[glyph_start + 3];
+    let height = data[glyph_start + 4];
 
     let pixel_offset = glyph_start + 5;
     let pixel_end = pixel_offset + width as usize * height as usize;
@@ -147,7 +152,14 @@ fn glyph_info(data: &'static [u8], ch: char) -> Option<GlyphInfo> {
         return None;
     }
 
-    Some(GlyphInfo { advance, left, top, width, height, pixel_offset })
+    Some(GlyphInfo {
+        advance,
+        left,
+        top,
+        width,
+        height,
+        pixel_offset,
+    })
 }
 
 // ── Public metrics API ────────────────────────────────────────────────────────
@@ -156,14 +168,22 @@ fn glyph_info(data: &'static [u8], ch: char) -> Option<GlyphInfo> {
 #[inline]
 pub fn ascent(role: FontRole) -> u32 {
     let d = font_data(role);
-    if d.len() >= 6 { d[5] as u32 } else { 10 }
+    if d.len() >= 6 {
+        d[5] as u32
+    } else {
+        10
+    }
 }
 
 /// Recommended vertical line spacing (em box height) in pixels for `role`.
 #[inline]
 pub fn line_height(role: FontRole) -> u32 {
     let d = font_data(role);
-    if d.len() >= 5 { d[4] as u32 } else { 13 }
+    if d.len() >= 5 {
+        d[4] as u32
+    } else {
+        13
+    }
 }
 
 /// Measure the pixel width and height of `text` rendered with `role`.
@@ -190,20 +210,24 @@ pub fn measure_text(text: &str, role: FontRole) -> Size {
 /// caller can continue rendering on the same line.
 pub fn draw_text(canvas: &mut Canvas, text: &str, x: i32, y: i32, style: &TextStyle) -> i32 {
     let data = font_data(style.role);
-    let asc  = ascent(style.role) as i32;
+    let asc = ascent(style.role) as i32;
     let baseline_y = y + asc;
     let mut cx = x;
 
     for ch in text.chars() {
         let g = match glyph_info(data, ch) {
             Some(g) => g,
-            None    => { cx += 4; continue; } // unknown char — skip with small gap
+            None => {
+                cx += 4;
+                continue;
+            } // unknown char — skip with small gap
         };
 
         if g.width > 0 && g.height > 0 {
             let bx = cx + g.left as i32;
             let by = baseline_y - g.top as i32;
-            let pixels = &data[g.pixel_offset..g.pixel_offset + g.width as usize * g.height as usize];
+            let pixels =
+                &data[g.pixel_offset..g.pixel_offset + g.width as usize * g.height as usize];
 
             for row in 0..g.height as i32 {
                 for col in 0..g.width as i32 {
@@ -211,12 +235,7 @@ pub fn draw_text(canvas: &mut Canvas, text: &str, x: i32, y: i32, style: &TextSt
                     if alpha == 0 {
                         continue;
                     }
-                    let fg = Color::rgba(
-                        style.color.r(),
-                        style.color.g(),
-                        style.color.b(),
-                        alpha,
-                    );
+                    let fg = Color::rgba(style.color.r(), style.color.g(), style.color.b(), alpha);
                     canvas.blend_pixel(bx + col, by + row, fg);
                 }
             }
@@ -236,13 +255,7 @@ pub fn draw_text_centered(canvas: &mut Canvas, rect: Rect, text: &str, style: &T
 }
 
 /// Draw `text` right-aligned inside `rect`, with `pad` pixels of right padding.
-pub fn draw_text_right(
-    canvas: &mut Canvas,
-    rect: Rect,
-    text: &str,
-    style: &TextStyle,
-    pad: i32,
-) {
+pub fn draw_text_right(canvas: &mut Canvas, rect: Rect, text: &str, style: &TextStyle, pad: i32) {
     let sz = measure_text(text, style.role);
     let tx = rect.right() - sz.w as i32 - pad;
     let ty = rect.y + (rect.h as i32 - sz.h as i32) / 2;
@@ -311,14 +324,14 @@ impl sunlight_ui::font::VecText for VecFont {
 /// Call once at process startup to catch a corrupt build.
 pub fn assert_fonts_valid() {
     for (role, data) in [
-        (FontRole::UiSmall,     FONT_UI_11),
-        (FontRole::UiRegular,   FONT_UI_13),
-        (FontRole::UiMedium,    FONT_UI_MEDIUM_13),
-        (FontRole::UiBold,      FONT_UI_SEMIBOLD_13),
-        (FontRole::UiLarge,     FONT_UI_16),
-        (FontRole::UiTitle,     FONT_UI_TITLE_18),
+        (FontRole::UiSmall, FONT_UI_11),
+        (FontRole::UiRegular, FONT_UI_13),
+        (FontRole::UiMedium, FONT_UI_MEDIUM_13),
+        (FontRole::UiBold, FONT_UI_SEMIBOLD_13),
+        (FontRole::UiLarge, FONT_UI_16),
+        (FontRole::UiTitle, FONT_UI_TITLE_18),
         (FontRole::MonoRegular, FONT_MONO_REGULAR),
-        (FontRole::MonoMedium,  FONT_MONO_MEDIUM),
+        (FontRole::MonoMedium, FONT_MONO_MEDIUM),
     ] {
         assert!(
             data.len() >= GLYPH_DATA_START && &data[0..4] == b"MTF1",
@@ -338,14 +351,14 @@ pub fn assert_fonts_valid() {
 pub struct Typography;
 
 impl Typography {
-    pub const UI_SMALL:   VecFont = VecFont(FontRole::UiSmall);
+    pub const UI_SMALL: VecFont = VecFont(FontRole::UiSmall);
     pub const UI_REGULAR: VecFont = VecFont(FontRole::UiRegular);
-    pub const UI_MEDIUM:  VecFont = VecFont(FontRole::UiMedium);
-    pub const UI_BOLD:    VecFont = VecFont(FontRole::UiBold);
-    pub const UI_LARGE:   VecFont = VecFont(FontRole::UiLarge);
-    pub const UI_TITLE:   VecFont = VecFont(FontRole::UiTitle);
-    pub const MONO:       VecFont = VecFont(FontRole::MonoRegular);
-    pub const MONO_MEDIUM:VecFont = VecFont(FontRole::MonoMedium);
+    pub const UI_MEDIUM: VecFont = VecFont(FontRole::UiMedium);
+    pub const UI_BOLD: VecFont = VecFont(FontRole::UiBold);
+    pub const UI_LARGE: VecFont = VecFont(FontRole::UiLarge);
+    pub const UI_TITLE: VecFont = VecFont(FontRole::UiTitle);
+    pub const MONO: VecFont = VecFont(FontRole::MonoRegular);
+    pub const MONO_MEDIUM: VecFont = VecFont(FontRole::MonoMedium);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -372,7 +385,12 @@ mod tests {
             FontRole::MonoMedium,
         ] {
             let lh = line_height(role);
-            assert!(lh >= 8 && lh <= 32, "line_height({:?}) = {} is out of range", role, lh);
+            assert!(
+                lh >= 8 && lh <= 32,
+                "line_height({:?}) = {} is out of range",
+                role,
+                lh
+            );
         }
     }
 
@@ -381,8 +399,12 @@ mod tests {
         let ui_lh = line_height(FontRole::UiRegular);
         let mono_lh = line_height(FontRole::MonoRegular);
         // FiraCode 14px vs Inter 13px — line heights should differ
-        assert!(ui_lh != mono_lh || measure_text("W", FontRole::MonoRegular).w == measure_text("i", FontRole::MonoRegular).w,
-            "MonoRegular should have fixed-width cells");
+        assert!(
+            ui_lh != mono_lh
+                || measure_text("W", FontRole::MonoRegular).w
+                    == measure_text("i", FontRole::MonoRegular).w,
+            "MonoRegular should have fixed-width cells"
+        );
     }
 
     #[test]
@@ -395,7 +417,10 @@ mod tests {
     #[test]
     fn measure_returns_positive_width() {
         let sz = measure_text("Hello", FontRole::UiRegular);
-        assert!(sz.w > 0, "measure_text returned zero width for non-empty string");
+        assert!(
+            sz.w > 0,
+            "measure_text returned zero width for non-empty string"
+        );
     }
 
     #[test]
@@ -413,6 +438,9 @@ mod tests {
         let mut canvas = Canvas::new(&mut pixels, 100, 100, 20);
         let style = TextStyle::new(FontRole::UiSmall, Color::rgb(0xF0, 0xF0, 0xF0));
         let x = draw_text(&mut canvas, "", 10, 4, &style);
-        assert_eq!(x, 10, "draw_text with empty string should not advance cursor");
+        assert_eq!(
+            x, 10,
+            "draw_text with empty string should not advance cursor"
+        );
     }
 }

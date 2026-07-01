@@ -50,21 +50,8 @@ use sunlight_ipc::{
     EndpointId, IpcMsg, ThumbMsg,
 };
 use sunlight_libc::{
-    self as libc,
-    env,
-    mkdir_recursive,
-    open_with_flags,
-    read_dir,
-    rename,
-    stat,
-    unlink,
-    write_all,
-    DirEntry,
-    Fd,
-    O_CREAT,
-    O_RDONLY,
-    O_TRUNC,
-    O_WRONLY,
+    self as libc, env, mkdir_recursive, open_with_flags, read_dir, rename, stat, unlink, write_all,
+    DirEntry, Fd, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY,
 };
 use sunlight_ui::image::simg::{decode, encode_tga_type2_bgr24, scale_fit};
 
@@ -84,26 +71,41 @@ struct PathBuf {
 
 impl PathBuf {
     const fn empty() -> Self {
-        Self { bytes: [0u8; MAX_PATH], len: 0 }
-    }
-
-    fn clear(&mut self) { self.len = 0; }
-
-    fn append_bytes(&mut self, src: &[u8]) {
-        for &b in src {
-            if b == 0 { break; }
-            if self.len < MAX_PATH { self.bytes[self.len] = b; self.len += 1; }
+        Self {
+            bytes: [0u8; MAX_PATH],
+            len: 0,
         }
     }
 
-    fn as_bytes(&self) -> &[u8] { &self.bytes[..self.len] }
+    fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    fn append_bytes(&mut self, src: &[u8]) {
+        for &b in src {
+            if b == 0 {
+                break;
+            }
+            if self.len < MAX_PATH {
+                self.bytes[self.len] = b;
+                self.len += 1;
+            }
+        }
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
 }
 
 // ── FNV-1a 64-bit hash → 16-char hex cache key ────────────────────────────────
 
 fn fnv1a_64(data: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
-    for &b in data { h ^= b as u64; h = h.wrapping_mul(0x100000001b3); }
+    for &b in data {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
     h
 }
 
@@ -136,7 +138,10 @@ fn build_cache_path(
     macro_rules! append {
         ($slice:expr) => {
             for &b in $slice {
-                if p < MAX_PATH - 1 { out[p] = b; p += 1; }
+                if p < MAX_PATH - 1 {
+                    out[p] = b;
+                    p += 1;
+                }
             }
         };
     }
@@ -155,7 +160,10 @@ fn cache_dir(home: &[u8], size_dir: &[u8], out: &mut [u8; MAX_PATH]) -> usize {
     macro_rules! append {
         ($slice:expr) => {
             for &b in $slice {
-                if p < MAX_PATH - 1 { out[p] = b; p += 1; }
+                if p < MAX_PATH - 1 {
+                    out[p] = b;
+                    p += 1;
+                }
             }
         };
     }
@@ -185,21 +193,34 @@ fn generate_thumb(src_path: &[u8], home: &[u8], size_flag: u32) {
 
     let fd = match open_with_flags(src_path, O_RDONLY) {
         Ok(f) => f,
-        Err(_) => { debug_log("[THUMBD] open failed\n"); return; }
+        Err(_) => {
+            debug_log("[THUMBD] open failed\n");
+            return;
+        }
     };
     let mut src_data: Vec<u8> = Vec::with_capacity(file_size as usize);
     src_data.resize(file_size as usize, 0u8);
     let n = libc::read(fd, &mut src_data).unwrap_or(0);
     let _ = libc::close(fd);
-    if n < 18 { debug_log("[THUMBD] short read\n"); return; }
+    if n < 18 {
+        debug_log("[THUMBD] short read\n");
+        return;
+    }
     src_data.truncate(n);
 
     // Decode SIMG/TGA.
     let img = match decode(&src_data) {
         Ok(i) => i,
-        Err(_) => { debug_log("[THUMBD] decode failed\n"); return; }
+        Err(_) => {
+            debug_log("[THUMBD] decode failed\n");
+            return;
+        }
     };
-    let max_edge = if size_flag == 0 { MAX_NORMAL_EDGE } else { MAX_LARGE_EDGE };
+    let max_edge = if size_flag == 0 {
+        MAX_NORMAL_EDGE
+    } else {
+        MAX_LARGE_EDGE
+    };
     let thumb = scale_fit(&img, max_edge, max_edge);
     let encoded = encode_tga_type2_bgr24(&thumb);
 
@@ -222,7 +243,10 @@ fn generate_thumb(src_path: &[u8], home: &[u8], size_flag: u32) {
     // Atomic write: write to .tmp then rename.
     let fd = match open_with_flags(&tmp_path[..tmplen], O_WRONLY | O_CREAT | O_TRUNC) {
         Ok(f) => f,
-        Err(_) => { debug_log("[THUMBD] cannot create tmp\n"); return; }
+        Err(_) => {
+            debug_log("[THUMBD] cannot create tmp\n");
+            return;
+        }
     };
     if write_all(fd, &encoded).is_err() {
         let _ = libc::close(fd);
@@ -237,7 +261,13 @@ fn generate_thumb(src_path: &[u8], home: &[u8], size_flag: u32) {
     }
 
     // Write .meta (best-effort).
-    write_meta(&meta_path[..mlen], src_path, file_size, thumb.width, thumb.height);
+    write_meta(
+        &meta_path[..mlen],
+        src_path,
+        file_size,
+        thumb.width,
+        thumb.height,
+    );
 
     if let Ok(s) = core::str::from_utf8(&thumb_path[..tlen]) {
         debug_log("[THUMBD] cached: ");
@@ -267,12 +297,21 @@ fn write_u64_fd(fd: Fd, v: u64) {
     let mut buf = [0u8; 20];
     let mut i = buf.len();
     let mut n = v;
-    if n == 0 { let _ = write_all(fd, b"0"); return; }
-    while n > 0 { i -= 1; buf[i] = b'0' + (n % 10) as u8; n /= 10; }
+    if n == 0 {
+        let _ = write_all(fd, b"0");
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
     let _ = write_all(fd, &buf[i..]);
 }
 
-fn write_u32_fd(fd: Fd, v: u32) { write_u64_fd(fd, v as u64); }
+fn write_u32_fd(fd: Fd, v: u32) {
+    write_u64_fd(fd, v as u64);
+}
 
 // ── IPC word → byte extraction ────────────────────────────────────────────────
 
@@ -280,7 +319,9 @@ fn words_to_bytes(words: &[u64; 8], n_words: usize, n_bytes: usize, out: &mut [u
     let mut w = 0usize;
     'outer: for wi in 0..n_words {
         for bi in 0..8usize {
-            if w >= n_bytes || w >= out.len() { break 'outer; }
+            if w >= n_bytes || w >= out.len() {
+                break 'outer;
+            }
             out[w] = ((words[wi] >> (bi * 8)) & 0xFF) as u8;
             w += 1;
         }
@@ -304,7 +345,9 @@ fn prewarm_sample_pictures(home: &[u8]) {
         let key = cache_key(path, 0);
         let mut check = [0u8; MAX_PATH];
         let clen = build_cache_path(home, &key, b"normal", b".simg", &mut check);
-        if stat(&check[..clen]).is_ok() { continue; }
+        if stat(&check[..clen]).is_ok() {
+            continue;
+        }
         generate_thumb(path, home, 0);
         process_yield();
     }
@@ -315,8 +358,7 @@ fn prewarm_sample_pictures(home: &[u8]) {
 fn cleanup_cache(home: &[u8]) {
     let mut total: u64 = 0;
     // (path_buf, len, size) for up to 64 candidate files
-    let mut candidates: [([u8; MAX_PATH], usize, u64); 64] =
-        [([0u8; MAX_PATH], 0usize, 0u64); 64];
+    let mut candidates: [([u8; MAX_PATH], usize, u64); 64] = [([0u8; MAX_PATH], 0usize, 0u64); 64];
     let mut count = 0usize;
 
     for size_dir in [b"normal" as &[u8], b"large"] {
@@ -329,13 +371,18 @@ fn cleanup_cache(home: &[u8]) {
         };
         for entry in &dir_entries[..n] {
             let name = entry.name_bytes();
-            if name.len() < 5 || &name[name.len() - 5..] != b".simg" { continue; }
+            if name.len() < 5 || &name[name.len() - 5..] != b".simg" {
+                continue;
+            }
             total += entry.size;
             if count < 64 {
                 let mut fp = [0u8; MAX_PATH];
                 let mut flen = 0usize;
                 for &b in dir_buf[..dlen].iter().chain(b"/".iter()).chain(name) {
-                    if flen < MAX_PATH - 1 { fp[flen] = b; flen += 1; }
+                    if flen < MAX_PATH - 1 {
+                        fp[flen] = b;
+                        flen += 1;
+                    }
                 }
                 candidates[count] = (fp, flen, entry.size);
                 count += 1;
@@ -343,13 +390,19 @@ fn cleanup_cache(home: &[u8]) {
         }
     }
 
-    if total <= CACHE_MAX_BYTES { return; }
+    if total <= CACHE_MAX_BYTES {
+        return;
+    }
 
     let mut freed: u64 = 0;
     for i in 0..count {
-        if total.saturating_sub(freed) <= CACHE_MAX_BYTES { break; }
+        if total.saturating_sub(freed) <= CACHE_MAX_BYTES {
+            break;
+        }
         let (ref fp, flen, sz) = candidates[i];
-        if unlink(&fp[..flen]).is_ok() { freed += sz; }
+        if unlink(&fp[..flen]).is_ok() {
+            freed += sz;
+        }
     }
 }
 
@@ -382,8 +435,14 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
     {
         let mut d = [0u8; MAX_PATH];
         let mut p = 0usize;
-        for &b in home.iter().chain(b"/.cache/sunlightos/thumbs/failed".iter()) {
-            if p < MAX_PATH - 1 { d[p] = b; p += 1; }
+        for &b in home
+            .iter()
+            .chain(b"/.cache/sunlightos/thumbs/failed".iter())
+        {
+            if p < MAX_PATH - 1 {
+                d[p] = b;
+                p += 1;
+            }
         }
         let _ = mkdir_recursive(&d[..p]);
     }
@@ -404,7 +463,10 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
         let sender = msg.badge;
         let reply = match msg.label {
             ThumbMsg::PATH_CHUNK => {
-                if sender != in_flight_pid { path_buf.clear(); in_flight_pid = sender; }
+                if sender != in_flight_pid {
+                    path_buf.clear();
+                    in_flight_pid = sender;
+                }
                 let mut chunk = [0u8; 32];
                 words_to_bytes(&msg.words, 4, 32, &mut chunk);
                 path_buf.append_bytes(&chunk);
@@ -413,7 +475,10 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
                 r
             }
             ThumbMsg::PATH_END => {
-                if sender != in_flight_pid { path_buf.clear(); in_flight_pid = sender; }
+                if sender != in_flight_pid {
+                    path_buf.clear();
+                    in_flight_pid = sender;
+                }
                 let mut tail = [0u8; 24];
                 words_to_bytes(&msg.words, 3, 24, &mut tail);
                 path_buf.append_bytes(&tail);
@@ -422,7 +487,9 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
                 let path_total_len = (meta & 0xFFFF_FFFF) as usize;
                 let size_flag = ((meta >> 32) & 0xFFFF_FFFF) as u32;
 
-                if path_total_len < path_buf.len { path_buf.len = path_total_len; }
+                if path_total_len < path_buf.len {
+                    path_buf.len = path_total_len;
+                }
 
                 let mut src_copy = [0u8; MAX_PATH];
                 let slen = path_buf.len.min(MAX_PATH - 1);

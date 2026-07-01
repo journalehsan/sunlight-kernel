@@ -1642,7 +1642,10 @@ impl Scheduler {
             if oc != u8::MAX && qc != u8::MAX && oc != qc {
                 serial_println!(
                     "[SCHED-INV] VIOLATION owning!=queued pid={} oc={} qc={} state={:?}",
-                    p.pid, oc, qc, p.state
+                    p.pid,
+                    oc,
+                    qc,
+                    p.state
                 );
             }
             if is_running && oc == u8::MAX {
@@ -1666,13 +1669,19 @@ impl Scheduler {
         if queued_flag_count != total_in_queues {
             serial_println!(
                 "[SCHED-INV] VIOLATION queued_flag_count={} != queues_len={}",
-                queued_flag_count, total_in_queues
+                queued_flag_count,
+                total_in_queues
             );
         }
 
         // Cross check: any running task present in any queue, or queued flag pointing to wrong core's queues.
         for (c, core) in self.cores.iter().enumerate().take(self.online_cores) {
-            for &q in core.run_queue_high.iter().chain(core.run_queue_medium.iter()).chain(core.run_queue_low.iter()) {
+            for &q in core
+                .run_queue_high
+                .iter()
+                .chain(core.run_queue_medium.iter())
+                .chain(core.run_queue_low.iter())
+            {
                 if q < self.processes.len() {
                     let p = &self.processes[q];
                     if p.state == ProcessState::Running {
@@ -1690,9 +1699,16 @@ impl Scheduler {
                 let owner = p.owning_core as usize;
                 // scan other cores queues
                 for oc in 0..self.online_cores {
-                    if oc == owner { continue; }
+                    if oc == owner {
+                        continue;
+                    }
                     let co = &self.cores[oc];
-                    let present = co.run_queue_high.iter().chain(&co.run_queue_medium).chain(&co.run_queue_low).any(|&x| x==idx);
+                    let present = co
+                        .run_queue_high
+                        .iter()
+                        .chain(&co.run_queue_medium)
+                        .chain(&co.run_queue_low)
+                        .any(|&x| x == idx);
                     if present {
                         serial_println!("[SCHED-INV] VIOLATION running on {} present in foreign queue {} pid={}", owner, oc, p.pid);
                     }

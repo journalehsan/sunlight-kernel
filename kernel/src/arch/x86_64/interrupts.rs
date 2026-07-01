@@ -695,7 +695,9 @@ const TTY_WAKE_INTERVAL_TICKS: u64 = 3;
 pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // Send LAPIC EOI. All cores (BSP and APs) now receive their timer
     // interrupts from the per-core LAPIC, not the legacy 8259 PIC.
-    unsafe { crate::arch::x86_64::lapic::send_eoi(); }
+    unsafe {
+        crate::arch::x86_64::lapic::send_eoi();
+    }
 
     // Cache CPU ID once per timer entry.
     // current_cpu_id() issues a CPUID instruction (a full pipeline serialisation
@@ -726,7 +728,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         drop(ticks);
         // Poll key injection buffer for test automation (no IRQ1 needed)
         keyboard::poll_inject_buffer();
-        TELEMETRY_TICK_COUNT.fetch_add(1, Ordering::Relaxed).wrapping_add(1)
+        TELEMETRY_TICK_COUNT
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1)
     } else {
         TELEMETRY_TICK_COUNT.load(Ordering::Relaxed)
     };

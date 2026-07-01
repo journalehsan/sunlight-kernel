@@ -33,7 +33,14 @@ impl<'a> Label<'a> {
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
         let color = if self.dim { theme.text_dim } else { theme.text };
         if let Some(f) = self.font {
-            f.draw_vcenter(canvas, self.text, self.rect.x, self.rect.y, self.rect.h, color);
+            f.draw_vcenter(
+                canvas,
+                self.text,
+                self.rect.x,
+                self.rect.y,
+                self.rect.h,
+                color,
+            );
         } else {
             let text_y = self.rect.y + (self.rect.h as i32 - 10) / 2;
             canvas.draw_text(self.rect.x, text_y, self.text, color);

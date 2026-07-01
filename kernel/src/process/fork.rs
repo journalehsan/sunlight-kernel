@@ -119,9 +119,9 @@ pub fn fork_current_process(
             brk_base: parent_brk_base,
             brk_current: parent_brk_current,
             mmap_next: 0,
-            sched_type: 0,         // inherit SCHED_NORMAL
-            weight: 1024,          // inherit default weight
-            cpu_mask: u64::MAX,    // inherit all CPUs
+            sched_type: 0,      // inherit SCHED_NORMAL
+            weight: 1024,       // inherit default weight
+            cpu_mask: u64::MAX, // inherit all CPUs
             owning_core: u8::MAX,
             queued_on_core: u8::MAX,
             burst_score: 256,      // Start at MEDIUM tier
@@ -241,15 +241,15 @@ fn sys_fork(
             cpu_mask: parent.cpu_mask,     // inherit CPU mask
             owning_core: u8::MAX,
             queued_on_core: u8::MAX,
-            burst_score: 256,              // Start at MEDIUM tier
-            timeslice_used: 0,             // Fresh quantum
-            last_run_tick: 0,              // Will be set on first run
-            io_wait_time: 0,               // No wait yet
-            interactive_bonus: 20,         // Assume interactive initially
-            block_start_tick: 0,           // Not blocked yet
-            aging_counter: 0,              // No aging yet
-            wait_child: None,              // Not waiting on a child
-            tty_tab: None,                 // fork() children are not part of the TTY spawn flow
+            burst_score: 256,                    // Start at MEDIUM tier
+            timeslice_used: 0,                   // Fresh quantum
+            last_run_tick: 0,                    // Will be set on first run
+            io_wait_time: 0,                     // No wait yet
+            interactive_bonus: 20,               // Assume interactive initially
+            block_start_tick: 0,                 // Not blocked yet
+            aging_counter: 0,                    // No aging yet
+            wait_child: None,                    // Not waiting on a child
+            tty_tab: None, // fork() children are not part of the TTY spawn flow
             linux_termios: parent.linux_termios, // inherit terminal settings from parent
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),

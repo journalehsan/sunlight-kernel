@@ -4,19 +4,21 @@
 mod calculator_state;
 
 use calculator_state::{ButtonAction, CalculatorState};
+use sun_font::{
+    self, draw_text_centered, draw_text_vcenter, measure_text, FontRole, TextStyle, VecFont,
+};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, ProcessExit,
 };
-use sun_font::{self, draw_text_centered, draw_text_vcenter, measure_text, FontRole, TextStyle, VecFont};
 use sunlight_ui::paint::Canvas;
 use sunlight_ui::theme::{Color, Theme};
 use sunlight_ui::{
     request_close, widgets::Label, App, Event, Rect, UiSymbol, Window, WindowConfig,
 };
 
-static F_MED:   VecFont = VecFont(FontRole::UiMedium);
+static F_MED: VecFont = VecFont(FontRole::UiMedium);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 // ── Layout constants ───────────────────────────────────────────────────────────
@@ -278,7 +280,12 @@ impl CalcApp {
 
         match face {
             ButtonFace::Text(label) => {
-                draw_text_centered(canvas, rect, label, &TextStyle::new(FontRole::UiMedium, text_color));
+                draw_text_centered(
+                    canvas,
+                    rect,
+                    label,
+                    &TextStyle::new(FontRole::UiMedium, text_color),
+                );
             }
             ButtonFace::Symbol(symbol) => canvas.draw_ui_symbol_centered(rect, symbol, text_color),
         }
@@ -325,8 +332,14 @@ impl CalcApp {
         let pill_h = (lh + 6) as u32;
         let pill_rect = Rect::new((WIN_W as i32) - (tw as i32) - 24, 4, tw + 14, pill_h);
         canvas.fill_rounded_rect(pill_rect, 8, theme.panel_alt);
-        draw_text_vcenter(canvas, sunlight_label, pill_rect.x + 7, pill_rect.y, pill_rect.h,
-            &TextStyle::new(FontRole::UiSmall, theme.accent));
+        draw_text_vcenter(
+            canvas,
+            sunlight_label,
+            pill_rect.x + 7,
+            pill_rect.y,
+            pill_rect.h,
+            &TextStyle::new(FontRole::UiSmall, theme.accent),
+        );
     }
 
     fn draw_display(canvas: &mut Canvas, app: &Self, theme: &Theme) {
@@ -349,14 +362,26 @@ impl CalcApp {
         let tw = measure_text(text, FontRole::UiLarge).w;
         let pad = 8;
         let tx = display_rect.right() - (tw as i32) - pad;
-        draw_text_vcenter(canvas, text, tx, display_rect.y, display_rect.h,
-            &TextStyle::new(FontRole::UiLarge, text_color));
+        draw_text_vcenter(
+            canvas,
+            text,
+            tx,
+            display_rect.y,
+            display_rect.h,
+            &TextStyle::new(FontRole::UiLarge, text_color),
+        );
 
         if app.state.memory_value() != 0.0 {
             let memory_rect = Rect::new(display_rect.x + 6, display_rect.y + 6, 16, 20);
             canvas.fill_rounded_rect(memory_rect, 6, theme.panel_alt);
-            draw_text_vcenter(canvas, "M", memory_rect.x + 3, memory_rect.y, memory_rect.h,
-                &TextStyle::new(FontRole::UiSmall, theme.accent));
+            draw_text_vcenter(
+                canvas,
+                "M",
+                memory_rect.x + 3,
+                memory_rect.y,
+                memory_rect.h,
+                &TextStyle::new(FontRole::UiSmall, theme.accent),
+            );
         }
     }
 }

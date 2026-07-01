@@ -42,9 +42,9 @@
 use core::arch::naked_asm;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use x86_64::VirtAddr;
 use x86_64::structures::gdt::SegmentSelector;
 use x86_64::structures::tss::TaskStateSegment;
+use x86_64::VirtAddr;
 
 use crate::arch::x86_64::{cpu, interrupts, lapic, syscall};
 
@@ -70,12 +70,12 @@ const AP_STACK_SIZE: usize = 64 * 1024;
 //
 // Verified against x86_64 0.15 crate assert: KERNEL_CODE64 = 0x00af9b000000ffff.
 
-const GDT_NULL:            u64 = 0x0000_0000_0000_0000;
-const GDT_KERNEL_CODE:     u64 = 0x00af_9b00_0000_ffff; // kernel_code_segment()
-const GDT_KERNEL_DATA:     u64 = 0x00cf_9300_0000_ffff; // kernel_data_segment()
-const GDT_USER_CODE_COMPAT:u64 = 0x00AF_FA00_0000_FFFF; // user_code_segment() (compat)
-const GDT_USER_DATA:       u64 = 0x00AF_F200_0000_FFFF; // user_data_segment()
-const GDT_USER_CODE64:     u64 = 0x00AF_FA00_0000_FFFF; // user_code_segment() (64-bit)
+const GDT_NULL: u64 = 0x0000_0000_0000_0000;
+const GDT_KERNEL_CODE: u64 = 0x00af_9b00_0000_ffff; // kernel_code_segment()
+const GDT_KERNEL_DATA: u64 = 0x00cf_9300_0000_ffff; // kernel_data_segment()
+const GDT_USER_CODE_COMPAT: u64 = 0x00AF_FA00_0000_FFFF; // user_code_segment() (compat)
+const GDT_USER_DATA: u64 = 0x00AF_F200_0000_FFFF; // user_data_segment()
+const GDT_USER_CODE64: u64 = 0x00AF_FA00_0000_FFFF; // user_code_segment() (64-bit)
 
 /// TSS selector: index 6, RPL 0 → 6 × 8 = 0x30.
 const AP_TSS_SELECTOR: u16 = 0x30;
@@ -100,8 +100,7 @@ static mut AP_STACKS: [ApStack; MAX_APS] = [const { ApStack([0u8; AP_STACK_SIZE]
 /// RSP0 is updated by `set_current_cpu_tss_rsp0` on every context switch so
 /// that the next interrupt from ring-3 on that core delivers to the correct
 /// kernel stack.
-static mut AP_TSS_STORE: [TaskStateSegment; MAX_APS] =
-    [const { TaskStateSegment::new() }; MAX_APS];
+static mut AP_TSS_STORE: [TaskStateSegment; MAX_APS] = [const { TaskStateSegment::new() }; MAX_APS];
 
 /// Per-AP raw GDT storage: 8 × u64 = 64 bytes per AP.
 ///
@@ -139,8 +138,7 @@ pub fn start_aps(all_cpus: &[&limine::mp::MpInfo], bsp_lapic_id: u32) {
             break;
         }
 
-        let stack_top: u64 =
-            unsafe { AP_STACKS[ap_idx].0.as_mut_ptr().add(AP_STACK_SIZE) as u64 };
+        let stack_top: u64 = unsafe { AP_STACKS[ap_idx].0.as_mut_ptr().add(AP_STACK_SIZE) as u64 };
 
         crate::serial_println!(
             "[SMP] Starting AP{}  proc_id={}  lapic_id={}  stack={:#x}..{:#x}",
@@ -232,7 +230,7 @@ fn build_tss_descriptor(tss: *const TaskStateSegment) -> (u64, u64) {
         | ((base & 0x00FF_FFFF) << 16)              // bits 39:16 — base [23:0]
         | (0x89u64 << 40)                            // bits 47:40 — Present + type 0x9
         | (((limit >> 16) & 0xF) << 48)             // bits 51:48 — limit high nibble
-        | (((base >> 24) & 0xFF) << 56);             // bits 63:56 — base [31:24]
+        | (((base >> 24) & 0xFF) << 56); // bits 63:56 — base [31:24]
 
     let hi = base >> 32; // bits 31:0 — base [63:32]
 
@@ -273,7 +271,7 @@ unsafe fn ap_setup_gdt_and_tss(ap_idx: usize) {
     x86_64::instructions::tables::lgdt(&gdtr);
 
     // Reload segment registers to flush the old GDT selectors.
-    use x86_64::instructions::segmentation::{CS, DS, ES, SS, Segment};
+    use x86_64::instructions::segmentation::{Segment, CS, DS, ES, SS};
     CS::set_reg(SegmentSelector(0x08)); // kernel code: index 1, RPL 0
     SS::set_reg(SegmentSelector(0));
     DS::set_reg(SegmentSelector(0));
@@ -313,9 +311,7 @@ unsafe extern "C" fn ap_entry_rust(info: &limine::mp::MpInfo) -> ! {
 
     // ── Step 4: SYSCALL/SYSRET MSRs ──────────────────────────────────────────
     unsafe {
-        syscall::setup_syscall_msrs(VirtAddr::new(
-            syscall::syscall_entry as *const () as u64,
-        ));
+        syscall::setup_syscall_msrs(VirtAddr::new(syscall::syscall_entry as *const () as u64));
     }
 
     // ── Step 5+6: LAPIC init + periodic timer ────────────────────────────────

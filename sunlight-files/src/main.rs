@@ -6,6 +6,10 @@ extern crate alloc;
 use core::alloc::GlobalAlloc;
 use core::cmp::Ordering;
 
+use sun_font::{
+    draw_text as sf_draw, draw_text_centered as sf_centered, draw_text_right as sf_right,
+    draw_text_vcenter as sf_vcenter, line_height as sf_lh, FontRole, TextStyle, VecFont,
+};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -13,13 +17,9 @@ use sunlight_ipc::{
 };
 use sunlight_libc::{self as libc, env, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::TgaImage;
-use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
+use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
-use sun_font::{FontRole, TextStyle, VecFont,
-               draw_text as sf_draw, draw_text_centered as sf_centered,
-               draw_text_right as sf_right, draw_text_vcenter as sf_vcenter,
-               line_height as sf_lh};
 
 // ── Central GUI font instance (vector / Inter) ───────────────────────────────
 // Bitmap font (paint::font) remains available for early-boot and TTY rendering.
@@ -31,8 +31,7 @@ static FONT_UI_REG: VecFont = VecFont(FontRole::UiRegular);
 // Embedded place icons (16 px TGA, nearest-neighbour scaled to 32px in widget)
 // ---------------------------------------------------------------------------
 
-static ICON_HOME_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/user-home.tga");
+static ICON_HOME_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/user-home.tga");
 static ICON_FOLDER_DESKTOP_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/folder-desktop.tga");
 static ICON_FOLDER_DOCUMENTS_TGA: &[u8] =
@@ -49,8 +48,7 @@ static ICON_FOLDER_NETWORK_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/folder-network.tga");
 static ICON_USER_TRASH_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.tga");
-static ICON_FOLDER_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
+static ICON_FOLDER_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
 
 /// Parse a sidebar icon TGA for the given sidebar index.
 /// Returns `None` if parsing fails (the widget falls back to the UiSymbol).
@@ -63,8 +61,8 @@ fn sidebar_tga(idx: usize) -> Option<TgaImage> {
         4 => ICON_FOLDER_PICTURES_TGA,
         5 => ICON_FOLDER_MUSIC_TGA,
         6 => ICON_FOLDER_VIDEOS_TGA,
-        7 => ICON_FOLDER_TGA,      // Root /
-        8 => ICON_FOLDER_TGA,      // Volumes (no device icon in places set)
+        7 => ICON_FOLDER_TGA, // Root /
+        8 => ICON_FOLDER_TGA, // Volumes (no device icon in places set)
         9 => ICON_FOLDER_NETWORK_TGA,
         10 => ICON_USER_TRASH_TGA,
         _ => return None,
@@ -362,7 +360,11 @@ fn log_i32(value: i32) {
     let mut buf = [0u8; 12];
     let mut i = buf.len();
     let neg = value < 0;
-    let mut n = if neg { (-(value as i64)) as u64 } else { value as u64 };
+    let mut n = if neg {
+        (-(value as i64)) as u64
+    } else {
+        value as u64
+    };
     if n == 0 {
         debug_log("0");
         return;
@@ -373,7 +375,12 @@ fn log_i32(value: i32) {
         n /= 10;
     }
     if neg {
-        if i == 0 { debug_log("-"); } else { i -= 1; buf[i] = b'-'; }
+        if i == 0 {
+            debug_log("-");
+        } else {
+            i -= 1;
+            buf[i] = b'-';
+        }
     }
     if let Ok(s) = core::str::from_utf8(&buf[i..]) {
         debug_log(s);
@@ -422,8 +429,7 @@ static ALLOC: NoAlloc = NoAlloc;
 /// Returns true if the file name ends in .simg or .tga.
 fn is_image_name(name: &[u8]) -> bool {
     let n = name.len();
-    (n >= 5 && name[n - 5..] == *b".simg")
-        || (n >= 4 && name[n - 4..] == *b".tga")
+    (n >= 5 && name[n - 5..] == *b".simg") || (n >= 4 && name[n - 4..] == *b".tga")
 }
 
 /// Human-readable type label for a supported image file name.
@@ -436,46 +442,71 @@ fn image_type_label(name: &[u8]) -> &'static str {
     }
 }
 
-
 /// Draw a raw TGA type-2 (24bpp) byte slice directly onto `canvas` at `dst`,
 /// scaling with nearest-neighbour. No allocation; reads pixel data inline.
 fn draw_tga_bytes(canvas: &mut Canvas, data: &[u8], dst: Rect) {
-    if data.len() < 18 { return; }
-    if data[2] != 2 { return; }
+    if data.len() < 18 {
+        return;
+    }
+    if data[2] != 2 {
+        return;
+    }
     let bpp = data[16];
-    if bpp != 24 && bpp != 32 { return; }
+    if bpp != 24 && bpp != 32 {
+        return;
+    }
     let w = u16::from_le_bytes([data[12], data[13]]) as u32;
     let h = u16::from_le_bytes([data[14], data[15]]) as u32;
-    if w == 0 || h == 0 { return; }
+    if w == 0 || h == 0 {
+        return;
+    }
     let top_down = (data[17] & 0x20) != 0;
     let bpp_b = (bpp / 8) as u32;
     let cm_len = u16::from_le_bytes([data[5], data[6]]) as u32;
     let cm_entry_bits = data[7] as u32;
-    let cm_bytes = if data[1] != 0 { cm_len * ((cm_entry_bits + 7) / 8) } else { 0 };
+    let cm_bytes = if data[1] != 0 {
+        cm_len * ((cm_entry_bits + 7) / 8)
+    } else {
+        0
+    };
     let data_off = (18 + data[0] as u32 + cm_bytes) as usize;
     let needed = data_off + (w * h * bpp_b) as usize;
-    if data.len() < needed { return; }
+    if data.len() < needed {
+        return;
+    }
 
     let cx0 = dst.x.max(0) as u32;
     let cy0 = dst.y.max(0) as u32;
     let cx1 = (dst.right() as u32).min(canvas.width);
     let cy1 = (dst.bottom() as u32).min(canvas.height);
-    if cx0 >= cx1 || cy0 >= cy1 { return; }
+    if cx0 >= cx1 || cy0 >= cy1 {
+        return;
+    }
     let dw = cx1 - cx0;
     let dh = cy1 - cy0;
 
     for dy in 0..dh {
         let src_y_scale = dy * h / dh;
-        let file_row = if top_down { src_y_scale } else { h - 1 - src_y_scale };
+        let file_row = if top_down {
+            src_y_scale
+        } else {
+            h - 1 - src_y_scale
+        };
         for dx in 0..dw {
             let src_x = dx * w / dw;
             let idx = data_off + (file_row * w + src_x) as usize * bpp_b as usize;
-            if idx + 2 >= data.len() { continue; }
+            if idx + 2 >= data.len() {
+                continue;
+            }
             let b = data[idx] as u32;
             let g = data[idx + 1] as u32;
             let r = data[idx + 2] as u32;
             use sunlight_ui::theme::Color;
-            canvas.put_pixel((cx0 + dx) as i32, (cy0 + dy) as i32, Color((r << 16) | (g << 8) | b));
+            canvas.put_pixel(
+                (cx0 + dx) as i32,
+                (cy0 + dy) as i32,
+                Color((r << 16) | (g << 8) | b),
+            );
         }
     }
 }
@@ -536,28 +567,42 @@ fn load_preview_sync(path: &[u8]) {
 
     let stat = match libc::stat(path) {
         Ok(s) => s,
-        Err(_) => { unsafe { PREVIEW_READY = 2; } return; }
+        Err(_) => {
+            unsafe {
+                PREVIEW_READY = 2;
+            }
+            return;
+        }
     };
     let file_size = stat.size as usize;
     if file_size > PREVIEW_SRC_BUF_LEN || file_size < 18 {
-        unsafe { PREVIEW_READY = 2; }
+        unsafe {
+            PREVIEW_READY = 2;
+        }
         return;
     }
 
     let fd = match libc::open(path) {
         Ok(f) => f,
-        Err(_) => { unsafe { PREVIEW_READY = 2; } return; }
+        Err(_) => {
+            unsafe {
+                PREVIEW_READY = 2;
+            }
+            return;
+        }
     };
 
     let mut total = 0usize;
     loop {
         let remaining = file_size - total;
-        if remaining == 0 { break; }
+        if remaining == 0 {
+            break;
+        }
         let chunk = remaining.min(8192);
-        let n = unsafe {
-            libc::read(fd, &mut PREVIEW_SRC_BUF[total..total + chunk]).unwrap_or(0)
-        };
-        if n == 0 { break; }
+        let n = unsafe { libc::read(fd, &mut PREVIEW_SRC_BUF[total..total + chunk]).unwrap_or(0) };
+        if n == 0 {
+            break;
+        }
         total += n;
     }
     let _ = libc::close(fd);
@@ -853,16 +898,36 @@ impl State {
                 .filter(|p| path_matches(current, p.as_str()))
                 .map(|_| idx)
         };
-        if let Some(i) = check("Desktop", 1) { return i; }
-        if let Some(i) = check("Documents", 2) { return i; }
-        if let Some(i) = check("Downloads", 3) { return i; }
-        if let Some(i) = check("Pictures", 4) { return i; }
-        if let Some(i) = check("Music", 5) { return i; }
-        if let Some(i) = check("Videos", 6) { return i; }
-        if current == "/" { return 7; }
-        if current == "/mnt" || current.starts_with("/mnt/") { return 8; }
-        if current == "/boot" || current.starts_with("/boot/") { return 8; }
-        if current == "/network" || current.starts_with("/network/") { return 9; }
+        if let Some(i) = check("Desktop", 1) {
+            return i;
+        }
+        if let Some(i) = check("Documents", 2) {
+            return i;
+        }
+        if let Some(i) = check("Downloads", 3) {
+            return i;
+        }
+        if let Some(i) = check("Pictures", 4) {
+            return i;
+        }
+        if let Some(i) = check("Music", 5) {
+            return i;
+        }
+        if let Some(i) = check("Videos", 6) {
+            return i;
+        }
+        if current == "/" {
+            return 7;
+        }
+        if current == "/mnt" || current.starts_with("/mnt/") {
+            return 8;
+        }
+        if current == "/boot" || current.starts_with("/boot/") {
+            return 8;
+        }
+        if current == "/network" || current.starts_with("/network/") {
+            return 9;
+        }
         7
     }
 
@@ -944,15 +1009,27 @@ impl FilesApp {
     fn update_preview_for_selection(&mut self) {
         self.preview_src_w = 0;
         self.preview_src_h = 0;
-        unsafe { PREVIEW_READY = 0; }
+        unsafe {
+            PREVIEW_READY = 0;
+        }
 
-        if self.state.view_mode != ViewMode::Directory { return; }
-        let Some(idx) = self.state.selected_row else { return; };
-        if idx >= self.state.entry_count { return; }
+        if self.state.view_mode != ViewMode::Directory {
+            return;
+        }
+        let Some(idx) = self.state.selected_row else {
+            return;
+        };
+        if idx >= self.state.entry_count {
+            return;
+        }
         let entry = self.state.entries[idx];
-        if entry.file_type == FT_DIR { return; }
+        if entry.file_type == FT_DIR {
+            return;
+        }
         let name_bytes = entry.name_bytes();
-        if !is_image_name(name_bytes) { return; }
+        if !is_image_name(name_bytes) {
+            return;
+        }
         let name = match core::str::from_utf8(name_bytes) {
             Ok(s) => s,
             Err(_) => return,
@@ -1030,7 +1107,9 @@ impl FilesApp {
     fn home_folder_rect(inner: Rect, idx: usize) -> Rect {
         let title_y = inner.y + 36;
         let grid_top = title_y + 18;
-        let card_w = (inner.w.saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
+        let card_w = (inner
+            .w
+            .saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
             / HOME_COLS as u32)
             .max(120);
         let col = idx % HOME_COLS;
@@ -1048,9 +1127,8 @@ impl FilesApp {
 
     fn volumes_section_y(inner: Rect) -> i32 {
         // title_y = folder section top + grid height + gap
-        let title_y = inner.y + 36 + 18
-            + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32
-            + 12;
+        let title_y =
+            inner.y + 36 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 12;
         title_y + 18 // after section label
     }
 
@@ -1063,14 +1141,44 @@ impl FilesApp {
             ViewMode::Directory => self.state.current_path.parent().is_none(),
             _ => true,
         };
-        draw_pill(canvas, theme, back, "Back", Some(UiSymbol::Back), false, true);
-        draw_pill(canvas, theme, forward, "Fwd", Some(UiSymbol::Forward), false, true);
-        draw_pill(canvas, theme, up, "Up", Some(UiSymbol::Up), false, up_disabled);
+        draw_pill(
+            canvas,
+            theme,
+            back,
+            "Back",
+            Some(UiSymbol::Back),
+            false,
+            true,
+        );
+        draw_pill(
+            canvas,
+            theme,
+            forward,
+            "Fwd",
+            Some(UiSymbol::Forward),
+            false,
+            true,
+        );
+        draw_pill(
+            canvas,
+            theme,
+            up,
+            "Up",
+            Some(UiSymbol::Up),
+            false,
+            up_disabled,
+        );
 
         canvas.fill_rounded_rect_with_border(search, RADIUS, theme.panel_alt, theme.border, 1);
         canvas.draw_ui_symbol(search.x + 8, search.y + 9, UiSymbol::Search, theme.text_dim);
-        sf_vcenter(canvas, "Search", search.x + 22, search.y, search.h,
-                   &TextStyle::new(FontRole::UiRegular, theme.text_dim));
+        sf_vcenter(
+            canvas,
+            "Search",
+            search.x + 22,
+            search.y,
+            search.h,
+            &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+        );
 
         canvas.fill_rounded_rect(breadcrumb, RADIUS, theme.panel);
         let crumb = match self.state.view_mode {
@@ -1079,8 +1187,14 @@ impl FilesApp {
             ViewMode::Network => "Network",
             ViewMode::Directory => self.state.current_path.as_str(),
         };
-        sf_vcenter(canvas, crumb, breadcrumb.x + 10, breadcrumb.y, breadcrumb.h,
-                   &TextStyle::new(FontRole::MonoRegular, theme.accent));
+        sf_vcenter(
+            canvas,
+            crumb,
+            breadcrumb.x + 10,
+            breadcrumb.y,
+            breadcrumb.h,
+            &TextStyle::new(FontRole::MonoRegular, theme.accent),
+        );
     }
 
     fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme, sidebar: Rect) {
@@ -1089,8 +1203,14 @@ impl FilesApp {
         let inner = sidebar.inset(PAD);
 
         // Section label
-        sf_vcenter(canvas, "Places", inner.x, inner.y + 3, 14,
-                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_vcenter(
+            canvas,
+            "Places",
+            inner.x,
+            inner.y + 3,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
 
         // Items via SidebarItem widget
         let items_area = Rect::new(
@@ -1145,10 +1265,22 @@ impl FilesApp {
     fn draw_home_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
         canvas.draw_ui_symbol(inner.x, inner.y + 1, UiSymbol::FilesApp, theme.accent);
-        sf_vcenter(canvas, "Home", inner.x + 16, inner.y, 18,
-                   &TextStyle::new(FontRole::UiMedium, theme.text));
-        sf_vcenter(canvas, "Folders and volumes", inner.x, inner.y + 18, 14,
-                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_vcenter(
+            canvas,
+            "Home",
+            inner.x + 16,
+            inner.y,
+            18,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+        sf_vcenter(
+            canvas,
+            "Folders and volumes",
+            inner.x,
+            inner.y + 18,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
 
         self.draw_home_folders(canvas, theme, inner);
         let after_volumes = self.draw_home_volumes(canvas, theme, inner);
@@ -1157,10 +1289,18 @@ impl FilesApp {
 
     fn draw_home_folders(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) {
         let title_y = inner.y + 36;
-        sf_vcenter(canvas, "Places", inner.x, title_y, 14,
-                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_vcenter(
+            canvas,
+            "Places",
+            inner.x,
+            title_y,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
 
-        let card_w = (inner.w.saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
+        let card_w = (inner
+            .w
+            .saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
             / HOME_COLS as u32)
             .max(120);
 
@@ -1181,28 +1321,49 @@ impl FilesApp {
 
             // Name and path hint — no "Missing" labels on startup
             let text_x = rect.x + 46;
-            sf_draw(canvas, folder.name, text_x, rect.y + 8,
-                    &TextStyle::new(FontRole::UiRegular, theme.text));
+            sf_draw(
+                canvas,
+                folder.name,
+                text_x,
+                rect.y + 8,
+                &TextStyle::new(FontRole::UiRegular, theme.text),
+            );
             // Show a shortened path if there's room
             let _ = card_w; // used for layout calculation above
-            sf_draw(canvas, folder.path.as_str(), text_x, rect.y + 24,
-                    &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+            sf_draw(
+                canvas,
+                folder.path.as_str(),
+                text_x,
+                rect.y + 24,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
         }
     }
 
     /// Draw the Volumes section; returns the y coordinate directly below it.
     fn draw_home_volumes(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) -> i32 {
-        let title_y = inner.y + 36 + 18
-            + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32
-            + 12;
-        sf_vcenter(canvas, "Volumes", inner.x, title_y, 14,
-                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        let title_y =
+            inner.y + 36 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 12;
+        sf_vcenter(
+            canvas,
+            "Volumes",
+            inner.x,
+            title_y,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
 
         let mut y = title_y + 18;
 
         if self.state.volume_count == 0 {
-            sf_vcenter(canvas, "No mounted volumes detected", inner.x, y + 4, 14,
-                       &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+            sf_vcenter(
+                canvas,
+                "No mounted volumes detected",
+                inner.x,
+                y + 4,
+                14,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
             return y + 24;
         }
 
@@ -1225,19 +1386,43 @@ impl FilesApp {
         if y >= inner.bottom() - 18 {
             return; // no space
         }
-        sf_vcenter(canvas, "Network", inner.x, y + 4, 14,
-                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_vcenter(
+            canvas,
+            "Network",
+            inner.x,
+            y + 4,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
         canvas.draw_ui_symbol(inner.x, y + 20, UiSymbol::Network, theme.text_dim);
-        sf_vcenter(canvas, "No network mounts", inner.x + 16, y + 18, 14,
-                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_vcenter(
+            canvas,
+            "No network mounts",
+            inner.x + 16,
+            y + 18,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
     }
 
     fn draw_volumes_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
-        sf_vcenter(canvas, "Volumes", inner.x, inner.y, 18,
-                   &TextStyle::new(FontRole::UiMedium, theme.text));
-        sf_vcenter(canvas, "Mounted filesystems and drives", inner.x, inner.y + 18, 14,
-                   &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_vcenter(
+            canvas,
+            "Volumes",
+            inner.x,
+            inner.y,
+            18,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+        sf_vcenter(
+            canvas,
+            "Mounted filesystems and drives",
+            inner.x,
+            inner.y + 18,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
 
         let mut y = inner.y + 42;
         for idx in 0..self.state.volume_count {
@@ -1252,29 +1437,55 @@ impl FilesApp {
         }
 
         if self.state.volume_count == 0 {
-            sf_vcenter(canvas, "No mounted volumes", inner.x, y + 8, 14,
-                       &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+            sf_vcenter(
+                canvas,
+                "No mounted volumes",
+                inner.x,
+                y + 8,
+                14,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
         }
     }
 
     fn draw_network_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
-        sf_vcenter(canvas, "Network", inner.x, inner.y, 18,
-                   &TextStyle::new(FontRole::UiMedium, theme.text));
+        sf_vcenter(
+            canvas,
+            "Network",
+            inner.x,
+            inner.y,
+            18,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
         let card = Rect::new(inner.x, inner.y + 28, inner.w, 60);
         canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel_alt, theme.border, 1);
-        sf_draw(canvas, "No network mounts", card.x + 12, card.y + 10,
-                &TextStyle::new(FontRole::UiRegular, theme.text));
-        sf_draw(canvas,
-                "Network mounts appear here when VFS metadata is available.",
-                card.x + 12, card.y + 28,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_draw(
+            canvas,
+            "No network mounts",
+            card.x + 12,
+            card.y + 10,
+            &TextStyle::new(FontRole::UiRegular, theme.text),
+        );
+        sf_draw(
+            canvas,
+            "Network mounts appear here when VFS metadata is available.",
+            card.x + 12,
+            card.y + 28,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
     }
 
     fn draw_directory_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
-        sf_vcenter(canvas, self.state.current_path.as_str(), inner.x, inner.y, HEADER_H,
-                   &TextStyle::new(FontRole::UiMedium, theme.text));
+        sf_vcenter(
+            canvas,
+            self.state.current_path.as_str(),
+            inner.x,
+            inner.y,
+            HEADER_H,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
 
         let subtitle = if self.state.error_len != 0 {
             self.state.error_str()
@@ -1286,8 +1497,13 @@ impl FilesApp {
         } else {
             theme.text_dim
         };
-        sf_draw(canvas, subtitle, inner.x, inner.y + HEADER_H as i32,
-                &TextStyle::new(FontRole::UiSmall, subtitle_color));
+        sf_draw(
+            canvas,
+            subtitle,
+            inner.x,
+            inner.y + HEADER_H as i32,
+            &TextStyle::new(FontRole::UiSmall, subtitle_color),
+        );
 
         self.draw_directory_rows(canvas, theme, main);
     }
@@ -1303,12 +1519,21 @@ impl FilesApp {
         let row_count = self.state.entry_count.min(visible_rows);
 
         if row_count == 0 {
-            sf_vcenter(canvas, "No entries in this directory", inner.x, list_top + 8, 14,
-                       &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+            sf_vcenter(
+                canvas,
+                "No entries in this directory",
+                inner.x,
+                list_top + 8,
+                14,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
             return;
         }
 
-        let name_w = inner.w.saturating_sub(TYPE_W + SIZE_W + MOD_W + 24).max(180);
+        let name_w = inner
+            .w
+            .saturating_sub(TYPE_W + SIZE_W + MOD_W + 24)
+            .max(180);
         let type_x = inner.x + name_w as i32;
         let size_x = type_x + TYPE_W as i32;
         let mod_x = size_x + SIZE_W as i32;
@@ -1345,8 +1570,13 @@ impl FilesApp {
             canvas.draw_ui_symbol(sym_x, sym_y, icon, icon_color);
             // Text starts after the icon slot + 6px gap.
             let text_x = row.x + ICON_SLOT as i32 + 6;
-            sf_draw(canvas, entry_name_str(&entry), text_x, text_y,
-                    &TextStyle::new(FontRole::UiRegular, theme.text));
+            sf_draw(
+                canvas,
+                entry_name_str(&entry),
+                text_x,
+                text_y,
+                &TextStyle::new(FontRole::UiRegular, theme.text),
+            );
 
             let type_label = match entry.file_type {
                 FT_DIR => "Directory",
@@ -1359,33 +1589,58 @@ impl FilesApp {
                 }
                 _ => "Other",
             };
-            sf_draw(canvas, type_label, type_x + 8, text_y,
-                    &TextStyle::new(FontRole::UiRegular, theme.text_dim));
+            sf_draw(
+                canvas,
+                type_label,
+                type_x + 8,
+                text_y,
+                &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+            );
 
             if entry.file_type == FT_DIR {
-                sf_right(canvas, Rect::new(size_x, row.y, SIZE_W, ROW_H), "--",
-                         &TextStyle::new(FontRole::UiRegular, theme.text), 8);
+                sf_right(
+                    canvas,
+                    Rect::new(size_x, row.y, SIZE_W, ROW_H),
+                    "--",
+                    &TextStyle::new(FontRole::UiRegular, theme.text),
+                    8,
+                );
             } else {
                 let mut scratch = [0u8; 16];
                 let len = write_size(entry.size, &mut scratch);
                 let size_text = core::str::from_utf8(&scratch[..len]).unwrap_or("--");
-                sf_right(canvas, Rect::new(size_x, row.y, SIZE_W, ROW_H), size_text,
-                         &TextStyle::new(FontRole::UiRegular, theme.text), 8);
+                sf_right(
+                    canvas,
+                    Rect::new(size_x, row.y, SIZE_W, ROW_H),
+                    size_text,
+                    &TextStyle::new(FontRole::UiRegular, theme.text),
+                    8,
+                );
             }
-            sf_draw(canvas, "--", mod_x + 8, text_y,
-                    &TextStyle::new(FontRole::UiRegular, theme.text_dim));
+            sf_draw(
+                canvas,
+                "--",
+                mod_x + 8,
+                text_y,
+                &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+            );
         }
     }
 
     fn draw_details_pane(&self, canvas: &mut Canvas, theme: &Theme, details: Rect) {
         canvas.fill_rounded_rect_with_border(details, RADIUS, theme.panel_alt, theme.border, 1);
         canvas.hline(details.x, details.right(), details.y as u32, theme.border);
-        
+
         let inner = details.inset(PAD);
         let preview_x = inner.right() - DETAILS_PREVIEW_W as i32;
-        let left_area = Rect::new(inner.x, inner.y, inner.w.saturating_sub(DETAILS_PREVIEW_W + PAD as u32), inner.h);
+        let left_area = Rect::new(
+            inner.x,
+            inner.y,
+            inner.w.saturating_sub(DETAILS_PREVIEW_W + PAD as u32),
+            inner.h,
+        );
         let preview_area = Rect::new(preview_x, inner.y, DETAILS_PREVIEW_W, inner.h);
-        
+
         match self.state.view_mode {
             ViewMode::Directory => {
                 if let Some(idx) = self.state.selected_row {
@@ -1407,16 +1662,45 @@ impl FilesApp {
         let lh_sm = sf_lh(FontRole::UiSmall) as i32;
         let lh_rg = sf_lh(FontRole::UiRegular) as i32;
         let mut y = left.y + 6;
-        sf_draw(canvas, "Folder:", left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_draw(
+            canvas,
+            "Folder:",
+            left.x,
+            y,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
         y += lh_sm + 2;
-        let folder_name = self.state.current_path.as_str().rsplit('/').next().unwrap_or("");
-        sf_draw(canvas, folder_name, left.x, y, &TextStyle::new(FontRole::UiMedium, theme.text));
+        let folder_name = self
+            .state
+            .current_path
+            .as_str()
+            .rsplit('/')
+            .next()
+            .unwrap_or("");
+        sf_draw(
+            canvas,
+            folder_name,
+            left.x,
+            y,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
         y += lh_rg + 6;
 
-        sf_draw(canvas, "Path:", left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+        sf_draw(
+            canvas,
+            "Path:",
+            left.x,
+            y,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
         y += lh_sm + 2;
-        sf_draw(canvas, self.state.current_path.as_str(), left.x, y,
-                &TextStyle::new(FontRole::MonoRegular, theme.text));
+        sf_draw(
+            canvas,
+            self.state.current_path.as_str(),
+            left.x,
+            y,
+            &TextStyle::new(FontRole::MonoRegular, theme.text),
+        );
         y += lh_rg + 6;
 
         let mut buf = [0u8; 64];
@@ -1426,7 +1710,13 @@ impl FilesApp {
         len += write_to_buf(&mut buf[len..], b"Items: ");
         len += write_usize(&mut buf[len..], items);
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-            sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
+            sf_draw(
+                canvas,
+                s,
+                left.x,
+                y,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
         }
         y += lh_sm + 2;
 
@@ -1436,7 +1726,13 @@ impl FilesApp {
         len += write_to_buf(&mut buf[len..], b", Dirs: ");
         len += write_usize(&mut buf[len..], self.state.folder_count);
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-            sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
+            sf_draw(
+                canvas,
+                s,
+                left.x,
+                y,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
         }
         y += lh_sm + 2;
 
@@ -1451,24 +1747,49 @@ impl FilesApp {
         len += write_usize(&mut buf[len..], image_count);
         len += write_to_buf(&mut buf[len..], b" (SIMG/TGA)");
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-            sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
+            sf_draw(
+                canvas,
+                s,
+                left.x,
+                y,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
         }
 
         canvas.draw_ui_symbol_centered(preview, UiSymbol::Folder, theme.accent);
     }
 
-    fn draw_file_details(&self, canvas: &mut Canvas, theme: &Theme, left: Rect, preview: Rect, entry: DirEntry) {
+    fn draw_file_details(
+        &self,
+        canvas: &mut Canvas,
+        theme: &Theme,
+        left: Rect,
+        preview: Rect,
+        entry: DirEntry,
+    ) {
         let lh_sm = sf_lh(FontRole::UiSmall) as i32;
         let lh_rg = sf_lh(FontRole::UiRegular) as i32;
         let mut y = left.y + 6;
         let name_bytes = entry.name_bytes();
         if let Ok(name) = core::str::from_utf8(name_bytes) {
-            sf_draw(canvas, name, left.x, y, &TextStyle::new(FontRole::UiMedium, theme.accent));
+            sf_draw(
+                canvas,
+                name,
+                left.x,
+                y,
+                &TextStyle::new(FontRole::UiMedium, theme.accent),
+            );
         }
         y += lh_rg + 4;
 
         let type_label = image_type_label(name_bytes);
-        sf_draw(canvas, type_label, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
+        sf_draw(
+            canvas,
+            type_label,
+            left.x,
+            y,
+            &TextStyle::new(FontRole::UiSmall, theme.text),
+        );
         y += lh_sm + 4;
 
         let mut buf = [0u8; 64];
@@ -1476,11 +1797,17 @@ impl FilesApp {
         let mut size_buf = [0u8; 16];
         let size_len = write_size(entry.size, &mut size_buf);
         if len + size_len <= buf.len() {
-            buf[len..len+size_len].copy_from_slice(&size_buf[..size_len]);
+            buf[len..len + size_len].copy_from_slice(&size_buf[..size_len]);
             len += size_len;
         }
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-            sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
+            sf_draw(
+                canvas,
+                s,
+                left.x,
+                y,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
         }
         y += lh_sm + 4;
 
@@ -1491,12 +1818,23 @@ impl FilesApp {
             len += write_to_buf(&mut buf[len..], b"x");
             len += write_usize(&mut buf[len..], self.preview_src_h as usize);
             if let Ok(s) = core::str::from_utf8(&buf[..len]) {
-                sf_draw(canvas, s, left.x, y, &TextStyle::new(FontRole::UiSmall, theme.text));
+                sf_draw(
+                    canvas,
+                    s,
+                    left.x,
+                    y,
+                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                );
             }
             y += lh_sm + 4;
 
-            sf_draw(canvas, "Format: RGBA8888", left.x, y,
-                    &TextStyle::new(FontRole::UiSmall, theme.text));
+            sf_draw(
+                canvas,
+                "Format: RGBA8888",
+                left.x,
+                y,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
         }
 
         if is_image_name(name_bytes) {
@@ -1508,10 +1846,14 @@ impl FilesApp {
                 }
             } else if ready == 2 {
                 canvas.draw_ui_symbol_centered(preview, UiSymbol::MissingFolder, theme.danger);
-                sf_vcenter(canvas, "Preview unavailable",
-                           preview.x + 8, preview.bottom() - sf_lh(FontRole::UiSmall) as i32 - 4,
-                           sf_lh(FontRole::UiSmall),
-                           &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+                sf_vcenter(
+                    canvas,
+                    "Preview unavailable",
+                    preview.x + 8,
+                    preview.bottom() - sf_lh(FontRole::UiSmall) as i32 - 4,
+                    sf_lh(FontRole::UiSmall),
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
             } else {
                 canvas.draw_ui_symbol_centered(preview, UiSymbol::Pictures, theme.accent);
             }
@@ -1535,11 +1877,27 @@ impl FilesApp {
             &mut count_buf,
         );
         let count_text = core::str::from_utf8(&count_buf[..count_len]).unwrap_or("0 items");
-        sf_vcenter(canvas, count_text, status.x + 12, status.y, STATUS_H,
-                   &TextStyle::new(FontRole::UiSmall, theme.text));
-        let summary_color = if self.state.error_len != 0 { theme.danger } else { theme.text_dim };
-        sf_vcenter(canvas, summary, status.x + 160, status.y, STATUS_H,
-                   &TextStyle::new(FontRole::UiSmall, summary_color));
+        sf_vcenter(
+            canvas,
+            count_text,
+            status.x + 12,
+            status.y,
+            STATUS_H,
+            &TextStyle::new(FontRole::UiSmall, theme.text),
+        );
+        let summary_color = if self.state.error_len != 0 {
+            theme.danger
+        } else {
+            theme.text_dim
+        };
+        sf_vcenter(
+            canvas,
+            summary,
+            status.x + 160,
+            status.y,
+            STATUS_H,
+            &TextStyle::new(FontRole::UiSmall, summary_color),
+        );
     }
 }
 
@@ -1686,8 +2044,14 @@ fn detect_home_path() -> PathBuf {
 /// The OS is responsible for creating standard user directories; the file
 /// manager assumes they exist and surfaces an error only if navigation fails.
 fn build_home_folders(home_path: PathBuf) -> [HomeFolder; HOME_FOLDER_COUNT] {
-    let names: [&'static str; HOME_FOLDER_COUNT] =
-        ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"];
+    let names: [&'static str; HOME_FOLDER_COUNT] = [
+        "Desktop",
+        "Documents",
+        "Downloads",
+        "Pictures",
+        "Music",
+        "Videos",
+    ];
     let mut folders = [HomeFolder::placeholder(); HOME_FOLDER_COUNT];
     let mut i = 0usize;
     while i < HOME_FOLDER_COUNT {
@@ -1887,16 +2251,43 @@ fn draw_pill(
     active: bool,
     disabled: bool,
 ) {
-    let fill = if disabled { theme.panel_alt } else if active { theme.accent } else { theme.panel };
-    let border = if active { theme.accent_hover } else { theme.border };
-    let color = if disabled { theme.text_dim } else if active { theme.bg } else { theme.text };
+    let fill = if disabled {
+        theme.panel_alt
+    } else if active {
+        theme.accent
+    } else {
+        theme.panel
+    };
+    let border = if active {
+        theme.accent_hover
+    } else {
+        theme.border
+    };
+    let color = if disabled {
+        theme.text_dim
+    } else if active {
+        theme.bg
+    } else {
+        theme.text
+    };
     canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
     if let Some(sym) = icon {
         canvas.draw_ui_symbol(rect.x + 8, rect.y + 9, sym, color);
-        sf_vcenter(canvas, text, rect.x + 22, rect.y, rect.h,
-                   &TextStyle::new(FontRole::UiSmall, color));
+        sf_vcenter(
+            canvas,
+            text,
+            rect.x + 22,
+            rect.y,
+            rect.h,
+            &TextStyle::new(FontRole::UiSmall, color),
+        );
     } else {
-        sf_centered(canvas, rect, text, &TextStyle::new(FontRole::UiSmall, color));
+        sf_centered(
+            canvas,
+            rect,
+            text,
+            &TextStyle::new(FontRole::UiSmall, color),
+        );
     }
 }
 

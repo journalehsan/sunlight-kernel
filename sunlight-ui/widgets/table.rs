@@ -82,7 +82,14 @@ impl<'a> Table<'a> {
                 self.header_h,
             );
             if let Some(f) = self.font {
-                f.draw_vcenter(canvas, col.header, col_rect.x, col_rect.y, self.header_h, theme.text);
+                f.draw_vcenter(
+                    canvas,
+                    col.header,
+                    col_rect.x,
+                    col_rect.y,
+                    self.header_h,
+                    theme.text,
+                );
             } else {
                 canvas.draw_text(
                     col_rect.x,

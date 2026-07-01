@@ -203,10 +203,7 @@ impl NetworkManager {
             // Log only on the first failure (deviced was available → now gone).
             if self.discovery.deviced_was_available || self.discovery.consecutive_failures == 0 {
                 let backoff = self.discovery.backoff_ms();
-                serial_println!(
-                    "[NETD] deviced unavailable; next retry in {}ms",
-                    backoff
-                );
+                serial_println!("[NETD] deviced unavailable; next retry in {}ms", backoff);
                 self.discovery.current_backoff_ms = backoff;
             }
             self.discovery.deviced_was_available = false;
@@ -301,8 +298,8 @@ impl NetworkManager {
         }
 
         // Detect what changed to decide what to log.
-        let was_unavailable = !self.discovery.deviced_was_available
-            && self.discovery.consecutive_failures > 0;
+        let was_unavailable =
+            !self.discovery.deviced_was_available && self.discovery.consecutive_failures > 0;
         let count_changed = found_net != self.discovery.last_net_count;
         let ids_changed = new_driver_ids[..found_net.min(MAX_IFACES)]
             != self.discovery.last_driver_ids[..found_net.min(MAX_IFACES)];

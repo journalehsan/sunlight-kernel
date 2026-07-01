@@ -29,13 +29,13 @@ use core::sync::atomic::{AtomicU32, Ordering};
 
 // ─── LAPIC MMIO register offsets ──────────────────────────────────────────────
 
-const LAPIC_ID:      usize = 0x020; // Local APIC ID register (read)
-const LAPIC_EOI:     usize = 0x0B0; // End-of-interrupt register (write 0)
-const LAPIC_SVR:     usize = 0x0F0; // Spurious Interrupt Vector register
+const LAPIC_ID: usize = 0x020; // Local APIC ID register (read)
+const LAPIC_EOI: usize = 0x0B0; // End-of-interrupt register (write 0)
+const LAPIC_SVR: usize = 0x0F0; // Spurious Interrupt Vector register
 const LAPIC_LVT_TIMER: usize = 0x320; // LVT timer register
 const LAPIC_TIMER_INITIAL: usize = 0x380; // Initial count register
 const LAPIC_TIMER_CURRENT: usize = 0x390; // Current count register (read)
-const LAPIC_TIMER_DCR:    usize = 0x3E0; // Divide Configuration register
+const LAPIC_TIMER_DCR: usize = 0x3E0; // Divide Configuration register
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

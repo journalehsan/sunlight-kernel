@@ -14,7 +14,7 @@ use sunlight_ui::{
     App, Event, HBox, Rect, VBox, Window, WindowConfig,
 };
 
-static F_UI:    VecFont = VecFont(FontRole::UiRegular);
+static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 const WIN_W: u32 = 420;
@@ -206,7 +206,9 @@ impl App for RunnerApp {
         self.open.rect = input_rect;
         self.elevated.rect = checkbox_rect;
 
-        Label::new(label_rect, "Open:").with_font(&F_UI).draw(canvas, theme);
+        Label::new(label_rect, "Open:")
+            .with_font(&F_UI)
+            .draw(canvas, theme);
         self.open.draw(canvas, theme);
         self.elevated.draw(canvas, theme);
 

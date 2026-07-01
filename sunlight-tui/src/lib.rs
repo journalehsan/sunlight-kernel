@@ -12,9 +12,9 @@ pub mod font;
 pub mod fontatlas;
 pub mod framebuffer;
 pub mod layout;
-pub mod tga;
 mod modes;
 mod splash;
+pub mod tga;
 
 pub use layout::ANSI_COLORS;
 pub use modes::debug::LogBuffer;
@@ -22,8 +22,7 @@ pub use splash::{BootMode, SplashScreen};
 
 // Framebuffer login screen icons (32×32 TGA, transparent-background).
 // Source: docs/icons/SunlightOS/actions/32/
-const ICON_USERS: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/32/system-users.tga");
+const ICON_USERS: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/32/system-users.tga");
 const ICON_REBOOT: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/actions/32/system-reboot.tga");
 const ICON_SHUTDOWN: &[u8] =
@@ -83,7 +82,14 @@ pub unsafe fn render_tty_shell(
 
     // Header — UI atlas for labels, bitmap "*" bullet kept as-is
     font::draw_str(&mut fb, 16, hdr_text_y + 1, "*", layout::palette::ACCENT, 1);
-    fontatlas::draw_text(&mut fb, "SunlightOS", 32, hdr_text_y, layout::palette::TEXT, fontatlas::FontSize::Regular);
+    fontatlas::draw_text(
+        &mut fb,
+        "SunlightOS",
+        32,
+        hdr_text_y,
+        layout::palette::TEXT,
+        fontatlas::FontSize::Regular,
+    );
     let mode_label = "TTY";
     let mode_w = fontatlas::measure_text(mode_label, fontatlas::FontSize::Regular);
     fontatlas::draw_text(
@@ -113,7 +119,14 @@ pub unsafe fn render_tty_shell(
         let tab_text = " shell ";
         let tw = fontatlas::measure_text(tab_text, fontatlas::FontSize::Regular);
         fb.fill_rect(tx, tab_y + 3, tw + 2, TAB_H - 6, layout::palette::BG);
-        fontatlas::draw_text(&mut fb, tab_text, tx + 1, tab_text_y, fg, fontatlas::FontSize::Regular);
+        fontatlas::draw_text(
+            &mut fb,
+            tab_text,
+            tx + 1,
+            tab_text_y,
+            fg,
+            fontatlas::FontSize::Regular,
+        );
         if is_active {
             // Orange underline on active tab
             fb.hline(tx, tab_y + TAB_H - 2, tw + 2, layout::palette::ACCENT);
@@ -272,12 +285,26 @@ pub unsafe fn render_terminal_grid(
 
     // Header: logo left, clock right, mode label left of the clock — UI atlas
     font::draw_str(&mut fb, 16, hdr_text_y + 1, "*", layout::palette::ACCENT, 1);
-    fontatlas::draw_text(&mut fb, "SunlightOS", 32, hdr_text_y, layout::palette::ACCENT, fontatlas::FontSize::Regular);
+    fontatlas::draw_text(
+        &mut fb,
+        "SunlightOS",
+        32,
+        hdr_text_y,
+        layout::palette::ACCENT,
+        fontatlas::FontSize::Regular,
+    );
     let clock_str = core::str::from_utf8(clock).unwrap_or("");
     let clock_w = fontatlas::measure_text(clock_str, fontatlas::FontSize::Regular);
     let clock_x = fb_width.saturating_sub(clock_w + 16);
     if !clock_str.is_empty() {
-        fontatlas::draw_text(&mut fb, clock_str, clock_x, hdr_text_y, layout::palette::TEXT, fontatlas::FontSize::Regular);
+        fontatlas::draw_text(
+            &mut fb,
+            clock_str,
+            clock_x,
+            hdr_text_y,
+            layout::palette::TEXT,
+            fontatlas::FontSize::Regular,
+        );
     }
     let mode_label = "TTY";
     let mode_w = fontatlas::measure_text(mode_label, fontatlas::FontSize::Regular);
@@ -330,7 +357,14 @@ pub unsafe fn render_terminal_grid(
         let tab_text = core::str::from_utf8(&buf[..n]).unwrap_or(" SHELL ");
         let tw = fontatlas::measure_text(tab_text, fontatlas::FontSize::Regular);
         fb.fill_rect(tx, tab_y + 3, tw + 2, TAB_H - 6, layout::palette::BG);
-        fontatlas::draw_text(&mut fb, tab_text, tx + 1, tab_text_y, fg, fontatlas::FontSize::Regular);
+        fontatlas::draw_text(
+            &mut fb,
+            tab_text,
+            tx + 1,
+            tab_text_y,
+            fg,
+            fontatlas::FontSize::Regular,
+        );
         if is_active {
             fb.hline(tx, tab_y + TAB_H - 2, tw + 2, layout::palette::ACCENT);
         }
@@ -365,7 +399,15 @@ pub unsafe fn render_terminal_grid(
             // Fill cell background first, then alpha-blend the glyph on top
             fb.fill_rect(x, y, cell_w, cell_h, cell.bg);
             if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
-                fontatlas::draw_mono_char(&mut fb, x, y, cell_h, cell.ch, cell.fg, fontatlas::FontSize::MonoRegular);
+                fontatlas::draw_mono_char(
+                    &mut fb,
+                    x,
+                    y,
+                    cell_h,
+                    cell.ch,
+                    cell.fg,
+                    fontatlas::FontSize::MonoRegular,
+                );
             }
         }
     }
@@ -383,7 +425,15 @@ pub unsafe fn render_terminal_grid(
             let cell = cells[cell_idx];
             fb.fill_rect(x, y, cell_w, cell_h, cell.fg); // fg becomes bg
             if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
-                fontatlas::draw_mono_char(&mut fb, x, y, cell_h, cell.ch, cell.bg, fontatlas::FontSize::MonoRegular); // bg becomes fg
+                fontatlas::draw_mono_char(
+                    &mut fb,
+                    x,
+                    y,
+                    cell_h,
+                    cell.ch,
+                    cell.bg,
+                    fontatlas::FontSize::MonoRegular,
+                ); // bg becomes fg
             }
         } else {
             // Empty cell: just draw inverted space
@@ -441,8 +491,8 @@ pub enum LoginFocus {
 /// Orange border on focused/selected; subtle border otherwise.
 fn draw_user_avatar(
     fb: &mut framebuffer::Framebuffer,
-    cx: u32,        // horizontal center of the slot
-    icon_top: u32,  // top of the 32×32 icon area
+    cx: u32,       // horizontal center of the slot
+    icon_top: u32, // top of the 32×32 icon area
     icon: Option<&tga::TgaImage<'_>>,
     name: &[u8],
     is_custom: bool,
@@ -457,7 +507,13 @@ fn draw_user_avatar(
     let box_y = icon_top.saturating_sub(PAD);
 
     // Tile background: warm orange tint when selected, dark when inactive.
-    let fill = if focused { 0x1C0C00 } else if selected { 0x160900 } else { 0x0A0A0A };
+    let fill = if focused {
+        0x1C0C00
+    } else if selected {
+        0x160900
+    } else {
+        0x0A0A0A
+    };
     fb.fill_rect(box_x, box_y, BOX_SZ, BOX_SZ, fill);
 
     let border_color = if focused {
@@ -467,7 +523,15 @@ fn draw_user_avatar(
     } else {
         layout::palette::SEPARATOR
     };
-    draw::rect_outline(fb, box_x, box_y, BOX_SZ, BOX_SZ, if focused { 2 } else { 1 }, border_color);
+    draw::rect_outline(
+        fb,
+        box_x,
+        box_y,
+        BOX_SZ,
+        BOX_SZ,
+        if focused { 2 } else { 1 },
+        border_color,
+    );
 
     // Fallback icon color: orange for focused, dimmed orange for selected,
     // muted gray for inactive.
@@ -481,14 +545,30 @@ fn draw_user_avatar(
 
     let icon_x = cx.saturating_sub(ICON_SZ / 2);
     if let Some(img) = icon {
-        tga::draw_tga_icon(fb, Some(img), icon_x, icon_top, ICON_SZ, ICON_SZ, icon_color);
+        tga::draw_tga_icon(
+            fb,
+            Some(img),
+            icon_x,
+            icon_top,
+            ICON_SZ,
+            ICON_SZ,
+            icon_color,
+        );
     } else {
         // Fallback: draw the first letter of the name
         let ch = if name.is_empty() {
-            if is_custom { b'+' } else { b'?' }
+            if is_custom {
+                b'+'
+            } else {
+                b'?'
+            }
         } else {
             let c = name[0];
-            if c >= b'a' && c <= b'z' { c - 32 } else { c }
+            if c >= b'a' && c <= b'z' {
+                c - 32
+            } else {
+                c
+            }
         };
         font::draw_char(fb, icon_x + 12, icon_top + 9, ch, icon_color, 1);
     }
@@ -617,7 +697,11 @@ pub unsafe fn render_login_grid(
             label,
             slot_cx.saturating_sub(label_w / 2),
             avatar_icon_top + ICON_SZ + 8,
-            if selected { layout::palette::TEXT } else { layout::palette::TEXT_DIM },
+            if selected {
+                layout::palette::TEXT
+            } else {
+                layout::palette::TEXT_DIM
+            },
             fontatlas::FontSize::Regular,
         );
     }
@@ -644,18 +728,37 @@ pub unsafe fn render_login_grid(
     let pw_focused = focus == LoginFocus::Password;
 
     // Box fill: slightly brighter when active to hint at focus
-    fb.fill_rect(pw_box_x, pass_y.saturating_sub(4), pw_box_w, pw_box_h,
-        if pw_focused { 0x0E0D00 } else { 0x080808 });
+    fb.fill_rect(
+        pw_box_x,
+        pass_y.saturating_sub(4),
+        pw_box_w,
+        pw_box_h,
+        if pw_focused { 0x0E0D00 } else { 0x080808 },
+    );
     draw::rect_outline(
         &mut fb,
-        pw_box_x, pass_y.saturating_sub(4), pw_box_w, pw_box_h,
+        pw_box_x,
+        pass_y.saturating_sub(4),
+        pw_box_w,
+        pw_box_h,
         if pw_focused { 2 } else { 1 },
-        if pw_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+        if pw_focused {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::SEPARATOR
+        },
     );
     // Bullet dots
     let dot_count = password_len.min(24) as u32;
     for i in 0..dot_count {
-        font::draw_char(&mut fb, pw_box_x + 6 + i * 8, pass_y, b'*', layout::palette::TEXT, 1);
+        font::draw_char(
+            &mut fb,
+            pw_box_x + 6 + i * 8,
+            pass_y,
+            b'*',
+            layout::palette::TEXT,
+            1,
+        );
     }
     // Caret
     if pw_focused {
@@ -679,13 +782,25 @@ pub unsafe fn render_login_grid(
     let drop_box_h = 26u32;
     let drop_focused = focus == LoginFocus::Dropdown;
 
-    fb.fill_rect(drop_box_x, drop_y.saturating_sub(4), drop_box_w, drop_box_h,
-        if drop_focused { 0x0E0D00 } else { 0x080808 });
+    fb.fill_rect(
+        drop_box_x,
+        drop_y.saturating_sub(4),
+        drop_box_w,
+        drop_box_h,
+        if drop_focused { 0x0E0D00 } else { 0x080808 },
+    );
     draw::rect_outline(
         &mut fb,
-        drop_box_x, drop_y.saturating_sub(4), drop_box_w, drop_box_h,
+        drop_box_x,
+        drop_y.saturating_sub(4),
+        drop_box_w,
+        drop_box_h,
         if drop_focused { 2 } else { 1 },
-        if drop_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+        if drop_focused {
+            layout::palette::ACCENT
+        } else {
+            layout::palette::SEPARATOR
+        },
     );
     fontatlas::draw_text(
         &mut fb,
@@ -696,8 +811,14 @@ pub unsafe fn render_login_grid(
         fontatlas::FontSize::Regular,
     );
     // Dropdown arrow indicator
-    font::draw_str(&mut fb, drop_box_x + drop_box_w.saturating_sub(16), drop_y, "v",
-        layout::palette::TEXT_DIM, 1);
+    font::draw_str(
+        &mut fb,
+        drop_box_x + drop_box_w.saturating_sub(16),
+        drop_y,
+        "v",
+        layout::palette::TEXT_DIM,
+        1,
+    );
 
     // ── Status message ───────────────────────────────────────────────────────
     if !message.is_empty() {
@@ -743,21 +864,41 @@ pub unsafe fn render_login_grid(
         let bg = if reboot_focused { 0x1C0C00 } else { 0x080808 };
         fb.fill_rect(reboot_x, btn_y, rb_btn_w, BTN_H, bg);
         draw::rect_outline(
-            &mut fb, reboot_x, btn_y, rb_btn_w, BTN_H,
+            &mut fb,
+            reboot_x,
+            btn_y,
+            rb_btn_w,
+            BTN_H,
             if reboot_focused { 2 } else { 1 },
-            if reboot_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+            if reboot_focused {
+                layout::palette::ACCENT
+            } else {
+                layout::palette::SEPARATOR
+            },
         );
         tga::draw_tga_icon(
-            &mut fb, icon_reboot.as_ref(),
-            reboot_x + BTN_ICON_PAD, btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
-            BTN_ICON, BTN_ICON,
-            if reboot_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+            &mut fb,
+            icon_reboot.as_ref(),
+            reboot_x + BTN_ICON_PAD,
+            btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
+            BTN_ICON,
+            BTN_ICON,
+            if reboot_focused {
+                layout::palette::ACCENT
+            } else {
+                layout::palette::TEXT_DIM
+            },
         );
         fontatlas::draw_text(
-            &mut fb, rb_label,
+            &mut fb,
+            rb_label,
             reboot_x + BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP,
             btn_y + (BTN_H.saturating_sub(14)) / 2,
-            if reboot_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+            if reboot_focused {
+                layout::palette::ACCENT
+            } else {
+                layout::palette::TEXT_DIM
+            },
             fontatlas::FontSize::Regular,
         );
     }
@@ -767,21 +908,41 @@ pub unsafe fn render_login_grid(
         let bg = if shutdown_focused { 0x1C0C00 } else { 0x080808 };
         fb.fill_rect(shutdown_x, btn_y, sd_btn_w, BTN_H, bg);
         draw::rect_outline(
-            &mut fb, shutdown_x, btn_y, sd_btn_w, BTN_H,
+            &mut fb,
+            shutdown_x,
+            btn_y,
+            sd_btn_w,
+            BTN_H,
             if shutdown_focused { 2 } else { 1 },
-            if shutdown_focused { layout::palette::ACCENT } else { layout::palette::SEPARATOR },
+            if shutdown_focused {
+                layout::palette::ACCENT
+            } else {
+                layout::palette::SEPARATOR
+            },
         );
         tga::draw_tga_icon(
-            &mut fb, icon_shutdown.as_ref(),
-            shutdown_x + BTN_ICON_PAD, btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
-            BTN_ICON, BTN_ICON,
-            if shutdown_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+            &mut fb,
+            icon_shutdown.as_ref(),
+            shutdown_x + BTN_ICON_PAD,
+            btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
+            BTN_ICON,
+            BTN_ICON,
+            if shutdown_focused {
+                layout::palette::ACCENT
+            } else {
+                layout::palette::TEXT_DIM
+            },
         );
         fontatlas::draw_text(
-            &mut fb, sd_label,
+            &mut fb,
+            sd_label,
             shutdown_x + BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP,
             btn_y + (BTN_H.saturating_sub(14)) / 2,
-            if shutdown_focused { layout::palette::ACCENT } else { layout::palette::TEXT_DIM },
+            if shutdown_focused {
+                layout::palette::ACCENT
+            } else {
+                layout::palette::TEXT_DIM
+            },
             fontatlas::FontSize::Regular,
         );
     }

@@ -201,11 +201,7 @@ pub fn draw_tga_icon(
 ///
 /// After drawing the image a translucent black overlay is applied
 /// (`overlay_alpha` in 0–255, where 128 ≈ 50 % opaque).
-pub fn draw_tga_background(
-    fb: &mut Framebuffer,
-    img: &TgaImage,
-    overlay_alpha: u8,
-) {
+pub fn draw_tga_background(fb: &mut Framebuffer, img: &TgaImage, overlay_alpha: u8) {
     let fb_w = fb.width();
     let fb_h = fb.height();
     if fb_w == 0 || fb_h == 0 {

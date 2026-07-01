@@ -1334,10 +1334,7 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
     // compositor never kills its own backdrop, and pids 0/1 (kernel/init) are
     // never signalled.
     const SIGTERM: u32 = 15;
-    if !was_desktop
-        && owner_pid > 1
-        && !state.windows.iter().any(|w| w.owner_pid == owner_pid)
-    {
+    if !was_desktop && owner_pid > 1 && !state.windows.iter().any(|w| w.owner_pid == owner_pid) {
         let _ = sunlight_ipc::kill(owner_pid, SIGTERM);
     }
 
@@ -3013,7 +3010,10 @@ pub extern "C" fn _start() -> ! {
     // takes over). SESSION_ACTIVATE from tty_server would never arrive, leaving
     // session_active=false forever and the desktop blank. Auto-activate here so
     // the compositor draws and the Vortex Shell launches immediately.
-    if matches!(state.display_backend, backend::DisplayBackend::VirtioGpu { .. }) {
+    if matches!(
+        state.display_backend,
+        backend::DisplayBackend::VirtioGpu { .. }
+    ) {
         debug_log("[DISPLAY] VirtIO GPU backend: auto-activating Desktop session\n");
         state.session_active = true;
         ensure_vortex_shell(&mut state);

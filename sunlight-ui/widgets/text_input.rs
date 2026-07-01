@@ -55,17 +55,34 @@ impl<'a, const N: usize> TextInput<'a, N> {
         let prefix = self.value().get(..self.cursor).unwrap_or("");
 
         if let Some(f) = self.font {
-            f.draw_vcenter(canvas, self.value(), text_x, self.rect.y, self.rect.h, theme.text);
+            f.draw_vcenter(
+                canvas,
+                self.value(),
+                text_x,
+                self.rect.y,
+                self.rect.h,
+                theme.text,
+            );
             if self.active {
                 let cursor_x = text_x + f.measure_w(prefix) as i32;
-                canvas.vline(cursor_x, self.rect.y + 4, self.rect.h.saturating_sub(8), theme.accent);
+                canvas.vline(
+                    cursor_x,
+                    self.rect.y + 4,
+                    self.rect.h.saturating_sub(8),
+                    theme.accent,
+                );
             }
         } else {
             let text_y = self.rect.y + (self.rect.h as i32 - 10) / 2;
             canvas.draw_text(text_x, text_y, self.value(), theme.text);
             if self.active {
                 let cursor_x = text_x + Canvas::measure_text(prefix) as i32;
-                canvas.vline(cursor_x, self.rect.y + 4, self.rect.h.saturating_sub(8), theme.accent);
+                canvas.vline(
+                    cursor_x,
+                    self.rect.y + 4,
+                    self.rect.h.saturating_sub(8),
+                    theme.accent,
+                );
             }
         }
     }

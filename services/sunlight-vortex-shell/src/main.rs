@@ -48,6 +48,7 @@
 extern crate alloc;
 
 use alloc::{string::String, vec::Vec};
+use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
     debug_log, ipc_call, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -55,9 +56,8 @@ use sunlight_ipc::{
     unpack_iface_summary, CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
     NotificationKind, ProcessExit, SgpMsg, TzMsg,
 };
-use sunlight_telemetry::{SystemSnapshot, Telemetry};
-use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_libc::{self as libc, sun_exec, DirEntry, FT_DIR};
+use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
     image::{
         icon_theme::{self, category as icon_category, name as icon_name},
@@ -111,8 +111,9 @@ static MENU_REFRESH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/view-refresh.tga");
 static MENU_SORT_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/sort-name.tga");
-static MENU_TERMINAL_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/scalable/xsi-utilities-terminal-symbolic.tga");
+static MENU_TERMINAL_TGA: &[u8] = include_bytes!(
+    "../../../docs/icons/SunlightOS/actions/scalable/xsi-utilities-terminal-symbolic.tga"
+);
 
 /// Theme icons for desktop shortcuts. All fields are `Copy` (TgaImage borrows `&'static [u8]`).
 #[derive(Clone, Copy)]
@@ -391,17 +392,17 @@ static ALLOC: BumpAlloc = BumpAlloc;
 const SUN_ROWS: [u16; 16] = [
     0b0000000000000000,
     0b0000000000000000,
-    0b0000000100000000,  // N ray
+    0b0000000100000000, // N ray
     0b0000000000000000,
-    0b0000011111000000,  // circle top (cols 5-9)
-    0b0000111111100000,  // circle (cols 4-10)
+    0b0000011111000000, // circle top (cols 5-9)
+    0b0000111111100000, // circle (cols 4-10)
     0b0000111111100000,
-    0b0100111111100100,  // W ray + circle + E ray
+    0b0100111111100100, // W ray + circle + E ray
     0b0000111111100000,
     0b0000111111100000,
-    0b0000011111000000,  // circle bottom (cols 5-9)
+    0b0000011111000000, // circle bottom (cols 5-9)
     0b0000000000000000,
-    0b0000000100000000,  // S ray
+    0b0000000100000000, // S ray
     0b0000000000000000,
     0b0000000000000000,
     0b0000000000000000,
@@ -819,9 +820,14 @@ const MENU_LABELS: [(&str, ContextMenuAction); 5] = [
 enum DesktopSelectState {
     Idle,
     /// Mouse button is down on empty desktop but hasn't moved past threshold yet.
-    Armed { anchor: Point },
+    Armed {
+        anchor: Point,
+    },
     /// Past the 4-pixel threshold — rubber-band rectangle is visible.
-    Dragging { anchor: Point, current: Point },
+    Dragging {
+        anchor: Point,
+        current: Point,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -1403,7 +1409,11 @@ impl VortexShell {
         let mut seen_len = 0usize;
 
         for window in windows {
-            if window.hidden || window.workspace_id != 0 || window.window_type == 2 || window.window_type == 3 {
+            if window.hidden
+                || window.workspace_id != 0
+                || window.window_type == 2
+                || window.window_type == 3
+            {
                 continue;
             }
             if self.app_pid_is_pinned(window.owner_pid) {
@@ -1438,7 +1448,8 @@ impl VortexShell {
                     dirty = true;
                 }
                 if entry.icon.is_none() {
-                    if let Some(icon) = resolve_running_icon(proc_name, entry.display_name.as_str()) {
+                    if let Some(icon) = resolve_running_icon(proc_name, entry.display_name.as_str())
+                    {
                         entry.icon = Some(icon);
                         dirty = true;
                     }
@@ -1476,7 +1487,10 @@ impl VortexShell {
             dirty = true;
         }
 
-        if self.running_hover.map_or(false, |idx| idx >= self.running_apps.len()) {
+        if self
+            .running_hover
+            .map_or(false, |idx| idx >= self.running_apps.len())
+        {
             self.running_hover = None;
         }
         dirty
@@ -1637,7 +1651,11 @@ impl VortexShell {
             return false;
         }
 
-        if let Some(entry) = self.running_apps.iter_mut().find(|entry| entry.win_id == win_id) {
+        if let Some(entry) = self
+            .running_apps
+            .iter_mut()
+            .find(|entry| entry.win_id == win_id)
+        {
             entry.minimized = false;
             entry.last_click_at = now;
         }
@@ -1933,7 +1951,10 @@ fn draw_generic_app_icon(canvas: &mut Canvas, rect: Rect, fill: Color, border: C
     let line_color = fill.darken(18);
     for i in 0..3i32 {
         let line_y = body.y + 10 + i * 4;
-        canvas.fill_rect(Rect::new(body.x + 4, line_y, body.w.saturating_sub(8), 1), line_color);
+        canvas.fill_rect(
+            Rect::new(body.x + 4, line_y, body.w.saturating_sub(8), 1),
+            line_color,
+        );
     }
 }
 
@@ -2135,7 +2156,14 @@ fn draw_status_cluster(
     let ts = core::str::from_utf8(&tbuf[..tlen]).unwrap_or("??:??");
     let tw = measure_text(ts, FontRole::UiSmall).w;
     let clock_x = x - tw as i32;
-    draw_text_vcenter(canvas, ts, clock_x, bar.y, bar.h, &TextStyle::new(FontRole::UiSmall, theme.text));
+    draw_text_vcenter(
+        canvas,
+        ts,
+        clock_x,
+        bar.y,
+        bar.h,
+        &TextStyle::new(FontRole::UiSmall, theme.text),
+    );
     x = clock_x - 8;
 
     // Battery icon (static placeholder)
@@ -2215,7 +2243,14 @@ fn draw_top_bar(
     let title = "SunlightOS";
     let title_w = measure_text(title, FontRole::UiMedium).w;
     let title_x = bar.x + (bar.w as i32 - title_w as i32) / 2;
-    draw_text_vcenter(canvas, title, title_x, bar.y, bar.h, &TextStyle::new(FontRole::UiMedium, theme.text));
+    draw_text_vcenter(
+        canvas,
+        title,
+        title_x,
+        bar.y,
+        bar.h,
+        &TextStyle::new(FontRole::UiMedium, theme.text),
+    );
 
     // ── Right zone: status cluster (power | net | bat | clock) ───────────────
     // Clock source: "tz" service (TzMsg::GET_LOCAL_TIME) — same path used by
@@ -2574,13 +2609,23 @@ fn draw_desktop_icons(
             draw_icon16_scaled(canvas, icon_rect, rows, color, DESKTOP_ICON_SCALE);
         }
 
-        let icon_color = if is_selected { theme.text } else { theme.text_dim.lighten(90) };
+        let icon_color = if is_selected {
+            theme.text
+        } else {
+            theme.text_dim.lighten(90)
+        };
         let label_w = measure_text(&icon.label, FontRole::UiSmall).w;
         let label_x = slot.x + (slot.w as i32 - label_w as i32) / 2;
         let label_h = sun_font::line_height(FontRole::UiSmall) + 4;
         let label_rect_y = slot.y + 58;
-        draw_text_vcenter(canvas, &icon.label, label_x, label_rect_y, label_h,
-            &TextStyle::new(FontRole::UiSmall, icon_color));
+        draw_text_vcenter(
+            canvas,
+            &icon.label,
+            label_x,
+            label_rect_y,
+            label_h,
+            &TextStyle::new(FontRole::UiSmall, icon_color),
+        );
     }
 }
 
@@ -2588,18 +2633,8 @@ fn draw_desktop_marquee(canvas: &mut Canvas, theme: &Theme, rect: Rect) {
     if rect.w == 0 || rect.h == 0 {
         return;
     }
-    let fill = Color::rgba(
-        theme.accent.r(),
-        theme.accent.g(),
-        theme.accent.b(),
-        48,
-    );
-    let border = Color::rgba(
-        theme.accent.r(),
-        theme.accent.g(),
-        theme.accent.b(),
-        180,
-    );
+    let fill = Color::rgba(theme.accent.r(), theme.accent.g(), theme.accent.b(), 48);
+    let border = Color::rgba(theme.accent.r(), theme.accent.g(), theme.accent.b(), 180);
     for y in rect.y..rect.bottom() {
         for x in rect.x..rect.right() {
             canvas.blend_pixel(x, y, fill);
@@ -2859,14 +2894,15 @@ fn normalize_icon_stem(name: &str) -> String {
 fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
     let stem = normalize_icon_stem(name);
     match stem.as_str() {
-        "terminal" | icon_name::TERMINAL | "xterm" | "konsole" | "alacritty" | "sunlight-terminal" => {
-            Some(ICON_TERMINAL_TGA)
+        "terminal"
+        | icon_name::TERMINAL
+        | "xterm"
+        | "konsole"
+        | "alacritty"
+        | "sunlight-terminal" => Some(ICON_TERMINAL_TGA),
+        "calc" | "calculator" | icon_name::CALCULATOR | "kcalc" | "sunlight-calculator" => {
+            Some(ICON_CALC_TGA)
         }
-        "calc"
-        | "calculator"
-        | icon_name::CALCULATOR
-        | "kcalc"
-        | "sunlight-calculator" => Some(ICON_CALC_TGA),
         "files"
         | "file-manager"
         | icon_name::FILE_MANAGER
@@ -2949,7 +2985,9 @@ fn dock_cluster_width(count: usize) -> u32 {
     if count == 0 {
         return CLUSTER_PAD as u32 * 2;
     }
-    CLUSTER_PAD as u32 * 2 + count as u32 * ICON_BTN + (count.saturating_sub(1) as u32) * ICON_GAP as u32
+    CLUSTER_PAD as u32 * 2
+        + count as u32 * ICON_BTN
+        + (count.saturating_sub(1) as u32) * ICON_GAP as u32
 }
 
 /// Draw the bottom-left cluster: overview | sidebar | settings.
@@ -3101,7 +3139,8 @@ fn draw_bot_center(
         x += ICON_GAP as i32;
         for (i, entry) in running_apps.iter().enumerate() {
             let mut label_buf = [0u8; RUNNING_LABEL_BUF];
-            let label = truncate_label_into(&entry.display_name, RUNNING_LABEL_CHARS, &mut label_buf);
+            let label =
+                truncate_label_into(&entry.display_name, RUNNING_LABEL_CHARS, &mut label_buf);
             let label_w = measure_text(&label, FontRole::UiSmall).w;
             let label_box_w = label_w.clamp(RUNNING_LABEL_MIN_W, RUNNING_LABEL_MAX_W);
             let cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON + 6 + label_box_w;
@@ -3147,8 +3186,14 @@ fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32) {
     let ph = "Search...";
     let ph_w = measure_text(ph, FontRole::UiSmall).w;
     let ph_x = search_rect.x + (search_rect.w as i32 - ph_w as i32) / 2;
-    draw_text_vcenter(canvas, ph, ph_x, search_rect.y, search_rect.h,
-        &TextStyle::new(FontRole::UiSmall, theme.text_dim));
+    draw_text_vcenter(
+        canvas,
+        ph,
+        ph_x,
+        search_rect.y,
+        search_rect.h,
+        &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+    );
 }
 
 // ---------------------------------------------------------------------------

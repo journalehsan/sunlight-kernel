@@ -48,20 +48,37 @@ fn main() {
     println!("cargo:rerun-if-changed={}", fira_regular.display());
     println!("cargo:rerun-if-changed={}", fira_semibold.display());
 
-    let inter_bytes = fs::read(&inter_path)
-        .unwrap_or_else(|e| panic!("sunlight-tui build: cannot read {}: {}", inter_path.display(), e));
+    let inter_bytes = fs::read(&inter_path).unwrap_or_else(|e| {
+        panic!(
+            "sunlight-tui build: cannot read {}: {}",
+            inter_path.display(),
+            e
+        )
+    });
     let inter = Font::from_bytes(inter_bytes.as_slice(), FontSettings::default())
         .expect("sunlight-tui build: failed to parse Inter Regular");
 
-    let fira_regular_bytes = fs::read(&fira_regular)
-        .unwrap_or_else(|e| panic!("sunlight-tui build: cannot read {}: {}", fira_regular.display(), e));
-    let fira_regular_font = Font::from_bytes(fira_regular_bytes.as_slice(), FontSettings::default())
-        .expect("sunlight-tui build: failed to parse Fira Code Regular");
+    let fira_regular_bytes = fs::read(&fira_regular).unwrap_or_else(|e| {
+        panic!(
+            "sunlight-tui build: cannot read {}: {}",
+            fira_regular.display(),
+            e
+        )
+    });
+    let fira_regular_font =
+        Font::from_bytes(fira_regular_bytes.as_slice(), FontSettings::default())
+            .expect("sunlight-tui build: failed to parse Fira Code Regular");
 
-    let fira_semibold_bytes = fs::read(&fira_semibold)
-        .unwrap_or_else(|e| panic!("sunlight-tui build: cannot read {}: {}", fira_semibold.display(), e));
-    let fira_semibold_font = Font::from_bytes(fira_semibold_bytes.as_slice(), FontSettings::default())
-        .expect("sunlight-tui build: failed to parse Fira Code SemiBold");
+    let fira_semibold_bytes = fs::read(&fira_semibold).unwrap_or_else(|e| {
+        panic!(
+            "sunlight-tui build: cannot read {}: {}",
+            fira_semibold.display(),
+            e
+        )
+    });
+    let fira_semibold_font =
+        Font::from_bytes(fira_semibold_bytes.as_slice(), FontSettings::default())
+            .expect("sunlight-tui build: failed to parse Fira Code SemiBold");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
@@ -70,17 +87,27 @@ fn main() {
     generate(&inter, 24.0, &out_dir.join("login_title_24.mtf"));
 
     // Shell/terminal monospace fonts (Fira Code)
-    generate(&fira_regular_font, 14.0, &out_dir.join("tty_mono_regular_14.mtf"));
-    generate(&fira_semibold_font, 14.0, &out_dir.join("tty_mono_bold_14.mtf"));
+    generate(
+        &fira_regular_font,
+        14.0,
+        &out_dir.join("tty_mono_regular_14.mtf"),
+    );
+    generate(
+        &fira_semibold_font,
+        14.0,
+        &out_dir.join("tty_mono_bold_14.mtf"),
+    );
 }
 
 fn generate(font: &Font, px: f32, out_path: &PathBuf) {
-    let lm = font.horizontal_line_metrics(px).unwrap_or_else(|| fontdue::LineMetrics {
-        ascent: px * 0.8,
-        descent: -(px * 0.2),
-        line_gap: 0.0,
-        new_line_size: px,
-    });
+    let lm = font
+        .horizontal_line_metrics(px)
+        .unwrap_or_else(|| fontdue::LineMetrics {
+            ascent: px * 0.8,
+            descent: -(px * 0.2),
+            line_gap: 0.0,
+            new_line_size: px,
+        });
 
     let ascent_px = lm.ascent.ceil() as u8;
     let line_h = (lm.ascent - lm.descent + lm.line_gap).ceil() as u8;
@@ -107,18 +134,25 @@ fn generate(font: &Font, px: f32, out_path: &PathBuf) {
         pos += 5 + (*w as usize) * (*h as usize);
     }
 
-    let mut out = fs::File::create(out_path)
-        .unwrap_or_else(|e| panic!("sunlight-tui build: cannot create {}: {}", out_path.display(), e));
+    let mut out = fs::File::create(out_path).unwrap_or_else(|e| {
+        panic!(
+            "sunlight-tui build: cannot create {}: {}",
+            out_path.display(),
+            e
+        )
+    });
 
     out.write_all(b"MTF1").unwrap();
-    out.write_all(&[line_h, ascent_px, GLYPH_COUNT as u8, 0]).unwrap();
+    out.write_all(&[line_h, ascent_px, GLYPH_COUNT as u8, 0])
+        .unwrap();
 
     for off in &offsets {
         out.write_all(&off.to_le_bytes()).unwrap();
     }
 
     for (advance, left, top, width, height, pixels) in &glyphs {
-        out.write_all(&[*advance, *left as u8, *top as u8, *width, *height]).unwrap();
+        out.write_all(&[*advance, *left as u8, *top as u8, *width, *height])
+            .unwrap();
         out.write_all(pixels).unwrap();
     }
 

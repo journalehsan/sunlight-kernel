@@ -297,7 +297,8 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
             match hhdm_opt {
                 Some(resp) => {
                     let hhdm = x86_64::VirtAddr::new(resp.offset);
-                    let aspace = crate::process::address_space::AddressSpace::from_pml4(ps.pml4_phys);
+                    let aspace =
+                        crate::process::address_space::AddressSpace::from_pml4(ps.pml4_phys);
                     if aspace.is_reclaimed() {
                         0
                     } else {

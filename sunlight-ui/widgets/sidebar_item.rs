@@ -291,7 +291,9 @@ impl<'a> SidebarItem<'a> {
         };
 
         // ── Title + hint vertical placement ───────────────────────────────
-        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| f.line_height() as i32);
+        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| {
+            f.line_height() as i32
+        });
         let (title_y, hint_y) = if self.hint.is_some() {
             // Two lines: center the pair vertically inside the card height.
             let block_h = font_h * 2 + 3;
@@ -411,8 +413,8 @@ mod tests {
         assert!(!item.hit_test(300, 10)); // outside x
         assert!(!item.hit_test(10, 100)); // outside y
 
-        let disabled = SidebarItem::new(Rect::new(0, 0, 200, 48), "Home")
-            .with_state(SidebarState::Disabled);
+        let disabled =
+            SidebarItem::new(Rect::new(0, 0, 200, 48), "Home").with_state(SidebarState::Disabled);
         assert!(!disabled.hit_test(10, 10));
     }
 

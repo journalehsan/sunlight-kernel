@@ -266,7 +266,9 @@ impl<'a> DriveCard<'a> {
     // ── Card (grid) body layout ───────────────────────────────────────────
 
     fn draw_card_body(&self, canvas: &mut Canvas, theme: &Theme, card: Rect) {
-        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| f.line_height() as i32);
+        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| {
+            f.line_height() as i32
+        });
         let icon_size = Self::CARD_ICON_SIZE;
 
         // Icon — centered horizontally, top-padded
@@ -328,7 +330,9 @@ impl<'a> DriveCard<'a> {
     // ── Row (list) body layout ────────────────────────────────────────────
 
     fn draw_row_body(&self, canvas: &mut Canvas, theme: &Theme, card: Rect) {
-        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| f.line_height() as i32);
+        let font_h = self.font.map_or(crate::paint::font::GLYPH_H as i32, |f| {
+            f.line_height() as i32
+        });
         let icon_size = Self::ROW_ICON_SIZE;
 
         let icon_x = card.x + Self::PAD;
@@ -426,7 +430,14 @@ impl<'a> DriveCard<'a> {
     }
 
     /// Draw the usage progress bar at `cy`, returns new `cy` below the bar.
-    fn draw_usage_bar(&self, canvas: &mut Canvas, theme: &Theme, area: Rect, cy: i32, ratio: f32) -> i32 {
+    fn draw_usage_bar(
+        &self,
+        canvas: &mut Canvas,
+        theme: &Theme,
+        area: Rect,
+        cy: i32,
+        ratio: f32,
+    ) -> i32 {
         let bar_x = area.x;
         let bar_w = area.w;
         let bar_rect = Rect::new(bar_x, cy, bar_w, Self::BAR_H);
@@ -520,8 +531,8 @@ mod tests {
         assert!(!card.hit_test(W as i32 + 10, 10));
         assert!(!card.hit_test(10, H as i32 + 10));
 
-        let disabled = DriveCard::new(Rect::new(0, 0, W, H), "System")
-            .with_state(DriveCardState::Disabled);
+        let disabled =
+            DriveCard::new(Rect::new(0, 0, W, H), "System").with_state(DriveCardState::Disabled);
         assert!(!disabled.hit_test(10, 10));
     }
 
