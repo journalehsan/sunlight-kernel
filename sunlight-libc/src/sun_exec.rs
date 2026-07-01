@@ -213,6 +213,7 @@ fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
         b"files" | b"file-manager" | b"sunlight-files" => Some(b"/bin/sunlight-files"),
         b"tasks" | b"task-manager" | b"sunlight-tasks" => Some(b"/bin/sunlight-tasks"),
         b"eyes" => Some(b"/bin/eyes"),
+        b"bench" | b"sunbench" | b"sunlight-bench" => Some(b"/bin/sunbench"),
         _ => None,
     }
 }

@@ -18,9 +18,16 @@
 //! Battery: static placeholder icon. No ACPI queries.
 //!   TODO(battery): integrate real battery via powerd context or future battery service.
 //!
-//! Power button: icon only. Click is recognized but performs no action.
-//!   TODO(power): wire a small menu (lock, logout, reboot, shutdown) via powerd.
-//!   Do not implement actual reboot/shutdown here.
+//! Top-bar power button: icon only, click is a no-op. Session/power actions
+//!   (Sleep/Restart/Shut Down) live in the Start Menu footer instead — see
+//!   `start_menu.rs` and `docs/GUI/START_MENU.md`. Restart/Shut Down call
+//!   `sunlight_libc::power` directly (kernel `PowerCtl` syscall / ACPI);
+//!   Sleep has no kernel support yet and just shows a notification.
+//!
+//! Start Menu: dark, structured app launcher opened via the dock's grid icon.
+//!   Search, Pinned/All Apps/Recent sections, footer power actions. See
+//!   `start_menu.rs` for the view model/layout and `docs/GUI/START_MENU.md`
+//!   for the architecture writeup and known limitations.
 //!
 //! Update frequency: driven by Window::POLL_TIMEOUT_MS (~200 ms Event::Tick).
 //!   Redraw is requested only on visible change (minute rollover or net state flip)
@@ -28,7 +35,6 @@
 //!   dirty still yields no visible flicker for small status updates.
 //!
 //! Constraints observed:
-//!   - No real power actions.
 //!   - No battery driver logic.
 //!   - No networkd changes.
 //!   - sunlight-top left unchanged.
@@ -40,12 +46,14 @@
 //!   network status source used: "networkd" (LIST_INTERFACES + IfaceSummary)
 //!   update frequency: ~200 ms Tick (POLL_TIMEOUT_MS), redraw only on content change
 //!   fake battery behavior: static icon (BAT_ROWS), no queries
-//!   TODOs: see TODO(battery) and TODO(power) markers above; power zone click logs only.
+//!   TODOs: see TODO(battery) marker above.
 
 #![no_std]
 #![no_main]
 
 extern crate alloc;
+
+mod start_menu;
 
 use alloc::{string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
@@ -192,20 +200,31 @@ impl DockTheme {
             AppId::Calculator => self.calc,
             AppId::Files => self.files,
             AppId::Settings => self.settings,
+            // Not rendered in the bottom dock; the Start Menu owns their icons.
+            AppId::Tasks | AppId::Bench | AppId::Eyes => None,
         }
     }
 }
 
+/// Identifies a launchable SunlightOS app.
+///
+/// `Terminal`/`Calculator`/`Files`/`Settings` are tracked by both the bottom
+/// dock and the Start Menu. `Tasks`/`Bench`/`Eyes` were added for the Start
+/// Menu's "All Apps" grid (see `start_menu.rs`) — they reuse the same
+/// registry/launch machinery but are not shown in the fixed 4-icon dock.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum AppId {
+pub(crate) enum AppId {
     Terminal,
     Calculator,
     Files,
     Settings,
+    Tasks,
+    Bench,
+    Eyes,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum AppLaunchState {
+pub(crate) enum AppLaunchState {
     NotRunning,
     Launching,
     Running,
@@ -220,20 +239,20 @@ enum DockZone {
 }
 
 #[derive(Clone, Copy)]
-struct DockAppState {
-    app_id: AppId,
-    display_name: &'static str,
+pub(crate) struct DockAppState {
+    pub(crate) app_id: AppId,
+    pub(crate) display_name: &'static str,
     icon: AppId,
     pid: Option<u64>,
     main_window_id: Option<u64>,
-    state: AppLaunchState,
+    pub(crate) state: AppLaunchState,
     last_launch_id: u64,
     last_launch_source: LaunchSource,
     last_launch_started_at: u64,
     last_click_at: u64,
     launch_error: [u8; 64],
     launch_error_len: usize,
-    launch_attempts: u32,
+    pub(crate) launch_attempts: u32,
     duplicate_blocks: u32,
 }
 
@@ -316,12 +335,12 @@ const DESKTOP_LAYER_FLAGS: u64 = 0x1E;
 // ---------------------------------------------------------------------------
 
 const RADIUS: u32 = 7;
-const TOP_H: u32 = 36; // top bar height
-const TOP_Y: i32 = 6; // top bar Y offset from screen top
-const TOP_PAD: i32 = 8; // horizontal margin from screen edge
+pub(crate) const TOP_H: u32 = 36; // top bar height
+pub(crate) const TOP_Y: i32 = 6; // top bar Y offset from screen top
+pub(crate) const TOP_PAD: i32 = 8; // horizontal margin from screen edge
 
-const BOT_H: u32 = 44; // bottom cluster height
-const BOT_Y_OFF: i32 = 8; // distance from screen bottom to bottom of cluster
+pub(crate) const BOT_H: u32 = 44; // bottom cluster height
+pub(crate) const BOT_Y_OFF: i32 = 8; // distance from screen bottom to bottom of cluster
 const ICON_BTN: u32 = 36; // square size for icon buttons in clusters
 const CLUSTER_PAD: i32 = 6; // inner horizontal padding inside clusters
 const ICON_GAP: i32 = 4; // gap between icon buttons
@@ -336,6 +355,7 @@ const MAX_RUNNING_TRACKED: usize = 32;
 
 const SEARCH_W: u32 = 200; // search box width
 const SEARCH_H: u32 = 32; // search box height
+const MAX_RECENT_APPS: usize = 6; // Start Menu "Recent" section cap
 const STATUS_POLL_MS: u64 = 1000;
 const TIME_IPC_TIMEOUT_MS: u64 = 250;
 const NET_IPC_TIMEOUT_MS: u64 = 50;
@@ -862,12 +882,17 @@ struct VortexShell {
     power_zone: Rect,
     /// Bounds of the settings button in the left cluster.
     settings_zone: Rect,
+    /// Bounds of the dock's grid icon — toggles the Start Menu.
+    launcher_zone: Rect,
     /// TGA icon theme for desktop shortcuts.
     desktop_theme: DesktopTheme,
     /// TGA icon theme for the bottom dock.
     dock_theme: DockTheme,
-    /// Dock app registry used for launch/focus/restore behavior.
-    apps: [DockAppState; 4],
+    /// App registry used for launch/focus/restore behavior. The first four
+    /// entries (Terminal/Calculator/Files/Settings) are also shown in the
+    /// bottom dock; Tasks/Bench/Eyes are Start-Menu-only but share the same
+    /// launch/state-sync machinery.
+    apps: [DockAppState; 7],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// Clickable bounds for the dynamic running-app strip.
@@ -880,6 +905,13 @@ struct VortexShell {
     next_app_poll_ms: u64,
     /// Next launch trace id assigned by this shell process.
     next_launch_id: u64,
+    /// Dark Start Menu overlay — search, pinned/all-apps/recent sections,
+    /// power actions. See `start_menu.rs` and `docs/GUI/START_MENU.md`.
+    start_menu: start_menu::StartMenuState,
+    /// Session-only most-recently-used app list (newest first, capped),
+    /// shown in the Start Menu's "Recent" section. Not persisted across
+    /// restarts — falls back to a static "Suggested" set when empty.
+    recent_apps: Vec<AppId>,
 }
 
 impl VortexShell {
@@ -918,6 +950,7 @@ impl VortexShell {
             next_status_poll_ms: 0,
             power_zone: Rect::new(0, 0, 0, 0),
             settings_zone: Rect::new(0, 0, 0, 0),
+            launcher_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
             dock_theme,
             apps: [
@@ -925,6 +958,10 @@ impl VortexShell {
                 DockAppState::new(AppId::Calculator, "Sunlight Calculator", AppId::Calculator),
                 DockAppState::new(AppId::Files, "Sunlight Files", AppId::Files),
                 DockAppState::new(AppId::Settings, "System Preferences", AppId::Settings),
+                // Not shown in the bottom dock — launched/tracked only from the Start Menu.
+                DockAppState::new(AppId::Tasks, "Task Manager", AppId::Tasks),
+                DockAppState::new(AppId::Bench, "Sunlight Bench", AppId::Bench),
+                DockAppState::new(AppId::Eyes, "Eyes", AppId::Eyes),
             ],
             running_apps: Vec::new(),
             running_zones: Vec::new(),
@@ -932,6 +969,8 @@ impl VortexShell {
             telemetry,
             next_app_poll_ms: 0,
             next_launch_id: 1,
+            start_menu: start_menu::StartMenuState::new(),
+            recent_apps: Vec::new(),
         };
         shell.reload_desktop_icons();
         shell
@@ -994,6 +1033,9 @@ impl VortexShell {
             AppId::Calculator => "/bin/calculator",
             AppId::Files => "/bin/sunlight-files",
             AppId::Settings => "/bin/control-panel",
+            AppId::Tasks => "/bin/sunlight-tasks",
+            AppId::Bench => "/bin/sunbench",
+            AppId::Eyes => "/bin/eyes",
         }
     }
 
@@ -1003,6 +1045,9 @@ impl VortexShell {
             AppId::Calculator => b"calculator",
             AppId::Files => b"files",
             AppId::Settings => b"settings",
+            AppId::Tasks => b"tasks",
+            AppId::Bench => b"bench",
+            AppId::Eyes => b"eyes",
         }
     }
 
@@ -1012,6 +1057,9 @@ impl VortexShell {
             AppId::Calculator => "app=calculator",
             AppId::Files => "app=files",
             AppId::Settings => "app=control-panel",
+            AppId::Tasks => "app=tasks",
+            AppId::Bench => "app=bench",
+            AppId::Eyes => "app=eyes",
         }
     }
 
@@ -1680,6 +1728,51 @@ impl VortexShell {
             }
             AppLaunchState::Running | AppLaunchState::Minimized => {
                 self.activate_app_window(app_id, now)
+            }
+        }
+    }
+
+    /// Record `app_id` as the most-recently-used app for the Start Menu's
+    /// "Recent" section (session-only, not persisted — see
+    /// `docs/GUI/START_MENU.md`).
+    fn note_recent_app(&mut self, app_id: AppId) {
+        self.recent_apps.retain(|id| *id != app_id);
+        self.recent_apps.insert(0, app_id);
+        self.recent_apps.truncate(MAX_RECENT_APPS);
+    }
+
+    /// Interpret what the Start Menu asked for. This is the *only* place
+    /// that turns a Start Menu action into IPC/launch/power side effects —
+    /// `start_menu.rs` itself stays UI-only.
+    fn apply_start_menu_action(&mut self, action: start_menu::StartMenuAction, now: u64) {
+        use start_menu::{PowerAction, StartMenuAction};
+        match action {
+            StartMenuAction::None => {}
+            StartMenuAction::Launch(app_id) => {
+                self.note_recent_app(app_id);
+                let _ = self.handle_app_click(app_id, now, LaunchSource::Shell);
+            }
+            StartMenuAction::Unavailable(name) => {
+                let mut body = String::new();
+                body.push_str(name);
+                body.push_str(" isn't available yet.");
+                show_notification(NotificationKind::Info, "Coming soon", &body, 3500);
+            }
+            StartMenuAction::Power(PowerAction::Sleep) => {
+                show_notification(
+                    NotificationKind::Info,
+                    "Sleep",
+                    "Sleep isn't supported on this hardware yet.",
+                    3500,
+                );
+            }
+            StartMenuAction::Power(PowerAction::Restart) => {
+                debug_log("[VORTEX] start menu: reboot requested\n");
+                libc::power::reboot();
+            }
+            StartMenuAction::Power(PowerAction::Shutdown) => {
+                debug_log("[VORTEX] start menu: shutdown requested\n");
+                libc::power::shutdown();
             }
         }
     }
@@ -2977,7 +3070,7 @@ fn resolve_running_icon(proc_name: Option<&str>, display_name: &str) -> Option<R
 // ---------------------------------------------------------------------------
 
 /// Compute y coordinate of the top of the bottom clusters.
-fn bot_y(screen_h: u32) -> i32 {
+pub(crate) fn bot_y(screen_h: u32) -> i32 {
     screen_h as i32 - BOT_Y_OFF - BOT_H as i32
 }
 
@@ -3036,8 +3129,9 @@ fn draw_bot_left(
     settings_cell
 }
 
-/// Draw the bottom-center dock and return the clickable zone rects
-/// (terminal, tasks, calc, files).
+/// Draw the bottom-center dock and return `(launcher_rect, [terminal, tasks,
+/// calc, files])`. `launcher_rect` is the grid icon that toggles the Start
+/// Menu; `menu_open` draws it in an active/highlighted state.
 fn draw_bot_center(
     canvas: &mut Canvas,
     theme: &Theme,
@@ -3051,8 +3145,9 @@ fn draw_bot_center(
     files_app: &DockAppState,
     running_apps: &[RunningAppEntry],
     running_zones: &mut Vec<(Rect, u64)>,
+    menu_open: bool,
     now: u64,
-) -> [Rect; 4] {
+) -> (Rect, [Rect; 4]) {
     let icons: &[&[u16; 16]; 5] = &[
         &GRID_ROWS,
         &TERMINAL_ROWS,
@@ -3086,6 +3181,7 @@ fn draw_bot_center(
 
     let mut x = cluster.x + CLUSTER_PAD;
     let mut clickable = [Rect::new(0, 0, 0, 0); 4];
+    let mut launcher_rect = Rect::new(0, 0, 0, 0);
     for (i, rows) in icons.iter().enumerate() {
         let cell = Rect::new(
             x,
@@ -3098,6 +3194,16 @@ fn draw_bot_center(
             .unwrap_or(false);
 
         match i {
+            0 => {
+                launcher_rect = cell;
+                if menu_open || is_hover {
+                    canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
+                }
+                if menu_open {
+                    canvas.stroke_rounded_rect(cell, 5, 1, theme.accent);
+                }
+                draw_icon_btn(canvas, cell, rows, theme, false, false);
+            }
             1 => draw_app_button(
                 canvas,
                 cell,
@@ -3124,8 +3230,8 @@ fn draw_bot_center(
             }
         }
 
-        // Icons 1,2,3 are clickable (terminal, tasks, calc); icon 0 (grid) is placeholder.
-        // Icon 4 is Sunlight Files.
+        // Icon 0 (grid) toggles the Start Menu — see `launcher_rect` above.
+        // Icons 1,2,3 are clickable (terminal, tasks, calc); icon 4 is Files.
         if i >= 1 {
             clickable[i - 1] = cell;
         }
@@ -3172,7 +3278,7 @@ fn draw_bot_center(
         }
     }
     running_zones.truncate(running_apps.len());
-    clickable
+    (launcher_rect, clickable)
 }
 
 /// Draw the bottom-right search box.
@@ -3270,7 +3376,7 @@ impl App for VortexShell {
             now,
         );
         self.running_zones.clear();
-        let dock_cells = draw_bot_center(
+        let (launcher_rect, dock_cells) = draw_bot_center(
             canvas,
             theme,
             by,
@@ -3283,8 +3389,10 @@ impl App for VortexShell {
             &files_app,
             &self.running_apps,
             &mut self.running_zones,
+            self.start_menu.is_open(),
             now,
         );
+        self.launcher_zone = launcher_rect;
         draw_bot_right(canvas, theme, by, cw);
 
         // Record clickable zones (terminal, tasks, calc, files).
@@ -3295,12 +3403,44 @@ impl App for VortexShell {
             (dock_cells[3], Self::dock_zone_app(3)),
         ];
 
+        self.start_menu.view(
+            canvas,
+            theme,
+            cw,
+            ch,
+            &self.apps,
+            &self.recent_apps,
+            now,
+        );
+
         if let Some(menu) = &self.context_menu {
             draw_context_menu(canvas, theme, menu);
         }
     }
 
     fn update(&mut self, event: Event) -> bool {
+        // The Start Menu owns all interactive input while open (click,
+        // mouse move/hover, keyboard search/nav). `Event::Tick` deliberately
+        // falls through below so background app-state polling keeps the
+        // menu's running-app badges fresh even while it's open.
+        if self.start_menu.is_open() {
+            match event {
+                Event::Click { .. }
+                | Event::MouseDown { .. }
+                | Event::MouseUp { .. }
+                | Event::MouseMove { .. }
+                | Event::Key(_)
+                | Event::KeyPress { .. } => {
+                    let now = monotonic_millis();
+                    let (dirty, action) =
+                        self.start_menu
+                            .handle_event(event, self.screen_w, self.screen_h, &self.recent_apps, now);
+                    self.apply_start_menu_action(action, now);
+                    return dirty;
+                }
+                _ => {}
+            }
+        }
         match event {
             Event::Click { x, y } => {
                 let point = Point::new(x, y);
@@ -3353,12 +3493,15 @@ impl App for VortexShell {
                     }
                     return true;
                 }
-                // Power button click: no behavior yet.
-                // TODO(power): show menu (lock, logout, reboot, shutdown).
-                // Real actions must go through sunlight-powerd; do not implement here.
+                // Power button click: no behavior yet. Session/power actions
+                // live in the Start Menu footer (see launcher_zone below).
                 if self.power_zone.contains(point) {
-                    debug_log("[VORTEX] power clicked (no-op; TODO menu)\n");
+                    debug_log("[VORTEX] power clicked (no-op; see Start Menu)\n");
                     return false;
+                }
+                if self.launcher_zone.contains(point) {
+                    self.start_menu.open_menu();
+                    return true;
                 }
                 if self.settings_zone.contains(point) {
                     return self.handle_app_click(

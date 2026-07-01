@@ -139,6 +139,13 @@ Current limitations:
 - Plan: implement `SgpMsg::RESIZE_WINDOW` → `SgpMsg::RESIZE_ACK` IPC, then add
   `Super+Left` / `Super+Right` snap in the `KEY_EVENT` handler in `sunlight-display`.
 
+## Start Menu
+
+The Vortex Shell's dock "grid" icon now opens a real dark-themed Start Menu
+(search, Pinned/All Apps/Recent sections, footer power actions) instead of
+being a decorative no-op. See `docs/GUI/START_MENU.md` for the full
+architecture writeup, app catalog, search scope, and known limitations.
+
 ## Input Routing State
 
 Keyboard routing currently works like this:

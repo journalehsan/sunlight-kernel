@@ -30,6 +30,8 @@ pub mod launch_trace;
 pub mod mem;
 /// POSIX memory mapping wrappers (`mmap`, `munmap`).
 pub mod mman;
+/// Power management: shutdown/reboot via the kernel `PowerCtl` syscall.
+pub mod power;
 /// Canonical user-space app launch resolution and tracing.
 pub mod sun_exec;
 /// Native thread spawning.
