@@ -17,6 +17,7 @@ mod panic;
 mod process;
 mod sched;
 mod telemetry;
+mod timekeeping;
 
 use arch::x86_64::{acpi, cpu, interrupts, keyboard, serial, smp, syscall};
 use memory::{heap, pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};

@@ -355,8 +355,8 @@ pub fn now_ns() -> u64 {
         let dt = tsc.saturating_sub(origin);
         return ((dt as u128 * (mul as u128)) >> 32) as u64;
     }
-    // Fallback: 100 Hz ticks * 10_000_000 ns
-    ticks().saturating_mul(10_000_000)
+    // Fallback: centralized 100 Hz timekeeper tick.
+    ticks().saturating_mul(crate::timekeeping::NS_PER_TICK)
 }
 
 extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
@@ -609,9 +609,6 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
     true
 }
 
-static TICKS: spin::Mutex<u64> = spin::Mutex::new(0);
-static TELEMETRY_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
-
 // === Monotonic kernel clock (TSC calibrated) ===
 // These are initialized during calibrate_tsc_from_pit().
 static TSC_ORIGIN: AtomicU64 = AtomicU64::new(0);
@@ -719,20 +716,16 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     }
 
     // ── BSP-only global bookkeeping ───────────────────────────────────────────
-    // APs do not touch TICKS or the key-injection buffer; both are BSP concerns
-    // and contending on TICKS.lock() from every core adds cross-core cache traffic
-    // for no AP benefit.
+    // APs do not touch the centralized global timekeeper or the key-injection
+    // buffer. They only drive local preemption/accounting.
     let ticks_total = if cpu_id == 0 {
-        let mut ticks = TICKS.lock();
-        *ticks += 1;
-        drop(ticks);
+        let monotonic_ns = now_ns();
+        let ticks = crate::timekeeping::advance_global_tick(cpu_id, monotonic_ns);
         // Poll key injection buffer for test automation (no IRQ1 needed)
         keyboard::poll_inject_buffer();
-        TELEMETRY_TICK_COUNT
-            .fetch_add(1, Ordering::Relaxed)
-            .wrapping_add(1)
+        ticks
     } else {
-        TELEMETRY_TICK_COUNT.load(Ordering::Relaxed)
+        crate::timekeeping::global_ticks()
     };
 
     // Disable interrupts while holding scheduler lock to prevent a deadlock if
@@ -748,18 +741,14 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     let mut telemetry_snap: Option<crate::telemetry::TelemetrySnapshot> = None;
     {
         let mut sched = crate::sched::SCHEDULER.lock();
-        sched.tick(cpu_id);
+        sched.tick(cpu_id, ticks_total);
 
         // Telemetry and cross-process timer work are BSP-only (CPU 0).
         if cpu_id == 0 {
             if ticks_total % 100 == 0 {
                 let pmm = crate::PMM.lock();
                 // Capture only scalars here; expensive walks moved out.
-                telemetry_snap = Some(crate::telemetry::capture_telemetry_snapshot(
-                    &sched,
-                    &pmm,
-                    ticks_total,
-                ));
+                telemetry_snap = Some(crate::telemetry::capture_telemetry_snapshot(&sched, &pmm));
                 // pmm dropped; sched still held briefly for remaining BSP work.
             }
 
@@ -857,7 +846,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
 
 #[allow(dead_code)]
 pub fn ticks() -> u64 {
-    *TICKS.lock()
+    // Legacy tick accessor kept intentionally for syscall/API compatibility.
+    crate::timekeeping::global_ticks()
 }
 
 // ---------------------------------------------------------------------------

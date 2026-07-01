@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
-pub const TELEMETRY_VERSION: u32 = 1;
+pub const TELEMETRY_VERSION: u32 = 2;
 pub const MAX_PROCESSES: usize = 64;
 pub const MAX_CORES: usize = 64;
 
@@ -65,6 +65,14 @@ pub struct TelemetryPage {
 
     pub core_count: u32,
     pub cores: [CoreStat; MAX_CORES],
+
+    pub timekeeper_core: u8,
+    pub drift_warning: u8,
+    pub _time_diag_pad: [u8; 6],
+    pub global_timekeeper_ticks: u64,
+    pub monotonic_ns: u64,
+    pub uptime_seconds: u64,
+    pub ticks_per_core: [u64; MAX_CORES],
 }
 
 const ZERO_PROC: ProcessStat = ProcessStat {
@@ -107,7 +115,7 @@ pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
     zram_comp_kb: 0,
     net_rx_bytes: 0,
     net_tx_bytes: 0,
-    tick_hz: 100,
+    tick_hz: crate::timekeeping::TICK_HZ as u32,
     cpu_count: 1,
     gpu_count: 0,
     _pad: [0; 2],
@@ -119,6 +127,13 @@ pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
 
     core_count: 0,
     cores: [ZERO_CORE; MAX_CORES],
+    timekeeper_core: 0,
+    drift_warning: 0,
+    _time_diag_pad: [0; 6],
+    global_timekeeper_ticks: 0,
+    monotonic_ns: 0,
+    uptime_seconds: 0,
+    ticks_per_core: [0; MAX_CORES],
 };
 
 pub fn record_net_rx(bytes: u64) {
@@ -155,6 +170,7 @@ pub struct CoreSnap {
 #[derive(Clone)]
 pub struct TelemetrySnapshot {
     pub uptime_secs: u64,
+    pub uptime_seconds: u64,
     pub total_ram_kb: u64,
     pub used_ram_kb: u64,
     pub zram_orig_kb: u64,
@@ -167,17 +183,20 @@ pub struct TelemetrySnapshot {
     pub procs: Vec<ProcSnap>,
     pub cores: Vec<CoreSnap>,
     pub core_count: u32,
+    pub timekeeper_core: u8,
+    pub drift_warning: u8,
+    pub global_timekeeper_ticks: u64,
+    pub monotonic_ns: u64,
+    pub ticks_per_core: [u64; MAX_CORES],
 }
 
 /// Capture only stable scalar data while holding SCHEDULER lock (cheap copy).
 pub fn capture_telemetry_snapshot(
     sched: &Scheduler,
     pmm: &PhysicalMemoryManager,
-    tick_count: u64,
 ) -> TelemetrySnapshot {
-    let tick_hz = unsafe { TELEMETRY.tick_hz };
-    let uptime_secs = tick_count / (tick_hz as u64).max(1);
-
+    let global_timekeeper_ticks = crate::timekeeping::global_ticks();
+    let uptime_secs = crate::timekeeping::uptime_secs();
     let sample_now = sched.now_ns();
 
     let (total_frames, free_frames) = pmm.stats();
@@ -218,6 +237,7 @@ pub fn capture_telemetry_snapshot(
 
     let online = sched.online_cores.min(MAX_CORES);
     let mut cores = Vec::with_capacity(online);
+    let mut ticks_per_core = [0u64; MAX_CORES];
     for c in 0..online {
         let core = &sched.cores[c];
         let mut cs = CoreSnap {
@@ -236,11 +256,13 @@ pub fn capture_telemetry_snapshot(
                 cs.nice = p.nice;
             }
         }
+        ticks_per_core[c] = core.timer_ticks;
         cores.push(cs);
     }
 
     TelemetrySnapshot {
         uptime_secs,
+        uptime_seconds: uptime_secs,
         total_ram_kb: total_frames as u64 * 4,
         used_ram_kb: total_frames.saturating_sub(free_frames) as u64 * 4,
         zram_orig_kb: swap_used_blocks as u64 * 4,
@@ -253,6 +275,11 @@ pub fn capture_telemetry_snapshot(
         procs,
         cores,
         core_count: online as u32,
+        timekeeper_core: crate::timekeeping::timekeeper_core() as u8,
+        drift_warning: crate::timekeeping::drift_warning_active() as u8,
+        global_timekeeper_ticks,
+        monotonic_ns: sample_now,
+        ticks_per_core,
     }
 }
 
@@ -264,7 +291,12 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
 
     TELEMETRY.uptime_secs = snap.uptime_secs;
+    TELEMETRY.uptime_seconds = snap.uptime_seconds;
     TELEMETRY.sample_time_ns = snap.sample_time_ns;
+    TELEMETRY.timekeeper_core = snap.timekeeper_core;
+    TELEMETRY.drift_warning = snap.drift_warning;
+    TELEMETRY.global_timekeeper_ticks = snap.global_timekeeper_ticks;
+    TELEMETRY.monotonic_ns = snap.monotonic_ns;
     TELEMETRY.total_ram_kb = snap.total_ram_kb;
     TELEMETRY.used_ram_kb = snap.used_ram_kb;
     TELEMETRY.zram_orig_kb = snap.zram_orig_kb;
@@ -331,6 +363,11 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
         entry.current_pid = cs.current_pid;
         entry.current_ticks = cs.current_ticks;
         entry.nice = cs.nice;
+        TELEMETRY.ticks_per_core[c] = snap.ticks_per_core[c];
+    }
+    for c in online..MAX_CORES {
+        TELEMETRY.cores[c] = ZERO_CORE;
+        TELEMETRY.ticks_per_core[c] = 0;
     }
 
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
@@ -342,8 +379,8 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
 pub unsafe fn update_telemetry(
     sched: &mut Scheduler,
     pmm: &PhysicalMemoryManager,
-    tick_count: u64,
+    _tick_count: u64,
 ) {
-    let snap = capture_telemetry_snapshot(sched, pmm, tick_count);
+    let snap = capture_telemetry_snapshot(sched, pmm);
     commit_telemetry_snapshot(&snap);
 }

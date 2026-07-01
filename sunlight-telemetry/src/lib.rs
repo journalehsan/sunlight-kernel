@@ -57,6 +57,13 @@ pub struct TelemetryPage {
 
     pub core_count: u32,
     pub cores: [RawCoreStat; MAX_CORES],
+    pub timekeeper_core: u8,
+    pub drift_warning: u8,
+    pub _time_diag_pad: [u8; 6],
+    pub global_timekeeper_ticks: u64,
+    pub monotonic_ns: u64,
+    pub uptime_seconds: u64,
+    pub ticks_per_core: [u64; MAX_CORES],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -82,6 +89,29 @@ pub struct ProcessSnapshot {
     pub cpu_ticks: u64,
     pub cpu_bp: u16,
     pub mem_kb: u32,
+}
+
+#[derive(Clone, Copy)]
+pub struct TimeDiagnostics {
+    pub timekeeper_core: u8,
+    pub drift_warning: bool,
+    pub global_timekeeper_ticks: u64,
+    pub monotonic_ns: u64,
+    pub uptime_seconds: u64,
+    pub ticks_per_core: [u64; MAX_CORES],
+}
+
+impl Default for TimeDiagnostics {
+    fn default() -> Self {
+        Self {
+            timekeeper_core: 0,
+            drift_warning: false,
+            global_timekeeper_ticks: 0,
+            monotonic_ns: 0,
+            uptime_seconds: 0,
+            ticks_per_core: [0; MAX_CORES],
+        }
+    }
 }
 
 impl ProcessSnapshot {
@@ -122,6 +152,8 @@ pub struct SystemSnapshot {
     pub cpu_telemetry: CpuTelemetry,
     /// Aggregated task-state counts (running / ready / blocked / zombie).
     pub task_stats: TaskStats,
+    /// Optional SMP-safe timekeeping diagnostics.
+    pub time_diagnostics: TimeDiagnostics,
 }
 
 impl Default for SystemSnapshot {
@@ -146,6 +178,7 @@ impl Default for SystemSnapshot {
             topology: TopologyInfo::default(),
             cpu_telemetry: CpuTelemetry::default(),
             task_stats: TaskStats::default(),
+            time_diagnostics: TimeDiagnostics::default(),
         }
     }
 }
@@ -229,6 +262,14 @@ impl Telemetry {
             snap.net_tx_bytes = vread(core::ptr::addr_of!(page.net_tx_bytes));
             snap.cpu_count = vread(core::ptr::addr_of!(page.cpu_count));
             snap.gpu_count = vread(core::ptr::addr_of!(page.gpu_count));
+            snap.time_diagnostics.timekeeper_core =
+                vread(core::ptr::addr_of!(page.timekeeper_core));
+            snap.time_diagnostics.drift_warning =
+                vread(core::ptr::addr_of!(page.drift_warning)) != 0;
+            snap.time_diagnostics.global_timekeeper_ticks =
+                vread(core::ptr::addr_of!(page.global_timekeeper_ticks));
+            snap.time_diagnostics.monotonic_ns = vread(core::ptr::addr_of!(page.monotonic_ns));
+            snap.time_diagnostics.uptime_seconds = vread(core::ptr::addr_of!(page.uptime_seconds));
         }
 
         // Topology: derived from cpu_count until CPUID leaf 0x0B is wired.
@@ -254,6 +295,8 @@ impl Telemetry {
                 snap.cpu_telemetry.cores[i].local_timer_ticks = cs.local_timer_ticks;
                 snap.cpu_telemetry.cores[i].context_switches = cs.context_switches;
             }
+            snap.time_diagnostics.ticks_per_core[i] =
+                unsafe { vread(core::ptr::addr_of!(page.ticks_per_core[i])) };
             // load_bp is filled in compute_cpu_usage() after interval is known.
         }
 

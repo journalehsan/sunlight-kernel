@@ -330,6 +330,9 @@ pub struct Scheduler {
     /// Updated by the smart core-scaling policy every SCALE_INTERVAL_TICKS.
     pub active_cores: usize,
 
+    /// Legacy scheduler-visible global tick counter.
+    /// Kept intentionally for backward compatibility; the canonical source of
+    /// truth now lives in `crate::timekeeping` and this field mirrors it.
     pub global_tick: u64,
     pub idle_context_rsp: u64,
 
@@ -755,14 +758,10 @@ impl Scheduler {
     /// 100 ticks ≈ 1 second at 100 Hz — enough to smooth out brief bursts.
     const SCALE_INTERVAL_TICKS: u64 = 100;
 
-    pub fn tick(&mut self, cpu_id: usize) {
-        // Only the BSP (CPU 0) drives the global tick counter.
-        // With N cores each firing at 100 Hz, incrementing on every core would
-        // advance global_tick N× faster, making aging and the diagnostic report
-        // fire far too often and misrepresenting elapsed time to userland.
-        if cpu_id == 0 {
-            self.global_tick += 1;
-        }
+    pub fn tick(&mut self, cpu_id: usize, global_tick: u64) {
+        // Compatibility mirror: all legacy scheduler logic still reads
+        // `self.global_tick`, but only the centralized timekeeper advances it.
+        self.global_tick = self.global_tick.max(global_tick);
         self.cores[cpu_id].current_ticks += 1;
         self.cores[cpu_id].timer_ticks += 1;
 
@@ -856,7 +855,7 @@ impl Scheduler {
             if !matches!(p.state, ProcessState::Ready) {
                 continue;
             }
-            let ticks_since_run = self.global_tick - p.last_run_tick;
+            let ticks_since_run = self.global_tick.saturating_sub(p.last_run_tick);
             if ticks_since_run > AGING_THRESHOLD_TICKS {
                 update_burst_score(p, BurstReason::Aged);
             }
@@ -1322,7 +1321,9 @@ impl Scheduler {
         };
 
         if self.processes[idx].state == ProcessState::BlockedOnIpc {
-            let ticks_blocked = self.global_tick - self.processes[idx].block_start_tick;
+            let ticks_blocked = self
+                .global_tick
+                .saturating_sub(self.processes[idx].block_start_tick);
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
@@ -1342,7 +1343,9 @@ impl Scheduler {
             None => return,
         };
         if self.processes[idx].state == ProcessState::BlockedOnTimer {
-            let ticks_blocked = self.global_tick - self.processes[idx].block_start_tick;
+            let ticks_blocked = self
+                .global_tick
+                .saturating_sub(self.processes[idx].block_start_tick);
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
@@ -1362,7 +1365,9 @@ impl Scheduler {
             None => return,
         };
         if self.processes[idx].state == ProcessState::BlockedOnIo {
-            let ticks_blocked = self.global_tick - self.processes[idx].block_start_tick;
+            let ticks_blocked = self
+                .global_tick
+                .saturating_sub(self.processes[idx].block_start_tick);
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }

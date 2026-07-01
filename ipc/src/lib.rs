@@ -1851,8 +1851,9 @@ pub fn get_time_utc() -> u64 {
     ret
 }
 
-/// Milliseconds since boot (~10 ms resolution, PIT-derived). Suitable for
-/// RTT/elapsed measurement where `get_time_utc`'s 1 s resolution is too coarse.
+/// Milliseconds since boot (~10 ms resolution, kernel timekeeper-derived).
+/// Suitable for RTT/elapsed measurement where `get_time_utc`'s 1 s resolution
+/// is too coarse.
 pub fn monotonic_millis() -> u64 {
     // SAFETY: MonotonicMs takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::MonotonicMs, 0, 0, 0, 0, 0, 0, 0) };

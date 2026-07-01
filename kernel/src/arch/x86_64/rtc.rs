@@ -1,9 +1,9 @@
 //! CMOS Real-Time Clock driver.
 //!
 //! Reads the wall-clock once at boot, converts it to a Unix timestamp, then
-//! advances it from the PIT tick counter (~100 Hz) so later reads never have
-//! to touch the slow CMOS ports again. BCD and 12-hour register quirks are
-//! handled per the classic CMOS spec.
+//! advances it from the centralized kernel timekeeper tick (~100 Hz) so later
+//! reads never have to touch the slow CMOS ports again. BCD and 12-hour
+//! register quirks are handled per the classic CMOS spec.
 
 use core::sync::atomic::{AtomicU64, Ordering};
 
@@ -22,18 +22,6 @@ const RTC_STATUS_B: u8 = 0x0B;
 const STATUS_A_UPDATE_IN_PROGRESS: u8 = 0x80;
 const STATUS_B_24HR: u8 = 0x02;
 const STATUS_B_BINARY: u8 = 0x04;
-
-/// PIT IRQ0 frequency, as actually programmed in interrupts::init_pit().
-///
-/// This MUST match the hardware divisor: the PIT base is 1_193_182 Hz and the
-/// divisor is 11932, giving 1_193_182 / 11932 ≈ 100 Hz. This constant converts
-/// the raw tick counter into seconds, so a mismatch makes uptime wrong by the
-/// ratio of the two values.
-///
-/// (telemetry.rs uses `tick_hz = 100` for the same conversion in `top`; keep
-/// these in sync. A previous change bumped this constant to 1000 without
-/// changing the divisor, which made `sysfetch`/`uptime` report 10× too small.)
-const TIMER_HZ: u64 = 100;
 
 static BOOT_UNIX_TIME: AtomicU64 = AtomicU64::new(0);
 static BOOT_TICKS: AtomicU64 = AtomicU64::new(0);
@@ -126,25 +114,26 @@ fn days_from_civil(year: u64, month: u64, day: u64) -> u64 {
 }
 
 /// Current Unix timestamp in seconds. CMOS is only read on the first call;
-/// afterwards time advances from the PIT tick counter.
+/// afterwards time advances from the centralized global tick counter.
 pub fn unix_time() -> u64 {
     let boot_time = BOOT_UNIX_TIME.load(Ordering::Relaxed);
     if boot_time != 0 {
         let elapsed_ticks =
-            super::interrupts::ticks().saturating_sub(BOOT_TICKS.load(Ordering::Relaxed));
-        return boot_time + elapsed_ticks / TIMER_HZ;
+            crate::timekeeping::global_ticks().saturating_sub(BOOT_TICKS.load(Ordering::Relaxed));
+        return boot_time + elapsed_ticks / crate::timekeeping::TICK_HZ;
     }
 
     let (year, month, day, hour, min, sec) = read_cmos_clock();
     let ts = days_from_civil(year, month, day) * 86400 + hour * 3600 + min * 60 + sec;
     BOOT_UNIX_TIME.store(ts, Ordering::Relaxed);
-    BOOT_TICKS.store(super::interrupts::ticks(), Ordering::Relaxed);
+    BOOT_TICKS.store(crate::timekeeping::global_ticks(), Ordering::Relaxed);
     ts
 }
 
-/// Seconds since boot, derived from the PIT tick counter.
+/// Seconds since boot, derived from the centralized timekeeper.
 pub fn uptime_secs() -> u64 {
-    super::interrupts::ticks() / TIMER_HZ
+    // Legacy uptime API kept intentionally for existing services/apps.
+    crate::timekeeping::uptime_secs()
 }
 
 /// Read the RTC once and log it. Call after interrupts::init() so the tick
@@ -153,7 +142,7 @@ pub fn init() {
     let (year, month, day, hour, min, sec) = read_cmos_clock();
     let ts = days_from_civil(year, month, day) * 86400 + hour * 3600 + min * 60 + sec;
     BOOT_UNIX_TIME.store(ts, Ordering::Relaxed);
-    BOOT_TICKS.store(super::interrupts::ticks(), Ordering::Relaxed);
+    BOOT_TICKS.store(crate::timekeeping::global_ticks(), Ordering::Relaxed);
     crate::serial_println!(
         "[RTC] CMOS clock: {}/{}/{} {:02}:{:02}:{:02} UTC (unix {}) OK",
         year,

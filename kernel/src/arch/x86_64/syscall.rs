@@ -3761,12 +3761,13 @@ fn sys_get_time_utc() -> u64 {
     crate::arch::x86_64::rtc::unix_time()
 }
 
-/// Syscall: monotonic_ms (86). Milliseconds since boot, derived from the PIT
-/// tick counter (~100 Hz, so ~10 ms resolution). Used for RTT measurement
-/// (e.g. ping) where the 1 s resolution of `get_time_utc` is too coarse.
+/// Syscall: monotonic_ms (86). Milliseconds since boot, derived from the
+/// centralized kernel timekeeper (~100 Hz, so ~10 ms resolution). Used for
+/// RTT measurement (e.g. ping) where the 1 s resolution of `get_time_utc` is
+/// too coarse.
 fn sys_monotonic_ms() -> u64 {
-    // PIT runs at ~100 Hz (see interrupts::init), i.e. 10 ms per tick.
-    crate::arch::x86_64::interrupts::ticks().wrapping_mul(10)
+    // Legacy coarse monotonic syscall kept intentionally for existing Ring 3 code.
+    crate::timekeeping::monotonic_ms()
 }
 
 /// Syscall: GetEntropy (87). Returns one u64 of raw hardware seed entropy.
