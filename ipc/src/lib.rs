@@ -337,7 +337,8 @@ pub mod sgp {
         /// Reply: words[0]=win_id (0 when no more windows),
         ///        words[1]=owner_pid,
         ///        words[2]=window_state,
-        ///        words[3]=window_type|rolled_up metadata.
+        ///        words[3]=window_type|rolled_up metadata,
+        ///        words[6..7]=first 16 bytes of the window title (LE packed).
         pub const LIST_WINDOWS: u64 = 0xA10A;
         /// Bring the window to the front and restore it if minimized.
         /// words[0] = win_id

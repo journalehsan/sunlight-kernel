@@ -55,10 +55,15 @@ use sunlight_ipc::{
     unpack_iface_summary, CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
     NotificationKind, ProcessExit, SgpMsg, TzMsg,
 };
+use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_libc::{self as libc, sun_exec, DirEntry, FT_DIR};
 use sunlight_ui::{
-    image::TgaImage, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
+    image::{
+        icon_theme::{self, category as icon_category, name as icon_name},
+        TgaImage,
+    },
+    App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
 };
 
 // ---------------------------------------------------------------------------
@@ -272,6 +277,25 @@ struct WindowSnapshot {
     id: u64,
     owner_pid: u64,
     state: u64,
+    window_type: u64,
+    workspace_id: u64,
+    hidden: bool,
+    rolled_up: bool,
+    title: [u8; 16],
+}
+
+enum RunningIcon {
+    Static(TgaImage),
+    Runtime(Vec<u8>),
+}
+
+struct RunningAppEntry {
+    win_id: u64,
+    pid: u64,
+    display_name: String,
+    minimized: bool,
+    icon: Option<RunningIcon>,
+    last_click_at: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -300,6 +324,14 @@ const BOT_Y_OFF: i32 = 8; // distance from screen bottom to bottom of cluster
 const ICON_BTN: u32 = 36; // square size for icon buttons in clusters
 const CLUSTER_PAD: i32 = 6; // inner horizontal padding inside clusters
 const ICON_GAP: i32 = 4; // gap between icon buttons
+const RUNNING_ICON: u32 = 24; // icon size inside running-app cells
+const RUNNING_CELL_PAD: i32 = 6; // inner padding inside running-app cells
+const RUNNING_LABEL_MIN_W: u32 = 60;
+const RUNNING_LABEL_MAX_W: u32 = 90;
+const RUNNING_LABEL_CHARS: usize = 14;
+const RUNNING_NAME_BUF: usize = 64;
+const RUNNING_LABEL_BUF: usize = 32;
+const MAX_RUNNING_TRACKED: usize = 32;
 
 const SEARCH_W: u32 = 200; // search box width
 const SEARCH_H: u32 = 32; // search box height
@@ -830,6 +862,14 @@ struct VortexShell {
     dock_theme: DockTheme,
     /// Dock app registry used for launch/focus/restore behavior.
     apps: [DockAppState; 4],
+    /// Dynamic dock entries for visible non-pinned windows.
+    running_apps: Vec<RunningAppEntry>,
+    /// Clickable bounds for the dynamic running-app strip.
+    running_zones: Vec<(Rect, u64)>,
+    /// Hovered running-app index, if any.
+    running_hover: Option<usize>,
+    /// Optional telemetry snapshot source for process-name fallback.
+    telemetry: Option<Telemetry>,
     /// Next monotonic deadline for app/window registry polling.
     next_app_poll_ms: u64,
     /// Next launch trace id assigned by this shell process.
@@ -848,6 +888,10 @@ impl VortexShell {
         }
         let desktop_theme = DesktopTheme::load();
         let dock_theme = DockTheme::load();
+        let telemetry = Telemetry::init().ok();
+        if telemetry.is_none() {
+            debug_log("[VORTEX] telemetry unavailable for running-app names\n");
+        }
         let mut shell = Self {
             wallpaper,
             display_ep,
@@ -876,6 +920,10 @@ impl VortexShell {
                 DockAppState::new(AppId::Files, "Sunlight Files", AppId::Files),
                 DockAppState::new(AppId::Settings, "System Preferences", AppId::Settings),
             ],
+            running_apps: Vec::new(),
+            running_zones: Vec::new(),
+            running_hover: None,
+            telemetry,
             next_app_poll_ms: 0,
             next_launch_id: 1,
         };
@@ -1099,6 +1147,47 @@ impl VortexShell {
         }
     }
 
+    fn app_pid_is_pinned(&self, pid: u64) -> bool {
+        self.apps.iter().any(|app| app.pid == Some(pid))
+    }
+
+    fn process_name_hint<'a>(
+        window: &WindowSnapshot,
+        telem: Option<&'a SystemSnapshot>,
+    ) -> Option<&'a str> {
+        telem.and_then(|snap| Self::process_name_for_pid(window.owner_pid, snap))
+    }
+
+    fn process_name_for_pid<'a>(pid: u64, snap: &'a SystemSnapshot) -> Option<&'a str> {
+        snap.procs
+            .iter()
+            .take(snap.proc_count)
+            .find(|proc| proc.pid as u64 == pid)
+            .map(|proc| proc.name_str())
+    }
+
+    fn running_display_name<'a>(
+        &self,
+        window: &WindowSnapshot,
+        telem: Option<&SystemSnapshot>,
+        buf: &'a mut [u8; RUNNING_NAME_BUF],
+    ) -> &'a str {
+        let title_len = copy_sanitized_ascii(&window.title, buf);
+        if title_len > 0 {
+            return core::str::from_utf8(&buf[..title_len]).unwrap_or("App");
+        }
+
+        if let Some(name) = Self::process_name_hint(window, telem) {
+            let name_len = copy_sanitized_ascii(name.as_bytes(), buf);
+            if name_len > 0 {
+                return core::str::from_utf8(&buf[..name_len]).unwrap_or("App");
+            }
+        }
+
+        let len = write_fallback_app_name(window.owner_pid, buf);
+        core::str::from_utf8(&buf[..len]).unwrap_or("App")
+    }
+
     fn log_app_click(&self, app_id: AppId) {
         let app = self.app(app_id);
         debug_log("[VORTEX] dock_app_click(");
@@ -1135,10 +1224,21 @@ impl VortexShell {
             if reply.words[0] == 0 {
                 break;
             }
+            let metadata = reply.words[3];
+            let mut title = [0u8; 16];
+            for i in 0..8usize {
+                title[i] = ((reply.words[6] >> (i * 8)) & 0xFF) as u8;
+                title[8 + i] = ((reply.words[7] >> (i * 8)) & 0xFF) as u8;
+            }
             windows.push(WindowSnapshot {
                 id: reply.words[0],
                 owner_pid: reply.words[1],
                 state: reply.words[2],
+                window_type: metadata & 0xFF,
+                workspace_id: reply.words[4],
+                hidden: reply.words[5] != 0,
+                rolled_up: ((metadata >> 8) & 1) != 0,
+                title,
             });
             idx = idx.saturating_add(1);
         }
@@ -1282,6 +1382,103 @@ impl VortexShell {
             }
         }
 
+        let telem_snapshot = self.telemetry.as_mut().map(|telemetry| {
+            let _ = telemetry.poll();
+            *telemetry.snapshot()
+        });
+        if self.sync_running_apps(&windows, telem_snapshot.as_ref()) {
+            dirty = true;
+        }
+
+        dirty
+    }
+
+    fn sync_running_apps(
+        &mut self,
+        windows: &[WindowSnapshot],
+        telem: Option<&SystemSnapshot>,
+    ) -> bool {
+        let mut dirty = false;
+        let mut seen = [0u64; MAX_RUNNING_TRACKED];
+        let mut seen_len = 0usize;
+
+        for window in windows {
+            if window.hidden || window.workspace_id != 0 || window.window_type == 2 || window.window_type == 3 {
+                continue;
+            }
+            if self.app_pid_is_pinned(window.owner_pid) {
+                continue;
+            }
+
+            if seen_len < seen.len() {
+                seen[seen_len] = window.id;
+                seen_len += 1;
+            }
+            let minimized = (window.state & 0x3) == 1 || window.rolled_up;
+            let mut name_buf = [0u8; RUNNING_NAME_BUF];
+            let display_name = self.running_display_name(window, telem, &mut name_buf);
+            let proc_name = Self::process_name_hint(window, telem);
+
+            if let Some(entry) = self
+                .running_apps
+                .iter_mut()
+                .find(|entry| entry.win_id == window.id)
+            {
+                if entry.pid != window.owner_pid {
+                    entry.pid = window.owner_pid;
+                    dirty = true;
+                }
+                if entry.minimized != minimized {
+                    entry.minimized = minimized;
+                    dirty = true;
+                }
+                if entry.display_name.as_str() != display_name {
+                    entry.display_name.clear();
+                    entry.display_name.push_str(display_name);
+                    dirty = true;
+                }
+                if entry.icon.is_none() {
+                    if let Some(icon) = resolve_running_icon(proc_name, entry.display_name.as_str()) {
+                        entry.icon = Some(icon);
+                        dirty = true;
+                    }
+                }
+                continue;
+            }
+
+            if self.running_apps.len() >= MAX_RUNNING_TRACKED {
+                continue;
+            }
+
+            self.running_apps.push(RunningAppEntry {
+                win_id: window.id,
+                pid: window.owner_pid,
+                display_name: String::from(display_name),
+                minimized,
+                icon: resolve_running_icon(proc_name, display_name),
+                last_click_at: 0,
+            });
+            dirty = true;
+        }
+
+        let before = self.running_apps.len();
+        self.running_apps.retain(|entry| {
+            let mut i = 0usize;
+            while i < seen_len {
+                if seen[i] == entry.win_id {
+                    return true;
+                }
+                i += 1;
+            }
+            false
+        });
+        if self.running_apps.len() != before {
+            dirty = true;
+        }
+
+        if self.running_hover.map_or(false, |idx| idx >= self.running_apps.len()) {
+            self.running_hover = None;
+        }
         dirty
     }
 
@@ -1427,6 +1624,23 @@ impl VortexShell {
         }
         app.state = AppLaunchState::Running;
         app.last_click_at = now;
+        true
+    }
+
+    fn activate_running_window(&mut self, win_id: u64, now: u64) -> bool {
+        let reply = ipc_call_timeout(
+            self.display_ep,
+            IpcMsg::with_label(SgpMsg::ACTIVATE_WINDOW).word(0, win_id),
+            DISPLAY_IPC_TIMEOUT_MS,
+        );
+        if reply.is_err() {
+            return false;
+        }
+
+        if let Some(entry) = self.running_apps.iter_mut().find(|entry| entry.win_id == win_id) {
+            entry.minimized = false;
+            entry.last_click_at = now;
+        }
         true
     }
 
@@ -1617,6 +1831,190 @@ fn draw_app_button(
     } else {
         draw_icon16(canvas, cell, rows, icon_color);
     }
+}
+
+fn draw_tga_bytes(canvas: &mut Canvas, bytes: &[u8], dst: Rect) {
+    if bytes.len() < 18 {
+        return;
+    }
+    if bytes[2] != 2 {
+        return;
+    }
+    let bpp = bytes[16];
+    if bpp != 24 && bpp != 32 {
+        return;
+    }
+    let width = u16::from_le_bytes([bytes[12], bytes[13]]) as u32;
+    let height = u16::from_le_bytes([bytes[14], bytes[15]]) as u32;
+    if width == 0 || height == 0 {
+        return;
+    }
+    let id_len = bytes[0] as usize;
+    let cm_len = u16::from_le_bytes([bytes[5], bytes[6]]) as u32;
+    let cm_entry_bits = bytes[7] as u32;
+    let cm_bytes = if bytes[1] != 0 {
+        cm_len * ((cm_entry_bits + 7) / 8)
+    } else {
+        0
+    };
+    let data_offset = 18usize
+        .saturating_add(id_len)
+        .saturating_add(cm_bytes as usize);
+    if data_offset >= bytes.len() {
+        return;
+    }
+    let top_down = (bytes[17] & 0x20) != 0;
+
+    let cx0 = dst.x.max(0) as u32;
+    let cy0 = dst.y.max(0) as u32;
+    let cx1 = (dst.right() as u32).min(canvas.width);
+    let cy1 = (dst.bottom() as u32).min(canvas.height);
+    if cx0 >= cx1 || cy0 >= cy1 {
+        return;
+    }
+    let dw = (dst.right() - dst.x.max(0)).max(1) as u32;
+    let dh = (dst.bottom() - dst.y.max(0)).max(1) as u32;
+    let bpp_bytes = (bpp / 8) as u32;
+    let row_stride = width.saturating_mul(bpp_bytes);
+
+    for dy in cy0..cy1 {
+        let src_y = (dy - cy0) * height / dh;
+        let file_row = if top_down {
+            src_y
+        } else {
+            height.saturating_sub(1).saturating_sub(src_y)
+        };
+        let row_start = data_offset + file_row as usize * row_stride as usize;
+        let out_row = dy as usize * canvas.stride as usize;
+        for dx in cx0..cx1 {
+            let src_x = (dx - cx0) * width / dw;
+            let idx = row_start + src_x as usize * bpp_bytes as usize;
+            if idx + 2 >= bytes.len() {
+                continue;
+            }
+            let b = bytes[idx] as u32;
+            let g = bytes[idx + 1] as u32;
+            let r = bytes[idx + 2] as u32;
+            let a = if bpp == 32 && idx + 3 < bytes.len() {
+                bytes[idx + 3] as u32
+            } else {
+                0xFF
+            };
+            if a == 0 {
+                continue;
+            }
+            let px = out_row + dx as usize;
+            if px >= canvas.pixels.len() {
+                continue;
+            }
+            if a == 0xFF {
+                canvas.pixels[px] = (r << 16) | (g << 8) | b;
+            } else {
+                let dst_px = canvas.pixels[px];
+                let dr = (dst_px >> 16) & 0xFF;
+                let dg = (dst_px >> 8) & 0xFF;
+                let db = dst_px & 0xFF;
+                let ia = 255 - a;
+                let nr = (r * a + dr * ia) >> 8;
+                let ng = (g * a + dg * ia) >> 8;
+                let nb = (b * a + db * ia) >> 8;
+                canvas.pixels[px] = (nr << 16) | (ng << 8) | nb;
+            }
+        }
+    }
+}
+
+fn draw_generic_app_icon(canvas: &mut Canvas, rect: Rect, fill: Color, border: Color) {
+    let body = rect.inset(2);
+    canvas.fill_rounded_rect(body, 3, fill);
+    canvas.stroke_rounded_rect(body, 3, 1, border);
+    let title = Rect::new(body.x + 3, body.y + 3, body.w.saturating_sub(6), 4);
+    canvas.fill_rect(title, border);
+    let line_color = fill.darken(18);
+    for i in 0..3i32 {
+        let line_y = body.y + 10 + i * 4;
+        canvas.fill_rect(Rect::new(body.x + 4, line_y, body.w.saturating_sub(8), 1), line_color);
+    }
+}
+
+fn draw_running_app_button(
+    canvas: &mut Canvas,
+    cell: Rect,
+    theme: &Theme,
+    entry: &RunningAppEntry,
+    label: &str,
+    hovered: bool,
+    now: u64,
+) {
+    let pressed = now.saturating_sub(entry.last_click_at) < APP_PRESS_MS;
+    let mut fill;
+    let mut border = theme.accent;
+    let mut icon_color = theme.accent;
+    let mut label_color = theme.text;
+    let mut top_marker = false;
+    let mut bottom_marker = false;
+
+    if entry.minimized {
+        top_marker = true;
+        fill = theme.panel_alt;
+    } else {
+        bottom_marker = true;
+        fill = theme.panel_alt;
+    }
+
+    if hovered {
+        fill = theme.accent.darken(74);
+        label_color = theme.text;
+    }
+    if pressed {
+        fill = theme.accent_hover.darken(35);
+        border = theme.accent_hover;
+        icon_color = theme.text;
+        label_color = theme.text;
+    }
+
+    canvas.fill_rounded_rect(cell, 5, fill);
+    canvas.stroke_rounded_rect(cell, 5, 1, border);
+    if top_marker {
+        canvas.fill_rect(
+            Rect::new(cell.x + 4, cell.y + 1, cell.w.saturating_sub(8), 2),
+            theme.accent,
+        );
+    }
+    if bottom_marker {
+        canvas.fill_rect(
+            Rect::new(cell.x + 4, cell.bottom() - 3, cell.w.saturating_sub(8), 2),
+            theme.accent,
+        );
+    }
+
+    let icon_rect = Rect::new(
+        cell.x + RUNNING_CELL_PAD,
+        cell.y + (cell.h as i32 - RUNNING_ICON as i32) / 2,
+        RUNNING_ICON,
+        RUNNING_ICON,
+    );
+    match &entry.icon {
+        Some(RunningIcon::Static(img)) => canvas.draw_tga_icon(img, icon_rect),
+        Some(RunningIcon::Runtime(bytes)) => draw_tga_bytes(canvas, bytes, icon_rect),
+        None => draw_generic_app_icon(canvas, icon_rect, icon_color.darken(72), border),
+    }
+
+    let label_x = icon_rect.right() + 6;
+    let label_rect = Rect::new(
+        label_x,
+        cell.y,
+        cell.right().saturating_sub(label_x + 6) as u32,
+        cell.h,
+    );
+    draw_text_vcenter(
+        canvas,
+        label,
+        label_rect.x,
+        label_rect.y,
+        label_rect.h,
+        &TextStyle::new(FontRole::UiSmall, label_color),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2353,6 +2751,191 @@ fn fmt_u32_ascii(mut value: u32, out: &mut [u8; 10]) -> usize {
     n
 }
 
+fn copy_sanitized_ascii(bytes: &[u8], out: &mut [u8]) -> usize {
+    let mut len = 0usize;
+    for &b in bytes {
+        match b {
+            0 | b'\n' | b'\r' => break,
+            0x20..=0x7e => {
+                if len >= out.len() {
+                    break;
+                }
+                out[len] = b;
+                len += 1;
+            }
+            _ => {
+                if len >= out.len() {
+                    break;
+                }
+                out[len] = b'?';
+                len += 1;
+            }
+        }
+    }
+    len
+}
+
+fn write_fallback_app_name(pid: u64, out: &mut [u8; RUNNING_NAME_BUF]) -> usize {
+    let prefix = b"App-";
+    let mut len = prefix.len();
+    out[..len].copy_from_slice(prefix);
+    let mut rev = [0u8; 20];
+    let mut n = 0usize;
+    let mut value = pid;
+    if value == 0 {
+        rev[n] = b'0';
+        n += 1;
+    } else {
+        while value > 0 && n < rev.len() {
+            rev[n] = b'0' + (value % 10) as u8;
+            value /= 10;
+            n += 1;
+        }
+    }
+    for idx in (0..n).rev() {
+        if len >= out.len() {
+            break;
+        }
+        out[len] = rev[idx];
+        len += 1;
+    }
+    len
+}
+
+fn truncate_label_into<'a>(
+    text: &str,
+    max_chars: usize,
+    out: &'a mut [u8; RUNNING_LABEL_BUF],
+) -> &'a str {
+    let char_count = text.chars().count();
+    let mut len = 0usize;
+    let keep = if char_count > max_chars {
+        max_chars.saturating_sub(3)
+    } else {
+        max_chars
+    };
+    for ch in text.chars().take(keep) {
+        if !ch.is_ascii() || len >= out.len() {
+            break;
+        }
+        out[len] = ch as u8;
+        len += 1;
+    }
+    if char_count > max_chars && len + 3 <= out.len() {
+        out[len] = b'.';
+        out[len + 1] = b'.';
+        out[len + 2] = b'.';
+        len += 3;
+    }
+    core::str::from_utf8(&out[..len]).unwrap_or("")
+}
+
+fn normalize_icon_stem(name: &str) -> String {
+    let mut stem = name.trim();
+    if let Some(rest) = stem.strip_prefix("sunlight-") {
+        stem = rest;
+    } else if let Some(rest) = stem.strip_prefix("sunlight_") {
+        stem = rest;
+    }
+
+    let mut out = String::with_capacity(stem.len());
+    for ch in stem.chars() {
+        let ch = ch.to_ascii_lowercase();
+        match ch {
+            'a'..='z' | '0'..='9' | '.' | '-' | '_' | '@' => out.push(ch),
+            ' ' | '/' | '\\' | ':' | '+' | '=' | ',' | '(' | ')' | '[' | ']' => out.push('-'),
+            _ => {}
+        }
+    }
+    while out.starts_with('-') {
+        out.remove(0);
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    out
+}
+
+fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
+    let stem = normalize_icon_stem(name);
+    match stem.as_str() {
+        "terminal" | icon_name::TERMINAL | "xterm" | "konsole" | "alacritty" | "sunlight-terminal" => {
+            Some(ICON_TERMINAL_TGA)
+        }
+        "calc"
+        | "calculator"
+        | icon_name::CALCULATOR
+        | "kcalc"
+        | "sunlight-calculator" => Some(ICON_CALC_TGA),
+        "files"
+        | "file-manager"
+        | icon_name::FILE_MANAGER
+        | "dolphin"
+        | "nautilus"
+        | "thunar"
+        | "sunlight-files" => Some(ICON_FILES_TGA),
+        "settings"
+        | icon_name::SETTINGS
+        | "systemsettings"
+        | "system-settings"
+        | "sunlight-settings" => Some(ICON_SETTINGS_TGA),
+        "folder" | "home" | "folder-home" => Some(ICON_FOLDER_TGA),
+        "computer" | "desktop-computer" => Some(ICON_COMPUTER_TGA),
+        "drive" | icon_name::DRIVE | "disk" => Some(ICON_DRIVE_TGA),
+        "text" | icon_name::TEXT_GENERIC | "editor" | "writer" | "notes" => Some(ICON_FILE_TGA),
+        _ => None,
+    }
+}
+
+fn try_load_runtime_icon(name: &str) -> Option<Vec<u8>> {
+    let stem = normalize_icon_stem(name);
+    if stem.is_empty() {
+        return None;
+    }
+
+    let mut path = [0u8; 160];
+    let candidates = [name, stem.as_str()];
+    let categories = [
+        icon_category::APPS,
+        icon_category::PLACES,
+        icon_category::MIMETYPES,
+        icon_category::DEVICES,
+        icon_category::PREFERENCES,
+        icon_category::ACTIONS,
+    ];
+    let sizes = [48u32, 32, 16];
+
+    for candidate in candidates {
+        for &category in &categories {
+            for &size in &sizes {
+                let len = icon_theme::icon_path(category, size, candidate, &mut path);
+                if len == 0 {
+                    continue;
+                }
+                if let Some(bytes) = read_file_bytes(&path[..len], 32 * 1024) {
+                    if !bytes.is_empty() {
+                        return Some(bytes);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn resolve_running_icon(proc_name: Option<&str>, display_name: &str) -> Option<RunningIcon> {
+    let hint = proc_name.unwrap_or(display_name);
+    if let Some(bytes) = resolve_icon_bytes(hint) {
+        if let Ok(img) = TgaImage::parse(bytes) {
+            return Some(RunningIcon::Static(img));
+        }
+    }
+    if let Some(bytes) = try_load_runtime_icon(hint) {
+        return Some(RunningIcon::Runtime(bytes));
+    }
+    None
+}
+
 // ---------------------------------------------------------------------------
 // Bottom bar layout
 // ---------------------------------------------------------------------------
@@ -2360,6 +2943,13 @@ fn fmt_u32_ascii(mut value: u32, out: &mut [u8; 10]) -> usize {
 /// Compute y coordinate of the top of the bottom clusters.
 fn bot_y(screen_h: u32) -> i32 {
     screen_h as i32 - BOT_Y_OFF - BOT_H as i32
+}
+
+fn dock_cluster_width(count: usize) -> u32 {
+    if count == 0 {
+        return CLUSTER_PAD as u32 * 2;
+    }
+    CLUSTER_PAD as u32 * 2 + count as u32 * ICON_BTN + (count.saturating_sub(1) as u32) * ICON_GAP as u32
 }
 
 /// Draw the bottom-left cluster: overview | sidebar | settings.
@@ -2374,8 +2964,7 @@ fn draw_bot_left(
     now: u64,
 ) -> Rect {
     let icons: &[&[u16; 16]] = &[&OVERVIEW_ROWS, &SIDEBAR_ROWS, &SETTINGS_ROWS];
-    let n = icons.len() as u32;
-    let cluster_w = CLUSTER_PAD as u32 * 2 + n * ICON_BTN + (n - 1) * ICON_GAP as u32;
+    let cluster_w = dock_cluster_width(icons.len());
     let cluster = Rect::new(TOP_PAD, by, cluster_w, BOT_H);
     draw_panel(canvas, cluster, theme.panel, theme.border);
 
@@ -2417,10 +3006,13 @@ fn draw_bot_center(
     by: i32,
     screen_w: u32,
     hover: Option<usize>,
+    running_hover: Option<usize>,
     dock: DockTheme,
     terminal_app: &DockAppState,
     calc_app: &DockAppState,
     files_app: &DockAppState,
+    running_apps: &[RunningAppEntry],
+    running_zones: &mut Vec<(Rect, u64)>,
     now: u64,
 ) -> [Rect; 4] {
     let icons: &[&[u16; 16]; 5] = &[
@@ -2430,10 +3022,28 @@ fn draw_bot_center(
         &CALC_ROWS,
         &FOLDER_ROWS,
     ];
-    let n = icons.len() as u32;
-    let cluster_w = CLUSTER_PAD as u32 * 2 + n * ICON_BTN + (n - 1) * ICON_GAP as u32;
-    let cx_start = (screen_w as i32 - cluster_w as i32) / 2;
-    let cluster = Rect::new(cx_start, by, cluster_w, BOT_H);
+    let fixed_w = dock_cluster_width(icons.len());
+    let mut running_total_w = 0u32;
+    for entry in running_apps {
+        let mut label_buf = [0u8; RUNNING_LABEL_BUF];
+        let label = truncate_label_into(&entry.display_name, RUNNING_LABEL_CHARS, &mut label_buf);
+        let label_w = measure_text(&label, FontRole::UiSmall).w;
+        let label_box_w = label_w.clamp(RUNNING_LABEL_MIN_W, RUNNING_LABEL_MAX_W);
+        let cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON + 6 + label_box_w;
+        running_total_w = running_total_w.saturating_add(cell_w);
+    }
+    if !running_apps.is_empty() {
+        running_total_w = running_total_w.saturating_add(
+            ICON_GAP as u32
+                + (running_apps.len().saturating_sub(1) as u32) * ICON_GAP as u32
+                + CLUSTER_PAD as u32,
+        );
+    }
+    let total_w = fixed_w.saturating_add(running_total_w);
+    let min_x = TOP_PAD + dock_cluster_width(3) as i32 + 8;
+    let max_x = screen_w as i32 - TOP_PAD - SEARCH_W as i32 - 8 - total_w as i32;
+    let cx_start = ((screen_w as i32 - total_w as i32) / 2).clamp(min_x, max_x.max(min_x));
+    let cluster = Rect::new(cx_start, by, total_w, BOT_H);
     draw_panel(canvas, cluster, theme.panel, theme.border);
 
     let mut x = cluster.x + CLUSTER_PAD;
@@ -2481,8 +3091,48 @@ fn draw_bot_center(
         if i >= 1 {
             clickable[i - 1] = cell;
         }
-        x += ICON_BTN as i32 + ICON_GAP;
+        if i + 1 < icons.len() {
+            x += ICON_BTN as i32 + ICON_GAP;
+        } else {
+            x += ICON_BTN as i32;
+        }
     }
+    if !running_apps.is_empty() {
+        x += ICON_GAP as i32;
+        for (i, entry) in running_apps.iter().enumerate() {
+            let mut label_buf = [0u8; RUNNING_LABEL_BUF];
+            let label = truncate_label_into(&entry.display_name, RUNNING_LABEL_CHARS, &mut label_buf);
+            let label_w = measure_text(&label, FontRole::UiSmall).w;
+            let label_box_w = label_w.clamp(RUNNING_LABEL_MIN_W, RUNNING_LABEL_MAX_W);
+            let cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON + 6 + label_box_w;
+            let cell = Rect::new(
+                x,
+                cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2,
+                cell_w,
+                ICON_BTN,
+            );
+            draw_running_app_button(
+                canvas,
+                cell,
+                theme,
+                entry,
+                label,
+                running_hover.map_or(false, |h| h == i),
+                now,
+            );
+            if let Some(zone) = running_zones.get_mut(i) {
+                *zone = (cell, entry.win_id);
+            } else {
+                running_zones.push((cell, entry.win_id));
+            }
+            if i + 1 < running_apps.len() {
+                x += cell_w as i32 + ICON_GAP as i32;
+            } else {
+                x += cell_w as i32;
+            }
+        }
+    }
+    running_zones.truncate(running_apps.len());
     clickable
 }
 
@@ -2574,16 +3224,20 @@ impl App for VortexShell {
             self.settings_hover,
             now,
         );
+        self.running_zones.clear();
         let dock_cells = draw_bot_center(
             canvas,
             theme,
             by,
             cw,
             self.hover,
+            self.running_hover,
             dock_theme,
             &terminal_app,
             &calc_app,
             &files_app,
+            &self.running_apps,
+            &mut self.running_zones,
             now,
         );
         draw_bot_right(canvas, theme, by, cw);
@@ -2683,6 +3337,11 @@ impl App for VortexShell {
                         };
                     }
                 }
+                for (rect, win_id) in &self.running_zones {
+                    if rect.contains(point) {
+                        return self.activate_running_window(*win_id, monotonic_millis());
+                    }
+                }
                 let changed = !self.selected_icons.is_empty();
                 self.clear_desktop_selection();
                 changed
@@ -2712,6 +3371,18 @@ impl App for VortexShell {
                         return true;
                     }
                 }
+                for (rect, win_id) in &self.running_zones {
+                    if rect.contains(point) {
+                        if let Some(entry) = self
+                            .running_apps
+                            .iter_mut()
+                            .find(|entry| entry.win_id == *win_id)
+                        {
+                            entry.last_click_at = monotonic_millis();
+                        }
+                        return true;
+                    }
+                }
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
                     self.select_only_desktop_icon(idx);
                 } else {
@@ -2733,6 +3404,18 @@ impl App for VortexShell {
                             {
                                 app.last_click_at = monotonic_millis();
                             }
+                        }
+                        return true;
+                    }
+                }
+                for (rect, win_id) in &self.running_zones {
+                    if rect.contains(point) {
+                        if let Some(entry) = self
+                            .running_apps
+                            .iter_mut()
+                            .find(|entry| entry.win_id == *win_id)
+                        {
+                            entry.last_click_at = monotonic_millis();
                         }
                         return true;
                     }
@@ -2759,12 +3442,20 @@ impl App for VortexShell {
                         break;
                     }
                 }
+                let prev_running = self.running_hover;
+                self.running_hover = None;
+                for (i, (rect, _)) in self.running_zones.iter().enumerate() {
+                    if rect.contains(Point::new(x, y)) {
+                        self.running_hover = Some(i);
+                        break;
+                    }
+                }
                 let prev_settings = self.settings_hover;
                 self.settings_hover = self.settings_zone.contains(Point::new(x, y));
                 if self.settings_hover != prev_settings {
                     return true;
                 }
-                self.hover != prev
+                self.hover != prev || self.running_hover != prev_running
             }
             Event::MouseUp { x, y, button } if button == 0 => {
                 match self.selection_state {

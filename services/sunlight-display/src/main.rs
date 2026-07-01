@@ -1364,6 +1364,14 @@ fn list_window_reply(win: &Window) -> IpcMsg {
     let rolled_up = if win.rolled_up { 1u64 } else { 0u64 };
     let window_type = win.config.window_type as u64;
     let state = win.config.state as u64;
+    let mut title0 = 0u64;
+    let mut title1 = 0u64;
+    for i in 0..8usize {
+        title0 |= (win.config.title[i] as u64) << (i * 8);
+    }
+    for i in 0..8usize {
+        title1 |= (win.config.title[8 + i] as u64) << (i * 8);
+    }
     IpcMsg::with_label(SgpMsg::REPLY)
         .word(0, win.id)
         .word(1, win.owner_pid)
@@ -1371,6 +1379,8 @@ fn list_window_reply(win: &Window) -> IpcMsg {
         .word(3, window_type | (rolled_up << 8))
         .word(4, win.workspace_id as u64)
         .word(5, win.hidden as u64)
+        .word(6, title0)
+        .word(7, title1)
 }
 
 fn list_window_at(state: &CompositorState, idx: usize) -> IpcMsg {
@@ -3292,6 +3302,7 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             // LIST_WINDOWS — enumerate compositor-managed windows for shell state
             // tracking. words[0] = 0-based index into the current window stack.
+            // Reply includes the first 16 title bytes in words[6..7].
             // -------------------------------------------------------------------
             SgpMsg::LIST_WINDOWS => {
                 let idx = msg.words[0] as usize;

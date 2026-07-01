@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-vortex-shell"
-version = "0.2.662"
+version = "0.2.669"
+
+
 
 
 
@@ -61,6 +63,7 @@ edition = "2021"
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-telemetry = { path = "../../sunlight-telemetry" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 sun-font = { path = "../../sun-font" }
 
