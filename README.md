@@ -4,6 +4,22 @@
 
 **Version:** 0.1.51
 
+<p align="center">
+  <img src="docs/images/SunlightOS-Logo.png" alt="SunlightOS logo" width="900">
+</p>
+
+<table>
+  <tr>
+    <td><img src="docs/images/Levobo-Thinkpad-Sunligt)S-VortexShell-1.jpeg" alt="SunlightOS on ThinkPad, overview 1" width="100%"></td>
+    <td><img src="docs/images/Levobo-Thinkpad-Sunligt)S-VortexShell-2.jpeg" alt="SunlightOS on ThinkPad, overview 2" width="100%"></td>
+    <td><img src="docs/images/Levobo-Thinkpad-Sunligt)S-VortexShell-3.jpeg" alt="SunlightOS on ThinkPad, terminal" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/Levobo-Thinkpad-Sunligt)S-VortexShell-4.jpeg" alt="SunlightOS on ThinkPad, file manager" width="100%"></td>
+    <td><img src="docs/images/Levobo-Thinkpad-Sunligt)S-VortexShell-1.jpeg" alt="SunlightOS on ThinkPad, overview 3" width="100%"></td>
+  </tr>
+</table>
+
 ## Architecture
 
 - **Microkernel (Ring 0):** Scheduler, IPC bus, memory manager, and capability broker.
