@@ -70,20 +70,20 @@ case "$PHASE" in
         ;;
     phase4.5)
         EXPECTED_FILE="tools/tests/phase4_5.expected"
-        FINAL_MARKER="[SunlightOS] Phase 4.5 OK"
-        PASS_LABEL="Phase 4.5"
+        FINAL_MARKER="[SunlightOS] Ring 3 Expansion OK"
+        PASS_LABEL="Ring 3 Expansion"
         NEED_DISK=false
         ;;
     phase5.0)
         EXPECTED_FILE="tools/tests/phase5_0.expected"
         FINAL_MARKER="[NET]  virtio-net OK"
-        PASS_LABEL="Phase 5.0"
+        PASS_LABEL="Developer Build"
         NEED_DISK=false
         ;;
     phase5.1)
         EXPECTED_FILE="tools/tests/phase5_1.expected"
         FINAL_MARKER="[NET]  Interface: eth0 MAC="
-        PASS_LABEL="Phase 5.1"
+        PASS_LABEL="Userland Growth"
         NEED_DISK=false
         ;;
     phase5.2)
@@ -118,8 +118,8 @@ case "$PHASE" in
         ;;
     phase5.7)
         EXPECTED_FILE="tools/tests/phase5_7.expected"
-        FINAL_MARKER="[SunlightOS] Phase 5 OK"
-        PASS_LABEL="Phase 5.7"
+        FINAL_MARKER="[SunlightOS] Post-Phase Stabilization OK"
+        PASS_LABEL="Stabilization and Hardening"
         NEED_DISK=true
         ;;
     phase5x.0)

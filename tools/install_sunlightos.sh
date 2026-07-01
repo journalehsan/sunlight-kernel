@@ -462,7 +462,7 @@ main() {
     echo -e "${GREEN}"
     echo "╔════════════════════════════════════════════════════╗"
     echo "║     SunlightOS Interactive System Installer        ║"
-    echo "║                  Phase 6 - Release                 ║"
+    echo "║            Post-Phase Stabilization               ║"
     echo "╚════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 

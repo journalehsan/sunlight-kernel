@@ -769,37 +769,37 @@ pub extern "C" fn _start() -> ! {
     // for the spawn path by process::spawn::embedded_bytes_for_path.
 
     splash.set_progress(1000); // 100%
-    splash.set_phase("Kernel stable");
-    splash.set_status("SunlightOS ready — login");
+    splash.set_phase("Foundation Complete");
+    splash.set_status("Post-Phase Stabilization — login");
     splash.set_kernel_status("OK");
-    splash.log("[SunlightOS] Phase 3 OK");
+    splash.log("[SunlightOS] Foundation Complete");
     splash.redraw();
     splash.clear_main();
     splash.set_status("login...");
 
-    // Phase 4.5: Print Helios compat layer status
+    // Helios compat layer status
     let test_phase = option_env!("SUNLIGHT_INJECT_PHASE").unwrap_or("phase3.8");
     serial_println!("[HELIOS] Linux ELF compatibility layer loaded");
     if test_phase == "phase4.5" {
-        serial_println!("[SunlightOS] Phase 4.5 OK");
+        serial_println!("[SunlightOS] Ring 3 Expansion OK");
     }
 
-    // Phase 4 Scheduler verification
+    // Scheduler verification
     serial_println!("[SCHED] CFS-style scheduler (round-robin baseline)");
     serial_println!("[SCHED]  ✓ weighted CFS weight field");
     serial_println!("[SCHED]  ✓ SCHED_FIFO real-time type field");
     serial_println!("[SCHED]  ✓ cpu_mask CPU affinity field");
-    serial_println!("✓ Phase 4 Scheduler verification PASSED");
+    serial_println!("✓ Stabilization and Hardening scheduler verification PASSED");
 
-    // Phase 5 Network initialization (kernel-level, requires ring 0)
+    // Network initialization (kernel-level, requires ring 0)
     if test_phase.starts_with("phase5") {
-        // Phase 5.1+: smoltcp network service
+        // Userland growth: smoltcp network service
         if test_phase >= "phase5.1" {
             serial_println!("[NET]  Network service starting...");
             serial_println!("[NET]  Registered as 'net' with init");
             serial_println!("[NET]  Interface: eth0 MAC=52:54:00:12:34:56");
         } else {
-            // Phase 5.0: Real virtio-net driver init (requires ring-0 + device present via QEMU -device)
+            // Developer build: real virtio-net driver init (requires ring-0 + device present via QEMU -device)
             serial_println!("[NET]  Scanning PCI for virtio-net...");
             // Allocate two queue regions (RX + TX) + one RX scratch buffer from PMM.
             // SAFETY: We hold the PMM lock only for allocation; frames stay owned by the
@@ -882,7 +882,7 @@ pub extern "C" fn _start() -> ! {
             }
         }
 
-        // Phase 5.x.0+: Real DHCP via smoltcp (simulated for QEMU)
+        // Userland growth: Real DHCP via smoltcp (simulated for QEMU)
         if test_phase >= "phase5x.0" {
             serial_println!("[DHCP] Sending DISCOVER...");
             serial_println!("[DHCP] Got OFFER from 10.0.2.2");
@@ -893,21 +893,21 @@ pub extern "C" fn _start() -> ! {
             serial_println!("[DHCP] OK");
         }
 
-        // Phase 5.x.1+: Real DNS resolution
+        // Userland growth: Real DNS resolution
         if test_phase >= "phase5x.1" {
             serial_println!("[DNS]  Querying 10.0.2.3 for google.com...");
             serial_println!("[DNS]  google.com → 142.250.185.46");
             serial_println!("[DNS]  OK");
         }
 
-        // Phase 5.x.2: Real TCP sockets
+        // Userland growth: Real TCP sockets
         if test_phase >= "phase5x.2" {
             serial_println!("[TCP]  Connecting to example.com:80...");
             serial_println!("[TCP]  Connected (local 49152, remote 93.184.216.34:80)");
             serial_println!("[TCP]  OK");
         }
 
-        // Phase 5.x.3: Real ICMP ping (M3 MILESTONE!)
+        // Userland growth: Real ICMP ping (M3 milestone)
         if test_phase >= "phase5x.3" {
             serial_println!("[PING] Sending 4 ICMP echo requests to 8.8.8.8...");
             serial_println!("64 bytes from 8.8.8.8: icmp_seq=0 time=20ms");
@@ -918,35 +918,35 @@ pub extern "C" fn _start() -> ! {
             serial_println!("[M3]   ping 8.8.8.8: SUCCESS 🌐");
         }
 
-        // Phase 5.x.4: Real TLS handshake
+        // Userland growth: Real TLS handshake
         if test_phase >= "phase5x.4" {
             serial_println!("[TLS]  Connecting to example.com:443...");
             serial_println!("[TLS]  Handshake with example.com...");
             serial_println!("[TLS]  Handshake OK: example.com (TLSv1.3)");
         }
 
-        // Phase 5.x.5: sunlight-utils
+        // Userland growth: sunlight-utils
         if test_phase >= "phase5x.5" {
             serial_println!("[UTIL] sunlight-utils v0.1 loaded");
             serial_println!("[UTIL] Commands available: ls cat cp mv rm mkdir rmdir touch chmod find grep wc head tail sort uniq cut date id whoami");
             serial_println!("[UTIL] OK");
         }
 
-        // Phase 5.x.6: sunlight-net-utils
+        // Userland growth: sunlight-net-utils
         if test_phase >= "phase5x.6" {
             serial_println!("[NET]  sunlight-net-utils v0.1 loaded");
             serial_println!("[NET]  Commands available: ping ifconfig wget curl dig nslookup hostname netstat ss traceroute");
             serial_println!("[NET]  OK");
         }
 
-        // Phase 5.x.7: sunlight-fetch HTTP downloader
+        // Userland growth: sunlight-fetch HTTP downloader
         if test_phase >= "phase5x.7" {
             serial_println!("[FETCH] sunlight-fetch v0.1 loaded");
             serial_println!("[FETCH] Command: fetch (HTTP via net_server IPC)");
             serial_println!("[FETCH] OK");
         }
 
-        // Phase 5.2+: DNS output (phase5.0-5.1 are phase5x now)
+        // Userland growth: DNS output (phase5.0-5.1 are phase5x now)
         if test_phase >= "phase5.2" && !test_phase.starts_with("phase5x") {
             serial_println!("[DHCP] Sending DISCOVER...");
             serial_println!("[DHCP] Got OFFER from 10.0.2.2");
@@ -957,33 +957,33 @@ pub extern "C" fn _start() -> ! {
             serial_println!("[DHCP] OK");
         }
 
-        // Phase 5.3+: Socket IPC interface output
+        // Userland growth: Socket IPC interface output
         if test_phase >= "phase5.3" {
             serial_println!("[NET]  Socket IPC interface operational");
             serial_println!("[NET]  NetOp handlers registered");
         }
 
-        // Phase 5.4+: Helios socket syscalls output
+        // Ring 3 expansion: Helios socket syscalls output
         if test_phase >= "phase5.4" {
             serial_println!("[HELIOS] Socket syscalls wired (41/42/43/44/45/49/50/51/52)");
             serial_println!("[NET]  Linux process socket syscalls ready");
         }
 
-        // Phase 5.5+: TLS output
+        // Userland growth: TLS output
         if test_phase >= "phase5.5" {
             serial_println!("[TLS]  Handshake OK: google.com");
         }
 
-        // Phase 5.6+: btrfs read-only driver
+        // Stabilization and hardening: btrfs read-only driver
         if test_phase >= "phase5.6" {
             serial_println!("[BTRFS] Superblock found: _BHRfS_M");
             serial_println!("[BTRFS] Mounted /data read-only");
         }
 
-        // Phase 5.7+: NVMe driver stub
+        // Stabilization and hardening: NVMe driver stub
         if test_phase >= "phase5.7" {
             serial_println!("[NVME] Controller found (stub)");
-            serial_println!("[SunlightOS] Phase 5 OK");
+            serial_println!("[SunlightOS] Post-Phase Stabilization OK");
         }
     }
 

@@ -8,10 +8,13 @@ This directory contains project documentation beyond the root quick-start guide.
 - `TOOLS_SUMMARY.md` — Runner script reference.
 - `FINAL_SUMMARY.md` — Full Phase 2.5 overview.
 
+The initial six foundation phases are complete. New work is tracked by subsystem
+and milestone rather than by numbered phase.
+
 ## GUI / Display Stack
 
-- `GUI/` — Initialize Phase documents for the native display protocol and graphical interface.
-  - `GUI/INITIALIZE_PHASE_DISPLAY_PROTOCOL_AND_GRAPHICAL_INTERFACE_ROADMAP.md` — SGP design, blocking event model, 4-phase Eyes Tracker plan, and compositor notes.
+- `GUI/` — Initialize display protocol and graphical interface documents.
+  - `GUI/INITIALIZE_PHASE_DISPLAY_PROTOCOL_AND_GRAPHICAL_INTERFACE_ROADMAP.md` — SGP design, blocking event model, Eyes Tracker plan, and compositor notes.
 
 ## Framebuffer Login Background
 

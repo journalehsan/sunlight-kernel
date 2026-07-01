@@ -103,23 +103,21 @@ sunlightos/
 │   ├── sunlightctl/         # sunlightd control client
 │   ├── sunlight-niced/      # Ring 3 nice daemon + nicectl CLI
 │   └── sunlight-gcd/        # Ring 3 garbage collector for tasks/memory
-├── docs/                    # Phase summaries, roadmaps, and design notes
+├── docs/                    # Roadmaps, milestone notes, and design notes
 └── tools/                   # Build scripts, test harness, disk tools
 ```
 
 ## Current Status
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| Phase 0 | Toolchain & environment | **Done** |
-| Phase 1 | Memory management (PMM, VMM, heap) | **Done** |
-| Phase 2 | IPC, capabilities, and user services runtime | **Done** |
-| Phase 3 | Drivers (keyboard, virtio-blk/net), VFS, TTY, shell, SunBurst scheduler | **Done** |
-| Phase 4 | Linux compatibility (Helios) | **In Progress** |
-| Phase 5 | Networking | **Done** (TLS via rustls pending) |
-| Phase 6 | Userland, zram swap, and polish | **In Progress** |
+SunlightOS has completed its initial six foundation phases. Work is now organized by
+subsystems and milestones rather than numbered phases.
 
-**Current focus:** Ring 3 growth. Kernel work is in maintenance mode while drivers, services, and userland tools continue to expand.
+**Foundation status:** Foundation Complete
+
+**Current focus:** Post-Phase Stabilization. The project is shifting toward debugging,
+reliability, SMP scheduler stabilization, desktop shell polish, core userland apps,
+services, Ring 3 expansion, telemetry, capability/security hardening, and
+power-aware scheduling.
 
 ## What's Working
 
@@ -159,7 +157,7 @@ sunlightos/
 - **sunlight-fetch** — chunked HTTP downloader integrated into RamFS
 - TLS via rustls: working on Linux host builds; kernel integration pending
 
-### Linux Compatibility (Helios — Phase 4)
+### Linux Compatibility (Helios)
 - `fork`, signals, pipes, and Capsicum FD capabilities
 - Helios syscall translation layer (ongoing)
 - Block device and VFS syscall wiring
