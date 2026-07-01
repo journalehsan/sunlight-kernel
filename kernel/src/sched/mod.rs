@@ -176,14 +176,6 @@ pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
 /// its own bit; cross-core wakeups set the owner CPU's bit.
 static RESCHEDULE_MASK: AtomicU64 = AtomicU64::new(0);
 
-/// Number of cores currently active under the smart scaling policy.
-/// May be less than ONLINE_CORES when load is light. Cores with
-/// cpu_id >= ACTIVE_CORES return early from the timer handler.
-pub static ACTIVE_CORES: AtomicUsize = AtomicUsize::new(1);
-
-/// Scaling hysteresis: ticks remaining before the next scale decision is allowed.
-static SCALE_COOLDOWN: AtomicU64 = AtomicU64::new(0);
-
 /// Diagnostic: track first time sunlightd (pid 6) is picked by scheduler.
 static SUNLIGHTD_FIRST_SCHED: AtomicBool = AtomicBool::new(false);
 
@@ -326,20 +318,12 @@ pub struct Scheduler {
     pub cores: [CoreState; MAX_CORES],
     /// Number of online cores (1 until init_cores() is called).
     pub online_cores: usize,
-    /// Number of cores currently participating in scheduling (≤ online_cores).
-    /// Updated by the smart core-scaling policy every SCALE_INTERVAL_TICKS.
-    pub active_cores: usize,
 
     /// Legacy scheduler-visible global tick counter.
     /// Kept intentionally for backward compatibility; the canonical source of
     /// truth now lives in `crate::timekeeping` and this field mirrors it.
     pub global_tick: u64,
     pub idle_context_rsp: u64,
-
-    /// Per-core busy-tick counters for CPU-usage estimation (updated by tick()).
-    pub core_busy_ticks: [u64; MAX_CORES],
-    /// Per-core total-tick counters for CPU-usage estimation.
-    pub core_total_ticks: [u64; MAX_CORES],
 }
 
 impl Scheduler {
@@ -348,11 +332,8 @@ impl Scheduler {
             processes: Vec::new(),
             cores: [const { CoreState::new() }; MAX_CORES],
             online_cores: 1,
-            active_cores: 1,
             global_tick: 0,
             idle_context_rsp: 0,
-            core_busy_ticks: [0u64; MAX_CORES],
-            core_total_ticks: [0u64; MAX_CORES],
         }
     }
 
@@ -654,134 +635,16 @@ impl Scheduler {
         }
     }
 
-    // ── Smart core scaling ───────────────────────────────────────────────────
-
-    /// Decide how many cores should be active based on current workload and
-    /// CPU usage. Called by BSP only, every SCALE_INTERVAL_TICKS.
-    ///
-    /// Policy (three tiers):
-    ///   1. active_tasks / online_cores > 2 → use ALL online cores (heavy load)
-    ///   2. active_tasks > 8               → use max(4, online/2)  (medium load)
-    ///   3. else                           → use min(4, online)    (light load)
-    ///
-    /// CPU-usage overlay: if mean usage across active cores < 50 % we halve
-    /// the active count (but never below 1 or min(4, online)).
-    /// Maximum cores the scaling policy will ever activate. The single global
-    /// scheduler lock makes additional cores counter-productive beyond this.
-    const HEAVY_ACTIVE_CAP: usize = 8;
-
-    pub fn maybe_scale_active_cores(&mut self) {
-        let online = self.online_cores;
-        // No point dynamically scaling when we only have 4 or fewer cores.
-        if online <= 4 {
-            if self.active_cores != online {
-                self.active_cores = online;
-                ACTIVE_CORES.store(online, Ordering::Release);
-            }
-            return;
-        }
-
-        // Count tasks eligible to run.
-        let active_tasks = self
-            .processes
-            .iter()
-            .filter(|p| matches!(p.state, ProcessState::Ready | ProcessState::Running))
-            .count();
-
-        // Estimate mean CPU usage from the busy/total tick accumulators.
-        let active = self.active_cores.max(1);
-        let total_ticks: u64 = (0..active).map(|c| self.core_total_ticks[c]).sum();
-        let busy_ticks: u64 = (0..active).map(|c| self.core_busy_ticks[c]).sum();
-        let usage_pct = if total_ticks > 0 {
-            (busy_ticks * 100) / total_ticks
-        } else {
-            0
-        };
-        // Reset accumulators for next window.
-        for c in 0..online {
-            self.core_busy_ticks[c] = 0;
-            self.core_total_ticks[c] = 0;
-        }
-
-        // Load-ratio core target. The fraction of cores we activate rises with
-        // the runnable-tasks-per-core ratio, following n/(n+1):
-        //   ratio 0 (tasks < online) → small fixed set (light idle)
-        //   ratio 1 (≈1 task/core)   → 1/2 of cores
-        //   ratio 2 (≈2 tasks/core)  → 2/3 of cores
-        //   ratio 3 (≈3 tasks/core)  → 3/4 of cores
-        //   ratio ≥ 4               → all cores
-        let ratio = active_tasks / online;
-        let tier_target = match ratio {
-            0 => 4.min(online),    // light: at most 4
-            1 => online / 4,       // 1/4
-            2 => online / 3,       // 1/3
-            3 => (online * 2) / 4, // 2/4
-            4 => (online * 3) / 5, // 3/5
-            5 => (online * 4) / 5, // 4/5
-            _ => online,           // heavy: all cores
-        };
-
-        // CPU-usage overlay: < 50 % utilisation → halve (but floor at 4 or 1).
-        let floor = 4.min(online);
-        let scaled = if usage_pct < 50 {
-            (tier_target / 2).max(floor)
-        } else {
-            tier_target
-        };
-
-        // Contention cap. All cores share a single global scheduler spin-lock,
-        // so every active core takes that lock 100×/sec. Past ~8 active cores
-        // the lock convoy costs more than the added parallelism buys, which is
-        // exactly the >8-core slowdown. Never un-park more than HEAVY_ACTIVE_CAP
-        // cores (but always honour the light-load floor on smaller machines).
-        let capped = scaled.min(Self::HEAVY_ACTIVE_CAP.max(floor));
-
-        let new_active = capped.max(floor).clamp(1, online);
-        if new_active != self.active_cores {
-            serial_println!(
-                "[SCHED] core-scale {} → {} (tasks={} usage={}%)",
-                self.active_cores,
-                new_active,
-                active_tasks,
-                usage_pct
-            );
-            self.active_cores = new_active;
-            ACTIVE_CORES.store(new_active, Ordering::Release);
-        }
-    }
-
     // ── Timer tick ───────────────────────────────────────────────────────────
 
     /// Called from the timer IRQ on each tick. Updates quantum tracking and
     /// requests a local reschedule when the current task's quantum expires.
-    /// Interval (in BSP global ticks) between core-scaling decisions.
-    /// 100 ticks ≈ 1 second at 100 Hz — enough to smooth out brief bursts.
-    const SCALE_INTERVAL_TICKS: u64 = 100;
-
     pub fn tick(&mut self, cpu_id: usize, global_tick: u64) {
         // Compatibility mirror: all legacy scheduler logic still reads
         // `self.global_tick`, but only the centralized timekeeper advances it.
         self.global_tick = self.global_tick.max(global_tick);
         self.cores[cpu_id].current_ticks += 1;
         self.cores[cpu_id].timer_ticks += 1;
-
-        // Accumulate busy/total tick counters for CPU-usage estimation.
-        if cpu_id < MAX_CORES {
-            self.core_total_ticks[cpu_id] += 1;
-            let is_busy = self.cores[cpu_id].current_task.map_or(false, |idx| {
-                idx < self.processes.len()
-                    && matches!(self.processes[idx].state, ProcessState::Running)
-            });
-            if is_busy {
-                self.core_busy_ticks[cpu_id] += 1;
-            }
-        }
-
-        // BSP drives the periodic core-scaling decision.
-        if cpu_id == 0 && self.global_tick > 0 && self.global_tick % Self::SCALE_INTERVAL_TICKS == 0
-        {
-            self.maybe_scale_active_cores();
-        }
 
         let current = match self.cores[cpu_id].current_task {
             Some(idx) => idx,
@@ -1176,12 +1039,6 @@ impl Scheduler {
         // not-yet-seeded task (and contend with the BSP's PMM-heavy boot).
         // Core 0 (BSP) is never gated.
         if cpu_id != 0 && !SCHEDULER_READY.load(Ordering::Acquire) {
-            return 0;
-        }
-
-        // AP cores above the active_cores threshold are parked by the scaling
-        // policy. They consume no scheduler-lock time and no context-switch work.
-        if cpu_id != 0 && cpu_id >= self.active_cores {
             return 0;
         }
 
@@ -2080,23 +1937,14 @@ pub fn current_cpu_id() -> usize {
 pub fn init_cores(total_cpus: usize) {
     let count = total_cpus.min(MAX_CORES).max(1);
     ONLINE_CORES.store(count, Ordering::Release);
-    ACTIVE_CORES.store(count, Ordering::Release);
     {
         let mut sched = SCHEDULER.lock();
         sched.online_cores = count;
-        sched.active_cores = count;
     }
     serial_println!(
         "[SCHED] Per-core work-stealing scheduler: {} online core(s)",
         count
     );
-}
-
-/// Returns true if this core has been parked by the smart scaling policy.
-/// The BSP (cpu_id == 0) is never parked.
-#[inline]
-pub fn is_core_parked(cpu_id: usize) -> bool {
-    cpu_id != 0 && cpu_id >= ACTIVE_CORES.load(Ordering::Relaxed)
 }
 
 pub mod context;

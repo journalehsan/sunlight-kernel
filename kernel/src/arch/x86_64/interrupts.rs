@@ -709,12 +709,6 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         return 0;
     }
 
-    // AP: parking check — core is above the active_cores threshold set by the
-    // smart scaling policy. No lock needed; ACTIVE_CORES is an atomic.
-    if crate::sched::is_core_parked(cpu_id) {
-        return 0;
-    }
-
     // ── BSP-only global bookkeeping ───────────────────────────────────────────
     // APs do not touch the centralized global timekeeper or the key-injection
     // buffer. They only drive local preemption/accounting.
