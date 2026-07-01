@@ -42,11 +42,14 @@ exactly as before for its 4 pinned quick-launch icons.
   previous frame to get out of sync).
 - **Toggling:** `VortexShell.launcher_zone` is the dock grid icon's rect,
   captured each frame from `draw_bot_center`'s return value. Clicking it
-  calls `StartMenuState::open_menu()`. While open, `VortexShell::update()`
-  routes all pointer/keyboard events straight into
-  `StartMenuState::handle_event()` before any other shell input handling
-  runs; `Event::Tick` deliberately still falls through to the normal path
-  so background app-registry polling keeps the menu's running-app badges
+  calls `StartMenuState::open_menu()` when closed, or closes the menu when
+  already open. While open, `VortexShell::update()` routes all
+  pointer/keyboard events straight into `StartMenuState::handle_event()`
+  before any other shell input handling runs. Outside clicks/presses close
+  the menu and are consumed so the same gesture does not leak through and
+  accidentally activate the desktop, dock, or other shell chrome below.
+  `Event::Tick` deliberately still falls through to the normal path so
+  background app-registry polling keeps the menu's running-app badges
   fresh even while it's open.
 
 ## Layout (dark theme MVP)
@@ -54,7 +57,7 @@ exactly as before for its 4 pinned quick-launch icons.
 Bottom-left-anchored panel, positioned directly above the dock (same 10px
 gap convention as the desktop icon area), roughly 600px wide:
 
-1. **Header** — "SunlightOS" title + a small close ("x") button.
+1. **Header** — "SunlightOS" title on the left, close ("x") button on the right.
 2. **Search bar** — "Search apps, files, settings...", focused automatically
    on open.
 3. **Content** (one of two modes):
@@ -149,16 +152,29 @@ see Future Ideas).
 ## Keyboard & mouse UX
 
 - Opening the menu focuses the search field automatically.
-- Clicking outside the panel, or the header's close button, closes the
-  menu.
+- Clicking outside the panel, the header close button, or pressing `Escape`
+  (with an empty search query) closes the menu. Outside dismissal is
+  intentionally consumed to avoid click-through bugs; clicking the dock
+  grid icon while the menu is open only closes it (toggle-off).
 - Clicking a tile launches it (or shows "coming soon" for placeholders);
   clicking a power button arms/executes it (see below).
-- Mouse hover tints a tile's background; keyboard selection additionally
-  draws an accent border, so the two states are visually distinguishable
-  when they disagree (e.g. hovering one tile while a different one is
-  keyboard-selected).
+- Mouse hover tints a tile's background; keyboard selection is tracked
+  separately and only draws an accent border after explicit keyboard
+  navigation, so the menu does not open with a permanent highlight stuck
+  on the first tile.
 - `Tab`-based focus traversal is not implemented (not needed given the
   search-first UX); documented here as a possible future addition.
+
+## Interaction notes for this patch
+
+- The close button and outside-click dismissal both use the existing
+  `StartMenuState::close()` path; no second shell-only close path was added.
+- App tiles map directly to shared `AppId` values (`CatalogId::App(AppId)`),
+  and `main.rs` still launches them exclusively through
+  `VortexShell::handle_app_click()` / `launch_app()`.
+- Hover state is stored as `StartMenuState.hover`; keyboard selection is
+  stored separately as `StartMenuState.selected: Option<usize>`.
+- Search behavior itself is intentionally unchanged in this patch.
 
 ## Power / session actions
 

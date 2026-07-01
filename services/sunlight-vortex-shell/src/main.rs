@@ -908,6 +908,9 @@ struct VortexShell {
     /// Dark Start Menu overlay — search, pinned/all-apps/recent sections,
     /// power actions. See `start_menu.rs` and `docs/GUI/START_MENU.md`.
     start_menu: start_menu::StartMenuState,
+    /// After the Start Menu closes because the user clicked the dock grid
+    /// icon, suppress the follow-up `Click` so the menu stays closed.
+    suppress_launcher_open: bool,
     /// Session-only most-recently-used app list (newest first, capped),
     /// shown in the Start Menu's "Recent" section. Not persisted across
     /// restarts — falls back to a static "Suggested" set when empty.
@@ -970,6 +973,7 @@ impl VortexShell {
             next_app_poll_ms: 0,
             next_launch_id: 1,
             start_menu: start_menu::StartMenuState::new(),
+            suppress_launcher_open: false,
             recent_apps: Vec::new(),
         };
         shell.reload_desktop_icons();
@@ -1747,7 +1751,7 @@ impl VortexShell {
     fn apply_start_menu_action(&mut self, action: start_menu::StartMenuAction, now: u64) {
         use start_menu::{PowerAction, StartMenuAction};
         match action {
-            StartMenuAction::None => {}
+            StartMenuAction::None | StartMenuAction::DismissedOutside { .. } => {}
             StartMenuAction::Launch(app_id) => {
                 self.note_recent_app(app_id);
                 let _ = self.handle_app_click(app_id, now, LaunchSource::Shell);
@@ -3403,15 +3407,8 @@ impl App for VortexShell {
             (dock_cells[3], Self::dock_zone_app(3)),
         ];
 
-        self.start_menu.view(
-            canvas,
-            theme,
-            cw,
-            ch,
-            &self.apps,
-            &self.recent_apps,
-            now,
-        );
+        self.start_menu
+            .view(canvas, theme, cw, ch, &self.apps, &self.recent_apps, now);
 
         if let Some(menu) = &self.context_menu {
             draw_context_menu(canvas, theme, menu);
@@ -3432,9 +3429,21 @@ impl App for VortexShell {
                 | Event::Key(_)
                 | Event::KeyPress { .. } => {
                     let now = monotonic_millis();
-                    let (dirty, action) =
-                        self.start_menu
-                            .handle_event(event, self.screen_w, self.screen_h, &self.recent_apps, now);
+                    let (dirty, action) = self.start_menu.handle_event(
+                        event,
+                        self.screen_w,
+                        self.screen_h,
+                        &self.recent_apps,
+                        now,
+                    );
+                    if let start_menu::StartMenuAction::DismissedOutside { x, y } = action {
+                        if matches!(event, Event::MouseDown { .. }) {
+                            self.suppress_next_click = true;
+                        }
+                        if self.launcher_zone.contains(Point::new(x, y)) {
+                            self.suppress_launcher_open = true;
+                        }
+                    }
                     self.apply_start_menu_action(action, now);
                     return dirty;
                 }
@@ -3500,7 +3509,15 @@ impl App for VortexShell {
                     return false;
                 }
                 if self.launcher_zone.contains(point) {
-                    self.start_menu.open_menu();
+                    if self.suppress_launcher_open {
+                        self.suppress_launcher_open = false;
+                        return true;
+                    }
+                    if self.start_menu.is_open() {
+                        self.start_menu.close();
+                    } else {
+                        self.start_menu.open_menu();
+                    }
                     return true;
                 }
                 if self.settings_zone.contains(point) {
