@@ -89,6 +89,24 @@ The scanout resource is created with `VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM`
 compositor back buffer). It was previously `X8R8G8B8_UNORM`, which swapped the
 red/green channels and dropped blue entirely, producing a green-tinted screen.
 
+## Cursor
+
+The compositor always uses a software cursor: 32×32 TGA sprites
+(`assets/cursors/*.tga`, generated from `docs/images/cursors/*.svg` by
+`tools/gen_cursors.sh`) are alpha-blended into the back buffer with a
+per-shape hotspot, so the cursor is visible on both the Limine and VirtIO
+backends and appears in screendumps.
+
+The VirtIO hardware-cursor plane (`UPDATE_CURSOR`/`MOVE_CURSOR`) is
+deliberately not activated: QEMU UIs map that sprite onto the host pointer,
+which is hidden while a relative-pointer (PS/2) grab is active, leaving no
+visible cursor. The upload path (`upload_hw_cursor_if_needed`) is kept
+functional for future absolute-pointer (virtio-tablet) setups.
+
+To change a cursor: edit the SVG in `docs/images/cursors/`, run
+`./tools/gen_cursors.sh`, and rebuild `sunlight-display`. Hotspots live in
+`cursor_asset()` in `services/sunlight-display/src/main.rs`.
+
 The startup summary is a single serial line:
 
 ```

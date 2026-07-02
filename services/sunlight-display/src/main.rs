@@ -1586,168 +1586,50 @@ impl WindowControlKind {
 }
 
 // ---------------------------------------------------------------------------
-// Cursor bitmaps — 8 px wide × 12 rows, one u8 per row, MSB = leftmost pixel
+// Cursor sprites — 32×32 TGA assets (type 2, 32bpp BGRA, top-down) generated
+// from docs/images/cursors/*.svg by tools/gen_cursors.sh into assets/cursors/.
+// Each shape has a hotspot: the sprite pixel that sits on the mouse coordinate.
 // ---------------------------------------------------------------------------
 
-const CURSOR_W: usize = 8;
-const CURSOR_H: usize = 12;
+const CURSOR_W: usize = 32;
+const CURSOR_H: usize = 32;
 
-// Default arrow
-const CURSOR_PTR: [u8; CURSOR_H] = [
-    0b1000_0000,
-    0b1100_0000,
-    0b1110_0000,
-    0b1111_0000,
-    0b1111_1000,
-    0b1111_1100,
-    0b1111_1110,
-    0b1111_1000,
-    0b1101_0000,
-    0b1001_0000,
-    0b0001_0000,
-    0b0000_0000,
-];
+static CURSOR_TGA_POINTER: &[u8] = include_bytes!("../../../assets/cursors/pointer.tga");
+static CURSOR_TGA_HAND: &[u8] = include_bytes!("../../../assets/cursors/hand.tga");
+static CURSOR_TGA_RESIZE_H: &[u8] = include_bytes!("../../../assets/cursors/resize-h.tga");
+static CURSOR_TGA_RESIZE_V: &[u8] = include_bytes!("../../../assets/cursors/resize-v.tga");
+static CURSOR_TGA_RESIZE_NWSE: &[u8] = include_bytes!("../../../assets/cursors/resize-nwse.tga");
+static CURSOR_TGA_RESIZE_NESW: &[u8] = include_bytes!("../../../assets/cursors/resize-nesw.tga");
+static CURSOR_TGA_MOVE: &[u8] = include_bytes!("../../../assets/cursors/move.tga");
+static CURSOR_TGA_WAIT: &[u8] = include_bytes!("../../../assets/cursors/wait.tga");
+static CURSOR_TGA_QUESTION: &[u8] = include_bytes!("../../../assets/cursors/question.tga");
 
-// Hand (pointing finger)
-const CURSOR_HAND: [u8; CURSOR_H] = [
-    0b0010_0000, // index finger tip
-    0b0010_0000,
-    0b0010_1010, // grip shape
-    0b0010_1010,
-    0b1111_1110, // palm top
-    0b1111_1110,
-    0b1111_1100,
-    0b0111_1100,
-    0b0011_1000,
-    0b0011_1000,
-    0b0001_0000,
-    0b0000_0000,
-];
-
-// Horizontal resize ←→
-const CURSOR_RESIZE_H: [u8; CURSOR_H] = [
-    0b0000_0000,
-    0b0000_0000,
-    0b0001_1000,
-    0b0011_1100,
-    0b0111_1110,
-    0b1111_1111, // full bar
-    0b0111_1110,
-    0b0011_1100,
-    0b0001_1000,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-];
-
-// Vertical resize ↑↓
-const CURSOR_RESIZE_V: [u8; CURSOR_H] = [
-    0b0001_1000, // up arrowhead
-    0b0011_1100,
-    0b0001_1000,
-    0b0001_1000,
-    0b0001_1000, // center bar
-    0b0001_1000,
-    0b0001_1000,
-    0b0011_1100, // down arrowhead
-    0b0001_1000,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-];
-
-// NW-SE diagonal corner (↖↘)
-const CURSOR_RESIZE_NW: [u8; CURSOR_H] = [
-    0b1111_0000,
-    0b1100_0000,
-    0b1010_0000,
-    0b1001_0000,
-    0b0000_1001,
-    0b0000_1010,
-    0b0000_1100,
-    0b0000_1111,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-];
-
-// NE-SW diagonal corner (↗↙)
-const CURSOR_RESIZE_NE: [u8; CURSOR_H] = [
-    0b0000_1111,
-    0b0000_0110,
-    0b0000_1010,
-    0b0001_0010,
-    0b0100_1000,
-    0b0101_0000,
-    0b0110_0000,
-    0b1111_0000,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-];
-
-// 4-way move (✛)
-const CURSOR_MOVE: [u8; CURSOR_H] = [
-    0b0001_1000,
-    0b0011_1100,
-    0b0001_1000,
-    0b1001_1001,
-    0b1111_1111,
-    0b1001_1001,
-    0b0001_1000,
-    0b0011_1100,
-    0b0001_1000,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-];
-
-// Hourglass wait
-const CURSOR_WAIT: [u8; CURSOR_H] = [
-    0b1111_1110,
-    0b0111_1100,
-    0b0011_1000,
-    0b0001_1000,
-    0b0001_1000, // waist
-    0b0001_1000,
-    0b0011_1100,
-    0b0111_1110,
-    0b1111_1111,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-];
-
-// Question mark with arrow base
-const CURSOR_QUESTION: [u8; CURSOR_H] = [
-    0b1100_0000, // arrow tip
-    0b1110_0000,
-    0b1001_1000, // ?
-    0b0000_1100,
-    0b0001_1000,
-    0b0001_0000,
-    0b0000_0000,
-    0b0001_0000, // dot
-    0b0001_0000,
-    0b0000_0000,
-    0b0000_0000,
-    0b0000_0000,
-];
-
-fn cursor_bitmap(shape: CursorShape) -> &'static [u8; CURSOR_H] {
+/// TGA bytes and hotspot (x, y) for a cursor shape.
+fn cursor_asset(shape: CursorShape) -> (&'static [u8], i32, i32) {
     match shape {
-        CursorShape::Pointer => &CURSOR_PTR,
-        CursorShape::Hand => &CURSOR_HAND,
-        CursorShape::ResizeH => &CURSOR_RESIZE_H,
-        CursorShape::ResizeV => &CURSOR_RESIZE_V,
-        CursorShape::ResizeCornerNW => &CURSOR_RESIZE_NW,
-        CursorShape::ResizeCornerNE => &CURSOR_RESIZE_NE,
-        CursorShape::Moving => &CURSOR_MOVE,
-        CursorShape::Waiting => &CURSOR_WAIT,
-        CursorShape::Question => &CURSOR_QUESTION,
+        CursorShape::Pointer => (CURSOR_TGA_POINTER, 3, 2),
+        CursorShape::Hand => (CURSOR_TGA_HAND, 14, 3),
+        CursorShape::ResizeH => (CURSOR_TGA_RESIZE_H, 16, 16),
+        CursorShape::ResizeV => (CURSOR_TGA_RESIZE_V, 16, 16),
+        CursorShape::ResizeCornerNW => (CURSOR_TGA_RESIZE_NWSE, 16, 16),
+        CursorShape::ResizeCornerNE => (CURSOR_TGA_RESIZE_NESW, 16, 16),
+        CursorShape::Moving => (CURSOR_TGA_MOVE, 16, 16),
+        CursorShape::Waiting => (CURSOR_TGA_WAIT, 16, 16),
+        CursorShape::Question => (CURSOR_TGA_QUESTION, 2, 2),
     }
+}
+
+/// Parsed sprite + hotspot for a shape. TGA parsing only reads the 18-byte
+/// header (pixels decode on demand), so parsing per call is cheap.
+fn cursor_sprite(shape: CursorShape) -> Option<(TgaImage, i32, i32)> {
+    let (bytes, hx, hy) = cursor_asset(shape);
+    TgaImage::parse(bytes).ok().map(|img| (img, hx, hy))
+}
+
+/// Top-left screen position of the sprite for a given mouse position.
+fn cursor_origin(shape: CursorShape, cx: u32, cy: u32) -> (i32, i32) {
+    let (_, hx, hy) = cursor_asset(shape);
+    (cx as i32 - hx, cy as i32 - hy)
 }
 
 // ---------------------------------------------------------------------------
@@ -1844,26 +1726,33 @@ fn present_rect(state: &mut CompositorState, r: Rect) {
     }
 }
 
-/// Dirty rect that covers the cursor bitmap plus a 1-px border for clean erasure.
+/// Dirty rect that covers any cursor sprite placement around (cx, cy).
+/// Hotspots lie inside the sprite, so every possible placement (old or new
+/// shape) fits in a (2W+2)×(2H+2) box centred on the hotspot pixel; using the
+/// conservative box keeps this correct across shape changes without needing
+/// to know which shape was drawn previously.
 fn cursor_dirty_rect(cx: u32, cy: u32) -> Rect {
     Rect::new(
-        cx as i32 - 1,
-        cy as i32 - 1,
-        CURSOR_W as u32 + 2,
-        CURSOR_H as u32 + 2,
+        cx as i32 - CURSOR_W as i32 - 1,
+        cy as i32 - CURSOR_H as i32 - 1,
+        CURSOR_W as u32 * 2 + 2,
+        CURSOR_H as u32 * 2 + 2,
     )
 }
 
+/// On-screen rect the active cursor sprite occupies for mouse position
+/// (cx, cy), offset by the shape's hotspot and clipped to the screen.
 fn cursor_rect(state: &CompositorState, cx: u32, cy: u32) -> Option<Rect> {
-    if cx >= state.fb_width || cy >= state.fb_height {
-        return None;
-    }
-    let w = (CURSOR_W as u32).min(state.fb_width - cx);
-    let h = (CURSOR_H as u32).min(state.fb_height - cy);
-    if w == 0 || h == 0 {
+    let (ox, oy) = cursor_origin(state.active_cursor, cx, cy);
+    let r = clip_to_screen(
+        Rect::new(ox, oy, CURSOR_W as u32, CURSOR_H as u32),
+        state.fb_width,
+        state.fb_height,
+    );
+    if r.w == 0 || r.h == 0 {
         None
     } else {
-        Some(Rect::new(cx as i32, cy as i32, w, h))
+        Some(r)
     }
 }
 
@@ -2382,37 +2271,50 @@ fn composite_window(
     }
 }
 
-fn draw_cursor_bitmap(
+/// Alpha-blend the cursor sprite for `shape` into the back buffer with its
+/// hotspot on the mouse position (mouse_x, mouse_y).
+fn draw_cursor_sprite(
     state: &CompositorState,
     back_buffer: &mut [u32],
     shape: CursorShape,
-    base_x: u32,
-    base_y: u32,
+    mouse_x: u32,
+    mouse_y: u32,
 ) {
-    let base_x = base_x as i32;
-    let base_y = base_y as i32;
+    let Some((img, hx, hy)) = cursor_sprite(shape) else {
+        return;
+    };
+    let base_x = mouse_x as i32 - hx;
+    let base_y = mouse_y as i32 - hy;
     let stride = fb_stride(state);
-    let bitmap = cursor_bitmap(shape);
+    let w = img.width.min(CURSOR_W as u32);
+    let h = img.height.min(CURSOR_H as u32);
 
-    const SHADOW: u32 = 0x00000000;
-    const FG: u32 = 0x00F5F5F5;
-
-    for (row, &mask) in bitmap.iter().enumerate() {
-        for col in 0..CURSOR_W {
-            if (mask & (1 << (7 - col))) == 0 {
-                continue;
-            }
+    for row in 0..h {
+        let y = base_y + row as i32;
+        if y < 0 || y >= state.fb_height as i32 {
+            continue;
+        }
+        for col in 0..w {
             let x = base_x + col as i32;
-            let y = base_y + row as i32;
-            if x < 0 || y < 0 || x >= state.fb_width as i32 || y >= state.fb_height as i32 {
+            if x < 0 || x >= state.fb_width as i32 {
                 continue;
             }
-            let color = if col == CURSOR_W - 1 || row == CURSOR_H - 1 {
-                SHADOW
+            let src = img.pixel_argb(col, row);
+            let a = src >> 24;
+            if a == 0 {
+                continue;
+            }
+            let idx = y as usize * stride + x as usize;
+            if a == 0xFF {
+                back_buffer[idx] = src & 0x00FF_FFFF;
             } else {
-                FG
-            };
-            back_buffer[y as usize * stride + x as usize] = color;
+                let dst = back_buffer[idx];
+                let inv = 255 - a;
+                let r = (((src >> 16) & 0xFF) * a + ((dst >> 16) & 0xFF) * inv) / 255;
+                let g = (((src >> 8) & 0xFF) * a + ((dst >> 8) & 0xFF) * inv) / 255;
+                let b = ((src & 0xFF) * a + (dst & 0xFF) * inv) / 255;
+                back_buffer[idx] = (r << 16) | (g << 8) | b;
+            }
         }
     }
 }
@@ -2467,7 +2369,7 @@ fn draw_cursor(state: &mut CompositorState, back_buffer: &mut [u32]) {
     }
     state.debug_counters.sw_cursor_redraw_count += 1;
     let _ = save_software_cursor_under(state, back_buffer);
-    draw_cursor_bitmap(
+    draw_cursor_sprite(
         state,
         back_buffer,
         state.active_cursor,
@@ -2502,7 +2404,7 @@ fn move_software_cursor(state: &mut CompositorState) -> bool {
     if let Some(new_rect) = save_software_cursor_under(state, &back_buffer) {
         mark_dirty_rect(state, new_rect);
     }
-    draw_cursor_bitmap(
+    draw_cursor_sprite(
         state,
         &mut back_buffer,
         state.active_cursor,
@@ -2515,7 +2417,15 @@ fn move_software_cursor(state: &mut CompositorState) -> bool {
 }
 
 /// Upload a hardware cursor to the GPU if the shape changed.
-/// Converts the 1-bit 8×12 cursor bitmap to a 64×64 BGRA pixel image.
+/// Renders the 32×32 TGA cursor sprite into the top-left of the 64×64 BGRA
+/// cursor plane image, with the shape's real hotspot.
+///
+/// NOTE: the hardware cursor plane is currently never activated (see
+/// activate_virtio_scanout): QEMU UIs map the VirtIO cursor sprite onto the
+/// host pointer, which is hidden while a relative-pointer (PS/2) grab is
+/// active — making the cursor invisible. The compositor blends the sprite in
+/// software instead. This path is kept functional for future absolute-pointer
+/// (virtio-tablet) setups.
 fn upload_hw_cursor_if_needed(state: &mut CompositorState) -> bool {
     if !state.hw_cursor_active {
         return false;
@@ -2524,47 +2434,33 @@ fn upload_hw_cursor_if_needed(state: &mut CompositorState) -> bool {
         return true;
     }
 
-    // Build a 64×64 BGRA buffer (transparent background, white foreground).
-    // We upscale the 8×12 bitmap by 4× to fill the 32×48 center of the 64×64 canvas.
+    let Some((img, hot_x, hot_y)) = cursor_sprite(state.active_cursor) else {
+        debug_log("[DISPLAY] hardware cursor sprite parse failed, falling back to software\n");
+        state.hw_cursor_active = false;
+        state.last_hw_cursor_shape = None;
+        return false;
+    };
+
+    // 64×64 BGRA plane image; u32 0xAARRGGBB little-endian == BGRA bytes.
     static mut CURSOR_PIXELS: [u32; 64 * 64] = [0; 64 * 64];
     let pixels = unsafe { &mut *(&raw mut CURSOR_PIXELS) };
     for p in pixels.iter_mut() {
         *p = 0x00000000; // transparent
     }
-
-    let bitmap = cursor_bitmap(state.active_cursor);
-    let scale = 4usize;
-    // Offset within 64×64 canvas to center the upscaled 8×12 glyph (32×48)
-    let off_x = (64 - CURSOR_W * scale) / 2;
-    let off_y = (64 - CURSOR_H * scale) / 2;
-
-    const FG_BGRA: u32 = 0xFFF5F5F5; // opaque white (BGRA: B=F5, G=F5, R=F5, A=FF)
-    const SHADOW_BGRA: u32 = 0xFF303030; // opaque dark shadow
-
-    for (row, &mask) in bitmap.iter().enumerate() {
-        for col in 0..CURSOR_W {
-            if (mask & (1 << (7 - col))) == 0 {
-                continue;
-            }
-            let color = if col == CURSOR_W - 1 || row == CURSOR_H - 1 {
-                SHADOW_BGRA
-            } else {
-                FG_BGRA
-            };
-            for dy in 0..scale {
-                for dx in 0..scale {
-                    let px = off_x + col * scale + dx;
-                    let py = off_y + row * scale + dy;
-                    if px < 64 && py < 64 {
-                        pixels[py * 64 + px] = color;
-                    }
-                }
-            }
+    let w = img.width.min(64) as usize;
+    let h = img.height.min(64) as usize;
+    for y in 0..h {
+        for x in 0..w {
+            pixels[y * 64 + x] = img.pixel_argb(x as u32, y as u32);
         }
     }
 
-    // Hotspot is top-left corner (0, 0) for all cursors currently.
-    let ok = sunlight_ipc::gpu_update_cursor(pixels.as_ptr(), 64 * 64, 0, 0);
+    let ok = sunlight_ipc::gpu_update_cursor(
+        pixels.as_ptr(),
+        64 * 64,
+        hot_x.max(0) as u32,
+        hot_y.max(0) as u32,
+    );
     if ok {
         state.last_hw_cursor_shape = Some(state.active_cursor);
         true
@@ -2815,16 +2711,12 @@ fn activate_virtio_scanout(state: &mut CompositorState) {
         Ok(()) => {
             debug_log("[DISPLAY] gpu_set_scanout OK — VirtIO output active\n");
             state.virtio_scanout_enabled = true;
-            state.hw_cursor_active = true;
-            let mx = state.mouse_x as u32;
-            let my = state.mouse_y as u32;
-            let _ = upload_hw_cursor_if_needed(state);
-            let _ = move_hw_cursor(state, mx, my);
-            debug_log(if state.hw_cursor_active {
-                "[DISPLAY] cursor_mode=hardware\n"
-            } else {
-                "[DISPLAY] hardware cursor setup failed; using software cursor on GPU scanout\n"
-            });
+            // Software cursor: the compositor alpha-blends the cursor sprite
+            // into the back buffer, so it is always visible. The VirtIO
+            // hardware cursor plane is NOT used — QEMU UIs map that sprite to
+            // the host pointer, which relative-pointer (PS/2) grabs hide,
+            // leaving no visible cursor at all.
+            debug_log("[DISPLAY] cursor_mode=software (composited sprite)\n");
         }
         Err(e) => {
             // The resource keeps its backing; QEMU keeps showing the VGA
