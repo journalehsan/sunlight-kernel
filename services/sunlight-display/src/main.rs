@@ -15,8 +15,8 @@ use sunlight_ipc::{
     endpoint_create, ipc_recv, ipc_recv_timeout, ipc_reply,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_register,
-    sgp::SgpMsg,
-    CapabilityToken, IpcMsg, MouseMsg, NotificationKind,
+    sgp::SgpMsg, DisplayMetrics, PixelFormat, ScreenBackend, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+    validate_size, CapabilityToken, IpcMsg, MouseMsg, NotificationKind,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
@@ -893,6 +893,10 @@ struct CompositorState {
     /// When true, the hardware cursor is active (VirtIO GPU backend) and
     /// cursor moves do not repaint the back_buffer.
     hw_cursor_active: bool,
+    /// True once SET_SCANOUT has wired the VirtIO resource to the display.
+    /// Kept false until the first SESSION_ACTIVATE so the VGA/TTY login
+    /// screen stays visible during boot.
+    virtio_scanout_enabled: bool,
     /// Last cursor shape that was uploaded to the GPU (avoid redundant uploads).
     last_hw_cursor_shape: Option<CursorShape>,
     active_cursor: CursorShape,
@@ -922,6 +926,22 @@ struct CompositorState {
     /// Future user preference placeholder. Existing shade behavior stays wired.
     #[allow(dead_code)]
     titlebar_double_click_action: TitlebarDoubleClickAction,
+}
+
+impl CompositorState {
+    fn display_metrics(&self) -> DisplayMetrics {
+        let backend = match self.display_backend {
+            backend::DisplayBackend::VirtioGpu { .. } => ScreenBackend::VirtioGpu,
+            backend::DisplayBackend::Limine { .. } => ScreenBackend::LimineFramebuffer,
+        };
+        DisplayMetrics::new(
+            self.fb_width,
+            self.fb_height,
+            self.fb_pitch,
+            PixelFormat::Xrgb8888,
+            backend,
+        )
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1493,25 +1513,6 @@ fn activate_window(state: &mut CompositorState, win_id: u64) -> bool {
 // Chrome constants (Vortex Shell Theme)
 // ---------------------------------------------------------------------------
 
-// Safe fallback resolution if neither the VirtIO GPU nor the Limine framebuffer
-// report a usable size. Used so the compositor never allocates a 0×0 buffer.
-const SAFE_FALLBACK_W: u32 = 1280;
-const SAFE_FALLBACK_H: u32 = 800;
-// Upper sanity bound on any reported dimension. Guards against a garbage VirtIO
-// GPU reply (e.g. uninitialized registers) sizing a multi-GB back buffer.
-const MAX_DIM: u32 = 16384;
-
-/// Validate a backend-reported `(width, height)`: both must be non-zero and
-/// within `MAX_DIM`. Returns `None` for a zero/garbage size so the caller can
-/// fall back instead of allocating a bogus buffer.
-fn validate_size(w: u32, h: u32) -> Option<(u32, u32)> {
-    if w == 0 || h == 0 || w > MAX_DIM || h > MAX_DIM {
-        None
-    } else {
-        Some((w, h))
-    }
-}
-
 const DESKTOP_COLOR: u32 = 0x00121214; // Deep dark gray/black
 const TITLEBAR_H: u32 = 32; // Taller for Chrome-tab style
 const COMPACT_TITLEBAR_H: u32 = 24;
@@ -1786,14 +1787,19 @@ fn back_buffer_canvas<'a>(state: &CompositorState, pixels: &'a mut [u32]) -> Can
 
 fn present_back_buffer(state: &mut CompositorState) {
     match &state.display_backend {
-        backend::DisplayBackend::Limine { fb, .. } => {
+        backend::DisplayBackend::Limine { fb, pitch_words } => {
             state.debug_counters.framebuffer_copy_count += 1;
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    state.back_buffer.as_ptr(),
-                    *fb,
-                    state.back_buffer.len(),
-                );
+            let stride = *pitch_words;
+            let fw = state.fb_width as usize;
+            let fh = state.fb_height as usize;
+            for y in 0..fh {
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        state.back_buffer.as_ptr().add(y * stride),
+                        fb.add(y * stride),
+                        fw,
+                    );
+                }
             }
         }
         backend::DisplayBackend::VirtioGpu { width, height } => {
@@ -2656,8 +2662,190 @@ fn redraw_scene(state: &mut CompositorState) {
 }
 
 // ---------------------------------------------------------------------------
+// Display backend setup helpers
+// ---------------------------------------------------------------------------
+
+/// Small fixed buffer for composing a log line and emitting it with a single
+/// DebugLog syscall, so it cannot be interleaved with other services' output.
+struct LogLine {
+    buf: [u8; 192],
+    len: usize,
+}
+
+impl LogLine {
+    fn new() -> Self {
+        Self {
+            buf: [0; 192],
+            len: 0,
+        }
+    }
+
+    fn push_str(&mut self, s: &str) {
+        for b in s.bytes() {
+            if self.len < self.buf.len() {
+                self.buf[self.len] = b;
+                self.len += 1;
+            }
+        }
+    }
+
+    fn push_dec(&mut self, v: u32) {
+        let mut tmp = [0u8; 10];
+        let mut n = v;
+        let mut i = tmp.len();
+        loop {
+            i -= 1;
+            tmp[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+            if n == 0 {
+                break;
+            }
+        }
+        for &b in &tmp[i..] {
+            if self.len < self.buf.len() {
+                self.buf[self.len] = b;
+                self.len += 1;
+            }
+        }
+    }
+
+    fn push_hex(&mut self, v: u32) {
+        self.push_str("0x");
+        let hex = b"0123456789ABCDEF";
+        for i in 0..8 {
+            let nibble = ((v >> (28 - i * 4)) & 0xF) as usize;
+            if self.len < self.buf.len() {
+                self.buf[self.len] = hex[nibble];
+                self.len += 1;
+            }
+        }
+    }
+
+    fn push_dim(&mut self, w: u32, h: u32) {
+        self.push_dec(w);
+        self.push_str("x");
+        self.push_dec(h);
+    }
+
+    fn flush(&self) {
+        if let Ok(s) = core::str::from_utf8(&self.buf[..self.len]) {
+            debug_log(s);
+        }
+    }
+}
+
+/// Allocate a page-aligned, tightly-packed pixel buffer. VirtIO GPU backing
+/// must start on a page boundary (the device scans whole pages, and the kernel
+/// rejects misaligned buffers). Returns an empty Vec on allocation failure.
+fn alloc_page_aligned_pixels(words: usize, fill: u32) -> Vec<u32> {
+    if words == 0 {
+        return Vec::new();
+    }
+    let layout = match core::alloc::Layout::from_size_align(words * 4, 4096) {
+        Ok(l) => l,
+        Err(_) => return Vec::new(),
+    };
+    // SAFETY: layout is non-zero; the bump allocator never reclaims, so
+    // reconstructing the Vec with a u32 layout is safe (dealloc is a no-op).
+    let ptr = unsafe { alloc::alloc::alloc(layout) as *mut u32 };
+    if ptr.is_null() {
+        return Vec::new();
+    }
+    let mut pixels = unsafe { Vec::from_raw_parts(ptr, words, words) };
+    for p in pixels.iter_mut() {
+        *p = fill;
+    }
+    pixels
+}
+
+/// Log a kernel GPU proxy failure with its reason and step-specific detail
+/// word (VirtIO response code, failing page index, or sg entry count).
+fn log_gpu_proxy_error(step: &str, e: sunlight_ipc::gpu_proxy::GpuProxyError) {
+    let mut line = LogLine::new();
+    line.push_str("[DISPLAY] ");
+    line.push_str(step);
+    line.push_str(" FAILED reason=");
+    line.push_str(e.reason_str());
+    line.push_str(" detail=");
+    line.push_hex(e.detail);
+    line.push_str("\n");
+    line.flush();
+}
+
+/// Prepare the VirtIO GPU backend: allocate a page-aligned back buffer at the
+/// GPU's scanout size and attach it as the scanout resource backing.
+///
+/// Deliberately does NOT issue SET_SCANOUT: QEMU's virtio-vga keeps showing
+/// the VGA-compat output (the Limine framebuffer with the TTY login screen)
+/// until the first non-zero SET_SCANOUT. Wiring the scanout is deferred to
+/// SESSION_ACTIVATE so the login screen stays visible until the user logs in.
+///
+/// Returns the attached buffer on success or a diagnostic reason string on
+/// failure (each step logs its exact error).
+fn setup_virtio_backend(gw: u32, gh: u32) -> Result<Vec<u32>, &'static str> {
+    let gpu_buffer = alloc_page_aligned_pixels((gw as usize) * (gh as usize), DESKTOP_COLOR);
+    if gpu_buffer.is_empty() {
+        debug_log("[DISPLAY] VirtIO back buffer allocation failed (");
+        debug_dim(gw, gh);
+        debug_log(")\n");
+        return Err("virtio-buffer-alloc-failed");
+    }
+    let num_pages = (gpu_buffer.len() * 4 + 4095) / 4096;
+    if let Err(e) = sunlight_ipc::gpu_attach_backing(gpu_buffer.as_ptr(), num_pages) {
+        log_gpu_proxy_error("gpu_attach_backing", e);
+        return Err("virtio-attach-backing-failed");
+    }
+    debug_log("[DISPLAY] gpu_attach_backing OK\n");
+    Ok(gpu_buffer)
+}
+
+/// Wire the prepared VirtIO resource to scanout 0 and switch to the hardware
+/// cursor. Called on the first SESSION_ACTIVATE (after login) so the VGA/TTY
+/// login screen stays visible until then. Idempotent via `virtio_scanout_enabled`.
+fn activate_virtio_scanout(state: &mut CompositorState) {
+    if state.virtio_scanout_enabled
+        || !matches!(
+            state.display_backend,
+            backend::DisplayBackend::VirtioGpu { .. }
+        )
+    {
+        return;
+    }
+    match sunlight_ipc::gpu_set_scanout() {
+        Ok(()) => {
+            debug_log("[DISPLAY] gpu_set_scanout OK — VirtIO output active\n");
+            state.virtio_scanout_enabled = true;
+            state.hw_cursor_active = true;
+            let mx = state.mouse_x as u32;
+            let my = state.mouse_y as u32;
+            let _ = upload_hw_cursor_if_needed(state);
+            let _ = move_hw_cursor(state, mx, my);
+            debug_log(if state.hw_cursor_active {
+                "[DISPLAY] cursor_mode=hardware\n"
+            } else {
+                "[DISPLAY] hardware cursor setup failed; using software cursor on GPU scanout\n"
+            });
+        }
+        Err(e) => {
+            // The resource keeps its backing; QEMU keeps showing the VGA
+            // output. Do NOT swap render dimensions here — clients may already
+            // hold the VirtIO-sized metrics.
+            log_gpu_proxy_error("gpu_set_scanout", e);
+            debug_log("[DISPLAY] VirtIO output unavailable; VGA output remains\n");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Debug helpers
 // ---------------------------------------------------------------------------
+
+/// Print `WxH` (e.g. `1280x720`).
+fn debug_dim(w: u32, h: u32) {
+    debug_dec(w);
+    debug_log("x");
+    debug_dec(h);
+}
 
 fn debug_hex(val: u32) {
     let mut buf = [0u8; 10];
@@ -2868,6 +3056,7 @@ mod tests {
                 pitch_words: 800,
             },
             hw_cursor_active: false,
+            virtio_scanout_enabled: false,
             last_hw_cursor_shape: None,
             active_cursor: CursorShape::Pointer,
             software_cursor: SoftwareCursorState::new(),
@@ -3065,6 +3254,32 @@ mod tests {
     }
 
     #[test]
+    fn initial_window_origin_stays_within_screen_bounds() {
+        let metrics = DisplayMetrics::new(
+            1366,
+            768,
+            1366 * 4,
+            PixelFormat::Xrgb8888,
+            ScreenBackend::VirtioGpu,
+        );
+        let client_w = 900;
+        let client_h = 650;
+        let chrome_w = client_w + BORDER_W * 2;
+        let chrome_h = TITLEBAR_H + client_h + BORDER_W;
+        let (x, y) = metrics.initial_window_origin(
+            5,
+            client_w,
+            client_h,
+            chrome_w,
+            chrome_h,
+            PANEL_TOP_RESERVED_H,
+        );
+        assert!(x + chrome_w <= 1366);
+        assert!(y + chrome_h <= 768);
+        assert!(y >= PANEL_TOP_RESERVED_H);
+    }
+
+    #[test]
     fn hidden_overlay_transitions_on_enter_idle_and_leave() {
         let mut state = test_state(vec![test_window(
             1,
@@ -3159,45 +3374,56 @@ pub extern "C" fn _start() -> ! {
     debug_log(" bpp=");
     debug_dec(bpp as u32);
     debug_log("\n");
+    debug_log("[display] available mode 0: ");
+    debug_dec(fb_width);
+    debug_log("x");
+    debug_dec(fb_height);
+    debug_log(" pitch=");
+    debug_dec(pitch as u32);
+    debug_log(" bpp=");
+    debug_dec(bpp as u32);
+    debug_log(" format=limine-framebuffer current=yes\n");
+    debug_log("[display] current mode: ");
+    debug_dec(fb_width);
+    debug_log("x");
+    debug_dec(fb_height);
+    debug_log("\n");
 
     let limine_backend = backend::DisplayBackend::Limine {
         fb: fb_ptr as *mut u32,
         pitch_words: pitch as usize / 4,
     };
 
-    // Try to use VirtIO GPU backend; fall back to Limine framebuffer.
+    // Probe the VirtIO GPU. The scanout reported by GET_DISPLAY_INFO carries
+    // the host's requested resolution (e.g. QEMU -device virtio-vga,xres=,yres=
+    // or a host window resize) — it is the mode we try to honor.
     //
     // TODO(live-resize): the VirtIO GPU size is sampled exactly once here, at
     // startup. If the host window is resized later, the kernel can signal a new
     // scanout size; the compositor would then need to resize back_buffer,
     // recreate the GPU resource, re-attach backing, set scanout, mark the whole
     // screen dirty and redraw. Until that path exists we pin the initial size.
-    let detected_backend = match sunlight_ipc::gpu_get_info() {
+    let mut diag_reason: &'static str = "no-virtio-gpu";
+    let virtio_scanout: Option<(u32, u32)> = match sunlight_ipc::gpu_get_info() {
         Some((gw, gh)) => match validate_size(gw, gh) {
             Some((gw, gh)) => {
                 debug_log("[DISPLAY] VirtIO GPU reported ");
-                debug_dec(gw);
-                debug_log("x");
-                debug_dec(gh);
+                debug_dim(gw, gh);
                 debug_log("\n");
-                backend::DisplayBackend::VirtioGpu {
-                    width: gw,
-                    height: gh,
-                }
+                Some((gw, gh))
             }
             None => {
                 // Garbage/zero size — ignore the GPU and use Limine instead.
                 debug_log("[DISPLAY] VirtIO GPU reported invalid size ");
-                debug_dec(gw);
-                debug_log("x");
-                debug_dec(gh);
+                debug_dim(gw, gh);
                 debug_log(", ignoring GPU\n");
-                limine_backend
+                diag_reason = "virtio-invalid-size";
+                None
             }
         },
         None => {
             debug_log("[DISPLAY] VirtIO GPU not found, using Limine framebuffer\n");
-            limine_backend
+            None
         }
     };
 
@@ -3213,80 +3439,94 @@ pub extern "C" fn _start() -> ! {
             Some((w, h)) => (w, h, pitch as u32),
             None => {
                 debug_log("[DISPLAY] Limine framebuffer size invalid, using safe fallback\n");
+                if virtio_scanout.is_none() {
+                    diag_reason = "limine-invalid-size-safe-fallback";
+                }
                 (SAFE_FALLBACK_W, SAFE_FALLBACK_H, SAFE_FALLBACK_W * 4)
             }
         };
+
+    // Backend selection is explicit: VirtIO GPU is only the active backend once
+    // resource create + backing attach succeed (SET_SCANOUT itself is deferred
+    // to SESSION_ACTIVATE so the TTY login stays visible). Any failure logs its
+    // exact reason and reverts every render dimension to the Limine mode, so
+    // VirtIO and Limine dimensions are never mixed.
     let mut render_width = limine_render_w;
     let mut render_height = limine_render_h;
     let mut render_pitch = limine_render_pitch;
-    if let backend::DisplayBackend::VirtioGpu { width, height } = detected_backend {
-        render_width = width;
-        render_height = height;
-        render_pitch = width * 4;
+    let mut display_backend = limine_backend;
+    let mut back_buffer: Vec<u32> = Vec::new();
+
+    if let Some((gw, gh)) = virtio_scanout {
+        match setup_virtio_backend(gw, gh) {
+            Ok(gpu_buffer) => {
+                display_backend = backend::DisplayBackend::VirtioGpu {
+                    width: gw,
+                    height: gh,
+                };
+                render_width = gw;
+                render_height = gh;
+                render_pitch = gw * 4;
+                back_buffer = gpu_buffer;
+                diag_reason = "virtio-attach-ok-scanout-deferred";
+                debug_log(
+                    "[DISPLAY] VirtIO scanout deferred until session activation (login stays on VGA output)\n",
+                );
+            }
+            Err(reason) => {
+                diag_reason = reason;
+                debug_log("[DISPLAY] falling back to Limine framebuffer backend at ");
+                debug_dim(limine_render_w, limine_render_h);
+                debug_log("\n");
+            }
+        }
     }
 
-    let mut back_buffer = {
-        let mut pixels = Vec::new();
-        pixels.resize(
+    // Limine (or fallback) path: allocate the software back buffer now that the
+    // final render dimensions are known.
+    if back_buffer.is_empty() {
+        back_buffer = alloc_page_aligned_pixels(
             (render_pitch as usize / 4) * render_height as usize,
             DESKTOP_COLOR,
         );
-        pixels
-    };
-
-    let mut display_backend = detected_backend;
-    let mut hw_cursor = false;
-    if let backend::DisplayBackend::VirtioGpu { .. } = display_backend {
-        // Page-align the back_buffer pointer and count pages.
-        let buf_start = back_buffer.as_ptr();
-        let buf_bytes = back_buffer.len() * 4;
-        let num_pages = (buf_bytes + 4095) / 4096;
-        let ok = sunlight_ipc::gpu_attach_backing(buf_start, num_pages);
-        if ok {
-            debug_log("[DISPLAY] gpu_attach_backing OK\n");
-            let ok2 = sunlight_ipc::gpu_set_scanout();
-            if ok2 {
-                debug_log("[DISPLAY] gpu_set_scanout OK\n");
-                hw_cursor = true;
-            } else {
-                debug_log("[DISPLAY] gpu_set_scanout FAILED\n");
-                debug_log("[DISPLAY] falling back to Limine framebuffer backend\n");
-                display_backend = limine_backend;
-            }
-        } else {
-            debug_log("[DISPLAY] gpu_attach_backing FAILED\n");
-            debug_log("[DISPLAY] falling back to Limine framebuffer backend\n");
-            display_backend = limine_backend;
-        }
-        // If GPU setup failed, the back buffer was sized for the GPU; revert it
-        // and the render dimensions to the Limine framebuffer for software present.
-        if !hw_cursor {
-            render_width = limine_render_w;
-            render_height = limine_render_h;
-            render_pitch = limine_render_pitch;
-            back_buffer = {
-                let mut pixels = Vec::new();
-                pixels.resize(
-                    (render_pitch as usize / 4) * render_height as usize,
-                    DESKTOP_COLOR,
-                );
-                pixels
-            };
+        if back_buffer.is_empty() {
+            debug_log("[DISPLAY] FATAL: back buffer allocation failed\n");
+            loop {}
         }
     }
 
     // Startup summary: single source of truth for the compositor's geometry.
-    match display_backend {
-        backend::DisplayBackend::VirtioGpu { .. } => debug_log("[DISPLAY] backend=VirtioGpu\n"),
-        backend::DisplayBackend::Limine { .. } => debug_log("[DISPLAY] backend=Limine\n"),
+    // `requested` is the mode the host asked for via the VirtIO scanout report
+    // (QEMU xres/yres override or window size); without a VirtIO GPU the Limine
+    // framebuffer mode is the only request we can honor.
+    let requested = virtio_scanout.unwrap_or((limine_render_w, limine_render_h));
+    let mut diag = LogLine::new();
+    diag.push_str("[DISPLAY] display_backend=");
+    diag.push_str(match display_backend {
+        backend::DisplayBackend::VirtioGpu { .. } => "VirtIO",
+        backend::DisplayBackend::Limine { .. } => "Limine",
+    });
+    diag.push_str(" requested=");
+    diag.push_dim(requested.0, requested.1);
+    diag.push_str(" virtio_scanout=");
+    match virtio_scanout {
+        Some((vw, vh)) => diag.push_dim(vw, vh),
+        None => diag.push_str("none"),
     }
-    debug_log("[DISPLAY] compositor size ");
-    debug_dec(render_width);
-    debug_log("x");
-    debug_dec(render_height);
-    debug_log(" pitch=");
-    debug_dec(render_pitch);
-    debug_log("\n");
+    diag.push_str(" final=");
+    diag.push_dim(render_width, render_height);
+    diag.push_str(" reason=");
+    diag.push_str(diag_reason);
+    diag.push_str("\n");
+    diag.flush();
+
+    let mut size_line = LogLine::new();
+    size_line.push_str("[DISPLAY] compositor size ");
+    size_line.push_dim(render_width, render_height);
+    size_line.push_str(" pitch=");
+    size_line.push_dec(render_pitch);
+    size_line.push_str("\n");
+    size_line.flush();
     let expected_back_len = (render_pitch as usize / 4) * render_height as usize;
     debug_log("[DISPLAY] back_buffer expected_len=");
     debug_dec(expected_back_len as u32);
@@ -3311,7 +3551,10 @@ pub extern "C" fn _start() -> ! {
         fb_pitch: render_pitch,
         back_buffer,
         display_backend,
-        hw_cursor_active: hw_cursor,
+        // Hardware cursor and scanout are enabled together on the first
+        // SESSION_ACTIVATE (see activate_virtio_scanout).
+        hw_cursor_active: false,
+        virtio_scanout_enabled: false,
         last_hw_cursor_shape: None,
         active_cursor: CursorShape::Pointer,
         software_cursor: SoftwareCursorState::new(),
@@ -3330,49 +3573,12 @@ pub extern "C" fn _start() -> ! {
         last_titlebar_click_ms: 0,
         titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
     };
-    // Initial cursor position for the hardware cursor.
-    if state.hw_cursor_active {
-        let init_mouse_x = state.mouse_x as u32;
-        let init_mouse_y = state.mouse_y as u32;
-        let _ = upload_hw_cursor_if_needed(&mut state);
-        let _ = move_hw_cursor(&mut state, init_mouse_x, init_mouse_y);
-        if !state.hw_cursor_active {
-            debug_log(
-                "[DISPLAY] initial hardware cursor setup failed; using software cursor on GPU scanout\n",
-            );
-        }
-    }
-    debug_log("[DISPLAY] cursor_mode=");
-    debug_log(if state.hw_cursor_active {
-        "hardware\n"
-    } else {
-        "software\n"
-    });
     log_debug_counters(&state, "startup");
-    // Initial render: clear the back_buffer and present to avoid a black screen
-    // on VirtIO GPU. The session is inactive at boot (tty_server will activate
-    // it later), but we must populate the scanout resource to display anything.
+    // Prime the back_buffer content (wallpaper/desktop color) but do NOT
+    // present it: the TTY session owns the display until SESSION_ACTIVATE.
+    // Presenting here used to overwrite the login screen on the Limine
+    // backend, and on VirtIO the (deferred) scanout is not wired yet.
     clear_back_buffer(&mut state);
-    if state.hw_cursor_active {
-        let _ = upload_hw_cursor_if_needed(&mut state);
-    }
-    present_back_buffer(&mut state);
-
-    // When VirtIO GPU is the active backend, the TTY login screen is drawn to
-    // the Limine framebuffer which QEMU does not display (VirtIO GPU output
-    // takes over). SESSION_ACTIVATE from tty_server would never arrive, leaving
-    // session_active=false forever and the desktop blank. Auto-activate here so
-    // the compositor draws and the Vortex Shell launches immediately.
-    if matches!(
-        state.display_backend,
-        backend::DisplayBackend::VirtioGpu { .. }
-    ) {
-        debug_log("[DISPLAY] VirtIO GPU backend: auto-activating Desktop session\n");
-        state.session_active = true;
-        ensure_vortex_shell(&mut state);
-        mark_dirty_full(&mut state);
-        redraw_scene(&mut state);
-    }
 
     let mut next_win_id: u64 = 1;
 
@@ -3452,18 +3658,23 @@ pub extern "C" fn _start() -> ! {
                         let id = next_win_id;
                         next_win_id += 1;
 
-                        // Initial position: cascade from center of screen, clamped below the
-                        // top panel so new windows don't obscure the Vortex Shell bar.
-                        let cascade = ((id.saturating_sub(1)) % 8) as u32 * 28;
-                        let win_x = state
-                            .fb_width
-                            .saturating_sub(w)
-                            .saturating_div(2)
-                            .saturating_add(cascade);
-                        let win_y = ((state.fb_height / 4)
-                            .saturating_sub(h / 2)
-                            .saturating_add(cascade))
-                        .max(PANEL_TOP_RESERVED_H);
+                        let titlebar_h = WindowDecoration::from_flags(msg.words[1])
+                            .titlebar_height();
+                        let chrome_w = w.saturating_add(BORDER_W * 2);
+                        let chrome_h = titlebar_h + h + BORDER_W;
+                        let metrics = state.display_metrics();
+                        let (win_x, win_y) = if is_desktop_window {
+                            (0, 0)
+                        } else {
+                            metrics.initial_window_origin(
+                                id,
+                                w,
+                                h,
+                                chrome_w,
+                                chrome_h,
+                                PANEL_TOP_RESERVED_H,
+                            )
+                        };
 
                         debug_log("[DISPLAY] create_window id=");
                         debug_dec(id as u32);
@@ -3691,13 +3902,16 @@ pub extern "C" fn _start() -> ! {
             }
 
             // -------------------------------------------------------------------
-            // GET_SCREEN_INFO — reply with physical framebuffer dimensions.
+            // GET_SCREEN_INFO — reply with compositor display metrics.
             // No input words needed.
-            // Reply: words[0] = fb_width | (fb_height << 32)
             // -------------------------------------------------------------------
             SgpMsg::GET_SCREEN_INFO => {
-                let packed = state.fb_width as u64 | ((state.fb_height as u64) << 32);
-                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, packed));
+                let words = state.display_metrics().pack_reply_words();
+                let mut reply = IpcMsg::with_label(SgpMsg::REPLY);
+                for (i, word) in words.iter().enumerate() {
+                    reply = reply.word(i, *word);
+                }
+                let _ = ipc_reply(reply);
             }
 
             // -------------------------------------------------------------------
@@ -4301,6 +4515,9 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::SESSION_ACTIVATE => {
                 if !state.session_active {
                     debug_log("[DISPLAY] [SESSION] activated — Desktop owns framebuffer\n");
+                    // First activation on the VirtIO backend: wire the scanout
+                    // now, taking the display over from the VGA/TTY output.
+                    activate_virtio_scanout(&mut state);
                     state.session_active = true;
                     mark_dirty_full(&mut state);
                     redraw_scene(&mut state);

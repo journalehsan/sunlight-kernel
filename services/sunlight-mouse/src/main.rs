@@ -10,8 +10,9 @@
 
 use sunlight_ipc::{
     endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, nameserver_lookup,
-    nameserver_lookup_timeout, nameserver_register, process_yield, DevicedMsg, DriverCaps,
-    DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
+    nameserver_lookup_timeout, nameserver_register, process_yield, query_display_metrics,
+    DisplayMetrics, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg,
+    ProcessExit,
 };
 
 mod profile;
@@ -248,6 +249,23 @@ impl MouseState {
             .y_fp
             .clamp(0, ((self.screen_height - 1).max(0)) << FP_SHIFT);
         self.x_fp != before_x || self.y_fp != before_y
+    }
+
+    fn set_screen_size(&mut self, width: i32, height: i32) {
+        if width <= 0 || height <= 0 {
+            return;
+        }
+        if self.screen_width == width && self.screen_height == height {
+            return;
+        }
+        self.screen_width = width;
+        self.screen_height = height;
+        let _ = self.sync_clamp();
+        syscall::debug_log("[MOUSE] screen bounds updated to ");
+        syscall::debug_log_i32(width);
+        syscall::debug_log("x");
+        syscall::debug_log_i32(height);
+        syscall::debug_log("\n");
     }
 
     fn update_kernel_drop_count(&mut self) {
@@ -647,10 +665,23 @@ pub extern "C" fn _start() -> ! {
 
     syscall::debug_log("[MOUSE] found tty, ready to process mouse events\n");
 
-    let mut mouse_state = MouseState::new(1024, 768);
+    let fallback = DisplayMetrics::safe_fallback();
+    let mut mouse_state = MouseState::new(fallback.width_px as i32, fallback.height_px as i32);
+    let mut screen_bounds_synced = false;
 
     loop {
         request_priority_boost(&mut priority_boosted);
+        if !screen_bounds_synced {
+            if display_token.is_none() {
+                display_token = nameserver_lookup("display_server");
+            }
+            if let Some(ep) = display_token {
+                if let Some(metrics) = query_display_metrics(ep) {
+                    mouse_state.set_screen_size(metrics.width_px as i32, metrics.height_px as i32);
+                    screen_bounds_synced = true;
+                }
+            }
+        }
         let mut pending_batch: Option<PendingMotionBatch> = None;
 
         while let Some(byte) = syscall::mouse_pop_byte() {

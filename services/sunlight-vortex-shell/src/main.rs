@@ -58,11 +58,12 @@ mod start_menu;
 use alloc::{string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
-    debug_log, ipc_call, ipc_call_timeout,
+    debug_log, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, nameserver_lookup, process_is_alive, process_yield, show_notification,
-    unpack_iface_summary, CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg,
-    NotificationKind, ProcessExit, SgpMsg, TzMsg,
+    monotonic_millis, nameserver_lookup, process_is_alive, process_yield, query_display_metrics,
+    show_notification, unpack_iface_summary, DisplayMetrics, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+    CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg, NotificationKind, ProcessExit,
+    SgpMsg, TzMsg,
 };
 use sunlight_libc::{self as libc, sun_exec, DirEntry, FT_DIR};
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
@@ -339,10 +340,6 @@ impl RunningAppEntry {
 // ---------------------------------------------------------------------------
 // Window geometry
 // ---------------------------------------------------------------------------
-
-// Fallback if GET_SCREEN_INFO fails (display server not yet ready on first poll).
-const FALLBACK_W: u32 = 1280;
-const FALLBACK_H: u32 = 800;
 
 // Desktop-layer config flags (see app.rs WindowConfig docs).
 // bits[1:0]=2 Desktop, bits[3:2]=3 Fullscreen, bit[4]=1 NoChrome → 0x1E
@@ -963,8 +960,8 @@ impl VortexShell {
             display_ep,
             desktop_paths,
             desktop_icons: Vec::new(),
-            screen_w: FALLBACK_W,
-            screen_h: FALLBACK_H,
+            screen_w: SAFE_FALLBACK_W,
+            screen_h: SAFE_FALLBACK_H,
             dock_zones: [(Rect::new(0, 0, 0, 0), DockZone::Placeholder); 4],
             selected_icons: Vec::new(),
             context_menu: None,
@@ -3748,15 +3745,12 @@ pub extern "C" fn _start() -> ! {
 
     // Query physical framebuffer dimensions before allocating the SHM window.
     // This ensures the shell canvas matches the actual screen, not the image size.
-    let packed = ipc_call(display_ep, IpcMsg::with_label(SgpMsg::GET_SCREEN_INFO));
-    let (screen_w, screen_h) = if packed.label == SgpMsg::REPLY && packed.words[0] != 0 {
-        let w = (packed.words[0] & 0xFFFF_FFFF) as u32;
-        let h = (packed.words[0] >> 32) as u32;
-        (w.max(320), h.max(240)) // clamp to sanity minimums
-    } else {
+    let metrics = query_display_metrics(display_ep).unwrap_or_else(|| {
         debug_log("[VORTEX] GET_SCREEN_INFO failed, using fallback resolution\n");
-        (FALLBACK_W, FALLBACK_H)
-    };
+        DisplayMetrics::safe_fallback()
+    });
+    let screen_w = metrics.width_px;
+    let screen_h = metrics.height_px;
 
     debug_log("[VORTEX] screen ");
     debug_log_u32(screen_w);

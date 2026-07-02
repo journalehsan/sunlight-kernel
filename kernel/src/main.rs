@@ -734,9 +734,42 @@ pub extern "C" fn _start() -> ! {
                     match gpu {
                         Some(mut dev) => {
                             // Probe display info immediately and cache dimensions
-                            if let Some((w, h)) = unsafe { dev.get_display_info() } {
+                            if let Some(modes) = unsafe { dev.get_display_modes() } {
+                                for (index, mode) in modes.iter().enumerate() {
+                                    if mode.r_w == 0 || mode.r_h == 0 {
+                                        continue;
+                                    }
+                                    serial_println!(
+                                        "[display] available virtio scanout {}: {}x{} x={} y={} enabled={} flags={} pitch=unavailable format=virtio-gpu",
+                                        index,
+                                        mode.r_w,
+                                        mode.r_h,
+                                        mode.r_x,
+                                        mode.r_y,
+                                        mode.enabled,
+                                        mode.flags
+                                    );
+                                }
+                                let w = modes[0].r_w;
+                                let h = modes[0].r_h;
+                                if w != 0 && h != 0 {
+                                    dev.width = w;
+                                    dev.height = h;
+                                    serial_println!(
+                                        "[display] current virtio scanout: {}x{}",
+                                        w,
+                                        h
+                                    );
+                                    serial_println!("[GPU]  VirtIO GPU ready {}x{}", w, h);
+                                } else {
+                                    serial_println!(
+                                        "[GPU]  VirtIO GPU: GET_DISPLAY_INFO returned empty scanout 0"
+                                    );
+                                }
+                            } else if let Some((w, h)) = unsafe { dev.get_display_info() } {
                                 dev.width = w;
                                 dev.height = h;
+                                serial_println!("[display] current virtio scanout: {}x{}", w, h);
                                 serial_println!("[GPU]  VirtIO GPU ready {}x{}", w, h);
                             } else {
                                 serial_println!("[GPU]  VirtIO GPU: GET_DISPLAY_INFO failed");
@@ -774,6 +807,9 @@ pub extern "C" fn _start() -> ! {
     splash.set_status("Post-Phase Stabilization — login");
     splash.set_kernel_status("OK");
     splash.log("[SunlightOS] Foundation Complete");
+    // The boot gate (tools/test.sh) greps serial for this marker; splash.log
+    // only writes to the framebuffer.
+    serial_println!("[SunlightOS] Foundation Complete");
     splash.redraw();
     splash.clear_main();
     splash.set_status("login...");
@@ -1466,6 +1502,7 @@ fn setup_key_injection() {
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "top" => build_top_sequence(),
         "dns_test" => build_dns_test_sequence(),
+        "desktop_login" => build_desktop_login_sequence(),
         _ => build_phase3_8_sequence(),
     };
     let len = sequence
@@ -1531,6 +1568,23 @@ fn build_phase3_9_sequence() -> [u8; 256] {
         0x1F, 0x15, 0x1F, 0x21, 0x12, 0x14, // sysfetch + (no Enter; we are done)
     ];
     s[p38_len..p38_len + extra.len()].copy_from_slice(&extra);
+    s
+}
+
+/// Desktop login injection: commit the preselected root user, type the
+/// password, Tab to the session dropdown, Space to toggle Tty→Desktop, Enter
+/// to log in. Used to verify the login → SESSION_ACTIVATE → desktop handover.
+#[cfg(feature = "key_inject")]
+fn build_desktop_login_sequence() -> [u8; 256] {
+    let mut s = [0u8; 256];
+    let codes: [u8; 8] = [
+        0x1C, // Enter -> commit user slot "root", focus password
+        0x13, 0x18, 0x18, 0x14, // password: r,o,o,t
+        0x0F, // Tab -> session dropdown
+        0x39, // Space -> toggle session to Desktop
+        0x1C, // Enter -> login
+    ];
+    s[..codes.len()].copy_from_slice(&codes);
     s
 }
 

@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-utils"
-version = "0.2.704"
+version = "0.2.725"
+
+
+
 
 
 
@@ -197,4 +200,5 @@ path = "src/main.rs"
 
 [dependencies]
 sunlight-libc = { path = "../sunlight-libc" }
+sunlight-ipc = { path = "../ipc" }
 memchr = { version = "2", default-features = false }

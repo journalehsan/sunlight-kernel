@@ -365,17 +365,24 @@ impl ControlPanelApp {
         let opt3_row = rows.next().unwrap_or_default();
         let actions_row = rows.next().unwrap_or_default();
 
-        Label::new(desc_row, "Screen resolution settings.").draw(canvas, theme);
+        Label::new(desc_row, "Display resolution (read-only).").draw(canvas, theme);
 
         // Format current resolution
         let mut cur_buf = [0u8; 48];
         let cur_str = fmt_cur_res(self.screen_w, self.screen_h, &mut cur_buf);
         Label::new(cur_row, cur_str).draw(canvas, theme);
 
-        // Placeholder resolution options (disabled)
-        Label::new(opt1_row, "  [ ] 800 x 600    (TODO: mode switching)").draw(canvas, theme);
-        Label::new(opt2_row, "  [ ] 1024 x 768   (TODO: mode switching)").draw(canvas, theme);
-        Label::new(opt3_row, "  [ ] 1280 x 1024  (TODO: mode switching)").draw(canvas, theme);
+        Label::new(
+            opt1_row,
+            "Runtime mode switching is not available yet.",
+        )
+        .draw(canvas, theme);
+        Label::new(
+            opt2_row,
+            "Use host VM settings or ./tools/runs.sh --resolution.",
+        )
+        .draw(canvas, theme);
+        Label::new(opt3_row, " ").draw(canvas, theme);
 
         let back_r = Rect::new(actions_row.x, actions_row.y, 80, actions_row.h);
         let mut back = Button::secondary(back_r, "Back");
@@ -525,19 +532,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     debug_log("[CONTROL-PANEL] starting\n");
 
     let display_ep = nameserver_lookup("display_server");
-    let (screen_w, screen_h) = if let Some(ep) = display_ep {
-        let reply = ipc_call(ep, IpcMsg::with_label(SgpMsg::GET_SCREEN_INFO));
-        if reply.label == SgpMsg::REPLY {
-            let packed = reply.words[0];
-            let w = (packed & 0xFFFF_FFFF) as u32;
-            let h = (packed >> 32) as u32;
-            (w.max(640), h.max(480))
-        } else {
-            (1024, 768)
-        }
-    } else {
-        (1024, 768)
-    };
+    let (screen_w, screen_h) = display_ep
+        .and_then(sunlight_ipc::query_display_metrics)
+        .map(|m| (m.width_px, m.height_px))
+        .unwrap_or((sunlight_ipc::SAFE_FALLBACK_W, sunlight_ipc::SAFE_FALLBACK_H));
 
     let app = ControlPanelApp::new(display_ep, screen_w, screen_h);
     let mut app = app;

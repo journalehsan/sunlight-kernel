@@ -19,6 +19,7 @@ Advanced runner with all options and help menu.
 ./tools/runs.sh --curses        # Text-mode display
 ./tools/runs.sh --no-display    # Serial only
 ./tools/runs.sh --dual-gpu      # VGA std + explicit virtio-gpu-pci
+./tools/runs.sh --resolution 1366x768
 
 # Other options
 ./tools/runs.sh --memory 512    # Custom RAM size
@@ -30,6 +31,12 @@ Advanced runner with all options and help menu.
 - Multiple display backends (GTK, SDL, VNC, curses)
 - `--display MODE` switch plus convenience flags
 - Old hardware-cursor runner mode via `--dual-gpu`
+- VM-friendly default resolution policy for QEMU:
+  `1366x768 -> 1280x800 -> 1280x720 -> 1024x768`
+- Explicit QEMU resolution override via `--resolution WxH` or
+  `SUNLIGHT_QEMU_RESOLUTION=WxH`
+- Safety guardrails: resolution requests are ignored on non-QEMU hypervisors
+  and when the selected QEMU video device lacks explicit `xres` / `yres`
 - Custom memory configuration
 - GDB debugging support
 - Screenshot capture
@@ -49,6 +56,11 @@ This simply forwards to `tools/runs.sh` so older commands still work.
 ```bash
 ./tools/runs.sh --sdl
 ```
+
+The QEMU launcher now requests `1366x768` by default when the selected VirtIO
+video device supports explicit `xres` / `yres` properties. That gives the
+desktop, Start Menu, and apps more usable space without changing physical
+hardware behavior.
 
 ### For Headless/SSH Environments
 ```bash

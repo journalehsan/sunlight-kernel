@@ -4129,26 +4129,61 @@ fn sys_gpu_get_info(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
+// Failure reason codes for the GPU setup syscalls (120/121), reported to
+// userspace in frame.r8 (msg.words[0]) when the syscall returns 0.
+// Keep numerically in sync with `sunlight_ipc::gpu_proxy`.
+// Layout: low 32 bits = reason, high 32 bits = detail (VirtIO resp code,
+// failing page index, or entry count depending on the reason).
+const GPU_ERR_NOT_DISPLAY_SERVER: u64 = 1;
+const GPU_ERR_BAD_ARGS: u64 = 2;
+const GPU_ERR_NO_DEVICE: u64 = 3;
+const GPU_ERR_UNMAPPED_PAGE: u64 = 4;
+const GPU_ERR_SG_OVERFLOW: u64 = 5;
+const GPU_ERR_CREATE_FAILED: u64 = 6;
+const GPU_ERR_ATTACH_FAILED: u64 = 7;
+const GPU_ERR_SCANOUT_FAILED: u64 = 8;
+
+fn gpu_err(frame: &mut SyscallFrame, reason: u64, detail: u32) -> u64 {
+    frame.r8 = reason | ((detail as u64) << 32);
+    0
+}
+
 /// Syscall 120: GpuAttachBacking
-/// rdi = user VA of back_buffer start, rsi = number of 4KiB pages.
-/// Walks the process page table, builds scatter-gather list, sends RESOURCE_ATTACH_BACKING
-/// for SCANOUT_RESOURCE_ID (1).
+/// rdi = user VA of back_buffer start (must be page-aligned),
+/// rsi = number of 4KiB pages.
+/// Walks the process page table, coalesces physically-contiguous pages into a
+/// scatter-gather list, then sends RESOURCE_CREATE_2D + RESOURCE_ATTACH_BACKING
+/// for SCANOUT_RESOURCE_ID (1). Returns 1 on success; on failure returns 0 with
+/// a reason code in r8 and logs the exact step that failed.
 fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
     if !current_process_is_display_server() {
-        return 0;
+        return gpu_err(frame, GPU_ERR_NOT_DISPLAY_SERVER, 0);
     }
     let user_va = frame.rdi;
     let num_pages = frame.rsi as usize;
-    if num_pages == 0 || num_pages > 2048 {
-        return 0;
+    // 4096 pages = 16 MiB backing, comfortably above any sane scanout size.
+    if num_pages == 0 || num_pages > 4096 {
+        crate::serial_println!("[GPU] attach_backing: bad num_pages={}", num_pages);
+        return gpu_err(frame, GPU_ERR_BAD_ARGS, num_pages as u32);
+    }
+    if user_va & 0xFFF != 0 {
+        // A misaligned buffer would silently shift every scanline: the device
+        // scans from the start of the first page, not from user_va.
+        crate::serial_println!(
+            "[GPU] attach_backing: user_va {:#x} not page-aligned",
+            user_va
+        );
+        return gpu_err(frame, GPU_ERR_BAD_ARGS, (user_va & 0xFFF) as u32);
     }
 
     use x86_64::{structures::paging::Page, VirtAddr};
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
     let hhdm_va = VirtAddr::new(hhdm);
 
-    // Build scatter-gather entries from the process's page table
-    let mut entries = alloc::vec::Vec::with_capacity(num_pages);
+    // Build scatter-gather entries from the process's page table, merging
+    // physically-contiguous pages so large buffers stay within the device
+    // driver's sg buffer capacity (MAX_SG_ENTRIES).
+    let mut entries: alloc::vec::Vec<sunlight_virtio::VirtioGpuMemEntry> = alloc::vec::Vec::new();
     {
         let sched = crate::sched::SCHEDULER.lock();
         let process = sched.current_process();
@@ -4157,70 +4192,121 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
             let page = Page::containing_address(VirtAddr::new(va));
             let phys = match unsafe { process.address_space.lookup_phys(page, hhdm_va) } {
                 Some(p) => p.as_u64(),
-                None => return 0,
+                None => {
+                    crate::serial_println!(
+                        "[GPU] attach_backing: page {}/{} at va {:#x} not mapped",
+                        i,
+                        num_pages,
+                        va
+                    );
+                    return gpu_err(frame, GPU_ERR_UNMAPPED_PAGE, i as u32);
+                }
             };
-            entries.push(sunlight_virtio::VirtioGpuMemEntry {
-                addr: phys,
-                length: 4096,
-                padding: 0,
-            });
+            match entries.last_mut() {
+                Some(last) if last.addr + last.length as u64 == phys => {
+                    last.length += 4096;
+                }
+                _ => entries.push(sunlight_virtio::VirtioGpuMemEntry {
+                    addr: phys,
+                    length: 4096,
+                    padding: 0,
+                }),
+            }
         }
+    }
+    if entries.len() > sunlight_virtio::gpu::MAX_SG_ENTRIES {
+        crate::serial_println!(
+            "[GPU] attach_backing: {} pages need {} sg entries, driver max is {}",
+            num_pages,
+            entries.len(),
+            sunlight_virtio::gpu::MAX_SG_ENTRIES
+        );
+        return gpu_err(frame, GPU_ERR_SG_OVERFLOW, entries.len() as u32);
     }
 
     let mut dev = crate::GPU_DEVICE.lock();
     let gpu = match dev.as_mut() {
         Some(g) => g,
-        None => return 0,
+        None => return gpu_err(frame, GPU_ERR_NO_DEVICE, 0),
     };
 
     // First create the scanout resource (idempotent if already created, but safe)
     let (w, h) = (gpu.width, gpu.height);
-    let ok = unsafe {
+    crate::serial_println!(
+        "[GPU] attach_backing: va={:#x} pages={} sg_entries={} resource={}x{}",
+        user_va,
+        num_pages,
+        entries.len(),
+        w,
+        h
+    );
+    if let Err(code) = unsafe {
         gpu.resource_create_2d(
             sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
-            sunlight_virtio::gpu::VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM,
+            // The back_buffer holds packed little-endian 0x00RRGGBB pixels,
+            // which is memory byte order B,G,R,X. Using X8R8G8B8 here swaps
+            // R/G and drops blue entirely (green-tinted screen).
+            sunlight_virtio::gpu::VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM,
             w,
             h,
         )
-    };
-    if !ok {
-        crate::serial_println!("[GPU] resource_create_2d failed");
+    } {
+        crate::serial_println!(
+            "[GPU] RESOURCE_CREATE_2D {}x{} failed: {:#x} ({})",
+            w,
+            h,
+            code,
+            sunlight_virtio::gpu::resp_code_name(code)
+        );
+        return gpu_err(frame, GPU_ERR_CREATE_FAILED, code);
     }
 
-    let ok =
-        unsafe { gpu.resource_attach_backing(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, &entries) };
-    if ok {
-        1
-    } else {
-        0
+    if let Err(code) =
+        unsafe { gpu.resource_attach_backing(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, &entries) }
+    {
+        crate::serial_println!(
+            "[GPU] RESOURCE_ATTACH_BACKING ({} entries) failed: {:#x} ({})",
+            entries.len(),
+            code,
+            sunlight_virtio::gpu::resp_code_name(code)
+        );
+        return gpu_err(frame, GPU_ERR_ATTACH_FAILED, code);
     }
+    1
 }
 
 /// Syscall 121: GpuSetScanout
-/// Sends SET_SCANOUT to wire resource 1 to scanout 0.
-fn sys_gpu_set_scanout(_frame: &mut SyscallFrame) -> u64 {
+/// Sends SET_SCANOUT to wire resource 1 to scanout 0. Returns 1 on success;
+/// on failure returns 0 with a reason code in r8.
+fn sys_gpu_set_scanout(frame: &mut SyscallFrame) -> u64 {
     if !current_process_is_display_server() {
-        return 0;
+        return gpu_err(frame, GPU_ERR_NOT_DISPLAY_SERVER, 0);
     }
     let mut dev = crate::GPU_DEVICE.lock();
     let gpu = match dev.as_mut() {
         Some(g) => g,
-        None => return 0,
+        None => return gpu_err(frame, GPU_ERR_NO_DEVICE, 0),
     };
     let (w, h) = (gpu.width, gpu.height);
-    let ok = unsafe {
+    if let Err(code) = unsafe {
         gpu.set_scanout(
             sunlight_virtio::gpu::SCANOUT_ID,
             sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
             w,
             h,
         )
-    };
-    if ok {
-        1
-    } else {
-        0
+    } {
+        crate::serial_println!(
+            "[GPU] SET_SCANOUT {}x{} failed: {:#x} ({})",
+            w,
+            h,
+            code,
+            sunlight_virtio::gpu::resp_code_name(code)
+        );
+        return gpu_err(frame, GPU_ERR_SCANOUT_FAILED, code);
     }
+    crate::serial_println!("[GPU] SET_SCANOUT {}x{} OK (scanout 0, resource 1)", w, h);
+    1
 }
 
 /// Syscall 122: GpuFlush
@@ -4245,7 +4331,7 @@ fn sys_gpu_flush(frame: &mut SyscallFrame) -> u64 {
         gpu.transfer_to_host_2d(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, x, y, w, h, width)
     };
     let ok2 = unsafe { gpu.resource_flush(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, x, y, w, h) };
-    if ok1 && ok2 {
+    if ok1.is_ok() && ok2.is_ok() {
         1
     } else {
         0
@@ -4296,29 +4382,35 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
     };
 
     // Create cursor resource (format B8G8R8A8 for transparency)
-    let ok = unsafe {
+    if let Err(code) = unsafe {
         gpu.resource_create_2d(
             sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
             sunlight_virtio::gpu::VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM,
             sunlight_virtio::gpu::CURSOR_W,
             sunlight_virtio::gpu::CURSOR_H,
         )
-    };
-    if !ok {
-        crate::serial_println!("[GPU] cursor resource_create_2d failed");
+    } {
+        crate::serial_println!(
+            "[GPU] cursor resource_create_2d failed: {:#x} ({})",
+            code,
+            sunlight_virtio::gpu::resp_code_name(code)
+        );
     }
 
     // Attach backing (kernel-allocated cursor pages)
     let cursor_pages = gpu.cursor_pages_phys();
-    let ok = unsafe {
+    if let Err(code) = unsafe {
         gpu.resource_attach_backing(sunlight_virtio::gpu::CURSOR_RESOURCE_ID, &cursor_pages)
-    };
-    if !ok {
-        crate::serial_println!("[GPU] cursor resource_attach_backing failed");
+    } {
+        crate::serial_println!(
+            "[GPU] cursor resource_attach_backing failed: {:#x} ({})",
+            code,
+            sunlight_virtio::gpu::resp_code_name(code)
+        );
     }
 
     // Transfer cursor pixels to host
-    let ok = unsafe {
+    if let Err(code) = unsafe {
         gpu.transfer_to_host_2d(
             sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
             0,
@@ -4327,13 +4419,16 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
             sunlight_virtio::gpu::CURSOR_H,
             sunlight_virtio::gpu::CURSOR_W,
         )
-    };
-    if !ok {
-        crate::serial_println!("[GPU] cursor transfer failed");
+    } {
+        crate::serial_println!(
+            "[GPU] cursor transfer failed: {:#x} ({})",
+            code,
+            sunlight_virtio::gpu::resp_code_name(code)
+        );
     }
 
     // Update cursor on scanout
-    let ok = unsafe {
+    let result = unsafe {
         gpu.update_cursor(
             sunlight_virtio::gpu::SCANOUT_ID,
             sunlight_virtio::gpu::CURSOR_RESOURCE_ID,
@@ -4343,13 +4438,16 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
             hot_y,
         )
     };
-    if !ok {
-        crate::serial_println!("[GPU] cursor UPDATE_CURSOR command failed");
-    }
-    if ok {
-        1
-    } else {
-        0
+    match result {
+        Ok(()) => 1,
+        Err(code) => {
+            crate::serial_println!(
+                "[GPU] cursor UPDATE_CURSOR command failed: {:#x} ({})",
+                code,
+                sunlight_virtio::gpu::resp_code_name(code)
+            );
+            0
+        }
     }
 }
 
@@ -4367,13 +4465,15 @@ fn sys_gpu_move_cursor(frame: &mut SyscallFrame) -> u64 {
         Some(g) => g,
         None => return 0,
     };
-    let ok = unsafe { gpu.move_cursor(sunlight_virtio::gpu::SCANOUT_ID, x, y) };
-    if !ok {
-        crate::serial_println!("[GPU] cursor MOVE_CURSOR command failed");
-    }
-    if ok {
-        1
-    } else {
-        0
+    match unsafe { gpu.move_cursor(sunlight_virtio::gpu::SCANOUT_ID, x, y) } {
+        Ok(()) => 1,
+        Err(code) => {
+            crate::serial_println!(
+                "[GPU] cursor MOVE_CURSOR command failed: {:#x} ({})",
+                code,
+                sunlight_virtio::gpu::resp_code_name(code)
+            );
+            0
+        }
     }
 }

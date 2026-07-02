@@ -25,3 +25,10 @@ docs/PHASE_3_0_SUMMARY.md
 docs/PHASE_3_5_SUMMARY.md
 docs/PHASE_3_6_SUMMARY.md
 ```
+
+Fast host-side policy checks can live alongside the boot-gate data when they
+validate launcher-only behavior. Current example:
+
+```bash
+./tools/tests/test_vm_display_policy.sh
+```

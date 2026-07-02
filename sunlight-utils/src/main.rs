@@ -10,6 +10,7 @@
 #![no_main]
 
 use libc::{DirEntry, Errno, Fd, FT_DIR, STDOUT};
+use sunlight_ipc::{nameserver_lookup, query_display_metrics, DisplayMetrics};
 use sunlight_libc as libc;
 
 const MAX_ARGS: usize = 16;
@@ -108,6 +109,7 @@ fn run(args: &[&str]) -> i32 {
             1
         }
         "grep" => cmd_grep(rest),
+        "display-status" => cmd_display_status(),
         _ => {
             print2(applet, ": applet not found\n");
             127
@@ -118,6 +120,27 @@ fn run(args: &[&str]) -> i32 {
 // ---------------------------------------------------------------------------
 // Applets
 // ---------------------------------------------------------------------------
+
+fn cmd_display_status() -> i32 {
+    let Some(display_ep) = nameserver_lookup("display_server") else {
+        let _ = write_all(b"display_server: not running\n");
+        return 1;
+    };
+
+    let metrics = query_display_metrics(display_ep).unwrap_or(DisplayMetrics::safe_fallback());
+    let _ = write_all(b"resolution: ");
+    print_u64(metrics.width_px as u64);
+    let _ = write_all(b"x");
+    print_u64(metrics.height_px as u64);
+    let _ = write_all(b"\nstride_bytes: ");
+    print_u64(metrics.stride_bytes as u64);
+    let _ = write_all(b"\npixel_format: ");
+    let _ = write_all(metrics.pixel_format.as_str().as_bytes());
+    let _ = write_all(b"\nbackend: ");
+    let _ = write_all(metrics.backend.as_str().as_bytes());
+    let _ = write_all(b"\nscale: 1.0 (native)\nruntime_modesetting: unsupported\n");
+    0
+}
 
 fn cmd_ls(args: &[&str]) -> i32 {
     let mut long_format = false;

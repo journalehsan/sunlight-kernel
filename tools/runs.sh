@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ISO_PATH="$PROJECT_ROOT/target/sunlightos.iso"
 
+# shellcheck source=tools/vm_display_policy.sh
+source "$SCRIPT_DIR/vm_display_policy.sh"
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -42,6 +45,9 @@ Display Options (QEMU only):
   --screenshot          Capture screenshot and exit
   --dual-gpu            Use VGA std + explicit virtio-gpu-pci, like the old
                         hardware-cursor runner with a separate GPU output/tab
+  --resolution WxH      Request an explicit QEMU desktop resolution. When unset,
+                        SunlightOS prefers 1366x768, then 1280x800, 1280x720,
+                        then 1024x768 if the QEMU video device exposes xres/yres
 
 QEMU Options:
   -m, --memory MB       Set RAM size (default: 2048)
@@ -86,6 +92,11 @@ GDB_MODE=false
 SCREENSHOT_MODE=false
 BUILD_FIRST=false
 DUAL_GPU_MODE=false
+QEMU_RESOLUTION_OVERRIDE="${SUNLIGHT_QEMU_RESOLUTION:-}"
+QEMU_RESOLUTION_REQUESTED=false
+if [[ -n "$QEMU_RESOLUTION_OVERRIDE" ]]; then
+    QEMU_RESOLUTION_REQUESTED=true
+fi
 VMWARE_MODE=false
 VMWARE_VM_PATH="${SUNLIGHT_VMWARE_VM:-$HOME/vmware/SunlightOS/SunlightOS.vmx}"
 VBOX_MODE=false
@@ -156,6 +167,11 @@ while [[ $# -gt 0 ]]; do
             DUAL_GPU_MODE=true
             shift
             ;;
+        --resolution)
+            QEMU_RESOLUTION_OVERRIDE="$2"
+            QEMU_RESOLUTION_REQUESTED=true
+            shift 2
+            ;;
         -m|--memory)
             MEMORY="$2"
             shift 2
@@ -224,6 +240,11 @@ if [[ "$DISPLAY_TYPE" == "gtk" || "$DISPLAY_TYPE" == "sdl" ]]; then
         echo -e "${YELLOW}  Launch from your desktop user session or use --vnc/--no-display.${NC}"
         exit 1
     fi
+fi
+
+if { [ "$VMWARE_MODE" = true ] || [ "$VBOX_MODE" = true ]; } \
+    && [ "$QEMU_RESOLUTION_REQUESTED" = true ]; then
+    echo -e "${YELLOW}Warning:${NC} --resolution / SUNLIGHT_QEMU_RESOLUTION is QEMU-only and will be ignored for this hypervisor"
 fi
 
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -354,6 +375,44 @@ if [ "$USE_DISK" = true ] && [ ! -f "$DISK_PATH" ]; then
     qemu-img create -f qcow2 "$DISK_PATH" "$DISK_SIZE"
 fi
 
+VIDEO_DEVICE="virtio-vga"
+if [ "$DUAL_GPU_MODE" = true ]; then
+    VIDEO_DEVICE="virtio-gpu-pci"
+fi
+
+QEMU_RESOLUTION=""
+QEMU_RESOLUTION_SOURCE="backend-default"
+if sunlight_qemu_device_supports_resolution "$VIDEO_DEVICE"; then
+    if [[ -n "$QEMU_RESOLUTION_OVERRIDE" ]]; then
+        if sunlight_parse_resolution "$QEMU_RESOLUTION_OVERRIDE" >/dev/null; then
+            QEMU_RESOLUTION="$QEMU_RESOLUTION_OVERRIDE"
+            QEMU_RESOLUTION_SOURCE="override"
+        else
+            echo -e "${YELLOW}Warning:${NC} ignoring invalid resolution '$QEMU_RESOLUTION_OVERRIDE'"
+        fi
+    fi
+
+    if [[ -z "$QEMU_RESOLUTION" ]]; then
+        QEMU_RESOLUTION="$(sunlight_resolve_vm_display_mode \
+            "" \
+            "qemu" \
+            "" \
+            "${SUNLIGHT_VM_PREFERRED_MODES[@]}")"
+        if [[ -n "$QEMU_RESOLUTION" ]]; then
+            QEMU_RESOLUTION_SOURCE="vm-policy"
+        fi
+    fi
+elif [ "$QEMU_RESOLUTION_REQUESTED" = true ]; then
+    echo -e "${YELLOW}Warning:${NC} selected QEMU video device '$VIDEO_DEVICE' does not expose xres/yres; keeping backend default resolution"
+fi
+
+QEMU_RESOLUTION_X=""
+QEMU_RESOLUTION_Y=""
+if [[ -n "$QEMU_RESOLUTION" ]]; then
+    read -r QEMU_RESOLUTION_X QEMU_RESOLUTION_Y \
+        <<<"$(sunlight_parse_resolution "$QEMU_RESOLUTION")"
+fi
+
 QEMU_CMD=(
     qemu-system-x86_64
     -cdrom "$ISO_PATH"
@@ -365,12 +424,26 @@ QEMU_CMD=(
 )
 
 if [ "$DUAL_GPU_MODE" = true ]; then
-    QEMU_CMD+=(
-        -vga std
-        -device virtio-gpu-pci
-    )
+    if [[ -n "$QEMU_RESOLUTION" ]]; then
+        QEMU_CMD+=(
+            -vga std
+            -device "virtio-gpu-pci,xres=${QEMU_RESOLUTION_X},yres=${QEMU_RESOLUTION_Y}"
+        )
+    else
+        QEMU_CMD+=(
+            -vga std
+            -device virtio-gpu-pci
+        )
+    fi
 else
-    QEMU_CMD+=(-vga virtio)
+    if [[ -n "$QEMU_RESOLUTION" ]]; then
+        QEMU_CMD+=(
+            -vga none
+            -device "virtio-vga,xres=${QEMU_RESOLUTION_X},yres=${QEMU_RESOLUTION_Y}"
+        )
+    else
+        QEMU_CMD+=(-vga virtio)
+    fi
 fi
 
 if [ "$USE_DISK" = true ]; then
@@ -430,6 +503,11 @@ if [ "$DUAL_GPU_MODE" = true ]; then
     echo -e "${YELLOW}Note:${NC}    Switch to the virtio-gpu tab/output in QEMU for the desktop view"
 else
     echo -e "${BLUE}Video:${NC}   virtio VGA"
+fi
+if [[ -n "$QEMU_RESOLUTION" ]]; then
+    echo -e "${BLUE}Resolution:${NC} ${QEMU_RESOLUTION} (${QEMU_RESOLUTION_SOURCE})"
+else
+    echo -e "${BLUE}Resolution:${NC} backend default"
 fi
 
 if [ "$DEBUG_MODE" = true ]; then

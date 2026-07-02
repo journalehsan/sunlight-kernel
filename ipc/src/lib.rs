@@ -1,5 +1,11 @@
 #![no_std]
 
+pub mod display_metrics;
+pub use display_metrics::{
+    DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect, BORDER_W as DISPLAY_BORDER_W,
+    MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE, validate_size,
+};
+
 pub const IPC_MAX_WORDS: usize = 8;
 /// Register IPC currently transports only `words[0..4)` via r8/r9/r10/r12.
 pub const IPC_REGISTER_WORDS: usize = 4;
@@ -319,8 +325,13 @@ pub mod sgp {
         /// Client requests a cursor shape when its pointer is inside its client area.
         /// words[0] = (win_id as u32) | ((CursorShape discriminant as u32) << 32)
         pub const SET_CURSOR: u64 = 0xA106;
-        /// Query the physical framebuffer dimensions before creating a window.
-        /// No words required. Reply: words[0] = width | (height << 32).
+        /// Query compositor display metrics before creating a window.
+        /// No words required.
+        /// Reply:
+        ///   words[0] = width | (height << 32)
+        ///   words[1] = stride_bytes | (pixel_format << 32)
+        ///   words[2] = scale_fp | (backend << 32)   // scale_fp: 65536 = 1.0×
+        ///   words[3] = refresh_hz (0 when unknown)
         pub const GET_SCREEN_INFO: u64 = 0xA107;
         /// Show a transient desktop notification.
         /// words[0] = NotificationKind discriminant
@@ -2016,11 +2027,60 @@ pub fn gpu_get_info() -> Option<(u32, u32)> {
     }
 }
 
+/// Failure reasons for the GPU setup syscalls (120/121).
+/// Keep numerically in sync with the kernel's `GPU_ERR_*` constants in
+/// `kernel/src/arch/x86_64/syscall.rs`.
+pub mod gpu_proxy {
+    pub const ERR_NOT_DISPLAY_SERVER: u32 = 1;
+    pub const ERR_BAD_ARGS: u32 = 2;
+    pub const ERR_NO_DEVICE: u32 = 3;
+    pub const ERR_UNMAPPED_PAGE: u32 = 4;
+    pub const ERR_SG_OVERFLOW: u32 = 5;
+    pub const ERR_CREATE_FAILED: u32 = 6;
+    pub const ERR_ATTACH_FAILED: u32 = 7;
+    pub const ERR_SCANOUT_FAILED: u32 = 8;
+
+    /// Kernel-reported failure: reason plus a step-specific detail word
+    /// (VirtIO response code, failing page index, or sg entry count).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct GpuProxyError {
+        pub reason: u32,
+        pub detail: u32,
+    }
+
+    impl GpuProxyError {
+        pub fn from_word(word: u64) -> Self {
+            Self {
+                reason: (word & 0xFFFF_FFFF) as u32,
+                detail: (word >> 32) as u32,
+            }
+        }
+
+        pub fn reason_str(&self) -> &'static str {
+            match self.reason {
+                ERR_NOT_DISPLAY_SERVER => "not-display-server",
+                ERR_BAD_ARGS => "bad-args",
+                ERR_NO_DEVICE => "no-gpu-device",
+                ERR_UNMAPPED_PAGE => "unmapped-page",
+                ERR_SG_OVERFLOW => "sg-overflow",
+                ERR_CREATE_FAILED => "resource-create-failed",
+                ERR_ATTACH_FAILED => "attach-backing-failed",
+                ERR_SCANOUT_FAILED => "set-scanout-failed",
+                _ => "unknown",
+            }
+        }
+    }
+}
+
 /// Attach the display server's back_buffer pages to VirtIO GPU scanout resource 1.
 /// `buf_ptr`: pointer to the start of back_buffer memory (must be page-aligned).
 /// `num_pages`: number of 4KiB pages to attach.
-pub fn gpu_attach_backing(buf_ptr: *const u32, num_pages: usize) -> bool {
-    let (ok, _) = unsafe {
+/// On failure returns the kernel's reason + detail.
+pub fn gpu_attach_backing(
+    buf_ptr: *const u32,
+    num_pages: usize,
+) -> Result<(), gpu_proxy::GpuProxyError> {
+    let (ok, msg) = unsafe {
         raw_syscall(
             SunlightSyscall::GpuAttachBacking,
             buf_ptr as u64,
@@ -2032,13 +2092,21 @@ pub fn gpu_attach_backing(buf_ptr: *const u32, num_pages: usize) -> bool {
             0,
         )
     };
-    ok != 0
+    if ok != 0 {
+        Ok(())
+    } else {
+        Err(gpu_proxy::GpuProxyError::from_word(msg.words[0]))
+    }
 }
 
-/// Wire resource 1 to scanout 0.
-pub fn gpu_set_scanout() -> bool {
-    let (ok, _) = unsafe { raw_syscall(SunlightSyscall::GpuSetScanout, 0, 0, 0, 0, 0, 0, 0) };
-    ok != 0
+/// Wire resource 1 to scanout 0. On failure returns the kernel's reason + detail.
+pub fn gpu_set_scanout() -> Result<(), gpu_proxy::GpuProxyError> {
+    let (ok, msg) = unsafe { raw_syscall(SunlightSyscall::GpuSetScanout, 0, 0, 0, 0, 0, 0, 0) };
+    if ok != 0 {
+        Ok(())
+    } else {
+        Err(gpu_proxy::GpuProxyError::from_word(msg.words[0]))
+    }
 }
 
 /// Issue TRANSFER_TO_HOST_2D + RESOURCE_FLUSH for a dirty rectangle.
@@ -2067,6 +2135,15 @@ pub fn gpu_update_cursor(pixels: *const u32, num_pixels: usize, hot_x: u32, hot_
         )
     };
     ok != 0
+}
+
+/// Query live display metrics from `display_server`.
+pub fn query_display_metrics(display_ep: CapabilityToken) -> Option<DisplayMetrics> {
+    let reply = ipc_call(display_ep, IpcMsg::with_label(sgp::SgpMsg::GET_SCREEN_INFO));
+    if reply.label != sgp::SgpMsg::REPLY || reply.words[0] == 0 {
+        return None;
+    }
+    Some(DisplayMetrics::from_reply(&reply.words).clamped_for_clients())
 }
 
 /// Move the hardware cursor to (x, y) without changing its image.

@@ -9,6 +9,143 @@ run at once and how the UI/input/PTY plumbing is shared between them.
 All code referenced below lives in `services/sunlight-terminal/src/main.rs`
 unless noted otherwise.
 
+> **Update:** the first version of this patch created a tab by making the
+> `pty` `CREATE`/`SET_MODE` calls (and the shell spawn) synchronously, inline,
+> inside the click/shortcut handler, using the plain unbounded
+> `sunlight_ipc::ipc_call`. That version hung the *entire* terminal window
+> (not just the new tab) whenever the `pty` service didn't answer instantly.
+> See [Root cause: the new-tab hang](#root-cause-the-new-tab-hang) below for
+> the analysis and the fix that shipped instead (a small tick-driven state
+> machine using bounded `ipc_call_timeout`). Everything else in this document
+> (ownership model, keyboard shortcuts, PTY routing, titles) is unchanged by
+> that fix.
+
+## Root cause: the new-tab hang
+
+**Symptom:** launching the terminal and using its single starting tab was
+fine (window visible in well under a second). Clicking `+` (or `Ctrl+T`) to
+open a *second* tab froze the whole window — no redraws, no keyboard input,
+not even to the already-running first tab — until the process was killed.
+
+**Why:** `sunlight-ui`'s event loop (`Window::run_with` in
+`sunlight-ui/app.rs`) is a single synchronous loop per window:
+`poll_event → App::update → (redraw)`. There is no background thread. Any
+call made from inside `App::update` that never returns therefore freezes
+*that entire loop* — polling, input, and rendering for every tab, not just
+the one being created.
+
+The original tab-creation path (`TerminalApp::spawn_tab`, called directly
+from the tab-bar click handler) did exactly that: it opened a new
+`PtySession` with `PtySession::open_with`, which issued `PtyMsg::CREATE` and
+`PtyMsg::SET_MODE` via `sunlight_ipc::ipc_call` — the **unbounded** IPC
+primitive that retries forever on `WouldBlock` and has no timeout. Contrast
+this with `Window::poll_event` and `Window::connect`'s launch-trace call in
+the very same crate, which both correctly use `ipc_call_timeout`. `pty`
+session creation was the one blocking, multi-round-trip lifecycle operation
+in this app that had *not* been given a bound.
+
+In other words: this was a **lifecycle/state-machine bug**, not a resource
+leak or a data race. Tab creation was modeled as "do three blocking things in
+a row on the UI thread and hope they all return quickly" instead of as an
+explicit state machine with bounded steps and a failure state. The first
+tab's bootstrap (in `_start`, before the window/event loop even exists)
+happened to mask this because there is nothing else competing for `pty`
+attention that early — which is exactly why the launch path measured as
+healthy while the *second* tab was the one that could wedge the process.
+
+**Fix:** tab creation is now a small explicit state machine
+(`SpawnStep`/`PendingSpawn`), advanced one bounded step per `Event::Tick`
+by `TerminalApp::advance_pending_spawn`:
+
+1. `TerminalApp::spawn_tab` (the click/shortcut entry point) performs **no
+   IPC and no process spawn at all**. It only allocates an in-memory
+   `TabStatus::Connecting` placeholder tab, activates it, and queues a
+   `PendingSpawn`. This is what makes tab creation non-blocking from the
+   UI's perspective — the tab visibly appears in the tab bar on the very
+   next frame regardless of how the `pty` service behaves afterward.
+2. Each tick, `advance_pending_spawn` attempts exactly one step (`CREATE`,
+   then `SET_MODE`, then spawn the shell) using
+   `sunlight_ipc::ipc_call_timeout` with a `SPAWN_STEP_TIMEOUT_MS` (40 ms)
+   budget instead of the unbounded `ipc_call`. A timeout just retries next
+   tick; the render/input loop keeps running in between — the worst case is
+   a ~40 ms stall on a single frame, not an unbounded freeze.
+3. An overall `SPAWN_DEADLINE_MS` (1.5 s) wall-clock budget bounds the whole
+   sequence. Exceeding it — or an outright rejection from the `pty` service
+   — flips the tab to `TabStatus::Failed`, a normal, visible, closable tab
+   state, instead of hanging.
+4. Closing a tab whose spawn is still in flight (`TerminalApp::close_tab`)
+   cancels the `PendingSpawn` and releases any partially-created PTY session
+   so it isn't leaked in `pty_server`.
+
+The very first tab (`_start`, pre-window) drives the *same* state machine in
+a tight bounded loop before the window is created, so the happy-path timing
+is unchanged, but a stuck `pty` service can no longer prevent the window
+from ever appearing either.
+
+### Phase log
+
+Every step above is logged through `log_tab_phase` (monotonic timestamp via
+`sunlight_ipc::monotonic_millis`, tagged with the numeric tab id) to the
+serial debug log:
+
+```
+tab_create_clicked → tab_state_allocated → tab_focused → pty_request_sent
+  → pty_created → shell_spawn_requested → shell_spawned
+  → tab_attached_to_pty
+(and, from the render side) first_tab_frame
+(on failure, instead of the remaining steps) tab_create_failed
+```
+
+Format: `[TERM][TAB] tab=<id> phase=<phase> t=<monotonic_ms>ms`.
+
+#### Before (synchronous, unbounded — hangs)
+
+With the old `ipc_call`-based `spawn_tab`, a slow/unresponsive `pty` service
+produced logs like this (note there is no way to observe *where* it got
+stuck beyond "system log stops"; the process never returns to any logging
+point after `pty_request_sent`, since `ipc_call` retries silently forever):
+
+```
+[TERM][TAB] tab=2 phase=tab_create_clicked t=812ms
+[TERM][TAB] tab=2 phase=tab_state_allocated t=812ms
+[TERM][TAB] tab=2 phase=pty_request_sent t=813ms
+<window frozen here forever — no further output, no redraws, no input>
+```
+
+#### After (state machine, bounded — recovers)
+
+Same scenario with the fix in place — the deadline trips and the tab is
+marked `Failed` instead of hanging the window; input and rendering never
+stop:
+
+```
+[TERM][TAB] tab=2 phase=tab_create_clicked t=812ms
+[TERM][TAB] tab=2 phase=tab_state_allocated t=812ms
+[TERM][TAB] tab=2 phase=tab_focused t=812ms
+[TERM][TAB] tab=2 phase=pty_request_sent t=812ms
+[TERM][TAB] tab=2 phase=first_tab_frame t=814ms
+[TERM][TAB] tab=2 phase=tab_create_failed t=2314ms
+```
+
+And the healthy/normal case (what you'll actually see in practice —
+everything resolves within a tick or two, not the full deadline):
+
+```
+[TERM][TAB] tab=2 phase=tab_create_clicked t=4021ms
+[TERM][TAB] tab=2 phase=tab_state_allocated t=4021ms
+[TERM][TAB] tab=2 phase=tab_focused t=4021ms
+[TERM][TAB] tab=2 phase=pty_request_sent t=4021ms
+[TERM][TAB] tab=2 phase=first_tab_frame t=4023ms
+[TERM][TAB] tab=2 phase=pty_created t=4023ms
+[TERM][TAB] tab=2 phase=shell_spawn_requested t=4023ms
+[TERM][TAB] tab=2 phase=shell_spawned t=4024ms
+[TERM][TAB] tab=2 phase=tab_attached_to_pty t=4024ms
+```
+
+Grep serial output for `tab=<id>` to reconstruct one tab's full lifecycle
+timeline, or for `phase=tab_create_failed` to find any tab that hit the
+deadline.
+
 ## Phase 1 — audit of the pre-tab code
 
 Before this patch:
@@ -67,23 +204,35 @@ between tabs in them. There is no shared/global terminal or PTY singleton.
 ## Tab lifecycle (Phase 3)
 
 - **Startup**: `_start` resolves the `pty` capability once, constructs
-  `TerminalApp`, and calls `spawn_tab()` to create the first tab ("Tab 1")
-  before the window is even created. If either step fails the process yields
-  forever rather than opening a broken window (same failure style as before
-  this patch).
-- **New tab** (`TerminalApp::spawn_tab`): opens a fresh `PtySession`
-  (`PtySession::open_with`), spawns `/bin/sshl<pty_id>` against it
-  (`spawn_shell`), and inserts the resulting `TerminalTab` via
-  `insert_tab`. The per-tab shell id is derived from the *PTY session id*
-  (not the terminal's own pid), so concurrent tabs never collide on
-  `/bin/sshl<id>`. Failure at any step (no PTY capacity, spawn failure) is a
-  no-op — existing tabs are left untouched.
+  `TerminalApp`, calls `spawn_tab()` to allocate the first tab ("Tab 1"),
+  then drives `advance_pending_spawn()` in a bounded loop until it resolves
+  (`Running` or `Failed`) before the window is created. If the `pty`
+  capability itself can't be resolved at all, the process yields forever
+  rather than opening a broken window (same failure style as before this
+  patch) — but a *slow* `pty` service can no longer do that (see
+  [Root cause](#root-cause-the-new-tab-hang)).
+- **New tab** (`TerminalApp::spawn_tab` + `TerminalApp::advance_pending_spawn`):
+  `spawn_tab` synchronously allocates a `TabStatus::Connecting`
+  `TerminalTab` (no PTY/shell yet) and activates it — no IPC, so it can never
+  block. `advance_pending_spawn`, called once per `Event::Tick`, then opens a
+  fresh `PtySession` (`PtySession::create_timeout` + `set_mode_timeout`,
+  bounded by `SPAWN_STEP_TIMEOUT_MS` each) and spawns `/bin/sshl<pty_id>`
+  against it (`spawn_shell`), one bounded step at a time, attaching the
+  result to the tab via `attach_tab` once the shell is actually running. The
+  per-tab shell id is derived from the *PTY session id* (not the terminal's
+  own pid), so concurrent tabs never collide on `/bin/sshl<id>`. Failure or
+  timeout at any step flips the tab to `TabStatus::Failed` (see
+  [Root cause](#root-cause-the-new-tab-hang)) rather than leaving existing
+  tabs — or the window — in a bad state.
 - **Close tab** (`TerminalApp::close_tab`): removes the tab from the array
   (`remove_tab`) and then calls `TerminalTab::close`, which signals the
   shell (`libc::kill(pid, SIGTERM)`, only if it's still `Running`) and
-  releases the PTY session (`PtySession::close`, i.e. `PtyMsg::CLOSE`). This
-  is the *same* teardown a single-session terminal would use — no second
-  shutdown path was invented for tabs.
+  releases the PTY session (`PtySession::close`, i.e. `PtyMsg::CLOSE`,
+  bounded by `CLOSE_TIMEOUT_MS`) if one was ever created. If the closed tab
+  had a spawn still in flight, `close_tab` also cancels the `PendingSpawn`
+  and releases any partially-created PTY session. This is the *same*
+  teardown a single-session terminal would use — no second shutdown path was
+  invented for tabs.
 - **Last tab is un-closeable**: `close_tab` is a no-op when `tab_count == 1`
   (it returns `false` before touching the tab at all, so no PTY/process
   syscalls happen). There is therefore always at least one tab open; closing
@@ -92,11 +241,17 @@ between tabs in them. There is no shared/global terminal or PTY singleton.
   tab so this is visible rather than a silent no-op.
 - **Switch tab** (`switch_tab`/`next_tab`/`prev_tab`): changes `active` and
   clears the new active tab's `dirty` flag. Input and rendering are always
-  scoped to `tabs[active]` only (see `App::update`/`App::view`).
+  scoped to `tabs[active]` only (see `App::update`/`App::view`) — a
+  `Connecting`/`Failed` tab simply has no `PtySession` to route input to
+  (`TerminalTab::handle_char`/`handle_raw_key` no-op when `pty` is `None`),
+  so keystrokes typed while a background tab is still connecting never leak
+  anywhere.
 
 `insert_tab`/`remove_tab` are intentionally pure array bookkeeping (no
 syscalls) split out from `spawn_tab`/`close_tab` specifically so they can be
-unit tested — see [Testing](#testing).
+unit tested — see [Testing](#testing). `spawn_tab` itself is also pure/
+syscall-free by construction now (see above), which is what lets its
+regression tests run directly on the host.
 
 ## UI behavior (Phase 4)
 
@@ -244,6 +399,31 @@ the bottom covering the state that doesn't require a live PTY/process:
 - `close_tab_is_a_no_op_on_the_last_remaining_tab`
 - `ingest_routes_pty_output_into_its_own_grid`
 - `inactive_tab_output_does_not_leak_into_other_tabs`
+- `translate_special_key_maps_tab_to_tab_byte`
+
+Regression coverage added for the new-tab hang fix (see
+[Root cause](#root-cause-the-new-tab-hang)) — these are the tests that would
+have caught the bug, because they assert `spawn_tab` never touches IPC/PTY/
+process syscalls directly:
+
+- `spawn_tab_allocates_connecting_placeholder_without_any_blocking_call` —
+  asserts `spawn_tab` synchronously produces a `TabStatus::Connecting` tab
+  with `pty`/`shell_pid` still `None` and a queued `PendingSpawn` in the
+  `RequestPty` step, all without any syscall.
+- `spawn_tab_is_a_no_op_while_a_spawn_is_already_pending` — a second
+  click/shortcut before the first tab finishes connecting must not start a
+  second concurrent spawn.
+- `spawn_tab_respects_max_tabs_capacity` — unchanged behavior, re-verified
+  against the new allocate-then-advance split.
+- `closing_a_tab_with_a_pending_spawn_cancels_it` — closing the tab a spawn
+  was targeting clears `pending_spawn` (this is what prevents a leaked
+  `pty_server` session / stuck state if the user closes a still-connecting
+  tab).
+- `closing_an_unrelated_tab_leaves_a_pending_spawn_intact` — closing a
+  *different* tab while one spawn is in flight does not disturb it, even
+  though `remove_tab` shifts array indices.
+- `advance_pending_spawn_is_a_cheap_no_op_when_nothing_is_pending` — the
+  per-tick check when idle costs nothing and touches no syscalls.
 
 To make these possible, `#![no_main]`, the `#[global_allocator]`, and
 `#[panic_handler]`/`_start` are all gated with `#[cfg(not(test))]` (the crate
@@ -253,9 +433,13 @@ into a thin IPC wrapper plus a pure `ingest(bytes, ...)` step, and
 `spawn_tab`/`close_tab` were split into pure `insert_tab`/`remove_tab`
 bookkeeping plus the real PTY/process calls, specifically so the array
 bookkeeping and byte-routing logic could be tested without a live PTY or
-process (`PtySession::open_with/read/write/close`, `spawn_shell`,
-`libc::kill`, `libc::try_waitpid` all perform real syscalls that don't exist
-on a host target and are not exercised by these tests).
+process (`PtySession::create_timeout`/`set_mode_timeout`/`read`/`write`/
+`close`, `spawn_shell`, `libc::kill`, `libc::try_waitpid` all perform real
+syscalls that don't exist on a host target and are not exercised by these
+tests). `spawn_tab` itself went further: it was restructured so the entire
+click/shortcut-handler path is syscall-free (see
+[Root cause](#root-cause-the-new-tab-hang)), which is precisely what lets
+its regression tests assert on real (not simulated) production behavior.
 
 Run with:
 
@@ -279,33 +463,71 @@ Future Work below.
 
 ### Manual test plan
 
-1. Launch `sunlight-terminal` — confirm exactly one tab ("Tab 1") appears.
-2. Click `+` to open a second tab — confirm it becomes active immediately.
-3. Run a different command in each tab (e.g. `echo one` in Tab 1, `echo two`
-   in Tab 2) and switch between them — confirm each tab shows only its own
-   output.
-4. Run `top` (or `sunlight-top`) in one tab and a normal shell command in the
-   other — confirm `top` keeps updating only while/after its own tab is
+**Core hang regression (this is the scenario reported as broken):**
+
+1. Launch `sunlight-terminal` from the dock — confirm the window appears in
+   well under a second, with exactly one tab ("Tab 1"), and it is fully
+   interactive immediately (typing works).
+2. Click `+` three times in a row (or press `Ctrl+T` three times) to create
+   three more tabs — confirm **each** click:
+   - shows the new tab in the tab bar on the very next frame (briefly as
+     "Connecting...", per `TabStatus::Connecting`, then live), and
+   - never freezes the window — you should be able to keep clicking/typing
+     immediately after each click, with no perceptible stall.
+3. Switch between all four tabs (click each tab, and via `Ctrl+Tab`/
+   `Ctrl+Shift+Tab`) — confirm each tab shows only its own output and the
+   active tab visibly changes every time.
+4. Type a distinct command into each tab (e.g. `echo one` .. `echo four`)
+   and confirm keystrokes always land in the *currently focused* tab only —
+   switching tabs mid-typing must never cause a keystroke to appear in the
+   wrong tab's line editor.
+5. Close the middle tab (tab 2 or 3) via its `x` button — confirm the
+   remaining tabs (including the one to its right) shift left by one, stay
+   alive with their shells still running, and focus lands on a sensible
+   remaining tab.
+6. Immediately create another new tab (`+` or `Ctrl+T`) — confirm this
+   succeeds exactly like step 2 (instant appearance, no hang), which is the
+   specific "close then create again" sequence that would surface any
+   leaked/stale state from the previous close.
+7. Check the serial debug log (`debug_log`/QEMU serial output) for the
+   `[TERM][TAB] tab=<id> phase=...` lines described in
+   [Root cause](#root-cause-the-new-tab-hang) — confirm every tab created in
+   steps 2 and 6 reaches `tab_attached_to_pty` (not stuck at
+   `pty_request_sent`, and not `tab_create_failed`) within a couple of
+   ticks.
+
+**Failure-path check (optional, requires faking a stuck/absent `pty`
+service, e.g. by not starting `pty_server` or killing it mid-session):**
+
+8. Attempt to open a new tab with no working `pty` service — confirm the tab
+   reaches `TabStatus::Failed` (danger-colored title, "Failed to start
+   shell" message) within `SPAWN_DEADLINE_MS` (1.5 s) instead of hanging,
+   and confirm the rest of the window (existing tabs, input, redraws) stays
+   fully responsive throughout and afterward. Confirm the failed tab can
+   still be closed with `x` like any other tab.
+
+**Existing coverage (unchanged by this fix, still worth re-checking):**
+
+9. Run `top` (or `sunlight-top`) in one tab and a normal shell command in
+   another — confirm `top` keeps updating only while/after its own tab is
    selected, and the other tab's content is never overwritten by `top`'s
    output.
-5. Click a tab's `x` — confirm the other tab remains alive and its shell
-   keeps running.
-6. Close tabs down to the last one — confirm the last tab's `x` button
-   disappears entirely and neither clicking where it was nor pressing
-   `Ctrl+Shift+W` closes it or the window.
-7. With 2+ tabs open, press `Ctrl+Shift+W` — confirm it closes the *active*
-   tab (same teardown as the `x` button) and switches focus sensibly, and
-   confirm plain `Ctrl+W` still closes the whole window immediately
-   regardless of how many tabs are open.
-8. Close the terminal window directly (title-bar close) with multiple tabs
-   open — confirm all tabs' PTYs/processes are cleaned up
-   (`shutdown_all_tabs`).
-9. Confirm minimize/restore still works (this patch does not touch window
-   chrome handling).
-10. Confirm no regression in terminal rendering, colors, or cursor handling
+10. Close tabs down to the last one — confirm the last tab's `x` button
+    disappears entirely and neither clicking where it was nor pressing
+    `Ctrl+Shift+W` closes it or the window.
+11. With 2+ tabs open, press `Ctrl+Shift+W` — confirm it closes the *active*
+    tab (same teardown as the `x` button) and switches focus sensibly, and
+    confirm plain `Ctrl+W` still closes the whole window immediately
+    regardless of how many tabs are open.
+12. Close the terminal window directly (title-bar close) with multiple tabs
+    open — confirm all tabs' PTYs/processes are cleaned up
+    (`shutdown_all_tabs`).
+13. Confirm minimize/restore still works (this patch does not touch window
+    chrome handling).
+14. Confirm no regression in terminal rendering, colors, or cursor handling
     versus the state described in `graphical-terminal-audit.md` (run `top`,
     `ls --color`, etc. and compare).
-11. Open a second `sunlight-terminal` window (or any other app) and confirm
+15. Open a second `sunlight-terminal` window (or any other app) and confirm
     plain `Ctrl+W` still force-closes whichever window is focused — the
     `sunlight-display` change only added a `Shift` exception, it did not
     change the un-shifted binding.
@@ -327,6 +549,18 @@ Future Work below.
   environment due to a host-toolchain/test-harness issue affecting all
   bin-only crates (see Testing above); the tests do compile and are
   reviewable as-is.
+- `PtySession::read`/`write` (the per-keystroke/output hot path, used every
+  `Event::Tick` and on every keypress) still use the unbounded `ipc_call`,
+  matching the pre-existing single-tab behavior. Only the tab *lifecycle*
+  (create/close, i.e. the reported hang) was moved onto bounded,
+  tick-driven primitives — broadening the same treatment to steady-state
+  read/write was judged a larger change than this fix required (see
+  [Root cause](#root-cause-the-new-tab-hang)) and is listed here as
+  follow-up work rather than folded into this patch.
+- Only one tab creation can be in flight at a time (`spawn_tab` is a no-op
+  while `pending_spawn` is `Some`); rapid repeated clicks/`Ctrl+T` presses
+  are simply ignored until the current one resolves, rather than being
+  queued.
 
 ## Future work
 
@@ -335,6 +569,9 @@ Future Work below.
 - Drag-to-reorder tabs.
 - Split panes.
 - Session restore across terminal restarts.
+- Extend the bounded-timeout treatment from tab creation/close to
+  `PtySession::read`/`write` for full protection against a stuck `pty`
+  service mid-session, not just during tab lifecycle events.
 - Full resize correctness (`TIOCGWINSZ`/`TIOCSWINSZ`/`SIGWINCH`), tracked
   separately per `graphical-terminal-audit.md`'s recommended next work.
 - Either fix host `cargo test` for bin-only crates, or extract the pure tab

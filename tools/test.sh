@@ -296,7 +296,8 @@ mkdir -p "$ISO_ROOT/boot/limine"
 mkdir -p "$ISO_ROOT/boot"
 
 cp "$KERNEL_ELF" "$ISO_ROOT/boot/sunlight-kernel.elf"
-cp limine.cfg "$ISO_ROOT/boot/limine/"
+# Limine v8.x reads limine.conf (new syntax); limine.cfg is the legacy name.
+cp limine.conf "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/limine-bios.sys" "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/BOOTX64.EFI" "$ISO_ROOT/boot/limine/"
@@ -336,7 +337,7 @@ qemu-system-x86_64 \
     -cdrom "$ISO_PATH" \
     -serial file:"$QEMU_OUTPUT" \
     -display none \
-    -m 256M \
+    -m 1024M \
     -smp 2 \
     $KVM_FLAGS \
     $DISK_FLAGS \

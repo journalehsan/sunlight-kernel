@@ -1,17 +1,141 @@
 #![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_main)]
+
+//! `sunlight-terminal` — graphical terminal emulator with multi-tab support.
+//!
+//! # Tab architecture
+//!
+//! Each [`TerminalTab`] owns a fully independent terminal session: its own
+//! [`PtySession`], its own spawned shell process (`shell_pid`, via
+//! `/bin/sshl<id>`), its own [`ModelGrid`] (`sunlight_tty::TerminalGrid`)
+//! screen/cursor state, its own [`Footer`] (prompt/line-editor/history) and
+//! [`OscParser`] state, and its own [`TabStatus`].
+//!
+//! [`TerminalApp`] owns the tab collection (`[Option<TerminalTab>; MAX_TABS]`
+//! kept compacted at the front, plus a count and an `active` index), routes
+//! input to the active tab only, and polls every tab for PTY output once per
+//! `Event::Tick`.
+//!
+//! ## New-tab lifecycle: non-blocking by construction
+//!
+//! Creating a tab needs two round trips to the `pty` service (`CREATE` then
+//! `SET_MODE`) plus a process spawn. Naively doing all of that inline inside
+//! the click handler — using the plain, un-timed [`sunlight_ipc::ipc_call`],
+//! which retries **forever** on `WouldBlock` — makes the *entire* window
+//! event loop hang if the `pty` service is ever slow to answer a second
+//! session while the first is already live: `Window::run_with` is a single
+//! synchronous loop (poll → `App::update` → redraw), so any unbounded
+//! blocking call made from `update()` freezes polling, rendering, *and*
+//! input for every tab, not just the new one, with no way to recover.
+//!
+//! This is exactly the "new tab hangs the whole terminal" failure mode this
+//! file guards against. The fix keeps the same request→create→spawn steps
+//! but restructures them into a tiny state machine ([`SpawnStep`] /
+//! [`PendingSpawn`]) advanced by [`TerminalApp::advance_pending_spawn`], one
+//! bounded step per `Event::Tick`:
+//!
+//! - [`TerminalApp::spawn_tab`] (the click/shortcut handler) does **no
+//!   IPC at all**. It only allocates a `TabStatus::Connecting` placeholder
+//!   tab (instant, in-memory) and activates it, so the tab visibly appears
+//!   immediately — this is what makes tab creation non-blocking from the
+//!   UI's perspective (see `tab_state_allocated`/`first_tab_frame` in the
+//!   phase log below).
+//! - Each subsequent tick, [`TerminalApp::advance_pending_spawn`] attempts
+//!   exactly one step (`CREATE`, then `SET_MODE`, then spawn the shell),
+//!   using [`sunlight_ipc::ipc_call_timeout`] with a short
+//!   [`SPAWN_STEP_TIMEOUT_MS`] budget instead of the unbounded `ipc_call`.
+//!   A timeout just retries on the next tick; the render/input loop keeps
+//!   running in between.
+//! - An overall [`SPAWN_DEADLINE_MS`] wall-clock budget bounds the whole
+//!   sequence. If it elapses (or the `pty`/shell step is rejected outright)
+//!   the tab flips to `TabStatus::Failed` — a visible, closable tab state —
+//!   instead of hanging forever.
+//!
+//! The very first tab (opened in `_start`, before the window/event loop
+//! exists) drives the *same* state machine synchronously in a small bounded
+//! loop, so the happy-path timing (visible in well under a second) is
+//! unchanged, but a stuck `pty` service can no longer wedge the process
+//! before it even opens a window.
+//!
+//! ### Phase log
+//!
+//! Every step above is logged via [`log_tab_phase`] with a monotonic
+//! timestamp (`sunlight_ipc::monotonic_millis`), tagged with the numeric tab
+//! id, to `debug_log` (serial): `tab_create_clicked`, `tab_state_allocated`,
+//! `pty_request_sent`, `pty_created`, `shell_spawn_requested`,
+//! `shell_spawned`, `tab_attached_to_pty`, `tab_focused`,
+//! `first_tab_frame`, and `tab_create_failed` on the failure path.
+//!
+//! ## Keyboard shortcuts
+//!
+//! - `Ctrl+Tab` / `Ctrl+Shift+Tab`: next / previous tab.
+//! - `Ctrl+T` / `Ctrl+Shift+T`: new tab.
+//! - `Ctrl+Shift+W`: close the active tab (no-op if it's the last tab).
+//! - `Alt+1..Alt+9`: jump to tab N (best-effort, see limitation below).
+//!
+//! ### Known input-stack limitation
+//!
+//! The display server's `Window::poll_event` (`sunlight-ui`) resolves a
+//! pressed key to `Event::Key(char)` whenever the keyboard driver produced an
+//! ASCII value for it — and that ASCII value is computed independently of
+//! the Ctrl modifier (only Shift is factored in). This means `Ctrl+<letter>`
+//! and `Ctrl+<digit>` cannot be observed as a distinct `Event::KeyPress` the
+//! way `Ctrl+Tab` can (Tab has no ASCII mapping in the printable range, so it
+//! always falls through to `Event::KeyPress` with accurate modifiers).
+//!
+//! To still offer `Ctrl+T`/`Ctrl+Shift+T`/`Alt+1..9`, this file tracks
+//! `ctrl`/`alt` state itself from every `Event::KeyPress` it observes
+//! (including presses of the modifier keys themselves, which *do* carry
+//! accurate modifier bits) and consults that tracked state when a plain
+//! `Event::Key(ch)` arrives. This is best-effort: if a modifier key-up event
+//! is ever dropped by the input stack, tracked state can desync until the
+//! next KeyPress event resynchronizes it.
+//!
+//! Plain `Ctrl+W` still can't be used here: the display server globally
+//! intercepts it (unconditionally) to close the focused window outright,
+//! before the event ever reaches this app. `Ctrl+Shift+W`, however, is
+//! deliberately left unconsumed by that same interceptor specifically so
+//! this app can bind it. See `docs/terminal/tab-support.md` for the full
+//! writeup.
+//!
+//! ## Testing
+//!
+//! Pure tab-array bookkeeping (`insert_tab`/`remove_tab`/`switch_tab`/
+//! `next_tab`/`prev_tab`), per-tab byte routing (`TerminalTab::ingest`), and
+//! the non-blocking new-tab allocation path (`spawn_tab`,
+//! `advance_pending_spawn`'s cancellation on close) have `#[cfg(test)]` unit
+//! tests at the bottom of this file. They run on the host target
+//! (`cargo test --target x86_64-unknown-linux-gnu -p sunlight-terminal`);
+//! `no_main`/the global allocator/panic handler/`_start` are all gated with
+//! `#[cfg(not(test))]` so a normal host test binary can link. Anything that
+//! performs a real syscall (`PtySession::create_timeout`/`set_mode_timeout`/
+//! `read`/`write`/`close`, `spawn_shell`, `libc::kill`, `libc::try_waitpid`)
+//! cannot run on the host and is instead covered by the manual test plan in
+//! `docs/terminal/tab-support.md`.
+//!
+//! ## Deferred / non-goals
+//!
+//! - Resize correctness (rows/cols are still fixed).
+//! - OSC window-title escape support — tab titles are `Tab N` today.
+//! - Drag-to-reorder tabs, split panes, session restore.
+//! - `PtySession::read`/`write` (the per-keystroke hot path) still use the
+//!   unbounded `ipc_call`, matching the pre-existing single-tab behavior.
+//!   Only the *new-tab lifecycle* (create/close) — the reported hang — was
+//!   moved onto bounded, non-blocking primitives; broadening that further
+//!   was judged out of scope for this fix (see `docs/terminal/tab-support.md`).
 
 use sun_font::{self, FontRole, VecFont};
 use sunlight_ipc::{
-    debug_log, ipc_call,
+    debug_log, ipc_call, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    nameserver_lookup, process_yield, CapabilityToken, IpcMsg, PtyMsg,
+    monotonic_millis, nameserver_lookup, process_yield, CapabilityToken, IpcCallError, IpcMsg,
+    ProcessExit, PtyMsg,
 };
 use sunlight_libc as libc;
 use sunlight_tty::TerminalGrid as ModelGrid;
 use sunlight_ui::{
-    widgets::{Label, Panel, StatusBar},
-    App, Canvas, Event, HBox, Rect, Window, WindowConfig,
+    widgets::{Label, StatusBar},
+    App, Canvas, Event, HBox, Point, Rect, VecText, Window, WindowConfig,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -37,6 +161,11 @@ const KEY_RIGHT: u8 = 0x4D;
 const KEY_HOME: u8 = 0x47;
 const KEY_END: u8 = 0x4F;
 const KEY_DEL: u8 = 0x53;
+/// PS/2 Set-1 scancode for Tab. Unlike letter/digit keys, Tab has no ASCII
+/// mapping in `sunlight-kbd`'s `scancode_to_ascii`, so it always reaches this
+/// app as `Event::KeyPress` with accurate Ctrl/Shift bits — see the
+/// module-level doc comment for why that matters.
+const KEY_TAB: u8 = 0x0F;
 
 const INPUT_MAX: usize = 240;
 const PROMPT_MAX: usize = 64;
@@ -47,6 +176,29 @@ const ANSI_COLORS: [u32; 16] = [
     0xFF000000, 0xFFCC241D, 0xFF98971A, 0xFFD79921, 0xFF458588, 0xFFB16286, 0xFF689D6A, 0xFFA89984,
     0xFF928374, 0xFFFB4934, 0xFFB8BB26, 0xFFFABD2F, 0xFF83A598, 0xFFD3869B, 0xFF8EC07C, 0xFFEBDBB2,
 ];
+
+/// Signal number for a graceful stop request. Matches the constant used
+/// elsewhere in the tree (e.g. `services/sunlight-display`, `sunlightd`).
+const SIGTERM: u32 = 15;
+
+/// Upper bound on concurrent tabs *per terminal window*. Kept modest because
+/// `pty_server` only maintains `MAX_SESSIONS = 8` sessions for the whole
+/// system (see `services/pty_server/src/main.rs`).
+const MAX_TABS: usize = 6;
+const TAB_TITLE_MAX: usize = 20;
+
+/// Budget for a single `pty` IPC round trip while creating/closing a tab.
+/// Chosen to be short enough that a stuck `pty` service only ever stalls the
+/// UI loop for a barely-perceptible instant (never indefinitely, unlike the
+/// plain `ipc_call` this replaces) while still comfortably covering a normal
+/// same-machine reply, which completes in well under a millisecond.
+const SPAWN_STEP_TIMEOUT_MS: u64 = 40;
+/// Overall wall-clock budget for a tab to go from `Connecting` to `Running`.
+/// If this elapses the tab is marked `Failed` instead of retrying forever.
+const SPAWN_DEADLINE_MS: u64 = 1500;
+/// Budget for the best-effort `PtyMsg::CLOSE` sent when a tab/session goes
+/// away. Bounded for the same reason as `SPAWN_STEP_TIMEOUT_MS`.
+const CLOSE_TIMEOUT_MS: u64 = 200;
 
 struct BumpAllocator;
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
@@ -63,14 +215,35 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     }
     unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
 }
+#[cfg(not(test))]
 #[global_allocator]
 static ALLOC: BumpAllocator = BumpAllocator;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[TERM] panic\n");
     loop {
         process_yield();
+    }
+}
+
+/// Outcome of a single bounded `pty` IPC attempt. `Timeout` is retryable
+/// (the caller tries again next tick); `Rejected` is a hard failure (bad
+/// capability, malformed reply, or an explicit `PtyMsg::ERROR`) that should
+/// not be retried.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PtyIoError {
+    Timeout,
+    Rejected,
+}
+
+impl From<IpcCallError> for PtyIoError {
+    fn from(err: IpcCallError) -> Self {
+        match err {
+            IpcCallError::Timeout => PtyIoError::Timeout,
+            _ => PtyIoError::Rejected,
+        }
     }
 }
 
@@ -80,22 +253,37 @@ struct PtySession {
 }
 
 impl PtySession {
-    fn open() -> Result<Self, ()> {
-        let cap = nameserver_lookup("pty").ok_or(())?;
-        let reply = ipc_call(cap, IpcMsg::with_label(PtyMsg::CREATE));
+    /// Request a new session against an already-resolved `pty` service
+    /// capability, bounded by `timeout_ms`. Every tab shares the same
+    /// capability token (it is just the service endpoint); sessions are
+    /// distinguished server-side by `id`.
+    ///
+    /// Uses [`ipc_call_timeout`] rather than the unbounded `ipc_call` — see
+    /// the module-level doc comment for why an unbounded call here is what
+    /// causes the whole-terminal hang this file fixes.
+    fn create_timeout(cap: CapabilityToken, timeout_ms: u64) -> Result<Self, PtyIoError> {
+        let reply = ipc_call_timeout(cap, IpcMsg::with_label(PtyMsg::CREATE), timeout_ms)?;
         if reply.label != PtyMsg::REPLY || reply.cap_count < 2 {
-            return Err(());
+            return Err(PtyIoError::Rejected);
         }
-        ipc_call(
-            cap,
-            IpcMsg::with_label(PtyMsg::SET_MODE)
-                .word(0, reply.words[0])
-                .word(1, 0),
-        );
         Ok(Self {
             id: reply.words[0],
             cap,
         })
+    }
+
+    fn set_mode_timeout(&self, mode_flags: u64, timeout_ms: u64) -> Result<(), PtyIoError> {
+        let reply = ipc_call_timeout(
+            self.cap,
+            IpcMsg::with_label(PtyMsg::SET_MODE)
+                .word(0, self.id)
+                .word(1, mode_flags),
+            timeout_ms,
+        )?;
+        if reply.label != PtyMsg::REPLY {
+            return Err(PtyIoError::Rejected);
+        }
+        Ok(())
     }
 
     fn write(&self, bytes: &[u8]) {
@@ -150,6 +338,18 @@ impl PtySession {
             }
         }
         total
+    }
+
+    /// Release this session back to `pty_server` (frees the server-side
+    /// slot for reuse). Best-effort and idempotent; bounded by
+    /// [`CLOSE_TIMEOUT_MS`] so a stuck server can't wedge tab close/teardown
+    /// either.
+    fn close(&self) {
+        let _ = ipc_call_timeout(
+            self.cap,
+            IpcMsg::with_label(PtyMsg::CLOSE).word(0, self.id),
+            CLOSE_TIMEOUT_MS,
+        );
     }
 }
 
@@ -519,63 +719,142 @@ impl DebugFlags {
     }
 }
 
-struct TerminalApp {
-    pty: PtySession,
+/// Tracked keyboard-modifier state, refreshed from every `Event::KeyPress`.
+/// See the module-level doc comment for why `Event::Key(char)` can't carry
+/// this itself.
+#[derive(Clone, Copy, Default)]
+struct Mods {
+    ctrl: bool,
+    alt: bool,
+}
+
+type TabId = u32;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum TabStatus {
+    /// Placeholder tab: allocated and focused, but its PTY/shell are still
+    /// being brought up by [`TerminalApp::advance_pending_spawn`].
+    Connecting,
+    Running,
+    Exited,
+    /// PTY creation or shell spawn did not complete within
+    /// [`SPAWN_DEADLINE_MS`], or was rejected outright. Shown distinctly and
+    /// closable like any other tab — never a silent hang.
+    Failed,
+}
+
+/// One step of the new-tab state machine driven by
+/// [`TerminalApp::advance_pending_spawn`]. See the module-level doc comment.
+enum SpawnStep {
+    RequestPty,
+    SetMode(PtySession),
+    SpawnShell(PtySession),
+}
+
+/// The single in-flight tab creation, if any. Only one is allowed at a time
+/// (enforced by [`TerminalApp::spawn_tab`]) so tab creation never contends
+/// with itself over `pty_server` session ordering.
+struct PendingSpawn {
+    tab_id: TabId,
+    step: SpawnStep,
+    started_ms: u64,
+}
+
+/// One terminal tab: an independent PTY session, shell process, terminal
+/// emulator/grid, and line-editor footer. `pty`/`shell_pid` are `None` while
+/// `status == Connecting` (see [`SpawnStep`]) and are populated by
+/// [`TerminalApp::attach_tab`] once the shell is actually running.
+struct TerminalTab {
+    id: TabId,
+    title: [u8; TAB_TITLE_MAX],
+    title_len: usize,
+    pty: Option<PtySession>,
+    shell_pid: Option<u64>,
     grid: ModelGrid,
     footer: Footer,
     osc: OscParser,
-    read_buf: [u8; READ_BUF],
-    console_buf: [u8; READ_BUF],
-    debug: DebugFlags,
+    status: TabStatus,
+    /// Set when a background (non-active) tab receives PTY output the user
+    /// hasn't seen yet. Cleared when the tab becomes active.
+    dirty: bool,
+    /// Set once `App::view` has drawn this tab for the first time, so the
+    /// `first_tab_frame` phase is logged exactly once per tab.
+    first_frame_logged: bool,
 }
 
-impl TerminalApp {
-    fn new(pty: PtySession, debug: DebugFlags) -> Self {
-        Self {
-            pty,
+impl TerminalTab {
+    /// A brand-new placeholder tab with no PTY/shell yet — the immediate,
+    /// zero-IPC result of clicking "+"/pressing `Ctrl+T` (see
+    /// [`TerminalApp::spawn_tab`]).
+    fn connecting(id: TabId, title: &[u8]) -> Self {
+        let mut tab = Self {
+            id,
+            title: [0; TAB_TITLE_MAX],
+            title_len: 0,
+            pty: None,
+            shell_pid: None,
             grid: ModelGrid::new(CONTENT_COLS, CONTENT_ROWS),
             footer: Footer::new(),
             osc: OscParser::new(),
-            read_buf: [0; READ_BUF],
-            console_buf: [0; READ_BUF],
-            debug,
-        }
+            status: TabStatus::Connecting,
+            dirty: false,
+            first_frame_logged: false,
+        };
+        tab.set_title(title);
+        tab
     }
 
-    fn content_rect(&self) -> Rect {
-        Rect::new(
-            PAD_X as i32,
-            TAB_H as i32 + PAD_Y as i32,
-            WIN_W - PAD_X * 2,
-            WIN_H - TAB_H - FOOTER_H - PAD_Y * 2,
-        )
+    fn set_title(&mut self, text: &[u8]) {
+        self.title_len = text.len().min(TAB_TITLE_MAX);
+        self.title[..self.title_len].copy_from_slice(&text[..self.title_len]);
     }
 
-    fn footer_rect(&self) -> Rect {
-        Rect::new(0, WIN_H as i32 - FOOTER_H as i32, WIN_W, FOOTER_H)
+    fn title_str(&self) -> &str {
+        core::str::from_utf8(&self.title[..self.title_len]).unwrap_or("tab")
     }
 
     fn app_owns_input(&self) -> bool {
         self.footer.app_mode || self.grid.in_alt_screen()
     }
 
-    fn shell_spawn(&self) {
-        let shell_id = (libc::getpid() as u8).max(1) as u64;
-        let _ = spawn_shell(&self.pty, shell_id);
+    /// Non-blocking liveness check for this tab's shell process. Uses the
+    /// same `try_waitpid` primitive as the rest of the tree.
+    fn refresh_status(&mut self) {
+        if self.status != TabStatus::Running {
+            return;
+        }
+        let Some(pid) = self.shell_pid else { return };
+        if let Ok(Some(_exit_code)) = libc::try_waitpid(pid) {
+            self.status = TabStatus::Exited;
+        }
     }
 
-    fn poll_pty(&mut self) -> bool {
-        let n = self.pty.read(&mut self.read_buf);
+    /// Drain one round of PTY output into this tab's OSC parser / grid.
+    /// A no-op (returns `false`) while `pty` is `None` (i.e. `Connecting`
+    /// or `Failed`).
+    fn poll_pty(&mut self, read_buf: &mut [u8], console_buf: &mut [u8], debug: DebugFlags) -> bool {
+        let Some(pty) = self.pty.as_ref() else {
+            return false;
+        };
+        let n = pty.read(read_buf);
         if n == 0 {
             return false;
         }
-        if self.debug.log_pty_stream {
-            log_pty_bytes(&self.read_buf[..n]);
+        self.ingest(&read_buf[..n], console_buf, debug);
+        true
+    }
+
+    /// Feed already-read PTY bytes through this tab's OSC parser and into
+    /// its own [`ModelGrid`]/[`Footer`]. Never touches any other tab's
+    /// state, which is what keeps per-tab output isolated.
+    fn ingest(&mut self, bytes: &[u8], console_buf: &mut [u8], debug: DebugFlags) {
+        if debug.log_pty_stream {
+            log_pty_bytes(bytes);
         }
         let mut console_len = 0usize;
         self.osc.feed(
-            &self.read_buf[..n],
-            &mut self.console_buf,
+            bytes,
+            console_buf,
             &mut console_len,
             |body| match parse_osc(body) {
                 OscCmd::Prompt(text) => self.footer.set_prompt(text),
@@ -585,20 +864,22 @@ impl TerminalApp {
             },
         );
         if console_len > 0 {
-            self.grid.feed(&self.console_buf[..console_len]);
+            self.grid.feed(&console_buf[..console_len]);
         }
-        true
     }
 
     fn handle_raw_key(&mut self, keycode: u8, pressed: bool) -> bool {
         if !pressed {
             return false;
         }
+        let Some(pty) = self.pty.as_ref() else {
+            return false;
+        };
         if self.app_owns_input() {
             let mut buf = [0u8; 4];
             let n = translate_special_key(keycode, &mut buf);
             if n > 0 {
-                self.pty.write(&buf[..n]);
+                pty.write(&buf[..n]);
                 return true;
             }
             return false;
@@ -617,48 +898,849 @@ impl TerminalApp {
         true
     }
 
+    fn handle_char(&mut self, ch: char) -> bool {
+        if self.pty.is_none() {
+            return false;
+        }
+        if self.app_owns_input() {
+            let byte = match ch {
+                '\t' => b'\t',
+                '\n' => b'\n',
+                '\u{8}' => 0x08,
+                c if c.is_ascii() => c as u8,
+                _ => 0,
+            };
+            if byte != 0 {
+                self.pty.as_ref().unwrap().write(&[byte]);
+                return true;
+            }
+            return false;
+        }
+        if ch == '\n' {
+            self.submit_line();
+            return true;
+        }
+        if ch == '\u{8}' {
+            self.footer.backspace();
+            return true;
+        }
+        if ch.is_ascii_graphic() || ch == ' ' {
+            self.footer.insert(ch as u8);
+            return true;
+        }
+        false
+    }
+
     fn submit_line(&mut self) {
+        let Some(pty) = self.pty.as_ref() else {
+            return;
+        };
         let (line, len) = self.footer.take_line();
         if len > 0 {
-            self.pty.write(&line[..len]);
+            pty.write(&line[..len]);
         }
-        self.pty.write(b"\n");
+        pty.write(b"\n");
+    }
+
+    /// Clean shutdown for this tab: stop the shell if it's still alive, then
+    /// release the PTY session (if either was ever actually created — a
+    /// `Connecting`/`Failed` tab may have neither).
+    fn close(&self) {
+        if self.status == TabStatus::Running {
+            if let Some(pid) = self.shell_pid {
+                let _ = libc::kill(pid, SIGTERM);
+            }
+        }
+        if let Some(pty) = &self.pty {
+            pty.close();
+        }
+    }
+}
+
+/// The terminal window/app. Owns every open [`TerminalTab`] plus the state
+/// shared across tabs (the `pty` service capability, scratch read buffers,
+/// debug flags, tracked keyboard modifiers, and the one allowed in-flight
+/// [`PendingSpawn`]).
+struct TerminalApp {
+    tabs: [Option<TerminalTab>; MAX_TABS],
+    tab_count: usize,
+    active: usize,
+    poll_cursor: usize,
+    next_tab_id: TabId,
+    pty_cap: CapabilityToken,
+    read_buf: [u8; READ_BUF],
+    console_buf: [u8; READ_BUF],
+    debug: DebugFlags,
+    mods: Mods,
+    pending_spawn: Option<PendingSpawn>,
+}
+
+impl TerminalApp {
+    const TAB_W: u32 = 92;
+    /// Wider than a single glyph so the new-tab button has a comfortable
+    /// click target.
+    const NEW_TAB_W: u32 = 34;
+    const CLOSE_BTN_SIZE: u32 = 14;
+
+    fn new(pty_cap: CapabilityToken, debug: DebugFlags) -> Self {
+        Self {
+            tabs: core::array::from_fn(|_| None),
+            tab_count: 0,
+            active: 0,
+            poll_cursor: 0,
+            next_tab_id: 1,
+            pty_cap,
+            read_buf: [0; READ_BUF],
+            console_buf: [0; READ_BUF],
+            debug,
+            mods: Mods::default(),
+            pending_spawn: None,
+        }
+    }
+
+    fn active_tab_mut(&mut self) -> Option<&mut TerminalTab> {
+        self.tabs.get_mut(self.active).and_then(|t| t.as_mut())
+    }
+
+    fn tab_index_by_id(&self, id: TabId) -> Option<usize> {
+        self.tabs
+            .iter()
+            .position(|t| t.as_ref().map(|t| t.id) == Some(id))
+    }
+
+    /// Request a new tab. Returns `false` (no-op) if at capacity or if a
+    /// spawn is already in flight — existing tabs are left untouched either
+    /// way.
+    ///
+    /// This performs **no IPC and no process spawn** — it only allocates an
+    /// in-memory `TabStatus::Connecting` placeholder and activates it, then
+    /// queues a [`PendingSpawn`] for [`Self::advance_pending_spawn`] to
+    /// drive on subsequent ticks. That split is the fix for the
+    /// whole-terminal hang described in the module doc comment: the
+    /// click/shortcut handler that calls this can never block on `pty_server`
+    /// or process spawn, no matter how slow either one is.
+    fn spawn_tab(&mut self) -> bool {
+        if self.tab_count >= MAX_TABS || self.pending_spawn.is_some() {
+            return false;
+        }
+
+        let id = self.next_tab_id;
+        self.next_tab_id = self.next_tab_id.wrapping_add(1);
+        log_tab_phase(id, "tab_create_clicked");
+
+        let mut title = [0u8; TAB_TITLE_MAX];
+        let mut len = copy_ascii(b"Tab ", &mut title);
+        len += fmt_u64(&mut title[len..], id as u64);
+
+        if !self.insert_tab(TerminalTab::connecting(id, &title[..len])) {
+            return false;
+        }
+        log_tab_phase(id, "tab_state_allocated");
+        // `insert_tab` always activates the tab it just inserted.
+        log_tab_phase(id, "tab_focused");
+        log_tab_phase(id, "pty_request_sent");
+
+        self.pending_spawn = Some(PendingSpawn {
+            tab_id: id,
+            step: SpawnStep::RequestPty,
+            started_ms: monotonic_millis(),
+        });
+        true
+    }
+
+    /// Pure array bookkeeping: append `tab` and make it active. Returns
+    /// `false` (leaving `self` untouched) if already at [`MAX_TABS`].
+    ///
+    /// Split out from [`Self::spawn_tab`] so tab-creation bookkeeping can be
+    /// unit tested without a live PTY/process (see `tests` below).
+    fn insert_tab(&mut self, tab: TerminalTab) -> bool {
+        if self.tab_count >= MAX_TABS {
+            return false;
+        }
+        let slot = self.tab_count;
+        self.tabs[slot] = Some(tab);
+        self.tab_count += 1;
+        self.active = slot;
+        true
+    }
+
+    /// Advance the in-flight tab creation (if any) by exactly one bounded
+    /// step. Intended to be called once per `Event::Tick`. Returns `true` if
+    /// anything changed (so callers can request a redraw).
+    ///
+    /// Every IPC step uses [`ipc_call_timeout`] with [`SPAWN_STEP_TIMEOUT_MS`]
+    /// instead of an unbounded call, so a single stuck `pty_server` reply
+    /// only ever delays this by one short, bounded step — it can retry on
+    /// the next tick rather than freezing the caller. The overall elapsed
+    /// time since the tab was requested is checked against
+    /// [`SPAWN_DEADLINE_MS`] before every step; exceeding it fails the tab
+    /// instead of retrying indefinitely.
+    fn advance_pending_spawn(&mut self) -> bool {
+        let Some(mut pending) = self.pending_spawn.take() else {
+            return false;
+        };
+
+        if monotonic_millis().saturating_sub(pending.started_ms) > SPAWN_DEADLINE_MS {
+            self.mark_pending_failed(pending.tab_id, pending.step);
+            return true;
+        }
+
+        let outcome: Result<Option<SpawnStep>, ()> = match pending.step {
+            SpawnStep::RequestPty => {
+                match PtySession::create_timeout(self.pty_cap, SPAWN_STEP_TIMEOUT_MS) {
+                    Ok(pty) => {
+                        log_tab_phase(pending.tab_id, "pty_created");
+                        Ok(Some(SpawnStep::SetMode(pty)))
+                    }
+                    Err(PtyIoError::Timeout) => Ok(Some(SpawnStep::RequestPty)),
+                    Err(PtyIoError::Rejected) => Err(()),
+                }
+            }
+            SpawnStep::SetMode(pty) => match pty.set_mode_timeout(0, SPAWN_STEP_TIMEOUT_MS) {
+                Ok(()) => Ok(Some(SpawnStep::SpawnShell(pty))),
+                Err(PtyIoError::Timeout) => Ok(Some(SpawnStep::SetMode(pty))),
+                Err(PtyIoError::Rejected) => {
+                    pty.close();
+                    Err(())
+                }
+            },
+            SpawnStep::SpawnShell(pty) => {
+                log_tab_phase(pending.tab_id, "shell_spawn_requested");
+                let shell_id = (pty.id as u8).max(1) as u64;
+                match spawn_shell(&pty, shell_id) {
+                    Ok(shell_pid) => {
+                        log_tab_phase(pending.tab_id, "shell_spawned");
+                        self.attach_tab(pending.tab_id, pty, shell_pid);
+                        Ok(None)
+                    }
+                    Err(_) => {
+                        pty.close();
+                        Err(())
+                    }
+                }
+            }
+        };
+
+        match outcome {
+            Ok(Some(step)) => {
+                pending.step = step;
+                self.pending_spawn = Some(pending);
+            }
+            Ok(None) => {
+                // Attached successfully; nothing left pending.
+            }
+            Err(()) => self.mark_pending_failed_id(pending.tab_id),
+        }
+        true
+    }
+
+    /// Wire a freshly created PTY/shell into the tab that requested it. If
+    /// that tab was closed while the spawn was still in flight, releases the
+    /// now-orphaned PTY session instead of leaking a `pty_server` slot.
+    fn attach_tab(&mut self, tab_id: TabId, pty: PtySession, shell_pid: u64) {
+        if let Some(idx) = self.tab_index_by_id(tab_id) {
+            if let Some(tab) = self.tabs[idx].as_mut() {
+                tab.pty = Some(pty);
+                tab.shell_pid = Some(shell_pid);
+                tab.status = TabStatus::Running;
+                log_tab_phase(tab_id, "tab_attached_to_pty");
+                return;
+            }
+        }
+        pty.close();
+    }
+
+    fn mark_pending_failed_id(&mut self, tab_id: TabId) {
+        if let Some(idx) = self.tab_index_by_id(tab_id) {
+            if let Some(tab) = self.tabs[idx].as_mut() {
+                tab.status = TabStatus::Failed;
+            }
+        }
+        log_tab_phase(tab_id, "tab_create_failed");
+    }
+
+    /// Like [`Self::mark_pending_failed_id`], but also releases a
+    /// partially-created PTY session (deadline exceeded mid-`SetMode`/
+    /// `SpawnShell`) so it isn't leaked in `pty_server`.
+    fn mark_pending_failed(&mut self, tab_id: TabId, step: SpawnStep) {
+        match step {
+            SpawnStep::SetMode(pty) | SpawnStep::SpawnShell(pty) => pty.close(),
+            SpawnStep::RequestPty => {}
+        }
+        self.mark_pending_failed_id(tab_id);
+    }
+
+    /// Close the tab at `idx`. Running processes are signaled and the PTY
+    /// session is released (see [`TerminalTab::close`]). If a tab creation
+    /// was still in flight for this tab, it is cancelled and any
+    /// partially-created PTY session is released rather than leaked.
+    ///
+    /// Closing the *last* remaining tab is deliberately a no-op — there is
+    /// therefore always at least one tab open; closing the terminal itself
+    /// requires closing the window.
+    ///
+    /// Returns `true` if a tab was actually closed.
+    fn close_tab(&mut self, idx: usize) -> bool {
+        if self.tab_count <= 1 {
+            return false;
+        }
+        let Some(tab) = self.remove_tab(idx) else {
+            return false;
+        };
+        let tab_id = tab.id;
+        tab.close();
+
+        if let Some(pending) = self.pending_spawn.take() {
+            if pending.tab_id == tab_id {
+                match pending.step {
+                    SpawnStep::SetMode(pty) | SpawnStep::SpawnShell(pty) => pty.close(),
+                    SpawnStep::RequestPty => {}
+                }
+            } else {
+                self.pending_spawn = Some(pending);
+            }
+        }
+        true
+    }
+
+    /// Pure array bookkeeping: remove the tab at `idx`, shifting later tabs
+    /// down to keep `tabs[0..tab_count]` contiguous and fixing up `active`.
+    /// Returns the removed tab (still owning its live PTY/process — callers
+    /// that want a clean shutdown must call [`TerminalTab::close`] on it, as
+    /// [`Self::close_tab`] does) or `None` if `idx` is out of range.
+    fn remove_tab(&mut self, idx: usize) -> Option<TerminalTab> {
+        if idx >= self.tab_count {
+            return None;
+        }
+        let removed = self.tabs[idx].take();
+        for i in idx..self.tab_count - 1 {
+            self.tabs[i] = self.tabs[i + 1].take();
+        }
+        self.tabs[self.tab_count - 1] = None;
+        self.tab_count -= 1;
+
+        if self.active > idx {
+            self.active -= 1;
+        }
+        if self.tab_count > 0 && self.active >= self.tab_count {
+            self.active = self.tab_count - 1;
+        }
+        if self.tab_count == 0 {
+            self.poll_cursor = 0;
+        } else {
+            self.poll_cursor %= self.tab_count;
+        }
+        removed
+    }
+
+    fn switch_tab(&mut self, idx: usize) -> bool {
+        if idx >= self.tab_count || idx == self.active {
+            return false;
+        }
+        self.active = idx;
+        if let Some(tab) = self.tabs[idx].as_mut() {
+            tab.dirty = false;
+            log_tab_phase(tab.id, "tab_focused");
+        }
+        true
+    }
+
+    fn next_tab(&mut self) -> bool {
+        if self.tab_count == 0 {
+            return false;
+        }
+        self.switch_tab((self.active + 1) % self.tab_count)
+    }
+
+    fn prev_tab(&mut self) -> bool {
+        if self.tab_count == 0 {
+            return false;
+        }
+        self.switch_tab((self.active + self.tab_count - 1) % self.tab_count)
+    }
+
+    /// Poll the active tab every tick, plus one background tab per tick in a
+    /// round-robin, and advance any in-flight tab creation by one step.
+    fn poll_all_tabs(&mut self) -> bool {
+        let mut redraw = self.advance_pending_spawn();
+
+        if let Some(tab) = self.tabs.get_mut(self.active).and_then(|t| t.as_mut()) {
+            tab.refresh_status();
+            if tab.poll_pty(&mut self.read_buf, &mut self.console_buf, self.debug) {
+                redraw = true;
+            }
+        }
+        if self.tab_count <= 1 {
+            return redraw;
+        }
+
+        if self.poll_cursor >= self.tab_count {
+            self.poll_cursor = 0;
+        }
+        let start = self.poll_cursor;
+        let mut idx = start;
+        for _ in 0..self.tab_count {
+            if idx != self.active {
+                self.poll_cursor = (idx + 1) % self.tab_count;
+                if let Some(tab) = self.tabs[idx].as_mut() {
+                    tab.refresh_status();
+                    let produced =
+                        tab.poll_pty(&mut self.read_buf, &mut self.console_buf, self.debug);
+                    if produced && !tab.dirty {
+                        tab.dirty = true;
+                        redraw = true;
+                    }
+                }
+                return redraw;
+            }
+            idx = (idx + 1) % self.tab_count;
+        }
+        self.poll_cursor = (start + 1) % self.tab_count;
+        redraw
+    }
+
+    /// Release every remaining tab's PTY/process, plus any in-flight spawn.
+    /// Called before process exit (window-close).
+    fn shutdown_all_tabs(&mut self) {
+        for slot in self.tabs.iter_mut() {
+            if let Some(tab) = slot.take() {
+                tab.close();
+            }
+        }
+        self.tab_count = 0;
+        if let Some(pending) = self.pending_spawn.take() {
+            match pending.step {
+                SpawnStep::SetMode(pty) | SpawnStep::SpawnShell(pty) => pty.close(),
+                SpawnStep::RequestPty => {}
+            }
+        }
+    }
+
+    fn tab_rect(index: usize) -> Rect {
+        Rect::new((index as u32 * Self::TAB_W) as i32, 0, Self::TAB_W, TAB_H)
+    }
+
+    fn new_tab_rect(tab_count: usize) -> Rect {
+        Rect::new(
+            (tab_count as u32 * Self::TAB_W) as i32,
+            0,
+            Self::NEW_TAB_W,
+            TAB_H,
+        )
+    }
+
+    fn close_btn_rect(tab: Rect) -> Rect {
+        let s = Self::CLOSE_BTN_SIZE as i32;
+        Rect::new(
+            tab.right() - s - 6,
+            tab.y + (TAB_H as i32 - s) / 2,
+            Self::CLOSE_BTN_SIZE,
+            Self::CLOSE_BTN_SIZE,
+        )
+    }
+
+    /// Route a click within the tab strip to close/switch/new-tab. Returns
+    /// `false` (and does nothing) for clicks outside the tab strip.
+    fn handle_click(&mut self, x: i32, y: i32) -> bool {
+        if y < 0 || y as u32 >= TAB_H {
+            return false;
+        }
+        let point = Point::new(x, y);
+
+        if self.tab_count > 1 {
+            for i in 0..self.tab_count {
+                let r = Self::tab_rect(i);
+                if Self::close_btn_rect(r).contains(point) {
+                    self.close_tab(i);
+                    return true;
+                }
+            }
+        }
+        for i in 0..self.tab_count {
+            if Self::tab_rect(i).contains(point) {
+                return self.switch_tab(i);
+            }
+        }
+        if self.tab_count < MAX_TABS && Self::new_tab_rect(self.tab_count).contains(point) {
+            return self.spawn_tab();
+        }
+        false
+    }
+
+    fn draw_tab_bar(&self, canvas: &mut Canvas, theme: &sunlight_ui::Theme) {
+        canvas.fill_rect(Rect::new(0, 0, WIN_W, TAB_H), theme.panel);
+        canvas.hbar(0, TAB_H as i32 - 1, WIN_W, 1, theme.border);
+
+        for i in 0..self.tab_count {
+            let Some(tab) = self.tabs[i].as_ref() else {
+                continue;
+            };
+            let r = Self::tab_rect(i);
+            let active = i == self.active;
+
+            canvas.fill_rect(r, if active { theme.panel_alt } else { theme.panel });
+
+            let text_color = match tab.status {
+                TabStatus::Failed | TabStatus::Exited => theme.danger,
+                TabStatus::Connecting => theme.warn,
+                TabStatus::Running if active => theme.accent,
+                TabStatus::Running => theme.text_dim,
+            };
+            F_SMALL.draw_vcenter(canvas, tab.title_str(), r.x + 8, r.y, TAB_H, text_color);
+
+            if active {
+                canvas.hbar(r.x, r.bottom() - 2, r.w, 2, theme.accent);
+            } else if tab.dirty {
+                canvas.fill_rect(Rect::new(r.right() - 10, r.y + 5, 4, 4), theme.accent);
+            }
+
+            if self.tab_count > 1 {
+                let close_r = Self::close_btn_rect(r);
+                F_SMALL.draw_vcenter(
+                    canvas,
+                    "x",
+                    close_r.x + 2,
+                    close_r.y,
+                    close_r.h,
+                    theme.text_dim,
+                );
+            }
+
+            if i + 1 < self.tab_count {
+                canvas.vline(
+                    r.right() - 1,
+                    r.y + 5,
+                    TAB_H.saturating_sub(10),
+                    theme.border,
+                );
+            }
+        }
+
+        if self.tab_count < MAX_TABS {
+            let nr = Self::new_tab_rect(self.tab_count);
+            let plus_w = sun_font::measure_text("+", FontRole::UiSmall).w as i32;
+            let plus_x = nr.x + ((nr.w as i32 - plus_w) / 2).max(0);
+            F_SMALL.draw_vcenter(canvas, "+", plus_x, nr.y, TAB_H, theme.text_dim);
+        }
+    }
+}
+
+/// Unit tests for the tab model.
+///
+/// These target `cargo test --target <host>`, not the kernel target: the
+/// crate stays `#![no_std]` but `no_main`/the custom global allocator/panic
+/// handler/`_start` are all gated with `#[cfg(not(test))]`.
+///
+/// Covered here: pure tab-array bookkeeping (`insert_tab`/`remove_tab`/
+/// `switch_tab`/`next_tab`/`prev_tab`), per-tab byte routing
+/// (`TerminalTab::ingest`), and — most importantly for this fix — that
+/// `spawn_tab` allocates its placeholder tab and queues a `PendingSpawn`
+/// *without performing any IPC or process spawn*, and that closing a tab
+/// whose spawn is still pending cancels it cleanly. Anything that performs a
+/// real syscall (`PtySession::create_timeout`/`set_mode_timeout`/`read`/
+/// `write`/`close`, `spawn_shell`, `libc::kill`, `libc::try_waitpid`) cannot
+/// run on the host and is instead covered by the manual test plan in
+/// `docs/terminal/tab-support.md`.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_pty(id: u64) -> PtySession {
+        PtySession {
+            id,
+            cap: CapabilityToken::INVALID,
+        }
+    }
+
+    /// A tab already `Running` with a fake PTY/shell — used by tests that
+    /// only exercise array bookkeeping / byte routing, not the connecting
+    /// state machine.
+    fn test_tab(id: TabId, title: &[u8]) -> TerminalTab {
+        let mut tab = TerminalTab::connecting(id, title);
+        tab.pty = Some(test_pty(id as u64));
+        tab.shell_pid = Some(0);
+        tab.status = TabStatus::Running;
+        tab
+    }
+
+    fn test_app() -> TerminalApp {
+        TerminalApp::new(CapabilityToken::INVALID, DebugFlags::new())
+    }
+
+    #[test]
+    fn insert_tab_creates_first_tab() {
+        let mut app = test_app();
+        assert!(app.insert_tab(test_tab(1, b"Tab 1")));
+        assert_eq!(app.tab_count, 1);
+        assert_eq!(app.active, 0);
+        assert_eq!(app.tabs[0].as_ref().unwrap().title_str(), "Tab 1");
+    }
+
+    #[test]
+    fn insert_tab_adds_additional_tabs_and_activates_newest() {
+        let mut app = test_app();
+        assert!(app.insert_tab(test_tab(1, b"Tab 1")));
+        assert!(app.insert_tab(test_tab(2, b"Tab 2")));
+        assert_eq!(app.tab_count, 2);
+        assert_eq!(app.active, 1);
+        assert_eq!(app.tabs[1].as_ref().unwrap().title_str(), "Tab 2");
+    }
+
+    #[test]
+    fn insert_tab_respects_max_tabs_capacity() {
+        let mut app = test_app();
+        for i in 0..MAX_TABS {
+            assert!(app.insert_tab(test_tab(i as TabId + 1, b"Tab")));
+        }
+        assert_eq!(app.tab_count, MAX_TABS);
+        assert!(!app.insert_tab(test_tab(99, b"Overflow")));
+        assert_eq!(app.tab_count, MAX_TABS);
+    }
+
+    #[test]
+    fn switch_tab_changes_active_and_clears_dirty_flag() {
+        let mut app = test_app();
+        app.insert_tab(test_tab(1, b"Tab 1"));
+        app.insert_tab(test_tab(2, b"Tab 2"));
+        app.tabs[0].as_mut().unwrap().dirty = true;
+        assert_eq!(app.active, 1);
+
+        assert!(app.switch_tab(0));
+        assert_eq!(app.active, 0);
+        assert!(!app.tabs[0].as_ref().unwrap().dirty);
+
+        assert!(!app.switch_tab(0));
+
+        assert!(app.next_tab());
+        assert_eq!(app.active, 1);
+        assert!(app.prev_tab());
+        assert_eq!(app.active, 0);
+    }
+
+    #[test]
+    fn remove_tab_shifts_later_tabs_and_reindexes_active() {
+        let mut app = test_app();
+        app.insert_tab(test_tab(1, b"Tab 1"));
+        app.insert_tab(test_tab(2, b"Tab 2"));
+        app.insert_tab(test_tab(3, b"Tab 3"));
+        assert_eq!(app.active, 2);
+
+        let removed = app.remove_tab(0).expect("tab 0 should be removed");
+        assert_eq!(removed.title_str(), "Tab 1");
+        assert_eq!(app.tab_count, 2);
+        assert_eq!(app.tabs[0].as_ref().unwrap().title_str(), "Tab 2");
+        assert_eq!(app.tabs[1].as_ref().unwrap().title_str(), "Tab 3");
+        assert_eq!(app.active, 1);
+    }
+
+    #[test]
+    fn remove_tab_out_of_range_is_a_no_op() {
+        let mut app = test_app();
+        app.insert_tab(test_tab(1, b"Tab 1"));
+        assert!(app.remove_tab(5).is_none());
+        assert_eq!(app.tab_count, 1);
+    }
+
+    #[test]
+    fn removing_last_tab_reaches_zero_tabs() {
+        let mut app = test_app();
+        app.insert_tab(test_tab(1, b"Tab 1"));
+        assert!(app.remove_tab(0).is_some());
+        assert_eq!(app.tab_count, 0);
+        assert!(app.remove_tab(0).is_none());
+    }
+
+    #[test]
+    fn close_tab_is_a_no_op_on_the_last_remaining_tab() {
+        let mut app = test_app();
+        app.insert_tab(test_tab(1, b"Tab 1"));
+        assert!(!app.close_tab(0));
+        assert_eq!(app.tab_count, 1);
+        assert_eq!(app.tabs[0].as_ref().unwrap().title_str(), "Tab 1");
+    }
+
+    #[test]
+    fn ingest_routes_pty_output_into_its_own_grid() {
+        let mut tab = test_tab(1, b"Tab 1");
+        let mut console_buf = [0u8; READ_BUF];
+        tab.ingest(b"hi", &mut console_buf, DebugFlags::new());
+        assert_eq!(tab.grid.cell(0, 0).ch, b'h');
+        assert_eq!(tab.grid.cell(0, 1).ch, b'i');
+    }
+
+    #[test]
+    fn inactive_tab_output_does_not_leak_into_other_tabs() {
+        let mut app = test_app();
+        app.insert_tab(test_tab(1, b"Tab 1"));
+        app.insert_tab(test_tab(2, b"Tab 2"));
+        assert_eq!(app.active, 1);
+
+        let mut console_buf = [0u8; READ_BUF];
+        app.tabs[0]
+            .as_mut()
+            .unwrap()
+            .ingest(b"top", &mut console_buf, DebugFlags::new());
+
+        assert_eq!(app.tabs[0].as_ref().unwrap().grid.cell(0, 0).ch, b't');
+        assert_eq!(app.tabs[1].as_ref().unwrap().grid.cell(0, 0).ch, b' ');
+    }
+
+    #[test]
+    fn translate_special_key_maps_tab_to_tab_byte() {
+        let mut buf = [0u8; 4];
+        let n = translate_special_key(KEY_TAB, &mut buf);
+        assert_eq!(n, 1);
+        assert_eq!(buf[0], b'\t');
+    }
+
+    // ---- Regression coverage for the new-tab hang fix -------------------
+    //
+    // These are the key regression tests for this bug: `spawn_tab` (the
+    // click/Ctrl+T handler) must never touch the network/PTY/process
+    // syscalls directly — only `advance_pending_spawn` (driven by
+    // `Event::Tick`) may do that, bounded by `ipc_call_timeout`. Because
+    // `spawn_tab` performs no IPC, these tests can (and do) call it
+    // directly on the host target and assert on its *synchronous* result,
+    // which is exactly the property that makes tab creation non-blocking
+    // from the UI's perspective.
+
+    #[test]
+    fn spawn_tab_allocates_connecting_placeholder_without_any_blocking_call() {
+        let mut app = test_app();
+        assert!(app.spawn_tab());
+
+        assert_eq!(app.tab_count, 1);
+        assert_eq!(app.active, 0);
+        let tab = app.tabs[0].as_ref().unwrap();
+        assert_eq!(tab.status, TabStatus::Connecting);
+        assert!(tab.pty.is_none());
+        assert!(tab.shell_pid.is_none());
+
+        let pending = app.pending_spawn.as_ref().expect("spawn should be queued");
+        assert_eq!(pending.tab_id, tab.id);
+        assert!(matches!(pending.step, SpawnStep::RequestPty));
+    }
+
+    #[test]
+    fn spawn_tab_is_a_no_op_while_a_spawn_is_already_pending() {
+        let mut app = test_app();
+        assert!(app.spawn_tab());
+        // A second click/shortcut before the first tab finished connecting
+        // must not start a second concurrent spawn (and must not panic or
+        // corrupt the first one).
+        assert!(!app.spawn_tab());
+        assert_eq!(app.tab_count, 1);
+    }
+
+    #[test]
+    fn spawn_tab_respects_max_tabs_capacity() {
+        let mut app = test_app();
+        for _ in 0..MAX_TABS {
+            assert!(app.insert_tab(test_tab(app.next_tab_id, b"Tab")));
+            app.next_tab_id = app.next_tab_id.wrapping_add(1);
+        }
+        assert_eq!(app.tab_count, MAX_TABS);
+        assert!(!app.spawn_tab());
+        assert!(app.pending_spawn.is_none());
+    }
+
+    #[test]
+    fn closing_a_tab_with_a_pending_spawn_cancels_it() {
+        let mut app = test_app();
+        app.insert_tab(test_tab(1, b"Tab 1"));
+        assert!(app.spawn_tab());
+        assert_eq!(app.tab_count, 2);
+        assert!(app.pending_spawn.is_some());
+
+        // Close the still-connecting tab (index 1).
+        assert!(app.close_tab(1));
+        assert_eq!(app.tab_count, 1);
+        assert!(
+            app.pending_spawn.is_none(),
+            "closing the tab a spawn was targeting must cancel that spawn"
+        );
+    }
+
+    #[test]
+    fn closing_an_unrelated_tab_leaves_a_pending_spawn_intact() {
+        let mut app = test_app();
+        app.insert_tab(test_tab(1, b"Tab 1"));
+        app.insert_tab(test_tab(2, b"Tab 2"));
+        assert!(app.spawn_tab()); // tab 3, connecting
+        assert_eq!(app.tab_count, 3);
+
+        // Close tab 1 (index 0) -- unrelated to the pending spawn for tab 3.
+        assert!(app.close_tab(0));
+        assert_eq!(app.tab_count, 2);
+        let pending = app
+            .pending_spawn
+            .as_ref()
+            .expect("unrelated spawn survives");
+        assert_eq!(pending.tab_id, 3);
+    }
+
+    #[test]
+    fn advance_pending_spawn_is_a_cheap_no_op_when_nothing_is_pending() {
+        let mut app = test_app();
+        assert!(!app.advance_pending_spawn());
     }
 }
 
 impl App for TerminalApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &sunlight_ui::Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
-        Panel::new(Rect::new(0, 0, WIN_W, TAB_H)).draw(canvas, theme);
-        Label::new(Rect::new(14, 8, 80, TAB_H - 8), "Tab 1")
-            .with_font(&F_UI)
+        self.draw_tab_bar(canvas, theme);
+
+        let content = content_rect();
+        let footer = footer_rect();
+
+        let Some(tab) = self.tabs[self.active].as_mut() else {
+            StatusBar::new(footer, "", "no active tab", "").draw(canvas, theme);
+            return;
+        };
+
+        if !tab.first_frame_logged {
+            tab.first_frame_logged = true;
+            log_tab_phase(tab.id, "first_tab_frame");
+        }
+
+        TerminalViewport::new(content).draw(canvas, &mut tab.grid, theme);
+
+        let status_label = match tab.status {
+            TabStatus::Connecting => Some("Connecting..."),
+            TabStatus::Failed => Some("Failed to start shell"),
+            TabStatus::Running | TabStatus::Exited => None,
+        };
+        if let Some(text) = status_label {
+            Label::new(
+                Rect::new(content.x + 8, content.y + 8, content.w - 16, 20),
+                text,
+            )
+            .with_font(&F_SMALL)
             .draw(canvas, theme);
+        }
 
-        TerminalViewport::new(self.content_rect()).draw(canvas, &mut self.grid, theme);
-
-        let footer = self.footer_rect();
         StatusBar::new(footer, "", "", "").draw(canvas, theme);
-        if self.app_owns_input() {
+        if tab.app_owns_input() {
             Label::new(
                 Rect::new(8, footer.y + 4, 220, FOOTER_H - 8),
-                self.footer.app_name_str(),
+                tab.footer.app_name_str(),
             )
             .with_font(&F_SMALL)
             .draw(canvas, theme);
         } else {
-            let prompt_w =
-                sun_font::measure_text(self.footer.prompt_str(), FontRole::UiSmall).w + 4;
+            let prompt_w = sun_font::measure_text(tab.footer.prompt_str(), FontRole::UiSmall).w + 4;
             let prompt_widths = [prompt_w, WIN_W - 48];
             let mut prompt_cells = HBox::new(Rect::new(8, footer.y + 4, WIN_W - 16, FOOTER_H - 8))
                 .with_spacing(8)
                 .layout(&prompt_widths);
             if let Some(prompt_rect) = prompt_cells.next() {
-                Label::new(prompt_rect, self.footer.prompt_str())
+                Label::new(prompt_rect, tab.footer.prompt_str())
                     .with_font(&F_SMALL)
                     .draw(canvas, theme);
             }
             if let Some(input_rect) = prompt_cells.next() {
-                Label::new(input_rect, self.footer.input_str())
+                Label::new(input_rect, tab.footer.input_str())
                     .with_font(&F_UI)
                     .draw(canvas, theme);
             }
@@ -669,45 +1751,88 @@ impl App for TerminalApp {
         let mut dirty = false;
         match event {
             Event::Tick => {
-                dirty |= self.poll_pty();
-            }
-            Event::Key(ch) => {
-                if self.app_owns_input() {
-                    let byte = match ch {
-                        '\n' => b'\n',
-                        '\u{8}' => 0x08,
-                        c if c.is_ascii() => c as u8,
-                        _ => 0,
-                    };
-                    if byte != 0 {
-                        self.pty.write(&[byte]);
-                        dirty = true;
-                    }
-                } else if ch == '\n' {
-                    self.submit_line();
-                    dirty = true;
-                } else if ch == '\u{8}' {
-                    self.footer.backspace();
-                    dirty = true;
-                } else if ch.is_ascii_graphic() || ch == ' ' {
-                    self.footer.insert(ch as u8);
-                    dirty = true;
-                }
+                dirty |= self.poll_all_tabs();
             }
             Event::KeyPress {
-                keycode, pressed, ..
+                keycode,
+                pressed,
+                shift,
+                ctrl,
+                alt,
+                ..
             } => {
-                dirty |= self.handle_raw_key(keycode, pressed);
+                self.mods = Mods { ctrl, alt };
+                if pressed && ctrl && keycode == KEY_TAB {
+                    dirty |= if shift {
+                        self.prev_tab()
+                    } else {
+                        self.next_tab()
+                    };
+                } else if let Some(tab) = self.active_tab_mut() {
+                    dirty |= tab.handle_raw_key(keycode, pressed);
+                }
             }
-            Event::Click { .. }
-            | Event::MouseDown { .. }
-            | Event::MouseUp { .. }
-            | Event::MouseMove { .. } => {}
+            Event::Key(ch) => {
+                if self.mods.ctrl && (ch == 't' || ch == 'T') {
+                    dirty |= self.spawn_tab();
+                } else if self.mods.ctrl && (ch == 'w' || ch == 'W') {
+                    // Plain Ctrl+W never reaches here -- `sunlight-display`
+                    // still intercepts it globally to close the window. Only
+                    // Ctrl+Shift+W is left unconsumed for apps.
+                    dirty |= self.close_tab(self.active);
+                } else if self.mods.alt && !self.mods.ctrl && ch.is_ascii_digit() && ch != '0' {
+                    let idx = (ch as u8 - b'1') as usize;
+                    dirty |= self.switch_tab(idx);
+                } else if let Some(tab) = self.active_tab_mut() {
+                    dirty |= tab.handle_char(ch);
+                }
+            }
+            Event::Click { x, y } => {
+                dirty |= self.handle_click(x, y);
+            }
+            Event::MouseDown { .. } | Event::MouseUp { .. } | Event::MouseMove { .. } => {}
         }
         dirty
     }
 }
 
+fn content_rect() -> Rect {
+    Rect::new(
+        PAD_X as i32,
+        TAB_H as i32 + PAD_Y as i32,
+        WIN_W - PAD_X * 2,
+        WIN_H - TAB_H - FOOTER_H - PAD_Y * 2,
+    )
+}
+
+fn footer_rect() -> Rect {
+    Rect::new(0, WIN_H as i32 - FOOTER_H as i32, WIN_W, FOOTER_H)
+}
+
+/// Log one lifecycle phase for tab `tab_id` with a monotonic timestamp.
+/// Format: `[TERM][TAB] tab=<id> phase=<phase> t=<monotonic_ms>ms`.
+///
+/// This is what makes the new-tab path traceable end to end (see the
+/// module-level doc comment for the full phase list): grepping serial output
+/// for `tab=<id>` shows exactly how long each step took and where a hang (or
+/// failure) occurred, without needing a debugger attached to a `no_std`
+/// process.
+fn log_tab_phase(tab_id: TabId, phase: &str) {
+    let mut buf = [0u8; 96];
+    let mut len = 0usize;
+    len += copy_ascii(b"[TERM][TAB] tab=", &mut buf[len..]);
+    len += fmt_u64(&mut buf[len..], tab_id as u64);
+    len += copy_ascii(b" phase=", &mut buf[len..]);
+    len += copy_ascii(phase.as_bytes(), &mut buf[len..]);
+    len += copy_ascii(b" t=", &mut buf[len..]);
+    len += fmt_u64(&mut buf[len..], monotonic_millis());
+    len += copy_ascii(b"ms\n", &mut buf[len..]);
+    if let Ok(text) = core::str::from_utf8(&buf[..len]) {
+        debug_log(text);
+    }
+}
+
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
@@ -718,15 +1843,30 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         "app_main_started",
         Some(sunlight_ipc::getpid()),
     );
-    let pty = match PtySession::open() {
-        Ok(pty) => pty,
-        Err(_) => loop {
+
+    let Some(pty_cap) = nameserver_lookup("pty") else {
+        loop {
             process_yield();
-        },
+        }
     };
 
-    let mut app = TerminalApp::new(pty, parse_debug_flags(argc, argv));
-    app.shell_spawn();
+    let mut app = TerminalApp::new(pty_cap, parse_debug_flags(argc, argv));
+
+    // Drive the very first tab through the same bounded, non-blocking state
+    // machine used for every later tab (see `advance_pending_spawn`). In the
+    // healthy case (the reported-working launch path) this resolves within
+    // a handful of near-instant local IPC round trips, exactly matching the
+    // old behavior's timing; the difference is that a stuck `pty` service
+    // can no longer hang this loop forever -- `SPAWN_DEADLINE_MS` bounds it,
+    // after which the window still opens, showing a failed first tab
+    // instead of a process that never becomes visible at all.
+    app.spawn_tab();
+    while app.pending_spawn.is_some() {
+        app.advance_pending_spawn();
+        if app.pending_spawn.is_some() {
+            process_yield();
+        }
+    }
 
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
@@ -740,15 +1880,22 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         },
     };
     window.run(&mut app);
-    loop {
-        process_yield();
-    }
+    // Defensive: under normal operation `close_tab` has already released
+    // every tab's PTY/process by the time the window-close flow above
+    // returns. This just guards against leaking sessions if that
+    // invariant is ever violated.
+    app.shutdown_all_tabs();
+    ProcessExit::exit(0);
 }
 
 fn translate_special_key(keycode: u8, buf: &mut [u8; 4]) -> usize {
     match keycode {
         KEY_ENTER => {
             buf[0] = b'\n';
+            1
+        }
+        KEY_TAB => {
+            buf[0] = b'\t';
             1
         }
         KEY_BACKSPACE => {

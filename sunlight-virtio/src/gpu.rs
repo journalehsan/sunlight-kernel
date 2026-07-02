@@ -53,13 +53,62 @@ const VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING: u32 = 0x0106;
 const VIRTIO_GPU_CMD_UPDATE_CURSOR: u32 = 0x0300;
 const VIRTIO_GPU_CMD_MOVE_CURSOR: u32 = 0x0301;
 
-const VIRTIO_GPU_RESP_OK_NODATA: u32 = 0x1100;
-const VIRTIO_GPU_RESP_OK_DISPLAY_INFO: u32 = 0x1101;
+pub const VIRTIO_GPU_RESP_OK_NODATA: u32 = 0x1100;
+pub const VIRTIO_GPU_RESP_OK_DISPLAY_INFO: u32 = 0x1101;
 
-// Pixel formats (§5.7.6.8)
-/// XRGB 32-bit — matches the existing display server back_buffer format.
+// Device error responses (§5.7.6)
+pub const VIRTIO_GPU_RESP_ERR_UNSPEC: u32 = 0x1200;
+pub const VIRTIO_GPU_RESP_ERR_OUT_OF_MEMORY: u32 = 0x1201;
+pub const VIRTIO_GPU_RESP_ERR_INVALID_SCANOUT_ID: u32 = 0x1202;
+pub const VIRTIO_GPU_RESP_ERR_INVALID_RESOURCE_ID: u32 = 0x1203;
+pub const VIRTIO_GPU_RESP_ERR_INVALID_CONTEXT_ID: u32 = 0x1204;
+pub const VIRTIO_GPU_RESP_ERR_INVALID_PARAMETER: u32 = 0x1205;
+
+// Driver-side pseudo response codes (never produced by the device).
+/// The used-ring poll spun out without a completion.
+pub const DRIVER_ERR_TIMEOUT: u32 = 0xFFFF_0000;
+/// More scatter-gather entries than fit in the driver's sg buffer.
+pub const DRIVER_ERR_SG_OVERFLOW: u32 = 0xFFFF_0001;
+
+/// Max RESOURCE_ATTACH_BACKING scatter-gather entries (4-page sg buffer).
+pub const MAX_SG_ENTRIES: usize = (4 * 4096) / core::mem::size_of::<VirtioGpuMemEntry>();
+
+/// Human-readable name for a VirtIO GPU response / driver error code.
+pub fn resp_code_name(code: u32) -> &'static str {
+    match code {
+        VIRTIO_GPU_RESP_OK_NODATA => "OK_NODATA",
+        VIRTIO_GPU_RESP_OK_DISPLAY_INFO => "OK_DISPLAY_INFO",
+        VIRTIO_GPU_RESP_ERR_UNSPEC => "ERR_UNSPEC",
+        VIRTIO_GPU_RESP_ERR_OUT_OF_MEMORY => "ERR_OUT_OF_MEMORY",
+        VIRTIO_GPU_RESP_ERR_INVALID_SCANOUT_ID => "ERR_INVALID_SCANOUT_ID",
+        VIRTIO_GPU_RESP_ERR_INVALID_RESOURCE_ID => "ERR_INVALID_RESOURCE_ID",
+        VIRTIO_GPU_RESP_ERR_INVALID_CONTEXT_ID => "ERR_INVALID_CONTEXT_ID",
+        VIRTIO_GPU_RESP_ERR_INVALID_PARAMETER => "ERR_INVALID_PARAMETER",
+        DRIVER_ERR_TIMEOUT => "DRIVER_TIMEOUT",
+        DRIVER_ERR_SG_OVERFLOW => "DRIVER_SG_OVERFLOW",
+        _ => "UNKNOWN",
+    }
+}
+
+#[inline]
+fn resp_to_result(code: u32) -> Result<(), u32> {
+    if code == VIRTIO_GPU_RESP_OK_NODATA || code == VIRTIO_GPU_RESP_OK_DISPLAY_INFO {
+        Ok(())
+    } else {
+        Err(code)
+    }
+}
+
+// Pixel formats (§5.7.6.8). VirtIO GPU format names enumerate the component
+// bytes in MEMORY order, not the packed little-endian u32 order.
+/// Memory bytes B,G,R,X — i.e. a little-endian u32 holding 0x00RRGGBB.
+/// This matches the display server's XRGB back_buffer pixels.
+pub const VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM: u32 = 2;
+/// Memory bytes X,R,G,B — a little-endian u32 holding 0xBBGGRR00.
+/// NOT the layout of a packed 0x00RRGGBB pixel; kept for reference.
 pub const VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM: u32 = 4;
-/// BGRA 32-bit — cursor resource (supports alpha for transparency).
+/// Memory bytes B,G,R,A — a little-endian u32 holding 0xAARRGGBB.
+/// Cursor resource format (supports alpha for transparency).
 pub const VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM: u32 = 1;
 
 /// Resource ID for the scanout (back_buffer).
@@ -419,6 +468,18 @@ impl VirtioGpu {
 
     /// Probe scanout 0 dimensions. Returns (width, height) or None on failure.
     pub unsafe fn get_display_info(&mut self) -> Option<(u32, u32)> {
+        let modes = self.get_display_modes()?;
+        let w = modes[0].r_w;
+        let h = modes[0].r_h;
+        if w == 0 || h == 0 {
+            None
+        } else {
+            Some((w, h))
+        }
+    }
+
+    /// Probe all reported scanout rectangles from GET_DISPLAY_INFO.
+    pub unsafe fn get_display_modes(&mut self) -> Option<[VirtioGpuDisplayOne; 16]> {
         let cmd_v = self.cmd_virt as *mut VirtioGpuCtrlHdr;
         let rsp_v = (self.cmd_virt + 512) as *mut VirtioGpuRespDisplayInfo;
         let rsp_type_v = (self.cmd_virt + 512) as *const u32;
@@ -427,35 +488,28 @@ impl VirtioGpu {
         (rsp_v as *mut u8).write_bytes(0, core::mem::size_of::<VirtioGpuRespDisplayInfo>());
         fence(Ordering::SeqCst);
 
-        let ok = self.ctrl2(
+        let code = self.ctrl2(
             self.cmd_phys,
             core::mem::size_of::<VirtioGpuCtrlHdr>() as u32,
             self.cmd_phys + 512,
             core::mem::size_of::<VirtioGpuRespDisplayInfo>() as u32,
             rsp_type_v,
         );
-        if !ok {
+        if resp_to_result(code).is_err() {
             return None;
         }
 
-        let rsp = &*rsp_v;
-        let w = rsp.pmodes[0].r_w;
-        let h = rsp.pmodes[0].r_h;
-        if w == 0 || h == 0 {
-            None
-        } else {
-            Some((w, h))
-        }
+        Some((*rsp_v).pmodes)
     }
 
-    /// Create a 2D resource.
+    /// Create a 2D resource. On failure returns the device/driver error code.
     pub unsafe fn resource_create_2d(
         &mut self,
         resource_id: u32,
         format: u32,
         w: u32,
         h: u32,
-    ) -> bool {
+    ) -> Result<(), u32> {
         let cmd_v = self.cmd_virt as *mut VirtioGpuResourceCreate2d;
         let rsp_v = (self.cmd_virt + 512) as *const u32;
         *cmd_v = VirtioGpuResourceCreate2d {
@@ -466,37 +520,44 @@ impl VirtioGpu {
             height: h,
         };
         fence(Ordering::SeqCst);
-        self.ctrl2(
+        resp_to_result(self.ctrl2(
             self.cmd_phys,
             core::mem::size_of::<VirtioGpuResourceCreate2d>() as u32,
             self.cmd_phys + 512,
             core::mem::size_of::<VirtioGpuCtrlHdr>() as u32,
             rsp_v,
-        )
+        ))
     }
 
     /// Attach backing memory to a resource (scatter-gather list via sg buffer).
+    /// On failure returns the device/driver error code. Fails with
+    /// `DRIVER_ERR_SG_OVERFLOW` if `entries` exceeds `MAX_SG_ENTRIES` — the
+    /// header's `nr_entries` must exactly match the entries sent, otherwise the
+    /// device rejects the whole command.
     pub unsafe fn resource_attach_backing(
         &mut self,
         resource_id: u32,
         entries: &[VirtioGpuMemEntry],
-    ) -> bool {
+    ) -> Result<(), u32> {
+        if entries.len() > MAX_SG_ENTRIES {
+            return Err(DRIVER_ERR_SG_OVERFLOW);
+        }
+        let n = entries.len();
+
         // Command header in cmd buffer
         let cmd_v = self.cmd_virt as *mut VirtioGpuResourceAttachBacking;
         *cmd_v = VirtioGpuResourceAttachBacking {
             hdr: VirtioGpuCtrlHdr::cmd(VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING),
             resource_id,
-            nr_entries: entries.len() as u32,
+            nr_entries: n as u32,
         };
         let cmd_phys = self.cmd_phys;
         let cmd_len = core::mem::size_of::<VirtioGpuResourceAttachBacking>() as u32;
 
         // Copy entries to sg buffer
-        let max_n = (4 * 4096) / core::mem::size_of::<VirtioGpuMemEntry>();
-        let n = entries.len().min(max_n);
         let sg_v = self.sg_virt as *mut VirtioGpuMemEntry;
-        for i in 0..n {
-            sg_v.add(i).write_volatile(entries[i]);
+        for (i, entry) in entries.iter().enumerate() {
+            sg_v.add(i).write_volatile(*entry);
         }
         let entries_phys = self.sg_phys;
         let entries_len = (n * core::mem::size_of::<VirtioGpuMemEntry>()) as u32;
@@ -510,7 +571,7 @@ impl VirtioGpu {
         let rsp_type_v = (self.cmd_virt + 512) as *const u32;
         fence(Ordering::SeqCst);
 
-        self.ctrl3(
+        resp_to_result(self.ctrl3(
             cmd_phys,
             cmd_len,
             entries_phys,
@@ -518,17 +579,17 @@ impl VirtioGpu {
             resp_phys,
             resp_len,
             rsp_type_v,
-        )
+        ))
     }
 
-    /// Wire a resource to a scanout.
+    /// Wire a resource to a scanout. On failure returns the error code.
     pub unsafe fn set_scanout(
         &mut self,
         scanout_id: u32,
         resource_id: u32,
         w: u32,
         h: u32,
-    ) -> bool {
+    ) -> Result<(), u32> {
         let cmd_v = self.cmd_virt as *mut VirtioGpuSetScanout;
         let rsp_v = (self.cmd_virt + 512) as *const u32;
         *cmd_v = VirtioGpuSetScanout {
@@ -541,13 +602,13 @@ impl VirtioGpu {
             resource_id,
         };
         fence(Ordering::SeqCst);
-        self.ctrl2(
+        resp_to_result(self.ctrl2(
             self.cmd_phys,
             core::mem::size_of::<VirtioGpuSetScanout>() as u32,
             self.cmd_phys + 512,
             core::mem::size_of::<VirtioGpuCtrlHdr>() as u32,
             rsp_v,
-        )
+        ))
     }
 
     /// TRANSFER_TO_HOST_2D for the given dirty rect.
@@ -560,7 +621,7 @@ impl VirtioGpu {
         w: u32,
         h: u32,
         stride: u32,
-    ) -> bool {
+    ) -> Result<(), u32> {
         let offset = (y as u64) * (stride as u64 * 4) + (x as u64 * 4);
         let cmd_v = self.cmd_virt as *mut VirtioGpuTransferToHost2d;
         let rsp_v = (self.cmd_virt + 512) as *const u32;
@@ -575,13 +636,13 @@ impl VirtioGpu {
             padding: 0,
         };
         fence(Ordering::SeqCst);
-        self.ctrl2(
+        resp_to_result(self.ctrl2(
             self.cmd_phys,
             core::mem::size_of::<VirtioGpuTransferToHost2d>() as u32,
             self.cmd_phys + 512,
             core::mem::size_of::<VirtioGpuCtrlHdr>() as u32,
             rsp_v,
-        )
+        ))
     }
 
     /// RESOURCE_FLUSH for the given dirty rect.
@@ -592,7 +653,7 @@ impl VirtioGpu {
         y: u32,
         w: u32,
         h: u32,
-    ) -> bool {
+    ) -> Result<(), u32> {
         let cmd_v = self.cmd_virt as *mut VirtioGpuResourceFlush;
         let rsp_v = (self.cmd_virt + 512) as *const u32;
         *cmd_v = VirtioGpuResourceFlush {
@@ -605,13 +666,13 @@ impl VirtioGpu {
             padding: 0,
         };
         fence(Ordering::SeqCst);
-        self.ctrl2(
+        resp_to_result(self.ctrl2(
             self.cmd_phys,
             core::mem::size_of::<VirtioGpuResourceFlush>() as u32,
             self.cmd_phys + 512,
             core::mem::size_of::<VirtioGpuCtrlHdr>() as u32,
             rsp_v,
-        )
+        ))
     }
 
     /// UPDATE_CURSOR — upload a new cursor image and set its position.
@@ -623,7 +684,7 @@ impl VirtioGpu {
         y: u32,
         hot_x: u32,
         hot_y: u32,
-    ) -> bool {
+    ) -> Result<(), u32> {
         let cmd_v = self.cmd_virt as *mut VirtioGpuUpdateCursor;
         let rsp_v = (self.cmd_virt + 512) as *const u32;
         *cmd_v = VirtioGpuUpdateCursor {
@@ -638,17 +699,17 @@ impl VirtioGpu {
             padding1: 0,
         };
         fence(Ordering::SeqCst);
-        self.cursor2(
+        resp_to_result(self.cursor2(
             self.cmd_phys,
             core::mem::size_of::<VirtioGpuUpdateCursor>() as u32,
             self.cmd_phys + 512,
             core::mem::size_of::<VirtioGpuCtrlHdr>() as u32,
             rsp_v,
-        )
+        ))
     }
 
     /// MOVE_CURSOR — update position without changing the cursor image.
-    pub unsafe fn move_cursor(&mut self, scanout_id: u32, x: u32, y: u32) -> bool {
+    pub unsafe fn move_cursor(&mut self, scanout_id: u32, x: u32, y: u32) -> Result<(), u32> {
         let cmd_v = self.cmd_virt as *mut VirtioGpuUpdateCursor;
         let rsp_v = (self.cmd_virt + 512) as *const u32;
         *cmd_v = VirtioGpuUpdateCursor {
@@ -663,13 +724,13 @@ impl VirtioGpu {
             padding1: 0,
         };
         fence(Ordering::SeqCst);
-        self.cursor2(
+        resp_to_result(self.cursor2(
             self.cmd_phys,
             core::mem::size_of::<VirtioGpuUpdateCursor>() as u32,
             self.cmd_phys + 512,
             core::mem::size_of::<VirtioGpuCtrlHdr>() as u32,
             rsp_v,
-        )
+        ))
     }
 
     /// Virtual address of the cursor backing pixels (64×64 BGRA, kernel-owned).
@@ -709,6 +770,7 @@ impl VirtioGpu {
 
     /// Send a 2-descriptor chain on the control queue.
     /// `rsp_type_v`: virtual *const u32 pointing at the response type field (for polling).
+    /// Returns the raw response type code.
     unsafe fn ctrl2(
         &mut self,
         cmd_phys: u64,
@@ -716,7 +778,7 @@ impl VirtioGpu {
         rsp_phys: u64,
         rsp_len: u32,
         rsp_type_v: *const u32,
-    ) -> bool {
+    ) -> u32 {
         let q = &mut self.controlq;
         let nb = self.notify_base;
         let mult = self.notify_multiplier;
@@ -734,6 +796,7 @@ impl VirtioGpu {
     }
 
     /// 3-descriptor chain on the control queue (ATTACH_BACKING).
+    /// Returns the raw response type code.
     unsafe fn ctrl3(
         &mut self,
         cmd_phys: u64,
@@ -743,7 +806,7 @@ impl VirtioGpu {
         rsp_phys: u64,
         rsp_len: u32,
         rsp_type_v: *const u32,
-    ) -> bool {
+    ) -> u32 {
         let q = &mut self.controlq;
         let nb = self.notify_base;
         let mult = self.notify_multiplier;
@@ -763,6 +826,7 @@ impl VirtioGpu {
     }
 
     /// 2-descriptor chain on the cursor queue.
+    /// Returns the raw response type code.
     unsafe fn cursor2(
         &mut self,
         cmd_phys: u64,
@@ -770,7 +834,7 @@ impl VirtioGpu {
         rsp_phys: u64,
         rsp_len: u32,
         rsp_type_v: *const u32,
-    ) -> bool {
+    ) -> u32 {
         let q = &mut self.cursorq;
         let nb = self.notify_base;
         let mult = self.notify_multiplier;
@@ -870,7 +934,8 @@ impl VirtioGpu {
     }
 
     /// Spin-poll the used ring for one completion entry.
-    unsafe fn poll(q: &mut Virtq, rsp_type_v: *const u32) -> bool {
+    /// Returns the device's response type code, or `DRIVER_ERR_TIMEOUT`.
+    unsafe fn poll(q: &mut Virtq, rsp_type_v: *const u32) -> u32 {
         let used_idx_ptr = (q.used_virt + 2) as *const u16;
         let mut limit = 10_000_000u32;
         loop {
@@ -880,13 +945,12 @@ impl VirtioGpu {
             }
             limit -= 1;
             if limit == 0 {
-                return false;
+                return DRIVER_ERR_TIMEOUT;
             }
             core::hint::spin_loop();
         }
         q.last_used_idx = q.last_used_idx.wrapping_add(1);
         fence(Ordering::SeqCst);
-        let t = rsp_type_v.read_volatile();
-        t == VIRTIO_GPU_RESP_OK_NODATA || t == VIRTIO_GPU_RESP_OK_DISPLAY_INFO
+        rsp_type_v.read_volatile()
     }
 }
