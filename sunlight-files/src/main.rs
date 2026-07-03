@@ -15,7 +15,7 @@ use sunlight_ipc::{
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, ProcessExit,
 };
-use sunlight_libc::{self as libc, env, DirEntry, FT_DIR, FT_FILE};
+use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
@@ -772,22 +772,57 @@ impl State {
         }
         self.selected_row = Some(idx);
         let entry = self.entries[idx];
-        if entry.file_type != FT_DIR {
-            return true;
-        }
         let name = entry.name_bytes();
         let name = match core::str::from_utf8(name) {
             Ok(s) => s,
             Err(_) => {
-                self.set_error("Invalid directory name");
+                self.set_error(if entry.file_type == FT_DIR {
+                    "Invalid directory name"
+                } else {
+                    "Invalid file name"
+                });
                 return false;
             }
         };
-        if let Some(next) = self.current_path.join(name) {
-            self.navigate_to(next)
+        if entry.file_type == FT_DIR {
+            if let Some(next) = self.current_path.join(name) {
+                return self.navigate_to(next);
+            }
+            self.set_error("Path is too long");
+            return false;
+        }
+        if let Some(file_path) = self.current_path.join(name) {
+            self.open_file_with_resolver(&file_path)
         } else {
             self.set_error("Path is too long");
             false
+        }
+    }
+
+    fn open_file_with_resolver(&mut self, path: &PathBuf) -> bool {
+        let trace = launch_trace::current()
+            .unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+        match sun_open::open_path(trace, LaunchSource::Unknown, path.as_str().as_bytes()) {
+            Ok(_) => {
+                self.clear_error();
+                true
+            }
+            Err(sun_open::OpenError::NoAssociation) => {
+                self.set_error("No application is registered for this file type");
+                false
+            }
+            Err(sun_open::OpenError::MissingPath) => {
+                self.set_error("Missing file path");
+                false
+            }
+            Err(sun_open::OpenError::PathTooLong) => {
+                self.set_error("Path is too long");
+                false
+            }
+            Err(sun_open::OpenError::LaunchFailed(_)) => {
+                self.set_error("Unable to open file");
+                false
+            }
         }
     }
 

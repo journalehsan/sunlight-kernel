@@ -283,6 +283,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sun-open",
+            output: "sun-open",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-terminal",
             output: "sunlight-terminal",
             rustflags: service_rustflags,

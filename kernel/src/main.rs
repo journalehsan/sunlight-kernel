@@ -157,6 +157,8 @@ static SUNLIGHT_RUNNER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-runner");
 static SUN_EXEC_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sun-exec");
+static SUN_OPEN_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sun-open");
 // First PTY-backed graphical terminal client.
 static SUNLIGHT_TERMINAL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-terminal");

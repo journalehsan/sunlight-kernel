@@ -34,6 +34,8 @@ pub mod mman;
 pub mod power;
 /// Canonical user-space app launch resolution and tracing.
 pub mod sun_exec;
+/// Global file-open resolver (extension MIME + default app associations).
+pub mod sun_open;
 /// Native thread spawning.
 pub mod thread;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.

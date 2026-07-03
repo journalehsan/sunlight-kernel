@@ -942,6 +942,7 @@ max_ttys = 6
     RamEntry::file("/bin/eyes", 0, 0, mode::FILE_755, b"#!/sunlight/eyes\n"),
     RamEntry::file("/bin/sunlight-runner", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-runner\n"),
     RamEntry::file("/bin/sun-exec", 0, 0, mode::FILE_755, b"#!/sunlight/sun-exec\n"),
+    RamEntry::file("/bin/sun-open", 0, 0, mode::FILE_755, b"#!/sunlight/sun-open\n"),
     // GUI Terminal emulator
     RamEntry::file("/bin/sunlight-terminal", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-terminal\n"),
     // GUI Task Monitor
@@ -1469,6 +1470,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/sun-exec\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sun-open",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sun-open\n",
     ),
     RamEntry::file(
         "/usr/bin/sunlight-terminal",

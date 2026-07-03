@@ -1,0 +1,13 @@
+[package]
+name = "sun-open"
+version = "0.2.748"
+
+edition = "2021"
+
+[[bin]]
+name = "sun-open"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
