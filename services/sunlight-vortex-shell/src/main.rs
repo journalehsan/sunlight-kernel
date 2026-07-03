@@ -65,7 +65,7 @@ use sunlight_ipc::{
     CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg, NotificationKind, ProcessExit,
     SgpMsg, TzMsg,
 };
-use sunlight_libc::{self as libc, sun_exec, DirEntry, FT_DIR};
+use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
     image::{
@@ -155,7 +155,7 @@ impl DesktopTheme {
             DesktopIconKind::Home => self.home,
             DesktopIconKind::Trash => self.trash,
             DesktopIconKind::Folder => self.folder,
-            DesktopIconKind::File => self.file,
+            DesktopIconKind::File | DesktopIconKind::DesktopEntry => self.file,
             DesktopIconKind::Drive => self.drive,
             DesktopIconKind::Network => self.network,
         }
@@ -801,6 +801,7 @@ enum DesktopIconKind {
     Drive,
     Folder,
     File,
+    DesktopEntry,
 }
 
 struct DesktopIcon {
@@ -1094,15 +1095,27 @@ impl VortexShell {
         }
     }
 
-    fn desktop_icon_app(kind: DesktopIconKind) -> AppId {
-        match kind {
-            DesktopIconKind::Network => AppId::Settings,
-            DesktopIconKind::Computer
-            | DesktopIconKind::Home
-            | DesktopIconKind::Trash
-            | DesktopIconKind::Drive
-            | DesktopIconKind::Folder
-            | DesktopIconKind::File => AppId::Files,
+    fn open_file_via_resolver(&mut self, path: &str, source: LaunchSource) -> bool {
+        let trace = self.next_launch_trace(source);
+        match sun_open::open_path(trace, source, path.as_bytes()) {
+            Ok(result) => {
+                debug_log("[VORTEX] open_path ok path=\"");
+                debug_log(path);
+                debug_log("\" pid=");
+                debug_log_u32(result.pid as u32);
+                debug_log("\n");
+                true
+            }
+            Err(err) => {
+                let (title, body) = open_error_notification(err, path);
+                debug_log("[VORTEX] open_path failed path=\"");
+                debug_log(path);
+                debug_log("\" error=");
+                debug_log(body);
+                debug_log("\n");
+                let _ = show_notification(NotificationKind::Error, title, body, 5000);
+                false
+            }
         }
     }
 
@@ -1140,12 +1153,28 @@ impl VortexShell {
     }
 
     fn launch_desktop_icon(&mut self, idx: usize, now: u64) -> bool {
-        let Some(icon) = self.desktop_icons.get(idx) else {
-            return false;
+        let (kind, path) = {
+            let Some(icon) = self.desktop_icons.get(idx) else {
+                return false;
+            };
+            (icon.kind, icon._action.clone())
         };
-        let app_id = Self::desktop_icon_app(icon.kind);
         self.select_only_desktop_icon(idx);
-        self.handle_app_click(app_id, now, LaunchSource::Shortcut)
+        match kind {
+            DesktopIconKind::File | DesktopIconKind::DesktopEntry => {
+                self.open_file_via_resolver(&path, LaunchSource::Shortcut)
+            }
+            DesktopIconKind::Network => {
+                self.handle_app_click(AppId::Settings, now, LaunchSource::Shortcut)
+            }
+            DesktopIconKind::Computer
+            | DesktopIconKind::Home
+            | DesktopIconKind::Trash
+            | DesktopIconKind::Drive
+            | DesktopIconKind::Folder => {
+                self.handle_app_click(AppId::Files, now, LaunchSource::Shortcut)
+            }
+        }
     }
 
     fn arm_desktop_marquee(&mut self, anchor: Point) {
@@ -2622,16 +2651,14 @@ fn load_desktop_dir_icons(desktop_dir: &str) -> Vec<DesktopIcon> {
                 continue;
             }
             let path = join_path(desktop_dir, &name);
-            icons.push(make_desktop_icon(
-                name,
-                "Desktop entry",
-                path,
-                if entry.file_type == FT_DIR {
-                    DesktopIconKind::Folder
-                } else {
-                    DesktopIconKind::File
-                },
-            ));
+            let kind = if entry.file_type == FT_DIR {
+                DesktopIconKind::Folder
+            } else if name.ends_with(".desktop") {
+                DesktopIconKind::DesktopEntry
+            } else {
+                DesktopIconKind::File
+            };
+            icons.push(make_desktop_icon(name, "Desktop entry", path, kind));
         }
     }
     icons.sort_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));
@@ -2708,7 +2735,7 @@ fn desktop_icon_visual(kind: DesktopIconKind, theme: &Theme) -> (&'static [u16; 
         DesktopIconKind::Network => (&NET_ON_ROWS, theme.text),
         DesktopIconKind::Drive => (&DRIVE_ROWS, theme.warn),
         DesktopIconKind::Folder => (&FOLDER_ROWS, theme.accent_hover),
-        DesktopIconKind::File => (&FILE_ROWS, theme.text),
+        DesktopIconKind::File | DesktopIconKind::DesktopEntry => (&FILE_ROWS, theme.text),
     }
 }
 
@@ -3805,6 +3832,27 @@ fn debug_log_u32(mut n: u32) {
     }
     if let Ok(text) = core::str::from_utf8(&s[..len]) {
         debug_log(text);
+    }
+}
+
+fn open_error_notification(err: sun_open::OpenError, path: &str) -> (&'static str, &'static str) {
+    match err {
+        sun_open::OpenError::NoAssociation => (
+            "Cannot open file",
+            "No application is registered for this file type",
+        ),
+        sun_open::OpenError::InvalidDesktopEntry => (
+            "Cannot open shortcut",
+            "The desktop entry file is invalid or missing Exec=",
+        ),
+        sun_open::OpenError::MissingPath => ("Cannot open file", "Missing file path"),
+        sun_open::OpenError::PathTooLong => ("Cannot open file", "Path is too long"),
+        sun_open::OpenError::LaunchFailed(_) => {
+            debug_log("[VORTEX] open failed for ");
+            debug_log(path);
+            debug_log("\n");
+            ("Cannot open file", "Unable to launch the default application")
+        }
     }
 }
 

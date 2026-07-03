@@ -48,6 +48,7 @@ fn debug_log_error(err: sun_open::OpenError) {
         sun_open::OpenError::NoAssociation => {
             debug_log("No application is registered for this file type")
         }
+        sun_open::OpenError::InvalidDesktopEntry => debug_log("invalid desktop entry"),
         sun_open::OpenError::LaunchFailed(launch_err) => {
             debug_log("launch failed: ");
             debug_log_launch_error(launch_err);

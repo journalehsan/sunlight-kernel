@@ -12,17 +12,20 @@
 
 use sunlight_ipc::launch_trace::{LaunchSource, LaunchTrace};
 
-use crate::MAX_PATH;
+use crate::{self as libc, MAX_PATH};
 
 use super::sun_exec::{self, LaunchError, LaunchResult};
 
 const MAX_EXT: usize = 16;
+const MAX_DESKTOP_FILE: usize = 4096;
+const MAX_EXEC_LINE: usize = 256;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenError {
     MissingPath,
     PathTooLong,
     NoAssociation,
+    InvalidDesktopEntry,
     LaunchFailed(LaunchError),
 }
 
@@ -60,6 +63,13 @@ pub fn open_path(
         return Err(OpenError::PathTooLong);
     }
 
+    let mut ext = [0u8; MAX_EXT];
+    if let Some(ext_len) = extension_bytes(path, &mut ext) {
+        if &ext[..ext_len] == b"desktop" {
+            return launch_desktop_entry(trace, source, path);
+        }
+    }
+
     let mime = mime_from_path(path);
     let app = app_for_mime(mime).ok_or(OpenError::NoAssociation)?;
 
@@ -71,6 +81,115 @@ pub fn open_path(
         require_display: true,
     })
     .map_err(OpenError::LaunchFailed)
+}
+
+/// Launch the application described by a freedesktop `.desktop` entry (v1: `Exec=` only).
+pub fn launch_desktop_entry(
+    trace: LaunchTrace,
+    source: LaunchSource,
+    path: &[u8],
+) -> Result<LaunchResult, OpenError> {
+    let mut buf = [0u8; MAX_DESKTOP_FILE];
+    let len = read_file_bytes(path, &mut buf)?;
+    let exec_value = find_exec_value(&buf[..len]).ok_or(OpenError::InvalidDesktopEntry)?;
+
+    let mut normalized = [0u8; MAX_EXEC_LINE];
+    let norm_len = normalize_exec_line(exec_value, &mut normalized)
+        .ok_or(OpenError::InvalidDesktopEntry)?;
+
+    let mut words = [&[][..]; libc::MAX_ARGS - 1];
+    let word_count = sun_exec::split_words(&normalized[..norm_len], &mut words)
+        .map_err(OpenError::LaunchFailed)?;
+    if word_count == 0 {
+        return Err(OpenError::InvalidDesktopEntry);
+    }
+
+    sun_exec::launch_from_words(trace, source, &words[..word_count], true)
+        .map_err(OpenError::LaunchFailed)
+}
+
+fn read_file_bytes(path: &[u8], buf: &mut [u8]) -> Result<usize, OpenError> {
+    let fd = libc::open(path).map_err(|_| OpenError::InvalidDesktopEntry)?;
+    let mut total = 0usize;
+    while total < buf.len() {
+        let n = libc::read(fd, &mut buf[total..])
+            .map_err(|_| OpenError::InvalidDesktopEntry)?;
+        if n == 0 {
+            break;
+        }
+        total += n;
+    }
+    let _ = libc::close(fd);
+    if total == 0 {
+        return Err(OpenError::InvalidDesktopEntry);
+    }
+    Ok(total)
+}
+
+fn find_exec_value(data: &[u8]) -> Option<&[u8]> {
+    let mut start = 0usize;
+    while start < data.len() {
+        let line_end = data[start..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map(|idx| start + idx)
+            .unwrap_or(data.len());
+        let mut line = &data[start..line_end];
+        if line.ends_with(&[b'\r']) {
+            line = &line[..line.len() - 1];
+        }
+        if let Some(rest) = line.strip_prefix(b"Exec=") {
+            return Some(rest);
+        }
+        if let Some(rest) = line.strip_prefix(b"exec=") {
+            return Some(rest);
+        }
+        if line_end >= data.len() {
+            break;
+        }
+        start = line_end + 1;
+    }
+    None
+}
+
+fn normalize_exec_line(value: &[u8], out: &mut [u8]) -> Option<usize> {
+    let mut out_len = 0usize;
+    let mut idx = 0usize;
+    while idx < value.len() {
+        if value[idx] == b'%' && idx + 1 < value.len() {
+            if value[idx + 1] == b'%' {
+                if out_len < out.len() {
+                    out[out_len] = b'%';
+                    out_len += 1;
+                }
+            }
+            idx += 2;
+            continue;
+        }
+        if value[idx].is_ascii_whitespace() {
+            if out_len > 0 && out_len < out.len() && out[out_len - 1] != b' ' {
+                out[out_len] = b' ';
+                out_len += 1;
+            }
+            while idx < value.len() && value[idx].is_ascii_whitespace() {
+                idx += 1;
+            }
+            continue;
+        }
+        if out_len < out.len() {
+            out[out_len] = value[idx];
+            out_len += 1;
+        }
+        idx += 1;
+    }
+    while out_len > 0 && out[out_len - 1] == b' ' {
+        out_len -= 1;
+    }
+    if out_len == 0 {
+        None
+    } else {
+        Some(out_len)
+    }
 }
 
 fn mime_from_extension(ext: &[u8]) -> &'static [u8] {

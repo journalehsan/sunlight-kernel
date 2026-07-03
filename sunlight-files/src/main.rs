@@ -811,6 +811,10 @@ impl State {
                 self.set_error("No application is registered for this file type");
                 false
             }
+            Err(sun_open::OpenError::InvalidDesktopEntry) => {
+                self.set_error("Invalid desktop entry file");
+                false
+            }
             Err(sun_open::OpenError::MissingPath) => {
                 self.set_error("Missing file path");
                 false
