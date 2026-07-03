@@ -170,7 +170,8 @@ pub fn fork_current_process(
     };
 
     let child_pid_copy = child.pid;
-    sched.add_process(child);
+    let child_idx = sched.add_process(child);
+    sched.enqueue_ready(child_idx);
 
     crate::serial_println!(
         "[FORK] parent pid={} created child pid={}",
@@ -288,7 +289,8 @@ fn sys_fork(
     };
 
     let child_pid_copy = child.pid;
-    sched.add_process(child);
+    let child_idx = sched.add_process(child);
+    sched.enqueue_ready(child_idx);
 
     crate::serial_println!(
         "[FORK] parent pid={} created child pid={}",

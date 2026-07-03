@@ -299,7 +299,7 @@ fn deliver_reply_to_current_target(
         if let Some(cpu_id) = sched.live_owner_core(client_idx) {
             crate::sched::request_reschedule_on(cpu_id);
         } else {
-            sched.enqueue_process_once(client_idx);
+            sched.enqueue_ready(client_idx);
         }
     }
     Ok(())

@@ -386,6 +386,15 @@ fn spawn_named(spawn_cap: CapabilityToken, path: &str, name: &str) -> Result<u32
     }
 }
 
+fn wait_for_spawn_cap() -> CapabilityToken {
+    loop {
+        if let Some(cap) = nameserver_lookup("spawn") {
+            return cap;
+        }
+        sunlight_ipc::process_yield();
+    }
+}
+
 /// Reply label codes for control operations.
 const REPLY_OK: u64 = 1;
 const REPLY_NOP: u64 = 2; // already in desired state (enable/disable no-op)
@@ -665,7 +674,7 @@ fn _start() -> ! {
     // Spawn enabled services owned by sunlightd (kernel/init own vfs/net/tty — not our job).
     // Order matters: sm before kv, rand_service before sunlight-tls.
     // solar is disabled by default and intentionally omitted from auto-start.
-    let spawn_cap = nameserver_lookup("spawn").unwrap_or(sunlight_ipc::CapabilityToken(0));
+    let spawn_cap = wait_for_spawn_cap();
     if spawn_cap != sunlight_ipc::CapabilityToken(0) {
         let managed: &[(&str, &str)] = &[
             ("/sbin/timezone_service", "timezone_service"),
@@ -709,8 +718,6 @@ fn _start() -> ! {
                 Err(e) => serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name, e),
             }
         }
-    } else {
-        serial_println!("[SUNLIGHTD] spawn capability unavailable; daemons not started");
     }
 
     // Main control loop.

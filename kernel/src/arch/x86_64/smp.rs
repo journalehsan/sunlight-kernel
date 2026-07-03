@@ -190,6 +190,20 @@ pub fn set_current_cpu_tss_rsp0(stack_top: u64) {
     }
 }
 
+pub fn current_cpu_tss_rsp0() -> u64 {
+    let cpu_id = crate::sched::current_cpu_id();
+    if cpu_id == 0 {
+        crate::arch::x86_64::interrupts::current_tss_rsp0()
+    } else {
+        let ap_idx = cpu_id - 1;
+        if ap_idx < MAX_APS {
+            unsafe { AP_TSS_STORE[ap_idx].privilege_stack_table[0].as_u64() }
+        } else {
+            0
+        }
+    }
+}
+
 // ─── AP entry point ───────────────────────────────────────────────────────────
 
 /// Naked entry point given to Limine via `MpInfo::bootstrap`.

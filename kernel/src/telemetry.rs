@@ -239,24 +239,41 @@ pub fn capture_telemetry_snapshot(
     let mut cores = Vec::with_capacity(online);
     let mut ticks_per_core = [0u64; MAX_CORES];
     for c in 0..online {
-        let core = &sched.cores[c];
         let mut cs = CoreSnap {
             core_id: c as u8,
-            local_timer_ticks: core.timer_ticks,
-            context_switches: core.context_switches,
+            local_timer_ticks: 0,
+            context_switches: 0,
             current_pid: 0,
             current_ticks: 0,
             nice: 0,
         };
-        if let Some(idx) = core.current_task {
-            if idx < sched.processes.len() {
-                let p = &sched.processes[idx];
-                cs.current_pid = p.pid as u32;
-                cs.current_ticks = core.current_ticks.min(u32::MAX as u64) as u32;
-                cs.nice = p.nice;
+        if crate::sched::SCHEDULER_MODE == crate::sched::SchedulerMode::RoundRobin {
+            let core = crate::sched::CORE_STATES[c].lock();
+            cs.local_timer_ticks = core.timer_ticks;
+            cs.context_switches = core.context_switches;
+            if let Some(idx) = core.current_task {
+                if idx < sched.processes.len() {
+                    let p = &sched.processes[idx];
+                    cs.current_pid = p.pid as u32;
+                    cs.current_ticks = core.current_ticks.min(u32::MAX as u64) as u32;
+                    cs.nice = p.nice;
+                }
             }
+            ticks_per_core[c] = core.timer_ticks;
+        } else {
+            let core = &sched.cores[c];
+            cs.local_timer_ticks = core.timer_ticks;
+            cs.context_switches = core.context_switches;
+            if let Some(idx) = core.current_task {
+                if idx < sched.processes.len() {
+                    let p = &sched.processes[idx];
+                    cs.current_pid = p.pid as u32;
+                    cs.current_ticks = core.current_ticks.min(u32::MAX as u64) as u32;
+                    cs.nice = p.nice;
+                }
+            }
+            ticks_per_core[c] = core.timer_ticks;
         }
-        ticks_per_core[c] = core.timer_ticks;
         cores.push(cs);
     }
 

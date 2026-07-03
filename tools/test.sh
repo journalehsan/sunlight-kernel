@@ -15,7 +15,7 @@ KERNEL_RUSTFLAGS="-C link-arg=-Tkernel/src/arch/x86_64/linker.ld -C relocation-m
 # Userspace baseline: x86-64-v2 (SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CMPXCHG16B).
 # v2 enables better code generation for userspace services without requiring AVX.
 # v3 (AVX/AVX2) is runtime-only for selected apps until kernel adds XSAVE/YMM switching.
-SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2"
+SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone"
 BUILD_LOG=$(mktemp)
 PHASE="${1:-phase3.0}"
 

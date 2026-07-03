@@ -264,14 +264,16 @@ pub fn mark_scheduler_ready() {
     SCHEDULER_READY.store(true, Ordering::Release);
 }
 
-/// Per-core scheduling state: local BORE-tiered run queues and current task.
-///
-/// All fields are protected by the global `SCHEDULER` spinlock during BSP-only
-/// operation (SMP Phase 0). When per-core LAPIC timers are wired (Phase 1),
-/// each CoreState gains its own `spin::Mutex` and steal_work() uses try_lock()
-/// to avoid blocking on a busy victim — the current single-lock design is
-/// correct because only the BSP acquires SCHEDULER.
+const RR_STEAL_BATCH_MAX: usize = 32;
+
+/// Per-core scheduling state: local RoundRobin FIFO, BORE-tiered run queues,
+/// and current task. The type is cache-line aligned so adjacent core locks do
+/// not share a line and bounce between CPUs on every LAPIC tick.
+#[repr(align(64))]
 pub struct CoreState {
+    /// RoundRobin ready FIFO. A task in this queue has
+    /// `Process::queued_on_core == this_cpu`; the current task is never queued.
+    pub rr_queue: VecDeque<usize>,
     /// Highest-priority ready tasks (burst_score 0–256, interactive).
     pub run_queue_high: VecDeque<usize>,
     /// Medium-priority ready tasks (burst_score 257–768).
@@ -289,11 +291,20 @@ pub struct CoreState {
     pub timer_ticks: u64,
     /// Number of times a different task was switched onto this core.
     pub context_switches: u64,
+    /// Number of successful work-steal batches performed by this core.
+    pub steal_count: u64,
+    /// Number of stale queue entries dropped by this core.
+    pub stale_pops: u64,
+    /// Number of times this core found its RR FIFO empty.
+    pub empty_pops: u64,
+    /// Saved interrupt-frame RSP for this core's idle hlt loop.
+    pub idle_context_rsp: u64,
 }
 
 impl CoreState {
     pub const fn new() -> Self {
         Self {
+            rr_queue: VecDeque::new(),
             run_queue_high: VecDeque::new(),
             run_queue_medium: VecDeque::new(),
             run_queue_low: VecDeque::new(),
@@ -301,13 +312,32 @@ impl CoreState {
             current_ticks: 0,
             timer_ticks: 0,
             context_switches: 0,
+            steal_count: 0,
+            stale_pops: 0,
+            empty_pops: 0,
+            idle_context_rsp: 0,
         }
     }
 
     fn total_ready(&self) -> usize {
-        self.run_queue_high.len() + self.run_queue_medium.len() + self.run_queue_low.len()
+        self.rr_queue.len()
+            + self.run_queue_high.len()
+            + self.run_queue_medium.len()
+            + self.run_queue_low.len()
     }
 }
+
+/// Per-core scheduler state. RoundRobin uses this array for its hot FIFO and
+/// current-task metadata; Bore keeps using `Scheduler::cores` so the existing
+/// tiered code paths continue compiling.
+///
+/// Lock ordering: normal enqueue/dequeue takes the process-table lock
+/// (`SCHEDULER`) before a single core lock. Work stealing never blocks on a
+/// victim: it uses `try_lock()`, drops the victim lock, then updates process
+/// queue ownership and pushes leftovers to the thief. No path holds two core
+/// locks at once.
+pub static CORE_STATES: [spin::Mutex<CoreState>; MAX_CORES] =
+    [const { spin::Mutex::new(CoreState::new()) }; MAX_CORES];
 
 // ─── Scheduler ───────────────────────────────────────────────────────────────
 
@@ -339,6 +369,102 @@ impl Scheduler {
 
     // ── Process management ───────────────────────────────────────────────────
 
+    #[inline]
+    fn core_current_task(&self, cpu_id: usize) -> Option<usize> {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => CORE_STATES[cpu_id].lock().current_task,
+            SchedulerMode::Bore => self.cores[cpu_id].current_task,
+        }
+    }
+
+    #[inline]
+    fn set_core_current_task(&mut self, cpu_id: usize, task: Option<usize>) {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                CORE_STATES[cpu_id].lock().current_task = task;
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].current_task = task;
+            }
+        }
+    }
+
+    #[inline]
+    fn increment_context_switches(&mut self, cpu_id: usize) {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                CORE_STATES[cpu_id].lock().context_switches += 1;
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].context_switches += 1;
+            }
+        }
+    }
+
+    #[inline]
+    fn core_current_ticks(&self, cpu_id: usize) -> u64 {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => CORE_STATES[cpu_id].lock().current_ticks,
+            SchedulerMode::Bore => self.cores[cpu_id].current_ticks,
+        }
+    }
+
+    #[inline]
+    fn set_core_current_ticks(&mut self, cpu_id: usize, ticks: u64) {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                CORE_STATES[cpu_id].lock().current_ticks = ticks;
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].current_ticks = ticks;
+            }
+        }
+    }
+
+    #[inline]
+    fn core_idle_context_rsp(&self, cpu_id: usize) -> u64 {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => CORE_STATES[cpu_id].lock().idle_context_rsp,
+            SchedulerMode::Bore => self.cores[cpu_id].idle_context_rsp,
+        }
+    }
+
+    #[inline]
+    fn set_core_idle_context_rsp(&mut self, cpu_id: usize, rsp: u64) {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                CORE_STATES[cpu_id].lock().idle_context_rsp = rsp;
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].idle_context_rsp = rsp;
+            }
+        }
+    }
+
+    fn choose_rr_core(&self, idx: usize) -> usize {
+        let online = self.online_cores.min(MAX_CORES).max(1);
+        let cpu_mask = if idx < self.processes.len() {
+            self.processes[idx].cpu_mask
+        } else {
+            u64::MAX
+        };
+
+        let mut best_core = 0usize;
+        let mut best_load = usize::MAX;
+        for core_id in 0..online {
+            if cpu_mask & (1u64 << core_id) == 0 {
+                continue;
+            }
+            let core = CORE_STATES[core_id].lock();
+            let load = core.rr_queue.len() + usize::from(core.current_task.is_some());
+            if load < best_load {
+                best_load = load;
+                best_core = core_id;
+            }
+        }
+        best_core
+    }
+
     pub fn add_process(&mut self, process: Process) -> usize {
         let created_count = PROCESS_CREATED.fetch_add(1, Ordering::Relaxed);
         let online = self.online_cores;
@@ -347,7 +473,7 @@ impl Scheduler {
         // don't reclaim them while a core still has a reference.
         let mut in_use = [usize::MAX; MAX_CORES];
         for c in 0..online {
-            in_use[c] = self.cores[c].current_task.unwrap_or(usize::MAX);
+            in_use[c] = self.core_current_task(c).unwrap_or(usize::MAX);
         }
 
         if let Some(id) = self
@@ -387,6 +513,10 @@ impl Scheduler {
 
     /// Choose the least-loaded core that the process's cpu_mask permits.
     fn target_core_for_process(&self, idx: usize) -> usize {
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            return self.choose_rr_core(idx);
+        }
+
         let online = self.online_cores;
         let cpu_mask = if idx < self.processes.len() {
             self.processes[idx].cpu_mask
@@ -413,6 +543,15 @@ impl Scheduler {
     fn enqueue_process_to_core(&mut self, idx: usize, core_id: usize) {
         if idx >= self.processes.len() || !matches!(self.processes[idx].state, ProcessState::Ready)
         {
+            return;
+        }
+        if self.processes[idx].owning_core != u8::MAX {
+            return;
+        }
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            self.processes[idx].queued_on_core = core_id as u8;
+            CORE_STATES[core_id].lock().rr_queue.push_back(idx);
+            request_reschedule_on(core_id);
             return;
         }
         let tier = self.processes[idx].get_queue_tier();
@@ -449,6 +588,13 @@ impl Scheduler {
         self.enqueue_process(idx);
     }
 
+    /// Public Ready-transition helper. Call this exactly once after changing a
+    /// non-running task to `ProcessState::Ready`; it is idempotent via
+    /// `queued_on_core` and refuses to queue a task still owned by a CPU.
+    pub fn enqueue_ready(&mut self, idx: usize) {
+        self.enqueue_process_once(idx);
+    }
+
     /// Remove a process index from ready queues.
     ///
     /// Uses `queued_on_core` to target the single core that owns this entry
@@ -463,10 +609,14 @@ impl Scheduler {
         }
         let core_id = qcore as usize;
         if core_id < self.online_cores.min(MAX_CORES) {
-            let core = &mut self.cores[core_id];
-            core.run_queue_high.retain(|&q| q != idx);
-            core.run_queue_medium.retain(|&q| q != idx);
-            core.run_queue_low.retain(|&q| q != idx);
+            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                CORE_STATES[core_id].lock().rr_queue.retain(|&q| q != idx);
+            } else {
+                let core = &mut self.cores[core_id];
+                core.run_queue_high.retain(|&q| q != idx);
+                core.run_queue_medium.retain(|&q| q != idx);
+                core.run_queue_low.retain(|&q| q != idx);
+            }
         }
         self.processes[idx].queued_on_core = u8::MAX;
     }
@@ -508,15 +658,34 @@ impl Scheduler {
         idx < self.processes.len() && self.processes[idx].queued_on_core != u8::MAX
     }
 
+    fn context_is_dispatchable(&self, idx: usize) -> bool {
+        if idx >= self.processes.len() {
+            return false;
+        }
+
+        let rsp = self.processes[idx].context_rsp;
+        let stack_top = self.processes[idx].kernel_stack_top;
+        let stack_bottom = stack_top.saturating_sub(crate::process::KERNEL_STACK_SIZE as u64);
+        if rsp < stack_bottom || rsp.saturating_add(160) > stack_top {
+            return false;
+        }
+
+        unsafe { ((rsp + 120) as *const u64).read_volatile() != 0 }
+    }
+
     /// Clear all core queues, then distribute all Ready processes (except
     /// `running_idx`) across the online cores.
     pub fn seed_ready_queues_except(&mut self, running_idx: usize) {
         let online = self.online_cores;
         for core_id in 0..online {
-            let core = &mut self.cores[core_id];
-            core.run_queue_high.clear();
-            core.run_queue_medium.clear();
-            core.run_queue_low.clear();
+            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                CORE_STATES[core_id].lock().rr_queue.clear();
+            } else {
+                let core = &mut self.cores[core_id];
+                core.run_queue_high.clear();
+                core.run_queue_medium.clear();
+                core.run_queue_low.clear();
+            }
         }
         for idx in 0..self.processes.len() {
             if idx != running_idx && matches!(self.processes[idx].state, ProcessState::Ready) {
@@ -562,7 +731,7 @@ impl Scheduler {
     /// accumulate the elapsed delta. Returns bytes charged (0 if none).
     pub fn account_current_runtime(&mut self) -> u64 {
         let cpu_id = current_cpu_id();
-        let current = match self.cores[cpu_id].current_task {
+        let current = match self.core_current_task(cpu_id) {
             Some(idx) => idx,
             None => return 0,
         };
@@ -585,7 +754,7 @@ impl Scheduler {
         let delta = self.account_current_runtime();
         if delta > 0 && delta < SHORT_BURST_NS {
             let cpu_id = current_cpu_id();
-            if let Some(current) = self.cores[cpu_id].current_task {
+            if let Some(current) = self.core_current_task(cpu_id) {
                 if current < self.processes.len() {
                     let p = &mut self.processes[current];
                     p.burst_score = p
@@ -643,10 +812,16 @@ impl Scheduler {
         // Compatibility mirror: all legacy scheduler logic still reads
         // `self.global_tick`, but only the centralized timekeeper advances it.
         self.global_tick = self.global_tick.max(global_tick);
-        self.cores[cpu_id].current_ticks += 1;
-        self.cores[cpu_id].timer_ticks += 1;
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            let mut core = CORE_STATES[cpu_id].lock();
+            core.current_ticks += 1;
+            core.timer_ticks += 1;
+        } else {
+            self.cores[cpu_id].current_ticks += 1;
+            self.cores[cpu_id].timer_ticks += 1;
+        }
 
-        let current = match self.cores[cpu_id].current_task {
+        let current = match self.core_current_task(cpu_id) {
             Some(idx) => idx,
             None => {
                 request_reschedule_on(cpu_id);
@@ -659,15 +834,15 @@ impl Scheduler {
         }
 
         if !matches!(self.processes[current].state, ProcessState::Running) {
-            self.cores[cpu_id].current_ticks = 0;
+            self.set_core_current_ticks(cpu_id, 0);
             request_reschedule_on(cpu_id);
             return;
         }
 
         let quantum = quantum_ticks(&self.processes[current]) as u64;
 
-        if self.cores[cpu_id].current_ticks >= quantum {
-            let ticks_used = self.cores[cpu_id].current_ticks;
+        if self.core_current_ticks(cpu_id) >= quantum {
+            let ticks_used = self.core_current_ticks(cpu_id);
             let current_proc = &mut self.processes[current];
             current_proc.timeslice_used = ticks_used as u32;
 
@@ -697,7 +872,7 @@ impl Scheduler {
             }
 
             self.age_ready_tasks();
-            self.cores[cpu_id].current_ticks = 0;
+            self.set_core_current_ticks(cpu_id, 0);
             request_reschedule_on(cpu_id);
         }
 
@@ -755,6 +930,10 @@ impl Scheduler {
     /// single-lock design (all CoreState under SCHEDULER's lock) the
     /// "skip if empty or insufficient" check plays the same role.
     pub fn steal_work(&mut self, thief_id: usize) -> Option<usize> {
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            return self.steal_work_round_robin(thief_id);
+        }
+
         let online = self.online_cores;
         for victim_id in 0..online {
             if victim_id == thief_id {
@@ -797,6 +976,88 @@ impl Scheduler {
                 }
             }
         }
+        None
+    }
+
+    /// RoundRobin work stealing: take up to half of a victim FIFO, bounded by a
+    /// small fixed stack batch, using try_lock so a timer interrupt never blocks
+    /// behind another core's queue lock. One valid task is returned immediately;
+    /// the rest are moved to the thief's FIFO to amortize future steals.
+    pub fn steal_work_round_robin(&mut self, thief_id: usize) -> Option<usize> {
+        let online = self.online_cores.min(MAX_CORES).max(1);
+        let mut batch = [usize::MAX; RR_STEAL_BATCH_MAX];
+
+        for victim_id in 0..online {
+            if victim_id == thief_id {
+                continue;
+            }
+
+            let mut count = 0usize;
+            if let Some(mut victim) = CORE_STATES[victim_id].try_lock() {
+                let available = victim.rr_queue.len();
+                if available <= 1 {
+                    continue;
+                }
+                let to_take = (available / 2).min(RR_STEAL_BATCH_MAX);
+                while count < to_take {
+                    let Some(idx) = victim.rr_queue.pop_back() else {
+                        break;
+                    };
+                    batch[count] = idx;
+                    count += 1;
+                }
+            } else {
+                continue;
+            }
+
+            if count == 0 {
+                continue;
+            }
+
+            let mut picked = None;
+            let mut moved = 0usize;
+            for &idx in batch[..count].iter() {
+                if idx >= self.processes.len() {
+                    continue;
+                }
+
+                if self.processes[idx].queued_on_core == victim_id as u8 {
+                    self.processes[idx].queued_on_core = u8::MAX;
+                }
+
+                let eligible = matches!(self.processes[idx].state, ProcessState::Ready)
+                    && !self.is_live_on_other_core(idx, thief_id)
+                    && self.processes[idx].cpu_mask & (1u64 << thief_id) != 0
+                    && self.context_is_dispatchable(idx);
+
+                if !eligible {
+                    CORE_STATES[thief_id].lock().stale_pops += 1;
+                    if matches!(self.processes[idx].state, ProcessState::Ready)
+                        && !self.is_live_on_other_core(idx, thief_id)
+                    {
+                        self.processes[idx].queued_on_core = victim_id as u8;
+                        CORE_STATES[victim_id].lock().rr_queue.push_back(idx);
+                    }
+                    continue;
+                }
+
+                if picked.is_none() {
+                    picked = Some(idx);
+                } else {
+                    self.processes[idx].queued_on_core = thief_id as u8;
+                    CORE_STATES[thief_id].lock().rr_queue.push_back(idx);
+                    moved += 1;
+                }
+            }
+
+            if picked.is_some() || moved > 0 {
+                CORE_STATES[thief_id].lock().steal_count += 1;
+            }
+            if picked.is_some() {
+                return picked;
+            }
+        }
+
         None
     }
 
@@ -902,34 +1163,39 @@ impl Scheduler {
 
     /// Pick the next Ready process for RoundRobin mode for `cpu_id`. [FEAT-3]
     pub fn pick_next_round_robin(&mut self, cpu_id: usize) -> Option<usize> {
-        let len = self.processes.len();
-        if len == 0 {
-            return None;
-        }
+        let mut remaining = CORE_STATES[cpu_id].lock().rr_queue.len();
+        while remaining > 0 {
+            let idx = {
+                let mut core = CORE_STATES[cpu_id].lock();
+                match core.rr_queue.pop_front() {
+                    Some(idx) => idx,
+                    None => {
+                        core.empty_pops += 1;
+                        return self.steal_work(cpu_id);
+                    }
+                }
+            };
+            remaining -= 1;
 
-        let current = self.cores[cpu_id].current_task.unwrap_or(0);
-        let mut attempts = len;
-        let start = (current + 1) % len;
-        let mut idx = start;
-
-        loop {
-            if attempts == 0 {
-                break;
+            if idx >= self.processes.len() {
+                CORE_STATES[cpu_id].lock().stale_pops += 1;
+                continue;
             }
-            attempts -= 1;
 
-            // Not eligible if it isn't Ready, or if it is still the live
-            // `current_task` of another core. RoundRobin ignores the run queues
-            // and selects purely by state, so without the live-on-core check a
-            // process woken (set Ready) while still executing on its owning core
-            // would be dispatched here too — running the same context on two
-            // cores at once. Its owning core re-selects it on its next tick.
+            if self.processes[idx].queued_on_core == cpu_id as u8 {
+                self.processes[idx].queued_on_core = u8::MAX;
+            }
+
             if !matches!(self.processes[idx].state, ProcessState::Ready)
                 || self.is_live_on_other_core(idx, cpu_id)
+                || self.processes[idx].cpu_mask & (1u64 << cpu_id) == 0
+                || !self.context_is_dispatchable(idx)
             {
-                idx = (idx + 1) % len;
-                if idx == start && attempts == 0 {
-                    break;
+                CORE_STATES[cpu_id].lock().stale_pops += 1;
+                if matches!(self.processes[idx].state, ProcessState::Ready)
+                    && !self.is_live_on_other_core(idx, cpu_id)
+                {
+                    self.enqueue_process_once(idx);
                 }
                 continue;
             }
@@ -969,10 +1235,8 @@ impl Scheduler {
             if self.processes[idx].nice > 0 && self.processes[idx].counter <= SKIP_LIMIT {
                 self.processes[idx].counter += DECAY_RATE;
                 self.processes[idx].aging_boosted_this_pick = false;
-                idx = (idx + 1) % len;
-                if idx == start && attempts == 0 {
-                    break;
-                }
+                self.processes[idx].queued_on_core = cpu_id as u8;
+                CORE_STATES[cpu_id].lock().rr_queue.push_back(idx);
                 continue;
             }
 
@@ -980,31 +1244,6 @@ impl Scheduler {
             return Some(idx);
         }
 
-        // All tasks skipped — find least-indebted, or try stealing.
-        let mut best_idx = None;
-        let mut best_counter = i32::MIN;
-        let mut scan = start;
-        for _ in 0..len {
-            if matches!(self.processes[scan].state, ProcessState::Ready)
-                && !self.is_live_on_other_core(scan, cpu_id)
-                && self.processes[scan].counter > best_counter
-            {
-                best_counter = self.processes[scan].counter;
-                best_idx = Some(scan);
-            }
-            scan = (scan + 1) % len;
-        }
-
-        if let Some(idx) = best_idx {
-            serial_println!(
-                "[SCHED-RR] fallback: all tasks in debt, picking least-indebted idx={} counter={}",
-                idx,
-                best_counter
-            );
-            return Some(idx);
-        }
-
-        // Absolutely nothing local — try stealing.
         self.steal_work(cpu_id)
     }
 
@@ -1049,21 +1288,18 @@ impl Scheduler {
         // ── Idle-AP fast path ─────────────────────────────────────────────────
         // When an AP has no current task (it was in its idle hlt loop), try to
         // pick a task immediately.  There is nothing to save or re-queue.
-        if self.cores[cpu_id].current_task.is_none() {
+        if self.core_current_task(cpu_id).is_none() {
+            self.set_core_idle_context_rsp(cpu_id, saved_rsp);
             if let Some(next) = self.pick_next(cpu_id) {
                 let next_rsp = self.processes[next].context_rsp;
                 let next_stack_top = self.processes[next].kernel_stack_top;
                 let next_fs_base = self.processes[next].fs_base;
-                self.cores[cpu_id].current_task = Some(next);
-                self.cores[cpu_id].context_switches += 1;
+                self.set_core_current_task(cpu_id, Some(next));
+                self.increment_context_switches(cpu_id);
                 self.processes[next].state = ProcessState::Running;
                 self.processes[next].last_run_tick = self.global_tick;
                 self.processes[next].owning_core = cpu_id as u8;
-                // Do NOT clear queued_on_core here. In BORE mode pick_next_bore
-                // already cleared it when it popped the process. In RR mode the
-                // process is never popped from the queue, so queued_on_core must
-                // remain valid so remove_from_ready_queues can find and evict it
-                // when the process later blocks.
+                self.processes[next].queued_on_core = u8::MAX;
                 self.start_charging_runtime(next);
                 unsafe {
                     self.processes[next].address_space.activate();
@@ -1075,7 +1311,7 @@ impl Scheduler {
             return 0;
         }
 
-        let current = self.cores[cpu_id].current_task.unwrap();
+        let current = self.core_current_task(cpu_id).unwrap();
 
         if current >= self.processes.len() {
             return 0;
@@ -1097,10 +1333,12 @@ impl Scheduler {
             self.processes[current].state = ProcessState::Ready;
         }
         if matches!(self.processes[current].state, ProcessState::Ready) {
-            // Enqueue in both BORE and RR so steal_work() has per-core queues
-            // to pull from when a core runs out of local work.
-            self.enqueue_process_once(current);
+            self.processes[current].owning_core = u8::MAX;
+            self.set_core_current_task(cpu_id, None);
+            self.enqueue_process_to_core(current, cpu_id);
         } else if !was_runnable || !matches!(self.processes[current].state, ProcessState::Ready) {
+            self.processes[current].owning_core = u8::MAX;
+            self.set_core_current_task(cpu_id, None);
             self.remove_from_ready_queues(current);
         }
 
@@ -1111,14 +1349,14 @@ impl Scheduler {
             let prev = current;
 
             if next != prev {
-                self.cores[cpu_id].context_switches += 1;
+                self.increment_context_switches(cpu_id);
                 self.processes[prev].owning_core = u8::MAX;
             }
-            self.cores[cpu_id].current_task = Some(next);
+            self.set_core_current_task(cpu_id, Some(next));
             self.processes[next].state = ProcessState::Running;
             self.processes[next].last_run_tick = self.global_tick;
             self.processes[next].owning_core = cpu_id as u8;
-            // queued_on_core is not cleared here — see idle-fast-path comment.
+            self.processes[next].queued_on_core = u8::MAX;
             self.start_charging_runtime(next);
 
             unsafe {
@@ -1136,7 +1374,34 @@ impl Scheduler {
 
             next_rsp
         } else {
-            0
+            if current < self.processes.len()
+                && matches!(self.processes[current].state, ProcessState::Ready)
+            {
+                self.remove_from_ready_queues(current);
+                self.set_core_current_task(cpu_id, Some(current));
+                self.processes[current].state = ProcessState::Running;
+                self.processes[current].owning_core = cpu_id as u8;
+                self.processes[current].queued_on_core = u8::MAX;
+                self.start_charging_runtime(current);
+                return 0;
+            }
+
+            let idle_rsp = self.core_idle_context_rsp(cpu_id);
+            if idle_rsp != 0 {
+                return idle_rsp;
+            }
+            let stack_top = unsafe {
+                core::ptr::addr_of!(CORE_IDLE_STACKS[cpu_id][crate::process::KERNEL_STACK_SIZE - 1])
+                    as u64
+                    + 1
+            };
+            let rsp = build_kernel_idle_frame(stack_top);
+            self.set_core_idle_context_rsp(cpu_id, rsp);
+            serial_println!(
+                "[SCHED] WARN: cpu={} lazily initialized idle context",
+                cpu_id
+            );
+            rsp
         }
     }
 
@@ -1144,12 +1409,16 @@ impl Scheduler {
 
     pub fn current_process(&self) -> &Process {
         let cpu_id = current_cpu_id();
-        &self.processes[self.cores[cpu_id].current_task.unwrap_or(0)]
+        &self.processes[self.core_current_task(cpu_id).unwrap_or(0)]
+    }
+
+    pub fn current_process_index(&self) -> Option<usize> {
+        self.core_current_task(current_cpu_id())
     }
 
     pub fn current_process_mut(&mut self) -> &mut Process {
         let cpu_id = current_cpu_id();
-        let idx = self.cores[cpu_id].current_task.unwrap_or(0);
+        let idx = self.core_current_task(cpu_id).unwrap_or(0);
         &mut self.processes[idx]
     }
 
@@ -1157,12 +1426,26 @@ impl Scheduler {
 
     /// Return the PID of the process currently running on this CPU (0 if none).
     pub fn current_pid(&self) -> usize {
-        let cpu_id = current_cpu_id();
-        self.cores[cpu_id]
-            .current_task
+        self.process_index_for_cpu(current_cpu_id())
             .and_then(|idx| self.processes.get(idx))
             .map(|p| p.pid)
             .unwrap_or(0)
+    }
+
+    /// Resolve the live process on `cpu_id` from per-core bookkeeping, falling
+    /// back to the active page table when a user context is running without a
+    /// `current_task` entry (SMP bookkeeping bug recovery).
+    pub(crate) fn process_index_for_cpu(&self, cpu_id: usize) -> Option<usize> {
+        if let Some(idx) = self.core_current_task(cpu_id) {
+            return Some(idx);
+        }
+        let cr3 = x86_64::registers::control::Cr3::read()
+            .0
+            .start_address()
+            .as_u64();
+        self.processes.iter().position(|p| {
+            p.state != ProcessState::Finished && p.address_space.pml4_phys.as_u64() == cr3
+        })
     }
 
     pub fn is_blocked_on_recv(&self, pid: usize) -> bool {
@@ -1189,7 +1472,7 @@ impl Scheduler {
             if let Some(cpu_id) = self.live_owner_core(idx) {
                 request_reschedule_on(cpu_id);
             } else {
-                self.enqueue_process(idx);
+                self.enqueue_ready(idx);
             }
         }
     }
@@ -1211,7 +1494,7 @@ impl Scheduler {
             if let Some(cpu_id) = self.live_owner_core(idx) {
                 request_reschedule_on(cpu_id);
             } else {
-                self.enqueue_process(idx);
+                self.enqueue_ready(idx);
             }
         }
     }
@@ -1233,7 +1516,7 @@ impl Scheduler {
             if let Some(cpu_id) = self.live_owner_core(idx) {
                 request_reschedule_on(cpu_id);
             } else {
-                self.enqueue_process(idx);
+                self.enqueue_ready(idx);
             }
         }
     }
@@ -1261,7 +1544,7 @@ impl Scheduler {
                 if let Some(cpu_id) = self.live_owner_core(idx) {
                     request_reschedule_on(cpu_id);
                 } else {
-                    self.enqueue_process(idx);
+                    self.enqueue_ready(idx);
                 }
             }
             _ => {}
@@ -1417,7 +1700,7 @@ impl Scheduler {
         }
 
         if let Some(idx) = first {
-            self.cores[0].current_task = Some(idx);
+            self.set_core_current_task(0, Some(idx));
             self.processes[idx].state = ProcessState::Running;
             self.processes[idx].last_run_tick = self.global_tick;
             self.processes[idx].owning_core = 0;
@@ -1461,15 +1744,24 @@ impl Scheduler {
             .count();
         let finished_slots = self.processes.len().saturating_sub(alive);
 
-        let ready_high: usize = (0..self.online_cores)
-            .map(|c| self.cores[c].run_queue_high.len())
-            .sum();
-        let ready_mid: usize = (0..self.online_cores)
-            .map(|c| self.cores[c].run_queue_medium.len())
-            .sum();
-        let ready_low: usize = (0..self.online_cores)
-            .map(|c| self.cores[c].run_queue_low.len())
-            .sum();
+        let (ready_high, ready_mid, ready_low) = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            let rr_ready: usize = (0..self.online_cores)
+                .map(|c| CORE_STATES[c].lock().rr_queue.len())
+                .sum();
+            (0, rr_ready, 0)
+        } else {
+            (
+                (0..self.online_cores)
+                    .map(|c| self.cores[c].run_queue_high.len())
+                    .sum(),
+                (0..self.online_cores)
+                    .map(|c| self.cores[c].run_queue_medium.len())
+                    .sum(),
+                (0..self.online_cores)
+                    .map(|c| self.cores[c].run_queue_low.len())
+                    .sum(),
+            )
+        };
 
         let blocked_ipc = self
             .processes
@@ -1498,8 +1790,11 @@ impl Scheduler {
             let is_running = p.state == ProcessState::Running;
             let is_ready = p.state == ProcessState::Ready;
             if is_running && qc != u8::MAX {
-                // For RR mode this is currently accepted (see schedule_tick comments);
-                // for BORE pick clears it. Flag if we see owning+queued mismatch.
+                serial_println!(
+                    "[SCHED-INV] VIOLATION running task queued pid={} qc={}",
+                    p.pid,
+                    qc
+                );
             }
             if oc != u8::MAX && qc != u8::MAX && oc != qc {
                 serial_println!(
@@ -1537,13 +1832,21 @@ impl Scheduler {
         }
 
         // Cross check: any running task present in any queue, or queued flag pointing to wrong core's queues.
-        for (c, core) in self.cores.iter().enumerate().take(self.online_cores) {
-            for &q in core
-                .run_queue_high
-                .iter()
-                .chain(core.run_queue_medium.iter())
-                .chain(core.run_queue_low.iter())
+        for c in 0..self.online_cores {
+            let queue_iter: alloc::vec::Vec<usize> = if SCHEDULER_MODE == SchedulerMode::RoundRobin
             {
+                let core = CORE_STATES[c].lock();
+                core.rr_queue.iter().copied().collect()
+            } else {
+                let core = &self.cores[c];
+                core.run_queue_high
+                    .iter()
+                    .chain(core.run_queue_medium.iter())
+                    .chain(core.run_queue_low.iter())
+                    .copied()
+                    .collect()
+            };
+            for q in queue_iter {
                 if q < self.processes.len() {
                     let p = &self.processes[q];
                     if p.state == ProcessState::Running {
@@ -1564,13 +1867,16 @@ impl Scheduler {
                     if oc == owner {
                         continue;
                     }
-                    let co = &self.cores[oc];
-                    let present = co
-                        .run_queue_high
-                        .iter()
-                        .chain(&co.run_queue_medium)
-                        .chain(&co.run_queue_low)
-                        .any(|&x| x == idx);
+                    let present = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                        CORE_STATES[oc].lock().rr_queue.iter().any(|&x| x == idx)
+                    } else {
+                        let co = &self.cores[oc];
+                        co.run_queue_high
+                            .iter()
+                            .chain(&co.run_queue_medium)
+                            .chain(&co.run_queue_low)
+                            .any(|&x| x == idx)
+                    };
                     if present {
                         serial_println!("[SCHED-INV] VIOLATION running on {} present in foreign queue {} pid={}", owner, oc, p.pid);
                     }
@@ -1585,7 +1891,48 @@ impl Scheduler {
             blocked_ipc, blocked_timer, blocked_io, self.online_cores
         );
         for core_id in 0..self.online_cores {
-            match self.cores[core_id].current_task {
+            let (
+                current_task,
+                current_ticks,
+                q_high,
+                q_mid,
+                q_low,
+                timer_ticks,
+                context_switches,
+                steal_count,
+                stale_pops,
+                empty_pops,
+            ) = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                let core = CORE_STATES[core_id].lock();
+                (
+                    core.current_task,
+                    core.current_ticks,
+                    0,
+                    core.rr_queue.len(),
+                    0,
+                    core.timer_ticks,
+                    core.context_switches,
+                    core.steal_count,
+                    core.stale_pops,
+                    core.empty_pops,
+                )
+            } else {
+                let core = &self.cores[core_id];
+                (
+                    core.current_task,
+                    core.current_ticks,
+                    core.run_queue_high.len(),
+                    core.run_queue_medium.len(),
+                    core.run_queue_low.len(),
+                    core.timer_ticks,
+                    core.context_switches,
+                    core.steal_count,
+                    core.stale_pops,
+                    core.empty_pops,
+                )
+            };
+
+            match current_task {
                 Some(idx) if idx < self.processes.len() => {
                     let process = &self.processes[idx];
                     serial_println!(
@@ -1595,29 +1942,32 @@ impl Scheduler {
                         process.pid,
                         process.name_str(),
                         process.state,
-                        self.cores[core_id].current_ticks,
-                        self.cores[core_id].run_queue_high.len(),
-                        self.cores[core_id].run_queue_medium.len(),
-                        self.cores[core_id].run_queue_low.len()
+                        current_ticks,
+                        q_high,
+                        q_mid,
+                        q_low
                     );
                 }
                 _ => {
                     serial_println!(
                         "[SCHED-DIAG] core={} current_idx=none ticks={} queues=({},{},{})",
                         core_id,
-                        self.cores[core_id].current_ticks,
-                        self.cores[core_id].run_queue_high.len(),
-                        self.cores[core_id].run_queue_medium.len(),
-                        self.cores[core_id].run_queue_low.len()
+                        current_ticks,
+                        q_high,
+                        q_mid,
+                        q_low
                     );
                 }
             }
             // Minimal extra for runtime matrix: expose ticks/switches per core.
             serial_println!(
-                "[SCHED-DIAG] core={} timer_ticks={} ctx_switches={}",
+                "[SCHED-DIAG] core={} timer_ticks={} ctx_switches={} steals={} stale_pops={} empty_pops={}",
                 core_id,
-                self.cores[core_id].timer_ticks,
-                self.cores[core_id].context_switches
+                timer_ticks,
+                context_switches,
+                steal_count,
+                stale_pops,
+                empty_pops
             );
         }
 
@@ -1740,11 +2090,54 @@ fn pop_ready_excluding_current(
     None
 }
 
-fn idle_loop() -> ! {
+/// Per-core idle loop target for synthetic kernel interrupt frames.
+#[no_mangle]
+extern "C" fn core_idle_entry() -> ! {
     loop {
         x86_64::instructions::interrupts::enable();
         x86_64::instructions::hlt();
     }
+}
+
+/// Build a saved interrupt frame that `iretq`s into [`core_idle_entry`] on a
+/// dedicated kernel stack. Used so a core with no runnable task never resumes a
+/// descheduled (blocked) user context when `idle_context_rsp` was unset.
+fn build_kernel_idle_frame(stack_top: u64) -> u64 {
+    const FRAME_SIZE: u64 = 160;
+    let frame_base = stack_top - FRAME_SIZE;
+    // SAFETY: `frame_base` lies within the per-core idle stack allocated in
+    // `init_core_idle_contexts`.
+    unsafe {
+        let base = frame_base as *mut u64;
+        for i in 0..15 {
+            base.add(i).write_volatile(0);
+        }
+        base.add(15).write_volatile(core_idle_entry as *const () as usize as u64);
+        base.add(16).write_volatile(0x08); // kernel 64-bit code selector
+        base.add(17).write_volatile(0x202); // IF=1
+        base.add(18).write_volatile(stack_top.saturating_sub(8));
+        base.add(19).write_volatile(0x10); // kernel data selector
+    }
+    frame_base
+}
+
+static mut CORE_IDLE_STACKS: [[u8; crate::process::KERNEL_STACK_SIZE]; MAX_CORES] =
+    [[0; crate::process::KERNEL_STACK_SIZE]; MAX_CORES];
+
+fn init_core_idle_contexts(online: usize) {
+    for core_id in 0..online.min(MAX_CORES) {
+        let stack_top = unsafe {
+            core::ptr::addr_of!(CORE_IDLE_STACKS[core_id][crate::process::KERNEL_STACK_SIZE - 1])
+                as u64
+                + 1
+        };
+        let idle_rsp = build_kernel_idle_frame(stack_top);
+        CORE_STATES[core_id].lock().idle_context_rsp = idle_rsp;
+    }
+}
+
+fn idle_loop() -> ! {
+    core_idle_entry();
 }
 
 // ─── Scheduler reschedule requests ────────────────────────────────────────────
@@ -1790,17 +2183,33 @@ pub fn note_process_finished(pid: usize, name: &str) {
 pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     let mut sched = SCHEDULER.lock();
     let cpu_id = current_cpu_id();
-    let cur = match sched.cores[cpu_id].current_task {
+    let fallback_kstack_top = crate::arch::x86_64::smp::current_cpu_tss_rsp0();
+    let cur = match sched.process_index_for_cpu(cpu_id) {
         Some(idx) => idx,
-        None => return 0,
+        None => {
+            serial_println!(
+                "[SCHED] WARN: finish_current_process with no current_task on cpu={}",
+                cpu_id
+            );
+            return fallback_kstack_top;
+        }
     };
     if cur >= sched.processes.len() {
-        return 0;
+        serial_println!(
+            "[SCHED] WARN: finish_current_process invalid current idx={} cpu={}",
+            cur,
+            cpu_id
+        );
+        return fallback_kstack_top;
     }
 
     let kstack_top = sched.processes[cur].kernel_stack_top;
     if sched.processes[cur].state == crate::process::ProcessState::Finished {
-        return kstack_top;
+        return if kstack_top != 0 {
+            kstack_top
+        } else {
+            fallback_kstack_top
+        };
     }
 
     sched.account_current_runtime();
@@ -1809,7 +2218,11 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         process.exit_code = code;
         process.state = crate::process::ProcessState::Finished;
         process.exit_cleanup_pending = true;
+        process.owning_core = u8::MAX;
+        process.queued_on_core = u8::MAX;
     }
+    sched.set_core_current_task(cpu_id, None);
+    sched.set_core_current_ticks(cpu_id, 0);
     sched.remove_from_ready_queues(cur);
 
     let my_pid = sched.processes[cur].pid;
@@ -1829,7 +2242,11 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         sched.wake_pid(parent_pid);
     }
 
-    kstack_top
+    if kstack_top != 0 {
+        kstack_top
+    } else {
+        fallback_kstack_top
+    }
 }
 
 // ─── Globals and wrappers ─────────────────────────────────────────────────────
@@ -1864,7 +2281,7 @@ pub fn enter_first_process() -> ! {
         }
 
         if let Some(idx) = first {
-            sched.cores[0].current_task = Some(idx);
+            sched.set_core_current_task(0, Some(idx));
             sched.processes[idx].state = ProcessState::Running;
             sched.processes[idx].last_run_tick = sched.global_tick;
             sched.processes[idx].owning_core = 0;
@@ -1907,10 +2324,19 @@ pub fn enter_first_process() -> ! {
 pub fn current_process_rsp() -> u64 {
     let sched = SCHEDULER.lock();
     let cpu_id = current_cpu_id();
-    match sched.cores[cpu_id].current_task {
+    match sched.core_current_task(cpu_id) {
         Some(idx) => sched.processes[idx].context_rsp,
         None => 0,
     }
+}
+
+/// Best-effort current PID for exception diagnostics. Never spins on
+/// `SCHEDULER`; fault handlers may run while that lock is already held.
+pub fn try_current_pid() -> usize {
+    SCHEDULER
+        .try_lock()
+        .map(|sched| sched.current_pid())
+        .unwrap_or(usize::MAX)
 }
 
 // ─── SMP helpers ──────────────────────────────────────────────────────────────
@@ -1937,9 +2363,17 @@ pub fn current_cpu_id() -> usize {
 pub fn init_cores(total_cpus: usize) {
     let count = total_cpus.min(MAX_CORES).max(1);
     ONLINE_CORES.store(count, Ordering::Release);
+    init_core_idle_contexts(count);
     {
         let mut sched = SCHEDULER.lock();
         sched.online_cores = count;
+        for core_id in 0..count {
+            let idle_rsp = CORE_STATES[core_id].lock().idle_context_rsp;
+            sched.cores[core_id].idle_context_rsp = idle_rsp;
+        }
+    }
+    for core_id in 0..count {
+        CORE_STATES[core_id].lock().rr_queue.reserve(128);
     }
     serial_println!(
         "[SCHED] Per-core work-stealing scheduler: {} online core(s)",

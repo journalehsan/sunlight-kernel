@@ -279,8 +279,7 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
         return Err(());
     }
 
-    let cur_cpu = crate::sched::current_cpu_id();
-    let current_idx = sched.cores[cur_cpu].current_task.unwrap_or(usize::MAX);
+    let current_idx = sched.current_process_index().unwrap_or(usize::MAX);
     if idx == current_idx && matches!(signal, Signal::SIGKILL) {
         drop(sched);
         process_exit(signal.default_exit_code());
@@ -827,15 +826,10 @@ fn process_exit(code: i32) -> ! {
     // space), then re-enable interrupts (syscall_entry ran `cli`) and wait
     // to be switched away from; this context is never resumed.
     unsafe {
-        core::arch::asm!(
-            "mov rsp, {0}",
-            "sti",
-            "2:",
-            "hlt",
-            "jmp 2b",
-            in(reg) kstack_top,
-            options(noreturn),
-        );
+        if kstack_top != 0 {
+            core::arch::asm!("mov rsp, {}", in(reg) kstack_top);
+        }
+        core::arch::asm!("sti", "2:", "hlt", "jmp 2b", options(noreturn),);
     }
 }
 
@@ -847,9 +841,8 @@ fn process_yield() -> u64 {
         if s.current_process().state == ProcessState::Running {
             s.current_process_mut().state = ProcessState::Ready;
         }
-        // Phase 2 + 4: for BORE, ensure the yielded task is in the correct queue.
-        // The timer will also defend this, but enqueue here so next pick sees it promptly.
-        // (RR ignores queues; pick_next_round_robin scans states.)
+        // The timer path requeues the yielded task on its current core before
+        // picking another task, preserving queue ownership for both RR and BORE.
         if crate::sched::SCHEDULER_MODE == crate::sched::SchedulerMode::Bore {
             // current is still the index; enqueue_once is idempotent and state-checked.
             // We don't have idx here easily, but enqueue via scheduler logic will happen on pick.
@@ -1008,7 +1001,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     thread.fs_base = tls_ptr;
 
     let idx = sched.add_process(thread);
-    sched.enqueue_process(idx);
+    sched.enqueue_ready(idx);
 
     crate::serial_println!(
         "[SYSCALL] thread_spawn: parent={} tid={} trampoline={:#x}",
@@ -1249,10 +1242,7 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
 
     // Child still running: park the caller until the child exits.
     let global_tick = sched.global_tick;
-    let cur = {
-        let cpu_id = crate::sched::current_cpu_id();
-        sched.cores[cpu_id].current_task.unwrap_or(0)
-    };
+    let cur = sched.current_process_index().unwrap_or(0);
     // Phase 1 + 4: account + possible churn penalty for short work before wait
     sched.account_and_apply_churn_penalty();
     {
@@ -1460,7 +1450,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let idx = sched.add_process(child);
     // add_process leaves queueing to the caller; without this the child sits
     // Ready but is never picked by the BORE queues.
-    sched.enqueue_process(idx);
+    sched.enqueue_ready(idx);
 
     // [LAUNCH-TRACE] Point 7: enqueue_finished (child is runnable)
     trace.enqueue_finished_ns = now_ns();

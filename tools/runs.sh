@@ -256,7 +256,7 @@ if [ "$BUILD_FIRST" = true ]; then
     python3 "$SCRIPT_DIR/version_manager.py" "$PROJECT_ROOT"
 
     echo -e "${YELLOW}Rebuilding kernel and services...${NC}"
-    SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C no-redzone"
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release

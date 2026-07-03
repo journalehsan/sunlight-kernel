@@ -152,7 +152,7 @@ build_image() {
     # version is whatever the last real build set. Run ./tools/build.sh first
     # if you want a fresh version stamp.
 
-    SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C no-redzone"
     TLS_RUSTFLAGS="$SERVICE_RUSTFLAGS --cfg aes_force_soft --cfg polyval_force_soft --cfg poly1305_force_soft --cfg chacha20_force_soft --cfg curve25519_dalek_backend=\"serial\""
 
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release

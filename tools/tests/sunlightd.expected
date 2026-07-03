@@ -1,6 +1,6 @@
-[SUNLIGHTD] Starting sunlightd v0.1
+[SUNLIGHTD] Starting sunlightd v0.2
 [SUNLIGHTD] Registered as 'sunlightd'
-[SUNLIGHTD] All units accounted for
+[SUNLIGHTD] Loaded 10 service units
 [TZ] Starting timezone_service
 [TZ] Registered as 'tz'
 [SUNLIGHTD] timezone.service: running
