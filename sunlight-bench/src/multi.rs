@@ -1,8 +1,12 @@
-//! Multi-core integer mixing benchmark.
+//! Multi-core benchmarking suite.
 //!
-//! Each worker runs a deterministic xorshift64* style loop for a fixed number
-//! of iterations. The workload is branch-light, heap-free, and easy to keep
-//! stable in a `no_std` environment while still exercising all cores.
+//! Runs three workloads sequentially, each dispatching worker threads across
+//! all available cores. Results are combined into a multi-core score.
+//!
+//! Workloads:
+//!   1. Integer Mix — xorshift64* loop (existing)
+//!   2. Matrix Multiply — each core handles a chunk of rows via ikj loop
+//!   3. SHA-256 Hash — each core hashes independent 4 KiB blocks
 
 use crate::bench::rdtsc;
 use crate::thread::{arrive_and_wait, barrier_reset, spawn};
@@ -10,11 +14,15 @@ use alloc::vec::Vec;
 use core::hint::black_box;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-pub const NAME: &str = "Parallel Integer Mix (64M ops/core)";
+pub const NAME_INTEGER: &str = "Parallel Integer Mix (64M ops/core)";
+pub const NAME_MATRIX: &str = "Parallel Matrix Multiply 1024^2";
+pub const NAME_SHA256: &str = "Parallel SHA-256 (16 MiB/core)";
 pub const MAX_CORES: usize = 32;
 
-const OPS_PER_CORE: u64 = 64_000_000;
-const PROGRESS_CHUNK: u64 = 1_000_000;
+const N_MATRIX: usize = 1024;
+const HASH_BYTES_PER_CORE: usize = 16 * 1024 * 1024;
+
+// ── Shared statics, reset between workloads ────────────────────────────────
 
 static THREAD_START: [AtomicU64; MAX_CORES] = {
     const ZERO: AtomicU64 = AtomicU64::new(0);
@@ -33,20 +41,31 @@ static TOTAL_CORES: AtomicU64 = AtomicU64::new(1);
 static ASYNC_STATE: AtomicU64 = AtomicU64::new(0);
 static ASYNC_RESULT: AtomicU64 = AtomicU64::new(0);
 static ASYNC_CORES: AtomicU64 = AtomicU64::new(1);
+static ASYNC_WORKLOAD: AtomicU64 = AtomicU64::new(0);
 
-unsafe extern "C" fn worker(slot: u64) {
+// ── Matrix workload shared data ────────────────────────────────────────────
+
+static mut MAT_A: [i32; N_MATRIX * N_MATRIX] = [0i32; N_MATRIX * N_MATRIX];
+static mut MAT_B: [i32; N_MATRIX * N_MATRIX] = [0i32; N_MATRIX * N_MATRIX];
+static mut MAT_C: [i32; N_MATRIX * N_MATRIX] = [0i32; N_MATRIX * N_MATRIX];
+
+// ── Integer Mix worker ─────────────────────────────────────────────────────
+
+unsafe extern "C" fn integer_mix_worker(slot: u64) {
     let n = TOTAL_CORES.load(Ordering::SeqCst);
     arrive_and_wait(n);
 
     let slot_usize = slot as usize;
     THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
 
-    let mut remaining = OPS_PER_CORE;
+    let ops_per_core: u64 = 64_000_000;
+    let progress_chunk: u64 = 1_000_000;
+    let mut remaining = ops_per_core;
     let mut acc = 0x9E37_79B9_7F4A_7C15u64 ^ slot.wrapping_mul(0xD1B5_4A32_D192_ED03);
     let mut completed = 0u64;
 
     while remaining > 0 {
-        let chunk = remaining.min(PROGRESS_CHUNK);
+        let chunk = remaining.min(progress_chunk);
         for _ in 0..chunk {
             acc ^= acc >> 12;
             acc ^= acc << 25;
@@ -62,9 +81,189 @@ unsafe extern "C" fn worker(slot: u64) {
     THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
 }
 
+// ── Matrix Multiply worker ──────────────────────────────────────────────────
+
+unsafe extern "C" fn matrix_mix_worker(slot: u64) {
+    let ncores = TOTAL_CORES.load(Ordering::SeqCst) as usize;
+    arrive_and_wait(ncores as u64);
+
+    let slot_usize = slot as usize;
+    THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
+
+    let total_rows = N_MATRIX;
+    let rows_per_core = total_rows / ncores;
+    let extra = total_rows % ncores;
+    let start_row = if slot_usize < extra {
+        slot_usize * (rows_per_core + 1)
+    } else {
+        extra * (rows_per_core + 1) + (slot_usize - extra) * rows_per_core
+    };
+    let end_row = if slot_usize < extra {
+        start_row + rows_per_core + 1
+    } else {
+        start_row + rows_per_core
+    };
+
+    let total_ops = ((end_row - start_row) * N_MATRIX * N_MATRIX) as u64;
+    let mut completed = 0u64;
+
+    for i in start_row..end_row {
+        for k in 0..N_MATRIX {
+            let aik = MAT_A[i * N_MATRIX + k];
+            if aik == 0 {
+                continue;
+            }
+            for j in 0..N_MATRIX {
+                MAT_C[i * N_MATRIX + j] += aik * MAT_B[k * N_MATRIX + j];
+            }
+        }
+        completed += (N_MATRIX * N_MATRIX) as u64;
+        THREAD_PROGRESS[slot_usize].store(completed.min(total_ops), Ordering::SeqCst);
+    }
+
+    black_box((core::ptr::addr_of!(MAT_C), core::ptr::addr_of!(MAT_A)));
+    THREAD_PROGRESS[slot_usize].store(total_ops, Ordering::SeqCst);
+    THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
+}
+
+// ── SHA-256 Hash worker ────────────────────────────────────────────────────
+
+unsafe extern "C" fn sha256_mix_worker(slot: u64) {
+    let ncores = TOTAL_CORES.load(Ordering::SeqCst) as usize;
+    arrive_and_wait(ncores as u64);
+
+    let slot_usize = slot as usize;
+    THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
+
+    let total_bytes = HASH_BYTES_PER_CORE;
+    const CHUNK: usize = 4096;
+    let total_chunks = total_bytes / CHUNK;
+    let mut completed = 0u64;
+
+    for chunk_idx in 0..total_chunks {
+        let mut block = [0u8; CHUNK];
+        let seed = (slot << 32) | (chunk_idx as u64);
+        let mut mixer = seed.wrapping_mul(0xD6E8_FEB8_6659_FD93);
+        for b in &mut block {
+            mixer = mixer.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            *b = (mixer >> 24) as u8;
+        }
+        let digest = crate::sha256::sha256(&block);
+        black_box(digest);
+        completed += 1;
+        THREAD_PROGRESS[slot_usize].store(completed.min(total_chunks as u64), Ordering::SeqCst);
+    }
+
+    THREAD_PROGRESS[slot_usize].store(total_chunks as u64, Ordering::SeqCst);
+    THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
+}
+
+// ── Workload runner ─────────────────────────────────────────────────────────
+
+fn reset_statics(ncores: usize) {
+    TOTAL_CORES.store(ncores as u64, Ordering::SeqCst);
+    for idx in 0..ncores {
+        THREAD_START[idx].store(0, Ordering::SeqCst);
+        THREAD_END[idx].store(0, Ordering::SeqCst);
+        THREAD_PROGRESS[idx].store(0, Ordering::SeqCst);
+    }
+    barrier_reset();
+}
+
+fn spawn_workers(ncores: usize, worker: unsafe extern "C" fn(u64)) -> Vec<Vec<u8>> {
+    let mut stacks: Vec<Vec<u8>> = Vec::new();
+    for slot in 1..ncores {
+        let (_, stack) = spawn(worker, slot as u64);
+        stacks.push(stack);
+    }
+    stacks
+}
+
+unsafe fn run_worker_on_core0(slot: u64, worker: unsafe extern "C" fn(u64)) {
+    worker(slot);
+}
+
+fn wait_all_workers(ncores: usize) {
+    for slot in 1..ncores {
+        while THREAD_END[slot].load(Ordering::SeqCst) == 0 {
+            sunlight_ipc::process_yield();
+        }
+    }
+}
+
+fn measure_elapsed(ncores: usize) -> u64 {
+    let min_start = (0..ncores)
+        .map(|idx| THREAD_START[idx].load(Ordering::SeqCst))
+        .fold(u64::MAX, u64::min);
+    let max_end = (0..ncores)
+        .map(|idx| THREAD_END[idx].load(Ordering::SeqCst))
+        .fold(0u64, u64::max);
+    max_end.saturating_sub(min_start)
+}
+
+pub fn run_integer_mix(ncores: usize) -> u64 {
+    let n = ncores.min(MAX_CORES).max(1);
+    reset_statics(n);
+    let stacks = spawn_workers(n, integer_mix_worker);
+    unsafe { run_worker_on_core0(0, integer_mix_worker) };
+    wait_all_workers(n);
+    let elapsed = measure_elapsed(n);
+    black_box(&stacks);
+    drop(stacks);
+    elapsed
+}
+
+pub fn run_matrix_mix(ncores: usize) -> u64 {
+    let n = ncores.min(MAX_CORES).max(1);
+
+    unsafe {
+        for idx in 0..N_MATRIX * N_MATRIX {
+            MAT_A[idx] = ((idx as u32).wrapping_mul(2_654_435_761) >> 16) as i32;
+            MAT_B[idx] = ((idx as u32).wrapping_mul(1_299_709) >> 16) as i32;
+            MAT_C[idx] = 0;
+        }
+    }
+
+    reset_statics(n);
+    let stacks = spawn_workers(n, matrix_mix_worker);
+    unsafe { run_worker_on_core0(0, matrix_mix_worker) };
+    wait_all_workers(n);
+    let elapsed = measure_elapsed(n);
+    black_box(&stacks);
+    drop(stacks);
+    elapsed
+}
+
+pub fn run_sha256_mix(ncores: usize) -> u64 {
+    let n = ncores.min(MAX_CORES).max(1);
+    reset_statics(n);
+    let stacks = spawn_workers(n, sha256_mix_worker);
+    unsafe { run_worker_on_core0(0, sha256_mix_worker) };
+    wait_all_workers(n);
+    let elapsed = measure_elapsed(n);
+    black_box(&stacks);
+    drop(stacks);
+    elapsed
+}
+
+// ── Async dispatch (for GUI integration) ───────────────────────────────────
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkloadId {
+    Integer = 0,
+    Matrix = 1,
+    Sha256 = 2,
+}
+
 unsafe extern "C" fn async_entry(ncores: u64) {
-    let bench = ParallelMix::new(ncores as usize);
-    let cycles = bench.run_sync();
+    let n = ncores as usize;
+    let wl = ASYNC_WORKLOAD.load(Ordering::SeqCst);
+    let cycles = match wl {
+        0 => run_integer_mix(n),
+        1 => run_matrix_mix(n),
+        2 => run_sha256_mix(n),
+        _ => 0,
+    };
     ASYNC_RESULT.store(cycles, Ordering::SeqCst);
     ASYNC_STATE.store(2, Ordering::SeqCst);
 }
@@ -73,57 +272,7 @@ pub struct AsyncHandle {
     _stack: Vec<u8>,
 }
 
-pub struct ParallelMix {
-    ncores: usize,
-}
-
-impl ParallelMix {
-    pub fn new(ncores: usize) -> Self {
-        Self {
-            ncores: ncores.min(MAX_CORES).max(1),
-        }
-    }
-
-    pub fn run_sync(&self) -> u64 {
-        let n = self.ncores as u64;
-        TOTAL_CORES.store(n, Ordering::SeqCst);
-
-        for idx in 0..self.ncores {
-            THREAD_START[idx].store(0, Ordering::SeqCst);
-            THREAD_END[idx].store(0, Ordering::SeqCst);
-            THREAD_PROGRESS[idx].store(0, Ordering::SeqCst);
-        }
-        barrier_reset();
-
-        let mut stacks: Vec<Vec<u8>> = Vec::new();
-        for slot in 1..self.ncores {
-            let (_, stack) = spawn(worker, slot as u64);
-            stacks.push(stack);
-        }
-
-        unsafe { worker(0) };
-
-        for slot in 1..self.ncores {
-            while THREAD_END[slot].load(Ordering::SeqCst) == 0 {
-                sunlight_ipc::process_yield();
-            }
-        }
-
-        let min_start = (0..self.ncores)
-            .map(|idx| THREAD_START[idx].load(Ordering::SeqCst))
-            .fold(u64::MAX, u64::min);
-        let max_end = (0..self.ncores)
-            .map(|idx| THREAD_END[idx].load(Ordering::SeqCst))
-            .fold(0u64, u64::max);
-
-        black_box(&stacks);
-        drop(stacks);
-
-        max_end.saturating_sub(min_start)
-    }
-}
-
-pub fn start_async(ncores: usize) -> Option<AsyncHandle> {
+pub fn start_async(ncores: usize, workload: WorkloadId) -> Option<AsyncHandle> {
     if ASYNC_STATE
         .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
@@ -134,6 +283,7 @@ pub fn start_async(ncores: usize) -> Option<AsyncHandle> {
     let ncores = ncores.min(MAX_CORES).max(1);
     ASYNC_RESULT.store(0, Ordering::SeqCst);
     ASYNC_CORES.store(ncores as u64, Ordering::SeqCst);
+    ASYNC_WORKLOAD.store(workload as u64, Ordering::SeqCst);
 
     for idx in 0..ncores {
         THREAD_PROGRESS[idx].store(0, Ordering::SeqCst);
@@ -160,7 +310,14 @@ pub fn async_progress_bp() -> u16 {
     for idx in 0..ncores.min(MAX_CORES) {
         total = total.saturating_add(THREAD_PROGRESS[idx].load(Ordering::SeqCst));
     }
-    let denom = OPS_PER_CORE.saturating_mul(ncores.max(1) as u64);
+
+    let base: u64 = match ASYNC_WORKLOAD.load(Ordering::SeqCst) {
+        0 => 64_000_000,
+        1 => (N_MATRIX * N_MATRIX * N_MATRIX) as u64,
+        2 => (HASH_BYTES_PER_CORE / 4096) as u64,
+        _ => 1,
+    };
+    let denom = base.saturating_mul(ncores.max(1) as u64);
     ((total.min(denom) * 10_000) / denom.max(1)) as u16
 }
 
@@ -171,4 +328,18 @@ pub fn take_async_result() -> Option<u64> {
     let cycles = ASYNC_RESULT.load(Ordering::SeqCst);
     ASYNC_STATE.store(3, Ordering::SeqCst);
     Some(cycles)
+}
+
+pub fn reset_async() {
+    ASYNC_STATE.store(0, Ordering::SeqCst);
+    ASYNC_RESULT.store(0, Ordering::SeqCst);
+}
+
+// ── Synchronous runner for headless mode ────────────────────────────────────
+
+pub fn run_all_multi(ncores: usize) -> (u64, u64, u64) {
+    let cycles_int = run_integer_mix(ncores);
+    let cycles_mat = run_matrix_mix(ncores);
+    let cycles_sha = run_sha256_mix(ncores);
+    (cycles_int, cycles_mat, cycles_sha)
 }

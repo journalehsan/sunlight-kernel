@@ -55,6 +55,10 @@ impl CpuRunner {
         ((self.round.saturating_mul(10_000)) / ROUNDS) as u16
     }
 
+    pub fn release(&mut self) {
+        self.buf = alloc::vec::Vec::new();
+    }
+
     pub fn step(&mut self) -> bool {
         if self.round >= ROUNDS {
             return true;

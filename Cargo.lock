@@ -1528,6 +1528,8 @@ dependencies = [
 name = "sunlight-bench"
 version = "0.2.750"
 dependencies = [
+ "linked_list_allocator",
+ "spin",
  "sun-font",
  "sunlight-ipc",
  "sunlight-telemetry",

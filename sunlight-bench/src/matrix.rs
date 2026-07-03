@@ -55,6 +55,12 @@ impl MatrixRunner {
         ((self.ops_done.min(TOTAL_OPS) * 10_000) / TOTAL_OPS) as u16
     }
 
+    pub fn release(&mut self) {
+        self.a = alloc::vec::Vec::new();
+        self.b = alloc::vec::Vec::new();
+        self.c = alloc::vec::Vec::new();
+    }
+
     pub fn step(&mut self) -> bool {
         if self.i >= N {
             return true;

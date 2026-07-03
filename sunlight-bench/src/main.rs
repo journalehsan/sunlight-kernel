@@ -17,14 +17,14 @@ mod sieve;
 mod thread;
 
 use core::alloc::{GlobalAlloc, Layout};
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use cpu::CpuRunner;
 use matrix::MatrixRunner;
-use multi::{AsyncHandle, ParallelMix};
+use multi::{AsyncHandle, WorkloadId};
 use pi::PiRunner;
 use prime_scan::PrimeRunner;
-use scoring::{make_entry, total_score, Entry, BENCH_COUNT};
+use scoring::{make_entry, single_score, multi_score, total_score, Entry, BENCH_COUNT, SINGLE_COUNT};
 use sieve::SieveRunner;
 use sun_font::{FontRole, VecFont};
 use sunlight_ipc::{debug_log, process_yield, ProcessExit};
@@ -45,10 +45,10 @@ static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 const HEAP_SIZE: usize = 32 * 1024 * 1024;
 
 const WIN_W: u32 = 880;
-const WIN_H: u32 = 560;
+const WIN_H: u32 = 620;
 const HEADER_H: u32 = 46;
 const TOOLBAR_H: u32 = 30;
-const SUMMARY_H: u32 = 104;
+const SUMMARY_H: u32 = 130;
 const STAGE_H: u32 = 116;
 const STATUS_H: u32 = 18;
 const MARGIN: i32 = 14;
@@ -87,40 +87,53 @@ const TABLE_COLUMNS: [Column<'static>; TABLE_COLS] = [
 
 const EMPTY_ROW: [&str; TABLE_COLS] = ["", "", "", ""];
 
+// ── Heap allocator ─────────────────────────────────────────────────────────
+
 #[repr(C, align(16))]
 struct AlignedHeap([u8; HEAP_SIZE]);
 
 static mut HEAP_DATA: AlignedHeap = AlignedHeap([0u8; HEAP_SIZE]);
-static HEAP_NEXT: AtomicUsize = AtomicUsize::new(0);
+static HEAP_INIT: AtomicBool = AtomicBool::new(false);
 
-struct BumpAlloc;
-
-unsafe impl GlobalAlloc for BumpAlloc {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let align = layout.align();
-        let size = layout.size();
-        let mut cur = HEAP_NEXT.load(Ordering::Relaxed);
-        loop {
-            let aligned = (cur + align - 1) & !(align - 1);
-            let next = aligned + size;
-            if next > HEAP_SIZE {
-                return core::ptr::null_mut();
-            }
-            match HEAP_NEXT.compare_exchange(cur, next, Ordering::SeqCst, Ordering::Relaxed) {
-                Ok(_) => {
-                    #[allow(static_mut_refs)]
-                    return unsafe { HEAP_DATA.0.as_mut_ptr().add(aligned) };
-                }
-                Err(actual) => cur = actual,
-            }
+fn ensure_heap_init() {
+    if HEAP_INIT
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        use linked_list_allocator::LockedHeap;
+        static ALLOC: LockedHeap = LockedHeap::empty();
+        unsafe {
+            ALLOC
+                .lock()
+                .init(core::ptr::addr_of_mut!(HEAP_DATA.0) as *mut u8, HEAP_SIZE);
         }
     }
+}
 
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+struct RealAlloc;
+
+unsafe impl GlobalAlloc for RealAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        if !HEAP_INIT.load(Ordering::Acquire) {
+            ensure_heap_init();
+        }
+        use linked_list_allocator::LockedHeap;
+        static ALLOC: LockedHeap = LockedHeap::empty();
+        ALLOC.lock().allocate_first_fit(layout).ok().map_or(
+            core::ptr::null_mut(),
+            |ptr| ptr.as_ptr(),
+        )
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        use linked_list_allocator::LockedHeap;
+        static ALLOC: LockedHeap = LockedHeap::empty();
+        ALLOC.lock().deallocate(core::ptr::NonNull::new_unchecked(ptr), layout);
+    }
 }
 
 #[global_allocator]
-static ALLOC: BumpAlloc = BumpAlloc;
+static GLOBAL_ALLOC: RealAlloc = RealAlloc;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -136,6 +149,8 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     ProcessExit::exit(1);
 }
 
+// ── Stage state machine ────────────────────────────────────────────────────
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Stage {
     Ready,
@@ -144,7 +159,9 @@ enum Stage {
     Sieve,
     Matrix,
     Cpu,
-    Multi,
+    MultiInt,
+    MultiMatrix,
+    MultiSha,
     Finished,
 }
 
@@ -157,11 +174,15 @@ impl Stage {
             Self::Sieve => "Sieve",
             Self::Matrix => "Matrix",
             Self::Cpu => "CPU Mix",
-            Self::Multi => "Parallel Mix",
+            Self::MultiInt => "Multi-1",
+            Self::MultiMatrix => "Multi-2",
+            Self::MultiSha => "Multi-3",
             Self::Finished => "Finished",
         }
     }
 }
+
+// ── Application ────────────────────────────────────────────────────────────
 
 struct BenchApp {
     pid: u64,
@@ -173,10 +194,14 @@ struct BenchApp {
     hovered_button: Option<usize>,
     status: [u8; 128],
     status_len: usize,
-    detail: [u8; 128],
+    detail: [u8; 160],
     detail_len: usize,
-    score_text: [u8; 24],
-    score_len: usize,
+    single_text: [u8; 24],
+    single_len: usize,
+    multi_text: [u8; 24],
+    multi_len: usize,
+    total_text: [u8; 24],
+    total_len: usize,
     core_text: [u8; 24],
     core_len: usize,
     phase_text: [u8; 32],
@@ -191,9 +216,11 @@ struct BenchApp {
     cpu: CpuRunner,
     multi_started: bool,
     multi_handle: Option<AsyncHandle>,
+    multi_workload: u8,
     telemetry_ptr: *const TelemetryPage,
     multi_busy_verified: bool,
     multi_busy_peak: usize,
+    released: bool,
 }
 
 impl BenchApp {
@@ -208,10 +235,14 @@ impl BenchApp {
             hovered_button: None,
             status: [0; 128],
             status_len: 0,
-            detail: [0; 128],
+            detail: [0; 160],
             detail_len: 0,
-            score_text: [0; 24],
-            score_len: 0,
+            single_text: [0; 24],
+            single_len: 0,
+            multi_text: [0; 24],
+            multi_len: 0,
+            total_text: [0; 24],
+            total_len: 0,
             core_text: [0; 24],
             core_len: 0,
             phase_text: [0; 32],
@@ -226,13 +257,15 @@ impl BenchApp {
             cpu: CpuRunner::new(),
             multi_started: false,
             multi_handle: None,
+            multi_workload: 0,
             telemetry_ptr: map_telemetry_page(),
             multi_busy_verified: false,
             multi_busy_peak: 0,
+            released: false,
         };
         app.set_status("Ready to benchmark");
         app.set_detail(
-            "Run starts chunked single-core stages and a live multi-core integer mix pass.",
+            "Run starts chunked single-core stages, then three parallel multi-core workloads.",
         );
         app.rebuild_summary();
         app.rebuild_rows();
@@ -255,8 +288,16 @@ impl BenchApp {
         as_str(&self.detail[..self.detail_len])
     }
 
-    fn score_str(&self) -> &str {
-        as_str(&self.score_text[..self.score_len])
+    fn single_str(&self) -> &str {
+        as_str(&self.single_text[..self.single_len])
+    }
+
+    fn multi_str(&self) -> &str {
+        as_str(&self.multi_text[..self.multi_len])
+    }
+
+    fn total_str(&self) -> &str {
+        as_str(&self.total_text[..self.total_len])
     }
 
     fn core_str(&self) -> &str {
@@ -338,9 +379,17 @@ impl BenchApp {
             &mut self.core_text[self.core_len..],
         );
 
-        let score = total_score(&self.results);
-        self.score_len = copy_bytes(b"Score ", &mut self.score_text);
-        self.score_len += write_u64_into(score, &mut self.score_text[self.score_len..]);
+        let ss = single_score(&self.results);
+        self.single_len = copy_bytes(b"1-Core ", &mut self.single_text);
+        self.single_len += write_u64_into(ss, &mut self.single_text[self.single_len..]);
+
+        let ms = multi_score(&self.results);
+        self.multi_len = copy_bytes(b"N-Core ", &mut self.multi_text);
+        self.multi_len += write_u64_into(ms, &mut self.multi_text[self.multi_len..]);
+
+        let ts = total_score(&self.results);
+        self.total_len = copy_bytes(b"Total ", &mut self.total_text);
+        self.total_len += write_u64_into(ts, &mut self.total_text[self.total_len..]);
 
         let phase = completed_count(&self.results);
         self.phase_len = write_num_into(phase as u32, &mut self.phase_text);
@@ -357,7 +406,9 @@ impl BenchApp {
             sieve::NAME,
             matrix::NAME,
             cpu::NAME,
-            multi::NAME,
+            multi::NAME_INTEGER,
+            multi::NAME_MATRIX,
+            multi::NAME_SHA256,
         ];
         for (idx, name) in names.iter().enumerate() {
             copy_cell(name, &mut self.row_bufs[idx][0], &mut self.row_lens[idx][0]);
@@ -404,7 +455,9 @@ impl BenchApp {
             Stage::Sieve => Some(2),
             Stage::Matrix => Some(3),
             Stage::Cpu => Some(4),
-            Stage::Multi => Some(5),
+            Stage::MultiInt => Some(5),
+            Stage::MultiMatrix => Some(6),
+            Stage::MultiSha => Some(7),
             _ => None,
         }
     }
@@ -423,7 +476,9 @@ impl BenchApp {
             Stage::Sieve => self.sieve.progress_bp(),
             Stage::Matrix => self.matrix.progress_bp(),
             Stage::Cpu => self.cpu.progress_bp(),
-            Stage::Multi => multi::async_progress_bp(),
+            Stage::MultiInt | Stage::MultiMatrix | Stage::MultiSha => {
+                multi::async_progress_bp()
+            }
             Stage::Finished => 10_000,
         }
     }
@@ -436,7 +491,9 @@ impl BenchApp {
             Stage::Sieve => self.sieve.name(),
             Stage::Matrix => self.matrix.name(),
             Stage::Cpu => self.cpu.name(),
-            Stage::Multi => multi::NAME,
+            Stage::MultiInt => multi::NAME_INTEGER,
+            Stage::MultiMatrix => multi::NAME_MATRIX,
+            Stage::MultiSha => multi::NAME_SHA256,
             Stage::Finished => "Benchmark complete",
         }
     }
@@ -455,8 +512,14 @@ impl BenchApp {
             Stage::Cpu => {
                 "Geekbench-style integer mix and SHA-256 stay bounded and avoid raw-pointer tricks."
             }
-            Stage::Multi => {
+            Stage::MultiInt => {
                 "Worker threads run a deterministic integer mixer while the window polls progress."
+            }
+            Stage::MultiMatrix => {
+                "Each core processes a chunk of rows via ikj-loop over a 1024^2 matrix."
+            }
+            Stage::MultiSha => {
+                "Each core independently hashes 4 KiB blocks (16 MiB/core) with SHA-256."
             }
             Stage::Finished => "Use Serial to mirror the final table into debug_log.",
         }
@@ -466,7 +529,7 @@ impl BenchApp {
         match self.stage {
             Stage::Ready => BadgeKind::Dim,
             Stage::Finished => BadgeKind::Ok,
-            Stage::Multi => BadgeKind::Warn,
+            Stage::MultiInt | Stage::MultiMatrix | Stage::MultiSha => BadgeKind::Warn,
             _ => BadgeKind::Accent,
         }
     }
@@ -486,11 +549,39 @@ impl BenchApp {
         self.rebuild_rows();
     }
 
+    fn release_memory(&mut self) {
+        if self.released {
+            return;
+        }
+        self.matrix.release();
+        self.cpu.release();
+        self.prime.release();
+        self.multi_handle = None;
+        self.released = true;
+        debug_log("[BENCH] Memory released");
+    }
+
     fn emit_serial_report(&mut self) {
         debug_log("[BENCH] ============================================");
-        debug_log("[BENCH] SunLight-Bench GUI results");
+        debug_log("[BENCH] SunLight-Bench results");
         debug_log("[BENCH] ============================================");
-        for entry in self.results.iter().flatten() {
+        debug_log(&alloc::format!(
+            "[BENCH] ── Single-Core ({}) ──",
+            single_score(&self.results)
+        ));
+        for entry in self.results[..SINGLE_COUNT].iter().flatten() {
+            debug_log(&alloc::format!(
+                "[BENCH] {:.<40} {:>14} cycles  score {:>6}",
+                entry.name,
+                entry.cycles,
+                entry.score
+            ));
+        }
+        debug_log(&alloc::format!(
+            "[BENCH] ── Multi-Core ({}) ──",
+            multi_score(&self.results)
+        ));
+        for entry in self.results[SINGLE_COUNT..].iter().flatten() {
             debug_log(&alloc::format!(
                 "[BENCH] {:.<40} {:>14} cycles  score {:>6}",
                 entry.name,
@@ -524,6 +615,7 @@ impl BenchApp {
         self.running = false;
         sunlight_ipc::set_nice(self.pid, 0);
         self.report_multi_core_activity();
+        self.release_memory();
         self.set_detail(
             "SunLight-Bench finished. Close the window or mirror the summary to serial.",
         );
@@ -533,6 +625,52 @@ impl BenchApp {
         self.set_status("Benchmark complete");
         self.rebuild_summary();
         self.rebuild_rows();
+    }
+
+    fn advance_to_next_multi_workload(&mut self) {
+        self.multi_workload += 1;
+        self.multi_started = false;
+        self.multi_handle = None;
+        multi::reset_async();
+
+        match self.multi_workload {
+            1 => {
+                self.stage = Stage::MultiMatrix;
+                self.set_status("Parallel matrix started");
+                self.set_detail("Each core processes a chunk of rows via ikj-loop over a 1024^2 matrix.");
+            }
+            2 => {
+                self.stage = Stage::MultiSha;
+                self.set_status("Parallel SHA-256 started");
+                self.set_detail("Each core independently hashes 4 KiB blocks (16 MiB/core) with SHA-256.");
+            }
+            _ => {
+                self.finish();
+            }
+        }
+    }
+
+    fn tick_multi_workload(&mut self, idx: usize, workload: WorkloadId, name: &'static str) -> bool {
+        if !self.multi_started {
+            self.multi_handle = multi::start_async(self.ncores, workload);
+            self.multi_started = self.multi_handle.is_some();
+            if !self.multi_started {
+                self.set_status("Parallel workload failed to start");
+                self.set_detail("Background worker creation failed.");
+                self.running = false;
+                return true;
+            }
+            self.verify_multi_core_activity();
+            true
+        } else if let Some(cycles) = multi::take_async_result() {
+            self.verify_multi_core_activity();
+            self.record_result(idx, name, cycles);
+            self.advance_to_next_multi_workload();
+            true
+        } else {
+            self.verify_multi_core_activity();
+            true
+        }
     }
 
     fn tick_benchmark(&mut self) -> bool {
@@ -598,39 +736,25 @@ impl BenchApp {
                 );
                 if done {
                     self.record_result(4, cpu::NAME, self.cpu.cycles());
-                    self.stage = Stage::Multi;
+                    self.stage = Stage::MultiInt;
+                    self.multi_workload = 0;
+                    self.multi_started = false;
                     self.set_status("CPU mix complete");
-                    self.set_detail("Dispatching multi-core mix workers.");
+                    self.set_detail("Dispatching multi-core integer mix workers.");
                 }
                 true
             }
-            Stage::Multi => {
-                if !self.multi_started {
-                    self.multi_handle = multi::start_async(self.ncores);
-                    self.multi_started = self.multi_handle.is_some();
-                    if !self.multi_started {
-                        self.set_status("Parallel mix failed to start");
-                        self.set_detail("Background worker creation failed.");
-                        self.running = false;
-                        return true;
-                    }
-                    self.set_status("Parallel mix running");
-                    self.set_detail("Worker threads are running a deterministic integer mixer in the background.");
-                    self.verify_multi_core_activity();
-                    true
-                } else if let Some(cycles) = multi::take_async_result() {
-                    self.verify_multi_core_activity();
-                    self.record_result(5, multi::NAME, cycles);
-                    self.multi_handle = None;
-                    self.finish();
-                    true
-                } else {
-                    self.verify_multi_core_activity();
-                    self.set_detail(
-                        "Parallel mix workers are active. The window is polling completion.",
-                    );
-                    true
-                }
+            Stage::MultiInt => {
+                self.set_detail("Worker threads are running a deterministic integer mixer in the background.");
+                self.tick_multi_workload(5, WorkloadId::Integer, multi::NAME_INTEGER)
+            }
+            Stage::MultiMatrix => {
+                self.set_detail("Each core processes rows via ikj-loop. Progress is updated per row.");
+                self.tick_multi_workload(6, WorkloadId::Matrix, multi::NAME_MATRIX)
+            }
+            Stage::MultiSha => {
+                self.set_detail("Each core hashes independent data. Progress is reported per block.");
+                self.tick_multi_workload(7, WorkloadId::Sha256, multi::NAME_SHA256)
             }
             Stage::Finished | Stage::Ready => false,
         };
@@ -646,7 +770,7 @@ impl BenchApp {
         if !self.multi_busy_verified && busy >= 2 {
             self.multi_busy_verified = true;
             debug_log(&alloc::format!(
-                "[BENCH] telemetry verified {} non-idle cores during Parallel Mix",
+                "[BENCH] telemetry verified {} non-idle cores during multi-core pass",
                 busy
             ));
         }
@@ -655,12 +779,12 @@ impl BenchApp {
     fn report_multi_core_activity(&self) {
         if self.multi_busy_peak >= 2 {
             debug_log(&alloc::format!(
-                "[BENCH] telemetry peak non-idle cores during Parallel Mix: {}",
+                "[BENCH] telemetry peak non-idle cores during multi-core passes: {}",
                 self.multi_busy_peak
             ));
         } else {
             debug_log(&alloc::format!(
-                "[BENCH] telemetry peak non-idle cores during Parallel Mix: {} (multi-core activity not observed)",
+                "[BENCH] telemetry peak non-idle cores during multi-core passes: {} (multi-core activity not observed)",
                 self.multi_busy_peak
             ));
         }
@@ -682,7 +806,10 @@ impl BenchApp {
                 match idx {
                     0 => self.start(),
                     1 => self.emit_serial_report(),
-                    2 => request_close(),
+                    2 => {
+                        self.release_memory();
+                        request_close();
+                    }
                     _ => {}
                 }
                 return true;
@@ -756,34 +883,48 @@ impl App for BenchApp {
         StatusBadge::new(summary.x + 14, summary.y + 26, self.status_badge())
             .with_label(self.stage.label())
             .draw(canvas, theme);
+
         Label::new(
             Rect::new(summary.x + 120, summary.y + 20, 180, 16),
-            self.score_str(),
+            self.single_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 300, summary.y + 20, 140, 16),
+            Rect::new(summary.x + 300, summary.y + 20, 180, 16),
+            self.multi_str(),
+        )
+        .with_font(&F_UI)
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 480, summary.y + 20, 160, 16),
+            self.total_str(),
+        )
+        .with_font(&F_UI)
+        .draw(canvas, theme);
+
+        Label::new(
+            Rect::new(summary.x + 14, summary.y + 44, 240, 14),
+            self.status_str(),
+        )
+        .with_font(&F_UI)
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 14, summary.y + 60, 240, 14),
             self.core_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 430, summary.y + 20, 140, 16),
+            Rect::new(summary.x + 300, summary.y + 60, 240, 14),
             self.phase_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 14, summary.y + 42, 240, 14),
-            self.status_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
             Rect::new(
                 summary.x + 14,
-                summary.y + 58,
+                summary.y + 78,
                 summary.w.saturating_sub(28),
                 14,
             ),
@@ -883,6 +1024,7 @@ impl App for BenchApp {
                 ..
             } => {
                 if ctrl && keycode == KEY_Q {
+                    self.release_memory();
                     request_close();
                     return true;
                 }
@@ -899,6 +1041,8 @@ impl App for BenchApp {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    ensure_heap_init();
+
     let pid = sunlight_ipc::getpid();
     let ncores = cpu_count();
 
@@ -915,6 +1059,7 @@ pub extern "C" fn _start() -> ! {
 
     window.run(&mut app);
     sunlight_ipc::set_nice(pid, 0);
+    app.release_memory();
     ProcessExit::exit(0);
 }
 
@@ -961,30 +1106,44 @@ fn run_headless(pid: u64, ncores: usize) -> ! {
     let telemetry_ptr = map_telemetry_page();
     let mut multi_busy_peak = 0usize;
     let mut multi_verified = false;
-    let handle = multi::start_async(ncores);
-    if let Some(_handle) = handle {
-        while results[5].is_none() {
-            let busy = busy_core_count(telemetry_ptr);
-            multi_busy_peak = multi_busy_peak.max(busy);
-            if !multi_verified && busy >= 2 {
-                multi_verified = true;
-                debug_log(&alloc::format!(
-                    "[BENCH] telemetry verified {} non-idle cores during Parallel Mix",
-                    busy
-                ));
+
+    let multi_workloads = [
+        (5usize, WorkloadId::Integer, multi::NAME_INTEGER),
+        (6usize, WorkloadId::Matrix, multi::NAME_MATRIX),
+        (7usize, WorkloadId::Sha256, multi::NAME_SHA256),
+    ];
+
+    for (idx, wl, name) in multi_workloads {
+        let handle = multi::start_async(ncores, wl);
+        if let Some(_handle) = handle {
+            while results[idx].is_none() {
+                let busy = busy_core_count(telemetry_ptr);
+                multi_busy_peak = multi_busy_peak.max(busy);
+                if !multi_verified && busy >= 2 {
+                    multi_verified = true;
+                    debug_log(&alloc::format!(
+                        "[BENCH] telemetry verified {} non-idle cores during multi-core pass",
+                        busy
+                    ));
+                }
+                if let Some(cycles) = multi::take_async_result() {
+                    results[idx] = Some(make_entry(name, cycles));
+                } else {
+                    process_yield();
+                }
             }
-            if let Some(cycles) = multi::take_async_result() {
-                results[5] = Some(make_entry(multi::NAME, cycles));
-            } else {
-                process_yield();
-            }
+        } else {
+            let (ci, cm, cs) = multi::run_all_multi(ncores);
+            results[5] = Some(make_entry(multi::NAME_INTEGER, ci));
+            results[6] = Some(make_entry(multi::NAME_MATRIX, cm));
+            results[7] = Some(make_entry(multi::NAME_SHA256, cs));
+            break;
         }
-    } else {
-        let multi = ParallelMix::new(ncores);
-        results[5] = Some(make_entry(multi::NAME, multi.run_sync()));
+        multi::reset_async();
     }
+
     debug_log(&alloc::format!(
-        "[BENCH] telemetry peak non-idle cores during Parallel Mix: {}{}",
+        "[BENCH] telemetry peak non-idle cores during multi-core passes: {}{}",
         multi_busy_peak,
         if multi_busy_peak >= 2 {
             ""
@@ -992,10 +1151,21 @@ fn run_headless(pid: u64, ncores: usize) -> ! {
             " (multi-core activity not observed)"
         }
     ));
-    log_entry(results[5].unwrap());
+
+    for entry in results.iter().flatten() {
+        log_entry(*entry);
+    }
 
     debug_log(&alloc::format!(
-        "[BENCH] TOTAL SCORE {:>32}",
+        "[BENCH] SINGLE-CORE SCORE {:>22}",
+        single_score(&results)
+    ));
+    debug_log(&alloc::format!(
+        "[BENCH] MULTI-CORE SCORE {:>23}",
+        multi_score(&results)
+    ));
+    debug_log(&alloc::format!(
+        "[BENCH] TOTAL SCORE {:>28}",
         total_score(&results)
     ));
     sunlight_ipc::set_nice(pid, 0);

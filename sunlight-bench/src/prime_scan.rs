@@ -62,6 +62,10 @@ impl PrimeRunner {
         }
     }
 
+    pub fn release(&mut self) {
+        self.is_prime = alloc::vec::Vec::new();
+    }
+
     pub fn step(&mut self) -> bool {
         if self.phase == Phase::Done {
             return true;
