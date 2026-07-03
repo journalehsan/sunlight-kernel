@@ -42,7 +42,7 @@ static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_MED: VecFont = VecFont(FontRole::UiMedium);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
-const HEAP_SIZE: usize = 16 * 1024 * 1024;
+const HEAP_SIZE: usize = 32 * 1024 * 1024;
 
 const WIN_W: u32 = 880;
 const WIN_H: u32 = 620;
@@ -208,7 +208,6 @@ struct BenchApp {
     telemetry_ptr: *const TelemetryPage,
     multi_busy_verified: bool,
     multi_busy_peak: usize,
-    released: bool,
 }
 
 impl BenchApp {
@@ -249,7 +248,6 @@ impl BenchApp {
             telemetry_ptr: map_telemetry_page(),
             multi_busy_verified: false,
             multi_busy_peak: 0,
-            released: false,
         };
         app.set_status("Ready to benchmark");
         app.set_detail(
@@ -538,14 +536,10 @@ impl BenchApp {
     }
 
     fn release_memory(&mut self) {
-        if self.released {
-            return;
-        }
         self.matrix.release();
         self.cpu.release();
         self.prime.release();
         self.multi_handle = None;
-        self.released = true;
         HEAP_NEXT.store(0, Ordering::Relaxed);
         debug_log("[BENCH] Memory released");
     }
@@ -725,6 +719,7 @@ impl BenchApp {
                 );
                 if done {
                     self.record_result(4, cpu::NAME, self.cpu.cycles());
+                    self.release_memory();
                     self.stage = Stage::MultiInt;
                     self.multi_workload = 0;
                     self.multi_started = false;
