@@ -45,9 +45,9 @@ static ASYNC_WORKLOAD: AtomicU64 = AtomicU64::new(0);
 
 // ── Matrix workload shared data ────────────────────────────────────────────
 
-static mut MAT_A: [i32; N_MATRIX * N_MATRIX] = [0i32; N_MATRIX * N_MATRIX];
-static mut MAT_B: [i32; N_MATRIX * N_MATRIX] = [0i32; N_MATRIX * N_MATRIX];
-static mut MAT_C: [i32; N_MATRIX * N_MATRIX] = [0i32; N_MATRIX * N_MATRIX];
+static MATRIX_A_PTR: AtomicU64 = AtomicU64::new(0);
+static MATRIX_B_PTR: AtomicU64 = AtomicU64::new(0);
+static MATRIX_C_PTR: AtomicU64 = AtomicU64::new(0);
 
 // ── Integer Mix worker ─────────────────────────────────────────────────────
 
@@ -90,6 +90,10 @@ unsafe extern "C" fn matrix_mix_worker(slot: u64) {
     let slot_usize = slot as usize;
     THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
 
+    let a_ptr = MATRIX_A_PTR.load(Ordering::SeqCst) as *const i32;
+    let b_ptr = MATRIX_B_PTR.load(Ordering::SeqCst) as *const i32;
+    let c_ptr = MATRIX_C_PTR.load(Ordering::SeqCst) as *mut i32;
+
     let total_rows = N_MATRIX;
     let rows_per_core = total_rows / ncores;
     let extra = total_rows % ncores;
@@ -109,19 +113,19 @@ unsafe extern "C" fn matrix_mix_worker(slot: u64) {
 
     for i in start_row..end_row {
         for k in 0..N_MATRIX {
-            let aik = MAT_A[i * N_MATRIX + k];
+            let aik = *a_ptr.add(i * N_MATRIX + k);
             if aik == 0 {
                 continue;
             }
             for j in 0..N_MATRIX {
-                MAT_C[i * N_MATRIX + j] += aik * MAT_B[k * N_MATRIX + j];
+                *c_ptr.add(i * N_MATRIX + j) += aik * (*b_ptr.add(k * N_MATRIX + j));
             }
         }
         completed += (N_MATRIX * N_MATRIX) as u64;
         THREAD_PROGRESS[slot_usize].store(completed.min(total_ops), Ordering::SeqCst);
     }
 
-    black_box((core::ptr::addr_of!(MAT_C), core::ptr::addr_of!(MAT_A)));
+    black_box((a_ptr, c_ptr));
     THREAD_PROGRESS[slot_usize].store(total_ops, Ordering::SeqCst);
     THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
 }
@@ -216,20 +220,31 @@ pub fn run_integer_mix(ncores: usize) -> u64 {
 pub fn run_matrix_mix(ncores: usize) -> u64 {
     let n = ncores.min(MAX_CORES).max(1);
 
-    unsafe {
-        for idx in 0..N_MATRIX * N_MATRIX {
-            MAT_A[idx] = ((idx as u32).wrapping_mul(2_654_435_761) >> 16) as i32;
-            MAT_B[idx] = ((idx as u32).wrapping_mul(1_299_709) >> 16) as i32;
-            MAT_C[idx] = 0;
-        }
+    let mut a = alloc::vec![0i32; N_MATRIX * N_MATRIX];
+    let mut b = alloc::vec![0i32; N_MATRIX * N_MATRIX];
+    let mut c = alloc::vec![0i32; N_MATRIX * N_MATRIX];
+
+    for idx in 0..N_MATRIX * N_MATRIX {
+        a[idx] = ((idx as u32).wrapping_mul(2_654_435_761) >> 16) as i32;
+        b[idx] = ((idx as u32).wrapping_mul(1_299_709) >> 16) as i32;
+        c[idx] = 0;
     }
+
+    MATRIX_A_PTR.store(a.as_ptr() as u64, Ordering::SeqCst);
+    MATRIX_B_PTR.store(b.as_ptr() as u64, Ordering::SeqCst);
+    MATRIX_C_PTR.store(c.as_ptr() as u64, Ordering::SeqCst);
 
     reset_statics(n);
     let stacks = spawn_workers(n, matrix_mix_worker);
     unsafe { run_worker_on_core0(0, matrix_mix_worker) };
     wait_all_workers(n);
     let elapsed = measure_elapsed(n);
-    black_box(&stacks);
+
+    MATRIX_A_PTR.store(0, Ordering::SeqCst);
+    MATRIX_B_PTR.store(0, Ordering::SeqCst);
+    MATRIX_C_PTR.store(0, Ordering::SeqCst);
+
+    black_box((&stacks, &c));
     drop(stacks);
     elapsed
 }

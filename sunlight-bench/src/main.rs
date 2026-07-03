@@ -17,7 +17,7 @@ mod sieve;
 mod thread;
 
 use core::alloc::{GlobalAlloc, Layout};
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use cpu::CpuRunner;
 use matrix::MatrixRunner;
@@ -42,7 +42,7 @@ static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_MED: VecFont = VecFont(FontRole::UiMedium);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
-const HEAP_SIZE: usize = 32 * 1024 * 1024;
+const HEAP_SIZE: usize = 16 * 1024 * 1024;
 
 const WIN_W: u32 = 880;
 const WIN_H: u32 = 620;
@@ -93,47 +93,35 @@ const EMPTY_ROW: [&str; TABLE_COLS] = ["", "", "", ""];
 struct AlignedHeap([u8; HEAP_SIZE]);
 
 static mut HEAP_DATA: AlignedHeap = AlignedHeap([0u8; HEAP_SIZE]);
-static HEAP_INIT: AtomicBool = AtomicBool::new(false);
+static HEAP_NEXT: AtomicUsize = AtomicUsize::new(0);
 
-fn ensure_heap_init() {
-    if HEAP_INIT
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_ok()
-    {
-        use linked_list_allocator::LockedHeap;
-        static ALLOC: LockedHeap = LockedHeap::empty();
-        unsafe {
-            ALLOC
-                .lock()
-                .init(core::ptr::addr_of_mut!(HEAP_DATA.0) as *mut u8, HEAP_SIZE);
-        }
-    }
-}
+struct BumpAlloc;
 
-struct RealAlloc;
-
-unsafe impl GlobalAlloc for RealAlloc {
+unsafe impl GlobalAlloc for BumpAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if !HEAP_INIT.load(Ordering::Acquire) {
-            ensure_heap_init();
+        let align = layout.align();
+        let size = layout.size();
+        let mut cur = HEAP_NEXT.load(Ordering::Relaxed);
+        loop {
+            let aligned = (cur + align - 1) & !(align - 1);
+            let next = aligned + size;
+            if next > HEAP_SIZE {
+                return core::ptr::null_mut();
+            }
+            match HEAP_NEXT.compare_exchange(cur, next, Ordering::SeqCst, Ordering::Relaxed) {
+                Ok(_) => {
+                    return core::ptr::addr_of_mut!(HEAP_DATA.0).cast::<u8>().add(aligned);
+                }
+                Err(actual) => cur = actual,
+            }
         }
-        use linked_list_allocator::LockedHeap;
-        static ALLOC: LockedHeap = LockedHeap::empty();
-        ALLOC.lock().allocate_first_fit(layout).ok().map_or(
-            core::ptr::null_mut(),
-            |ptr| ptr.as_ptr(),
-        )
     }
 
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        use linked_list_allocator::LockedHeap;
-        static ALLOC: LockedHeap = LockedHeap::empty();
-        ALLOC.lock().deallocate(core::ptr::NonNull::new_unchecked(ptr), layout);
-    }
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
 }
 
 #[global_allocator]
-static GLOBAL_ALLOC: RealAlloc = RealAlloc;
+static ALLOC: BumpAlloc = BumpAlloc;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -558,6 +546,7 @@ impl BenchApp {
         self.prime.release();
         self.multi_handle = None;
         self.released = true;
+        HEAP_NEXT.store(0, Ordering::Relaxed);
         debug_log("[BENCH] Memory released");
     }
 
@@ -1041,8 +1030,6 @@ impl App for BenchApp {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    ensure_heap_init();
-
     let pid = sunlight_ipc::getpid();
     let ncores = cpu_count();
 
