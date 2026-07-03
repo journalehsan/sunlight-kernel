@@ -1,6 +1,7 @@
 [package]
 name = "sun-open"
-version = "0.2.748"
+version = "0.2.750"
+
 
 edition = "2021"
 
