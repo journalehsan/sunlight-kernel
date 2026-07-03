@@ -918,6 +918,7 @@ fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
 /// RDI/RSI of the new thread's initial context so `thread_trampoline`
 /// receives them as normal C arguments.
 fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
+    let current_cpu = crate::sched::current_cpu_id();
     let trampoline = frame.rdi;
     let user_stack_top = frame.rsi;
     let tls_ptr = frame.rdx;
@@ -1001,7 +1002,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     thread.fs_base = tls_ptr;
 
     let idx = sched.add_process(thread);
-    sched.enqueue_ready(idx);
+    sched.enqueue_ready_on_cpu(idx, current_cpu);
 
     crate::serial_println!(
         "[SYSCALL] thread_spawn: parent={} tid={} trampoline={:#x}",
@@ -1296,6 +1297,7 @@ fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
 /// Returns the child pid, or -1 on error.
 fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // [LAUNCH-TRACE] Point 1: request received
+    let current_cpu = crate::sched::current_cpu_id();
     let launch_id = crate::launch_trace::next_launch_id();
     let mut trace = crate::launch_trace::LaunchTrace::new(launch_id, now_ns());
 
@@ -1450,7 +1452,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let idx = sched.add_process(child);
     // add_process leaves queueing to the caller; without this the child sits
     // Ready but is never picked by the BORE queues.
-    sched.enqueue_ready(idx);
+    sched.enqueue_ready_on_cpu(idx, current_cpu);
 
     // [LAUNCH-TRACE] Point 7: enqueue_finished (child is runnable)
     trace.enqueue_finished_ns = now_ns();

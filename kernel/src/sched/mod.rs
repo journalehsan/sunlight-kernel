@@ -595,6 +595,32 @@ impl Scheduler {
         self.enqueue_process_once(idx);
     }
 
+    /// Enqueue a freshly created Ready task onto a preferred CPU for its first
+    /// dispatch. Once it has run and been preempted, normal scheduler paths
+    /// are free to rebalance it across cores.
+    pub fn enqueue_ready_on_cpu(&mut self, idx: usize, preferred_cpu: usize) {
+        if idx >= self.processes.len() || !matches!(self.processes[idx].state, ProcessState::Ready)
+        {
+            return;
+        }
+        if self.processes[idx].owning_core != u8::MAX {
+            return;
+        }
+
+        self.remove_from_ready_queues(idx);
+
+        let online = self.online_cores.min(MAX_CORES).max(1);
+        let preferred_cpu = preferred_cpu.min(online - 1);
+        let cpu_mask = self.processes[idx].cpu_mask;
+        let target_cpu = if cpu_mask & (1u64 << preferred_cpu) != 0 {
+            preferred_cpu
+        } else {
+            self.target_core_for_process(idx)
+        };
+
+        self.enqueue_process_to_core(idx, target_cpu);
+    }
+
     /// Remove a process index from ready queues.
     ///
     /// Uses `queued_on_core` to target the single core that owns this entry
