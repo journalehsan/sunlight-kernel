@@ -191,11 +191,11 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         available: false,
     },
     AppCatalogEntry {
-        id: CatalogId::Placeholder("text-editor"),
+        id: CatalogId::App(AppId::TextEditor),
         name: "Text Editor",
         category: "Productivity",
         icon_bytes: Some(ICON_TEXT_EDITOR_TGA),
-        available: false,
+        available: true,
     },
     AppCatalogEntry {
         id: CatalogId::Placeholder("notes"),

@@ -44,6 +44,7 @@ members = [
     "std-proof/sunlight-dict",
     "sunlight-hangman", "helios-note",
     "cpu-utils",
+    "sunlight-edit",
     "services/sunlight-kbd",
     "services/sunlight-mouse",
     "services/sunlight-display",

@@ -1,91 +1,16 @@
 [package]
-name = "sunlight-calculator"
+name = "sunlight-edit"
 version = "0.2.745"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 edition = "2021"
 
+[lib]
+name = "sunlight_edit"
+path = "src/lib.rs"
+
 [[bin]]
-name = "calculator"
+name = "sunlight-edit"
 path = "src/main.rs"
 
 [dependencies]

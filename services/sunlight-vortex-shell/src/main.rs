@@ -202,7 +202,7 @@ impl DockTheme {
             AppId::Files => self.files,
             AppId::Settings => self.settings,
             // Not rendered in the bottom dock; the Start Menu owns their icons.
-            AppId::Tasks | AppId::Bench | AppId::Eyes => None,
+            AppId::Tasks | AppId::Bench | AppId::Eyes | AppId::TextEditor => None,
         }
     }
 }
@@ -210,8 +210,8 @@ impl DockTheme {
 /// Identifies a launchable SunlightOS app.
 ///
 /// `Terminal`/`Calculator`/`Files`/`Settings` are tracked by both the bottom
-/// dock and the Start Menu. `Tasks`/`Bench`/`Eyes` were added for the Start
-/// Menu's "All Apps" grid (see `start_menu.rs`) — they reuse the same
+/// dock and the Start Menu. `Tasks`/`Bench`/`Eyes`/`TextEditor` were added for
+/// the Start Menu's "All Apps" grid (see `start_menu.rs`) — they reuse the same
 /// registry/launch machinery but are not shown in the fixed 4-icon dock.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AppId {
@@ -222,6 +222,7 @@ pub(crate) enum AppId {
     Tasks,
     Bench,
     Eyes,
+    TextEditor,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -906,9 +907,9 @@ struct VortexShell {
     dock_theme: DockTheme,
     /// App registry used for launch/focus/restore behavior. The first four
     /// entries (Terminal/Calculator/Files/Settings) are also shown in the
-    /// bottom dock; Tasks/Bench/Eyes are Start-Menu-only but share the same
-    /// launch/state-sync machinery.
-    apps: [DockAppState; 7],
+    /// bottom dock; Tasks/Bench/Eyes/TextEditor are Start-Menu-only but share
+    /// the same launch/state-sync machinery.
+    apps: [DockAppState; 8],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// Clickable bounds for the dynamic running-app strip.
@@ -987,6 +988,7 @@ impl VortexShell {
                 DockAppState::new(AppId::Tasks, "Task Manager", AppId::Tasks),
                 DockAppState::new(AppId::Bench, "Sunlight Bench", AppId::Bench),
                 DockAppState::new(AppId::Eyes, "Eyes", AppId::Eyes),
+                DockAppState::new(AppId::TextEditor, "Sunlight Edit", AppId::TextEditor),
             ],
             running_apps: Vec::new(),
             running_zones: Vec::new(),
@@ -1062,6 +1064,7 @@ impl VortexShell {
             AppId::Tasks => "/bin/sunlight-tasks",
             AppId::Bench => "/bin/sunbench",
             AppId::Eyes => "/bin/eyes",
+            AppId::TextEditor => "/bin/sunlight-edit",
         }
     }
 
@@ -1074,6 +1077,7 @@ impl VortexShell {
             AppId::Tasks => b"tasks",
             AppId::Bench => b"bench",
             AppId::Eyes => b"eyes",
+            AppId::TextEditor => b"sunlight-edit",
         }
     }
 
@@ -1086,6 +1090,7 @@ impl VortexShell {
             AppId::Tasks => "app=tasks",
             AppId::Bench => "app=bench",
             AppId::Eyes => "app=eyes",
+            AppId::TextEditor => "app=sunlight-edit",
         }
     }
 
@@ -3045,7 +3050,8 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         "folder" | "home" | "folder-home" => Some(ICON_FOLDER_TGA),
         "computer" | "desktop-computer" => Some(ICON_COMPUTER_TGA),
         "drive" | icon_name::DRIVE | "disk" => Some(ICON_DRIVE_TGA),
-        "text" | icon_name::TEXT_GENERIC | "editor" | "writer" | "notes" => Some(ICON_FILE_TGA),
+        "text" | icon_name::TEXT_GENERIC | "editor" | "writer" | "notes" | "sunlight-edit"
+        | "sunlight-text" | "kate" => Some(ICON_FILE_TGA),
         _ => None,
     }
 }
