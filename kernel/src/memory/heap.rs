@@ -6,7 +6,7 @@ use x86_64::{
 };
 
 pub const HEAP_START: VirtAddr = VirtAddr::new_truncate(0xFFFF_FFFF_9000_0000);
-pub const HEAP_SIZE: usize = 16 * 1024 * 1024; // 16 MiB
+pub const HEAP_SIZE: usize = 64 * 1024 * 1024; // 64 MiB
 pub const HEAP_PAGES: usize = HEAP_SIZE / Size4KiB::SIZE as usize;
 
 #[global_allocator]
@@ -31,4 +31,14 @@ pub fn init_heap(vmm: &mut VirtualMemoryManager, pmm: &mut PhysicalMemoryManager
     unsafe {
         ALLOCATOR.lock().init(HEAP_START.as_mut_ptr(), HEAP_SIZE);
     }
+}
+
+pub fn heap_diagnostic() {
+    let heap = ALLOCATOR.lock();
+    crate::serial_println!(
+        "[HEAP-DIAG] total={} used={} free={}",
+        heap.size(),
+        heap.used(),
+        heap.free(),
+    );
 }
