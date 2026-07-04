@@ -12,6 +12,7 @@ mod matrix;
 mod multi;
 mod pi;
 mod prime_scan;
+mod profile;
 mod scoring;
 mod sha256;
 mod sieve;
@@ -27,7 +28,8 @@ use multi::{AsyncHandle, WorkloadId};
 use pi::PiRunner;
 use prime_scan::PrimeRunner;
 use scoring::{
-    make_entry, score_report, Entry, ScoreReport, StageMetrics, WorkloadClass, BENCH_COUNT,
+    make_entry, median_score, score_report, spread_is_unstable, spread_pct_from_scores,
+    spread_stability_class, Entry, ScoreReport, StageMetrics, WorkloadClass, BENCH_COUNT,
 };
 use sieve::SieveRunner;
 use sun_font::{FontRole, VecFont};
@@ -49,23 +51,31 @@ static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 const HEAP_SIZE: usize = 32 * 1024 * 1024;
 
 const WIN_W: u32 = 880;
-const WIN_H: u32 = 620;
-const HEADER_H: u32 = 46;
-const TOOLBAR_H: u32 = 30;
-const SUMMARY_H: u32 = 148;
-const STAGE_H: u32 = 116;
+const WIN_H: u32 = 670;
+const HEADER_H: u32 = 36;
+const SUMMARY_H: u32 = 100;
+const STAGE_H: u32 = 100;
 const STATUS_H: u32 = 18;
 const MARGIN: i32 = 14;
 
 const BUTTON_COUNT: usize = 3;
-const BUTTON_WIDTHS: [u32; BUTTON_COUNT] = [112, 112, 112];
+const BUTTON_WIDTHS: [u32; BUTTON_COUNT] = [90, 90, 90];
 
 const KEY_Q: u8 = 0x10;
 const KEY_ENTER: u8 = 0x1C;
+const KEY_PGUP: u8 = 0x49;
+const KEY_PGDN: u8 = 0x51;
+const KEY_UP: u8 = 0x48;
+const KEY_DOWN: u8 = 0x50;
 
 const TABLE_COLS: usize = 4;
 const CELL_BUF: usize = 64;
 const DEFAULT_RUNS: usize = 3;
+const WARMUP_ENABLED: bool = true;
+const RUN_COOLDOWN_MS: u64 = 50;
+const RUN_COOLDOWN_YIELDS: u32 = 32;
+const SPREAD_WARNING: &str =
+    "Warning: benchmark run variance is high; results may not be reliable.";
 
 const TABLE_COLUMNS: [Column<'static>; TABLE_COLS] = [
     Column {
@@ -222,10 +232,19 @@ impl Default for RunSnapshot {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum CooldownTarget {
+    #[default]
+    None,
+    FirstMeasuredRun,
+    NextMeasuredRun,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct AggregateSummary {
     best: u64,
     average: u64,
+    median: u64,
     min: u64,
     max: u64,
     spread_pct: u64,
@@ -244,7 +263,7 @@ struct BenchApp {
     hovered_button: Option<usize>,
     status: [u8; 128],
     status_len: usize,
-    detail: [u8; 160],
+    detail: [u8; 256],
     detail_len: usize,
     single_text: [u8; 48],
     single_len: usize,
@@ -256,9 +275,11 @@ struct BenchApp {
     legacy_len: usize,
     core_text: [u8; 24],
     core_len: usize,
+    profile_text: [u8; 48],
+    profile_len: usize,
     run_text: [u8; 72],
     run_len: usize,
-    phase_text: [u8; 32],
+    phase_text: [u8; 128],
     phase_len: usize,
     results: [Option<Entry>; BENCH_COUNT],
     run_summaries: [RunSnapshot; DEFAULT_RUNS],
@@ -277,6 +298,12 @@ struct BenchApp {
     telemetry_ptr: *const TelemetryPage,
     multi_busy_verified: bool,
     multi_busy_peak: usize,
+    warming_up: bool,
+    multi_timing_pending: bool,
+    cooldown_target: CooldownTarget,
+    cooldown_until_ms: u64,
+    cooldown_yields_left: u32,
+    table_scroll_offset: usize,
 }
 
 impl BenchApp {
@@ -292,7 +319,7 @@ impl BenchApp {
             hovered_button: None,
             status: [0; 128],
             status_len: 0,
-            detail: [0; 160],
+            detail: [0; 256],
             detail_len: 0,
             single_text: [0; 48],
             single_len: 0,
@@ -304,9 +331,11 @@ impl BenchApp {
             legacy_len: 0,
             core_text: [0; 24],
             core_len: 0,
+            profile_text: [0; 48],
+            profile_len: 0,
             run_text: [0; 72],
             run_len: 0,
-            phase_text: [0; 32],
+            phase_text: [0; 128],
             phase_len: 0,
             results: [None; BENCH_COUNT],
             run_summaries: [RunSnapshot::default(); DEFAULT_RUNS],
@@ -325,6 +354,12 @@ impl BenchApp {
             telemetry_ptr: map_telemetry_page(),
             multi_busy_verified: false,
             multi_busy_peak: 0,
+            warming_up: false,
+            multi_timing_pending: false,
+            cooldown_target: CooldownTarget::None,
+            cooldown_until_ms: 0,
+            cooldown_yields_left: 0,
+            table_scroll_offset: 0,
         };
         app.set_status("Ready to benchmark");
         app.set_detail(
@@ -347,6 +382,7 @@ impl BenchApp {
         self.detail_len = copy_str(text, &mut self.detail);
     }
 
+    #[allow(dead_code)]
     fn detail_str(&self) -> &str {
         as_str(&self.detail[..self.detail_len])
     }
@@ -369,6 +405,10 @@ impl BenchApp {
 
     fn core_str(&self) -> &str {
         as_str(&self.core_text[..self.core_len])
+    }
+
+    fn profile_str(&self) -> &str {
+        as_str(&self.profile_text[..self.profile_len])
     }
 
     fn run_str(&self) -> &str {
@@ -422,31 +462,31 @@ impl BenchApp {
         Rect::new(content.x, content.y, content.w, HEADER_H)
     }
 
-    fn toolbar_rect(&self) -> Rect {
-        let header = self.header_rect();
-        Rect::new(header.x, header.bottom() + 8, header.w, TOOLBAR_H)
-    }
-
     fn summary_rect(&self) -> Rect {
-        let toolbar = self.toolbar_rect();
-        Rect::new(toolbar.x, toolbar.bottom() + 10, toolbar.w, SUMMARY_H)
+        let header = self.header_rect();
+        Rect::new(header.x, header.bottom() + 4, header.w, SUMMARY_H)
     }
 
     fn stage_rect(&self) -> Rect {
         let summary = self.summary_rect();
-        Rect::new(summary.x, summary.bottom() + 10, summary.w, STAGE_H)
+        if self.stage == Stage::Finished {
+            Rect::new(summary.x, summary.bottom(), summary.w, 0)
+        } else {
+            Rect::new(summary.x, summary.bottom() + 4, summary.w, STAGE_H)
+        }
     }
 
     fn results_rect(&self) -> Rect {
         let stage = self.stage_rect();
         let content = self.content_rect();
+        let stage_end = if stage.h == 0 { stage.y } else { stage.bottom() + 4 };
+        let status_y = content.bottom() - STATUS_H as i32;
+        let available = (status_y - 4).saturating_sub(stage_end);
         Rect::new(
             stage.x,
-            stage.bottom() + 10,
+            stage_end,
             stage.w,
-            content
-                .bottom()
-                .saturating_sub(stage.bottom() + 10 + STATUS_H as i32 + 8) as u32,
+            available.max(0) as u32,
         )
     }
 
@@ -461,9 +501,16 @@ impl BenchApp {
     }
 
     fn button_rects(&self) -> [Rect; BUTTON_COUNT] {
+        let header = self.header_rect();
         let mut rects = [Rect::default(); BUTTON_COUNT];
-        for (idx, rect) in HBox::new(self.toolbar_rect())
-            .with_spacing(8)
+        let btn_area = Rect::new(
+            header.right() - 300,
+            header.y + 4,
+            290,
+            HEADER_H - 8,
+        );
+        for (idx, rect) in HBox::new(btn_area)
+            .with_spacing(6)
             .layout(&BUTTON_WIDTHS)
             .enumerate()
         {
@@ -477,6 +524,29 @@ impl BenchApp {
         self.stage_started_ms = monotonic_millis();
     }
 
+    fn stage_metrics_from_times(
+        &self,
+        start_tick: u64,
+        start_ms: u64,
+        end_tick: u64,
+        end_ms: u64,
+        work_units: u64,
+        workers: u32,
+        cycles: u64,
+        class: WorkloadClass,
+    ) -> StageMetrics {
+        StageMetrics {
+            start_tick,
+            end_tick,
+            start_ms,
+            end_ms,
+            work_units,
+            workers,
+            cycles,
+            class,
+        }
+    }
+
     fn stage_metrics(
         &self,
         work_units: u64,
@@ -484,18 +554,16 @@ impl BenchApp {
         cycles: u64,
         class: WorkloadClass,
     ) -> StageMetrics {
-        let end_tick = bench::rdtsc();
-        let end_ms = monotonic_millis();
-        StageMetrics {
-            start_tick: self.stage_started_tick,
-            end_tick,
-            start_ms: self.stage_started_ms,
-            end_ms,
+        self.stage_metrics_from_times(
+            self.stage_started_tick,
+            self.stage_started_ms,
+            bench::rdtsc(),
+            monotonic_millis(),
             work_units,
             workers,
             cycles,
             class,
-        }
+        )
     }
 
     fn worker_count(&self) -> usize {
@@ -506,23 +574,33 @@ impl BenchApp {
         self.completed_runs + 1
     }
 
-    fn display_run_number(&self) -> usize {
-        if !self.started {
-            0
-        } else if self.running {
-            self.current_run_number()
-        } else {
-            self.completed_runs.max(1)
+    fn run_scores(&self) -> alloc::vec::Vec<u64> {
+        let count = self.completed_runs.min(DEFAULT_RUNS);
+        let mut scores = alloc::vec::Vec::with_capacity(count);
+        for idx in 0..count {
+            scores.push(self.run_summaries[idx].report.weighted_final);
         }
+        scores
     }
 
     fn current_stage_counts(&self) -> (usize, usize, usize) {
-        let completed = completed_count(&self.results);
+        let completed = if !self.running
+            && self.cooldown_target == CooldownTarget::FirstMeasuredRun
+            && self.completed_runs == 0
+        {
+            0
+        } else {
+            completed_count(&self.results)
+        };
         (completed, 0, 0)
     }
 
     fn scores(&self) -> ScoreReport {
         score_report(&self.results)
+    }
+
+    fn current_run_score(&self) -> u64 {
+        self.scores().weighted_final
     }
 
     fn capture_run_snapshot(&self) -> RunSnapshot {
@@ -545,55 +623,62 @@ impl BenchApp {
     }
 
     fn aggregate_summary(&self) -> Option<AggregateSummary> {
-        if self.completed_runs == 0 {
+        let scores = self.run_scores();
+        if scores.is_empty() {
             return None;
         }
 
-        let mut best = 0u64;
-        let mut min = u64::MAX;
-        let mut max = 0u64;
-        let mut sum = 0u128;
-
-        for idx in 0..self.completed_runs.min(DEFAULT_RUNS) {
-            let score = self.run_summaries[idx].report.weighted_final;
-            best = best.max(score);
-            min = min.min(score);
-            max = max.max(score);
-            sum = sum.saturating_add(score as u128);
-        }
-
-        let runs = self.completed_runs.min(DEFAULT_RUNS) as u128;
-        if runs == 0 {
-            return None;
-        }
-
-        let average = ((sum + (runs / 2)) / runs) as u64;
-        let spread_pct = if average == 0 {
-            0
-        } else {
-            let spread = max.saturating_sub(min) as u128;
-            ((spread.saturating_mul(100) + (average as u128 / 2)) / average as u128) as u64
-        };
+        let best = scores.iter().copied().max().unwrap_or(0);
+        let min = scores.iter().copied().min().unwrap_or(0);
+        let max = best;
+        let sum: u128 = scores.iter().map(|score| *score as u128).sum();
+        let average = ((sum + (scores.len() as u128 / 2)) / scores.len() as u128) as u64;
+        let median = median_score(&scores);
+        let spread_pct = spread_pct_from_scores(&scores);
 
         Some(AggregateSummary {
             best,
             average,
+            median,
             min,
             max,
             spread_pct,
         })
     }
 
+    fn headline_score(&self) -> u64 {
+        if let Some(summary) = self.aggregate_summary() {
+            if self.completed_runs >= 2 {
+                return summary.median;
+            }
+        }
+        self.current_run_score()
+    }
+
     fn rebuild_summary(&mut self) {
         let report = self.scores();
+        let current_score = self.current_run_score();
         let workers = self.worker_count();
         let (completed, skipped, failed) = self.current_stage_counts();
+        let headline = if self.stage == Stage::Finished && self.completed_runs >= 2 {
+            self.headline_score()
+        } else {
+            current_score
+        };
 
-        self.final_len = copy_bytes(b"Final v2 Score: ", &mut self.final_text);
-        self.final_len += write_u64_into(
-            report.weighted_final,
-            &mut self.final_text[self.final_len..],
-        );
+        self.final_len = if self.warming_up
+            || (self.completed_runs == 0
+                && self.cooldown_target == CooldownTarget::FirstMeasuredRun)
+        {
+            copy_bytes(b"Warmup (excluded): ", &mut self.final_text)
+        } else if self.stage == Stage::Finished && self.completed_runs >= 2 {
+            copy_bytes(b"Median v2 Score: ", &mut self.final_text)
+        } else if self.started {
+            copy_bytes(b"Current v2 Score: ", &mut self.final_text)
+        } else {
+            copy_bytes(b"Final v2 Score: ", &mut self.final_text)
+        };
+        self.final_len += write_u64_into(headline, &mut self.final_text[self.final_len..]);
 
         self.single_len = copy_bytes(b"Single normalized/raw: ", &mut self.single_text);
         self.single_len += write_u64_into(
@@ -618,6 +703,12 @@ impl BenchApp {
             &mut self.legacy_text[self.legacy_len..],
         );
 
+        self.profile_len = copy_bytes(b"Profile: ", &mut self.profile_text);
+        self.profile_len += copy_str(
+            profile::detect_profile(),
+            &mut self.profile_text[self.profile_len..],
+        );
+
         self.core_len = copy_bytes(b"Cores: ", &mut self.core_text);
         self.core_len += write_num_into(
             workers.min(u32::MAX as usize) as u32,
@@ -626,7 +717,7 @@ impl BenchApp {
 
         self.run_len = copy_bytes(b"Runs: ", &mut self.run_text);
         self.run_len += write_num_into(
-            self.display_run_number().min(u32::MAX as usize) as u32,
+            self.completed_runs.min(u32::MAX as usize) as u32,
             &mut self.run_text[self.run_len..],
         );
         self.run_len += copy_bytes(b"/", &mut self.run_text[self.run_len..]);
@@ -634,6 +725,15 @@ impl BenchApp {
             self.run_target.min(u32::MAX as usize) as u32,
             &mut self.run_text[self.run_len..],
         );
+        if self.warming_up {
+            self.run_len += copy_bytes(b"  Warmup", &mut self.run_text[self.run_len..]);
+        } else if self.running && self.completed_runs < self.run_target {
+            self.run_len += copy_bytes(b"  Current: ", &mut self.run_text[self.run_len..]);
+            self.run_len += write_num_into(
+                self.current_run_number().min(u32::MAX as usize) as u32,
+                &mut self.run_text[self.run_len..],
+            );
+        }
         self.run_len += copy_bytes(b"  Stages: ", &mut self.run_text[self.run_len..]);
         self.run_len += write_num_into(
             completed.min(u32::MAX as usize) as u32,
@@ -657,54 +757,65 @@ impl BenchApp {
 
         let speedup = self.multi_speedup_ratio();
         let efficiency = self.multi_efficiency_pct();
-        self.phase_len = copy_bytes(b"Speedup: ", &mut self.phase_text);
-        self.phase_len +=
-            write_optional_ratio_into(speedup, &mut self.phase_text[self.phase_len..]);
-        self.phase_len += copy_bytes(b"  Eff: ", &mut self.phase_text[self.phase_len..]);
-        self.phase_len +=
-            write_optional_pct_into(efficiency, &mut self.phase_text[self.phase_len..]);
+        self.phase_len = if self.stage == Stage::Finished {
+            if let Some(summary) = self.aggregate_summary() {
+                let stability = spread_stability_class(summary.spread_pct);
+                let mut len = copy_bytes(b"Current: ", &mut self.phase_text);
+                len += write_u64_into(current_score, &mut self.phase_text[len..]);
+                len += copy_bytes(b"  Median: ", &mut self.phase_text[len..]);
+                len += write_u64_into(summary.median, &mut self.phase_text[len..]);
+                len += copy_bytes(b"  Best: ", &mut self.phase_text[len..]);
+                len += write_u64_into(summary.best, &mut self.phase_text[len..]);
+                len += copy_bytes(b"  Avg: ", &mut self.phase_text[len..]);
+                len += write_u64_into(summary.average, &mut self.phase_text[len..]);
+                len += copy_bytes(b"  Spread: ", &mut self.phase_text[len..]);
+                len += write_u64_into(summary.spread_pct, &mut self.phase_text[len..]);
+                if len < self.phase_text.len() {
+                    self.phase_text[len] = b'%';
+                    len += 1;
+                }
+                len += copy_bytes(b"  ", &mut self.phase_text[len..]);
+                len += copy_bytes(stability.as_bytes(), &mut self.phase_text[len..]);
+                len
+            } else {
+                copy_bytes(b"Speedup: n/a", &mut self.phase_text)
+            }
+        } else {
+            let mut len = copy_bytes(b"Speedup: ", &mut self.phase_text);
+            len += write_optional_ratio_into(speedup, &mut self.phase_text[len..]);
+            len += copy_bytes(b"  Eff: ", &mut self.phase_text[len..]);
+            len += write_optional_pct_into(efficiency, &mut self.phase_text[len..]);
+            len
+        };
     }
 
-    fn run_summary_text(
-        snapshot: &RunSnapshot,
-        run_number: usize,
-        workers: usize,
+    fn aggregate_summary_text(
+        summary: AggregateSummary,
+        runs: usize,
+        current_score: u64,
     ) -> alloc::string::String {
-        let mut speed_buf = [0u8; 16];
-        let speed_len = write_optional_ratio_into(snapshot.speedup, &mut speed_buf);
-        let speed = as_str(&speed_buf[..speed_len]);
-        let mut eff_buf = [0u8; 8];
-        let eff_len = write_optional_pct_into(snapshot.efficiency, &mut eff_buf);
-        let eff = as_str(&eff_buf[..eff_len]);
-        alloc::format!(
-            "run={run_number} final={final_score} single={single_norm}/{single_raw} multi={multi_norm}/{multi_raw} legacy={legacy_raw} speedup={speed} efficiency={eff} stages={completed}/{expected} skipped={skipped} failed={failed} cores={workers}",
-            run_number = run_number,
-            final_score = snapshot.report.weighted_final,
-            single_norm = snapshot.report.single_normalized,
-            single_raw = snapshot.report.single_raw,
-            multi_norm = snapshot.report.multi_normalized,
-            multi_raw = snapshot.report.multi_raw,
-            legacy_raw = snapshot.report.legacy_raw_total,
-            speed = speed,
-            eff = eff,
-            completed = snapshot.completed_stages,
-            expected = BENCH_COUNT,
-            skipped = snapshot.skipped_stages,
-            failed = snapshot.failed_stages,
-            workers = workers,
-        )
-    }
-
-    fn aggregate_summary_text(summary: AggregateSummary, runs: usize) -> alloc::string::String {
-        alloc::format!(
-            "Aggregate over {runs} runs: best={best} average={average} min={min} max={max} spread={spread_pct}%",
+        let stability = spread_stability_class(summary.spread_pct);
+        let mut text = alloc::format!(
+            "Aggregate over {runs} runs: current={current_score} median={median} best={best} average={average} min={min} max={max} spread={spread_pct}% ({stability})",
             runs = runs,
+            current_score = current_score,
+            median = summary.median,
             best = summary.best,
             average = summary.average,
             min = summary.min,
             max = summary.max,
             spread_pct = summary.spread_pct,
-        )
+            stability = stability,
+        );
+        if spread_is_unstable(summary.spread_pct) {
+            text.push_str("  ");
+            text.push_str(SPREAD_WARNING);
+        }
+        text
+    }
+
+    fn profile_label(workers: usize) -> alloc::string::String {
+        alloc::format!("{}-core", workers)
     }
 
     fn rebuild_rows(&mut self) {
@@ -845,11 +956,96 @@ impl BenchApp {
             return;
         }
         self.started = true;
-        self.begin_run(1);
+        if WARMUP_ENABLED {
+            self.begin_warmup_run();
+        } else {
+            self.begin_measured_run(1);
+        }
         debug_log(&alloc::format!(
-            "[BENCH] GUI benchmark starting (runs={})",
+            "[BENCH] GUI benchmark starting (runs={}, warmup={})",
+            self.run_target,
+            WARMUP_ENABLED
+        ));
+    }
+
+    fn reset_run_state(&mut self) {
+        self.release_memory();
+        self.results = [None; BENCH_COUNT];
+        self.stage = Stage::Pi;
+        self.running = true;
+        self.multi_started = false;
+        self.multi_handle = None;
+        self.multi_workload = 0;
+        self.multi_timing_pending = false;
+        self.stage_started_tick = 0;
+        self.stage_started_ms = 0;
+        self.multi_busy_verified = false;
+        self.multi_busy_peak = 0;
+        self.cooldown_target = CooldownTarget::None;
+        self.cooldown_until_ms = 0;
+        self.cooldown_yields_left = 0;
+        self.table_scroll_offset = 0;
+        self.pi = PiRunner::new();
+        self.prime = PrimeRunner::new();
+        self.sieve = SieveRunner::new();
+        self.matrix = MatrixRunner::new();
+        self.cpu = CpuRunner::new();
+        multi::reset_async();
+        self.begin_stage_timing();
+        self.rebuild_summary();
+        self.rebuild_rows();
+    }
+
+    fn begin_warmup_run(&mut self) {
+        self.warming_up = true;
+        sunlight_ipc::set_nice(self.pid, -10);
+        self.reset_run_state();
+        self.set_status("Warmup pass running");
+        self.set_detail("Warmup is excluded from scoring and repeat-run aggregates.");
+    }
+
+    fn begin_measured_run(&mut self, run_number: usize) {
+        self.warming_up = false;
+        sunlight_ipc::set_nice(self.pid, -10);
+        self.reset_run_state();
+        self.set_status(&alloc::format!(
+            "Run {}/{} running",
+            run_number,
             self.run_target
         ));
+        self.set_detail("Pi stage started. The process priority is raised to reduce interference.");
+    }
+
+    fn enter_cooldown(&mut self, target: CooldownTarget) {
+        self.running = false;
+        self.cooldown_target = target;
+        self.cooldown_until_ms = monotonic_millis().saturating_add(RUN_COOLDOWN_MS);
+        self.cooldown_yields_left = RUN_COOLDOWN_YIELDS;
+        self.set_status("Cooldown between runs");
+        self.set_detail("Yielding briefly so QEMU and the OS can settle.");
+        self.rebuild_summary();
+        self.rebuild_rows();
+    }
+
+    fn tick_cooldown(&mut self) -> bool {
+        if self.cooldown_yields_left > 0 {
+            self.cooldown_yields_left -= 1;
+            process_yield();
+            return true;
+        }
+        if monotonic_millis() < self.cooldown_until_ms {
+            process_yield();
+            return true;
+        }
+
+        let target = self.cooldown_target;
+        self.cooldown_target = CooldownTarget::None;
+        match target {
+            CooldownTarget::FirstMeasuredRun => self.begin_measured_run(1),
+            CooldownTarget::NextMeasuredRun => self.begin_measured_run(self.current_run_number()),
+            CooldownTarget::None => {}
+        }
+        true
     }
 
     fn release_memory(&mut self) {
@@ -862,36 +1058,6 @@ impl BenchApp {
         debug_log("[BENCH] Memory released");
     }
 
-    fn begin_run(&mut self, run_number: usize) {
-        sunlight_ipc::set_nice(self.pid, -10);
-        if run_number > 1 {
-            self.release_memory();
-        }
-
-        self.results = [None; BENCH_COUNT];
-        self.stage = Stage::Pi;
-        self.running = true;
-        self.multi_started = false;
-        self.multi_handle = None;
-        self.multi_workload = 0;
-        self.stage_started_tick = 0;
-        self.stage_started_ms = 0;
-        self.pi = PiRunner::new();
-        self.prime = PrimeRunner::new();
-        self.sieve = SieveRunner::new();
-        self.matrix = MatrixRunner::new();
-        self.cpu = CpuRunner::new();
-        self.begin_stage_timing();
-        self.set_status(&alloc::format!(
-            "Run {}/{} running",
-            run_number,
-            self.run_target
-        ));
-        self.set_detail("Pi stage started. The process priority is raised to reduce interference.");
-        self.rebuild_summary();
-        self.rebuild_rows();
-    }
-
     fn finish_current_run(&mut self) {
         let snapshot = self.capture_run_snapshot();
         let run_idx = self.completed_runs.min(DEFAULT_RUNS - 1);
@@ -899,13 +1065,18 @@ impl BenchApp {
         self.completed_runs = self.completed_runs.saturating_add(1);
     }
 
-    fn start_next_run_or_finish(&mut self) {
-        self.finish_current_run();
+    fn complete_current_pass(&mut self) {
         sunlight_ipc::set_nice(self.pid, 0);
+        if self.warming_up {
+            self.warming_up = false;
+            debug_log("[BENCH] Warmup pass complete (excluded from scoring)");
+            self.enter_cooldown(CooldownTarget::FirstMeasuredRun);
+            return;
+        }
 
+        self.finish_current_run();
         if self.completed_runs < self.run_target {
-            let next_run = self.current_run_number();
-            self.begin_run(next_run);
+            self.enter_cooldown(CooldownTarget::NextMeasuredRun);
         } else {
             self.finish_all_runs();
         }
@@ -918,7 +1089,9 @@ impl BenchApp {
         self.report_multi_core_activity();
         let detail = self
             .aggregate_summary()
-            .map(|summary| Self::aggregate_summary_text(summary, self.completed_runs))
+            .map(|summary| {
+                Self::aggregate_summary_text(summary, self.completed_runs, self.current_run_score())
+            })
             .unwrap_or_else(|| alloc::string::String::from("Aggregate: n/a"));
         self.set_detail(&detail);
         self.set_status("Benchmark complete");
@@ -930,68 +1103,145 @@ impl BenchApp {
     fn emit_serial_report(&self) {
         let completed_runs = self.completed_runs.min(DEFAULT_RUNS);
         let workers = self.worker_count();
+        let (stages_completed, skipped_stages, failed_stages) = self.current_stage_counts();
+        let profile = Self::profile_label(workers);
+        let report = self.scores();
+        let summary = self.aggregate_summary();
+        let current = report.weighted_final;
+        let speedup = self.multi_speedup_ratio();
+        let efficiency = self.multi_efficiency_pct();
+        let mut speed_buf = [0u8; 16];
+        let speed_len = write_optional_ratio_into(speedup, &mut speed_buf);
+        let speed = as_str(&speed_buf[..speed_len]);
+        let mut eff_buf = [0u8; 8];
+        let eff_len = write_optional_pct_into(efficiency, &mut eff_buf);
+        let eff = as_str(&eff_buf[..eff_len]);
+        let (median, best, average, min, max, spread, stability) = summary
+            .map(|summary| {
+                (
+                    summary.median,
+                    summary.best,
+                    summary.average,
+                    summary.min,
+                    summary.max,
+                    summary.spread_pct,
+                    spread_stability_class(summary.spread_pct),
+                )
+            })
+            .unwrap_or((0, 0, 0, 0, 0, 0, "n/a"));
+
         debug_log("[BENCH] ============================================");
-        debug_log("[BENCH] SunLight Bench v2 Report");
-        debug_log(&alloc::format!("[BENCH] Cores: {}", workers));
+        debug_log("[BENCH] SunLight Bench v2 Stable Report");
+        debug_log("[BENCH] Environment/Profile:");
+        debug_log(&alloc::format!("[BENCH]   Hypervisor: {}", profile::detect_profile()));
+        debug_log(&alloc::format!("[BENCH]   Profile: {}", profile));
+        debug_log(&alloc::format!("[BENCH]   Cores: {}", workers));
         debug_log(&alloc::format!(
-            "[BENCH] Runs: {}/{}",
+            "[BENCH]   Runs: {}/{}",
             completed_runs,
             self.run_target
         ));
         debug_log(&alloc::format!(
-            "[BENCH] Stage count: {}/{} (skipped=0 failed=0)",
-            BENCH_COUNT,
+            "[BENCH]   Stages: {}/{}",
+            stages_completed,
             BENCH_COUNT
         ));
+        debug_log(&alloc::format!("[BENCH]   Skipped: {}", skipped_stages));
+        debug_log(&alloc::format!("[BENCH]   Failed: {}", failed_stages));
+        debug_log(&alloc::format!("[BENCH]   Median v2 Score: {}", median));
+        debug_log(&alloc::format!("[BENCH]   Current: {}", current));
+        debug_log(&alloc::format!("[BENCH]   Best: {}", best));
+        debug_log(&alloc::format!("[BENCH]   Average: {}", average));
+        debug_log(&alloc::format!("[BENCH]   Min: {}", min));
+        debug_log(&alloc::format!("[BENCH]   Max: {}", max));
+        debug_log(&alloc::format!("[BENCH]   Spread: {}%", spread));
+        debug_log(&alloc::format!("[BENCH]   Stability: {}", stability));
+        if spread_is_unstable(spread) {
+            debug_log(&alloc::format!("[BENCH]   {}", SPREAD_WARNING));
+        }
+        debug_log(&alloc::format!(
+            "[BENCH]   Single normalized/raw: {} / {}",
+            report.single_normalized,
+            report.single_raw
+        ));
+        debug_log(&alloc::format!(
+            "[BENCH]   Multi normalized/raw: {} / {}",
+            report.multi_normalized,
+            report.multi_raw
+        ));
+        debug_log(&alloc::format!(
+            "[BENCH]   Legacy Raw Total: {}",
+            report.legacy_raw_total
+        ));
+        debug_log(&alloc::format!("[BENCH]   Speedup: {}", speed));
+        debug_log(&alloc::format!("[BENCH]   Efficiency: {}", eff));
+        debug_log("[BENCH] hypervisor,profile,cores,runs,median,current,best,average,min,max,spread,stability,single_norm,single_raw,multi_norm,multi_raw,legacy_raw_total,speedup,efficiency");
+        debug_log(&alloc::format!(
+            "[BENCH] {hypervisor},{profile},{cores},{runs},{median},{current},{best},{average},{min},{max},{spread},{stability},{single_norm},{single_raw},{multi_norm},{multi_raw},{legacy_raw_total},{speedup},{efficiency}",
+            hypervisor = profile::detect_profile(),
+            profile = profile,
+            cores = workers,
+            runs = completed_runs,
+            median = median,
+            current = current,
+            best = best,
+            average = average,
+            min = min,
+            max = max,
+            spread = spread,
+            stability = stability,
+            single_norm = report.single_normalized,
+            single_raw = report.single_raw,
+            multi_norm = report.multi_normalized,
+            multi_raw = report.multi_raw,
+            legacy_raw_total = report.legacy_raw_total,
+            speedup = speed,
+            efficiency = eff,
+        ));
+
         debug_log("[BENCH] ");
         debug_log("[BENCH] Per-run summary:");
 
         for run_idx in 0..completed_runs {
             let snapshot = self.run_summaries[run_idx];
+            let mut run_speed_buf = [0u8; 16];
+            let run_speed_len = write_optional_ratio_into(snapshot.speedup, &mut run_speed_buf);
+            let run_speed = as_str(&run_speed_buf[..run_speed_len]);
+            let mut run_eff_buf = [0u8; 8];
+            let run_eff_len = write_optional_pct_into(snapshot.efficiency, &mut run_eff_buf);
+            let run_eff = as_str(&run_eff_buf[..run_eff_len]);
+            debug_log(&alloc::format!("[BENCH] Run {}:", run_idx + 1));
             debug_log(&alloc::format!(
-                "[BENCH]   {}",
-                Self::run_summary_text(&snapshot, run_idx + 1, workers)
+                "[BENCH]   Final v2 Score: {}",
+                snapshot.report.weighted_final
             ));
-        }
-
-        if let Some(summary) = self.aggregate_summary() {
-            debug_log("[BENCH] Aggregate:");
             debug_log(&alloc::format!(
-                "[BENCH]   best={} average={} min={} max={} spread={}%",
-                summary.best,
-                summary.average,
-                summary.min,
-                summary.max,
-                summary.spread_pct
+                "[BENCH]   Single normalized/raw: {} / {}",
+                snapshot.report.single_normalized,
+                snapshot.report.single_raw
             ));
-        }
-
-        debug_log("[BENCH] CSV:");
-        debug_log(
-            "[BENCH] run,final,single_norm,single_raw,multi_norm,multi_raw,legacy_raw,speedup,efficiency,completed,skipped,failed",
-        );
-        for run_idx in 0..completed_runs {
-            let snapshot = self.run_summaries[run_idx];
-            let mut speed_buf = [0u8; 16];
-            let speed_len = write_optional_ratio_into(snapshot.speedup, &mut speed_buf);
-            let speed = as_str(&speed_buf[..speed_len]);
-            let mut eff_buf = [0u8; 8];
-            let eff_len = write_optional_pct_into(snapshot.efficiency, &mut eff_buf);
-            let eff = as_str(&eff_buf[..eff_len]);
             debug_log(&alloc::format!(
-                "[BENCH] {run},{final_score},{single_norm},{single_raw},{multi_norm},{multi_raw},{legacy_raw},{speed},{eff},{completed},{skipped},{failed}",
-                run = run_idx + 1,
-                final_score = snapshot.report.weighted_final,
-                single_norm = snapshot.report.single_normalized,
-                single_raw = snapshot.report.single_raw,
-                multi_norm = snapshot.report.multi_normalized,
-                multi_raw = snapshot.report.multi_raw,
-                legacy_raw = snapshot.report.legacy_raw_total,
-                speed = speed,
-                eff = eff,
-                completed = snapshot.completed_stages,
-                skipped = snapshot.skipped_stages,
-                failed = snapshot.failed_stages,
+                "[BENCH]   Multi normalized/raw: {} / {}",
+                snapshot.report.multi_normalized,
+                snapshot.report.multi_raw
+            ));
+            debug_log(&alloc::format!(
+                "[BENCH]   Legacy Raw Total: {}",
+                snapshot.report.legacy_raw_total
+            ));
+            debug_log(&alloc::format!("[BENCH]   Speedup: {}", run_speed));
+            debug_log(&alloc::format!("[BENCH]   Efficiency: {}", run_eff));
+            debug_log(&alloc::format!(
+                "[BENCH]   Stages: {}/{} skipped={} failed={}",
+                snapshot.completed_stages,
+                BENCH_COUNT,
+                snapshot.skipped_stages,
+                snapshot.failed_stages
+            ));
+            debug_log(&alloc::format!("[BENCH]   Cores: {}", workers));
+            debug_log(&alloc::format!(
+                "[BENCH]   Hypervisor/Profile: {}",
+                profile::detect_profile()
             ));
         }
 
@@ -1044,22 +1294,22 @@ impl BenchApp {
         match self.multi_workload {
             1 => {
                 self.stage = Stage::MultiMatrix;
+                self.begin_stage_timing();
                 self.set_status("Parallel matrix started");
                 self.set_detail(
                     "Fixed-total-work: all workers split one 1024^2 matrix multiply to measure speedup.",
                 );
-                self.begin_stage_timing();
             }
             2 => {
                 self.stage = Stage::MultiSha;
+                self.begin_stage_timing();
                 self.set_status("Parallel SHA-256 started");
                 self.set_detail(
                     "Work-per-core: each worker hashes 16 MiB so throughput scaling stays visible.",
                 );
-                self.begin_stage_timing();
             }
             _ => {
-                self.start_next_run_or_finish();
+                self.complete_current_pass();
             }
         }
     }
@@ -1082,11 +1332,21 @@ impl BenchApp {
                 self.running = false;
                 return true;
             }
+            self.multi_timing_pending = true;
             self.verify_multi_core_activity();
             true
         } else if let Some(cycles) = multi::take_async_result() {
             self.verify_multi_core_activity();
-            let metrics = self.stage_metrics(
+            if self.multi_timing_pending {
+                self.stage_started_tick = multi::measured_start_tick(workers);
+                self.stage_started_ms = multi::measured_start_ms(workers);
+            }
+            self.multi_timing_pending = false;
+            let metrics = self.stage_metrics_from_times(
+                self.stage_started_tick,
+                self.stage_started_ms,
+                multi::measured_end_tick(workers),
+                multi::measured_end_ms(workers),
                 workload.total_work_units(workers),
                 workers as u32,
                 cycles,
@@ -1310,28 +1570,19 @@ impl App for BenchApp {
     fn view(&mut self, canvas: &mut sunlight_ui::Canvas, theme: &sunlight_ui::Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
 
-        let content = self.content_rect();
-        Panel::new(content).draw(canvas, theme);
-
+        // ── Combined header + toolbar ────────────────────────────────────────
         let header = self.header_rect();
         canvas.fill_rect(header, theme.panel_alt);
         canvas.hbar(header.x, header.bottom() - 1, header.w, 1, theme.accent);
         Label::new(
-            Rect::new(header.x + 12, header.y + 6, 260, 20),
+            Rect::new(header.x + 12, header.y + 3, 120, HEADER_H - 6),
             "SunLight Bench",
         )
         .with_font(&F_MED)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(header.x + 12, header.y + 26, 520, 14),
-            "Windowed performance suite with live progress, orange telemetry, and chunked long runs.",
-        )
-        .dim()
-        .with_font(&F_SMALL)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(header.right() - 118, header.y + 12, 106, 14),
-            "SunlightOS GUI",
+            Rect::new(header.x + 116, header.y + 4, 280, HEADER_H - 8),
+            self.profile_str(),
         )
         .dim()
         .with_font(&F_SMALL)
@@ -1341,115 +1592,113 @@ impl App for BenchApp {
         let labels = ["Run", "Serial", "Close"];
         for (idx, rect) in buttons.iter().enumerate() {
             let mut button = if idx == 0 {
-                Button::new(*rect, labels[idx]).with_font(&F_UI)
+                Button::new(*rect, labels[idx]).with_font(&F_SMALL)
             } else {
-                Button::secondary(*rect, labels[idx]).with_font(&F_UI)
+                Button::secondary(*rect, labels[idx]).with_font(&F_SMALL)
             };
             button.state = self.button_state(idx);
             button.draw(canvas, theme);
         }
 
+        // ── Overview (compact) ──────────────────────────────────────────────
         let summary = self.summary_rect();
         Panel::with_title(summary, "Overview").draw(canvas, theme);
-        StatusBadge::new(summary.x + 14, summary.y + 26, self.status_badge())
+
+        let ov = summary.y + 22;
+        StatusBadge::new(summary.x + 14, ov, self.status_badge())
             .with_label(self.stage.label())
             .draw(canvas, theme);
-
         Label::new(
-            Rect::new(summary.x + 120, summary.y + 20, 420, 16),
+            Rect::new(summary.x + 120, ov - 2, 260, 16),
             self.final_str(),
         )
         .with_font(&F_MED)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 560, summary.y + 22, 200, 14),
+            Rect::new(summary.x + 370, ov + 1, 140, 14),
+            self.core_str(),
+        )
+        .with_font(&F_UI)
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 460, ov + 1, summary.w.saturating_sub(474), 14),
+            self.run_str(),
+        )
+        .with_font(&F_UI)
+        .draw(canvas, theme);
+
+        let ov2 = ov + 18;
+        Label::new(
+            Rect::new(summary.x + 14, ov2, 390, 14),
+            self.single_str(),
+        )
+        .with_font(&F_UI)
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 400, ov2, 260, 14),
+            self.multi_str(),
+        )
+        .with_font(&F_UI)
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 660, ov2, 180, 14),
             self.legacy_str(),
         )
         .dim()
         .with_font(&F_SMALL)
         .draw(canvas, theme);
 
+        let ov3 = ov2 + 16;
         Label::new(
-            Rect::new(summary.x + 14, summary.y + 42, 400, 14),
-            self.single_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 420, summary.y + 42, 400, 14),
-            self.multi_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 14, summary.y + 60, 120, 14),
-            self.core_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 110, summary.y + 60, 690, 14),
-            self.run_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 14, summary.y + 78, 280, 14),
+            Rect::new(summary.x + 14, ov3, summary.w.saturating_sub(28), 14),
             self.phase_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
-        Label::new(
-            Rect::new(
-                summary.x + 14,
-                summary.y + 96,
-                summary.w.saturating_sub(28),
-                14,
-            ),
-            self.detail_str(),
-        )
-        .dim()
-        .with_font(&F_SMALL)
-        .draw(canvas, theme);
+
         ProgressBar::new(
             Rect::new(
                 summary.x + 14,
-                summary.bottom() - 28,
+                summary.bottom() - 20,
                 summary.w.saturating_sub(28),
-                14,
+                12,
             ),
             self.global_progress(),
         )
         .with_pct()
         .draw(canvas, theme);
 
+        // ── Current Stage (collapsed when finished) ──────────────────────────
         let stage = self.stage_rect();
-        Panel::with_title(stage, "Current Stage").draw(canvas, theme);
-        Label::new(
-            Rect::new(stage.x + 14, stage.y + 26, stage.w.saturating_sub(28), 16),
-            self.stage_name(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(stage.x + 14, stage.y + 46, stage.w.saturating_sub(28), 14),
-            self.stage_note(),
-        )
-        .dim()
-        .with_font(&F_SMALL)
-        .draw(canvas, theme);
-        ProgressBar::new(
-            Rect::new(
-                stage.x + 14,
-                stage.bottom() - 34,
-                stage.w.saturating_sub(28),
-                16,
-            ),
-            self.stage_progress_bp() as f32 / 10_000.0,
-        )
-        .with_pct()
-        .draw(canvas, theme);
+        if stage.h > 0 {
+            Panel::with_title(stage, "Current Stage").draw(canvas, theme);
+            Label::new(
+                Rect::new(stage.x + 14, stage.y + 22, stage.w.saturating_sub(28), 16),
+                self.stage_name(),
+            )
+            .with_font(&F_UI)
+            .draw(canvas, theme);
+            Label::new(
+                Rect::new(stage.x + 14, stage.y + 40, stage.w.saturating_sub(28), 14),
+                self.stage_note(),
+            )
+            .dim()
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
+            ProgressBar::new(
+                Rect::new(
+                    stage.x + 14,
+                    stage.bottom() - 28,
+                    stage.w.saturating_sub(28),
+                    14,
+                ),
+                self.stage_progress_bp() as f32 / 10_000.0,
+            )
+            .with_pct()
+            .draw(canvas, theme);
+        }
 
+        // ── Results ─────────────────────────────────────────────────────────
         let results = self.results_rect();
         Panel::with_title(results, "Results").draw(canvas, theme);
         let mut rows = [EMPTY_ROW; BENCH_COUNT];
@@ -1465,6 +1714,7 @@ impl App for BenchApp {
             &row_refs,
         )
         .with_selected(self.current_index())
+        .with_scroll_offset(self.table_scroll_offset)
         .with_font(&F_UI)
         .draw(canvas, theme);
 
@@ -1472,14 +1722,22 @@ impl App for BenchApp {
             self.status_rect(),
             self.status_str(),
             self.stage.label(),
-            self.core_str(),
+            self.profile_str(),
         )
         .draw(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
-            Event::Tick => self.tick_benchmark(),
+            Event::Tick => {
+                if self.running {
+                    self.tick_benchmark()
+                } else if self.cooldown_target != CooldownTarget::None {
+                    self.tick_cooldown()
+                } else {
+                    false
+                }
+            }
             Event::MouseMove { x, y } => {
                 let next = self
                     .button_rects()
@@ -1509,6 +1767,45 @@ impl App for BenchApp {
                 if keycode == KEY_ENTER && !self.started {
                     self.start();
                     return true;
+                }
+                // Table scrolling with arrow keys / page keys
+                if self.completed_runs > 0 || self.results.iter().any(|e| e.is_some()) {
+                    let results = self.results_rect();
+                    let table_h = results.h.saturating_sub(34);
+                    let row_h = (sun_font::line_height(FontRole::UiRegular) + 5).max(16);
+                    let visible = (table_h.saturating_sub(24) / row_h) as usize;
+                    let max_offset = BENCH_COUNT.saturating_sub(visible);
+                    match keycode {
+                        KEY_DOWN => {
+                            if self.table_scroll_offset < max_offset {
+                                self.table_scroll_offset += 1;
+                                return true;
+                            }
+                        }
+                        KEY_UP => {
+                            if self.table_scroll_offset > 0 {
+                                self.table_scroll_offset -= 1;
+                                return true;
+                            }
+                        }
+                        KEY_PGDN => {
+                            let step = visible.saturating_sub(1).max(1);
+                            let new_offset = self.table_scroll_offset.saturating_add(step).min(max_offset);
+                            if new_offset != self.table_scroll_offset {
+                                self.table_scroll_offset = new_offset;
+                                return true;
+                            }
+                        }
+                        KEY_PGUP => {
+                            let step = visible.saturating_sub(1).max(1);
+                            let new_offset = self.table_scroll_offset.saturating_sub(step);
+                            if new_offset != self.table_scroll_offset {
+                                self.table_scroll_offset = new_offset;
+                                return true;
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 false
             }

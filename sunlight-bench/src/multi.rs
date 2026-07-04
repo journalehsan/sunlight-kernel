@@ -14,6 +14,7 @@ use crate::scoring::WorkloadClass;
 use crate::thread::{arrive_and_wait, barrier_reset, spawn};
 use core::hint::black_box;
 use core::sync::atomic::{AtomicU64, Ordering};
+use sunlight_ipc::monotonic_millis;
 
 pub const NAME_INTEGER: &str = "Parallel Integer Mix (64M ops/core)";
 pub const NAME_MATRIX: &str = "Parallel Matrix Multiply 1024^2";
@@ -29,7 +30,15 @@ static THREAD_START: [AtomicU64; MAX_CORES] = {
     const ZERO: AtomicU64 = AtomicU64::new(0);
     [ZERO; MAX_CORES]
 };
+static THREAD_START_MS: [AtomicU64; MAX_CORES] = {
+    const ZERO: AtomicU64 = AtomicU64::new(0);
+    [ZERO; MAX_CORES]
+};
 static THREAD_END: [AtomicU64; MAX_CORES] = {
+    const ZERO: AtomicU64 = AtomicU64::new(0);
+    [ZERO; MAX_CORES]
+};
+static THREAD_END_MS: [AtomicU64; MAX_CORES] = {
     const ZERO: AtomicU64 = AtomicU64::new(0);
     [ZERO; MAX_CORES]
 };
@@ -58,6 +67,7 @@ unsafe extern "C" fn integer_mix_worker(slot: u64) {
 
     let slot_usize = slot as usize;
     THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
+    THREAD_START_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
 
     let ops_per_core: u64 = 64_000_000;
     let progress_chunk: u64 = 1_000_000;
@@ -79,6 +89,7 @@ unsafe extern "C" fn integer_mix_worker(slot: u64) {
     }
 
     black_box(acc);
+    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
     THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
 }
 
@@ -90,6 +101,7 @@ unsafe extern "C" fn matrix_mix_worker(slot: u64) {
 
     let slot_usize = slot as usize;
     THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
+    THREAD_START_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
 
     let a_ptr = MATRIX_A_PTR.load(Ordering::SeqCst) as *const i32;
     let b_ptr = MATRIX_B_PTR.load(Ordering::SeqCst) as *const i32;
@@ -128,6 +140,7 @@ unsafe extern "C" fn matrix_mix_worker(slot: u64) {
 
     black_box((a_ptr, c_ptr));
     THREAD_PROGRESS[slot_usize].store(total_ops, Ordering::SeqCst);
+    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
     THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
 }
 
@@ -139,6 +152,7 @@ unsafe extern "C" fn sha256_mix_worker(slot: u64) {
 
     let slot_usize = slot as usize;
     THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
+    THREAD_START_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
 
     let total_bytes = HASH_BYTES_PER_CORE;
     const CHUNK: usize = 4096;
@@ -162,6 +176,7 @@ unsafe extern "C" fn sha256_mix_worker(slot: u64) {
     }
 
     THREAD_PROGRESS[slot_usize].store(total_chunks as u64, Ordering::SeqCst);
+    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
     THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
 }
 
@@ -171,6 +186,8 @@ fn reset_statics(ncores: usize) {
     TOTAL_CORES.store(ncores as u64, Ordering::SeqCst);
     for idx in 0..ncores {
         THREAD_START[idx].store(0, Ordering::SeqCst);
+        THREAD_START_MS[idx].store(0, Ordering::SeqCst);
+        THREAD_END_MS[idx].store(0, Ordering::SeqCst);
         THREAD_END[idx].store(0, Ordering::SeqCst);
         THREAD_PROGRESS[idx].store(0, Ordering::SeqCst);
     }
@@ -328,7 +345,9 @@ pub fn start_async(ncores: usize, workload: WorkloadId) -> Option<AsyncHandle> {
     for idx in 0..ncores {
         THREAD_PROGRESS[idx].store(0, Ordering::SeqCst);
         THREAD_END[idx].store(0, Ordering::SeqCst);
+        THREAD_END_MS[idx].store(0, Ordering::SeqCst);
         THREAD_START[idx].store(0, Ordering::SeqCst);
+        THREAD_START_MS[idx].store(0, Ordering::SeqCst);
     }
 
     let tid = spawn(async_entry, ncores as u64);
@@ -377,4 +396,56 @@ pub fn take_async_result() -> Option<u64> {
 pub fn reset_async() {
     ASYNC_STATE.store(0, Ordering::SeqCst);
     ASYNC_RESULT.store(0, Ordering::SeqCst);
+    ASYNC_CORES.store(1, Ordering::SeqCst);
+    ASYNC_WORKLOAD.store(0, Ordering::SeqCst);
+    MATRIX_A_PTR.store(0, Ordering::SeqCst);
+    MATRIX_B_PTR.store(0, Ordering::SeqCst);
+    MATRIX_C_PTR.store(0, Ordering::SeqCst);
+    for idx in 0..MAX_CORES {
+        THREAD_START[idx].store(0, Ordering::SeqCst);
+        THREAD_START_MS[idx].store(0, Ordering::SeqCst);
+        THREAD_END[idx].store(0, Ordering::SeqCst);
+        THREAD_END_MS[idx].store(0, Ordering::SeqCst);
+        THREAD_PROGRESS[idx].store(0, Ordering::SeqCst);
+    }
+    barrier_reset();
+}
+
+/// Earliest worker start tick after the common barrier (for measured multi stages).
+pub fn measured_start_tick(ncores: usize) -> u64 {
+    let n = ncores.min(MAX_CORES).max(1);
+    (0..n)
+        .map(|idx| THREAD_START[idx].load(Ordering::SeqCst))
+        .filter(|tick| *tick > 0)
+        .min()
+        .unwrap_or(0)
+}
+
+/// Earliest worker start wall time after the common barrier.
+pub fn measured_start_ms(ncores: usize) -> u64 {
+    let n = ncores.min(MAX_CORES).max(1);
+    (0..n)
+        .map(|idx| THREAD_START_MS[idx].load(Ordering::SeqCst))
+        .filter(|ms| *ms > 0)
+        .min()
+        .unwrap_or(0)
+}
+
+/// Latest worker end tick after the common barrier.
+pub fn measured_end_tick(ncores: usize) -> u64 {
+    let n = ncores.min(MAX_CORES).max(1);
+    (0..n)
+        .map(|idx| THREAD_END[idx].load(Ordering::SeqCst))
+        .max()
+        .unwrap_or(0)
+}
+
+/// Latest worker end wall time after the common barrier.
+pub fn measured_end_ms(ncores: usize) -> u64 {
+    let n = ncores.min(MAX_CORES).max(1);
+    (0..n)
+        .map(|idx| THREAD_END_MS[idx].load(Ordering::SeqCst))
+        .filter(|ms| *ms > 0)
+        .max()
+        .unwrap_or(0)
 }

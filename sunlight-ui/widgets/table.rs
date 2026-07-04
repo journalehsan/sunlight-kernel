@@ -1,9 +1,10 @@
-//! Table widget — fixed-column data grid with alternating row colors.
+//! Table widget — fixed-column data grid with alternating row colors and scrolling.
 
 use crate::font::VecText;
 use crate::geom::Rect;
 use crate::paint::Canvas;
 use crate::theme::Theme;
+use core::cmp;
 
 pub struct Column<'a> {
     pub header: &'a str,
@@ -16,6 +17,7 @@ pub struct Table<'a> {
     pub columns: &'a [Column<'a>],
     pub rows: &'a [&'a [&'a str]],
     pub selected: Option<usize>,
+    pub scroll_offset: usize,
     pub header_h: u32,
     pub row_h: u32,
     font: Option<&'a dyn VecText>,
@@ -28,6 +30,7 @@ impl<'a> Table<'a> {
             columns,
             rows,
             selected: None,
+            scroll_offset: 0,
             header_h: 18,
             row_h: 16,
             font: None,
@@ -39,11 +42,15 @@ impl<'a> Table<'a> {
         self
     }
 
+    pub fn with_scroll_offset(mut self, offset: usize) -> Self {
+        self.scroll_offset = offset;
+        self
+    }
+
     /// Enable vector font rendering and bump row heights to fit the larger glyphs.
     pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
         self.font = Some(font);
         let lh = font.line_height();
-        // Ensure comfortable padding around the font.
         if self.header_h < lh + 8 {
             self.header_h = lh + 8;
         }
@@ -59,6 +66,18 @@ impl<'a> Table<'a> {
                 .iter()
                 .map(|c| c.width as i32)
                 .sum::<i32>()
+    }
+
+    /// Visible rows fitting in the widget area, clamped to available data.
+    fn visible_count(&self) -> usize {
+        let max_fit = ((self.rect.h.saturating_sub(self.header_h)) / self.row_h) as usize;
+        max_fit.min(self.rows.len().saturating_sub(self.scroll_offset))
+    }
+
+    /// Maximum scroll offset so the last row is still (at least partially) visible.
+    fn max_scroll(&self) -> usize {
+        let max_fit = ((self.rect.h.saturating_sub(self.header_h)) / self.row_h) as usize;
+        self.rows.len().saturating_sub(max_fit)
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -102,16 +121,21 @@ impl<'a> Table<'a> {
         }
 
         // ── Rows ─────────────────────────────────────────────────────────────
-        let visible_rows = ((self.rect.h.saturating_sub(self.header_h)) / self.row_h) as usize;
-        let row_count = self.rows.len().min(visible_rows);
+        let visible_rows = self.visible_count();
+        let offset = self.scroll_offset;
 
-        for (row_idx, row_data) in self.rows.iter().take(row_count).enumerate() {
-            let ry = self.rect.y + self.header_h as i32 + (row_idx as u32 * self.row_h) as i32;
+        for local_idx in 0..visible_rows {
+            let row_idx = offset + local_idx;
+            let row_data = match self.rows.get(row_idx) {
+                Some(r) => r,
+                None => break,
+            };
+            let ry = self.rect.y + self.header_h as i32 + (local_idx as u32 * self.row_h) as i32;
             let row_rect = Rect::new(self.rect.x, ry, self.rect.w, self.row_h);
 
             let bg = if self.selected == Some(row_idx) {
                 theme.accent.darken(180)
-            } else if row_idx % 2 == 0 {
+            } else if local_idx % 2 == 0 {
                 theme.panel
             } else {
                 theme.panel_alt
@@ -156,11 +180,35 @@ impl<'a> Table<'a> {
             );
         }
 
+        // ── Scroll indicators ────────────────────────────────────────────────
+        if self.max_scroll() > 0 {
+            let scroll_indicator_color = theme.text_dim;
+            let indicator_size = 4;
+            let indicator_y = self.rect.y + self.header_h as i32 + 4;
+            if offset > 0 {
+                // Up arrow indicator (top of content area)
+                let cx2 = self.rect.right() - 10;
+                canvas.fill_rect(
+                    Rect::new(cx2, indicator_y, 6, indicator_size),
+                    scroll_indicator_color,
+                );
+            }
+            if offset + visible_rows < self.rows.len() {
+                // Down arrow indicator (bottom of content area)
+                let cx2 = self.rect.right() - 10;
+                let by = self.rect.bottom() - indicator_size as i32 - 4;
+                canvas.fill_rect(
+                    Rect::new(cx2, by, 6, indicator_size),
+                    scroll_indicator_color,
+                );
+            }
+        }
+
         // Outer border
         canvas.draw_rect(self.rect, theme.border);
     }
 
-    /// Returns the row index clicked at `(x, y)`, if any.
+    /// Returns the logical row index clicked at `(x, y)`, if any.
     pub fn hit_test(&self, x: i32, y: i32) -> Option<usize> {
         let p = crate::geom::Point::new(x, y);
         if !self.rect.contains(p) {
@@ -170,11 +218,18 @@ impl<'a> Table<'a> {
         if rel_y < 0 {
             return None;
         }
-        let row = (rel_y as u32) / self.row_h;
-        if row < self.rows.len() as u32 {
-            Some(row as usize)
+        let local_row = (rel_y as u32) / self.row_h;
+        let row = self.scroll_offset + local_row as usize;
+        if row < self.rows.len() {
+            Some(row)
         } else {
             None
         }
+    }
+
+    /// Number of rows that fit in the visible area (for scroll calculation).
+    pub fn visible_row_count(&self) -> usize {
+        let max_fit = ((self.rect.h.saturating_sub(self.header_h)) / self.row_h) as usize;
+        cmp::min(max_fit, self.rows.len())
     }
 }

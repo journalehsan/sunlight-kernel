@@ -309,9 +309,11 @@ pub fn format_bench_v2_summary(
     stages_completed: usize,
     speedup: &str,
     efficiency: &str,
+    hypervisor: &str,
 ) -> String {
     alloc::format!(
         "SunLight Bench v2 Summary\n\
+         Hypervisor/Profile: {hypervisor}\n\
          Cores: {cores}\n\
          Stages completed: {stages_completed}/{BENCH_COUNT}\n\
          \n\
@@ -322,6 +324,7 @@ pub fn format_bench_v2_summary(
          \n\
          Speedup: {speedup}\n\
          Efficiency: {efficiency}",
+        hypervisor = hypervisor,
         cores = cores,
         stages_completed = stages_completed,
         single_raw = report.single_raw,
@@ -372,6 +375,59 @@ pub fn total_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
     compute_legacy_raw_total(entries)
 }
 
+/// Spread percentage from min/max relative to the average: `(max - min) * 100 / average`.
+pub fn spread_pct_from_scores(scores: &[u64]) -> u64 {
+    if scores.is_empty() {
+        return 0;
+    }
+    let min = scores.iter().copied().min().unwrap_or(0);
+    let max = scores.iter().copied().max().unwrap_or(0);
+    let sum: u128 = scores.iter().map(|score| *score as u128).sum();
+    let average = ((sum + (scores.len() as u128 / 2)) / scores.len() as u128) as u64;
+    if average == 0 {
+        0
+    } else {
+        let spread = max.saturating_sub(min) as u128;
+        ((spread.saturating_mul(100) + (average as u128 / 2)) / average as u128) as u64
+    }
+}
+
+/// Median of an unsorted score slice.
+pub fn median_score(scores: &[u64]) -> u64 {
+    if scores.is_empty() {
+        return 0;
+    }
+    let mut sorted = alloc::vec::Vec::with_capacity(scores.len());
+    sorted.extend_from_slice(scores);
+    sorted.sort_unstable();
+    let mid = sorted.len() / 2;
+    if sorted.len() % 2 == 0 {
+        (sorted[mid - 1] + sorted[mid]).saturating_add(1) / 2
+    } else {
+        sorted[mid]
+    }
+}
+
+/// Human-readable stability label for repeat-run spread.
+pub fn spread_stability_class(spread_pct: u64) -> &'static str {
+    if spread_pct <= 5 {
+        "excellent"
+    } else if spread_pct <= 10 {
+        "good"
+    } else if spread_pct <= 15 {
+        "acceptable"
+    } else if spread_pct <= 20 {
+        "noisy"
+    } else {
+        "unstable"
+    }
+}
+
+/// True when repeat-run variance is high enough to warn consumers.
+pub fn spread_is_unstable(spread_pct: u64) -> bool {
+    spread_pct > 20
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,6 +465,19 @@ mod tests {
     }
 
     #[test]
+    fn spread_and_median_helpers() {
+        let scores = [672u64, 835, 1156];
+        assert_eq!(median_score(&scores), 835);
+        assert_eq!(spread_stability_class(4), "excellent");
+        assert_eq!(spread_stability_class(8), "good");
+        assert_eq!(spread_stability_class(12), "acceptable");
+        assert_eq!(spread_stability_class(18), "noisy");
+        assert_eq!(spread_stability_class(58), "unstable");
+        assert!(spread_is_unstable(21));
+        assert!(!spread_is_unstable(20));
+    }
+
+    #[test]
     fn v2_summary_uses_clear_labels() {
         let report = ScoreReport {
             single_raw: 1_529_429,
@@ -419,7 +488,7 @@ mod tests {
             weighted_final: 1_500,
         };
 
-        let summary = format_bench_v2_summary(report, 12, 8, "2.00x", "83%");
+        let summary = format_bench_v2_summary(report, 12, 8, "2.00x", "83%", "QEMU");
 
         assert!(summary.contains("Final v2 Score: 1500"));
         assert!(summary.contains("Single normalized/raw: 1529 / 1529429"));
