@@ -32,6 +32,7 @@ pub enum SunlightSyscall {
     TtyStdinPush = 23,
     TtyStdoutPull = 24,
     ProcessIsAlive = 25,
+    WaitPid = 32,
     GetPid = 33,
     Kill = 72,
     // NOTE: 50 belongs to sys_mmap in the kernel dispatcher — GetTimeUtc
@@ -1820,6 +1821,31 @@ pub fn process_is_alive(pid: u64) -> bool {
     // SAFETY: ProcessIsAlive takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ProcessIsAlive, pid, 0, 0, 0, 0, 0, 0) };
     ret == 1
+}
+
+/// Non-blocking child wait. Returns the exit code once `pid` exits, or `None`
+/// while it is still running or is not recognized as a child.
+pub fn try_waitpid(pid: u64) -> Option<u64> {
+    // SAFETY: WaitPid takes no user pointers.
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::WaitPid, pid, 0, 0, 0, 0, 0, 0) };
+    if ret == u64::MAX || ret == u64::MAX - 1 {
+        None
+    } else {
+        Some(ret)
+    }
+}
+
+/// Blocking child wait built on `try_waitpid` + yield.
+pub fn waitpid(pid: u64) -> u64 {
+    loop {
+        if let Some(code) = try_waitpid(pid) {
+            return code;
+        }
+        if !process_is_alive(pid) {
+            return u64::MAX;
+        }
+        process_yield();
+    }
 }
 
 pub fn getpid() -> u64 {

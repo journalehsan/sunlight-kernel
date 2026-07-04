@@ -6,6 +6,7 @@
 extern crate alloc;
 
 mod bench;
+mod bench_mode;
 mod cpu;
 mod matrix;
 mod multi;
@@ -24,10 +25,14 @@ use matrix::MatrixRunner;
 use multi::{AsyncHandle, WorkloadId};
 use pi::PiRunner;
 use prime_scan::PrimeRunner;
-use scoring::{make_entry, single_score, multi_score, total_score, Entry, BENCH_COUNT, SINGLE_COUNT};
+use bench_mode::{enter_parallel_phase, leave_parallel_phase, parallel_workers};
+use scoring::{
+    make_entry, multi_fixed_score, multi_work_per_core_score, score_report, Entry, ScoreReport,
+    StageMetrics, WorkloadClass, BENCH_COUNT, SINGLE_COUNT,
+};
 use sieve::SieveRunner;
 use sun_font::{FontRole, VecFont};
-use sunlight_ipc::{debug_log, process_yield, ProcessExit};
+use sunlight_ipc::{debug_log, monotonic_millis, process_yield, ProcessExit};
 use sunlight_telemetry::{TelemetryPage, MAX_CORES as TELEMETRY_MAX_CORES, TELEMETRY_MAGIC};
 use sunlight_ui::{
     request_close,
@@ -48,7 +53,7 @@ const WIN_W: u32 = 880;
 const WIN_H: u32 = 620;
 const HEADER_H: u32 = 46;
 const TOOLBAR_H: u32 = 30;
-const SUMMARY_H: u32 = 130;
+const SUMMARY_H: u32 = 148;
 const STAGE_H: u32 = 116;
 const STATUS_H: u32 = 18;
 const MARGIN: i32 = 14;
@@ -110,7 +115,9 @@ unsafe impl GlobalAlloc for BumpAlloc {
             }
             match HEAP_NEXT.compare_exchange(cur, next, Ordering::SeqCst, Ordering::Relaxed) {
                 Ok(_) => {
-                    return core::ptr::addr_of_mut!(HEAP_DATA.0).cast::<u8>().add(aligned);
+                    return core::ptr::addr_of_mut!(HEAP_DATA.0)
+                        .cast::<u8>()
+                        .add(aligned);
                 }
                 Err(actual) => cur = actual,
             }
@@ -190,10 +197,16 @@ struct BenchApp {
     multi_len: usize,
     total_text: [u8; 24],
     total_len: usize,
+    legacy_text: [u8; 28],
+    legacy_len: usize,
+    norm_text: [u8; 56],
+    norm_len: usize,
     core_text: [u8; 24],
     core_len: usize,
     phase_text: [u8; 32],
     phase_len: usize,
+    speed_text: [u8; 48],
+    speed_len: usize,
     results: [Option<Entry>; BENCH_COUNT],
     row_bufs: [[[u8; CELL_BUF]; TABLE_COLS]; BENCH_COUNT],
     row_lens: [[usize; TABLE_COLS]; BENCH_COUNT],
@@ -205,6 +218,8 @@ struct BenchApp {
     multi_started: bool,
     multi_handle: Option<AsyncHandle>,
     multi_workload: u8,
+    stage_started_tick: u64,
+    stage_started_ms: u64,
     telemetry_ptr: *const TelemetryPage,
     multi_busy_verified: bool,
     multi_busy_peak: usize,
@@ -230,10 +245,16 @@ impl BenchApp {
             multi_len: 0,
             total_text: [0; 24],
             total_len: 0,
+            legacy_text: [0; 28],
+            legacy_len: 0,
+            norm_text: [0; 56],
+            norm_len: 0,
             core_text: [0; 24],
             core_len: 0,
             phase_text: [0; 32],
             phase_len: 0,
+            speed_text: [0; 48],
+            speed_len: 0,
             results: [None; BENCH_COUNT],
             row_bufs: [[[0; CELL_BUF]; TABLE_COLS]; BENCH_COUNT],
             row_lens: [[0; TABLE_COLS]; BENCH_COUNT],
@@ -245,6 +266,8 @@ impl BenchApp {
             multi_started: false,
             multi_handle: None,
             multi_workload: 0,
+            stage_started_tick: 0,
+            stage_started_ms: 0,
             telemetry_ptr: map_telemetry_page(),
             multi_busy_verified: false,
             multi_busy_peak: 0,
@@ -286,12 +309,53 @@ impl BenchApp {
         as_str(&self.total_text[..self.total_len])
     }
 
+    fn legacy_str(&self) -> &str {
+        as_str(&self.legacy_text[..self.legacy_len])
+    }
+
+    fn norm_str(&self) -> &str {
+        as_str(&self.norm_text[..self.norm_len])
+    }
+
     fn core_str(&self) -> &str {
         as_str(&self.core_text[..self.core_len])
     }
 
     fn phase_str(&self) -> &str {
         as_str(&self.phase_text[..self.phase_len])
+    }
+
+    fn speed_str(&self) -> &str {
+        as_str(&self.speed_text[..self.speed_len])
+    }
+
+    fn elapsed_ms(entry: Entry) -> u64 {
+        if entry.end_ms > entry.start_ms {
+            entry.end_ms - entry.start_ms
+        } else {
+            (entry.end_tick.saturating_sub(entry.start_tick) / 1_000_000).max(1)
+        }
+    }
+
+    fn multi_speedup_ratio(&self) -> Option<(u64, u64)> {
+        let single = self.results[3]?;
+        let multi = self.results[6]?;
+        let single_ms = Self::elapsed_ms(single);
+        let multi_ms = Self::elapsed_ms(multi);
+        if single_ms == 0 || multi_ms == 0 {
+            return None;
+        }
+        Some((single_ms, multi_ms))
+    }
+
+    fn multi_efficiency_pct(&self) -> Option<u64> {
+        let (single_ms, multi_ms) = self.multi_speedup_ratio()?;
+        let cores = self.worker_count().max(1) as u64;
+        if multi_ms == 0 {
+            None
+        } else {
+            Some(single_ms.saturating_mul(100) / (multi_ms.saturating_mul(cores)))
+        }
     }
 
     fn content_rect(&self) -> Rect {
@@ -358,31 +422,89 @@ impl BenchApp {
         rects
     }
 
+    fn begin_stage_timing(&mut self) {
+        self.stage_started_tick = bench::rdtsc();
+        self.stage_started_ms = monotonic_millis();
+    }
+
+    fn stage_metrics(
+        &self,
+        work_units: u64,
+        workers: u32,
+        cycles: u64,
+        class: WorkloadClass,
+    ) -> StageMetrics {
+        let end_tick = bench::rdtsc();
+        let end_ms = monotonic_millis();
+        StageMetrics {
+            start_tick: self.stage_started_tick,
+            end_tick,
+            start_ms: self.stage_started_ms,
+            end_ms,
+            work_units,
+            workers,
+            cycles,
+            class,
+        }
+    }
+
+    fn worker_count(&self) -> usize {
+        parallel_workers(self.ncores, self.ncores)
+    }
+
+    fn scores(&self) -> ScoreReport {
+        score_report(&self.results)
+    }
+
     fn rebuild_summary(&mut self) {
+        let report = self.scores();
+        let workers = self.worker_count();
+
         self.core_len = copy_bytes(b"Cores ", &mut self.core_text);
-        self.core_len += write_num_into(
-            self.ncores.min(u32::MAX as usize) as u32,
-            &mut self.core_text[self.core_len..],
-        );
-
-        let ss = single_score(&self.results);
-        self.single_len = copy_bytes(b"1-Core ", &mut self.single_text);
-        self.single_len += write_u64_into(ss, &mut self.single_text[self.single_len..]);
-
-        let ms = multi_score(&self.results);
-        self.multi_len = copy_bytes(b"N-Core ", &mut self.multi_text);
-        self.multi_len += write_u64_into(ms, &mut self.multi_text[self.multi_len..]);
-
-        let ts = total_score(&self.results);
-        self.total_len = copy_bytes(b"Total ", &mut self.total_text);
-        self.total_len += write_u64_into(ts, &mut self.total_text[self.total_len..]);
-
+        self.core_len += write_num_into(workers.min(u32::MAX as usize) as u32, &mut self.core_text[self.core_len..]);
+        self.core_len += copy_bytes(b" | ", &mut self.core_text[self.core_len..]);
         let phase = completed_count(&self.results);
-        self.phase_len = write_num_into(phase as u32, &mut self.phase_text);
-        self.phase_len += copy_bytes(b"/", &mut self.phase_text[self.phase_len..]);
+        self.core_len += write_num_into(phase as u32, &mut self.core_text[self.core_len..]);
+        self.core_len += copy_bytes(b"/", &mut self.core_text[self.core_len..]);
+        self.core_len += write_num_into(BENCH_COUNT as u32, &mut self.core_text[self.core_len..]);
+        self.core_len += copy_bytes(b" stages", &mut self.core_text[self.core_len..]);
+
+        self.single_len = copy_bytes(b"1C Raw ", &mut self.single_text);
+        self.single_len += write_u64_into(report.single_raw, &mut self.single_text[self.single_len..]);
+
+        self.multi_len = copy_bytes(b"NC Raw ", &mut self.multi_text);
+        self.multi_len += write_u64_into(report.multi_raw, &mut self.multi_text[self.multi_len..]);
+
+        self.total_len = copy_bytes(b"Score v2 ", &mut self.total_text);
+        self.total_len +=
+            write_u64_into(report.weighted_total, &mut self.total_text[self.total_len..]);
+
+        self.legacy_len = copy_bytes(b"Legacy ", &mut self.legacy_text);
+        self.legacy_len +=
+            write_u64_into(report.legacy_total, &mut self.legacy_text[self.legacy_len..]);
+
+        self.norm_len = copy_bytes(b"Norm 1C ", &mut self.norm_text);
+        self.norm_len +=
+            write_u64_into(report.single_normalized, &mut self.norm_text[self.norm_len..]);
+        self.norm_len += copy_bytes(b" | NC ", &mut self.norm_text[self.norm_len..]);
+        self.norm_len +=
+            write_u64_into(report.multi_normalized, &mut self.norm_text[self.norm_len..]);
+
+        let fixed = multi_fixed_score(&self.results);
+        let per_core = multi_work_per_core_score(&self.results);
+        let speedup = self.multi_speedup_ratio();
+        let efficiency = self.multi_efficiency_pct();
+        self.phase_len = copy_bytes(b"Speedup ", &mut self.phase_text);
         self.phase_len +=
-            write_num_into(BENCH_COUNT as u32, &mut self.phase_text[self.phase_len..]);
-        self.phase_len += copy_bytes(b" stages", &mut self.phase_text[self.phase_len..]);
+            write_optional_ratio_into(speedup, &mut self.phase_text[self.phase_len..]);
+        self.phase_len += copy_bytes(b" | Eff ", &mut self.phase_text[self.phase_len..]);
+        self.phase_len +=
+            write_optional_pct_into(efficiency, &mut self.phase_text[self.phase_len..]);
+
+        self.speed_len = copy_bytes(b"Fixed ", &mut self.speed_text);
+        self.speed_len += write_u64_into(fixed, &mut self.speed_text[self.speed_len..]);
+        self.speed_len += copy_bytes(b" | Per-core ", &mut self.speed_text[self.speed_len..]);
+        self.speed_len += write_u64_into(per_core, &mut self.speed_text[self.speed_len..]);
     }
 
     fn rebuild_rows(&mut self) {
@@ -462,9 +584,7 @@ impl BenchApp {
             Stage::Sieve => self.sieve.progress_bp(),
             Stage::Matrix => self.matrix.progress_bp(),
             Stage::Cpu => self.cpu.progress_bp(),
-            Stage::MultiInt | Stage::MultiMatrix | Stage::MultiSha => {
-                multi::async_progress_bp()
-            }
+            Stage::MultiInt | Stage::MultiMatrix | Stage::MultiSha => multi::async_progress_bp(),
             Stage::Finished => 10_000,
         }
     }
@@ -499,13 +619,13 @@ impl BenchApp {
                 "Geekbench-style integer mix and SHA-256 stay bounded and avoid raw-pointer tricks."
             }
             Stage::MultiInt => {
-                "Worker threads run a deterministic integer mixer while the window polls progress."
+                "Work-per-core: each worker runs 64M integer ops so throughput scaling stays visible."
             }
             Stage::MultiMatrix => {
-                "Each core processes a chunk of rows via ikj-loop over a 1024^2 matrix."
+                "Fixed-total-work: all workers split one 1024^2 matrix multiply to measure speedup."
             }
             Stage::MultiSha => {
-                "Each core independently hashes 4 KiB blocks (16 MiB/core) with SHA-256."
+                "Work-per-core: each worker hashes 16 MiB so throughput scaling stays visible."
             }
             Stage::Finished => "Use Serial to mirror the final table into debug_log.",
         }
@@ -527,6 +647,7 @@ impl BenchApp {
         self.started = true;
         self.running = true;
         self.stage = Stage::Pi;
+        self.begin_stage_timing();
         sunlight_ipc::set_nice(self.pid, -10);
         self.set_status("Benchmark running");
         self.set_detail("Pi stage started. The process priority is raised to reduce interference.");
@@ -545,50 +666,33 @@ impl BenchApp {
     }
 
     fn emit_serial_report(&mut self) {
+        let report = self.scores();
+        let workers = self.worker_count();
         debug_log("[BENCH] ============================================");
-        debug_log("[BENCH] SunLight-Bench results");
+        debug_log("[BENCH] SunLight-Bench results (scoring v2)");
         debug_log("[BENCH] ============================================");
+        log_score_summary(workers, report, self.multi_speedup_ratio(), self.multi_efficiency_pct());
         debug_log(&alloc::format!(
-            "[BENCH] ── Single-Core ({}) ──",
-            single_score(&self.results)
+            "[BENCH] Multi fixed-total-work subtotal: {}",
+            multi_fixed_score(&self.results)
         ));
-        for entry in self.results[..SINGLE_COUNT].iter().flatten() {
-            debug_log(&alloc::format!(
-                "[BENCH] {:.<40} {:>14} cycles  score {:>6}",
-                entry.name,
-                entry.cycles,
-                entry.score
-            ));
+        debug_log(&alloc::format!(
+            "[BENCH] Multi work-per-core subtotal:    {}",
+            multi_work_per_core_score(&self.results)
+        ));
+        debug_log(&alloc::format!("[BENCH] {}", self.speed_str()));
+        debug_log("[BENCH] ── Per-stage results ──");
+        for entry in self.results.iter().flatten() {
+            log_entry(*entry);
         }
-        debug_log(&alloc::format!(
-            "[BENCH] ── Multi-Core ({}) ──",
-            multi_score(&self.results)
-        ));
-        for entry in self.results[SINGLE_COUNT..].iter().flatten() {
-            debug_log(&alloc::format!(
-                "[BENCH] {:.<40} {:>14} cycles  score {:>6}",
-                entry.name,
-                entry.cycles,
-                entry.score
-            ));
-        }
-        debug_log(&alloc::format!(
-            "[BENCH] TOTAL SCORE {:>32}",
-            total_score(&self.results)
-        ));
         self.serial_reported = true;
         self.set_status("Results mirrored to serial");
     }
 
-    fn record_result(&mut self, idx: usize, name: &'static str, cycles: u64) {
-        let entry = make_entry(name, cycles);
+    fn record_result(&mut self, idx: usize, name: &'static str, metrics: StageMetrics) {
+        let entry = make_entry(idx, name, metrics);
         self.results[idx] = Some(entry);
-        debug_log(&alloc::format!(
-            "[BENCH] {:.<40} {:>14} cycles  score {:>6}",
-            entry.name,
-            entry.cycles,
-            entry.score
-        ));
+        log_entry(entry);
         self.rebuild_summary();
         self.rebuild_rows();
     }
@@ -620,12 +724,18 @@ impl BenchApp {
             1 => {
                 self.stage = Stage::MultiMatrix;
                 self.set_status("Parallel matrix started");
-                self.set_detail("Each core processes a chunk of rows via ikj-loop over a 1024^2 matrix.");
+                self.set_detail(
+                    "Fixed-total-work: all workers split one 1024^2 matrix multiply to measure speedup.",
+                );
+                self.begin_stage_timing();
             }
             2 => {
                 self.stage = Stage::MultiSha;
                 self.set_status("Parallel SHA-256 started");
-                self.set_detail("Each core independently hashes 4 KiB blocks (16 MiB/core) with SHA-256.");
+                self.set_detail(
+                    "Work-per-core: each worker hashes 16 MiB so throughput scaling stays visible.",
+                );
+                self.begin_stage_timing();
             }
             _ => {
                 self.finish();
@@ -633,11 +743,19 @@ impl BenchApp {
         }
     }
 
-    fn tick_multi_workload(&mut self, idx: usize, workload: WorkloadId, name: &'static str) -> bool {
+    fn tick_multi_workload(
+        &mut self,
+        idx: usize,
+        workload: WorkloadId,
+        name: &'static str,
+    ) -> bool {
+        let workers = self.worker_count();
         if !self.multi_started {
-            self.multi_handle = multi::start_async(self.ncores, workload);
+            enter_parallel_phase(workers);
+            self.multi_handle = multi::start_async(workers, workload);
             self.multi_started = self.multi_handle.is_some();
             if !self.multi_started {
+                leave_parallel_phase();
                 self.set_status("Parallel workload failed to start");
                 self.set_detail("Background worker creation failed.");
                 self.running = false;
@@ -647,7 +765,14 @@ impl BenchApp {
             true
         } else if let Some(cycles) = multi::take_async_result() {
             self.verify_multi_core_activity();
-            self.record_result(idx, name, cycles);
+            let metrics = self.stage_metrics(
+                workload.total_work_units(workers),
+                workers as u32,
+                cycles,
+                workload.class(),
+            );
+            self.record_result(idx, name, metrics);
+            leave_parallel_phase();
             self.advance_to_next_multi_workload();
             true
         } else {
@@ -666,8 +791,15 @@ impl BenchApp {
                 let done = self.pi.step();
                 self.set_detail("Pi iterations are chunked to preserve redraw cadence.");
                 if done {
-                    self.record_result(0, pi::NAME, self.pi.cycles());
+                    let metrics = self.stage_metrics(
+                        scoring::WORK_UNITS[0],
+                        1,
+                        self.pi.cycles(),
+                        WorkloadClass::SingleCore,
+                    );
+                    self.record_result(0, pi::NAME, metrics);
                     self.stage = Stage::Prime;
+                    self.begin_stage_timing();
                     self.set_status("Pi stage complete");
                     self.set_detail("Dense 100k prime sieve started.");
                 }
@@ -679,8 +811,15 @@ impl BenchApp {
                     "Dense prime sieve is marking and counting in small UI-friendly chunks.",
                 );
                 if done {
-                    self.record_result(1, prime_scan::NAME, self.prime.cycles());
+                    let metrics = self.stage_metrics(
+                        scoring::WORK_UNITS[1],
+                        1,
+                        self.prime.cycles(),
+                        WorkloadClass::SingleCore,
+                    );
+                    self.record_result(1, prime_scan::NAME, metrics);
                     self.stage = Stage::Sieve;
+                    self.begin_stage_timing();
                     self.set_status("Prime stage complete");
                     self.set_detail("Segmented sieve started.");
                 }
@@ -690,8 +829,15 @@ impl BenchApp {
                 let done = self.sieve.step();
                 self.set_detail("Marking cache-sized segments and counting primes incrementally.");
                 if done {
-                    self.record_result(2, sieve::NAME, self.sieve.cycles());
+                    let metrics = self.stage_metrics(
+                        scoring::WORK_UNITS[2],
+                        1,
+                        self.sieve.cycles(),
+                        WorkloadClass::SingleCore,
+                    );
+                    self.record_result(2, sieve::NAME, metrics);
                     self.stage = Stage::Matrix;
+                    self.begin_stage_timing();
                     self.set_status("Sieve stage complete");
                     self.set_detail(
                         "Matrix multiply started. This is typically the longest stage.",
@@ -705,8 +851,15 @@ impl BenchApp {
                     "Matrix work slices through the ikj loop nest without freezing the UI.",
                 );
                 if done {
-                    self.record_result(3, matrix::NAME, self.matrix.cycles());
+                    let metrics = self.stage_metrics(
+                        scoring::WORK_UNITS[3],
+                        1,
+                        self.matrix.cycles(),
+                        WorkloadClass::SingleCore,
+                    );
+                    self.record_result(3, matrix::NAME, metrics);
                     self.stage = Stage::Cpu;
+                    self.begin_stage_timing();
                     self.set_status("Matrix stage complete");
                     self.set_detail("Geekbench-style CPU mix started.");
                 }
@@ -718,9 +871,16 @@ impl BenchApp {
                     "CPU mix combines bounded integer churn with SHA-256 over a fixed working set.",
                 );
                 if done {
-                    self.record_result(4, cpu::NAME, self.cpu.cycles());
+                    let metrics = self.stage_metrics(
+                        scoring::WORK_UNITS[4],
+                        1,
+                        self.cpu.cycles(),
+                        WorkloadClass::SingleCore,
+                    );
+                    self.record_result(4, cpu::NAME, metrics);
                     self.release_memory();
                     self.stage = Stage::MultiInt;
+                    self.begin_stage_timing();
                     self.multi_workload = 0;
                     self.multi_started = false;
                     self.set_status("CPU mix complete");
@@ -729,15 +889,21 @@ impl BenchApp {
                 true
             }
             Stage::MultiInt => {
-                self.set_detail("Worker threads are running a deterministic integer mixer in the background.");
+                self.set_detail(
+                    "Worker threads are running a deterministic integer mixer in the background.",
+                );
                 self.tick_multi_workload(5, WorkloadId::Integer, multi::NAME_INTEGER)
             }
             Stage::MultiMatrix => {
-                self.set_detail("Each core processes rows via ikj-loop. Progress is updated per row.");
+                self.set_detail(
+                    "Each core processes rows via ikj-loop. Progress is updated per row.",
+                );
                 self.tick_multi_workload(6, WorkloadId::Matrix, multi::NAME_MATRIX)
             }
             Stage::MultiSha => {
-                self.set_detail("Each core hashes independent data. Progress is reported per block.");
+                self.set_detail(
+                    "Each core hashes independent data. Progress is reported per block.",
+                );
                 self.tick_multi_workload(7, WorkloadId::Sha256, multi::NAME_SHA256)
             }
             Stage::Finished | Stage::Ready => false,
@@ -881,34 +1047,54 @@ impl App for BenchApp {
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 480, summary.y + 20, 160, 16),
+            Rect::new(summary.x + 480, summary.y + 20, 180, 16),
             self.total_str(),
         )
-        .with_font(&F_UI)
+        .with_font(&F_MED)
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 660, summary.y + 20, 120, 16),
+            self.legacy_str(),
+        )
+        .dim()
+        .with_font(&F_SMALL)
         .draw(canvas, theme);
 
         Label::new(
-            Rect::new(summary.x + 14, summary.y + 44, 240, 14),
-            self.status_str(),
+            Rect::new(summary.x + 14, summary.y + 44, summary.w.saturating_sub(28), 14),
+            self.norm_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
             Rect::new(summary.x + 14, summary.y + 60, 240, 14),
+            self.status_str(),
+        )
+        .with_font(&F_UI)
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(summary.x + 14, summary.y + 76, 240, 14),
             self.core_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 300, summary.y + 60, 240, 14),
+            Rect::new(summary.x + 300, summary.y + 76, 280, 14),
             self.phase_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
+            Rect::new(summary.x + 300, summary.y + 92, 360, 14),
+            self.speed_str(),
+        )
+        .dim()
+        .with_font(&F_SMALL)
+        .draw(canvas, theme);
+        Label::new(
             Rect::new(
                 summary.x + 14,
-                summary.y + 78,
+                summary.y + 94,
                 summary.w.saturating_sub(28),
                 14,
             ),
@@ -1047,42 +1233,118 @@ pub extern "C" fn _start() -> ! {
 
 fn run_headless(pid: u64, ncores: usize) -> ! {
     let mut results = [None; BENCH_COUNT];
+    let workers = parallel_workers(ncores, ncores);
     sunlight_ipc::set_nice(pid, -10);
     debug_log("[BENCH] display unavailable, running headless");
 
     let mut pi = PiRunner::new();
+    let pi_start_tick = bench::rdtsc();
+    let pi_start_ms = monotonic_millis();
     while !pi.step() {
         process_yield();
     }
-    results[0] = Some(make_entry(pi::NAME, pi.cycles()));
+    results[0] = Some(make_entry(
+        0,
+        pi::NAME,
+        StageMetrics {
+            start_tick: pi_start_tick,
+            end_tick: bench::rdtsc(),
+            start_ms: pi_start_ms,
+            end_ms: monotonic_millis(),
+            work_units: scoring::WORK_UNITS[0],
+            workers: 1,
+            cycles: pi.cycles(),
+            class: WorkloadClass::SingleCore,
+        },
+    ));
     log_entry(results[0].unwrap());
 
     let mut prime = PrimeRunner::new();
+    let prime_start_tick = bench::rdtsc();
+    let prime_start_ms = monotonic_millis();
     while !prime.step() {
         process_yield();
     }
-    results[1] = Some(make_entry(prime_scan::NAME, prime.cycles()));
+    results[1] = Some(make_entry(
+        1,
+        prime_scan::NAME,
+        StageMetrics {
+            start_tick: prime_start_tick,
+            end_tick: bench::rdtsc(),
+            start_ms: prime_start_ms,
+            end_ms: monotonic_millis(),
+            work_units: scoring::WORK_UNITS[1],
+            workers: 1,
+            cycles: prime.cycles(),
+            class: WorkloadClass::SingleCore,
+        },
+    ));
     log_entry(results[1].unwrap());
 
     let mut sieve = SieveRunner::new();
+    let sieve_start_tick = bench::rdtsc();
+    let sieve_start_ms = monotonic_millis();
     while !sieve.step() {
         process_yield();
     }
-    results[2] = Some(make_entry(sieve::NAME, sieve.cycles()));
+    results[2] = Some(make_entry(
+        2,
+        sieve::NAME,
+        StageMetrics {
+            start_tick: sieve_start_tick,
+            end_tick: bench::rdtsc(),
+            start_ms: sieve_start_ms,
+            end_ms: monotonic_millis(),
+            work_units: scoring::WORK_UNITS[2],
+            workers: 1,
+            cycles: sieve.cycles(),
+            class: WorkloadClass::SingleCore,
+        },
+    ));
     log_entry(results[2].unwrap());
 
     let mut matrix = MatrixRunner::new();
+    let matrix_start_tick = bench::rdtsc();
+    let matrix_start_ms = monotonic_millis();
     while !matrix.step() {
         process_yield();
     }
-    results[3] = Some(make_entry(matrix::NAME, matrix.cycles()));
+    results[3] = Some(make_entry(
+        3,
+        matrix::NAME,
+        StageMetrics {
+            start_tick: matrix_start_tick,
+            end_tick: bench::rdtsc(),
+            start_ms: matrix_start_ms,
+            end_ms: monotonic_millis(),
+            work_units: scoring::WORK_UNITS[3],
+            workers: 1,
+            cycles: matrix.cycles(),
+            class: WorkloadClass::SingleCore,
+        },
+    ));
     log_entry(results[3].unwrap());
 
     let mut cpu = CpuRunner::new();
+    let cpu_start_tick = bench::rdtsc();
+    let cpu_start_ms = monotonic_millis();
     while !cpu.step() {
         process_yield();
     }
-    results[4] = Some(make_entry(cpu::NAME, cpu.cycles()));
+    results[4] = Some(make_entry(
+        4,
+        cpu::NAME,
+        StageMetrics {
+            start_tick: cpu_start_tick,
+            end_tick: bench::rdtsc(),
+            start_ms: cpu_start_ms,
+            end_ms: monotonic_millis(),
+            work_units: scoring::WORK_UNITS[4],
+            workers: 1,
+            cycles: cpu.cycles(),
+            class: WorkloadClass::SingleCore,
+        },
+    ));
     log_entry(results[4].unwrap());
 
     let telemetry_ptr = map_telemetry_page();
@@ -1096,7 +1358,10 @@ fn run_headless(pid: u64, ncores: usize) -> ! {
     ];
 
     for (idx, wl, name) in multi_workloads {
-        let handle = multi::start_async(ncores, wl);
+        let start_tick = bench::rdtsc();
+        let start_ms = monotonic_millis();
+        enter_parallel_phase(workers);
+        let handle = multi::start_async(workers, wl);
         if let Some(_handle) = handle {
             while results[idx].is_none() {
                 let busy = busy_core_count(telemetry_ptr);
@@ -1109,18 +1374,65 @@ fn run_headless(pid: u64, ncores: usize) -> ! {
                     ));
                 }
                 if let Some(cycles) = multi::take_async_result() {
-                    results[idx] = Some(make_entry(name, cycles));
+                    results[idx] = Some(make_entry(
+                        idx,
+                        name,
+                        StageMetrics {
+                            start_tick,
+                            end_tick: bench::rdtsc(),
+                            start_ms,
+                            end_ms: monotonic_millis(),
+                            work_units: wl.total_work_units(workers),
+                            workers: workers as u32,
+                            cycles,
+                            class: wl.class(),
+                        },
+                    ));
                 } else {
                     process_yield();
                 }
             }
         } else {
-            let (ci, cm, cs) = multi::run_all_multi(ncores);
-            results[5] = Some(make_entry(multi::NAME_INTEGER, ci));
-            results[6] = Some(make_entry(multi::NAME_MATRIX, cm));
-            results[7] = Some(make_entry(multi::NAME_SHA256, cs));
+            let sync_workloads: &[(usize, WorkloadId, &'static str)] = match idx {
+                5 => &[
+                    (5, WorkloadId::Integer, multi::NAME_INTEGER),
+                    (6, WorkloadId::Matrix, multi::NAME_MATRIX),
+                    (7, WorkloadId::Sha256, multi::NAME_SHA256),
+                ],
+                6 => &[
+                    (6, WorkloadId::Matrix, multi::NAME_MATRIX),
+                    (7, WorkloadId::Sha256, multi::NAME_SHA256),
+                ],
+                7 => &[(7, WorkloadId::Sha256, multi::NAME_SHA256)],
+                _ => &[],
+            };
+
+            for (entry_idx, sync_wl, label) in sync_workloads {
+                let sync_start_tick = bench::rdtsc();
+                let sync_start_ms = monotonic_millis();
+                let cycles = match sync_wl {
+                    WorkloadId::Integer => multi::run_integer_mix(workers),
+                    WorkloadId::Matrix => multi::run_matrix_mix(workers),
+                    WorkloadId::Sha256 => multi::run_sha256_mix(workers),
+                };
+                results[*entry_idx] = Some(make_entry(
+                    *entry_idx,
+                    *label,
+                    StageMetrics {
+                        start_tick: sync_start_tick,
+                        end_tick: bench::rdtsc(),
+                        start_ms: sync_start_ms,
+                        end_ms: monotonic_millis(),
+                        work_units: sync_wl.total_work_units(workers),
+                        workers: workers as u32,
+                        cycles,
+                        class: sync_wl.class(),
+                    },
+                ));
+            }
             break;
         }
+        leave_parallel_phase();
         multi::reset_async();
     }
 
@@ -1138,29 +1450,142 @@ fn run_headless(pid: u64, ncores: usize) -> ! {
         log_entry(*entry);
     }
 
-    debug_log(&alloc::format!(
-        "[BENCH] SINGLE-CORE SCORE {:>22}",
-        single_score(&results)
-    ));
-    debug_log(&alloc::format!(
-        "[BENCH] MULTI-CORE SCORE {:>23}",
-        multi_score(&results)
-    ));
-    debug_log(&alloc::format!(
-        "[BENCH] TOTAL SCORE {:>28}",
-        total_score(&results)
-    ));
+    let report = score_report(&results);
+    let speedup = headless_speedup_ratio(&results);
+    let efficiency = headless_efficiency_pct(&results, workers);
+    log_score_summary(workers, report, speedup, efficiency);
     sunlight_ipc::set_nice(pid, 0);
     ProcessExit::exit(0);
 }
 
+fn headless_speedup_ratio(results: &[Option<Entry>; BENCH_COUNT]) -> Option<(u64, u64)> {
+    let single = results[3]?;
+    let multi = results[6]?;
+    let single_ms = BenchApp::elapsed_ms(single);
+    let multi_ms = BenchApp::elapsed_ms(multi);
+    if single_ms == 0 || multi_ms == 0 {
+        None
+    } else {
+        Some((single_ms, multi_ms))
+    }
+}
+
+fn headless_efficiency_pct(
+    results: &[Option<Entry>; BENCH_COUNT],
+    workers: usize,
+) -> Option<u64> {
+    let (single_ms, multi_ms) = headless_speedup_ratio(results)?;
+    let cores = workers.max(1) as u64;
+    Some(single_ms.saturating_mul(100) / (multi_ms.saturating_mul(cores)))
+}
+
+fn log_score_summary(
+    workers: usize,
+    report: ScoreReport,
+    speedup: Option<(u64, u64)>,
+    efficiency: Option<u64>,
+) {
+    debug_log(&alloc::format!("[BENCH] Cores used:              {:>12}", workers));
+    debug_log(&alloc::format!(
+        "[BENCH] Single-Core Raw:         {:>12}",
+        report.single_raw
+    ));
+    debug_log(&alloc::format!(
+        "[BENCH] Multi-Core Raw:          {:>12}",
+        report.multi_raw
+    ));
+    debug_log(&alloc::format!(
+        "[BENCH] Single-Core Normalized:  {:>12}",
+        report.single_normalized
+    ));
+    debug_log(&alloc::format!(
+        "[BENCH] Multi-Core Normalized:   {:>12}",
+        report.multi_normalized
+    ));
+    debug_log(&alloc::format!(
+        "[BENCH] Weighted Total (v2):     {:>12}",
+        report.weighted_total
+    ));
+    debug_log(&alloc::format!(
+        "[BENCH] Legacy Total (raw sum):  {:>12}",
+        report.legacy_total
+    ));
+    let mut speed_buf = [0u8; 16];
+    let speed_len = write_optional_ratio_into(speedup, &mut speed_buf);
+    let speed = as_str(&speed_buf[..speed_len]);
+    let mut eff_buf = [0u8; 8];
+    let eff_len = write_optional_pct_into(efficiency, &mut eff_buf);
+    let eff = as_str(&eff_buf[..eff_len]);
+    debug_log(&alloc::format!("[BENCH] Speedup:                 {:>12}", speed));
+    debug_log(&alloc::format!("[BENCH] Efficiency:              {:>12}", eff));
+}
+
 fn log_entry(entry: Entry) {
     debug_log(&alloc::format!(
-        "[BENCH] {:.<40} {:>14} cycles  score {:>6}",
+        "[BENCH] {:.<40} start={:>10} end={:>10} wall={:>5}ms work={:>12} workers={:>2} cycles={:>14} class={:<17} score={:>6}",
         entry.name,
+        entry.start_tick,
+        entry.end_tick,
+        BenchApp::elapsed_ms(entry),
+        entry.work_units,
+        entry.workers,
         entry.cycles,
+        entry.class.label(),
         entry.score
     ));
+}
+
+fn write_optional_ratio_into(value: Option<(u64, u64)>, dst: &mut [u8]) -> usize {
+    match value {
+        Some((numer, denom)) => write_ratio_into(numer, denom, dst),
+        None => copy_bytes(b"n/a", dst),
+    }
+}
+
+fn write_ratio_into(numer: u64, denom: u64, dst: &mut [u8]) -> usize {
+    if dst.is_empty() || denom == 0 {
+        return copy_bytes(b"n/a", dst);
+    }
+
+    let whole = numer / denom;
+    let rem = numer % denom;
+    let mut len = write_u64_into(whole, dst);
+    if len < dst.len() {
+        dst[len] = b'.';
+        len += 1;
+    } else {
+        return len;
+    }
+
+    let frac = ((rem as u128).saturating_mul(100) + (denom as u128 / 2)) / denom as u128;
+    let frac = frac.min(99) as u8;
+    if len < dst.len() {
+        dst[len] = b'0' + (frac / 10);
+        len += 1;
+    }
+    if len < dst.len() {
+        dst[len] = b'0' + (frac % 10);
+        len += 1;
+    }
+    if len < dst.len() {
+        dst[len] = b'x';
+        len += 1;
+    }
+    len
+}
+
+fn write_optional_pct_into(value: Option<u64>, dst: &mut [u8]) -> usize {
+    match value {
+        Some(pct) => {
+            let mut len = write_u64_into(pct, dst);
+            if len < dst.len() {
+                dst[len] = b'%';
+                len += 1;
+            }
+            len
+        }
+        None => copy_bytes(b"n/a", dst),
+    }
 }
 
 fn cpu_count() -> usize {

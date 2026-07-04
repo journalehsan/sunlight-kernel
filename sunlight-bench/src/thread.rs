@@ -18,10 +18,9 @@ pub const THREAD_STACK_BYTES: usize = 64 * 1024; // 64 KiB per thread stack
 unsafe extern "C" fn thread_trampoline(func: u64, arg: u64) -> ! {
     let f: unsafe extern "C" fn(u64) = core::mem::transmute(func as *const ());
     f(arg);
-    // The kernel currently treats ProcessExit as process-wide teardown even
-    // for ThreadSpawn children, so benchmark workers must not return through
-    // ProcessExit or they will unmap the shared address space out from under
-    // the rest of the benchmark. Park until the main benchmark process exits.
+    // The kernel still reclaims shared address-space mappings on ProcessExit,
+    // so benchmark workers must not exit through that path. Park after
+    // finishing so the parent can observe completion through shared flags.
     loop {
         sunlight_ipc::process_yield();
     }

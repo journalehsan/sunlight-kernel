@@ -1,7 +1,8 @@
 //! Multi-core benchmarking suite.
 //!
 //! Runs three workloads sequentially, each dispatching worker threads across
-//! all available cores. Results are combined into a multi-core score.
+//! all available cores. Results are combined into throughput-based N-core
+//! scores with explicit fixed-total-work and work-per-core categories.
 //!
 //! Workloads:
 //!   1. Integer Mix — xorshift64* loop (existing)
@@ -9,6 +10,7 @@
 //!   3. SHA-256 Hash — each core hashes independent 4 KiB blocks
 
 use crate::bench::rdtsc;
+use crate::scoring::WorkloadClass;
 use crate::thread::{arrive_and_wait, barrier_reset, spawn};
 use alloc::vec::Vec;
 use core::hint::black_box;
@@ -149,7 +151,9 @@ unsafe extern "C" fn sha256_mix_worker(slot: u64) {
         let seed = (slot << 32) | (chunk_idx as u64);
         let mut mixer = seed.wrapping_mul(0xD6E8_FEB8_6659_FD93);
         for b in &mut block {
-            mixer = mixer.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            mixer = mixer
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
             *b = (mixer >> 24) as u8;
         }
         let digest = crate::sha256::sha256(&block);
@@ -187,14 +191,6 @@ unsafe fn run_worker_on_core0(slot: u64, worker: unsafe extern "C" fn(u64)) {
     worker(slot);
 }
 
-fn wait_all_workers(ncores: usize) {
-    for slot in 1..ncores {
-        while THREAD_END[slot].load(Ordering::SeqCst) == 0 {
-            sunlight_ipc::process_yield();
-        }
-    }
-}
-
 fn measure_elapsed(ncores: usize) -> u64 {
     let min_start = (0..ncores)
         .map(|idx| THREAD_START[idx].load(Ordering::SeqCst))
@@ -210,7 +206,6 @@ pub fn run_integer_mix(ncores: usize) -> u64 {
     reset_statics(n);
     let stacks = spawn_workers(n, integer_mix_worker);
     unsafe { run_worker_on_core0(0, integer_mix_worker) };
-    wait_all_workers(n);
     let elapsed = measure_elapsed(n);
     black_box(&stacks);
     drop(stacks);
@@ -237,7 +232,6 @@ pub fn run_matrix_mix(ncores: usize) -> u64 {
     reset_statics(n);
     let stacks = spawn_workers(n, matrix_mix_worker);
     unsafe { run_worker_on_core0(0, matrix_mix_worker) };
-    wait_all_workers(n);
     let elapsed = measure_elapsed(n);
 
     MATRIX_A_PTR.store(0, Ordering::SeqCst);
@@ -254,7 +248,6 @@ pub fn run_sha256_mix(ncores: usize) -> u64 {
     reset_statics(n);
     let stacks = spawn_workers(n, sha256_mix_worker);
     unsafe { run_worker_on_core0(0, sha256_mix_worker) };
-    wait_all_workers(n);
     let elapsed = measure_elapsed(n);
     black_box(&stacks);
     drop(stacks);
@@ -268,6 +261,51 @@ pub enum WorkloadId {
     Integer = 0,
     Matrix = 1,
     Sha256 = 2,
+}
+
+impl WorkloadId {
+    pub fn class(self) -> WorkloadClass {
+        match self {
+            Self::Matrix => WorkloadClass::MultiFixedTotalWork,
+            Self::Integer | Self::Sha256 => WorkloadClass::MultiWorkPerCore,
+        }
+    }
+
+    pub fn work_units_per_worker(self) -> u64 {
+        match self {
+            Self::Integer => 64_000_000,
+            Self::Matrix => (N_MATRIX * N_MATRIX * N_MATRIX) as u64,
+            Self::Sha256 => HASH_BYTES_PER_CORE as u64,
+        }
+    }
+
+    pub fn progress_units_per_worker(self) -> u64 {
+        match self {
+            Self::Integer => 64_000_000,
+            Self::Matrix => (N_MATRIX * N_MATRIX * N_MATRIX) as u64,
+            Self::Sha256 => (HASH_BYTES_PER_CORE / 4096) as u64,
+        }
+    }
+
+    pub fn total_progress_units(self, workers: usize) -> u64 {
+        match self.class() {
+            WorkloadClass::MultiFixedTotalWork => self.progress_units_per_worker(),
+            WorkloadClass::MultiWorkPerCore => self
+                .progress_units_per_worker()
+                .saturating_mul(workers.max(1) as u64),
+            WorkloadClass::SingleCore => self.progress_units_per_worker(),
+        }
+    }
+
+    pub fn total_work_units(self, workers: usize) -> u64 {
+        match self.class() {
+            WorkloadClass::MultiFixedTotalWork => self.work_units_per_worker(),
+            WorkloadClass::MultiWorkPerCore => self
+                .work_units_per_worker()
+                .saturating_mul(workers.max(1) as u64),
+            WorkloadClass::SingleCore => self.work_units_per_worker(),
+        }
+    }
 }
 
 unsafe extern "C" fn async_entry(ncores: u64) {
@@ -326,13 +364,17 @@ pub fn async_progress_bp() -> u16 {
         total = total.saturating_add(THREAD_PROGRESS[idx].load(Ordering::SeqCst));
     }
 
-    let base: u64 = match ASYNC_WORKLOAD.load(Ordering::SeqCst) {
-        0 => 64_000_000,
-        1 => (N_MATRIX * N_MATRIX * N_MATRIX) as u64,
-        2 => (HASH_BYTES_PER_CORE / 4096) as u64,
-        _ => 1,
+    let workload = match ASYNC_WORKLOAD.load(Ordering::SeqCst) {
+        0 => WorkloadId::Integer,
+        1 => WorkloadId::Matrix,
+        2 => WorkloadId::Sha256,
+        _ => WorkloadId::Integer,
     };
-    let denom = base.saturating_mul(ncores.max(1) as u64);
+    let denom = match workload.class() {
+        WorkloadClass::MultiFixedTotalWork => workload.total_progress_units(ncores),
+        WorkloadClass::MultiWorkPerCore => workload.total_progress_units(ncores),
+        WorkloadClass::SingleCore => workload.total_progress_units(ncores),
+    };
     ((total.min(denom) * 10_000) / denom.max(1)) as u16
 }
 
@@ -348,13 +390,4 @@ pub fn take_async_result() -> Option<u64> {
 pub fn reset_async() {
     ASYNC_STATE.store(0, Ordering::SeqCst);
     ASYNC_RESULT.store(0, Ordering::SeqCst);
-}
-
-// ── Synchronous runner for headless mode ────────────────────────────────────
-
-pub fn run_all_multi(ncores: usize) -> (u64, u64, u64) {
-    let cycles_int = run_integer_mix(ncores);
-    let cycles_mat = run_matrix_mix(ncores);
-    let cycles_sha = run_sha256_mix(ncores);
-    (cycles_int, cycles_mat, cycles_sha)
 }
