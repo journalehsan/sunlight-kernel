@@ -12,7 +12,6 @@
 use crate::bench::rdtsc;
 use crate::scoring::WorkloadClass;
 use crate::thread::{arrive_and_wait, barrier_reset, spawn};
-use alloc::vec::Vec;
 use core::hint::black_box;
 use core::sync::atomic::{AtomicU64, Ordering};
 
@@ -178,13 +177,10 @@ fn reset_statics(ncores: usize) {
     barrier_reset();
 }
 
-fn spawn_workers(ncores: usize, worker: unsafe extern "C" fn(u64)) -> Vec<Vec<u8>> {
-    let mut stacks: Vec<Vec<u8>> = Vec::new();
+fn spawn_workers(ncores: usize, worker: unsafe extern "C" fn(u64)) {
     for slot in 1..ncores {
-        let (_, stack) = spawn(worker, slot as u64);
-        stacks.push(stack);
+        let _ = spawn(worker, slot as u64);
     }
-    stacks
 }
 
 unsafe fn run_worker_on_core0(slot: u64, worker: unsafe extern "C" fn(u64)) {
@@ -204,12 +200,9 @@ fn measure_elapsed(ncores: usize) -> u64 {
 pub fn run_integer_mix(ncores: usize) -> u64 {
     let n = ncores.min(MAX_CORES).max(1);
     reset_statics(n);
-    let stacks = spawn_workers(n, integer_mix_worker);
+    spawn_workers(n, integer_mix_worker);
     unsafe { run_worker_on_core0(0, integer_mix_worker) };
-    let elapsed = measure_elapsed(n);
-    black_box(&stacks);
-    drop(stacks);
-    elapsed
+    measure_elapsed(n)
 }
 
 pub fn run_matrix_mix(ncores: usize) -> u64 {
@@ -230,7 +223,7 @@ pub fn run_matrix_mix(ncores: usize) -> u64 {
     MATRIX_C_PTR.store(c.as_ptr() as u64, Ordering::SeqCst);
 
     reset_statics(n);
-    let stacks = spawn_workers(n, matrix_mix_worker);
+    spawn_workers(n, matrix_mix_worker);
     unsafe { run_worker_on_core0(0, matrix_mix_worker) };
     let elapsed = measure_elapsed(n);
 
@@ -238,20 +231,16 @@ pub fn run_matrix_mix(ncores: usize) -> u64 {
     MATRIX_B_PTR.store(0, Ordering::SeqCst);
     MATRIX_C_PTR.store(0, Ordering::SeqCst);
 
-    black_box((&stacks, &c));
-    drop(stacks);
+    black_box(&c);
     elapsed
 }
 
 pub fn run_sha256_mix(ncores: usize) -> u64 {
     let n = ncores.min(MAX_CORES).max(1);
     reset_statics(n);
-    let stacks = spawn_workers(n, sha256_mix_worker);
+    spawn_workers(n, sha256_mix_worker);
     unsafe { run_worker_on_core0(0, sha256_mix_worker) };
-    let elapsed = measure_elapsed(n);
-    black_box(&stacks);
-    drop(stacks);
-    elapsed
+    measure_elapsed(n)
 }
 
 // ── Async dispatch (for GUI integration) ───────────────────────────────────
@@ -321,9 +310,7 @@ unsafe extern "C" fn async_entry(ncores: u64) {
     ASYNC_STATE.store(2, Ordering::SeqCst);
 }
 
-pub struct AsyncHandle {
-    _stack: Vec<u8>,
-}
+pub struct AsyncHandle;
 
 pub fn start_async(ncores: usize, workload: WorkloadId) -> Option<AsyncHandle> {
     if ASYNC_STATE
@@ -344,13 +331,13 @@ pub fn start_async(ncores: usize, workload: WorkloadId) -> Option<AsyncHandle> {
         THREAD_START[idx].store(0, Ordering::SeqCst);
     }
 
-    let (tid, stack) = spawn(async_entry, ncores as u64);
+    let tid = spawn(async_entry, ncores as u64);
     if tid == 0 {
         ASYNC_STATE.store(0, Ordering::SeqCst);
         return None;
     }
 
-    Some(AsyncHandle { _stack: stack })
+    Some(AsyncHandle)
 }
 
 pub fn async_progress_bp() -> u16 {

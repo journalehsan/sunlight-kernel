@@ -8,10 +8,14 @@
 //! Kernel then starts the new thread with:
 //!   RIP = trampoline, RSP = user_stack_top, RDI = func, RSI = arg
 
-use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-pub const THREAD_STACK_BYTES: usize = 64 * 1024; // 64 KiB per thread stack
+pub const THREAD_STACK_BYTES: usize = 32 * 1024; // 32 KiB per thread stack
+pub const MAX_THREAD_STACKS: usize = 320;
+
+static mut THREAD_STACK_POOL: [[u8; THREAD_STACK_BYTES]; MAX_THREAD_STACKS] =
+    [[0u8; THREAD_STACK_BYTES]; MAX_THREAD_STACKS];
+static NEXT_STACK_SLOT: AtomicU64 = AtomicU64::new(0);
 
 /// The trampoline receives func in RDI and arg in RSI (set by the kernel via
 /// `set_initial_args`), then calls the actual benchmark worker.
@@ -26,12 +30,18 @@ unsafe extern "C" fn thread_trampoline(func: u64, arg: u64) -> ! {
     }
 }
 
-/// Spawn a thread running `func(arg)`.  Returns the new thread ID, or 0 on error.
+/// Spawn a thread running `func(arg)`. Returns the new thread ID, or 0 on error.
 ///
-/// `stack` must live at least as long as the thread.  Ownership is transferred
-/// to the caller; nothing reclaims it automatically (bump allocator, no free).
-pub fn spawn(func: unsafe extern "C" fn(u64), arg: u64) -> (u64, Vec<u8>) {
-    let mut stack = alloc::vec![0u8; THREAD_STACK_BYTES];
+/// Benchmark threads never exit cleanly, so stacks are drawn from a fixed
+/// process-lifetime pool instead of the bump heap. That keeps repeated runs
+/// from corrupting live stack memory when the benchmark heap is reset.
+pub fn spawn(func: unsafe extern "C" fn(u64), arg: u64) -> u64 {
+    let slot = NEXT_STACK_SLOT.fetch_add(1, Ordering::SeqCst) as usize;
+    if slot >= MAX_THREAD_STACKS {
+        return 0;
+    }
+
+    let stack = unsafe { &mut THREAD_STACK_POOL[slot] };
 
     // Write [func, arg] at the TOP of the stack (highest addresses).
     // The kernel reads them from [rsi+0] and [rsi+8], then sets
@@ -66,7 +76,7 @@ pub fn spawn(func: unsafe extern "C" fn(u64), arg: u64) -> (u64, Vec<u8>) {
             options(nostack),
         );
     }
-    (tid, stack)
+    tid
 }
 
 // ---------------------------------------------------------------------------

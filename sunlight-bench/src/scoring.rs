@@ -302,6 +302,7 @@ pub fn score_report(entries: &[Option<Entry>; BENCH_COUNT]) -> ScoreReport {
 }
 
 /// Serial/debug summary block for the v2 scoring model.
+#[allow(dead_code)]
 pub fn format_bench_v2_summary(
     report: ScoreReport,
     cores: usize,
