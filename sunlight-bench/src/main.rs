@@ -1265,10 +1265,14 @@ impl BenchApp {
                 let state = snapshot.stage_states[idx].label();
                 let cycles = entry.map(|entry| entry.cycles).unwrap_or(0);
                 let raw_score = entry.map(|entry| entry.score).unwrap_or(0);
+                let workers = entry.map(|entry| entry.workers).unwrap_or(0);
+                let wall_ms = entry.map(Self::elapsed_ms).unwrap_or(0);
                 debug_log(&alloc::format!(
-                    "[BENCH]     stage={} state={} cycles={} raw_score={}",
+                    "[BENCH]     stage={} state={} workers={} wall_ms={} cycles={} raw_score={}",
                     name,
                     state,
+                    workers,
+                    wall_ms,
                     cycles,
                     raw_score
                 ));
