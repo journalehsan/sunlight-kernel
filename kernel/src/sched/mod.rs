@@ -2151,6 +2151,25 @@ fn build_kernel_idle_frame(stack_top: u64) -> u64 {
 static mut CORE_IDLE_STACKS: [[u8; crate::process::KERNEL_STACK_SIZE]; MAX_CORES] =
     [[0; crate::process::KERNEL_STACK_SIZE]; MAX_CORES];
 
+/// Top-of-stack address of the per-core static idle kernel stack for `cpu_id`.
+///
+/// This is the safer resting place for a CPU that has just called
+/// `finish_current_process` (or `terminate_current_user_process`) — it must
+/// `sti; hlt` waiting to be descheduled, but should do so on a static stack
+/// rather than the dying process's heap-allocated `Box<[u8; 32K]> kernel_stack`.
+/// A subsequent cross-core `Scheduler::add_process` can reuse the Finished slot
+/// (`self.processes[id] = process` in this file) which drops the old `Box` and
+/// frees that heap; if a CPU is still halted on the dying kernel stack, the
+/// next timer IRQ pushes the IRET frame into the now-freed heap, and the
+/// resulting `iretq` reads a zeroed/garbage CS and raises `#GP` (err=0) — the
+/// desktop appears frozen because the gpf_handler loops on `hlt`.
+pub(crate) fn core_idle_stack_top(cpu_id: usize) -> u64 {
+    let cpu = cpu_id.min(MAX_CORES - 1);
+    unsafe {
+        core::ptr::addr_of!(CORE_IDLE_STACKS[cpu][crate::process::KERNEL_STACK_SIZE - 1]) as u64 + 1
+    }
+}
+
 fn init_core_idle_contexts(online: usize) {
     for core_id in 0..online.min(MAX_CORES) {
         let stack_top = unsafe {
@@ -2206,11 +2225,24 @@ pub fn note_process_finished(pid: usize, name: &str) {
 }
 
 /// Mark the current process finished and release resources.
-/// Returns the process kernel stack top for the final idle loop.
+///
+/// Returns the **per-core static idle stack top** (NOT the dying process's
+/// heap-allocated `kernel_stack_top`) for the caller's final `sti; hlt` loop.
+/// Callers (`process_exit` in `arch/x86_64/syscall.rs` and
+/// `terminate_current_user_process` in `arch/x86_64/interrupts.rs`) pivot RSP
+/// to this value, then halt until the next timer IRQ deschedules them.
+///
+/// Returning the dying process's own `kernel_stack_top` here would leave the
+/// CPU halted on a `Box`-owned per-process stack whose memory is freed when
+/// `Scheduler::add_process` later reuses the Finished slot via
+/// `self.processes[id] = process`. The next timer IRQ would push an IRET
+/// frame into freed heap and the resulting `iretq` would load a zeroed CS
+/// and raise `#GP` (err=0) — the desktop "freeze after several app launches
+/// from the file manager" symptom.
 pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     let mut sched = SCHEDULER.lock();
     let cpu_id = current_cpu_id();
-    let fallback_kstack_top = crate::arch::x86_64::smp::current_cpu_tss_rsp0();
+    let idle_top = core_idle_stack_top(cpu_id);
     let cur = match sched.process_index_for_cpu(cpu_id) {
         Some(idx) => idx,
         None => {
@@ -2218,7 +2250,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
                 "[SCHED] WARN: finish_current_process with no current_task on cpu={}",
                 cpu_id
             );
-            return fallback_kstack_top;
+            return idle_top;
         }
     };
     if cur >= sched.processes.len() {
@@ -2227,16 +2259,11 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
             cur,
             cpu_id
         );
-        return fallback_kstack_top;
+        return idle_top;
     }
 
-    let kstack_top = sched.processes[cur].kernel_stack_top;
     if sched.processes[cur].state == crate::process::ProcessState::Finished {
-        return if kstack_top != 0 {
-            kstack_top
-        } else {
-            fallback_kstack_top
-        };
+        return idle_top;
     }
 
     sched.account_current_runtime();
@@ -2269,11 +2296,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         sched.wake_pid(parent_pid);
     }
 
-    if kstack_top != 0 {
-        kstack_top
-    } else {
-        fallback_kstack_top
-    }
+    idle_top
 }
 
 // ─── Globals and wrappers ─────────────────────────────────────────────────────

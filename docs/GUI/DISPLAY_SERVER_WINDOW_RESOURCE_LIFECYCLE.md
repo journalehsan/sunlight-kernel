@@ -262,4 +262,105 @@ In short: we deallocate and reuse. We do not reboot the desktop to clean up afte
 
 ---
 
+## 11. App Lifecycle Policy
+
+**Status:** Implemented — 2026-07-05  
+**Scope:** `sunlight-display` `app_lifecycle` module  
+
+The compositor tracks every graphical app as an `AppInstance` keyed by `pid`.
+Each instance carries a lifecycle policy that governs what happens when the
+app's last window closes.
+
+### Lifecycle Policies
+
+| Policy | Behavior on last-window-close | Notes |
+|---|---|---|
+| `ExitOnLastWindowClosed` | SIGTERM → 500 ms grace → SIGKILL | **Default** for all normal GUI apps |
+| `KeepAlive` | App stays alive; state becomes `IdleNoWindows` | Future opt-in only (macOS-style) |
+| `BackgroundAllowed` | Same as `ExitOnLastWindowClosed` for now; future will check tray/background registration | Pending background registration mechanism |
+| `System` | Never killed by window close | Shell, dock, display server, kernel |
+
+### Policy Assignment
+
+At `CREATE_WINDOW` time the compositor assigns a policy:
+
+- **Desktop** window type (`WindowType::Desktop`) → `System`
+- PIDs 0 or 1 (kernel / init) → `System`
+- Everything else → `ExitOnLastWindowClosed`
+
+This keeps the default simple: normal apps exit when their last window closes.
+A future app-manifest or registration protocol will enable `KeepAlive` or
+`BackgroundAllowed` for specific apps.
+
+### App States
+
+| State | Meaning |
+|---|---|
+| `Launching` | First window created, app is starting |
+| `Running` | App has at least one live window |
+| `Closing` | Last window closed, awaiting process exit (or force kill) |
+| `Background` | (future) Alive without foreground windows |
+| `IdleNoWindows` | (future) KeepAlive with zero windows |
+| `Exited` | Process has terminated |
+| `Crashed` | Process died unexpectedly |
+
+### Termination Escalation
+
+When the last window of an `ExitOnLastWindowClosed` app closes:
+
+1. Compositor sends **SIGTERM** (signal 15) to the owning process.
+2. The app is marked `Closing` and the close timestamp is recorded.
+3. If the process is still alive after a 500 ms grace period, the compositor's
+   zombie sweeper sends **SIGKILL** (signal 9), which forcibly terminates the
+   process regardless of its current state.
+4. After process exit (detected via `process_is_alive` poll), the `AppInstance`
+   is cleaned up and any orphaned windows are removed from the scene.
+
+### Zombie Sweeper
+
+The compositor runs a periodic sweep (every 1000 ms) that:
+
+- Escalates `Closing` apps that have exceeded the grace period.
+- Detects apps with no windows whose process is still alive (stale zombies).
+- Detects apps whose process has died unexpectedly and cleans up their windows.
+- Logs `zombie_app_reaped` for diagnostics.
+
+The sweep is integrated into the compositor's main event loop timeout path,
+which is guaranteed to fire at least every 500 ms.
+
+### Logging Events
+
+All lifecycle transitions are logged via `debug_log`:
+
+- `app_instance_created` — new AppInstance registered
+- `app_window_attached` — window added to an existing app
+- `app_window_detached` — window removed from its app
+- `app_last_window_closed` — last window removed, policy evaluation starts
+- `app_terminate_requested` — SIGTERM sent
+- `app_terminate_forced` — SIGKILL escalation
+- `app_exited` — process death confirmed
+- `app_lifecycle_policy` — policy assigned at registration
+- `zombie_app_reaped` — sweeper cleaned up a stale app
+
+### Shell Integration (Vortex)
+
+The Vortex shell's `sync_app_registry` treats "window-gone, process-alive" as
+the expected `Closing` transition instead of an error. Previously this was
+misdiagnosed as `Failed: window disappeared`.
+
+When an app enters `Closing` state the dock shows a subtle pulse to indicate
+the transition. Pinned apps remain in the dock with the running indicator
+turned off once the process exits; unpinned apps are removed from the running
+strip.
+
+### Future Work
+
+- `KeepAlive` manifest / registration protocol for opt-in macOS-style behavior.
+- Process-exit notification from `sunlight-gcd` for event-driven cleanup
+  (currently handled by the periodic sweeper).
+- Per-process window memory quotas and limits.
+- Generation IDs for window slot reuse.
+
+---
+
 **End of document.**

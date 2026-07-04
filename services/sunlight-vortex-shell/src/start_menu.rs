@@ -1257,7 +1257,7 @@ impl StartMenuState {
             if let Some(app) = apps.iter().find(|a| a.app_id == id) {
                 if matches!(
                     app.state,
-                    AppLaunchState::Running | AppLaunchState::Minimized
+                    AppLaunchState::Running | AppLaunchState::Minimized | AppLaunchState::Closing
                 ) {
                     canvas.fill_rect(
                         Rect::new(r.x + r.w as i32 / 2 - 8, r.bottom() - 3, 16, 2),

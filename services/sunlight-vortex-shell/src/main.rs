@@ -231,6 +231,7 @@ pub(crate) enum AppLaunchState {
     Launching,
     Running,
     Minimized,
+    Closing,
     Failed,
 }
 
@@ -1052,6 +1053,7 @@ impl VortexShell {
             AppLaunchState::Launching => "Launching",
             AppLaunchState::Running => "Running",
             AppLaunchState::Minimized => "Minimized",
+            AppLaunchState::Closing => "Closing",
             AppLaunchState::Failed => "Failed",
         }
     }
@@ -1439,7 +1441,7 @@ impl VortexShell {
                         dirty = true;
                     }
                 }
-                AppLaunchState::Running | AppLaunchState::Minimized => {
+                AppLaunchState::Running | AppLaunchState::Minimized | AppLaunchState::Closing => {
                     if let Some(pid) = prev_pid {
                         if !process_is_alive(pid) {
                             app.state = AppLaunchState::NotRunning;
@@ -1451,10 +1453,9 @@ impl VortexShell {
                             debug_log(")\n");
                             dirty = true;
                         } else {
-                            app.state = AppLaunchState::Failed;
-                            app.set_error("window disappeared");
+                            app.state = AppLaunchState::Closing;
                             app.main_window_id = None;
-                            debug_log("[VORTEX] app_window_lost(");
+                            debug_log("[VORTEX] app_closing_awaiting_exit(");
                             debug_log(app.display_name);
                             debug_log(")\n");
                             dirty = true;
@@ -1658,7 +1659,10 @@ impl VortexShell {
             app.main_window_id = None;
             if matches!(
                 app.state,
-                AppLaunchState::Running | AppLaunchState::Minimized | AppLaunchState::Launching
+                AppLaunchState::Running
+                    | AppLaunchState::Minimized
+                    | AppLaunchState::Launching
+                    | AppLaunchState::Closing
             ) {
                 app.state = AppLaunchState::NotRunning;
                 app.clear_error();
@@ -1781,7 +1785,7 @@ impl VortexShell {
         self.log_app_click(app_id);
         let state = self.app(app_id).state;
         match state {
-            AppLaunchState::NotRunning | AppLaunchState::Failed => {
+            AppLaunchState::NotRunning | AppLaunchState::Failed | AppLaunchState::Closing => {
                 self.launch_app(app_id, now, source)
             }
             AppLaunchState::Launching => {
@@ -1970,6 +1974,24 @@ fn draw_app_button(
             top_marker = true;
             if hovered {
                 fill = theme.accent.darken(74);
+            }
+        }
+        AppLaunchState::Closing => {
+            fill = if pulse {
+                theme.panel_alt
+            } else {
+                theme.panel
+            };
+            border = theme.border;
+            icon_color = if pulse {
+                theme.text_dim
+            } else {
+                theme.text
+            };
+            if hovered {
+                fill = theme.accent.darken(78);
+                border = theme.accent_hover.darken(24);
+                icon_color = theme.text;
             }
         }
         AppLaunchState::Failed => {

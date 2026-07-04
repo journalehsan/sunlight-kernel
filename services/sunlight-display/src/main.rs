@@ -12,7 +12,7 @@ use sunlight_libc as libc;
 
 use sunlight_ipc::debug_log;
 use sunlight_ipc::{
-    endpoint_create, ipc_recv, ipc_recv_timeout, ipc_reply,
+    endpoint_create, ipc_recv, ipc_recv_timeout, ipc_reply, kill,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_register,
     sgp::SgpMsg,
@@ -26,6 +26,7 @@ use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
 /// Embedded directly so the compositor can decode without a VFS read at startup.
 static WALLPAPER_TGA_BYTES: &[u8] = include_bytes!("../../../docs/images/wallpaper.tga");
 
+mod app_lifecycle;
 mod backend;
 mod blend;
 mod dirty;
@@ -927,6 +928,10 @@ struct CompositorState {
     /// Future user preference placeholder. Existing shade behavior stays wired.
     #[allow(dead_code)]
     titlebar_double_click_action: TitlebarDoubleClickAction,
+    /// Application lifecycle tracker: maps pid -> AppInstance, enforces
+    /// termination policy on last-window-close, and periodically sweeps
+    /// zombie processes.
+    app_tracker: app_lifecycle::AppTracker,
 }
 
 impl CompositorState {
@@ -1423,25 +1428,17 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
 
     let win = state.windows.remove(pos);
     let was_desktop = win.config.window_type == WindowType::Desktop;
-    let owner_pid = win.owner_pid;
 
-    // The display server owns the SHM object created at CREATE_WINDOW time, so
-    // normal close must explicitly release that ownership.
     let _ = sunlight_ipc::shm_free(win.shm_cap);
-    // TODO: Harden forced-close paths so SHM revocation is coordinated more
-    // explicitly with process-exit cleanup and stale clients.
 
-    // Terminate the owning application once its last window closes. Without this
-    // a closed app lingers headless (its EVENT_POLL loop keeps spinning on a
-    // window that no longer exists), and the shell reports it as "window
-    // disappeared" rather than restoring the not-running dock icon. SIGTERM lets
-    // the process exit cleanly; the shell's process_is_alive poll then flips the
-    // app back to NotRunning. The desktop shell (Desktop type) is exempt so the
-    // compositor never kills its own backdrop, and pids 0/1 (kernel/init) are
-    // never signalled.
-    const SIGTERM: u32 = 15;
-    if !was_desktop && owner_pid > 1 && !state.windows.iter().any(|w| w.owner_pid == owner_pid) {
-        let _ = sunlight_ipc::kill(owner_pid, SIGTERM);
+    let now = monotonic_millis();
+    let action = state.app_tracker.unregister_window(win_id, now);
+    match action {
+        app_lifecycle::AppAction::Terminate(pid) => {
+            let _ = kill(pid, 15);
+        }
+        app_lifecycle::AppAction::None => {}
+        app_lifecycle::AppAction::SystemProtected => {}
     }
 
     let cancel = match &state.active_drag {
@@ -1461,6 +1458,25 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
         }
     }
     true
+}
+
+fn sweep_app_zombies(state: &mut CompositorState, now: u64) -> bool {
+    if now < state.app_tracker.next_zombie_sweep_ms {
+        return false;
+    }
+    let result = state.app_tracker.sweep_zombies(now);
+    let mut dirty = false;
+    for win_id in &result.window_ids_to_cleanup {
+        close_window(state, *win_id, None);
+        dirty = true;
+    }
+    for _pid in &result.pids_killed {
+        debug_log(&alloc::format!(
+            "[APP_LIFECYCLE] zombie_app_reaped pid={}\n",
+            _pid
+        ));
+    }
+    dirty
 }
 
 fn list_window_reply(win: &Window) -> IpcMsg {
@@ -2024,11 +2040,16 @@ fn compositor_poll_timeout_ms(state: &CompositorState) -> Option<u64> {
     } else {
         None
     };
-    match (notification_timeout, overlay_timeout) {
+    let base = match (notification_timeout, overlay_timeout) {
         (Some(a), Some(b)) => Some(a.min(b)),
         (Some(a), None) => Some(a),
         (None, Some(b)) => Some(b),
         (None, None) => None,
+    };
+    // Always wake up periodically to run the zombie app sweeper.
+    match base {
+        Some(ms) => Some(ms.min(500)),
+        None => Some(500),
     }
 }
 
@@ -2965,6 +2986,7 @@ mod tests {
             last_titlebar_click_win_id: 0,
             last_titlebar_click_ms: 0,
             titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
+            app_tracker: app_lifecycle::AppTracker::new(),
         }
     }
 
@@ -3465,6 +3487,7 @@ pub extern "C" fn _start() -> ! {
         last_titlebar_click_win_id: 0,
         last_titlebar_click_ms: 0,
         titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
+        app_tracker: app_lifecycle::AppTracker::new(),
     };
     log_debug_counters(&state, "startup");
     // Prime the back_buffer content (wallpaper/desktop color) but do NOT
@@ -3487,6 +3510,9 @@ pub extern "C" fn _start() -> ! {
                     needs_redraw = true;
                 }
                 if update_overlay_window_visibility(&mut state, now, false, false) {
+                    needs_redraw = true;
+                }
+                if sweep_app_zombies(&mut state, now) {
                     needs_redraw = true;
                 }
                 if needs_redraw {
@@ -3542,11 +3568,8 @@ pub extern "C" fn _start() -> ! {
                 );
 
                 match sunlight_ipc::shm_create(size, 0) {
-                    Ok((_, shm_tok)) => {
-                        let our_buf = match sunlight_ipc::shm_map(shm_tok) {
-                            Ok(p) => p as *mut u32,
-                            Err(_) => core::ptr::null_mut(),
-                        };
+                    Ok((buf, shm_tok)) => {
+                        let our_buf = buf as *mut u32;
 
                         let id = next_win_id;
                         next_win_id += 1;
@@ -3630,6 +3653,12 @@ pub extern "C" fn _start() -> ! {
                         if is_desktop_window {
                             state.vortex_launch_pending = false;
                         }
+                        state.app_tracker.register_window(
+                            owner_pid,
+                            id,
+                            window_title_str(&config.title),
+                            is_desktop_window,
+                        );
                         mark_dirty_full(&mut state);
                         redraw_scene(&mut state);
                         launch_trace::log_phase_now(

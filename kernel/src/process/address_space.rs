@@ -472,6 +472,11 @@ impl AddressSpace {
     ) -> &'static mut PageTable {
         if entry.is_unused() {
             let frame_addr = pmm.alloc_frame().expect("page table alloc failed");
+            debug_assert!(
+                frame_addr.as_u64() & 0xFFF == 0,
+                "PMM returned unaligned frame_addr {:#x}",
+                frame_addr.as_u64()
+            );
             let flags = PageTableFlags::PRESENT
                 | PageTableFlags::WRITABLE
                 | PageTableFlags::USER_ACCESSIBLE;
