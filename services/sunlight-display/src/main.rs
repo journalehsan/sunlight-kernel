@@ -15,8 +15,9 @@ use sunlight_ipc::{
     endpoint_create, ipc_recv, ipc_recv_timeout, ipc_reply,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_register,
-    sgp::SgpMsg, DisplayMetrics, PixelFormat, ScreenBackend, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
-    validate_size, CapabilityToken, IpcMsg, MouseMsg, NotificationKind,
+    sgp::SgpMsg,
+    validate_size, CapabilityToken, DisplayMetrics, IpcMsg, MouseMsg, NotificationKind,
+    PixelFormat, ScreenBackend, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
@@ -3550,8 +3551,8 @@ pub extern "C" fn _start() -> ! {
                         let id = next_win_id;
                         next_win_id += 1;
 
-                        let titlebar_h = WindowDecoration::from_flags(msg.words[1])
-                            .titlebar_height();
+                        let titlebar_h =
+                            WindowDecoration::from_flags(msg.words[1]).titlebar_height();
                         let chrome_w = w.saturating_add(BORDER_W * 2);
                         let chrome_h = titlebar_h + h + BORDER_W;
                         let metrics = state.display_metrics();

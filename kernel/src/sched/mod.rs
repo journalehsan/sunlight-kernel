@@ -2138,7 +2138,8 @@ fn build_kernel_idle_frame(stack_top: u64) -> u64 {
         for i in 0..15 {
             base.add(i).write_volatile(0);
         }
-        base.add(15).write_volatile(core_idle_entry as *const () as usize as u64);
+        base.add(15)
+            .write_volatile(core_idle_entry as *const () as usize as u64);
         base.add(16).write_volatile(0x08); // kernel 64-bit code selector
         base.add(17).write_volatile(0x202); // IF=1
         base.add(18).write_volatile(stack_top.saturating_sub(8));

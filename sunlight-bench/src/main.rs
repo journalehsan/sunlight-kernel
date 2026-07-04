@@ -1,7 +1,7 @@
 //! sunlight-bench — SunlightOS performance benchmarking suite.
 
 #![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
 
@@ -20,15 +20,15 @@ mod thread;
 use core::alloc::{GlobalAlloc, Layout};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
+use bench_mode::{enter_parallel_phase, leave_parallel_phase, parallel_workers};
 use cpu::CpuRunner;
 use matrix::MatrixRunner;
 use multi::{AsyncHandle, WorkloadId};
 use pi::PiRunner;
 use prime_scan::PrimeRunner;
-use bench_mode::{enter_parallel_phase, leave_parallel_phase, parallel_workers};
 use scoring::{
-    make_entry, multi_fixed_score, multi_work_per_core_score, score_report, Entry, ScoreReport,
-    StageMetrics, WorkloadClass, BENCH_COUNT, SINGLE_COUNT,
+    format_bench_v2_summary, make_entry, score_report, Entry, ScoreReport, StageMetrics,
+    WorkloadClass, BENCH_COUNT,
 };
 use sieve::SieveRunner;
 use sun_font::{FontRole, VecFont};
@@ -130,6 +130,7 @@ unsafe impl GlobalAlloc for BumpAlloc {
 #[global_allocator]
 static ALLOC: BumpAlloc = BumpAlloc;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     if let Some(loc) = info.location() {
@@ -191,22 +192,18 @@ struct BenchApp {
     status_len: usize,
     detail: [u8; 160],
     detail_len: usize,
-    single_text: [u8; 24],
+    single_text: [u8; 48],
     single_len: usize,
-    multi_text: [u8; 24],
+    multi_text: [u8; 48],
     multi_len: usize,
-    total_text: [u8; 24],
-    total_len: usize,
-    legacy_text: [u8; 28],
+    final_text: [u8; 32],
+    final_len: usize,
+    legacy_text: [u8; 36],
     legacy_len: usize,
-    norm_text: [u8; 56],
-    norm_len: usize,
     core_text: [u8; 24],
     core_len: usize,
     phase_text: [u8; 32],
     phase_len: usize,
-    speed_text: [u8; 48],
-    speed_len: usize,
     results: [Option<Entry>; BENCH_COUNT],
     row_bufs: [[[u8; CELL_BUF]; TABLE_COLS]; BENCH_COUNT],
     row_lens: [[usize; TABLE_COLS]; BENCH_COUNT],
@@ -239,22 +236,18 @@ impl BenchApp {
             status_len: 0,
             detail: [0; 160],
             detail_len: 0,
-            single_text: [0; 24],
+            single_text: [0; 48],
             single_len: 0,
-            multi_text: [0; 24],
+            multi_text: [0; 48],
             multi_len: 0,
-            total_text: [0; 24],
-            total_len: 0,
-            legacy_text: [0; 28],
+            final_text: [0; 32],
+            final_len: 0,
+            legacy_text: [0; 36],
             legacy_len: 0,
-            norm_text: [0; 56],
-            norm_len: 0,
             core_text: [0; 24],
             core_len: 0,
             phase_text: [0; 32],
             phase_len: 0,
-            speed_text: [0; 48],
-            speed_len: 0,
             results: [None; BENCH_COUNT],
             row_bufs: [[[0; CELL_BUF]; TABLE_COLS]; BENCH_COUNT],
             row_lens: [[0; TABLE_COLS]; BENCH_COUNT],
@@ -305,16 +298,12 @@ impl BenchApp {
         as_str(&self.multi_text[..self.multi_len])
     }
 
-    fn total_str(&self) -> &str {
-        as_str(&self.total_text[..self.total_len])
+    fn final_str(&self) -> &str {
+        as_str(&self.final_text[..self.final_len])
     }
 
     fn legacy_str(&self) -> &str {
         as_str(&self.legacy_text[..self.legacy_len])
-    }
-
-    fn norm_str(&self) -> &str {
-        as_str(&self.norm_text[..self.norm_len])
     }
 
     fn core_str(&self) -> &str {
@@ -323,10 +312,6 @@ impl BenchApp {
 
     fn phase_str(&self) -> &str {
         as_str(&self.phase_text[..self.phase_len])
-    }
-
-    fn speed_str(&self) -> &str {
-        as_str(&self.speed_text[..self.speed_len])
     }
 
     fn elapsed_ms(entry: Entry) -> u64 {
@@ -460,51 +445,49 @@ impl BenchApp {
         let report = self.scores();
         let workers = self.worker_count();
 
-        self.core_len = copy_bytes(b"Cores ", &mut self.core_text);
-        self.core_len += write_num_into(workers.min(u32::MAX as usize) as u32, &mut self.core_text[self.core_len..]);
-        self.core_len += copy_bytes(b" | ", &mut self.core_text[self.core_len..]);
-        let phase = completed_count(&self.results);
-        self.core_len += write_num_into(phase as u32, &mut self.core_text[self.core_len..]);
-        self.core_len += copy_bytes(b"/", &mut self.core_text[self.core_len..]);
-        self.core_len += write_num_into(BENCH_COUNT as u32, &mut self.core_text[self.core_len..]);
-        self.core_len += copy_bytes(b" stages", &mut self.core_text[self.core_len..]);
+        self.final_len = copy_bytes(b"Final v2 Score: ", &mut self.final_text);
+        self.final_len += write_u64_into(
+            report.weighted_final,
+            &mut self.final_text[self.final_len..],
+        );
 
-        self.single_len = copy_bytes(b"1C Raw ", &mut self.single_text);
-        self.single_len += write_u64_into(report.single_raw, &mut self.single_text[self.single_len..]);
+        self.single_len = copy_bytes(b"Single normalized/raw: ", &mut self.single_text);
+        self.single_len += write_u64_into(
+            report.single_normalized,
+            &mut self.single_text[self.single_len..],
+        );
+        self.single_len += copy_bytes(b" / ", &mut self.single_text[self.single_len..]);
+        self.single_len +=
+            write_u64_into(report.single_raw, &mut self.single_text[self.single_len..]);
 
-        self.multi_len = copy_bytes(b"NC Raw ", &mut self.multi_text);
+        self.multi_len = copy_bytes(b"Multi normalized/raw: ", &mut self.multi_text);
+        self.multi_len += write_u64_into(
+            report.multi_normalized,
+            &mut self.multi_text[self.multi_len..],
+        );
+        self.multi_len += copy_bytes(b" / ", &mut self.multi_text[self.multi_len..]);
         self.multi_len += write_u64_into(report.multi_raw, &mut self.multi_text[self.multi_len..]);
 
-        self.total_len = copy_bytes(b"Score v2 ", &mut self.total_text);
-        self.total_len +=
-            write_u64_into(report.weighted_total, &mut self.total_text[self.total_len..]);
+        self.legacy_len = copy_bytes(b"Legacy Raw Total: ", &mut self.legacy_text);
+        self.legacy_len += write_u64_into(
+            report.legacy_raw_total,
+            &mut self.legacy_text[self.legacy_len..],
+        );
 
-        self.legacy_len = copy_bytes(b"Legacy ", &mut self.legacy_text);
-        self.legacy_len +=
-            write_u64_into(report.legacy_total, &mut self.legacy_text[self.legacy_len..]);
+        self.core_len = copy_bytes(b"Cores: ", &mut self.core_text);
+        self.core_len += write_num_into(
+            workers.min(u32::MAX as usize) as u32,
+            &mut self.core_text[self.core_len..],
+        );
 
-        self.norm_len = copy_bytes(b"Norm 1C ", &mut self.norm_text);
-        self.norm_len +=
-            write_u64_into(report.single_normalized, &mut self.norm_text[self.norm_len..]);
-        self.norm_len += copy_bytes(b" | NC ", &mut self.norm_text[self.norm_len..]);
-        self.norm_len +=
-            write_u64_into(report.multi_normalized, &mut self.norm_text[self.norm_len..]);
-
-        let fixed = multi_fixed_score(&self.results);
-        let per_core = multi_work_per_core_score(&self.results);
         let speedup = self.multi_speedup_ratio();
         let efficiency = self.multi_efficiency_pct();
-        self.phase_len = copy_bytes(b"Speedup ", &mut self.phase_text);
+        self.phase_len = copy_bytes(b"Speedup: ", &mut self.phase_text);
         self.phase_len +=
             write_optional_ratio_into(speedup, &mut self.phase_text[self.phase_len..]);
-        self.phase_len += copy_bytes(b" | Eff ", &mut self.phase_text[self.phase_len..]);
+        self.phase_len += copy_bytes(b"  Eff: ", &mut self.phase_text[self.phase_len..]);
         self.phase_len +=
             write_optional_pct_into(efficiency, &mut self.phase_text[self.phase_len..]);
-
-        self.speed_len = copy_bytes(b"Fixed ", &mut self.speed_text);
-        self.speed_len += write_u64_into(fixed, &mut self.speed_text[self.speed_len..]);
-        self.speed_len += copy_bytes(b" | Per-core ", &mut self.speed_text[self.speed_len..]);
-        self.speed_len += write_u64_into(per_core, &mut self.speed_text[self.speed_len..]);
     }
 
     fn rebuild_rows(&mut self) {
@@ -668,23 +651,22 @@ impl BenchApp {
     fn emit_serial_report(&mut self) {
         let report = self.scores();
         let workers = self.worker_count();
+        let stages = completed_count(&self.results);
         debug_log("[BENCH] ============================================");
-        debug_log("[BENCH] SunLight-Bench results (scoring v2)");
-        debug_log("[BENCH] ============================================");
-        log_score_summary(workers, report, self.multi_speedup_ratio(), self.multi_efficiency_pct());
-        debug_log(&alloc::format!(
-            "[BENCH] Multi fixed-total-work subtotal: {}",
-            multi_fixed_score(&self.results)
-        ));
-        debug_log(&alloc::format!(
-            "[BENCH] Multi work-per-core subtotal:    {}",
-            multi_work_per_core_score(&self.results)
-        ));
-        debug_log(&alloc::format!("[BENCH] {}", self.speed_str()));
-        debug_log("[BENCH] ── Per-stage results ──");
-        for entry in self.results.iter().flatten() {
-            log_entry(*entry);
+        log_bench_v2_summary(
+            report,
+            workers,
+            stages,
+            self.multi_speedup_ratio(),
+            self.multi_efficiency_pct(),
+        );
+        debug_log("[BENCH] Per-stage Results:");
+        for (idx, entry) in self.results.iter().enumerate() {
+            if let Some(entry) = entry {
+                log_stage_compact(*entry, self.row_state(idx));
+            }
         }
+        debug_log("[BENCH] ============================================");
         self.serial_reported = true;
         self.set_status("Results mirrored to serial");
     }
@@ -1035,25 +1017,13 @@ impl App for BenchApp {
             .draw(canvas, theme);
 
         Label::new(
-            Rect::new(summary.x + 120, summary.y + 20, 180, 16),
-            self.single_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 300, summary.y + 20, 180, 16),
-            self.multi_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 480, summary.y + 20, 180, 16),
-            self.total_str(),
+            Rect::new(summary.x + 120, summary.y + 20, 420, 16),
+            self.final_str(),
         )
         .with_font(&F_MED)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 660, summary.y + 20, 120, 16),
+            Rect::new(summary.x + 560, summary.y + 22, 200, 14),
             self.legacy_str(),
         )
         .dim()
@@ -1061,35 +1031,34 @@ impl App for BenchApp {
         .draw(canvas, theme);
 
         Label::new(
-            Rect::new(summary.x + 14, summary.y + 44, summary.w.saturating_sub(28), 14),
-            self.norm_str(),
+            Rect::new(summary.x + 14, summary.y + 42, 400, 14),
+            self.single_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 14, summary.y + 60, 240, 14),
-            self.status_str(),
+            Rect::new(summary.x + 420, summary.y + 42, 400, 14),
+            self.multi_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 14, summary.y + 76, 240, 14),
+            Rect::new(summary.x + 14, summary.y + 60, 120, 14),
             self.core_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 300, summary.y + 76, 280, 14),
+            Rect::new(summary.x + 140, summary.y + 60, 280, 14),
             self.phase_str(),
         )
         .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
-            Rect::new(summary.x + 300, summary.y + 92, 360, 14),
-            self.speed_str(),
+            Rect::new(summary.x + 14, summary.y + 78, 400, 14),
+            self.status_str(),
         )
-        .dim()
-        .with_font(&F_SMALL)
+        .with_font(&F_UI)
         .draw(canvas, theme);
         Label::new(
             Rect::new(
@@ -1209,6 +1178,7 @@ impl App for BenchApp {
     }
 }
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     let pid = sunlight_ipc::getpid();
@@ -1446,14 +1416,15 @@ fn run_headless(pid: u64, ncores: usize) -> ! {
         }
     ));
 
-    for entry in results.iter().flatten() {
-        log_entry(*entry);
-    }
-
     let report = score_report(&results);
     let speedup = headless_speedup_ratio(&results);
     let efficiency = headless_efficiency_pct(&results, workers);
-    log_score_summary(workers, report, speedup, efficiency);
+    let stages = results.iter().filter(|entry| entry.is_some()).count();
+    log_bench_v2_summary(report, workers, stages, speedup, efficiency);
+    debug_log("[BENCH] Per-stage Results:");
+    for entry in results.iter().flatten() {
+        log_stage_compact(*entry, "Done");
+    }
     sunlight_ipc::set_nice(pid, 0);
     ProcessExit::exit(0);
 }
@@ -1470,54 +1441,39 @@ fn headless_speedup_ratio(results: &[Option<Entry>; BENCH_COUNT]) -> Option<(u64
     }
 }
 
-fn headless_efficiency_pct(
-    results: &[Option<Entry>; BENCH_COUNT],
-    workers: usize,
-) -> Option<u64> {
+fn headless_efficiency_pct(results: &[Option<Entry>; BENCH_COUNT], workers: usize) -> Option<u64> {
     let (single_ms, multi_ms) = headless_speedup_ratio(results)?;
     let cores = workers.max(1) as u64;
     Some(single_ms.saturating_mul(100) / (multi_ms.saturating_mul(cores)))
 }
 
-fn log_score_summary(
-    workers: usize,
+fn log_bench_v2_summary(
     report: ScoreReport,
+    cores: usize,
+    stages_completed: usize,
     speedup: Option<(u64, u64)>,
     efficiency: Option<u64>,
 ) {
-    debug_log(&alloc::format!("[BENCH] Cores used:              {:>12}", workers));
-    debug_log(&alloc::format!(
-        "[BENCH] Single-Core Raw:         {:>12}",
-        report.single_raw
-    ));
-    debug_log(&alloc::format!(
-        "[BENCH] Multi-Core Raw:          {:>12}",
-        report.multi_raw
-    ));
-    debug_log(&alloc::format!(
-        "[BENCH] Single-Core Normalized:  {:>12}",
-        report.single_normalized
-    ));
-    debug_log(&alloc::format!(
-        "[BENCH] Multi-Core Normalized:   {:>12}",
-        report.multi_normalized
-    ));
-    debug_log(&alloc::format!(
-        "[BENCH] Weighted Total (v2):     {:>12}",
-        report.weighted_total
-    ));
-    debug_log(&alloc::format!(
-        "[BENCH] Legacy Total (raw sum):  {:>12}",
-        report.legacy_total
-    ));
     let mut speed_buf = [0u8; 16];
     let speed_len = write_optional_ratio_into(speedup, &mut speed_buf);
     let speed = as_str(&speed_buf[..speed_len]);
     let mut eff_buf = [0u8; 8];
     let eff_len = write_optional_pct_into(efficiency, &mut eff_buf);
     let eff = as_str(&eff_buf[..eff_len]);
-    debug_log(&alloc::format!("[BENCH] Speedup:                 {:>12}", speed));
-    debug_log(&alloc::format!("[BENCH] Efficiency:              {:>12}", eff));
+    let summary = format_bench_v2_summary(report, cores, stages_completed, speed, eff);
+    for line in summary.lines() {
+        debug_log(&alloc::format!("[BENCH] {line}"));
+    }
+}
+
+fn log_stage_compact(entry: Entry, state: &str) {
+    debug_log(&alloc::format!(
+        "[BENCH]   - {}, cycles={}, score={}, state={}",
+        entry.name,
+        entry.cycles,
+        entry.score,
+        state
+    ));
 }
 
 fn log_entry(entry: Entry) {

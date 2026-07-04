@@ -174,10 +174,7 @@ impl DisplayMetrics {
             x = x.min(self.width_px.saturating_sub(chrome_w));
         }
 
-        let max_y = self
-            .height_px
-            .saturating_sub(chrome_h)
-            .max(min_y);
+        let max_y = self.height_px.saturating_sub(chrome_h).max(min_y);
         y = y.clamp(min_y, max_y);
         (x, y)
     }
@@ -208,8 +205,7 @@ impl DisplayMetrics {
     /// Pack `GET_SCREEN_INFO` reply words (backward compatible: word 0 unchanged).
     pub fn pack_reply_words(self) -> [u64; 4] {
         let wh = (self.width_px as u64) | ((self.height_px as u64) << 32);
-        let stride_fmt =
-            (self.stride_bytes as u64) | ((self.pixel_format as u64) << 32);
+        let stride_fmt = (self.stride_bytes as u64) | ((self.pixel_format as u64) << 32);
         let meta = (self.scale_fp as u64) | ((self.backend as u64) << 32);
         let refresh = self.refresh_hz.unwrap_or(0) as u64;
         [wh, stride_fmt, meta, refresh]

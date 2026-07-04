@@ -40,11 +40,7 @@ mod tests {
 
     #[test]
     fn extract_skips_metadata() {
-        let args = [
-            "--sunlight-launch=2:shell:47330",
-            "?",
-            "/root/roadmap.md",
-        ];
+        let args = ["--sunlight-launch=2:shell:47330", "?", "/root/roadmap.md"];
         assert_eq!(
             extract_first_real_file_path(&args),
             Some("/root/roadmap.md")

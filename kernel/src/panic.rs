@@ -31,9 +31,7 @@ fn alloc_error(layout: core::alloc::Layout) -> ! {
     if let Some(mut sched) = crate::sched::SCHEDULER.try_lock() {
         let mut reaped = 0usize;
         for idx in 0..sched.processes.len() {
-            if sched.processes[idx].state
-                == crate::process::ProcessState::Finished
-            {
+            if sched.processes[idx].state == crate::process::ProcessState::Finished {
                 // Clear heap-allocated fields to free kernel-heap memory
                 // without touching PMM or IPC locks (best-effort).
                 sched.processes[idx].ipc_queue.clear();
@@ -54,13 +52,14 @@ fn alloc_error(layout: core::alloc::Layout) -> ! {
             }
         }
         if reaped > 0 {
-            serial_println!(
-                "[OOM] Emergency-purged {} finished process slots",
-                reaped
-            );
+            serial_println!("[OOM] Emergency-purged {} finished process slots", reaped);
         }
     }
 
     // Panic instead of hanging, so the failure is immediately visible.
-    panic!("[OOM] Allocation of {} bytes (align={}) failed", layout.size(), layout.align());
+    panic!(
+        "[OOM] Allocation of {} bytes (align={}) failed",
+        layout.size(),
+        layout.align()
+    );
 }

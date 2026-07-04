@@ -61,9 +61,9 @@ use sunlight_ipc::{
     debug_log, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, process_is_alive, process_yield, query_display_metrics,
-    show_notification, unpack_iface_summary, DisplayMetrics, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
-    CapabilityToken, InterfaceKind, IpcMsg, LinkState, NetworkdMsg, NotificationKind, ProcessExit,
-    SgpMsg, TzMsg,
+    show_notification, unpack_iface_summary, CapabilityToken, DisplayMetrics, InterfaceKind,
+    IpcMsg, LinkState, NetworkdMsg, NotificationKind, ProcessExit, SgpMsg, TzMsg, SAFE_FALLBACK_H,
+    SAFE_FALLBACK_W,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
@@ -3077,8 +3077,14 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         "folder" | "home" | "folder-home" => Some(ICON_FOLDER_TGA),
         "computer" | "desktop-computer" => Some(ICON_COMPUTER_TGA),
         "drive" | icon_name::DRIVE | "disk" => Some(ICON_DRIVE_TGA),
-        "text" | icon_name::TEXT_GENERIC | "editor" | "writer" | "notes" | "sunlight-edit"
-        | "sunlight-text" | "kate" => Some(ICON_FILE_TGA),
+        "text"
+        | icon_name::TEXT_GENERIC
+        | "editor"
+        | "writer"
+        | "notes"
+        | "sunlight-edit"
+        | "sunlight-text"
+        | "kate" => Some(ICON_FILE_TGA),
         _ => None,
     }
 }
@@ -3851,7 +3857,10 @@ fn open_error_notification(err: sun_open::OpenError, path: &str) -> (&'static st
             debug_log("[VORTEX] open failed for ");
             debug_log(path);
             debug_log("\n");
-            ("Cannot open file", "Unable to launch the default application")
+            (
+                "Cannot open file",
+                "Unable to launch the default application",
+            )
         }
     }
 }

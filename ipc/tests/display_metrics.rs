@@ -1,5 +1,5 @@
 use sunlight_ipc::{
-    DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect, SCALE_FP_ONE, validate_size, MAX_DIM,
+    validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect, MAX_DIM, SCALE_FP_ONE,
 };
 
 #[test]
@@ -77,13 +77,7 @@ fn window_origin_stays_on_screen() {
 #[test]
 fn initial_placement_fits_multiple_resolutions() {
     for (w, h) in [(1920, 1080), (1366, 768), (1024, 768)] {
-        let m = DisplayMetrics::new(
-            w,
-            h,
-            w * 4,
-            PixelFormat::Xrgb8888,
-            ScreenBackend::VirtioGpu,
-        );
+        let m = DisplayMetrics::new(w, h, w * 4, PixelFormat::Xrgb8888, ScreenBackend::VirtioGpu);
         let client_w = 600;
         let client_h = 440;
         let chrome_w = client_w + 2;
@@ -105,7 +99,15 @@ fn wallpaper_rect_covers_screen() {
         ScreenBackend::VirtioGpu,
     );
     let r = m.wallpaper_target_rect();
-    assert_eq!(r, ScreenRect { x: 0, y: 0, w: 1600, h: 900 });
+    assert_eq!(
+        r,
+        ScreenRect {
+            x: 0,
+            y: 0,
+            w: 1600,
+            h: 900
+        }
+    );
 }
 
 #[test]

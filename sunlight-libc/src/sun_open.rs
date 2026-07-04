@@ -41,11 +41,9 @@ pub fn mime_from_path(path: &[u8]) -> &'static [u8] {
 /// Look up the default application path for a MIME type.
 pub fn app_for_mime(mime: &[u8]) -> Option<&'static [u8]> {
     match mime {
-        b"text/plain"
-        | b"text/markdown"
-        | b"text/toml"
-        | b"text/rust"
-        | b"application/json" => Some(b"/bin/sunlight-edit"),
+        b"text/plain" | b"text/markdown" | b"text/toml" | b"text/rust" | b"application/json" => {
+            Some(b"/bin/sunlight-edit")
+        }
         _ => None,
     }
 }
@@ -94,8 +92,8 @@ pub fn launch_desktop_entry(
     let exec_value = find_exec_value(&buf[..len]).ok_or(OpenError::InvalidDesktopEntry)?;
 
     let mut normalized = [0u8; MAX_EXEC_LINE];
-    let norm_len = normalize_exec_line(exec_value, &mut normalized)
-        .ok_or(OpenError::InvalidDesktopEntry)?;
+    let norm_len =
+        normalize_exec_line(exec_value, &mut normalized).ok_or(OpenError::InvalidDesktopEntry)?;
 
     let mut words = [&[][..]; libc::MAX_ARGS - 1];
     let word_count = sun_exec::split_words(&normalized[..norm_len], &mut words)
@@ -112,8 +110,7 @@ fn read_file_bytes(path: &[u8], buf: &mut [u8]) -> Result<usize, OpenError> {
     let fd = libc::open(path).map_err(|_| OpenError::InvalidDesktopEntry)?;
     let mut total = 0usize;
     while total < buf.len() {
-        let n = libc::read(fd, &mut buf[total..])
-            .map_err(|_| OpenError::InvalidDesktopEntry)?;
+        let n = libc::read(fd, &mut buf[total..]).map_err(|_| OpenError::InvalidDesktopEntry)?;
         if n == 0 {
             break;
         }

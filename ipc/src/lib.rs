@@ -2,8 +2,8 @@
 
 pub mod display_metrics;
 pub use display_metrics::{
-    DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect, BORDER_W as DISPLAY_BORDER_W,
-    MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE, validate_size,
+    validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
+    BORDER_W as DISPLAY_BORDER_W, MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE,
 };
 
 pub const IPC_MAX_WORDS: usize = 8;

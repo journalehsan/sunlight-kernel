@@ -372,11 +372,7 @@ impl ControlPanelApp {
         let cur_str = fmt_cur_res(self.screen_w, self.screen_h, &mut cur_buf);
         Label::new(cur_row, cur_str).draw(canvas, theme);
 
-        Label::new(
-            opt1_row,
-            "Runtime mode switching is not available yet.",
-        )
-        .draw(canvas, theme);
+        Label::new(opt1_row, "Runtime mode switching is not available yet.").draw(canvas, theme);
         Label::new(
             opt2_row,
             "Use host VM settings or ./tools/runs.sh --resolution.",

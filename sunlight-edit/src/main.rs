@@ -21,8 +21,7 @@ use sunlight_libc::{self as libc, crt0};
 use sunlight_ui::widgets::button::ButtonState;
 use sunlight_ui::widgets::{StatusBar, Toolbar, ToolbarItem};
 use sunlight_ui::{
-    request_close, App, Canvas, Event, Point, Rect, Theme, Window, WindowConfig,
-    WindowDecoration,
+    request_close, App, Canvas, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
 };
 
 static FONT_MONO: VecFont = VecFont(FontRole::MonoRegular);
@@ -187,7 +186,9 @@ enum ActiveDialog {
     SaveBeforeClose,
     /// Path prompt for temporary documents. `close_after_save` is true when
     /// opened from the close flow (Save/Discard/Cancel); false from Save.
-    PromptSavePath { close_after_save: bool },
+    PromptSavePath {
+        close_after_save: bool,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -376,9 +377,7 @@ impl EditApp {
     }
 
     fn save_to_backing(&mut self) -> Result<(), &'static str> {
-        let backing = self
-            .backing_path
-            .ok_or("No save path")?;
+        let backing = self.backing_path.ok_or("No save path")?;
         let content = self.buffer.to_utf8_string();
         write_utf8_file(backing.as_bytes(), content.as_bytes())
     }
@@ -492,7 +491,12 @@ impl EditApp {
             (ActiveDialog::PromptSavePath { close_after_save }, DialogAction::Save) => {
                 self.commit_prompted_save(close_after_save)
             }
-            (ActiveDialog::PromptSavePath { close_after_save: true }, DialogAction::Discard) => {
+            (
+                ActiveDialog::PromptSavePath {
+                    close_after_save: true,
+                },
+                DialogAction::Discard,
+            ) => {
                 self.dismiss_dialog();
                 request_close();
                 true
@@ -634,7 +638,11 @@ impl EditApp {
         }
         let rel = (x - rect.x).max(0) as u32;
         let idx = (rel / ITEM_W) as usize;
-        if idx < ITEMS { Some(idx) } else { None }
+        if idx < ITEMS {
+            Some(idx)
+        } else {
+            None
+        }
     }
 
     fn handle_toolbar_click(&mut self, idx: usize) -> bool {
@@ -836,9 +844,7 @@ impl EditApp {
             ActiveDialog::SaveBeforeClose => "Save changes before closing?",
             ActiveDialog::PromptSavePath {
                 close_after_save: true,
-            } => {
-                "This document is only saved in a temporary file. Enter a final path to save it:"
-            }
+            } => "This document is only saved in a temporary file. Enter a final path to save it:",
             ActiveDialog::PromptSavePath {
                 close_after_save: false,
             } => "Choose a location to save this document:",
@@ -1053,9 +1059,8 @@ fn user_home_dir() -> &'static str {
 fn default_save_path_for_user() -> PathBuf {
     let mut path = String::from(user_home_dir());
     path.push_str("/untitled.txt");
-    PathBuf::from_str(&path).unwrap_or_else(|| {
-        PathBuf::from_str(DEFAULT_SAVE_PATH).unwrap_or(PathBuf::empty())
-    })
+    PathBuf::from_str(&path)
+        .unwrap_or_else(|| PathBuf::from_str(DEFAULT_SAVE_PATH).unwrap_or(PathBuf::empty()))
 }
 
 fn create_temp_backing_path() -> Result<PathBuf, &'static str> {

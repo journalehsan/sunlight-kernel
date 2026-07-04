@@ -11,8 +11,7 @@
 use sunlight_ipc::{
     endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, nameserver_lookup,
     nameserver_lookup_timeout, nameserver_register, process_yield, query_display_metrics,
-    DisplayMetrics, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg,
-    ProcessExit,
+    DevicedMsg, DisplayMetrics, DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
 };
 
 mod profile;

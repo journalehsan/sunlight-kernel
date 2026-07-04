@@ -800,8 +800,8 @@ impl State {
     }
 
     fn open_file_with_resolver(&mut self, path: &PathBuf) -> bool {
-        let trace = launch_trace::current()
-            .unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+        let trace =
+            launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
         match sun_open::open_path(trace, LaunchSource::Unknown, path.as_str().as_bytes()) {
             Ok(_) => {
                 self.clear_error();

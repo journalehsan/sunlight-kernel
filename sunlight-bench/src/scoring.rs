@@ -1,36 +1,37 @@
 //! Score normalisation helpers shared by the GUI and serial views.
 //!
-//! # v2 weighted total
+//! # Why v2 scoring exists
 //!
-//! Per-stage raw scores use different formulas for single-core (`score_single`) and
-//! multi-core (`score_multi`). On typical hardware the single-core group sums to
-//! roughly 1.4M while the multi-core group stays in the low thousands, so adding
-//! raw group totals (`legacy_total`) makes the headline score almost insensitive to
-//! SMP scaling (4-core vs 12-core multi-core gains barely move Total).
+//! Raw single-core and multi-core scores are on very different scales. A typical
+//! 12-core run might produce ~1.7M single-core raw vs ~26k multi-core raw. The
+//! legacy total (`single_raw + multi_raw`) is therefore ~99% single-core; even
+//! when N-core improves sharply (e.g. 14k → 26k), the legacy total barely moves
+//! and 4-core vs 8-core vs 12-core comparisons look flat.
 //!
-//! v2 normalises each group independently against its reference sum (stage count ×
-//! 1000 at baseline hardware), then combines with configurable weights so single-
-//! and multi-core contributions are comparable.
+//! v2 scoring keeps all raw data but normalises each group independently against
+//! internal baseline constants (scoring calibration, not hardware truth), then
+//! blends the normalised groups with equal weights so SMP scaling affects the
+//! headline score.
+
+extern crate alloc;
+
+use alloc::string::String;
 
 pub const SINGLE_COUNT: usize = 5;
 pub const MULTI_COUNT: usize = 3;
 pub const BENCH_COUNT: usize = SINGLE_COUNT + MULTI_COUNT;
 
-/// Per-stage score on reference hardware (see `score_single` / `score_multi`).
-pub const REFERENCE_STAGE_SCORE: u64 = 1_000;
+/// Single-core raw sum that maps to normalised 1000. Scoring constant only.
+pub const SINGLE_BASELINE: u64 = 1_000_000;
 
-/// Expected raw single-core group sum at reference hardware.
-pub const SINGLE_GROUP_BASELINE: u64 = (SINGLE_COUNT as u64) * REFERENCE_STAGE_SCORE;
+/// Multi-core raw sum that maps to normalised 1000. Scoring constant only.
+pub const MULTI_BASELINE: u64 = 10_000;
 
-/// Expected raw multi-core group sum at reference hardware.
-pub const MULTI_GROUP_BASELINE: u64 = (MULTI_COUNT as u64) * REFERENCE_STAGE_SCORE;
+/// Single-core weight in the v2 final score.
+pub const SINGLE_WEIGHT: f64 = 0.50;
 
-/// Weight (percent) of normalised single-core score in the v2 total. Pair with
-/// [`WEIGHT_MULTI_CORE`]; both should sum to 100.
-pub const WEIGHT_SINGLE_CORE: u32 = 50;
-
-/// Weight (percent) of normalised multi-core score in the v2 total.
-pub const WEIGHT_MULTI_CORE: u32 = 50;
+/// Multi-core weight in the v2 final score.
+pub const MULTI_WEIGHT: f64 = 0.50;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkloadClass {
@@ -127,17 +128,17 @@ pub struct StageMetrics {
     pub class: WorkloadClass,
 }
 
-/// Separated raw and normalised score groups plus legacy and v2 totals.
+/// Separated raw, normalised, legacy, and v2 headline scores.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ScoreReport {
     pub single_raw: u64,
     pub multi_raw: u64,
     pub single_normalized: u64,
     pub multi_normalized: u64,
-    /// Raw single + raw multi. Kept for compatibility; dominated by single-core.
-    pub legacy_total: u64,
-    /// `WEIGHT_SINGLE_CORE` / `WEIGHT_MULTI_CORE` blend of normalised groups.
-    pub weighted_total: u64,
+    /// `single_raw + multi_raw` — compatibility/debug only.
+    pub legacy_raw_total: u64,
+    /// Final v2 score, derived from the normalized single- and multi-core groups.
+    pub weighted_final: u64,
 }
 
 fn baseline_for(idx: usize) -> u64 {
@@ -221,49 +222,8 @@ pub fn make_entry(idx: usize, name: &'static str, metrics: StageMetrics) -> Entr
     }
 }
 
-/// Scale a raw group sum to reference hardware (1000 = baseline group performance).
-pub fn normalize_group_score(raw: u64, group_baseline: u64) -> u64 {
-    if group_baseline == 0 {
-        return 0;
-    }
-    let scaled = (raw as u128)
-        .saturating_mul(REFERENCE_STAGE_SCORE as u128)
-        .saturating_add((group_baseline as u128) / 2);
-    scaled
-        .saturating_div(group_baseline as u128)
-        .max(1)
-        .min(u64::MAX as u128) as u64
-}
-
-/// v2 headline score: equal-weighted blend of normalised single- and multi-core groups.
-pub fn weighted_total_v2(single_normalized: u64, multi_normalized: u64) -> u64 {
-    let weight_sum = (WEIGHT_SINGLE_CORE + WEIGHT_MULTI_CORE).max(1) as u128;
-    let blended = (single_normalized as u128)
-        .saturating_mul(WEIGHT_SINGLE_CORE as u128)
-        .saturating_add((multi_normalized as u128).saturating_mul(WEIGHT_MULTI_CORE as u128));
-    (blended.saturating_add(weight_sum / 2) / weight_sum)
-        .max(1)
-        .min(u64::MAX as u128) as u64
-}
-
-pub fn score_report(entries: &[Option<Entry>; BENCH_COUNT]) -> ScoreReport {
-    let single_raw = single_score(entries);
-    let multi_raw = multi_score(entries);
-    let single_normalized = normalize_group_score(single_raw, SINGLE_GROUP_BASELINE);
-    let multi_normalized = normalize_group_score(multi_raw, MULTI_GROUP_BASELINE);
-    let legacy_total = total_score(entries);
-    let weighted_total = weighted_total_v2(single_normalized, multi_normalized);
-    ScoreReport {
-        single_raw,
-        multi_raw,
-        single_normalized,
-        multi_normalized,
-        legacy_total,
-        weighted_total,
-    }
-}
-
-pub fn single_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
+/// Sum of completed single-core stage raw scores.
+pub fn compute_single_raw_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
     entries[..SINGLE_COUNT]
         .iter()
         .flatten()
@@ -272,7 +232,8 @@ pub fn single_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
         .sum()
 }
 
-pub fn multi_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
+/// Sum of completed multi-core stage raw scores.
+pub fn compute_multi_raw_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
     entries[SINGLE_COUNT..]
         .iter()
         .flatten()
@@ -280,6 +241,111 @@ pub fn multi_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
         .sum()
 }
 
+/// Legacy raw total (`single_raw + multi_raw`).
+pub fn compute_legacy_raw_total(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
+    compute_single_raw_score(entries).saturating_add(compute_multi_raw_score(entries))
+}
+
+fn normalize_against_baseline(raw: u64, baseline: u64) -> u64 {
+    if baseline == 0 {
+        return 0;
+    }
+    let scaled = (raw as u128)
+        .saturating_mul(1000)
+        .saturating_add((baseline as u128) / 2);
+    scaled
+        .saturating_div(baseline as u128)
+        .max(1)
+        .min(u64::MAX as u128) as u64
+}
+
+/// `(single_raw * 1000) / SINGLE_BASELINE`
+pub fn normalize_single_score(raw: u64) -> u64 {
+    normalize_against_baseline(raw, SINGLE_BASELINE)
+}
+
+/// `(multi_raw * 1000) / MULTI_BASELINE`
+pub fn normalize_multi_score(raw: u64) -> u64 {
+    normalize_against_baseline(raw, MULTI_BASELINE)
+}
+
+/// Equal-weighted blend of the normalized single- and multi-core scores.
+pub fn compute_weighted_final_score(single_normalized: u64, multi_normalized: u64) -> u64 {
+    debug_assert!((SINGLE_WEIGHT - 0.50).abs() < f64::EPSILON);
+    debug_assert!((MULTI_WEIGHT - 0.50).abs() < f64::EPSILON);
+
+    if single_normalized == 0 && multi_normalized == 0 {
+        return 0;
+    }
+
+    single_normalized
+        .saturating_add(multi_normalized)
+        .saturating_add(1)
+        / 2
+}
+
+pub fn score_report(entries: &[Option<Entry>; BENCH_COUNT]) -> ScoreReport {
+    let single_raw = compute_single_raw_score(entries);
+    let multi_raw = compute_multi_raw_score(entries);
+    let single_normalized = normalize_single_score(single_raw);
+    let multi_normalized = normalize_multi_score(multi_raw);
+    let legacy_raw_total = compute_legacy_raw_total(entries);
+    let weighted_final = compute_weighted_final_score(single_normalized, multi_normalized);
+    ScoreReport {
+        single_raw,
+        multi_raw,
+        single_normalized,
+        multi_normalized,
+        legacy_raw_total,
+        weighted_final,
+    }
+}
+
+/// Serial/debug summary block for the v2 scoring model.
+pub fn format_bench_v2_summary(
+    report: ScoreReport,
+    cores: usize,
+    stages_completed: usize,
+    speedup: &str,
+    efficiency: &str,
+) -> String {
+    alloc::format!(
+        "SunLight Bench v2 Summary\n\
+         Cores: {cores}\n\
+         Stages completed: {stages_completed}/{BENCH_COUNT}\n\
+         \n\
+         Final v2 Score: {weighted_final}\n\
+         Single normalized/raw: {single_normalized} / {single_raw}\n\
+         Multi normalized/raw: {multi_normalized} / {multi_raw}\n\
+         Legacy Raw Total: {legacy_raw_total}\n\
+         \n\
+         Speedup: {speedup}\n\
+         Efficiency: {efficiency}",
+        cores = cores,
+        stages_completed = stages_completed,
+        single_raw = report.single_raw,
+        multi_raw = report.multi_raw,
+        legacy_raw_total = report.legacy_raw_total,
+        single_normalized = report.single_normalized,
+        multi_normalized = report.multi_normalized,
+        weighted_final = report.weighted_final,
+        speedup = speedup,
+        efficiency = efficiency,
+    )
+}
+
+/// Legacy aliases kept for compatibility with older call sites.
+#[allow(dead_code)]
+pub fn single_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
+    compute_single_raw_score(entries)
+}
+
+#[allow(dead_code)]
+pub fn multi_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
+    compute_multi_raw_score(entries)
+}
+
+#[allow(dead_code)]
 pub fn multi_fixed_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
     entries[SINGLE_COUNT..]
         .iter()
@@ -289,6 +355,7 @@ pub fn multi_fixed_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
         .sum()
 }
 
+#[allow(dead_code)]
 pub fn multi_work_per_core_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
     entries[SINGLE_COUNT..]
         .iter()
@@ -298,7 +365,64 @@ pub fn multi_work_per_core_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 
         .sum()
 }
 
-/// Legacy total: raw single-core plus raw multi-core. Not used for v2 headline score.
+/// Legacy alias for [`compute_legacy_raw_total`].
+#[allow(dead_code)]
 pub fn total_score(entries: &[Option<Entry>; BENCH_COUNT]) -> u64 {
-    single_score(entries).saturating_add(multi_score(entries))
+    compute_legacy_raw_total(entries)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(score: u64, class: WorkloadClass) -> Entry {
+        Entry {
+            score,
+            class,
+            ..Entry::default()
+        }
+    }
+
+    #[test]
+    fn score_report_keeps_legacy_raw_total_and_v2_blend() {
+        let mut entries = [None; BENCH_COUNT];
+        entries[0] = Some(entry(1_529_429, WorkloadClass::SingleCore));
+        entries[5] = Some(entry(14_703, WorkloadClass::MultiWorkPerCore));
+
+        let report = score_report(&entries);
+
+        assert_eq!(report.single_raw, 1_529_429);
+        assert_eq!(report.multi_raw, 14_703);
+        assert_eq!(report.legacy_raw_total, 1_544_132);
+        assert_eq!(report.single_normalized, 1_529);
+        assert_eq!(report.multi_normalized, 1_470);
+        assert_eq!(report.weighted_final, 1_500);
+        assert_eq!(
+            report.legacy_raw_total,
+            report.single_raw + report.multi_raw
+        );
+        assert_eq!(
+            report.weighted_final,
+            compute_weighted_final_score(report.single_normalized, report.multi_normalized)
+        );
+    }
+
+    #[test]
+    fn v2_summary_uses_clear_labels() {
+        let report = ScoreReport {
+            single_raw: 1_529_429,
+            multi_raw: 14_703,
+            single_normalized: 1_529,
+            multi_normalized: 1_470,
+            legacy_raw_total: 1_544_132,
+            weighted_final: 1_500,
+        };
+
+        let summary = format_bench_v2_summary(report, 12, 8, "2.00x", "83%");
+
+        assert!(summary.contains("Final v2 Score: 1500"));
+        assert!(summary.contains("Single normalized/raw: 1529 / 1529429"));
+        assert!(summary.contains("Multi normalized/raw: 1470 / 14703"));
+        assert!(summary.contains("Legacy Raw Total: 1544132"));
+    }
 }
