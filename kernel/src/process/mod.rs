@@ -149,6 +149,8 @@ pub enum ProcessState {
     Running,
     Suspended,
     Finished,
+    /// Fully reaped: kernel resources cleaned, slot is reusable by add_process.
+    Reaped,
     BlockedOnIpc,
     /// Blocked waiting for a timer/sleep to expire. [FEAT-2]
     BlockedOnTimer,

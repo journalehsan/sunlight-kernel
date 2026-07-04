@@ -275,7 +275,10 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
         return Err(());
     };
 
-    if sched.processes[idx].state == crate::process::ProcessState::Finished {
+    if matches!(
+        sched.processes[idx].state,
+        crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
+    ) {
         return Err(());
     }
 
@@ -901,10 +904,9 @@ fn sys_tty_stdout_pull(frame: &mut SyscallFrame) -> u64 {
 fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
     let pid = frame.rdi as usize;
     let sched = crate::sched::SCHEDULER.lock();
-    let alive = sched
-        .processes
-        .iter()
-        .any(|p| p.pid == pid && p.state != ProcessState::Finished);
+    let alive = sched.processes.iter().any(|p| {
+        p.pid == pid && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+    });
     alive as u64
 }
 
@@ -1223,7 +1225,7 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
     for p in sched.processes.iter() {
         if p.pid == pid && p.ppid == me {
             found = true;
-            if p.state == ProcessState::Finished {
+            if matches!(p.state, ProcessState::Finished | ProcessState::Reaped) {
                 finished_code = Some((p.exit_code as u8) as u64);
             }
             break;
@@ -3426,7 +3428,9 @@ fn sys_kill(frame: &mut SyscallFrame) -> u64 {
             .lock()
             .processes
             .iter()
-            .any(|p| p.pid == pid && p.state != ProcessState::Finished) as u64;
+            .any(|p| {
+                p.pid == pid && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+            }) as u64;
     }
 
     let Some(signal) = crate::process::signal::Signal::try_from_u32(sig) else {

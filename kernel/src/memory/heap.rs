@@ -42,3 +42,23 @@ pub fn heap_diagnostic() {
         heap.free(),
     );
 }
+
+/// Lightweight heap accounting snapshot for telemetry.
+#[derive(Clone, Copy, Default)]
+pub struct HeapStats {
+    pub allocated: usize,
+    pub free: usize,
+    pub reusable: usize,
+}
+
+pub fn heap_stats() -> HeapStats {
+    let heap = ALLOCATOR.lock();
+    let used = heap.used();
+    let free = heap.free();
+    // "reusable" is the free pool; treat used as allocated.
+    HeapStats {
+        allocated: used,
+        free,
+        reusable: free,
+    }
+}

@@ -192,6 +192,11 @@ impl PhysicalMemoryManager {
         unsafe { (TOTAL_FRAMES, FREE_FRAMES) }
     }
 
+    /// Convenience: free page count (4KiB frames).
+    pub fn free_page_count(&self) -> usize {
+        unsafe { FREE_FRAMES }
+    }
+
     pub fn owner_of(&self, addr: PhysAddr) -> Option<u32> {
         let frame = (addr.as_u64() / FRAME_SIZE as u64) as usize;
         if frame >= MAX_FRAMES {

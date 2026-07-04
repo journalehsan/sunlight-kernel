@@ -219,6 +219,7 @@ pub fn capture_telemetry_snapshot(
             crate::process::ProcessState::Running => 1,
             crate::process::ProcessState::BlockedOnIpc => 2,
             crate::process::ProcessState::Finished => 3,
+            crate::process::ProcessState::Reaped => 7,
             crate::process::ProcessState::Suspended => 4,
             crate::process::ProcessState::BlockedOnTimer => 5,
             crate::process::ProcessState::BlockedOnIo => 6,

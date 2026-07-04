@@ -476,25 +476,64 @@ impl Scheduler {
             in_use[c] = self.core_current_task(c).unwrap_or(usize::MAX);
         }
 
+        // Centralized reaper: attempt to turn safe Finished slots into Reaped.
+        self.reap_finished_processes();
+
+        // Only reuse slots that are fully Reaped (or Finished that became reaped above).
+        // Never overwrite a still-Finished slot until its resources are cleaned.
         if let Some(id) = self
             .processes
             .iter()
             .enumerate()
             .find(|(idx, p)| {
-                p.state == ProcessState::Finished && in_use[..online].iter().all(|&cur| cur != *idx)
+                (p.state == ProcessState::Reaped
+                    || (p.state == ProcessState::Finished && !p.exit_cleanup_pending))
+                    && in_use[..online].iter().all(|&cur| cur != *idx)
             })
             .map(|(idx, _)| idx)
         {
             self.remove_from_ready_queues(id);
             serial_println!(
-                "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused slot)",
-                created_count + 1,
-                process.name_str(),
+                "[SCHED] process_slot_reused idx={} pid={} (reused reaped slot)",
                 id,
-                process.burst_score,
-                process.get_queue_tier()
+                process.pid
             );
+            // Drop old (reaped) contents by overwrite; new process owns fresh resources.
             self.processes[id] = process;
+            serial_println!(
+                "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused reaped slot)",
+                created_count + 1,
+                self.processes[id].name_str(),
+                id,
+                self.processes[id].burst_score,
+                self.processes[id].get_queue_tier()
+            );
+            return id;
+        }
+
+        // Fallback: if there are stale Finished (not safe to reap yet), do not overwrite them.
+        // Search only for Reaped again (after the reap attempt above).
+        if let Some(id) = self
+            .processes
+            .iter()
+            .enumerate()
+            .find(|(idx, p)| {
+                p.state == ProcessState::Reaped
+                    && in_use[..online].iter().all(|&cur| cur != *idx)
+            })
+            .map(|(idx, _)| idx)
+        {
+            self.remove_from_ready_queues(id);
+            serial_println!("[SCHED] process_slot_reused idx={} (reaped)", id);
+            self.processes[id] = process;
+            serial_println!(
+                "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused reaped)",
+                created_count + 1,
+                self.processes[id].name_str(),
+                id,
+                self.processes[id].burst_score,
+                self.processes[id].get_queue_tier()
+            );
             return id;
         }
 
@@ -900,6 +939,12 @@ impl Scheduler {
             self.age_ready_tasks();
             self.set_core_current_ticks(cpu_id, 0);
             request_reschedule_on(cpu_id);
+        }
+
+        // Periodic opportunistic reaping of Finished (cheap no-op if none).
+        // 50 ticks ~ 0.5s at 100Hz; keeps Finished from lingering without depending on spawn/switch.
+        if self.global_tick % 50 == 0 {
+            self.reap_finished_processes();
         }
 
         // The diagnostic dump writes per-core + per-process state over the slow
@@ -1394,9 +1439,17 @@ impl Scheduler {
             // (BSP → global TSS; APs → AP_TSS_STORE[cpu_id-1]).
             crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
 
-            if self.processes[prev].state == ProcessState::Finished {
-                self.reap_process_resources(prev);
+            if matches!(
+                self.processes[prev].state,
+                ProcessState::Finished | ProcessState::Reaped
+            ) {
+                if self.processes[prev].state == ProcessState::Finished {
+                    self.reap_process_resources(prev);
+                }
             }
+
+            // Opportunistic global reaping of any other safe Finished processes.
+            self.reap_finished_processes();
 
             next_rsp
         } else {
@@ -1470,7 +1523,8 @@ impl Scheduler {
             .start_address()
             .as_u64();
         self.processes.iter().position(|p| {
-            p.state != ProcessState::Finished && p.address_space.pml4_phys.as_u64() == cr3
+            !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+                && p.address_space.pml4_phys.as_u64() == cr3
         })
     }
 
@@ -1583,28 +1637,84 @@ impl Scheduler {
         let pml4 = self.processes[idx].address_space.pml4_phys;
         self.processes.iter().enumerate().any(|(other_idx, proc)| {
             other_idx != idx
-                && proc.state != ProcessState::Finished
+                && !matches!(proc.state, ProcessState::Finished | ProcessState::Reaped)
                 && proc.address_space.pml4_phys == pml4
         })
     }
 
     pub fn reap_process_resources(&mut self, idx: usize) {
-        if idx >= self.processes.len() || !self.processes[idx].exit_cleanup_pending {
+        if idx >= self.processes.len() {
+            return;
+        }
+        if !self.processes[idx].exit_cleanup_pending {
+            // Already reaped or never marked for cleanup. Ensure state reflects it.
+            if self.processes[idx].state == ProcessState::Finished {
+                // If no pending work was recorded, treat as reaped to allow reuse.
+                self.processes[idx].state = ProcessState::Reaped;
+            }
+            return;
+        }
+
+        serial_println!(
+            "[SCHED] process_reap_attempt idx={} pid={} name='{}'",
+            idx,
+            self.processes[idx].pid,
+            self.processes[idx].name_str()
+        );
+
+        // Safety: never reap while still current on a core or queued.
+        if self.processes[idx].owning_core != u8::MAX {
+            serial_println!(
+                "[SCHED] process_reap_blocked_reason idx={} reason=owning_core cpu={}",
+                idx,
+                self.processes[idx].owning_core
+            );
+            return;
+        }
+        if self.processes[idx].queued_on_core != u8::MAX {
+            serial_println!(
+                "[SCHED] process_reap_blocked_reason idx={} reason=queued_on_core",
+                idx
+            );
             return;
         }
 
         let pid = self.processes[idx].pid;
+        let name: alloc::string::String = self.processes[idx].name_str().into();
         let free_root = !self.address_space_is_shared(idx);
         let hhdm_offset = match crate::HHDM_REQ.response() {
             Some(resp) => x86_64::VirtAddr::new(resp.offset),
-            None => return,
+            None => {
+                serial_println!("[SCHED] process_reap_blocked_reason idx={} reason=no_hhdm", idx);
+                return;
+            }
         };
+
+        // Additional safety: do not reap the live current on this or other cores (double-check).
+        for c in 0..self.online_cores {
+            if self.core_current_task(c) == Some(idx) {
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason idx={} reason=current_on_cpu={}",
+                    idx,
+                    c
+                );
+                return;
+            }
+        }
 
         crate::memory::swap::untrack_process(pid);
 
         let endpoint_ids = {
             let caps = crate::capability::CAP_BROKER.lock();
             caps.endpoints_owned_by(pid)
+        };
+
+        let ipc_pending_before = {
+            let mut n = 0usize;
+            crate::ipc::for_all_shards(|bus| {
+                n += bus.pending_count_for_pid(pid);
+            });
+            n
         };
 
         {
@@ -1647,6 +1757,8 @@ impl Scheduler {
             }
         };
 
+        // Clear per-process kernel structures (idempotent clears).
+        let ipc_q_len = self.processes[idx].ipc_queue.len();
         self.processes[idx].ipc_queue.clear();
         self.processes[idx].ipc_reply = None;
         self.processes[idx].ipc_endpoint = None;
@@ -1654,27 +1766,125 @@ impl Scheduler {
         self.processes[idx].pending_reply_wait = None;
         self.processes[idx].ipc_reply_target = None;
         self.processes[idx].capabilities.clear();
+        // fd_table is a boxed struct; dropping the box on overwrite or here via default is ok.
+        // We leave fd_table as-is; when slot is reused or dropped it will release.
         self.processes[idx].exit_cleanup_pending = false;
 
+        // Mark as fully reaped: slot is now safe for add_process reuse.
+        self.processes[idx].state = ProcessState::Reaped;
+
         serial_println!(
-            "[SCHED] reaped pid={} user_frames={} page_tables={} swap_blocks={}",
+            "[SCHED] process_reaped pid={} name='{}' user_frames={} page_tables={} swap_blocks={} ipc_cleared={}",
             pid,
+            name,
             reclaim.user_frames,
             reclaim.page_tables,
-            reclaim.swap_blocks
+            reclaim.swap_blocks,
+            ipc_q_len
+        );
+        serial_println!(
+            "[SCHED] process_resource_cleanup_summary pid={} frames={} pts={} swap={} ipc_entries_cleared={}",
+            pid, reclaim.user_frames, reclaim.page_tables, reclaim.swap_blocks, ipc_pending_before
+        );
+        serial_println!(
+            "[SCHED] ipc_entries_reaped_for_process pid={} cleared_msgs={}",
+            pid,
+            ipc_pending_before
         );
         crate::PMM.lock().diagnostic_report_pid(pid as u32);
     }
 
+    /// Centralized reaper. Walks Finished processes and reaps those that are
+    /// safe (not current on any core, not queued, not mid-transition).
+    /// A reaped slot transitions to ProcessState::Reaped and may be reused by
+    /// add_process. Never reaps the current task of any CPU.
+    pub fn reap_finished_processes(&mut self) {
+        let online = self.online_cores;
+        let mut in_use = [usize::MAX; MAX_CORES];
+        for c in 0..online.min(MAX_CORES) {
+            in_use[c] = self.core_current_task(c).unwrap_or(usize::MAX);
+        }
+
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state != ProcessState::Finished {
+                continue;
+            }
+            if !self.processes[idx].exit_cleanup_pending {
+                // Stale Finished without pending flag: promote to Reaped for reuse safety.
+                self.processes[idx].state = ProcessState::Reaped;
+                continue;
+            }
+            // Safety checks per requirements
+            if self.processes[idx].owning_core != u8::MAX {
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=owning_core",
+                    self.processes[idx].pid,
+                    idx
+                );
+                continue;
+            }
+            if self.processes[idx].queued_on_core != u8::MAX {
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=queued",
+                    self.processes[idx].pid,
+                    idx
+                );
+                continue;
+            }
+            if in_use[..online].iter().any(|&cur| cur == idx) {
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=in_use_on_core",
+                    self.processes[idx].pid,
+                    idx
+                );
+                continue;
+            }
+            // Do not reap if this idx is still the current on its last known owner (paranoia).
+            if let Some(c) = self.live_owner_core(idx) {
+                if c < online {
+                    serial_println!(
+                        "[SCHED] process_reap_blocked_reason pid={} idx={} reason=live_owner",
+                        self.processes[idx].pid,
+                        idx
+                    );
+                    continue;
+                }
+            }
+
+            serial_println!(
+                "[SCHED] process_reap_attempt pid={} idx={} name='{}'",
+                self.processes[idx].pid,
+                idx,
+                self.processes[idx].name_str()
+            );
+            // Perform the resource cleanup; it will set Reaped on success.
+            self.reap_process_resources(idx);
+        }
+    }
+
     pub fn terminate_process_by_pid(&mut self, pid: usize, code: i32, reason: &str) -> bool {
+        serial_println!("[SCHED] process_exit_begin external pid={} reason={}", pid, reason);
         let Some(idx) = self.process_index_by_pid(pid) else {
             return false;
         };
         // Refuse to terminate a task that is currently executing on any core.
         let is_running_on_core = self.processes[idx].owning_core != u8::MAX;
-        if is_running_on_core || self.processes[idx].state == ProcessState::Finished {
+        if is_running_on_core
+            || matches!(
+                self.processes[idx].state,
+                ProcessState::Finished | ProcessState::Reaped
+            )
+        {
             return false;
         }
+
+        serial_println!(
+            "[SCHED] process_mark_finished pid={} name='{}' reason={} code={} (external)",
+            pid,
+            self.processes[idx].name_str(),
+            reason,
+            code
+        );
 
         self.processes[idx].exit_code = code;
         self.processes[idx].state = ProcessState::Finished;
@@ -1766,9 +1976,18 @@ impl Scheduler {
         let alive = self
             .processes
             .iter()
-            .filter(|p| p.state != ProcessState::Finished)
+            .filter(|p| !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
             .count();
-        let finished_slots = self.processes.len().saturating_sub(alive);
+        let finished_slots = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::Finished)
+            .count();
+        let _reaped_slots = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::Reaped)
+            .count();
 
         let (ready_high, ready_mid, ready_low) = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             let rr_ready: usize = (0..self.online_cores)
@@ -1808,7 +2027,7 @@ impl Scheduler {
         // Minimal post-fix ownership invariant validation (diagnostics only).
         // Reports on the five listed bad states.
         for (_idx, p) in self.processes.iter().enumerate() {
-            if p.state == ProcessState::Finished {
+            if matches!(p.state, ProcessState::Finished | ProcessState::Reaped) {
                 continue;
             }
             let oc = p.owning_core;
@@ -2005,7 +2224,7 @@ impl Scheduler {
             for p in self
                 .processes
                 .iter()
-                .filter(|p| p.state != ProcessState::Finished)
+                .filter(|p| !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
             {
                 let (pending_call_cap, pending_call_label, resolved_ep, resolved_owner) =
                     match p.pending_call {
@@ -2084,6 +2303,61 @@ impl Scheduler {
                 });
             }
         }
+
+        // ── Accounting / leak-detection telemetry (per spec) ───────────────────
+        let live_process_count = self
+            .processes
+            .iter()
+            .filter(|p| !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
+            .count();
+        let finished_process_count = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::Finished)
+            .count();
+        let reaped_process_count = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::Reaped)
+            .count();
+        let process_slots_used = self.processes.len();
+        let process_slots_finished = finished_process_count + reaped_process_count;
+
+        // Best-effort kernel heap stats if available (heap module may export).
+        // We log what we can; real numbers come from PMM + allocator diagnostics.
+        let kernel_heap_info = crate::memory::heap::heap_stats();
+
+        // PMM free pages (approx).
+        let pmm_free = crate::PMM.lock().free_page_count();
+
+        // Rough display surface/window counts are userspace-owned; we expose process stats here.
+        // IPC queue/wait snapshot (sampled).
+        let mut ipc_wait_entries: usize = 0;
+        let mut ipc_queue_entries: usize = 0;
+        for p in self.processes.iter() {
+            ipc_queue_entries += p.ipc_queue.len();
+        }
+        crate::ipc::for_all_shards(|bus| {
+            ipc_wait_entries += bus.total_waiter_count();
+        });
+
+        serial_println!(
+            "[SCHED-ACCT] live_process_count={} finished_process_count={} reaped_process_count={} process_slots_used={} process_slots_finished={} ipc_wait_entries={} ipc_queue_entries={}",
+            live_process_count,
+            finished_process_count,
+            reaped_process_count,
+            process_slots_used,
+            process_slots_finished,
+            ipc_wait_entries,
+            ipc_queue_entries
+        );
+        serial_println!(
+            "[SCHED-ACCT] kernel_heap_allocated={} kernel_heap_free={} kernel_heap_reusable={} pmm_free_pages={}",
+            kernel_heap_info.allocated,
+            kernel_heap_info.free,
+            kernel_heap_info.reusable,
+            pmm_free
+        );
     }
 }
 
@@ -2240,6 +2514,7 @@ pub fn note_process_finished(pid: usize, name: &str) {
 /// and raise `#GP` (err=0) — the desktop "freeze after several app launches
 /// from the file manager" symptom.
 pub fn finish_current_process(code: i32, reason: &str) -> u64 {
+    serial_println!("[SCHED] process_exit_begin reason={}", reason);
     let mut sched = SCHEDULER.lock();
     let cpu_id = current_cpu_id();
     let idle_top = core_idle_stack_top(cpu_id);
@@ -2262,9 +2537,22 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         return idle_top;
     }
 
-    if sched.processes[cur].state == crate::process::ProcessState::Finished {
+    if matches!(
+        sched.processes[cur].state,
+        crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
+    ) {
         return idle_top;
     }
+
+    let my_pid = sched.processes[cur].pid;
+    let my_name: alloc::string::String = sched.processes[cur].name_str().into();
+    serial_println!(
+        "[SCHED] process_mark_finished pid={} name='{}' reason={} code={}",
+        my_pid,
+        my_name,
+        reason,
+        code
+    );
 
     sched.account_current_runtime();
     {
@@ -2279,16 +2567,15 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     sched.set_core_current_ticks(cpu_id, 0);
     sched.remove_from_ready_queues(cur);
 
-    let my_pid = sched.processes[cur].pid;
-    let parent_pid = sched.processes[cur].ppid;
     serial_println!(
         "[SCHED] terminating pid={} name='{}' reason={}",
         my_pid,
-        sched.processes[cur].name_str(),
+        my_name,
         reason
     );
-    note_process_finished(my_pid, sched.processes[cur].name_str());
+    note_process_finished(my_pid, &my_name);
 
+    let parent_pid = sched.processes[cur].ppid;
     let parent_waiting = sched
         .process_mut_by_pid(parent_pid)
         .is_some_and(|parent| parent.wait_child == Some(my_pid));

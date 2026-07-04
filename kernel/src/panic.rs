@@ -31,7 +31,10 @@ fn alloc_error(layout: core::alloc::Layout) -> ! {
     if let Some(mut sched) = crate::sched::SCHEDULER.try_lock() {
         let mut reaped = 0usize;
         for idx in 0..sched.processes.len() {
-            if sched.processes[idx].state == crate::process::ProcessState::Finished {
+            if matches!(
+                sched.processes[idx].state,
+                crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
+            ) {
                 // Clear heap-allocated fields to free kernel-heap memory
                 // without touching PMM or IPC locks (best-effort).
                 sched.processes[idx].ipc_queue.clear();

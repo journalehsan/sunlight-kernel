@@ -1479,6 +1479,71 @@ fn sweep_app_zombies(state: &mut CompositorState, now: u64) -> bool {
     dirty
 }
 
+/// Prune any windows whose owner_pid no longer has a live process.
+/// This ensures that on crash or external kill, remaining windows/surfaces
+/// for that pid are removed even if app_tracker missed an instance.
+/// Minimized windows are left alone if the process is still alive.
+fn prune_dead_owner_windows(state: &mut CompositorState) -> bool {
+    // Snapshot pids that have windows.
+    let owner_pids: alloc::vec::Vec<u64> = state
+        .windows
+        .iter()
+        .map(|w| w.owner_pid)
+        .collect::<alloc::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+
+    let mut to_close: alloc::vec::Vec<u64> = alloc::vec::Vec::new();
+    for pid in &owner_pids {
+        if *pid <= 1 {
+            continue; // system/boot pids
+        }
+        if !sunlight_ipc::process_is_alive(*pid) {
+            for w in state.windows.iter() {
+                if w.owner_pid == *pid {
+                    to_close.push(w.id);
+                }
+            }
+        }
+    }
+
+    if to_close.is_empty() {
+        // Still prune tracker instances for dead pids even with no remaining windows.
+        let mut did_remove = false;
+        for pid in &owner_pids {
+            if *pid > 1 && !sunlight_ipc::process_is_alive(*pid) {
+                if state.app_tracker.remove_instance_for_pid(*pid) {
+                    did_remove = true;
+                }
+            }
+        }
+        return did_remove;
+    }
+
+    let mut dirty = false;
+    let count = to_close.len();
+    for id in to_close {
+        let _ = close_window(state, id, None);
+        dirty = true;
+    }
+    if count > 0 {
+        debug_log(&alloc::format!(
+            "[DISPLAY] display_windows_reaped_for_process count={} (dead_owner_prune)\n",
+            count
+        ));
+    }
+    // Also drop any AppInstance entries for dead pids so future sweeps are clean.
+    for pid in &owner_pids {
+        if *pid <= 1 {
+            continue;
+        }
+        if !sunlight_ipc::process_is_alive(*pid) {
+            let _ = state.app_tracker.remove_instance_for_pid(*pid);
+        }
+    }
+    dirty
+}
+
 fn list_window_reply(win: &Window) -> IpcMsg {
     let rolled_up = if win.rolled_up { 1u64 } else { 0u64 };
     let window_type = win.config.window_type as u64;
@@ -3513,6 +3578,9 @@ pub extern "C" fn _start() -> ! {
                     needs_redraw = true;
                 }
                 if sweep_app_zombies(&mut state, now) {
+                    needs_redraw = true;
+                }
+                if prune_dead_owner_windows(&mut state) {
                     needs_redraw = true;
                 }
                 if needs_redraw {

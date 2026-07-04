@@ -209,6 +209,27 @@ impl IpcBusShard {
             waiters.retain(|waiter| *waiter != pid);
         }
     }
+
+    /// Count pending messages and waiter entries that reference this pid (best effort).
+    pub fn pending_count_for_pid(&mut self, pid: usize) -> usize {
+        let mut n = 0usize;
+        for queue in self.queues.values() {
+            n += queue.iter().filter(|msg| msg.badge == pid as u64).count();
+        }
+        for waiters in self.reply_waiters.values() {
+            n += waiters.iter().filter(|w| **w == pid).count();
+        }
+        n
+    }
+
+    /// Total number of waiter pids across all endpoints in this shard.
+    pub fn total_waiter_count(&self) -> usize {
+        let mut n = 0usize;
+        for waiters in self.reply_waiters.values() {
+            n += waiters.len();
+        }
+        n
+    }
 }
 
 pub type IpcBus = IpcBusShard;

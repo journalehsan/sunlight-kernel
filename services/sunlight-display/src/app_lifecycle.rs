@@ -145,6 +145,24 @@ impl AppTracker {
         }
     }
 
+    /// Remove any AppInstance for a pid that has exited (called on detection).
+    /// Emits app_instance_removed.
+    pub fn remove_instance_for_pid(&mut self, pid: u64) -> bool {
+        let before = self.apps.len();
+        self.apps.retain(|a| {
+            if a.pid == pid {
+                debug_log(&alloc::format!(
+                    "[APP_LIFECYCLE] app_instance_removed pid={} name={}\n",
+                    pid, a.app_name
+                ));
+                false
+            } else {
+                true
+            }
+        });
+        self.apps.len() != before
+    }
+
     pub fn sweep_zombies(&mut self, now_ms: u64) -> SweepResult {
         let mut pids_killed = Vec::new();
         let mut window_ids = Vec::new();
@@ -188,14 +206,40 @@ impl AppTracker {
                     app.pid, app.app_name
                 ));
 
+                // Record display windows reaped for this process exit.
+                if !app.windows.is_empty() {
+                    debug_log(&alloc::format!(
+                        "[DISPLAY] display_windows_reaped_for_process pid={} count={}\n",
+                        app.pid,
+                        app.windows.len()
+                    ));
+                }
+
+                debug_log(&alloc::format!(
+                    "[APP_LIFECYCLE] app_instance_removed pid={} name={}\n",
+                    app.pid,
+                    app.app_name
+                ));
                 self.apps.remove(i);
             } else {
                 let alive = process_is_alive(app.pid);
                 if !alive && app.policy != LifecyclePolicy::System {
                     window_ids.extend(app.windows.iter().cloned());
+                    if !app.windows.is_empty() {
+                        debug_log(&alloc::format!(
+                            "[DISPLAY] display_windows_reaped_for_process pid={} count={}\n",
+                            app.pid,
+                            app.windows.len()
+                        ));
+                    }
                     debug_log(&alloc::format!(
                         "[APP_LIFECYCLE] app_exited pid={} name={} (detected_dead)\n",
                         app.pid, app.app_name
+                    ));
+                    debug_log(&alloc::format!(
+                        "[APP_LIFECYCLE] app_instance_removed pid={} name={}\n",
+                        app.pid,
+                        app.app_name
                     ));
                     self.apps.remove(i);
                 } else {
