@@ -837,6 +837,8 @@ struct DesktopIcon {
     rect: Rect,
 }
 
+const DESKTOP_DOUBLE_CLICK_MS: u64 = 400;
+
 struct DesktopPaths {
     _username: String,
     home_dir: String,
@@ -906,6 +908,8 @@ struct VortexShell {
     /// Bounds of each clickable dock button (local coords), plus the action.
     dock_zones: [(Rect, DockZone); 4],
     selected_icons: Vec<usize>,
+    last_desktop_click_idx: Option<usize>,
+    last_desktop_click_at: u64,
     context_menu: Option<ContextMenuState>,
     selection_state: DesktopSelectState,
     suppress_next_click: bool,
@@ -990,6 +994,8 @@ impl VortexShell {
             screen_h: SAFE_FALLBACK_H,
             dock_zones: [(Rect::new(0, 0, 0, 0), DockZone::Placeholder); 4],
             selected_icons: Vec::new(),
+            last_desktop_click_idx: None,
+            last_desktop_click_at: 0,
             context_menu: None,
             selection_state: DesktopSelectState::Idle,
             suppress_next_click: false,
@@ -1051,6 +1057,8 @@ impl VortexShell {
         self.desktop_icons = load_desktop_icons(&self.desktop_paths);
         self.selected_icons
             .retain(|idx| *idx < self.desktop_icons.len());
+        self.last_desktop_click_idx = None;
+        self.last_desktop_click_at = 0;
         if self.selected_icons.is_empty() {
             self.selection_state = DesktopSelectState::Idle;
         }
@@ -1151,6 +1159,8 @@ impl VortexShell {
 
     fn clear_desktop_selection(&mut self) {
         self.selected_icons.clear();
+        self.last_desktop_click_idx = None;
+        self.last_desktop_click_at = 0;
     }
 
     fn select_desktop_icons_in_rect(&mut self, rect: Rect) {
@@ -1199,6 +1209,22 @@ impl VortexShell {
             | DesktopIconKind::Folder => {
                 self.handle_app_click(AppId::Files, now, LaunchSource::Shortcut)
             }
+        }
+    }
+
+    fn handle_desktop_icon_click(&mut self, idx: usize, now: u64) -> bool {
+        let is_double_click = self.last_desktop_click_idx == Some(idx)
+            && now.saturating_sub(self.last_desktop_click_at) <= DESKTOP_DOUBLE_CLICK_MS;
+        self.select_only_desktop_icon(idx);
+        self.last_desktop_click_idx = Some(idx);
+        self.last_desktop_click_at = now;
+        if is_double_click {
+            let launched = self.launch_desktop_icon(idx, now);
+            self.last_desktop_click_idx = None;
+            self.last_desktop_click_at = 0;
+            launched
+        } else {
+            true
         }
     }
 
@@ -3637,7 +3663,7 @@ impl App for VortexShell {
                     );
                 }
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
-                    return self.launch_desktop_icon(idx, monotonic_millis());
+                    return self.handle_desktop_icon_click(idx, monotonic_millis());
                 }
                 for (rect, zone) in &self.dock_zones {
                     if rect.contains(point) {

@@ -13,7 +13,7 @@ use sun_font::{
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    process_yield, ProcessExit,
+    monotonic_millis, process_yield, ProcessExit,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::TgaImage;
@@ -119,6 +119,9 @@ const ERROR_LEN: usize = 96;
 const DETAILS_H: u32 = 132;
 const DETAILS_MIN_H: u32 = 92;
 const DETAILS_PREVIEW_W: u32 = 132;
+const DOUBLE_CLICK_MS: u64 = 400;
+const TEXT_PREVIEW_LIMIT: usize = 8 * 1024;
+const TEXT_PREVIEW_BUF_LEN: usize = 8 * 1024;
 
 // Home grid: 6 core folders (Desktop, Documents, Downloads, Pictures, Music, Videos).
 // Templates and Public are available via navigation but not shown on the home page.
@@ -141,6 +144,7 @@ const SIDEBAR_COUNT: usize = 11;
 enum Message {
     ShowHome,
     SelectSidebar(usize),
+    SelectRow(usize),
     OpenRow(usize),
     OpenHomeFolder(usize),
     OpenHomeVolume(usize),
@@ -432,6 +436,71 @@ fn is_image_name(name: &[u8]) -> bool {
     (n >= 5 && name[n - 5..] == *b".simg") || (n >= 4 && name[n - 4..] == *b".tga")
 }
 
+fn ascii_lower(byte: u8) -> u8 {
+    if byte.is_ascii_uppercase() {
+        byte + 32
+    } else {
+        byte
+    }
+}
+
+fn ends_with_ignore_ascii_case(name: &[u8], suffix: &[u8]) -> bool {
+    if name.len() < suffix.len() {
+        return false;
+    }
+    let start = name.len() - suffix.len();
+    for i in 0..suffix.len() {
+        if ascii_lower(name[start + i]) != ascii_lower(suffix[i]) {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_known_text_name(name: &[u8]) -> bool {
+    const TEXT_EXTS: [&[u8]; 9] = [
+        b".txt", b".md", b".rs", b".toml", b".json", b".log", b".conf", b".ini", b".sh",
+    ];
+    for ext in TEXT_EXTS {
+        if ends_with_ignore_ascii_case(name, ext) {
+            return true;
+        }
+    }
+    false
+}
+
+fn is_likely_text_bytes(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return true;
+    }
+    let mut control_count = 0usize;
+    for &byte in bytes {
+        if byte == 0 {
+            return false;
+        }
+        if byte < 0x20 && byte != b'\n' && byte != b'\r' && byte != b'\t' {
+            control_count += 1;
+        }
+    }
+    control_count * 16 <= bytes.len()
+}
+
+fn text_type_label(name: &[u8]) -> &'static str {
+    if ends_with_ignore_ascii_case(name, b".md") {
+        "Markdown Text"
+    } else if ends_with_ignore_ascii_case(name, b".rs") {
+        "Rust Source"
+    } else if ends_with_ignore_ascii_case(name, b".toml") {
+        "TOML Config"
+    } else if ends_with_ignore_ascii_case(name, b".json") {
+        "JSON File"
+    } else if ends_with_ignore_ascii_case(name, b".sh") {
+        "Shell Script"
+    } else {
+        "Text File"
+    }
+}
+
 /// Human-readable type label for a supported image file name.
 fn image_type_label(name: &[u8]) -> &'static str {
     let n = name.len();
@@ -554,6 +623,10 @@ static mut PREVIEW_SRC_W: u32 = 0;
 static mut PREVIEW_SRC_H: u32 = 0;
 /// Raw file bytes — in BSS, costs nothing in the binary on disk.
 static mut PREVIEW_SRC_BUF: [u8; PREVIEW_SRC_BUF_LEN] = [0u8; PREVIEW_SRC_BUF_LEN];
+static mut TEXT_PREVIEW_READY: u8 = 0;
+static mut TEXT_PREVIEW_LEN: usize = 0;
+static mut TEXT_PREVIEW_TRUNCATED: u8 = 0;
+static mut TEXT_PREVIEW_BUF: [u8; TEXT_PREVIEW_BUF_LEN] = [0u8; TEXT_PREVIEW_BUF_LEN];
 
 /// Load `path` synchronously into PREVIEW_SRC_BUF and validate the TGA header.
 /// Sets PREVIEW_READY to 1 on success, 2 on any failure.
@@ -625,6 +698,87 @@ fn load_preview_sync(path: &[u8]) {
     }
 }
 
+fn clear_text_preview() {
+    unsafe {
+        TEXT_PREVIEW_READY = 0;
+        TEXT_PREVIEW_LEN = 0;
+        TEXT_PREVIEW_TRUNCATED = 0;
+    }
+}
+
+fn load_text_preview_sync(path: &[u8], treat_as_text: bool) {
+    clear_text_preview();
+    let stat = match libc::stat(path) {
+        Ok(s) => s,
+        Err(_) => {
+            unsafe {
+                TEXT_PREVIEW_READY = 2;
+            }
+            return;
+        }
+    };
+    let file_size = stat.size as usize;
+    let capped = file_size.min(TEXT_PREVIEW_LIMIT);
+    let fd = match libc::open(path) {
+        Ok(f) => f,
+        Err(_) => {
+            unsafe {
+                TEXT_PREVIEW_READY = 2;
+            }
+            return;
+        }
+    };
+    let mut raw = [0u8; TEXT_PREVIEW_LIMIT];
+    let mut total = 0usize;
+    while total < capped {
+        let chunk = (capped - total).min(1024);
+        let n = libc::read(fd, &mut raw[total..total + chunk]).unwrap_or(0);
+        if n == 0 {
+            break;
+        }
+        total += n;
+    }
+    let _ = libc::close(fd);
+    if total == 0 && file_size > 0 {
+        unsafe {
+            TEXT_PREVIEW_READY = 2;
+        }
+        return;
+    }
+    if !treat_as_text && !is_likely_text_bytes(&raw[..total]) {
+        unsafe {
+            TEXT_PREVIEW_READY = 3;
+        }
+        return;
+    }
+    let mut out = 0usize;
+    let mut i = 0usize;
+    while i < total && out < TEXT_PREVIEW_BUF_LEN {
+        let byte = raw[i];
+        if byte == b'\r' {
+            i += 1;
+            continue;
+        }
+        unsafe {
+            TEXT_PREVIEW_BUF[out] =
+                if byte == b'\n' || byte == b'\t' || (0x20..=0x7e).contains(&byte) {
+                    byte
+                } else if byte >= 0x80 {
+                    b'?'
+                } else {
+                    b'.'
+                };
+        }
+        out += 1;
+        i += 1;
+    }
+    unsafe {
+        TEXT_PREVIEW_LEN = out;
+        TEXT_PREVIEW_TRUNCATED = if file_size > total { 1 } else { 0 };
+        TEXT_PREVIEW_READY = 1;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // App state
 // ---------------------------------------------------------------------------
@@ -674,6 +828,7 @@ impl State {
         match message {
             Message::ShowHome => self.show_home(),
             Message::SelectSidebar(idx) => self.go_to_sidebar(idx),
+            Message::SelectRow(idx) => self.select_row(idx),
             Message::OpenRow(idx) => self.open_row(idx),
             Message::OpenHomeFolder(idx) => self.open_home_folder(idx),
             Message::OpenHomeVolume(idx) => self.open_home_volume(idx),
@@ -764,6 +919,21 @@ impl State {
             self.selected_sidebar = self.sidebar_index_for_path();
         }
         true
+    }
+
+    fn select_row(&mut self, idx: usize) -> bool {
+        if idx >= self.entry_count {
+            return false;
+        }
+        self.selected_row = Some(idx);
+        self.clear_error();
+        true
+    }
+
+    fn clear_row_selection(&mut self) -> bool {
+        let changed = self.selected_row.is_some();
+        self.selected_row = None;
+        changed
     }
 
     fn open_row(&mut self, idx: usize) -> bool {
@@ -994,6 +1164,8 @@ struct FilesApp {
     /// Cached source dimensions of the last loaded preview (for metadata display).
     preview_src_w: u32,
     preview_src_h: u32,
+    last_clicked_row: Option<usize>,
+    last_click_at: u64,
 }
 
 impl FilesApp {
@@ -1002,6 +1174,8 @@ impl FilesApp {
             state: State::new(),
             preview_src_w: 0,
             preview_src_h: 0,
+            last_clicked_row: None,
+            last_click_at: 0,
         }
     }
 
@@ -1051,6 +1225,7 @@ impl FilesApp {
         unsafe {
             PREVIEW_READY = 0;
         }
+        clear_text_preview();
 
         if self.state.view_mode != ViewMode::Directory {
             return;
@@ -1066,17 +1241,51 @@ impl FilesApp {
             return;
         }
         let name_bytes = entry.name_bytes();
-        if !is_image_name(name_bytes) {
-            return;
-        }
         let name = match core::str::from_utf8(name_bytes) {
             Ok(s) => s,
             Err(_) => return,
         };
         if let Some(full_path) = self.state.current_path.join(name) {
-            load_preview_sync(full_path.as_str().as_bytes());
-            self.preview_src_w = unsafe { PREVIEW_SRC_W };
-            self.preview_src_h = unsafe { PREVIEW_SRC_H };
+            if is_image_name(name_bytes) {
+                load_preview_sync(full_path.as_str().as_bytes());
+                self.preview_src_w = unsafe { PREVIEW_SRC_W };
+                self.preview_src_h = unsafe { PREVIEW_SRC_H };
+            } else {
+                load_text_preview_sync(full_path.as_str().as_bytes(), is_known_text_name(name_bytes));
+            }
+        }
+    }
+
+    fn reset_row_click_state(&mut self) {
+        self.last_clicked_row = None;
+        self.last_click_at = 0;
+    }
+
+    fn select_item(&mut self, idx: usize) -> bool {
+        let changed = self.state.update(Message::SelectRow(idx));
+        self.update_preview_for_selection();
+        changed
+    }
+
+    fn open_selected_or_item(&mut self, idx: usize) -> bool {
+        let changed = self.state.update(Message::OpenRow(idx));
+        self.update_preview_for_selection();
+        if changed {
+            self.reset_row_click_state();
+        }
+        changed
+    }
+
+    fn handle_directory_click(&mut self, idx: usize) -> bool {
+        let now = monotonic_millis();
+        let is_double_click = self.last_clicked_row == Some(idx)
+            && now.saturating_sub(self.last_click_at) <= DOUBLE_CLICK_MS;
+        self.last_clicked_row = Some(idx);
+        self.last_click_at = now;
+        if is_double_click {
+            self.open_selected_or_item(idx)
+        } else {
+            self.select_item(idx)
         }
     }
 
@@ -1821,7 +2030,13 @@ impl FilesApp {
         }
         y += lh_rg + 4;
 
-        let type_label = image_type_label(name_bytes);
+        let type_label = if is_image_name(name_bytes) {
+            image_type_label(name_bytes)
+        } else if is_known_text_name(name_bytes) {
+            text_type_label(name_bytes)
+        } else {
+            "File"
+        };
         sf_draw(
             canvas,
             type_label,
@@ -1896,6 +2111,62 @@ impl FilesApp {
             } else {
                 canvas.draw_ui_symbol_centered(preview, UiSymbol::Pictures, theme.accent);
             }
+        } else if unsafe { TEXT_PREVIEW_READY } == 1 {
+            canvas.fill_rect(preview, theme.panel);
+            let text = unsafe { &TEXT_PREVIEW_BUF[..TEXT_PREVIEW_LEN] };
+            let line_h = sf_lh(FontRole::UiSmall) as i32;
+            let mut line_y = preview.y + 6;
+            let mut start = 0usize;
+            while start < text.len() && line_y + line_h <= preview.bottom() - line_h - 4 {
+                let mut end = start;
+                let mut cols = 0usize;
+                while end < text.len() && text[end] != b'\n' && cols < 26 {
+                    end += 1;
+                    cols += 1;
+                }
+                let line = core::str::from_utf8(&text[start..end]).unwrap_or("");
+                sf_draw(
+                    canvas,
+                    line,
+                    preview.x + 6,
+                    line_y,
+                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                );
+                line_y += line_h;
+                start = end;
+                if start < text.len() && text[start] == b'\n' {
+                    start += 1;
+                }
+            }
+            if unsafe { TEXT_PREVIEW_TRUNCATED } != 0 {
+                sf_draw(
+                    canvas,
+                    "Truncated",
+                    preview.x + 6,
+                    preview.bottom() - line_h - 4,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
+            }
+        } else if unsafe { TEXT_PREVIEW_READY } == 2 {
+            canvas.draw_ui_symbol_centered(preview, UiSymbol::File, theme.danger);
+            sf_vcenter(
+                canvas,
+                "Preview read error",
+                preview.x + 8,
+                preview.bottom() - sf_lh(FontRole::UiSmall) as i32 - 4,
+                sf_lh(FontRole::UiSmall),
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+        } else if unsafe { TEXT_PREVIEW_READY } == 3 {
+            canvas.draw_ui_symbol_centered(preview, UiSymbol::File, theme.text_dim);
+            sf_vcenter(
+                canvas,
+                "Preview unavailable",
+                preview.x + 8,
+                preview.bottom() - sf_lh(FontRole::UiSmall) as i32 - 4,
+                sf_lh(FontRole::UiSmall),
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
         } else {
             canvas.draw_ui_symbol_centered(preview, UiSymbol::File, theme.text);
         }
@@ -2032,11 +2303,13 @@ impl App for FilesApp {
                             debug_log("[FILES] hit_test directory_row idx=");
                             log_usize(idx);
                             debug_log("\n");
-                            let changed = self.state.update(Message::OpenRow(idx));
-                            self.update_preview_for_selection();
-                            return changed;
+                            return self.handle_directory_click(idx);
                         }
                         debug_log("[FILES] hit_test none (directory view)\n");
+                        let changed = self.state.clear_row_selection();
+                        self.update_preview_for_selection();
+                        self.reset_row_click_state();
+                        return changed;
                     }
                 }
                 false
@@ -2056,6 +2329,7 @@ impl App for FilesApp {
             } => {
                 let changed = self.state.update(Message::NavigateUp);
                 self.update_preview_for_selection();
+                self.reset_row_click_state();
                 changed
             }
             Event::Tick => false,
