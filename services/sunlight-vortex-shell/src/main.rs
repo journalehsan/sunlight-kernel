@@ -399,19 +399,26 @@ struct BumpHeap(core::cell::UnsafeCell<[u8; HEAP_SIZE]>);
 unsafe impl Sync for BumpHeap {}
 static BUMP_HEAP: BumpHeap = BumpHeap(core::cell::UnsafeCell::new([0u8; HEAP_SIZE]));
 
+/// Bump pointer for `BumpAlloc`, hoisted to module scope (instead of a
+/// function-local `static`) so `shell_heap_used_bytes()` below can report
+/// live usage for the temporary heap diagnostics (Part A #1/#2).
+static HEAP_NEXT: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+/// Count of allocations that failed because the bump heap is exhausted.
+static HEAP_ALLOC_FAIL_COUNT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
 struct BumpAlloc;
 unsafe impl core::alloc::GlobalAlloc for BumpAlloc {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        use core::sync::atomic::{AtomicUsize, Ordering};
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        use core::sync::atomic::Ordering;
         let heap_ptr = BUMP_HEAP.0.get() as *mut u8;
-        let cur = NEXT.load(Ordering::Relaxed);
+        let cur = HEAP_NEXT.load(Ordering::Relaxed);
         let aligned = (cur + layout.align() - 1) & !(layout.align() - 1);
         let end = aligned + layout.size();
         if end > HEAP_SIZE {
+            HEAP_ALLOC_FAIL_COUNT.fetch_add(1, Ordering::Relaxed);
             return core::ptr::null_mut();
         }
-        NEXT.store(end, Ordering::Relaxed);
+        HEAP_NEXT.store(end, Ordering::Relaxed);
         unsafe { heap_ptr.add(aligned) }
     }
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
@@ -419,6 +426,22 @@ unsafe impl core::alloc::GlobalAlloc for BumpAlloc {
 
 #[global_allocator]
 static ALLOC: BumpAlloc = BumpAlloc;
+
+/// Temporary heap diagnostics (see AGENTS task: Part A #1/#2). These expose
+/// the no-dealloc bump allocator's live usage so a stress test can confirm
+/// `shell_heap_used_bytes()` stops growing after startup/first app
+/// discovery, instead of creeping toward `shell_heap_capacity_bytes()`.
+fn shell_heap_used_bytes() -> usize {
+    HEAP_NEXT.load(core::sync::atomic::Ordering::Relaxed)
+}
+
+fn shell_heap_capacity_bytes() -> usize {
+    HEAP_SIZE
+}
+
+fn shell_heap_alloc_fail_count() -> u64 {
+    HEAP_ALLOC_FAIL_COUNT.load(core::sync::atomic::Ordering::Relaxed)
+}
 
 // ---------------------------------------------------------------------------
 // Pixel-art icon bitmaps (1 bit per pixel, u16 rows, MSB = leftmost pixel)
