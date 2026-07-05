@@ -438,8 +438,7 @@ static ALLOC: NoAlloc = NoAlloc;
 // Static buffer large enough for a 128×128 BGRA24 TGA (18-byte header + pixels).
 /// Returns true if the file name ends in .simg or .tga.
 fn is_image_name(name: &[u8]) -> bool {
-    let n = name.len();
-    (n >= 5 && name[n - 5..] == *b".simg") || (n >= 4 && name[n - 4..] == *b".tga")
+    ends_with_ignore_ascii_case(name, b".simg") || ends_with_ignore_ascii_case(name, b".tga")
 }
 
 fn ascii_lower(byte: u8) -> u8 {
@@ -509,8 +508,7 @@ fn text_type_label(name: &[u8]) -> &'static str {
 
 /// Human-readable type label for a supported image file name.
 fn image_type_label(name: &[u8]) -> &'static str {
-    let n = name.len();
-    if n >= 5 && name[n - 5..] == *b".simg" {
+    if ends_with_ignore_ascii_case(name, b".simg") {
         "Sunlight Image"
     } else {
         "TGA Image"
