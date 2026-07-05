@@ -1,34 +1,14 @@
 [package]
-name = "sunlight-edit"
+name = "sunlight-light-lens"
 version = "0.2.790"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
-[lib]
-name = "sunlight_edit"
-path = "src/lib.rs"
-
 [[bin]]
-name = "sunlight-edit"
+name = "light-lens"
 path = "src/main.rs"
 
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
-sun-font = { path = "../sun-font" }

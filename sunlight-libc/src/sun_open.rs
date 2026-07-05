@@ -44,6 +44,7 @@ pub fn app_for_mime(mime: &[u8]) -> Option<&'static [u8]> {
         b"text/plain" | b"text/markdown" | b"text/toml" | b"text/rust" | b"application/json" => {
             Some(b"/bin/sunlight-edit")
         }
+        b"image/x-sunlight-simg" | b"image/x-tga" => Some(b"/bin/light-lens"),
         _ => None,
     }
 }
@@ -196,6 +197,8 @@ fn mime_from_extension(ext: &[u8]) -> &'static [u8] {
         b"toml" => b"text/toml",
         b"rs" => b"text/rust",
         b"json" => b"application/json",
+        b"simg" => b"image/x-sunlight-simg",
+        b"tga" => b"image/x-tga",
         _ => b"application/octet-stream",
     }
 }

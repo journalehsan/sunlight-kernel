@@ -904,9 +904,10 @@ fn sys_tty_stdout_pull(frame: &mut SyscallFrame) -> u64 {
 fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
     let pid = frame.rdi as usize;
     let sched = crate::sched::SCHEDULER.lock();
-    let alive = sched.processes.iter().any(|p| {
-        p.pid == pid && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
-    });
+    let alive = sched
+        .processes
+        .iter()
+        .any(|p| p.pid == pid && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped));
     alive as u64
 }
 
@@ -3424,13 +3425,9 @@ fn sys_kill(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     }
     if sig == 0 {
-        return crate::sched::SCHEDULER
-            .lock()
-            .processes
-            .iter()
-            .any(|p| {
-                p.pid == pid && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
-            }) as u64;
+        return crate::sched::SCHEDULER.lock().processes.iter().any(|p| {
+            p.pid == pid && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+        }) as u64;
     }
 
     let Some(signal) = crate::process::signal::Signal::try_from_u32(sig) else {

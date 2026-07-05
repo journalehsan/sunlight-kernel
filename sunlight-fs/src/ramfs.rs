@@ -960,6 +960,13 @@ max_ttys = 6
         b"#!/sunlight/sunlight-files\n",
     ),
     RamEntry::file(
+        "/bin/light-lens",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/light-lens\n",
+    ),
+    RamEntry::file(
         "/bin/sunlight-edit",
         0,
         0,
@@ -1512,6 +1519,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/sunlight-files\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/light-lens",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/light-lens\n",
     ),
     RamEntry::file(
         "/usr/bin/sunlight-edit",

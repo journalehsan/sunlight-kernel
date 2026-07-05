@@ -477,6 +477,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/calculator" | "/usr/bin/calculator" => Ok(crate::SUNLIGHT_CALCULATOR_ELF_BYTES),
         // sunlight-files: native graphical file manager.
         "/bin/sunlight-files" | "/usr/bin/sunlight-files" => Ok(crate::SUNLIGHT_FILES_ELF_BYTES),
+        // light-lens: native graphical image viewer.
+        "/bin/light-lens" | "/usr/bin/light-lens" => Ok(crate::LIGHT_LENS_ELF_BYTES),
         // sunlight-edit: native graphical text editor.
         "/bin/sunlight-edit"
         | "/usr/bin/sunlight-edit"

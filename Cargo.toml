@@ -66,6 +66,7 @@ members = [
     "sunlight-bench",
     "sunlight-calculator",
     "sunlight-files",
+    "sunlight-light-lens",
     "services/sunlight-control-panel",
     "services/sunlight-thumbd",
 ]

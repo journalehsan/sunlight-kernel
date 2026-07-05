@@ -518,8 +518,7 @@ impl Scheduler {
             .iter()
             .enumerate()
             .find(|(idx, p)| {
-                p.state == ProcessState::Reaped
-                    && in_use[..online].iter().all(|&cur| cur != *idx)
+                p.state == ProcessState::Reaped && in_use[..online].iter().all(|&cur| cur != *idx)
             })
             .map(|(idx, _)| idx)
         {
@@ -1685,7 +1684,10 @@ impl Scheduler {
         let hhdm_offset = match crate::HHDM_REQ.response() {
             Some(resp) => x86_64::VirtAddr::new(resp.offset),
             None => {
-                serial_println!("[SCHED] process_reap_blocked_reason idx={} reason=no_hhdm", idx);
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason idx={} reason=no_hhdm",
+                    idx
+                );
                 return;
             }
         };
@@ -1863,7 +1865,11 @@ impl Scheduler {
     }
 
     pub fn terminate_process_by_pid(&mut self, pid: usize, code: i32, reason: &str) -> bool {
-        serial_println!("[SCHED] process_exit_begin external pid={} reason={}", pid, reason);
+        serial_println!(
+            "[SCHED] process_exit_begin external pid={} reason={}",
+            pid,
+            reason
+        );
         let Some(idx) = self.process_index_by_pid(pid) else {
             return false;
         };

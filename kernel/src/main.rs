@@ -174,6 +174,9 @@ static SUNLIGHT_CALCULATOR_ELF_BYTES: &[u8] =
 // Sunlight Files: native file manager.
 static SUNLIGHT_FILES_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-files");
+// Light Lens: lightweight graphical image viewer.
+static LIGHT_LENS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/light-lens");
 // Sunlight Edit: native graphical text editor.
 static SUNLIGHT_EDIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-edit");
