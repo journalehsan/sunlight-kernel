@@ -49,6 +49,8 @@ static ICON_FOLDER_NETWORK_TGA: &[u8] =
 static ICON_USER_TRASH_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.tga");
 static ICON_FOLDER_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
+static ICON_IMAGE_FILE_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.tga");
 
 /// Parse a sidebar icon TGA for the given sidebar index.
 /// Returns `None` if parsing fails (the widget falls back to the UiSymbol).
@@ -82,6 +84,10 @@ fn home_folder_tga(idx: usize) -> Option<TgaImage> {
         _ => ICON_FOLDER_TGA,
     };
     TgaImage::parse(bytes).ok()
+}
+
+fn image_file_tga() -> Option<TgaImage> {
+    TgaImage::parse(ICON_IMAGE_FILE_TGA).ok()
 }
 
 // ---------------------------------------------------------------------------
@@ -1251,7 +1257,10 @@ impl FilesApp {
                 self.preview_src_w = unsafe { PREVIEW_SRC_W };
                 self.preview_src_h = unsafe { PREVIEW_SRC_H };
             } else {
-                load_text_preview_sync(full_path.as_str().as_bytes(), is_known_text_name(name_bytes));
+                load_text_preview_sync(
+                    full_path.as_str().as_bytes(),
+                    is_known_text_name(name_bytes),
+                );
             }
         }
     }
@@ -1799,23 +1808,26 @@ impl FilesApp {
             };
             canvas.fill_rect(row, fill);
 
-            let (icon, icon_color) = if entry.file_type == FT_DIR {
-                (UiSymbol::Folder, theme.accent)
-            } else if is_image_name(entry.name_bytes()) {
-                // v0: generic image-file glyph in the list. Full per-file
-                // thumbnail grid generation is deferred; image previews live
-                // in the bottom details/preview pane (see draw_details_pane).
-                (UiSymbol::Pictures, theme.accent)
-            } else {
-                (UiSymbol::File, theme.text_dim)
-            };
-            // Icon area: 32×32 slot; center the glyph. No per-file decode here
-            // so folder opening and scrolling stay fast.
             let font_lh = sf_lh(FontRole::UiRegular) as i32;
             let text_y = row.y + (ROW_H as i32 - font_lh) / 2;
-            let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
-            let sym_y = row.y + (ROW_H as i32 - 14) / 2;
-            canvas.draw_ui_symbol(sym_x, sym_y, icon, icon_color);
+            let icon_rect = Rect::new(row.x + 4, row.y + 2, 24, 24);
+            if entry.file_type == FT_DIR {
+                let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
+                let sym_y = row.y + (ROW_H as i32 - 14) / 2;
+                canvas.draw_ui_symbol(sym_x, sym_y, UiSymbol::Folder, theme.accent);
+            } else if is_image_name(entry.name_bytes()) {
+                if let Some(icon) = image_file_tga() {
+                    canvas.draw_tga_icon(&icon, icon_rect);
+                } else {
+                    let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
+                    let sym_y = row.y + (ROW_H as i32 - 14) / 2;
+                    canvas.draw_ui_symbol(sym_x, sym_y, UiSymbol::Pictures, theme.accent);
+                }
+            } else {
+                let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
+                let sym_y = row.y + (ROW_H as i32 - 14) / 2;
+                canvas.draw_ui_symbol(sym_x, sym_y, UiSymbol::File, theme.text_dim);
+            }
             // Text starts after the icon slot + 6px gap.
             let text_x = row.x + ICON_SLOT as i32 + 6;
             sf_draw(
@@ -2109,7 +2121,17 @@ impl FilesApp {
                     &TextStyle::new(FontRole::UiSmall, theme.text_dim),
                 );
             } else {
-                canvas.draw_ui_symbol_centered(preview, UiSymbol::Pictures, theme.accent);
+                if let Some(icon) = image_file_tga() {
+                    let icon_rect = Rect::new(
+                        preview.x + (preview.w as i32 - 72) / 2,
+                        preview.y + (preview.h as i32 - 72) / 2 - 10,
+                        72,
+                        72,
+                    );
+                    canvas.draw_tga_icon(&icon, icon_rect);
+                } else {
+                    canvas.draw_ui_symbol_centered(preview, UiSymbol::Pictures, theme.accent);
+                }
             }
         } else if unsafe { TEXT_PREVIEW_READY } == 1 {
             canvas.fill_rect(preview, theme.panel);

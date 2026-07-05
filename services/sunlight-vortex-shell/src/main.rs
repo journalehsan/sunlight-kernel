@@ -102,6 +102,8 @@ static ICON_NETWORK_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/network-card.tga");
 static ICON_FILE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
+static ICON_IMAGE_FILE_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.tga");
 
 // Dock icons
 static ICON_TERMINAL_TGA: &[u8] =
@@ -134,6 +136,7 @@ struct DesktopTheme {
     drive: Option<TgaImage>,
     network: Option<TgaImage>,
     file: Option<TgaImage>,
+    image: Option<TgaImage>,
 }
 
 impl DesktopTheme {
@@ -146,6 +149,7 @@ impl DesktopTheme {
             drive: TgaImage::parse(ICON_DRIVE_TGA).ok(),
             network: TgaImage::parse(ICON_NETWORK_TGA).ok(),
             file: TgaImage::parse(ICON_FILE_TGA).ok(),
+            image: TgaImage::parse(ICON_IMAGE_FILE_TGA).ok(),
         }
     }
 
@@ -155,6 +159,7 @@ impl DesktopTheme {
             DesktopIconKind::Home => self.home,
             DesktopIconKind::Trash => self.trash,
             DesktopIconKind::Folder => self.folder,
+            DesktopIconKind::Image => self.image,
             DesktopIconKind::File | DesktopIconKind::DesktopEntry => self.file,
             DesktopIconKind::Drive => self.drive,
             DesktopIconKind::Network => self.network,
@@ -824,6 +829,7 @@ enum DesktopIconKind {
     Network,
     Drive,
     Folder,
+    Image,
     File,
     DesktopEntry,
 }
@@ -1196,7 +1202,7 @@ impl VortexShell {
         };
         self.select_only_desktop_icon(idx);
         match kind {
-            DesktopIconKind::File | DesktopIconKind::DesktopEntry => {
+            DesktopIconKind::File | DesktopIconKind::Image | DesktopIconKind::DesktopEntry => {
                 self.open_file_via_resolver(&path, LaunchSource::Shortcut)
             }
             DesktopIconKind::Network => {
@@ -2026,17 +2032,9 @@ fn draw_app_button(
             }
         }
         AppLaunchState::Closing => {
-            fill = if pulse {
-                theme.panel_alt
-            } else {
-                theme.panel
-            };
+            fill = if pulse { theme.panel_alt } else { theme.panel };
             border = theme.border;
-            icon_color = if pulse {
-                theme.text_dim
-            } else {
-                theme.text
-            };
+            icon_color = if pulse { theme.text_dim } else { theme.text };
             if hovered {
                 fill = theme.accent.darken(78);
                 border = theme.accent_hover.darken(24);
@@ -2724,6 +2722,8 @@ fn load_desktop_dir_icons(desktop_dir: &str) -> Vec<DesktopIcon> {
             let path = join_path(desktop_dir, &name);
             let kind = if entry.file_type == FT_DIR {
                 DesktopIconKind::Folder
+            } else if is_supported_image_name(&name) {
+                DesktopIconKind::Image
             } else if name.ends_with(".desktop") {
                 DesktopIconKind::DesktopEntry
             } else {
@@ -2806,8 +2806,16 @@ fn desktop_icon_visual(kind: DesktopIconKind, theme: &Theme) -> (&'static [u16; 
         DesktopIconKind::Network => (&NET_ON_ROWS, theme.text),
         DesktopIconKind::Drive => (&DRIVE_ROWS, theme.warn),
         DesktopIconKind::Folder => (&FOLDER_ROWS, theme.accent_hover),
+        DesktopIconKind::Image => (&FILE_ROWS, theme.accent),
         DesktopIconKind::File | DesktopIconKind::DesktopEntry => (&FILE_ROWS, theme.text),
     }
+}
+
+fn is_supported_image_name(name: &str) -> bool {
+    name.ends_with(".simg")
+        || name.ends_with(".SIMG")
+        || name.ends_with(".tga")
+        || name.ends_with(".TGA")
 }
 
 fn draw_desktop_icons(

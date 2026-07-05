@@ -217,6 +217,7 @@ fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
         b"sunlight-edit" | b"sunlight-text" | b"edit" | b"text-editor" => {
             Some(b"/bin/sunlight-edit")
         }
+        b"light-lens" | b"photos" | b"photo-viewer" => Some(b"/bin/light-lens"),
         b"sun-open" => Some(b"/bin/sun-open"),
         _ => None,
     }
