@@ -16,7 +16,7 @@ use sunlight_ipc::{
     monotonic_millis, process_yield, ProcessExit,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
-use sunlight_ui::image::TgaImage;
+use sunlight_ui::image::{mime_icon, TgaImage};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
@@ -49,8 +49,30 @@ static ICON_FOLDER_NETWORK_TGA: &[u8] =
 static ICON_USER_TRASH_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.tga");
 static ICON_FOLDER_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
+static ICON_INODE_DIRECTORY_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/inode-directory.tga");
 static ICON_IMAGE_FILE_TGA: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.tga");
+static ICON_TEXT_PLAIN_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-plain.tga");
+static ICON_TEXT_MARKDOWN_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-markdown.tga");
+static ICON_TEXT_RUST_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-rust.tga");
+static ICON_TEXT_GENERIC_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
+static ICON_APPLICATION_JSON_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-json.tga");
+static ICON_APPLICATION_EXECUTABLE_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.tga");
+static ICON_APPLICATION_OCTET_STREAM_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.tga");
+static ICON_AUDIO_GENERIC_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
+static ICON_VIDEO_GENERIC_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.tga");
+static ICON_UNKNOWN_FILE_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/unknown.tga");
 
 /// Parse a sidebar icon TGA for the given sidebar index.
 /// Returns `None` if parsing fails (the widget falls back to the UiSymbol).
@@ -86,8 +108,86 @@ fn home_folder_tga(idx: usize) -> Option<TgaImage> {
     TgaImage::parse(bytes).ok()
 }
 
-fn image_file_tga() -> Option<TgaImage> {
-    TgaImage::parse(ICON_IMAGE_FILE_TGA).ok()
+#[derive(Clone, Copy)]
+struct MimeIconTheme {
+    folder: Option<TgaImage>,
+    inode_directory: Option<TgaImage>,
+    image_generic: Option<TgaImage>,
+    text_plain: Option<TgaImage>,
+    text_markdown: Option<TgaImage>,
+    text_rust: Option<TgaImage>,
+    text_generic: Option<TgaImage>,
+    application_json: Option<TgaImage>,
+    application_executable: Option<TgaImage>,
+    application_octet_stream: Option<TgaImage>,
+    audio_generic: Option<TgaImage>,
+    video_generic: Option<TgaImage>,
+    unknown: Option<TgaImage>,
+}
+
+impl MimeIconTheme {
+    fn load() -> Self {
+        Self {
+            folder: TgaImage::parse(ICON_FOLDER_TGA).ok(),
+            inode_directory: TgaImage::parse(ICON_INODE_DIRECTORY_TGA).ok(),
+            image_generic: TgaImage::parse(ICON_IMAGE_FILE_TGA).ok(),
+            text_plain: TgaImage::parse(ICON_TEXT_PLAIN_TGA).ok(),
+            text_markdown: TgaImage::parse(ICON_TEXT_MARKDOWN_TGA).ok(),
+            text_rust: TgaImage::parse(ICON_TEXT_RUST_TGA).ok(),
+            text_generic: TgaImage::parse(ICON_TEXT_GENERIC_TGA).ok(),
+            application_json: TgaImage::parse(ICON_APPLICATION_JSON_TGA).ok(),
+            application_executable: TgaImage::parse(ICON_APPLICATION_EXECUTABLE_TGA).ok(),
+            application_octet_stream: TgaImage::parse(ICON_APPLICATION_OCTET_STREAM_TGA).ok(),
+            audio_generic: TgaImage::parse(ICON_AUDIO_GENERIC_TGA).ok(),
+            video_generic: TgaImage::parse(ICON_VIDEO_GENERIC_TGA).ok(),
+            unknown: TgaImage::parse(ICON_UNKNOWN_FILE_TGA).ok(),
+        }
+    }
+
+    fn icon_for_entry(&self, entry: DirEntry) -> Option<TgaImage> {
+        if entry.file_type == FT_DIR {
+            return self
+                .folder
+                .or(self.inode_directory)
+                .or(self.application_octet_stream);
+        }
+
+        let mime = sun_open::mime_from_path(entry.name_bytes());
+        let mut exact_name = [0u8; mime_icon::MAX_MIME_ICON_NAME];
+        let lookup = mime_icon::resolve_file_icon(mime, &mut exact_name);
+
+        if let Some(name) = lookup.exact {
+            if let Some(icon) = self.icon_by_name(name) {
+                return Some(icon);
+            }
+        }
+        if let Some(name) = lookup.family {
+            if let Some(icon) = self.icon_by_name(name) {
+                return Some(icon);
+            }
+        }
+        self.icon_by_name(lookup.generic)
+            .or(self.icon_by_name(mime_icon::UNKNOWN_ICON))
+    }
+
+    fn icon_by_name(&self, name: &str) -> Option<TgaImage> {
+        match name {
+            "folder" => self.folder,
+            "inode-directory" => self.inode_directory,
+            "image-x-generic" => self.image_generic,
+            "text-plain" => self.text_plain,
+            "text-markdown" => self.text_markdown,
+            "text-rust" => self.text_rust,
+            "text-x-generic" => self.text_generic,
+            "application-json" => self.application_json,
+            "application-x-executable" => self.application_executable,
+            "application-octet-stream" => self.application_octet_stream,
+            "audio-x-generic" => self.audio_generic,
+            "video-x-generic" => self.video_generic,
+            "unknown" => self.unknown,
+            _ => None,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -437,8 +537,12 @@ static ALLOC: NoAlloc = NoAlloc;
 
 // Static buffer large enough for a 128×128 BGRA24 TGA (18-byte header + pixels).
 /// Returns true if the file name ends in .simg or .tga.
+fn mime_for_name(name: &[u8]) -> &'static [u8] {
+    sun_open::mime_from_path(name)
+}
+
 fn is_image_name(name: &[u8]) -> bool {
-    ends_with_ignore_ascii_case(name, b".simg") || ends_with_ignore_ascii_case(name, b".tga")
+    mime_icon::is_image_mime(mime_for_name(name))
 }
 
 fn ascii_lower(byte: u8) -> u8 {
@@ -463,15 +567,7 @@ fn ends_with_ignore_ascii_case(name: &[u8], suffix: &[u8]) -> bool {
 }
 
 fn is_known_text_name(name: &[u8]) -> bool {
-    const TEXT_EXTS: [&[u8]; 9] = [
-        b".txt", b".md", b".rs", b".toml", b".json", b".log", b".conf", b".ini", b".sh",
-    ];
-    for ext in TEXT_EXTS {
-        if ends_with_ignore_ascii_case(name, ext) {
-            return true;
-        }
-    }
-    false
+    mime_icon::is_text_like_mime(mime_for_name(name))
 }
 
 fn is_likely_text_bytes(bytes: &[u8]) -> bool {
@@ -512,6 +608,20 @@ fn image_type_label(name: &[u8]) -> &'static str {
         "Sunlight Image"
     } else {
         "TGA Image"
+    }
+}
+
+fn file_type_label(name: &[u8], mime: &[u8]) -> &'static str {
+    if mime_icon::is_image_mime(mime) {
+        image_type_label(name)
+    } else if mime_icon::is_text_like_mime(mime) {
+        text_type_label(name)
+    } else if mime == b"application/x-executable" {
+        "Executable"
+    } else if mime == b"application/octet-stream" {
+        "Binary File"
+    } else {
+        "File"
     }
 }
 
@@ -1165,6 +1275,7 @@ impl State {
 
 struct FilesApp {
     state: State,
+    mime_icons: MimeIconTheme,
     /// Cached source dimensions of the last loaded preview (for metadata display).
     preview_src_w: u32,
     preview_src_h: u32,
@@ -1176,6 +1287,7 @@ impl FilesApp {
     fn new() -> Self {
         Self {
             state: State::new(),
+            mime_icons: MimeIconTheme::load(),
             preview_src_w: 0,
             preview_src_h: 0,
             last_clicked_row: None,
@@ -1306,7 +1418,13 @@ impl FilesApp {
         let count = self.state.entry_count as isize;
         let current = match self.state.selected_row {
             Some(i) => i as isize,
-            None => if delta > 0 { -1 } else { count },
+            None => {
+                if delta > 0 {
+                    -1
+                } else {
+                    count
+                }
+            }
         };
         let mut new = current + delta;
         if new < 0 {
@@ -1850,18 +1968,8 @@ impl FilesApp {
             let font_lh = sf_lh(FontRole::UiRegular) as i32;
             let text_y = row.y + (ROW_H as i32 - font_lh) / 2;
             let icon_rect = Rect::new(row.x + 4, row.y + 2, 24, 24);
-            if entry.file_type == FT_DIR {
-                let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
-                let sym_y = row.y + (ROW_H as i32 - 14) / 2;
-                canvas.draw_ui_symbol(sym_x, sym_y, UiSymbol::Folder, theme.accent);
-            } else if is_image_name(entry.name_bytes()) {
-                if let Some(icon) = image_file_tga() {
-                    canvas.draw_tga_icon(&icon, icon_rect);
-                } else {
-                    let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
-                    let sym_y = row.y + (ROW_H as i32 - 14) / 2;
-                    canvas.draw_ui_symbol(sym_x, sym_y, UiSymbol::Pictures, theme.accent);
-                }
+            if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
+                canvas.draw_tga_icon(&icon, icon_rect);
             } else {
                 let sym_x = row.x + (ICON_SLOT as i32 - 12) / 2;
                 let sym_y = row.y + (ROW_H as i32 - 14) / 2;
@@ -1879,13 +1987,7 @@ impl FilesApp {
 
             let type_label = match entry.file_type {
                 FT_DIR => "Directory",
-                FT_FILE => {
-                    if is_image_name(entry.name_bytes()) {
-                        image_type_label(entry.name_bytes())
-                    } else {
-                        "File"
-                    }
-                }
+                FT_FILE => file_type_label(entry.name_bytes(), mime_for_name(entry.name_bytes())),
                 _ => "Other",
             };
             sf_draw(
@@ -2055,7 +2157,17 @@ impl FilesApp {
             );
         }
 
-        canvas.draw_ui_symbol_centered(preview, UiSymbol::Folder, theme.accent);
+        if let Some(icon) = self.mime_icons.folder.or(self.mime_icons.inode_directory) {
+            let icon_rect = Rect::new(
+                preview.x + (preview.w as i32 - 72) / 2,
+                preview.y + (preview.h as i32 - 72) / 2 - 10,
+                72,
+                72,
+            );
+            canvas.draw_tga_icon(&icon, icon_rect);
+        } else {
+            canvas.draw_ui_symbol_centered(preview, UiSymbol::Folder, theme.accent);
+        }
     }
 
     fn draw_file_details(
@@ -2081,13 +2193,8 @@ impl FilesApp {
         }
         y += lh_rg + 4;
 
-        let type_label = if is_image_name(name_bytes) {
-            image_type_label(name_bytes)
-        } else if is_known_text_name(name_bytes) {
-            text_type_label(name_bytes)
-        } else {
-            "File"
-        };
+        let mime = mime_for_name(name_bytes);
+        let type_label = file_type_label(name_bytes, mime);
         sf_draw(
             canvas,
             type_label,
@@ -2160,7 +2267,7 @@ impl FilesApp {
                     &TextStyle::new(FontRole::UiSmall, theme.text_dim),
                 );
             } else {
-                if let Some(icon) = image_file_tga() {
+                if let Some(icon) = self.mime_icons.image_generic {
                     let icon_rect = Rect::new(
                         preview.x + (preview.w as i32 - 72) / 2,
                         preview.y + (preview.h as i32 - 72) / 2 - 10,

@@ -70,7 +70,7 @@ use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
     image::{
         icon_theme::{self, category as icon_category, name as icon_name},
-        TgaImage,
+        mime_icon, TgaImage,
     },
     App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
 };
@@ -96,6 +96,8 @@ static ICON_TRASH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/user-trash.tga");
 static ICON_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.tga");
+static ICON_INODE_DIRECTORY_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/inode-directory.tga");
 static ICON_DRIVE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/drive-harddisk.tga");
 static ICON_NETWORK_TGA: &[u8] =
@@ -104,6 +106,24 @@ static ICON_FILE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
 static ICON_IMAGE_FILE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.tga");
+static ICON_TEXT_PLAIN_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-plain.tga");
+static ICON_TEXT_MARKDOWN_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-markdown.tga");
+static ICON_TEXT_RUST_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-rust.tga");
+static ICON_APPLICATION_JSON_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-json.tga");
+static ICON_APPLICATION_EXECUTABLE_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.tga");
+static ICON_APPLICATION_OCTET_STREAM_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.tga");
+static ICON_AUDIO_GENERIC_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
+static ICON_VIDEO_GENERIC_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.tga");
+static ICON_UNKNOWN_FILE_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/unknown.tga");
 
 // Dock icons
 static ICON_TERMINAL_TGA: &[u8] =
@@ -133,10 +153,20 @@ struct DesktopTheme {
     home: Option<TgaImage>,
     trash: Option<TgaImage>,
     folder: Option<TgaImage>,
+    inode_directory: Option<TgaImage>,
     drive: Option<TgaImage>,
     network: Option<TgaImage>,
     file: Option<TgaImage>,
     image: Option<TgaImage>,
+    text_plain: Option<TgaImage>,
+    text_markdown: Option<TgaImage>,
+    text_rust: Option<TgaImage>,
+    application_json: Option<TgaImage>,
+    application_executable: Option<TgaImage>,
+    application_octet_stream: Option<TgaImage>,
+    audio_generic: Option<TgaImage>,
+    video_generic: Option<TgaImage>,
+    unknown: Option<TgaImage>,
 }
 
 impl DesktopTheme {
@@ -146,10 +176,20 @@ impl DesktopTheme {
             home: TgaImage::parse(ICON_HOME_TGA).ok(),
             trash: TgaImage::parse(ICON_TRASH_TGA).ok(),
             folder: TgaImage::parse(ICON_FOLDER_TGA).ok(),
+            inode_directory: TgaImage::parse(ICON_INODE_DIRECTORY_TGA).ok(),
             drive: TgaImage::parse(ICON_DRIVE_TGA).ok(),
             network: TgaImage::parse(ICON_NETWORK_TGA).ok(),
             file: TgaImage::parse(ICON_FILE_TGA).ok(),
             image: TgaImage::parse(ICON_IMAGE_FILE_TGA).ok(),
+            text_plain: TgaImage::parse(ICON_TEXT_PLAIN_TGA).ok(),
+            text_markdown: TgaImage::parse(ICON_TEXT_MARKDOWN_TGA).ok(),
+            text_rust: TgaImage::parse(ICON_TEXT_RUST_TGA).ok(),
+            application_json: TgaImage::parse(ICON_APPLICATION_JSON_TGA).ok(),
+            application_executable: TgaImage::parse(ICON_APPLICATION_EXECUTABLE_TGA).ok(),
+            application_octet_stream: TgaImage::parse(ICON_APPLICATION_OCTET_STREAM_TGA).ok(),
+            audio_generic: TgaImage::parse(ICON_AUDIO_GENERIC_TGA).ok(),
+            video_generic: TgaImage::parse(ICON_VIDEO_GENERIC_TGA).ok(),
+            unknown: TgaImage::parse(ICON_UNKNOWN_FILE_TGA).ok(),
         }
     }
 
@@ -163,6 +203,60 @@ impl DesktopTheme {
             DesktopIconKind::File | DesktopIconKind::DesktopEntry => self.file,
             DesktopIconKind::Drive => self.drive,
             DesktopIconKind::Network => self.network,
+        }
+    }
+
+    fn icon_for_entry(&self, kind: DesktopIconKind, name: &str) -> Option<TgaImage> {
+        if matches!(
+            kind,
+            DesktopIconKind::Computer
+                | DesktopIconKind::Home
+                | DesktopIconKind::Trash
+                | DesktopIconKind::Drive
+                | DesktopIconKind::Network
+        ) {
+            return self.icon_for(kind);
+        }
+        if kind == DesktopIconKind::Folder {
+            return self
+                .folder
+                .or(self.inode_directory)
+                .or(self.application_octet_stream);
+        }
+
+        let mime = sunlight_libc::sun_open::mime_from_path(name.as_bytes());
+        let mut exact_name = [0u8; mime_icon::MAX_MIME_ICON_NAME];
+        let lookup = mime_icon::resolve_file_icon(mime, &mut exact_name);
+        if let Some(icon_name) = lookup.exact {
+            if let Some(icon) = self.icon_by_name(icon_name) {
+                return Some(icon);
+            }
+        }
+        if let Some(icon_name) = lookup.family {
+            if let Some(icon) = self.icon_by_name(icon_name) {
+                return Some(icon);
+            }
+        }
+        self.icon_by_name(lookup.generic)
+            .or(self.icon_by_name(mime_icon::UNKNOWN_ICON))
+    }
+
+    fn icon_by_name(&self, name: &str) -> Option<TgaImage> {
+        match name {
+            "folder" => self.folder,
+            "inode-directory" => self.inode_directory,
+            "text-plain" => self.text_plain,
+            "text-markdown" => self.text_markdown,
+            "text-rust" => self.text_rust,
+            "text-x-generic" => self.file,
+            "image-x-generic" => self.image,
+            "application-json" => self.application_json,
+            "application-x-executable" => self.application_executable,
+            "application-octet-stream" => self.application_octet_stream,
+            "audio-x-generic" => self.audio_generic,
+            "video-x-generic" => self.video_generic,
+            "unknown" => self.unknown,
+            _ => None,
         }
     }
 }
@@ -2840,7 +2934,7 @@ fn draw_desktop_icons(
         let icon_rect = Rect::new(slot.x + 18, slot.y + 6, 48, 40);
 
         // Prefer TGA theme icon; fall back to pixel-art if not loaded.
-        if let Some(tga) = dt.icon_for(icon.kind) {
+        if let Some(tga) = dt.icon_for_entry(icon.kind, &icon.name) {
             canvas.draw_tga_icon(&tga, icon_rect);
         } else {
             let (rows, color) = desktop_icon_visual(icon.kind, theme);
