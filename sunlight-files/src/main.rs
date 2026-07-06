@@ -229,6 +229,25 @@ const DOUBLE_CLICK_MS: u64 = 400;
 const TEXT_PREVIEW_LIMIT: usize = 8 * 1024;
 const TEXT_PREVIEW_BUF_LEN: usize = 8 * 1024;
 
+// Right-click context menu layout.
+const MENU_W: u32 = 176;
+const MENU_ITEM_H: u32 = 30;
+const MENU_PAD_V: u32 = 4;
+
+// Properties dialog layout.
+const DIALOG_W: u32 = 480;
+const PROP_PAD: i32 = 18;
+const PROP_LABEL_W: u32 = 104;
+const PROP_TITLE_H: u32 = 26;
+const PROP_ICON_ROW_H: u32 = 46;
+const PROP_ROW_H: u32 = 22;
+const PROP_BTN_H: u32 = 30;
+/// Cap used when counting a folder's direct children (shallow, no recursion).
+/// Mirrors the file list's own MAX_ENTRIES cap so Properties never blocks.
+const PROP_CHILD_BUF: usize = MAX_ENTRIES;
+const PROP_ROW_CAP: usize = 10;
+const PROP_VAL_LEN: usize = 64;
+
 // Home grid: 6 core folders (Desktop, Documents, Downloads, Pictures, Music, Videos).
 // Templates and Public are available via navigation but not shown on the home page.
 const HOME_FOLDER_COUNT: usize = 6;
@@ -263,6 +282,246 @@ enum ViewMode {
     Volumes,
     Network,
     Directory,
+}
+
+// ---------------------------------------------------------------------------
+// Right-click context menu + Properties dialog model
+// ---------------------------------------------------------------------------
+
+/// What a context menu was opened against: a list row or the empty background.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ContextTarget {
+    Row(usize),
+    Background,
+}
+
+/// A single context-menu entry. Kept tiny on purpose — destructive actions
+/// (rename/delete/move) are intentionally deferred to a later pass.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ContextMenuItem {
+    Open,
+    Properties,
+}
+
+/// Floating context-menu state. `hovered` is the index of the item under the
+/// cursor (None when outside the menu). All fields are plain values so the
+/// whole struct is `Copy`.
+#[derive(Clone, Copy)]
+struct ContextMenu {
+    x: i32,
+    y: i32,
+    target: ContextTarget,
+    hovered: Option<usize>,
+}
+
+impl ContextMenu {
+    /// Number of entries shown for this target.
+    fn item_count(&self) -> usize {
+        FilesApp::context_menu_items(self.target).len()
+    }
+
+    /// The menu card rect, clamped to stay inside the window.
+    fn menu_rect(&self) -> Rect {
+        let h = MENU_PAD_V * 2 + (self.item_count() as u32) * MENU_ITEM_H;
+        let x = self.x.min(WIN_W as i32 - MENU_W as i32 - 4).max(4);
+        let y = self.y.min(WIN_H as i32 - h as i32 - 4).max(4);
+        Rect::new(x, y, MENU_W, h)
+    }
+
+    /// Rect for entry `idx`, inset horizontally so hovered fills clear the
+    /// rounded card border.
+    fn item_rect(&self, idx: usize) -> Rect {
+        let r = self.menu_rect();
+        Rect::new(
+            r.x + 3,
+            r.y + MENU_PAD_V as i32 + (idx as i32) * MENU_ITEM_H as i32,
+            r.w - 6,
+            MENU_ITEM_H,
+        )
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PropertiesKind {
+    File,
+    Folder,
+}
+
+/// A single label/value row in the Properties dialog.
+#[derive(Clone, Copy)]
+struct PropRow {
+    label: &'static str,
+    value: [u8; PROP_VAL_LEN],
+    value_len: usize,
+}
+
+impl PropRow {
+    fn set_str(&mut self, text: &str) {
+        let b = text.as_bytes();
+        let n = b.len().min(self.value.len());
+        self.value[..n].copy_from_slice(&b[..n]);
+        self.value_len = n;
+    }
+
+    /// Store a byte slice that may not be valid UTF-8 (e.g. a MIME string).
+    fn set_bytes(&mut self, text: &[u8]) {
+        let n = text.len().min(self.value.len());
+        self.value[..n].copy_from_slice(&text[..n]);
+        self.value_len = n;
+    }
+
+    fn value_str(&self) -> &str {
+        core::str::from_utf8(&self.value[..self.value_len]).unwrap_or("")
+    }
+}
+
+/// Snapshot of everything the Properties dialog shows for one item. Computed
+/// once (cheaply) when Properties is opened, never on the draw path, and never
+/// via a recursive scan. Holds only `'static` references and fixed buffers, so
+/// it is `Copy`.
+#[derive(Clone, Copy)]
+struct PropertiesState {
+    kind: PropertiesKind,
+    name: [u8; 64],
+    name_len: usize,
+    path: PathBuf,
+    /// Human-readable type from the central presentation helpers
+    /// (`file_type_label`) or "Folder".
+    type_label: &'static str,
+    /// MIME type from the central `sun_open::mime_from_path` (empty for folders).
+    mime: &'static [u8],
+    /// Default app path from the central `sun_open::app_for_mime`, if any.
+    opener_path: Option<&'static [u8]>,
+    size: u64,
+    // Image metadata (file + image only). `img_format` is "" for non-images.
+    img_format: &'static str,
+    img_w: u32,
+    img_h: u32,
+    img_bpp: u8,
+    has_dims: bool,
+    // Folder contents (shallow, single read_dir — no recursion).
+    child_total: usize,
+    child_folders: usize,
+    child_files: usize,
+    /// True when the child count hit the buffer cap (>= PROP_CHILD_BUF), so the
+    /// dialog can hint the count may be larger.
+    child_capped: bool,
+    /// False when stat() failed (e.g. missing/unreadable item).
+    read_ok: bool,
+}
+
+impl PropertiesState {
+    /// Minimal state for an item that could not be resolved (missing/unreadable).
+    fn missing(path: PathBuf) -> Self {
+        Self {
+            kind: PropertiesKind::File,
+            name: [0; 64],
+            name_len: 0,
+            path,
+            type_label: "Unknown",
+            mime: EMPTY_BYTES,
+            opener_path: None,
+            size: 0,
+            img_format: "",
+            img_w: 0,
+            img_h: 0,
+            img_bpp: 0,
+            has_dims: false,
+            child_total: 0,
+            child_folders: 0,
+            child_files: 0,
+            child_capped: false,
+            read_ok: false,
+        }
+    }
+
+    fn name_bytes(&self) -> &[u8] {
+        &self.name[..self.name_len.min(64)]
+    }
+
+    /// Build the ordered label/value rows shown in the dialog. Returns the
+    /// filled rows and how many are valid — the single source of truth used by
+    /// both the dialog-height calculation and the draw code.
+    fn rows(&self) -> ([PropRow; PROP_ROW_CAP], usize) {
+        let mut rows = [PropRow {
+            label: "",
+            value: [0; PROP_VAL_LEN],
+            value_len: 0,
+        }; PROP_ROW_CAP];
+        let mut n = 0usize;
+
+        let push = |rows: &mut [PropRow; PROP_ROW_CAP], n: &mut usize, label, text: &str| {
+            if *n < rows.len() {
+                rows[*n].label = label;
+                rows[*n].set_str(text);
+                *n += 1;
+            }
+        };
+
+        push(&mut rows, &mut n, "Type:", self.type_label);
+        if !self.mime.is_empty() {
+            rows[n].label = "MIME:";
+            rows[n].set_bytes(self.mime);
+            n += 1;
+        }
+        push(&mut rows, &mut n, "Location:", self.path.as_str());
+
+        match self.kind {
+            PropertiesKind::File => {
+                let mut size_buf = [0u8; 16];
+                let size_len = write_size(self.size, &mut size_buf);
+                rows[n].label = "Size:";
+                let sn = size_len.min(rows[n].value.len());
+                rows[n].value[..sn].copy_from_slice(&size_buf[..sn]);
+                rows[n].value_len = sn;
+                n += 1;
+
+                if !self.img_format.is_empty() {
+                    push(&mut rows, &mut n, "Format:", self.img_format);
+                    if self.has_dims {
+                        let mut buf = [0u8; 32];
+                        let mut len = write_to_buf(&mut buf, b"");
+                        len += write_usize(&mut buf[len..], self.img_w as usize);
+                        len += write_to_buf(&mut buf[len..], b" x ");
+                        len += write_usize(&mut buf[len..], self.img_h as usize);
+                        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+                            push(&mut rows, &mut n, "Dimensions:", s);
+                        }
+                        let depth = if self.img_bpp == 32 {
+                            "32-bit"
+                        } else {
+                            "24-bit"
+                        };
+                        push(&mut rows, &mut n, "Color depth:", depth);
+                    }
+                }
+                if let Some(app) = self.opener_path {
+                    push(&mut rows, &mut n, "Opens with:", opener_label(app));
+                }
+            }
+            PropertiesKind::Folder => {
+                // Folder size would require a recursive scan; deliberately not
+                // computed in this pass. Direct child counts are shallow only.
+                if self.read_ok {
+                    let mut buf = [0u8; 40];
+                    let mut len = write_usize(&mut buf, self.child_total);
+                    len += write_to_buf(&mut buf[len..], b" items (");
+                    len += write_usize(&mut buf[len..], self.child_folders);
+                    len += write_to_buf(&mut buf[len..], b" folders, ");
+                    len += write_usize(&mut buf[len..], self.child_files);
+                    len += write_to_buf(&mut buf[len..], b" files)");
+                    if self.child_capped {
+                        len += write_to_buf(&mut buf[len..], b"+");
+                    }
+                    if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+                        push(&mut rows, &mut n, "Contents:", s);
+                    }
+                }
+            }
+        }
+
+        (rows, n)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1281,6 +1540,11 @@ struct FilesApp {
     preview_src_h: u32,
     last_clicked_row: Option<usize>,
     last_click_at: u64,
+    /// Active right-click context menu, if any.
+    context_menu: Option<ContextMenu>,
+    /// Active Properties dialog, if any. Modal-lite: while set it consumes
+    /// input so the underlying file list cannot be navigated.
+    properties: Option<PropertiesState>,
 }
 
 impl FilesApp {
@@ -1292,6 +1556,8 @@ impl FilesApp {
             preview_src_h: 0,
             last_clicked_row: None,
             last_click_at: 0,
+            context_menu: None,
+            properties: None,
         }
     }
 
@@ -1544,6 +1810,287 @@ impl FilesApp {
         let title_y =
             inner.y + 36 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 12;
         title_y + 18 // after section label
+    }
+
+    // ── Context menu + Properties ────────────────────────────────────────
+
+    fn context_menu_items(target: ContextTarget) -> &'static [ContextMenuItem] {
+        match target {
+            ContextTarget::Row(_) => &[ContextMenuItem::Open, ContextMenuItem::Properties],
+            ContextTarget::Background => &[ContextMenuItem::Properties],
+        }
+    }
+
+    fn context_menu_item_label(item: ContextMenuItem) -> &'static str {
+        match item {
+            ContextMenuItem::Open => "Open",
+            ContextMenuItem::Properties => "Properties",
+        }
+    }
+
+    /// Open (or reposition) the context menu at the cursor. For a row target
+    /// the row is selected first — without navigating — mirroring single-click.
+    fn open_context_menu(&mut self, x: i32, y: i32, target: ContextTarget) -> bool {
+        if let ContextTarget::Row(idx) = target {
+            if idx < self.state.entry_count && self.state.selected_row != Some(idx) {
+                self.select_item(idx);
+            }
+        }
+        self.context_menu = Some(ContextMenu {
+            x,
+            y,
+            target,
+            hovered: None,
+        });
+        true
+    }
+
+    /// Handle a right-click anywhere in the window.
+    fn handle_right_click(&mut self, x: i32, y: i32) -> bool {
+        // The context menu only applies to the directory listing.
+        if self.state.view_mode == ViewMode::Directory {
+            let (_, body, _, _) = Self::root_layout();
+            let (_, main) = Self::body_layout(body);
+            if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count) {
+                return self.open_context_menu(x, y, ContextTarget::Row(idx));
+            }
+            // Empty space → background menu (Properties for the current folder).
+            return self.open_context_menu(x, y, ContextTarget::Background);
+        }
+        self.context_menu = None;
+        false
+    }
+
+    /// Left-click while a context menu is open: activate an item, consume
+    /// clicks inside the menu, or dismiss on click-outside.
+    fn handle_context_menu_click(&mut self, x: i32, y: i32) -> bool {
+        let Some(menu) = self.context_menu else {
+            return false;
+        };
+        let pt = sunlight_ui::Point::new(x, y);
+        let items = Self::context_menu_items(menu.target);
+        for (i, item) in items.iter().enumerate() {
+            if menu.item_rect(i).contains(pt) {
+                return self.activate_context_menu_item(*item);
+            }
+        }
+        if menu.menu_rect().contains(pt) {
+            return true; // padding — consume
+        }
+        self.context_menu = None; // outside — dismiss
+        true
+    }
+
+    /// Track the hovered menu item on mouse move. Returns whether hover
+    /// changed so the caller redraws only when needed.
+    fn update_menu_hover(&mut self, x: i32, y: i32) -> bool {
+        let Some(menu) = self.context_menu else {
+            return false;
+        };
+        let pt = sunlight_ui::Point::new(x, y);
+        let new_hover = if menu.menu_rect().contains(pt) {
+            (0..menu.item_count()).find(|&i| menu.item_rect(i).contains(pt))
+        } else {
+            None
+        };
+        if menu.hovered != new_hover {
+            self.context_menu = Some(ContextMenu {
+                hovered: new_hover,
+                ..menu
+            });
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Activate the currently hovered menu item (Enter key).
+    fn activate_hovered_menu_item(&mut self) -> bool {
+        let Some(menu) = self.context_menu else {
+            return false;
+        };
+        if let Some(i) = menu.hovered {
+            let item = Self::context_menu_items(menu.target)[i];
+            return self.activate_context_menu_item(item);
+        }
+        false
+    }
+
+    /// Run a chosen menu item. The menu is dismissed first in every case.
+    fn activate_context_menu_item(&mut self, item: ContextMenuItem) -> bool {
+        let target = match self.context_menu {
+            Some(m) => m.target,
+            None => return false,
+        };
+        self.context_menu = None;
+        match item {
+            ContextMenuItem::Open => {
+                if let ContextTarget::Row(idx) = target {
+                    if idx < self.state.entry_count {
+                        // Reuse the exact open path used by double-click/Enter.
+                        self.open_selected_or_item(idx);
+                    }
+                }
+                true
+            }
+            ContextMenuItem::Properties => {
+                self.properties = Some(self.build_properties(target));
+                true
+            }
+        }
+    }
+
+    /// Left-click while the Properties dialog is open: Close button, consume
+    /// clicks inside, or dismiss on click-outside.
+    fn handle_properties_click(&mut self, x: i32, y: i32) -> bool {
+        let Some(props) = self.properties else {
+            return false;
+        };
+        let pt = sunlight_ui::Point::new(x, y);
+        let card = Self::properties_rect(&props);
+        if Self::properties_close_rect(card).contains(pt) {
+            self.properties = None;
+            return true;
+        }
+        if card.contains(pt) {
+            return true; // inside — consume
+        }
+        self.properties = None; // outside — dismiss
+        true
+    }
+
+    // ── Properties data ──────────────────────────────────────────────────
+
+    /// Snapshot the item `target` refers to into a PropertiesState.
+    fn build_properties(&self, target: ContextTarget) -> PropertiesState {
+        match target {
+            ContextTarget::Row(idx) => {
+                if idx >= self.state.entry_count {
+                    return PropertiesState::missing(self.state.current_path);
+                }
+                let entry = self.state.entries[idx];
+                let name_bytes = entry.name_bytes();
+                let name_str = core::str::from_utf8(name_bytes).unwrap_or("");
+                let path = match self.state.current_path.join(name_str) {
+                    Some(p) => p,
+                    None => return PropertiesState::missing(self.state.current_path),
+                };
+                Self::properties_for_path(path, Some(entry.file_type), name_bytes)
+            }
+            ContextTarget::Background => {
+                let path = self.state.current_path;
+                let basename = path.as_str().rsplit('/').next().unwrap_or("/");
+                Self::properties_for_path(path, Some(FT_DIR), basename.as_bytes())
+            }
+        }
+    }
+
+    /// Build a PropertiesState for an absolute path. `file_type_hint` and
+    /// `name_bytes` let us fall back gracefully when stat() fails.
+    fn properties_for_path(
+        path: PathBuf,
+        file_type_hint: Option<u8>,
+        name_bytes: &[u8],
+    ) -> PropertiesState {
+        let stat = libc::stat(path.as_str().as_bytes());
+        let (size, read_ok, file_type) = match stat {
+            Ok(s) => (s.size, true, s.file_type),
+            Err(_) => (0, false, file_type_hint.unwrap_or(0)),
+        };
+        let is_dir = file_type == FT_DIR || file_type_hint == Some(FT_DIR);
+
+        let kind = if is_dir {
+            PropertiesKind::Folder
+        } else {
+            PropertiesKind::File
+        };
+        let mime = if is_dir {
+            EMPTY_BYTES
+        } else {
+            mime_for_name(name_bytes)
+        };
+        let type_label = if is_dir {
+            "Folder"
+        } else {
+            file_type_label(name_bytes, mime)
+        };
+        let opener_path = if is_dir {
+            None
+        } else {
+            sun_open::app_for_mime(mime)
+        };
+
+        let mut props = PropertiesState {
+            kind,
+            name: [0; 64],
+            name_len: 0,
+            path,
+            type_label,
+            mime,
+            opener_path,
+            size,
+            img_format: "",
+            img_w: 0,
+            img_h: 0,
+            img_bpp: 0,
+            has_dims: false,
+            child_total: 0,
+            child_folders: 0,
+            child_files: 0,
+            child_capped: false,
+            read_ok,
+        };
+
+        let nl = name_bytes.len().min(props.name.len());
+        props.name[..nl].copy_from_slice(&name_bytes[..nl]);
+        props.name_len = nl;
+
+        if !read_ok {
+            return props;
+        }
+
+        match kind {
+            PropertiesKind::File => {
+                if mime_icon::is_image_mime(mime) {
+                    props.img_format = image_format_compact(name_bytes);
+                    // Peek at the header only — never decode the whole image,
+                    // and never touch the preview pane's buffer.
+                    let mut head = [0u8; 32];
+                    let n = read_file_head(props.path.as_str().as_bytes(), &mut head);
+                    if let Some((w, h, bpp)) = tga_header_dims(&head[..n]) {
+                        props.img_w = w;
+                        props.img_h = h;
+                        props.img_bpp = bpp;
+                        props.has_dims = true;
+                    }
+                }
+            }
+            PropertiesKind::Folder => {
+                // Shallow child count only — never recursive, never on the
+                // hot path. A failed read_dir leaves counts at zero (the
+                // Contents row is then omitted), which is the graceful path
+                // for unreadable folders.
+                let mut buf = [DirEntry::zeroed(); PROP_CHILD_BUF];
+                if let Ok(count) = libc::read_dir(props.path.as_str().as_bytes(), &mut buf) {
+                    let n = count.min(PROP_CHILD_BUF);
+                    let mut folders = 0usize;
+                    let mut files = 0usize;
+                    for e in buf[..n].iter() {
+                        if e.file_type == FT_DIR {
+                            folders += 1;
+                        } else {
+                            files += 1;
+                        }
+                    }
+                    props.child_total = n;
+                    props.child_folders = folders;
+                    props.child_files = files;
+                    props.child_capped = n >= PROP_CHILD_BUF;
+                }
+            }
+        }
+
+        props
     }
 
     // ── Draw ──────────────────────────────────────────────────────────────
@@ -2377,6 +2924,144 @@ impl FilesApp {
             &TextStyle::new(FontRole::UiSmall, summary_color),
         );
     }
+
+    // ── Context menu + Properties drawing ────────────────────────────────
+
+    fn draw_context_menu(&self, canvas: &mut Canvas, theme: &Theme, menu: ContextMenu) {
+        let r = menu.menu_rect();
+        canvas.fill_rounded_rect_with_border(r, RADIUS, theme.panel, theme.border, 1);
+        let items = Self::context_menu_items(menu.target);
+        for (i, &item) in items.iter().enumerate() {
+            let ir = menu.item_rect(i);
+            let hovered = menu.hovered == Some(i);
+            if hovered {
+                canvas.fill_rect(ir, theme.accent);
+            }
+            let color = if hovered { theme.bg } else { theme.text };
+            sf_vcenter(
+                canvas,
+                Self::context_menu_item_label(item),
+                ir.x + 12,
+                ir.y,
+                ir.h,
+                &TextStyle::new(FontRole::UiRegular, color),
+            );
+        }
+    }
+
+    /// Centered dialog card rect; height is derived from the row count so the
+    /// layout (used by both sizing and drawing) stays in sync.
+    fn properties_rect(props: &PropertiesState) -> Rect {
+        let count = props.rows().1 as u32;
+        // top_block = top pad + title + icon row + gap above rows
+        let top_block = PROP_PAD as u32 + PROP_TITLE_H + PROP_ICON_ROW_H + 6;
+        let bottom_block = 12 + PROP_BTN_H + 14; // gap + button + bottom pad
+        let h = top_block + count * PROP_ROW_H + bottom_block;
+        let x = (WIN_W as i32 - DIALOG_W as i32) / 2;
+        let y = ((WIN_H as i32 - h as i32) / 2).max(24);
+        Rect::new(x, y, DIALOG_W, h)
+    }
+
+    fn properties_close_rect(card: Rect) -> Rect {
+        let bw = 96;
+        Rect::new(
+            card.x + (card.w as i32 - bw) / 2,
+            card.bottom() - PROP_BTN_H as i32 - 14,
+            bw as u32,
+            PROP_BTN_H,
+        )
+    }
+
+    fn draw_properties(&self, canvas: &mut Canvas, theme: &Theme, props: PropertiesState) {
+        let card = Self::properties_rect(&props);
+        canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel, theme.accent, 2);
+
+        let pad = PROP_PAD;
+        let title_y = card.y + pad;
+        sf_draw(
+            canvas,
+            "Properties",
+            card.x + pad,
+            title_y,
+            &TextStyle::new(FontRole::UiMedium, theme.accent),
+        );
+
+        // Icon + name row. Reuse the central MIME icon resolver via a
+        // synthetic DirEntry so icon selection is never duplicated.
+        let icon_top = title_y + PROP_TITLE_H as i32;
+        let icon_rect = Rect::new(card.x + pad, icon_top, 40, 40);
+        let mut entry = DirEntry::zeroed();
+        let nb = props.name_bytes();
+        let nl = nb.len().min(entry.name.len());
+        entry.name[..nl].copy_from_slice(&nb[..nl]);
+        entry.name_len = nl as u8;
+        entry.file_type = if props.kind == PropertiesKind::Folder {
+            FT_DIR
+        } else {
+            FT_FILE
+        };
+        if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
+            canvas.draw_tga_icon(&icon, icon_rect);
+        } else {
+            let sym = if props.kind == PropertiesKind::Folder {
+                UiSymbol::Folder
+            } else {
+                UiSymbol::File
+            };
+            canvas.draw_ui_symbol_centered(icon_rect, sym, theme.accent);
+        }
+
+        let name_max_w = (card.right() - pad - (icon_rect.right() + 8)) as u32;
+        let name = core::str::from_utf8(props.name_bytes()).unwrap_or("");
+        let name_fit = fit_text_prefix(name, FontRole::UiMedium, name_max_w);
+        sf_vcenter(
+            canvas,
+            name_fit,
+            icon_rect.right() + 8,
+            icon_top,
+            40,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+
+        // Separator + rows.
+        let sep_y = icon_top + PROP_ICON_ROW_H as i32;
+        let sep_len = (card.w as i32 - 2 * pad) as u32;
+        canvas.hline(card.x + pad, sep_y, sep_len, theme.border);
+
+        let value_x = card.x + pad + PROP_LABEL_W as i32;
+        let value_w = (card.right() - pad - value_x) as u32;
+        let (rows, count) = props.rows();
+        let mut ry = sep_y + 6;
+        for i in 0..count {
+            sf_draw(
+                canvas,
+                rows[i].label,
+                card.x + pad,
+                ry,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            let fit = fit_text_prefix(rows[i].value_str(), FontRole::UiSmall, value_w);
+            sf_draw(
+                canvas,
+                fit,
+                value_x,
+                ry,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+            ry += PROP_ROW_H as i32;
+        }
+
+        // Close button reuses the toolbar pill style.
+        draw_pill(
+            canvas,
+            theme,
+            Self::properties_close_rect(card),
+            "Close",
+            None,
+            false,
+            false,
+        );
+    }
 }
 
 impl App for FilesApp {
@@ -2389,6 +3074,14 @@ impl App for FilesApp {
         self.draw_main(canvas, theme, main);
         self.draw_details_pane(canvas, theme, details);
         self.draw_status(canvas, theme, status);
+
+        // Overlays draw last so they sit above all other content.
+        if let Some(menu) = self.context_menu {
+            self.draw_context_menu(canvas, theme, menu);
+        }
+        if let Some(props) = self.properties {
+            self.draw_properties(canvas, theme, props);
+        }
     }
 
     fn update(&mut self, event: Event) -> bool {
@@ -2397,6 +3090,62 @@ impl App for FilesApp {
         const KEY_LEFT: u8 = 0x4B;
         const KEY_UP: u8 = 0x48;
         const KEY_DOWN: u8 = 0x50;
+
+        // Properties dialog is modal-lite: while open it swallows every event
+        // (including right-clicks) until the user closes it. This also keeps
+        // stale selection state from leaking through while the dialog is up.
+        if self.properties.is_some() {
+            return match event {
+                Event::Click { x, y } => self.handle_properties_click(x, y),
+                Event::Key('\n')
+                | Event::KeyPress {
+                    keycode: KEY_ENTER,
+                    pressed: true,
+                    ..
+                }
+                | Event::KeyPress {
+                    keycode: KEY_ESC,
+                    pressed: true,
+                    ..
+                } => {
+                    self.properties = None;
+                    true
+                }
+                _ => false,
+            };
+        }
+
+        // Right-click opens (or repositions) the context menu. Checked before
+        // the menu-grab below so a second right-click moves/replaces the menu.
+        if let Event::MouseDown { x, y, button } = event {
+            if button == 1 {
+                return self.handle_right_click(x, y);
+            }
+        }
+
+        // While a context menu is open it grabs pointer + keyboard input so
+        // underlying rows never see the events used to drive it.
+        if self.context_menu.is_some() {
+            return match event {
+                Event::Click { x, y } => self.handle_context_menu_click(x, y),
+                Event::MouseMove { x, y } => self.update_menu_hover(x, y),
+                Event::Key('\n')
+                | Event::KeyPress {
+                    keycode: KEY_ENTER,
+                    pressed: true,
+                    ..
+                } => self.activate_hovered_menu_item(),
+                Event::KeyPress {
+                    keycode: KEY_ESC,
+                    pressed: true,
+                    ..
+                } => {
+                    self.context_menu = None;
+                    true
+                }
+                _ => false,
+            };
+        }
 
         match event {
             Event::Click { x, y } => {
@@ -2743,6 +3492,92 @@ fn write_number(value: u64, out: &mut [u8], suffix: &[u8]) -> usize {
         pos += 1;
     }
     pos
+}
+
+/// Empty static byte slice used as the MIME value for folders.
+const EMPTY_BYTES: &[u8] = b"";
+
+/// Parse width/height/bpp from an uncompressed TGA type-2 header. Both `.tga`
+/// and `.simg` files share this on-disk layout (see `image::simg`), so one
+/// parser covers both. Reads only the header — never decodes pixels.
+fn tga_header_dims(buf: &[u8]) -> Option<(u32, u32, u8)> {
+    if buf.len() < 18 || buf[2] != 2 {
+        return None;
+    }
+    let bpp = buf[16];
+    if bpp != 24 && bpp != 32 {
+        return None;
+    }
+    let w = u16::from_le_bytes([buf[12], buf[13]]) as u32;
+    let h = u16::from_le_bytes([buf[14], buf[15]]) as u32;
+    if w == 0 || h == 0 {
+        return None;
+    }
+    Some((w, h, bpp))
+}
+
+/// Compact image-format label derived from the file extension.
+fn image_format_compact(name: &[u8]) -> &'static str {
+    if ends_with_ignore_ascii_case(name, b".simg") {
+        "SIMG"
+    } else if ends_with_ignore_ascii_case(name, b".tga") {
+        "TGA"
+    } else {
+        "Image"
+    }
+}
+
+/// Human-readable label for a default-app path returned by `sun_open::app_for_mime`.
+/// Keeps the Properties dialog from leaking raw binary paths.
+fn opener_label(app: &[u8]) -> &'static str {
+    match app {
+        b"/bin/light-lens" => "Light Lens",
+        b"/bin/sunlight-edit" => "Sunlight Edit",
+        _ => "Default application",
+    }
+}
+
+/// Read up to `out.len()` bytes from the start of `path`. Returns bytes read
+/// (0 on any failure). Used to peek at an image header without disturbing the
+/// preview pane's own buffer or decoding the whole file.
+fn read_file_head(path: &[u8], out: &mut [u8]) -> usize {
+    let fd = match libc::open(path) {
+        Ok(f) => f,
+        Err(_) => return 0,
+    };
+    let mut total = 0usize;
+    while total < out.len() {
+        let n = libc::read(fd, &mut out[total..]).unwrap_or(0);
+        if n == 0 {
+            break;
+        }
+        total += n;
+    }
+    let _ = libc::close(fd);
+    total
+}
+
+/// Longest char-boundary prefix of `text` whose vector-font width fits `max_w`.
+/// Guarantees no text overflows its column. Never panics on UTF-8 boundaries.
+fn fit_text_prefix(text: &str, role: FontRole, max_w: u32) -> &str {
+    if sun_font::measure_text(text, role).w <= max_w {
+        return text;
+    }
+    let bytes = text.as_bytes();
+    let mut best = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        i += 1;
+        while i < bytes.len() && !text.is_char_boundary(i) {
+            i += 1;
+        }
+        if sun_font::measure_text(&text[..i], role).w <= max_w {
+            best = i;
+        } else {
+            break;
+        }
+    }
+    &text[..best]
 }
 
 fn draw_pill(
