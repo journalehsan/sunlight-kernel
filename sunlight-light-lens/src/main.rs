@@ -4,6 +4,11 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::cmp::Ordering;
 
+use sun_font::{
+    draw_text as sf_draw, draw_text_centered as sf_centered, draw_text_right as sf_right,
+    draw_text_vcenter as sf_vcenter, line_height as sf_lh, measure_text as sf_measure, FontRole,
+    TextStyle,
+};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -11,9 +16,9 @@ use sunlight_ipc::{
 };
 use sunlight_libc::{self as libc, crt0, DirEntry, FT_FILE};
 use sunlight_ui::image::TgaImage;
-use sunlight_ui::widgets::{Button, ButtonState, Panel, StatusBar};
+use sunlight_ui::widgets::StatusBar;
 use sunlight_ui::{
-    request_close, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
+    request_close, App, Canvas, Color, Event, Point, Rect, Theme, UiSymbol, Window, WindowConfig,
     WindowDecoration,
 };
 
@@ -26,6 +31,8 @@ const OUTER_PAD: i32 = 10;
 const GAP: i32 = 10;
 const LEFT_W: u32 = 188;
 const RIGHT_W: u32 = 280;
+/// Reserved left column (px) for info-panel row labels.
+const INFO_LABEL_W: i32 = 84;
 const MAX_PATH: usize = 256;
 const MAX_SIBLINGS: usize = 128;
 const MAX_DIR_ENTRIES: usize = 160;
@@ -183,6 +190,43 @@ impl<const N: usize> TextBuf<N> {
     fn as_str(&self) -> &str {
         core::str::from_utf8(&self.buf[..self.len]).unwrap_or("")
     }
+
+    /// Truncate the buffer in place so it renders within `max_w` pixels when
+    /// drawn with `role`, appending ".." when content is cut. The MiniType
+    /// font is proportional, so width is measured per glyph rather than
+    /// derived from a fixed character count.
+    fn truncate_to_width(&mut self, max_w: i32, role: FontRole) -> &str {
+        if sf_measure(self.as_str(), role).w as i32 <= max_w {
+            return self.as_str();
+        }
+        let dots = "..";
+        let budget = max_w.saturating_sub(sf_measure(dots, role).w as i32).max(0) as u32;
+        // Walk glyphs left-to-right, accumulating their real advance widths,
+        // and keep the longest prefix that still fits within `budget`. The
+        // borrow of `full` is scoped to this loop so `self` can be mutated
+        // afterwards.
+        let cut = {
+            let full = self.as_str();
+            let mut acc: u32 = 0;
+            let mut cut = 0usize;
+            for (byte_idx, ch) in full.char_indices() {
+                let next = byte_idx + ch.len_utf8();
+                let glyph_w = sf_measure(&full[byte_idx..next], role).w;
+                if acc + glyph_w > budget {
+                    break;
+                }
+                acc += glyph_w;
+                cut = next;
+            }
+            cut
+        };
+        self.len = cut;
+        let room = self.buf.len() - self.len;
+        let add = dots.len().min(room);
+        self.buf[self.len..self.len + add].copy_from_slice(&dots.as_bytes()[..add]);
+        self.len += add;
+        self.as_str()
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -276,58 +320,134 @@ impl LightLensApp {
         (header, toolbar, left, center, right, status)
     }
 
-    fn toolbar_buttons(toolbar: Rect) -> (Rect, [Rect; 6], Rect) {
-        let back = Rect::new(
-            toolbar.x + 10,
-            toolbar.y + 8,
-            96,
-            toolbar.h.saturating_sub(16),
-        );
-        let next = Rect::new(
-            toolbar.right() - 106,
-            toolbar.y + 8,
-            96,
-            toolbar.h.saturating_sub(16),
-        );
-        let labels_w = [70u32, 70, 68, 68, 68, 74];
-        let total_w = labels_w.iter().copied().sum::<u32>() + (labels_w.len() as u32 - 1) * 6;
-        let mut x = toolbar.x + (toolbar.w as i32 - total_w as i32) / 2;
-        let mut rects = [Rect::new(0, 0, 0, 0); 6];
-        for (idx, width) in labels_w.iter().copied().enumerate() {
-            rects[idx] = Rect::new(x, toolbar.y + 8, width, toolbar.h.saturating_sub(16));
-            x += width as i32 + 6;
+    /// Layout the toolbar: a left cluster of navigation buttons (Back, Next)
+    /// and a right cluster of compact decorative tool chips. The wide middle
+    /// stays free for a subtle keyboard hint.
+    fn toolbar_buttons(toolbar: Rect) -> (Rect, Rect, [Rect; 6]) {
+        let btn_h = toolbar.h.saturating_sub(16);
+        let pad = 10i32;
+
+        // Navigation cluster (left): Back then Next.
+        let nav_w = 84u32;
+        let nav_gap = 6i32;
+        let back = Rect::new(toolbar.x + pad, toolbar.y + 8, nav_w, btn_h);
+        let next = Rect::new(back.right() + nav_gap, toolbar.y + 8, nav_w, btn_h);
+
+        // Decorative tool cluster (right): six compact placeholder chips.
+        let tool_w = [54u32, 54, 62, 62, 48, 56];
+        let tool_gap = 6u32;
+        let total_w = tool_w.iter().copied().sum::<u32>() + (tool_w.len() as u32 - 1) * tool_gap;
+        let mut x = toolbar.right() - pad - total_w as i32;
+        let mut tools = [Rect::new(0, 0, 0, 0); 6];
+        for (idx, &width) in tool_w.iter().enumerate() {
+            tools[idx] = Rect::new(x, toolbar.y + 8, width, btn_h);
+            x += width as i32 + tool_gap as i32;
         }
-        (back, rects, next)
+        (back, next, tools)
     }
 
-    fn left_button_row(rect: Rect, idx: usize) -> Rect {
+    /// Draw a titled panel using the MiniType vector font, matching the look
+    /// of `Panel::with_title` but without the bitmap title that widget draws.
+    /// Returns the content rect (everything below the title bar).
+    fn draw_panel(canvas: &mut Canvas, theme: &Theme, rect: Rect, title: &str) -> Rect {
+        const TITLE_H: u32 = 20;
+        canvas.fill_rect(rect, theme.panel);
+        let title_rect = Rect::new(rect.x, rect.y, rect.w, TITLE_H);
+        canvas.fill_rect(title_rect, theme.panel_alt);
+        sf_vcenter(
+            canvas,
+            title,
+            rect.x + 8,
+            rect.y,
+            TITLE_H,
+            &TextStyle::new(FontRole::UiMedium, theme.accent),
+        );
+        canvas.hbar(rect.x, rect.y + TITLE_H as i32, rect.w, 1, theme.border);
+        canvas.draw_rect(rect, theme.border);
         Rect::new(
-            rect.x + 12,
-            rect.y + 18 + idx as i32 * 38,
-            rect.w.saturating_sub(24),
-            28,
+            rect.x,
+            rect.y + TITLE_H as i32,
+            rect.w,
+            rect.h.saturating_sub(TITLE_H),
         )
     }
 
-    fn left_slider_row(rect: Rect, idx: usize) -> Rect {
-        Rect::new(
-            rect.x + 14,
-            rect.y + 154 + idx as i32 * 52,
-            rect.w.saturating_sub(28),
-            36,
-        )
+    /// A prominent navigation button: arrow glyph + label. Enabled buttons get
+    /// an accent arrow and accent underline so they read as the real actions.
+    fn draw_nav_button(
+        canvas: &mut Canvas,
+        theme: &Theme,
+        rect: Rect,
+        symbol: UiSymbol,
+        label: &str,
+        enabled: bool,
+    ) {
+        let bg = if enabled {
+            theme.panel
+        } else {
+            theme.panel_alt
+        };
+        canvas.fill_rect(rect, bg);
+        canvas.draw_rect(rect, theme.border);
+        if enabled {
+            canvas.hbar(rect.x, rect.bottom() - 2, rect.w, 2, theme.accent);
+        }
+
+        let glyph_color = if enabled {
+            theme.accent
+        } else {
+            theme.text_dim
+        };
+        let text_color = if enabled { theme.text } else { theme.text_dim };
+
+        let gw = Canvas::measure_ui_symbol(symbol) as i32;
+        let tw = sf_measure(label, FontRole::UiMedium).w as i32;
+        let gap: i32 = 5;
+        let unit = gw + gap + tw;
+        let start = rect.x + (rect.w as i32 - unit) / 2;
+        let glyph_ty = rect.y + (rect.h as i32 - 9) / 2;
+        let after = canvas.draw_ui_symbol(start, glyph_ty, symbol, glyph_color);
+        sf_vcenter(
+            canvas,
+            label,
+            after + gap,
+            rect.y,
+            rect.h,
+            &TextStyle::new(FontRole::UiMedium, text_color),
+        );
     }
 
-    fn left_small_button(rect: Rect, idx: usize) -> Rect {
-        let col = idx % 2;
-        let row = idx / 2;
-        let cell_w = rect.w.saturating_sub(34) / 2;
-        Rect::new(
-            rect.x + 12 + col as i32 * (cell_w as i32 + 10),
-            rect.y + 336 + row as i32 * 40,
-            cell_w,
-            28,
-        )
+    /// A clearly-inactive placeholder chip: flat fill, faint border, dim text.
+    /// Used for every decorative edit control so none read as clickable.
+    fn draw_placeholder_chip(canvas: &mut Canvas, theme: &Theme, rect: Rect, label: &str) {
+        canvas.fill_rect(rect, theme.panel_alt);
+        canvas.draw_rect(rect, theme.border);
+        sf_centered(
+            canvas,
+            rect,
+            label,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+    }
+
+    /// A small dim section heading with a faint separator trailing to the
+    /// right edge. Returns the y just below the heading.
+    fn draw_section_label(
+        canvas: &mut Canvas,
+        theme: &Theme,
+        x: i32,
+        y: i32,
+        w: u32,
+        label: &str,
+    ) -> i32 {
+        let role = FontRole::UiSmall;
+        sf_draw(canvas, label, x, y, &TextStyle::new(role, theme.text_dim));
+        let label_w = sf_measure(label, role).w as i32;
+        let lh = sf_lh(role) as i32;
+        let sep_x = x + label_w + 8;
+        let sep_w = (w as i32 - label_w - 8).max(0) as u32;
+        canvas.hline(sep_x, y + lh / 2, sep_w, theme.border);
+        y + 18
     }
 
     fn preview_fit_rect(viewport: Rect, img: TgaImage) -> Rect {
@@ -524,86 +644,184 @@ impl LightLensApp {
         if let Some(icon) = self.app_icon {
             canvas.draw_tga_icon(&icon, Rect::new(rect.x + 8, rect.y + 6, 22, 22));
         }
-        canvas.draw_text(rect.x + 38, rect.y + 13, "Light Lens", theme.text);
-        let subtitle = if self.current_path.is_empty() {
+        sf_vcenter(
+            canvas,
+            "Light Lens",
+            rect.x + 38,
+            rect.y,
+            rect.h,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+        let mut sub_buf: TextBuf<VALUE_LEN> = TextBuf::empty();
+        sub_buf.set_str(if self.current_path.is_empty() {
             "Image Viewer"
         } else {
             self.current_path.file_name_str()
-        };
-        canvas.draw_text_right(rect, subtitle, theme.text_dim, 12);
+        });
+        let subtitle = sub_buf.truncate_to_width(rect.w as i32 - 130, FontRole::UiSmall);
+        sf_right(
+            canvas,
+            rect,
+            subtitle,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            12,
+        );
+    }
+
+    /// Subtle dim "◀ / ▶ browse" hint, centered in the free toolbar middle.
+    fn draw_toolbar_hint(canvas: &mut Canvas, theme: &Theme, x0: i32, x1: i32, bar: Rect) {
+        let back_w = Canvas::measure_ui_symbol(UiSymbol::Back);
+        let fwd_w = Canvas::measure_ui_symbol(UiSymbol::Forward);
+        let mid = " / ";
+        let tail = "  browse";
+        let role = FontRole::UiSmall;
+        let total = back_w + sf_measure(mid, role).w + fwd_w + sf_measure(tail, role).w;
+        let cx = x0 + ((x1 - x0) - total as i32) / 2;
+        let glyph_ty = bar.y + (bar.h as i32 - 9) / 2;
+        let dim = theme.text_dim;
+        let style = TextStyle::new(role, dim);
+        let mut x = cx;
+        x = canvas.draw_ui_symbol(x, glyph_ty, UiSymbol::Back, dim);
+        x = sf_vcenter(canvas, mid, x, bar.y, bar.h, &style);
+        x = canvas.draw_ui_symbol(x, glyph_ty, UiSymbol::Forward, dim);
+        sf_vcenter(canvas, tail, x, bar.y, bar.h, &style);
     }
 
     fn draw_toolbar(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
         canvas.fill_rect(rect, theme.panel_alt);
         canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
 
-        let (back_rect, center_rects, next_rect) = Self::toolbar_buttons(rect);
-        let mut back = Button::secondary(back_rect, "Back");
-        back.state = if self.has_previous() {
-            ButtonState::Normal
-        } else {
-            ButtonState::Disabled
-        };
-        back.draw(canvas, theme);
+        let (back_rect, next_rect, tool_rects) = Self::toolbar_buttons(rect);
 
-        let labels = ["Zoom +", "Zoom -", "Rot L", "Rot R", "Crop", "Flip H"];
+        // Functional navigation (left cluster) — prominent, accent-highlighted.
+        Self::draw_nav_button(
+            canvas,
+            theme,
+            back_rect,
+            UiSymbol::Back,
+            "Back",
+            self.has_previous(),
+        );
+        Self::draw_nav_button(
+            canvas,
+            theme,
+            next_rect,
+            UiSymbol::Forward,
+            "Next",
+            self.has_next(),
+        );
+
+        // Decorative edit tools (right cluster) — all inactive placeholders.
+        let labels = ["Zoom +", "Zoom -", "Rotate L", "Rotate R", "Crop", "Flip H"];
         for (idx, label) in labels.iter().enumerate() {
-            let mut button = Button::secondary(center_rects[idx], label);
-            button.state = ButtonState::Disabled;
-            button.draw(canvas, theme);
+            Self::draw_placeholder_chip(canvas, theme, tool_rects[idx], label);
         }
 
-        let mut next = Button::secondary(next_rect, "Next");
-        next.state = if self.has_next() {
-            ButtonState::Normal
-        } else {
-            ButtonState::Disabled
-        };
-        next.draw(canvas, theme);
+        // Subtle keyboard hint in the free middle area, if there is room.
+        let hint_x0 = next_rect.right() + 14;
+        let hint_x1 = tool_rects[0].x.saturating_sub(14);
+        if hint_x1 > hint_x0 + 40 {
+            Self::draw_toolbar_hint(canvas, theme, hint_x0, hint_x1, rect);
+        }
     }
 
     fn draw_left_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
-        let panel = Panel::with_title(rect, "Edit Tools");
-        panel.draw(canvas, theme);
-        let content = panel.content_rect();
+        let content = Self::draw_panel(canvas, theme, rect, "Edit Tools");
+        let pad = 12i32;
+        let inner_w = (content.w as i32 - pad * 2).max(0) as u32;
+        let chip_h = 26u32;
+        let chip_gap = 6i32;
+        let dim = TextStyle::new(FontRole::UiSmall, theme.text_dim);
 
-        let top_buttons = ["Edit Mode", "AI Enhance", "Reset All"];
-        for (idx, label) in top_buttons.iter().enumerate() {
-            let mut button = Button::secondary(Self::left_button_row(content, idx), label);
-            button.state = ButtonState::Disabled;
-            button.draw(canvas, theme);
+        // "Coming soon" caption — makes the placeholder intent unmistakable.
+        let mut y = content.y + 12;
+        canvas.fill_rect(Rect::new(content.x + pad, y + 2, 6, 6), theme.warn);
+        sf_draw(canvas, "Coming soon", content.x + pad + 11, y, &dim);
+        y += 24;
+
+        // Section: Modes
+        y = Self::draw_section_label(canvas, theme, content.x + pad, y, inner_w, "Modes");
+        for label in ["Edit Mode", "AI Enhance", "Reset All"] {
+            Self::draw_placeholder_chip(
+                canvas,
+                theme,
+                Rect::new(content.x + pad, y, inner_w, chip_h),
+                label,
+            );
+            y += chip_h as i32 + chip_gap;
         }
 
-        let sliders = ["Brightness", "Contrast", "Saturation"];
-        for (idx, label) in sliders.iter().enumerate() {
-            let row = Self::left_slider_row(content, idx);
-            canvas.draw_text(row.x, row.y + 2, label, theme.text_dim);
-            let track = Rect::new(row.x, row.y + 18, row.w, 8);
-            canvas.fill_rect(track, theme.panel_alt.lighten(6));
+        // Section: Adjust — muted sliders, knob centered = no change applied.
+        y += 4;
+        y = Self::draw_section_label(canvas, theme, content.x + pad, y, inner_w, "Adjust");
+        for label in ["Brightness", "Contrast", "Saturation"] {
+            sf_draw(canvas, label, content.x + pad, y, &dim);
+            let track = Rect::new(content.x + pad, y + 14, inner_w, 6);
+            canvas.fill_rect(track, theme.panel_alt);
             canvas.draw_rect(track, theme.border);
-            let knob = Rect::new(track.x + track.w as i32 / 2 - 8, track.y - 2, 16, 12);
-            canvas.fill_rect(knob, theme.border);
+            let knob = Rect::new(track.x + track.w as i32 / 2 - 5, track.y - 3, 10, 12);
+            canvas.fill_rect(knob, theme.text_dim);
+            y += 32;
         }
 
-        let small = ["Filters", "Quick", "Apply", "Crop", "Flip H", "Reset"];
-        for (idx, label) in small.iter().enumerate() {
-            let mut button = Button::secondary(Self::left_small_button(content, idx), label);
-            button.state = ButtonState::Disabled;
-            button.draw(canvas, theme);
+        // Section: Filters — two columns of inactive chips.
+        y += 4;
+        y = Self::draw_section_label(canvas, theme, content.x + pad, y, inner_w, "Filters");
+        let col_gap = 8i32;
+        let col_w = ((inner_w as i32 - col_gap) / 2).max(0) as u32;
+        for (idx, label) in ["Filters", "Effects", "Crop", "Flip H"]
+            .into_iter()
+            .enumerate()
+        {
+            let col = (idx % 2) as i32;
+            let row = (idx / 2) as i32;
+            let cr = Rect::new(
+                content.x + pad + col * (col_w as i32 + col_gap),
+                y + row * (chip_h as i32 + chip_gap),
+                col_w,
+                chip_h,
+            );
+            Self::draw_placeholder_chip(canvas, theme, cr, label);
+        }
+        y += 2 * (chip_h as i32 + chip_gap);
+
+        // Footer note.
+        y += 10;
+        sf_draw(canvas, "Editing arrives", content.x + pad, y, &dim);
+        sf_draw(canvas, "in a later release.", content.x + pad, y + 14, &dim);
+    }
+
+    /// Subtle two-tone checkerboard — makes the preview read as an image
+    /// surface so empty/letterboxed areas feel intentional rather than blank.
+    fn draw_checkerboard(canvas: &mut Canvas, rect: Rect, base: Color, alt: Color, cell: i32) {
+        let mut y = rect.y;
+        let mut row = 0u32;
+        while y < rect.bottom() {
+            let h = cell.min(rect.bottom() - y) as u32;
+            let mut x = rect.x;
+            let mut col = 0u32;
+            while x < rect.right() {
+                let w = cell.min(rect.right() - x) as u32;
+                let color = if (row + col) % 2 == 0 { base } else { alt };
+                canvas.fill_rect(Rect::new(x, y, w, h), color);
+                x += cell;
+                col += 1;
+            }
+            y += cell;
+            row += 1;
         }
     }
 
     fn draw_preview_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
-        let panel = Panel::with_title(rect, "Preview");
-        panel.draw(canvas, theme);
-        let content = panel.content_rect().inset(8);
-        canvas.fill_rect(content, theme.bg.darken(10));
+        let content = Self::draw_panel(canvas, theme, rect, "Preview").inset(8);
+
+        Self::draw_checkerboard(canvas, content, theme.bg, theme.bg.lighten(7), 18);
         canvas.draw_rect(content, theme.border);
 
         match (self.load_state, self.image) {
             (LoadState::Ready, Some(image)) => {
                 let fit = Self::preview_fit_rect(content, image);
-                canvas.fill_rect(fit, Color::rgb(0x08, 0x08, 0x0a));
+                canvas.fill_rect(fit, theme.bg.darken(14));
                 canvas.draw_tga_icon(&image, fit);
                 canvas.draw_rect(fit, theme.border);
             }
@@ -618,7 +836,12 @@ impl LightLensApp {
                     canvas.draw_tga_icon(&icon, icon_rect);
                 }
                 let msg_rect = Rect::new(content.x + 20, content.bottom() - 70, content.w - 40, 24);
-                canvas.draw_text_centered(msg_rect, self.message.as_str(), theme.danger);
+                sf_centered(
+                    canvas,
+                    msg_rect,
+                    self.message.as_str(),
+                    &TextStyle::new(FontRole::UiRegular, theme.danger),
+                );
             }
             _ => {
                 if let Some(icon) = self.app_icon {
@@ -631,7 +854,12 @@ impl LightLensApp {
                     canvas.draw_tga_icon(&icon, icon_rect);
                 }
                 let msg_rect = Rect::new(content.x + 20, content.bottom() - 72, content.w - 40, 24);
-                canvas.draw_text_centered(msg_rect, self.message.as_str(), theme.text_dim);
+                sf_centered(
+                    canvas,
+                    msg_rect,
+                    self.message.as_str(),
+                    &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+                );
             }
         }
     }
@@ -644,47 +872,107 @@ impl LightLensApp {
         label: &str,
         value: &str,
     ) {
-        canvas.draw_text(rect.x, rect.y + 7, label, theme.text_dim);
-        canvas.draw_text_right(rect, value, theme.text, 0);
+        sf_vcenter(
+            canvas,
+            label,
+            rect.x,
+            rect.y,
+            rect.h,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+        let val_rect = Rect::new(
+            rect.x + INFO_LABEL_W,
+            rect.y,
+            (rect.w as i32 - INFO_LABEL_W).max(0) as u32,
+            rect.h,
+        );
+        sf_right(
+            canvas,
+            val_rect,
+            value,
+            &TextStyle::new(FontRole::UiRegular, theme.text),
+            0,
+        );
         canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
     }
 
     fn draw_info_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
-        let panel = Panel::with_title(rect, "Image Info");
-        panel.draw(canvas, theme);
-        let content = panel.content_rect().inset(12);
+        let content = Self::draw_panel(canvas, theme, rect, "Image Info").inset(12);
 
-        for idx in 0..8 {
-            let mut value = [0u8; VALUE_LEN];
-            let row = Rect::new(content.x, content.y + idx as i32 * 30, content.w, 28);
+        const ROWS: usize = 8;
+        const ROW_H: i32 = 32;
+
+        for idx in 0..ROWS {
+            let mut src = [0u8; VALUE_LEN];
+            let mut dst: TextBuf<VALUE_LEN> = TextBuf::empty();
+            let row = Rect::new(
+                content.x,
+                content.y + idx as i32 * ROW_H,
+                content.w,
+                ROW_H as u32,
+            );
             let (label, value) = match idx {
                 0 => ("Filename", self.current_path.file_name_str()),
                 1 => ("Format", format_label(self.info.format)),
-                2 => ("Resolution", fill_resolution(&self.info, &mut value)),
-                3 => ("File Size", fill_size(self.info.size_bytes, &mut value)),
+                2 => ("Resolution", fill_resolution(&self.info, &mut src)),
+                3 => ("File Size", fill_size(self.info.size_bytes, &mut src)),
                 4 => ("Zoom", "Fit"),
-                5 => ("Color Depth", fill_bpp(self.info.bpp, &mut value)),
+                5 => ("Color Depth", fill_bpp(self.info.bpp, &mut src)),
                 6 => ("Modified", "Unknown"),
                 _ => (
                     "Folder",
-                    fill_folder_position(self.current_index, self.sibling_count, &mut value),
+                    fill_folder_position(self.current_index, self.sibling_count, &mut src),
                 ),
             };
-            self.draw_info_row(canvas, theme, row, label, value);
+            dst.set_str(value);
+            let max_w = content.w as i32 - INFO_LABEL_W - 8;
+            let shown = dst.truncate_to_width(max_w, FontRole::UiRegular);
+            self.draw_info_row(canvas, theme, row, label, shown);
+        }
+
+        // Footer: parent folder location, truncated to fit.
+        if !self.current_path.is_empty() {
+            let footer_y = content.y + ROWS as i32 * ROW_H + 10;
+            canvas.hbar(content.x, footer_y, content.w, 1, theme.border);
+            sf_draw(
+                canvas,
+                "Location",
+                content.x,
+                footer_y + 10,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            let mut path_buf: TextBuf<VALUE_LEN> = TextBuf::empty();
+            match self.current_path.parent() {
+                Some(p) => path_buf.set_bytes(p.as_bytes()),
+                None => path_buf.set_str("/"),
+            }
+            let shown = path_buf.truncate_to_width(content.w as i32, FontRole::UiSmall);
+            sf_draw(
+                canvas,
+                shown,
+                content.x,
+                footer_y + 24,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
         }
     }
 
     fn draw_status(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
         let mut center_buf = [0u8; 48];
         let mut right_buf = [0u8; 24];
+        let mut left_buf: TextBuf<VALUE_LEN> = TextBuf::empty();
 
-        let left = if self.current_path.is_empty() {
+        let raw = if self.current_path.is_empty() {
             "No image"
         } else if self.load_state == LoadState::Error {
             self.message.as_str()
         } else {
             self.current_path.file_name_str()
         };
+        left_buf.set_str(raw);
+        // Keep the filename within roughly the left third of the bar.
+        let left = left_buf.truncate_to_width((rect.w as i32 / 3) - 16, FontRole::UiSmall);
+
         let center = fill_status_center(
             &self.info,
             self.current_index,
@@ -693,7 +981,37 @@ impl LightLensApp {
         );
         let right = fill_status_right(self.load_state, &mut right_buf);
 
-        StatusBar::new(rect, left, center, right).draw(canvas, theme);
+        // Render the status bar with the MiniType font. The StatusBar widget
+        // draws its own text with the bitmap font, so its three sections are
+        // drawn directly here to match the rest of the UI.
+        let h = StatusBar::HEIGHT;
+        canvas.fill_rect(rect, theme.panel_alt);
+        canvas.hbar(rect.x, rect.y, rect.w, 1, theme.border);
+        sf_vcenter(
+            canvas,
+            left,
+            rect.x + 8,
+            rect.y,
+            h,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+        let cw = sf_measure(center, FontRole::UiRegular).w as i32;
+        let cx = rect.x + (rect.w as i32 - cw) / 2;
+        sf_vcenter(
+            canvas,
+            center,
+            cx,
+            rect.y,
+            h,
+            &TextStyle::new(FontRole::UiRegular, theme.text),
+        );
+        sf_right(
+            canvas,
+            rect,
+            right,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            8,
+        );
     }
 }
 
@@ -713,7 +1031,7 @@ impl App for LightLensApp {
         match event {
             Event::Click { x, y } => {
                 let (_header, toolbar, _left, _center, _right, _status) = Self::root_layout();
-                let (back_rect, _center_rects, next_rect) = Self::toolbar_buttons(toolbar);
+                let (back_rect, next_rect, _tool_rects) = Self::toolbar_buttons(toolbar);
                 if back_rect.contains(Point::new(x, y)) {
                     return self.show_previous();
                 }
