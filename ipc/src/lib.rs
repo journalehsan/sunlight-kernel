@@ -695,6 +695,30 @@ pub mod PowerdMsg {
     pub const ERR_UNSUPPORTED: u64 = 4;
 }
 
+#[allow(non_snake_case)]
+pub mod ClipMsg {
+    pub const SET_CLIPBOARD: u64 = 0xD101;
+    pub const GET_CLIPBOARD: u64 = 0xD102;
+    pub const GET_CLIPBOARD_SUMMARY: u64 = 0xD103;
+    pub const LIST_CLIPBOARD_HISTORY: u64 = 0xD104;
+    pub const SELECT_CLIPBOARD_HISTORY_ITEM: u64 = 0xD105;
+    pub const CLEAR_CLIPBOARD: u64 = 0xD106;
+    pub const CLEAR_CLIPBOARD_HISTORY: u64 = 0xD107;
+
+    pub const REPLY: u64 = 0xD1FF;
+    pub const ERROR: u64 = 0xD1FE;
+
+    pub const SELECT_BY_INDEX: u64 = 0;
+    pub const SELECT_BY_ID: u64 = 1;
+
+    pub const ERR_BAD_REQUEST: u64 = 1;
+    pub const ERR_NOT_FOUND: u64 = 2;
+    pub const ERR_TOO_LARGE: u64 = 3;
+    pub const ERR_UNSUPPORTED: u64 = 4;
+    pub const ERR_CORRUPT: u64 = 5;
+    pub const ERR_INTERNAL: u64 = 6;
+}
+
 /// Power profile selection (selected by user or Auto).
 #[repr(u64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -495,6 +495,11 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunlight-thumbd" | "/usr/bin/sunlight-thumbd" | "/sbin/sunlight-thumbd" => {
             Ok(crate::SUNLIGHT_THUMBD_ELF_BYTES)
         }
+        "/sbin/sunlight-clipd" | "/usr/sbin/sunlight-clipd" => Ok(crate::SUNLIGHT_CLIPD_ELF_BYTES),
+        "/bin/sunlight-clip" | "/usr/bin/sunlight-clip" => Ok(crate::SUNLIGHT_CLIP_ELF_BYTES),
+        "/bin/sunlight-clipman" | "/usr/bin/sunlight-clipman" => {
+            Ok(crate::SUNLIGHT_CLIPMAN_ELF_BYTES)
+        }
         // cpufeat: x86-64 microarchitecture level detection (v2/v3 capability reporting).
         "/bin/cpufeat" | "/usr/bin/cpufeat" => Ok(crate::CPUFEAT_ELF_BYTES),
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.

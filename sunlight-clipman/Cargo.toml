@@ -1,0 +1,11 @@
+[package]
+name = "sunlight-clipman"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc" }
+sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
+sunlight-clipd = { path = "../services/sunlight-clipd" }
+heapless = "0.8"

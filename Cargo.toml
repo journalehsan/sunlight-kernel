@@ -67,8 +67,10 @@ members = [
     "sunlight-calculator",
     "sunlight-files",
     "sunlight-light-lens",
+    "sunlight-clipman",
     "services/sunlight-control-panel",
     "services/sunlight-thumbd",
+    "services/sunlight-clipd",
 ]
 
 [workspace.dependencies]

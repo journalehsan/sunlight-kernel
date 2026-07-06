@@ -140,6 +140,14 @@ UAC-approved* scoped write outside its home. The intended shape is
 where the minted token is scoped (subject, rights, path) and validated through
 `sunlight_fs::broker_mint_fs_capability`.
 
+## When not to use direct service state
+
+If the data is naturally small structured records rather than service-private
+files, prefer an existing persistence service instead of adding a new
+`/state/<service>` writer. `sunlight-clipd` is the current example: it keeps
+clipboard history in `sunlight-kv`, so it does **not** need its own actor mapping
+or `/state/sunlight-clipd` directory.
+
 ## Build gotchas
 
 - **`include_bytes!` staleness.** The kernel embeds service ELFs via

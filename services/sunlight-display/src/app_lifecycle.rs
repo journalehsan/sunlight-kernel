@@ -90,15 +90,19 @@ impl AppTracker {
 
         debug_log(&alloc::format!(
             "[APP_LIFECYCLE] app_instance_created pid={} name={} policy={:?}\n",
-            pid, app_name, policy
+            pid,
+            app_name,
+            policy
         ));
         debug_log(&alloc::format!(
             "[APP_LIFECYCLE] app_window_attached pid={} win_id={}\n",
-            pid, win_id
+            pid,
+            win_id
         ));
         debug_log(&alloc::format!(
             "[APP_LIFECYCLE] app_lifecycle_policy pid={} policy={:?}\n",
-            pid, policy
+            pid,
+            policy
         ));
 
         self.apps.push(app);
@@ -124,7 +128,9 @@ impl AppTracker {
 
         debug_log(&alloc::format!(
             "[APP_LIFECYCLE] app_last_window_closed pid={} name={} policy={:?}\n",
-            app.pid, app.app_name, app.policy
+            app.pid,
+            app.app_name,
+            app.policy
         ));
 
         match app.policy {
@@ -133,7 +139,8 @@ impl AppTracker {
                 app.last_window_close_time_ms = now_ms;
                 debug_log(&alloc::format!(
                     "[APP_LIFECYCLE] app_terminate_requested pid={} name={} signal=SIGTERM\n",
-                    app.pid, app.app_name
+                    app.pid,
+                    app.app_name
                 ));
                 AppAction::Terminate(app.pid)
             }
@@ -153,7 +160,8 @@ impl AppTracker {
             if a.pid == pid {
                 debug_log(&alloc::format!(
                     "[APP_LIFECYCLE] app_instance_removed pid={} name={}\n",
-                    pid, a.app_name
+                    pid,
+                    a.app_name
                 ));
                 false
             } else {
@@ -172,7 +180,8 @@ impl AppTracker {
             let app = &self.apps[i];
             let should_cleanup = match app.state {
                 AppState::Closing => {
-                    app.last_window_close_time_ms.saturating_add(TERMINATE_GRACE_PERIOD_MS)
+                    app.last_window_close_time_ms
+                        .saturating_add(TERMINATE_GRACE_PERIOD_MS)
                         <= now_ms
                 }
                 AppState::Running | AppState::Launching => {
@@ -188,7 +197,8 @@ impl AppTracker {
                     pids_killed.push(app.pid);
                     debug_log(&alloc::format!(
                         "[APP_LIFECYCLE] app_terminate_forced pid={} name={} signal=SIGKILL\n",
-                        app.pid, app.app_name
+                        app.pid,
+                        app.app_name
                     ));
                 }
 
@@ -203,7 +213,8 @@ impl AppTracker {
 
                 debug_log(&alloc::format!(
                     "[APP_LIFECYCLE] app_exited pid={} name={}\n",
-                    app.pid, app.app_name
+                    app.pid,
+                    app.app_name
                 ));
 
                 // Record display windows reaped for this process exit.
@@ -234,7 +245,8 @@ impl AppTracker {
                     }
                     debug_log(&alloc::format!(
                         "[APP_LIFECYCLE] app_exited pid={} name={} (detected_dead)\n",
-                        app.pid, app.app_name
+                        app.pid,
+                        app.app_name
                     ));
                     debug_log(&alloc::format!(
                         "[APP_LIFECYCLE] app_instance_removed pid={} name={}\n",

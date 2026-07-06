@@ -83,6 +83,8 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --relea
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-edit --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-control-panel --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release
 # Force a non-PIE static link so e_type is ET_EXEC (not ET_DYN). The kernel ELF
 # loader (sunlight-elf parse_elf_header) only accepts ET_EXEC; -no-pie + crt-static
 # is required because musl otherwise emits a static-PIE that loads as DYN.

@@ -73,6 +73,48 @@ fn launch_runner(state: &mut CompositorState) {
     }
 }
 
+fn find_window_by_title_prefix(state: &CompositorState, prefix: &[u8]) -> Option<(usize, u64)> {
+    state.windows.iter().enumerate().find_map(|(idx, win)| {
+        win.config
+            .title
+            .starts_with(prefix)
+            .then_some((idx, win.id))
+    })
+}
+
+fn launch_clipman(state: &mut CompositorState) {
+    if libc::spawn(b"/bin/sunlight-clipman", &[b"sunlight-clipman"], None).is_err() {
+        debug_log("[DISPLAY] failed to launch clipman\n");
+        push_notification(
+            state,
+            NotificationKind::Error,
+            String::from("Launch failed"),
+            String::from("Could not start /bin/sunlight-clipman"),
+            NOTIFICATION_TIMEOUT_MS,
+        );
+        mark_dirty_full(state);
+        redraw_scene(state);
+    }
+}
+
+fn toggle_clipman(state: &mut CompositorState) {
+    if let Some((idx, win_id)) = find_window_by_title_prefix(state, b"Sunlight Cl") {
+        if focused_window_id(state) == Some(win_id) {
+            if close_window(state, win_id, None) {
+                mark_dirty_full(state);
+                redraw_scene(state);
+            }
+            return;
+        }
+        if state.windows[idx].config.state == WindowState::Minimized {
+            state.windows[idx].config.state = WindowState::Normal;
+        }
+        let _ = activate_window(state, win_id);
+        return;
+    }
+    launch_clipman(state);
+}
+
 fn launch_vortex_shell(state: &mut CompositorState) -> bool {
     match libc::spawn(
         b"/bin/sunlight-vortex-shell",
@@ -126,6 +168,7 @@ const KEY_TAB: u8 = 0x0F;
 const KEY_CTRL: u8 = 0x1D;
 const KEY_ALT: u8 = 0x38;
 const KEY_R: u8 = 0x13;
+const KEY_V: u8 = 0x2F;
 const KEY_W: u8 = 0x11;
 const KEY_SPACE: u8 = 0x39;
 const KEY_LEFT_SUPER: u8 = 0x5B;
@@ -3858,6 +3901,23 @@ pub extern "C" fn _start() -> ! {
                             // Sunlight Terminal → left side, keep y
                             win.x = 24;
                             win.saved_x = 24;
+                        } else if win.config.title.starts_with(b"Sunlight Cl") {
+                            // Sunlight Clipman → near the mouse cursor, clamped on-screen.
+                            let margin = 16i32;
+                            let cursor_x = state.mouse_x as i32;
+                            let cursor_y = state.mouse_y as i32;
+                            let max_x =
+                                (state.fb_width as i32 - win.width as i32 - margin).max(margin);
+                            let max_y =
+                                (state.fb_height as i32 - win.height as i32 - margin).max(margin);
+                            let preferred_x = cursor_x - (win.width as i32 / 2);
+                            let preferred_y = cursor_y + 18;
+                            let new_x = preferred_x.clamp(margin, max_x) as u32;
+                            let new_y = preferred_y.clamp(margin, max_y) as u32;
+                            win.x = new_x;
+                            win.saved_x = new_x;
+                            win.y = new_y;
+                            win.saved_y = new_y;
                         }
                     }
                 }
@@ -4064,6 +4124,9 @@ pub extern "C" fn _start() -> ! {
                     consumed = true;
                 } else if pressed && !was_down && super_down && keycode == KEY_R {
                     launch_runner(&mut state);
+                    consumed = true;
+                } else if pressed && !was_down && super_down && keycode == KEY_V {
+                    toggle_clipman(&mut state);
                     consumed = true;
                 } else if pressed && !was_down && ctrl_down && keycode == KEY_SPACE {
                     launch_runner(&mut state);

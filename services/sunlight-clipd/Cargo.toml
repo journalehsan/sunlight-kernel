@@ -1,0 +1,19 @@
+[package]
+name = "sunlight-clipd"
+version = "0.2.826"
+
+
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+heapless = "0.8"
+
+[[bin]]
+name = "sunlight-clipd"
+path = "src/main.rs"
+
+[[bin]]
+name = "sunlight-clip"
+path = "src/bin/sunlight-clip.rs"

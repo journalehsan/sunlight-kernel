@@ -104,6 +104,11 @@ That means one package build line, two `include_bytes!` statics, two
 `embedded_bytes_for_path` arms, an init service entry for `/sbin/resolved`, and
 RamFS stubs for `/bin/resolvectl` and `/usr/bin/resolvectl`.
 
+Another common shape is a daemon + CLI in one package. `sunlight-clipd` builds
+both `/sbin/sunlight-clipd` and `/bin/sunlight-clip`, so it needs one package
+build line, two embedded binaries, two spawn resolver arms, a sunlightd unit
+for the daemon, and a RamFS stub for the CLI.
+
 ## Worked example: the three "not found" binaries
 
 `nicectl`, `capabilityctl`, and `runas` all returned "not found" because they

@@ -269,6 +269,26 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    let clipd_service = r#"[Unit]
+Description=SunlightOS Clipboard Service
+After=sunlight-kv.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/sunlight-clipd
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(clipd_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     // rand_service.service - ChaCha20 CSPRNG (libc crypto getrandom routes here).
     // MUST start before sunlight-tls: TLS handshakes pull randomness from it.
     let rand_service = r#"[Unit]

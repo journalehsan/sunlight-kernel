@@ -189,6 +189,12 @@ static SUNLIGHT_CONTROL_PANEL_ELF_BYTES: &[u8] =
 // Thumbnail daemon: decodes .simg sources and caches 128/256px thumbnails.
 static SUNLIGHT_THUMBD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-thumbd");
+static SUNLIGHT_CLIPD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipd");
+static SUNLIGHT_CLIP_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clip");
+static SUNLIGHT_CLIPMAN_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;

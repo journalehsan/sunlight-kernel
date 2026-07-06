@@ -1017,6 +1017,20 @@ max_ttys = 6
         mode::FILE_755,
         b"#!/sunlight/certificatectl\n",
     ),
+    RamEntry::file(
+        "/bin/sunlight-clip",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-clip\n",
+    ),
+    RamEntry::file(
+        "/bin/sunlight-clipman",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-clipman\n",
+    ),
     // sunlight-sm binary stub (real ELF embedded in kernel for spawn; entry for FS visibility/stat)
     RamEntry::file(
         "/sbin/sunlight-sm",
