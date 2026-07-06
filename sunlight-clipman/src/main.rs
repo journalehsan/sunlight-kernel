@@ -9,9 +9,10 @@ use alloc::vec::Vec;
 
 use sunlight_clipd::{decode_summary_list, ClipError, ClipboardKind, ClipboardSummary};
 use sunlight_ipc::{
-    debug_log, ipc_call, nameserver_lookup, process_yield, shm_free, shm_map, CapabilityToken,
-    ClipMsg, IpcMsg, ProcessExit,
+    debug_log, ipc_call, nameserver_lookup_timeout, process_yield, shm_free, shm_map,
+    CapabilityToken, ClipMsg, IpcMsg, ProcessExit,
 };
+use sunlight_libc as libc;
 use sunlight_ui::{
     request_close, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
     WindowDecoration,
@@ -81,7 +82,7 @@ struct ClipmanApp {
 
 impl ClipmanApp {
     fn new() -> Self {
-        let clipd = nameserver_lookup("clipd");
+        let clipd = ensure_clipboard_service();
         let mut app = Self {
             clipd,
             items: Vec::new(),
@@ -97,6 +98,9 @@ impl ClipmanApp {
     fn reload(&mut self) {
         self.items.clear();
         self.hover = None;
+        if self.clipd.is_none() {
+            self.clipd = ensure_clipboard_service();
+        }
         let Some(cap) = self.clipd else {
             self.load_state = LoadState::ServiceUnavailable;
             self.status = String::from("Clipboard service unavailable");
@@ -422,6 +426,21 @@ fn error_label(code: u64) -> &'static str {
         x if x == ClipError::Corrupt.code() => "Clipboard data is corrupt",
         _ => "Clipboard service error",
     }
+}
+
+fn ensure_clipboard_service() -> Option<CapabilityToken> {
+    if let Some(cap) = nameserver_lookup_timeout("clipd", 50) {
+        return Some(cap);
+    }
+    let _ = libc::spawn(b"/sbin/sunlight-clipd", &[b"sunlight-clipd"], None)
+        .or_else(|_| libc::spawn(b"/bin/sunlight-clipd", &[b"sunlight-clipd"], None));
+    for _ in 0..8 {
+        if let Some(cap) = nameserver_lookup_timeout("clipd", 75) {
+            return Some(cap);
+        }
+        process_yield();
+    }
+    None
 }
 
 fn fit_text(text: &str, max_chars: usize) -> String {

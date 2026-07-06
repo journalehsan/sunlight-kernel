@@ -11,9 +11,10 @@ use sun_font::{
     draw_text_vcenter as sf_vcenter, line_height as sf_lh, FontRole, TextStyle, VecFont,
 };
 use sunlight_ipc::{
-    debug_log,
+    debug_log, ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, process_yield, ProcessExit,
+    monotonic_millis, nameserver_lookup_timeout, process_yield, shm_alloc, shm_free, shm_map,
+    CapabilityToken, ClipMsg, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::{mime_icon, TgaImage};
@@ -247,6 +248,14 @@ const PROP_BTN_H: u32 = 30;
 const PROP_CHILD_BUF: usize = MAX_ENTRIES;
 const PROP_ROW_CAP: usize = 10;
 const PROP_VAL_LEN: usize = 64;
+const STATUS_MSG_LEN: usize = 128;
+const CLIP_ITEM_BUF_LEN: usize = SHM_PAGE;
+const CLIP_SOURCE_APP: &[u8] = b"sunlight-files";
+const CLIP_MIME_TEXT: &[u8] = b"text/plain";
+const CLIP_MIME_FILE_LIST: &[u8] = b"x-sunlight/file-list";
+const CLIP_WIRE_MAGIC_ITEM: u32 = 0x434C_4950;
+const CLIP_WIRE_MAGIC_SET: u32 = 0x4353_4554;
+const CLIP_WIRE_VERSION: u16 = 1;
 
 // Home grid: 6 core folders (Desktop, Documents, Downloads, Pictures, Music, Videos).
 // Templates and Public are available via navigation but not shown on the home page.
@@ -300,6 +309,9 @@ enum ContextTarget {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ContextMenuItem {
     Open,
+    Copy,
+    CopyPath,
+    Paste,
     Properties,
 }
 
@@ -1545,6 +1557,9 @@ struct FilesApp {
     /// Active Properties dialog, if any. Modal-lite: while set it consumes
     /// input so the underlying file list cannot be navigated.
     properties: Option<PropertiesState>,
+    status_msg: [u8; STATUS_MSG_LEN],
+    status_msg_len: usize,
+    status_is_error: bool,
 }
 
 impl FilesApp {
@@ -1558,6 +1573,9 @@ impl FilesApp {
             last_click_at: 0,
             context_menu: None,
             properties: None,
+            status_msg: [0; STATUS_MSG_LEN],
+            status_msg_len: 0,
+            status_is_error: false,
         }
     }
 
@@ -1721,6 +1739,225 @@ impl FilesApp {
         false
     }
 
+    fn set_status(&mut self, text: &str) {
+        self.write_status(text, false);
+    }
+
+    fn set_status_error(&mut self, text: &str) {
+        self.write_status(text, true);
+    }
+
+    fn write_status(&mut self, text: &str, is_error: bool) {
+        let bytes = text.as_bytes();
+        self.status_msg_len = bytes.len().min(self.status_msg.len());
+        self.status_msg[..self.status_msg_len].copy_from_slice(&bytes[..self.status_msg_len]);
+        self.status_is_error = is_error;
+    }
+
+    fn status_text(&self) -> &str {
+        core::str::from_utf8(&self.status_msg[..self.status_msg_len]).unwrap_or("")
+    }
+
+    fn selected_item_path(&self) -> Result<PathBuf, &'static str> {
+        if self.state.view_mode != ViewMode::Directory {
+            return Err("No item selected");
+        }
+        let Some(idx) = self.state.selected_row else {
+            return Err("No item selected");
+        };
+        if idx >= self.state.entry_count {
+            return Err("No item selected");
+        }
+        let entry = self.state.entries[idx];
+        let name = core::str::from_utf8(entry.name_bytes()).map_err(|_| "Invalid file name")?;
+        self.state.current_path.join(name).ok_or("Path is too long")
+    }
+
+    fn copy_selected_path_text(&mut self) -> bool {
+        let path = match self.selected_item_path() {
+            Ok(path) => path,
+            Err(msg) => {
+                self.state.clear_error();
+                self.set_status_error(msg);
+                return true;
+            }
+        };
+        if libc::stat(path.as_str().as_bytes()).is_err() {
+            self.state.clear_error();
+            self.set_status_error("Selected item is no longer available");
+            return true;
+        }
+        match self.set_clipboard_item(
+            ClipPayloadKind::Text,
+            CLIP_MIME_TEXT,
+            path.as_str().as_bytes(),
+        ) {
+            Ok(()) => {
+                self.state.clear_error();
+                self.set_status("Path copied");
+            }
+            Err(msg) => {
+                self.state.clear_error();
+                self.set_status_error(msg);
+            }
+        }
+        true
+    }
+
+    fn copy_selected_file_list(&mut self) -> bool {
+        let path = match self.selected_item_path() {
+            Ok(path) => path,
+            Err(msg) => {
+                self.state.clear_error();
+                self.set_status_error(msg);
+                return true;
+            }
+        };
+        if libc::stat(path.as_str().as_bytes()).is_err() {
+            self.state.clear_error();
+            self.set_status_error("Selected item is no longer available");
+            return true;
+        }
+        match self.set_clipboard_item(
+            ClipPayloadKind::FileList,
+            CLIP_MIME_FILE_LIST,
+            path.as_str().as_bytes(),
+        ) {
+            Ok(()) => {
+                self.state.clear_error();
+                self.set_status("Copied 1 item");
+            }
+            Err(msg) => {
+                self.state.clear_error();
+                self.set_status_error(msg);
+            }
+        }
+        true
+    }
+
+    fn paste_from_clipboard(&mut self) -> bool {
+        let mut item_buf = [0u8; CLIP_ITEM_BUF_LEN];
+        let item = match self.get_current_clipboard_item(&mut item_buf) {
+            Ok(Some(item)) => item,
+            Ok(None) => {
+                self.state.clear_error();
+                self.set_status_error("Clipboard is empty");
+                return true;
+            }
+            Err(msg) => {
+                self.state.clear_error();
+                self.set_status_error(msg);
+                return true;
+            }
+        };
+
+        match item.kind {
+            ClipPayloadKind::Text => {
+                self.state.clear_error();
+                self.set_status_error("Text paste into folder is not supported yet");
+            }
+            ClipPayloadKind::FileList => {
+                let (first_path, count) = match first_file_list_path(item.payload) {
+                    Ok(parsed) => parsed,
+                    Err(_) => {
+                        self.state.clear_error();
+                        self.set_status_error("Invalid clipboard item");
+                        return true;
+                    }
+                };
+                if count > 1 {
+                    self.state.clear_error();
+                    self.set_status_error("Multi-item paste is not supported yet");
+                    return true;
+                }
+                let stat = match libc::stat(first_path.as_bytes()) {
+                    Ok(stat) => stat,
+                    Err(_) => {
+                        self.state.clear_error();
+                        self.set_status_error("Clipboard file is no longer available");
+                        return true;
+                    }
+                };
+                self.state.clear_error();
+                if stat.file_type == FT_DIR {
+                    self.set_status_error("Folder paste not supported yet");
+                } else {
+                    self.set_status_error("Paste not implemented yet");
+                }
+            }
+        }
+        true
+    }
+
+    fn set_clipboard_item(
+        &self,
+        kind: ClipPayloadKind,
+        mime: &[u8],
+        payload: &[u8],
+    ) -> Result<(), &'static str> {
+        let cap = ensure_clipboard_service().ok_or("Clipboard service unavailable")?;
+        let total_len = 16 + mime.len() + CLIP_SOURCE_APP.len() + payload.len();
+        if total_len > SHM_PAGE {
+            return Err("Clipboard payload is too large");
+        }
+        let (ptr, token) = shm_alloc().map_err(|_| "Clipboard service unavailable")?;
+        unsafe {
+            let buf = core::slice::from_raw_parts_mut(ptr, SHM_PAGE);
+            let mut index = 0usize;
+            index += push_u32_le(&mut buf[index..], CLIP_WIRE_MAGIC_SET);
+            index += push_u16_le(&mut buf[index..], CLIP_WIRE_VERSION);
+            buf[index] = kind.as_u8();
+            index += 1;
+            buf[index] = 1;
+            index += 1;
+            index += push_u16_le(&mut buf[index..], mime.len() as u16);
+            index += push_u16_le(&mut buf[index..], CLIP_SOURCE_APP.len() as u16);
+            index += push_u32_le(&mut buf[index..], payload.len() as u32);
+            index += copy_bytes(&mut buf[index..], mime);
+            index += copy_bytes(&mut buf[index..], CLIP_SOURCE_APP);
+            let _ = copy_bytes(&mut buf[index..], payload);
+        }
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(ClipMsg::SET_CLIPBOARD)
+                .word(0, total_len as u64)
+                .with_cap(0, token),
+        );
+        let _ = shm_free(token);
+        if reply.label == ClipMsg::ERROR {
+            return Err(clip_error_label(reply.words[0]));
+        }
+        Ok(())
+    }
+
+    fn get_current_clipboard_item<'a>(
+        &self,
+        item_buf: &'a mut [u8],
+    ) -> Result<Option<ClipboardItemView<'a>>, &'static str> {
+        let cap = ensure_clipboard_service().ok_or("Clipboard service unavailable")?;
+        let reply = ipc_call(cap, IpcMsg::with_label(ClipMsg::GET_CLIPBOARD));
+        if reply.label == ClipMsg::ERROR {
+            return Err(clip_error_label(reply.words[0]));
+        }
+        let len = reply.words[1] as usize;
+        let token = reply.caps[0];
+        if len == 0 || token == CapabilityToken::INVALID {
+            return Ok(None);
+        }
+        if len > item_buf.len() || len > SHM_PAGE {
+            let _ = shm_free(token);
+            return Err("Invalid clipboard item");
+        }
+        let ptr = shm_map(token).map_err(|_| "Invalid clipboard item")?;
+        unsafe {
+            core::ptr::copy_nonoverlapping(ptr, item_buf.as_mut_ptr(), len);
+        }
+        let _ = shm_free(token);
+        parse_clipboard_item(&item_buf[..len])
+            .map(Some)
+            .map_err(|_| "Invalid clipboard item")
+    }
+
     fn toolbar_layout(toolbar: Rect) -> (Rect, Rect, Rect, Rect, Rect) {
         let nav_y = toolbar.y + (toolbar.h as i32 - NAV_BTN_H as i32) / 2;
         let nav_x = toolbar.x + PAD;
@@ -1816,14 +2053,22 @@ impl FilesApp {
 
     fn context_menu_items(target: ContextTarget) -> &'static [ContextMenuItem] {
         match target {
-            ContextTarget::Row(_) => &[ContextMenuItem::Open, ContextMenuItem::Properties],
-            ContextTarget::Background => &[ContextMenuItem::Properties],
+            ContextTarget::Row(_) => &[
+                ContextMenuItem::Open,
+                ContextMenuItem::Copy,
+                ContextMenuItem::CopyPath,
+                ContextMenuItem::Properties,
+            ],
+            ContextTarget::Background => &[ContextMenuItem::Paste, ContextMenuItem::Properties],
         }
     }
 
     fn context_menu_item_label(item: ContextMenuItem) -> &'static str {
         match item {
             ContextMenuItem::Open => "Open",
+            ContextMenuItem::Copy => "Copy",
+            ContextMenuItem::CopyPath => "Copy Path",
+            ContextMenuItem::Paste => "Paste",
             ContextMenuItem::Properties => "Properties",
         }
     }
@@ -1933,6 +2178,9 @@ impl FilesApp {
                 }
                 true
             }
+            ContextMenuItem::Copy => self.copy_selected_file_list(),
+            ContextMenuItem::CopyPath => self.copy_selected_path_text(),
+            ContextMenuItem::Paste => self.paste_from_clipboard(),
             ContextMenuItem::Properties => {
                 self.properties = Some(self.build_properties(target));
                 true
@@ -2891,6 +3139,8 @@ impl FilesApp {
         canvas.fill_rounded_rect_with_border(status, RADIUS, theme.panel_alt, theme.border, 1);
         let summary = if self.state.error_len != 0 {
             self.state.error_str()
+        } else if self.status_msg_len != 0 {
+            self.status_text()
         } else {
             "Ready"
         };
@@ -2911,6 +3161,8 @@ impl FilesApp {
             &TextStyle::new(FontRole::UiSmall, theme.text),
         );
         let summary_color = if self.state.error_len != 0 {
+            theme.danger
+        } else if self.status_is_error {
             theme.danger
         } else {
             theme.text_dim
@@ -3064,6 +3316,154 @@ impl FilesApp {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ClipPayloadKind {
+    Text,
+    FileList,
+}
+
+impl ClipPayloadKind {
+    fn as_u8(self) -> u8 {
+        match self {
+            Self::Text => 1,
+            Self::FileList => 2,
+        }
+    }
+
+    fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            1 => Some(Self::Text),
+            2 => Some(Self::FileList),
+            _ => None,
+        }
+    }
+}
+
+struct ClipboardItemView<'a> {
+    kind: ClipPayloadKind,
+    payload: &'a [u8],
+}
+
+fn parse_clipboard_item(bytes: &[u8]) -> Result<ClipboardItemView<'_>, ()> {
+    let mut index = 0usize;
+    if take_u32_le(bytes, &mut index).ok_or(())? != CLIP_WIRE_MAGIC_ITEM {
+        return Err(());
+    }
+    if take_u16_le(bytes, &mut index).ok_or(())? != CLIP_WIRE_VERSION {
+        return Err(());
+    }
+    let kind = ClipPayloadKind::from_u8(take_u8(bytes, &mut index).ok_or(())?).ok_or(())?;
+    let flags = take_u8(bytes, &mut index).ok_or(())?;
+    let _id = take_u32_le(bytes, &mut index).ok_or(())?;
+    let _created_at_ms = take_u64_le(bytes, &mut index).ok_or(())?;
+    let payload_len = take_u32_le(bytes, &mut index).ok_or(())? as usize;
+    let mime_len = take_u16_le(bytes, &mut index).ok_or(())? as usize;
+    let source_len = take_u16_le(bytes, &mut index).ok_or(())? as usize;
+    let _ = take_slice(bytes, &mut index, mime_len).ok_or(())?;
+    if (flags & 1) != 0 {
+        let _ = take_slice(bytes, &mut index, source_len).ok_or(())?;
+    } else {
+        let _ = take_slice(bytes, &mut index, source_len).ok_or(())?;
+    }
+    let payload = take_slice(bytes, &mut index, payload_len).ok_or(())?;
+    Ok(ClipboardItemView { kind, payload })
+}
+
+fn first_file_list_path(payload: &[u8]) -> Result<(&str, usize), ()> {
+    let mut first: Option<&str> = None;
+    let mut count = 0usize;
+    let mut start = 0usize;
+    let mut index = 0usize;
+    while index <= payload.len() {
+        if index == payload.len() || payload[index] == 0 {
+            if index > start {
+                let part = core::str::from_utf8(&payload[start..index]).map_err(|_| ())?;
+                if first.is_none() {
+                    first = Some(part);
+                }
+                count += 1;
+            }
+            start = index + 1;
+        }
+        index += 1;
+    }
+    match first {
+        Some(path) => Ok((path, count)),
+        None => Err(()),
+    }
+}
+
+fn clip_error_label(code: u64) -> &'static str {
+    match code {
+        x if x == ClipMsg::ERR_NOT_FOUND => "Clipboard item not found",
+        x if x == ClipMsg::ERR_TOO_LARGE => "Clipboard payload is too large",
+        x if x == ClipMsg::ERR_UNSUPPORTED => "Paste not supported for this clipboard type",
+        x if x == ClipMsg::ERR_CORRUPT => "Invalid clipboard item",
+        _ => "Clipboard service unavailable",
+    }
+}
+
+fn ensure_clipboard_service() -> Option<CapabilityToken> {
+    if let Some(cap) = nameserver_lookup_timeout("clipd", 50) {
+        return Some(cap);
+    }
+    let _ = libc::spawn(b"/sbin/sunlight-clipd", &[b"sunlight-clipd"], None)
+        .or_else(|_| libc::spawn(b"/bin/sunlight-clipd", &[b"sunlight-clipd"], None));
+    for _ in 0..8 {
+        if let Some(cap) = nameserver_lookup_timeout("clipd", 75) {
+            return Some(cap);
+        }
+        process_yield();
+    }
+    None
+}
+
+fn copy_bytes(dst: &mut [u8], src: &[u8]) -> usize {
+    let len = src.len().min(dst.len());
+    dst[..len].copy_from_slice(&src[..len]);
+    len
+}
+
+fn push_u16_le(dst: &mut [u8], value: u16) -> usize {
+    copy_bytes(dst, &value.to_le_bytes())
+}
+
+fn push_u32_le(dst: &mut [u8], value: u32) -> usize {
+    copy_bytes(dst, &value.to_le_bytes())
+}
+
+fn take_u8(bytes: &[u8], index: &mut usize) -> Option<u8> {
+    let value = *bytes.get(*index)?;
+    *index += 1;
+    Some(value)
+}
+
+fn take_u16_le(bytes: &[u8], index: &mut usize) -> Option<u16> {
+    let raw = take_slice(bytes, index, 2)?;
+    Some(u16::from_le_bytes([raw[0], raw[1]]))
+}
+
+fn take_u32_le(bytes: &[u8], index: &mut usize) -> Option<u32> {
+    let raw = take_slice(bytes, index, 4)?;
+    Some(u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]))
+}
+
+fn take_u64_le(bytes: &[u8], index: &mut usize) -> Option<u64> {
+    let raw = take_slice(bytes, index, 8)?;
+    Some(u64::from_le_bytes([
+        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
+    ]))
+}
+
+fn take_slice<'a>(bytes: &'a [u8], index: &mut usize, len: usize) -> Option<&'a [u8]> {
+    if *index + len > bytes.len() {
+        return None;
+    }
+    let out = &bytes[*index..*index + len];
+    *index += len;
+    Some(out)
+}
+
 impl App for FilesApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
@@ -3086,10 +3486,12 @@ impl App for FilesApp {
 
     fn update(&mut self, event: Event) -> bool {
         const KEY_ESC: u8 = 0x01;
+        const KEY_C: u8 = 0x2E;
         const KEY_ENTER: u8 = 0x1C;
         const KEY_LEFT: u8 = 0x4B;
         const KEY_UP: u8 = 0x48;
         const KEY_DOWN: u8 = 0x50;
+        const KEY_V: u8 = 0x2F;
 
         // Properties dialog is modal-lite: while open it swallows every event
         // (including right-clicks) until the user closes it. This also keeps
@@ -3262,6 +3664,19 @@ impl App for FilesApp {
                 ..
             } => self.activate_selected(),
             Event::KeyPress {
+                keycode: KEY_C,
+                pressed: true,
+                ctrl: true,
+                shift: true,
+                ..
+            } => self.copy_selected_path_text(),
+            Event::KeyPress {
+                keycode: KEY_C,
+                pressed: true,
+                ctrl: true,
+                ..
+            } => self.copy_selected_file_list(),
+            Event::KeyPress {
                 keycode: KEY_UP,
                 pressed: true,
                 ..
@@ -3271,6 +3686,12 @@ impl App for FilesApp {
                 pressed: true,
                 ..
             } => self.change_row_selection(1),
+            Event::KeyPress {
+                keycode: KEY_V,
+                pressed: true,
+                ctrl: true,
+                ..
+            } => self.paste_from_clipboard(),
             Event::Tick => false,
             _ => false,
         }
