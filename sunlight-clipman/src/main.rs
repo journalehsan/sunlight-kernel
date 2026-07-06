@@ -224,7 +224,10 @@ impl ClipmanApp {
 
 impl App for ClipmanApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), Color::rgba(0x12, 0x12, 0x14, 0xE8));
+        canvas.fill_rect(
+            Rect::new(0, 0, WIN_W, WIN_H),
+            Color::rgba(0x12, 0x12, 0x14, 0xE8),
+        );
         let panel = Rect::new(0, 0, WIN_W, WIN_H);
         canvas.fill_rect(panel, theme.panel);
         canvas.draw_rect(panel, theme.border);
@@ -301,7 +304,12 @@ impl App for ClipmanApp {
             }
             LoadState::ServiceUnavailable => {
                 canvas.draw_text(72, 172, "Clipboard service unavailable", theme.danger);
-                canvas.draw_text(90, 194, "Start sunlight-clipd and try again", theme.text_dim);
+                canvas.draw_text(
+                    90,
+                    194,
+                    "Start sunlight-clipd and try again",
+                    theme.text_dim,
+                );
             }
             LoadState::Error => {
                 canvas.draw_text(100, 172, "Clipboard error", theme.danger);
@@ -315,7 +323,12 @@ impl App for ClipmanApp {
 
         canvas.hbar(0, (WIN_H as i32) - FOOTER_H, WIN_W, 1, theme.border);
         canvas.fill_rect(
-            Rect::new(0, (WIN_H as i32) - FOOTER_H + 1, WIN_W, (FOOTER_H - 1) as u32),
+            Rect::new(
+                0,
+                (WIN_H as i32) - FOOTER_H + 1,
+                WIN_W,
+                (FOOTER_H - 1) as u32,
+            ),
             theme.panel_alt,
         );
         let footer = fit_text(&self.status, 52);
