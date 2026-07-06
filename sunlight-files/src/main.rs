@@ -1296,6 +1296,47 @@ impl FilesApp {
         }
     }
 
+    /// Move the row selection by delta rows (for arrow key navigation).
+    /// Clamps to [0, entry_count-1]. If nothing selected, Down picks first,
+    /// Up picks last (or first on clamp).
+    fn change_row_selection(&mut self, delta: isize) -> bool {
+        if self.state.view_mode != ViewMode::Directory || self.state.entry_count == 0 {
+            return false;
+        }
+        let count = self.state.entry_count as isize;
+        let current = match self.state.selected_row {
+            Some(i) => i as isize,
+            None => if delta > 0 { -1 } else { count },
+        };
+        let mut new = current + delta;
+        if new < 0 {
+            new = 0;
+        }
+        if new >= count {
+            new = count - 1;
+        }
+        let new_idx = new as usize;
+        if self.state.selected_row != Some(new_idx) {
+            self.select_item(new_idx)
+        } else {
+            false
+        }
+    }
+
+    /// Treat Enter (on selected item) the same as double-click: open the file
+    /// or descend into the folder.
+    fn activate_selected(&mut self) -> bool {
+        if self.state.view_mode != ViewMode::Directory {
+            return false;
+        }
+        if let Some(idx) = self.state.selected_row {
+            if idx < self.state.entry_count {
+                return self.open_selected_or_item(idx);
+            }
+        }
+        false
+    }
+
     fn toolbar_layout(toolbar: Rect) -> (Rect, Rect, Rect, Rect, Rect) {
         let nav_y = toolbar.y + (toolbar.h as i32 - NAV_BTN_H as i32) / 2;
         let nav_x = toolbar.x + PAD;
@@ -2244,6 +2285,12 @@ impl App for FilesApp {
     }
 
     fn update(&mut self, event: Event) -> bool {
+        const KEY_ESC: u8 = 0x01;
+        const KEY_ENTER: u8 = 0x1C;
+        const KEY_LEFT: u8 = 0x4B;
+        const KEY_UP: u8 = 0x48;
+        const KEY_DOWN: u8 = 0x50;
+
         match event {
             Event::Click { x, y } => {
                 debug_log("[FILES] mouse_down x=");
@@ -2334,8 +2381,9 @@ impl App for FilesApp {
                 }
                 false
             }
+            Event::Key('\n') => self.activate_selected(),
             Event::KeyPress {
-                keycode: 0x01,
+                keycode: KEY_ESC,
                 pressed: true,
                 ..
             } => {
@@ -2343,7 +2391,7 @@ impl App for FilesApp {
                 true
             }
             Event::KeyPress {
-                keycode: 0x4B,
+                keycode: KEY_LEFT,
                 pressed: true,
                 ..
             } => {
@@ -2352,6 +2400,21 @@ impl App for FilesApp {
                 self.reset_row_click_state();
                 changed
             }
+            Event::KeyPress {
+                keycode: KEY_ENTER,
+                pressed: true,
+                ..
+            } => self.activate_selected(),
+            Event::KeyPress {
+                keycode: KEY_UP,
+                pressed: true,
+                ..
+            } => self.change_row_selection(-1),
+            Event::KeyPress {
+                keycode: KEY_DOWN,
+                pressed: true,
+                ..
+            } => self.change_row_selection(1),
             Event::Tick => false,
             _ => false,
         }
