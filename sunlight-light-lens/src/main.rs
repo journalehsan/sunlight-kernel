@@ -418,16 +418,37 @@ impl LightLensApp {
     }
 
     /// A clearly-inactive placeholder chip: flat fill, faint border, dim text.
-    /// Used for every decorative edit control so none read as clickable.
-    fn draw_placeholder_chip(canvas: &mut Canvas, theme: &Theme, rect: Rect, label: &str) {
+    /// When `symbol` is provided a small UiSymbol glyph is drawn before the
+    /// label so the chip reads as a decorative tool button. Used for every
+    /// placeholder edit control so none read as clickable.
+    fn draw_placeholder_chip(
+        canvas: &mut Canvas,
+        theme: &Theme,
+        rect: Rect,
+        symbol: Option<UiSymbol>,
+        label: &str,
+    ) {
         canvas.fill_rect(rect, theme.panel_alt);
         canvas.draw_rect(rect, theme.border);
-        sf_centered(
-            canvas,
-            rect,
-            label,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-        );
+        let dim_style = TextStyle::new(FontRole::UiSmall, theme.text_dim);
+        let dim_color = theme.text_dim;
+
+        if let Some(sym) = symbol {
+            let sw = Canvas::measure_ui_symbol(sym) as i32;
+            let tw = sf_measure(label, FontRole::UiSmall).w as i32;
+            let gap = 4i32;
+            let unit = sw + gap + tw;
+            let start_x = rect.x + (rect.w as i32 - unit) / 2;
+            canvas.draw_ui_symbol(
+                start_x,
+                rect.y + (rect.h as i32 - 9) / 2,
+                sym,
+                dim_color,
+            );
+            sf_vcenter(canvas, label, start_x + sw + gap, rect.y, rect.h, &dim_style);
+        } else {
+            sf_centered(canvas, rect, label, &dim_style);
+        }
     }
 
     /// A small dim section heading with a faint separator trailing to the
@@ -505,7 +526,23 @@ impl LightLensApp {
         self.load_state = LoadState::Empty;
         self.message.clear();
         self.load_current_image();
-        self.collect_siblings();
+        // Only refresh the sibling list if the image loaded successfully;
+        // on failure keep the previous sibling state so Back/Next remain
+        // usable to navigate back to the last good image.
+        if self.load_state == LoadState::Ready {
+            self.collect_siblings();
+        } else {
+            // Search the existing sibling list for the failed path so the
+            // folder-position display stays accurate.
+            self.has_current_index = false;
+            for (idx, sib) in self.sibling_paths.iter().enumerate().take(self.sibling_count) {
+                if *sib == self.current_path {
+                    self.current_index = idx;
+                    self.has_current_index = true;
+                    break;
+                }
+            }
+        }
     }
 
     fn load_current_image(&mut self) {
@@ -518,7 +555,7 @@ impl LightLensApp {
         let stat = match libc::stat(self.current_path.as_bytes()) {
             Ok(stat) => stat,
             Err(_) => {
-                self.set_error("Could not read image file.");
+                self.set_error("File not found or inaccessible.");
                 return;
             }
         };
@@ -711,10 +748,18 @@ impl LightLensApp {
             self.has_next(),
         );
 
-        // Decorative edit tools (right cluster) — all inactive placeholders.
-        let labels = ["Zoom +", "Zoom -", "Rotate L", "Rotate R", "Crop", "Flip H"];
-        for (idx, label) in labels.iter().enumerate() {
-            Self::draw_placeholder_chip(canvas, theme, tool_rects[idx], label);
+        // Decorative edit tools (right cluster) — all inactive placeholders
+        // with UiSymbol glyphs so they read as polished tool buttons.
+        let tools: [(Option<UiSymbol>, &str); 6] = [
+            (Some(UiSymbol::Search), "Zoom +"),
+            (Some(UiSymbol::Minus), "Zoom -"),
+            (Some(UiSymbol::Back), "Rotate L"),
+            (Some(UiSymbol::Forward), "Rotate R"),
+            (Some(UiSymbol::Divide), "Crop"),
+            (Some(UiSymbol::Multiply), "Flip H"),
+        ];
+        for (idx, (sym, label)) in tools.iter().enumerate() {
+            Self::draw_placeholder_chip(canvas, theme, tool_rects[idx], *sym, label);
         }
 
         // Subtle keyboard hint in the free middle area, if there is room.
@@ -746,6 +791,7 @@ impl LightLensApp {
                 canvas,
                 theme,
                 Rect::new(content.x + pad, y, inner_w, chip_h),
+                None,
                 label,
             );
             y += chip_h as i32 + chip_gap;
@@ -781,7 +827,7 @@ impl LightLensApp {
                 col_w,
                 chip_h,
             );
-            Self::draw_placeholder_chip(canvas, theme, cr, label);
+            Self::draw_placeholder_chip(canvas, theme, cr, None, label);
         }
         y += 2 * (chip_h as i32 + chip_gap);
 
@@ -821,21 +867,29 @@ impl LightLensApp {
         match (self.load_state, self.image) {
             (LoadState::Ready, Some(image)) => {
                 let fit = Self::preview_fit_rect(content, image);
-                canvas.fill_rect(fit, theme.bg.darken(14));
+                canvas.fill_rect(fit, theme.bg);
                 canvas.draw_tga_icon(&image, fit);
                 canvas.draw_rect(fit, theme.border);
+                let outer = fit.inset(-1);
+                canvas.draw_rect(outer, theme.border);
             }
             (LoadState::Error, _) => {
                 if let Some(icon) = self.missing_icon {
                     let icon_rect = Rect::new(
                         content.x + (content.w as i32 - 64) / 2,
-                        content.y + (content.h as i32 - 64) / 2 - 18,
+                        content.y + (content.h as i32 - 64) / 2 - 24,
                         64,
                         64,
                     );
                     canvas.draw_tga_icon(&icon, icon_rect);
                 }
-                let msg_rect = Rect::new(content.x + 20, content.bottom() - 70, content.w - 40, 24);
+                let msg_buf_px = sf_measure(self.message.as_str(), FontRole::UiRegular).w as i32;
+                let msg_rect = Rect::new(
+                    content.x + (content.w as i32 - msg_buf_px) / 2 - 16,
+                    content.y + (content.h as i32 - 64) / 2 + 50,
+                    (msg_buf_px + 32).max(40) as u32,
+                    28,
+                );
                 sf_centered(
                     canvas,
                     msg_rect,
