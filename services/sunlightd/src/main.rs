@@ -38,8 +38,8 @@ mod unit;
 use graph::DepGraph;
 use ipc::{extract_unit_name, ListEntry, StatusReply, SunlightdOp};
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
-    nameserver_register, CapabilityToken, IpcMsg, SpawnRequest,
+    debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, nameserver_lookup,
+    nameserver_register, monotonic_millis, CapabilityToken, IpcMsg, SpawnRequest,
 };
 use supervisor::{ServiceEntry, ServiceState};
 use unit::{parse_service_unit, ServiceUnit, SocketUnit, MAX_UNITS};
@@ -56,6 +56,12 @@ macro_rules! serial_println {
 struct ServiceTable {
     services: [Option<ServiceEntry>; MAX_UNITS],
     count: usize,
+}
+
+struct BootStartup {
+    pending: [bool; MAX_UNITS],
+    remaining: usize,
+    completion_logged: bool,
 }
 
 impl ServiceTable {
@@ -106,6 +112,41 @@ impl ServiceTable {
     }
 }
 
+impl BootStartup {
+    fn new(services: &ServiceTable) -> Self {
+        let mut pending = [false; MAX_UNITS];
+        let mut remaining = 0usize;
+        for idx in 0..services.count {
+            if let Some(entry) = services.get(idx) {
+                if entry.enabled {
+                    pending[idx] = true;
+                    remaining += 1;
+                }
+            }
+        }
+        Self {
+            pending,
+            remaining,
+            completion_logged: false,
+        }
+    }
+
+    fn is_pending(&self, idx: usize) -> bool {
+        idx < self.pending.len() && self.pending[idx]
+    }
+
+    fn mark_done(&mut self, idx: usize) {
+        if self.is_pending(idx) {
+            self.pending[idx] = false;
+            self.remaining = self.remaining.saturating_sub(1);
+        }
+    }
+
+    fn is_complete(&self) -> bool {
+        self.remaining == 0
+    }
+}
+
 /// Extract binary name from an ExecStart path like "/sbin/niced" → "niced".
 fn binary_name_of(exec_start: &str) -> &str {
     if let Some(pos) = exec_start.rfind('/') {
@@ -113,6 +154,17 @@ fn binary_name_of(exec_start: &str) -> &str {
     } else {
         exec_start
     }
+}
+
+fn normalize_dep_unit_name(dep: &str) -> heapless::String<64> {
+    let mut unit_name = heapless::String::<64>::new();
+    if dep.contains('.') {
+        let _ = unit_name.push_str(dep);
+    } else {
+        let _ = unit_name.push_str(dep);
+        let _ = unit_name.push_str(".service");
+    }
+    unit_name
 }
 
 /// Load unit files for services managed by sunlightd.
@@ -124,7 +176,7 @@ fn load_units() -> (ServiceTable, heapless::Vec<SocketUnit, 8>) {
     // solar.service — disabled by default; start with: sunlightctl start solar
     let solar_service = r#"[Unit]
 Description=Solar HTTP Server
-After=net_server
+After=net_server.service
 
 [Service]
 Type=simple
@@ -230,6 +282,7 @@ WantedBy=sunlight.target
     let sm_service = r#"[Unit]
 Description=SunlightOS Storage Manager (controlled persistent writes)
 After=uac_service.service
+Requires=uac_service.service
 
 [Service]
 Type=simple
@@ -251,7 +304,8 @@ WantedBy=sunlight.target
     // NOTE: sunlight-kv now delegates protected writes to sunlight-sm ("sm")
     let kv_service = r#"[Unit]
 Description=SunlightOS Key-Value Storage Daemon
-After=sm.service
+After=sunlight-sm.service
+Requires=sunlight-sm.service
 
 [Service]
 Type=simple
@@ -272,6 +326,7 @@ WantedBy=sunlight.target
     let clipd_service = r#"[Unit]
 Description=SunlightOS Clipboard Service
 After=sunlight-kv.service
+Requires=sunlight-kv.service
 
 [Service]
 Type=simple
@@ -314,6 +369,8 @@ WantedBy=sunlight.target
     // handshake randomness via rand_service). Starts after kv + rand_service.
     let tls_service = r#"[Unit]
 Description=SunlightOS TLS Service
+After=sunlight-kv.service rand_service.service net_server.service networkd.service resolved.service
+Requires=sunlight-kv.service rand_service.service net_server.service
 
 [Service]
 Type=simple
@@ -380,7 +437,12 @@ fn build_dep_graph(
             let _ = unit_name.push_str(".service");
 
             for dep in &entry.unit.after {
-                let _ = graph.add_edge(dep, &unit_name);
+                let dep_name = normalize_dep_unit_name(dep);
+                let _ = graph.add_edge(&dep_name, &unit_name);
+            }
+            for dep in &entry.unit.requires {
+                let dep_name = normalize_dep_unit_name(dep);
+                let _ = graph.add_edge(&dep_name, &unit_name);
             }
         }
     }
@@ -412,6 +474,111 @@ fn wait_for_spawn_cap() -> CapabilityToken {
             return cap;
         }
         sunlight_ipc::process_yield();
+    }
+}
+
+fn dep_unit_to_ready_name(dep: &str) -> &str {
+    let dep = dep.strip_suffix(".service").unwrap_or(dep);
+    match dep {
+        "timezone_service" => "tz",
+        "uac_service" => "uac",
+        "sunlight-sm" => "sm",
+        "rand_service" => "rand",
+        "net_server" => "net",
+        "sunlight-thumbd" => "thumbd",
+        other => other,
+    }
+}
+
+fn unit_is_enabled(services: &ServiceTable, dep: &str) -> bool {
+    let dep_service = dep.strip_suffix(".service").unwrap_or(dep);
+    services
+        .find_by_name(dep_service)
+        .and_then(|idx| services.get(idx))
+        .map(|entry| entry.enabled)
+        .unwrap_or(true)
+}
+
+fn deps_ready(services: &ServiceTable, unit: &ServiceUnit) -> bool {
+    for dep in &unit.requires {
+        if nameserver_lookup(dep_unit_to_ready_name(dep)).is_none() {
+            return false;
+        }
+    }
+    for dep in &unit.after {
+        if !unit_is_enabled(services, dep) {
+            continue;
+        }
+        if nameserver_lookup(dep_unit_to_ready_name(dep)).is_none() {
+            return false;
+        }
+    }
+    true
+}
+
+fn autostart_services(
+    services: &mut ServiceTable,
+    startup: &mut BootStartup,
+    spawn_cap: CapabilityToken,
+) {
+    if startup.is_complete() {
+        if !startup.completion_logged {
+            serial_println!("[SUNLIGHTD] Autostart queue drained");
+            startup.completion_logged = true;
+        }
+        return;
+    }
+
+    for idx in 0..services.count {
+        if !startup.is_pending(idx) {
+            continue;
+        }
+
+        let Some(entry) = services.get(idx) else {
+            startup.mark_done(idx);
+            continue;
+        };
+
+        if !entry.enabled {
+            startup.mark_done(idx);
+            continue;
+        }
+
+        if !deps_ready(services, &entry.unit) {
+            continue;
+        }
+
+        let mut path = heapless::String::<256>::new();
+        let _ = path.push_str(&entry.unit.exec_start);
+        let bin = binary_name_of(&path);
+        let mut name_buf = heapless::String::<64>::new();
+        let _ = name_buf.push_str(bin);
+
+        if let Some(entry) = services.get_mut(idx) {
+            entry.mark_starting();
+        }
+
+        match spawn_named(spawn_cap, &path, &name_buf) {
+            Ok(pid) => {
+                let started_at = monotonic_millis();
+                serial_println!("[SUNLIGHTD] spawned {} pid={}", name_buf, pid);
+                if let Some(entry) = services.get_mut(idx) {
+                    entry.mark_running(pid, started_at);
+                }
+                if name_buf.as_str() == "timezone_service" {
+                    serial_println!("[SUNLIGHTD] timezone.service: running (pid={})", pid);
+                    serial_println!("[SunlightOS] timezone OK");
+                }
+            }
+            Err(e) => {
+                serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name_buf, e);
+                if let Some(entry) = services.get_mut(idx) {
+                    entry.mark_failed(-1, monotonic_millis());
+                }
+            }
+        }
+
+        startup.mark_done(idx);
     }
 }
 
@@ -460,7 +627,7 @@ fn handle_control_message(
                         match spawn_named(spawn_cap, &path, &name_buf) {
                             Ok(pid) => {
                                 if let Some(entry) = services.get_mut(idx) {
-                                    entry.mark_running(pid, 0);
+                                    entry.mark_running(pid, monotonic_millis());
                                 }
                                 reply.label = REPLY_OK;
                             }
@@ -521,7 +688,7 @@ fn handle_control_message(
                     match spawn_named(spawn_cap, &path, &name_buf) {
                         Ok(pid) => {
                             if let Some(entry) = services.get_mut(idx) {
-                                entry.mark_running(pid, 0);
+                                entry.mark_running(pid, monotonic_millis());
                             }
                             reply.label = REPLY_OK;
                         }
@@ -679,7 +846,7 @@ fn _start() -> ! {
     let (mut services, _sockets) = load_units();
     serial_println!("[SUNLIGHTD] Loaded {} service units", services.count);
 
-    // Build dependency graph (validates graph; start order is fixed below)
+    // Build dependency graph (validates the declarative dependency metadata)
     let _order = match build_dep_graph(&services) {
         Ok(o) => o,
         Err(e) => {
@@ -688,63 +855,35 @@ fn _start() -> ! {
         }
     };
 
-    serial_println!("[SUNLIGHTD] Start order: timezone_service → niced → gcd → uac_service → sm → sunlight-kv → rand_service → sunlight-tls");
+    serial_println!(
+        "[SUNLIGHTD] Autostart: parallel where possible, gated by service readiness"
+    );
+    serial_println!(
+        "[SUNLIGHTD] TLS waits for rand_service, sunlight-kv, and the network stack"
+    );
     serial_println!("[SunlightOS] sunlightd OK");
 
     // Spawn enabled services owned by sunlightd (kernel/init own vfs/net/tty — not our job).
-    // Order matters: sm before kv, rand_service before sunlight-tls.
-    // solar is disabled by default and intentionally omitted from auto-start.
+    // Independent services can launch together; dependent services wait until
+    // their providers have registered with the nameserver.
     let spawn_cap = wait_for_spawn_cap();
-    if spawn_cap != sunlight_ipc::CapabilityToken(0) {
-        let managed: &[(&str, &str)] = &[
-            ("/sbin/timezone_service", "timezone_service"),
-            ("/sbin/niced", "niced"),
-            ("/sbin/gcd", "gcd"),
-            ("/sbin/uac_service", "uac_service"),
-            ("/sbin/sunlight-sm", "sunlight-sm"),
-            ("/sbin/sunlight-kv", "sunlight-kv"),
-            ("/sbin/rand_service", "rand_service"),
-            ("/sbin/sunlight-tls", "sunlight-tls"),
-            ("/sbin/solar", "solar"),
-            ("/sbin/sunlight-thumbd", "sunlight-thumbd"),
-        ];
-        for &(path, name) in managed {
-            // Check enabled state before spawning
-            let enabled = services
-                .find_by_name(name)
-                .and_then(|i| services.get(i))
-                .map(|e| e.enabled)
-                .unwrap_or(true);
+    let mut startup = BootStartup::new(&services);
+    autostart_services(&mut services, &mut startup, spawn_cap);
 
-            if !enabled {
-                serial_println!("[SUNLIGHTD] {} is disabled, skipping auto-start", name);
-                continue;
+    // Main control loop. Non-blocking receive lets boot autostart keep
+    // progressing while dependencies register.
+    let mut reply = IpcMsg::empty();
+    loop {
+        autostart_services(&mut services, &mut startup, spawn_cap);
+        match ipc_reply_and_try_recv(ep, reply) {
+            Some(msg) => {
+                reply = handle_control_message(&msg, &mut services, spawn_cap);
             }
-
-            match spawn_named(spawn_cap, path, name) {
-                Ok(pid) => {
-                    serial_println!("[SUNLIGHTD] spawned {} pid={}", name, pid);
-                    // Update service table state using name-based lookup (not index)
-                    if let Some(idx) = services.find_by_name(name) {
-                        if let Some(entry) = services.get_mut(idx) {
-                            entry.mark_running(pid, 0);
-                        }
-                    }
-                    if name == "timezone_service" {
-                        serial_println!("[SUNLIGHTD] timezone.service: running (pid={})", pid);
-                        serial_println!("[SunlightOS] timezone OK");
-                    }
-                }
-                Err(e) => serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name, e),
+            None => {
+                reply = IpcMsg::empty();
+                sunlight_ipc::process_yield();
             }
         }
-    }
-
-    // Main control loop.
-    let mut msg = ipc_recv(ep);
-    loop {
-        let reply = handle_control_message(&msg, &mut services, spawn_cap);
-        msg = ipc_reply_and_wait(ep, reply);
     }
 }
 

@@ -10,6 +10,10 @@ use sunlight_ipc::{
 /// holds the spawn token. These need no privileged memory setup (unlike
 /// vfs_server/tty_server, which the kernel spawns directly). sunlightd in turn
 /// launches the user-level daemons (timezone_service, niced, gcd).
+///
+/// Spawn returns immediately, so init effectively queues these services and
+/// then services their nameserver traffic. Keep `sunlightd` early enough that
+/// its own daemon tree can start overlapping the rest of init's boot work.
 /// deviced starts before drivers so registration normally succeeds. Drivers
 /// still treat deviced as optional and continue if it is unavailable.
 /// sunlight-kbd and sunlight-mouse are spawned AFTER timer_server (so IPC is stable)
@@ -17,6 +21,7 @@ use sunlight_ipc::{
 const INIT_SERVICES: [&str; 11] = [
     "/sbin/timer_server",
     "/sbin/deviced",
+    "/sbin/sunlightd",
     "/sbin/networkd",
     "/sbin/resolved",
     "/sbin/powerd",
@@ -26,7 +31,6 @@ const INIT_SERVICES: [&str; 11] = [
     // PTY broker used by sunlight-libc::openpty() for tty/session spawning.
     "/sbin/pty_server",
     "/sbin/net_server",
-    "/sbin/sunlightd",
 ];
 
 /// Spawn a service by absolute path using the kernel spawn capability.
