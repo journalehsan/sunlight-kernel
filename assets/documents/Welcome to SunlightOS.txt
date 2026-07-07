@@ -1,0 +1,41 @@
++----------------------------------+
+|      Welcome to SunlightOS       |
++----------------------------------+
+
+Welcome to SunlightOS                          \   |   /
+A bright and simple desktop OS                  .-*-.
+Core: SunlightX                                /  |  \
+Microkernel written in Rust                      \ | /
+Created by Ehsan Tork                             `-'
+
+Hello, and welcome.
+
+You are now inside SunlightOS, a small operating system with a bright
+desktop, a growing set of native apps, and a core named SunlightX.
+
+This Documents folder belongs to you. Keep your notes, drafts, personal
+files, and project documents here.
+
+SunlightOS is built with a simple goal:
+to be understandable, useful, fast, and friendly.
+
+Places to explore:
+
+- Pictures
+  Contains sample pictures and wallpapers.
+
+- Documents
+  A place for notes, text files, and personal work.
+
+- Files
+  Browse your folders and the system.
+
+- Control Panel
+  Change wallpaper and other system settings.
+
+- Terminal
+  Explore SunlightOS from the inside.
+
+Thank you for trying SunlightOS.
+
+Enjoy your new little sun-powered machine.

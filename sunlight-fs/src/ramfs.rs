@@ -1802,6 +1802,30 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0, 0, mode::FILE_644,
         include_bytes!("../../docs/images/Samples/08_orange_tulips.simg"),
     ),
+
+    // ── Welcome document ──────────────────────────────────────────────────
+    // Text asset copied into the Documents folder for the default accounts.
+    // /home/user/ serves as the home template; later the installer will copy
+    // from equivalent template locations when provisioning real users.
+    // A system copy is provided under /usr/share for reference/reuse.
+    RamEntry::dir("/usr/share/sunlightos/documents", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/usr/share/sunlightos/documents/Welcome to SunlightOS.txt",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/documents/Welcome to SunlightOS.txt"),
+    ),
+    // Root's Documents (seeded read-only by the OS).
+    RamEntry::file(
+        "/root/Documents/Welcome to SunlightOS.txt",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/documents/Welcome to SunlightOS.txt"),
+    ),
+    // Default user's Documents (template home, uid/gid 1000).
+    RamEntry::file(
+        "/home/user/Documents/Welcome to SunlightOS.txt",
+        1000, 1000, mode::FILE_644,
+        include_bytes!("../../assets/documents/Welcome to SunlightOS.txt"),
+    ),
 ];
 
 #[cfg(test)]
@@ -2000,5 +2024,42 @@ mod tests {
             fs.read_dir("/missing", &mut |_| true),
             Err(FsError::NotFound)
         );
+    }
+
+    #[test]
+    fn welcome_document_is_present_in_default_homes() {
+        // Verify the welcome document asset is wired into root and the
+        // default user template under Documents, and that Documents dirs
+        // exist (they are declared earlier in INITRAMFS).
+        let has_root_welcome = INITRAMFS.iter().any(|e| {
+            e.path == "/root/Documents/Welcome to SunlightOS.txt" && !e.is_dir
+        });
+        let has_user_welcome = INITRAMFS.iter().any(|e| {
+            e.path == "/home/user/Documents/Welcome to SunlightOS.txt" && !e.is_dir
+        });
+        let has_documents_root = INITRAMFS.iter().any(|e| {
+            e.path == "/root/Documents" && e.is_dir
+        });
+        let has_documents_user = INITRAMFS.iter().any(|e| {
+            e.path == "/home/user/Documents" && e.is_dir
+        });
+
+        assert!(has_root_welcome, "missing /root/Documents welcome file");
+        assert!(has_user_welcome, "missing /home/user/Documents welcome file");
+        assert!(has_documents_root, "missing /root/Documents dir entry");
+        assert!(has_documents_user, "missing /home/user/Documents dir entry");
+
+        // Also spot-check content by opening via a fresh RamFs.
+        let mut fs = RamFs::new(INITRAMFS);
+        let h = fs.open("/home/user/Documents/Welcome to SunlightOS.txt").unwrap();
+        let mut buf = [0u8; 80];
+        let n = fs.read(h, 0, &mut buf).unwrap();
+        // Should start with the ASCII title box.
+        assert!(n > 0);
+        assert_eq!(&buf[..10], b"+---------");
+        // Verify text from the header/intro is present (full content is the
+        // asset bytes; we just sanity-check a few early distinctive words).
+        let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
+        assert!(text.contains("Welcome to SunlightOS") || text.contains("A bright"));
     }
 }
