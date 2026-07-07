@@ -281,6 +281,29 @@ mod sunlight {
             );
             self.env.load_defaults(self.uid, &username);
             self.env.set("PWD", &self.cwd);
+            // Locale foundation: overlay LANG/LC_* from /etc/locale.conf if present.
+            self.load_locale_into_env();
+        }
+
+        /// Read /etc/locale.conf via VFS and inject known locale vars into ShellEnv.
+        /// Falls back silently if VFS or file is unavailable (kernel defaults remain).
+        fn load_locale_into_env(&mut self) {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return,
+            };
+            let bytes = read_file(vfs_cap, "/etc/locale.conf");
+            if bytes.is_empty() {
+                return;
+            }
+            let cfg = sunlight_locale::parse_locale_conf(&bytes);
+            // Convert to pairs the ShellEnv understands.
+            let mut pairs: alloc::vec::Vec<(alloc::string::String, alloc::string::String)> =
+                alloc::vec::Vec::new();
+            for (k, v) in cfg.iter() {
+                pairs.push((alloc::string::String::from(k), alloc::string::String::from(v)));
+            }
+            self.env.apply_locale(&pairs);
         }
 
         fn run_calc(&mut self, expr: &str) -> ([u8; MAX_OUT], usize) {
@@ -537,7 +560,8 @@ mod sunlight {
                 "hostnamectl" => self.cmd_hostnamectl(),
                 "uptime" => self.cmd_uptime(),
                 "tzctl" => self.cmd_tzctl(&args),
-                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, tzctl, =<expr> (calc), help, shutdown, reboot\n",
+                "localectl" => self.cmd_localectl(&args),
+                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, tzctl, localectl, =<expr> (calc), help, shutdown, reboot\n",
                 "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
                 "exit" => b"exit\n",
                 // Not a builtin: resolve through $PATH and run it (Step 3)
@@ -1501,6 +1525,146 @@ mod sunlight {
                     return &out[..pos];
                 }
                 let _ = copy_bytes(out, &mut pos, b"tzctl: list | get | set <id>\n");
+                &out[..pos]
+            }
+        }
+
+        fn cmd_localectl(&mut self, args: &[&str]) -> &[u8] {
+            // localectl
+            // localectl list
+            // localectl set <locale>
+            // localectl set-time <locale>
+            unsafe {
+                static mut OUT: [u8; 768] = [0u8; 768];
+                let out = &mut OUT;
+                let mut pos = 0usize;
+
+                fn copy_bytes(dst: &mut [u8], pos: &mut usize, src: &[u8]) -> usize {
+                    let n = src.len().min(dst.len().saturating_sub(*pos));
+                    dst[*pos..*pos + n].copy_from_slice(&src[..n]);
+                    *pos += n;
+                    n
+                }
+
+                let vfs_cap = match nameserver_lookup("vfs") {
+                    Some(c) => c,
+                    None => {
+                        let msg = b"localectl: VFS not available\n";
+                        out[..msg.len()].copy_from_slice(msg);
+                        return &out[..msg.len()];
+                    }
+                };
+
+                // Read current active config from /etc/locale.conf
+                let conf_bytes = read_file(vfs_cap, "/etc/locale.conf");
+                let mut cfg = sunlight_locale::parse_locale_conf(&conf_bytes);
+
+                // If file was empty/missing, synthesize a minimal fallback view
+                if conf_bytes.is_empty() {
+                    cfg.set("LANG", "C.UTF-8");
+                    cfg.set("LC_TIME", "C.UTF-8");
+                }
+
+                if args.is_empty() {
+                    // Print active (from parsed file or fallback)
+                    let _ = copy_bytes(out, &mut pos, b"System Locale: ");
+                    if let Some(v) = cfg.get("LANG") {
+                        let _ = copy_bytes(out, &mut pos, v.as_bytes());
+                    } else {
+                        let _ = copy_bytes(out, &mut pos, b"C.UTF-8");
+                    }
+                    let _ = copy_bytes(out, &mut pos, b"\n");
+
+                    // Show a few key categories for visibility (like localectl on Linux)
+                    let keys = [
+                        "LC_TIME",
+                        "LC_NUMERIC",
+                        "LC_MONETARY",
+                        "LC_MEASUREMENT",
+                    ];
+                    for &k in &keys {
+                        let _ = copy_bytes(out, &mut pos, k.as_bytes());
+                        let _ = copy_bytes(out, &mut pos, b": ");
+                        let val = cfg.get(k).unwrap_or_else(|| {
+                            cfg.get("LANG").unwrap_or("C.UTF-8")
+                        });
+                        let _ = copy_bytes(out, &mut pos, val.as_bytes());
+                        let _ = copy_bytes(out, &mut pos, b"\n");
+                    }
+                    return &out[..pos];
+                } else if args[0] == "list" {
+                    let gen_bytes = read_file(vfs_cap, "/etc/locale.gen");
+                    let avail = sunlight_locale::parse_locale_gen(&gen_bytes);
+                    let _ = copy_bytes(out, &mut pos, b"Available locales:\n");
+                    for name in &avail {
+                        if pos + name.len() + 1 >= out.len() {
+                            break;
+                        }
+                        let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                        out[pos] = b'\n';
+                        pos += 1;
+                    }
+                    if avail.is_empty() {
+                        // Fallback small list if file missing
+                        let _ = copy_bytes(out, &mut pos, b"C\nC.UTF-8\nen_US.UTF-8\n");
+                    }
+                    return &out[..pos];
+                } else if args[0] == "set" && args.len() > 1 {
+                    let name = args[1];
+                    let gen_bytes = read_file(vfs_cap, "/etc/locale.gen");
+                    let avail = sunlight_locale::parse_locale_gen(&gen_bytes);
+                    if !sunlight_locale::is_valid_locale(name, &avail) {
+                        let _ = copy_bytes(out, &mut pos, b"localectl: invalid locale '");
+                        let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                        let _ = copy_bytes(out, &mut pos, b"'\n");
+                        return &out[..pos];
+                    }
+                    // Apply full set
+                    sunlight_locale::apply_set_all(&mut cfg, name);
+                    let serialized = sunlight_locale::serialize_locale_conf(&cfg);
+                    if write_file(vfs_cap, "/etc/locale.conf", serialized.as_bytes()).is_err() {
+                        let _ = copy_bytes(out, &mut pos, b"localectl: failed to write /etc/locale.conf\n");
+                        return &out[..pos];
+                    }
+                    // Also update our live shell env so new children see it immediately
+                    let mut pairs: alloc::vec::Vec<(alloc::string::String, alloc::string::String)> = alloc::vec::Vec::new();
+                    for (k, v) in cfg.iter() {
+                        pairs.push((alloc::string::String::from(k), alloc::string::String::from(v)));
+                    }
+                    self.env.apply_locale(&pairs);
+
+                    let _ = copy_bytes(out, &mut pos, b"Locale set to ");
+                    let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                    out[pos] = b'\n';
+                    pos += 1;
+                    return &out[..pos];
+                } else if args[0] == "set-time" && args.len() > 1 {
+                    let name = args[1];
+                    let gen_bytes = read_file(vfs_cap, "/etc/locale.gen");
+                    let avail = sunlight_locale::parse_locale_gen(&gen_bytes);
+                    if !sunlight_locale::is_valid_locale(name, &avail) {
+                        let _ = copy_bytes(out, &mut pos, b"localectl: invalid locale '");
+                        let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                        let _ = copy_bytes(out, &mut pos, b"'\n");
+                        return &out[..pos];
+                    }
+                    sunlight_locale::apply_set_time(&mut cfg, name);
+                    let serialized = sunlight_locale::serialize_locale_conf(&cfg);
+                    if write_file(vfs_cap, "/etc/locale.conf", serialized.as_bytes()).is_err() {
+                        let _ = copy_bytes(out, &mut pos, b"localectl: failed to write /etc/locale.conf\n");
+                        return &out[..pos];
+                    }
+                    // live update
+                    self.env.set("LC_TIME", name);
+
+                    let _ = copy_bytes(out, &mut pos, b"LC_TIME set to ");
+                    let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                    out[pos] = b'\n';
+                    pos += 1;
+                    return &out[..pos];
+                }
+
+                let _ = copy_bytes(out, &mut pos, b"localectl | localectl list | localectl set <locale> | localectl set-time <locale>\n");
                 &out[..pos]
             }
         }

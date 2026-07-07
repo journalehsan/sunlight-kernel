@@ -49,6 +49,11 @@ impl EnvMap {
         env.set("HOME", &home);
         env.set("SHELL", "/bin/sshl");
         env.set("TERM", "vt100");
+        // Locale foundation defaults (C.UTF-8). Actual user values come from
+        // /etc/locale.conf via session shell / environment overlay so that
+        // both kernel spawns and future installer sessions behave consistently.
+        env.set("LANG", "C.UTF-8");
+        env.set("LC_TIME", "C.UTF-8");
         env
     }
 

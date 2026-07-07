@@ -72,6 +72,7 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release", "--bin", "powerd"],
         },
+        // vfs-server (pulls in sunlight-fs which seeds /etc/locale.conf, /etc/locale.gen etc.)
         EmbeddedBinary {
             package: "sunlight-vfs-server",
             output: "sunlight-vfs-server",
@@ -108,6 +109,7 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release"],
         },
+        // sunshell (includes localectl builtin; transitively builds sunlight-locale etc.)
         EmbeddedBinary {
             package: "sunshell",
             output: "sshl",

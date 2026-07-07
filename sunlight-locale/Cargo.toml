@@ -1,0 +1,12 @@
+[package]
+name = "sunlight-locale"
+version = "0.2.910"
+
+edition = "2021"
+
+[features]
+default = []
+std = []
+
+[dependencies]
+# Keep minimal; no_std + alloc friendly for kernel/userspace use

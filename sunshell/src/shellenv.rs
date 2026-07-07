@@ -46,6 +46,17 @@ impl ShellEnv {
         self.set("SHELL", "/bin/sshl");
     }
 
+    /// Overlay locale variables from a parsed configuration.
+    /// Only known LANG/LC_* keys are applied. Empty values are skipped.
+    /// This is called after load_defaults so that /etc/locale.conf wins.
+    pub fn apply_locale(&mut self, pairs: &[(alloc::string::String, alloc::string::String)]) {
+        for (k, v) in pairs {
+            if !v.is_empty() {
+                self.set(k, v);
+            }
+        }
+    }
+
     pub fn set(&mut self, key: &str, value: &str) {
         self.vars.insert(String::from(key), String::from(value));
     }

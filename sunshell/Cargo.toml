@@ -1,6 +1,7 @@
 [package]
 name    = "sunshell"
-version = "0.2.903"
+version = "0.2.910"
+
 
 
 
@@ -243,6 +244,7 @@ path = "src/main.rs"
 sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true }
 sunlight-tz = { path = "../sunlight-tz" }
+sunlight-locale = { path = "../sunlight-locale" }
 libm = "0.2"
 
 [features]
