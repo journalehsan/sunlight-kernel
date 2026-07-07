@@ -398,7 +398,11 @@ impl Footer {
     }
 
     fn prompt_str(&self) -> &str {
-        core::str::from_utf8(&self.prompt[..self.prompt_len]).unwrap_or("$ ")
+        if self.prompt_len == 0 {
+            "$ "
+        } else {
+            core::str::from_utf8(&self.prompt[..self.prompt_len]).unwrap_or("$ ")
+        }
     }
 
     fn input_str(&self) -> &str {
@@ -407,6 +411,14 @@ impl Footer {
 
     fn app_name_str(&self) -> &str {
         core::str::from_utf8(&self.app_name[..self.app_name_len]).unwrap_or("app")
+    }
+
+    fn input_prefix_str(&self) -> &str {
+        core::str::from_utf8(&self.input[..self.input_cursor]).unwrap_or("")
+    }
+
+    fn input_suffix_str(&self) -> &str {
+        core::str::from_utf8(&self.input[self.input_cursor..self.input_len]).unwrap_or("")
     }
 
     fn insert(&mut self, ch: u8) {
@@ -728,6 +740,13 @@ struct Mods {
     alt: bool,
 }
 
+impl Mods {
+    fn clear(&mut self) {
+        self.ctrl = false;
+        self.alt = false;
+    }
+}
+
 type TabId = u32;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1002,6 +1021,10 @@ impl TerminalApp {
         self.tabs.get_mut(self.active).and_then(|t| t.as_mut())
     }
 
+    fn clear_tracked_mods(&mut self) {
+        self.mods.clear();
+    }
+
     fn tab_index_by_id(&self, id: TabId) -> Option<usize> {
         self.tabs
             .iter()
@@ -1035,6 +1058,7 @@ impl TerminalApp {
         if !self.insert_tab(TerminalTab::connecting(id, &title[..len])) {
             return false;
         }
+        self.clear_tracked_mods();
         log_tab_phase(id, "tab_state_allocated");
         // `insert_tab` always activates the tab it just inserted.
         log_tab_phase(id, "tab_focused");
@@ -1200,6 +1224,7 @@ impl TerminalApp {
                 self.pending_spawn = Some(pending);
             }
         }
+        self.clear_tracked_mods();
         true
     }
 
@@ -1238,6 +1263,7 @@ impl TerminalApp {
             return false;
         }
         self.active = idx;
+        self.clear_tracked_mods();
         if let Some(tab) = self.tabs[idx].as_mut() {
             tab.dirty = false;
             log_tab_phase(tab.id, "tab_focused");
@@ -1421,6 +1447,31 @@ impl TerminalApp {
             let plus_w = sun_font::measure_text("+", FontRole::UiSmall).w as i32;
             let plus_x = nr.x + ((nr.w as i32 - plus_w) / 2).max(0);
             F_SMALL.draw_vcenter(canvas, "+", plus_x, nr.y, TAB_H, theme.text_dim);
+        }
+    }
+
+    fn footer_center_text(tab: &TerminalTab) -> &'static str {
+        match tab.status {
+            TabStatus::Connecting => "Starting session...",
+            TabStatus::Failed => "Session failed",
+            TabStatus::Exited => "Session exited",
+            TabStatus::Running => {
+                if tab.app_owns_input() {
+                    "App input active"
+                } else {
+                    "Shell input active"
+                }
+            }
+        }
+    }
+
+    fn footer_right_text(tab: &TerminalTab, pending_spawn_for_tab: bool) -> &'static str {
+        if pending_spawn_for_tab {
+            "new tab pending"
+        } else if tab.pty.is_some() {
+            "session attached"
+        } else {
+            "no session"
         }
     }
 }
@@ -1720,7 +1771,14 @@ impl App for TerminalApp {
             .draw(canvas, theme);
         }
 
-        StatusBar::new(footer, "", "", "").draw(canvas, theme);
+        let pending_spawn_for_tab = self.pending_spawn.as_ref().map(|p| p.tab_id) == Some(tab.id);
+        StatusBar::new(
+            footer,
+            "",
+            Self::footer_center_text(tab),
+            Self::footer_right_text(tab, pending_spawn_for_tab),
+        )
+        .draw(canvas, theme);
         if tab.app_owns_input() {
             Label::new(
                 Rect::new(8, footer.y + 4, 220, FOOTER_H - 8),
@@ -1743,6 +1801,27 @@ impl App for TerminalApp {
                 Label::new(input_rect, tab.footer.input_str())
                     .with_font(&F_UI)
                     .draw(canvas, theme);
+                if !tab.app_owns_input() {
+                    let prefix_w =
+                        sun_font::measure_text(tab.footer.input_prefix_str(), FontRole::UiRegular)
+                            .w as i32;
+                    let caret_x = (input_rect.x + prefix_w).min(input_rect.right() - 1);
+                    canvas.vline(caret_x, input_rect.y + 2, input_rect.h.saturating_sub(4), theme.accent);
+                    if tab.footer.input_cursor < tab.footer.input_len {
+                        let suffix = tab.footer.input_suffix_str();
+                        if let Some(ch) = suffix.chars().next() {
+                            let mut buf = [0u8; 4];
+                            let text = ch.encode_utf8(&mut buf);
+                            let char_w =
+                                sun_font::measure_text(text, FontRole::UiRegular).w.min(input_rect.w);
+                            canvas.fill_rect(
+                                Rect::new(caret_x, input_rect.y + 1, char_w, input_rect.h.saturating_sub(2)),
+                                theme.accent,
+                            );
+                            canvas.draw_char(caret_x, input_rect.y, ch, theme.bg);
+                        }
+                    }
+                }
             }
         }
     }
@@ -1788,9 +1867,13 @@ impl App for TerminalApp {
                 }
             }
             Event::Click { x, y } => {
+                self.clear_tracked_mods();
                 dirty |= self.handle_click(x, y);
             }
-            Event::MouseDown { .. } | Event::MouseUp { .. } | Event::MouseMove { .. } => {}
+            Event::MouseDown { .. } => {
+                self.clear_tracked_mods();
+            }
+            Event::MouseUp { .. } | Event::MouseMove { .. } => {}
         }
         dirty
     }
