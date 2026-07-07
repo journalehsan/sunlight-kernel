@@ -19,8 +19,9 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 use core::alloc::GlobalAlloc;
+use core::cmp;
 use sunlight_ipc::{
     debug_log, ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -35,8 +36,8 @@ use sunlight_ui::{
     App, Canvas, Color, Event, HBox, Point, Rect, Theme, VBox, Window, WindowConfig,
 };
 use sunlight_wallpaper::{
-    is_supported_wallpaper, load_desktop_config, read_file_bytes, save_desktop_config,
-    scan_wallpapers, DesktopConfig, WallpaperEntry,
+    is_supported_wallpaper, load_desktop_config, save_desktop_config, scan_wallpapers,
+    DesktopConfig, WallpaperEntry,
 };
 
 // ---------------------------------------------------------------------------
@@ -59,6 +60,9 @@ const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO
 const WIN_W: u32 = 500;
 const WIN_H: u32 = 330;
 const FP_ONE: i32 = 65536;
+const WALLPAPER_PREVIEW_W: u32 = 240;
+const WALLPAPER_PREVIEW_H: u32 = 112;
+const WALLPAPER_PREVIEW_MAX_BYTES: usize = 8 * 1024 * 1024;
 
 // Map slider value 1-10 to a pointer sensitivity fixed-point multiplier.
 // Slider 5 → 1.0× (FP_ONE).  Range: ~0.6× (1) … ~1.8× (10).
@@ -94,7 +98,7 @@ struct ControlPanelApp {
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
     wallpaper_preview: Option<TgaImage>,
-    wallpaper_preview_bytes: Option<Box<[u8]>>,
+    wallpaper_pending_item: Option<usize>,
 }
 
 impl ControlPanelApp {
@@ -111,7 +115,10 @@ impl ControlPanelApp {
         accel_cb.checked = true;
         let wallpaper_config = load_desktop_config();
         let wallpaper_items = scan_wallpapers(&wallpaper_config.wallpaper);
-        let wallpaper_selected = wallpaper_items.iter().position(|it| it.selected).unwrap_or(0);
+        let wallpaper_selected = wallpaper_items
+            .iter()
+            .position(|it| it.selected)
+            .unwrap_or(0);
         Self {
             page: initial_page,
             display_ep,
@@ -130,7 +137,7 @@ impl ControlPanelApp {
             wallpaper_config,
             wallpaper_selected,
             wallpaper_preview: None,
-            wallpaper_preview_bytes: None,
+            wallpaper_pending_item: None,
         }
     }
 
@@ -156,34 +163,30 @@ impl ControlPanelApp {
     }
 
     fn refresh_wallpaper_preview(&mut self) {
-        self.wallpaper_preview = None;
-        self.wallpaper_preview_bytes = None;
         if self.wallpaper_items.is_empty() {
             self.set_wallpaper_status("No wallpapers found");
             return;
         }
-        let path = self.wallpaper_items[self.wallpaper_selected].path.clone();
-        let Some(bytes) = read_file_bytes(path.as_bytes(), 8 * 1024 * 1024) else {
+        let path = self.wallpaper_items[self.wallpaper_selected]
+            .preview_path
+            .clone();
+        let Some(bytes) = read_preview_wallpaper_bytes(path.as_bytes()) else {
+            // Keep the previous valid preview (if any) and surface the problem.
             self.set_wallpaper_status("Selected wallpaper missing");
             return;
         };
-        if !is_supported_wallpaper(&bytes) {
-            self.set_wallpaper_status("Unsupported or corrupt TGA");
-            self.wallpaper_preview_bytes = Some(bytes.into_boxed_slice());
+        if !is_supported_wallpaper(bytes) {
+            self.set_wallpaper_status("Unsupported or corrupt wallpaper");
             return;
         }
-        let owned = bytes.into_boxed_slice();
-        let borrowed: &'static [u8] =
-            unsafe { core::mem::transmute::<&[u8], &'static [u8]>(&owned) };
-        match TgaImage::parse(borrowed) {
+        match TgaImage::parse(bytes) {
             Ok(img) => {
                 self.wallpaper_preview = Some(img);
-                self.wallpaper_preview_bytes = Some(owned);
                 self.wallpaper_status_len = 0;
             }
             Err(_) => {
-                self.wallpaper_preview_bytes = Some(owned);
-                self.set_wallpaper_status("Unsupported or corrupt TGA");
+                self.wallpaper_preview = None;
+                self.set_wallpaper_status("Unsupported or corrupt wallpaper");
             }
         }
     }
@@ -274,7 +277,12 @@ impl ControlPanelApp {
         if let Ok(tga) = TgaImage::parse(ICON_SETTINGS_TGA) {
             canvas.draw_tga_icon(&tga, Rect::new(8, 6, 32, 32));
         }
-        let _ = draw_mono_icon(canvas, &ICON_PREFS_MONO, Point::new(18, 14), theme.icon_foreground);
+        let _ = draw_mono_icon(
+            canvas,
+            &ICON_PREFS_MONO,
+            Point::new(18, 14),
+            theme.icon_foreground,
+        );
         Label::new(Rect::new(46, 12, WIN_W - 58, 20), "System Preferences").draw(canvas, theme);
 
         let (c1, c2, c3) = self.card_rects();
@@ -515,20 +523,40 @@ impl ControlPanelApp {
     }
 
     fn wallpaper_preview_rect() -> Rect {
-        Rect::new(28, 54, WIN_W - 56, 138)
+        Rect::new(
+            ((WIN_W - WALLPAPER_PREVIEW_W) / 2) as i32,
+            46,
+            WALLPAPER_PREVIEW_W,
+            WALLPAPER_PREVIEW_H,
+        )
     }
 
+    /// 3-column wrapping grid tile for wallpaper `idx` (rows of 3,3,1 for 7 items).
     fn wallpaper_item_rect(idx: usize) -> Rect {
-        let start_x = 28i32;
-        let y = 214i32;
-        let w = 102u32;
-        let h = 44u32;
-        let gap = 10i32;
-        Rect::new(start_x + idx as i32 * (w as i32 + gap), y, w, h)
+        const COLS: i32 = 3;
+        const TILE_W: i32 = 102;
+        const TILE_H: i32 = 34;
+        const HGAP: i32 = 10;
+        const VGAP: i32 = 5;
+        const GRID_Y: i32 = 166;
+        let total_w = COLS * TILE_W + (COLS - 1) * HGAP;
+        let start_x = (WIN_W as i32 - total_w) / 2;
+        let col = (idx as i32) % COLS;
+        let row = (idx as i32) / COLS;
+        Rect::new(
+            start_x + col * (TILE_W + HGAP),
+            GRID_Y + row * (TILE_H + VGAP),
+            TILE_W as u32,
+            TILE_H as u32,
+        )
     }
 
     fn wallpaper_back_rect() -> Rect {
         Rect::new(28, WIN_H as i32 - 44, 80, 28)
+    }
+
+    fn wallpaper_refresh_rect() -> Rect {
+        Rect::new((WIN_W as i32 - 80) / 2, WIN_H as i32 - 44, 80, 28)
     }
 
     fn wallpaper_apply_rect() -> Rect {
@@ -544,10 +572,8 @@ impl ControlPanelApp {
         canvas.fill_rect(preview, theme.panel_alt);
         canvas.draw_rect(preview, theme.border);
         if let Some(img) = self.wallpaper_preview {
-            canvas.draw_tga_icon(
-                &img,
-                Rect::new(preview.x + 4, preview.y + 4, preview.w - 8, preview.h - 8),
-            );
+            let dst = fit_image_rect(img.width, img.height, preview.inset(4));
+            canvas.draw_tga_icon(&img, dst);
         } else {
             Label::new(
                 Rect::new(preview.x + 8, preview.y + 8, preview.w - 16, preview.h - 16),
@@ -556,7 +582,7 @@ impl ControlPanelApp {
             .draw(canvas, theme);
         }
 
-        for idx in 0..self.wallpaper_items.len().min(4) {
+        for idx in 0..self.wallpaper_items.len() {
             let item = &self.wallpaper_items[idx];
             let r = Self::wallpaper_item_rect(idx);
             let fill = if idx == self.wallpaper_selected {
@@ -571,16 +597,24 @@ impl ControlPanelApp {
             };
             canvas.fill_rounded_rect(r, 6, fill);
             canvas.stroke_rounded_rect(r, 6, 1, border);
-            Label::new(Rect::new(r.x + 8, r.y + 13, r.w - 16, 16), &item.label).draw(canvas, theme);
+            Label::new(Rect::new(r.x + 8, r.y + 9, r.w - 16, 16), &item.label).draw(canvas, theme);
         }
 
         if self.wallpaper_status_len > 0 {
-            Label::new(Rect::new(28, 268, WIN_W - 56, 16), self.wallpaper_status_str()).draw(canvas, theme);
+            Label::new(
+                Rect::new(28, 270, WIN_W - 56, 14),
+                self.wallpaper_status_str(),
+            )
+            .draw(canvas, theme);
         }
 
         let mut back = Button::secondary(Self::wallpaper_back_rect(), "Back");
         back.state = ButtonState::Normal;
         back.draw(canvas, theme);
+
+        let mut refresh = Button::secondary(Self::wallpaper_refresh_rect(), "Refresh");
+        refresh.state = ButtonState::Normal;
+        refresh.draw(canvas, theme);
 
         let mut apply = Button::new(Self::wallpaper_apply_rect(), "Apply");
         apply.state = ButtonState::Normal;
@@ -592,9 +626,14 @@ impl ControlPanelApp {
             self.set_wallpaper_status("No wallpapers found");
             return;
         }
-        self.wallpaper_config.wallpaper = self.wallpaper_items[self.wallpaper_selected].path.clone();
+        self.wallpaper_config.wallpaper = self.wallpaper_items[self.wallpaper_selected]
+            .apply_path
+            .clone();
         match save_desktop_config(&self.wallpaper_config) {
             Ok(()) => {
+                for idx in 0..self.wallpaper_items.len() {
+                    self.wallpaper_items[idx].selected = idx == self.wallpaper_selected;
+                }
                 self.set_wallpaper_status("Wallpaper applied");
                 let _ = show_notification(
                     NotificationKind::Info,
@@ -607,24 +646,88 @@ impl ControlPanelApp {
         }
     }
 
+    /// Rescan the wallpaper directory and rebuild the grid, preserving the
+    /// current selection when possible (matched by `apply_path`).
+    fn refresh_wallpaper_list(&mut self) {
+        let prev_apply = self
+            .wallpaper_items
+            .get(self.wallpaper_selected)
+            .map(|item| item.apply_path.clone());
+        self.wallpaper_items = scan_wallpapers(&self.wallpaper_config.wallpaper);
+        self.wallpaper_selected = prev_apply
+            .and_then(|p| {
+                self.wallpaper_items
+                    .iter()
+                    .position(|item| item.apply_path == p)
+            })
+            .unwrap_or_else(|| {
+                self.wallpaper_items
+                    .iter()
+                    .position(|item| item.selected)
+                    .unwrap_or(0)
+            });
+        self.refresh_wallpaper_preview();
+        if self.wallpaper_items.is_empty() {
+            self.set_wallpaper_status("No wallpapers found");
+        } else {
+            self.set_wallpaper_status("Wallpaper list refreshed");
+        }
+    }
+
+    fn wallpaper_item_at(pt: Point, len: usize) -> Option<usize> {
+        (0..len).find(|&idx| Self::wallpaper_item_rect(idx).contains(pt))
+    }
+
+    fn select_wallpaper(&mut self, idx: usize) {
+        if idx >= self.wallpaper_items.len() {
+            return;
+        }
+        self.wallpaper_selected = idx;
+        self.refresh_wallpaper_preview();
+    }
+
     fn update_wallpaper_page(&mut self, event: Event) -> bool {
-        if let Event::Click { x, y } = event {
-            let pt = Point::new(x, y);
-            if Self::wallpaper_back_rect().contains(pt) {
-                self.page = Page::Grid;
-                return true;
-            }
-            if Self::wallpaper_apply_rect().contains(pt) {
-                self.apply_wallpaper();
-                return true;
-            }
-            for idx in 0..self.wallpaper_items.len().min(4) {
-                if Self::wallpaper_item_rect(idx).contains(pt) {
-                    self.wallpaper_selected = idx;
-                    self.refresh_wallpaper_preview();
+        match event {
+            Event::MouseDown { x, y, button: 0 } => {
+                let pt = Point::new(x, y);
+                self.wallpaper_pending_item =
+                    Self::wallpaper_item_at(pt, self.wallpaper_items.len());
+                if let Some(idx) = self.wallpaper_pending_item {
+                    self.select_wallpaper(idx);
                     return true;
                 }
             }
+            Event::MouseUp { x, y, button: 0 } | Event::Click { x, y } => {
+                let pt = Point::new(x, y);
+                if Self::wallpaper_back_rect().contains(pt) {
+                    self.wallpaper_pending_item = None;
+                    self.page = Page::Grid;
+                    return true;
+                }
+                if Self::wallpaper_apply_rect().contains(pt) {
+                    self.wallpaper_pending_item = None;
+                    self.apply_wallpaper();
+                    return true;
+                }
+                if Self::wallpaper_refresh_rect().contains(pt) {
+                    self.wallpaper_pending_item = None;
+                    self.refresh_wallpaper_list();
+                    return true;
+                }
+                if let Some(idx) = Self::wallpaper_item_at(pt, self.wallpaper_items.len()) {
+                    if self
+                        .wallpaper_pending_item
+                        .map(|pending| pending == idx)
+                        .unwrap_or(true)
+                    {
+                        self.select_wallpaper(idx);
+                    }
+                    self.wallpaper_pending_item = None;
+                    return true;
+                }
+                self.wallpaper_pending_item = None;
+            }
+            _ => {}
         }
         false
     }
@@ -704,6 +807,67 @@ fn fmt_cur_res<'a>(w: u32, h: u32, buf: &'a mut [u8; 48]) -> &'a str {
     }
     write_u32_into(buf, &mut pos, h);
     core::str::from_utf8(&buf[..pos]).unwrap_or("???")
+}
+
+fn read_preview_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {
+    use sunlight_libc as libc;
+
+    static mut PREVIEW_BUF: [u8; WALLPAPER_PREVIEW_MAX_BYTES] = [0u8; WALLPAPER_PREVIEW_MAX_BYTES];
+
+    let fd = libc::open(path).ok()?;
+    let mut len = 0usize;
+    loop {
+        let remaining = WALLPAPER_PREVIEW_MAX_BYTES.saturating_sub(len);
+        if remaining == 0 {
+            break;
+        }
+        let take = remaining.min(4096);
+        let chunk = unsafe {
+            core::slice::from_raw_parts_mut(
+                core::ptr::addr_of_mut!(PREVIEW_BUF).cast::<u8>().add(len),
+                take,
+            )
+        };
+        let n = match libc::read(fd, chunk) {
+            Ok(n) => n,
+            Err(libc::sys::Errno::Again) => continue,
+            Err(_) => {
+                let _ = libc::close(fd);
+                return None;
+            }
+        };
+        if n == 0 {
+            break;
+        }
+        len = len.saturating_add(n);
+    }
+    let _ = libc::close(fd);
+    Some(unsafe { core::slice::from_raw_parts(core::ptr::addr_of!(PREVIEW_BUF).cast::<u8>(), len) })
+}
+
+fn fit_image_rect(img_w: u32, img_h: u32, bounds: Rect) -> Rect {
+    if img_w == 0 || img_h == 0 || bounds.w == 0 || bounds.h == 0 {
+        return bounds;
+    }
+    let by_width_h = (bounds.w as u64)
+        .saturating_mul(img_h as u64)
+        .checked_div(img_w as u64)
+        .unwrap_or(bounds.h as u64);
+    let (draw_w, draw_h) = if by_width_h <= bounds.h as u64 {
+        (bounds.w, by_width_h as u32)
+    } else {
+        let w = (bounds.h as u64)
+            .saturating_mul(img_w as u64)
+            .checked_div(img_h as u64)
+            .unwrap_or(bounds.w as u64);
+        (cmp::min(w as u32, bounds.w), bounds.h)
+    };
+    Rect::new(
+        bounds.x + (bounds.w.saturating_sub(draw_w) / 2) as i32,
+        bounds.y + (bounds.h.saturating_sub(draw_h) / 2) as i32,
+        draw_w,
+        draw_h,
+    )
 }
 
 // ---------------------------------------------------------------------------

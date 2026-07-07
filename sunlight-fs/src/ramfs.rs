@@ -583,6 +583,51 @@ pub static INITRAMFS: &[RamEntry] = &[
         mode::FILE_644,
         include_bytes!("../../docs/images/wallpaper.tga"),
     ),
+    // Locally bundled wallpapers available in Wallpaper Settings.
+    // Converted from docs/images/wallpaper{1..6}.{jpg,png} to render-ready
+    // TGA type-2 24 bpp BGR (the desktop renderer is TGA-only).
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper1.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper1.tga"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper2.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper2.tga"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper3.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper3.tga"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper4.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper4.tga"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper5.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper5.tga"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper6.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper6.tga"),
+    ),
     // System config files (world-readable)
     RamEntry::file(
         "/etc/passwd",

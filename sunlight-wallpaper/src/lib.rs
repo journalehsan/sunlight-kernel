@@ -10,7 +10,7 @@ pub const LEGACY_WALLPAPER_DIR: &str = "/var/sunlightos/wallpapers";
 pub const USER_WALLPAPER_DIR: &str = "/home/root/.local/share/sunlight/wallpapers";
 pub const CONFIG_PATH: &str = "/home/root/.config/sunlight/desktop.toml";
 pub const CONFIG_TMP_PATH: &str = "/home/root/.config/sunlight/desktop.toml.tmp";
-pub const DEFAULT_WALLPAPER_PATH: &str = "/system/share/wallpapers/default.tga";
+pub const DEFAULT_WALLPAPER_PATH: &str = "/var/sunlightos/wallpapers/wallpaper.tga";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WallpaperMode {
@@ -42,7 +42,14 @@ impl Default for DesktopConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WallpaperEntry {
+    /// Listed/source asset (e.g. a `.tga`, or a `.jpg`/`.png` that has a TGA sidecar).
     pub path: String,
+    /// Path written to the desktop config and rendered by the shell.
+    /// Always a render-ready TGA (the desktop renderer is TGA-only); for a
+    /// `.jpg`/`.png` source this points at its converted `.tga` sidecar.
+    pub apply_path: String,
+    /// Path the settings preview loads. Always a TGA (preview is TGA-only).
+    pub preview_path: String,
     pub label: String,
     pub source: WallpaperSource,
     pub selected: bool,
@@ -113,25 +120,33 @@ pub fn save_desktop_config(cfg: &DesktopConfig) -> Result<(), WallpaperError> {
     out.push_str("\"\n");
 
     libc::mkdir_recursive(b"/home/root/.config/sunlight").map_err(|_| WallpaperError::Io)?;
-    let fd = libc::open_with_flags(CONFIG_TMP_PATH.as_bytes(), libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC)
-        .map_err(|_| WallpaperError::Io)?;
+    let fd = libc::open_with_flags(
+        CONFIG_TMP_PATH.as_bytes(),
+        libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+    )
+    .map_err(|_| WallpaperError::Io)?;
     let write_res = libc::write_all(fd, out.as_bytes()).map_err(|_| WallpaperError::Io);
     let _ = libc::close(fd);
     write_res?;
-    libc::rename(CONFIG_TMP_PATH.as_bytes(), CONFIG_PATH.as_bytes()).map_err(|_| WallpaperError::Io)?;
+    libc::rename(CONFIG_TMP_PATH.as_bytes(), CONFIG_PATH.as_bytes())
+        .map_err(|_| WallpaperError::Io)?;
     Ok(())
 }
 
 pub fn scan_wallpapers(active_path: &str) -> Vec<WallpaperEntry> {
     let mut out = Vec::new();
-    scan_dir(BUILTIN_WALLPAPER_DIR, WallpaperSource::Builtin, active_path, &mut out);
-    scan_dir(USER_WALLPAPER_DIR, WallpaperSource::User, active_path, &mut out);
-    scan_dir(LEGACY_WALLPAPER_DIR, WallpaperSource::Legacy, active_path, &mut out);
-    out.sort_by(|a, b| {
-        b.selected
-            .cmp(&a.selected)
-            .then_with(|| a.label.as_bytes().cmp(b.label.as_bytes()))
-    });
+    // The local Wallpaper Settings MVP lists the bundled wallpapers from the
+    // wallpaper directory. Builtin/User directories can be re-enabled once
+    // additional render-ready assets are staged there.
+    scan_dir(
+        LEGACY_WALLPAPER_DIR,
+        WallpaperSource::Legacy,
+        active_path,
+        &mut out,
+    );
+    // Stable name order so tiles do not jump when a different one is selected.
+    // The current wallpaper is indicated by `selected`, not by grid position.
+    out.sort_by(|a, b| a.path.as_bytes().cmp(b.path.as_bytes()));
     out
 }
 
@@ -139,11 +154,33 @@ pub fn is_supported_wallpaper(bytes: &[u8]) -> bool {
     if bytes.len() < 18 {
         return false;
     }
+    let id_len = bytes[0] as usize;
+    let has_color_map = bytes[1] != 0;
     let image_type = bytes[2];
+    let color_map_len = u16::from_le_bytes([bytes[5], bytes[6]]) as usize;
+    let color_map_entry_bits = bytes[7] as usize;
     let width = u16::from_le_bytes([bytes[12], bytes[13]]) as u32;
     let height = u16::from_le_bytes([bytes[14], bytes[15]]) as u32;
     let bit_depth = bytes[16];
-    width != 0 && height != 0 && image_type == 2 && matches!(bit_depth, 24 | 32)
+    if width == 0 || height == 0 || image_type != 2 || !matches!(bit_depth, 24 | 32) {
+        return false;
+    }
+    let color_map_bytes = if has_color_map {
+        color_map_len.saturating_mul((color_map_entry_bits + 7) / 8)
+    } else {
+        0
+    };
+    let bytes_per_pixel = (bit_depth as usize) / 8;
+    let data_offset = 18usize
+        .saturating_add(id_len)
+        .saturating_add(color_map_bytes);
+    let pixel_bytes = (width as usize)
+        .saturating_mul(height as usize)
+        .saturating_mul(bytes_per_pixel);
+    data_offset
+        .checked_add(pixel_bytes)
+        .map(|needed| bytes.len() >= needed)
+        .unwrap_or(false)
 }
 
 pub fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {
@@ -155,7 +192,16 @@ pub fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(reserve);
     let mut buf = [0u8; 256];
     loop {
-        let n = libc::read(fd, &mut buf).ok()?;
+        let n = match libc::read(fd, &mut buf) {
+            Ok(n) => n,
+            Err(libc::sys::Errno::Again) => {
+                continue;
+            }
+            Err(_) => {
+                let _ = libc::close(fd);
+                return None;
+            }
+        };
         if n == 0 {
             break;
         }
@@ -179,10 +225,20 @@ fn scan_dir(dir: &str, source: WallpaperSource, active_path: &str, out: &mut Vec
         if !is_wallpaper_candidate(&name) {
             continue;
         }
+        // The desktop renderer is TGA-only. `.jpg`/`.jpeg`/`.png` are recognised
+        // as wallpaper asset types (is_wallpaper_candidate), but only render-ready
+        // `.tga` entries are surfaced here: a bundled image is expected to ship
+        // alongside its converted `.tga` sidecar, which is what gets listed and
+        // applied. This keeps `apply_path`/`preview_path` always TGA-safe.
+        if !has_ext(&name, "tga") {
+            continue;
+        }
         let path = join_path(dir, &name);
         out.push(WallpaperEntry {
             label: wallpaper_label(&name),
             selected: path == active_path,
+            apply_path: path.clone(),
+            preview_path: path.clone(),
             path,
             source,
         });
@@ -190,29 +246,70 @@ fn scan_dir(dir: &str, source: WallpaperSource, active_path: &str, out: &mut Vec
 }
 
 fn is_wallpaper_candidate(name: &str) -> bool {
-    if name.is_empty() || name.starts_with('.') || name.ends_with(".tmp") {
+    if name.is_empty() || name.starts_with('.') {
         return false;
     }
-    name.as_bytes().len() >= 4 && name.to_ascii_lowercase().ends_with(".tga")
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".tmp") || lower.ends_with(".part") {
+        return false;
+    }
+    lower.ends_with(".tga")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".png")
+}
+
+/// Case-insensitive check that `name` ends with `.{ext}` (ext without the dot).
+fn has_ext(name: &str, ext: &str) -> bool {
+    if name.len() <= ext.len() + 1 {
+        return false;
+    }
+    let dot = name.len() - ext.len() - 1;
+    name.as_bytes()[dot] == b'.' && name[dot + 1..].eq_ignore_ascii_case(ext)
 }
 
 fn wallpaper_label(name: &str) -> String {
-    let stem = name.strip_suffix(".tga").unwrap_or(name);
-    let mut out = String::with_capacity(stem.len());
+    let stem = wallpaper_stem(name);
+    let mut out = String::with_capacity(stem.len() + 4);
     let mut upper = true;
+    let mut prev_was_letter = false;
     for ch in stem.chars() {
-        let c = if ch == '-' || ch == '_' {
+        if ch == '-' || ch == '_' {
+            out.push(' ');
             upper = true;
-            ' '
-        } else if upper {
+            prev_was_letter = false;
+        } else if ch.is_ascii_digit() {
+            // Separate a trailing number from the preceding word:
+            // "wallpaper1" -> "Wallpaper 1".
+            if prev_was_letter {
+                out.push(' ');
+            }
+            out.push(ch);
             upper = false;
-            ch.to_ascii_uppercase()
+            prev_was_letter = false;
         } else {
-            ch
-        };
-        out.push(c);
+            let c = if upper {
+                upper = false;
+                ch.to_ascii_uppercase()
+            } else {
+                ch
+            };
+            out.push(c);
+            prev_was_letter = ch.is_ascii_alphabetic();
+        }
     }
     out
+}
+
+/// Strip a recognised image extension (case-insensitive) to get the display stem.
+fn wallpaper_stem(name: &str) -> &str {
+    const EXTS: [&str; 4] = [".tga", ".jpg", ".jpeg", ".png"];
+    for &ext in EXTS.iter() {
+        if name.len() >= ext.len() && name[name.len() - ext.len()..].eq_ignore_ascii_case(ext) {
+            return &name[..name.len() - ext.len()];
+        }
+    }
+    name
 }
 
 fn join_path(base: &str, leaf: &str) -> String {
@@ -315,23 +412,61 @@ mod tests {
     fn scan_filters_names() {
         assert!(is_wallpaper_candidate("default.tga"));
         assert!(is_wallpaper_candidate("DEFAULT.TGA"));
+        assert!(is_wallpaper_candidate("wallpaper1.jpg"));
+        assert!(is_wallpaper_candidate("wallpaper2.JPEG"));
+        assert!(is_wallpaper_candidate("wallpaper3.png"));
         assert!(!is_wallpaper_candidate("bad.tmp"));
         assert!(!is_wallpaper_candidate("default.tga.tmp"));
+        assert!(!is_wallpaper_candidate("download.part"));
         assert!(!is_wallpaper_candidate(".hidden.tga"));
-        assert!(!is_wallpaper_candidate("wallpaper.png"));
+        assert!(!is_wallpaper_candidate("readme.txt"));
+        assert!(!is_wallpaper_candidate(""));
     }
 
     #[test]
     fn wallpaper_label_humanizes_names() {
         assert_eq!(wallpaper_label("default.tga"), "Default");
-        assert_eq!(wallpaper_label("sunlight-login-background.tga"), "Sunlight Login Background");
+        assert_eq!(
+            wallpaper_label("sunlight-login-background.tga"),
+            "Sunlight Login Background"
+        );
         assert_eq!(wallpaper_label("dark_mode.tga"), "Dark Mode");
+        assert_eq!(wallpaper_label("wallpaper.tga"), "Wallpaper");
+        assert_eq!(wallpaper_label("wallpaper1.tga"), "Wallpaper 1");
+        assert_eq!(wallpaper_label("wallpaper6.tga"), "Wallpaper 6");
+    }
+
+    #[test]
+    fn wallpaper_sort_keeps_original_before_numbered() {
+        // Byte comparison puts '.' (0x2E) before '1' (0x31), so the original
+        // wallpaper.tga sorts ahead of wallpaper1.tga..wallpaper6.tga.
+        let mut paths = [
+            String::from("/var/sunlightos/wallpapers/wallpaper1.tga"),
+            String::from("/var/sunlightos/wallpapers/wallpaper2.tga"),
+            String::from("/var/sunlightos/wallpapers/wallpaper3.tga"),
+            String::from("/var/sunlightos/wallpapers/wallpaper4.tga"),
+            String::from("/var/sunlightos/wallpapers/wallpaper5.tga"),
+            String::from("/var/sunlightos/wallpapers/wallpaper6.tga"),
+            String::from("/var/sunlightos/wallpapers/wallpaper.tga"),
+        ];
+        paths.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        let expected = [
+            "/var/sunlightos/wallpapers/wallpaper.tga",
+            "/var/sunlightos/wallpapers/wallpaper1.tga",
+            "/var/sunlightos/wallpapers/wallpaper2.tga",
+            "/var/sunlightos/wallpapers/wallpaper3.tga",
+            "/var/sunlightos/wallpapers/wallpaper4.tga",
+            "/var/sunlightos/wallpapers/wallpaper5.tga",
+            "/var/sunlightos/wallpapers/wallpaper6.tga",
+        ];
+        assert_eq!(paths, expected);
     }
 
     #[test]
     fn supported_wallpaper_requires_type2_and_dimensions() {
         let valid = [
-            0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 24, 0,
+            0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
         ];
         assert!(is_supported_wallpaper(&valid));
 
@@ -350,12 +485,16 @@ mod tests {
         let entries = [
             WallpaperEntry {
                 path: String::from("/system/share/wallpapers/dark.tga"),
+                apply_path: String::from("/system/share/wallpapers/dark.tga"),
+                preview_path: String::from("/system/share/wallpapers/dark.tga"),
                 label: String::from("Dark"),
                 source: WallpaperSource::Builtin,
                 selected: false,
             },
             WallpaperEntry {
                 path: String::from("/system/share/wallpapers/default.tga"),
+                apply_path: String::from("/system/share/wallpapers/default.tga"),
+                preview_path: String::from("/system/share/wallpapers/default.tga"),
                 label: String::from("Default"),
                 source: WallpaperSource::Builtin,
                 selected: true,

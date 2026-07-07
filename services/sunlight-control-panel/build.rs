@@ -3,7 +3,11 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const ICONS: &[(&str, &str, u32)] = &[("assets/icons/preferences-symbolic.png", "preferences-symbolic.raw", 16)];
+const ICONS: &[(&str, &str, u32)] = &[(
+    "assets/icons/preferences-symbolic.png",
+    "preferences-symbolic.raw",
+    16,
+)];
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
@@ -13,8 +17,9 @@ fn main() {
         let out_path = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR missing"))
             .join("icons")
             .join(output);
-        convert_png_to_raw(Path::new(input), &out_path, 128, false, Some(*width))
-            .unwrap_or_else(|err| panic!("sunlight-control-panel build: failed to convert {input}: {err}"));
+        convert_png_to_raw(Path::new(input), &out_path, 128, false, Some(*width)).unwrap_or_else(
+            |err| panic!("sunlight-control-panel build: failed to convert {input}: {err}"),
+        );
     }
 }
 
@@ -24,7 +29,10 @@ mod tests {
 
     fn temp_path(name: &str) -> PathBuf {
         let mut path = env::temp_dir();
-        path.push(format!("sunlight-control-panel-{name}-{}", std::process::id()));
+        path.push(format!(
+            "sunlight-control-panel-{name}-{}",
+            std::process::id()
+        ));
         path
     }
 
