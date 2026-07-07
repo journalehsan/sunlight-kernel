@@ -10,11 +10,15 @@
 #![no_main]
 
 use libc::{DirEntry, Errno, Fd, FT_DIR, STDOUT};
-use sunlight_ipc::{nameserver_lookup, query_display_metrics, DisplayMetrics};
+use sunlight_ipc::{
+    get_time_utc, ipc_call_timeout, nameserver_lookup, query_display_metrics, DisplayMetrics,
+    IpcMsg, TzMsg,
+};
 use sunlight_libc as libc;
 
 const MAX_ARGS: usize = 16;
 const MAX_DIR_ENTRIES: usize = 64;
+const TIME_IPC_TIMEOUT_MS: u64 = 100;
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -104,7 +108,8 @@ fn run(args: &[&str]) -> i32 {
         "mv" => cmd_mv(rest),
         "chmod" => cmd_chmod(rest),
         "chown" => cmd_chown(rest),
-        "find" | "sort" | "uniq" | "cut" | "tail" | "date" => {
+        "date" => cmd_date(rest),
+        "find" | "sort" | "uniq" | "cut" | "tail" => {
             print2(applet, ": not implemented yet\n");
             1
         }
@@ -140,6 +145,215 @@ fn cmd_display_status() -> i32 {
     let _ = write_all(metrics.backend.as_str().as_bytes());
     let _ = write_all(b"\nscale: 1.0 (native)\nruntime_modesetting: unsupported\n");
     0
+}
+
+fn cmd_date(args: &[&str]) -> i32 {
+    if !args.is_empty() {
+        let _ = write_all(b"usage: date\n");
+        return 2;
+    }
+
+    let mut dt = match query_tz_local_time() {
+        Some(dt) => dt,
+        None => {
+            let (year, month, day, hour, minute, second) = decompose_unix(get_time_utc());
+            DateTime {
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                abbr: *b"UTC\0\0\0\0\0",
+            }
+        }
+    };
+
+    if !dt.is_valid() {
+        let _ = write_all(b"date: invalid time source\n");
+        return 1;
+    }
+
+    dt.write_date_cmd();
+    let _ = write_all(b"\n");
+    0
+}
+
+#[derive(Clone, Copy)]
+struct DateTime {
+    year: u16,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    abbr: [u8; 8],
+}
+
+impl DateTime {
+    fn is_valid(&self) -> bool {
+        self.year >= 1970
+            && self.month >= 1
+            && self.month <= 12
+            && self.day >= 1
+            && self.day <= days_in_month(self.year, self.month)
+            && self.hour < 24
+            && self.minute < 60
+            && self.second < 60
+    }
+
+    fn write_date_cmd(&mut self) {
+        let wname = match weekday_from_ymd(self.year as i32, self.month, self.day) {
+            0 => b"Sun",
+            1 => b"Mon",
+            2 => b"Tue",
+            3 => b"Wed",
+            4 => b"Thu",
+            5 => b"Fri",
+            _ => b"Sat",
+        };
+        let mname = match self.month {
+            1 => b"Jan",
+            2 => b"Feb",
+            3 => b"Mar",
+            4 => b"Apr",
+            5 => b"May",
+            6 => b"Jun",
+            7 => b"Jul",
+            8 => b"Aug",
+            9 => b"Sep",
+            10 => b"Oct",
+            11 => b"Nov",
+            _ => b"Dec",
+        };
+
+        let _ = write_all(wname);
+        let _ = write_all(b" ");
+        let _ = write_all(mname);
+        let _ = write_all(b" ");
+        write_two(self.day);
+        let _ = write_all(b" ");
+        write_two(self.hour);
+        let _ = write_all(b":");
+        write_two(self.minute);
+        let _ = write_all(b":");
+        write_two(self.second);
+        let _ = write_all(b" ");
+        let abbr_len = self
+            .abbr
+            .iter()
+            .position(|b| *b == 0)
+            .unwrap_or(self.abbr.len());
+        if abbr_len == 0 {
+            let _ = write_all(b"UTC");
+        } else {
+            let _ = write_all(&self.abbr[..abbr_len]);
+        }
+        let _ = write_all(b" ");
+        write_four(self.year);
+    }
+}
+
+fn query_tz_local_time() -> Option<DateTime> {
+    let tz = nameserver_lookup("tz")?;
+    let reply = ipc_call_timeout(
+        tz,
+        IpcMsg::with_label(TzMsg::GET_LOCAL_TIME),
+        TIME_IPC_TIMEOUT_MS,
+    )
+    .ok()?;
+    if reply.label != TzMsg::REPLY {
+        return None;
+    }
+    let word = reply.words[0];
+    let mut abbr = [0u8; 8];
+    let abbr_word = reply.words[3];
+    for (idx, slot) in abbr.iter_mut().enumerate() {
+        *slot = ((abbr_word >> (idx * 8)) & 0xff) as u8;
+    }
+    Some(DateTime {
+        year: ((word >> 48) & 0xffff) as u16,
+        month: ((word >> 40) & 0xff) as u8,
+        day: ((word >> 32) & 0xff) as u8,
+        hour: ((word >> 24) & 0xff) as u8,
+        minute: ((word >> 16) & 0xff) as u8,
+        second: ((word >> 8) & 0xff) as u8,
+        abbr,
+    })
+}
+
+fn decompose_unix(ts: u64) -> (u16, u8, u8, u8, u8, u8) {
+    let days = (ts / 86_400) as i64;
+    let secs = ts % 86_400;
+    let (year, month, day) = civil_from_days(days);
+    (
+        year as u16,
+        month,
+        day,
+        (secs / 3600) as u8,
+        ((secs % 3600) / 60) as u8,
+        (secs % 60) as u8,
+    )
+}
+
+fn civil_from_days(mut z: i64) -> (i32, u8, u8) {
+    z += 719_468;
+    let era = if z >= 0 {
+        z / 146_097
+    } else {
+        (z - 146_096) / 146_097
+    };
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let mut year = (yoe + era * 400) as i32;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u8;
+    let month = (mp + if mp < 10 { 3 } else { -9 }) as u8;
+    if month <= 2 {
+        year += 1;
+    }
+    (year, month, day)
+}
+
+fn weekday_from_ymd(year: i32, month: u8, day: u8) -> u8 {
+    let mut yy = year;
+    let mut mm = month as i32;
+    if mm <= 2 {
+        yy -= 1;
+        mm += 12;
+    }
+    let c = yy / 100;
+    let k = yy % 100;
+    let w = (day as i32 + (13 * (mm + 1) / 5) + k + (k / 4) + (c / 4) + 5 * c) % 7;
+    ((w + 6) % 7) as u8
+}
+
+fn days_in_month(year: u16, month: u8) -> u8 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_leap_year(year) => 29,
+        2 => 28,
+        _ => 0,
+    }
+}
+
+fn is_leap_year(year: u16) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+fn write_two(value: u8) {
+    let _ = write_all(&[b'0' + value / 10, b'0' + value % 10]);
+}
+
+fn write_four(value: u16) {
+    let _ = write_all(&[
+        b'0' + ((value / 1000) % 10) as u8,
+        b'0' + ((value / 100) % 10) as u8,
+        b'0' + ((value / 10) % 10) as u8,
+        b'0' + (value % 10) as u8,
+    ]);
 }
 
 fn cmd_ls(args: &[&str]) -> i32 {

@@ -89,9 +89,12 @@ impl TextBuffer {
 
     pub fn clamp_position(&self, pos: TextPosition) -> TextPosition {
         let line = pos.line.min(self.lines.len().saturating_sub(1));
-        let col = pos
-            .col
-            .min(self.lines.get(line).map(|line| line.chars().count()).unwrap_or(0));
+        let col = pos.col.min(
+            self.lines
+                .get(line)
+                .map(|line| line.chars().count())
+                .unwrap_or(0),
+        );
         TextPosition { line, col }
     }
 
@@ -116,12 +119,19 @@ impl TextBuffer {
         let line = self.lines.len().saturating_sub(1);
         TextPosition {
             line,
-            col: self.lines.get(line).map(|line| line.chars().count()).unwrap_or(0),
+            col: self
+                .lines
+                .get(line)
+                .map(|line| line.chars().count())
+                .unwrap_or(0),
         }
     }
 
     pub fn line_len_chars(&self, line: usize) -> usize {
-        self.lines.get(line).map(|line| line.chars().count()).unwrap_or(0)
+        self.lines
+            .get(line)
+            .map(|line| line.chars().count())
+            .unwrap_or(0)
     }
 
     pub fn is_dirty(&self) -> bool {

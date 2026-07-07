@@ -59,7 +59,10 @@ impl VirtualMemoryManager {
         self.page_table.translate_addr(addr)
     }
 
-    pub fn mapping_info(&self, page: Page<Size4KiB>) -> Option<(PhysFrame<Size4KiB>, PageTableFlags)> {
+    pub fn mapping_info(
+        &self,
+        page: Page<Size4KiB>,
+    ) -> Option<(PhysFrame<Size4KiB>, PageTableFlags)> {
         match self.page_table.translate(page.start_address()) {
             TranslateResult::Mapped {
                 frame: MappedFrame::Size4KiB(frame),

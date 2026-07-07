@@ -39,7 +39,8 @@ fn run() -> Result<(), String> {
 }
 
 fn inspect_cmd(input: &Path) -> Result<(), String> {
-    let bytes = fs::read(input).map_err(|err| format!("failed to read {}: {err}", input.display()))?;
+    let bytes =
+        fs::read(input).map_err(|err| format!("failed to read {}: {err}", input.display()))?;
     let format = detect_format(&bytes);
     println!("format: {}", format_name(format));
     if format == ImageFormat::Tga {
@@ -67,16 +68,23 @@ fn inspect_cmd(input: &Path) -> Result<(), String> {
 }
 
 fn convert_cmd(input: &Path, output: &Path) -> Result<(), String> {
-    let bytes = fs::read(input).map_err(|err| format!("failed to read {}: {err}", input.display()))?;
+    let bytes =
+        fs::read(input).map_err(|err| format!("failed to read {}: {err}", input.display()))?;
     let converted = convert_to_tga_rgba32(&bytes).map_err(|err| err.to_string())?;
     let tmp = tmp_output_path(output);
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("failed to create {}: {err}", parent.display()))?;
     }
-    fs::write(&tmp, converted).map_err(|err| format!("failed to write {}: {err}", tmp.display()))?;
-    fs::rename(&tmp, output)
-        .map_err(|err| format!("failed to rename {} -> {}: {err}", tmp.display(), output.display()))?;
+    fs::write(&tmp, converted)
+        .map_err(|err| format!("failed to write {}: {err}", tmp.display()))?;
+    fs::rename(&tmp, output).map_err(|err| {
+        format!(
+            "failed to rename {} -> {}: {err}",
+            tmp.display(),
+            output.display()
+        )
+    })?;
     Ok(())
 }
 

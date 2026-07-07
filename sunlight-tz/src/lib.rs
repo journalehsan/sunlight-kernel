@@ -53,9 +53,7 @@ mod tests {
     #[test]
     fn test_utc_decompose() {
         // 2026-06-14 10:45:30 UTC
-        // seconds since 2000-01-01: compute approximately and verify fields
-        // Use a known value that the decompose should handle.
-        let secs = 835_505_130u64; // rough 2026-06-14 ~10:45
+        let secs = 1_781_433_930u64;
         let dt = local_now(
             secs,
             &TzEntry {
@@ -72,7 +70,10 @@ mod tests {
         );
         assert_eq!(dt.year, 2026);
         assert_eq!(dt.month, 6);
-        // day/hour/min may be off by the exact epoch calc but core year/month test the calendar
+        assert_eq!(dt.day, 14);
+        assert_eq!(dt.hour, 10);
+        assert_eq!(dt.minute, 45);
+        assert_eq!(dt.second, 30);
     }
 
     #[test]
@@ -91,7 +92,7 @@ mod tests {
             dst_end_month: 9,
         };
         // Some UTC secs that land in November
-        let utc = 847_065_600u64; // roughly 2026-11-01
+        let utc = 1_793_476_800u64; // 2026-11-01
         let offset = local_offset_secs(&entry, utc);
         assert_eq!(offset, 3 * 3600 + 30 * 60); // 12600 secs
     }
@@ -111,7 +112,7 @@ mod tests {
             dst_start_month: 3,
             dst_end_month: 9,
         };
-        let utc = 835_500_000u64; // roughly 2026-06-14
+        let utc = 1_781_428_800u64; // 2026-06-14
         let offset = local_offset_secs(&entry, utc);
         assert_eq!(offset, 3 * 3600 + 30 * 60 + 3600); // 16200 secs = UTC+4:30
     }

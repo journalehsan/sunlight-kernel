@@ -4,7 +4,7 @@
 use crate::csv::TzEntry;
 
 /// Total UTC offset in seconds, including DST if currently active.
-/// utc_secs: seconds since QEMU RTC epoch (2000-01-01 00:00:00 UTC).
+/// utc_secs: Unix timestamp seconds since 1970-01-01 00:00:00 UTC.
 pub fn local_offset_secs(entry: &TzEntry, utc_secs: u64) -> i64 {
     let base: i64 = (entry.utc_offset_hours as i64) * 3600 + (entry.utc_offset_minutes as i64) * 60;
     let dst: i64 = if is_dst_active(entry, utc_secs) {
@@ -38,9 +38,8 @@ fn month_from_secs(utc_secs: u64) -> u8 {
     m
 }
 
-/// Decompose seconds since 2000-01-01 UTC into (year, month, day, hour, min, sec).
-/// Uses Howard Hinnant's public-domain civil_from_days algorithm, adjusted for
-/// 2000-01-01 epoch (10957 days after 1970-01-01).
+/// Decompose Unix timestamp seconds into (year, month, day, hour, min, sec).
+/// Uses Howard Hinnant's public-domain civil_from_days algorithm.
 pub fn decompose(utc_secs: u64) -> (u16, u8, u8, u8, u8, u8) {
     let days: u64 = utc_secs / 86400;
     let secs_in_day: u64 = utc_secs % 86400;
@@ -49,11 +48,7 @@ pub fn decompose(utc_secs: u64) -> (u16, u8, u8, u8, u8, u8) {
     let min: u8 = ((secs_in_day % 3600) / 60) as u8;
     let sec: u8 = (secs_in_day % 60) as u8;
 
-    // Epoch adjustment: our days are since 2000-01-01, Hinnant is since 1970-01-01.
-    // 2000-01-01 is day 10957 after 1970-01-01.
-    let unix_days: i64 = (days as i64) + 10957;
-
-    let (y, m, d) = civil_from_days(unix_days);
+    let (y, m, d) = civil_from_days(days as i64);
 
     (y as u16, m, d, hour, min, sec)
 }
@@ -329,7 +324,7 @@ fn make_offset_abbr(h: i8, m: u8) -> [u8; 8] {
 /// Public conversion: compute LocalDateTime for given UTC seconds and TzEntry.
 pub fn local_now(utc_secs: u64, entry: &TzEntry) -> LocalDateTime {
     let offset = local_offset_secs(entry, utc_secs);
-    let local_secs = (utc_secs as i64 + offset) as u64;
+    let local_secs = utc_secs.saturating_add_signed(offset);
     let (year, month, day, hour, minute, second) = decompose(local_secs);
     let is_dst = is_dst_active(entry, utc_secs);
     let abbr = derive_abbr(entry, is_dst);
@@ -343,5 +338,80 @@ pub fn local_now(utc_secs: u64, entry: &TzEntry) -> LocalDateTime {
         utc_offset_secs: offset,
         is_dst,
         abbr,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const UTC: TzEntry = TzEntry {
+        id: "UTC",
+        region: "Etc",
+        city: "UTC",
+        display_name: "Coordinated Universal Time",
+        utc_offset_hours: 0,
+        utc_offset_minutes: 0,
+        dst_offset_minutes: 0,
+        dst_start_month: 0,
+        dst_end_month: 0,
+    };
+
+    const IRAN: TzEntry = TzEntry {
+        id: "Asia/Tehran",
+        region: "Asia",
+        city: "Tehran",
+        display_name: "Iran Standard Time",
+        utc_offset_hours: 3,
+        utc_offset_minutes: 30,
+        dst_offset_minutes: 0,
+        dst_start_month: 0,
+        dst_end_month: 0,
+    };
+
+    fn assert_decompose(ts: u64, expected: (u16, u8, u8, u8, u8, u8)) {
+        assert_eq!(decompose(ts), expected);
+    }
+
+    #[test]
+    fn decompose_uses_unix_epoch() {
+        assert_decompose(0, (1970, 1, 1, 0, 0, 0));
+        assert_decompose(951_782_400, (2000, 2, 29, 0, 0, 0));
+        assert_decompose(1_783_468_800, (2026, 7, 8, 0, 0, 0));
+    }
+
+    #[test]
+    fn local_now_does_not_add_2000_epoch_offset() {
+        let ldt = local_now(1_783_468_800, &UTC);
+        assert_eq!((ldt.year, ldt.month, ldt.day), (2026, 7, 8));
+    }
+
+    #[test]
+    fn local_now_applies_offset_once() {
+        let ldt = local_now(1_783_468_800, &IRAN);
+        assert_eq!(
+            (ldt.year, ldt.month, ldt.day, ldt.hour, ldt.minute),
+            (2026, 7, 8, 3, 30)
+        );
+    }
+
+    #[test]
+    fn local_now_handles_negative_offset_crossing_midnight() {
+        let pacific = TzEntry {
+            id: "America/Los_Angeles",
+            region: "America",
+            city: "Los_Angeles",
+            display_name: "Pacific Standard Time",
+            utc_offset_hours: -8,
+            utc_offset_minutes: 0,
+            dst_offset_minutes: 0,
+            dst_start_month: 0,
+            dst_end_month: 0,
+        };
+        let ldt = local_now(1_783_468_800, &pacific);
+        assert_eq!(
+            (ldt.year, ldt.month, ldt.day, ldt.hour, ldt.minute),
+            (2026, 7, 7, 16, 0)
+        );
     }
 }

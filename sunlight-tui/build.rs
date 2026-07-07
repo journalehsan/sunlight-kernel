@@ -43,7 +43,8 @@ fn main() {
     let fira_regular = fira_dir.join("FiraCode-Regular.ttf");
     let fira_semibold = fira_dir.join("FiraCode-SemiBold.ttf");
 
-    let material_path = workspace_root.join("assets/fonts/Material-Icons/MaterialIcons-Regular.ttf");
+    let material_path =
+        workspace_root.join("assets/fonts/Material-Icons/MaterialIcons-Regular.ttf");
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed={}", inter_path.display());
@@ -113,9 +114,27 @@ fn main() {
 
     // Material Icons (replacing the old TGA action icons for login buttons/avatars)
     // Chosen glyphs that render nicely at ~28px inside the 32px slots.
-    emit_icon_tga(&material_font, 0xe853, 28.0, 32, &out_dir.join("icon_users.tga")); // account_circle
-    emit_icon_tga(&material_font, 0xe053, 28.0, 32, &out_dir.join("icon_reboot.tga")); // restart_alt
-    emit_icon_tga(&material_font, 0xe8ac, 28.0, 32, &out_dir.join("icon_shutdown.tga")); // power_settings_new
+    emit_icon_tga(
+        &material_font,
+        0xe853,
+        28.0,
+        32,
+        &out_dir.join("icon_users.tga"),
+    ); // account_circle
+    emit_icon_tga(
+        &material_font,
+        0xe053,
+        28.0,
+        32,
+        &out_dir.join("icon_reboot.tga"),
+    ); // restart_alt
+    emit_icon_tga(
+        &material_font,
+        0xe8ac,
+        28.0,
+        32,
+        &out_dir.join("icon_shutdown.tga"),
+    ); // power_settings_new
 }
 
 fn generate(font: &Font, px: f32, out_path: &PathBuf) {
@@ -196,7 +215,7 @@ fn emit_icon_tga(font: &Font, cp: u32, px: f32, canvas: u32, out_path: &PathBuf)
     // 18 bytes header.
     let mut tga: Vec<u8> = vec![0u8; 18];
     tga[2] = 2; // image type = uncompressed true-color
-    // width/height little endian at 12/14
+                // width/height little endian at 12/14
     tga[12] = (canvas & 0xff) as u8;
     tga[13] = (canvas >> 8) as u8;
     tga[14] = (canvas & 0xff) as u8;
@@ -223,7 +242,7 @@ fn emit_icon_tga(font: &Font, cp: u32, px: f32, canvas: u32, out_path: &PathBuf)
             img[didx + 0] = 0xFF; // B
             img[didx + 1] = 0xFF; // G
             img[didx + 2] = 0xFF; // R
-            img[didx + 3] = a;    // A
+            img[didx + 3] = a; // A
         }
     }
 

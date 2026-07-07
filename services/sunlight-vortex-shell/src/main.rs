@@ -146,6 +146,30 @@ static MENU_TERMINAL_TGA: &[u8] = include_bytes!(
     "../../../docs/icons/SunlightOS/actions/scalable/xsi-utilities-terminal-symbolic.tga"
 );
 
+// Material Symbols glyphs (rasterized at build time from assets/fonts/material-symbols/
+// using the local font. Provides clean vector icons for panel/dock/search at small sizes.
+static ICON_SYM_HOME_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_home.tga"));
+static ICON_SYM_SEARCH_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_search.tga"));
+static ICON_SYM_TERMINAL_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_terminal.tga"));
+static ICON_SYM_FOLDER_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_folder.tga"));
+static ICON_SYM_CALENDAR_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_calendar_month.tga"));
+static ICON_SYM_NOTIF_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_notifications.tga"));
+static ICON_SYM_LOGOUT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_logout.tga"));
+static ICON_SYM_LAN_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_lan.tga"));
+static ICON_SYM_MENU_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_menu.tga"));
+static ICON_SYM_SETTINGS_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_settings.tga"));
+static ICON_SYM_EDIT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_edit.tga"));
+static ICON_SYM_CALC_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_calculate.tga"));
+static ICON_SYM_PUBLIC_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_public.tga"));
+static ICON_SYM_CODE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_code.tga"));
+static ICON_SYM_ARTICLE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_article.tga"));
+static ICON_SYM_SUNNY_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_sunny.tga"));
+static ICON_SYM_START_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_start_menu.tga"));
+
 /// Theme icons for desktop shortcuts. All fields are `Copy` (TgaImage borrows `&'static [u8]`).
 #[derive(Clone, Copy)]
 struct DesktopTheme {
@@ -302,6 +326,77 @@ impl DockTheme {
             AppId::Settings => self.settings,
             // Not rendered in the bottom dock; the Start Menu owns their icons.
             AppId::Tasks | AppId::Bench | AppId::Eyes | AppId::TextEditor => None,
+        }
+    }
+}
+
+/// Small Material Symbols glyph set loaded from build-time rasters.
+/// Orange accent applied at draw time for active/system items.
+/// Centralized to avoid scattering raw glyph strings or per-site loads.
+#[derive(Clone, Copy)]
+struct SymbolTheme {
+    home: Option<TgaImage>,
+    search: Option<TgaImage>,
+    terminal: Option<TgaImage>,
+    folder: Option<TgaImage>,
+    calendar: Option<TgaImage>,
+    notifications: Option<TgaImage>,
+    logout: Option<TgaImage>,
+    lan: Option<TgaImage>,
+    menu: Option<TgaImage>,
+    settings: Option<TgaImage>,
+    edit: Option<TgaImage>,
+    calc: Option<TgaImage>,
+    public: Option<TgaImage>,
+    code: Option<TgaImage>,
+    article: Option<TgaImage>,
+    sunny: Option<TgaImage>,
+    start: Option<TgaImage>,
+}
+
+impl SymbolTheme {
+    fn load() -> Self {
+        Self {
+            home: TgaImage::parse(ICON_SYM_HOME_TGA).ok(),
+            search: TgaImage::parse(ICON_SYM_SEARCH_TGA).ok(),
+            terminal: TgaImage::parse(ICON_SYM_TERMINAL_TGA).ok(),
+            folder: TgaImage::parse(ICON_SYM_FOLDER_TGA).ok(),
+            calendar: TgaImage::parse(ICON_SYM_CALENDAR_TGA).ok(),
+            notifications: TgaImage::parse(ICON_SYM_NOTIF_TGA).ok(),
+            logout: TgaImage::parse(ICON_SYM_LOGOUT_TGA).ok(),
+            lan: TgaImage::parse(ICON_SYM_LAN_TGA).ok(),
+            menu: TgaImage::parse(ICON_SYM_MENU_TGA).ok(),
+            settings: TgaImage::parse(ICON_SYM_SETTINGS_TGA).ok(),
+            edit: TgaImage::parse(ICON_SYM_EDIT_TGA).ok(),
+            calc: TgaImage::parse(ICON_SYM_CALC_TGA).ok(),
+            public: TgaImage::parse(ICON_SYM_PUBLIC_TGA).ok(),
+            code: TgaImage::parse(ICON_SYM_CODE_TGA).ok(),
+            article: TgaImage::parse(ICON_SYM_ARTICLE_TGA).ok(),
+            sunny: TgaImage::parse(ICON_SYM_SUNNY_TGA).ok(),
+            start: TgaImage::parse(ICON_SYM_START_TGA).ok(),
+        }
+    }
+
+    fn get(&self, name: &str) -> Option<TgaImage> {
+        match name {
+            "home" => self.home,
+            "search" => self.search,
+            "terminal" => self.terminal,
+            "folder" => self.folder,
+            "calendar_month" => self.calendar,
+            "notifications" => self.notifications,
+            "logout" => self.logout,
+            "lan" => self.lan,
+            "menu" => self.menu,
+            "settings" => self.settings,
+            "edit" => self.edit,
+            "calculate" => self.calc,
+            "public" => self.public,
+            "code" => self.code,
+            "article" => self.article,
+            "sunny" => self.sunny,
+            "start" | "menu" => self.start.or(self.menu),
+            _ => None,
         }
     }
 }
@@ -1026,6 +1121,17 @@ struct VortexShell {
     /// Cached local hour/min for the status clock.
     status_hour: u8,
     status_min: u8,
+    // Extended for center date/time + tooltip (populated from tz GET_LOCAL_TIME)
+    status_year: u16,
+    status_month: u8,
+    status_day: u8,
+    status_sec: u8,
+    // TZ id bytes for tooltip (from /etc/localtime or GET_ZONE best effort)
+    tz_id: [u8; 48],
+    tz_id_len: usize,
+    // Effective locale for formatting (LC_TIME or LANG from /etc/locale.conf)
+    locale: [u8; 48],
+    locale_len: usize,
     /// Cached "any non-loopback interface up/carrier".
     status_net_up: bool,
     /// Next monotonic deadline for best-effort status polling.
@@ -1040,6 +1146,8 @@ struct VortexShell {
     desktop_theme: DesktopTheme,
     /// TGA icon theme for the bottom dock.
     dock_theme: DockTheme,
+    /// Material Symbols glyphs (panel, dock controls, search). Accent color at draw.
+    symbols: SymbolTheme,
     /// App registry used for launch/focus/restore behavior. The first four
     /// entries (Terminal/Calculator/Files/Settings) are also shown in the
     /// bottom dock; Tasks/Bench/Eyes/TextEditor are Start-Menu-only but share
@@ -1051,6 +1159,24 @@ struct VortexShell {
     running_zones: Vec<(Rect, u64)>,
     /// Hovered running-app index, if any.
     running_hover: Option<usize>,
+
+    // Top panel interactive zones (updated during draw_top_bar for hit testing)
+    datetime_zone: Rect,
+    net_zone: Rect,
+    notif_zone: Rect,
+    logout_zone: Rect,
+
+    // Popover / dialog / tooltip state (conservative, no overengineer)
+    show_datetime_tooltip: bool,
+    show_calendar_popover: bool,
+    cal_view_month: u8, // 1-12 current view (adjusted by offset)
+    cal_view_year: u16,
+    show_notif_panel: bool,
+    show_logout_confirm: bool,
+
+    // Stash for logout dialog button rects (simple, recomputed often)
+    logout_cancel_r: Rect,
+    logout_confirm_r: Rect,
     /// Optional telemetry snapshot source for process-name fallback.
     telemetry: Option<Telemetry>,
     /// Next monotonic deadline for app/window registry polling.
@@ -1082,6 +1208,7 @@ impl VortexShell {
         }
         let desktop_theme = DesktopTheme::load();
         let dock_theme = DockTheme::load();
+        let symbols = SymbolTheme::load();
         let telemetry = if ENABLE_RUNNING_TASKBAR {
             let telemetry = Telemetry::init().ok();
             if telemetry.is_none() {
@@ -1113,6 +1240,20 @@ impl VortexShell {
             settings_hover: false,
             status_hour: 0xff,
             status_min: 0xff,
+            status_year: 1970,
+            status_month: 1,
+            status_day: 1,
+            status_sec: 0,
+            tz_id: [
+                b'U', b'T', b'C', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            tz_id_len: 3,
+            locale: [
+                b'C', b'.', b'U', b'T', b'F', b'-', b'8', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            locale_len: 7,
             status_net_up: false,
             next_status_poll_ms: 0,
             power_zone: Rect::new(0, 0, 0, 0),
@@ -1120,6 +1261,19 @@ impl VortexShell {
             launcher_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
             dock_theme,
+            symbols,
+            datetime_zone: Rect::new(0, 0, 0, 0),
+            net_zone: Rect::new(0, 0, 0, 0),
+            notif_zone: Rect::new(0, 0, 0, 0),
+            logout_zone: Rect::new(0, 0, 0, 0),
+            show_datetime_tooltip: false,
+            show_calendar_popover: false,
+            cal_view_month: 1,
+            cal_view_year: 1970,
+            show_notif_panel: false,
+            show_logout_confirm: false,
+            logout_cancel_r: Rect::new(0, 0, 0, 0),
+            logout_confirm_r: Rect::new(0, 0, 0, 0),
             apps: [
                 DockAppState::new(AppId::Terminal, "Sunlight Terminal", AppId::Terminal),
                 DockAppState::new(AppId::Calculator, "Sunlight Calculator", AppId::Calculator),
@@ -1164,19 +1318,53 @@ impl VortexShell {
 
     fn refresh_status(&mut self) -> bool {
         let mut dirty = false;
-        if let Some((h, m)) = query_local_hm() {
-            if h != self.status_hour || m != self.status_min {
+
+        let mut tmp_tz = [0u8; 48];
+        let mut tmp_tz_l = 0usize;
+        if let Some((y, mon, d, h, mi, s)) = query_local_full(&mut tmp_tz, &mut tmp_tz_l) {
+            if mi != self.status_min
+                || d != self.status_day
+                || mon != self.status_month
+                || y != self.status_year
+                || self.status_min == 0xff
+            {
+                self.status_year = y;
+                self.status_month = mon;
+                self.status_day = d;
                 self.status_hour = h;
-                self.status_min = m;
+                self.status_min = mi;
+                self.status_sec = s;
+                if self.show_calendar_popover && (1..=12).contains(&mon) && y >= 1970 {
+                    self.cal_view_month = mon;
+                    self.cal_view_year = y;
+                }
+                if tmp_tz_l > 0 && tmp_tz_l <= 48 {
+                    self.tz_id[..tmp_tz_l].copy_from_slice(&tmp_tz[..tmp_tz_l]);
+                    self.tz_id_len = tmp_tz_l;
+                }
                 dirty = true;
             }
         }
+
         if let Some(net_up) = query_net_up() {
             if net_up != self.status_net_up {
                 self.status_net_up = net_up;
                 dirty = true;
             }
         }
+
+        // Load locale infrequently (file read is cheap here; 1/min ok)
+        if self.status_min % 5 == 0 || self.locale_len == 0 {
+            if let Some(loc) = read_locale_effective() {
+                let b = loc.as_bytes();
+                let n = b.len().min(47);
+                self.locale[..n].copy_from_slice(&b[..n]);
+                self.locale[n] = 0;
+                self.locale_len = n;
+                dirty = true;
+            }
+        }
+
         dirty
     }
 
@@ -2200,6 +2388,48 @@ fn draw_app_button(
     }
 }
 
+/// Tint a white+alpha TGA glyph to the given color using its alpha mask.
+/// Used for Material Symbols so they pick up orange accent at small panel size.
+fn draw_tga_tinted_orange(canvas: &mut Canvas, img: &TgaImage, dst: Rect, tint: Color) {
+    if img.width == 0 || img.height == 0 {
+        return;
+    }
+    let cx0 = dst.x.max(0) as u32;
+    let cy0 = dst.y.max(0) as u32;
+    let cx1 = (dst.right() as u32).min(canvas.width);
+    let cy1 = (dst.bottom() as u32).min(canvas.height);
+    if cx0 >= cx1 || cy0 >= cy1 {
+        return;
+    }
+    let dw = (dst.right() - dst.x.max(0)).max(1) as u32;
+    let dh = (dst.bottom() - dst.y.max(0)).max(1) as u32;
+    let tr = ((tint.0 >> 16) & 0xFF) as u32;
+    let tg = ((tint.0 >> 8) & 0xFF) as u32;
+    let tb = (tint.0 & 0xFF) as u32;
+
+    for dy in cy0..cy1 {
+        let src_y = (dy - cy0) * img.height / dh;
+        for dx in cx0..cx1 {
+            let src_x = (dx - cx0) * img.width / dw;
+            let argb = img.pixel_argb(src_x, src_y);
+            let a = (argb >> 24) as u32;
+            if a == 0 {
+                continue;
+            }
+            // Blend tint over dst using src alpha
+            let idx = (dy as usize) * (canvas.width as usize) + (dx as usize); // rough, use internal? use put with blend
+                                                                               // Simpler: use canvas blend if avail, else direct approx
+            let ia = 255 - a;
+            // Read dst? Canvas doesn't expose easy read for all; approximate by direct write scaled
+            // For small icons we just write the tinted value (overwrites, good for panel bg)
+            let r = (tr * a + 0 * ia) / 255; // assume dark panel; simple solid tint
+            let g = (tg * a + 0 * ia) / 255;
+            let b = (tb * a + 0 * ia) / 255;
+            canvas.put_pixel(dx as i32, dy as i32, Color((r << 16) | (g << 8) | b));
+        }
+    }
+}
+
 fn draw_tga_bytes(canvas: &mut Canvas, bytes: &[u8], dst: Rect) {
     if bytes.len() < 18 {
         return;
@@ -2393,8 +2623,12 @@ fn draw_running_app_button(
 // Status cluster: clock (tz), network (networkd), battery (placeholder), power
 // ---------------------------------------------------------------------------
 
-/// Query "tz" for local time. Returns Some(hour,min) on success.
-fn query_local_hm() -> Option<(u8, u8)> {
+/// Query "tz" for full local time + basic zone info. Returns (y,m,d,h,min,s) on success.
+/// Also fills a small tz id buffer from reply or fallback.
+fn query_local_full(
+    out_tz: &mut [u8; 48],
+    out_tz_len: &mut usize,
+) -> Option<(u16, u8, u8, u8, u8, u8)> {
     let Some(tz) = nameserver_lookup("tz") else {
         return None;
     };
@@ -2408,11 +2642,43 @@ fn query_local_hm() -> Option<(u8, u8)> {
     if reply.label != TzMsg::REPLY {
         return None;
     }
-    // word(0): y<<48 | m<<40 | d<<32 | h<<24 | min<<16 | s<<8
+    // word(0): year(u16)<<48 | mon<<40 | day<<32 | h<<24 | min<<16 | s<<8
     let w = reply.words[0];
+    let y = ((w >> 48) & 0xffff) as u16;
+    let mon = ((w >> 40) & 0xff) as u8;
+    let d = ((w >> 32) & 0xff) as u8;
     let h = ((w >> 24) & 0xff) as u8;
-    let m = ((w >> 16) & 0xff) as u8;
-    Some((h, m))
+    let mi = ((w >> 16) & 0xff) as u8;
+    let s = ((w >> 8) & 0xff) as u8;
+
+    // Try GET_ZONE for id (best effort, non fatal)
+    *out_tz_len = 3;
+    out_tz[..3].copy_from_slice(b"UTC");
+    if let Ok(zr) = ipc_call_timeout(tz, IpcMsg::with_label(TzMsg::GET_ZONE), TIME_IPC_TIMEOUT_MS) {
+        if zr.label == TzMsg::REPLY {
+            // id packed starting word 2
+            let mut tmp = [0u8; 48];
+            let mut l = 0usize;
+            for wi in 2..6 {
+                let wd = zr.words[wi];
+                for bi in 0..8 {
+                    let b = (wd >> (bi * 8)) as u8;
+                    if b == 0 {
+                        break;
+                    }
+                    if l < 47 {
+                        tmp[l] = b;
+                        l += 1;
+                    }
+                }
+            }
+            if l > 0 {
+                out_tz[..l].copy_from_slice(&tmp[..l]);
+                *out_tz_len = l;
+            }
+        }
+    }
+    Some((y, mon, d, h, mi, s))
 }
 
 /// Query networkd for any non-loopback interface that is Up or Carrier.
@@ -2562,53 +2828,139 @@ fn draw_status_cluster(
 // Top bar layout
 // ---------------------------------------------------------------------------
 
-fn draw_top_bar(
-    canvas: &mut Canvas,
-    theme: &Theme,
-    screen_w: u32,
-    net_up: bool,
-    h: u8,
-    m: u8,
-) -> i32 {
+fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut VortexShell) {
     let bar = Rect::new(TOP_PAD, TOP_Y, screen_w - (TOP_PAD * 2) as u32, TOP_H);
     draw_panel(canvas, bar, theme.panel, theme.border);
 
-    // ── Left zone: sun + workspace dots ──────────────────────────────────────
-    let left_x = bar.x + 10;
+    let sym = shell.symbols;
 
-    // Sun icon (orange)
-    let sun_cell = Rect::new(left_x, bar.y, 28, TOP_H);
-    draw_icon16(canvas, sun_cell, &SUN_ROWS, theme.accent);
+    // ── Left zone: improved 8-ray sun + SunlightOS + quick shortcuts ─────────
+    let mut x = bar.x + 8;
 
-    // Three workspace indicator dots
-    let dot_start_x = left_x + 34;
-    let dot_cy = bar.y + bar.h as i32 / 2;
-    for i in 0..3i32 {
-        let dot_x = dot_start_x + i * 14;
-        let dot_color = if i == 0 { theme.accent } else { theme.text_dim };
-        // 6×6 filled rounded rect as a dot
-        canvas.fill_rounded_rect(Rect::new(dot_x, dot_cy - 3, 6, 6), 3, dot_color);
+    // Sunlight mark: prefer sunny symbol glyph (orange), else fallback 8-ray-ish pixel
+    let sun_w = 22u32;
+    let sun_cell = Rect::new(x, bar.y + 2, sun_w, TOP_H - 4);
+    if let Some(tga) = sym.sunny {
+        // Draw white glyph then manually accent tint using simple mask (see helper below)
+        draw_tga_tinted_orange(canvas, &tga, sun_cell, theme.accent);
+    } else {
+        draw_icon16(canvas, sun_cell, &SUN_ROWS, theme.accent);
     }
+    x += sun_w as i32 + 4;
 
-    // ── Center zone: current app title ───────────────────────────────────────
-    let title = "SunlightOS";
-    let title_w = measure_text(title, FontRole::UiMedium).w;
-    let title_x = bar.x + (bar.w as i32 - title_w as i32) / 2;
+    // "SunlightOS" label (small, clean)
+    let brand = "SunlightOS";
     draw_text_vcenter(
         canvas,
-        title,
-        title_x,
+        brand,
+        x,
         bar.y,
+        bar.h,
+        &TextStyle::new(FontRole::UiSmall, theme.text),
+    );
+    let brand_w = measure_text(brand, FontRole::UiSmall).w as i32;
+    x += brand_w + 8;
+
+    // Quick static shortcuts (no config yet; prepared for future file)
+    let shortcuts = ["home", "public", "code", "terminal", "article"];
+    let sc_size = 16u32;
+    for &name in &shortcuts {
+        let cell = Rect::new(
+            x,
+            bar.y + (TOP_H as i32 - sc_size as i32) / 2,
+            sc_size,
+            sc_size,
+        );
+        if let Some(tga) = sym.get(name) {
+            draw_tga_tinted_orange(canvas, &tga, cell, theme.accent);
+        }
+        x += sc_size as i32 + 2;
+    }
+
+    // Record left area not needed for zones in v1 (shortcuts static for now)
+
+    // ── Center: localized date/time (clickable, hoverable) ───────────────────
+    // Use cached full time + locale. Format per spec. Updates on minute change only.
+    let center_text = format_center_datetime(
+        shell.status_year,
+        shell.status_month,
+        shell.status_day,
+        shell.status_hour,
+        shell.status_min,
+        core::str::from_utf8(&shell.locale[..shell.locale_len]).unwrap_or("C.UTF-8"),
+    );
+    let tw = measure_text(&center_text, FontRole::UiMedium).w as i32;
+    let cx = bar.x + (bar.w as i32 - tw) / 2;
+    let cy = bar.y;
+    draw_text_vcenter(
+        canvas,
+        &center_text,
+        cx,
+        cy,
         bar.h,
         &TextStyle::new(FontRole::UiMedium, theme.text),
     );
+    // clickable/hover rect around the text cluster
+    let pad = 6;
+    shell.datetime_zone = Rect::new(cx - pad, cy, (tw + pad * 2) as u32, bar.h);
 
-    // ── Right zone: status cluster (power | net | bat | clock) ───────────────
-    // Clock source: "tz" service (TzMsg::GET_LOCAL_TIME) — same path used by
-    // sunlight-top via telemetry. Format is compact local time.
-    // Network source: "networkd" via LIST_INTERFACES (no shelling to networkctl).
-    let power_left = draw_status_cluster(canvas, theme, bar, net_up, h, m);
-    power_left
+    // ── Right: meaningful indicators (no duplicate time) ─────────────────────
+    // [lan] [notif] [logout]
+    let mut rx = bar.right() - 8;
+    let ic = 18u32; // icon size
+
+    // Logout
+    rx -= ic as i32;
+    let logout_cell = Rect::new(rx, bar.y + (TOP_H - ic) as i32 / 2, ic, ic);
+    if let Some(tga) = sym.logout {
+        draw_tga_tinted_orange(canvas, &tga, logout_cell, theme.accent);
+    }
+    shell.logout_zone = logout_cell;
+    rx -= 4;
+
+    // Notifications
+    rx -= ic as i32;
+    let notif_cell = Rect::new(rx, bar.y + (TOP_H - ic) as i32 / 2, ic, ic);
+    if let Some(tga) = sym.notifications {
+        draw_tga_tinted_orange(canvas, &tga, notif_cell, theme.text_dim);
+    }
+    shell.notif_zone = notif_cell;
+    rx -= 4;
+
+    // Network (lan)
+    rx -= ic as i32;
+    let net_cell = Rect::new(rx, bar.y + (TOP_H - ic) as i32 / 2, ic, ic);
+    let net_color = if shell.status_net_up {
+        theme.accent
+    } else {
+        theme.text_dim
+    };
+    if let Some(tga) = sym.lan {
+        draw_tga_tinted_orange(canvas, &tga, net_cell, net_color);
+    }
+    shell.net_zone = net_cell;
+}
+
+/// Format the center date/time cluster per spec.
+/// en_US.UTF-8-ish: "Wed, Jul 8   12:39 AM"
+/// C / C.UTF-8:     "2026-07-08   00:39"
+/// Uses sunlight-locale helpers. 12h only for en style in this polish.
+fn format_center_datetime(y: u16, mon: u8, d: u8, h: u8, mi: u8, loc: &str) -> String {
+    let is_en = loc.to_ascii_lowercase().starts_with("en_us")
+        || loc.to_ascii_lowercase().starts_with("en-us");
+    if is_en {
+        // short names (weekday_name with 0 falls back inside helper)
+        let wd = sunlight_locale::weekday_name(0, false, loc);
+        let mon_s = sunlight_locale::month_name(mon, false, loc);
+        let mut hh = h % 12;
+        if hh == 0 {
+            hh = 12;
+        }
+        let ap = if h >= 12 { "PM" } else { "AM" };
+        alloc::format!("{}, {} {}   {}:{:02} {}", wd, mon_s, d, hh, mi, ap)
+    } else {
+        alloc::format!("{:04}-{:02}-{:02}   {:02}:{:02}", y, mon, d, h, mi)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2761,6 +3113,19 @@ fn read_hostname() -> String {
         }
     }
     String::from("sunlight")
+}
+
+/// Read /etc/locale.conf (or fallback) and return effective LC_TIME/LANG string.
+/// Uses sunlight-locale parser for correct fallback chain. Safe if file missing.
+fn read_locale_effective() -> Option<String> {
+    let data = read_file_bytes(b"/etc/locale.conf", 1024).unwrap_or_default();
+    let cfg = sunlight_locale::parse_locale_conf(&data);
+    let eff = cfg.lc_time();
+    if eff.is_empty() {
+        None
+    } else {
+        Some(alloc::string::String::from(eff))
+    }
 }
 
 fn root_desktop_paths(hostname: String) -> DesktopPaths {
@@ -3513,6 +3878,7 @@ fn draw_bot_center(
     hover: Option<usize>,
     running_hover: Option<usize>,
     dock: DockTheme,
+    sym: SymbolTheme,
     terminal_app: &DockAppState,
     calc_app: &DockAppState,
     files_app: &DockAppState,
@@ -3570,7 +3936,12 @@ fn draw_bot_center(
                 if menu_open {
                     canvas.stroke_rounded_rect(cell, 5, 1, theme.accent);
                 }
-                draw_icon_btn(canvas, cell, rows, theme, false, false);
+                // Use Material Symbols start/menu glyph in orange accent (rich app icons kept for others)
+                if let Some(tga) = sym.start.or(sym.menu) {
+                    draw_tga_tinted_orange(canvas, &tga, cell.inset(4), theme.accent);
+                } else {
+                    draw_icon_btn(canvas, cell, rows, theme, false, false);
+                }
             }
             1 => draw_app_button(
                 canvas,
@@ -3644,17 +4015,263 @@ fn draw_bot_center(
     (launcher_rect, clickable)
 }
 
+impl VortexShell {
+    fn draw_datetime_tooltip(&mut self, canvas: &mut Canvas, theme: &Theme, _cw: u32, _ch: u32) {
+        // Build lines with safe fallbacks
+        let loc_str = core::str::from_utf8(&self.locale[..self.locale_len.min(47)])
+            .unwrap_or("C.UTF-8")
+            .trim_end_matches('\0');
+        let tz_str = if self.tz_id_len > 0 {
+            core::str::from_utf8(&self.tz_id[..self.tz_id_len.min(47)])
+                .unwrap_or("UTC")
+                .trim_end_matches('\0')
+        } else {
+            "UTC"
+        };
+        let tz_disp = if tz_str.eq_ignore_ascii_case("utc") || tz_str.is_empty() {
+            "UTC"
+        } else {
+            tz_str
+        };
+
+        // long form using locale helpers
+        let dt = sunlight_locale::SimpleDateTime {
+            year: self.status_year as i32,
+            month: self.status_month,
+            day: self.status_day,
+            hour: self.status_hour,
+            minute: self.status_min,
+            second: self.status_sec,
+            weekday_iso: 0,
+        };
+        let long_date = sunlight_locale::format_long_date(&dt, loc_str);
+        let long_time = alloc::format!(
+            "{:02}:{:02}:{:02} {}",
+            self.status_hour,
+            self.status_min,
+            self.status_sec,
+            if self.status_hour >= 12 { "PM" } else { "AM" }
+        );
+        let line1 = alloc::format!("{} {}", long_date, long_time);
+
+        let l2 = alloc::format!("Timezone: {}", tz_disp);
+        let l3 = alloc::format!("Locale: {}", loc_str);
+        let l4 = alloc::format!("LC_TIME: {}", loc_str);
+
+        let lines: [&str; 4] = [&line1, &l2, &l3, &l4];
+
+        let mut w = 0u32;
+        for &ln in &lines {
+            w = w.max(measure_text(ln, FontRole::UiSmall).w);
+        }
+        w = w.saturating_add(16);
+        let h = 18 * 4 + 10;
+        let x = (self.datetime_zone.x + self.datetime_zone.w as i32 / 2 - w as i32 / 2).max(8);
+        let y = self.datetime_zone.bottom() + 4;
+
+        let r = Rect::new(x, y, w, h as u32);
+        canvas.fill_rounded_rect(r, 6, theme.panel);
+        canvas.stroke_rounded_rect(r, 6, 1, theme.border);
+
+        let mut ty = y + 6;
+        for &ln in &lines {
+            draw_text_vcenter(
+                canvas,
+                ln,
+                x + 8,
+                ty,
+                16,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+            ty += 16;
+        }
+    }
+
+    fn draw_calendar_popover(&mut self, canvas: &mut Canvas, theme: &Theme, cw: u32, _ch: u32) {
+        let pw = 220u32;
+        let ph = 180u32;
+        let cx = self.datetime_zone.x + (self.datetime_zone.w as i32) / 2;
+        let x = (cx - (pw as i32) / 2)
+            .max(TOP_PAD)
+            .min((cw - pw - TOP_PAD as u32) as i32);
+        let y = self.datetime_zone.bottom() + 2;
+
+        let panel = Rect::new(x, y, pw, ph);
+        canvas.fill_rounded_rect(panel, 8, theme.panel);
+        canvas.stroke_rounded_rect(panel, 8, 1, theme.border);
+
+        let mon_name = sunlight_locale::month_name(self.cal_view_month, true, "en_US.UTF-8");
+        let header = alloc::format!("{} {}", mon_name, self.cal_view_year);
+        draw_text_vcenter(
+            canvas,
+            &header,
+            x + 12,
+            y + 4,
+            20,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+
+        let mut hx = x + 8;
+        let cell = 26u32;
+        for &wd in &["S", "M", "T", "W", "T", "F", "S"] {
+            draw_text_vcenter(
+                canvas,
+                wd,
+                hx,
+                y + 26,
+                14,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            hx += cell as i32;
+        }
+
+        let mut gy = y + 44;
+        let mut day = 1u8;
+        let today_d =
+            if self.cal_view_month == self.status_month && self.cal_view_year == self.status_year {
+                self.status_day
+            } else {
+                0
+            };
+        for _row in 0..6 {
+            let mut gx = x + 8;
+            for _col in 0..7 {
+                if day > 31 {
+                    break;
+                }
+                let cell_r = Rect::new(gx, gy, cell, 18);
+                if day == today_d {
+                    canvas.fill_rounded_rect(cell_r, 3, theme.accent);
+                    let s = alloc::format!("{}", day);
+                    draw_text_vcenter(
+                        canvas,
+                        &s,
+                        gx + 4,
+                        gy,
+                        16,
+                        &TextStyle::new(FontRole::UiSmall, theme.panel),
+                    );
+                } else {
+                    let s = alloc::format!("{}", day);
+                    draw_text_vcenter(
+                        canvas,
+                        &s,
+                        gx + 4,
+                        gy,
+                        16,
+                        &TextStyle::new(FontRole::UiSmall, theme.text),
+                    );
+                }
+                gx += cell as i32;
+                day += 1;
+            }
+            gy += 18;
+            if day > 28 {
+                break;
+            }
+        }
+
+        let btn_y = panel.bottom() - 26;
+        let btn_r = Rect::new(x + 12, btn_y, pw - 24, 20);
+        canvas.fill_rounded_rect(btn_r, 4, theme.panel_alt);
+        let btn_label = "Calendar coming soon";
+        draw_text_vcenter(
+            canvas,
+            btn_label,
+            btn_r.x + 8,
+            btn_r.y,
+            btn_r.h,
+            &TextStyle::new(FontRole::UiSmall, theme.text),
+        );
+    }
+
+    fn draw_notif_panel(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        let pw = 180u32;
+        let ph = 60u32;
+        let x = self.notif_zone.x - 20;
+        let y = self.notif_zone.bottom() + 2;
+        let r = Rect::new(x, y, pw, ph);
+        canvas.fill_rounded_rect(r, 6, theme.panel);
+        canvas.stroke_rounded_rect(r, 6, 1, theme.border);
+        draw_text_vcenter(
+            canvas,
+            "No notifications",
+            r.x + 8,
+            r.y + 8,
+            18,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+    }
+
+    fn draw_logout_confirm(&mut self, canvas: &mut Canvas, theme: &Theme, _cw: u32, _ch: u32) {
+        let dw = 240u32;
+        let dh = 80u32;
+        let x = (self.screen_w / 2) as i32 - (dw / 2) as i32;
+        let y = (self.screen_h / 2) as i32 - (dh / 2) as i32;
+        let panel = Rect::new(x, y, dw, dh);
+        canvas.fill_rounded_rect(panel, 8, theme.panel);
+        canvas.stroke_rounded_rect(panel, 8, 1, theme.border);
+
+        draw_text_vcenter(
+            canvas,
+            "Log out of SunlightOS?",
+            x + 12,
+            y + 8,
+            18,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+
+        let bw = 90u32;
+        let bh = 22u32;
+        let by = y + dh as i32 - 30;
+        let cancel_r = Rect::new(x + 12, by, bw, bh);
+        let logout_r = Rect::new(x + dw as i32 - 12 - bw as i32, by, bw, bh);
+
+        canvas.fill_rounded_rect(cancel_r, 4, theme.panel_alt);
+        draw_text_vcenter(
+            canvas,
+            "Cancel",
+            cancel_r.x + 8,
+            cancel_r.y,
+            bh,
+            &TextStyle::new(FontRole::UiSmall, theme.text),
+        );
+
+        canvas.fill_rounded_rect(logout_r, 4, theme.warn);
+        draw_text_vcenter(
+            canvas,
+            "Log Out",
+            logout_r.x + 8,
+            logout_r.y,
+            bh,
+            &TextStyle::new(FontRole::UiSmall, theme.text),
+        );
+
+        self.logout_cancel_r = cancel_r;
+        self.logout_confirm_r = logout_r;
+    }
+} // end impl VortexShell
+
+// (stash fields live in VortexShell)
+
 /// Draw the bottom-right search box.
-fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32) {
+fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32, sym: SymbolTheme) {
     let sx = screen_w as i32 - TOP_PAD - SEARCH_W as i32;
     let sy = by + (BOT_H as i32 - SEARCH_H as i32) / 2;
     let search_rect = Rect::new(sx, sy, SEARCH_W, SEARCH_H);
     draw_panel(canvas, search_rect, theme.panel_alt, theme.border);
 
-    // Placeholder text
+    // Search glyph icon on left
+    let ic = 14u32;
+    let icell = Rect::new(sx + 6, sy + (SEARCH_H as i32 - ic as i32) / 2, ic, ic);
+    if let Some(tga) = sym.search {
+        draw_tga_tinted_orange(canvas, &tga, icell, theme.text_dim);
+    }
+
+    // Placeholder text (indented for icon)
     let ph = "Search...";
     let ph_w = measure_text(ph, FontRole::UiSmall).w;
-    let ph_x = search_rect.x + (search_rect.w as i32 - ph_w as i32) / 2;
+    let ph_x = sx + 24;
     draw_text_vcenter(
         canvas,
         ph,
@@ -3706,21 +4323,29 @@ impl App for VortexShell {
         }
 
         // ── Top bar ──────────────────────────────────────────────────────────
-        let pwr_left = draw_top_bar(
-            canvas,
-            theme,
-            cw,
-            self.status_net_up,
-            self.status_hour,
-            self.status_min,
-        );
-        // Record power zone for clicks (x,y,w,h). Height matches icon cell.
-        self.power_zone = Rect::new(
-            pwr_left,
-            TOP_Y + (TOP_H as i32 - ICON_BTN as i32) / 2,
-            ICON_BTN,
-            ICON_BTN,
-        );
+        draw_top_bar(canvas, theme, cw, self);
+        // power_zone kept for compat (may be unused now that logout is primary)
+        self.power_zone = self.logout_zone; // conservative alias for old code paths
+
+        // Date/time tooltip (hover, long info, safe fallbacks)
+        if self.show_datetime_tooltip && !self.show_calendar_popover {
+            self.draw_datetime_tooltip(canvas, theme, cw, ch);
+        }
+
+        // Calendar popover (small, under center)
+        if self.show_calendar_popover {
+            self.draw_calendar_popover(canvas, theme, cw, ch);
+        }
+
+        // Notif placeholder panel
+        if self.show_notif_panel {
+            self.draw_notif_panel(canvas, theme);
+        }
+
+        // Logout confirm dialog
+        if self.show_logout_confirm {
+            self.draw_logout_confirm(canvas, theme, cw, ch);
+        }
 
         // ── Bottom panels ────────────────────────────────────────────────────
         let by = bot_y(ch);
@@ -3752,6 +4377,7 @@ impl App for VortexShell {
             self.hover,
             self.running_hover,
             dock_theme,
+            self.symbols,
             &terminal_app,
             &calc_app,
             &files_app,
@@ -3761,7 +4387,7 @@ impl App for VortexShell {
             now,
         );
         self.launcher_zone = launcher_rect;
-        draw_bot_right(canvas, theme, by, cw);
+        draw_bot_right(canvas, theme, by, cw, self.symbols);
 
         // Record clickable zones (terminal, tasks, calc, files).
         self.dock_zones = [
@@ -3877,11 +4503,49 @@ impl App for VortexShell {
                     }
                     return true;
                 }
+                // Close transient panels on outside click (conservative)
+                let mut closed = false;
+                if self.show_calendar_popover && !self.datetime_zone.contains(point) {
+                    // also allow inside popover rect? for v1 close on any outside
+                    self.show_calendar_popover = false;
+                    closed = true;
+                }
+                if self.show_notif_panel {
+                    self.show_notif_panel = false;
+                    closed = true;
+                }
+                if self.show_logout_confirm && !/*simple*/ false {
+                    // keep open until buttons; but if click far we'll close below in draw click
+                }
+                if closed {
+                    return true;
+                }
+
                 // Power button click: no behavior yet. Session/power actions
                 // live in the Start Menu footer (see launcher_zone below).
                 if self.power_zone.contains(point) {
                     debug_log("[VORTEX] power clicked (no-op; see Start Menu)\n");
                     return false;
+                }
+
+                if self.show_logout_confirm {
+                    if self.logout_cancel_r.contains(point) {
+                        self.show_logout_confirm = false;
+                        return true;
+                    }
+                    if self.logout_confirm_r.contains(point) {
+                        self.show_logout_confirm = false;
+                        // Safe logout path (no display stop):
+                        // close shell windows + user apps, return toward login.
+                        // TODO(session): call into sunlight-uac / session manager when ready.
+                        debug_log("[VORTEX] logout confirmed (safe stub: close shell context)\n");
+                        // For this task we just close overlays and let higher level handle session end.
+                        // Do not kill critical services.
+                        return true;
+                    }
+                    // click elsewhere on confirm open: close it
+                    self.show_logout_confirm = false;
+                    return true;
                 }
                 if self.launcher_zone.contains(point) {
                     if self.suppress_launcher_open {
@@ -3901,6 +4565,45 @@ impl App for VortexShell {
                         monotonic_millis(),
                         LaunchSource::Shortcut,
                     );
+                }
+
+                // Center date/time: click toggles calendar popover, hides tooltip
+                if self.datetime_zone.contains(point) {
+                    self.show_datetime_tooltip = false;
+                    self.show_calendar_popover = !self.show_calendar_popover;
+                    if self.show_calendar_popover {
+                        // reset view to current
+                        self.cal_view_month = if (1..=12).contains(&self.status_month) {
+                            self.status_month
+                        } else {
+                            1
+                        };
+                        self.cal_view_year = if self.status_year >= 1970 {
+                            self.status_year
+                        } else {
+                            1970
+                        };
+                    }
+                    return true;
+                }
+
+                // Right side indicators
+                if self.logout_zone.contains(point) {
+                    self.show_logout_confirm = true;
+                    self.show_notif_panel = false;
+                    self.show_calendar_popover = false;
+                    return true;
+                }
+                if self.notif_zone.contains(point) {
+                    self.show_notif_panel = !self.show_notif_panel;
+                    self.show_calendar_popover = false;
+                    self.show_logout_confirm = false;
+                    return true;
+                }
+                if self.net_zone.contains(point) {
+                    // visual only for now (network status shown by color)
+                    debug_log("[VORTEX] net indicator clicked (visual)\n");
+                    return false;
                 }
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
                     return self.handle_desktop_icon_click(idx, monotonic_millis());
@@ -4009,6 +4712,28 @@ impl App for VortexShell {
                 self.context_menu = Some(make_context_menu(x, y, self.screen_w, self.screen_h));
                 true
             }
+            Event::Key('\x1b') => {
+                let mut did = false;
+                if self.show_calendar_popover {
+                    self.show_calendar_popover = false;
+                    did = true;
+                }
+                if self.show_notif_panel {
+                    self.show_notif_panel = false;
+                    did = true;
+                }
+                if self.show_logout_confirm {
+                    self.show_logout_confirm = false;
+                    did = true;
+                }
+                self.show_datetime_tooltip = false;
+                did
+            }
+            Event::KeyPress { keycode: 1, .. } => {
+                // rough esc keycode if used
+                // fall to above via char if possible; keep simple
+                false
+            }
             Event::MouseMove { x, y } => {
                 if self.selection_state != DesktopSelectState::Idle {
                     self.update_desktop_marquee(Point::new(x, y));
@@ -4035,7 +4760,19 @@ impl App for VortexShell {
                 if self.settings_hover != prev_settings {
                     return true;
                 }
-                self.hover != prev || self.running_hover != prev_running
+
+                // Date/time hover for tooltip (no busy, just flag)
+                let p = Point::new(x, y);
+                let prev_tip = self.show_datetime_tooltip;
+                self.show_datetime_tooltip =
+                    self.datetime_zone.contains(p) && !self.show_calendar_popover;
+                if self.show_datetime_tooltip != prev_tip {
+                    return true;
+                }
+
+                self.hover != prev
+                    || self.running_hover != prev_running
+                    || self.show_datetime_tooltip != prev_tip
             }
             Event::MouseUp { x, y, button } if button == 0 => {
                 match self.selection_state {

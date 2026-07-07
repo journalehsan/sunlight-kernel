@@ -29,7 +29,11 @@ fn cli_bin() -> String {
 fn inspect_success_on_valid_tga() {
     let input = temp_path("inspect.tga");
     fs::write(&input, fixture_tga()).unwrap();
-    let output = Command::new(cli_bin()).arg("inspect").arg(&input).output().unwrap();
+    let output = Command::new(cli_bin())
+        .arg("inspect")
+        .arg(&input)
+        .output()
+        .unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("format: tga"));

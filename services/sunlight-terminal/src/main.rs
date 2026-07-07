@@ -1802,20 +1802,33 @@ impl App for TerminalApp {
                     .with_font(&F_UI)
                     .draw(canvas, theme);
                 if !tab.app_owns_input() {
-                    let prefix_w =
-                        sun_font::measure_text(tab.footer.input_prefix_str(), FontRole::UiRegular)
-                            .w as i32;
+                    let prefix_w = sun_font::measure_text(
+                        tab.footer.input_prefix_str(),
+                        FontRole::UiRegular,
+                    )
+                    .w as i32;
                     let caret_x = (input_rect.x + prefix_w).min(input_rect.right() - 1);
-                    canvas.vline(caret_x, input_rect.y + 2, input_rect.h.saturating_sub(4), theme.accent);
+                    canvas.vline(
+                        caret_x,
+                        input_rect.y + 2,
+                        input_rect.h.saturating_sub(4),
+                        theme.accent,
+                    );
                     if tab.footer.input_cursor < tab.footer.input_len {
                         let suffix = tab.footer.input_suffix_str();
                         if let Some(ch) = suffix.chars().next() {
                             let mut buf = [0u8; 4];
                             let text = ch.encode_utf8(&mut buf);
-                            let char_w =
-                                sun_font::measure_text(text, FontRole::UiRegular).w.min(input_rect.w);
+                            let char_w = sun_font::measure_text(text, FontRole::UiRegular)
+                                .w
+                                .min(input_rect.w);
                             canvas.fill_rect(
-                                Rect::new(caret_x, input_rect.y + 1, char_w, input_rect.h.saturating_sub(2)),
+                                Rect::new(
+                                    caret_x,
+                                    input_rect.y + 1,
+                                    char_w,
+                                    input_rect.h.saturating_sub(2),
+                                ),
                                 theme.accent,
                             );
                             canvas.draw_char(caret_x, input_rect.y, ch, theme.bg);

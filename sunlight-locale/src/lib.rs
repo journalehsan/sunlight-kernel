@@ -124,7 +124,9 @@ impl LocaleConfig {
 }
 
 fn is_known_key(k: &str) -> bool {
-    KNOWN_KEYS.iter().any(|&known| known.eq_ignore_ascii_case(k))
+    KNOWN_KEYS
+        .iter()
+        .any(|&known| known.eq_ignore_ascii_case(k))
 }
 
 /// Parse /etc/locale.conf content.

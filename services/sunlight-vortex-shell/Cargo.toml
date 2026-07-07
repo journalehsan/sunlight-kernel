@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-vortex-shell"
-version = "0.2.912"
+version = "0.2.928"
+
+
 
 
 
@@ -115,6 +117,9 @@ version = "0.2.912"
 
 edition = "2021"
 
+[build-dependencies]
+fontdue = "0.7"
+
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
@@ -122,6 +127,8 @@ sunlight-telemetry = { path = "../../sunlight-telemetry" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 sun-font = { path = "../../sun-font" }
 sunlight-wallpaper = { path = "../../sunlight-wallpaper" }
+sunlight-locale = { path = "../../sunlight-locale" }
+sunlight-tz = { path = "../../sunlight-tz" }
 
 [[bin]]
 name = "sunlight-vortex-shell"

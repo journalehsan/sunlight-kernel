@@ -141,7 +141,12 @@ impl PhysicalMemoryManager {
         None
     }
 
-    unsafe fn claim_frame(&mut self, byte_idx: usize, bit: usize, owner_pid: u32) -> Option<PhysAddr> {
+    unsafe fn claim_frame(
+        &mut self,
+        byte_idx: usize,
+        bit: usize,
+        owner_pid: u32,
+    ) -> Option<PhysAddr> {
         let frame = byte_idx * 8 + bit;
         BITMAP[byte_idx] |= 1 << bit;
         FRAME_OWNER[frame] = owner_pid;

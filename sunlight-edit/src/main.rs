@@ -83,18 +83,30 @@ const DIALOG_BTN_H: u32 = 28;
 const DIALOG_BTN_GAP: u32 = 10;
 const DIALOG_PAD: i32 = 16;
 
-static ICON_OPEN_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/document-open-symbolic.tga");
-static ICON_SAVE_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/document-save-symbolic.tga");
-static ICON_SAVE_AS_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/document-save-as-symbolic.tga");
-static ICON_FIND_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
-static ICON_REPLACE_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-find-replace-symbolic.tga");
-static ICON_CUT_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-cut-symbolic.tga");
-static ICON_COPY_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-copy-symbolic.tga");
-static ICON_PASTE_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-paste-symbolic.tga");
-static ICON_SELECT_ALL_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-select-all-symbolic.tga");
-static ICON_NEW_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/document-new-symbolic.tga");
-static ICON_NEXT_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/go-next-symbolic.tga");
-static ICON_PREV_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/16/go-previous-symbolic.tga");
+static ICON_OPEN_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/document-open-symbolic.tga");
+static ICON_SAVE_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/document-save-symbolic.tga");
+static ICON_SAVE_AS_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/document-save-as-symbolic.tga");
+static ICON_FIND_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
+static ICON_REPLACE_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-find-replace-symbolic.tga");
+static ICON_CUT_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-cut-symbolic.tga");
+static ICON_COPY_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-copy-symbolic.tga");
+static ICON_PASTE_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-paste-symbolic.tga");
+static ICON_SELECT_ALL_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-select-all-symbolic.tga");
+static ICON_NEW_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/document-new-symbolic.tga");
+static ICON_NEXT_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/go-next-symbolic.tga");
+static ICON_PREV_TGA: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/actions/16/go-previous-symbolic.tga");
 
 struct BumpAllocator;
 unsafe impl GlobalAlloc for BumpAllocator {
@@ -917,28 +929,108 @@ impl EditApp {
 
     fn menu_specs(kind: MenuKind) -> &'static [MenuItemSpec] {
         const CONTEXT: &[MenuItemSpec] = &[
-            MenuItemSpec { action: EditorAction::Cut, label: "Cut", icon: Some(ICON_CUT_TGA) },
-            MenuItemSpec { action: EditorAction::Copy, label: "Copy", icon: Some(ICON_COPY_TGA) },
-            MenuItemSpec { action: EditorAction::Paste, label: "Paste", icon: Some(ICON_PASTE_TGA) },
-            MenuItemSpec { action: EditorAction::SelectAll, label: "Select All", icon: Some(ICON_SELECT_ALL_TGA) },
-            MenuItemSpec { action: EditorAction::Find, label: "Find", icon: Some(ICON_FIND_TGA) },
-            MenuItemSpec { action: EditorAction::Replace, label: "Replace", icon: Some(ICON_REPLACE_TGA) },
-            MenuItemSpec { action: EditorAction::Open, label: "Open", icon: Some(ICON_OPEN_TGA) },
-            MenuItemSpec { action: EditorAction::Save, label: "Save", icon: Some(ICON_SAVE_TGA) },
-            MenuItemSpec { action: EditorAction::SaveAs, label: "Save As", icon: Some(ICON_SAVE_AS_TGA) },
+            MenuItemSpec {
+                action: EditorAction::Cut,
+                label: "Cut",
+                icon: Some(ICON_CUT_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Copy,
+                label: "Copy",
+                icon: Some(ICON_COPY_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Paste,
+                label: "Paste",
+                icon: Some(ICON_PASTE_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::SelectAll,
+                label: "Select All",
+                icon: Some(ICON_SELECT_ALL_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Find,
+                label: "Find",
+                icon: Some(ICON_FIND_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Replace,
+                label: "Replace",
+                icon: Some(ICON_REPLACE_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Open,
+                label: "Open",
+                icon: Some(ICON_OPEN_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Save,
+                label: "Save",
+                icon: Some(ICON_SAVE_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::SaveAs,
+                label: "Save As",
+                icon: Some(ICON_SAVE_AS_TGA),
+            },
         ];
         const HAMBURGER: &[MenuItemSpec] = &[
-            MenuItemSpec { action: EditorAction::New, label: "New", icon: Some(ICON_NEW_TGA) },
-            MenuItemSpec { action: EditorAction::Open, label: "Open", icon: Some(ICON_OPEN_TGA) },
-            MenuItemSpec { action: EditorAction::Save, label: "Save", icon: Some(ICON_SAVE_TGA) },
-            MenuItemSpec { action: EditorAction::SaveAs, label: "Save As", icon: Some(ICON_SAVE_AS_TGA) },
-            MenuItemSpec { action: EditorAction::Find, label: "Find", icon: Some(ICON_FIND_TGA) },
-            MenuItemSpec { action: EditorAction::Replace, label: "Replace", icon: Some(ICON_REPLACE_TGA) },
-            MenuItemSpec { action: EditorAction::SelectAll, label: "Select All", icon: Some(ICON_SELECT_ALL_TGA) },
-            MenuItemSpec { action: EditorAction::Cut, label: "Cut", icon: Some(ICON_CUT_TGA) },
-            MenuItemSpec { action: EditorAction::Copy, label: "Copy", icon: Some(ICON_COPY_TGA) },
-            MenuItemSpec { action: EditorAction::Paste, label: "Paste", icon: Some(ICON_PASTE_TGA) },
-            MenuItemSpec { action: EditorAction::About, label: "Editor Info", icon: None },
+            MenuItemSpec {
+                action: EditorAction::New,
+                label: "New",
+                icon: Some(ICON_NEW_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Open,
+                label: "Open",
+                icon: Some(ICON_OPEN_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Save,
+                label: "Save",
+                icon: Some(ICON_SAVE_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::SaveAs,
+                label: "Save As",
+                icon: Some(ICON_SAVE_AS_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Find,
+                label: "Find",
+                icon: Some(ICON_FIND_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Replace,
+                label: "Replace",
+                icon: Some(ICON_REPLACE_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::SelectAll,
+                label: "Select All",
+                icon: Some(ICON_SELECT_ALL_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Cut,
+                label: "Cut",
+                icon: Some(ICON_CUT_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Copy,
+                label: "Copy",
+                icon: Some(ICON_COPY_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::Paste,
+                label: "Paste",
+                icon: Some(ICON_PASTE_TGA),
+            },
+            MenuItemSpec {
+                action: EditorAction::About,
+                label: "Editor Info",
+                icon: None,
+            },
         ];
         match kind {
             MenuKind::Context => CONTEXT,
@@ -951,7 +1043,12 @@ impl EditApp {
         let menu_h = MENU_ITEM_H * specs.len() as u32 + 8;
         let max_x = WIN_W as i32 - MENU_W as i32 - 6;
         let max_y = WIN_H as i32 - menu_h as i32 - STATUS_H as i32 - 6;
-        let rect = Rect::new(x.clamp(6, max_x.max(6)), y.clamp(6, max_y.max(6)), MENU_W, menu_h);
+        let rect = Rect::new(
+            x.clamp(6, max_x.max(6)),
+            y.clamp(6, max_y.max(6)),
+            MENU_W,
+            menu_h,
+        );
         let mut items = [MenuItem {
             spec: MenuItemSpec {
                 action: EditorAction::About,
@@ -964,7 +1061,12 @@ impl EditApp {
         for (i, spec) in specs.iter().enumerate() {
             items[i] = MenuItem {
                 spec: *spec,
-                rect: Rect::new(rect.x + 4, rect.y + 4 + i as i32 * MENU_ITEM_H as i32, MENU_W - 8, MENU_ITEM_H),
+                rect: Rect::new(
+                    rect.x + 4,
+                    rect.y + 4 + i as i32 * MENU_ITEM_H as i32,
+                    MENU_W - 8,
+                    MENU_ITEM_H,
+                ),
                 enabled: self.action_enabled(spec.action),
             };
         }
@@ -1009,7 +1111,10 @@ impl EditApp {
     }
 
     fn range_char_count(&self, range: TextRange) -> usize {
-        self.buffer.extract_range(range.start, range.end).chars().count()
+        self.buffer
+            .extract_range(range.start, range.end)
+            .chars()
+            .count()
     }
 
     fn delete_selection(&mut self) -> bool {
@@ -1076,7 +1181,10 @@ impl EditApp {
             let width = measure_text(&prefix, FontRole::MonoRegular).w as i32;
             if width >= rel_x {
                 col = idx + if rel_x > width - 4 { 1 } else { 0 };
-                return TextPosition { line, col: col.min(self.buffer.line_len_chars(line)) };
+                return TextPosition {
+                    line,
+                    col: col.min(self.buffer.line_len_chars(line)),
+                };
             }
             col = idx + 1;
         }
@@ -1179,19 +1287,27 @@ impl EditApp {
                 KEY_LEFT => self.buffer.move_left(),
                 KEY_RIGHT => self.buffer.move_right(),
                 KEY_UP => {
-                    let preferred = self.selection.preferred_col.unwrap_or(self.buffer.cursor_col);
+                    let preferred = self
+                        .selection
+                        .preferred_col
+                        .unwrap_or(self.buffer.cursor_col);
                     let moved = self.buffer.move_up();
                     if moved {
-                        self.buffer.cursor_col = preferred.min(self.buffer.line_len_chars(self.buffer.cursor_line));
+                        self.buffer.cursor_col =
+                            preferred.min(self.buffer.line_len_chars(self.buffer.cursor_line));
                         self.selection.preferred_col = Some(preferred);
                     }
                     moved
                 }
                 KEY_DOWN => {
-                    let preferred = self.selection.preferred_col.unwrap_or(self.buffer.cursor_col);
+                    let preferred = self
+                        .selection
+                        .preferred_col
+                        .unwrap_or(self.buffer.cursor_col);
                     let moved = self.buffer.move_down();
                     if moved {
-                        self.buffer.cursor_col = preferred.min(self.buffer.line_len_chars(self.buffer.cursor_line));
+                        self.buffer.cursor_col =
+                            preferred.min(self.buffer.line_len_chars(self.buffer.cursor_line));
                         self.selection.preferred_col = Some(preferred);
                     }
                     moved
@@ -1444,7 +1560,11 @@ impl EditApp {
         let len = self.find.matches.len();
         let current = self.find.current_match.unwrap_or(0);
         let next = if previous {
-            if current == 0 { len - 1 } else { current - 1 }
+            if current == 0 {
+                len - 1
+            } else {
+                current - 1
+            }
         } else {
             (current + 1) % len
         };
@@ -1469,7 +1589,9 @@ impl EditApp {
         }
         let replacement = String::from(self.find.replace.value());
         let range = self.find.matches[index];
-        let changed = self.buffer.replace_range(range.start, range.end, &replacement);
+        let changed = self
+            .buffer
+            .replace_range(range.start, range.end, &replacement);
         if changed {
             self.clear_selection();
             self.note_document_changed();
@@ -1524,7 +1646,13 @@ impl EditApp {
         );
     }
 
-    fn draw_toolbar_button(&self, canvas: &mut Canvas, theme: &Theme, idx: usize, button: ToolbarButton) {
+    fn draw_toolbar_button(
+        &self,
+        canvas: &mut Canvas,
+        theme: &Theme,
+        idx: usize,
+        button: ToolbarButton,
+    ) {
         let state = if self.toolbar_pressed == Some(idx) {
             ButtonState::Pressed
         } else if self.toolbar_hover == Some(idx) {
@@ -1540,7 +1668,15 @@ impl EditApp {
         canvas.fill_rounded_rect(button.rect, 6, bg);
         canvas.stroke_rounded_rect(button.rect, 6, 1, theme.border);
         if let Some(icon) = self.icons.icon_for(button.spec.action) {
-            canvas.draw_tga_icon(icon, Rect::new(button.rect.x + 12, button.rect.y + 12, TOOLBAR_ICON, TOOLBAR_ICON));
+            canvas.draw_tga_icon(
+                icon,
+                Rect::new(
+                    button.rect.x + 12,
+                    button.rect.y + 12,
+                    TOOLBAR_ICON,
+                    TOOLBAR_ICON,
+                ),
+            );
         } else {
             draw_text_vcenter(
                 canvas,
@@ -1578,10 +1714,22 @@ impl EditApp {
                 break;
             }
             let line = self.buffer.line(line_idx).unwrap_or("");
-            let start_col = if line_idx == range.start.line { range.start.col } else { 0 };
-            let end_col = if line_idx == range.end.line { range.end.col } else { self.buffer.line_len_chars(line_idx) };
+            let start_col = if line_idx == range.start.line {
+                range.start.col
+            } else {
+                0
+            };
+            let end_col = if line_idx == range.end.line {
+                range.end.col
+            } else {
+                self.buffer.line_len_chars(line_idx)
+            };
             let prefix: String = line.chars().take(start_col).collect();
-            let selected: String = line.chars().skip(start_col).take(end_col.saturating_sub(start_col)).collect();
+            let selected: String = line
+                .chars()
+                .skip(start_col)
+                .take(end_col.saturating_sub(start_col))
+                .collect();
             let sx = text_x + measure_text(&prefix, FontRole::MonoRegular).w as i32;
             let sw = measure_text(&selected, FontRole::MonoRegular).w.max(4) as i32;
             for py in y..(y + lh - 1).min(rect.bottom()) {
@@ -1614,14 +1762,25 @@ impl EditApp {
         let selected: String = line
             .chars()
             .skip(highlight.range.start.col)
-            .take(highlight.range.end.col.saturating_sub(highlight.range.start.col))
+            .take(
+                highlight
+                    .range
+                    .end
+                    .col
+                    .saturating_sub(highlight.range.start.col),
+            )
             .collect();
         let sx = text_x + measure_text(&prefix, FontRole::MonoRegular).w as i32;
         let sw = measure_text(&selected, FontRole::MonoRegular).w.max(4) as i32;
         let fill = if highlight.current {
             Color::rgba(theme.accent.r(), theme.accent.g(), theme.accent.b(), 110)
         } else {
-            Color::rgba(theme.text_dim.r(), theme.text_dim.g(), theme.text_dim.b(), 60)
+            Color::rgba(
+                theme.text_dim.r(),
+                theme.text_dim.g(),
+                theme.text_dim.b(),
+                60,
+            )
         };
         for py in y..(y + lh - 1).min(rect.bottom()) {
             for px in sx..sx + sw {
@@ -1683,7 +1842,10 @@ impl EditApp {
             };
             draw_text(canvas, line, text_x, y, &mono);
 
-            if line_idx == self.buffer.cursor_line && self.caret_visible && self.focus == FocusTarget::Editor {
+            if line_idx == self.buffer.cursor_line
+                && self.caret_visible
+                && self.focus == FocusTarget::Editor
+            {
                 let prefix: String = line.chars().take(self.buffer.cursor_col).collect();
                 let cx = text_x + measure_text(&prefix, FontRole::MonoRegular).w as i32;
                 canvas.vline(cx, y, lh.saturating_sub(2) as u32, theme.accent);
@@ -1733,20 +1895,57 @@ impl EditApp {
             self.find.query.rect.h,
             &TextStyle::new(FontRole::UiSmall, theme.text_dim),
         );
-        self.draw_find_action_button(canvas, theme, EditorAction::FindPrev, Rect::new(rect.right() - 180, self.find.query.rect.y, 28, 28));
-        self.draw_find_action_button(canvas, theme, EditorAction::FindNext, Rect::new(rect.right() - 148, self.find.query.rect.y, 28, 28));
+        self.draw_find_action_button(
+            canvas,
+            theme,
+            EditorAction::FindPrev,
+            Rect::new(rect.right() - 180, self.find.query.rect.y, 28, 28),
+        );
+        self.draw_find_action_button(
+            canvas,
+            theme,
+            EditorAction::FindNext,
+            Rect::new(rect.right() - 148, self.find.query.rect.y, 28, 28),
+        );
         if self.find.replace_visible {
-            self.draw_find_action_button(canvas, theme, EditorAction::ReplaceCurrent, Rect::new(rect.right() - 116, self.find.replace.rect.y, 52, 28));
-            self.draw_find_action_button(canvas, theme, EditorAction::ReplaceAll, Rect::new(rect.right() - 60, self.find.replace.rect.y, 52, 28));
+            self.draw_find_action_button(
+                canvas,
+                theme,
+                EditorAction::ReplaceCurrent,
+                Rect::new(rect.right() - 116, self.find.replace.rect.y, 52, 28),
+            );
+            self.draw_find_action_button(
+                canvas,
+                theme,
+                EditorAction::ReplaceAll,
+                Rect::new(rect.right() - 60, self.find.replace.rect.y, 52, 28),
+            );
         }
     }
 
-    fn draw_find_action_button(&self, canvas: &mut Canvas, theme: &Theme, action: EditorAction, rect: Rect) {
+    fn draw_find_action_button(
+        &self,
+        canvas: &mut Canvas,
+        theme: &Theme,
+        action: EditorAction,
+        rect: Rect,
+    ) {
         let enabled = self.action_enabled(action);
-        canvas.fill_rounded_rect(rect, 6, if enabled { theme.panel } else { theme.panel_alt });
+        canvas.fill_rounded_rect(
+            rect,
+            6,
+            if enabled {
+                theme.panel
+            } else {
+                theme.panel_alt
+            },
+        );
         canvas.stroke_rounded_rect(rect, 6, 1, theme.border);
         if let Some(icon) = self.icons.icon_for(action) {
-            canvas.draw_tga_icon(icon, Rect::new(rect.x + ((rect.w as i32 - 16) / 2), rect.y + 6, 16, 16));
+            canvas.draw_tga_icon(
+                icon,
+                Rect::new(rect.x + ((rect.w as i32 - 16) / 2), rect.y + 6, 16, 16),
+            );
         } else {
             let label = match action {
                 EditorAction::ReplaceCurrent => "One",
@@ -1759,7 +1958,10 @@ impl EditApp {
                 rect.x + 4,
                 rect.y,
                 rect.h,
-                &TextStyle::new(FontRole::UiSmall, if enabled { theme.text } else { theme.text_dim }),
+                &TextStyle::new(
+                    FontRole::UiSmall,
+                    if enabled { theme.text } else { theme.text_dim },
+                ),
             );
         }
     }
@@ -1785,7 +1987,11 @@ impl EditApp {
         btn: DialogButton,
         hovered: bool,
     ) {
-        let fill = if hovered { theme.panel_alt } else { theme.panel };
+        let fill = if hovered {
+            theme.panel_alt
+        } else {
+            theme.panel
+        };
         canvas.fill_rounded_rect(btn.rect, 5, fill);
         canvas.stroke_rounded_rect(btn.rect, 5, 1, theme.border);
         draw_text_vcenter(
@@ -1833,9 +2039,17 @@ impl EditApp {
         canvas.fill_rounded_rect(menu.rect, 8, theme.panel);
         canvas.stroke_rounded_rect(menu.rect, 8, 1, theme.border);
         for item in &menu.items[..menu.count] {
-            let item_bg = if item.enabled { theme.panel_alt } else { theme.panel };
+            let item_bg = if item.enabled {
+                theme.panel_alt
+            } else {
+                theme.panel
+            };
             canvas.fill_rect(item.rect, item_bg);
-            if let Some(icon) = item.spec.icon.and_then(|_| self.icons.icon_for(item.spec.action)) {
+            if let Some(icon) = item
+                .spec
+                .icon
+                .and_then(|_| self.icons.icon_for(item.spec.action))
+            {
                 canvas.draw_tga_icon(icon, Rect::new(item.rect.x + 4, item.rect.y + 4, 16, 16));
             }
             draw_text_vcenter(
@@ -1846,7 +2060,11 @@ impl EditApp {
                 item.rect.h,
                 &TextStyle::new(
                     FontRole::UiRegular,
-                    if item.enabled { theme.text } else { theme.text_dim },
+                    if item.enabled {
+                        theme.text
+                    } else {
+                        theme.text_dim
+                    },
                 ),
             );
         }
@@ -1912,10 +2130,30 @@ impl EditApp {
         if !self.find.visible || !self.find_panel_rect().contains(Point::new(x, y)) {
             return false;
         }
-        let prev = Rect::new(self.find_panel_rect().right() - 180, self.find.query.rect.y, 28, 28);
-        let next = Rect::new(self.find_panel_rect().right() - 148, self.find.query.rect.y, 28, 28);
-        let rep_one = Rect::new(self.find_panel_rect().right() - 116, self.find.replace.rect.y, 52, 28);
-        let rep_all = Rect::new(self.find_panel_rect().right() - 60, self.find.replace.rect.y, 52, 28);
+        let prev = Rect::new(
+            self.find_panel_rect().right() - 180,
+            self.find.query.rect.y,
+            28,
+            28,
+        );
+        let next = Rect::new(
+            self.find_panel_rect().right() - 148,
+            self.find.query.rect.y,
+            28,
+            28,
+        );
+        let rep_one = Rect::new(
+            self.find_panel_rect().right() - 116,
+            self.find.replace.rect.y,
+            52,
+            28,
+        );
+        let rep_all = Rect::new(
+            self.find_panel_rect().right() - 60,
+            self.find.replace.rect.y,
+            52,
+            28,
+        );
         let point = Point::new(x, y);
         if prev.contains(point) {
             return self.dispatch_action(EditorAction::FindPrev);
@@ -1950,7 +2188,11 @@ impl EditApp {
 
     fn show_menu_from_toolbar(&mut self) {
         let button = self.toolbar_buttons()[5];
-        self.open_menu(MenuKind::Hamburger, button.rect.x - 120, button.rect.bottom() + 4);
+        self.open_menu(
+            MenuKind::Hamburger,
+            button.rect.x - 120,
+            button.rect.bottom() + 4,
+        );
     }
 
     fn copy_selection(&mut self) -> bool {
@@ -2062,7 +2304,10 @@ impl App for EditApp {
                 if let Some(menu) = self.menu {
                     let p = Point::new(x, y);
                     if menu.rect.contains(p) {
-                        if let Some(item) = menu.items[..menu.count].iter().find(|item| item.rect.contains(p) && item.enabled) {
+                        if let Some(item) = menu.items[..menu.count]
+                            .iter()
+                            .find(|item| item.rect.contains(p) && item.enabled)
+                        {
                             return self.dispatch_action(item.spec.action);
                         }
                         return true;

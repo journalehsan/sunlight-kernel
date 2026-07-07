@@ -3751,7 +3751,8 @@ pub extern "C" fn _start() -> ! {
                                 saved_y: win_y,
                                 saved_w: w,
                                 saved_h: h,
-                                parent_focus_window_id: if config.window_type == WindowType::Dialog {
+                                parent_focus_window_id: if config.window_type == WindowType::Dialog
+                                {
                                     focused_window_id(&state).unwrap_or(0)
                                 } else {
                                     0

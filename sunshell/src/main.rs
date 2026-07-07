@@ -301,7 +301,10 @@ mod sunlight {
             let mut pairs: alloc::vec::Vec<(alloc::string::String, alloc::string::String)> =
                 alloc::vec::Vec::new();
             for (k, v) in cfg.iter() {
-                pairs.push((alloc::string::String::from(k), alloc::string::String::from(v)));
+                pairs.push((
+                    alloc::string::String::from(k),
+                    alloc::string::String::from(v),
+                ));
             }
             self.env.apply_locale(&pairs);
         }
@@ -1576,18 +1579,13 @@ mod sunlight {
                     let _ = copy_bytes(out, &mut pos, b"\n");
 
                     // Show a few key categories for visibility (like localectl on Linux)
-                    let keys = [
-                        "LC_TIME",
-                        "LC_NUMERIC",
-                        "LC_MONETARY",
-                        "LC_MEASUREMENT",
-                    ];
+                    let keys = ["LC_TIME", "LC_NUMERIC", "LC_MONETARY", "LC_MEASUREMENT"];
                     for &k in &keys {
                         let _ = copy_bytes(out, &mut pos, k.as_bytes());
                         let _ = copy_bytes(out, &mut pos, b": ");
-                        let val = cfg.get(k).unwrap_or_else(|| {
-                            cfg.get("LANG").unwrap_or("C.UTF-8")
-                        });
+                        let val = cfg
+                            .get(k)
+                            .unwrap_or_else(|| cfg.get("LANG").unwrap_or("C.UTF-8"));
                         let _ = copy_bytes(out, &mut pos, val.as_bytes());
                         let _ = copy_bytes(out, &mut pos, b"\n");
                     }
@@ -1623,13 +1621,21 @@ mod sunlight {
                     sunlight_locale::apply_set_all(&mut cfg, name);
                     let serialized = sunlight_locale::serialize_locale_conf(&cfg);
                     if write_file(vfs_cap, "/etc/locale.conf", serialized.as_bytes()).is_err() {
-                        let _ = copy_bytes(out, &mut pos, b"localectl: failed to write /etc/locale.conf\n");
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            b"localectl: failed to write /etc/locale.conf\n",
+                        );
                         return &out[..pos];
                     }
                     // Also update our live shell env so new children see it immediately
-                    let mut pairs: alloc::vec::Vec<(alloc::string::String, alloc::string::String)> = alloc::vec::Vec::new();
+                    let mut pairs: alloc::vec::Vec<(alloc::string::String, alloc::string::String)> =
+                        alloc::vec::Vec::new();
                     for (k, v) in cfg.iter() {
-                        pairs.push((alloc::string::String::from(k), alloc::string::String::from(v)));
+                        pairs.push((
+                            alloc::string::String::from(k),
+                            alloc::string::String::from(v),
+                        ));
                     }
                     self.env.apply_locale(&pairs);
 
@@ -1651,7 +1657,11 @@ mod sunlight {
                     sunlight_locale::apply_set_time(&mut cfg, name);
                     let serialized = sunlight_locale::serialize_locale_conf(&cfg);
                     if write_file(vfs_cap, "/etc/locale.conf", serialized.as_bytes()).is_err() {
-                        let _ = copy_bytes(out, &mut pos, b"localectl: failed to write /etc/locale.conf\n");
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            b"localectl: failed to write /etc/locale.conf\n",
+                        );
                         return &out[..pos];
                     }
                     // live update

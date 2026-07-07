@@ -1697,6 +1697,21 @@ StandardOutput=journal\nStandardError=journal\n\n\
     // See docs/MINITYPE_FONTS.md
     RamEntry::dir("/usr/share/sunlightos/fonts", 0, 0, mode::DIR_755),
     RamEntry::dir("/usr/share/sunlightos/fonts/minitype", 0, 0, mode::DIR_755),
+
+    // Material Symbols font (for shell panel icons, future dynamic loaders).
+    // Bundled from local system font; see assets/fonts/material-symbols/
+    RamEntry::dir("/usr/share/fonts", 0, 0, mode::DIR_755),
+    RamEntry::dir("/usr/share/fonts/material-symbols", 0, 0, mode::DIR_755),
+    // Font file is present in source (assets/fonts/material-symbols/) and would be
+    // installed to runtime image in a full build. For kernel ramfs size we include
+    // a marker (real .ttf can be added when dynamic font loading lands).
+    RamEntry::file(
+        "/usr/share/fonts/material-symbols/MaterialSymbolsOutlined.ttf",
+        0,
+        0,
+        mode::FILE_644,
+        b"MaterialSymbolsOutlined (bundled; see assets/fonts/material-symbols/)\0",
+    ),
     RamEntry::file(
         "/usr/share/sunlightos/fonts/minitype/sunlight_ui_11.mtf",
         0, 0, mode::FILE_644,
@@ -2101,27 +2116,32 @@ mod tests {
         // Verify the welcome document asset is wired into root and the
         // default user template under Documents, and that Documents dirs
         // exist (they are declared earlier in INITRAMFS).
-        let has_root_welcome = INITRAMFS.iter().any(|e| {
-            e.path == "/root/Documents/Welcome to SunlightOS.txt" && !e.is_dir
-        });
-        let has_user_welcome = INITRAMFS.iter().any(|e| {
-            e.path == "/home/user/Documents/Welcome to SunlightOS.txt" && !e.is_dir
-        });
-        let has_documents_root = INITRAMFS.iter().any(|e| {
-            e.path == "/root/Documents" && e.is_dir
-        });
-        let has_documents_user = INITRAMFS.iter().any(|e| {
-            e.path == "/home/user/Documents" && e.is_dir
-        });
+        let has_root_welcome = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/root/Documents/Welcome to SunlightOS.txt" && !e.is_dir);
+        let has_user_welcome = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/home/user/Documents/Welcome to SunlightOS.txt" && !e.is_dir);
+        let has_documents_root = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/root/Documents" && e.is_dir);
+        let has_documents_user = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/home/user/Documents" && e.is_dir);
 
         assert!(has_root_welcome, "missing /root/Documents welcome file");
-        assert!(has_user_welcome, "missing /home/user/Documents welcome file");
+        assert!(
+            has_user_welcome,
+            "missing /home/user/Documents welcome file"
+        );
         assert!(has_documents_root, "missing /root/Documents dir entry");
         assert!(has_documents_user, "missing /home/user/Documents dir entry");
 
         // Also spot-check content by opening via a fresh RamFs.
         let mut fs = RamFs::new(INITRAMFS);
-        let h = fs.open("/home/user/Documents/Welcome to SunlightOS.txt").unwrap();
+        let h = fs
+            .open("/home/user/Documents/Welcome to SunlightOS.txt")
+            .unwrap();
         let mut buf = [0u8; 80];
         let n = fs.read(h, 0, &mut buf).unwrap();
         // Should start with the ASCII title box.
@@ -2136,8 +2156,12 @@ mod tests {
     #[test]
     fn locale_foundation_files_present_in_initramfs() {
         // Verify /etc/locale.conf and /etc/locale.gen are registered for boot.
-        let has_locale_conf = INITRAMFS.iter().any(|e| e.path == "/etc/locale.conf" && !e.is_dir);
-        let has_locale_gen = INITRAMFS.iter().any(|e| e.path == "/etc/locale.gen" && !e.is_dir);
+        let has_locale_conf = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/etc/locale.conf" && !e.is_dir);
+        let has_locale_gen = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/etc/locale.gen" && !e.is_dir);
         assert!(has_locale_conf, "missing /etc/locale.conf in INITRAMFS");
         assert!(has_locale_gen, "missing /etc/locale.gen in INITRAMFS");
 

@@ -22,6 +22,11 @@ const RTC_STATUS_B: u8 = 0x0B;
 const STATUS_A_UPDATE_IN_PROGRESS: u8 = 0x80;
 const STATUS_B_24HR: u8 = 0x02;
 const STATUS_B_BINARY: u8 = 0x04;
+const RTC_MIN_YEAR: u64 = 2024;
+const RTC_MAX_YEAR: u64 = 2040;
+const RTC_FALLBACK_YEAR: u64 = 2026;
+const RTC_FALLBACK_MONTH: u64 = 7;
+const RTC_FALLBACK_DAY: u64 = 8;
 
 static BOOT_UNIX_TIME: AtomicU64 = AtomicU64::new(0);
 static BOOT_TICKS: AtomicU64 = AtomicU64::new(0);
@@ -47,6 +52,55 @@ fn cmos_read(index: u8) -> u8 {
 
 fn bcd_to_binary(v: u8) -> u8 {
     ((v >> 4) * 10) + (v & 0x0F)
+}
+
+fn is_leap_year(year: u64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+fn days_in_month(year: u64, month: u64) -> u64 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_leap_year(year) => 29,
+        2 => 28,
+        _ => 0,
+    }
+}
+
+fn is_valid_rtc_datetime(year: u64, month: u64, day: u64, hour: u64, min: u64, sec: u64) -> bool {
+    year >= RTC_MIN_YEAR
+        && year <= RTC_MAX_YEAR
+        && month >= 1
+        && month <= 12
+        && day >= 1
+        && day <= days_in_month(year, month)
+        && hour < 24
+        && min < 60
+        && sec < 60
+}
+
+fn sanitized_rtc_datetime(
+    year: u64,
+    month: u64,
+    day: u64,
+    hour: u64,
+    min: u64,
+    sec: u64,
+) -> (u64, u64, u64, u64, u64, u64, bool) {
+    if is_valid_rtc_datetime(year, month, day, hour, min, sec) {
+        return (year, month, day, hour, min, sec, true);
+    }
+
+    (
+        RTC_FALLBACK_YEAR,
+        RTC_FALLBACK_MONTH,
+        RTC_FALLBACK_DAY,
+        0,
+        0,
+        0,
+        false,
+    )
 }
 
 /// Read calendar time from CMOS: (year, month, day, hour, min, sec), 24h.
@@ -124,6 +178,8 @@ pub fn unix_time() -> u64 {
     }
 
     let (year, month, day, hour, min, sec) = read_cmos_clock();
+    let (year, month, day, hour, min, sec, _valid) =
+        sanitized_rtc_datetime(year, month, day, hour, min, sec);
     let ts = days_from_civil(year, month, day) * 86400 + hour * 3600 + min * 60 + sec;
     BOOT_UNIX_TIME.store(ts, Ordering::Relaxed);
     BOOT_TICKS.store(crate::timekeeping::global_ticks(), Ordering::Relaxed);
@@ -140,17 +196,36 @@ pub fn uptime_secs() -> u64 {
 /// baseline is live.
 pub fn init() {
     let (year, month, day, hour, min, sec) = read_cmos_clock();
+    let raw = (year, month, day, hour, min, sec);
+    let (year, month, day, hour, min, sec, valid) =
+        sanitized_rtc_datetime(year, month, day, hour, min, sec);
     let ts = days_from_civil(year, month, day) * 86400 + hour * 3600 + min * 60 + sec;
     BOOT_UNIX_TIME.store(ts, Ordering::Relaxed);
     BOOT_TICKS.store(crate::timekeeping::global_ticks(), Ordering::Relaxed);
-    crate::serial_println!(
-        "[RTC] CMOS clock: {}/{}/{} {:02}:{:02}:{:02} UTC (unix {}) OK",
-        year,
-        month,
-        day,
-        hour,
-        min,
-        sec,
-        ts
-    );
+    if valid {
+        crate::serial_println!(
+            "[RTC] CMOS clock: {}/{}/{} {:02}:{:02}:{:02} UTC (unix {}) OK",
+            year,
+            month,
+            day,
+            hour,
+            min,
+            sec,
+            ts
+        );
+    } else {
+        crate::serial_println!(
+            "[RTC] WARNING invalid CMOS clock: {}/{}/{} {:02}:{:02}:{:02}; using {}/{}/{} 00:00:00 UTC (unix {})",
+            raw.0,
+            raw.1,
+            raw.2,
+            raw.3,
+            raw.4,
+            raw.5,
+            year,
+            month,
+            day,
+            ts
+        );
+    }
 }

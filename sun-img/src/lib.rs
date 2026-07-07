@@ -143,10 +143,7 @@ pub fn convert_to_tga_rgba32(input: &[u8]) -> Result<Vec<u8>, ImageError> {
     convert_with_options(input, &ConvertOptions::default())
 }
 
-pub fn convert_with_options(
-    input: &[u8],
-    options: &ConvertOptions,
-) -> Result<Vec<u8>, ImageError> {
+pub fn convert_with_options(input: &[u8], options: &ConvertOptions) -> Result<Vec<u8>, ImageError> {
     match options.output_format {
         OutputFormat::TgaRgba32 => {}
     }
@@ -238,7 +235,11 @@ fn decode_tga(bytes: &[u8]) -> Result<ImageRgba8, ImageError> {
             let b = bytes[src];
             let g = bytes[src + 1];
             let r = bytes[src + 2];
-            let a = if pixel_size == 4 { bytes[src + 3] } else { 0xFF };
+            let a = if pixel_size == 4 {
+                bytes[src + 3]
+            } else {
+                0xFF
+            };
             pixels[dst] = r;
             pixels[dst + 1] = g;
             pixels[dst + 2] = b;
@@ -431,6 +432,9 @@ mod tests {
     fn rejects_rle_cleanly() {
         let mut bytes = tiny_tga24_top_left();
         bytes[2] = 10;
-        assert_eq!(decode_image(&bytes), Err(ImageError::UnsupportedCompression));
+        assert_eq!(
+            decode_image(&bytes),
+            Err(ImageError::UnsupportedCompression)
+        );
     }
 }
