@@ -55,7 +55,7 @@ extern crate alloc;
 
 mod start_menu;
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
     debug_log, ipc_call_timeout,
@@ -74,7 +74,7 @@ use sunlight_ui::{
     },
     App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
 };
-use sunlight_wallpaper::{load_desktop_config, read_file_bytes as read_wallpaper_file, DesktopConfig};
+use sunlight_wallpaper::{is_supported_wallpaper, load_desktop_config, DesktopConfig};
 
 // ---------------------------------------------------------------------------
 // Wallpaper asset
@@ -493,6 +493,7 @@ const MENU_ITEM_H: u32 = 22;
 // ---------------------------------------------------------------------------
 
 const HEAP_SIZE: usize = 8 * 1024 * 1024;
+const WALLPAPER_MAX_BYTES: usize = 8 * 1024 * 1024;
 #[repr(align(16))]
 struct BumpHeap(core::cell::UnsafeCell<[u8; HEAP_SIZE]>);
 unsafe impl Sync for BumpHeap {}
@@ -1002,7 +1003,6 @@ enum DesktopSelectState {
 
 struct VortexShell {
     wallpaper: Option<TgaImage>,
-    wallpaper_bytes: Option<Box<[u8]>>,
     wallpaper_config: DesktopConfig,
     wallpaper_error: bool,
     wallpaper_last_reload_ms: u64,
@@ -1072,8 +1072,7 @@ struct VortexShell {
 impl VortexShell {
     fn new(display_ep: CapabilityToken) -> Self {
         let wallpaper_config = load_desktop_config();
-        let (wallpaper, wallpaper_bytes, wallpaper_error) =
-            load_wallpaper_from_config(&wallpaper_config);
+        let (wallpaper, wallpaper_error) = load_wallpaper_from_config(&wallpaper_config);
         let desktop_paths = resolve_desktop_paths();
         ensure_directory(&desktop_paths.desktop_dir);
         if wallpaper.is_some() {
@@ -1095,7 +1094,6 @@ impl VortexShell {
         };
         let mut shell = Self {
             wallpaper,
-            wallpaper_bytes,
             wallpaper_config,
             wallpaper_error,
             wallpaper_last_reload_ms: monotonic_millis(),
@@ -1157,9 +1155,8 @@ impl VortexShell {
             self.wallpaper_last_reload_ms = now;
             return;
         }
-        let (wallpaper, wallpaper_bytes, wallpaper_error) = load_wallpaper_from_config(&next);
+        let (wallpaper, wallpaper_error) = load_wallpaper_from_config(&next);
         self.wallpaper = wallpaper;
-        self.wallpaper_bytes = wallpaper_bytes;
         self.wallpaper_error = wallpaper_error;
         self.wallpaper_config = next;
         self.wallpaper_last_reload_ms = now;
@@ -2656,23 +2653,61 @@ fn join_path(base: &str, leaf: &str) -> String {
     out
 }
 
-fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<TgaImage>, Option<Box<[u8]>>, bool) {
-    let Some(bytes) = read_wallpaper_file(cfg.wallpaper.as_bytes(), 8 * 1024 * 1024) else {
+fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<TgaImage>, bool) {
+    let Some(bytes) = read_wallpaper_bytes(cfg.wallpaper.as_bytes()) else {
         debug_log("[VORTEX] wallpaper config path unreadable\n");
-        return (None, None, true);
+        return (None, true);
     };
     if bytes.is_empty() {
-        return (None, None, true);
+        return (None, true);
     }
-    let owned = bytes.into_boxed_slice();
-    let borrowed: &'static [u8] = unsafe { core::mem::transmute::<&[u8], &'static [u8]>(&owned) };
-    match TgaImage::parse(borrowed) {
-        Ok(img) => (Some(img), Some(owned), false),
+    if !is_supported_wallpaper(bytes) {
+        debug_log("[VORTEX] wallpaper unsupported or corrupt\n");
+        return (None, true);
+    }
+    match TgaImage::parse(bytes) {
+        Ok(img) => (Some(img), false),
         Err(_) => {
             debug_log("[VORTEX] wallpaper parse failed\n");
-            (None, Some(owned), true)
+            (None, true)
         }
     }
+}
+
+fn read_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {
+    static mut WALLPAPER_BUF: [u8; WALLPAPER_MAX_BYTES] = [0u8; WALLPAPER_MAX_BYTES];
+
+    let fd = libc::open(path).ok()?;
+    let mut len = 0usize;
+    loop {
+        let remaining = WALLPAPER_MAX_BYTES.saturating_sub(len);
+        if remaining == 0 {
+            break;
+        }
+        let take = remaining.min(4096);
+        let chunk = unsafe {
+            core::slice::from_raw_parts_mut(
+                core::ptr::addr_of_mut!(WALLPAPER_BUF).cast::<u8>().add(len),
+                take,
+            )
+        };
+        let n = match libc::read(fd, chunk) {
+            Ok(n) => n,
+            Err(libc::sys::Errno::Again) => continue,
+            Err(_) => {
+                let _ = libc::close(fd);
+                return None;
+            }
+        };
+        if n == 0 {
+            break;
+        }
+        len = len.saturating_add(n);
+    }
+    let _ = libc::close(fd);
+    Some(unsafe {
+        core::slice::from_raw_parts(core::ptr::addr_of!(WALLPAPER_BUF).cast::<u8>(), len)
+    })
 }
 
 fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {
@@ -2978,17 +3013,30 @@ fn draw_desktop_icons(
         }
         let slot = icon.rect;
         let is_selected = selected.contains(&idx);
-        let tile = Rect::new(slot.x + 8, slot.y + 2, slot.w.saturating_sub(16), slot.h.saturating_sub(10));
+        let tile = Rect::new(
+            slot.x + 8,
+            slot.y + 2,
+            slot.w.saturating_sub(16),
+            slot.h.saturating_sub(10),
+        );
         canvas.fill_rounded_rect(
             tile,
             10,
-            if is_selected { theme.panel } else { theme.panel_alt },
+            if is_selected {
+                theme.panel
+            } else {
+                theme.panel_alt
+            },
         );
         canvas.stroke_rounded_rect(
             tile,
             10,
             1,
-            if is_selected { theme.accent } else { theme.border },
+            if is_selected {
+                theme.accent
+            } else {
+                theme.border
+            },
         );
         if is_selected {
             let highlight = slot.inset(4);
@@ -3015,9 +3063,18 @@ fn draw_desktop_icons(
         let label_h = sun_font::line_height(FontRole::UiSmall) + 4;
         let label_rect_y = slot.y + 58;
         canvas.fill_rounded_rect(
-            Rect::new(slot.x + 12, label_rect_y - 2, slot.w.saturating_sub(24), label_h + 4),
+            Rect::new(
+                slot.x + 12,
+                label_rect_y - 2,
+                slot.w.saturating_sub(24),
+                label_h + 4,
+            ),
             6,
-            if is_selected { theme.panel } else { theme.panel_alt },
+            if is_selected {
+                theme.panel
+            } else {
+                theme.panel_alt
+            },
         );
         draw_text_vcenter(
             canvas,
