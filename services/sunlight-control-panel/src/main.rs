@@ -19,7 +19,7 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use core::alloc::GlobalAlloc;
 use sunlight_ipc::{
     debug_log, ipc_call,
@@ -94,7 +94,7 @@ struct ControlPanelApp {
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
     wallpaper_preview: Option<TgaImage>,
-    wallpaper_preview_bytes: Option<Vec<u8>>,
+    wallpaper_preview_bytes: Option<Box<[u8]>>,
 }
 
 impl ControlPanelApp {
@@ -169,18 +169,20 @@ impl ControlPanelApp {
         };
         if !is_supported_wallpaper(&bytes) {
             self.set_wallpaper_status("Unsupported or corrupt TGA");
-            self.wallpaper_preview_bytes = Some(bytes);
+            self.wallpaper_preview_bytes = Some(bytes.into_boxed_slice());
             return;
         }
-        let leaked: &'static [u8] = alloc::boxed::Box::leak(bytes.clone().into_boxed_slice());
-        match TgaImage::parse(leaked) {
+        let owned = bytes.into_boxed_slice();
+        let borrowed: &'static [u8] =
+            unsafe { core::mem::transmute::<&[u8], &'static [u8]>(&owned) };
+        match TgaImage::parse(borrowed) {
             Ok(img) => {
                 self.wallpaper_preview = Some(img);
-                self.wallpaper_preview_bytes = Some(bytes);
+                self.wallpaper_preview_bytes = Some(owned);
                 self.wallpaper_status_len = 0;
             }
             Err(_) => {
-                self.wallpaper_preview_bytes = Some(bytes);
+                self.wallpaper_preview_bytes = Some(owned);
                 self.set_wallpaper_status("Unsupported or corrupt TGA");
             }
         }
@@ -711,7 +713,7 @@ fn fmt_cur_res<'a>(w: u32, h: u32, buf: &'a mut [u8; 48]) -> &'a str {
 struct BumpAllocator;
 unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 512 * 1024] = [0; 512 * 1024];
+        static mut HEAP: [u8; 8 * 1024 * 1024] = [0; 8 * 1024 * 1024];
         static mut NEXT: usize = 0;
         let aligned = (NEXT + layout.align() - 1) & !(layout.align() - 1);
         let end = aligned + layout.size();
