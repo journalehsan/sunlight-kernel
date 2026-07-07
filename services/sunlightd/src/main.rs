@@ -346,7 +346,7 @@ WantedBy=sunlight.target
 
     let dialogd_service = r#"[Unit]
 Description=SunlightOS Dialog Host
-After=display_server.service
+After=sunlight-display.service
 
 [Service]
 Type=simple

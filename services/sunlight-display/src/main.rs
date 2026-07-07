@@ -701,6 +701,7 @@ struct Window {
     saved_y: u32,
     saved_w: u32,
     saved_h: u32,
+    parent_focus_window_id: u64,
     owner_pid: u64,
     /// Workspace assignment. Workspace switching UI is a later layer.
     workspace_id: u32,
@@ -1471,6 +1472,11 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
 
     let win = state.windows.remove(pos);
     let was_desktop = win.config.window_type == WindowType::Desktop;
+    let restore_focus_id = if win.config.window_type == WindowType::Dialog {
+        (win.parent_focus_window_id != 0).then_some(win.parent_focus_window_id)
+    } else {
+        None
+    };
 
     let _ = sunlight_ipc::shm_free(win.shm_cap);
 
@@ -1494,6 +1500,9 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
     }
 
     state.active_cursor = cursor_for_scene(state);
+    if let Some(parent_id) = restore_focus_id {
+        let _ = activate_window(state, parent_id);
+    }
     if was_desktop {
         state.vortex_launch_pending = false;
         if state.session_active {
@@ -3024,6 +3033,7 @@ mod tests {
             saved_y: y,
             saved_w: w,
             saved_h: h,
+            parent_focus_window_id: 0,
             owner_pid: 1,
             config: WindowConfig {
                 title: [0; 64],
@@ -3741,6 +3751,11 @@ pub extern "C" fn _start() -> ! {
                                 saved_y: win_y,
                                 saved_w: w,
                                 saved_h: h,
+                                parent_focus_window_id: if config.window_type == WindowType::Dialog {
+                                    focused_window_id(&state).unwrap_or(0)
+                                } else {
+                                    0
+                                },
                                 // Authoritative creator PID from the kernel IPC badge.
                                 // TODO: Use this for process-exit-driven cleanup in the
                                 // later hardening phase.

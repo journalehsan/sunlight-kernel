@@ -180,6 +180,9 @@ static LIGHT_LENS_ELF_BYTES: &[u8] =
 // Sunlight Edit: native graphical text editor.
 static SUNLIGHT_EDIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-edit");
+// Dialog host: shared native dialog service for GUI apps.
+static SUNLIGHT_DIALOGD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-dialogd");
 // Vortex Shell: SunlightOS desktop surface (Phase 1 — wallpaper + desktop layer).
 static SUNLIGHT_VORTEX_SHELL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vortex-shell");

@@ -75,7 +75,7 @@ impl AppTracker {
 
         let policy = if is_desktop || pid <= 1 {
             LifecyclePolicy::System
-        } else if app_name == "Sunlight Dialog" {
+        } else if app_name == "Sunlight Dialog" || app_name == "Sunlight" {
             LifecyclePolicy::KeepAlive
         } else {
             LifecyclePolicy::ExitOnLastWindowClosed

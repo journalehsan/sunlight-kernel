@@ -484,6 +484,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/sunlight-edit"
         | "/bin/sunlight-text"
         | "/usr/bin/sunlight-text" => Ok(crate::SUNLIGHT_EDIT_ELF_BYTES),
+        "/sbin/sunlight-dialogd" | "/usr/sbin/sunlight-dialogd" => {
+            Ok(crate::SUNLIGHT_DIALOGD_ELF_BYTES)
+        }
         "/bin/sunlight-vortex-shell" | "/usr/bin/sunlight-vortex-shell" => {
             Ok(crate::SUNLIGHT_VORTEX_SHELL_ELF_BYTES)
         }
