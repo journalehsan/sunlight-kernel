@@ -3,6 +3,18 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TextPosition {
+    pub line: usize,
+    pub col: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TextRange {
+    pub start: TextPosition,
+    pub end: TextPosition,
+}
+
 pub struct TextBuffer {
     lines: Vec<String>,
     pub cursor_line: usize,
@@ -60,6 +72,56 @@ impl TextBuffer {
 
     pub fn line(&self, idx: usize) -> Option<&str> {
         self.lines.get(idx).map(String::as_str)
+    }
+
+    pub fn cursor(&self) -> TextPosition {
+        TextPosition {
+            line: self.cursor_line,
+            col: self.cursor_col,
+        }
+    }
+
+    pub fn set_cursor(&mut self, pos: TextPosition) {
+        self.cursor_line = pos.line.min(self.lines.len().saturating_sub(1));
+        self.cursor_col = pos.col;
+        self.clamp_cursor_col();
+    }
+
+    pub fn clamp_position(&self, pos: TextPosition) -> TextPosition {
+        let line = pos.line.min(self.lines.len().saturating_sub(1));
+        let col = pos
+            .col
+            .min(self.lines.get(line).map(|line| line.chars().count()).unwrap_or(0));
+        TextPosition { line, col }
+    }
+
+    pub fn normalized_range(&self, start: TextPosition, end: TextPosition) -> TextRange {
+        let start = self.clamp_position(start);
+        let end = self.clamp_position(end);
+        if start <= end {
+            TextRange { start, end }
+        } else {
+            TextRange {
+                start: end,
+                end: start,
+            }
+        }
+    }
+
+    pub fn has_range(&self, start: TextPosition, end: TextPosition) -> bool {
+        self.normalized_range(start, end).start != self.normalized_range(start, end).end
+    }
+
+    pub fn document_end(&self) -> TextPosition {
+        let line = self.lines.len().saturating_sub(1);
+        TextPosition {
+            line,
+            col: self.lines.get(line).map(|line| line.chars().count()).unwrap_or(0),
+        }
+    }
+
+    pub fn line_len_chars(&self, line: usize) -> usize {
+        self.lines.get(line).map(|line| line.chars().count()).unwrap_or(0)
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -272,6 +334,242 @@ impl TextBuffer {
         }
         self.cursor_col = len;
         true
+    }
+
+    pub fn move_document_home(&mut self) -> bool {
+        if self.cursor_line == 0 && self.cursor_col == 0 {
+            return false;
+        }
+        self.cursor_line = 0;
+        self.cursor_col = 0;
+        true
+    }
+
+    pub fn move_document_end(&mut self) -> bool {
+        let end = self.document_end();
+        if self.cursor() == end {
+            return false;
+        }
+        self.set_cursor(end);
+        true
+    }
+
+    pub fn move_word_left(&mut self) -> bool {
+        let mut pos = self.cursor();
+        if pos.line == 0 && pos.col == 0 {
+            return false;
+        }
+        if pos.col == 0 {
+            pos.line -= 1;
+            pos.col = self.line_len_chars(pos.line);
+        }
+        let line = self.line(pos.line).unwrap_or("");
+        let chars: Vec<char> = line.chars().collect();
+        let mut idx = pos.col.min(chars.len());
+        while idx > 0 && chars[idx - 1].is_whitespace() {
+            idx -= 1;
+        }
+        while idx > 0 && !chars[idx - 1].is_whitespace() {
+            idx -= 1;
+        }
+        self.set_cursor(TextPosition {
+            line: pos.line,
+            col: idx,
+        });
+        true
+    }
+
+    pub fn move_word_right(&mut self) -> bool {
+        let pos = self.cursor();
+        let end = self.document_end();
+        if pos == end {
+            return false;
+        }
+        let line = self.line(pos.line).unwrap_or("");
+        let chars: Vec<char> = line.chars().collect();
+        let mut idx = pos.col.min(chars.len());
+        while idx < chars.len() && !chars[idx].is_whitespace() {
+            idx += 1;
+        }
+        while idx < chars.len() && chars[idx].is_whitespace() {
+            idx += 1;
+        }
+        if idx < chars.len() || pos.line == end.line {
+            self.set_cursor(TextPosition {
+                line: pos.line,
+                col: idx.min(chars.len()),
+            });
+        } else {
+            self.set_cursor(TextPosition {
+                line: pos.line + 1,
+                col: 0,
+            });
+        }
+        true
+    }
+
+    pub fn insert_text(&mut self, text: &str) -> bool {
+        if text.is_empty() {
+            return false;
+        }
+        let mut changed = false;
+        for ch in text.chars() {
+            changed |= if ch == '\n' {
+                self.insert_newline()
+            } else {
+                self.insert_char(ch)
+            };
+        }
+        changed
+    }
+
+    pub fn extract_range(&self, start: TextPosition, end: TextPosition) -> String {
+        let range = self.normalized_range(start, end);
+        if range.start == range.end {
+            return String::new();
+        }
+        if range.start.line == range.end.line {
+            let line = self.line(range.start.line).unwrap_or("");
+            let sb = char_index_to_byte(line, range.start.col);
+            let eb = char_index_to_byte(line, range.end.col);
+            return String::from(&line[sb..eb]);
+        }
+        let mut out = String::new();
+        for line_idx in range.start.line..=range.end.line {
+            let line = self.line(line_idx).unwrap_or("");
+            if line_idx == range.start.line {
+                let sb = char_index_to_byte(line, range.start.col);
+                out.push_str(&line[sb..]);
+            } else if line_idx == range.end.line {
+                let eb = char_index_to_byte(line, range.end.col);
+                out.push_str(&line[..eb]);
+            } else {
+                out.push_str(line);
+            }
+            if line_idx != range.end.line {
+                out.push('\n');
+            }
+        }
+        out
+    }
+
+    pub fn delete_range(&mut self, start: TextPosition, end: TextPosition) -> bool {
+        let range = self.normalized_range(start, end);
+        if range.start == range.end {
+            return false;
+        }
+        if range.start.line == range.end.line {
+            let line = &mut self.lines[range.start.line];
+            let sb = char_index_to_byte(line, range.start.col);
+            let eb = char_index_to_byte(line, range.end.col);
+            line.drain(sb..eb);
+        } else {
+            let first = self.lines[range.start.line].clone();
+            let last = self.lines[range.end.line].clone();
+            let sb = char_index_to_byte(&first, range.start.col);
+            let eb = char_index_to_byte(&last, range.end.col);
+            let mut merged = String::from(&first[..sb]);
+            merged.push_str(&last[eb..]);
+            self.lines
+                .splice(range.start.line..=range.end.line, [merged]);
+        }
+        if self.lines.is_empty() {
+            self.lines.push(String::new());
+        }
+        self.set_cursor(range.start);
+        self.dirty = true;
+        true
+    }
+
+    pub fn replace_range(&mut self, start: TextPosition, end: TextPosition, text: &str) -> bool {
+        let changed = self.delete_range(start, end);
+        self.insert_text(text) || changed
+    }
+
+    pub fn select_all_range(&self) -> TextRange {
+        TextRange {
+            start: TextPosition { line: 0, col: 0 },
+            end: self.document_end(),
+        }
+    }
+
+    pub fn word_range_at(&self, pos: TextPosition) -> Option<TextRange> {
+        let pos = self.clamp_position(pos);
+        let line = self.line(pos.line)?;
+        let chars: Vec<char> = line.chars().collect();
+        if chars.is_empty() {
+            return None;
+        }
+        let mut idx = pos.col.min(chars.len().saturating_sub(1));
+        if idx == chars.len() && idx > 0 {
+            idx -= 1;
+        }
+        if chars[idx].is_whitespace() {
+            return None;
+        }
+        let mut start = idx;
+        let mut end = idx + 1;
+        while start > 0 && !chars[start - 1].is_whitespace() {
+            start -= 1;
+        }
+        while end < chars.len() && !chars[end].is_whitespace() {
+            end += 1;
+        }
+        Some(TextRange {
+            start: TextPosition {
+                line: pos.line,
+                col: start,
+            },
+            end: TextPosition {
+                line: pos.line,
+                col: end,
+            },
+        })
+    }
+
+    pub fn line_range_at(&self, line: usize) -> Option<TextRange> {
+        if line >= self.lines.len() {
+            return None;
+        }
+        Some(TextRange {
+            start: TextPosition { line, col: 0 },
+            end: TextPosition {
+                line,
+                col: self.line_len_chars(line),
+            },
+        })
+    }
+
+    pub fn find_all(&self, query: &str) -> Vec<TextRange> {
+        let mut out = Vec::new();
+        if query.is_empty() {
+            return out;
+        }
+        let query_chars = query.chars().count();
+        for (line_idx, line) in self.lines.iter().enumerate() {
+            let mut search_from = 0usize;
+            while search_from <= line.len() {
+                let Some(found) = line[search_from..].find(query) else {
+                    break;
+                };
+                let byte_start = search_from + found;
+                let byte_end = byte_start + query.len();
+                let start_col = line[..byte_start].chars().count();
+                let end_col = start_col + query_chars;
+                out.push(TextRange {
+                    start: TextPosition {
+                        line: line_idx,
+                        col: start_col,
+                    },
+                    end: TextPosition {
+                        line: line_idx,
+                        col: end_col,
+                    },
+                });
+                search_from = byte_end.max(byte_start + 1);
+            }
+        }
+        out
     }
 }
 
