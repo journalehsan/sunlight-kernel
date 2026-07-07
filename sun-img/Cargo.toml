@@ -1,0 +1,12 @@
+[package]
+name = "sun-img"
+version = "0.2.898"
+
+
+edition = "2021"
+description = "Minimal user-space color image conversion foundation for SunlightOS"
+license = "MIT"
+
+[lib]
+name = "sun_img"
+path = "src/lib.rs"

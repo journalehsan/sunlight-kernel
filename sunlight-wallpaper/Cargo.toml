@@ -1,0 +1,11 @@
+[package]
+name = "sunlight-wallpaper"
+version = "0.2.898"
+
+
+edition = "2021"
+description = "Minimal wallpaper config and scanning helpers for SunlightOS"
+license = "MIT"
+
+[dependencies]
+sunlight-libc = { path = "../sunlight-libc" }

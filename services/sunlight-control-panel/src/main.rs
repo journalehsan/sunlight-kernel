@@ -17,17 +17,26 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+
+use alloc::vec::Vec;
+use core::alloc::GlobalAlloc;
 use sunlight_ipc::{
     debug_log, ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
     nameserver_lookup, process_yield, show_notification, CapabilityToken, IpcMsg, NotificationKind,
     ProcessExit, SgpMsg,
 };
+use sunlight_libc::crt0;
 use sunlight_ui::{
-    image::TgaImage,
+    image::{draw_mono_icon, MonoIcon, TgaImage},
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, Slider},
     App, Canvas, Color, Event, HBox, Point, Rect, Theme, VBox, Window, WindowConfig,
+};
+use sunlight_wallpaper::{
+    is_supported_wallpaper, load_desktop_config, read_file_bytes, save_desktop_config,
+    scan_wallpapers, DesktopConfig, WallpaperEntry,
 };
 
 // ---------------------------------------------------------------------------
@@ -38,8 +47,14 @@ static ICON_MOUSE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/input-mouse.tga");
 static ICON_MONITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/video-display.tga");
+static ICON_WALLPAPER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-desktop-wallpaper.tga");
 static ICON_SETTINGS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
+static ICON_PREFS_MONO_RAW: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icons/preferences-symbolic.raw"));
+
+const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO_RAW);
 
 const WIN_W: u32 = 500;
 const WIN_H: u32 = 330;
@@ -56,6 +71,7 @@ enum Page {
     Grid,
     Mouse,
     Monitor,
+    Wallpaper,
 }
 
 struct ControlPanelApp {
@@ -67,21 +83,37 @@ struct ControlPanelApp {
     accel_cb: Checkbox<'static>,
     status_msg: [u8; 40],
     status_len: usize,
+    wallpaper_status: [u8; 96],
+    wallpaper_status_len: usize,
     /// TGA icon for the Mouse settings card / page.
     icon_mouse: Option<TgaImage>,
     /// TGA icon for the Monitor settings card / page.
     icon_monitor: Option<TgaImage>,
+    icon_wallpaper: Option<TgaImage>,
+    wallpaper_items: Vec<WallpaperEntry>,
+    wallpaper_config: DesktopConfig,
+    wallpaper_selected: usize,
+    wallpaper_preview: Option<TgaImage>,
+    wallpaper_preview_bytes: Option<Vec<u8>>,
 }
 
 impl ControlPanelApp {
-    fn new(display_ep: Option<CapabilityToken>, screen_w: u32, screen_h: u32) -> Self {
+    fn new(
+        display_ep: Option<CapabilityToken>,
+        screen_w: u32,
+        screen_h: u32,
+        initial_page: Page,
+    ) -> Self {
         let sens_slider = Slider::horizontal(Rect::default())
             .with_range(1, 10)
             .with_value(5);
         let mut accel_cb = Checkbox::new(Rect::default(), "Enable pointer acceleration");
         accel_cb.checked = true;
+        let wallpaper_config = load_desktop_config();
+        let wallpaper_items = scan_wallpapers(&wallpaper_config.wallpaper);
+        let wallpaper_selected = wallpaper_items.iter().position(|it| it.selected).unwrap_or(0);
         Self {
-            page: Page::Grid,
+            page: initial_page,
             display_ep,
             screen_w,
             screen_h,
@@ -89,8 +121,16 @@ impl ControlPanelApp {
             accel_cb,
             status_msg: [0u8; 40],
             status_len: 0,
+            wallpaper_status: [0u8; 96],
+            wallpaper_status_len: 0,
             icon_mouse: TgaImage::parse(ICON_MOUSE_TGA).ok(),
             icon_monitor: TgaImage::parse(ICON_MONITOR_TGA).ok(),
+            icon_wallpaper: TgaImage::parse(ICON_WALLPAPER_TGA).ok(),
+            wallpaper_items,
+            wallpaper_config,
+            wallpaper_selected,
+            wallpaper_preview: None,
+            wallpaper_preview_bytes: None,
         }
     }
 
@@ -102,6 +142,48 @@ impl ControlPanelApp {
 
     fn status_str(&self) -> &str {
         core::str::from_utf8(&self.status_msg[..self.status_len]).unwrap_or("")
+    }
+
+    fn wallpaper_status_str(&self) -> &str {
+        core::str::from_utf8(&self.wallpaper_status[..self.wallpaper_status_len]).unwrap_or("")
+    }
+
+    fn set_wallpaper_status(&mut self, msg: &str) {
+        let bytes = msg.as_bytes();
+        let n = bytes.len().min(self.wallpaper_status.len());
+        self.wallpaper_status[..n].copy_from_slice(&bytes[..n]);
+        self.wallpaper_status_len = n;
+    }
+
+    fn refresh_wallpaper_preview(&mut self) {
+        self.wallpaper_preview = None;
+        self.wallpaper_preview_bytes = None;
+        if self.wallpaper_items.is_empty() {
+            self.set_wallpaper_status("No wallpapers found");
+            return;
+        }
+        let path = self.wallpaper_items[self.wallpaper_selected].path.clone();
+        let Some(bytes) = read_file_bytes(path.as_bytes(), 8 * 1024 * 1024) else {
+            self.set_wallpaper_status("Selected wallpaper missing");
+            return;
+        };
+        if !is_supported_wallpaper(&bytes) {
+            self.set_wallpaper_status("Unsupported or corrupt TGA");
+            self.wallpaper_preview_bytes = Some(bytes);
+            return;
+        }
+        let leaked: &'static [u8] = alloc::boxed::Box::leak(bytes.clone().into_boxed_slice());
+        match TgaImage::parse(leaked) {
+            Ok(img) => {
+                self.wallpaper_preview = Some(img);
+                self.wallpaper_preview_bytes = Some(bytes);
+                self.wallpaper_status_len = 0;
+            }
+            Err(_) => {
+                self.wallpaper_preview_bytes = Some(bytes);
+                self.set_wallpaper_status("Unsupported or corrupt TGA");
+            }
+        }
     }
 
     fn apply_mouse_settings(&mut self) {
@@ -134,15 +216,16 @@ impl ControlPanelApp {
     // Grid page
     // -----------------------------------------------------------------------
 
-    fn card_rects(&self) -> (Rect, Rect) {
-        let card_w = 180u32;
+    fn card_rects(&self) -> (Rect, Rect, Rect) {
+        let card_w = 136u32;
         let card_h = 180u32;
-        let gap = 24i32;
-        let start_x = (WIN_W as i32 - (card_w * 2) as i32 - gap) / 2;
+        let gap = 14i32;
+        let start_x = (WIN_W as i32 - (card_w * 3) as i32 - gap * 2) / 2;
         let card_y = 56i32;
         let r1 = Rect::new(start_x, card_y, card_w, card_h);
         let r2 = Rect::new(start_x + card_w as i32 + gap, card_y, card_w, card_h);
-        (r1, r2)
+        let r3 = Rect::new(start_x + (card_w as i32 + gap) * 2, card_y, card_w, card_h);
+        (r1, r2, r3)
     }
 
     fn draw_card(
@@ -189,14 +272,15 @@ impl ControlPanelApp {
         if let Ok(tga) = TgaImage::parse(ICON_SETTINGS_TGA) {
             canvas.draw_tga_icon(&tga, Rect::new(8, 6, 32, 32));
         }
+        let _ = draw_mono_icon(canvas, &ICON_PREFS_MONO, Point::new(18, 14), theme.icon_foreground);
         Label::new(Rect::new(46, 12, WIN_W - 58, 20), "System Preferences").draw(canvas, theme);
 
-        let (c1, c2) = self.card_rects();
+        let (c1, c2, c3) = self.card_rects();
         Self::draw_card(
             canvas,
             theme,
             c1,
-            theme.accent,
+            theme.icon_foreground,
             "Mouse",
             "Pointer & Acceleration",
             self.icon_mouse,
@@ -205,17 +289,26 @@ impl ControlPanelApp {
             canvas,
             theme,
             c2,
-            Color(0xFF_50_88_CC),
+            theme.icon_muted,
             "Monitor",
             "Resolution & Display",
             self.icon_monitor,
+        );
+        Self::draw_card(
+            canvas,
+            theme,
+            c3,
+            theme.accent,
+            "Wallpaper",
+            "Desktop Background",
+            self.icon_wallpaper,
         );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
-            let (c1, c2) = self.card_rects();
+            let (c1, c2, c3) = self.card_rects();
             if c1.contains(pt) {
                 self.page = Page::Mouse;
                 self.status_len = 0;
@@ -223,6 +316,11 @@ impl ControlPanelApp {
             }
             if c2.contains(pt) {
                 self.page = Page::Monitor;
+                return true;
+            }
+            if c3.contains(pt) {
+                self.page = Page::Wallpaper;
+                self.refresh_wallpaper_preview();
                 return true;
             }
         }
@@ -413,6 +511,121 @@ impl ControlPanelApp {
         }
         false
     }
+
+    fn wallpaper_preview_rect() -> Rect {
+        Rect::new(28, 54, WIN_W - 56, 138)
+    }
+
+    fn wallpaper_item_rect(idx: usize) -> Rect {
+        let start_x = 28i32;
+        let y = 214i32;
+        let w = 102u32;
+        let h = 44u32;
+        let gap = 10i32;
+        Rect::new(start_x + idx as i32 * (w as i32 + gap), y, w, h)
+    }
+
+    fn wallpaper_back_rect() -> Rect {
+        Rect::new(28, WIN_H as i32 - 44, 80, 28)
+    }
+
+    fn wallpaper_apply_rect() -> Rect {
+        Rect::new(WIN_W as i32 - 108, WIN_H as i32 - 44, 80, 28)
+    }
+
+    fn draw_wallpaper_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
+        Panel::with_title(content, "Wallpaper").draw(canvas, theme);
+
+        let preview = Self::wallpaper_preview_rect();
+        canvas.fill_rect(preview, theme.panel_alt);
+        canvas.draw_rect(preview, theme.border);
+        if let Some(img) = self.wallpaper_preview {
+            canvas.draw_tga_icon(
+                &img,
+                Rect::new(preview.x + 4, preview.y + 4, preview.w - 8, preview.h - 8),
+            );
+        } else {
+            Label::new(
+                Rect::new(preview.x + 8, preview.y + 8, preview.w - 16, preview.h - 16),
+                "Preview unavailable",
+            )
+            .draw(canvas, theme);
+        }
+
+        for idx in 0..self.wallpaper_items.len().min(4) {
+            let item = &self.wallpaper_items[idx];
+            let r = Self::wallpaper_item_rect(idx);
+            let fill = if idx == self.wallpaper_selected {
+                theme.accent.darken(140)
+            } else {
+                theme.panel
+            };
+            let border = if idx == self.wallpaper_selected {
+                theme.accent
+            } else {
+                theme.border
+            };
+            canvas.fill_rounded_rect(r, 6, fill);
+            canvas.stroke_rounded_rect(r, 6, 1, border);
+            Label::new(Rect::new(r.x + 8, r.y + 13, r.w - 16, 16), &item.label).draw(canvas, theme);
+        }
+
+        if self.wallpaper_status_len > 0 {
+            Label::new(Rect::new(28, 268, WIN_W - 56, 16), self.wallpaper_status_str()).draw(canvas, theme);
+        }
+
+        let mut back = Button::secondary(Self::wallpaper_back_rect(), "Back");
+        back.state = ButtonState::Normal;
+        back.draw(canvas, theme);
+
+        let mut apply = Button::new(Self::wallpaper_apply_rect(), "Apply");
+        apply.state = ButtonState::Normal;
+        apply.draw(canvas, theme);
+    }
+
+    fn apply_wallpaper(&mut self) {
+        if self.wallpaper_items.is_empty() {
+            self.set_wallpaper_status("No wallpapers found");
+            return;
+        }
+        self.wallpaper_config.wallpaper = self.wallpaper_items[self.wallpaper_selected].path.clone();
+        match save_desktop_config(&self.wallpaper_config) {
+            Ok(()) => {
+                self.set_wallpaper_status("Wallpaper applied");
+                let _ = show_notification(
+                    NotificationKind::Info,
+                    "Control Panel",
+                    "Wallpaper applied",
+                    3000,
+                );
+            }
+            Err(_) => self.set_wallpaper_status("Config write failed"),
+        }
+    }
+
+    fn update_wallpaper_page(&mut self, event: Event) -> bool {
+        if let Event::Click { x, y } = event {
+            let pt = Point::new(x, y);
+            if Self::wallpaper_back_rect().contains(pt) {
+                self.page = Page::Grid;
+                return true;
+            }
+            if Self::wallpaper_apply_rect().contains(pt) {
+                self.apply_wallpaper();
+                return true;
+            }
+            for idx in 0..self.wallpaper_items.len().min(4) {
+                if Self::wallpaper_item_rect(idx).contains(pt) {
+                    self.wallpaper_selected = idx;
+                    self.refresh_wallpaper_preview();
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +638,7 @@ impl App for ControlPanelApp {
             Page::Grid => self.draw_grid(canvas, theme),
             Page::Mouse => self.draw_mouse_page(canvas, theme),
             Page::Monitor => self.draw_monitor_page(canvas, theme),
+            Page::Wallpaper => self.draw_wallpaper_page(canvas, theme),
         }
     }
 
@@ -443,6 +657,7 @@ impl App for ControlPanelApp {
             Page::Grid => self.update_grid(event),
             Page::Mouse => self.update_mouse_page(event),
             Page::Monitor => self.update_monitor_page(event),
+            Page::Wallpaper => self.update_wallpaper_page(event),
         }
     }
 }
@@ -493,15 +708,23 @@ fn fmt_cur_res<'a>(w: u32, h: u32, buf: &'a mut [u8; 48]) -> &'a str {
 // Allocator + panic
 // ---------------------------------------------------------------------------
 
-struct NoAlloc;
-unsafe impl core::alloc::GlobalAlloc for NoAlloc {
-    unsafe fn alloc(&self, _: core::alloc::Layout) -> *mut u8 {
-        core::ptr::null_mut()
+struct BumpAllocator;
+unsafe impl GlobalAlloc for BumpAllocator {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        static mut HEAP: [u8; 512 * 1024] = [0; 512 * 1024];
+        static mut NEXT: usize = 0;
+        let aligned = (NEXT + layout.align() - 1) & !(layout.align() - 1);
+        let end = aligned + layout.size();
+        if end > HEAP.len() {
+            return core::ptr::null_mut();
+        }
+        NEXT = end;
+        HEAP.as_mut_ptr().add(aligned)
     }
     unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
 }
 #[global_allocator]
-static ALLOC: NoAlloc = NoAlloc;
+static ALLOC: BumpAllocator = BumpAllocator;
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -533,8 +756,12 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         .map(|m| (m.width_px, m.height_px))
         .unwrap_or((sunlight_ipc::SAFE_FALLBACK_W, sunlight_ipc::SAFE_FALLBACK_H));
 
-    let app = ControlPanelApp::new(display_ep, screen_w, screen_h);
+    let initial_page = parse_initial_page(argc, argv);
+    let app = ControlPanelApp::new(display_ep, screen_w, screen_h, initial_page);
     let mut app = app;
+    if app.page == Page::Wallpaper {
+        app.refresh_wallpaper_preview();
+    }
 
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
@@ -550,4 +777,29 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
     window.run(&mut app);
     ProcessExit::exit(0);
+}
+
+fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
+    let mut raw = [core::ptr::null::<u8>(); 8];
+    let count = unsafe { crt0::collect_raw_args(argc, argv, &mut raw) };
+    let mut i = 1usize;
+    while i < count {
+        let len = unsafe { crt0::cstr_len(raw[i], 32) };
+        if len == 0 {
+            i += 1;
+            continue;
+        }
+        let bytes = unsafe { core::slice::from_raw_parts(raw[i], len) };
+        if bytes == b"--page" && i + 1 < count {
+            let next_len = unsafe { crt0::cstr_len(raw[i + 1], 32) };
+            let next = unsafe { core::slice::from_raw_parts(raw[i + 1], next_len) };
+            if next == b"wallpaper" {
+                return Page::Wallpaper;
+            }
+            i += 2;
+            continue;
+        }
+        i += 1;
+    }
+    Page::Grid
 }

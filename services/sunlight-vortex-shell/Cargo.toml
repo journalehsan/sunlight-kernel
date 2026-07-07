@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-vortex-shell"
-version = "0.2.865"
+version = "0.2.898"
+
+
+
 
 
 
@@ -112,6 +115,7 @@ sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-telemetry = { path = "../../sunlight-telemetry" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 sun-font = { path = "../../sun-font" }
+sunlight-wallpaper = { path = "../../sunlight-wallpaper" }
 
 [[bin]]
 name = "sunlight-vortex-shell"

@@ -55,7 +55,7 @@ extern crate alloc;
 
 mod start_menu;
 
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
     debug_log, ipc_call_timeout,
@@ -74,12 +74,12 @@ use sunlight_ui::{
     },
     App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
 };
+use sunlight_wallpaper::{load_desktop_config, read_file_bytes as read_wallpaper_file, DesktopConfig};
 
 // ---------------------------------------------------------------------------
 // Wallpaper asset
 // ---------------------------------------------------------------------------
 
-static WALLPAPER_TGA: &[u8] = include_bytes!("../../../docs/images/wallpaper.tga");
 const FALLBACK_BG: u32 = 0x00121214;
 
 // ---------------------------------------------------------------------------
@@ -492,7 +492,7 @@ const MENU_ITEM_H: u32 = 22;
 // Heap (bump allocator — no dynamic allocations used)
 // ---------------------------------------------------------------------------
 
-const HEAP_SIZE: usize = 256 * 1024;
+const HEAP_SIZE: usize = 8 * 1024 * 1024;
 #[repr(align(16))]
 struct BumpHeap(core::cell::UnsafeCell<[u8; HEAP_SIZE]>);
 unsafe impl Sync for BumpHeap {}
@@ -954,6 +954,7 @@ enum ContextMenuAction {
     Refresh,
     SortByName,
     OpenTerminalHere,
+    WallpaperSettings,
 }
 
 #[derive(Clone, Copy)]
@@ -965,15 +966,16 @@ struct MenuItem {
 
 struct ContextMenuState {
     rect: Rect,
-    items: [MenuItem; 5],
+    items: [MenuItem; 6],
 }
 
-const MENU_LABELS: [(&str, ContextMenuAction); 5] = [
+const MENU_LABELS: [(&str, ContextMenuAction); 6] = [
     ("New Folder", ContextMenuAction::NewFolder),
     ("New Text File", ContextMenuAction::NewTextFile),
     ("Refresh", ContextMenuAction::Refresh),
     ("Sort By Name", ContextMenuAction::SortByName),
     ("Open Terminal", ContextMenuAction::OpenTerminalHere),
+    ("Wallpaper Settings", ContextMenuAction::WallpaperSettings),
 ];
 
 // ---------------------------------------------------------------------------
@@ -1000,6 +1002,10 @@ enum DesktopSelectState {
 
 struct VortexShell {
     wallpaper: Option<TgaImage>,
+    wallpaper_bytes: Option<Box<[u8]>>,
+    wallpaper_config: DesktopConfig,
+    wallpaper_error: bool,
+    wallpaper_last_reload_ms: u64,
     display_ep: CapabilityToken,
     desktop_paths: DesktopPaths,
     desktop_icons: Vec<DesktopIcon>,
@@ -1065,7 +1071,9 @@ struct VortexShell {
 
 impl VortexShell {
     fn new(display_ep: CapabilityToken) -> Self {
-        let wallpaper = TgaImage::parse(WALLPAPER_TGA).ok();
+        let wallpaper_config = load_desktop_config();
+        let (wallpaper, wallpaper_bytes, wallpaper_error) =
+            load_wallpaper_from_config(&wallpaper_config);
         let desktop_paths = resolve_desktop_paths();
         ensure_directory(&desktop_paths.desktop_dir);
         if wallpaper.is_some() {
@@ -1087,6 +1095,10 @@ impl VortexShell {
         };
         let mut shell = Self {
             wallpaper,
+            wallpaper_bytes,
+            wallpaper_config,
+            wallpaper_error,
+            wallpaper_last_reload_ms: monotonic_millis(),
             display_ep,
             desktop_paths,
             desktop_icons: Vec::new(),
@@ -1133,6 +1145,24 @@ impl VortexShell {
         };
         shell.reload_desktop_icons();
         shell
+    }
+
+    fn maybe_reload_wallpaper(&mut self, now: u64, width: u32, height: u32) {
+        let res_changed = self.screen_w != width || self.screen_h != height;
+        if !res_changed && now.saturating_sub(self.wallpaper_last_reload_ms) < 1000 {
+            return;
+        }
+        let next = load_desktop_config();
+        if next == self.wallpaper_config {
+            self.wallpaper_last_reload_ms = now;
+            return;
+        }
+        let (wallpaper, wallpaper_bytes, wallpaper_error) = load_wallpaper_from_config(&next);
+        self.wallpaper = wallpaper;
+        self.wallpaper_bytes = wallpaper_bytes;
+        self.wallpaper_error = wallpaper_error;
+        self.wallpaper_config = next;
+        self.wallpaper_last_reload_ms = now;
     }
 
     fn refresh_status(&mut self) -> bool {
@@ -2626,9 +2656,32 @@ fn join_path(base: &str, leaf: &str) -> String {
     out
 }
 
+fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<TgaImage>, Option<Box<[u8]>>, bool) {
+    let Some(bytes) = read_wallpaper_file(cfg.wallpaper.as_bytes(), 8 * 1024 * 1024) else {
+        debug_log("[VORTEX] wallpaper config path unreadable\n");
+        return (None, None, true);
+    };
+    if bytes.is_empty() {
+        return (None, None, true);
+    }
+    let owned = bytes.into_boxed_slice();
+    let borrowed: &'static [u8] = unsafe { core::mem::transmute::<&[u8], &'static [u8]>(&owned) };
+    match TgaImage::parse(borrowed) {
+        Ok(img) => (Some(img), Some(owned), false),
+        Err(_) => {
+            debug_log("[VORTEX] wallpaper parse failed\n");
+            (None, Some(owned), true)
+        }
+    }
+}
+
 fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {
     let fd = libc::open(path).ok()?;
-    let mut out = Vec::new();
+    let reserve = libc::fstat(fd)
+        .ok()
+        .map(|stat| (stat.size as usize).min(limit))
+        .unwrap_or(0);
+    let mut out = Vec::with_capacity(reserve);
     let mut buf = [0u8; 128];
     loop {
         let n = match libc::read(fd, &mut buf) {
@@ -2925,9 +2978,20 @@ fn draw_desktop_icons(
         }
         let slot = icon.rect;
         let is_selected = selected.contains(&idx);
+        let tile = Rect::new(slot.x + 8, slot.y + 2, slot.w.saturating_sub(16), slot.h.saturating_sub(10));
+        canvas.fill_rounded_rect(
+            tile,
+            10,
+            if is_selected { theme.panel } else { theme.panel_alt },
+        );
+        canvas.stroke_rounded_rect(
+            tile,
+            10,
+            1,
+            if is_selected { theme.accent } else { theme.border },
+        );
         if is_selected {
             let highlight = slot.inset(4);
-            canvas.fill_rounded_rect(highlight, 8, theme.panel);
             canvas.stroke_rounded_rect(highlight, 8, 1, theme.accent);
         }
 
@@ -2950,6 +3014,11 @@ fn draw_desktop_icons(
         let label_x = slot.x + (slot.w as i32 - label_w as i32) / 2;
         let label_h = sun_font::line_height(FontRole::UiSmall) + 4;
         let label_rect_y = slot.y + 58;
+        canvas.fill_rounded_rect(
+            Rect::new(slot.x + 12, label_rect_y - 2, slot.w.saturating_sub(24), label_h + 4),
+            6,
+            if is_selected { theme.panel } else { theme.panel_alt },
+        );
         draw_text_vcenter(
             canvas,
             &icon.label,
@@ -2996,7 +3065,7 @@ fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMen
         action: ContextMenuAction::Refresh,
         rect: Rect::new(0, 0, 0, 0),
         icon: None,
-    }; 5];
+    }; 6];
     for (i, (_, action)) in MENU_LABELS.iter().enumerate() {
         let icon = match action {
             ContextMenuAction::NewFolder => TgaImage::parse(MENU_NEW_FOLDER_TGA).ok(),
@@ -3004,6 +3073,7 @@ fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMen
             ContextMenuAction::Refresh => TgaImage::parse(MENU_REFRESH_TGA).ok(),
             ContextMenuAction::SortByName => TgaImage::parse(MENU_SORT_TGA).ok(),
             ContextMenuAction::OpenTerminalHere => TgaImage::parse(MENU_TERMINAL_TGA).ok(),
+            ContextMenuAction::WallpaperSettings => TgaImage::parse(ICON_SETTINGS_TGA).ok(),
         };
         items[i] = MenuItem {
             action: *action,
@@ -3555,14 +3625,14 @@ impl App for VortexShell {
 
         let cw = canvas.width;
         let ch = canvas.height;
+        self.maybe_reload_wallpaper(now, cw, ch);
         self.screen_w = cw;
         self.screen_h = ch;
 
         // ── Wallpaper ────────────────────────────────────────────────────────
+        canvas.fill_rect(Rect::new(0, 0, cw, ch), Color(FALLBACK_BG));
         if let Some(ref wp) = self.wallpaper {
             canvas.draw_image_cover(wp);
-        } else {
-            canvas.fill_rect(Rect::new(0, 0, cw, ch), Color(FALLBACK_BG));
         }
 
         let desktop_rect = desktop_area(cw, ch);
@@ -3733,6 +3803,17 @@ impl App for VortexShell {
                                     monotonic_millis(),
                                     LaunchSource::Shortcut,
                                 );
+                            }
+                            ContextMenuAction::WallpaperSettings => {
+                                let trace = self.next_launch_trace(LaunchSource::Shortcut);
+                                let request = sun_exec::LaunchRequest {
+                                    trace,
+                                    source: LaunchSource::Shortcut,
+                                    command: b"settings",
+                                    args: &[b"--page", b"wallpaper"],
+                                    require_display: true,
+                                };
+                                let _ = sun_exec::launch(request);
                             }
                         }
                         return true;

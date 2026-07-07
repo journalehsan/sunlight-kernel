@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-control-panel"
-version = "0.2.865"
+version = "0.2.898"
+
+
+
 
 
 
@@ -86,6 +89,7 @@ version = "0.2.865"
 
 
 edition = "2021"
+build = "build.rs"
 
 [[bin]]
 name = "control-panel"
@@ -95,3 +99,7 @@ path = "src/main.rs"
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
+sunlight-wallpaper = { path = "../../sunlight-wallpaper" }
+
+[build-dependencies]
+image = { version = "0.25.9", default-features = false, features = ["png"] }

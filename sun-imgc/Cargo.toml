@@ -1,0 +1,11 @@
+[package]
+name = "sun-imgc"
+version = "0.2.898"
+
+
+edition = "2021"
+description = "Minimal color image conversion CLI for SunlightOS"
+license = "MIT"
+
+[dependencies]
+sun-img = { path = "../sun-img" }

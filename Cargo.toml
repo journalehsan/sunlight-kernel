@@ -73,6 +73,9 @@ members = [
     "services/sunlight-control-panel",
     "services/sunlight-thumbd",
     "services/sunlight-clipd",
+    "sun-img",
+    "sun-imgc",
+    "sunlight-wallpaper",
 ]
 
 [workspace.dependencies]

@@ -543,6 +543,9 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/var", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/lib", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/log", 0, 0, mode::DIR_755),
+    RamEntry::dir("/system", 0, 0, mode::DIR_755),
+    RamEntry::dir("/system/share", 0, 0, mode::DIR_755),
+    RamEntry::dir("/system/share/wallpapers", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos/wallpapers", 0, 0, mode::DIR_755),
     // SunlightOS icon theme directory structure.
@@ -558,6 +561,20 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/var/sunlightos/icons/SunlightOS/actions", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos/icons/SunlightOS/status", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos/icons/SunlightOS/preferences", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/system/share/wallpapers/default.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper.tga"),
+    ),
+    RamEntry::file(
+        "/system/share/wallpapers/dark.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/sunlight-login-background.tga"),
+    ),
     // Vortex Shell desktop wallpaper (TGA type-2, 1672×941, 24 bpp BGR).
     RamEntry::file(
         "/var/sunlightos/wallpapers/wallpaper.tga",

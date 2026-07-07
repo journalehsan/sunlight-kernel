@@ -87,6 +87,12 @@ pub struct Theme {
     pub text: Color,
     /// Dimmed / secondary text
     pub text_dim: Color,
+    /// Default monochrome icon foreground
+    pub icon_foreground: Color,
+    /// Muted icon state for secondary actions
+    pub icon_muted: Color,
+    /// Disabled icon state
+    pub icon_disabled: Color,
     /// Accent (buttons, tabs, highlights) — SunlightOS orange by default
     pub accent: Color,
     /// Accent hover state
@@ -110,6 +116,9 @@ impl Theme {
             panel_alt: Color::rgb(0x22, 0x22, 0x26),
             text: Color::rgb(0xF0, 0xF0, 0xF0),
             text_dim: Color::rgb(0x88, 0x88, 0x99),
+            icon_foreground: Color::rgb(0xF0, 0xF0, 0xF0),
+            icon_muted: Color::rgb(0xA0, 0xA0, 0xAF),
+            icon_disabled: Color::rgb(0x5A, 0x5A, 0x66),
             accent: Color::rgb(0xFF, 0xA5, 0x00), // SunlightOS orange
             accent_hover: Color::rgb(0xFF, 0xBF, 0x40),
             ok: Color::rgb(0x4C, 0xAF, 0x50),
@@ -127,6 +136,9 @@ impl Theme {
             panel_alt: Color::rgb(0xEB, 0xEB, 0xEF),
             text: Color::rgb(0x11, 0x11, 0x11),
             text_dim: Color::rgb(0x66, 0x66, 0x77),
+            icon_foreground: Color::rgb(0x11, 0x11, 0x11),
+            icon_muted: Color::rgb(0x5C, 0x5C, 0x6B),
+            icon_disabled: Color::rgb(0xA8, 0xA8, 0xB5),
             accent: Color::rgb(0xE6, 0x8A, 0x00),
             accent_hover: Color::rgb(0xFF, 0xA5, 0x00),
             ok: Color::rgb(0x2E, 0x7D, 0x32),
