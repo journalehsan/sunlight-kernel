@@ -199,7 +199,6 @@ static SUNLIGHT_CLIPMAN_ELF_BYTES: &[u8] =
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
 const TTY_FB_VADDR: u64 = 0x0000_0002_0000_0000;
-
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     // Keep interrupts disabled during boot. The PIT is programmed when the IDT
@@ -246,7 +245,15 @@ pub extern "C" fn _start() -> ! {
         unsafe {
             pmm.init(entries);
         }
+        let kernel_span = memory::pmm::kernel_reserved_span();
         let (total, free) = pmm.stats();
+        serial_println!(
+            "[PMM] kernel image reserves phys {:#x}..{:#x} ({} frames, {} MiB)",
+            kernel_span.phys_start,
+            kernel_span.phys_end,
+            kernel_span.frame_count,
+            (kernel_span.frame_count * 4) / 1024
+        );
         serial_println!("[PMM] {}/{} MiB free", free * 4 / 1024, total * 4 / 1024);
         splash.set_ram((total * 4 / 1024) as u32);
     }
@@ -717,6 +724,27 @@ pub extern "C" fn _start() -> ! {
         let hhdm = hhdm_offset.as_u64();
         let pci_info = unsafe { sunlight_virtio::find_virtio_gpu() };
         if let Some(ref info) = pci_info {
+            map_kernel_mmio_range(
+                &mut vmm,
+                &mut PMM.lock(),
+                hhdm + info.common_cfg_phys + info.common_cfg_off as u64,
+                info.common_cfg_phys + info.common_cfg_off as u64,
+                info.common_cfg_len.max(64) as u64,
+            );
+            map_kernel_mmio_range(
+                &mut vmm,
+                &mut PMM.lock(),
+                hhdm + info.notify_phys + info.notify_off as u64,
+                info.notify_phys + info.notify_off as u64,
+                info.notify_len.max(4096) as u64,
+            );
+            map_kernel_mmio_range(
+                &mut vmm,
+                &mut PMM.lock(),
+                hhdm + info.isr_phys + info.isr_off as u64,
+                info.isr_phys + info.isr_off as u64,
+                info.isr_len.max(1) as u64,
+            );
             // Allocate: 2 pages control queue, 2 pages cursor queue,
             //           1 page cmd buf, 4 pages scatter-gather, 4 pages cursor backing.
             let mut pmm = PMM.lock();
@@ -1337,6 +1365,47 @@ fn map_tty_framebuffer(
         unsafe {
             tty.address_space
                 .map_page(user_page, fb_frame, flags, pmm, hhdm_offset);
+        }
+    }
+}
+
+fn map_kernel_mmio_range(
+    vmm: &mut VirtualMemoryManager,
+    pmm: &mut PhysicalMemoryManager,
+    virt_start: u64,
+    phys_start: u64,
+    len: u64,
+) {
+    if len == 0 {
+        return;
+    }
+
+    let start_phys = phys_start & !0xfff;
+    let start_virt = virt_start & !0xfff;
+    let end_phys = (phys_start + len - 1) & !0xfff;
+    let page_count = ((end_phys - start_phys) / 4096) + 1;
+    let flags = PageTableFlags::PRESENT
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::NO_EXECUTE
+        | PageTableFlags::NO_CACHE
+        | PageTableFlags::WRITE_THROUGH;
+
+    for page_idx in 0..page_count {
+        let virt = VirtAddr::new(start_virt + page_idx * 4096);
+        let phys = PhysAddr::new(start_phys + page_idx * 4096);
+        let page = Page::from_start_address(virt).expect("kernel MMIO virt must be page-aligned");
+        let frame = unsafe { PhysFrame::from_start_address_unchecked(phys) };
+        if let Some((mapped_frame, mapped_flags)) = vmm.mapping_info(page) {
+            assert_eq!(
+                mapped_frame.start_address(),
+                frame.start_address(),
+                "kernel MMIO page already mapped to unexpected frame"
+            );
+            vmm.update_flags(page, mapped_flags | flags)
+                .expect("kernel MMIO flag update failed");
+        } else {
+            vmm.map_page(page, frame, flags, pmm)
+                .expect("kernel MMIO map failed");
         }
     }
 }

@@ -7,15 +7,19 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::alloc::GlobalAlloc;
 
-use sun_font::{
-    draw_text, draw_text_vcenter, line_height, measure_text, FontRole, TextStyle, VecFont,
+use sun_font::{draw_text, draw_text_vcenter, line_height, measure_text, FontRole, TextStyle};
+use sunlight_dialogs::{
+    decode_result, encode_request, ConfirmRequest, ConfirmStyle,
+    DialogButton as DialogChoiceButton, DialogCommonOptions, DialogError, DialogMsg, DialogRequest,
+    DialogResult, OpenFileRequest, SaveFileRequest,
 };
 use sunlight_edit::args::extract_first_real_file_path;
 use sunlight_edit::text_buffer::TextBuffer;
 use sunlight_ipc::{
-    debug_log,
+    debug_log, ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, process_yield, ProcessExit,
+    monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, process_yield, shm_alloc,
+    shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, crt0};
 use sunlight_ui::widgets::button::ButtonState;
@@ -23,8 +27,6 @@ use sunlight_ui::widgets::{StatusBar, Toolbar, ToolbarItem};
 use sunlight_ui::{
     request_close, App, Canvas, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
 };
-
-static FONT_MONO: VecFont = VecFont(FontRole::MonoRegular);
 
 const WIN_W: u32 = 900;
 const WIN_H: u32 = 640;
@@ -37,10 +39,10 @@ const PATH_LEN: usize = 256;
 const MSG_LEN: usize = 96;
 const MAX_FILE_BYTES: usize = 512 * 1024;
 const MAX_ARGC: usize = 8;
-const DEFAULT_SAVE_PATH: &str = "/root/untitled.txt";
 const UNTITLED_DISPLAY: &str = "Untitled";
 
 const KEY_ESC: u8 = 0x01;
+const KEY_O: u8 = 0x18;
 const KEY_LEFT: u8 = 0x4B;
 const KEY_RIGHT: u8 = 0x4D;
 const KEY_UP: u8 = 0x48;
@@ -56,8 +58,6 @@ const DIALOG_BTN_W: u32 = 88;
 const DIALOG_BTN_H: u32 = 28;
 const DIALOG_BTN_GAP: u32 = 10;
 const DIALOG_PAD: i32 = 16;
-const DIALOG_FIELD_H: u32 = 30;
-
 struct BumpAllocator;
 unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
@@ -122,30 +122,6 @@ impl PathBuf {
         let path = self.as_str();
         path.rsplit('/').next().unwrap_or(path)
     }
-
-    fn push_char(&mut self, ch: char) -> bool {
-        let mut encoded = [0u8; 4];
-        let bytes = ch.encode_utf8(&mut encoded).as_bytes();
-        if self.len + bytes.len() >= PATH_LEN {
-            return false;
-        }
-        self.buf[self.len..self.len + bytes.len()].copy_from_slice(bytes);
-        self.len += bytes.len();
-        true
-    }
-
-    fn pop_char(&mut self) -> bool {
-        if self.len == 0 {
-            return false;
-        }
-        let text = self.as_str();
-        let Some(ch) = text.chars().last() else {
-            self.len = 0;
-            return true;
-        };
-        self.len -= ch.len_utf8();
-        true
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -184,11 +160,7 @@ impl TextSlot {
 enum ActiveDialog {
     None,
     SaveBeforeClose,
-    /// Path prompt for temporary documents. `close_after_save` is true when
-    /// opened from the close flow (Save/Discard/Cancel); false from Save.
-    PromptSavePath {
-        close_after_save: bool,
-    },
+    SaveBeforeCloseTemporary,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -224,7 +196,6 @@ struct EditApp {
     pending_user_path: Option<PathBuf>,
     document_ready: bool,
     active_dialog: ActiveDialog,
-    dialog_path_input: PathBuf,
     dialog_buttons: [DialogButton; 3],
     dialog_button_count: usize,
 }
@@ -250,7 +221,6 @@ impl EditApp {
             pending_user_path,
             document_ready: false,
             active_dialog: ActiveDialog::None,
-            dialog_path_input: PathBuf::empty(),
             dialog_buttons: [DialogButton {
                 action: DialogAction::Cancel,
                 rect: Rect::new(0, 0, 0, 0),
@@ -384,7 +354,7 @@ impl EditApp {
 
     fn save(&mut self) {
         if self.is_temporary {
-            self.open_save_path_dialog(false);
+            let _ = self.save_as(false);
             return;
         }
         match self.save_to_backing() {
@@ -397,13 +367,54 @@ impl EditApp {
         self.refresh_status_bars();
     }
 
-    fn open_save_path_dialog(&mut self, close_after_save: bool) {
-        if self.active_dialog != ActiveDialog::None {
-            return;
+    fn save_as(&mut self, close_after_save: bool) -> bool {
+        let request = DialogRequest::SaveFile(SaveFileRequest {
+            title: String::from("Save File"),
+            initial_dir: Some(self.dialog_initial_dir()),
+            suggested_name: Some(self.dialog_suggested_name()),
+            default_extension: self.dialog_default_extension(),
+            allowed_extensions: Vec::new(),
+            overwrite_confirm: true,
+            confirm_button_label: Some(String::from("Save")),
+        });
+        match show_dialog(&request) {
+            Ok(DialogResult::SavePathSelected(path)) => {
+                let Some(path) = PathBuf::from_str(&path) else {
+                    self.set_status_message("Selected path is invalid");
+                    return false;
+                };
+                match self.save_to_final_path(path) {
+                    Ok(()) => {
+                        self.set_status_message("Saved");
+                        self.refresh_status_bars();
+                        if close_after_save {
+                            request_close();
+                        }
+                        true
+                    }
+                    Err(msg) => {
+                        self.set_status_message(msg);
+                        false
+                    }
+                }
+            }
+            Ok(DialogResult::Cancelled | DialogResult::Cancel | DialogResult::Dismissed) => {
+                self.set_status_message("Save cancelled");
+                false
+            }
+            Ok(DialogResult::Error(message)) => {
+                self.set_status_message(&message);
+                false
+            }
+            Ok(_) => {
+                self.set_status_message("Save dialog returned unexpected result");
+                false
+            }
+            Err(message) => {
+                self.set_status_message(message);
+                false
+            }
         }
-        self.dialog_path_input = default_save_path_for_user();
-        self.active_dialog = ActiveDialog::PromptSavePath { close_after_save };
-        self.layout_dialog_buttons();
     }
 
     fn save_to_final_path(&mut self, path: PathBuf) -> Result<(), &'static str> {
@@ -433,7 +444,8 @@ impl EditApp {
             return;
         }
         if self.is_temporary {
-            self.open_save_path_dialog(true);
+            self.active_dialog = ActiveDialog::SaveBeforeCloseTemporary;
+            self.layout_dialog_buttons();
         } else {
             self.active_dialog = ActiveDialog::SaveBeforeClose;
             self.layout_dialog_buttons();
@@ -443,28 +455,6 @@ impl EditApp {
     fn dismiss_dialog(&mut self) {
         self.active_dialog = ActiveDialog::None;
         self.dialog_button_count = 0;
-    }
-
-    fn commit_prompted_save(&mut self, close_after_save: bool) -> bool {
-        let Some(path) = PathBuf::from_str(self.dialog_path_input.as_str()) else {
-            self.set_status_message("Invalid path");
-            return false;
-        };
-        match self.save_to_final_path(path) {
-            Ok(()) => {
-                self.dismiss_dialog();
-                self.set_status_message("Saved");
-                self.refresh_status_bars();
-                if close_after_save {
-                    request_close();
-                }
-                true
-            }
-            Err(msg) => {
-                self.set_status_message(msg);
-                false
-            }
-        }
     }
 
     fn dialog_action(&mut self, action: DialogAction) -> bool {
@@ -488,20 +478,16 @@ impl EditApp {
                 self.dismiss_dialog();
                 true
             }
-            (ActiveDialog::PromptSavePath { close_after_save }, DialogAction::Save) => {
-                self.commit_prompted_save(close_after_save)
+            (ActiveDialog::SaveBeforeCloseTemporary, DialogAction::Save) => {
+                self.dismiss_dialog();
+                self.save_as(true)
             }
-            (
-                ActiveDialog::PromptSavePath {
-                    close_after_save: true,
-                },
-                DialogAction::Discard,
-            ) => {
+            (ActiveDialog::SaveBeforeCloseTemporary, DialogAction::Discard) => {
                 self.dismiss_dialog();
                 request_close();
                 true
             }
-            (ActiveDialog::PromptSavePath { .. }, DialogAction::Cancel) => {
+            (ActiveDialog::SaveBeforeCloseTemporary, DialogAction::Cancel) => {
                 self.dismiss_dialog();
                 true
             }
@@ -511,8 +497,7 @@ impl EditApp {
 
     fn dialog_panel_rect(&self) -> Rect {
         let h = match self.active_dialog {
-            ActiveDialog::PromptSavePath { .. } => 188,
-            ActiveDialog::SaveBeforeClose => 132,
+            ActiveDialog::SaveBeforeClose | ActiveDialog::SaveBeforeCloseTemporary => 132,
             ActiveDialog::None => 0,
         };
         Rect::new(
@@ -526,24 +511,10 @@ impl EditApp {
     fn layout_dialog_buttons(&mut self) {
         let panel = self.dialog_panel_rect();
         let specs: [(&str, DialogAction); 3] = match self.active_dialog {
-            ActiveDialog::SaveBeforeClose => [
+            ActiveDialog::SaveBeforeClose | ActiveDialog::SaveBeforeCloseTemporary => [
                 ("Save", DialogAction::Save),
                 ("Discard", DialogAction::Discard),
                 ("Cancel", DialogAction::Cancel),
-            ],
-            ActiveDialog::PromptSavePath {
-                close_after_save: true,
-            } => [
-                ("Save", DialogAction::Save),
-                ("Discard", DialogAction::Discard),
-                ("Cancel", DialogAction::Cancel),
-            ],
-            ActiveDialog::PromptSavePath {
-                close_after_save: false,
-            } => [
-                ("Save", DialogAction::Save),
-                ("Cancel", DialogAction::Cancel),
-                ("", DialogAction::Cancel),
             ],
             ActiveDialog::None => [
                 ("", DialogAction::Cancel),
@@ -552,9 +523,6 @@ impl EditApp {
             ],
         };
         let count = match self.active_dialog {
-            ActiveDialog::PromptSavePath {
-                close_after_save: false,
-            } => 2,
             ActiveDialog::None => 0,
             _ => 3,
         };
@@ -592,18 +560,6 @@ impl EditApp {
         }
     }
 
-    fn handle_dialog_text(&mut self, ch: char) -> bool {
-        if !matches!(self.active_dialog, ActiveDialog::PromptSavePath { .. }) {
-            return false;
-        }
-        match ch {
-            '\u{8}' => self.dialog_path_input.pop_char(),
-            '\r' | '\n' => return self.dialog_action(DialogAction::Save),
-            c if !c.is_control() => self.dialog_path_input.push_char(c),
-            _ => false,
-        }
-    }
-
     fn editor_rect(&self) -> Rect {
         let top = HEADER_H + TOOLBAR_H;
         let bottom = WIN_H.saturating_sub(STATUS_H);
@@ -630,8 +586,8 @@ impl EditApp {
     }
 
     fn toolbar_hit(&self, x: i32, y: i32) -> Option<usize> {
-        const ITEMS: usize = 2;
-        const ITEM_W: u32 = 72;
+        const ITEMS: usize = 3;
+        const ITEM_W: u32 = 92;
         let rect = self.toolbar_rect();
         if !rect.contains(Point::new(x, y)) {
             return None;
@@ -648,14 +604,22 @@ impl EditApp {
     fn handle_toolbar_click(&mut self, idx: usize) -> bool {
         match idx {
             0 => {
+                self.open_with_dialog();
+                true
+            }
+            1 => {
                 self.save();
+                true
+            }
+            2 => {
+                let _ = self.save_as(false);
                 true
             }
             _ => false,
         }
     }
 
-    fn handle_key_press(&mut self, keycode: u8, pressed: bool, ctrl: bool) -> bool {
+    fn handle_key_press(&mut self, keycode: u8, pressed: bool, shift: bool, ctrl: bool) -> bool {
         if self.active_dialog != ActiveDialog::None {
             return self.handle_dialog_key(keycode, pressed);
         }
@@ -666,8 +630,16 @@ impl EditApp {
             self.try_close();
             return true;
         }
+        if ctrl && keycode == KEY_O {
+            self.open_with_dialog();
+            return true;
+        }
         if ctrl && keycode == KEY_S {
-            self.save();
+            if shift {
+                let _ = self.save_as(false);
+            } else {
+                self.save();
+            }
             return true;
         }
         let changed = match keycode {
@@ -689,7 +661,7 @@ impl EditApp {
 
     fn handle_text_key(&mut self, ch: char) -> bool {
         if self.active_dialog != ActiveDialog::None {
-            return self.handle_dialog_text(ch);
+            return false;
         }
         let changed = match ch {
             '\u{8}' => self.buffer.backspace(),
@@ -730,7 +702,7 @@ impl EditApp {
     fn draw_toolbar(&self, canvas: &mut Canvas, theme: &Theme) {
         let items = [
             ToolbarItem {
-                label: "Save",
+                label: "Open",
                 state: if self.toolbar_pressed == Some(0) {
                     ButtonState::Pressed
                 } else if self.toolbar_hover == Some(0) {
@@ -741,12 +713,29 @@ impl EditApp {
                 active: false,
             },
             ToolbarItem {
-                label: "Redo",
-                state: ButtonState::Disabled,
+                label: "Save",
+                state: if self.toolbar_pressed == Some(1) {
+                    ButtonState::Pressed
+                } else if self.toolbar_hover == Some(1) {
+                    ButtonState::Hovered
+                } else {
+                    ButtonState::Normal
+                },
+                active: false,
+            },
+            ToolbarItem {
+                label: "Save As",
+                state: if self.toolbar_pressed == Some(2) {
+                    ButtonState::Pressed
+                } else if self.toolbar_hover == Some(2) {
+                    ButtonState::Hovered
+                } else {
+                    ButtonState::Normal
+                },
                 active: false,
             },
         ];
-        Toolbar::new(self.toolbar_rect(), &items, 72).draw(canvas, theme);
+        Toolbar::new(self.toolbar_rect(), &items, 92).draw(canvas, theme);
     }
 
     fn draw_editor(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -842,12 +831,9 @@ impl EditApp {
 
         let title = match self.active_dialog {
             ActiveDialog::SaveBeforeClose => "Save changes before closing?",
-            ActiveDialog::PromptSavePath {
-                close_after_save: true,
-            } => "This document is only saved in a temporary file. Enter a final path to save it:",
-            ActiveDialog::PromptSavePath {
-                close_after_save: false,
-            } => "Choose a location to save this document:",
+            ActiveDialog::SaveBeforeCloseTemporary => {
+                "Save changes before closing this temporary document?"
+            }
             ActiveDialog::None => "",
         };
         draw_text(
@@ -857,25 +843,6 @@ impl EditApp {
             panel.y + DIALOG_PAD,
             &TextStyle::new(FontRole::UiMedium, theme.text),
         );
-
-        if matches!(self.active_dialog, ActiveDialog::PromptSavePath { .. }) {
-            let field = Rect::new(
-                panel.x + DIALOG_PAD,
-                panel.y + 44,
-                panel.w - (DIALOG_PAD as u32 * 2),
-                DIALOG_FIELD_H,
-            );
-            canvas.fill_rounded_rect(field, 5, theme.bg);
-            canvas.stroke_rounded_rect(field, 5, 1, theme.border);
-            draw_text_vcenter(
-                canvas,
-                self.dialog_path_input.as_str(),
-                field.x + 8,
-                field.y,
-                field.h,
-                &TextStyle::new(FontRole::MonoRegular, theme.text),
-            );
-        }
 
         for btn in &self.dialog_buttons[..self.dialog_button_count] {
             self.draw_dialog_button(canvas, theme, *btn, false);
@@ -963,9 +930,102 @@ impl App for EditApp {
             Event::KeyPress {
                 keycode,
                 pressed,
+                shift,
                 ctrl,
                 ..
-            } => self.handle_key_press(keycode, pressed, ctrl),
+            } => self.handle_key_press(keycode, pressed, shift, ctrl),
+            _ => false,
+        }
+    }
+}
+
+impl EditApp {
+    fn dialog_initial_dir(&self) -> String {
+        self.user_path
+            .or(self.backing_path)
+            .and_then(path_parent_string)
+            .unwrap_or_else(|| String::from(user_home_dir()))
+    }
+
+    fn dialog_suggested_name(&self) -> String {
+        if let Some(path) = self.user_path {
+            return String::from(path.file_name());
+        }
+        String::from("untitled.txt")
+    }
+
+    fn dialog_default_extension(&self) -> Option<String> {
+        let suggested = self.dialog_suggested_name();
+        if suggested
+            .rsplit('/')
+            .next()
+            .unwrap_or(&suggested)
+            .contains('.')
+        {
+            None
+        } else {
+            Some(String::from("txt"))
+        }
+    }
+
+    fn has_unsaved_content(&self) -> bool {
+        if self.is_temporary {
+            !self.buffer.is_content_empty() || self.buffer.is_dirty()
+        } else {
+            self.buffer.is_dirty()
+        }
+    }
+
+    fn open_with_dialog(&mut self) {
+        if self.has_unsaved_content() && !self.confirm_discard_for_open() {
+            self.set_status_message("Open cancelled");
+            return;
+        }
+        let request = DialogRequest::OpenFile(OpenFileRequest {
+            title: String::from("Open File"),
+            initial_dir: Some(self.dialog_initial_dir()),
+            allowed_mime_types: Vec::new(),
+            allowed_extensions: Vec::new(),
+            allow_multiple: false,
+            show_preview: true,
+            confirm_button_label: Some(String::from("Open")),
+        });
+        match show_dialog(&request) {
+            Ok(DialogResult::FileSelected(path)) => {
+                let Some(path) = PathBuf::from_str(&path) else {
+                    self.set_status_message("Selected path is invalid");
+                    return;
+                };
+                self.open_real_file(path);
+            }
+            Ok(DialogResult::Cancelled | DialogResult::Cancel | DialogResult::Dismissed) => {
+                self.set_status_message("Open cancelled");
+            }
+            Ok(DialogResult::Error(message)) => self.set_status_message(&message),
+            Ok(_) => self.set_status_message("Open dialog returned unexpected result"),
+            Err(message) => self.set_status_message(message),
+        }
+    }
+
+    fn confirm_discard_for_open(&mut self) -> bool {
+        let request = DialogRequest::Confirm(ConfirmRequest {
+            common: DialogCommonOptions {
+                title: String::from("Discard Changes?"),
+                message: String::from("Opening another file will discard unsaved changes."),
+            },
+            style: ConfirmStyle::OkCancel,
+            default_button: DialogChoiceButton::Cancel,
+        });
+        match show_dialog(&request) {
+            Ok(DialogResult::Ok | DialogResult::Yes) => true,
+            Ok(DialogResult::Error(message)) => {
+                self.set_status_message(&message);
+                false
+            }
+            Err(message) => {
+                self.set_status_message(message);
+                false
+            }
             _ => false,
         }
     }
@@ -1056,13 +1116,6 @@ fn user_home_dir() -> &'static str {
     }
 }
 
-fn default_save_path_for_user() -> PathBuf {
-    let mut path = String::from(user_home_dir());
-    path.push_str("/untitled.txt");
-    PathBuf::from_str(&path)
-        .unwrap_or_else(|| PathBuf::from_str(DEFAULT_SAVE_PATH).unwrap_or(PathBuf::empty()))
-}
-
 fn create_temp_backing_path() -> Result<PathBuf, &'static str> {
     let pid = libc::getpid();
     let ticks = monotonic_millis();
@@ -1116,6 +1169,87 @@ fn parse_user_path_arg(argc: u64, argv: *const *const u8) -> Option<PathBuf> {
     // argv[0] is the executable path; user paths start after it.
     let user_args = if count > 0 { &slice[1..] } else { &[][..] };
     extract_first_real_file_path(user_args).and_then(PathBuf::from_str)
+}
+
+fn path_parent_string(path: PathBuf) -> Option<String> {
+    let text = path.as_str();
+    let (parent, _) = text.rsplit_once('/')?;
+    if parent.is_empty() {
+        Some(String::from("/"))
+    } else {
+        Some(String::from(parent))
+    }
+}
+
+fn show_dialog(request: &DialogRequest) -> Result<DialogResult, &'static str> {
+    let cap = ensure_dialog_service().ok_or("Dialog host unavailable")?;
+    let body = encode_request(request);
+    let reply = call_dialog(cap, DialogMsg::SHOW_DIALOG, &body).map_err(dialog_error_message)?;
+    if reply.label == DialogMsg::ERROR {
+        return Err(dialog_error_message(DialogError::from_code(reply.words[0])));
+    }
+    let bytes = take_dialog_reply_bytes(&reply).map_err(dialog_error_message)?;
+    decode_result(&bytes).map_err(dialog_error_message)
+}
+
+fn ensure_dialog_service() -> Option<CapabilityToken> {
+    if let Some(cap) = nameserver_lookup("dialogd") {
+        return Some(cap);
+    }
+    if let Some(cap) = nameserver_lookup_timeout("dialogd", 50) {
+        return Some(cap);
+    }
+    let _ = libc::spawn(b"/sbin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
+        .or_else(|_| libc::spawn(b"/bin/sunlight-dialogd", &[b"sunlight-dialogd"], None));
+    for _ in 0..8 {
+        if let Some(cap) = nameserver_lookup_timeout("dialogd", 75) {
+            return Some(cap);
+        }
+        process_yield();
+    }
+    None
+}
+
+fn call_dialog(cap: CapabilityToken, label: u64, body: &[u8]) -> Result<IpcMsg, DialogError> {
+    if body.len() > SHM_PAGE {
+        return Err(DialogError::TooLarge);
+    }
+    let (ptr, token) = shm_alloc().map_err(|_| DialogError::Internal)?;
+    unsafe {
+        core::ptr::copy_nonoverlapping(body.as_ptr(), ptr, body.len());
+    }
+    let reply = ipc_call(
+        cap,
+        IpcMsg::with_label(label)
+            .word(0, body.len() as u64)
+            .with_cap(0, token),
+    );
+    let _ = shm_free(token);
+    Ok(reply)
+}
+
+fn take_dialog_reply_bytes(reply: &IpcMsg) -> Result<Vec<u8>, DialogError> {
+    let len = reply.words[1] as usize;
+    let token = reply.caps[0];
+    if len == 0 || len > SHM_PAGE || token == CapabilityToken::INVALID {
+        return Err(DialogError::Corrupt);
+    }
+    let ptr = shm_map(token).map_err(|_| DialogError::Corrupt)?;
+    let bytes = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+    let _ = shm_free(token);
+    Ok(bytes)
+}
+
+fn dialog_error_message(err: DialogError) -> &'static str {
+    match err {
+        DialogError::BadRequest => "Bad dialog request",
+        DialogError::TooLarge => "Dialog payload too large",
+        DialogError::Unsupported => "Dialog type not implemented",
+        DialogError::Busy => "Dialog host is busy",
+        DialogError::Internal => "Dialog failed",
+        DialogError::HostUnavailable => "Dialog host unavailable",
+        DialogError::Corrupt => "Dialog returned invalid data",
+    }
 }
 
 #[no_mangle]

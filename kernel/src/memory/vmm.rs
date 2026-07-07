@@ -1,7 +1,7 @@
 use super::pmm::PhysicalMemoryManager;
 use x86_64::{
     structures::paging::{
-        mapper::{MapToError, Mapper},
+        mapper::{FlagUpdateError, MapToError, MappedFrame, Mapper, TranslateResult},
         page::{Page, Size4KiB},
         FrameAllocator, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Translate,
     },
@@ -57,6 +57,27 @@ impl VirtualMemoryManager {
     #[allow(dead_code)]
     pub fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
         self.page_table.translate_addr(addr)
+    }
+
+    pub fn mapping_info(&self, page: Page<Size4KiB>) -> Option<(PhysFrame<Size4KiB>, PageTableFlags)> {
+        match self.page_table.translate(page.start_address()) {
+            TranslateResult::Mapped {
+                frame: MappedFrame::Size4KiB(frame),
+                offset: 0,
+                flags,
+            } => Some((frame, flags)),
+            _ => None,
+        }
+    }
+
+    pub fn update_flags(
+        &mut self,
+        page: Page<Size4KiB>,
+        flags: PageTableFlags,
+    ) -> Result<(), FlagUpdateError> {
+        let flush = unsafe { self.page_table.update_flags(page, flags) }?;
+        flush.flush();
+        Ok(())
     }
 }
 

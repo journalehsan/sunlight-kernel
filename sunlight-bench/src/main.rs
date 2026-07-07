@@ -479,15 +479,14 @@ impl BenchApp {
     fn results_rect(&self) -> Rect {
         let stage = self.stage_rect();
         let content = self.content_rect();
-        let stage_end = if stage.h == 0 { stage.y } else { stage.bottom() + 4 };
+        let stage_end = if stage.h == 0 {
+            stage.y
+        } else {
+            stage.bottom() + 4
+        };
         let status_y = content.bottom() - STATUS_H as i32;
         let available = (status_y - 4).saturating_sub(stage_end);
-        Rect::new(
-            stage.x,
-            stage_end,
-            stage.w,
-            available.max(0) as u32,
-        )
+        Rect::new(stage.x, stage_end, stage.w, available.max(0) as u32)
     }
 
     fn status_rect(&self) -> Rect {
@@ -503,12 +502,7 @@ impl BenchApp {
     fn button_rects(&self) -> [Rect; BUTTON_COUNT] {
         let header = self.header_rect();
         let mut rects = [Rect::default(); BUTTON_COUNT];
-        let btn_area = Rect::new(
-            header.right() - 300,
-            header.y + 4,
-            290,
-            HEADER_H - 8,
-        );
+        let btn_area = Rect::new(header.right() - 300, header.y + 4, 290, HEADER_H - 8);
         for (idx, rect) in HBox::new(btn_area)
             .with_spacing(6)
             .layout(&BUTTON_WIDTHS)
@@ -1133,7 +1127,10 @@ impl BenchApp {
         debug_log("[BENCH] ============================================");
         debug_log("[BENCH] SunLight Bench v2 Stable Report");
         debug_log("[BENCH] Environment/Profile:");
-        debug_log(&alloc::format!("[BENCH]   Hypervisor: {}", profile::detect_profile()));
+        debug_log(&alloc::format!(
+            "[BENCH]   Hypervisor: {}",
+            profile::detect_profile()
+        ));
         debug_log(&alloc::format!("[BENCH]   Profile: {}", profile));
         debug_log(&alloc::format!("[BENCH]   Cores: {}", workers));
         debug_log(&alloc::format!(
@@ -1618,12 +1615,9 @@ impl App for BenchApp {
         )
         .with_font(&F_MED)
         .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 370, ov + 1, 140, 14),
-            self.core_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
+        Label::new(Rect::new(summary.x + 370, ov + 1, 140, 14), self.core_str())
+            .with_font(&F_UI)
+            .draw(canvas, theme);
         Label::new(
             Rect::new(summary.x + 460, ov + 1, summary.w.saturating_sub(474), 14),
             self.run_str(),
@@ -1632,25 +1626,16 @@ impl App for BenchApp {
         .draw(canvas, theme);
 
         let ov2 = ov + 18;
-        Label::new(
-            Rect::new(summary.x + 14, ov2, 390, 14),
-            self.single_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 400, ov2, 260, 14),
-            self.multi_str(),
-        )
-        .with_font(&F_UI)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(summary.x + 660, ov2, 180, 14),
-            self.legacy_str(),
-        )
-        .dim()
-        .with_font(&F_SMALL)
-        .draw(canvas, theme);
+        Label::new(Rect::new(summary.x + 14, ov2, 390, 14), self.single_str())
+            .with_font(&F_UI)
+            .draw(canvas, theme);
+        Label::new(Rect::new(summary.x + 400, ov2, 260, 14), self.multi_str())
+            .with_font(&F_UI)
+            .draw(canvas, theme);
+        Label::new(Rect::new(summary.x + 660, ov2, 180, 14), self.legacy_str())
+            .dim()
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
 
         let ov3 = ov2 + 16;
         Label::new(
@@ -1794,7 +1779,10 @@ impl App for BenchApp {
                         }
                         KEY_PGDN => {
                             let step = visible.saturating_sub(1).max(1);
-                            let new_offset = self.table_scroll_offset.saturating_add(step).min(max_offset);
+                            let new_offset = self
+                                .table_scroll_offset
+                                .saturating_add(step)
+                                .min(max_offset);
                             if new_offset != self.table_scroll_offset {
                                 self.table_scroll_offset = new_offset;
                                 return true;

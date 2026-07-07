@@ -439,13 +439,15 @@ impl LightLensApp {
             let gap = 4i32;
             let unit = sw + gap + tw;
             let start_x = rect.x + (rect.w as i32 - unit) / 2;
-            canvas.draw_ui_symbol(
-                start_x,
-                rect.y + (rect.h as i32 - 9) / 2,
-                sym,
-                dim_color,
+            canvas.draw_ui_symbol(start_x, rect.y + (rect.h as i32 - 9) / 2, sym, dim_color);
+            sf_vcenter(
+                canvas,
+                label,
+                start_x + sw + gap,
+                rect.y,
+                rect.h,
+                &dim_style,
             );
-            sf_vcenter(canvas, label, start_x + sw + gap, rect.y, rect.h, &dim_style);
         } else {
             sf_centered(canvas, rect, label, &dim_style);
         }
@@ -535,7 +537,12 @@ impl LightLensApp {
             // Search the existing sibling list for the failed path so the
             // folder-position display stays accurate.
             self.has_current_index = false;
-            for (idx, sib) in self.sibling_paths.iter().enumerate().take(self.sibling_count) {
+            for (idx, sib) in self
+                .sibling_paths
+                .iter()
+                .enumerate()
+                .take(self.sibling_count)
+            {
                 if *sib == self.current_path {
                     self.current_index = idx;
                     self.has_current_index = true;

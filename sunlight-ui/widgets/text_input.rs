@@ -52,12 +52,14 @@ impl<'a, const N: usize> TextInput<'a, N> {
         );
 
         let text_x = self.rect.x + 6;
-        let prefix = self.value().get(..self.cursor).unwrap_or("");
+        let visible = self.visible_text();
+        let prefix_len = self.visible_prefix_len(visible);
+        let prefix = visible.get(..prefix_len).unwrap_or("");
 
         if let Some(f) = self.font {
             f.draw_vcenter(
                 canvas,
-                self.value(),
+                visible,
                 text_x,
                 self.rect.y,
                 self.rect.h,
@@ -74,7 +76,7 @@ impl<'a, const N: usize> TextInput<'a, N> {
             }
         } else {
             let text_y = self.rect.y + (self.rect.h as i32 - 10) / 2;
-            canvas.draw_text(text_x, text_y, self.value(), theme.text);
+            canvas.draw_text(text_x, text_y, visible, theme.text);
             if self.active {
                 let cursor_x = text_x + Canvas::measure_text(prefix) as i32;
                 canvas.vline(
@@ -85,6 +87,35 @@ impl<'a, const N: usize> TextInput<'a, N> {
                 );
             }
         }
+    }
+
+    fn visible_text(&self) -> &str {
+        let value = self.value();
+        let max_chars = self.max_visible_chars();
+        if value.chars().count() <= max_chars {
+            return value;
+        }
+        let cursor_chars = value[..self.cursor].chars().count();
+        let total_chars = value.chars().count();
+        let mut start_chars = cursor_chars.saturating_sub(max_chars.saturating_sub(1));
+        if start_chars + max_chars > total_chars {
+            start_chars = total_chars.saturating_sub(max_chars);
+        }
+        let start_byte = nth_char_byte(value, start_chars);
+        let end_byte = nth_char_byte(value, (start_chars + max_chars).min(total_chars));
+        &value[start_byte..end_byte]
+    }
+
+    fn visible_prefix_len(&self, visible: &str) -> usize {
+        let value = self.value();
+        let visible_start = visible.as_ptr() as usize - value.as_ptr() as usize;
+        self.cursor.saturating_sub(visible_start).min(visible.len())
+    }
+
+    fn max_visible_chars(&self) -> usize {
+        let inner_w = self.rect.w.saturating_sub(12);
+        let glyph_w = 8usize;
+        ((inner_w as usize) / glyph_w).max(1)
     }
 
     pub fn update(&mut self, event: Event) -> bool {
@@ -189,4 +220,14 @@ impl<'a, const N: usize> TextInput<'a, N> {
         self.cursor = self.len;
         true
     }
+}
+
+fn nth_char_byte(text: &str, char_index: usize) -> usize {
+    if char_index == 0 {
+        return 0;
+    }
+    text.char_indices()
+        .nth(char_index)
+        .map(|(idx, _)| idx)
+        .unwrap_or(text.len())
 }

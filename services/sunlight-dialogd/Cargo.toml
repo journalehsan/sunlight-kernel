@@ -1,0 +1,23 @@
+[package]
+name = "sunlight-dialogd"
+version = "0.2.864"
+
+
+
+edition = "2021"
+
+[dependencies]
+heapless = "0.8"
+sun-font = { path = "../../sun-font" }
+sunlight-dialogs = { path = "../../sunlight-dialogs" }
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
+
+[[bin]]
+name = "sunlight-dialogd"
+path = "src/main.rs"
+
+[[bin]]
+name = "sunlight-dialog"
+path = "src/bin/sunlight-dialog.rs"

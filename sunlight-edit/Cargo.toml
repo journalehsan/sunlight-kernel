@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-edit"
-version = "0.2.832"
+version = "0.2.864"
+
+
+
 
 
 
@@ -39,6 +42,7 @@ name = "sunlight-edit"
 path = "src/main.rs"
 
 [dependencies]
+sunlight-dialogs = { path = "../sunlight-dialogs" }
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }

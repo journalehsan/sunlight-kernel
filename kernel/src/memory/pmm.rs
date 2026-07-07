@@ -20,14 +20,23 @@ extern "C" {
     static __kernel_end: u8;
 }
 
-pub struct PhysicalMemoryManager;
+pub struct PhysicalMemoryManager {
+    scan_cursor: usize,
+}
 
 pub const PMM_OWNER_FREE: u32 = u32::MAX;
 pub const PMM_OWNER_KERNEL: u32 = 0;
 
+#[derive(Clone, Copy, Debug)]
+pub struct KernelReservedSpan {
+    pub phys_start: u64,
+    pub phys_end: u64,
+    pub frame_count: usize,
+}
+
 impl PhysicalMemoryManager {
     pub const fn new() -> Self {
-        Self
+        Self { scan_cursor: 0 }
     }
 
     /// Initialize from Limine memory map entries.
@@ -64,14 +73,16 @@ impl PhysicalMemoryManager {
         }
 
         // Mark kernel frames as used.
-        let _kernel_start = core::ptr::addr_of!(__kernel_start) as usize;
-        let _kernel_end = core::ptr::addr_of!(__kernel_end) as usize;
-        // The kernel is loaded at higher-half VA; subtract to get physical offset.
-        // Limine loads the kernel base at 0xFFFFFFFF80000000, but the actual
-        // physical address is not known. Use a conservative estimate:
-        // mark the first 16 MiB of physical memory as used (covers kernel + bootloader + page tables).
-        let start_frame = 0;
-        let end_frame = (16 * 1024 * 1024) / FRAME_SIZE; // 16 MiB
+        let kernel_start = core::ptr::addr_of!(__kernel_start) as usize;
+        let kernel_end = core::ptr::addr_of!(__kernel_end) as usize;
+        // The kernel is linked in the higher half at 0xFFFF_FFFF_8000_0000 and
+        // Limine loads it contiguously starting at physical address 0. Reserve
+        // the full loaded image span instead of a stale fixed 16 MiB window.
+        let kernel_phys_base = 0xFFFF_FFFF_8000_0000usize;
+        let kernel_phys_start = kernel_start.saturating_sub(kernel_phys_base);
+        let kernel_phys_end = kernel_end.saturating_sub(kernel_phys_base);
+        let start_frame = kernel_phys_start / FRAME_SIZE;
+        let end_frame = kernel_phys_end.div_ceil(FRAME_SIZE);
 
         for f in start_frame..end_frame {
             if f < MAX_FRAMES {
@@ -100,24 +111,27 @@ impl PhysicalMemoryManager {
         }
 
         unsafe {
-            for (byte_idx, byte) in BITMAP.iter_mut().enumerate() {
+            let cursor = self.scan_cursor;
+            let (left, right) = BITMAP.split_at_mut(cursor);
+
+            // First pass: scan from cursor to end
+            for (rel_idx, byte) in right.iter_mut().enumerate() {
+                if *byte != 0xFF {
+                    let byte_idx = cursor + rel_idx;
+                    for bit in 0..8 {
+                        if *byte & (1 << bit) == 0 {
+                            return self.claim_frame(byte_idx, bit, owner_pid);
+                        }
+                    }
+                }
+            }
+
+            // Second pass: wrap around and scan from 0 to cursor
+            for (byte_idx, byte) in left.iter_mut().enumerate() {
                 if *byte != 0xFF {
                     for bit in 0..8 {
                         if *byte & (1 << bit) == 0 {
-                            let frame = byte_idx * 8 + bit;
-                            *byte |= 1 << bit;
-                            FRAME_OWNER[frame] = owner_pid;
-                            FREE_FRAMES -= 1;
-                            let count = ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
-                            if cfg!(feature = "verbose_diag") && (count % 100 == 0 || count < 10) {
-                                crate::serial_println!(
-                                    "[PMM] ALLOC #{} addr={:#x} free_now={}",
-                                    count + 1,
-                                    frame as u64 * FRAME_SIZE as u64,
-                                    FREE_FRAMES
-                                );
-                            }
-                            return Some(PhysAddr::new(frame as u64 * FRAME_SIZE as u64));
+                            return self.claim_frame(byte_idx, bit, owner_pid);
                         }
                     }
                 }
@@ -125,6 +139,24 @@ impl PhysicalMemoryManager {
         }
 
         None
+    }
+
+    unsafe fn claim_frame(&mut self, byte_idx: usize, bit: usize, owner_pid: u32) -> Option<PhysAddr> {
+        let frame = byte_idx * 8 + bit;
+        BITMAP[byte_idx] |= 1 << bit;
+        FRAME_OWNER[frame] = owner_pid;
+        FREE_FRAMES -= 1;
+        self.scan_cursor = byte_idx;
+        let count = ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
+        if cfg!(feature = "verbose_diag") && (count % 100 == 0 || count < 10) {
+            crate::serial_println!(
+                "[PMM] ALLOC #{} addr={:#x} free_now={}",
+                count + 1,
+                frame as u64 * FRAME_SIZE as u64,
+                FREE_FRAMES
+            );
+        }
+        Some(PhysAddr::new(frame as u64 * FRAME_SIZE as u64))
     }
 
     /// Allocate `count` physically-contiguous 4 KiB frames.
@@ -238,6 +270,20 @@ impl PhysicalMemoryManager {
             free_ops,
             alloc_ops.saturating_sub(free_ops)
         );
+    }
+}
+
+pub fn kernel_reserved_span() -> KernelReservedSpan {
+    let kernel_start = core::ptr::addr_of!(__kernel_start) as usize;
+    let kernel_end = core::ptr::addr_of!(__kernel_end) as usize;
+    let kernel_phys_base = 0xFFFF_FFFF_8000_0000usize;
+    let phys_start = kernel_start.saturating_sub(kernel_phys_base);
+    let phys_end = kernel_end.saturating_sub(kernel_phys_base);
+    let frame_count = phys_end.saturating_sub(phys_start).div_ceil(FRAME_SIZE);
+    KernelReservedSpan {
+        phys_start: phys_start as u64,
+        phys_end: phys_end as u64,
+        frame_count,
     }
 }
 

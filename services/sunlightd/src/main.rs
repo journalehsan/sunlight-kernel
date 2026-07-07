@@ -38,8 +38,8 @@ mod unit;
 use graph::DepGraph;
 use ipc::{extract_unit_name, ListEntry, StatusReply, SunlightdOp};
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, nameserver_lookup,
-    nameserver_register, monotonic_millis, CapabilityToken, IpcMsg, SpawnRequest,
+    debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, monotonic_millis,
+    nameserver_lookup, nameserver_register, CapabilityToken, IpcMsg, SpawnRequest,
 };
 use supervisor::{ServiceEntry, ServiceState};
 use unit::{parse_service_unit, ServiceUnit, SocketUnit, MAX_UNITS};
@@ -341,6 +341,26 @@ StandardError=journal
 WantedBy=sunlight.target
 "#;
     if let Ok(unit) = parse_service_unit(clipd_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
+    let dialogd_service = r#"[Unit]
+Description=SunlightOS Dialog Host
+After=display_server.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/sunlight-dialogd
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(dialogd_service.as_bytes()) {
         let _ = services.add(unit);
     }
 
@@ -855,12 +875,8 @@ fn _start() -> ! {
         }
     };
 
-    serial_println!(
-        "[SUNLIGHTD] Autostart: parallel where possible, gated by service readiness"
-    );
-    serial_println!(
-        "[SUNLIGHTD] TLS waits for rand_service, sunlight-kv, and the network stack"
-    );
+    serial_println!("[SUNLIGHTD] Autostart: parallel where possible, gated by service readiness");
+    serial_println!("[SUNLIGHTD] TLS waits for rand_service, sunlight-kv, and the network stack");
     serial_println!("[SunlightOS] sunlightd OK");
 
     // Spawn enabled services owned by sunlightd (kernel/init own vfs/net/tty — not our job).

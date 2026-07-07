@@ -68,6 +68,8 @@ members = [
     "sunlight-files",
     "sunlight-light-lens",
     "sunlight-clipman",
+    "sunlight-dialogs",
+    "services/sunlight-dialogd",
     "services/sunlight-control-panel",
     "services/sunlight-thumbd",
     "services/sunlight-clipd",

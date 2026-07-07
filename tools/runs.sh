@@ -79,7 +79,7 @@ USAGE
 }
 
 DISPLAY_TYPE="gtk"
-MEMORY="2048"
+MEMORY="4096"
 CPU_COUNT="12"
 CPU_MODEL=""
 DISK_PATH="$HOME/vmware/sunlight.qcow2"

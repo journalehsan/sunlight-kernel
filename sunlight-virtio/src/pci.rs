@@ -25,15 +25,21 @@ pub struct VirtioGpuPciInfo {
     pub common_cfg_phys: u64,
     /// Byte offset within the BAR to the common config struct.
     pub common_cfg_off: u32,
+    /// Length of the common config capability window.
+    pub common_cfg_len: u32,
     /// Physical base of the notify BAR region.
     pub notify_phys: u64,
     /// Byte offset within the BAR for queue notifications.
     pub notify_off: u32,
+    /// Length of the notify capability window.
+    pub notify_len: u32,
     /// Multiplier: notify address for queue N = notify_base + N * notify_off_multiplier.
     pub notify_off_multiplier: u32,
     /// Physical base of the ISR status BAR region.
     pub isr_phys: u64,
     pub isr_off: u32,
+    /// Length of the ISR capability window.
+    pub isr_len: u32,
 }
 
 /// Read a single byte from PCI config space.
@@ -98,11 +104,14 @@ pub unsafe fn find_virtio_gpu() -> Option<VirtioGpuPciInfo> {
             let mut cap_off = pci_read8(bus, slot, 0, 0x34); // cap pointer
             let mut common_cfg_phys: Option<u64> = None;
             let mut common_cfg_off = 0u32;
+            let mut common_cfg_len = 0u32;
             let mut notify_phys: Option<u64> = None;
             let mut notify_off = 0u32;
+            let mut notify_len = 0u32;
             let mut notify_off_multiplier = 4u32;
             let mut isr_phys: Option<u64> = None;
             let mut isr_off = 0u32;
+            let mut isr_len = 0u32;
 
             while cap_off != 0 && cap_off >= 0x40 {
                 let cap_id = pci_read8(bus, slot, 0, cap_off);
@@ -114,6 +123,7 @@ pub unsafe fn find_virtio_gpu() -> Option<VirtioGpuPciInfo> {
                     let bar = pci_read8(bus, slot, 0, cap_off + 4);
                     // offset and length are u32 at cap_off+8 and cap_off+12
                     let bar_offset = pci_read32(bus, slot, 0, cap_off + 8);
+                    let cap_len = pci_read32(bus, slot, 0, cap_off + 12);
                     let bar_phys = read_bar_mmio_base(bus, slot, 0, bar);
 
                     match cfg_type {
@@ -121,12 +131,14 @@ pub unsafe fn find_virtio_gpu() -> Option<VirtioGpuPciInfo> {
                             if let Some(phys) = bar_phys {
                                 common_cfg_phys = Some(phys);
                                 common_cfg_off = bar_offset;
+                                common_cfg_len = cap_len;
                             }
                         }
                         VIRTIO_PCI_CAP_NOTIFY_CFG => {
                             if let Some(phys) = bar_phys {
                                 notify_phys = Some(phys);
                                 notify_off = bar_offset;
+                                notify_len = cap_len;
                                 // notify_off_multiplier is a u32 at cap_off+16
                                 notify_off_multiplier = pci_read32(bus, slot, 0, cap_off + 16);
                             }
@@ -135,6 +147,7 @@ pub unsafe fn find_virtio_gpu() -> Option<VirtioGpuPciInfo> {
                             if let Some(phys) = bar_phys {
                                 isr_phys = Some(phys);
                                 isr_off = bar_offset;
+                                isr_len = cap_len;
                             }
                         }
                         VIRTIO_PCI_CAP_DEVICE_CFG => {
@@ -155,11 +168,14 @@ pub unsafe fn find_virtio_gpu() -> Option<VirtioGpuPciInfo> {
                     func: 0,
                     common_cfg_phys: cp,
                     common_cfg_off,
+                    common_cfg_len,
                     notify_phys: np,
                     notify_off,
+                    notify_len,
                     notify_off_multiplier,
                     isr_phys: ip,
                     isr_off,
+                    isr_len,
                 });
             }
         }

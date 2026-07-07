@@ -133,11 +133,18 @@ impl Window {
         }
 
         launch_trace::log_phase_now(trace, config.title, "window_create_request_sent", Some(pid));
+        let title_bytes = config.title.as_bytes();
+        let mut title_words = [0u64; 4];
+        for (i, &b) in title_bytes.iter().enumerate().take(32) {
+            title_words[i / 8] |= (b as u64) << ((i % 8) * 8);
+        }
         let reply = ipc_call(
             display_ep,
             IpcMsg::with_label(SgpMsg::CREATE_WINDOW)
                 .word(0, config.width as u64 | ((config.height as u64) << 32))
-                .word(1, config.decoration.config_flag_bits()),
+                .word(1, config.decoration.config_flag_bits())
+                .word(2, pid)
+                .word(3, title_words[0]),
         );
 
         if reply.label != SgpMsg::REPLY || reply.cap_count == 0 {
@@ -152,11 +159,6 @@ impl Window {
         let buffer = shm_map(shm_cap).ok()? as *mut u32;
 
         // Set window title via CONFIGURE_WINDOW
-        let title_bytes = config.title.as_bytes();
-        let mut title_words = [0u64; 4];
-        for (i, &b) in title_bytes.iter().enumerate().take(32) {
-            title_words[i / 8] |= (b as u64) << ((i % 8) * 8);
-        }
         let mut title_cap = CapabilityToken::INVALID;
         let mut cfg = IpcMsg::with_label(SgpMsg::CONFIGURE_WINDOW)
             .word(0, win_id)

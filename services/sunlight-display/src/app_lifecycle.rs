@@ -63,6 +63,7 @@ impl AppTracker {
     pub fn register_window(&mut self, pid: u64, win_id: u64, app_name: &str, is_desktop: bool) {
         if let Some(app) = self.apps.iter_mut().find(|a| a.pid == pid) {
             app.windows.push(win_id);
+            app.state = AppState::Running;
             debug_log(&alloc::format!(
                 "[APP_LIFECYCLE] app_window_attached pid={} win_id={} app_name={}\n",
                 pid,
@@ -74,6 +75,8 @@ impl AppTracker {
 
         let policy = if is_desktop || pid <= 1 {
             LifecyclePolicy::System
+        } else if app_name == "Sunlight Dialog" {
+            LifecyclePolicy::KeepAlive
         } else {
             LifecyclePolicy::ExitOnLastWindowClosed
         };
