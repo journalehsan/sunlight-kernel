@@ -42,12 +42,16 @@ fn main() {
     let fira_regular = fira_dir.join("FiraCode-Regular.ttf");
     let fira_medium = fira_dir.join("FiraCode-Medium.ttf");
 
+    let material_dir = workspace_root.join("assets/fonts/Material-Icons");
+    let material_regular = material_dir.join("MaterialIcons-Regular.ttf");
+
     for p in [
         &inter_regular,
         &inter_medium,
         &inter_semibold,
         &fira_regular,
         &fira_medium,
+        &material_regular,
     ] {
         println!("cargo:rerun-if-changed={}", p.display());
     }
@@ -66,6 +70,7 @@ fn main() {
     let f_semibold = parse(load(&inter_semibold), "Inter SemiBold");
     let f_fira_reg = parse(load(&fira_regular), "FiraCode Regular");
     let f_fira_med = parse(load(&fira_medium), "FiraCode Medium");
+    let f_material = parse(load(&material_regular), "Material Icons");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
@@ -92,6 +97,12 @@ fn main() {
         14.0,
         &out_dir.join("sunlight_mono_medium_14.mtf"),
     );
+
+    // Material Icons font converted to MiniType (MTF1) format.
+    // Uses printable ASCII range for compatibility with current MTF loader.
+    // For full icon sets use dynamic loader + richer ranges in future.
+    generate(&f_material, 16.0, &out_dir.join("material_icons_16.mtf"));
+    generate(&f_material, 24.0, &out_dir.join("material_icons_24.mtf"));
 }
 
 fn generate(font: &Font, px: f32, out_path: &PathBuf) {

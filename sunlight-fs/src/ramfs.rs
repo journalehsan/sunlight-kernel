@@ -1692,6 +1692,61 @@ StandardOutput=journal\nStandardError=journal\n\n\
         mode::FILE_644,
         include_bytes!("../../docs/images/sunlight-login-background.tga"),
     ),
+    // MiniType fonts (standalone .mtf) for dynamic font loader / future OS image use.
+    // Generated via assets/fonts/minitype/generate.sh (and sun-font/build.rs).
+    // See docs/MINITYPE_FONTS.md
+    RamEntry::dir("/usr/share/sunlightos/fonts", 0, 0, mode::DIR_755),
+    RamEntry::dir("/usr/share/sunlightos/fonts/minitype", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_ui_11.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_ui_11.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_ui_13.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_ui_13.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_ui_16.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_ui_16.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_ui_medium_13.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_ui_medium_13.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_ui_semibold_13.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_ui_semibold_13.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_ui_title_18.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_ui_title_18.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_mono_regular_14.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_mono_regular_14.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_mono_medium_14.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_mono_medium_14.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/material_icons_16.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/material_icons_16.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/material_icons_24.mtf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/material_icons_24.mtf"),
+    ),
     RamEntry::dir("/usr/share/sunlightos/sample-pictures", 0, 0, mode::DIR_755),
     RamEntry::file(
         "/usr/share/sunlightos/sample-pictures/01_solar_blossom.simg",

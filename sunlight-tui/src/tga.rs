@@ -162,8 +162,8 @@ pub fn draw_tga_icon_tinted(
 /// Pixels with alpha < 128 are treated as transparent and skipped.
 /// When `img` is `None`, draws a simple placeholder outline using `fallback_color`.
 ///
-/// Framebuffer login screen uses this for user avatars and action buttons.
-/// Icon sources: docs/icons/SunlightOS/actions/32/
+/// Framebuffer login screen uses this (and draw_tga_icon_tinted) for user avatars and action buttons.
+/// Login icons are generated from the Material Icons font at build time.
 pub fn draw_tga_icon(
     fb: &mut Framebuffer,
     img: Option<&TgaImage<'_>>,

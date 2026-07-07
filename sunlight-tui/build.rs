@@ -43,10 +43,13 @@ fn main() {
     let fira_regular = fira_dir.join("FiraCode-Regular.ttf");
     let fira_semibold = fira_dir.join("FiraCode-SemiBold.ttf");
 
+    let material_path = workspace_root.join("assets/fonts/Material-Icons/MaterialIcons-Regular.ttf");
+
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed={}", inter_path.display());
     println!("cargo:rerun-if-changed={}", fira_regular.display());
     println!("cargo:rerun-if-changed={}", fira_semibold.display());
+    println!("cargo:rerun-if-changed={}", material_path.display());
 
     let inter_bytes = fs::read(&inter_path).unwrap_or_else(|e| {
         panic!(
@@ -80,6 +83,16 @@ fn main() {
         Font::from_bytes(fira_semibold_bytes.as_slice(), FontSettings::default())
             .expect("sunlight-tui build: failed to parse Fira Code SemiBold");
 
+    let material_bytes = fs::read(&material_path).unwrap_or_else(|e| {
+        panic!(
+            "sunlight-tui build: cannot read {}: {}",
+            material_path.display(),
+            e
+        )
+    });
+    let material_font = Font::from_bytes(material_bytes.as_slice(), FontSettings::default())
+        .expect("sunlight-tui build: failed to parse Material Icons");
+
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // UI chrome fonts (Inter)
@@ -97,6 +110,12 @@ fn main() {
         14.0,
         &out_dir.join("tty_mono_bold_14.mtf"),
     );
+
+    // Material Icons (replacing the old TGA action icons for login buttons/avatars)
+    // Chosen glyphs that render nicely at ~28px inside the 32px slots.
+    emit_icon_tga(&material_font, 0xe853, 28.0, 32, &out_dir.join("icon_users.tga")); // account_circle
+    emit_icon_tga(&material_font, 0xe053, 28.0, 32, &out_dir.join("icon_reboot.tga")); // restart_alt
+    emit_icon_tga(&material_font, 0xe8ac, 28.0, 32, &out_dir.join("icon_shutdown.tga")); // power_settings_new
 }
 
 fn generate(font: &Font, px: f32, out_path: &PathBuf) {
@@ -157,4 +176,72 @@ fn generate(font: &Font, px: f32, out_path: &PathBuf) {
     }
 
     println!("Generated {} ({} bytes)", out_path.display(), pos);
+}
+
+/// Rasterize a Material Icons glyph and emit a minimal 32-bpp top-down TGA
+/// (with white RGB + alpha from coverage) centered in a `canvas` x `canvas` image.
+/// This lets the existing TGA loader + tinted drawer work for action icons.
+fn emit_icon_tga(font: &Font, cp: u32, px: f32, canvas: u32, out_path: &PathBuf) {
+    let ch = char::from_u32(cp).expect("invalid codepoint for icon");
+    let (metrics, pixels) = font.rasterize(ch, px);
+
+    let gw = metrics.width as u32;
+    let gh = metrics.height as u32;
+
+    // Center the glyph inside the canvas.
+    let dst_x = (canvas.saturating_sub(gw)) / 2;
+    let dst_y = (canvas.saturating_sub(gh)) / 2;
+
+    // TGA header for type 2 (uncompressed truecolor), 32bpp, top-down.
+    // 18 bytes header.
+    let mut tga: Vec<u8> = vec![0u8; 18];
+    tga[2] = 2; // image type = uncompressed true-color
+    // width/height little endian at 12/14
+    tga[12] = (canvas & 0xff) as u8;
+    tga[13] = (canvas >> 8) as u8;
+    tga[14] = (canvas & 0xff) as u8;
+    tga[15] = (canvas >> 8) as u8;
+    tga[16] = 32; // bpp
+    tga[17] = 0x20; // top-down, no alpha attr bits needed for our parser
+
+    // Image data: top-down BGRA (B,G,R,A)
+    let mut img = vec![0u8; (canvas * canvas * 4) as usize];
+    for gy in 0..gh {
+        for gx in 0..gw {
+            let src_idx = (gy * gw + gx) as usize;
+            let a = pixels[src_idx];
+            if a == 0 {
+                continue;
+            }
+            let dx = dst_x + gx;
+            let dy = dst_y + gy;
+            if dx >= canvas || dy >= canvas {
+                continue;
+            }
+            let didx = ((dy * canvas + dx) * 4) as usize;
+            // White shape + coverage in alpha. Tinted drawer will use alpha.
+            img[didx + 0] = 0xFF; // B
+            img[didx + 1] = 0xFF; // G
+            img[didx + 2] = 0xFF; // R
+            img[didx + 3] = a;    // A
+        }
+    }
+
+    tga.extend_from_slice(&img);
+
+    fs::write(out_path, &tga).unwrap_or_else(|e| {
+        panic!(
+            "sunlight-tui build: cannot write icon tga {}: {}",
+            out_path.display(),
+            e
+        )
+    });
+
+    println!(
+        "Generated icon U+{:04X} -> {} ({}x{} canvas)",
+        cp,
+        out_path.display(),
+        canvas,
+        canvas
+    );
 }

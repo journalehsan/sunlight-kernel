@@ -25,10 +25,14 @@ runs at boot — the pixel data is baked into the binary at compile time.
 
 ## Font Asset Paths
 
-**Source TTFs** (open-source, OFL licensed):
+**Source TTFs**:
 ```
 docs/fonts/Inter/static/Inter_18pt-Regular.ttf
 docs/fonts/Inter/static/Inter_18pt-Medium.ttf
+docs/fonts/Inter/static/Inter_18pt-SemiBold.ttf
+docs/fonts/FiraCode/ttf/FiraCode-Regular.ttf
+docs/fonts/FiraCode/ttf/FiraCode-Medium.ttf
+assets/fonts/Material-Icons/MaterialIcons-Regular.ttf   (icon symbols)
 ```
 
 **Generated MTF files** (baked into the binary at build time, not shipped separately):
@@ -36,14 +40,74 @@ docs/fonts/Inter/static/Inter_18pt-Medium.ttf
 $OUT_DIR/sunlight_ui_11.mtf
 $OUT_DIR/sunlight_ui_13.mtf
 $OUT_DIR/sunlight_ui_medium_13.mtf
+$OUT_DIR/sunlight_ui_semibold_13.mtf
 $OUT_DIR/sunlight_ui_16.mtf
-$OUT_DIR/sunlight_mono_13.mtf
+$OUT_DIR/sunlight_ui_title_18.mtf
+$OUT_DIR/sunlight_mono_regular_14.mtf
+$OUT_DIR/sunlight_mono_medium_14.mtf
+$OUT_DIR/material_icons_16.mtf
+$OUT_DIR/material_icons_24.mtf
 ```
 
-For future OS-image installation (dynamic loading path, not yet used):
+Standalone copies are also maintained under:
+```
+assets/fonts/minitype/*.mtf
+```
+(Use `assets/fonts/minitype/generate.sh` or `cargo build -p sun-font`.)
+
+For future OS-image installation (dynamic loading path):
 ```
 /usr/share/sunlightos/fonts/minitype/
 ```
+These are seeded into the initramfs (see sunlight-fs/src/ramfs.rs INITRAMFS).
+
+## Material Icons Font
+
+In addition to text fonts, the Material Icons icon font is converted for use as UI symbols (reboot, shutdown, user avatars, etc.).
+
+**Source TTF:**
+```
+assets/fonts/Material-Icons/MaterialIcons-Regular.ttf
+```
+
+**Generated MTF files (ASCII range only, for MTF1 compatibility):**
+```
+$OUT_DIR/material_icons_16.mtf
+$OUT_DIR/material_icons_24.mtf
+```
+
+These MTFs (and the full set) are also copied to `assets/fonts/minitype/` and installed into the ramfs at `/usr/share/sunlightos/fonts/minitype/`.
+
+**Actual icon usage in the login screen and TUI (preferred path):**
+
+- `sunlight-tui/build.rs` directly rasterizes specific Private Use Area (PUA) codepoints using `fontdue` at build time.
+- It emits 32×32 TGA bitmaps (centered white + alpha) into `OUT_DIR`:
+  - `icon_users.tga` (from U+E853 `account_circle`)
+  - `icon_reboot.tga` (from U+E053 `restart_alt`)
+  - `icon_shutdown.tga` (from U+E8AC `power_settings_new`)
+- Drawn with `draw_tga_icon_tinted()` so they inherit the current theme accent / dim colors.
+- This replaced the previous checked-in `docs/icons/SunlightOS/actions/32/system-*.tga` files for the login grid (Reboot, Shutdown, Users slots).
+
+**Regenerating / Adding more icons:**
+
+```bash
+# Regenerate all .mtf (including material_icons_*)
+cargo clean -p sun-font
+cargo build -p sun-font
+
+# Or use the helper script (prefers build.rs path; falls back to minitype-cli if present)
+./assets/fonts/minitype/generate.sh
+```
+
+To use additional Material symbols in the framebuffer TUI (login or elsewhere):
+
+1. Pick the codepoint (use the probe in previous sessions or a font tool).
+2. Add a raster + emit call in `sunlight-tui/build.rs` (see `emit_icon_tga`).
+3. Add a `const ICON_FOO` include from `OUT_DIR`.
+4. Parse with `tga::TgaImage` and draw with `draw_tga_icon` or `draw_tga_icon_tinted`.
+5. Rebuild `sunlight-tui` (and dependents like `tty_server`).
+
+Note: The current MTF1 format is limited to 95 ASCII glyphs (0x20–0x7E). Full PUA icon sets are currently handled via direct rasterization in component build scripts or via the standalone minitype-cli path for dynamic loading experiments. Richer multi-range MTF support is planned for the future.
 
 ## Regenerating .mtf Files
 

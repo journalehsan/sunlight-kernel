@@ -21,12 +21,11 @@ pub use modes::debug::LogBuffer;
 pub use splash::{BootMode, SplashScreen};
 
 // Framebuffer login screen icons (32×32 TGA, transparent-background).
-// Source: docs/icons/SunlightOS/actions/32/
-const ICON_USERS: &[u8] = include_bytes!("../../docs/icons/SunlightOS/actions/32/system-users.tga");
-const ICON_REBOOT: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/32/system-reboot.tga");
-const ICON_SHUTDOWN: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/32/system-shutdown.tga");
+// Now generated at build time from Material Icons TTF (see sunlight-tui/build.rs).
+// We use the tinted drawer so the icons take the current accent/dim color.
+const ICON_USERS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_users.tga"));
+const ICON_REBOOT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_reboot.tga"));
+const ICON_SHUTDOWN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_shutdown.tga"));
 
 /// A terminal cell with character and pre-resolved RGB colors.
 #[derive(Clone, Copy, Debug)]
@@ -485,7 +484,7 @@ pub enum LoginFocus {
     Shutdown,
 }
 
-/// Draw a user avatar tile: 32×32 TGA icon inside a 40×40 slot box.
+/// Draw a user avatar tile: 32×32 Material Icon (or TGA) inside a 40×40 slot box.
 ///
 /// Falls back to a letter glyph when `icon` is `None` (icon failed to load).
 /// Orange border on focused/selected; subtle border otherwise.
@@ -545,7 +544,7 @@ fn draw_user_avatar(
 
     let icon_x = cx.saturating_sub(ICON_SZ / 2);
     if let Some(img) = icon {
-        tga::draw_tga_icon(
+        tga::draw_tga_icon_tinted(
             fb,
             Some(img),
             icon_x,
@@ -577,10 +576,10 @@ fn draw_user_avatar(
 /// Render the grid-based login screen with user avatars, password, and session dropdown.
 ///
 /// Background: TGA image with dark overlay (falls back to solid dark if decode fails).
-/// User avatars: 32×32 system-users.tga icons with orange selection ring.
-/// Action buttons: 32×32 system-reboot / system-shutdown icons with label.
+/// User avatars: 32×32 Material Icon (account_circle) with orange selection ring.
+/// Action buttons: 32×32 Material Icons (restart_alt / power_settings_new) with label.
 /// Password and session fields: outlined input boxes, orange border when focused.
-/// Icon source: docs/icons/SunlightOS/actions/32/
+/// Icons: generated from Material-Icons TTF via sunlight-tui/build.rs (no more checked-in TGAs)
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
 pub unsafe fn render_login_grid(
@@ -876,7 +875,7 @@ pub unsafe fn render_login_grid(
                 layout::palette::SEPARATOR
             },
         );
-        tga::draw_tga_icon(
+        tga::draw_tga_icon_tinted(
             &mut fb,
             icon_reboot.as_ref(),
             reboot_x + BTN_ICON_PAD,
@@ -920,7 +919,7 @@ pub unsafe fn render_login_grid(
                 layout::palette::SEPARATOR
             },
         );
-        tga::draw_tga_icon(
+        tga::draw_tga_icon_tinted(
             &mut fb,
             icon_shutdown.as_ref(),
             shutdown_x + BTN_ICON_PAD,
