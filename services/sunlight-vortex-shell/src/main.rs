@@ -1427,7 +1427,11 @@ impl VortexShell {
     }
 
     fn refresh_calendar_popover_data(&mut self) {
-        let key = format_cal_date(self.cal_view_year, self.cal_view_month, self.cal_selected_day);
+        let key = format_cal_date(
+            self.cal_view_year,
+            self.cal_view_month,
+            self.cal_selected_day,
+        );
         let kb = key.as_bytes();
         if kb.len() == self.cal_last_loaded_key_len
             && self.cal_last_loaded_key[..self.cal_last_loaded_key_len] == *kb
@@ -3146,7 +3150,10 @@ fn load_calendar_events_for_day(year: u16, month: u8, day: u8) -> Vec<CalendarMi
     let Some(index_bytes) = kv_get_bytes(&calendar_index_key(&date)) else {
         return events;
     };
-    for id in parse_id_list(&index_bytes).into_iter().take(CAL_POPUP_EVENTS) {
+    for id in parse_id_list(&index_bytes)
+        .into_iter()
+        .take(CAL_POPUP_EVENTS)
+    {
         if let Some(bytes) = kv_get_bytes(&format_event_key(id)) {
             if let Some(event) = parse_calendar_event_summary(&bytes) {
                 events.push(event);
@@ -4457,22 +4464,33 @@ impl VortexShell {
                 cell_r.h,
                 &TextStyle::new(
                     FontRole::UiSmall,
-                    if is_selected { theme.text_on_accent } else { theme.text },
+                    if is_selected {
+                        theme.text_on_accent
+                    } else {
+                        theme.text
+                    },
                 ),
             );
             if self.cal_event_days[idx] {
                 canvas.fill_rounded_rect(
                     Rect::new(cell_r.right() - 8, cell_r.bottom() - 6, 4, 4),
                     2,
-                    if is_selected { theme.text_on_accent } else { theme.accent },
+                    if is_selected {
+                        theme.text_on_accent
+                    } else {
+                        theme.accent
+                    },
                 );
             }
         }
 
         let list_y = y + 184;
         canvas.hbar(x + 12, list_y - 8, pw - 24, 1, theme.border);
-        let selected_date =
-            format_cal_date(self.cal_view_year, self.cal_view_month, self.cal_selected_day);
+        let selected_date = format_cal_date(
+            self.cal_view_year,
+            self.cal_view_month,
+            self.cal_selected_day,
+        );
         draw_text_vcenter(
             canvas,
             &selected_date,
@@ -4533,7 +4551,9 @@ impl VortexShell {
         draw_text_vcenter(
             canvas,
             "Open Calendar",
-            btn_r.x + ((btn_r.w as i32 - measure_text("Open Calendar", FontRole::UiSmall).w as i32) / 2),
+            btn_r.x
+                + ((btn_r.w as i32 - measure_text("Open Calendar", FontRole::UiSmall).w as i32)
+                    / 2),
             btn_r.y,
             btn_r.h,
             &TextStyle::new(FontRole::UiSmall, theme.text_on_accent),

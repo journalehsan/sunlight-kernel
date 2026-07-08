@@ -95,7 +95,8 @@ static ICON_REPLACE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_
 static ICON_CUT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_cut.tga"));
 static ICON_COPY_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_copy.tga"));
 static ICON_PASTE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_paste.tga"));
-static ICON_SELECT_ALL_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_select_all.tga"));
+static ICON_SELECT_ALL_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_select_all.tga"));
 static ICON_NEXT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_next.tga"));
 static ICON_PREV_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_prev.tga"));
 // Hamburger replaces the text "Menu" label on the toolbar.
@@ -1944,7 +1945,11 @@ impl EditApp {
             canvas.draw_tga_icon_tinted(
                 icon,
                 Rect::new(rect.x + ((rect.w as i32 - 16) / 2), rect.y + 6, 16, 16),
-                if enabled { theme.icon_foreground } else { theme.icon_disabled },
+                if enabled {
+                    theme.icon_foreground
+                } else {
+                    theme.icon_disabled
+                },
             );
         } else {
             let label = match action {
@@ -2050,8 +2055,16 @@ impl EditApp {
                 .icon
                 .and_then(|_| self.icons.icon_for(item.spec.action))
             {
-                let col = if item.enabled { theme.icon_foreground } else { theme.icon_disabled };
-                canvas.draw_tga_icon_tinted(icon, Rect::new(item.rect.x + 4, item.rect.y + 4, 16, 16), col);
+                let col = if item.enabled {
+                    theme.icon_foreground
+                } else {
+                    theme.icon_disabled
+                };
+                canvas.draw_tga_icon_tinted(
+                    icon,
+                    Rect::new(item.rect.x + 4, item.rect.y + 4, 16, 16),
+                    col,
+                );
             }
             draw_text_vcenter(
                 canvas,

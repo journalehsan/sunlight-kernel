@@ -81,7 +81,12 @@ fn parse_date_parts(s: &str) -> Option<(i32, i32, i32)> {
     let year_s = &s[..first_sep];
     let month_s = &s[first_sep + 1..second_sep];
     let day_s = &s[second_sep + 1..];
-    if year_s.len() != 4 || month_s.is_empty() || month_s.len() > 2 || day_s.is_empty() || day_s.len() > 2 {
+    if year_s.len() != 4
+        || month_s.is_empty()
+        || month_s.len() > 2
+        || day_s.is_empty()
+        || day_s.len() > 2
+    {
         return None;
     }
     for part in [year_s, month_s, day_s] {
@@ -152,9 +157,15 @@ pub fn parse_u64(s: &str) -> Option<u64> {
             return None;
         }
         seen = true;
-        n = n.saturating_mul(10).saturating_add((c as u64).saturating_sub('0' as u64));
+        n = n
+            .saturating_mul(10)
+            .saturating_add((c as u64).saturating_sub('0' as u64));
     }
-    if seen { Some(n) } else { None }
+    if seen {
+        Some(n)
+    } else {
+        None
+    }
 }
 
 pub fn push_u64_decimal(out: &mut String, mut n: u64) {
@@ -178,7 +189,11 @@ pub fn push_u64_hex(out: &mut String, mut n: u64) {
     let mut buf = [0u8; 16];
     for i in (0..16).rev() {
         let digit = (n & 0xF) as u8;
-        buf[i] = if digit < 10 { b'0' + digit } else { b'a' + digit - 10 };
+        buf[i] = if digit < 10 {
+            b'0' + digit
+        } else {
+            b'a' + digit - 10
+        };
         n >>= 4;
     }
     for &b in &buf {
@@ -221,8 +236,14 @@ mod tests {
     #[test]
     fn stable_namespace_keys_are_readable() {
         assert_eq!(event_key(42), "app.calendar.events/000000000000002a");
-        assert_eq!(by_date_key("2026-07-08"), "app.calendar.index/by-date/2026-07-08");
-        assert_eq!(setting_key("selected-date"), "app.calendar.settings/selected-date");
+        assert_eq!(
+            by_date_key("2026-07-08"),
+            "app.calendar.index/by-date/2026-07-08"
+        );
+        assert_eq!(
+            setting_key("selected-date"),
+            "app.calendar.settings/selected-date"
+        );
     }
 
     #[test]

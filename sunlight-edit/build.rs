@@ -11,7 +11,8 @@ use std::path::PathBuf;
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let workspace_root = manifest_dir.parent().unwrap().to_owned();
-    let material_path = workspace_root.join("assets/fonts/Material-Icons/MaterialIcons-Regular.ttf");
+    let material_path =
+        workspace_root.join("assets/fonts/Material-Icons/MaterialIcons-Regular.ttf");
 
     println!("cargo:rerun-if-changed={}", material_path.display());
     println!("cargo:rerun-if-changed=build.rs");
@@ -26,21 +27,99 @@ fn main() {
 
     // Toolbar / action icons at ~16-18px rendered into 24px square canvases.
     // Using slightly larger source raster then scaling gives better quality.
-    emit_icon_tga(&material_font, 0xe89c, 18.0, 24, &out_dir.join("icon_new.tga"));          // note_add
-    emit_icon_tga(&material_font, 0xeaf3, 18.0, 24, &out_dir.join("icon_open.tga"));          // file_open
-    emit_icon_tga(&material_font, 0xe161, 18.0, 24, &out_dir.join("icon_save.tga"));          // save
-    emit_icon_tga(&material_font, 0xe171, 18.0, 24, &out_dir.join("icon_save_as.tga"));       // save_as
-    emit_icon_tga(&material_font, 0xe8b6, 18.0, 24, &out_dir.join("icon_find.tga"));          // search
-    emit_icon_tga(&material_font, 0xe881, 18.0, 24, &out_dir.join("icon_replace.tga"));       // find_replace
-    emit_icon_tga(&material_font, 0xe14e, 18.0, 24, &out_dir.join("icon_cut.tga"));           // content_cut
-    emit_icon_tga(&material_font, 0xe14d, 18.0, 24, &out_dir.join("icon_copy.tga"));          // content_copy
-    emit_icon_tga(&material_font, 0xe14f, 18.0, 24, &out_dir.join("icon_paste.tga"));         // content_paste
-    emit_icon_tga(&material_font, 0xe162, 18.0, 24, &out_dir.join("icon_select_all.tga"));    // select_all
-    emit_icon_tga(&material_font, 0xe5c8, 18.0, 24, &out_dir.join("icon_next.tga"));          // arrow_forward (find next)
-    emit_icon_tga(&material_font, 0xe5c4, 18.0, 24, &out_dir.join("icon_prev.tga"));          // arrow_back   (find prev)
+    emit_icon_tga(
+        &material_font,
+        0xe89c,
+        18.0,
+        24,
+        &out_dir.join("icon_new.tga"),
+    ); // note_add
+    emit_icon_tga(
+        &material_font,
+        0xeaf3,
+        18.0,
+        24,
+        &out_dir.join("icon_open.tga"),
+    ); // file_open
+    emit_icon_tga(
+        &material_font,
+        0xe161,
+        18.0,
+        24,
+        &out_dir.join("icon_save.tga"),
+    ); // save
+    emit_icon_tga(
+        &material_font,
+        0xe171,
+        18.0,
+        24,
+        &out_dir.join("icon_save_as.tga"),
+    ); // save_as
+    emit_icon_tga(
+        &material_font,
+        0xe8b6,
+        18.0,
+        24,
+        &out_dir.join("icon_find.tga"),
+    ); // search
+    emit_icon_tga(
+        &material_font,
+        0xe881,
+        18.0,
+        24,
+        &out_dir.join("icon_replace.tga"),
+    ); // find_replace
+    emit_icon_tga(
+        &material_font,
+        0xe14e,
+        18.0,
+        24,
+        &out_dir.join("icon_cut.tga"),
+    ); // content_cut
+    emit_icon_tga(
+        &material_font,
+        0xe14d,
+        18.0,
+        24,
+        &out_dir.join("icon_copy.tga"),
+    ); // content_copy
+    emit_icon_tga(
+        &material_font,
+        0xe14f,
+        18.0,
+        24,
+        &out_dir.join("icon_paste.tga"),
+    ); // content_paste
+    emit_icon_tga(
+        &material_font,
+        0xe162,
+        18.0,
+        24,
+        &out_dir.join("icon_select_all.tga"),
+    ); // select_all
+    emit_icon_tga(
+        &material_font,
+        0xe5c8,
+        18.0,
+        24,
+        &out_dir.join("icon_next.tga"),
+    ); // arrow_forward (find next)
+    emit_icon_tga(
+        &material_font,
+        0xe5c4,
+        18.0,
+        24,
+        &out_dir.join("icon_prev.tga"),
+    ); // arrow_back   (find prev)
 
     // Hamburger / menu icon for the toolbar "Menu" button (replaces text label).
-    emit_icon_tga(&material_font, 0xe5d2, 18.0, 24, &out_dir.join("icon_menu.tga"));          // menu (hamburger)
+    emit_icon_tga(
+        &material_font,
+        0xe5d2,
+        18.0,
+        24,
+        &out_dir.join("icon_menu.tga"),
+    ); // menu (hamburger)
 }
 
 /// Rasterize one Material Icon codepoint into a square TGA (type 2, 32bpp top-down)
@@ -88,7 +167,11 @@ fn emit_icon_tga(font: &Font, cp: u32, px: f32, canvas: u32, out_path: &PathBuf)
     tga.extend_from_slice(&img);
 
     fs::write(out_path, &tga).unwrap_or_else(|e| {
-        panic!("sunlight-edit/build: failed to write {}: {}", out_path.display(), e);
+        panic!(
+            "sunlight-edit/build: failed to write {}: {}",
+            out_path.display(),
+            e
+        );
     });
 
     println!("Generated icon U+{:04X} -> {}", cp, out_path.display());

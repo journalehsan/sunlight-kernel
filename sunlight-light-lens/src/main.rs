@@ -687,7 +687,11 @@ impl LightLensApp {
         canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
         if let Some(icon) = self.app_icon {
             // Material icon (monochrome) tinted to foreground.
-            canvas.draw_tga_icon_tinted(&icon, Rect::new(rect.x + 8, rect.y + 6, 22, 22), theme.icon_foreground);
+            canvas.draw_tga_icon_tinted(
+                &icon,
+                Rect::new(rect.x + 8, rect.y + 6, 22, 22),
+                theme.icon_foreground,
+            );
         }
         sf_vcenter(
             canvas,

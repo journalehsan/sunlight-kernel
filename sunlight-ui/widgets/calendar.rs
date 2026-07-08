@@ -21,7 +21,11 @@ pub struct CalendarCellStyle {
 
 impl CalendarCellStyle {
     pub fn from_theme(theme: &Theme, state: CalendarCellState, has_events: bool) -> Self {
-        let marker = if has_events { theme.accent } else { Color::TRANSPARENT };
+        let marker = if has_events {
+            theme.accent
+        } else {
+            Color::TRANSPARENT
+        };
         match state {
             CalendarCellState::Normal => Self {
                 fill: None,

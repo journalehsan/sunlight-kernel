@@ -11,13 +11,17 @@ use std::path::PathBuf;
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let workspace_root = manifest_dir.parent().unwrap().to_owned();
-    let material_path = workspace_root.join("assets/fonts/Material-Icons/MaterialIcons-Regular.ttf");
+    let material_path =
+        workspace_root.join("assets/fonts/Material-Icons/MaterialIcons-Regular.ttf");
 
     println!("cargo:rerun-if-changed={}", material_path.display());
     println!("cargo:rerun-if-changed=build.rs");
 
     let material_bytes = fs::read(&material_path).unwrap_or_else(|e| {
-        panic!("sunlight-light-lens/build: cannot read Material Icons: {}", e);
+        panic!(
+            "sunlight-light-lens/build: cannot read Material Icons: {}",
+            e
+        );
     });
     let font = Font::from_bytes(material_bytes.as_slice(), FontSettings::default())
         .expect("sunlight-light-lens/build: parse Material Icons failed");
@@ -54,10 +58,14 @@ fn emit_icon_tga(font: &Font, cp: u32, px: f32, canvas: u32, out_path: &PathBuf)
     for gy in 0..gh {
         for gx in 0..gw {
             let a = pixels[(gy * gw + gx) as usize];
-            if a == 0 { continue; }
+            if a == 0 {
+                continue;
+            }
             let dx = dst_x + gx;
             let dy = dst_y + gy;
-            if dx >= canvas || dy >= canvas { continue; }
+            if dx >= canvas || dy >= canvas {
+                continue;
+            }
             let didx = ((dy * canvas + dx) * 4) as usize;
             img[didx + 0] = 0xFF;
             img[didx + 1] = 0xFF;

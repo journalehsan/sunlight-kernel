@@ -2198,13 +2198,22 @@ mod tests {
         let has_user_copy = INITRAMFS
             .iter()
             .any(|e| e.path == "/home/user/Documents/Why SunlightOS Exists.txt" && !e.is_dir);
-        let has_system_copy = INITRAMFS
-            .iter()
-            .any(|e| e.path == "/usr/share/sunlightos/documents/Why SunlightOS Exists.txt" && !e.is_dir);
+        let has_system_copy = INITRAMFS.iter().any(|e| {
+            e.path == "/usr/share/sunlightos/documents/Why SunlightOS Exists.txt" && !e.is_dir
+        });
 
-        assert!(has_root_copy, "missing /root/Documents/Why SunlightOS Exists.txt");
-        assert!(has_user_copy, "missing /home/user/Documents/Why SunlightOS Exists.txt");
-        assert!(has_system_copy, "missing /usr/share/sunlightos/documents/Why SunlightOS Exists.txt");
+        assert!(
+            has_root_copy,
+            "missing /root/Documents/Why SunlightOS Exists.txt"
+        );
+        assert!(
+            has_user_copy,
+            "missing /home/user/Documents/Why SunlightOS Exists.txt"
+        );
+        assert!(
+            has_system_copy,
+            "missing /usr/share/sunlightos/documents/Why SunlightOS Exists.txt"
+        );
 
         // Spot-check content via a fresh RamFs.
         let mut fs = RamFs::new(INITRAMFS);

@@ -3,9 +3,9 @@
 
 extern crate alloc;
 
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
-use alloc::format;
 use core::alloc::GlobalAlloc;
 
 use sun_font::{draw_text, draw_text_vcenter, line_height, measure_text, FontRole, TextStyle};
@@ -18,11 +18,11 @@ use sunlight_locale::{month_name, weekday_name};
 use sunlight_tz::{local_now, read_localtime, tz_by_id};
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
-    form_field_style, status_text_color, CalendarCellState, CalendarCellStyle, EmptyStateStyle,
-    StatusTextKind,
+    form_field_style, status_text_color, Button, CalendarCellState, CalendarCellStyle,
+    EmptyStateStyle, Panel, StatusTextKind,
 };
 use sunlight_ui::{
-    App, Canvas, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
+    App, Canvas, Event, GridRow, Point, Rect, Theme, VBox, Window, WindowConfig, WindowDecoration,
 };
 
 const WIN_W: u32 = 960;
@@ -32,14 +32,22 @@ const TOOLBAR_H: u32 = 38;
 const SIDEBAR_W: u32 = 260;
 const STATUS_H: u32 = 22;
 const PAD: i32 = 8;
-const CELL_W: i32 = 80;
-const CELL_H: i32 = 34;
+const CALENDAR_INNER_PAD: i32 = 12;
+const CALENDAR_SECTION_GAP: i32 = 12;
+const CALENDAR_CELL_W_MIN: i32 = 68;
+const CALENDAR_CELL_W_MAX: i32 = 90;
+const CALENDAR_CELL_H_MIN: i32 = 36;
+const CALENDAR_CELL_H_MAX: i32 = 52;
+const CALENDAR_HEADER_H: i32 = 24;
 const GRID_GAP: i32 = 2;
 const DIALOG_W: u32 = 500;
 const DIALOG_BTN_W: u32 = 96;
 const DIALOG_BTN_H: u32 = 28;
 const DIALOG_BTN_GAP: u32 = 10;
 const DIALOG_PAD: i32 = 16;
+const SIDEBAR_ACTION_H: i32 = 32;
+const SIDEBAR_ACTION_GAP: i32 = 8;
+const SIDEBAR_BOTTOM_MARGIN: i32 = 12;
 const MAX_EVENTS: usize = 256;
 const TITLE_LEN: usize = 96;
 const DATE_LEN: usize = 10;
@@ -73,7 +81,6 @@ static ICON_NEXT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_nex
 static ICON_ADD_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_add.tga"));
 static ICON_MENU_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_menu.tga"));
 static ICON_EVENT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_event.tga"));
-
 
 struct BumpAllocator;
 unsafe impl GlobalAlloc for BumpAllocator {
@@ -172,7 +179,11 @@ fn iso_weekday(year: i32, month: i32, day: i32) -> u8 {
     let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
     let y = if month < 3 { year - 1 } else { year };
     let w = (y + y / 4 - y / 100 + y / 400 + t[(month - 1) as usize] + day) % 7;
-    if w == 0 { 7 } else { w as u8 }
+    if w == 0 {
+        7
+    } else {
+        w as u8
+    }
 }
 
 fn weekday_mon0(year: i32, month: i32, day: i32) -> i32 {
@@ -208,6 +219,84 @@ fn month_grid_days(year: i32, month: i32) -> [i32; 42] {
         days[(start_wday + i) as usize % 42] = i + 1;
     }
     days
+}
+
+#[derive(Clone, Copy)]
+struct MonthGridLayout {
+    header_h: i32,
+    cell_w: i32,
+    cell_h: i32,
+    total_cell_w: i32,
+    total_cell_h: i32,
+    pad_x: i32,
+    header_y: i32,
+    grid_top: i32,
+}
+
+impl MonthGridLayout {
+    fn new(rect: Rect) -> Self {
+        let width_budget = (rect.w as i32 - 6 * GRID_GAP).max(1);
+        let height_budget = (rect.h as i32 - CALENDAR_HEADER_H - 4 - 5 * GRID_GAP).max(1);
+
+        let mut cell_w = (width_budget / 7)
+            .max(CALENDAR_CELL_W_MIN)
+            .min(CALENDAR_CELL_W_MAX);
+        let mut cell_h = (height_budget / 6)
+            .max(CALENDAR_CELL_H_MIN)
+            .min(CALENDAR_CELL_H_MAX);
+
+        let mut grid_w = 7 * cell_w + 6 * GRID_GAP;
+        if grid_w > rect.w as i32 {
+            cell_w = ((rect.w as i32 - 6 * GRID_GAP) / 7).max(1);
+            grid_w = 7 * cell_w + 6 * GRID_GAP;
+        }
+
+        let mut grid_h = CALENDAR_HEADER_H + 4 + 6 * cell_h + 5 * GRID_GAP;
+        if grid_h > rect.h as i32 {
+            cell_h = ((rect.h as i32 - CALENDAR_HEADER_H - 4 - 5 * GRID_GAP) / 6).max(1);
+            grid_h = CALENDAR_HEADER_H + 4 + 6 * cell_h + 5 * GRID_GAP;
+        }
+
+        let pad_x = ((rect.w as i32 - grid_w) / 2).max(0);
+        let pad_y = ((rect.h as i32 - grid_h) / 2).max(0);
+        let header_y = rect.y + pad_y;
+        let grid_top = header_y + CALENDAR_HEADER_H + 4;
+
+        Self {
+            header_h: CALENDAR_HEADER_H,
+            cell_w,
+            cell_h,
+            total_cell_w: cell_w + GRID_GAP,
+            total_cell_h: cell_h + GRID_GAP,
+            pad_x,
+            header_y,
+            grid_top,
+        }
+    }
+
+    fn cell_rect(&self, base: Rect, col: i32, row: i32) -> Rect {
+        let x = base.x + self.pad_x + col * self.total_cell_w;
+        let y = self.grid_top + row * self.total_cell_h;
+        Rect::new(x, y, self.cell_w as u32, self.cell_h as u32)
+    }
+
+    fn contains(&self, base: Rect, x: i32, y: i32) -> Option<i32> {
+        let rel_x = x - base.x - self.pad_x;
+        let rel_y = y - self.grid_top;
+
+        if rel_x < 0 || rel_y < 0 {
+            return None;
+        }
+
+        let col = rel_x / self.total_cell_w;
+        let row = rel_y / self.total_cell_h;
+
+        if col >= 7 || row >= 6 {
+            return None;
+        }
+
+        Some(row * 7 + col)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -408,7 +497,9 @@ impl CalendarStore for KvCalendarStore {
             }
         }
 
-        let mut date_ids = self.load_date_index(event.date.as_str()).unwrap_or_default();
+        let mut date_ids = self
+            .load_date_index(event.date.as_str())
+            .unwrap_or_default();
         if !date_ids.iter().any(|id| *id == event.id) {
             date_ids.push(event.id);
         }
@@ -661,7 +752,6 @@ fn unescape_field(value: &str) -> String {
     out
 }
 
-
 fn push_i32_fixed<const N: usize>(out: &mut SlotString<N>, mut n: i32, digits: usize) {
     if n < 0 {
         out.push('-');
@@ -740,7 +830,12 @@ fn parse_date_parts(s: &str) -> Option<(i32, i32, i32)> {
     let year_s = &s[..first_sep];
     let month_s = &s[first_sep + 1..second_sep];
     let day_s = &s[second_sep + 1..];
-    if year_s.len() != 4 || month_s.is_empty() || month_s.len() > 2 || day_s.is_empty() || day_s.len() > 2 {
+    if year_s.len() != 4
+        || month_s.is_empty()
+        || month_s.len() > 2
+        || day_s.is_empty()
+        || day_s.len() > 2
+    {
         return None;
     }
     for part in [year_s, month_s, day_s] {
@@ -864,8 +959,14 @@ fn load_events() -> Vec<CalendarEvent> {
             break;
         }
         let id = u64::from_le_bytes([
-            rec_data[ri], rec_data[ri + 1], rec_data[ri + 2], rec_data[ri + 3],
-            rec_data[ri + 4], rec_data[ri + 5], rec_data[ri + 6], rec_data[ri + 7],
+            rec_data[ri],
+            rec_data[ri + 1],
+            rec_data[ri + 2],
+            rec_data[ri + 3],
+            rec_data[ri + 4],
+            rec_data[ri + 5],
+            rec_data[ri + 6],
+            rec_data[ri + 7],
         ]);
         ri += 8;
 
@@ -932,12 +1033,24 @@ fn load_events() -> Vec<CalendarEvent> {
             break;
         }
         event.created_at = u64::from_le_bytes([
-            rec_data[ri], rec_data[ri + 1], rec_data[ri + 2], rec_data[ri + 3],
-            rec_data[ri + 4], rec_data[ri + 5], rec_data[ri + 6], rec_data[ri + 7],
+            rec_data[ri],
+            rec_data[ri + 1],
+            rec_data[ri + 2],
+            rec_data[ri + 3],
+            rec_data[ri + 4],
+            rec_data[ri + 5],
+            rec_data[ri + 6],
+            rec_data[ri + 7],
         ]);
         event.updated_at = u64::from_le_bytes([
-            rec_data[ri + 8], rec_data[ri + 9], rec_data[ri + 10], rec_data[ri + 11],
-            rec_data[ri + 12], rec_data[ri + 13], rec_data[ri + 14], rec_data[ri + 15],
+            rec_data[ri + 8],
+            rec_data[ri + 9],
+            rec_data[ri + 10],
+            rec_data[ri + 11],
+            rec_data[ri + 12],
+            rec_data[ri + 13],
+            rec_data[ri + 14],
+            rec_data[ri + 15],
         ]);
 
         events.push(event);
@@ -1251,35 +1364,66 @@ impl CalendarApp {
         )
     }
 
+    fn calendar_body_rect(&self) -> Rect {
+        self.grid_rect().inset(CALENDAR_INNER_PAD)
+    }
+
+    fn calendar_sections(&self) -> (Rect, Rect) {
+        let body = self.calendar_body_rect();
+        let month_h = self.calendar_month_height(body.h as i32).max(0) as u32;
+        let preview_h = body
+            .h
+            .saturating_sub(month_h)
+            .saturating_sub(CALENDAR_SECTION_GAP as u32);
+        let section_heights = [month_h, preview_h];
+        let mut sections = VBox::new(body)
+            .with_spacing(CALENDAR_SECTION_GAP as u32)
+            .layout(&section_heights);
+        let month = sections.next().unwrap_or(body);
+        let preview = sections
+            .next()
+            .unwrap_or(Rect::new(body.x, body.bottom(), body.w, 0));
+        (month, preview)
+    }
+
+    fn calendar_month_rect(&self) -> Rect {
+        self.calendar_sections().0
+    }
+
+    fn calendar_preview_rect(&self) -> Rect {
+        self.calendar_sections().1
+    }
+
+    fn calendar_month_height(&self, body_h: i32) -> i32 {
+        let desired = (body_h * 62) / 100;
+        let max_month = body_h - 132;
+        if max_month <= 0 {
+            return body_h;
+        }
+        desired.clamp(220.min(max_month), max_month)
+    }
+
+    fn sidebar_actions_rects(&self, rect: Rect) -> (Rect, Rect, i32) {
+        let action_w = rect.w.saturating_sub((PAD as u32) * 2);
+        let add_btn_y = rect.bottom() - SIDEBAR_BOTTOM_MARGIN - SIDEBAR_ACTION_H;
+        let tasks_btn_y = add_btn_y - SIDEBAR_ACTION_GAP - SIDEBAR_ACTION_H;
+        let tasks_btn = Rect::new(rect.x + PAD, tasks_btn_y, action_w, SIDEBAR_ACTION_H as u32);
+        let add_btn = Rect::new(rect.x + PAD, add_btn_y, action_w, SIDEBAR_ACTION_H as u32);
+        let events_limit_y = tasks_btn_y - 12;
+        (tasks_btn, add_btn, events_limit_y)
+    }
+
     fn status_rect(&self) -> Rect {
         Rect::new(0, (WIN_H - STATUS_H) as i32, WIN_W, STATUS_H)
     }
 
     fn day_at_point(&self, x: i32, y: i32) -> Option<i32> {
-        let grid = self.grid_rect();
-        let header_h = 24i32;
-        let grid_top = grid.y + header_h + 4;
-        let total_cell_w = CELL_W + GRID_GAP;
-        let total_cell_h = CELL_H + GRID_GAP;
-        let grid_pad_x = (grid.w as i32 - (7 * total_cell_w - GRID_GAP)) / 2;
+        let month_rect = self.calendar_month_rect();
+        let month_inner = month_rect.inset(12);
+        let layout = MonthGridLayout::new(month_inner);
+        let day_idx = layout.contains(month_inner, x, y)?;
 
-        let rel_x = x - grid.x - grid_pad_x;
-        let rel_y = y - grid_top;
-
-        if rel_x < 0 || rel_y < 0 {
-            return None;
-        }
-
-        let col = rel_x / total_cell_w;
-        let row = rel_y / total_cell_h;
-
-        if col >= 7 || row >= 6 {
-            return None;
-        }
-
-        let day_idx = row * 7 + col;
         let start_wday = weekday_mon0(self.view_year, self.view_month, 1);
-
         if day_idx < start_wday {
             return None;
         }
@@ -1497,7 +1641,9 @@ impl CalendarApp {
     }
 
     fn update_event_from_dialog(&mut self) {
-        let Some(edit_id) = self.dialog.editing_id else { return };
+        let Some(edit_id) = self.dialog.editing_id else {
+            return;
+        };
         let mut event = self.dialog.to_event(edit_id);
         event.created_at = self
             .events
@@ -1531,10 +1677,7 @@ impl CalendarApp {
 
     fn save_and_refresh(&mut self) {
         let (y, m, d) = (self.sel_year, self.sel_month, self.sel_day);
-        self.selected_event_idx = self
-            .events_for_date(y, m, d)
-            .first()
-            .map(|_| 0);
+        self.selected_event_idx = self.events_for_date(y, m, d).first().map(|_| 0);
         self.save_selection_settings();
     }
 
@@ -1542,7 +1685,11 @@ impl CalendarApp {
         let result = if self.store.mode() == StoreMode::Kv {
             self.store.save_event(&event)
         } else {
-            if let Some(existing) = self.memory_events.iter_mut().find(|existing| existing.id == event.id) {
+            if let Some(existing) = self
+                .memory_events
+                .iter_mut()
+                .find(|existing| existing.id == event.id)
+            {
                 *existing = event;
             } else {
                 self.memory_events.push(event);
@@ -1554,7 +1701,11 @@ impl CalendarApp {
             self.status_msg.set("Persistence error");
             return false;
         }
-        if let Some(existing) = self.events.iter_mut().find(|existing| existing.id == event.id) {
+        if let Some(existing) = self
+            .events
+            .iter_mut()
+            .find(|existing| existing.id == event.id)
+        {
             *existing = event;
         } else {
             self.events.push(event);
@@ -1621,12 +1772,16 @@ impl CalendarApp {
             return;
         }
         let date = CalendarEvent::format_date(self.sel_year, self.sel_month, self.sel_day);
-        let _ = self.store.save_setting("selected-date", date.as_str().as_bytes());
+        let _ = self
+            .store
+            .save_setting("selected-date", date.as_str().as_bytes());
         let mut month = SlotString::<7>::empty();
         push_i32_fixed(&mut month, self.view_year, 4);
         month.push('-');
         push_i32_fixed(&mut month, self.view_month, 2);
-        let _ = self.store.save_setting("view-month", month.as_str().as_bytes());
+        let _ = self
+            .store
+            .save_setting("view-month", month.as_str().as_bytes());
     }
 
     fn migrate_old_file_if_needed(&mut self) {
@@ -1855,7 +2010,8 @@ impl CalendarApp {
         let mut title = String::from(month_name_str);
         title.push(' ');
         push_i32_into_string(&mut title, self.view_year);
-        let title_x = rect.x + (rect.w as i32 / 2) - (measure_text(&title, FontRole::UiMedium).w as i32 / 2);
+        let title_x =
+            rect.x + (rect.w as i32 / 2) - (measure_text(&title, FontRole::UiMedium).w as i32 / 2);
         draw_text_vcenter(
             canvas,
             &title,
@@ -1867,25 +2023,24 @@ impl CalendarApp {
     }
 
     fn draw_month_grid(&self, canvas: &mut Canvas, theme: &Theme) {
-        let grid = self.grid_rect();
+        let body = self.calendar_body_rect();
+        canvas.fill_rect(body, theme.bg);
 
-        let total_cell_w = CELL_W + GRID_GAP;
-        let total_cell_h = CELL_H + GRID_GAP;
-        let grid_total_w = 7 * total_cell_w - GRID_GAP;
-        let grid_pad_x = (grid.w as i32 - grid_total_w) / 2;
-
-        let header_h = 24i32;
-        let header_y = grid.y;
-        canvas.fill_rect(
-            Rect::new(grid.x, header_y, grid.w, header_h as u32),
-            theme.bg,
-        );
+        let month_rect = self.calendar_month_rect();
+        canvas.fill_rounded_rect_with_border(month_rect, 10, theme.panel, theme.border, 1);
+        let month_inner = month_rect.inset(12);
+        let layout = MonthGridLayout::new(month_inner);
+        let days = month_grid_days(self.view_year, self.view_month);
 
         for col in 0..7 {
-            let x = grid.x + grid_pad_x + col * total_cell_w;
-            let cell_rect = Rect::new(x, header_y, CELL_W as u32, header_h as u32);
             let iso_wd = if col == 6 { 7u8 } else { (col + 1) as u8 };
             let wd_name = self.weekday_short(iso_wd);
+            let cell_rect = Rect::new(
+                month_inner.x + layout.pad_x + col * layout.total_cell_w,
+                layout.header_y,
+                layout.cell_w as u32,
+                layout.header_h as u32,
+            );
             draw_text_vcenter(
                 canvas,
                 wd_name,
@@ -1896,9 +2051,6 @@ impl CalendarApp {
             );
         }
 
-        let grid_top = grid.y + header_h + 4;
-        let days = month_grid_days(self.view_year, self.view_month);
-
         for i in 0i32..42 {
             let row = i / 7;
             let col = i % 7;
@@ -1907,9 +2059,7 @@ impl CalendarApp {
                 continue;
             }
 
-            let x = grid.x + grid_pad_x + col * total_cell_w;
-            let y = grid_top + row * total_cell_h;
-            let cell_rect = Rect::new(x, y, CELL_W as u32, CELL_H as u32);
+            let cell_rect = layout.cell_rect(month_inner, col, row);
 
             let is_today = day == self.today_day
                 && self.view_month == self.today_month
@@ -1939,15 +2089,6 @@ impl CalendarApp {
                 canvas.stroke_rounded_rect(cell_rect, 6, 1, cell_style.border);
             }
 
-            draw_text_vcenter(
-                canvas,
-                "",
-                cell_rect.x + 4,
-                cell_rect.y,
-                cell_rect.h,
-                &TextStyle::new(FontRole::UiSmall, cell_style.text),
-            );
-
             let mut day_str = String::new();
             push_i32_into_string(&mut day_str, day);
             draw_text(
@@ -1961,13 +2102,45 @@ impl CalendarApp {
             if has_events {
                 let dot_x = cell_rect.x + cell_rect.w as i32 - 10;
                 let dot_y = cell_rect.y + cell_rect.h as i32 - 8;
-                canvas.fill_rounded_rect(
-                    Rect::new(dot_x, dot_y, 6, 6),
-                    3,
-                    cell_style.marker,
-                );
+                canvas.fill_rounded_rect(Rect::new(dot_x, dot_y, 6, 6), 3, cell_style.marker);
             }
         }
+
+        let preview_rect = self.calendar_preview_rect();
+        if preview_rect.w > 0 && preview_rect.h > 0 {
+            let preview_col_blocks = [5u32, 5u32];
+            let mut preview_cols = GridRow::new(preview_rect)
+                .with_gap(CALENDAR_SECTION_GAP as u32)
+                .layout(&preview_col_blocks);
+            let tasks_rect = preview_cols.next().unwrap_or(preview_rect);
+            let reminders_rect = preview_cols.next().unwrap_or(preview_rect);
+            self.draw_preview_panel(canvas, theme, tasks_rect, "Tasks", "No tasks for this day");
+            self.draw_preview_panel(canvas, theme, reminders_rect, "Reminders", "No reminders");
+        }
+    }
+
+    fn draw_preview_panel(
+        &self,
+        canvas: &mut Canvas,
+        theme: &Theme,
+        rect: Rect,
+        title: &str,
+        empty_text: &str,
+    ) {
+        let panel = Panel::with_title(rect, title);
+        panel.draw(canvas, theme);
+        let content = panel.content_rect().inset(10);
+        if content.w == 0 || content.h == 0 {
+            return;
+        }
+        draw_text_vcenter(
+            canvas,
+            empty_text,
+            content.x,
+            content.y,
+            content.h,
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+        );
     }
 
     fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -1998,7 +2171,13 @@ impl CalendarApp {
             &TextStyle::new(FontRole::UiMedium, theme.text),
         );
 
-        canvas.hbar(rect.x + PAD, rect.y + PAD + (lh + 4) as i32 + 4, rect.w - (PAD as u32) * 2, 1, theme.border);
+        canvas.hbar(
+            rect.x + PAD,
+            rect.y + PAD + (lh + 4) as i32 + 4,
+            rect.w - (PAD as u32) * 2,
+            1,
+            theme.border,
+        );
 
         let events_header_y = rect.y + PAD + (lh + 4) as i32 + 10;
         let mut events_label = String::from("Events (");
@@ -2016,10 +2195,12 @@ impl CalendarApp {
 
         let events_y = events_header_y + lh as i32 + 6;
         let event_item_h = 36i32;
-        let max_visible = ((rect.bottom() - events_y - 50) / event_item_h).max(1) as usize;
+        let (tasks_btn, add_btn, events_limit_y) = self.sidebar_actions_rects(rect);
+        let max_visible = ((events_limit_y - events_y - 8) / event_item_h).max(1) as usize;
 
         if sel_events.is_empty() {
-            let empty_style = EmptyStateStyle::new(Rect::new(rect.x + PAD, events_y, rect.w - 16, 24), theme);
+            let empty_style =
+                EmptyStateStyle::new(Rect::new(rect.x + PAD, events_y, rect.w - 16, 24), theme);
             draw_text(
                 canvas,
                 "No events for this day.",
@@ -2081,8 +2262,8 @@ impl CalendarApp {
             }
         }
 
-        let add_btn_y = rect.bottom() - 44;
-        let add_btn = Rect::new(rect.x + PAD, add_btn_y, rect.w - (PAD as u32) * 2, 32);
+        let launch_btn = Button::secondary(tasks_btn, "Tasks & Reminders");
+        launch_btn.draw(canvas, theme);
         canvas.fill_rounded_rect(add_btn, 6, theme.accent);
         draw_text_vcenter(
             canvas,
@@ -2124,7 +2305,9 @@ impl CalendarApp {
             right_str.push_str(" | ");
         }
         right_str.push_str(self.locale_str.as_str());
-        let sel_count = self.events_for_date(self.sel_year, self.sel_month, self.sel_day).len();
+        let sel_count = self
+            .events_for_date(self.sel_year, self.sel_month, self.sel_day)
+            .len();
         right_str.push_str(" | ");
         push_i32_into_string(&mut right_str, sel_count as i32);
         right_str.push_str(" events");
@@ -2140,7 +2323,10 @@ impl CalendarApp {
 
         if !center_str.is_empty() {
             let cw = measure_text(&center_str, FontRole::UiSmall).w;
-            let kind = if center_str.contains("error") || center_str.contains("failed") || center_str.contains("unavailable") {
+            let kind = if center_str.contains("error")
+                || center_str.contains("failed")
+                || center_str.contains("unavailable")
+            {
                 StatusTextKind::Error
             } else {
                 StatusTextKind::Muted
@@ -2218,7 +2404,11 @@ impl CalendarApp {
 
         for i in 0..5 {
             let label_rect = Rect::new(
-                if i == 3 { fields[2].right() + 12 } else { panel.x + DIALOG_PAD },
+                if i == 3 {
+                    fields[2].right() + 12
+                } else {
+                    panel.x + DIALOG_PAD
+                },
                 fields[i].y,
                 if i == 3 { 28 } else { 70 },
                 fields[i].h,
@@ -2236,9 +2426,21 @@ impl CalendarApp {
             let field_style = form_field_style(theme, is_focused);
 
             if i < 4 {
-                canvas.fill_rounded_rect_with_border(fields[i], 4, field_style.fill, field_style.border, 1);
+                canvas.fill_rounded_rect_with_border(
+                    fields[i],
+                    4,
+                    field_style.fill,
+                    field_style.border,
+                    1,
+                );
             } else {
-                canvas.fill_rounded_rect_with_border(fields[i], 4, field_style.fill, field_style.border, 1);
+                canvas.fill_rounded_rect_with_border(
+                    fields[i],
+                    4,
+                    field_style.fill,
+                    field_style.border,
+                    1,
+                );
             }
 
             let text = match i {
@@ -2284,7 +2486,12 @@ impl CalendarApp {
             fields[1].h,
         );
         let check_size = 14;
-        let check_rect = Rect::new(all_day_rect.x, all_day_rect.y + (all_day_rect.h as i32 - check_size as i32) / 2, check_size, check_size);
+        let check_rect = Rect::new(
+            all_day_rect.x,
+            all_day_rect.y + (all_day_rect.h as i32 - check_size as i32) / 2,
+            check_size,
+            check_size,
+        );
         canvas.fill_rounded_rect_with_border(check_rect, 3, theme.bg, theme.border, 1);
         if self.dialog.all_day {
             canvas.fill_rounded_rect(check_rect.inset(2), 2, theme.accent);
@@ -2334,12 +2541,18 @@ impl CalendarApp {
             draw_text_vcenter(
                 canvas,
                 btn_label,
-                btns[i].x + ((btns[i].w as i32 - measure_text(btn_label, FontRole::UiSmall).w as i32) / 2),
+                btns[i].x
+                    + ((btns[i].w as i32 - measure_text(btn_label, FontRole::UiSmall).w as i32)
+                        / 2),
                 btns[i].y,
                 btns[i].h,
                 &TextStyle::new(
                     FontRole::UiSmall,
-                    if i == 0 { theme.text_on_accent } else { theme.text },
+                    if i == 0 {
+                        theme.text_on_accent
+                    } else {
+                        theme.text
+                    },
                 ),
             );
         }
@@ -2362,12 +2575,7 @@ impl CalendarApp {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg.darken(70));
         let w = 320u32;
         let h = 100u32;
-        let panel = Rect::new(
-            ((WIN_W - w) / 2) as i32,
-            ((WIN_H - h) / 2) as i32,
-            w,
-            h,
-        );
+        let panel = Rect::new(((WIN_W - w) / 2) as i32, ((WIN_H - h) / 2) as i32, w, h);
         canvas.fill_rounded_rect_with_border(panel, 8, theme.panel, theme.border, 1);
         draw_text_vcenter(
             canvas,
@@ -2414,12 +2622,7 @@ impl CalendarApp {
         if self.confirm.visible {
             let w = 320u32;
             let h = 100u32;
-            let panel = Rect::new(
-                ((WIN_W - w) / 2) as i32,
-                ((WIN_H - h) / 2) as i32,
-                w,
-                h,
-            );
+            let panel = Rect::new(((WIN_W - w) / 2) as i32, ((WIN_H - h) / 2) as i32, w, h);
             let btn_y = panel.bottom() - DIALOG_PAD - DIALOG_BTN_H as i32;
             let ok_btn = Rect::new(
                 panel.x + (panel.w as i32 / 2) - DIALOG_BTN_W as i32 - 5,
@@ -2458,14 +2661,18 @@ impl CalendarApp {
                         if self.dialog.validate() {
                             self.add_event_from_dialog();
                         } else {
-                            self.dialog.error_msg.set(self.dialog.validation_error().unwrap_or("Invalid input"));
+                            self.dialog
+                                .error_msg
+                                .set(self.dialog.validation_error().unwrap_or("Invalid input"));
                         }
                     }
                     (true, 0) => {
                         if self.dialog.validate() {
                             self.update_event_from_dialog();
                         } else {
-                            self.dialog.error_msg.set(self.dialog.validation_error().unwrap_or("Invalid input"));
+                            self.dialog
+                                .error_msg
+                                .set(self.dialog.validation_error().unwrap_or("Invalid input"));
                         }
                     }
                     (true, 1) => {
@@ -2568,22 +2775,26 @@ impl CalendarApp {
 
         let sidebar = self.sidebar_rect();
         if sidebar.contains(Point::new(x, y)) {
-            let add_btn_y = sidebar.bottom() - 44;
-            let add_btn = Rect::new(sidebar.x + PAD, add_btn_y, sidebar.w - (PAD as u32) * 2, 32);
+            let (tasks_btn, add_btn, events_limit_y) = self.sidebar_actions_rects(sidebar);
+            if tasks_btn.contains(Point::new(x, y)) {
+                return self.launch_tasks_and_reminders();
+            }
             if add_btn.contains(Point::new(x, y)) {
                 self.open_new_event_dialog();
                 return true;
             }
 
-            let events_header_y = sidebar.y + PAD + (line_height(FontRole::UiRegular) + 4) as i32 + 10;
+            let events_header_y =
+                sidebar.y + PAD + (line_height(FontRole::UiRegular) + 4) as i32 + 10;
             let lh = line_height(FontRole::UiRegular);
             let events_y = events_header_y + lh as i32 + 6;
             let event_item_h = 36i32;
+            let max_visible = ((events_limit_y - events_y - 8) / event_item_h).max(1) as usize;
             let sel_events = self.events_for_date(self.sel_year, self.sel_month, self.sel_day);
             let event_data: Vec<CalendarEvent> = sel_events.iter().map(|e| **e).collect();
             drop(sel_events);
 
-            for (idx, event) in event_data.iter().enumerate() {
+            for (idx, event) in event_data.iter().enumerate().take(max_visible) {
                 let item_rect = Rect::new(
                     sidebar.x + 4,
                     events_y + idx as i32 * event_item_h,
@@ -2636,15 +2847,20 @@ impl CalendarApp {
                 self.load_calendar_data();
                 true
             }
-            MenuAction::About => {
-                true
-            }
+            MenuAction::About => true,
         }
     }
 
     fn open_new_event_dialog(&mut self) {
         let date_str = CalendarEvent::format_date(self.sel_year, self.sel_month, self.sel_day);
         self.dialog.start_new(&date_str);
+    }
+
+    fn launch_tasks_and_reminders(&mut self) -> bool {
+        debug_log("[CALENDAR] Tasks & Reminders is not implemented yet\n");
+        self.status_msg
+            .set("Tasks & Reminders is not implemented yet");
+        true
     }
 
     fn dialog_push_char(&mut self, ch: char) {
@@ -2656,11 +2872,31 @@ impl CalendarApp {
             DialogField::Notes => NOTES_LEN,
         };
         match self.dialog.focus {
-            DialogField::Title => { if self.dialog.title.len < max { self.dialog.title.push(ch); } }
-            DialogField::Date => { if self.dialog.date.len < max { self.dialog.date.push(ch); } }
-            DialogField::StartTime => { if self.dialog.start_time.len < max { self.dialog.start_time.push(ch); } }
-            DialogField::EndTime => { if self.dialog.end_time.len < max { self.dialog.end_time.push(ch); } }
-            DialogField::Notes => { if self.dialog.notes.len < max { self.dialog.notes.push(ch); } }
+            DialogField::Title => {
+                if self.dialog.title.len < max {
+                    self.dialog.title.push(ch);
+                }
+            }
+            DialogField::Date => {
+                if self.dialog.date.len < max {
+                    self.dialog.date.push(ch);
+                }
+            }
+            DialogField::StartTime => {
+                if self.dialog.start_time.len < max {
+                    self.dialog.start_time.push(ch);
+                }
+            }
+            DialogField::EndTime => {
+                if self.dialog.end_time.len < max {
+                    self.dialog.end_time.push(ch);
+                }
+            }
+            DialogField::Notes => {
+                if self.dialog.notes.len < max {
+                    self.dialog.notes.push(ch);
+                }
+            }
         }
     }
 
@@ -2736,7 +2972,9 @@ impl CalendarApp {
                                 self.add_event_from_dialog();
                             }
                         } else {
-                            self.dialog.error_msg.set(self.dialog.validation_error().unwrap_or("Invalid input"));
+                            self.dialog
+                                .error_msg
+                                .set(self.dialog.validation_error().unwrap_or("Invalid input"));
                         }
                         return true;
                     }
@@ -2750,7 +2988,10 @@ impl CalendarApp {
                         DialogField::EndTime,
                         DialogField::Notes,
                     ];
-                    let cur = fields.iter().position(|f| *f == self.dialog.focus).unwrap_or(0);
+                    let cur = fields
+                        .iter()
+                        .position(|f| *f == self.dialog.focus)
+                        .unwrap_or(0);
                     self.dialog.focus = fields[(cur + 1) % fields.len()];
                     self.dialog.cursor = 0;
                     return true;
