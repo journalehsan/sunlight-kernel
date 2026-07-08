@@ -1927,6 +1927,25 @@ StandardOutput=journal\nStandardError=journal\n\n\
         1000, 1000, mode::FILE_644,
         include_bytes!("../../assets/documents/Welcome to SunlightOS.txt"),
     ),
+
+    // ── Why SunlightOS Exists document ──────────────────────────────────────
+    // Identity and philosophy document seeded alongside Welcome.
+    // Same deployment pattern: system reference + both default home accounts.
+    RamEntry::file(
+        "/usr/share/sunlightos/documents/Why SunlightOS Exists.txt",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/documents/Why SunlightOS Exists.txt"),
+    ),
+    RamEntry::file(
+        "/root/Documents/Why SunlightOS Exists.txt",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/documents/Why SunlightOS Exists.txt"),
+    ),
+    RamEntry::file(
+        "/home/user/Documents/Why SunlightOS Exists.txt",
+        1000, 1000, mode::FILE_644,
+        include_bytes!("../../assets/documents/Why SunlightOS Exists.txt"),
+    ),
 ];
 
 #[cfg(test)]
@@ -2167,6 +2186,37 @@ mod tests {
         // asset bytes; we just sanity-check a few early distinctive words).
         let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(text.contains("Welcome to SunlightOS") || text.contains("A bright"));
+    }
+
+    #[test]
+    fn why_sunlightos_exists_document_is_present_in_default_homes() {
+        // Verify the "Why SunlightOS Exists" identity document is seeded
+        // into the same locations as the Welcome document.
+        let has_root_copy = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/root/Documents/Why SunlightOS Exists.txt" && !e.is_dir);
+        let has_user_copy = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/home/user/Documents/Why SunlightOS Exists.txt" && !e.is_dir);
+        let has_system_copy = INITRAMFS
+            .iter()
+            .any(|e| e.path == "/usr/share/sunlightos/documents/Why SunlightOS Exists.txt" && !e.is_dir);
+
+        assert!(has_root_copy, "missing /root/Documents/Why SunlightOS Exists.txt");
+        assert!(has_user_copy, "missing /home/user/Documents/Why SunlightOS Exists.txt");
+        assert!(has_system_copy, "missing /usr/share/sunlightos/documents/Why SunlightOS Exists.txt");
+
+        // Spot-check content via a fresh RamFs.
+        let mut fs = RamFs::new(INITRAMFS);
+        let h = fs
+            .open("/home/user/Documents/Why SunlightOS Exists.txt")
+            .unwrap();
+        let mut buf = [0u8; 80];
+        let n = fs.read(h, 0, &mut buf).unwrap();
+        assert!(n > 0);
+        assert_eq!(&buf[..10], b"+---------");
+        let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
+        assert!(text.contains("SunlightOS exists") || text.contains("future-first"));
     }
 
     #[test]

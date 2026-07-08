@@ -1,8 +1,24 @@
 # SunlightOS
 
-**SunlightOS** is an independent operating system written in Rust, featuring a custom capability-based async IPC microkernel with Linux binary compatibility.
-
 **Version:** 0.1.51
+
+> SunlightOS is a future-first, open-source microkernel desktop: minimal like
+> UNIX, modern in experience, and intelligent by design.
+
+**SunlightOS** is an independent, experimental operating system written in
+Rust. It is built around a microkernel-oriented architecture, small
+UNIX-like tools, clean service boundaries, a compact modern desktop, and
+local-first intelligence.
+
+The kernel provides scheduling, IPC, memory management, and capability
+brokering. Everything else — drivers, filesystems, networking, services, and
+apps — lives in user space.
+
+SunlightOS exists to prove that a modern system can be small, understandable,
+fast, open, and intelligent without becoming heavy or chaotic. It is not only
+a research artifact: it aims to be a real daily-driver desktop seed with
+files, an editor, calendar, settings, notifications, tasks, and eventually
+WiseOwl working together.
 
 <p align="center">
   <img src="docs/images/SunlightOS-Logo.png" alt="SunlightOS logo" width="900">
@@ -19,6 +35,24 @@
     <td><img src="docs/images/Levobo-Thinkpad-Sunligt)S-VortexShell-1.jpeg" alt="SunlightOS on ThinkPad, overview 3" width="100%"></td>
   </tr>
 </table>
+
+## Philosophy
+
+- **Microkernel by design.** The kernel stays compact. Services, drivers, and
+  filesystems run in user space with clear capability boundaries.
+- **Small focused tools.** Each component does one job well. The shell is a
+  shell. A service manager manages services. Calendar is a calendar.
+- **Shared local state.** sunlight-kv provides lightweight persistent storage
+  for settings, events, tasks, and notifications so apps cooperate without
+  fragile file formats or polling loops.
+- **Local intelligence.** WiseOwl is planned as an assistant woven into the
+  workflow — not a chatbot overlay — for reminders, automation, and awareness
+  that respects the user and the system.
+- **Future-first.** SunlightOS is not recreating the past. It aims to start
+  the future early: minimal, modern, efficient, open-source, local-first, and
+  intelligent by design.
+- **Visible daily workflows.** Strong architecture ideas must translate into
+  real user-facing tools and a coherent desktop experience.
 
 ## Architecture
 

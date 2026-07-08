@@ -1,0 +1,49 @@
++----------------------------------+
+|       Why SunlightOS Exists      |
++----------------------------------+
+
+SunlightOS exists to explore a simple idea:
+
+A modern operating system can be small, understandable, fast, open, and
+intelligent without becoming heavy or chaotic.
+
+SunlightOS is built around a microkernel-oriented design and small UNIX-like
+components. Each part should do one job well. The shell should be a shell. A
+service manager should manage services. Calendar should be a calendar. Files
+should manage files. The system should be composed from clear pieces instead
+of one giant component quietly doing everything.
+
+But SunlightOS is not only about architecture.
+
+Good concepts matter, but an operating system also needs a visible daily
+experience. Users should be able to open files, write notes, manage events,
+change settings, receive notifications, and understand what the system is
+doing. Strong ideas should become real workflows.
+
+SunlightOS is future-first. It is not trying to recreate the past. It is
+trying to start the future early: a compact, modern, local-first desktop
+where apps and services can cooperate through clean system layers.
+
+sunlight-kv is one example of this direction. Small persistent state, such as
+calendar events, settings, notifications, tasks, and recent items, can live
+in a shared local store instead of every app inventing its own fragile file
+format and polling loop. When Calendar saves an event, the desktop can see
+it. Later, Tasks, Notifications, and WiseOwl can understand it too.
+
+WiseOwl is the long-term assistant layer for SunlightOS. The goal is not a
+chatbot glued on top of the desktop. The goal is local intelligence woven
+into the workflow: reminders, task help, event awareness, careful automation,
+and useful actions that respect the user and the system.
+
+SunlightOS is for people who like minimalism, performance, open source
+software, clean boundaries, and modern user experience. It is for people who
+believe a system can be understandable without being primitive, and
+intelligent without being bloated.
+
+SunlightOS is experimental. It is growing one working piece at a time.
+
+Small tools.
+Clear services.
+Modern desktop.
+Local intelligence.
+A future that starts early.
