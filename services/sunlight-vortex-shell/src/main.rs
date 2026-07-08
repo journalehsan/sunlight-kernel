@@ -1453,6 +1453,10 @@ impl VortexShell {
         }
     }
 
+    fn app_allows_multiple_instances(app_id: AppId) -> bool {
+        matches!(app_id, AppId::Calendar)
+    }
+
     fn open_file_via_resolver(&mut self, path: &str, source: LaunchSource) -> bool {
         let trace = self.next_launch_trace(source);
         match sun_open::open_path(trace, source, path.as_bytes()) {
@@ -2000,7 +2004,9 @@ impl VortexShell {
         let mut clear_stale_pid = false;
         let duplicate_blocked = {
             let app = self.app(app_id);
-            if let Some(pid) = app.pid {
+            if Self::app_allows_multiple_instances(app_id) {
+                false
+            } else if let Some(pid) = app.pid {
                 if process_is_alive(pid) {
                     true
                 } else {
@@ -2053,8 +2059,8 @@ impl VortexShell {
         }
 
         Self::log_launch_trace(trace, app_id, "spawn_start", None, now);
-        let request = sun_exec::LaunchRequest::new(trace, source, Self::app_launch_command(app_id));
-        match sun_exec::launch(request) {
+        let words = [Self::app_launch_command(app_id)];
+        match sun_exec::launch_from_words(trace, source, &words, true) {
             Ok(result) => {
                 Self::log_launch_trace(
                     trace,
@@ -2158,6 +2164,9 @@ impl VortexShell {
         self.sync_app_registry(now, true);
         self.log_app_click(app_id);
         let state = self.app(app_id).state;
+        if Self::app_allows_multiple_instances(app_id) {
+            return self.launch_app(app_id, now, source);
+        }
         match state {
             AppLaunchState::NotRunning | AppLaunchState::Failed | AppLaunchState::Closing => {
                 self.launch_app(app_id, now, source)
