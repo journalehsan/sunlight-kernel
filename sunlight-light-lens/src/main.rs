@@ -45,10 +45,10 @@ const KEY_Q: u8 = 0x10;
 const KEY_LEFT: u8 = 0x4B;
 const KEY_RIGHT: u8 = 0x4D;
 
-static APP_ICON_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/apps/48/accessories-image-viewer.tga");
-static MISSING_ICON_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/status/64/image-missing.tga");
+// Material Icons font rasterised at build time (minitype pipeline) for smaller
+// footprint and monochrome-friendly action/app icons.
+static APP_ICON_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_app.tga"));
+static MISSING_ICON_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_missing.tga"));
 
 static mut IMAGE_BUF: [u8; MAX_IMAGE_BYTES] = [0u8; MAX_IMAGE_BYTES];
 static mut IMAGE_LEN: usize = 0;
@@ -686,7 +686,8 @@ impl LightLensApp {
         canvas.fill_rect(rect, theme.panel);
         canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
         if let Some(icon) = self.app_icon {
-            canvas.draw_tga_icon(&icon, Rect::new(rect.x + 8, rect.y + 6, 22, 22));
+            // Material icon (monochrome) tinted to foreground.
+            canvas.draw_tga_icon_tinted(&icon, Rect::new(rect.x + 8, rect.y + 6, 22, 22), theme.icon_foreground);
         }
         sf_vcenter(
             canvas,
@@ -888,7 +889,7 @@ impl LightLensApp {
                         64,
                         64,
                     );
-                    canvas.draw_tga_icon(&icon, icon_rect);
+                    canvas.draw_tga_icon_tinted(&icon, icon_rect, theme.icon_muted);
                 }
                 let msg_buf_px = sf_measure(self.message.as_str(), FontRole::UiRegular).w as i32;
                 let msg_rect = Rect::new(
@@ -912,7 +913,7 @@ impl LightLensApp {
                         72,
                         72,
                     );
-                    canvas.draw_tga_icon(&icon, icon_rect);
+                    canvas.draw_tga_icon_tinted(&icon, icon_rect, theme.icon_muted);
                 }
                 let msg_rect = Rect::new(content.x + 20, content.bottom() - 72, content.w - 40, 24);
                 sf_centered(

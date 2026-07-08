@@ -82,6 +82,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --relea
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-edit --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dialogd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-control-panel --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release

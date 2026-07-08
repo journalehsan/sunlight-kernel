@@ -1,132 +1,11 @@
 [package]
-name = "sunlight-calculator"
+name = "sunlight-calendar"
 version = "0.2.954"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
 [[bin]]
-name = "calculator"
+name = "sunlight-calendar"
 path = "src/main.rs"
 
 [dependencies]
@@ -134,3 +13,8 @@ sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
+sunlight-tz = { path = "../sunlight-tz" }
+sunlight-locale = { path = "../sunlight-locale" }
+
+[build-dependencies]
+fontdue = "0.7"

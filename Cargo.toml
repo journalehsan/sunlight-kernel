@@ -77,6 +77,7 @@ members = [
     "sun-imgc",
     "sunlight-wallpaper",
     "sunlight-locale",
+    "sunlight-calendar",
 ]
 
 [workspace.dependencies]

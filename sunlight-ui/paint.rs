@@ -260,6 +260,60 @@ impl<'fb> Canvas<'fb> {
         }
     }
 
+    /// Draw a TGA icon (typically white+alpha from Material Icons raster) tinted
+    /// to a solid `tint` color using the source alpha mask. This produces clean
+    /// monochrome icons that match theme.icon_foreground / accent etc. without
+    /// baking color into the asset. Reduces reliance on colored bitmaps → lower RAM.
+    pub fn draw_tga_icon_tinted(&mut self, img: &crate::image::TgaImage, dst: Rect, tint: Color) {
+        if img.width == 0 || img.height == 0 {
+            return;
+        }
+        let cx0 = dst.x.max(0) as u32;
+        let cy0 = dst.y.max(0) as u32;
+        let cx1 = (dst.right() as u32).min(self.width);
+        let cy1 = (dst.bottom() as u32).min(self.height);
+        if cx0 >= cx1 || cy0 >= cy1 {
+            return;
+        }
+        let dw = (dst.right() - dst.x.max(0)).max(1) as u32;
+        let dh = (dst.bottom() - dst.y.max(0)).max(1) as u32;
+
+        let tr = tint.r() as u32;
+        let tg = tint.g() as u32;
+        let tb = tint.b() as u32;
+
+        for dy in cy0..cy1 {
+            let src_y = (dy - cy0) * img.height / dh;
+            let row_off = dy as usize * self.stride as usize;
+            for dx in cx0..cx1 {
+                let src_x = (dx - cx0) * img.width / dw;
+                let argb = img.pixel_argb(src_x, src_y);
+                let a = (argb >> 24) as u8;
+                if a == 0 {
+                    continue;
+                }
+                let idx = row_off + dx as usize;
+                if idx >= self.pixels.len() {
+                    continue;
+                }
+                if a == 255 {
+                    self.pixels[idx] = (tr << 16) | (tg << 8) | tb;
+                } else {
+                    let dst_px = self.pixels[idx];
+                    let dr = (dst_px >> 16) & 0xFF;
+                    let dg = (dst_px >> 8) & 0xFF;
+                    let db = dst_px & 0xFF;
+                    let af = a as u32;
+                    let ia = 255 - af;
+                    let r = (tr * af + dr * ia) >> 8;
+                    let g = (tg * af + dg * ia) >> 8;
+                    let b = (tb * af + db * ia) >> 8;
+                    self.pixels[idx] = (r << 16) | (g << 8) | b;
+                }
+            }
+        }
+    }
+
     pub fn draw_image_cover(&mut self, img: &crate::image::TgaImage) {
         let fw = self.width as usize;
         let fh = self.height as usize;

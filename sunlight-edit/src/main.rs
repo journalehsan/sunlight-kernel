@@ -83,30 +83,23 @@ const DIALOG_BTN_H: u32 = 28;
 const DIALOG_BTN_GAP: u32 = 10;
 const DIALOG_PAD: i32 = 16;
 
-static ICON_OPEN_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/document-open-symbolic.tga");
-static ICON_SAVE_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/document-save-symbolic.tga");
-static ICON_SAVE_AS_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/document-save-as-symbolic.tga");
-static ICON_FIND_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
-static ICON_REPLACE_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-find-replace-symbolic.tga");
-static ICON_CUT_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-cut-symbolic.tga");
-static ICON_COPY_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-copy-symbolic.tga");
-static ICON_PASTE_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-paste-symbolic.tga");
-static ICON_SELECT_ALL_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/edit-select-all-symbolic.tga");
-static ICON_NEW_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/document-new-symbolic.tga");
-static ICON_NEXT_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/go-next-symbolic.tga");
-static ICON_PREV_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/actions/16/go-previous-symbolic.tga");
+// Icons now generated at build time from the Material Icons font (see build.rs).
+// This replaces the checked-in symbolic TGAs with minitype-rasterised glyphs
+// (smaller, consistent, lower RAM). All are white+alpha so they tint naturally.
+static ICON_NEW_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_new.tga"));
+static ICON_OPEN_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_open.tga"));
+static ICON_SAVE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_save.tga"));
+static ICON_SAVE_AS_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_save_as.tga"));
+static ICON_FIND_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_find.tga"));
+static ICON_REPLACE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_replace.tga"));
+static ICON_CUT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_cut.tga"));
+static ICON_COPY_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_copy.tga"));
+static ICON_PASTE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_paste.tga"));
+static ICON_SELECT_ALL_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_select_all.tga"));
+static ICON_NEXT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_next.tga"));
+static ICON_PREV_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_prev.tga"));
+// Hamburger replaces the text "Menu" label on the toolbar.
+static ICON_MENU_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_menu.tga"));
 
 struct BumpAllocator;
 unsafe impl GlobalAlloc for BumpAllocator {
@@ -366,6 +359,8 @@ struct EditorIcons {
     new_doc: Option<TgaImage>,
     next: Option<TgaImage>,
     prev: Option<TgaImage>,
+    // Material hamburger for the toolbar menu button (was text "Menu").
+    menu: Option<TgaImage>,
 }
 
 impl EditorIcons {
@@ -383,6 +378,7 @@ impl EditorIcons {
             new_doc: TgaImage::parse(ICON_NEW_TGA).ok(),
             next: TgaImage::parse(ICON_NEXT_TGA).ok(),
             prev: TgaImage::parse(ICON_PREV_TGA).ok(),
+            menu: TgaImage::parse(ICON_MENU_TGA).ok(),
         }
     }
 
@@ -402,7 +398,8 @@ impl EditorIcons {
             EditorAction::Cut => self.cut.as_ref(),
             EditorAction::Copy => self.copy.as_ref(),
             EditorAction::Paste => self.paste.as_ref(),
-            EditorAction::About => None,
+            // About action on the toolbar is the hamburger / menu button.
+            EditorAction::About => self.menu.as_ref(),
         }
     }
 }
@@ -880,7 +877,7 @@ impl EditApp {
             },
             ToolbarButtonSpec {
                 action: EditorAction::About,
-                label: "Menu",
+                label: "", // now rendered as hamburger Material icon
             },
         ];
         let rect = self.toolbar_rect();
@@ -1668,7 +1665,8 @@ impl EditApp {
         canvas.fill_rounded_rect(button.rect, 6, bg);
         canvas.stroke_rounded_rect(button.rect, 6, 1, theme.border);
         if let Some(icon) = self.icons.icon_for(button.spec.action) {
-            canvas.draw_tga_icon(
+            // Use tinted monochrome Material icon so it matches theme (monochrome action icons).
+            canvas.draw_tga_icon_tinted(
                 icon,
                 Rect::new(
                     button.rect.x + 12,
@@ -1676,6 +1674,7 @@ impl EditApp {
                     TOOLBAR_ICON,
                     TOOLBAR_ICON,
                 ),
+                theme.icon_foreground,
             );
         } else {
             draw_text_vcenter(
@@ -1942,9 +1941,10 @@ impl EditApp {
         );
         canvas.stroke_rounded_rect(rect, 6, 1, theme.border);
         if let Some(icon) = self.icons.icon_for(action) {
-            canvas.draw_tga_icon(
+            canvas.draw_tga_icon_tinted(
                 icon,
                 Rect::new(rect.x + ((rect.w as i32 - 16) / 2), rect.y + 6, 16, 16),
+                if enabled { theme.icon_foreground } else { theme.icon_disabled },
             );
         } else {
             let label = match action {
@@ -2050,7 +2050,8 @@ impl EditApp {
                 .icon
                 .and_then(|_| self.icons.icon_for(item.spec.action))
             {
-                canvas.draw_tga_icon(icon, Rect::new(item.rect.x + 4, item.rect.y + 4, 16, 16));
+                let col = if item.enabled { theme.icon_foreground } else { theme.icon_disabled };
+                canvas.draw_tga_icon_tinted(icon, Rect::new(item.rect.x + 4, item.rect.y + 4, 16, 16), col);
             }
             draw_text_vcenter(
                 canvas,

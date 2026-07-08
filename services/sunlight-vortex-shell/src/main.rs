@@ -134,6 +134,8 @@ static ICON_FILES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/system-file-manager.tga");
 static ICON_SETTINGS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
+static ICON_CALENDAR_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/office-calendar.tga");
 static MENU_NEW_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.tga");
 static MENU_NEW_TEXT_TGA: &[u8] =
@@ -289,7 +291,7 @@ impl DesktopTheme {
 #[derive(Clone, Copy)]
 struct DockTheme {
     terminal: Option<TgaImage>,
-    tasks: Option<TgaImage>,
+    calendar: Option<TgaImage>,
     calc: Option<TgaImage>,
     files: Option<TgaImage>,
     settings: Option<TgaImage>,
@@ -299,19 +301,19 @@ impl DockTheme {
     fn load() -> Self {
         Self {
             terminal: TgaImage::parse(ICON_TERMINAL_TGA).ok(),
-            tasks: None, // pixel-art fallback
+            calendar: TgaImage::parse(ICON_CALENDAR_TGA).ok(),
             calc: TgaImage::parse(ICON_CALC_TGA).ok(),
             files: TgaImage::parse(ICON_FILES_TGA).ok(),
             settings: TgaImage::parse(ICON_SETTINGS_TGA).ok(),
         }
     }
 
-    /// Return TGA icon for dock slot index (0=grid/launcher, 1=term, 2=tasks, 3=calc, 4=files).
+    /// Return TGA icon for dock slot index (0=grid/launcher, 1=terminal, 2=calendar, 3=calc, 4=files).
     fn dock_icon(&self, idx: usize) -> Option<TgaImage> {
         match idx {
             0 => None, // launcher grid — keep pixel-art
             1 => self.terminal,
-            2 => self.tasks,
+            2 => self.calendar,
             3 => self.calc,
             4 => self.files,
             _ => None,
@@ -324,6 +326,7 @@ impl DockTheme {
             AppId::Calculator => self.calc,
             AppId::Files => self.files,
             AppId::Settings => self.settings,
+            AppId::Calendar => self.calendar,
             // Not rendered in the bottom dock; the Start Menu owns their icons.
             AppId::Tasks | AppId::Bench | AppId::Eyes | AppId::TextEditor => None,
         }
@@ -417,6 +420,7 @@ pub(crate) enum AppId {
     Bench,
     Eyes,
     TextEditor,
+    Calendar,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -764,21 +768,21 @@ const TERMINAL_ROWS: [u16; 16] = [
     0b0000000000000000,
 ];
 
-/// Tasks monitor icon — 3 horizontal bars (activity / list).
-const TASKS_ROWS: [u16; 16] = [
-    0b0000000000000000,
-    0b0000000000000000,
-    0b1111111111110000,
-    0b1111111111110000,
-    0b0000000000000000,
-    0b1111111000000000,
-    0b1111111000000000,
-    0b0000000000000000,
-    0b1111111111000000,
-    0b1111111111000000,
-    0b0000000000000000,
-    0b0000000000000000,
-    0b0000000000000000,
+/// Calendar icon — simple page with date squares.
+const CALENDAR_ROWS: [u16; 16] = [
+    0b0011111111110000,
+    0b0010101010100000,
+    0b0011111111110000,
+    0b0011000000110000,
+    0b0011011000110000,
+    0b0011000000110000,
+    0b0011000000110000,
+    0b0011011000110000,
+    0b0011000000110000,
+    0b0011000000110000,
+    0b0011011000110000,
+    0b0011000000110000,
+    0b0011111111110000,
     0b0000000000000000,
     0b0000000000000000,
     0b0000000000000000,
@@ -1152,7 +1156,7 @@ struct VortexShell {
     /// entries (Terminal/Calculator/Files/Settings) are also shown in the
     /// bottom dock; Tasks/Bench/Eyes/TextEditor are Start-Menu-only but share
     /// the same launch/state-sync machinery.
-    apps: [DockAppState; 8],
+    apps: [DockAppState; 9],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// Clickable bounds for the dynamic running-app strip.
@@ -1169,6 +1173,7 @@ struct VortexShell {
     // Popover / dialog / tooltip state (conservative, no overengineer)
     show_datetime_tooltip: bool,
     show_calendar_popover: bool,
+    cal_popup_open_btn: Rect,
     cal_view_month: u8, // 1-12 current view (adjusted by offset)
     cal_view_year: u16,
     show_notif_panel: bool,
@@ -1268,6 +1273,7 @@ impl VortexShell {
             logout_zone: Rect::new(0, 0, 0, 0),
             show_datetime_tooltip: false,
             show_calendar_popover: false,
+            cal_popup_open_btn: Rect::new(0, 0, 0, 0),
             cal_view_month: 1,
             cal_view_year: 1970,
             show_notif_panel: false,
@@ -1284,6 +1290,7 @@ impl VortexShell {
                 DockAppState::new(AppId::Bench, "Sunlight Bench", AppId::Bench),
                 DockAppState::new(AppId::Eyes, "Eyes", AppId::Eyes),
                 DockAppState::new(AppId::TextEditor, "Sunlight Edit", AppId::TextEditor),
+                DockAppState::new(AppId::Calendar, "Sunlight Calendar", AppId::Calendar),
             ],
             running_apps: Vec::new(),
             running_zones: Vec::new(),
@@ -1414,6 +1421,7 @@ impl VortexShell {
             AppId::Bench => "/bin/sunbench",
             AppId::Eyes => "/bin/eyes",
             AppId::TextEditor => "/bin/sunlight-edit",
+            AppId::Calendar => "/bin/sunlight-calendar",
         }
     }
 
@@ -1427,6 +1435,7 @@ impl VortexShell {
             AppId::Bench => b"bench",
             AppId::Eyes => b"eyes",
             AppId::TextEditor => b"sunlight-edit",
+            AppId::Calendar => b"calendar",
         }
     }
 
@@ -1440,6 +1449,7 @@ impl VortexShell {
             AppId::Bench => "app=bench",
             AppId::Eyes => "app=eyes",
             AppId::TextEditor => "app=sunlight-edit",
+            AppId::Calendar => "app=sunlight-calendar",
         }
     }
 
@@ -1620,7 +1630,7 @@ impl VortexShell {
     fn dock_zone_app(slot: usize) -> DockZone {
         match slot {
             0 => DockZone::App(AppId::Terminal),
-            1 => DockZone::Placeholder,
+            1 => DockZone::App(AppId::Calendar),
             2 => DockZone::App(AppId::Calculator),
             3 => DockZone::App(AppId::Files),
             _ => DockZone::Placeholder,
@@ -3750,6 +3760,7 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "sunlight-edit"
         | "sunlight-text"
         | "kate" => Some(ICON_FILE_TGA),
+        "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_TGA),
         _ => None,
     }
 }
@@ -3890,7 +3901,7 @@ fn draw_bot_center(
     let icons: &[&[u16; 16]; 5] = &[
         &GRID_ROWS,
         &TERMINAL_ROWS,
-        &TASKS_ROWS,
+        &CALENDAR_ROWS,
         &CALC_ROWS,
         &FOLDER_ROWS,
     ];
@@ -4173,11 +4184,11 @@ impl VortexShell {
 
         let btn_y = panel.bottom() - 26;
         let btn_r = Rect::new(x + 12, btn_y, pw - 24, 20);
-        canvas.fill_rounded_rect(btn_r, 4, theme.panel_alt);
-        let btn_label = "Calendar coming soon";
+        self.cal_popup_open_btn = btn_r;
+        canvas.fill_rounded_rect(btn_r, 4, theme.accent);
         draw_text_vcenter(
             canvas,
-            btn_label,
+            "Open Calendar",
             btn_r.x + 8,
             btn_r.y,
             btn_r.h,
@@ -4392,7 +4403,7 @@ impl App for VortexShell {
         // Record clickable zones (terminal, tasks, calc, files).
         self.dock_zones = [
             (dock_cells[0], Self::dock_zone_app(0)),
-            (dock_cells[1], Self::dock_zone_app(1)), // tasks — placeholder
+            (dock_cells[1], Self::dock_zone_app(1)), // calendar
             (dock_cells[2], Self::dock_zone_app(2)),
             (dock_cells[3], Self::dock_zone_app(3)),
         ];
@@ -4502,6 +4513,15 @@ impl App for VortexShell {
                         return true;
                     }
                     return true;
+                }
+                // Handle "Open Calendar" button in popover
+                if self.show_calendar_popover && self.cal_popup_open_btn.contains(point) {
+                    self.show_calendar_popover = false;
+                    return self.handle_app_click(
+                        AppId::Calendar,
+                        monotonic_millis(),
+                        LaunchSource::Shortcut,
+                    );
                 }
                 // Close transient panels on outside click (conservative)
                 let mut closed = false;

@@ -39,6 +39,8 @@ static ICON_MUSIC_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/gnome-music.tga");
 static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
+static ICON_CALENDAR_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/office-calendar.tga");
 static ICON_NOTES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/QOwnNotes.tga");
 static ICON_PHOTOS_TGA: &[u8] =
@@ -177,11 +179,11 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         available: true,
     },
     AppCatalogEntry {
-        id: CatalogId::Placeholder("video-player"),
-        name: "Video Player",
-        category: "Media",
-        icon_bytes: Some(ICON_VIDEO_TGA),
-        available: false,
+        id: CatalogId::App(AppId::Calendar),
+        name: "Sunlight Calendar",
+        category: "Productivity",
+        icon_bytes: Some(ICON_CALENDAR_TGA),
+        available: true,
     },
     AppCatalogEntry {
         id: CatalogId::Placeholder("music-player"),
