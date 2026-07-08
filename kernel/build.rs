@@ -315,6 +315,18 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-calendar",
+            output: "sunlight-calendar",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-reminders",
+            output: "sunlight-reminders",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-light-lens",
             output: "light-lens",
             rustflags: service_rustflags,

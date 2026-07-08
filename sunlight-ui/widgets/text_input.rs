@@ -11,6 +11,7 @@ pub struct TextInput<'a, const N: usize> {
     cursor: usize,
     buf: [u8; N],
     font: Option<&'a dyn VecText>,
+    placeholder: Option<&'a str>,
 }
 
 impl<'a, const N: usize> TextInput<'a, N> {
@@ -22,11 +23,17 @@ impl<'a, const N: usize> TextInput<'a, N> {
             cursor: 0,
             buf: [0; N],
             font: None,
+            placeholder: None,
         }
     }
 
     pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
         self.font = Some(font);
+        self
+    }
+
+    pub fn with_placeholder(mut self, placeholder: &'a str) -> Self {
+        self.placeholder = Some(placeholder);
         self
     }
 
@@ -52,19 +59,22 @@ impl<'a, const N: usize> TextInput<'a, N> {
         );
 
         let text_x = self.rect.x + 6;
-        let visible = self.visible_text();
+        let show_placeholder = self.len == 0 && !self.active;
+        let visible = if show_placeholder {
+            self.placeholder.unwrap_or("")
+        } else {
+            self.visible_text()
+        };
         let prefix_len = self.visible_prefix_len(visible);
         let prefix = visible.get(..prefix_len).unwrap_or("");
+        let text_color = if show_placeholder {
+            theme.text_dim
+        } else {
+            theme.text
+        };
 
         if let Some(f) = self.font {
-            f.draw_vcenter(
-                canvas,
-                visible,
-                text_x,
-                self.rect.y,
-                self.rect.h,
-                theme.text,
-            );
+            f.draw_vcenter(canvas, visible, text_x, self.rect.y, self.rect.h, text_color);
             if self.active {
                 let cursor_x = text_x + f.measure_w(prefix) as i32;
                 canvas.vline(
@@ -76,7 +86,7 @@ impl<'a, const N: usize> TextInput<'a, N> {
             }
         } else {
             let text_y = self.rect.y + (self.rect.h as i32 - 10) / 2;
-            canvas.draw_text(text_x, text_y, visible, theme.text);
+            canvas.draw_text(text_x, text_y, visible, text_color);
             if self.active {
                 let cursor_x = text_x + Canvas::measure_text(prefix) as i32;
                 canvas.vline(

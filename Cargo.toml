@@ -78,6 +78,7 @@ members = [
     "sunlight-wallpaper",
     "sunlight-locale",
     "sunlight-calendar",
+    "sunlight-reminders",
 ]
 
 [workspace.dependencies]

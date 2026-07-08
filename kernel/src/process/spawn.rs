@@ -488,6 +488,10 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunlight-calendar" | "/usr/bin/sunlight-calendar" => {
             Ok(crate::SUNLIGHT_CALENDAR_ELF_BYTES)
         }
+        // sunlight-reminders: personal tasks and reminders application.
+        "/bin/sunlight-reminders" | "/usr/bin/sunlight-reminders" => {
+            Ok(crate::SUNLIGHT_REMINDERS_ELF_BYTES)
+        }
         "/sbin/sunlight-dialogd" | "/usr/sbin/sunlight-dialogd" => {
             Ok(crate::SUNLIGHT_DIALOGD_ELF_BYTES)
         }

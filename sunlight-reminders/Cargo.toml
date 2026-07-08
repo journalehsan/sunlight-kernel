@@ -1,51 +1,17 @@
 [package]
-name = "sunlight-light-lens"
+name = "sunlight-reminders"
 version = "0.2.1001"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 edition = "2021"
 
 [[bin]]
-name = "light-lens"
+name = "sunlight-reminders"
 path = "src/main.rs"
 
 [dependencies]
+sun-font = { path = "../sun-font" }
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
+sunlight-tz = { path = "../sunlight-tz" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
-sun-font = { path = "../sun-font" }
-
-[build-dependencies]
-fontdue = "0.7"

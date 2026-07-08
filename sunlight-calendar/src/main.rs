@@ -10,10 +10,12 @@ use core::alloc::GlobalAlloc;
 
 use sun_font::{draw_text, draw_text_vcenter, line_height, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
+    launch_trace::{self, LaunchSource, LaunchTrace},
     debug_log, get_time_utc, ipc_call_timeout, monotonic_millis, nameserver_lookup_timeout,
     process_yield, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc};
+use sunlight_libc::sun_exec::{self, LaunchRequest};
 use sunlight_locale::{month_name, weekday_name};
 use sunlight_tz::{local_now, read_localtime, tz_by_id};
 use sunlight_ui::image::TgaImage;
@@ -2857,9 +2859,48 @@ impl CalendarApp {
     }
 
     fn launch_tasks_and_reminders(&mut self) -> bool {
-        debug_log("[CALENDAR] Tasks & Reminders is not implemented yet\n");
-        self.status_msg
-            .set("Tasks & Reminders is not implemented yet");
+        if libc::stat(b"/bin/sunlight-reminders").is_err()
+            && libc::stat(b"/usr/bin/sunlight-reminders").is_err()
+        {
+            debug_log("[CALENDAR] sunlight-reminders is missing\n");
+            self.status_msg
+                .set("Sunlight Reminders is not available yet");
+            return true;
+        }
+
+        let trace = launch_trace::current().unwrap_or(LaunchTrace::new(
+            0,
+            LaunchSource::Shortcut,
+            monotonic_millis(),
+        ));
+        let args: &[&[u8]] = &[b"sunlight-reminders"];
+        match sun_exec::launch(LaunchRequest {
+            trace,
+            source: LaunchSource::Shortcut,
+            command: b"/bin/sun-exec",
+            args,
+            require_display: true,
+        }) {
+            Ok(_) => {
+                self.status_msg.set("Launching Sunlight Reminders");
+            }
+            Err(err) => {
+                debug_log("[CALENDAR] failed to launch sun-exec for sunlight-reminders\n");
+                debug_log(match err {
+                    sun_exec::LaunchError::AppNotFound => "[CALENDAR] app not found\n",
+                    sun_exec::LaunchError::InvalidCommand => "[CALENDAR] invalid command\n",
+                    sun_exec::LaunchError::SpawnFailed(_) => "[CALENDAR] spawn failed\n",
+                    sun_exec::LaunchError::PermissionDenied => "[CALENDAR] permission denied\n",
+                    sun_exec::LaunchError::DisplayUnavailable => {
+                        "[CALENDAR] display unavailable\n"
+                    }
+                    sun_exec::LaunchError::TooManyArgs => "[CALENDAR] too many args\n",
+                    sun_exec::LaunchError::ArgTooLong => "[CALENDAR] arg too long\n",
+                });
+                self.status_msg
+                    .set("Sunlight Reminders is not available yet");
+            }
+        }
         true
     }
 

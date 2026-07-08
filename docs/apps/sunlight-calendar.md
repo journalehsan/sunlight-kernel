@@ -17,6 +17,12 @@ Event records are small UTF-8 field records containing title, date, start/end
 time, all-day flag, notes, and created/updated timestamps. Bad or malformed
 records are skipped during load instead of aborting the whole calendar.
 
+## Tasks & Reminders
+
+The Calendar toolbar's `Tasks & Reminders` button launches the native
+`sunlight-reminders` app through `sun-exec`. That app owns personal tasks,
+reminders, and daily planning; it is separate from the system task monitor.
+
 ## Migration
 
 On first successful `sunlight-kv` startup load, Calendar imports the legacy

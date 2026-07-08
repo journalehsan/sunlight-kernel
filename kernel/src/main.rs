@@ -183,6 +183,9 @@ static SUNLIGHT_EDIT_ELF_BYTES: &[u8] =
 // Sunlight Calendar: native graphical calendar application.
 static SUNLIGHT_CALENDAR_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-calendar");
+// Sunlight Reminders: native personal tasks and reminders application.
+static SUNLIGHT_REMINDERS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-reminders");
 // Dialog host: shared native dialog service for GUI apps.
 static SUNLIGHT_DIALOGD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-dialogd");
