@@ -480,55 +480,36 @@ mod sunlight {
                 }
             }
 
-            // Make owned copies of cmd and args first
-            let cmd_owned: alloc::string::String;
-            let target_user_owned: Option<alloc::string::String>;
-
-            {
-                let line = &self.line[..self.line_len];
-                let line_str = match core::str::from_utf8(line) {
-                    Ok(s) => s.trim(),
-                    Err(_) => return copy_out(b"Invalid UTF-8\n"),
-                };
-
-                if line_str.is_empty() {
-                    return ([0; MAX_OUT], 0);
+            // Parse once with the proper parser (handles quotes, pipes).
+            let line_str = core::str::from_utf8(&self.line[..self.line_len])
+                .unwrap_or("")
+                .trim();
+            if line_str.is_empty() {
+                return ([0; MAX_OUT], 0);
+            }
+            let ast = match super::parser::parse_line(line_str) {
+                Some(a) => a,
+                None => return ([0; MAX_OUT], 0),
+            };
+            let (cmd, args_raw) = match &ast {
+                super::parser::AstNode::Command(a) if !a.is_empty() => {
+                    (a[0].clone(), a[1..].to_vec())
                 }
-
-                let mut parts = line_str.split_ascii_whitespace();
-                let cmd = parts.next().unwrap_or("");
-                cmd_owned = alloc::string::String::from(cmd);
-
-                // Check if this is passwd and get target arg
-                if cmd == "passwd" {
-                    let args: alloc::vec::Vec<&str> = parts.collect();
-                    target_user_owned = if args.is_empty() {
-                        None
-                    } else {
-                        Some(alloc::string::String::from(args[0]))
-                    };
-                } else {
-                    target_user_owned = None;
+                super::parser::AstNode::Pipeline(_) => {
+                    return copy_out(b"sshl: pipelines not supported in sunlight mode\n");
                 }
+                _ => return ([0; MAX_OUT], 0),
+            };
+
+            // Handle passwd specially (needs target user)
+            if cmd == "passwd" {
+                let target = args_raw.first().map(|s| s.as_str());
+                return self.cmd_passwd(target);
             }
 
-            // Now self is not borrowed anymore, safe to call mutable methods
-            if cmd_owned == "passwd" {
-                return self.cmd_passwd(target_user_owned.as_deref());
-            }
-
-            // Re-parse for normal commands, expanding $VAR tokens in arguments.
-            // cmd and args are owned so &mut self builtins (export/unset) can
-            // run without keeping self.line borrowed.
-            let cmd: alloc::string::String;
-            let expanded: alloc::vec::Vec<alloc::string::String>;
-            {
-                let line = &self.line[..self.line_len];
-                let line_str = core::str::from_utf8(line).unwrap_or("").trim();
-                let mut parts = line_str.split_ascii_whitespace();
-                cmd = alloc::string::String::from(parts.next().unwrap_or(""));
-                expanded = parts.map(|t| self.env.expand_token(t)).collect();
-            }
+            // Expand $VAR tokens in arguments
+            let expanded: alloc::vec::Vec<alloc::string::String> =
+                args_raw.iter().map(|t| self.env.expand_token(t)).collect();
             let cmd = cmd.as_str();
             let args: alloc::vec::Vec<&str> = expanded.iter().map(|s| s.as_str()).collect();
 
@@ -2036,6 +2017,7 @@ mod sunlight {
                 | "find"
                 | "grep"
                 | "tail"
+                | "note"
         )
     }
 
@@ -2280,6 +2262,30 @@ mod sunlight {
             &data[..data.len() - 1]
         } else {
             data
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{external_uses_fs_paths, normalize_path};
+
+        #[test]
+        fn normalizes_relative_dot_paths() {
+            assert_eq!(
+                normalize_path("/root/Documents", "./Why SunlightOS Exists.txt").as_deref(),
+                Some("/root/Documents/Why SunlightOS Exists.txt")
+            );
+            assert_eq!(
+                normalize_path("/root/Documents", "../Documents/Welcome to SunlightOS.txt")
+                    .as_deref(),
+                Some("/root/Documents/Welcome to SunlightOS.txt")
+            );
+        }
+
+        #[test]
+        fn note_paths_are_normalized_before_launch() {
+            assert!(external_uses_fs_paths("cat"));
+            assert!(external_uses_fs_paths("note"));
         }
     }
 

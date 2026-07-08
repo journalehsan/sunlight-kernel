@@ -113,6 +113,19 @@ mod tests {
     }
 
     #[test]
+    fn quoted_absolute_path_with_spaces() {
+        match parse_line(r#"cat "/root/Documents/Why SunlightOS Exists.txt""#) {
+            Some(AstNode::Command(args)) => {
+                assert_eq!(
+                    args,
+                    vec!["cat", "/root/Documents/Why SunlightOS Exists.txt"]
+                );
+            }
+            _ => panic!("expected Command with quoted path"),
+        }
+    }
+
+    #[test]
     fn simple_pipeline() {
         match parse_line("ls | grep foo") {
             Some(AstNode::Pipeline(stages)) => {
