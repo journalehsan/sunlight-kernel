@@ -482,12 +482,16 @@ const KV_VALUE: u64 = 0x4B05;
 // (e.g. TLS certificates). The data producer allocates a page, fills it, and
 // passes the cap token in caps[0]; the consumer maps + copies + frees. Mirrors
 // the VFS DATA_SHARED pattern. One page (<=4096 bytes) per value.
-// TODO: add KV_*_SHM2 opcodes that carry keys in shared memory too; with the
-// current ABI, keys packed at word 2 are limited to 16 bytes.
 #[cfg(feature = "sunlightos")]
 const KV_PUT_SHM: u64 = 0x4B06;
 #[cfg(feature = "sunlightos")]
 const KV_GET_SHM: u64 = 0x4B07;
+#[cfg(feature = "sunlightos")]
+const KV_PUT_SHM2: u64 = 0x4B08;
+#[cfg(feature = "sunlightos")]
+const KV_GET_SHM2: u64 = 0x4B09;
+#[cfg(feature = "sunlightos")]
+const KV_DELETE_SHM2: u64 = 0x4B0A;
 #[cfg(feature = "sunlightos")]
 const SHM_PAGE: usize = 4096;
 
@@ -872,6 +876,40 @@ fn unpack_str(words: &[u64; 8], start_word: usize, max_len: usize) -> String {
 }
 
 #[cfg(feature = "sunlightos")]
+fn read_shm_bytes(tok: CapabilityToken, len: usize) -> Option<Vec<u8>> {
+    if tok == CapabilityToken::INVALID || len > SHM_PAGE {
+        return None;
+    }
+    let ptr = shm_map(tok).ok()?;
+    let bytes = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+    let _ = shm_free(tok);
+    Some(bytes)
+}
+
+#[cfg(feature = "sunlightos")]
+fn send_shm_value_reply(reply: &mut IpcMsg, value: &[u8]) {
+    if value.len() > SHM_PAGE {
+        reply.label = KV_ERROR;
+        reply.words[0] = 4;
+        return;
+    }
+    match shm_alloc() {
+        Ok((ptr, token)) => {
+            unsafe {
+                core::ptr::copy_nonoverlapping(value.as_ptr(), ptr, value.len());
+            }
+            reply.label = KV_VALUE;
+            reply.words[0] = value.len() as u64;
+            *reply = (*reply).with_cap(0, token);
+        }
+        Err(_) => {
+            reply.label = KV_ERROR;
+            reply.words[0] = 3;
+        }
+    }
+}
+
+#[cfg(feature = "sunlightos")]
 #[no_mangle]
 pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *const u8) -> ! {
     debug_log("[SUNLIGHT-KV] main() reached (no_std)\n");
@@ -1038,28 +1076,90 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     reply.label = KV_ERROR;
                 } else {
                     match do_get(&key, "root") {
-                        Ok(v) if v.len() <= SHM_PAGE => match shm_alloc() {
-                            Ok((ptr, token)) => {
-                                unsafe {
-                                    core::ptr::copy_nonoverlapping(v.as_ptr(), ptr, v.len());
-                                }
-                                reply.label = KV_VALUE;
-                                reply.words[0] = v.len() as u64;
-                                reply = reply.with_cap(0, token);
-                            }
-                            Err(_) => {
-                                reply.label = KV_ERROR;
-                                reply.words[0] = 3;
-                            }
-                        },
-                        Ok(_) => {
-                            reply.label = KV_ERROR;
-                            reply.words[0] = 4; // value larger than one shm page
-                        }
+                        Ok(v) => send_shm_value_reply(&mut reply, &v),
                         Err(()) => {
                             reply.label = KV_ERROR;
                             reply.words[0] = 2;
                         }
+                    }
+                }
+            }
+            KV_PUT_SHM2 => {
+                let key_len = msg.words[0] as usize;
+                let value_len = msg.words[1] as usize;
+                let key_tok = msg.caps[0];
+                let value_tok = msg.caps[1];
+                let Some(key_bytes) = read_shm_bytes(key_tok, key_len) else {
+                    reply.label = KV_ERROR;
+                    reply.words[0] = 1;
+                    if value_tok != CapabilityToken::INVALID {
+                        let _ = shm_free(value_tok);
+                    }
+                    if key_tok != CapabilityToken::INVALID {
+                        let _ = shm_free(key_tok);
+                    }
+                    msg = ipc_reply_and_try_recv(ep, reply).unwrap_or_else(|| ipc_recv(ep));
+                    flush_one_persist();
+                    continue;
+                };
+                let Some(value) = read_shm_bytes(value_tok, value_len) else {
+                    reply.label = KV_ERROR;
+                    reply.words[0] = 1;
+                    msg = ipc_reply_and_try_recv(ep, reply).unwrap_or_else(|| ipc_recv(ep));
+                    flush_one_persist();
+                    continue;
+                };
+                match String::from_utf8(key_bytes) {
+                    Ok(key) if !key.is_empty() && do_put(&key, &value, "root") => {
+                        reply.words[0] = 0;
+                    }
+                    _ => {
+                        reply.label = KV_ERROR;
+                        reply.words[0] = 2;
+                    }
+                }
+            }
+            KV_GET_SHM2 => {
+                let key_len = msg.words[0] as usize;
+                let key_tok = msg.caps[0];
+                let Some(key_bytes) = read_shm_bytes(key_tok, key_len) else {
+                    reply.label = KV_ERROR;
+                    reply.words[0] = 1;
+                    msg = ipc_reply_and_try_recv(ep, reply).unwrap_or_else(|| ipc_recv(ep));
+                    flush_one_persist();
+                    continue;
+                };
+                match String::from_utf8(key_bytes) {
+                    Ok(key) if !key.is_empty() => match do_get(&key, "root") {
+                        Ok(v) => send_shm_value_reply(&mut reply, &v),
+                        Err(()) => {
+                            reply.label = KV_ERROR;
+                            reply.words[0] = 2;
+                        }
+                    },
+                    _ => {
+                        reply.label = KV_ERROR;
+                        reply.words[0] = 2;
+                    }
+                }
+            }
+            KV_DELETE_SHM2 => {
+                let key_len = msg.words[0] as usize;
+                let key_tok = msg.caps[0];
+                let Some(key_bytes) = read_shm_bytes(key_tok, key_len) else {
+                    reply.label = KV_ERROR;
+                    reply.words[0] = 1;
+                    msg = ipc_reply_and_try_recv(ep, reply).unwrap_or_else(|| ipc_recv(ep));
+                    flush_one_persist();
+                    continue;
+                };
+                match String::from_utf8(key_bytes) {
+                    Ok(key) if !key.is_empty() && do_delete(&key, "root") => {
+                        reply.words[0] = 0;
+                    }
+                    _ => {
+                        reply.label = KV_ERROR;
+                        reply.words[0] = 2;
                     }
                 }
             }

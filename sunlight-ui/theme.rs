@@ -87,6 +87,10 @@ pub struct Theme {
     pub text: Color,
     /// Dimmed / secondary text
     pub text_dim: Color,
+    /// Readable secondary text for dense UI areas.
+    pub text_muted: Color,
+    /// Text intended to sit on accent-colored backgrounds.
+    pub text_on_accent: Color,
     /// Default monochrome icon foreground
     pub icon_foreground: Color,
     /// Muted icon state for secondary actions
@@ -103,6 +107,8 @@ pub struct Theme {
     pub warn: Color,
     /// Danger / error indicator
     pub danger: Color,
+    /// Readable error text on dark panels.
+    pub danger_text: Color,
     /// Subtle border / separator
     pub border: Color,
 }
@@ -116,6 +122,8 @@ impl Theme {
             panel_alt: Color::rgb(0x22, 0x22, 0x26),
             text: Color::rgb(0xF0, 0xF0, 0xF0),
             text_dim: Color::rgb(0x88, 0x88, 0x99),
+            text_muted: Color::rgb(0xC8, 0xC8, 0xD2),
+            text_on_accent: Color::rgb(0x12, 0x12, 0x14),
             icon_foreground: Color::rgb(0xF0, 0xF0, 0xF0),
             icon_muted: Color::rgb(0xA0, 0xA0, 0xAF),
             icon_disabled: Color::rgb(0x5A, 0x5A, 0x66),
@@ -124,6 +132,7 @@ impl Theme {
             ok: Color::rgb(0x4C, 0xAF, 0x50),
             warn: Color::rgb(0xFF, 0xC1, 0x07),
             danger: Color::rgb(0xF4, 0x43, 0x36),
+            danger_text: Color::rgb(0xFF, 0x8A, 0x80),
             border: Color::rgb(0x35, 0x35, 0x40),
         }
     }
@@ -136,6 +145,8 @@ impl Theme {
             panel_alt: Color::rgb(0xEB, 0xEB, 0xEF),
             text: Color::rgb(0x11, 0x11, 0x11),
             text_dim: Color::rgb(0x66, 0x66, 0x77),
+            text_muted: Color::rgb(0x3F, 0x3F, 0x4A),
+            text_on_accent: Color::rgb(0x11, 0x11, 0x11),
             icon_foreground: Color::rgb(0x11, 0x11, 0x11),
             icon_muted: Color::rgb(0x5C, 0x5C, 0x6B),
             icon_disabled: Color::rgb(0xA8, 0xA8, 0xB5),
@@ -144,6 +155,7 @@ impl Theme {
             ok: Color::rgb(0x2E, 0x7D, 0x32),
             warn: Color::rgb(0xF5, 0x7F, 0x17),
             danger: Color::rgb(0xC6, 0x28, 0x28),
+            danger_text: Color::rgb(0xB7, 0x1C, 0x1C),
             border: Color::rgb(0xCC, 0xCC, 0xD6),
         }
     }

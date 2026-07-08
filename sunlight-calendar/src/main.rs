@@ -5,18 +5,24 @@ extern crate alloc;
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use alloc::format;
 use core::alloc::GlobalAlloc;
 
 use sun_font::{draw_text, draw_text_vcenter, line_height, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
-    debug_log, get_time_utc, monotonic_millis, process_yield, ProcessExit,
+    debug_log, get_time_utc, ipc_call_timeout, monotonic_millis, nameserver_lookup_timeout,
+    process_yield, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc};
 use sunlight_locale::{month_name, weekday_name};
 use sunlight_tz::{local_now, read_localtime, tz_by_id};
 use sunlight_ui::image::TgaImage;
+use sunlight_ui::widgets::{
+    form_field_style, status_text_color, CalendarCellState, CalendarCellStyle, EmptyStateStyle,
+    StatusTextKind,
+};
 use sunlight_ui::{
-    App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
+    App, Canvas, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
 };
 
 const WIN_W: u32 = 960;
@@ -29,8 +35,8 @@ const PAD: i32 = 8;
 const CELL_W: i32 = 80;
 const CELL_H: i32 = 34;
 const GRID_GAP: i32 = 2;
-const DIALOG_W: u32 = 420;
-const DIALOG_BTN_W: u32 = 88;
+const DIALOG_W: u32 = 500;
+const DIALOG_BTN_W: u32 = 96;
 const DIALOG_BTN_H: u32 = 28;
 const DIALOG_BTN_GAP: u32 = 10;
 const DIALOG_PAD: i32 = 16;
@@ -41,12 +47,26 @@ const TIME_LEN: usize = 5;
 const NOTES_LEN: usize = 256;
 const MSG_LEN: usize = 64;
 const TOOLBAR_BTN_W: u32 = 36;
+const KV_REPLY: u64 = 0x4BFF;
+const KV_ERROR: u64 = 0x4BEE;
+const KV_VALUE: u64 = 0x4B05;
+const KV_PUT_SHM2: u64 = 0x4B08;
+const KV_GET_SHM2: u64 = 0x4B09;
+const KV_DELETE_SHM2: u64 = 0x4B0A;
+const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
+const KV_TIMEOUT_MS: u64 = 250;
+use sunlight_calendar::{
+    by_date_key, encode_id_list, event_key, parse_id_list, parse_u64, setting_key, CAL_INDEX_ALL,
+    CAL_MIGRATION_FILE_V1,
+};
 
 const KEY_ESC: u8 = 0x01;
 const KEY_ENTER: u8 = 0x1C;
 const KEY_TAB: u8 = 0x0F;
 const KEY_BACKSPACE: u8 = 0x0E;
 const KEY_DELETE: u8 = 0x53;
+
+static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 
 static ICON_PREV_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_prev.tga"));
 static ICON_NEXT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_next.tga"));
@@ -229,6 +249,419 @@ impl CalendarEvent {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StoreMode {
+    Kv,
+    MemoryFallback,
+}
+
+#[derive(Clone, Copy)]
+enum StoreError {
+    Unavailable,
+    InvalidData,
+    TooLarge,
+}
+
+trait CalendarStore {
+    fn load_events(&mut self) -> Result<Vec<CalendarEvent>, StoreError>;
+    fn save_event(&mut self, event: &CalendarEvent) -> Result<(), StoreError>;
+    fn delete_event(&mut self, event_id: u64) -> Result<(), StoreError>;
+    fn load_setting(&mut self, key: &str) -> Result<Option<Vec<u8>>, StoreError>;
+    fn save_setting(&mut self, key: &str, value: &[u8]) -> Result<(), StoreError>;
+    fn mode(&self) -> StoreMode;
+}
+
+struct KvCalendarStore {
+    available: bool,
+}
+
+impl KvCalendarStore {
+    fn new() -> Self {
+        Self {
+            available: kv_cap().is_ok(),
+        }
+    }
+
+    fn setting_key(key: &str) -> String {
+        setting_key(key)
+    }
+
+    fn event_key(event_id: u64) -> String {
+        event_key(event_id)
+    }
+
+    fn by_date_key(date: &str) -> String {
+        by_date_key(date)
+    }
+
+    fn get(&mut self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
+        match kv_get(key) {
+            Ok(value) => {
+                self.available = true;
+                Ok(Some(value))
+            }
+            Err(KvClientError::NotFound) => Ok(None),
+            Err(_) => {
+                self.available = false;
+                Err(StoreError::Unavailable)
+            }
+        }
+    }
+
+    fn put(&mut self, key: &str, value: &[u8]) -> Result<(), StoreError> {
+        kv_put(key, value).map_err(|err| {
+            self.available = false;
+            match err {
+                KvClientError::TooLarge => StoreError::TooLarge,
+                _ => StoreError::Unavailable,
+            }
+        })?;
+        self.available = true;
+        Ok(())
+    }
+
+    fn delete_key(&mut self, key: &str) -> Result<(), StoreError> {
+        match kv_delete(key) {
+            Ok(()) | Err(KvClientError::NotFound) => {
+                self.available = true;
+                Ok(())
+            }
+            Err(_) => {
+                self.available = false;
+                Err(StoreError::Unavailable)
+            }
+        }
+    }
+
+    fn load_id_index(&mut self) -> Result<Vec<u64>, StoreError> {
+        let Some(bytes) = self.get(CAL_INDEX_ALL)? else {
+            return Ok(Vec::new());
+        };
+        parse_id_list(&bytes).ok_or(StoreError::InvalidData)
+    }
+
+    fn save_id_index(&mut self, ids: &[u64]) -> Result<(), StoreError> {
+        let value = encode_id_list(ids);
+        self.put(CAL_INDEX_ALL, &value)
+    }
+
+    fn load_date_index(&mut self, date: &str) -> Result<Vec<u64>, StoreError> {
+        let key = Self::by_date_key(date);
+        let Some(bytes) = self.get(&key)? else {
+            return Ok(Vec::new());
+        };
+        Ok(parse_id_list(&bytes).unwrap_or_default())
+    }
+
+    fn save_date_index(&mut self, date: &str, ids: &[u64]) -> Result<(), StoreError> {
+        let key = Self::by_date_key(date);
+        if ids.is_empty() {
+            return self.delete_key(&key);
+        }
+        let value = encode_id_list(ids);
+        self.put(&key, &value)
+    }
+
+    fn mark_migration_complete(&mut self) -> Result<(), StoreError> {
+        self.save_setting(CAL_MIGRATION_FILE_V1, b"1")
+    }
+
+    fn migration_complete(&mut self) -> bool {
+        matches!(self.load_setting(CAL_MIGRATION_FILE_V1), Ok(Some(_)))
+    }
+}
+
+impl CalendarStore for KvCalendarStore {
+    fn load_events(&mut self) -> Result<Vec<CalendarEvent>, StoreError> {
+        let ids = self.load_id_index()?;
+        let mut events = Vec::new();
+        for id in ids {
+            let key = Self::event_key(id);
+            match self.get(&key) {
+                Ok(Some(bytes)) => match decode_event(&bytes) {
+                    Some(event) => events.push(event),
+                    None => debug_log("[CALENDAR] skipped malformed KV event\n"),
+                },
+                Ok(None) => debug_log("[CALENDAR] skipped missing indexed KV event\n"),
+                Err(_) => return Err(StoreError::Unavailable),
+            }
+            if events.len() >= MAX_EVENTS {
+                break;
+            }
+        }
+        Ok(events)
+    }
+
+    fn save_event(&mut self, event: &CalendarEvent) -> Result<(), StoreError> {
+        let mut ids = self.load_id_index().unwrap_or_default();
+        if !ids.iter().any(|id| *id == event.id) {
+            ids.push(event.id);
+        }
+        self.save_id_index(&ids)?;
+
+        let events = self.load_events().unwrap_or_default();
+        for old in events.iter().filter(|old| old.id == event.id) {
+            if old.date.as_str() != event.date.as_str() {
+                let mut date_ids = self.load_date_index(old.date.as_str()).unwrap_or_default();
+                date_ids.retain(|id| *id != event.id);
+                let _ = self.save_date_index(old.date.as_str(), &date_ids);
+            }
+        }
+
+        let mut date_ids = self.load_date_index(event.date.as_str()).unwrap_or_default();
+        if !date_ids.iter().any(|id| *id == event.id) {
+            date_ids.push(event.id);
+        }
+        self.save_date_index(event.date.as_str(), &date_ids)?;
+
+        let key = Self::event_key(event.id);
+        let value = encode_event(event);
+        self.put(&key, &value)
+    }
+
+    fn delete_event(&mut self, event_id: u64) -> Result<(), StoreError> {
+        let mut old_date = String::new();
+        let key = Self::event_key(event_id);
+        if let Ok(Some(bytes)) = self.get(&key) {
+            if let Some(event) = decode_event(&bytes) {
+                old_date.push_str(event.date.as_str());
+            }
+        }
+        self.delete_key(&key)?;
+
+        let mut ids = self.load_id_index().unwrap_or_default();
+        ids.retain(|id| *id != event_id);
+        self.save_id_index(&ids)?;
+
+        if !old_date.is_empty() {
+            let mut date_ids = self.load_date_index(&old_date).unwrap_or_default();
+            date_ids.retain(|id| *id != event_id);
+            self.save_date_index(&old_date, &date_ids)?;
+        }
+        Ok(())
+    }
+
+    fn load_setting(&mut self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
+        self.get(&Self::setting_key(key))
+    }
+
+    fn save_setting(&mut self, key: &str, value: &[u8]) -> Result<(), StoreError> {
+        self.put(&Self::setting_key(key), value)
+    }
+
+    fn mode(&self) -> StoreMode {
+        if self.available {
+            StoreMode::Kv
+        } else {
+            StoreMode::MemoryFallback
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum KvClientError {
+    Unavailable,
+    NotFound,
+    TooLarge,
+}
+
+fn kv_cap() -> Result<CapabilityToken, KvClientError> {
+    let cached = unsafe { KV_CAP_CACHE };
+    if cached != CapabilityToken::INVALID {
+        return Ok(cached);
+    }
+    match nameserver_lookup_timeout("sunlight-kv", KV_LOOKUP_TIMEOUT_MS) {
+        Some(cap) => {
+            unsafe {
+                KV_CAP_CACHE = cap;
+            }
+            Ok(cap)
+        }
+        None => {
+            debug_log("[CALENDAR-KV] lookup sunlight-kv failed/timeout\n");
+            Err(KvClientError::Unavailable)
+        }
+    }
+}
+
+fn kv_put(key: &str, value: &[u8]) -> Result<(), KvClientError> {
+    if key.len() > SHM_PAGE || value.len() > SHM_PAGE {
+        return Err(KvClientError::TooLarge);
+    }
+    let cap = kv_cap()?;
+    let (key_ptr, key_tok) = shm_alloc().map_err(|_| KvClientError::Unavailable)?;
+    let (value_ptr, value_tok) = shm_alloc().map_err(|_| {
+        let _ = shm_free(key_tok);
+        KvClientError::Unavailable
+    })?;
+    unsafe {
+        core::ptr::copy_nonoverlapping(key.as_ptr(), key_ptr, key.len());
+        core::ptr::copy_nonoverlapping(value.as_ptr(), value_ptr, value.len());
+    }
+    let msg = IpcMsg::with_label(KV_PUT_SHM2)
+        .word(0, key.len() as u64)
+        .word(1, value.len() as u64)
+        .with_cap(0, key_tok)
+        .with_cap(1, value_tok);
+    let reply_res = ipc_call_timeout(cap, msg, KV_TIMEOUT_MS);
+    let _ = shm_free(key_tok);
+    let _ = shm_free(value_tok);
+    let reply = reply_res.map_err(|_| {
+        debug_log("[CALENDAR-KV] put timeout/error\n");
+        KvClientError::Unavailable
+    })?;
+    if reply.label == KV_REPLY && reply.words[0] == 0 {
+        Ok(())
+    } else {
+        debug_log("[CALENDAR-KV] put failed\n");
+        Err(KvClientError::Unavailable)
+    }
+}
+
+fn kv_get(key: &str) -> Result<Vec<u8>, KvClientError> {
+    if key.len() > SHM_PAGE {
+        return Err(KvClientError::TooLarge);
+    }
+    let cap = kv_cap()?;
+    let (key_ptr, key_tok) = shm_alloc().map_err(|_| KvClientError::Unavailable)?;
+    unsafe {
+        core::ptr::copy_nonoverlapping(key.as_ptr(), key_ptr, key.len());
+    }
+    let msg = IpcMsg::with_label(KV_GET_SHM2)
+        .word(0, key.len() as u64)
+        .with_cap(0, key_tok);
+    let reply_res = ipc_call_timeout(cap, msg, KV_TIMEOUT_MS);
+    let _ = shm_free(key_tok);
+    let reply = reply_res.map_err(|_| {
+        debug_log("[CALENDAR-KV] get timeout/error\n");
+        KvClientError::Unavailable
+    })?;
+    if reply.label == KV_ERROR && reply.words[0] == 2 {
+        return Err(KvClientError::NotFound);
+    }
+    if reply.label != KV_VALUE {
+        debug_log("[CALENDAR-KV] get failed\n");
+        return Err(KvClientError::Unavailable);
+    }
+    let len = (reply.words[0] as usize).min(SHM_PAGE);
+    if len == 0 {
+        return Ok(Vec::new());
+    }
+    let tok = reply.caps[0];
+    if tok == CapabilityToken::INVALID {
+        return Err(KvClientError::Unavailable);
+    }
+    let ptr = shm_map(tok).map_err(|_| {
+        let _ = shm_free(tok);
+        KvClientError::Unavailable
+    })?;
+    let value = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+    let _ = shm_free(tok);
+    Ok(value)
+}
+
+fn kv_delete(key: &str) -> Result<(), KvClientError> {
+    if key.len() > SHM_PAGE {
+        return Err(KvClientError::TooLarge);
+    }
+    let cap = kv_cap()?;
+    let (key_ptr, key_tok) = shm_alloc().map_err(|_| KvClientError::Unavailable)?;
+    unsafe {
+        core::ptr::copy_nonoverlapping(key.as_ptr(), key_ptr, key.len());
+    }
+    let msg = IpcMsg::with_label(KV_DELETE_SHM2)
+        .word(0, key.len() as u64)
+        .with_cap(0, key_tok);
+    let reply_res = ipc_call_timeout(cap, msg, KV_TIMEOUT_MS);
+    let _ = shm_free(key_tok);
+    let reply = reply_res.map_err(|_| {
+        debug_log("[CALENDAR-KV] delete timeout/error\n");
+        KvClientError::Unavailable
+    })?;
+    if reply.label == KV_REPLY && reply.words[0] == 0 {
+        Ok(())
+    } else if reply.label == KV_ERROR && reply.words[0] == 2 {
+        Err(KvClientError::NotFound)
+    } else {
+        debug_log("[CALENDAR-KV] delete failed\n");
+        Err(KvClientError::Unavailable)
+    }
+}
+
+fn encode_event(event: &CalendarEvent) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(b"SCAL2\n");
+    push_field(&mut out, "id", &format!("{}", event.id));
+    push_field(&mut out, "title", event.title.as_str());
+    push_field(&mut out, "date", event.date.as_str());
+    push_field(&mut out, "start", event.start_time.as_str());
+    push_field(&mut out, "end", event.end_time.as_str());
+    push_field(&mut out, "all_day", if event.all_day { "1" } else { "0" });
+    push_field(&mut out, "notes", event.notes.as_str());
+    push_field(&mut out, "created_at", &format!("{}", event.created_at));
+    push_field(&mut out, "updated_at", &format!("{}", event.updated_at));
+    out
+}
+
+fn push_field(out: &mut Vec<u8>, name: &str, value: &str) {
+    out.extend_from_slice(name.as_bytes());
+    out.push(b'=');
+    for &byte in value.as_bytes() {
+        match byte {
+            b'\\' => out.extend_from_slice(b"\\\\"),
+            b'\n' => out.extend_from_slice(b"\\n"),
+            _ => out.push(byte),
+        }
+    }
+    out.push(b'\n');
+}
+
+fn decode_event(bytes: &[u8]) -> Option<CalendarEvent> {
+    let text = core::str::from_utf8(bytes).ok()?;
+    if !text.starts_with("SCAL2\n") {
+        return None;
+    }
+    let mut event = CalendarEvent::new(0);
+    for line in text.lines().skip(1) {
+        let Some(eq) = line.find('=') else { continue };
+        let name = &line[..eq];
+        let value = unescape_field(&line[eq + 1..]);
+        match name {
+            "id" => event.id = parse_u64(&value)?,
+            "title" => event.title.set(&value),
+            "date" => event.date.set(&value),
+            "start" => event.start_time.set(&value),
+            "end" => event.end_time.set(&value),
+            "all_day" => event.all_day = value == "1",
+            "notes" => event.notes.set(&value),
+            "created_at" => event.created_at = parse_u64(&value).unwrap_or(0),
+            "updated_at" => event.updated_at = parse_u64(&value).unwrap_or(0),
+            _ => {}
+        }
+    }
+    if event.id == 0 || !valid_date_str(event.date.as_str()) || event.title.len == 0 {
+        return None;
+    }
+    Some(event)
+}
+
+fn unescape_field(value: &str) -> String {
+    let mut out = String::new();
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            out.push(if ch == 'n' { '\n' } else { ch });
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+
 fn push_i32_fixed<const N: usize>(out: &mut SlotString<N>, mut n: i32, digits: usize) {
     if n < 0 {
         out.push('-');
@@ -241,13 +674,18 @@ fn push_i32_fixed<const N: usize>(out: &mut SlotString<N>, mut n: i32, digits: u
         buf[i] = b'0' + (n % 10) as u8;
         n /= 10;
     }
-    for _ in 0..digits {
-        if i == buf.len() {
+    let len = buf.len() - i;
+    for _ in len..digits {
+        out.push('0');
+    }
+    if len == 0 {
+        if digits == 0 {
             out.push('0');
-        } else {
-            out.push(buf[i] as char);
-            i += 1;
         }
+        return;
+    }
+    for &b in &buf[i..] {
+        out.push(b as char);
     }
 }
 
@@ -285,6 +723,59 @@ fn parse_i32(s: &str) -> i32 {
     n
 }
 
+fn valid_date_str(s: &str) -> bool {
+    parse_date_parts(s).is_some()
+}
+
+fn normalize_date_str(s: &str) -> Option<SlotString<DATE_LEN>> {
+    let (year, month, day) = parse_date_parts(s)?;
+    Some(CalendarEvent::format_date(year, month, day))
+}
+
+fn parse_date_parts(s: &str) -> Option<(i32, i32, i32)> {
+    let first_sep = s.find(|ch| ch == '-' || ch == '/')?;
+    let rest = &s[first_sep + 1..];
+    let second_rel = rest.find(|ch| ch == '-' || ch == '/')?;
+    let second_sep = first_sep + 1 + second_rel;
+    let year_s = &s[..first_sep];
+    let month_s = &s[first_sep + 1..second_sep];
+    let day_s = &s[second_sep + 1..];
+    if year_s.len() != 4 || month_s.is_empty() || month_s.len() > 2 || day_s.is_empty() || day_s.len() > 2 {
+        return None;
+    }
+    for part in [year_s, month_s, day_s] {
+        if !part.as_bytes().iter().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+    }
+    let year = parse_i32(year_s);
+    let month = parse_i32(month_s);
+    let day = parse_i32(day_s);
+    if month >= 1 && month <= 12 && day >= 1 && day <= days_in_month(year, month) {
+        Some((year, month, day))
+    } else {
+        None
+    }
+}
+
+fn valid_time_str(s: &str) -> bool {
+    if s.is_empty() {
+        return true;
+    }
+    let bytes = s.as_bytes();
+    if bytes.len() != 5 || bytes[2] != b':' {
+        return false;
+    }
+    for &i in &[0usize, 1, 3, 4] {
+        if !bytes[i].is_ascii_digit() {
+            return false;
+        }
+    }
+    let hour = parse_i32(&s[0..2]);
+    let minute = parse_i32(&s[3..5]);
+    hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59
+}
+
 fn user_data_dir() -> String {
     let home = if libc::getuid() == 0 {
         "/root"
@@ -300,10 +791,6 @@ fn events_file_path() -> String {
     let mut path = user_data_dir();
     path.push_str("/events.dat");
     path
-}
-
-fn ensure_dir(dir: &str) {
-    let _ = libc::mkdir_recursive(dir.as_bytes());
 }
 
 fn read_file_bytes(path: &str) -> Option<Vec<u8>> {
@@ -333,67 +820,7 @@ fn read_file_bytes(path: &str) -> Option<Vec<u8>> {
     Some(data)
 }
 
-fn write_file_bytes(path: &str, data: &[u8]) -> bool {
-    let fd = libc::open_with_flags(
-        path.as_bytes(),
-        libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
-    )
-    .ok();
-    let Some(fd) = fd else { return false };
-    let mut offset = 0usize;
-    while offset < data.len() {
-        let n = libc::write(fd, &data[offset..]).ok().unwrap_or(0);
-        if n == 0 {
-            let _ = libc::close(fd);
-            return false;
-        }
-        offset += n;
-    }
-    let _ = libc::close(fd);
-    true
-}
-
 const EVENTS_MAGIC: u32 = 0xCA1ECA1E;
-const EVENTS_VERSION: u16 = 1;
-
-fn save_events(events: &[CalendarEvent]) {
-    let path = events_file_path();
-    let dir = user_data_dir();
-    ensure_dir(&dir);
-
-    let mut data = Vec::new();
-    data.extend_from_slice(&EVENTS_MAGIC.to_le_bytes());
-    data.extend_from_slice(&EVENTS_VERSION.to_le_bytes());
-    let count = events.len() as u32;
-    data.extend_from_slice(&count.to_le_bytes());
-
-    for event in events {
-        let title_bytes = event.title.as_str().as_bytes();
-        let notes_bytes = event.notes.as_str().as_bytes();
-        let title_len = title_bytes.len() as u16;
-        let notes_len = notes_bytes.len() as u16;
-
-        let rec_start = data.len();
-        data.extend_from_slice(&[0u8; 4]);
-
-        data.extend_from_slice(&event.id.to_le_bytes());
-        data.extend_from_slice(&title_len.to_le_bytes());
-        data.extend_from_slice(title_bytes);
-        data.extend_from_slice(event.date.as_str().as_bytes());
-        data.extend_from_slice(event.start_time.as_str().as_bytes());
-        data.extend_from_slice(event.end_time.as_str().as_bytes());
-        data.push(if event.all_day { 1u8 } else { 0u8 });
-        data.extend_from_slice(&notes_len.to_le_bytes());
-        data.extend_from_slice(notes_bytes);
-        data.extend_from_slice(&event.created_at.to_le_bytes());
-        data.extend_from_slice(&event.updated_at.to_le_bytes());
-
-        let total_len = (data.len() - rec_start - 4) as u32;
-        data[rec_start..rec_start + 4].copy_from_slice(&total_len.to_le_bytes());
-    }
-
-    write_file_bytes(&path, &data);
-}
 
 fn load_events() -> Vec<CalendarEvent> {
     let path = events_file_path();
@@ -628,8 +1055,8 @@ impl DialogState {
         self.editing_id = None;
         self.title.clear();
         self.date = *date;
-        self.start_time.clear();
-        self.end_time.clear();
+        self.start_time.set("09:00");
+        self.end_time.set("10:00");
         self.all_day = false;
         self.notes.clear();
         self.error_msg.clear();
@@ -652,11 +1079,18 @@ impl DialogState {
     }
 
     fn validate(&self) -> bool {
-        if self.title.len == 0 && self.date.len < 10 {
-            return false;
+        self.validation_error().is_none()
+    }
+
+    fn validation_error(&self) -> Option<&'static str> {
+        if self.title.len == 0 {
+            return Some("Title is required");
         }
-        if self.date.len < 10 {
-            return false;
+        if !valid_date_str(self.date.as_str()) {
+            return Some("Date example: 2026/10/6 or 2026-10-06");
+        }
+        if !valid_time_str(self.start_time.as_str()) || !valid_time_str(self.end_time.as_str()) {
+            return Some("Time example: 09:00");
         }
         if !self.all_day {
             if self.start_time.len > 0 && self.end_time.len > 0 {
@@ -681,17 +1115,17 @@ impl DialogState {
                     0
                 };
                 if eh < sh || (eh == sh && em < sm) {
-                    return false;
+                    return Some("End time must be after start");
                 }
             }
         }
-        true
+        None
     }
 
     fn to_event(&self, id: u64) -> CalendarEvent {
         let mut event = CalendarEvent::new(id);
         event.title = self.title;
-        event.date = self.date;
+        event.date = normalize_date_str(self.date.as_str()).unwrap_or(self.date);
         event.start_time = self.start_time;
         event.end_time = self.end_time;
         event.all_day = self.all_day;
@@ -726,6 +1160,8 @@ impl Confirmation {
 
 struct CalendarApp {
     events: Vec<CalendarEvent>,
+    store: KvCalendarStore,
+    memory_events: Vec<CalendarEvent>,
     icons: CalendarIcons,
     view_year: i32,
     view_month: i32,
@@ -746,6 +1182,7 @@ struct CalendarApp {
     toolbar_hover: Option<usize>,
     dialog_hover_btn: Option<usize>,
     data_loaded: bool,
+    status_msg: SlotString<MSG_LEN>,
 }
 
 impl CalendarApp {
@@ -753,6 +1190,8 @@ impl CalendarApp {
         let local = decompose_utc(get_time_utc(), None);
         Self {
             events: Vec::new(),
+            store: KvCalendarStore::new(),
+            memory_events: Vec::new(),
             icons: CalendarIcons::load(),
             view_year: local.0,
             view_month: local.1,
@@ -773,6 +1212,7 @@ impl CalendarApp {
             toolbar_hover: None,
             dialog_hover_btn: None,
             data_loaded: false,
+            status_msg: SlotString::empty(),
         }
     }
 
@@ -995,7 +1435,7 @@ impl CalendarApp {
     fn dialog_field_rects(&self) -> [Rect; 5] {
         let panel = self.dialog_rect();
         let field_h = 28u32;
-        let label_w = 60u32;
+        let label_w = 70u32;
         let input_x = panel.x + DIALOG_PAD + label_w as i32;
         let input_w = panel.w - label_w - (DIALOG_PAD as u32) * 2;
         let mut y = panel.y + 36;
@@ -1004,12 +1444,12 @@ impl CalendarApp {
         fields[0] = Rect::new(input_x, y, input_w, field_h);
         y += field_h as i32 + 8;
 
-        fields[1] = Rect::new(input_x, y, input_w / 2 + 20, field_h);
+        fields[1] = Rect::new(input_x, y, 190, field_h);
         y += field_h as i32 + 8;
 
-        let time_w = 60u32;
+        let time_w = 72u32;
         fields[2] = Rect::new(input_x, y, time_w, field_h);
-        fields[3] = Rect::new(input_x + time_w as i32 + 12, y, time_w, field_h);
+        fields[3] = Rect::new(input_x + time_w as i32 + 44, y, time_w, field_h);
         y += field_h as i32 + 8;
 
         let notes_h = 60u32;
@@ -1049,46 +1489,169 @@ impl CalendarApp {
     fn add_event_from_dialog(&mut self) {
         let id = self.next_event_id();
         let mut event = self.dialog.to_event(id);
-        if event.title.len == 0 {
-            event.title.set("Untitled Event");
+        event.created_at = monotonic_millis();
+        event.updated_at = event.created_at;
+        if self.persist_event(event) {
+            self.dialog.reset();
         }
-        self.events.push(event);
-        self.save_and_refresh();
-        self.dialog.reset();
     }
 
     fn update_event_from_dialog(&mut self) {
         let Some(edit_id) = self.dialog.editing_id else { return };
-        if let Some(event) = self.events.iter_mut().find(|e| e.id == edit_id) {
-            event.title = self.dialog.title;
-            event.date = self.dialog.date;
-            event.start_time = self.dialog.start_time;
-            event.end_time = self.dialog.end_time;
-            event.all_day = self.dialog.all_day;
-            event.notes = self.dialog.notes;
-            event.updated_at = monotonic_millis();
-            if event.title.len == 0 {
-                event.title.set("Untitled Event");
-            }
+        let mut event = self.dialog.to_event(edit_id);
+        event.created_at = self
+            .events
+            .iter()
+            .find(|existing| existing.id == edit_id)
+            .map(|existing| existing.created_at)
+            .unwrap_or_else(monotonic_millis);
+        event.updated_at = monotonic_millis();
+        if self.persist_event(event) {
+            self.dialog.reset();
         }
-        self.save_and_refresh();
-        self.dialog.reset();
     }
 
     fn delete_event(&mut self, event_id: u64) {
+        let result = if self.store.mode() == StoreMode::Kv {
+            self.store.delete_event(event_id)
+        } else {
+            self.memory_events.retain(|e| e.id != event_id);
+            Ok(())
+        };
+        if result.is_err() {
+            self.status_msg.set("Delete failed; check sunlight-kv");
+            return;
+        }
         self.events.retain(|e| e.id != event_id);
-        self.save_and_refresh();
+        self.status_msg.set("Event deleted");
         self.confirm.visible = false;
         self.dialog.reset();
+        self.save_and_refresh();
     }
 
     fn save_and_refresh(&mut self) {
-        save_events(&self.events);
         let (y, m, d) = (self.sel_year, self.sel_month, self.sel_day);
         self.selected_event_idx = self
             .events_for_date(y, m, d)
             .first()
             .map(|_| 0);
+        self.save_selection_settings();
+    }
+
+    fn persist_event(&mut self, event: CalendarEvent) -> bool {
+        let result = if self.store.mode() == StoreMode::Kv {
+            self.store.save_event(&event)
+        } else {
+            if let Some(existing) = self.memory_events.iter_mut().find(|existing| existing.id == event.id) {
+                *existing = event;
+            } else {
+                self.memory_events.push(event);
+            }
+            Ok(())
+        };
+        if result.is_err() {
+            self.dialog.error_msg.set("Could not save to sunlight-kv");
+            self.status_msg.set("Persistence error");
+            return false;
+        }
+        if let Some(existing) = self.events.iter_mut().find(|existing| existing.id == event.id) {
+            *existing = event;
+        } else {
+            self.events.push(event);
+        }
+        self.sort_events();
+        self.status_msg.set("Event saved");
+        self.save_and_refresh();
+        true
+    }
+
+    fn sort_events(&mut self) {
+        self.events.sort_by(|a, b| {
+            a.date
+                .as_str()
+                .cmp(b.date.as_str())
+                .then(a.start_time.as_str().cmp(b.start_time.as_str()))
+        });
+    }
+
+    fn load_calendar_data(&mut self) {
+        match self.store.load_events() {
+            Ok(events) => {
+                self.events = events;
+                self.sort_events();
+                self.status_msg.set("Loaded from sunlight-kv");
+                self.restore_selection();
+                self.migrate_old_file_if_needed();
+                self.save_and_refresh();
+            }
+            Err(_) => {
+                debug_log("[CALENDAR] sunlight-kv unavailable; using memory fallback\n");
+                self.events = self.memory_events.clone();
+                self.status_msg.set("sunlight-kv unavailable; memory only");
+            }
+        }
+    }
+
+    fn restore_selection(&mut self) {
+        if let Ok(Some(bytes)) = self.store.load_setting("selected-date") {
+            if let Ok(text) = core::str::from_utf8(&bytes) {
+                if valid_date_str(text) {
+                    self.sel_year = parse_i32(&text[0..4]);
+                    self.sel_month = parse_i32(&text[5..7]);
+                    self.sel_day = parse_i32(&text[8..10]);
+                }
+            }
+        }
+        if let Ok(Some(bytes)) = self.store.load_setting("view-month") {
+            if let Ok(text) = core::str::from_utf8(&bytes) {
+                if text.len() == 7 && text.as_bytes()[4] == b'-' {
+                    let year = parse_i32(&text[0..4]);
+                    let month = parse_i32(&text[5..7]);
+                    if month >= 1 && month <= 12 {
+                        self.view_year = year;
+                        self.view_month = month;
+                    }
+                }
+            }
+        }
+    }
+
+    fn save_selection_settings(&mut self) {
+        if self.store.mode() != StoreMode::Kv {
+            return;
+        }
+        let date = CalendarEvent::format_date(self.sel_year, self.sel_month, self.sel_day);
+        let _ = self.store.save_setting("selected-date", date.as_str().as_bytes());
+        let mut month = SlotString::<7>::empty();
+        push_i32_fixed(&mut month, self.view_year, 4);
+        month.push('-');
+        push_i32_fixed(&mut month, self.view_month, 2);
+        let _ = self.store.save_setting("view-month", month.as_str().as_bytes());
+    }
+
+    fn migrate_old_file_if_needed(&mut self) {
+        if self.store.migration_complete() {
+            return;
+        }
+        let old_events = load_events();
+        if old_events.is_empty() {
+            let _ = self.store.mark_migration_complete();
+            return;
+        }
+        let mut imported = 0usize;
+        for event in old_events {
+            if self.store.save_event(&event).is_ok() {
+                imported += 1;
+            }
+        }
+        if imported > 0 {
+            if let Ok(events) = self.store.load_events() {
+                self.events = events;
+                self.sort_events();
+            }
+        }
+        let _ = self.store.mark_migration_complete();
+        self.status_msg.set("Imported old calendar file");
     }
 
     fn refresh_timezone_and_locale(&mut self) {
@@ -1174,18 +1737,8 @@ impl App for CalendarApp {
 
     fn on_ready(&mut self) -> bool {
         self.refresh_timezone_and_locale();
-        let events = load_events();
-        if events.is_empty() && !self.data_loaded {
-            let mut sample = CalendarEvent::new(self.next_event_id());
-            sample.title.set("Sample Event");
-            sample.date = CalendarEvent::format_date(self.today_year, self.today_month, self.today_day);
-            sample.start_time.set("09:00");
-            sample.end_time.set("10:00");
-            sample.notes.set("Welcome to Sunlight Calendar!");
-            self.events.push(sample);
-            save_events(&self.events);
-        } else {
-            self.events = events;
+        if !self.data_loaded {
+            self.load_calendar_data();
         }
         self.data_loaded = true;
         true
@@ -1227,7 +1780,7 @@ impl CalendarApp {
             rect.right() - 40,
             rect.y,
             rect.h,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
         );
     }
 
@@ -1339,7 +1892,7 @@ impl CalendarApp {
                 cell_rect.x + 4,
                 cell_rect.y,
                 cell_rect.h,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
             );
         }
 
@@ -1369,23 +1922,22 @@ impl CalendarApp {
                 .len()
                 > 0;
 
-            if is_selected {
-                canvas.fill_rounded_rect(cell_rect, 6, theme.panel_alt);
-                canvas.stroke_rounded_rect(cell_rect, 6, 1, theme.accent);
+            let state = if is_selected && is_today {
+                CalendarCellState::SelectedToday
+            } else if is_selected {
+                CalendarCellState::Selected
             } else if is_today {
-                canvas.fill_rounded_rect(cell_rect, 6, Color::rgba(
-                    theme.accent.r(),
-                    theme.accent.g(),
-                    theme.accent.b(),
-                    40,
-                ));
-            }
-
-            let text_color = if is_selected || is_today {
-                theme.text
+                CalendarCellState::Today
             } else {
-                theme.text_dim
+                CalendarCellState::Normal
             };
+            let cell_style = CalendarCellStyle::from_theme(theme, state, has_events);
+            if let Some(fill) = cell_style.fill {
+                canvas.fill_rounded_rect(cell_rect, 6, fill);
+            }
+            if state != CalendarCellState::Normal {
+                canvas.stroke_rounded_rect(cell_rect, 6, 1, cell_style.border);
+            }
 
             draw_text_vcenter(
                 canvas,
@@ -1393,7 +1945,7 @@ impl CalendarApp {
                 cell_rect.x + 4,
                 cell_rect.y,
                 cell_rect.h,
-                &TextStyle::new(FontRole::UiSmall, text_color),
+                &TextStyle::new(FontRole::UiSmall, cell_style.text),
             );
 
             let mut day_str = String::new();
@@ -1403,7 +1955,7 @@ impl CalendarApp {
                 &day_str,
                 cell_rect.x + 6,
                 cell_rect.y + 6,
-                &TextStyle::new(FontRole::UiSmall, text_color),
+                &TextStyle::new(FontRole::UiSmall, cell_style.text),
             );
 
             if has_events {
@@ -1412,7 +1964,7 @@ impl CalendarApp {
                 canvas.fill_rounded_rect(
                     Rect::new(dot_x, dot_y, 6, 6),
                     3,
-                    theme.accent,
+                    cell_style.marker,
                 );
             }
         }
@@ -1459,7 +2011,7 @@ impl CalendarApp {
             &events_label,
             rect.x + PAD,
             events_header_y,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
         );
 
         let events_y = events_header_y + lh as i32 + 6;
@@ -1467,12 +2019,13 @@ impl CalendarApp {
         let max_visible = ((rect.bottom() - events_y - 50) / event_item_h).max(1) as usize;
 
         if sel_events.is_empty() {
+            let empty_style = EmptyStateStyle::new(Rect::new(rect.x + PAD, events_y, rect.w - 16, 24), theme);
             draw_text(
                 canvas,
                 "No events for this day.",
-                rect.x + PAD,
-                events_y + 8,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                empty_style.rect.x,
+                empty_style.rect.y + 8,
+                &TextStyle::new(FontRole::UiSmall, empty_style.text),
             );
         } else {
             for (idx, event) in sel_events.iter().enumerate().take(max_visible) {
@@ -1522,7 +2075,7 @@ impl CalendarApp {
                         time_str,
                         item_rect.x + 24,
                         item_rect.y + lh as i32 + 6,
-                        &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                        &TextStyle::new(FontRole::UiSmall, theme.text_muted),
                     );
                 }
             }
@@ -1537,7 +2090,7 @@ impl CalendarApp {
             add_btn.x + 8,
             add_btn.y,
             add_btn.h,
-            &TextStyle::new(FontRole::UiSmall, theme.text),
+            &TextStyle::new(FontRole::UiSmall, theme.text_on_accent),
         );
     }
 
@@ -1557,16 +2110,12 @@ impl CalendarApp {
         sel_str.push(' ');
         push_i32_into_string(&mut sel_str, self.sel_year);
 
-        let wd_today = iso_weekday(self.today_year, self.today_month, self.today_day);
-        let wd_today_name = weekday_name(wd_today, false, self.locale_str.as_str());
-        let mut today_str = String::from("Today: ");
-        today_str.push_str(wd_today_name);
-        today_str.push(' ');
-        push_i32_into_string(&mut today_str, self.today_day);
-        today_str.push(' ');
-        today_str.push_str(self.month_name(self.today_month, false));
-        today_str.push_str(", ");
-        push_i32_into_string(&mut today_str, self.today_year);
+        let mut center_str = String::new();
+        if self.status_msg.len > 0 {
+            center_str.push_str(self.status_msg.as_str());
+        } else if self.store.mode() == StoreMode::MemoryFallback {
+            center_str.push_str("Memory-only mode");
+        }
 
         let mut right_str = String::new();
         let tz = self.timezone_abbr.as_str();
@@ -1586,8 +2135,25 @@ impl CalendarApp {
             rect.x + PAD,
             rect.y,
             rect.h,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
         );
+
+        if !center_str.is_empty() {
+            let cw = measure_text(&center_str, FontRole::UiSmall).w;
+            let kind = if center_str.contains("error") || center_str.contains("failed") || center_str.contains("unavailable") {
+                StatusTextKind::Error
+            } else {
+                StatusTextKind::Muted
+            };
+            draw_text_vcenter(
+                canvas,
+                &center_str,
+                rect.x + (rect.w as i32 - cw as i32) / 2,
+                rect.y,
+                rect.h,
+                &TextStyle::new(FontRole::UiSmall, status_text_color(theme, kind)),
+            );
+        }
 
         let tw = measure_text(&right_str, FontRole::UiSmall).w;
         draw_text_vcenter(
@@ -1596,7 +2162,7 @@ impl CalendarApp {
             rect.right() - tw as i32 - PAD,
             rect.y,
             rect.h,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
         );
     }
 
@@ -1652,9 +2218,9 @@ impl CalendarApp {
 
         for i in 0..5 {
             let label_rect = Rect::new(
-                panel.x + DIALOG_PAD,
+                if i == 3 { fields[2].right() + 12 } else { panel.x + DIALOG_PAD },
                 fields[i].y,
-                60,
+                if i == 3 { 28 } else { 70 },
                 fields[i].h,
             );
             draw_text_vcenter(
@@ -1663,25 +2229,16 @@ impl CalendarApp {
                 label_rect.x,
                 label_rect.y,
                 label_rect.h,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
             );
 
             let is_focused = self.dialog.focus == focus_map[i];
-            let input_bg = if is_focused {
-                theme.panel_alt
-            } else {
-                theme.bg
-            };
-            let input_border = if is_focused {
-                theme.accent
-            } else {
-                theme.border
-            };
+            let field_style = form_field_style(theme, is_focused);
 
             if i < 4 {
-                canvas.fill_rounded_rect_with_border(fields[i], 4, input_bg, input_border, 1);
+                canvas.fill_rounded_rect_with_border(fields[i], 4, field_style.fill, field_style.border, 1);
             } else {
-                canvas.fill_rounded_rect_with_border(fields[i], 4, input_bg, input_border, 1);
+                canvas.fill_rounded_rect_with_border(fields[i], 4, field_style.fill, field_style.border, 1);
             }
 
             let text = match i {
@@ -1700,7 +2257,7 @@ impl CalendarApp {
                     fields[i].x + 4,
                     fields[i].y,
                     fields[i].h,
-                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                    &TextStyle::new(FontRole::UiSmall, field_style.text),
                 );
             } else {
                 draw_text(
@@ -1708,7 +2265,7 @@ impl CalendarApp {
                     text,
                     fields[i].x + 4,
                     fields[i].y + 4,
-                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                    &TextStyle::new(FontRole::UiSmall, field_style.text),
                 );
             }
 
@@ -1738,7 +2295,7 @@ impl CalendarApp {
             check_rect.right() + 6,
             all_day_rect.y,
             all_day_rect.h,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
         );
 
         let btns = self.dialog_button_rects();
@@ -1747,15 +2304,17 @@ impl CalendarApp {
         } else {
             2usize
         };
-        let btn_labels = if self.dialog.editing_id.is_some() {
-            ["Save", "Delete", "Cancel"]
-        } else {
-            ["Save", "", "Cancel"]
-        };
-
         for i in 0..btn_count {
+            let is_delete = self.dialog.editing_id.is_some() && i == 1;
+            let btn_label = if i == 0 {
+                "Save"
+            } else if is_delete {
+                "Delete"
+            } else {
+                "Cancel"
+            };
             let bg = if self.dialog_hover_btn == Some(i) {
-                if i == 1 {
+                if is_delete {
                     theme.danger
                 } else if i == 0 {
                     theme.accent
@@ -1763,7 +2322,7 @@ impl CalendarApp {
                     theme.panel_alt
                 }
             } else {
-                if i == 1 {
+                if is_delete {
                     theme.danger.darken(30)
                 } else if i == 0 {
                     theme.accent.darken(20)
@@ -1774,11 +2333,14 @@ impl CalendarApp {
             canvas.fill_rounded_rect_with_border(btns[i], 5, bg, theme.border, 1);
             draw_text_vcenter(
                 canvas,
-                btn_labels[i],
-                btns[i].x + 8,
+                btn_label,
+                btns[i].x + ((btns[i].w as i32 - measure_text(btn_label, FontRole::UiSmall).w as i32) / 2),
                 btns[i].y,
                 btns[i].h,
-                &TextStyle::new(FontRole::UiSmall, theme.text),
+                &TextStyle::new(
+                    FontRole::UiSmall,
+                    if i == 0 { theme.text_on_accent } else { theme.text },
+                ),
             );
         }
 
@@ -1788,7 +2350,7 @@ impl CalendarApp {
                 self.dialog.error_msg.as_str(),
                 panel.x + DIALOG_PAD,
                 panel.bottom() - DIALOG_PAD - 30,
-                &TextStyle::new(FontRole::UiSmall, theme.danger),
+                &TextStyle::new(FontRole::UiSmall, theme.danger_text),
             );
         }
     }
@@ -1896,14 +2458,14 @@ impl CalendarApp {
                         if self.dialog.validate() {
                             self.add_event_from_dialog();
                         } else {
-                            self.dialog.error_msg.set("Invalid input");
+                            self.dialog.error_msg.set(self.dialog.validation_error().unwrap_or("Invalid input"));
                         }
                     }
                     (true, 0) => {
                         if self.dialog.validate() {
                             self.update_event_from_dialog();
                         } else {
-                            self.dialog.error_msg.set("Invalid input");
+                            self.dialog.error_msg.set(self.dialog.validation_error().unwrap_or("Invalid input"));
                         }
                     }
                     (true, 1) => {
@@ -1973,6 +2535,7 @@ impl CalendarApp {
                         self.view_month = 12;
                         self.view_year -= 1;
                     }
+                    self.save_selection_settings();
                 }
                 1 => {
                     self.view_year = self.today_year;
@@ -1981,6 +2544,7 @@ impl CalendarApp {
                     self.sel_month = self.today_month;
                     self.sel_day = self.today_day;
                     self.selected_event_idx = None;
+                    self.save_selection_settings();
                 }
                 2 => {
                     self.view_month += 1;
@@ -1988,6 +2552,7 @@ impl CalendarApp {
                         self.view_month = 1;
                         self.view_year += 1;
                     }
+                    self.save_selection_settings();
                 }
                 3 => {
                     self.open_new_event_dialog();
@@ -2041,6 +2606,7 @@ impl CalendarApp {
             self.sel_day = day;
             self.selected_event_idx = None;
             if (self.sel_year, self.sel_month, self.sel_day) != old_sel {
+                self.save_selection_settings();
                 return true;
             }
         }
@@ -2062,16 +2628,12 @@ impl CalendarApp {
                 self.sel_month = self.today_month;
                 self.sel_day = self.today_day;
                 self.selected_event_idx = None;
+                self.save_selection_settings();
                 true
             }
             MenuAction::Refresh => {
                 self.refresh_timezone_and_locale();
-                self.events = load_events();
-                let (y, m, d) = (self.sel_year, self.sel_month, self.sel_day);
-                self.selected_event_idx = self
-                    .events_for_date(y, m, d)
-                    .first()
-                    .map(|_| 0);
+                self.load_calendar_data();
                 true
             }
             MenuAction::About => {
@@ -2174,7 +2736,7 @@ impl CalendarApp {
                                 self.add_event_from_dialog();
                             }
                         } else {
-                            self.dialog.error_msg.set("Invalid input");
+                            self.dialog.error_msg.set(self.dialog.validation_error().unwrap_or("Invalid input"));
                         }
                         return true;
                     }

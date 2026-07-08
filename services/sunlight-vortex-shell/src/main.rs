@@ -60,10 +60,11 @@ use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
     debug_log, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, nameserver_lookup, process_is_alive, process_yield, query_display_metrics,
-    show_notification, unpack_iface_summary, CapabilityToken, DisplayMetrics, InterfaceKind,
-    IpcMsg, LinkState, NetworkdMsg, NotificationKind, ProcessExit, SgpMsg, TzMsg, SAFE_FALLBACK_H,
-    SAFE_FALLBACK_W,
+    monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, process_is_alive,
+    process_yield, query_display_metrics, shm_alloc, shm_free, shm_map, show_notification,
+    unpack_iface_summary, CapabilityToken, DisplayMetrics, InterfaceKind, IpcMsg, LinkState,
+    NetworkdMsg, NotificationKind, ProcessExit, SgpMsg, TzMsg, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+    SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
@@ -523,6 +524,12 @@ struct RunningAppEntry {
     last_click_at: u64,
 }
 
+#[derive(Clone)]
+struct CalendarMiniEvent {
+    title: String,
+    time: String,
+}
+
 impl RunningAppEntry {
     fn label_str(&self) -> &str {
         core::str::from_utf8(&self.label[..self.label_len]).unwrap_or("")
@@ -576,6 +583,16 @@ const STATUS_POLL_MS: u64 = 1000;
 const TIME_IPC_TIMEOUT_MS: u64 = 250;
 const NET_IPC_TIMEOUT_MS: u64 = 50;
 const DISPLAY_IPC_TIMEOUT_MS: u64 = 50;
+const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
+const KV_IPC_TIMEOUT_MS: u64 = 250;
+const KV_VALUE: u64 = 0x4B05;
+const KV_ERROR: u64 = 0x4BEE;
+const KV_GET_SHM2: u64 = 0x4B09;
+const CAL_EVENT_PREFIX: &str = "app.calendar.events/";
+const CAL_INDEX_BY_DATE_PREFIX: &str = "app.calendar.index/by-date/";
+const CAL_EVENT_TITLE_MAX: usize = 48;
+const CAL_POPUP_DAYS: usize = 42;
+const CAL_POPUP_EVENTS: usize = 8;
 const APP_STATE_POLL_MS: u64 = 250;
 const APP_LAUNCH_TIMEOUT_MS: u64 = 30_000;
 const APP_PRESS_MS: u64 = 140;
@@ -586,6 +603,8 @@ const DESKTOP_LABEL_CHARS: usize = 12;
 const MAX_DIR_ENTRIES: usize = 48;
 const MENU_W: u32 = 156;
 const MENU_ITEM_H: u32 = 22;
+
+static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 
 // ---------------------------------------------------------------------------
 // Heap (bump allocator — no dynamic allocations used)
@@ -1176,6 +1195,11 @@ struct VortexShell {
     cal_popup_open_btn: Rect,
     cal_view_month: u8, // 1-12 current view (adjusted by offset)
     cal_view_year: u16,
+    cal_selected_day: u8,
+    cal_event_days: [bool; CAL_POPUP_DAYS],
+    cal_selected_events: Vec<CalendarMiniEvent>,
+    cal_last_loaded_key: [u8; 10],
+    cal_last_loaded_key_len: usize,
     show_notif_panel: bool,
     show_logout_confirm: bool,
 
@@ -1276,6 +1300,11 @@ impl VortexShell {
             cal_popup_open_btn: Rect::new(0, 0, 0, 0),
             cal_view_month: 1,
             cal_view_year: 1970,
+            cal_selected_day: 1,
+            cal_event_days: [false; CAL_POPUP_DAYS],
+            cal_selected_events: Vec::new(),
+            cal_last_loaded_key: [0; 10],
+            cal_last_loaded_key_len: 0,
             show_notif_panel: false,
             show_logout_confirm: false,
             logout_cancel_r: Rect::new(0, 0, 0, 0),
@@ -1373,6 +1402,56 @@ impl VortexShell {
         }
 
         dirty
+    }
+
+    fn reset_calendar_view_to_today(&mut self) {
+        self.cal_view_month = if (1..=12).contains(&self.status_month) {
+            self.status_month
+        } else {
+            1
+        };
+        self.cal_view_year = if self.status_year >= 1970 {
+            self.status_year
+        } else {
+            1970
+        };
+        self.cal_selected_day = if self.status_day >= 1
+            && self.status_day <= cal_days_in_month(self.cal_view_year, self.cal_view_month)
+        {
+            self.status_day
+        } else {
+            1
+        };
+        self.cal_last_loaded_key_len = 0;
+        self.refresh_calendar_popover_data();
+    }
+
+    fn refresh_calendar_popover_data(&mut self) {
+        let key = format_cal_date(self.cal_view_year, self.cal_view_month, self.cal_selected_day);
+        let kb = key.as_bytes();
+        if kb.len() == self.cal_last_loaded_key_len
+            && self.cal_last_loaded_key[..self.cal_last_loaded_key_len] == *kb
+        {
+            return;
+        }
+        self.cal_event_days = [false; CAL_POPUP_DAYS];
+        let offset = cal_weekday_sun0(self.cal_view_year, self.cal_view_month, 1);
+        let dim = cal_days_in_month(self.cal_view_year, self.cal_view_month);
+        for day in 1..=dim {
+            let idx = offset + (day as usize - 1);
+            if idx < CAL_POPUP_DAYS {
+                self.cal_event_days[idx] =
+                    calendar_day_has_events(self.cal_view_year, self.cal_view_month, day);
+            }
+        }
+        self.cal_selected_events = load_calendar_events_for_day(
+            self.cal_view_year,
+            self.cal_view_month,
+            self.cal_selected_day,
+        );
+        self.cal_last_loaded_key_len = kb.len().min(self.cal_last_loaded_key.len());
+        self.cal_last_loaded_key[..self.cal_last_loaded_key_len]
+            .copy_from_slice(&kb[..self.cal_last_loaded_key_len]);
     }
 
     fn reload_desktop_icons(&mut self) {
@@ -2982,6 +3061,205 @@ fn format_center_datetime(y: u16, mon: u8, d: u8, h: u8, mi: u8, loc: &str) -> S
     }
 }
 
+fn cal_is_leap_year(year: u16) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+fn cal_days_in_month(year: u16, month: u8) -> u8 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if cal_is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
+    }
+}
+
+fn cal_weekday_sun0(year: u16, month: u8, day: u8) -> usize {
+    let t = [0i32, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    let mut y = year as i32;
+    let m = month as i32;
+    if m < 3 {
+        y -= 1;
+    }
+    ((y + y / 4 - y / 100 + y / 400 + t[(m - 1) as usize] + day as i32) % 7) as usize
+}
+
+fn format_cal_date(year: u16, month: u8, day: u8) -> String {
+    alloc::format!("{:04}-{:02}-{:02}", year, month, day)
+}
+
+fn format_event_key(event_id: u64) -> String {
+    alloc::format!("{}{:016x}", CAL_EVENT_PREFIX, event_id)
+}
+
+fn calendar_index_key(date: &str) -> String {
+    let mut key = String::from(CAL_INDEX_BY_DATE_PREFIX);
+    key.push_str(date);
+    key
+}
+
+fn parse_id_list(bytes: &[u8]) -> Vec<u64> {
+    let mut ids = Vec::new();
+    let Ok(text) = core::str::from_utf8(bytes) else {
+        return ids;
+    };
+    for line in text.lines() {
+        if let Some(id) = parse_u64_ascii(line.as_bytes()) {
+            if !ids.iter().any(|existing| *existing == id) {
+                ids.push(id);
+            }
+        }
+    }
+    ids
+}
+
+fn parse_u64_ascii(bytes: &[u8]) -> Option<u64> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut value = 0u64;
+    for &b in bytes {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        value = value.checked_mul(10)?.checked_add((b - b'0') as u64)?;
+    }
+    Some(value)
+}
+
+fn calendar_day_has_events(year: u16, month: u8, day: u8) -> bool {
+    let date = format_cal_date(year, month, day);
+    kv_get_bytes(&calendar_index_key(&date))
+        .map(|bytes| !parse_id_list(&bytes).is_empty())
+        .unwrap_or(false)
+}
+
+fn load_calendar_events_for_day(year: u16, month: u8, day: u8) -> Vec<CalendarMiniEvent> {
+    let mut events = Vec::new();
+    let date = format_cal_date(year, month, day);
+    let Some(index_bytes) = kv_get_bytes(&calendar_index_key(&date)) else {
+        return events;
+    };
+    for id in parse_id_list(&index_bytes).into_iter().take(CAL_POPUP_EVENTS) {
+        if let Some(bytes) = kv_get_bytes(&format_event_key(id)) {
+            if let Some(event) = parse_calendar_event_summary(&bytes) {
+                events.push(event);
+            }
+        }
+    }
+    events
+}
+
+fn parse_calendar_event_summary(bytes: &[u8]) -> Option<CalendarMiniEvent> {
+    let text = core::str::from_utf8(bytes).ok()?;
+    if !text.starts_with("SCAL2\n") {
+        return None;
+    }
+    let mut title = String::new();
+    let mut start = String::new();
+    let mut all_day = false;
+    for line in text.lines().skip(1) {
+        let Some(eq) = line.find('=') else { continue };
+        let name = &line[..eq];
+        let value = unescape_calendar_field(&line[eq + 1..]);
+        match name {
+            "title" => title = value,
+            "start" => start = value,
+            "all_day" => all_day = value == "1",
+            _ => {}
+        }
+    }
+    if title.is_empty() {
+        return None;
+    }
+    if title.chars().count() > CAL_EVENT_TITLE_MAX {
+        title = ellipsize_label(&title, CAL_EVENT_TITLE_MAX);
+    }
+    let time = if all_day {
+        String::from("All day")
+    } else if start.is_empty() {
+        String::from("No time")
+    } else {
+        start
+    };
+    Some(CalendarMiniEvent { title, time })
+}
+
+fn unescape_calendar_field(value: &str) -> String {
+    let mut out = String::new();
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            out.push(if ch == 'n' { ' ' } else { ch });
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn kv_cap() -> Option<CapabilityToken> {
+    let cached = unsafe { KV_CAP_CACHE };
+    if cached != CapabilityToken::INVALID {
+        return Some(cached);
+    }
+    let cap = nameserver_lookup_timeout("sunlight-kv", KV_LOOKUP_TIMEOUT_MS)?;
+    unsafe {
+        KV_CAP_CACHE = cap;
+    }
+    Some(cap)
+}
+
+fn kv_get_bytes(key: &str) -> Option<Vec<u8>> {
+    if key.len() > SHM_PAGE {
+        return None;
+    }
+    let cap = kv_cap()?;
+    let (key_ptr, key_tok) = shm_alloc().ok()?;
+    unsafe {
+        core::ptr::copy_nonoverlapping(key.as_ptr(), key_ptr, key.len());
+    }
+    let msg = IpcMsg::with_label(KV_GET_SHM2)
+        .word(0, key.len() as u64)
+        .with_cap(0, key_tok);
+    let reply_res = ipc_call_timeout(cap, msg, KV_IPC_TIMEOUT_MS);
+    let _ = shm_free(key_tok);
+    let reply = reply_res.ok()?;
+    if reply.label == KV_ERROR {
+        return None;
+    }
+    if reply.label != KV_VALUE {
+        return None;
+    }
+    let len = (reply.words[0] as usize).min(SHM_PAGE);
+    if len == 0 {
+        return Some(Vec::new());
+    }
+    let tok = reply.caps[0];
+    if tok == CapabilityToken::INVALID {
+        return None;
+    }
+    let ptr = match shm_map(tok) {
+        Ok(ptr) => ptr,
+        Err(_) => {
+            let _ = shm_free(tok);
+            return None;
+        }
+    };
+    let bytes = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+    let _ = shm_free(tok);
+    Some(bytes)
+}
+
 // ---------------------------------------------------------------------------
 // Desktop icons and menu
 // ---------------------------------------------------------------------------
@@ -4108,15 +4386,11 @@ impl VortexShell {
     }
 
     fn draw_calendar_popover(&mut self, canvas: &mut Canvas, theme: &Theme, cw: u32, _ch: u32) {
-        let pw = 220u32;
-        let ph = 180u32;
-        let cx = self.datetime_zone.x + (self.datetime_zone.w as i32) / 2;
-        let x = (cx - (pw as i32) / 2)
-            .max(TOP_PAD)
-            .min((cw - pw - TOP_PAD as u32) as i32);
-        let y = self.datetime_zone.bottom() + 2;
-
-        let panel = Rect::new(x, y, pw, ph);
+        self.refresh_calendar_popover_data();
+        let panel = self.calendar_popover_rect(cw);
+        let x = panel.x;
+        let y = panel.y;
+        let pw = panel.w;
         canvas.fill_rounded_rect(panel, 8, theme.panel);
         canvas.stroke_rounded_rect(panel, 8, 1, theme.border);
 
@@ -4131,63 +4405,124 @@ impl VortexShell {
             &TextStyle::new(FontRole::UiMedium, theme.text),
         );
 
-        let mut hx = x + 8;
-        let cell = 26u32;
+        let mut hx = x + 12;
+        let cell = 38u32;
         for &wd in &["S", "M", "T", "W", "T", "F", "S"] {
             draw_text_vcenter(
                 canvas,
                 wd,
-                hx,
+                hx + 12,
                 y + 26,
                 14,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
             );
             hx += cell as i32;
         }
 
-        let mut gy = y + 44;
-        let mut day = 1u8;
+        let grid_y = y + 44;
+        let offset = cal_weekday_sun0(self.cal_view_year, self.cal_view_month, 1);
+        let dim = cal_days_in_month(self.cal_view_year, self.cal_view_month);
         let today_d =
             if self.cal_view_month == self.status_month && self.cal_view_year == self.status_year {
                 self.status_day
             } else {
                 0
             };
-        for _row in 0..6 {
-            let mut gx = x + 8;
-            for _col in 0..7 {
-                if day > 31 {
-                    break;
-                }
-                let cell_r = Rect::new(gx, gy, cell, 18);
-                if day == today_d {
-                    canvas.fill_rounded_rect(cell_r, 3, theme.accent);
-                    let s = alloc::format!("{}", day);
-                    draw_text_vcenter(
-                        canvas,
-                        &s,
-                        gx + 4,
-                        gy,
-                        16,
-                        &TextStyle::new(FontRole::UiSmall, theme.panel),
-                    );
-                } else {
-                    let s = alloc::format!("{}", day);
-                    draw_text_vcenter(
-                        canvas,
-                        &s,
-                        gx + 4,
-                        gy,
-                        16,
-                        &TextStyle::new(FontRole::UiSmall, theme.text),
-                    );
-                }
-                gx += cell as i32;
-                day += 1;
+        for idx in 0..CAL_POPUP_DAYS {
+            let row = idx / 7;
+            let col = idx % 7;
+            let gx = x + 12 + col as i32 * cell as i32;
+            let cell_r = Rect::new(gx, grid_y + row as i32 * 22, cell - 4, 20);
+            if idx < offset {
+                continue;
             }
-            gy += 18;
-            if day > 28 {
-                break;
+            let day = (idx - offset + 1) as u8;
+            if day > dim {
+                continue;
+            }
+            let is_selected = day == self.cal_selected_day;
+            let is_today = day == today_d;
+            if is_selected {
+                canvas.fill_rounded_rect(cell_r, 4, theme.accent);
+            } else if is_today {
+                canvas.fill_rounded_rect(cell_r, 4, theme.panel_alt);
+                canvas.stroke_rounded_rect(cell_r, 4, 1, theme.accent);
+            }
+            let s = alloc::format!("{}", day);
+            draw_text_vcenter(
+                canvas,
+                &s,
+                gx + 7,
+                cell_r.y,
+                cell_r.h,
+                &TextStyle::new(
+                    FontRole::UiSmall,
+                    if is_selected { theme.text_on_accent } else { theme.text },
+                ),
+            );
+            if self.cal_event_days[idx] {
+                canvas.fill_rounded_rect(
+                    Rect::new(cell_r.right() - 8, cell_r.bottom() - 6, 4, 4),
+                    2,
+                    if is_selected { theme.text_on_accent } else { theme.accent },
+                );
+            }
+        }
+
+        let list_y = y + 184;
+        canvas.hbar(x + 12, list_y - 8, pw - 24, 1, theme.border);
+        let selected_date =
+            format_cal_date(self.cal_view_year, self.cal_view_month, self.cal_selected_day);
+        draw_text_vcenter(
+            canvas,
+            &selected_date,
+            x + 12,
+            list_y - 4,
+            18,
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+        );
+
+        if self.cal_selected_events.is_empty() {
+            draw_text_vcenter(
+                canvas,
+                "No events for this day",
+                x + 12,
+                list_y + 18,
+                18,
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+            );
+        } else {
+            let mut ey = list_y + 18;
+            for event in self.cal_selected_events.iter().take(4) {
+                let row = Rect::new(x + 12, ey, pw - 24, 22);
+                canvas.fill_rounded_rect(row, 4, theme.panel_alt);
+                draw_text_vcenter(
+                    canvas,
+                    &event.time,
+                    row.x + 6,
+                    row.y,
+                    row.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.accent),
+                );
+                draw_text_vcenter(
+                    canvas,
+                    &event.title,
+                    row.x + 62,
+                    row.y,
+                    row.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                );
+                ey += 24;
+            }
+            if self.cal_selected_events.len() > 4 {
+                draw_text_vcenter(
+                    canvas,
+                    "More in Calendar…",
+                    x + 12,
+                    ey,
+                    18,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+                );
             }
         }
 
@@ -4198,11 +4533,46 @@ impl VortexShell {
         draw_text_vcenter(
             canvas,
             "Open Calendar",
-            btn_r.x + 8,
+            btn_r.x + ((btn_r.w as i32 - measure_text("Open Calendar", FontRole::UiSmall).w as i32) / 2),
             btn_r.y,
             btn_r.h,
-            &TextStyle::new(FontRole::UiSmall, theme.text),
+            &TextStyle::new(FontRole::UiSmall, theme.text_on_accent),
         );
+    }
+
+    fn calendar_popover_rect(&self, cw: u32) -> Rect {
+        let pw = 300u32;
+        let ph = 310u32;
+        let cx = self.datetime_zone.x + (self.datetime_zone.w as i32) / 2;
+        let x = (cx - (pw as i32) / 2)
+            .max(TOP_PAD)
+            .min((cw - pw - TOP_PAD as u32) as i32);
+        Rect::new(x, self.datetime_zone.bottom() + 2, pw, ph)
+    }
+
+    fn calendar_day_at_point(&self, point: Point, cw: u32) -> Option<u8> {
+        let panel = self.calendar_popover_rect(cw);
+        let grid_x = panel.x + 12;
+        let grid_y = panel.y + 44;
+        if point.x < grid_x || point.y < grid_y {
+            return None;
+        }
+        let col = (point.x - grid_x) / 38;
+        let row = (point.y - grid_y) / 22;
+        if col < 0 || col >= 7 || row < 0 || row >= 6 {
+            return None;
+        }
+        let idx = row as usize * 7 + col as usize;
+        let offset = cal_weekday_sun0(self.cal_view_year, self.cal_view_month, 1);
+        if idx < offset {
+            return None;
+        }
+        let day = (idx - offset + 1) as u8;
+        if day == 0 || day > cal_days_in_month(self.cal_view_year, self.cal_view_month) {
+            None
+        } else {
+            Some(day)
+        }
     }
 
     fn draw_notif_panel(&mut self, canvas: &mut Canvas, theme: &Theme) {
@@ -4532,10 +4902,20 @@ impl App for VortexShell {
                         LaunchSource::Shortcut,
                     );
                 }
+                if self.show_calendar_popover {
+                    if let Some(day) = self.calendar_day_at_point(point, self.screen_w) {
+                        self.cal_selected_day = day;
+                        self.cal_last_loaded_key_len = 0;
+                        self.refresh_calendar_popover_data();
+                        return true;
+                    }
+                    if self.calendar_popover_rect(self.screen_w).contains(point) {
+                        return true;
+                    }
+                }
                 // Close transient panels on outside click (conservative)
                 let mut closed = false;
                 if self.show_calendar_popover && !self.datetime_zone.contains(point) {
-                    // also allow inside popover rect? for v1 close on any outside
                     self.show_calendar_popover = false;
                     closed = true;
                 }
@@ -4601,17 +4981,7 @@ impl App for VortexShell {
                     self.show_datetime_tooltip = false;
                     self.show_calendar_popover = !self.show_calendar_popover;
                     if self.show_calendar_popover {
-                        // reset view to current
-                        self.cal_view_month = if (1..=12).contains(&self.status_month) {
-                            self.status_month
-                        } else {
-                            1
-                        };
-                        self.cal_view_year = if self.status_year >= 1970 {
-                            self.status_year
-                        } else {
-                            1970
-                        };
+                        self.reset_calendar_view_to_today();
                     }
                     return true;
                 }

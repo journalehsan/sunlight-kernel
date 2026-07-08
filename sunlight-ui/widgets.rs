@@ -1,4 +1,5 @@
 pub mod button;
+pub mod calendar;
 pub mod checkbox;
 pub mod drive_card;
 pub mod label;
@@ -13,6 +14,10 @@ pub mod toolbar;
 
 // Re-export the most-used types at the widgets level
 pub use button::{Button, ButtonState};
+pub use calendar::{
+    form_field_style, status_text_color, CalendarCellState, CalendarCellStyle, EmptyStateStyle,
+    FormFieldStyle, StatusTextKind,
+};
 pub use checkbox::Checkbox;
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
 pub use label::Label;
