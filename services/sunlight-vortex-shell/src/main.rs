@@ -63,16 +63,17 @@ use sunlight_calendar::{
 use sunlight_ipc::{
     debug_log, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, process_is_alive,
-    process_yield, query_display_metrics, shm_alloc, shm_free, shm_map, show_notification,
-    unpack_iface_summary, CapabilityToken, DisplayMetrics, InterfaceKind, IpcMsg, LinkState,
-    NetworkdMsg, NotificationKind, ProcessExit, SgpMsg, TzMsg, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
-    SHM_PAGE,
+    monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, notification_dnd_enabled,
+    notification_history_recent, notification_set_dismissed, notification_set_dnd,
+    notification_set_seen, process_is_alive, process_yield, query_display_metrics, shm_alloc,
+    shm_free, shm_map, show_notification, unpack_iface_summary, CapabilityToken, DisplayMetrics,
+    InterfaceKind, IpcMsg, LinkState, NetworkdMsg, NotificationKind, NotificationPriority,
+    NotificationRecord, ProcessExit, SgpMsg, TzMsg, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
 use sunlight_reminders::{
-    by_date_list_key as reminder_due_date_list_key, decode_task, parse_id_list as parse_task_id_list,
-    reminder_date_list_key, task_key,
+    by_date_list_key as reminder_due_date_list_key, decode_task,
+    parse_id_list as parse_task_id_list, reminder_date_list_key, task_key,
 };
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
@@ -612,6 +613,8 @@ const DESKTOP_LABEL_CHARS: usize = 12;
 const MAX_DIR_ENTRIES: usize = 48;
 const MENU_W: u32 = 156;
 const MENU_ITEM_H: u32 = 22;
+const NOTIF_CENTER_W: u32 = 320;
+const NOTIF_CENTER_RECENT_LIMIT: usize = 32;
 
 static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 
@@ -1212,6 +1215,9 @@ struct VortexShell {
     cal_last_loaded_key: [u8; 10],
     cal_last_loaded_key_len: usize,
     show_notif_panel: bool,
+    notif_dnd_toggle_r: Rect,
+    notif_mark_seen_r: Rect,
+    notif_dismiss_r: Rect,
     show_logout_confirm: bool,
 
     // Stash for logout dialog button rects (simple, recomputed often)
@@ -1319,6 +1325,9 @@ impl VortexShell {
             cal_last_loaded_key: [0; 10],
             cal_last_loaded_key_len: 0,
             show_notif_panel: false,
+            notif_dnd_toggle_r: Rect::new(0, 0, 0, 0),
+            notif_mark_seen_r: Rect::new(0, 0, 0, 0),
+            notif_dismiss_r: Rect::new(0, 0, 0, 0),
             show_logout_confirm: false,
             logout_cancel_r: Rect::new(0, 0, 0, 0),
             logout_confirm_r: Rect::new(0, 0, 0, 0),
@@ -3374,6 +3383,41 @@ fn ellipsize_label(text: &str, max_chars: usize) -> String {
     out
 }
 
+fn notification_group_label(record: &NotificationRecord) -> String {
+    if record.sender_name == record.owner {
+        record.sender_name.clone()
+    } else {
+        alloc::format!("{} · {}", record.sender_name, record.owner)
+    }
+}
+
+fn notification_meta(record: &NotificationRecord) -> String {
+    let state = if record.seen { "seen" } else { "new" };
+    alloc::format!("{} · {} · {}", record.sender_name, record.timestamp, state)
+}
+
+fn notification_priority_color(priority: NotificationPriority) -> Color {
+    match priority {
+        NotificationPriority::Low => Color(0x00667777),
+        NotificationPriority::Normal => Color(0x00888899),
+        NotificationPriority::High => Color(0x00D6A94A),
+        NotificationPriority::Critical => Color(0x00D95F5F),
+    }
+}
+
+fn draw_small_notif_button(canvas: &mut Canvas, theme: &Theme, rect: Rect, label: &str) {
+    canvas.fill_rounded_rect(rect, 5, theme.panel);
+    canvas.stroke_rounded_rect(rect, 5, 1, theme.border);
+    draw_text_vcenter(
+        canvas,
+        label,
+        rect.x + 8,
+        rect.y,
+        rect.h,
+        &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+    );
+}
+
 fn join_path(base: &str, leaf: &str) -> String {
     let mut out = String::with_capacity(base.len() + leaf.len() + 1);
     out.push_str(base);
@@ -4797,21 +4841,153 @@ impl VortexShell {
     }
 
     fn draw_notif_panel(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        let pw = 180u32;
-        let ph = 60u32;
-        let x = self.notif_zone.x - 20;
-        let y = self.notif_zone.bottom() + 2;
-        let r = Rect::new(x, y, pw, ph);
-        canvas.fill_rounded_rect(r, 6, theme.panel);
-        canvas.stroke_rounded_rect(r, 6, 1, theme.border);
+        let pw = NOTIF_CENTER_W.min(canvas.width.saturating_sub(24));
+        let ph = canvas.height.saturating_sub(72).clamp(180, 520);
+        let x = canvas.width as i32 - pw as i32 - 12;
+        let y = TOP_Y + TOP_H as i32 + 8;
+        let panel = Rect::new(x, y, pw, ph);
+        canvas.fill_rounded_rect(panel, 10, theme.panel);
+        canvas.stroke_rounded_rect(panel, 10, 1, theme.border);
+
         draw_text_vcenter(
             canvas,
-            "No notifications",
-            r.x + 8,
-            r.y + 8,
-            18,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            "Notifications",
+            panel.x + 14,
+            panel.y + 10,
+            22,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
         );
+
+        let dnd_on = notification_dnd_enabled();
+        self.notif_dnd_toggle_r = Rect::new(panel.right() - 92, panel.y + 10, 76, 22);
+        canvas.fill_rounded_rect(
+            self.notif_dnd_toggle_r,
+            6,
+            if dnd_on { theme.warn } else { theme.panel_alt },
+        );
+        canvas.stroke_rounded_rect(self.notif_dnd_toggle_r, 6, 1, theme.border);
+        draw_text_vcenter(
+            canvas,
+            if dnd_on { "DND On" } else { "DND Off" },
+            self.notif_dnd_toggle_r.x + 9,
+            self.notif_dnd_toggle_r.y,
+            self.notif_dnd_toggle_r.h,
+            &TextStyle::new(FontRole::UiSmall, theme.text),
+        );
+
+        let records = notification_history_recent(NOTIF_CENTER_RECENT_LIMIT, false);
+        self.notif_mark_seen_r = Rect::new(0, 0, 0, 0);
+        self.notif_dismiss_r = Rect::new(0, 0, 0, 0);
+
+        if records.is_empty() {
+            draw_text_vcenter(
+                canvas,
+                "No notifications yet",
+                panel.x + 14,
+                panel.y + 52,
+                18,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            return;
+        }
+
+        let mut cy = panel.y + 44;
+        let bottom = panel.bottom() - 12;
+        let mut rendered_groups: Vec<String> = Vec::new();
+        let mut first_visible = true;
+        for group_record in &records {
+            if cy + 42 > bottom {
+                draw_text_vcenter(
+                    canvas,
+                    "More in history...",
+                    panel.x + 14,
+                    cy,
+                    18,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
+                break;
+            }
+            let group = notification_group_label(group_record);
+            if rendered_groups.iter().any(|existing| existing == &group) {
+                continue;
+            }
+            rendered_groups.push(group.clone());
+            if rendered_groups.len() > 1 {
+                cy += 5;
+            }
+            let label = ellipsize_label(&group, 34);
+            draw_text_vcenter(
+                canvas,
+                &label,
+                panel.x + 14,
+                cy,
+                18,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            cy += 20;
+
+            for record in records
+                .iter()
+                .filter(|record| notification_group_label(record) == group)
+            {
+                if cy + 42 > bottom {
+                    break;
+                }
+
+                let card_h = 64u32;
+                if cy + card_h as i32 > bottom {
+                    break;
+                }
+                let card = Rect::new(panel.x + 10, cy, panel.w - 20, card_h);
+                let fill = if record.seen {
+                    theme.panel_alt
+                } else {
+                    theme.accent.darken(150)
+                };
+                canvas.fill_rounded_rect(card, 8, fill);
+                canvas.stroke_rounded_rect(
+                    card,
+                    8,
+                    1,
+                    notification_priority_color(record.priority),
+                );
+                let title = ellipsize_label(&record.title, 36);
+                let body = ellipsize_label(&record.body, 46);
+                let meta = notification_meta(record);
+                draw_text_vcenter(
+                    canvas,
+                    &title,
+                    card.x + 10,
+                    card.y + 6,
+                    16,
+                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                );
+                draw_text_vcenter(
+                    canvas,
+                    &body,
+                    card.x + 10,
+                    card.y + 24,
+                    16,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
+                draw_text_vcenter(
+                    canvas,
+                    &meta,
+                    card.x + 10,
+                    card.y + 42,
+                    14,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
+                if first_visible {
+                    self.notif_mark_seen_r = Rect::new(card.right() - 86, card.y + 6, 74, 20);
+                    self.notif_dismiss_r = Rect::new(card.right() - 86, card.y + 34, 74, 20);
+                    draw_small_notif_button(canvas, theme, self.notif_mark_seen_r, "Seen");
+                    draw_small_notif_button(canvas, theme, self.notif_dismiss_r, "Dismiss");
+                    first_visible = false;
+                }
+                cy += card_h as i32 + 8;
+            }
+        }
     }
 
     fn draw_logout_confirm(&mut self, canvas: &mut Canvas, theme: &Theme, _cw: u32, _ch: u32) {
@@ -5131,6 +5307,50 @@ impl App for VortexShell {
                         return true;
                     }
                     if self.calendar_popover_rect(self.screen_w).contains(point) {
+                        return true;
+                    }
+                }
+                if self.show_notif_panel {
+                    if self.notif_dnd_toggle_r.contains(point) {
+                        let next = !notification_dnd_enabled();
+                        let _ = notification_set_dnd(next);
+                        return true;
+                    }
+                    if self.notif_mark_seen_r.contains(point) {
+                        if let Some(record) =
+                            notification_history_recent(NOTIF_CENTER_RECENT_LIMIT, false)
+                                .into_iter()
+                                .next()
+                        {
+                            notification_set_seen(&record, true);
+                        }
+                        return true;
+                    }
+                    if self.notif_dismiss_r.contains(point) {
+                        if let Some(record) =
+                            notification_history_recent(NOTIF_CENTER_RECENT_LIMIT, false)
+                                .into_iter()
+                                .next()
+                        {
+                            notification_set_dismissed(&record, true);
+                        }
+                        return true;
+                    }
+                    let pw = NOTIF_CENTER_W.min(self.screen_w.saturating_sub(24));
+                    let ph = self.screen_h.saturating_sub(72).clamp(180, 520);
+                    let panel = Rect::new(
+                        self.screen_w as i32 - pw as i32 - 12,
+                        TOP_Y + TOP_H as i32 + 8,
+                        pw,
+                        ph,
+                    );
+                    if panel.contains(point) {
+                        for record in notification_history_recent(NOTIF_CENTER_RECENT_LIMIT, false)
+                        {
+                            if !record.seen {
+                                notification_set_seen(&record, true);
+                            }
+                        }
                         return true;
                     }
                 }

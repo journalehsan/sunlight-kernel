@@ -1,5 +1,9 @@
 #![no_std]
 
+extern crate alloc;
+
+use alloc::{format, string::String, vec::Vec};
+
 pub mod display_metrics;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
@@ -410,6 +414,39 @@ pub enum NotificationKind {
     Error = 2,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationPriority {
+    Low,
+    Normal,
+    High,
+    Critical,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotificationRecord {
+    pub id: String,
+    pub timestamp: String,
+    pub sender_pid: Option<u64>,
+    pub sender_name: String,
+    pub sender_icon: Option<String>,
+    pub owner: String,
+    pub title: String,
+    pub body: String,
+    pub priority: NotificationPriority,
+    pub seen: bool,
+    pub dismissed: bool,
+}
+
+const KV_REPLY: u64 = 0x4BFF;
+const KV_ERROR: u64 = 0x4BEE;
+const KV_VALUE: u64 = 0x4B05;
+const KV_PUT_SHM2: u64 = 0x4B08;
+const KV_GET_SHM2: u64 = 0x4B09;
+const NOTIFICATION_RECENT_KEY: &str = "notifications/index/recent";
+const NOTIFICATION_DND_KEY: &str = "notifications/config/dnd";
+const NOTIFICATION_RECENT_LIMIT: usize = 64;
+static mut NOTIFICATION_ID_COUNTER: u64 = 1;
+
 #[repr(C)]
 struct NotificationWire {
     kind: u8,
@@ -443,6 +480,371 @@ impl NotificationWire {
         wire.body_len = body_len as u32;
         wire
     }
+}
+
+fn notification_priority_for_kind(kind: NotificationKind) -> NotificationPriority {
+    match kind {
+        NotificationKind::Info => NotificationPriority::Normal,
+        NotificationKind::Warning => NotificationPriority::High,
+        NotificationKind::Error => NotificationPriority::Critical,
+    }
+}
+
+fn notification_priority_str(priority: NotificationPriority) -> &'static str {
+    match priority {
+        NotificationPriority::Low => "low",
+        NotificationPriority::Normal => "normal",
+        NotificationPriority::High => "high",
+        NotificationPriority::Critical => "critical",
+    }
+}
+
+fn parse_notification_priority(value: &str) -> NotificationPriority {
+    match value {
+        "low" => NotificationPriority::Low,
+        "high" => NotificationPriority::High,
+        "critical" => NotificationPriority::Critical,
+        _ => NotificationPriority::Normal,
+    }
+}
+
+fn append_escaped(out: &mut String, value: &str) {
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '=' => out.push_str("\\e"),
+            _ => out.push(ch),
+        }
+    }
+}
+
+fn unescape_notification_field(value: &str) -> String {
+    let mut out = String::new();
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            out.push(match ch {
+                'n' => '\n',
+                'e' => '=',
+                '\\' => '\\',
+                other => other,
+            });
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn append_record_field(out: &mut String, key: &str, value: &str) {
+    out.push_str(key);
+    out.push('=');
+    append_escaped(out, value);
+    out.push('\n');
+}
+
+pub fn encode_notification_record(record: &NotificationRecord) -> Vec<u8> {
+    let mut out = String::from("sunlight-notification-v1\n");
+    append_record_field(&mut out, "id", &record.id);
+    append_record_field(&mut out, "timestamp", &record.timestamp);
+    append_record_field(
+        &mut out,
+        "sender_pid",
+        &record
+            .sender_pid
+            .map(|pid| format!("{}", pid))
+            .unwrap_or_default(),
+    );
+    append_record_field(&mut out, "sender_name", &record.sender_name);
+    append_record_field(
+        &mut out,
+        "sender_icon",
+        record.sender_icon.as_deref().unwrap_or(""),
+    );
+    append_record_field(&mut out, "owner", &record.owner);
+    append_record_field(&mut out, "title", &record.title);
+    append_record_field(&mut out, "body", &record.body);
+    append_record_field(
+        &mut out,
+        "priority",
+        notification_priority_str(record.priority),
+    );
+    append_record_field(&mut out, "seen", if record.seen { "1" } else { "0" });
+    append_record_field(
+        &mut out,
+        "dismissed",
+        if record.dismissed { "1" } else { "0" },
+    );
+    out.into_bytes()
+}
+
+pub fn decode_notification_record(bytes: &[u8]) -> Option<NotificationRecord> {
+    let text = core::str::from_utf8(bytes).ok()?;
+    let mut record = NotificationRecord {
+        id: String::new(),
+        timestamp: String::new(),
+        sender_pid: None,
+        sender_name: String::new(),
+        sender_icon: None,
+        owner: String::new(),
+        title: String::new(),
+        body: String::new(),
+        priority: NotificationPriority::Normal,
+        seen: false,
+        dismissed: false,
+    };
+    for line in text.lines().skip(1) {
+        let Some(eq) = line.find('=') else { continue };
+        let key = &line[..eq];
+        let value = unescape_notification_field(&line[eq + 1..]);
+        match key {
+            "id" => record.id = value,
+            "timestamp" => record.timestamp = value,
+            "sender_pid" => record.sender_pid = value.parse().ok(),
+            "sender_name" => record.sender_name = value,
+            "sender_icon" => record.sender_icon = if value.is_empty() { None } else { Some(value) },
+            "owner" => record.owner = value,
+            "title" => record.title = value,
+            "body" => record.body = value,
+            "priority" => record.priority = parse_notification_priority(&value),
+            "seen" => record.seen = value == "1" || value == "true",
+            "dismissed" => record.dismissed = value == "1" || value == "true",
+            _ => {}
+        }
+    }
+    if record.id.is_empty() || record.title.is_empty() {
+        return None;
+    }
+    if record.sender_name.is_empty() {
+        record.sender_name = String::from("Unknown sender");
+    }
+    if record.owner.is_empty() {
+        record.owner = String::from("unknown");
+    }
+    Some(record)
+}
+
+fn notification_owner_key(owner: &str) -> String {
+    let mut key = String::new();
+    for ch in owner.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+            key.push(ch.to_ascii_lowercase());
+        } else if ch.is_whitespace() {
+            key.push('-');
+        }
+    }
+    if key.is_empty() {
+        key.push_str("unknown");
+    }
+    key
+}
+
+pub fn notification_record_key(owner: &str, id: &str) -> String {
+    format!(
+        "notifications/history/{}/{}",
+        notification_owner_key(owner),
+        id
+    )
+}
+
+fn notification_kv_cap() -> Option<CapabilityToken> {
+    nameserver_lookup_timeout("sunlight-kv", 100)
+}
+
+fn notification_kv_put(key: &str, value: &[u8]) -> bool {
+    if key.len() > SHM_PAGE || value.len() > SHM_PAGE {
+        return false;
+    }
+    let Some(cap) = notification_kv_cap() else {
+        return false;
+    };
+    let Ok((key_ptr, key_tok)) = shm_create(SHM_PAGE, 0) else {
+        return false;
+    };
+    let Ok((value_ptr, value_tok)) = shm_create(SHM_PAGE, 0) else {
+        let _ = shm_free(key_tok);
+        return false;
+    };
+    unsafe {
+        core::ptr::copy_nonoverlapping(key.as_ptr(), key_ptr, key.len());
+        core::ptr::copy_nonoverlapping(value.as_ptr(), value_ptr, value.len());
+    }
+    let msg = IpcMsg::with_label(KV_PUT_SHM2)
+        .word(0, key.len() as u64)
+        .word(1, value.len() as u64)
+        .with_cap(0, key_tok)
+        .with_cap(1, value_tok);
+    let ok = matches!(
+        ipc_call_timeout(cap, msg, 100),
+        Ok(reply) if reply.label == KV_REPLY && reply.words[0] == 0
+    );
+    let _ = shm_free(key_tok);
+    let _ = shm_free(value_tok);
+    ok
+}
+
+pub fn notification_kv_get(key: &str) -> Option<Vec<u8>> {
+    if key.len() > SHM_PAGE {
+        return None;
+    }
+    let cap = notification_kv_cap()?;
+    let Ok((key_ptr, key_tok)) = shm_create(SHM_PAGE, 0) else {
+        return None;
+    };
+    unsafe {
+        core::ptr::copy_nonoverlapping(key.as_ptr(), key_ptr, key.len());
+    }
+    let msg = IpcMsg::with_label(KV_GET_SHM2)
+        .word(0, key.len() as u64)
+        .with_cap(0, key_tok);
+    let reply_res = ipc_call_timeout(cap, msg, 100);
+    let _ = shm_free(key_tok);
+    let reply = reply_res.ok()?;
+    if reply.label == KV_ERROR || reply.label != KV_VALUE {
+        return None;
+    }
+    let len = (reply.words[0] as usize).min(SHM_PAGE);
+    if len == 0 {
+        return Some(Vec::new());
+    }
+    let tok = reply.caps[0];
+    if tok == CapabilityToken::INVALID {
+        return None;
+    }
+    let ptr = match shm_map(tok) {
+        Ok(ptr) => ptr,
+        Err(_) => {
+            let _ = shm_free(tok);
+            return None;
+        }
+    };
+    let bytes = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+    let _ = shm_free(tok);
+    Some(bytes)
+}
+
+fn notification_recent_keys() -> Vec<String> {
+    let Some(bytes) = notification_kv_get(NOTIFICATION_RECENT_KEY) else {
+        return Vec::new();
+    };
+    let Ok(text) = core::str::from_utf8(&bytes) else {
+        return Vec::new();
+    };
+    text.lines()
+        .filter(|line| !line.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+fn notification_store_record(record: &NotificationRecord) {
+    let key = notification_record_key(&record.owner, &record.id);
+    let encoded = encode_notification_record(record);
+    if !notification_kv_put(&key, &encoded) {
+        return;
+    }
+    let mut keys = notification_recent_keys();
+    keys.retain(|existing| existing != &key);
+    keys.insert(0, key);
+    if keys.len() > NOTIFICATION_RECENT_LIMIT {
+        keys.truncate(NOTIFICATION_RECENT_LIMIT);
+    }
+    let mut index = String::new();
+    for key in keys {
+        index.push_str(&key);
+        index.push('\n');
+    }
+    let _ = notification_kv_put(NOTIFICATION_RECENT_KEY, index.as_bytes());
+}
+
+pub fn notification_history_recent(
+    limit: usize,
+    include_dismissed: bool,
+) -> Vec<NotificationRecord> {
+    let mut out = Vec::new();
+    for key in notification_recent_keys() {
+        if out.len() >= limit {
+            break;
+        }
+        let Some(bytes) = notification_kv_get(&key) else {
+            continue;
+        };
+        let Some(record) = decode_notification_record(&bytes) else {
+            continue;
+        };
+        if !include_dismissed && record.dismissed {
+            continue;
+        }
+        out.push(record);
+    }
+    out
+}
+
+pub fn notification_set_seen(record: &NotificationRecord, seen: bool) {
+    let mut updated = record.clone();
+    updated.seen = seen;
+    notification_store_record(&updated);
+}
+
+pub fn notification_set_dismissed(record: &NotificationRecord, dismissed: bool) {
+    let mut updated = record.clone();
+    updated.dismissed = dismissed;
+    notification_store_record(&updated);
+}
+
+pub fn notification_dnd_enabled() -> bool {
+    notification_kv_get(NOTIFICATION_DND_KEY)
+        .and_then(|bytes| core::str::from_utf8(&bytes).ok().map(|s| s.trim() == "1"))
+        .unwrap_or(false)
+}
+
+pub fn notification_set_dnd(enabled: bool) -> bool {
+    notification_kv_put(NOTIFICATION_DND_KEY, if enabled { b"1" } else { b"0" })
+}
+
+fn next_notification_id() -> String {
+    let unix = get_time_utc();
+    let pid = getpid();
+    let seq = unsafe {
+        let current = NOTIFICATION_ID_COUNTER;
+        NOTIFICATION_ID_COUNTER = NOTIFICATION_ID_COUNTER.saturating_add(1);
+        current
+    };
+    format!("{:016x}-{:x}-{:x}", unix, pid, seq)
+}
+
+pub fn show_notification_from(
+    kind: NotificationKind,
+    sender_name: &str,
+    owner: &str,
+    sender_icon: Option<&str>,
+    title: &str,
+    body: &str,
+    timeout_ms: u64,
+) -> bool {
+    let record = NotificationRecord {
+        id: next_notification_id(),
+        timestamp: format!("{}", get_time_utc()),
+        sender_pid: Some(getpid()),
+        sender_name: String::from(sender_name),
+        sender_icon: sender_icon.map(String::from),
+        owner: String::from(owner),
+        title: String::from(title),
+        body: String::from(body),
+        priority: notification_priority_for_kind(kind),
+        seen: false,
+        dismissed: false,
+    };
+    // TODO(notifications): restrict sender permissions, validate process/app manifest identity,
+    // and prevent spoofed sender_name/owner values.
+    notification_store_record(&record);
+    if notification_dnd_enabled() {
+        return true;
+    }
+    show_notification_popup(kind, title, body, timeout_ms)
 }
 
 #[allow(non_snake_case)]
@@ -1718,8 +2120,12 @@ pub fn nameserver_lookup_timeout(name: &str, timeout_ms: u64) -> Option<Capabili
     }
 }
 
-/// Best-effort desktop notification helper.
-pub fn show_notification(kind: NotificationKind, title: &str, body: &str, timeout_ms: u64) -> bool {
+fn show_notification_popup(
+    kind: NotificationKind,
+    title: &str,
+    body: &str,
+    timeout_ms: u64,
+) -> bool {
     let Some((payload_ptr, payload_cap)) =
         shm_create(core::mem::size_of::<NotificationWire>(), 0).ok()
     else {
@@ -1753,6 +2159,11 @@ pub fn show_notification(kind: NotificationKind, title: &str, body: &str, timeou
 
     let _ = shm_free(payload_cap);
     ok
+}
+
+/// Best-effort desktop notification helper.
+pub fn show_notification(kind: NotificationKind, title: &str, body: &str, timeout_ms: u64) -> bool {
+    show_notification_from(kind, title, title, None, title, body, timeout_ms)
 }
 
 pub fn name_to_u64(name: &str) -> u64 {

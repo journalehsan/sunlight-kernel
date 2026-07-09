@@ -25,8 +25,8 @@ use core::cmp;
 use sunlight_ipc::{
     debug_log, ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    nameserver_lookup, process_yield, show_notification, CapabilityToken, IpcMsg, NotificationKind,
-    ProcessExit, SgpMsg,
+    nameserver_lookup, notification_dnd_enabled, notification_set_dnd, process_yield,
+    show_notification, CapabilityToken, IpcMsg, NotificationKind, ProcessExit, SgpMsg,
 };
 use sunlight_libc::crt0;
 use sunlight_ui::{
@@ -76,6 +76,7 @@ enum Page {
     Mouse,
     Monitor,
     Wallpaper,
+    Notifications,
 }
 
 struct ControlPanelApp {
@@ -221,16 +222,17 @@ impl ControlPanelApp {
     // Grid page
     // -----------------------------------------------------------------------
 
-    fn card_rects(&self) -> (Rect, Rect, Rect) {
+    fn card_rects(&self) -> (Rect, Rect, Rect, Rect) {
         let card_w = 136u32;
-        let card_h = 180u32;
+        let card_h = 118u32;
         let gap = 14i32;
         let start_x = (WIN_W as i32 - (card_w * 3) as i32 - gap * 2) / 2;
         let card_y = 56i32;
         let r1 = Rect::new(start_x, card_y, card_w, card_h);
         let r2 = Rect::new(start_x + card_w as i32 + gap, card_y, card_w, card_h);
         let r3 = Rect::new(start_x + (card_w as i32 + gap) * 2, card_y, card_w, card_h);
-        (r1, r2, r3)
+        let r4 = Rect::new(start_x, card_y + card_h as i32 + 14, card_w, card_h);
+        (r1, r2, r3, r4)
     }
 
     fn draw_card(
@@ -285,7 +287,7 @@ impl ControlPanelApp {
         );
         Label::new(Rect::new(46, 12, WIN_W - 58, 20), "System Preferences").draw(canvas, theme);
 
-        let (c1, c2, c3) = self.card_rects();
+        let (c1, c2, c3, c4) = self.card_rects();
         Self::draw_card(
             canvas,
             theme,
@@ -313,12 +315,21 @@ impl ControlPanelApp {
             "Desktop Background",
             self.icon_wallpaper,
         );
+        Self::draw_card(
+            canvas,
+            theme,
+            c4,
+            theme.icon_foreground,
+            "Notifications",
+            "History & DND",
+            None,
+        );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
-            let (c1, c2, c3) = self.card_rects();
+            let (c1, c2, c3, c4) = self.card_rects();
             if c1.contains(pt) {
                 self.page = Page::Mouse;
                 self.status_len = 0;
@@ -331,6 +342,66 @@ impl ControlPanelApp {
             if c3.contains(pt) {
                 self.page = Page::Wallpaper;
                 self.refresh_wallpaper_preview();
+                return true;
+            }
+            if c4.contains(pt) {
+                self.page = Page::Notifications;
+                self.status_len = 0;
+                return true;
+            }
+        }
+        false
+    }
+
+    fn notification_back_rect() -> Rect {
+        Rect::new(28, WIN_H as i32 - 44, 80, 28)
+    }
+
+    fn notification_dnd_rect() -> Rect {
+        Rect::new(WIN_W as i32 - 128, WIN_H as i32 - 44, 100, 28)
+    }
+
+    fn draw_notifications_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
+        Panel::with_title(content, "Notifications").draw(canvas, theme);
+        let dnd = notification_dnd_enabled();
+        Label::new(
+            Rect::new(28, 58, WIN_W - 56, 18),
+            "Open Notification Center from the top-right bell in Vortex Shell.",
+        )
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(28, 88, WIN_W - 56, 18),
+            if dnd {
+                "Do Not Disturb is currently enabled."
+            } else {
+                "Do Not Disturb is currently disabled."
+            },
+        )
+        .draw(canvas, theme);
+
+        let mut back = Button::secondary(Self::notification_back_rect(), "Back");
+        back.state = ButtonState::Normal;
+        back.draw(canvas, theme);
+
+        let mut dnd_btn = Button::new(
+            Self::notification_dnd_rect(),
+            if dnd { "DND Off" } else { "DND On" },
+        );
+        dnd_btn.state = ButtonState::Normal;
+        dnd_btn.draw(canvas, theme);
+    }
+
+    fn update_notifications_page(&mut self, event: Event) -> bool {
+        if let Event::Click { x, y } = event {
+            let pt = Point::new(x, y);
+            if Self::notification_back_rect().contains(pt) {
+                self.page = Page::Grid;
+                return true;
+            }
+            if Self::notification_dnd_rect().contains(pt) {
+                let _ = notification_set_dnd(!notification_dnd_enabled());
                 return true;
             }
         }
@@ -744,6 +815,7 @@ impl App for ControlPanelApp {
             Page::Mouse => self.draw_mouse_page(canvas, theme),
             Page::Monitor => self.draw_monitor_page(canvas, theme),
             Page::Wallpaper => self.draw_wallpaper_page(canvas, theme),
+            Page::Notifications => self.draw_notifications_page(canvas, theme),
         }
     }
 
@@ -763,6 +835,7 @@ impl App for ControlPanelApp {
             Page::Mouse => self.update_mouse_page(event),
             Page::Monitor => self.update_monitor_page(event),
             Page::Wallpaper => self.update_wallpaper_page(event),
+            Page::Notifications => self.update_notifications_page(event),
         }
     }
 }
