@@ -20,7 +20,7 @@ use sunlight_ipc::{
     PixelFormat, ScreenBackend, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
 };
 use sunlight_ui::image::TgaImage;
-use sunlight_ui::{Canvas, Color, Rect, UiSymbol};
+use sunlight_ui::{Canvas, Color, Point, Rect, UiSymbol};
 
 /// Wallpaper asset staged at /var/sunlightos/wallpapers/wallpaper.tga.
 /// Embedded directly so the compositor can decode without a VFS read at startup.
@@ -186,6 +186,7 @@ const OVERLAY_DECORATION_POLL_MS: u64 = 100;
 const OVERLAY_DECORATION_IDLE_TIMEOUT_MS: u64 = 2_500;
 const NOTIFICATION_TEXT_MARGIN_X: i32 = 12;
 const NOTIFICATION_TEXT_MARGIN_Y: i32 = 10;
+const NOTIFICATION_CLOSE_SIZE: u32 = 18;
 
 // ---------------------------------------------------------------------------
 // Window property enums
@@ -1243,6 +1244,56 @@ fn notification_fit(text: &str, max_chars: usize) -> String {
     out
 }
 
+fn notification_toast_rect(canvas_w: u32, idx_from_top: usize) -> Option<Rect> {
+    let max_width =
+        NOTIFICATION_WIDTH.min(canvas_w.saturating_sub(2 * NOTIFICATION_MARGIN_X as u32));
+    if max_width <= 120 {
+        return None;
+    }
+    let x = canvas_w as i32 - NOTIFICATION_MARGIN_X - max_width as i32;
+    let y = NOTIFICATION_MARGIN_Y
+        + idx_from_top as i32 * (NOTIFICATION_HEIGHT as i32 + NOTIFICATION_GAP);
+    Some(Rect::new(x, y, max_width, NOTIFICATION_HEIGHT))
+}
+
+fn notification_close_rect(toast: Rect) -> Rect {
+    Rect::new(
+        toast.right() - NOTIFICATION_CLOSE_SIZE as i32 - 8,
+        toast.y + 8,
+        NOTIFICATION_CLOSE_SIZE,
+        NOTIFICATION_CLOSE_SIZE,
+    )
+}
+
+fn dismiss_notification_at_point(state: &mut CompositorState, point: Point) -> bool {
+    if state.notifications.is_empty() {
+        return false;
+    }
+    let canvas_w = state.fb_width;
+    let mut dismiss_idx = None;
+    for (idx_from_top, note) in state.notifications.iter().rev().enumerate() {
+        let Some(toast) = notification_toast_rect(canvas_w, idx_from_top) else {
+            break;
+        };
+        let close = notification_close_rect(toast);
+        if close.contains(point) {
+            dismiss_idx = state
+                .notifications
+                .iter()
+                .position(|candidate| candidate.id == note.id);
+            break;
+        }
+        if toast.contains(point) {
+            return true;
+        }
+    }
+    if let Some(idx) = dismiss_idx {
+        state.notifications.remove(idx);
+        return true;
+    }
+    false
+}
+
 fn register_launch_trace(
     state: &mut CompositorState,
     launch_id: u64,
@@ -1355,27 +1406,30 @@ fn draw_notifications(canvas: &mut Canvas<'_>, state: &CompositorState) {
         return;
     }
 
-    let box_x = canvas.width as i32 - NOTIFICATION_MARGIN_X - max_width as i32;
     let title_max_chars = ((max_width as i32 - NOTIFICATION_TEXT_MARGIN_X * 2) / 7).max(8) as usize;
     let body_max_chars = ((max_width as i32 - NOTIFICATION_TEXT_MARGIN_X * 2) / 7).max(12) as usize;
     let title_y = NOTIFICATION_TEXT_MARGIN_Y;
     let body_y = title_y + 16;
-    let total_h = NOTIFICATION_HEIGHT as i32;
 
     for (idx, note) in state.notifications.iter().rev().enumerate() {
-        let y = NOTIFICATION_MARGIN_Y + idx as i32 * (total_h + NOTIFICATION_GAP);
-        if y >= canvas.height as i32 {
+        let Some(rect) = notification_toast_rect(canvas.width, idx) else {
+            break;
+        };
+        if rect.y >= canvas.height as i32 {
             break;
         }
 
         let _ = note.id;
-        let rect = Rect::new(box_x, y, max_width, NOTIFICATION_HEIGHT);
         let accent = notification_color(note.kind);
         let panel = Color(0x001E1E26);
         let border = accent.darken(30);
         canvas.fill_rounded_rect(rect, 8, panel);
         canvas.stroke_rounded_rect(rect, 8, 1, border);
         canvas.fill_rect(Rect::new(rect.x, rect.y, 5, rect.h), accent);
+        let close = notification_close_rect(rect);
+        canvas.fill_rounded_rect(close, 4, Color(0x002A2A34));
+        canvas.stroke_rounded_rect(close, 4, 1, border);
+        canvas.draw_text(close.x + 5, close.y + 3, "X", Color(0x00CCCCD8));
 
         let title = notification_fit(&note.title, title_max_chars);
         let body = notification_fit(&note.body, body_max_chars);
@@ -2147,11 +2201,17 @@ fn update_overlay_window_visibility(
 }
 
 fn compositor_poll_timeout_ms(state: &CompositorState) -> Option<u64> {
-    let notification_timeout = if state.notifications.is_empty() {
-        None
-    } else {
-        Some(NOTIFICATION_POLL_MS)
-    };
+    let now = monotonic_millis();
+    let notification_timeout = state
+        .notifications
+        .iter()
+        .map(|note| {
+            let age = now.saturating_sub(note.created_at);
+            note.timeout_ms
+                .saturating_sub(age)
+                .min(NOTIFICATION_POLL_MS)
+        })
+        .min();
     let overlay_timeout = if overlay_decoration_timeout_pending(state) {
         Some(OVERLAY_DECORATION_POLL_MS)
     } else {
@@ -4265,6 +4325,14 @@ pub extern "C" fn _start() -> ! {
 
                 // ── Left button just pressed ────────────────────────────────
                 if state.session_active && left_down && !was_left_down {
+                    if dismiss_notification_at_point(&mut state, Point::new(cx as i32, cy as i32)) {
+                        state.active_drag = ActiveDrag::None;
+                        state.pending_move_drag = None;
+                        mark_dirty_full(&mut state);
+                        redraw_scene(&mut state);
+                        let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                        continue;
+                    }
                     if let Some(hit_idx) = topmost_window_idx_at(&state, cx, cy) {
                         let id = state.windows[hit_idx].id;
                         let hit_zone = hit_test_window(
