@@ -619,6 +619,9 @@ const RUNNING_LABEL_CHARS: usize = 14;
 const RUNNING_NAME_BUF: usize = 64;
 const RUNNING_LABEL_BUF: usize = 32;
 const RUNNING_MINIMIZED_DOT: u32 = 6;
+/// How long the pointer must rest on a running-app cell before its title
+/// tooltip appears (ms). Keeps the bar calm while sweeping across items.
+const RUNNING_TOOLTIP_DELAY_MS: u64 = 300;
 const MAX_RUNNING_TRACKED: usize = 32;
 const ENABLE_RUNNING_TASKBAR: bool = true;
 
@@ -1237,6 +1240,9 @@ struct VortexShell {
     running_zones: Vec<(Rect, u64)>,
     /// Hovered running-app index, if any.
     running_hover: Option<usize>,
+    /// Monotonic timestamp (ms) when the current running-app hover began.
+    /// Drives the tooltip open delay (see RUNNING_TOOLTIP_DELAY_MS).
+    running_hover_since: Option<u64>,
 
     // Top panel interactive zones (updated during draw_top_bar for hit testing)
     datetime_zone: Rect,
@@ -1394,6 +1400,7 @@ impl VortexShell {
             window_snapshots: Vec::new(),
             running_zones: Vec::new(),
             running_hover: None,
+            running_hover_since: None,
             telemetry,
             next_app_poll_ms: 0,
             next_launch_id: 1,
@@ -1808,8 +1815,20 @@ impl VortexShell {
         }
     }
 
-    fn app_pid_is_pinned(&self, pid: u64) -> bool {
-        self.apps.iter().any(|app| app.pid == Some(pid))
+    /// True only for pinned apps that already have a dedicated dock icon
+    /// (Terminal, Calendar, Calculator, Files). These are excluded from the
+    /// dynamic running-apps strip to avoid showing the same app twice.
+    /// Start-Menu-only pinned apps (Settings, Tasks, Bench, Eyes, TextEditor)
+    /// have no dock icon, so they *are* shown in the running strip when their
+    /// window is open — otherwise they'd be invisible in the taskbar.
+    fn app_pid_has_dock_icon(&self, pid: u64) -> bool {
+        self.apps.iter().any(|app| {
+            app.pid == Some(pid)
+                && matches!(
+                    app.app_id,
+                    AppId::Terminal | AppId::Calendar | AppId::Calculator | AppId::Files
+                )
+        })
     }
 
     fn process_name_hint<'a>(
@@ -2081,7 +2100,7 @@ impl VortexShell {
             {
                 continue;
             }
-            if self.app_pid_is_pinned(window.owner_pid) {
+            if self.app_pid_has_dock_icon(window.owner_pid) {
                 continue;
             }
 
@@ -2749,7 +2768,6 @@ fn draw_running_app_button(
     let mut border;
     let mut icon_color = theme.text;
     let mut label_color = theme.text;
-    let mut bottom_marker = false;
 
     if entry.minimized {
         fill = theme.panel;
@@ -2757,7 +2775,6 @@ fn draw_running_app_button(
     } else {
         fill = theme.accent.darken(68);
         border = theme.accent;
-        bottom_marker = true;
     }
 
     if hovered {
@@ -2777,15 +2794,14 @@ fn draw_running_app_button(
 
     canvas.fill_rounded_rect(cell, 5, fill);
     canvas.stroke_rounded_rect(cell, 5, 1, border);
-    if bottom_marker {
-        if entry.minimized {
-            draw_taskbar_dot(canvas, cell, theme.accent);
-        } else {
-            canvas.fill_rect(
-                Rect::new(cell.x + 4, cell.bottom() - 3, cell.w.saturating_sub(8), 2),
-                theme.accent,
-            );
-        }
+    // Marker invariant: active (non-minimized) entries get a full-width accent
+    // bar along the bottom here; minimized entries instead get the accent dot,
+    // drawn after the icon near the end of this function.
+    if !entry.minimized {
+        canvas.fill_rect(
+            Rect::new(cell.x + 4, cell.bottom() - 3, cell.w.saturating_sub(8), 2),
+            theme.accent,
+        );
     }
 
     let icon_x = if entry.minimized || !rtl {
@@ -4986,6 +5002,51 @@ impl VortexShell {
         }
     }
 
+    /// Draws the full (untruncated) window title above a running-app cell
+    /// after the pointer has dwelt on it. Mirrors the datetime tooltip style
+    /// but single-line and anchored to the hovered cell rather than the bar.
+    fn draw_running_tooltip(&self, canvas: &mut Canvas, theme: &Theme, idx: usize, cw: u32) {
+        let Some(&(cell, _win_id)) = self.running_zones.get(idx) else {
+            return;
+        };
+        let Some(entry) = self.running_apps.get(idx) else {
+            return;
+        };
+        let title = entry.display_name.as_str();
+        if title.is_empty() {
+            return;
+        }
+
+        let pad = 4i32;
+        let text_w = measure_text(title, FontRole::UiSmall).w as i32;
+        let w = text_w + pad * 2;
+        let h = 18u32;
+
+        // Centered on the cell, 8px above its top edge.
+        let cx = cell.x + cell.w as i32 / 2;
+        let mut x = cx - w / 2;
+        let y = (cell.y - h as i32 - 8).max(2);
+
+        // Clamp horizontally into the screen so long titles stay on-screen.
+        if x < 2 {
+            x = 2;
+        } else if x + w > cw as i32 - 2 {
+            x = cw as i32 - w - 2;
+        }
+
+        let r = Rect::new(x, y, w as u32, h);
+        canvas.fill_rounded_rect(r, 2, Color::rgb(0x2a, 0x2a, 0x2a));
+        canvas.stroke_rounded_rect(r, 2, 1, theme.border);
+        draw_text_vcenter(
+            canvas,
+            title,
+            x + pad,
+            y,
+            h,
+            &TextStyle::new(FontRole::UiSmall, theme.text),
+        );
+    }
+
     fn draw_calendar_popover(&mut self, canvas: &mut Canvas, theme: &Theme, cw: u32, _ch: u32) {
         self.refresh_calendar_popover_data();
         let panel = self.calendar_popover_rect(cw);
@@ -5637,6 +5698,18 @@ impl App for VortexShell {
             self.draw_datetime_tooltip(canvas, theme, cw, ch);
         }
 
+        // Running-app title tooltip: only after a dwell and never while the
+        // user is dragging out a desktop selection (the pointer is busy).
+        if self.selection_state == DesktopSelectState::Idle {
+            if let Some(idx) = self.running_hover {
+                if let Some(start) = self.running_hover_since {
+                    if now.saturating_sub(start) >= RUNNING_TOOLTIP_DELAY_MS {
+                        self.draw_running_tooltip(canvas, theme, idx, cw);
+                    }
+                }
+            }
+        }
+
         // Calendar popover (small, under center)
         if self.show_calendar_popover {
             self.draw_calendar_popover(canvas, theme, cw, ch);
@@ -6129,6 +6202,13 @@ impl App for VortexShell {
                         self.running_hover = Some(i);
                         break;
                     }
+                }
+                // Reset the tooltip timer whenever the hovered cell changes
+                // (including leaving the strip entirely), so the >300ms dwell
+                // only counts continuous rest on one item.
+                if self.running_hover != prev_running {
+                    self.running_hover_since =
+                        self.running_hover.map(|_| monotonic_millis());
                 }
                 let prev_settings = self.settings_hover;
                 self.settings_hover = self.settings_zone.contains(Point::new(x, y));
