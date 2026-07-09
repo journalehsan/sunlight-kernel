@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::alloc::GlobalAlloc;
 
 use sun_font::{draw_text, draw_text_vcenter, measure_text, FontRole, TextStyle, VecFont};
@@ -12,9 +12,11 @@ use sunlight_ipc::{
     process_yield, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_reminders::{
-    date_index_key, decode_list, decode_task, encode_id_list, encode_list, encode_task,
-    list_key, parse_id_list, settings_key, task_key, valid_date_str, valid_time_str, Task,
-    TaskList, TaskStatus, TinyString, DEFAULT_LISTS, DATE_LEN, INDEX_ALL_KEY, NOTES_LEN,
+    add_id_to_index_list, by_date_list_key, date_index_key, decode_list, decode_task,
+    encode_id_list, encode_list, encode_task, list_key, normalize_date_str, parse_id_list,
+    reminder_date_index_key, reminder_date_list_key, remove_id_from_index_list, settings_key,
+    task_key, valid_date_str, valid_time_str, Task, TaskList, TaskStatus, TinyString, DATE_LEN,
+    DEFAULT_LISTS, INDEX_ALL_KEY, INDEX_BY_DATE_PREFIX, INDEX_REMINDER_DATE_PREFIX, NOTES_LEN,
     TIME_LEN, TITLE_LEN,
 };
 use sunlight_tz::local_now_best_effort;
@@ -188,6 +190,13 @@ impl TaskEditor {
     }
 
     fn start_new(&mut self, list_idx: usize) {
+        let now = local_now_best_effort(get_time_utc());
+        let due_date = sunlight_reminders::format_date(
+            now.year.into(),
+            now.month as i32,
+            now.day as i32,
+        );
+        let due_time = format_time_hhmm(now.hour, now.minute);
         self.visible = true;
         self.editing_id = None;
         self.selected_list_idx = list_idx.min(2);
@@ -195,8 +204,8 @@ impl TaskEditor {
         self.error.clear();
         self.title.set_text("");
         self.notes.set_text("");
-        self.due_date.set_text("");
-        self.due_time.set_text("");
+        self.due_date.set_text(&due_date);
+        self.due_time.set_text(due_time.as_str());
         self.reminder_date.set_text("");
         self.reminder_time.set_text("");
         self.clear_focus();
@@ -242,8 +251,11 @@ impl TaskEditor {
         if !self.reminder_date.value().is_empty() && !valid_date_str(self.reminder_date.value()) {
             return Some("Reminder date must be YYYY-MM-DD");
         }
-        if !self.reminder_time.value().is_empty() && self.reminder_date.value().is_empty() {
-            return Some("Reminder time requires a reminder date");
+        if !self.reminder_time.value().is_empty()
+            && self.reminder_date.value().is_empty()
+            && self.due_date.value().is_empty()
+        {
+            return Some("Reminder time requires a reminder date or due date");
         }
         if !valid_time_str(self.reminder_time.value()) {
             return Some("Reminder time must be HH:MM");
@@ -269,13 +281,23 @@ impl TaskEditor {
         if !task.notes.try_set(self.notes.value()) {
             return None;
         }
-        if !task.due_date.try_set(self.due_date.value()) {
+        let due_date = if self.due_date.value().is_empty() {
+            String::new()
+        } else {
+            normalize_date_str(self.due_date.value())?
+        };
+        if !task.due_date.try_set(&due_date) {
             return None;
         }
         if !task.due_time.try_set(self.due_time.value()) {
             return None;
         }
-        if !task.reminder_date.try_set(self.reminder_date.value()) {
+        let reminder_date = if self.reminder_date.value().is_empty() {
+            String::new()
+        } else {
+            normalize_date_str(self.reminder_date.value())?
+        };
+        if !task.reminder_date.try_set(&reminder_date) {
             return None;
         }
         if !task.reminder_time.try_set(self.reminder_time.value()) {
@@ -433,29 +455,109 @@ impl KvReminderStore {
     }
 
     fn put_task_indexes(&mut self, task: &Task) -> Result<(), StoreError> {
-        self.put_date_index(task.due_date.as_str(), task.id)?;
-        self.put_date_index(task.reminder_date.as_str(), task.id)?;
+        self.put_due_date_index(task.due_date.as_str(), task.id)?;
+        self.put_reminder_date_index(task.reminder_date.as_str(), task.id)?;
+        if task.reminder_date.is_empty()
+            && !task.due_date.is_empty()
+            && !task.reminder_time.is_empty()
+        {
+            self.put_reminder_date_index(task.due_date.as_str(), task.id)?;
+        }
         Ok(())
     }
 
     fn delete_task_indexes(&mut self, task: &Task) -> Result<(), StoreError> {
-        self.delete_date_index(task.due_date.as_str(), task.id)?;
-        self.delete_date_index(task.reminder_date.as_str(), task.id)?;
+        self.delete_due_date_index(task.due_date.as_str(), task.id)?;
+        self.delete_reminder_date_index(task.reminder_date.as_str(), task.id)?;
+        if task.reminder_date.is_empty()
+            && !task.due_date.is_empty()
+            && !task.reminder_time.is_empty()
+        {
+            self.delete_reminder_date_index(task.due_date.as_str(), task.id)?;
+        }
         Ok(())
     }
 
-    fn put_date_index(&mut self, date: &str, task_id: u64) -> Result<(), StoreError> {
+    fn put_due_date_index(&mut self, date: &str, task_id: u64) -> Result<(), StoreError> {
         if date.is_empty() {
             return Ok(());
         }
-        self.put(&date_index_key(date, task_id), b"1")
+        // marker for stability
+        let _ = self.put(&date_index_key(date, task_id), b"1");
+        // list for queryable by-date (due)
+        self.add_id_to_date_list(INDEX_BY_DATE_PREFIX, date, task_id)
     }
 
-    fn delete_date_index(&mut self, date: &str, task_id: u64) -> Result<(), StoreError> {
+    fn delete_due_date_index(&mut self, date: &str, task_id: u64) -> Result<(), StoreError> {
         if date.is_empty() {
             return Ok(());
         }
-        self.delete_key(&date_index_key(date, task_id))
+        let _ = self.delete_key(&date_index_key(date, task_id));
+        self.remove_id_from_date_list(INDEX_BY_DATE_PREFIX, date, task_id)
+    }
+
+    fn put_reminder_date_index(&mut self, date: &str, task_id: u64) -> Result<(), StoreError> {
+        if date.is_empty() {
+            return Ok(());
+        }
+        // marker
+        let _ = self.put(&reminder_date_index_key(date, task_id), b"1");
+        // list for reminders
+        self.add_id_to_date_list(INDEX_REMINDER_DATE_PREFIX, date, task_id)
+    }
+
+    fn delete_reminder_date_index(&mut self, date: &str, task_id: u64) -> Result<(), StoreError> {
+        if date.is_empty() {
+            return Ok(());
+        }
+        let _ = self.delete_key(&reminder_date_index_key(date, task_id));
+        self.remove_id_from_date_list(INDEX_REMINDER_DATE_PREFIX, date, task_id)
+    }
+
+    fn add_id_to_date_list(
+        &mut self,
+        prefix: &str,
+        date: &str,
+        task_id: u64,
+    ) -> Result<(), StoreError> {
+        if date.is_empty() {
+            return Ok(());
+        }
+        let list_key = if prefix == INDEX_BY_DATE_PREFIX {
+            by_date_list_key(date)
+        } else {
+            reminder_date_list_key(date)
+        };
+        let existing = self.get(&list_key)?;
+        let next = add_id_to_index_list(existing.as_deref(), task_id);
+        self.put(&list_key, &next)?;
+        Ok(())
+    }
+
+    fn remove_id_from_date_list(
+        &mut self,
+        prefix: &str,
+        date: &str,
+        task_id: u64,
+    ) -> Result<(), StoreError> {
+        if date.is_empty() {
+            return Ok(());
+        }
+        let list_key = if prefix == INDEX_BY_DATE_PREFIX {
+            by_date_list_key(date)
+        } else {
+            reminder_date_list_key(date)
+        };
+        let existing = self.get(&list_key)?;
+        match remove_id_from_index_list(existing.as_deref(), task_id) {
+            Some(next) => self.put(&list_key, &next)?,
+            None => {
+                if existing.is_some() {
+                    let _ = self.delete_key(&list_key);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn get(&mut self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
@@ -665,7 +767,9 @@ impl ReminderApp {
     }
 
     fn list_index_for_id(&self, list_id: &str) -> Option<usize> {
-        self.lists.iter().position(|list| list.id.as_str() == list_id)
+        self.lists
+            .iter()
+            .position(|list| list.id.as_str() == list_id)
     }
 
     fn task_matches_view(&self, task: &Task) -> bool {
@@ -673,8 +777,12 @@ impl ReminderApp {
             SidebarView::Inbox | SidebarView::Work | SidebarView::Personal => {
                 task.list_id.as_str() == self.view.list_id().unwrap_or("")
             }
-            SidebarView::Today => task.status == TaskStatus::Todo && self.task_date_is_today_or_past(task),
-            SidebarView::Upcoming => task.status == TaskStatus::Todo && self.task_date_is_future(task),
+            SidebarView::Today => {
+                task.status == TaskStatus::Todo && self.task_date_is_today_or_past(task)
+            }
+            SidebarView::Upcoming => {
+                task.status == TaskStatus::Todo && self.task_date_is_future(task)
+            }
             SidebarView::Completed => task.status == TaskStatus::Done,
         }
     }
@@ -806,8 +914,12 @@ impl ReminderApp {
                 SidebarView::Inbox => task.list_id.as_str() == "inbox",
                 SidebarView::Work => task.list_id.as_str() == "work",
                 SidebarView::Personal => task.list_id.as_str() == "personal",
-                SidebarView::Today => task.status == TaskStatus::Todo && self.task_date_is_today_or_past(task),
-                SidebarView::Upcoming => task.status == TaskStatus::Todo && self.task_date_is_future(task),
+                SidebarView::Today => {
+                    task.status == TaskStatus::Todo && self.task_date_is_today_or_past(task)
+                }
+                SidebarView::Upcoming => {
+                    task.status == TaskStatus::Todo && self.task_date_is_future(task)
+                }
                 SidebarView::Completed => task.status == TaskStatus::Done,
             })
             .count()
@@ -870,7 +982,9 @@ impl ReminderApp {
         if !updated {
             self.next_task_id = self.tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1;
         }
-        let _ = self.store.save_setting("selected-view", self.view.as_str().as_bytes());
+        let _ = self
+            .store
+            .save_setting("selected-view", self.view.as_str().as_bytes());
     }
 
     fn toggle_selected_task(&mut self) {
@@ -961,12 +1075,7 @@ impl ReminderApp {
     }
 
     fn body_rect(&self) -> Rect {
-        Rect::new(
-            0,
-            HEADER_H as i32,
-            WIN_W,
-            WIN_H - HEADER_H - FOOTER_H,
-        )
+        Rect::new(0, HEADER_H as i32, WIN_W, WIN_H - HEADER_H - FOOTER_H)
     }
 
     fn footer_rect(&self) -> Rect {
@@ -985,7 +1094,9 @@ impl ReminderApp {
 
     fn sidebar_rects(&self) -> [Rect; 8] {
         let (left, _, _) = self.panel_rects();
-        let content = Panel::with_title(left, "Lists & Views").content_rect().inset(8);
+        let content = Panel::with_title(left, "Lists & Views")
+            .content_rect()
+            .inset(8);
         let rows = [
             SidebarGroupHeader::HEIGHT,
             SidebarItem::HEIGHT,
@@ -1015,7 +1126,9 @@ impl ReminderApp {
 
     fn set_filter(&mut self, view: SidebarView) {
         self.view = view;
-        let _ = self.store.save_setting("selected-view", view.as_str().as_bytes());
+        let _ = self
+            .store
+            .save_setting("selected-view", view.as_str().as_bytes());
     }
 
     fn draw_header(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -1057,13 +1170,18 @@ impl ReminderApp {
     }
 
     fn visible_task_count(&self) -> usize {
-        self.tasks.iter().filter(|task| self.task_matches_view(task)).count()
+        self.tasks
+            .iter()
+            .filter(|task| self.task_matches_view(task))
+            .count()
     }
 
     fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme) {
         let (left, _, _) = self.panel_rects();
         Panel::with_title(left, "Lists & Views").draw(canvas, theme);
-        let content = Panel::with_title(left, "Lists & Views").content_rect().inset(8);
+        let content = Panel::with_title(left, "Lists & Views")
+            .content_rect()
+            .inset(8);
         let rows = [
             SidebarGroupHeader::HEIGHT,
             SidebarItem::HEIGHT,
@@ -1074,9 +1192,7 @@ impl ReminderApp {
             SidebarItem::HEIGHT,
             SidebarItem::HEIGHT,
         ];
-        let mut rows = VBox::new(content)
-            .with_spacing(4)
-            .layout(&rows);
+        let mut rows = VBox::new(content).with_spacing(4).layout(&rows);
         let _lists_header = rows.next().unwrap_or_default();
         let inbox = rows.next().unwrap_or_default();
         let work = rows.next().unwrap_or_default();
@@ -1088,15 +1204,30 @@ impl ReminderApp {
 
         SidebarGroupHeader::new(_lists_header, "Lists").draw(canvas, theme);
         let items = [
-            (SidebarView::Inbox, inbox, self.lists[0].name.as_str(), self.count_tasks_for_list("inbox")),
-            (SidebarView::Work, work, self.lists[1].name.as_str(), self.count_tasks_for_list("work")),
+            (
+                SidebarView::Inbox,
+                inbox,
+                self.lists[0].name.as_str(),
+                self.count_tasks_for_list("inbox"),
+            ),
+            (
+                SidebarView::Work,
+                work,
+                self.lists[1].name.as_str(),
+                self.count_tasks_for_list("work"),
+            ),
             (
                 SidebarView::Personal,
                 personal,
                 self.lists[2].name.as_str(),
                 self.count_tasks_for_list("personal"),
             ),
-            (SidebarView::Today, today, "Today", self.count_tasks_for_view(SidebarView::Today)),
+            (
+                SidebarView::Today,
+                today,
+                "Today",
+                self.count_tasks_for_view(SidebarView::Today),
+            ),
             (
                 SidebarView::Upcoming,
                 upcoming,
@@ -1322,9 +1453,7 @@ impl ReminderApp {
             return;
         }
 
-        let rows = [
-            14, 28, 14, 56, 14, 28, 14, 28, 14, 28, 14, 28, 14, 28,
-        ];
+        let rows = [14, 28, 14, 56, 14, 28, 14, 28, 14, 28, 14, 28, 14, 28];
         let mut layout = VBox::new(content).with_spacing(4).layout(&rows);
         let title_label = layout.next().unwrap_or_default();
         let title_input = layout.next().unwrap_or_default();
@@ -1340,15 +1469,24 @@ impl ReminderApp {
         let action_row = layout.next().unwrap_or_default();
         let error_line = layout.next().unwrap_or_default();
 
-        Label::new(title_label, "Title").with_font(&F_SMALL).dim().draw(canvas, theme);
+        Label::new(title_label, "Title")
+            .with_font(&F_SMALL)
+            .dim()
+            .draw(canvas, theme);
         self.editor.title.rect = title_input;
         self.editor.title.draw(canvas, theme);
 
-        Label::new(notes_label, "Notes").with_font(&F_SMALL).dim().draw(canvas, theme);
+        Label::new(notes_label, "Notes")
+            .with_font(&F_SMALL)
+            .dim()
+            .draw(canvas, theme);
         self.editor.notes.rect = notes_input;
         self.editor.notes.draw(canvas, theme);
 
-        Label::new(due_label, "Due").with_font(&F_SMALL).dim().draw(canvas, theme);
+        Label::new(due_label, "Due")
+            .with_font(&F_SMALL)
+            .dim()
+            .draw(canvas, theme);
         let due_widths = [due_row.w.saturating_sub(78), 72];
         let mut due_inputs = HBox::new(due_row).with_spacing(6).layout(&due_widths);
         let due_date = due_inputs.next().unwrap_or_default();
@@ -1358,10 +1496,14 @@ impl ReminderApp {
         self.editor.due_date.draw(canvas, theme);
         self.editor.due_time.draw(canvas, theme);
 
-        Label::new(reminder_label, "Reminder").with_font(&F_SMALL).dim().draw(canvas, theme);
+        Label::new(reminder_label, "Reminder")
+            .with_font(&F_SMALL)
+            .dim()
+            .draw(canvas, theme);
         let reminder_widths = [reminder_row.w.saturating_sub(78), 72];
-        let mut reminder_inputs =
-            HBox::new(reminder_row).with_spacing(6).layout(&reminder_widths);
+        let mut reminder_inputs = HBox::new(reminder_row)
+            .with_spacing(6)
+            .layout(&reminder_widths);
         let reminder_date = reminder_inputs.next().unwrap_or_default();
         let reminder_time = reminder_inputs.next().unwrap_or_default();
         self.editor.reminder_date.rect = reminder_date;
@@ -1369,7 +1511,10 @@ impl ReminderApp {
         self.editor.reminder_date.draw(canvas, theme);
         self.editor.reminder_time.draw(canvas, theme);
 
-        Label::new(list_label, "List").with_font(&F_SMALL).dim().draw(canvas, theme);
+        Label::new(list_label, "List")
+            .with_font(&F_SMALL)
+            .dim()
+            .draw(canvas, theme);
         let list_widths = [
             list_row.w.saturating_sub(12) / 3,
             list_row.w.saturating_sub(12) / 3,
@@ -1401,7 +1546,10 @@ impl ReminderApp {
         btn.state = ButtonState::Normal;
         btn.draw(canvas, theme);
 
-        Label::new(action_label, "Actions").with_font(&F_SMALL).dim().draw(canvas, theme);
+        Label::new(action_label, "Actions")
+            .with_font(&F_SMALL)
+            .dim()
+            .draw(canvas, theme);
         let action_widths_3 = [
             (action_row.w.saturating_sub(12)) / 3,
             (action_row.w.saturating_sub(12)) / 3,
@@ -1412,9 +1560,13 @@ impl ReminderApp {
             (action_row.w.saturating_sub(6)) / 2,
         ];
         let mut action_buttons = if self.editor.editing_id.is_some() {
-            HBox::new(action_row).with_spacing(6).layout(&action_widths_3)
+            HBox::new(action_row)
+                .with_spacing(6)
+                .layout(&action_widths_3)
         } else {
-            HBox::new(action_row).with_spacing(6).layout(&action_widths_2)
+            HBox::new(action_row)
+                .with_spacing(6)
+                .layout(&action_widths_2)
         };
         let save_btn = action_buttons.next().unwrap_or_default();
         let delete_btn = if self.editor.editing_id.is_some() {
@@ -1543,9 +1695,7 @@ impl ReminderApp {
                 return true;
             }
 
-            let rows = [
-                14, 28, 14, 56, 14, 28, 14, 28, 14, 28, 14, 28, 14, 28,
-            ];
+            let rows = [14, 28, 14, 56, 14, 28, 14, 28, 14, 28, 14, 28, 14, 28];
             let mut layout = VBox::new(content).with_spacing(4).layout(&rows);
             let _title_label = layout.next().unwrap_or_default();
             let title_input = layout.next().unwrap_or_default();
@@ -1583,8 +1733,9 @@ impl ReminderApp {
                 }
                 if reminder_row.contains(Point::new(x, y)) {
                     let reminder_widths = [reminder_row.w.saturating_sub(78), 72];
-                    let mut reminder_inputs =
-                        HBox::new(reminder_row).with_spacing(6).layout(&reminder_widths);
+                    let mut reminder_inputs = HBox::new(reminder_row)
+                        .with_spacing(6)
+                        .layout(&reminder_widths);
                     let reminder_date = reminder_inputs.next().unwrap_or_default();
                     let reminder_time = reminder_inputs.next().unwrap_or_default();
                     if reminder_date.contains(Point::new(x, y)) {
@@ -1602,8 +1753,7 @@ impl ReminderApp {
                         list_row.w.saturating_sub(12) / 3,
                         list_row.w.saturating_sub(12) / 3,
                     ];
-                    let mut list_buttons =
-                        HBox::new(list_row).with_spacing(6).layout(&list_widths);
+                    let mut list_buttons = HBox::new(list_row).with_spacing(6).layout(&list_widths);
                     let inbox_btn = list_buttons.next().unwrap_or_default();
                     let work_btn = list_buttons.next().unwrap_or_default();
                     let personal_btn = list_buttons.next().unwrap_or_default();
@@ -1621,7 +1771,11 @@ impl ReminderApp {
                     }
                 }
                 if action_row.contains(Point::new(x, y)) {
-                    let count = if self.editor.editing_id.is_some() { 3 } else { 2 };
+                    let count = if self.editor.editing_id.is_some() {
+                        3
+                    } else {
+                        2
+                    };
                     let action_widths_3 = [
                         (action_row.w.saturating_sub(12)) / 3,
                         (action_row.w.saturating_sub(12)) / 3,
@@ -1632,9 +1786,13 @@ impl ReminderApp {
                         (action_row.w.saturating_sub(6)) / 2,
                     ];
                     let mut action_buttons = if count == 3 {
-                        HBox::new(action_row).with_spacing(6).layout(&action_widths_3)
+                        HBox::new(action_row)
+                            .with_spacing(6)
+                            .layout(&action_widths_3)
                     } else {
-                        HBox::new(action_row).with_spacing(6).layout(&action_widths_2)
+                        HBox::new(action_row)
+                            .with_spacing(6)
+                            .layout(&action_widths_2)
                     };
                     let save_btn = action_buttons.next().unwrap_or_default();
                     let delete_btn = if count == 3 {
@@ -1808,6 +1966,21 @@ fn current_local_date() -> TinyString<DATE_LEN> {
     out
 }
 
+fn format_time_hhmm(hour: u8, minute: u8) -> TinyString<TIME_LEN> {
+    let mut out = TinyString::<TIME_LEN>::empty();
+    let buf = [
+        b'0' + hour / 10,
+        b'0' + hour % 10,
+        b':',
+        b'0' + minute / 10,
+        b'0' + minute % 10,
+    ];
+    if let Ok(text) = core::str::from_utf8(&buf) {
+        out.set(text);
+    }
+    out
+}
+
 fn task_cmp(a: &Task, b: &Task) -> core::cmp::Ordering {
     let a_status = match a.status {
         TaskStatus::Todo => 0,
@@ -1825,7 +1998,9 @@ fn task_cmp(a: &Task, b: &Task) -> core::cmp::Ordering {
 }
 
 fn task_sort_date(task: &Task) -> &str {
-    task_primary_date_time(task).map(|pair| pair.0).unwrap_or("9999-12-31")
+    task_primary_date_time(task)
+        .map(|pair| pair.0)
+        .unwrap_or("9999-12-31")
 }
 
 fn task_sort_time(task: &Task) -> &str {
@@ -1841,13 +2016,41 @@ fn task_primary_date_time(task: &Task) -> Option<(&str, Option<&str>)> {
     let rem_time = task.reminder_time.as_str();
     match (due_date.is_empty(), rem_date.is_empty()) {
         (true, true) => None,
-        (false, true) => Some((due_date, if due_time.is_empty() { None } else { Some(due_time) })),
-        (true, false) => Some((rem_date, if rem_time.is_empty() { None } else { Some(rem_time) })),
+        (false, true) => Some((
+            due_date,
+            if due_time.is_empty() {
+                None
+            } else {
+                Some(due_time)
+            },
+        )),
+        (true, false) => Some((
+            rem_date,
+            if rem_time.is_empty() {
+                None
+            } else {
+                Some(rem_time)
+            },
+        )),
         (false, false) => {
             if due_date < rem_date {
-                Some((due_date, if due_time.is_empty() { None } else { Some(due_time) }))
+                Some((
+                    due_date,
+                    if due_time.is_empty() {
+                        None
+                    } else {
+                        Some(due_time)
+                    },
+                ))
             } else if rem_date < due_date {
-                Some((rem_date, if rem_time.is_empty() { None } else { Some(rem_time) }))
+                Some((
+                    rem_date,
+                    if rem_time.is_empty() {
+                        None
+                    } else {
+                        Some(rem_time)
+                    },
+                ))
             } else if !due_time.is_empty() && !rem_time.is_empty() {
                 if due_time <= rem_time {
                     Some((due_date, Some(due_time)))

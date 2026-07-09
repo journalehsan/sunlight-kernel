@@ -10,12 +10,11 @@ use core::alloc::GlobalAlloc;
 
 use sun_font::{draw_text, draw_text_vcenter, line_height, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
-    launch_trace::{self, LaunchSource, LaunchTrace},
-    debug_log, get_time_utc, ipc_call_timeout, monotonic_millis, nameserver_lookup_timeout,
-    process_yield, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
+    debug_log, get_time_utc, ipc_call_timeout, launch_trace::LaunchSource, monotonic_millis,
+    nameserver_lookup_timeout, process_yield, shm_alloc, shm_free, shm_map, CapabilityToken,
+    IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc};
-use sunlight_libc::sun_exec::{self, LaunchRequest};
 use sunlight_locale::{month_name, weekday_name};
 use sunlight_tz::{local_now, read_localtime, tz_by_id};
 use sunlight_ui::image::TgaImage;
@@ -66,8 +65,12 @@ const KV_DELETE_SHM2: u64 = 0x4B0A;
 const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
 const KV_TIMEOUT_MS: u64 = 250;
 use sunlight_calendar::{
-    by_date_key, encode_id_list, event_key, parse_id_list, parse_u64, setting_key, CAL_INDEX_ALL,
-    CAL_MIGRATION_FILE_V1,
+    build_selected_day_previews, by_date_key, encode_id_list, event_key, parse_id_list, parse_u64,
+    setting_key, CAL_INDEX_ALL, CAL_MIGRATION_FILE_V1,
+};
+use sunlight_reminders::{
+    by_date_list_key, decode_list, decode_task, list_key, reminder_date_list_key, task_key,
+    TaskList, TaskStatus, DEFAULT_LISTS,
 };
 
 const KEY_ESC: u8 = 0x01;
@@ -338,6 +341,21 @@ impl CalendarEvent {
         push_i32_fixed(&mut s, day, 2);
         s
     }
+}
+
+#[derive(Clone, Copy)]
+struct TaskPreview {
+    title: SlotString<TITLE_LEN>,
+    due_time: SlotString<TIME_LEN>,
+    list_name: SlotString<32>,
+    status: TaskStatus,
+}
+
+#[derive(Clone, Copy)]
+struct ReminderPreview {
+    title: SlotString<TITLE_LEN>,
+    reminder_time: SlotString<TIME_LEN>,
+    linked_task_title: SlotString<TITLE_LEN>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1298,6 +1316,14 @@ struct CalendarApp {
     dialog_hover_btn: Option<usize>,
     data_loaded: bool,
     status_msg: SlotString<MSG_LEN>,
+    // Sunlight Reminders & Tasks integration via sunlight-kv
+    reminder_lists: [TaskList; 3],
+    task_previews: Vec<TaskPreview>,
+    reminder_previews: Vec<ReminderPreview>,
+    tasks_loaded_for: SlotString<DATE_LEN>,
+    reminders_loaded_for: SlotString<DATE_LEN>,
+    reminder_lists_loaded: bool,
+    last_preview_refresh_ms: u64,
 }
 
 impl CalendarApp {
@@ -1328,6 +1354,17 @@ impl CalendarApp {
             dialog_hover_btn: None,
             data_loaded: false,
             status_msg: SlotString::empty(),
+            reminder_lists: [
+                TaskList::new("inbox", "Inbox", 0, 0).unwrap(),
+                TaskList::new("work", "Work", 0, 0).unwrap(),
+                TaskList::new("personal", "Personal", 0, 0).unwrap(),
+            ],
+            task_previews: Vec::new(),
+            reminder_previews: Vec::new(),
+            tasks_loaded_for: SlotString::empty(),
+            reminders_loaded_for: SlotString::empty(),
+            reminder_lists_loaded: false,
+            last_preview_refresh_ms: 0,
         }
     }
 
@@ -1728,6 +1765,9 @@ impl CalendarApp {
     }
 
     fn load_calendar_data(&mut self) {
+        self.reminder_lists_loaded = false;
+        self.tasks_loaded_for.clear();
+        self.reminders_loaded_for.clear();
         match self.store.load_events() {
             Ok(events) => {
                 self.events = events;
@@ -1736,11 +1776,13 @@ impl CalendarApp {
                 self.restore_selection();
                 self.migrate_old_file_if_needed();
                 self.save_and_refresh();
+                self.load_reminder_previews_for_selection(true);
             }
             Err(_) => {
                 debug_log("[CALENDAR] sunlight-kv unavailable; using memory fallback\n");
                 self.events = self.memory_events.clone();
                 self.status_msg.set("sunlight-kv unavailable; memory only");
+                self.load_reminder_previews_for_selection(true);
             }
         }
     }
@@ -1809,6 +1851,163 @@ impl CalendarApp {
         }
         let _ = self.store.mark_migration_complete();
         self.status_msg.set("Imported old calendar file");
+    }
+
+    fn ensure_reminder_lists(&mut self) {
+        if self.reminder_lists_loaded {
+            return;
+        }
+        for (idx, (id, _name)) in DEFAULT_LISTS.iter().enumerate() {
+            let key = list_key(id);
+            match kv_get(&key) {
+                Ok(bytes) => {
+                    if let Some(list) = decode_list(&bytes) {
+                        self.reminder_lists[idx] = list;
+                    }
+                }
+                Err(KvClientError::NotFound) => {}
+                Err(_) => {}
+            }
+        }
+        self.reminder_lists_loaded = true;
+    }
+
+    fn dynamic_list_name(&self, list_id: &str) -> Option<String> {
+        for list in &self.reminder_lists {
+            if list.id.as_str() == list_id {
+                let name = list.name.as_str();
+                if !name.is_empty() {
+                    return Some(String::from(name));
+                }
+            }
+        }
+        None
+    }
+
+    fn selected_date_str(&self) -> SlotString<DATE_LEN> {
+        CalendarEvent::format_date(self.sel_year, self.sel_month, self.sel_day)
+    }
+
+    fn selected_legacy_slash_date_str(&self) -> SlotString<DATE_LEN> {
+        let mut out = SlotString::empty();
+        push_i32_fixed(&mut out, self.sel_year, 4);
+        out.push('/');
+        push_i32_fixed(&mut out, self.sel_month, 2);
+        out.push('/');
+        push_i32_fixed(&mut out, self.sel_day, 2);
+        out
+    }
+
+    fn load_reminder_id_list(&self, key: &str) -> Result<Vec<u64>, KvClientError> {
+        match kv_get(key) {
+            Ok(bytes) => Ok(parse_id_list(&bytes).unwrap_or_default()),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn load_reminder_id_list_with_legacy(
+        &self,
+        canonical_key: &str,
+        legacy_key: &str,
+    ) -> Result<Vec<u64>, KvClientError> {
+        match self.load_reminder_id_list(canonical_key) {
+            Ok(ids) => Ok(ids),
+            Err(KvClientError::NotFound) => match self.load_reminder_id_list(legacy_key) {
+                Ok(ids) => Ok(ids),
+                Err(KvClientError::NotFound) => Ok(Vec::new()),
+                Err(err) => Err(err),
+            },
+            Err(err) => Err(err),
+        }
+    }
+
+    fn load_reminder_previews_for_selection(&mut self, force: bool) {
+        let date_slot = self.selected_date_str();
+        let date_str = date_slot.as_str();
+        if date_str.is_empty() {
+            return;
+        }
+        if !force
+            && self.tasks_loaded_for.as_str() == date_str
+            && self.reminders_loaded_for.as_str() == date_str
+        {
+            return;
+        }
+
+        self.ensure_reminder_lists();
+        let legacy_date_slot = self.selected_legacy_slash_date_str();
+        let due_ids = match self.load_reminder_id_list_with_legacy(
+            &by_date_list_key(date_str),
+            &by_date_list_key(legacy_date_slot.as_str()),
+        ) {
+            Ok(ids) => ids,
+            Err(_) => {
+                self.last_preview_refresh_ms = monotonic_millis();
+                return;
+            }
+        };
+        let reminder_ids = match self.load_reminder_id_list_with_legacy(
+            &reminder_date_list_key(date_str),
+            &reminder_date_list_key(legacy_date_slot.as_str()),
+        ) {
+            Ok(ids) => ids,
+            Err(_) => {
+                self.last_preview_refresh_ms = monotonic_millis();
+                return;
+            }
+        };
+        let mut load_failed = false;
+        let selected = build_selected_day_previews(
+            date_str,
+            &due_ids,
+            &reminder_ids,
+            |id| match kv_get(&task_key(id)) {
+                Ok(rec) => decode_task(&rec),
+                Err(KvClientError::NotFound) => None,
+                Err(_) => {
+                    load_failed = true;
+                    None
+                }
+            },
+            |list_id| self.dynamic_list_name(list_id),
+        );
+        if load_failed {
+            self.last_preview_refresh_ms = monotonic_millis();
+            return;
+        }
+
+        self.task_previews.clear();
+        for preview in selected.tasks {
+            let mut task_preview = TaskPreview {
+                title: SlotString::empty(),
+                due_time: SlotString::empty(),
+                list_name: SlotString::empty(),
+                status: preview.status,
+            };
+            task_preview.title.set(&preview.title);
+            task_preview.due_time.set(&preview.due_time);
+            task_preview.list_name.set(&preview.list_name);
+            self.task_previews.push(task_preview);
+        }
+
+        self.reminder_previews.clear();
+        for preview in selected.reminders {
+            let mut reminder_preview = ReminderPreview {
+                title: SlotString::empty(),
+                reminder_time: SlotString::empty(),
+                linked_task_title: SlotString::empty(),
+            };
+            reminder_preview.title.set(&preview.title);
+            reminder_preview.reminder_time.set(&preview.reminder_time);
+            reminder_preview
+                .linked_task_title
+                .set(&preview.linked_task_title);
+            self.reminder_previews.push(reminder_preview);
+        }
+
+        self.tasks_loaded_for = date_slot;
+        self.reminders_loaded_for = date_slot;
+        self.last_preview_refresh_ms = monotonic_millis();
     }
 
     fn refresh_timezone_and_locale(&mut self) {
@@ -1903,7 +2102,15 @@ impl App for CalendarApp {
 
     fn update(&mut self, event: Event) -> bool {
         match event {
-            Event::Tick => false,
+            Event::Tick => {
+                let now = monotonic_millis();
+                if now.saturating_sub(self.last_preview_refresh_ms) >= 2_000 {
+                    self.load_reminder_previews_for_selection(true);
+                    true
+                } else {
+                    false
+                }
+            }
             Event::Click { x, y } => self.handle_click(x, y),
             Event::Key(ch) => self.handle_char(ch),
             Event::KeyPress {
@@ -2116,33 +2323,130 @@ impl CalendarApp {
                 .layout(&preview_col_blocks);
             let tasks_rect = preview_cols.next().unwrap_or(preview_rect);
             let reminders_rect = preview_cols.next().unwrap_or(preview_rect);
-            self.draw_preview_panel(canvas, theme, tasks_rect, "Tasks", "No tasks for this day");
-            self.draw_preview_panel(canvas, theme, reminders_rect, "Reminders", "No reminders");
+            self.draw_tasks_preview(canvas, theme, tasks_rect);
+            self.draw_reminders_preview(canvas, theme, reminders_rect);
         }
     }
 
-    fn draw_preview_panel(
-        &self,
-        canvas: &mut Canvas,
-        theme: &Theme,
-        rect: Rect,
-        title: &str,
-        empty_text: &str,
-    ) {
-        let panel = Panel::with_title(rect, title);
+    fn draw_tasks_preview(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
+        let panel = Panel::with_title(rect, "Tasks");
         panel.draw(canvas, theme);
-        let content = panel.content_rect().inset(10);
+        let content = panel.content_rect().inset(6);
         if content.w == 0 || content.h == 0 {
             return;
         }
-        draw_text_vcenter(
-            canvas,
-            empty_text,
-            content.x,
-            content.y,
-            content.h,
-            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
-        );
+        if self.task_previews.is_empty() {
+            draw_text_vcenter(
+                canvas,
+                "No tasks for this day",
+                content.x,
+                content.y,
+                content.h,
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+            );
+            return;
+        }
+
+        let item_h: i32 = 18;
+        let mut y = content.y + 2;
+        for tp in &self.task_previews {
+            if y + item_h > content.bottom() {
+                break;
+            }
+            // status marker
+            let marker = if tp.status == TaskStatus::Done {
+                "[x]"
+            } else {
+                "[ ]"
+            };
+            let mut line = String::new();
+            line.push_str(marker);
+            line.push(' ');
+            let t = if tp.title.len > 22 {
+                &tp.title.as_str()[..22]
+            } else {
+                tp.title.as_str()
+            };
+            line.push_str(t);
+            if tp.due_time.len > 0 {
+                line.push(' ');
+                line.push_str(tp.due_time.as_str());
+            }
+            if tp.list_name.len > 0 {
+                line.push_str(" (");
+                let l = if tp.list_name.as_str().len() > 8 {
+                    &tp.list_name.as_str()[..8]
+                } else {
+                    tp.list_name.as_str()
+                };
+                line.push_str(l);
+                line.push(')');
+            }
+            let style = if tp.status == TaskStatus::Done {
+                TextStyle::new(FontRole::UiSmall, theme.text_muted)
+            } else {
+                TextStyle::new(FontRole::UiSmall, theme.text)
+            };
+            draw_text(canvas, &line, content.x + 2, y, &style);
+            y += item_h;
+        }
+    }
+
+    fn draw_reminders_preview(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
+        let panel = Panel::with_title(rect, "Reminders");
+        panel.draw(canvas, theme);
+        let content = panel.content_rect().inset(6);
+        if content.w == 0 || content.h == 0 {
+            return;
+        }
+        if self.reminder_previews.is_empty() {
+            draw_text_vcenter(
+                canvas,
+                "No reminders",
+                content.x,
+                content.y,
+                content.h,
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+            );
+            return;
+        }
+
+        let item_h: i32 = 18;
+        let mut y = content.y + 2;
+        for rp in &self.reminder_previews {
+            if y + item_h > content.bottom() {
+                break;
+            }
+            let mut line = String::new();
+            let t = if rp.title.len > 20 {
+                &rp.title.as_str()[..20]
+            } else {
+                rp.title.as_str()
+            };
+            line.push_str(t);
+            if rp.reminder_time.len > 0 {
+                line.push(' ');
+                line.push_str(rp.reminder_time.as_str());
+            }
+            if rp.linked_task_title.len > 0 && rp.linked_task_title.as_str() != rp.title.as_str() {
+                // rarely different but per spec
+                line.push_str(" <- ");
+                let lt = if rp.linked_task_title.len > 12 {
+                    &rp.linked_task_title.as_str()[..12]
+                } else {
+                    rp.linked_task_title.as_str()
+                };
+                line.push_str(lt);
+            }
+            draw_text(
+                canvas,
+                &line,
+                content.x + 2,
+                y,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+            y += item_h;
+        }
     }
 
     fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -2754,6 +3058,7 @@ impl CalendarApp {
                     self.sel_day = self.today_day;
                     self.selected_event_idx = None;
                     self.save_selection_settings();
+                    self.load_reminder_previews_for_selection(false);
                 }
                 2 => {
                     self.view_month += 1;
@@ -2820,8 +3125,15 @@ impl CalendarApp {
             self.selected_event_idx = None;
             if (self.sel_year, self.sel_month, self.sel_day) != old_sel {
                 self.save_selection_settings();
+                self.load_reminder_previews_for_selection(false);
                 return true;
             }
+        }
+
+        // Optional simple behavior: click in Tasks/Reminders preview area launches reminders app (no deep link)
+        let preview_rect = self.calendar_preview_rect();
+        if preview_rect.contains(Point::new(x, y)) && preview_rect.h > 8 {
+            return self.launch_tasks_and_reminders();
         }
 
         false
@@ -2842,6 +3154,7 @@ impl CalendarApp {
                 self.sel_day = self.today_day;
                 self.selected_event_idx = None;
                 self.save_selection_settings();
+                self.load_reminder_previews_for_selection(false);
                 true
             }
             MenuAction::Refresh => {
@@ -2859,44 +3172,18 @@ impl CalendarApp {
     }
 
     fn launch_tasks_and_reminders(&mut self) -> bool {
-        if libc::stat(b"/bin/sunlight-reminders").is_err()
-            && libc::stat(b"/usr/bin/sunlight-reminders").is_err()
-        {
-            debug_log("[CALENDAR] sunlight-reminders is missing\n");
-            self.status_msg
-                .set("Sunlight Reminders is not available yet");
-            return true;
-        }
-
-        let trace = launch_trace::current().unwrap_or(LaunchTrace::new(
-            0,
-            LaunchSource::Shortcut,
-            monotonic_millis(),
-        ));
-        let args: &[&[u8]] = &[b"sunlight-reminders"];
-        match sun_exec::launch(LaunchRequest {
-            trace,
+        match libc::sun_exec::launch(libc::sun_exec::LaunchRequest {
+            trace: libc::sun_exec::next_cli_trace(LaunchSource::Shortcut),
             source: LaunchSource::Shortcut,
-            command: b"/bin/sun-exec",
-            args,
+            command: b"sunlight-reminders",
+            args: &[],
             require_display: true,
         }) {
             Ok(_) => {
                 self.status_msg.set("Launching Sunlight Reminders");
             }
-            Err(err) => {
-                debug_log("[CALENDAR] failed to launch sun-exec for sunlight-reminders\n");
-                debug_log(match err {
-                    sun_exec::LaunchError::AppNotFound => "[CALENDAR] app not found\n",
-                    sun_exec::LaunchError::InvalidCommand => "[CALENDAR] invalid command\n",
-                    sun_exec::LaunchError::SpawnFailed(_) => "[CALENDAR] spawn failed\n",
-                    sun_exec::LaunchError::PermissionDenied => "[CALENDAR] permission denied\n",
-                    sun_exec::LaunchError::DisplayUnavailable => {
-                        "[CALENDAR] display unavailable\n"
-                    }
-                    sun_exec::LaunchError::TooManyArgs => "[CALENDAR] too many args\n",
-                    sun_exec::LaunchError::ArgTooLong => "[CALENDAR] arg too long\n",
-                });
+            Err(_) => {
+                debug_log("[CALENDAR] sun-exec launch of sunlight-reminders failed\n");
                 self.status_msg
                     .set("Sunlight Reminders is not available yet");
             }

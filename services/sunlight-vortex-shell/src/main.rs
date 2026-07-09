@@ -57,6 +57,9 @@ mod start_menu;
 
 use alloc::{string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
+use sunlight_calendar::{
+    build_selected_day_previews, SelectedDayReminderPreview, SelectedDayTaskPreview,
+};
 use sunlight_ipc::{
     debug_log, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -67,6 +70,10 @@ use sunlight_ipc::{
     SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
+use sunlight_reminders::{
+    by_date_list_key as reminder_due_date_list_key, decode_task, parse_id_list as parse_task_id_list,
+    reminder_date_list_key, task_key,
+};
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
     image::{
@@ -593,6 +600,8 @@ const CAL_INDEX_BY_DATE_PREFIX: &str = "app.calendar.index/by-date/";
 const CAL_EVENT_TITLE_MAX: usize = 48;
 const CAL_POPUP_DAYS: usize = 42;
 const CAL_POPUP_EVENTS: usize = 8;
+const CAL_POPUP_TASKS: usize = 4;
+const CAL_POPUP_REMINDERS: usize = 4;
 const APP_STATE_POLL_MS: u64 = 250;
 const APP_LAUNCH_TIMEOUT_MS: u64 = 30_000;
 const APP_PRESS_MS: u64 = 140;
@@ -1198,6 +1207,8 @@ struct VortexShell {
     cal_selected_day: u8,
     cal_event_days: [bool; CAL_POPUP_DAYS],
     cal_selected_events: Vec<CalendarMiniEvent>,
+    cal_selected_tasks: Vec<SelectedDayTaskPreview>,
+    cal_selected_reminders: Vec<SelectedDayReminderPreview>,
     cal_last_loaded_key: [u8; 10],
     cal_last_loaded_key_len: usize,
     show_notif_panel: bool,
@@ -1303,6 +1314,8 @@ impl VortexShell {
             cal_selected_day: 1,
             cal_event_days: [false; CAL_POPUP_DAYS],
             cal_selected_events: Vec::new(),
+            cal_selected_tasks: Vec::new(),
+            cal_selected_reminders: Vec::new(),
             cal_last_loaded_key: [0; 10],
             cal_last_loaded_key_len: 0,
             show_notif_panel: false,
@@ -1445,7 +1458,7 @@ impl VortexShell {
             let idx = offset + (day as usize - 1);
             if idx < CAL_POPUP_DAYS {
                 self.cal_event_days[idx] =
-                    calendar_day_has_events(self.cal_view_year, self.cal_view_month, day);
+                    calendar_day_has_items(self.cal_view_year, self.cal_view_month, day);
             }
         }
         self.cal_selected_events = load_calendar_events_for_day(
@@ -1453,6 +1466,13 @@ impl VortexShell {
             self.cal_view_month,
             self.cal_selected_day,
         );
+        let (tasks, reminders) = load_tasks_and_reminders_for_day(
+            self.cal_view_year,
+            self.cal_view_month,
+            self.cal_selected_day,
+        );
+        self.cal_selected_tasks = tasks;
+        self.cal_selected_reminders = reminders;
         self.cal_last_loaded_key_len = kb.len().min(self.cal_last_loaded_key.len());
         self.cal_last_loaded_key[..self.cal_last_loaded_key_len]
             .copy_from_slice(&kb[..self.cal_last_loaded_key_len]);
@@ -3098,6 +3118,10 @@ fn format_cal_date(year: u16, month: u8, day: u8) -> String {
     alloc::format!("{:04}-{:02}-{:02}", year, month, day)
 }
 
+fn format_legacy_slash_date(year: u16, month: u8, day: u8) -> String {
+    alloc::format!("{:04}/{:02}/{:02}", year, month, day)
+}
+
 fn format_event_key(event_id: u64) -> String {
     alloc::format!("{}{:016x}", CAL_EVENT_PREFIX, event_id)
 }
@@ -3144,6 +3168,24 @@ fn calendar_day_has_events(year: u16, month: u8, day: u8) -> bool {
         .unwrap_or(false)
 }
 
+fn calendar_day_has_items(year: u16, month: u8, day: u8) -> bool {
+    if calendar_day_has_events(year, month, day) {
+        return true;
+    }
+    let date = format_cal_date(year, month, day);
+    let legacy_date = format_legacy_slash_date(year, month, day);
+    !load_task_ids_with_legacy(
+        &reminder_due_date_list_key(&date),
+        &reminder_due_date_list_key(&legacy_date),
+    )
+    .is_empty()
+        || !load_task_ids_with_legacy(
+            &reminder_date_list_key(&date),
+            &reminder_date_list_key(&legacy_date),
+        )
+        .is_empty()
+}
+
 fn load_calendar_events_for_day(year: u16, month: u8, day: u8) -> Vec<CalendarMiniEvent> {
     let mut events = Vec::new();
     let date = format_cal_date(year, month, day);
@@ -3161,6 +3203,39 @@ fn load_calendar_events_for_day(year: u16, month: u8, day: u8) -> Vec<CalendarMi
         }
     }
     events
+}
+
+fn load_tasks_and_reminders_for_day(
+    year: u16,
+    month: u8,
+    day: u8,
+) -> (Vec<SelectedDayTaskPreview>, Vec<SelectedDayReminderPreview>) {
+    let date = format_cal_date(year, month, day);
+    let legacy_date = format_legacy_slash_date(year, month, day);
+    let due_ids = load_task_ids_with_legacy(
+        &reminder_due_date_list_key(&date),
+        &reminder_due_date_list_key(&legacy_date),
+    );
+    let reminder_ids = load_task_ids_with_legacy(
+        &reminder_date_list_key(&date),
+        &reminder_date_list_key(&legacy_date),
+    );
+    let selected = build_selected_day_previews(
+        &date,
+        &due_ids,
+        &reminder_ids,
+        |id| kv_get_bytes(&task_key(id)).and_then(|bytes| decode_task(&bytes)),
+        |list_id| sunlight_reminders::default_list_name(list_id).map(String::from),
+    );
+    (selected.tasks, selected.reminders)
+}
+
+fn load_task_ids_with_legacy(canonical_key: &str, legacy_key: &str) -> Vec<u64> {
+    kv_get_bytes(canonical_key)
+        .and_then(|bytes| parse_task_id_list(&bytes))
+        .filter(|ids| !ids.is_empty())
+        .or_else(|| kv_get_bytes(legacy_key).and_then(|bytes| parse_task_id_list(&bytes)))
+        .unwrap_or_default()
 }
 
 fn parse_calendar_event_summary(bytes: &[u8]) -> Option<CalendarMiniEvent> {
@@ -4500,19 +4575,29 @@ impl VortexShell {
             &TextStyle::new(FontRole::UiSmall, theme.text_muted),
         );
 
+        let mut item_y = list_y + 18;
+        draw_text_vcenter(
+            canvas,
+            "Events",
+            x + 12,
+            item_y,
+            16,
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+        );
+        item_y += 16;
         if self.cal_selected_events.is_empty() {
             draw_text_vcenter(
                 canvas,
                 "No events for this day",
                 x + 12,
-                list_y + 18,
+                item_y,
                 18,
                 &TextStyle::new(FontRole::UiSmall, theme.text_muted),
             );
+            item_y += 20;
         } else {
-            let mut ey = list_y + 18;
-            for event in self.cal_selected_events.iter().take(4) {
-                let row = Rect::new(x + 12, ey, pw - 24, 22);
+            for event in self.cal_selected_events.iter().take(3) {
+                let row = Rect::new(x + 12, item_y, pw - 24, 20);
                 canvas.fill_rounded_rect(row, 4, theme.panel_alt);
                 draw_text_vcenter(
                     canvas,
@@ -4530,17 +4615,133 @@ impl VortexShell {
                     row.h,
                     &TextStyle::new(FontRole::UiSmall, theme.text),
                 );
-                ey += 24;
+                item_y += 22;
             }
-            if self.cal_selected_events.len() > 4 {
+            if self.cal_selected_events.len() > 3 {
                 draw_text_vcenter(
                     canvas,
                     "More in Calendar…",
                     x + 12,
-                    ey,
+                    item_y,
                     18,
                     &TextStyle::new(FontRole::UiSmall, theme.text_muted),
                 );
+                item_y += 18;
+            }
+        }
+
+        item_y += 2;
+        draw_text_vcenter(
+            canvas,
+            "Tasks",
+            x + 12,
+            item_y,
+            16,
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+        );
+        item_y += 16;
+        if self.cal_selected_tasks.is_empty() {
+            draw_text_vcenter(
+                canvas,
+                "No tasks for this day",
+                x + 12,
+                item_y,
+                18,
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+            );
+            item_y += 20;
+        } else {
+            for task in self.cal_selected_tasks.iter().take(CAL_POPUP_TASKS) {
+                let row = Rect::new(x + 12, item_y, pw - 24, 20);
+                canvas.fill_rounded_rect(row, 4, theme.panel_alt);
+                let marker = if task.status == sunlight_reminders::TaskStatus::Done {
+                    "[x]"
+                } else {
+                    "[ ]"
+                };
+                draw_text_vcenter(
+                    canvas,
+                    marker,
+                    row.x + 6,
+                    row.y,
+                    row.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.accent),
+                );
+                let mut title = task.title.clone();
+                if title.chars().count() > 28 {
+                    title = ellipsize_label(&title, 28);
+                }
+                draw_text_vcenter(
+                    canvas,
+                    &title,
+                    row.x + 34,
+                    row.y,
+                    row.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                );
+                if !task.due_time.is_empty() {
+                    draw_text_vcenter(
+                        canvas,
+                        &task.due_time,
+                        row.right() - 42,
+                        row.y,
+                        row.h,
+                        &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+                    );
+                }
+                item_y += 22;
+            }
+        }
+
+        item_y += 2;
+        draw_text_vcenter(
+            canvas,
+            "Reminders",
+            x + 12,
+            item_y,
+            16,
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+        );
+        item_y += 16;
+        if self.cal_selected_reminders.is_empty() {
+            draw_text_vcenter(
+                canvas,
+                "No reminders",
+                x + 12,
+                item_y,
+                18,
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+            );
+        } else {
+            for reminder in self.cal_selected_reminders.iter().take(CAL_POPUP_REMINDERS) {
+                let row = Rect::new(x + 12, item_y, pw - 24, 20);
+                canvas.fill_rounded_rect(row, 4, theme.panel_alt);
+                let time = if reminder.reminder_time.is_empty() {
+                    "--:--"
+                } else {
+                    reminder.reminder_time.as_str()
+                };
+                draw_text_vcenter(
+                    canvas,
+                    time,
+                    row.x + 6,
+                    row.y,
+                    row.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.accent),
+                );
+                let mut title = reminder.title.clone();
+                if title.chars().count() > 30 {
+                    title = ellipsize_label(&title, 30);
+                }
+                draw_text_vcenter(
+                    canvas,
+                    &title,
+                    row.x + 52,
+                    row.y,
+                    row.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                );
+                item_y += 22;
             }
         }
 

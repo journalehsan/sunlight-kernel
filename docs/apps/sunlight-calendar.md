@@ -19,9 +19,23 @@ records are skipped during load instead of aborting the whole calendar.
 
 ## Tasks & Reminders
 
-The Calendar toolbar's `Tasks & Reminders` button launches the native
-`sunlight-reminders` app through `sun-exec`. That app owns personal tasks,
-reminders, and daily planning; it is separate from the system task monitor.
+The Calendar lower panels (Tasks / Reminders) now show live previews for the
+selected day by reading `sunlight-kv` indexes written by the Sunlight Reminders
+& Tasks app:
+
+- Tasks use `app.reminders.index.by-date/<date>` (due_date)
+- Reminders use `app.reminders.index.reminder-date/<date>` (with due+reminder_time fallback)
+
+Calendar refreshes those preview panels periodically while open, so edits made
+in Sunlight Reminders appear without restarting Calendar. The Vortex Shell
+date popover uses the same indexes and displays selected-day Tasks and
+Reminders below Calendar events.
+
+The "Tasks & Reminders" button (and clicks in preview area) launch the exact
+`sunlight-reminders` command through `sun-exec`. Calendar remains a read-only
+preview surface.
+
+See sunlight-reminders/README.md for full namespace and TODO list.
 
 ## Migration
 

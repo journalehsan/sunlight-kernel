@@ -8,6 +8,7 @@ use alloc::vec::Vec;
 pub const LIST_PREFIX: &str = "app.reminders.lists/";
 pub const TASK_PREFIX: &str = "app.reminders.tasks/";
 pub const INDEX_BY_DATE_PREFIX: &str = "app.reminders.index.by-date/";
+pub const INDEX_REMINDER_DATE_PREFIX: &str = "app.reminders.index.reminder-date/";
 pub const INDEX_ALL_KEY: &str = "app.reminders.index/all";
 pub const SETTINGS_PREFIX: &str = "app.reminders.settings/";
 
@@ -205,6 +206,26 @@ pub fn date_index_key(date: &str, task_id: u64) -> String {
     out
 }
 
+pub fn reminder_date_index_key(date: &str, task_id: u64) -> String {
+    let mut out = String::from(INDEX_REMINDER_DATE_PREFIX);
+    out.push_str(date);
+    out.push('/');
+    push_u64_decimal(&mut out, task_id);
+    out
+}
+
+pub fn by_date_list_key(date: &str) -> String {
+    let mut out = String::from(INDEX_BY_DATE_PREFIX);
+    out.push_str(date);
+    out
+}
+
+pub fn reminder_date_list_key(date: &str) -> String {
+    let mut out = String::from(INDEX_REMINDER_DATE_PREFIX);
+    out.push_str(date);
+    out
+}
+
 pub fn settings_key(key: &str) -> String {
     let mut out = String::from(SETTINGS_PREFIX);
     out.push_str(key);
@@ -238,8 +259,35 @@ pub fn parse_id_list(bytes: &[u8]) -> Option<Vec<u64>> {
     Some(ids)
 }
 
+pub fn add_id_to_index_list(existing: Option<&[u8]>, task_id: u64) -> Vec<u8> {
+    let mut ids = existing.and_then(parse_id_list).unwrap_or_default();
+    if !ids.iter().any(|existing| *existing == task_id) {
+        ids.push(task_id);
+        ids.sort_unstable();
+    }
+    encode_id_list(&ids)
+}
+
+pub fn remove_id_from_index_list(existing: Option<&[u8]>, task_id: u64) -> Option<Vec<u8>> {
+    let mut ids = existing.and_then(parse_id_list).unwrap_or_default();
+    if ids.is_empty() {
+        return None;
+    }
+    ids.retain(|id| *id != task_id);
+    if ids.is_empty() {
+        None
+    } else {
+        Some(encode_id_list(&ids))
+    }
+}
+
 pub fn valid_date_str(text: &str) -> bool {
     parse_date_parts(text).is_some()
+}
+
+pub fn normalize_date_str(text: &str) -> Option<String> {
+    let (year, month, day) = parse_date_parts(text)?;
+    Some(format_date(year, month, day))
 }
 
 pub fn valid_time_str(text: &str) -> bool {
@@ -388,8 +436,7 @@ pub fn decode_task(bytes: &[u8]) -> Option<Task> {
         }
     }
 
-    if task.id == 0 || !seen_title || !seen_list || !seen_status || !seen_created || !seen_updated
-    {
+    if task.id == 0 || !seen_title || !seen_list || !seen_status || !seen_created || !seen_updated {
         return None;
     }
 
@@ -513,7 +560,12 @@ fn unescape_field(value: &str) -> String {
 }
 
 fn parse_date_parts(text: &str) -> Option<(i32, i32, i32)> {
-    if text.len() != 10 || text.as_bytes()[4] != b'-' || text.as_bytes()[7] != b'-' {
+    if text.len() != 10 {
+        return None;
+    }
+    let bytes = text.as_bytes();
+    let sep = bytes[4];
+    if (sep != b'-' && sep != b'/') || bytes[7] != sep {
         return None;
     }
     let year = parse_i32(&text[0..4]);
@@ -645,6 +697,18 @@ mod tests {
             "app.reminders.index.by-date/2026-07-08/42"
         );
         assert_eq!(
+            reminder_date_index_key("2026-07-08", 42),
+            "app.reminders.index.reminder-date/2026-07-08/42"
+        );
+        assert_eq!(
+            by_date_list_key("2026-07-08"),
+            "app.reminders.index.by-date/2026-07-08"
+        );
+        assert_eq!(
+            reminder_date_list_key("2026-07-08"),
+            "app.reminders.index.reminder-date/2026-07-08"
+        );
+        assert_eq!(
             settings_key("selected-view"),
             "app.reminders.settings/selected-view"
         );
@@ -713,5 +777,57 @@ mod tests {
         assert_eq!(decoded.name.as_str(), "Personal");
         assert_eq!(decoded.created_at, 1);
         assert_eq!(decoded.updated_at, 2);
+    }
+
+    #[test]
+    fn by_date_and_reminder_date_indexes_are_distinct_and_stable() {
+        assert_eq!(
+            by_date_list_key("2026-07-09"),
+            "app.reminders.index.by-date/2026-07-09"
+        );
+        assert_eq!(
+            reminder_date_list_key("2026-07-09"),
+            "app.reminders.index.reminder-date/2026-07-09"
+        );
+        // markers use /id suffix
+        assert!(date_index_key("2026-07-09", 7).ends_with("/7"));
+        assert!(reminder_date_index_key("2026-07-09", 7)
+            .starts_with("app.reminders.index.reminder-date/"));
+    }
+
+    #[test]
+    fn id_lists_roundtrip_for_date_indexes() {
+        let ids = vec![3u64, 1, 99];
+        let enc = encode_id_list(&ids);
+        let parsed = parse_id_list(&enc).unwrap();
+        assert_eq!(parsed, vec![3, 1, 99]);
+    }
+
+    #[test]
+    fn by_date_index_list_is_written_on_create() {
+        let encoded = add_id_to_index_list(None, 42);
+        assert_eq!(parse_id_list(&encoded).unwrap(), vec![42]);
+    }
+
+    #[test]
+    fn old_index_entry_is_removed_when_due_date_changes() {
+        let old_date = add_id_to_index_list(None, 42);
+        assert_eq!(remove_id_from_index_list(Some(&old_date), 42), None);
+
+        let new_date = add_id_to_index_list(None, 42);
+        assert_eq!(parse_id_list(&new_date).unwrap(), vec![42]);
+    }
+
+    #[test]
+    fn reminder_date_index_is_written_when_present() {
+        let encoded = add_id_to_index_list(None, 7);
+        assert_eq!(parse_id_list(&encoded).unwrap(), vec![7]);
+    }
+
+    #[test]
+    fn malformed_records_are_skipped_and_dont_panic() {
+        assert!(decode_task(b"").is_none());
+        assert!(decode_task(b"SRM1\nid=abc\n").is_none());
+        assert!(decode_list(b"SRL1\nid=foo").is_none());
     }
 }

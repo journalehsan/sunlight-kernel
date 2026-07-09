@@ -7,12 +7,36 @@ use alloc::vec::Vec;
 use core::convert::From;
 use core::iter::Iterator;
 use core::option::Option::{self, None, Some};
+use sunlight_reminders::{default_list_name, Task, TaskStatus};
 
 pub const CAL_EVENT_PREFIX: &str = "app.calendar.events/";
 pub const CAL_INDEX_ALL: &str = "app.calendar.index/all";
 pub const CAL_INDEX_BY_DATE_PREFIX: &str = "app.calendar.index/by-date/";
 pub const CAL_SETTINGS_PREFIX: &str = "app.calendar.settings/";
 pub const CAL_MIGRATION_FILE_V1: &str = "file-v1-imported";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectedDayTaskPreview {
+    pub id: u64,
+    pub title: String,
+    pub due_time: String,
+    pub list_name: String,
+    pub status: TaskStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectedDayReminderPreview {
+    pub task_id: u64,
+    pub title: String,
+    pub reminder_time: String,
+    pub linked_task_title: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectedDayPreviews {
+    pub tasks: Vec<SelectedDayTaskPreview>,
+    pub reminders: Vec<SelectedDayReminderPreview>,
+}
 
 pub fn event_key(event_id: u64) -> String {
     let mut out = String::from(CAL_EVENT_PREFIX);
@@ -71,6 +95,108 @@ pub fn format_date(year: i32, month: i32, day: i32) -> String {
     out.push('-');
     push_i32_fixed(&mut out, day, 2);
     out
+}
+
+pub fn build_selected_day_previews<LoadTask, ResolveList>(
+    date: &str,
+    due_task_ids: &[u64],
+    reminder_task_ids: &[u64],
+    mut load_task: LoadTask,
+    mut resolve_list_name: ResolveList,
+) -> SelectedDayPreviews
+where
+    LoadTask: FnMut(u64) -> Option<Task>,
+    ResolveList: FnMut(&str) -> Option<String>,
+{
+    if date.is_empty() {
+        return SelectedDayPreviews::default();
+    }
+
+    let mut previews = SelectedDayPreviews::default();
+    for &task_id in due_task_ids {
+        let Some(task) = load_task(task_id) else {
+            continue;
+        };
+        if !same_date(task.due_date.as_str(), date) {
+            continue;
+        }
+        let list_name = resolve_list_name(task.list_id.as_str())
+            .or_else(|| default_list_name(task.list_id.as_str()).map(String::from))
+            .unwrap_or_default();
+        previews.tasks.push(SelectedDayTaskPreview {
+            id: task_id,
+            title: String::from(task.title.as_str()),
+            due_time: String::from(task.due_time.as_str()),
+            list_name,
+            status: task.status,
+        });
+    }
+    previews.tasks.sort_by(|a, b| {
+        let prio_a = if a.status == TaskStatus::Todo { 0u8 } else { 1 };
+        let prio_b = if b.status == TaskStatus::Todo { 0u8 } else { 1 };
+        prio_a
+            .cmp(&prio_b)
+            .then_with(|| a.due_time.cmp(&b.due_time))
+            .then_with(|| a.title.cmp(&b.title))
+    });
+
+    let mut seen = Vec::new();
+    for &task_id in reminder_task_ids {
+        let Some(task) = load_task(task_id) else {
+            continue;
+        };
+        if task.reminder_date.is_empty() || !same_date(task.reminder_date.as_str(), date) {
+            continue;
+        }
+        let reminder_time = if !task.reminder_time.is_empty() {
+            String::from(task.reminder_time.as_str())
+        } else {
+            String::from(task.due_time.as_str())
+        };
+        previews.reminders.push(SelectedDayReminderPreview {
+            task_id,
+            title: String::from(task.title.as_str()),
+            reminder_time,
+            linked_task_title: String::from(task.title.as_str()),
+        });
+        seen.push(task_id);
+    }
+
+    for &task_id in due_task_ids {
+        if seen.iter().any(|seen_id| *seen_id == task_id) {
+            continue;
+        }
+        let Some(task) = load_task(task_id) else {
+            continue;
+        };
+        if !task.reminder_date.is_empty()
+            || !same_date(task.due_date.as_str(), date)
+            || task.reminder_time.is_empty()
+        {
+            continue;
+        }
+        previews.reminders.push(SelectedDayReminderPreview {
+            task_id,
+            title: String::from(task.title.as_str()),
+            reminder_time: String::from(task.reminder_time.as_str()),
+            linked_task_title: String::from(task.title.as_str()),
+        });
+    }
+
+    previews.reminders.sort_by(|a, b| {
+        a.reminder_time
+            .cmp(&b.reminder_time)
+            .then_with(|| a.title.cmp(&b.title))
+    });
+
+    previews
+}
+
+fn same_date(candidate: &str, canonical: &str) -> bool {
+    candidate == canonical
+        || parse_date_parts(candidate)
+            .map(|(year, month, day)| format_date(year, month, day) == canonical)
+            .unwrap_or(false)
 }
 
 fn parse_date_parts(s: &str) -> Option<(i32, i32, i32)> {
@@ -232,6 +358,8 @@ fn push_i32_fixed(out: &mut String, mut n: i32, digits: usize) {
 mod tests {
     use super::*;
     use alloc::vec;
+    use sunlight_reminders::Task;
+    use sunlight_reminders::TaskStatus;
 
     #[test]
     fn stable_namespace_keys_are_readable() {
@@ -276,5 +404,148 @@ mod tests {
         assert_eq!(days[2], 1);
         assert_eq!(days[9], 8);
         assert_eq!(days[32], 31);
+    }
+
+    fn task(
+        id: u64,
+        title: &str,
+        list_id: &str,
+        status: TaskStatus,
+        due_date: &str,
+        due_time: &str,
+        reminder_date: &str,
+        reminder_time: &str,
+    ) -> Task {
+        let mut task = Task::blank(id, list_id).unwrap();
+        task.title.set(title);
+        task.status = status;
+        task.due_date.set(due_date);
+        task.due_time.set(due_time);
+        task.reminder_date.set(reminder_date);
+        task.reminder_time.set(reminder_time);
+        task
+    }
+
+    #[test]
+    fn selected_day_loader_returns_only_tasks_for_that_date() {
+        let previews = build_selected_day_previews(
+            "2026-07-09",
+            &[1, 2, 3],
+            &[],
+            |id| match id {
+                1 => Some(task(
+                    1,
+                    "Inbox follow-up",
+                    "inbox",
+                    TaskStatus::Done,
+                    "2026-07-09",
+                    "08:30",
+                    "",
+                    "",
+                )),
+                2 => Some(task(
+                    2,
+                    "Work block",
+                    "work",
+                    TaskStatus::Todo,
+                    "2026-07-09",
+                    "10:00",
+                    "",
+                    "",
+                )),
+                3 => Some(task(
+                    3,
+                    "Tomorrow item",
+                    "personal",
+                    TaskStatus::Todo,
+                    "2026-07-10",
+                    "09:00",
+                    "",
+                    "",
+                )),
+                _ => None,
+            },
+            |list_id| Some(String::from(default_list_name(list_id).unwrap_or(""))),
+        );
+
+        assert_eq!(previews.tasks.len(), 2);
+        assert_eq!(previews.tasks[0].id, 2);
+        assert_eq!(previews.tasks[0].list_name, "Work");
+        assert_eq!(previews.tasks[1].id, 1);
+    }
+
+    #[test]
+    fn reminders_include_explicit_index_and_due_date_fallback() {
+        let previews = build_selected_day_previews(
+            "2026-07-09",
+            &[1, 2],
+            &[2],
+            |id| match id {
+                1 => Some(task(
+                    1,
+                    "Morning review",
+                    "inbox",
+                    TaskStatus::Todo,
+                    "2026-07-09",
+                    "",
+                    "",
+                    "09:15",
+                )),
+                2 => Some(task(
+                    2,
+                    "Client call",
+                    "work",
+                    TaskStatus::Todo,
+                    "2026-07-09",
+                    "10:00",
+                    "2026-07-09",
+                    "08:45",
+                )),
+                _ => None,
+            },
+            |_list_id| None,
+        );
+
+        assert_eq!(previews.reminders.len(), 2);
+        assert_eq!(previews.reminders[0].task_id, 2);
+        assert_eq!(previews.reminders[0].reminder_time, "08:45");
+        assert_eq!(previews.reminders[1].task_id, 1);
+        assert_eq!(previews.reminders[1].reminder_time, "09:15");
+    }
+
+    #[test]
+    fn missing_list_or_task_records_do_not_crash_preview() {
+        let previews = build_selected_day_previews(
+            "2026-07-09",
+            &[1, 99],
+            &[99],
+            |id| match id {
+                1 => Some(task(
+                    1,
+                    "Loose item",
+                    "custom",
+                    TaskStatus::Todo,
+                    "2026-07-09",
+                    "",
+                    "",
+                    "",
+                )),
+                _ => None,
+            },
+            |_list_id| None,
+        );
+
+        assert_eq!(previews.tasks.len(), 1);
+        assert_eq!(previews.tasks[0].list_name, "");
+        assert!(previews.reminders.is_empty());
+    }
+
+    #[test]
+    fn malformed_or_missing_records_are_skipped() {
+        let previews =
+            build_selected_day_previews("2026-07-09", &[42], &[42], |_id| None, |_list_id| None);
+
+        assert!(previews.tasks.is_empty());
+        assert!(previews.reminders.is_empty());
     }
 }

@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-vortex-shell"
-version = "0.2.1001"
+version = "0.2.1011"
+
+
+
 
 
 
@@ -136,6 +139,8 @@ sun-font = { path = "../../sun-font" }
 sunlight-wallpaper = { path = "../../sunlight-wallpaper" }
 sunlight-locale = { path = "../../sunlight-locale" }
 sunlight-tz = { path = "../../sunlight-tz" }
+sunlight-calendar = { path = "../../sunlight-calendar" }
+sunlight-reminders = { path = "../../sunlight-reminders" }
 
 [[bin]]
 name = "sunlight-vortex-shell"

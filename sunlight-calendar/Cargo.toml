@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-calendar"
-version = "0.2.1001"
+version = "0.2.1011"
+
+
+
 
 
 
@@ -21,6 +24,7 @@ sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
 sunlight-tz = { path = "../sunlight-tz" }
 sunlight-locale = { path = "../sunlight-locale" }
+sunlight-reminders = { path = "../sunlight-reminders" }
 
 [build-dependencies]
 fontdue = "0.7"
