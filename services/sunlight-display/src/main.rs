@@ -1698,7 +1698,10 @@ fn list_window_reply(win: &Window, active_ws: u32) -> IpcMsg {
         .word(0, win.id)
         .word(1, win.owner_pid)
         .word(2, state)
-        .word(3, window_type | (rolled_up << 8) | ((active_ws as u64) << 16))
+        .word(
+            3,
+            window_type | (rolled_up << 8) | ((active_ws as u64) << 16),
+        )
         .word(4, win.workspace_id as u64)
         .word(5, win.hidden as u64)
         .word(6, title0)

@@ -485,9 +485,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/bin/sunlight-text"
         | "/usr/bin/sunlight-text" => Ok(crate::SUNLIGHT_EDIT_ELF_BYTES),
         // sunlight-writer: professional document shell.
-        "/bin/sunlight-writer" | "/usr/bin/sunlight-writer" => {
-            Ok(crate::SUNLIGHT_WRITER_ELF_BYTES)
-        }
+        "/bin/sunlight-writer" | "/usr/bin/sunlight-writer" => Ok(crate::SUNLIGHT_WRITER_ELF_BYTES),
         // sunlight-calendar: graphical calendar application.
         "/bin/sunlight-calendar" | "/usr/bin/sunlight-calendar" => {
             Ok(crate::SUNLIGHT_CALENDAR_ELF_BYTES)

@@ -1,9 +1,11 @@
 pub mod button;
 pub mod calendar;
 pub mod checkbox;
+pub mod document_canvas;
 pub mod drive_card;
 pub mod label;
 pub mod panel;
+pub mod pro_app;
 pub mod sidebar_item;
 pub mod slider;
 pub mod status;
@@ -20,9 +22,17 @@ pub use calendar::{
     FormFieldStyle, StatusTextKind,
 };
 pub use checkbox::Checkbox;
+pub use document_canvas::{
+    DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode, DocumentRectStyle, DocumentStrokeStyle,
+    DocumentTextStyle,
+};
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
 pub use label::Label;
 pub use panel::{BadgeKind, Histogram, Panel, ProgressBar, StatusBadge};
+pub use pro_app::{
+    AppMenuCommand, AppMenuSecondaryItem, DocumentCanvasHost, HeaderActionButton, HeaderChip,
+    PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, TwoPaneAppMenu,
+};
 pub use sidebar_item::{SidebarGroupHeader, SidebarItem, SidebarState};
 pub use slider::{Slider, SliderOrientation};
 pub use status::StatusBar;

@@ -1,22 +1,29 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
+#![cfg_attr(test, allow(dead_code, unused_imports))]
 
 extern crate alloc;
 
 use alloc::string::String;
+use alloc::vec::Vec;
+#[cfg(not(test))]
 use core::alloc::GlobalAlloc;
 
-use sun_font::{draw_text, draw_text_vcenter, measure_text, FontRole, TextStyle};
+use sun_font::{FontRole, VecFont};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, ProcessExit,
 };
 use sunlight_ui::image::TgaImage;
-use sunlight_ui::widgets::StatusBar;
+use sunlight_ui::widgets::{
+    AppMenuCommand, AppMenuSecondaryItem, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
+    DocumentRectStyle, DocumentStrokeStyle, DocumentTextStyle, HeaderActionButton, HeaderChip,
+    PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, StatusBar,
+    TwoPaneAppMenu,
+};
 use sunlight_ui::{
-    request_close, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
-    WindowDecoration,
+    request_close, App, Color, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
 };
 
 const WIN_W: u32 = 1240;
@@ -28,14 +35,14 @@ const APP_MENU_X: i32 = 14;
 const APP_MENU_Y_GAP: i32 = 6;
 const APP_MENU_LEFT_W: u32 = 222;
 const APP_MENU_RIGHT_W: u32 = 300;
-const APP_MENU_HEADER_H: u32 = 34;
-const APP_MENU_ITEM_H: u32 = 30;
-const APP_MENU_OPEN_INDEX: usize = 1;
-const MENU_BUTTON_W: u32 = 44;
-const QUICK_CHIP_H: u32 = 28;
-const CONTENT_PAD: i32 = 18;
 const MSG_LEN: usize = 96;
 const KEY_ESC: u8 = 0x01;
+
+static FONT_UI_TITLE: VecFont = VecFont(FontRole::UiTitle);
+static FONT_UI_LARGE: VecFont = VecFont(FontRole::UiLarge);
+static FONT_UI_MEDIUM: VecFont = VecFont(FontRole::UiMedium);
+static FONT_UI_REGULAR: VecFont = VecFont(FontRole::UiRegular);
+static FONT_UI_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 static ICON_MENU_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_menu.tga"));
 static ICON_NEW_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_new.tga"));
@@ -56,12 +63,13 @@ static ICON_ALIGN_RIGHT_TGA: &[u8] =
 static ICON_ALIGN_JUSTIFY_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icon_align_justify.tga"));
 static ICON_BULLETS_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_bullets.tga"));
-static ICON_NUMBERING_TGA: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/icon_numbering.tga"));
+static ICON_NUMBERING_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_numbering.tga"));
 static ICON_PICTURE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_picture.tga"));
 static ICON_LINK_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_link.tga"));
 
+#[cfg(not(test))]
 struct BumpAllocator;
+#[cfg(not(test))]
 unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         const HEAP_SIZE: usize = 1024 * 1024;
@@ -79,9 +87,11 @@ unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
 }
 
+#[cfg(not(test))]
 #[global_allocator]
 static ALLOC: BumpAllocator = BumpAllocator;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[WRITER] panic\n");
@@ -141,7 +151,7 @@ enum WriterAction {
 }
 
 #[derive(Clone, Copy)]
-struct AppMenuItem {
+struct AppMenuItemDef {
     label: &'static str,
     action: WriterAction,
     icon: Option<IconId>,
@@ -155,32 +165,21 @@ struct RecentDocument {
 }
 
 #[derive(Clone, Copy)]
-enum RibbonControlKind {
-    Dropdown,
-    Toggle,
-    IconButton,
-    WideButton,
-}
-
-#[derive(Clone, Copy)]
-struct RibbonControl {
+struct QuickChipDef {
     label: &'static str,
     icon: Option<IconId>,
     width: u32,
-    kind: RibbonControlKind,
-    action: WriterAction,
+    accent_outline: bool,
 }
 
 #[derive(Clone, Copy)]
-struct RibbonGroup {
-    title: &'static str,
-    controls: &'static [RibbonControl],
-}
-
-#[derive(Clone, Copy)]
-struct QuickChip {
+struct RibbonCommandDef {
     label: &'static str,
     icon: Option<IconId>,
+    width: u32,
+    kind: RibbonButtonKind,
+    row: u8,
+    action: WriterAction,
 }
 
 #[derive(Clone, Copy)]
@@ -212,6 +211,230 @@ impl TextSlot {
             return "";
         }
         core::str::from_utf8(&self.buf[..self.len]).unwrap_or("")
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WriterTextRole {
+    Title,
+    Subtitle,
+    Paragraph,
+    Callout,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WriterRectRole {
+    Callout,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WriterLineRole {
+    Divider,
+}
+
+#[derive(Clone, Copy)]
+enum WriterBlock<'a> {
+    Text {
+        x: i32,
+        y: i32,
+        text: &'a str,
+        role: WriterTextRole,
+    },
+    Link {
+        x: i32,
+        y: i32,
+        text: &'a str,
+        url: &'a str,
+    },
+    Rect {
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        role: WriterRectRole,
+    },
+    Line {
+        x1: i32,
+        y1: i32,
+        x2: i32,
+        y2: i32,
+        role: WriterLineRole,
+    },
+    ImagePlaceholder {
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        label: &'a str,
+    },
+}
+
+#[derive(Clone, Copy)]
+struct WriterDocument<'a> {
+    mode: DocumentCanvasMode,
+    blocks: &'a [WriterBlock<'a>],
+}
+
+const SAMPLE_DOCUMENT_BLOCKS: &[WriterBlock<'static>] = &[
+    WriterBlock::Text {
+        x: 0,
+        y: 0,
+        text: "Sunlight Writer document surface",
+        role: WriterTextRole::Title,
+    },
+    WriterBlock::Text {
+        x: 0,
+        y: 32,
+        text: "Reusable fixed-coordinate canvas for Writer, Notes, previews, and future read-only viewers.",
+        role: WriterTextRole::Subtitle,
+    },
+    WriterBlock::Line {
+        x1: 0,
+        y1: 58,
+        x2: 676,
+        y2: 58,
+        role: WriterLineRole::Divider,
+    },
+    WriterBlock::Text {
+        x: 0,
+        y: 96,
+        text: "This first patch keeps the polished Writer shell intact and swaps only the central placeholder for a shared page widget.",
+        role: WriterTextRole::Paragraph,
+    },
+    WriterBlock::Text {
+        x: 0,
+        y: 136,
+        text: "The widget renders a real document page, comfortable margins, subtle guide lines, and a stable primitive list instead of layout logic.",
+        role: WriterTextRole::Paragraph,
+    },
+    WriterBlock::Rect {
+        x: 0,
+        y: 186,
+        w: 310,
+        h: 54,
+        role: WriterRectRole::Callout,
+    },
+    WriterBlock::Text {
+        x: 18,
+        y: 204,
+        text: "Mode: Editable  |  Rendering: fixed coordinates",
+        role: WriterTextRole::Callout,
+    },
+    WriterBlock::Link {
+        x: 0,
+        y: 268,
+        text: "Future feed: absolute-position document items from Golden Fish and office-style apps.",
+        url: "sunlight://document-canvas",
+    },
+    WriterBlock::ImagePlaceholder {
+        x: 438,
+        y: 186,
+        w: 238,
+        h: 164,
+        label: "Image / preview placeholder",
+    },
+];
+
+impl<'a> WriterDocument<'a> {
+    fn sample() -> WriterDocument<'static> {
+        WriterDocument {
+            mode: DocumentCanvasMode::Editable,
+            blocks: SAMPLE_DOCUMENT_BLOCKS,
+        }
+    }
+
+    #[cfg(test)]
+    fn empty(mode: DocumentCanvasMode) -> Self {
+        Self { mode, blocks: &[] }
+    }
+
+    fn to_canvas_items(&self) -> Vec<DocumentCanvasItem<'a>> {
+        let mut items = Vec::with_capacity(self.blocks.len());
+        for block in self.blocks {
+            match *block {
+                WriterBlock::Text { x, y, text, role } => {
+                    items.push(DocumentCanvasItem::Text {
+                        x,
+                        y,
+                        text,
+                        style: writer_text_style(role),
+                    });
+                }
+                WriterBlock::Link { x, y, text, url } => {
+                    items.push(DocumentCanvasItem::LinkText {
+                        x,
+                        y,
+                        text,
+                        url,
+                        style: writer_link_style(),
+                    });
+                }
+                WriterBlock::Rect { x, y, w, h, role } => {
+                    items.push(DocumentCanvasItem::Rect {
+                        x,
+                        y,
+                        w,
+                        h,
+                        style: writer_rect_style(role),
+                    });
+                }
+                WriterBlock::Line {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    role,
+                } => {
+                    items.push(DocumentCanvasItem::Line {
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        style: writer_line_style(role),
+                    });
+                }
+                WriterBlock::ImagePlaceholder { x, y, w, h, label } => {
+                    items.push(DocumentCanvasItem::ImagePlaceholder { x, y, w, h, label });
+                }
+            }
+        }
+        items
+    }
+}
+
+fn writer_text_style(role: WriterTextRole) -> DocumentTextStyle<'static> {
+    match role {
+        WriterTextRole::Title => {
+            DocumentTextStyle::new(Some(&FONT_UI_LARGE), Color::rgb(0x25, 0x25, 0x29))
+        }
+        WriterTextRole::Subtitle => {
+            DocumentTextStyle::new(Some(&FONT_UI_SMALL), Color::rgb(0x6C, 0x6B, 0x73))
+        }
+        WriterTextRole::Paragraph => {
+            DocumentTextStyle::new(Some(&FONT_UI_MEDIUM), Color::rgb(0x37, 0x37, 0x3C))
+        }
+        WriterTextRole::Callout => {
+            DocumentTextStyle::new(Some(&FONT_UI_SMALL), Color::rgb(0x7A, 0x64, 0x34))
+        }
+    }
+}
+
+fn writer_link_style() -> DocumentTextStyle<'static> {
+    DocumentTextStyle::new(Some(&FONT_UI_MEDIUM), Color::rgb(0xA6, 0x5E, 0x00))
+}
+
+fn writer_rect_style(role: WriterRectRole) -> DocumentRectStyle {
+    match role {
+        WriterRectRole::Callout => DocumentRectStyle::new(
+            Color::rgb(0xFA, 0xF6, 0xEF),
+            Some(DocumentStrokeStyle::new(Color::rgb(0xE5, 0xDB, 0xC8), 1)),
+        ),
+    }
+}
+
+fn writer_line_style(role: WriterLineRole) -> DocumentStrokeStyle {
+    match role {
+        WriterLineRole::Divider => DocumentStrokeStyle::new(Color::rgb(0xDD, 0xD7, 0xCF), 1),
     }
 }
 
@@ -284,50 +507,50 @@ impl WriterIcons {
     }
 }
 
-const APP_MENU_ITEMS: [AppMenuItem; 8] = [
-    AppMenuItem {
+const APP_MENU_ITEMS: [AppMenuItemDef; 8] = [
+    AppMenuItemDef {
         label: "New",
         action: WriterAction::New,
         icon: Some(IconId::New),
         submenu: false,
     },
-    AppMenuItem {
+    AppMenuItemDef {
         label: "Open",
         action: WriterAction::Open,
         icon: Some(IconId::Open),
         submenu: true,
     },
-    AppMenuItem {
+    AppMenuItemDef {
         label: "Save",
         action: WriterAction::Save,
         icon: Some(IconId::Save),
         submenu: false,
     },
-    AppMenuItem {
+    AppMenuItemDef {
         label: "Save As",
         action: WriterAction::SaveAs,
         icon: Some(IconId::Save),
         submenu: false,
     },
-    AppMenuItem {
+    AppMenuItemDef {
         label: "Print",
         action: WriterAction::Print,
         icon: Some(IconId::Print),
         submenu: false,
     },
-    AppMenuItem {
+    AppMenuItemDef {
         label: "Share",
         action: WriterAction::Share,
         icon: Some(IconId::Share),
         submenu: false,
     },
-    AppMenuItem {
+    AppMenuItemDef {
         label: "Export",
         action: WriterAction::Export,
         icon: Some(IconId::Share),
         submenu: false,
     },
-    AppMenuItem {
+    AppMenuItemDef {
         label: "Exit",
         action: WriterAction::Exit,
         icon: None,
@@ -354,187 +577,194 @@ const RECENT_DOCS: [RecentDocument; 4] = [
     },
 ];
 
-const QUICK_CHIPS: [QuickChip; 3] = [
-    QuickChip {
+const QUICK_CHIPS: [QuickChipDef; 3] = [
+    QuickChipDef {
         label: "Secure Draft",
         icon: Some(IconId::Doc),
+        width: 104,
+        accent_outline: false,
     },
-    QuickChip {
+    QuickChipDef {
         label: "Premium Workspace",
         icon: None,
+        width: 144,
+        accent_outline: true,
     },
-    QuickChip {
+    QuickChipDef {
         label: "Canvas Pending",
         icon: None,
+        width: 132,
+        accent_outline: false,
     },
 ];
 
-const FILE_GROUP_CONTROLS: [RibbonControl; 4] = [
-    RibbonControl {
+const FILE_GROUP_DEFS: [RibbonCommandDef; 4] = [
+    RibbonCommandDef {
         label: "New",
         icon: Some(IconId::New),
-        width: 58,
-        kind: RibbonControlKind::WideButton,
+        width: 78,
+        kind: RibbonButtonKind::WideButton,
+        row: 0,
         action: WriterAction::New,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "Open",
         icon: Some(IconId::Open),
-        width: 58,
-        kind: RibbonControlKind::WideButton,
+        width: 78,
+        kind: RibbonButtonKind::WideButton,
+        row: 0,
         action: WriterAction::Open,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "Save",
         icon: Some(IconId::Save),
-        width: 58,
-        kind: RibbonControlKind::WideButton,
+        width: 78,
+        kind: RibbonButtonKind::WideButton,
+        row: 1,
         action: WriterAction::Save,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "Print",
         icon: Some(IconId::Print),
-        width: 58,
-        kind: RibbonControlKind::WideButton,
+        width: 78,
+        kind: RibbonButtonKind::WideButton,
+        row: 1,
         action: WriterAction::Print,
     },
 ];
 
-const FONT_GROUP_CONTROLS: [RibbonControl; 5] = [
-    RibbonControl {
+const FONT_GROUP_DEFS: [RibbonCommandDef; 5] = [
+    RibbonCommandDef {
         label: "Inter",
         icon: None,
-        width: 120,
-        kind: RibbonControlKind::Dropdown,
+        width: 124,
+        kind: RibbonButtonKind::Dropdown,
+        row: 0,
         action: WriterAction::FontFamily,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "12",
         icon: None,
-        width: 58,
-        kind: RibbonControlKind::Dropdown,
+        width: 56,
+        kind: RibbonButtonKind::Dropdown,
+        row: 0,
         action: WriterAction::FontSize,
     },
-    RibbonControl {
-        label: "B",
+    RibbonCommandDef {
+        label: "",
         icon: Some(IconId::Bold),
-        width: 36,
-        kind: RibbonControlKind::Toggle,
+        width: 40,
+        kind: RibbonButtonKind::Toggle,
+        row: 1,
         action: WriterAction::Bold,
     },
-    RibbonControl {
-        label: "I",
+    RibbonCommandDef {
+        label: "",
         icon: Some(IconId::Italic),
-        width: 36,
-        kind: RibbonControlKind::Toggle,
+        width: 40,
+        kind: RibbonButtonKind::Toggle,
+        row: 1,
         action: WriterAction::Italic,
     },
-    RibbonControl {
-        label: "U",
+    RibbonCommandDef {
+        label: "",
         icon: Some(IconId::Underline),
-        width: 36,
-        kind: RibbonControlKind::Toggle,
+        width: 40,
+        kind: RibbonButtonKind::Toggle,
+        row: 1,
         action: WriterAction::Underline,
     },
 ];
 
-const PARAGRAPH_GROUP_CONTROLS: [RibbonControl; 6] = [
-    RibbonControl {
+const PARAGRAPH_GROUP_DEFS: [RibbonCommandDef; 6] = [
+    RibbonCommandDef {
         label: "",
         icon: Some(IconId::AlignLeft),
-        width: 36,
-        kind: RibbonControlKind::IconButton,
+        width: 40,
+        kind: RibbonButtonKind::IconButton,
+        row: 0,
         action: WriterAction::AlignLeft,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "",
         icon: Some(IconId::AlignCenter),
-        width: 36,
-        kind: RibbonControlKind::IconButton,
+        width: 40,
+        kind: RibbonButtonKind::IconButton,
+        row: 0,
         action: WriterAction::AlignCenter,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "",
         icon: Some(IconId::AlignRight),
-        width: 36,
-        kind: RibbonControlKind::IconButton,
+        width: 40,
+        kind: RibbonButtonKind::IconButton,
+        row: 0,
         action: WriterAction::AlignRight,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "",
         icon: Some(IconId::AlignJustify),
-        width: 36,
-        kind: RibbonControlKind::IconButton,
+        width: 40,
+        kind: RibbonButtonKind::IconButton,
+        row: 1,
         action: WriterAction::AlignJustify,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "",
         icon: Some(IconId::Bullets),
-        width: 36,
-        kind: RibbonControlKind::IconButton,
+        width: 40,
+        kind: RibbonButtonKind::IconButton,
+        row: 1,
         action: WriterAction::Bullets,
     },
-    RibbonControl {
+    RibbonCommandDef {
         label: "",
         icon: Some(IconId::Numbering),
-        width: 36,
-        kind: RibbonControlKind::IconButton,
+        width: 40,
+        kind: RibbonButtonKind::IconButton,
+        row: 1,
         action: WriterAction::Numbering,
     },
 ];
 
-const INSERT_GROUP_CONTROLS: [RibbonControl; 4] = [
-    RibbonControl {
+const INSERT_GROUP_DEFS: [RibbonCommandDef; 4] = [
+    RibbonCommandDef {
         label: "Picture",
         icon: Some(IconId::Picture),
-        width: 80,
-        kind: RibbonControlKind::WideButton,
+        width: 92,
+        kind: RibbonButtonKind::WideButton,
+        row: 0,
         action: WriterAction::InsertPicture,
     },
-    RibbonControl {
-        label: "Shape",
-        icon: None,
-        width: 70,
-        kind: RibbonControlKind::WideButton,
-        action: WriterAction::InsertShape,
-    },
-    RibbonControl {
+    RibbonCommandDef {
         label: "Table",
         icon: None,
-        width: 70,
-        kind: RibbonControlKind::WideButton,
+        width: 76,
+        kind: RibbonButtonKind::WideButton,
+        row: 0,
         action: WriterAction::InsertTable,
     },
-    RibbonControl {
+    RibbonCommandDef {
+        label: "Shape",
+        icon: None,
+        width: 76,
+        kind: RibbonButtonKind::WideButton,
+        row: 1,
+        action: WriterAction::InsertShape,
+    },
+    RibbonCommandDef {
         label: "Link",
         icon: Some(IconId::Link),
-        width: 66,
-        kind: RibbonControlKind::WideButton,
+        width: 76,
+        kind: RibbonButtonKind::WideButton,
+        row: 1,
         action: WriterAction::InsertLink,
-    },
-];
-
-const RIBBON_GROUPS: [RibbonGroup; 4] = [
-    RibbonGroup {
-        title: "File",
-        controls: &FILE_GROUP_CONTROLS,
-    },
-    RibbonGroup {
-        title: "Font",
-        controls: &FONT_GROUP_CONTROLS,
-    },
-    RibbonGroup {
-        title: "Paragraph",
-        controls: &PARAGRAPH_GROUP_CONTROLS,
-    },
-    RibbonGroup {
-        title: "Insert",
-        controls: &INSERT_GROUP_CONTROLS,
     },
 ];
 
 struct WriterApp {
     icons: WriterIcons,
+    document: WriterDocument<'static>,
     menu_open: bool,
     menu_hover: Option<usize>,
     menu_pinned: Option<usize>,
@@ -549,9 +779,10 @@ struct WriterApp {
 impl WriterApp {
     fn new() -> Self {
         let mut status_center = TextSlot::empty();
-        status_center.set("Canvas Widget Placeholder");
+        status_center.set("Document Canvas Ready");
         Self {
             icons: WriterIcons::load(),
+            document: WriterDocument::sample(),
             menu_open: false,
             menu_hover: None,
             menu_pinned: None,
@@ -579,170 +810,375 @@ impl WriterApp {
 
     fn content_rect(&self) -> Rect {
         let top = TOP_BAR_H + RIBBON_H;
-        Rect::new(
-            0,
-            top as i32,
-            WIN_W,
-            WIN_H.saturating_sub(top + STATUS_H),
-        )
+        Rect::new(0, top as i32, WIN_W, WIN_H.saturating_sub(top + STATUS_H))
     }
 
     fn status_rect(&self) -> Rect {
         Rect::new(0, (WIN_H - STATUS_H) as i32, WIN_W, STATUS_H)
     }
 
-    fn menu_button_rect(&self) -> Rect {
-        Rect::new(APP_MENU_X, 10, MENU_BUTTON_W, 32)
-    }
-
-    fn command_title_rect(&self) -> Rect {
-        Rect::new(APP_MENU_X + MENU_BUTTON_W as i32 + 12, 7, 420, 18)
-    }
-
-    fn command_subtitle_rect(&self) -> Rect {
-        Rect::new(APP_MENU_X + MENU_BUTTON_W as i32 + 12, 26, 420, 16)
-    }
-
-    fn quick_chip_rect(&self, idx: usize) -> Rect {
-        let base_y = 12;
-        let widths = [104u32, 144u32, 132u32];
-        let mut x = WIN_W as i32 - 24;
-        for width in widths[..=idx].iter().rev() {
-            x -= *width as i32;
-            if idx != 0 || *width != widths[idx] {
-                x -= 8;
-            }
-        }
-        Rect::new(x, base_y, widths[idx], QUICK_CHIP_H)
-    }
-
-    fn active_menu_index(&self) -> Option<usize> {
-        self.menu_hover.or(self.menu_pinned)
-    }
-
-    fn submenu_visible(&self) -> bool {
-        self.active_menu_index() == Some(APP_MENU_OPEN_INDEX)
+    fn menu_visible_secondary(&self) -> bool {
+        self.menu_hover.or(self.menu_pinned) == Some(1)
     }
 
     fn app_menu_rect(&self) -> Rect {
-        let width = if self.submenu_visible() {
+        let width = if self.menu_visible_secondary() {
             APP_MENU_LEFT_W + APP_MENU_RIGHT_W
         } else {
             APP_MENU_LEFT_W
         };
-        let height =
-            APP_MENU_HEADER_H + APP_MENU_ITEMS.len() as u32 * APP_MENU_ITEM_H + 12;
         Rect::new(
             APP_MENU_X,
             self.top_bar_rect().bottom() + APP_MENU_Y_GAP,
             width,
-            height,
+            34 + APP_MENU_ITEMS.len() as u32 * 30 + 12,
         )
     }
 
-    fn app_menu_left_rect(&self) -> Rect {
-        let panel = self.app_menu_rect();
-        Rect::new(panel.x, panel.y, APP_MENU_LEFT_W, panel.h)
+    fn icon(&self, id: IconId) -> Option<&TgaImage> {
+        self.icons.get(id)
     }
 
-    fn app_menu_right_rect(&self) -> Rect {
-        let left = self.app_menu_left_rect();
-        Rect::new(left.right(), left.y, APP_MENU_RIGHT_W, left.h)
+    fn with_header<T>(&self, f: impl FnOnce(PremiumHeader<'_>) -> T) -> T {
+        let chips = [
+            HeaderChip {
+                label: QUICK_CHIPS[0].label,
+                icon: QUICK_CHIPS[0].icon.and_then(|id| self.icon(id)),
+                width: QUICK_CHIPS[0].width,
+                accent_outline: QUICK_CHIPS[0].accent_outline,
+            },
+            HeaderChip {
+                label: QUICK_CHIPS[1].label,
+                icon: QUICK_CHIPS[1].icon.and_then(|id| self.icon(id)),
+                width: QUICK_CHIPS[1].width,
+                accent_outline: QUICK_CHIPS[1].accent_outline,
+            },
+            HeaderChip {
+                label: QUICK_CHIPS[2].label,
+                icon: QUICK_CHIPS[2].icon.and_then(|id| self.icon(id)),
+                width: QUICK_CHIPS[2].width,
+                accent_outline: QUICK_CHIPS[2].accent_outline,
+            },
+        ];
+        let button = self.icon(IconId::Menu).map(|icon| HeaderActionButton {
+            rect: Rect::new(APP_MENU_X, 10, 44, 32),
+            icon,
+            active: self.menu_open,
+            hovered: self.menu_button_hover,
+        });
+        f(PremiumHeader {
+            rect: self.top_bar_rect(),
+            title: "Sunlight Writer",
+            subtitle: "Professional document shell . ribbon workspace . canvas-ready layout",
+            leading_button: button,
+            chips: &chips,
+            hovered_chip: self.quick_hover,
+            title_font: Some(&FONT_UI_TITLE),
+            subtitle_font: Some(&FONT_UI_SMALL),
+            chip_font: Some(&FONT_UI_SMALL),
+        })
     }
 
-    fn menu_item_rect(&self, idx: usize) -> Rect {
-        let left = self.app_menu_left_rect();
-        Rect::new(
-            left.x + 8,
-            left.y + APP_MENU_HEADER_H as i32 + 4 + idx as i32 * APP_MENU_ITEM_H as i32,
-            APP_MENU_LEFT_W - 16,
-            APP_MENU_ITEM_H,
-        )
+    fn with_app_menu<T>(&self, f: impl FnOnce(TwoPaneAppMenu<'_>) -> T) -> T {
+        let commands = [
+            AppMenuCommand {
+                label: APP_MENU_ITEMS[0].label,
+                icon: APP_MENU_ITEMS[0].icon.and_then(|id| self.icon(id)),
+                has_secondary: APP_MENU_ITEMS[0].submenu,
+            },
+            AppMenuCommand {
+                label: APP_MENU_ITEMS[1].label,
+                icon: APP_MENU_ITEMS[1].icon.and_then(|id| self.icon(id)),
+                has_secondary: APP_MENU_ITEMS[1].submenu,
+            },
+            AppMenuCommand {
+                label: APP_MENU_ITEMS[2].label,
+                icon: APP_MENU_ITEMS[2].icon.and_then(|id| self.icon(id)),
+                has_secondary: APP_MENU_ITEMS[2].submenu,
+            },
+            AppMenuCommand {
+                label: APP_MENU_ITEMS[3].label,
+                icon: APP_MENU_ITEMS[3].icon.and_then(|id| self.icon(id)),
+                has_secondary: APP_MENU_ITEMS[3].submenu,
+            },
+            AppMenuCommand {
+                label: APP_MENU_ITEMS[4].label,
+                icon: APP_MENU_ITEMS[4].icon.and_then(|id| self.icon(id)),
+                has_secondary: APP_MENU_ITEMS[4].submenu,
+            },
+            AppMenuCommand {
+                label: APP_MENU_ITEMS[5].label,
+                icon: APP_MENU_ITEMS[5].icon.and_then(|id| self.icon(id)),
+                has_secondary: APP_MENU_ITEMS[5].submenu,
+            },
+            AppMenuCommand {
+                label: APP_MENU_ITEMS[6].label,
+                icon: APP_MENU_ITEMS[6].icon.and_then(|id| self.icon(id)),
+                has_secondary: APP_MENU_ITEMS[6].submenu,
+            },
+            AppMenuCommand {
+                label: APP_MENU_ITEMS[7].label,
+                icon: APP_MENU_ITEMS[7].icon.and_then(|id| self.icon(id)),
+                has_secondary: APP_MENU_ITEMS[7].submenu,
+            },
+        ];
+        let recent = [
+            AppMenuSecondaryItem {
+                title: RECENT_DOCS[0].title,
+                subtitle: RECENT_DOCS[0].meta,
+                icon: self.icon(IconId::Doc),
+            },
+            AppMenuSecondaryItem {
+                title: RECENT_DOCS[1].title,
+                subtitle: RECENT_DOCS[1].meta,
+                icon: self.icon(IconId::Doc),
+            },
+            AppMenuSecondaryItem {
+                title: RECENT_DOCS[2].title,
+                subtitle: RECENT_DOCS[2].meta,
+                icon: self.icon(IconId::Doc),
+            },
+            AppMenuSecondaryItem {
+                title: RECENT_DOCS[3].title,
+                subtitle: RECENT_DOCS[3].meta,
+                icon: self.icon(IconId::Doc),
+            },
+        ];
+        f(TwoPaneAppMenu {
+            rect: self.app_menu_rect(),
+            left_width: APP_MENU_LEFT_W,
+            right_width: APP_MENU_RIGHT_W,
+            header_title: "Application Menu",
+            header_subtitle: "Writer shell commands",
+            secondary_title: "Recent Documents",
+            secondary_subtitle: "Open continues into this column",
+            commands: &commands,
+            secondary_items: &recent,
+            active_command: self.menu_hover.or(self.menu_pinned),
+            active_secondary: self.recent_hover,
+            show_secondary: self.menu_visible_secondary(),
+            title_font: Some(&FONT_UI_MEDIUM),
+            label_font: Some(&FONT_UI_REGULAR),
+            small_font: Some(&FONT_UI_SMALL),
+        })
     }
 
-    fn recent_doc_rect(&self, idx: usize) -> Rect {
-        let right = self.app_menu_right_rect();
-        Rect::new(
-            right.x + 10,
-            right.y + APP_MENU_HEADER_H as i32 + 4 + idx as i32 * 42,
-            APP_MENU_RIGHT_W - 20,
-            38,
-        )
+    fn with_ribbon_bar<T>(&self, f: impl FnOnce(RibbonBar<'_>) -> T) -> T {
+        let file = [
+            RibbonButtonSpec {
+                label: FILE_GROUP_DEFS[0].label,
+                icon: FILE_GROUP_DEFS[0].icon.and_then(|id| self.icon(id)),
+                width: FILE_GROUP_DEFS[0].width,
+                kind: FILE_GROUP_DEFS[0].kind,
+                row: FILE_GROUP_DEFS[0].row,
+            },
+            RibbonButtonSpec {
+                label: FILE_GROUP_DEFS[1].label,
+                icon: FILE_GROUP_DEFS[1].icon.and_then(|id| self.icon(id)),
+                width: FILE_GROUP_DEFS[1].width,
+                kind: FILE_GROUP_DEFS[1].kind,
+                row: FILE_GROUP_DEFS[1].row,
+            },
+            RibbonButtonSpec {
+                label: FILE_GROUP_DEFS[2].label,
+                icon: FILE_GROUP_DEFS[2].icon.and_then(|id| self.icon(id)),
+                width: FILE_GROUP_DEFS[2].width,
+                kind: FILE_GROUP_DEFS[2].kind,
+                row: FILE_GROUP_DEFS[2].row,
+            },
+            RibbonButtonSpec {
+                label: FILE_GROUP_DEFS[3].label,
+                icon: FILE_GROUP_DEFS[3].icon.and_then(|id| self.icon(id)),
+                width: FILE_GROUP_DEFS[3].width,
+                kind: FILE_GROUP_DEFS[3].kind,
+                row: FILE_GROUP_DEFS[3].row,
+            },
+        ];
+        let font = [
+            RibbonButtonSpec {
+                label: FONT_GROUP_DEFS[0].label,
+                icon: None,
+                width: FONT_GROUP_DEFS[0].width,
+                kind: FONT_GROUP_DEFS[0].kind,
+                row: FONT_GROUP_DEFS[0].row,
+            },
+            RibbonButtonSpec {
+                label: FONT_GROUP_DEFS[1].label,
+                icon: None,
+                width: FONT_GROUP_DEFS[1].width,
+                kind: FONT_GROUP_DEFS[1].kind,
+                row: FONT_GROUP_DEFS[1].row,
+            },
+            RibbonButtonSpec {
+                label: "",
+                icon: FONT_GROUP_DEFS[2].icon.and_then(|id| self.icon(id)),
+                width: FONT_GROUP_DEFS[2].width,
+                kind: FONT_GROUP_DEFS[2].kind,
+                row: FONT_GROUP_DEFS[2].row,
+            },
+            RibbonButtonSpec {
+                label: "",
+                icon: FONT_GROUP_DEFS[3].icon.and_then(|id| self.icon(id)),
+                width: FONT_GROUP_DEFS[3].width,
+                kind: FONT_GROUP_DEFS[3].kind,
+                row: FONT_GROUP_DEFS[3].row,
+            },
+            RibbonButtonSpec {
+                label: "",
+                icon: FONT_GROUP_DEFS[4].icon.and_then(|id| self.icon(id)),
+                width: FONT_GROUP_DEFS[4].width,
+                kind: FONT_GROUP_DEFS[4].kind,
+                row: FONT_GROUP_DEFS[4].row,
+            },
+        ];
+        let paragraph = [
+            RibbonButtonSpec {
+                label: "",
+                icon: PARAGRAPH_GROUP_DEFS[0].icon.and_then(|id| self.icon(id)),
+                width: PARAGRAPH_GROUP_DEFS[0].width,
+                kind: PARAGRAPH_GROUP_DEFS[0].kind,
+                row: PARAGRAPH_GROUP_DEFS[0].row,
+            },
+            RibbonButtonSpec {
+                label: "",
+                icon: PARAGRAPH_GROUP_DEFS[1].icon.and_then(|id| self.icon(id)),
+                width: PARAGRAPH_GROUP_DEFS[1].width,
+                kind: PARAGRAPH_GROUP_DEFS[1].kind,
+                row: PARAGRAPH_GROUP_DEFS[1].row,
+            },
+            RibbonButtonSpec {
+                label: "",
+                icon: PARAGRAPH_GROUP_DEFS[2].icon.and_then(|id| self.icon(id)),
+                width: PARAGRAPH_GROUP_DEFS[2].width,
+                kind: PARAGRAPH_GROUP_DEFS[2].kind,
+                row: PARAGRAPH_GROUP_DEFS[2].row,
+            },
+            RibbonButtonSpec {
+                label: "",
+                icon: PARAGRAPH_GROUP_DEFS[3].icon.and_then(|id| self.icon(id)),
+                width: PARAGRAPH_GROUP_DEFS[3].width,
+                kind: PARAGRAPH_GROUP_DEFS[3].kind,
+                row: PARAGRAPH_GROUP_DEFS[3].row,
+            },
+            RibbonButtonSpec {
+                label: "",
+                icon: PARAGRAPH_GROUP_DEFS[4].icon.and_then(|id| self.icon(id)),
+                width: PARAGRAPH_GROUP_DEFS[4].width,
+                kind: PARAGRAPH_GROUP_DEFS[4].kind,
+                row: PARAGRAPH_GROUP_DEFS[4].row,
+            },
+            RibbonButtonSpec {
+                label: "",
+                icon: PARAGRAPH_GROUP_DEFS[5].icon.and_then(|id| self.icon(id)),
+                width: PARAGRAPH_GROUP_DEFS[5].width,
+                kind: PARAGRAPH_GROUP_DEFS[5].kind,
+                row: PARAGRAPH_GROUP_DEFS[5].row,
+            },
+        ];
+        let insert = [
+            RibbonButtonSpec {
+                label: INSERT_GROUP_DEFS[0].label,
+                icon: INSERT_GROUP_DEFS[0].icon.and_then(|id| self.icon(id)),
+                width: INSERT_GROUP_DEFS[0].width,
+                kind: INSERT_GROUP_DEFS[0].kind,
+                row: INSERT_GROUP_DEFS[0].row,
+            },
+            RibbonButtonSpec {
+                label: INSERT_GROUP_DEFS[1].label,
+                icon: None,
+                width: INSERT_GROUP_DEFS[1].width,
+                kind: INSERT_GROUP_DEFS[1].kind,
+                row: INSERT_GROUP_DEFS[1].row,
+            },
+            RibbonButtonSpec {
+                label: INSERT_GROUP_DEFS[2].label,
+                icon: None,
+                width: INSERT_GROUP_DEFS[2].width,
+                kind: INSERT_GROUP_DEFS[2].kind,
+                row: INSERT_GROUP_DEFS[2].row,
+            },
+            RibbonButtonSpec {
+                label: INSERT_GROUP_DEFS[3].label,
+                icon: INSERT_GROUP_DEFS[3].icon.and_then(|id| self.icon(id)),
+                width: INSERT_GROUP_DEFS[3].width,
+                kind: INSERT_GROUP_DEFS[3].kind,
+                row: INSERT_GROUP_DEFS[3].row,
+            },
+        ];
+        let groups = [
+            RibbonGroupSpec {
+                title: "File",
+                buttons: &file,
+            },
+            RibbonGroupSpec {
+                title: "Font",
+                buttons: &font,
+            },
+            RibbonGroupSpec {
+                title: "Paragraph",
+                buttons: &paragraph,
+            },
+            RibbonGroupSpec {
+                title: "Insert",
+                buttons: &insert,
+            },
+        ];
+        f(RibbonBar {
+            rect: self.ribbon_rect(),
+            groups: &groups,
+            hovered: self.ribbon_hover,
+            label_font: Some(&FONT_UI_REGULAR),
+            small_font: Some(&FONT_UI_SMALL),
+        })
     }
 
-    fn document_host_rect(&self) -> Rect {
-        self.content_rect().inset(CONTENT_PAD)
+    fn document_items(&self) -> Vec<DocumentCanvasItem<'static>> {
+        self.document.to_canvas_items()
     }
 
-    fn document_page_rect(&self) -> Rect {
-        let host = self.document_host_rect();
-        let desired_w = 860u32.min(host.w.saturating_sub(96)).max(620);
-        let desired_h = host.h.saturating_sub(56).max(420);
-        let x = host.x + ((host.w as i32 - desired_w as i32) / 2);
-        let y = host.y + 26;
-        Rect::new(x, y, desired_w, desired_h)
-    }
-
-    fn canvas_insertion_rect(&self) -> Rect {
-        self.document_page_rect().inset(24)
-    }
-
-    fn ribbon_group_rects(&self) -> [Rect; 4] {
-        let ribbon = self.ribbon_rect();
-        let widths = [258u32, 292u32, 264u32, 302u32];
-        let mut rects = [Rect::new(0, 0, 0, 0); 4];
-        let mut x = 16;
-        for (idx, width) in widths.iter().enumerate() {
-            rects[idx] = Rect::new(x, ribbon.y + 12, *width, ribbon.h - 20);
-            x += *width as i32 + 10;
-        }
-        rects
-    }
-
-    fn ribbon_control_rect(&self, group_idx: usize, control_idx: usize) -> Rect {
-        let group = self.ribbon_group_rects()[group_idx];
-        let control = RIBBON_GROUPS[group_idx].controls[control_idx];
-        let mut x = group.x + 12;
-        for prev in &RIBBON_GROUPS[group_idx].controls[..control_idx] {
-            x += prev.width as i32 + 8;
-        }
-        let y = group.y + 12;
-        Rect::new(x, y, control.width, 36)
+    fn document_canvas<'a>(&self, items: &'a [DocumentCanvasItem<'a>]) -> DocumentCanvas<'a> {
+        DocumentCanvas::new(self.content_rect(), items)
+            .with_mode(self.document.mode)
+            .with_titles(
+                "Sunlight Canvas Area",
+                "Reusable document canvas prepared for editable and read-only surfaces",
+            )
+            .with_empty_label("Document Canvas Ready")
+            .with_footer_note("Shared page widget . fixed-coordinate items . shell preserved")
+            .with_guides(true)
+            .with_fonts(
+                Some(&FONT_UI_LARGE),
+                Some(&FONT_UI_SMALL),
+                Some(&FONT_UI_MEDIUM),
+                Some(&FONT_UI_SMALL),
+            )
     }
 
     fn quick_chip_hit(&self, point: Point) -> Option<usize> {
-        QUICK_CHIPS
-            .iter()
-            .enumerate()
-            .find_map(|(idx, _)| self.quick_chip_rect(idx).contains(point).then_some(idx))
+        self.with_header(|header| header.chip_hit(point))
     }
 
-    fn menu_item_hit(&self, point: Point) -> Option<usize> {
-        APP_MENU_ITEMS
-            .iter()
-            .enumerate()
-            .find_map(|(idx, _)| self.menu_item_rect(idx).contains(point).then_some(idx))
+    fn menu_button_hit(&self, point: Point) -> bool {
+        self.with_header(|header| header.leading_button_hit(point))
+    }
+
+    fn menu_command_hit(&self, point: Point) -> Option<usize> {
+        self.with_app_menu(|menu| menu.command_hit(point))
     }
 
     fn recent_doc_hit(&self, point: Point) -> Option<usize> {
-        if !self.submenu_visible() {
-            return None;
-        }
-        RECENT_DOCS
-            .iter()
-            .enumerate()
-            .find_map(|(idx, _)| self.recent_doc_rect(idx).contains(point).then_some(idx))
+        self.with_app_menu(|menu| menu.secondary_hit(point))
     }
 
     fn ribbon_hit(&self, point: Point) -> Option<(usize, usize)> {
-        for (group_idx, group) in RIBBON_GROUPS.iter().enumerate() {
-            for (control_idx, _) in group.controls.iter().enumerate() {
-                if self.ribbon_control_rect(group_idx, control_idx).contains(point) {
-                    return Some((group_idx, control_idx));
-                }
-            }
-        }
-        None
+        self.with_ribbon_bar(|bar| bar.hit_test(point))
+    }
+
+    fn close_menu(&mut self) {
+        self.menu_open = false;
+        self.menu_hover = None;
+        self.menu_pinned = None;
+        self.recent_hover = None;
     }
 
     fn toggle_menu(&mut self) {
@@ -753,18 +1189,9 @@ impl WriterApp {
             self.recent_hover = None;
             self.set_status_message("Application menu opened");
         } else {
-            self.menu_hover = None;
-            self.menu_pinned = None;
-            self.recent_hover = None;
+            self.close_menu();
             self.set_status_message("Application menu closed");
         }
-    }
-
-    fn close_menu(&mut self) {
-        self.menu_open = false;
-        self.menu_hover = None;
-        self.menu_pinned = None;
-        self.recent_hover = None;
     }
 
     fn dispatch_action(&mut self, action: WriterAction) -> bool {
@@ -798,532 +1225,43 @@ impl WriterApp {
             WriterAction::InsertTable => self.set_status_message("Insert Table placeholder"),
             WriterAction::InsertLink => self.set_status_message("Insert Link placeholder"),
             WriterAction::RecentDocument(idx) => {
-                let doc = RECENT_DOCS[idx];
                 let mut msg = String::from("Recent document preview: ");
-                msg.push_str(doc.title);
+                msg.push_str(RECENT_DOCS[idx].title);
                 self.set_status_message(&msg);
             }
         }
         true
     }
 
-    fn draw_top_bar(&self, canvas: &mut Canvas, theme: &Theme) {
-        let rect = self.top_bar_rect();
-        fill_vertical_gradient(
-            canvas,
-            rect,
-            theme.panel.lighten(10),
-            theme.panel.darken(24),
-        );
-        canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
-        canvas.hbar(rect.x, rect.bottom() - 2, rect.w, 1, theme.accent.darken(110));
-
-        let menu_button = self.menu_button_rect();
-        let menu_fill = if self.menu_open {
-            theme.accent.darken(42)
-        } else if self.menu_button_hover {
-            theme.panel_alt.lighten(18)
-        } else {
-            theme.panel_alt
-        };
-        canvas.fill_rounded_rect(menu_button, 8, menu_fill);
-        canvas.stroke_rounded_rect(
-            menu_button,
-            8,
-            1,
-            if self.menu_open {
-                theme.accent
-            } else {
-                theme.border
-            },
-        );
-        if let Some(icon) = self.icons.get(IconId::Menu) {
-            canvas.draw_tga_icon_tinted(
-                icon,
-                Rect::new(menu_button.x + 10, menu_button.y + 8, 20, 20),
-                if self.menu_open {
-                    theme.text_on_accent
-                } else {
-                    theme.icon_foreground
-                },
-            );
+    fn ribbon_action(group_idx: usize, button_idx: usize) -> WriterAction {
+        match group_idx {
+            0 => FILE_GROUP_DEFS[button_idx].action,
+            1 => FONT_GROUP_DEFS[button_idx].action,
+            2 => PARAGRAPH_GROUP_DEFS[button_idx].action,
+            3 => INSERT_GROUP_DEFS[button_idx].action,
+            _ => WriterAction::Open,
         }
-
-        draw_text(
-            canvas,
-            "Sunlight Writer",
-            self.command_title_rect().x,
-            self.command_title_rect().y,
-            &TextStyle::new(FontRole::UiTitle, theme.text),
-        );
-        draw_text(
-            canvas,
-            "Professional document shell . ribbon workspace . canvas-ready layout",
-            self.command_subtitle_rect().x,
-            self.command_subtitle_rect().y,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-        );
-
-        for (idx, chip) in QUICK_CHIPS.iter().enumerate() {
-            let rect = self.quick_chip_rect(idx);
-            let hovered = self.quick_hover == Some(idx);
-            canvas.fill_rounded_rect(
-                rect,
-                12,
-                if hovered {
-                    theme.panel_alt.lighten(12)
-                } else {
-                    theme.panel
-                },
-            );
-            canvas.stroke_rounded_rect(
-                rect,
-                12,
-                1,
-                if idx == 1 {
-                    theme.accent.darken(90)
-                } else {
-                    theme.border
-                },
-            );
-            if let Some(icon_id) = chip.icon {
-                if let Some(icon) = self.icons.get(icon_id) {
-                    canvas.draw_tga_icon_tinted(
-                        icon,
-                        Rect::new(rect.x + 8, rect.y + 6, 16, 16),
-                        if idx == 0 { theme.accent } else { theme.icon_muted },
-                    );
-                }
-            }
-            let text_x = if chip.icon.is_some() { rect.x + 28 } else { rect.x + 12 };
-            draw_text_vcenter(
-                canvas,
-                chip.label,
-                text_x,
-                rect.y,
-                rect.h,
-                &TextStyle::new(
-                    FontRole::UiSmall,
-                    if idx == 1 { theme.text } else { theme.text_muted },
-                ),
-            );
-        }
-    }
-
-    fn draw_ribbon(&self, canvas: &mut Canvas, theme: &Theme) {
-        let rect = self.ribbon_rect();
-        fill_vertical_gradient(
-            canvas,
-            rect,
-            theme.panel_alt.lighten(8),
-            theme.panel.darken(12),
-        );
-        canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
-
-        for (group_idx, group) in RIBBON_GROUPS.iter().enumerate() {
-            let group_rect = self.ribbon_group_rects()[group_idx];
-            canvas.fill_rounded_rect(group_rect, 12, theme.panel.lighten(4));
-            canvas.stroke_rounded_rect(group_rect, 12, 1, theme.border);
-            canvas.hbar(
-                group_rect.x + 10,
-                group_rect.bottom() - 24,
-                group_rect.w - 20,
-                1,
-                theme.border,
-            );
-
-            for (control_idx, control) in group.controls.iter().enumerate() {
-                self.draw_ribbon_control(
-                    canvas,
-                    theme,
-                    group_idx,
-                    control_idx,
-                    *control,
-                    self.ribbon_hover == Some((group_idx, control_idx)),
-                );
-            }
-
-            draw_text_vcenter(
-                canvas,
-                group.title,
-                group_rect.x + 12,
-                group_rect.bottom() - 22,
-                18,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-            );
-        }
-    }
-
-    fn draw_ribbon_control(
-        &self,
-        canvas: &mut Canvas,
-        theme: &Theme,
-        group_idx: usize,
-        control_idx: usize,
-        control: RibbonControl,
-        hovered: bool,
-    ) {
-        let rect = self.ribbon_control_rect(group_idx, control_idx);
-        let fill = match control.kind {
-            RibbonControlKind::Dropdown => theme.panel_alt.lighten(6),
-            RibbonControlKind::Toggle => {
-                if hovered {
-                    theme.accent.darken(36)
-                } else {
-                    theme.panel_alt
-                }
-            }
-            RibbonControlKind::IconButton | RibbonControlKind::WideButton => {
-                if hovered {
-                    theme.panel_alt.lighten(18)
-                } else {
-                    theme.panel_alt
-                }
-            }
-        };
-        let border = if hovered {
-            theme.accent.darken(70)
-        } else {
-            theme.border
-        };
-
-        canvas.fill_rounded_rect(rect, 8, fill);
-        canvas.stroke_rounded_rect(rect, 8, 1, border);
-
-        match control.kind {
-            RibbonControlKind::Dropdown => {
-                draw_text_vcenter(
-                    canvas,
-                    control.label,
-                    rect.x + 10,
-                    rect.y,
-                    rect.h,
-                    &TextStyle::new(FontRole::UiRegular, theme.text),
-                );
-                let arrow_x = rect.right() - 18;
-                let cy = rect.y + rect.h as i32 / 2;
-                canvas.put_pixel(arrow_x, cy - 2, theme.text_dim);
-                canvas.put_pixel(arrow_x + 1, cy - 1, theme.text_dim);
-                canvas.put_pixel(arrow_x + 2, cy, theme.text_dim);
-                canvas.put_pixel(arrow_x + 3, cy - 1, theme.text_dim);
-                canvas.put_pixel(arrow_x + 4, cy - 2, theme.text_dim);
-            }
-            RibbonControlKind::Toggle | RibbonControlKind::IconButton => {
-                if let Some(icon_id) = control.icon {
-                    if let Some(icon) = self.icons.get(icon_id) {
-                        canvas.draw_tga_icon_tinted(
-                            icon,
-                            Rect::new(rect.x + 8, rect.y + 8, 20, 20),
-                            if hovered {
-                                theme.accent
-                            } else {
-                                theme.icon_foreground
-                            },
-                        );
-                    }
-                }
-                if matches!(control.kind, RibbonControlKind::Toggle) {
-                    draw_text_vcenter(
-                        canvas,
-                        control.label,
-                        rect.x + 14,
-                        rect.y,
-                        rect.h,
-                        &TextStyle::new(FontRole::UiMedium, theme.text),
-                    );
-                }
-            }
-            RibbonControlKind::WideButton => {
-                if let Some(icon_id) = control.icon {
-                    if let Some(icon) = self.icons.get(icon_id) {
-                        canvas.draw_tga_icon_tinted(
-                            icon,
-                            Rect::new(rect.x + 8, rect.y + 8, 18, 18),
-                            if hovered {
-                                theme.accent
-                            } else {
-                                theme.icon_foreground
-                            },
-                        );
-                    }
-                }
-                draw_text_vcenter(
-                    canvas,
-                    control.label,
-                    rect.x + if control.icon.is_some() { 30 } else { 10 },
-                    rect.y,
-                    rect.h,
-                    &TextStyle::new(FontRole::UiRegular, theme.text),
-                );
-            }
-        }
-    }
-
-    fn draw_app_menu(&self, canvas: &mut Canvas, theme: &Theme) {
-        if !self.menu_open {
-            return;
-        }
-
-        let panel = self.app_menu_rect();
-        let left = self.app_menu_left_rect();
-        canvas.fill_rounded_rect(panel, 14, theme.panel.lighten(4));
-        canvas.stroke_rounded_rect(panel, 14, 1, theme.border);
-        canvas.fill_rect(Rect::new(left.x, left.y, left.w, left.h), theme.panel.lighten(4));
-
-        draw_text(
-            canvas,
-            "Application Menu",
-            left.x + 12,
-            left.y + 10,
-            &TextStyle::new(FontRole::UiMedium, theme.text),
-        );
-        draw_text(
-            canvas,
-            "Writer shell commands",
-            left.x + 12,
-            left.y + 22,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-        );
-        canvas.fill_rect(Rect::new(left.x + 8, left.y + 8, 4, 18), theme.accent);
-
-        for (idx, item) in APP_MENU_ITEMS.iter().enumerate() {
-            let rect = self.menu_item_rect(idx);
-            let active = self.active_menu_index() == Some(idx);
-            canvas.fill_rounded_rect(
-                rect,
-                8,
-                if active {
-                    theme.accent.darken(34)
-                } else if idx % 2 == 0 {
-                    theme.panel_alt
-                } else {
-                    theme.panel
-                },
-            );
-            if active {
-                canvas.stroke_rounded_rect(rect, 8, 1, theme.accent);
-            }
-            if let Some(icon_id) = item.icon {
-                if let Some(icon) = self.icons.get(icon_id) {
-                    canvas.draw_tga_icon_tinted(
-                        icon,
-                        Rect::new(rect.x + 8, rect.y + 6, 18, 18),
-                        if active {
-                            theme.accent_hover
-                        } else {
-                            theme.icon_foreground
-                        },
-                    );
-                }
-            }
-            draw_text_vcenter(
-                canvas,
-                item.label,
-                rect.x + 34,
-                rect.y,
-                rect.h,
-                &TextStyle::new(
-                    FontRole::UiRegular,
-                    if active { theme.text } else { theme.text_muted },
-                ),
-            );
-            if item.submenu {
-                draw_text_vcenter(
-                    canvas,
-                    ">",
-                    rect.right() - 18,
-                    rect.y,
-                    rect.h,
-                    &TextStyle::new(FontRole::UiRegular, theme.text_dim),
-                );
-            }
-        }
-
-        if !self.submenu_visible() {
-            return;
-        }
-
-        let right = self.app_menu_right_rect();
-        canvas.fill_rect(right, theme.panel_alt.lighten(6));
-        canvas.vline(right.x, right.y + 10, right.h - 20, theme.border);
-        draw_text(
-            canvas,
-            "Recent Documents",
-            right.x + 16,
-            right.y + 10,
-            &TextStyle::new(FontRole::UiMedium, theme.text),
-        );
-        draw_text(
-            canvas,
-            "Open continues into this column",
-            right.x + 16,
-            right.y + 22,
-            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-        );
-
-        for (idx, doc) in RECENT_DOCS.iter().enumerate() {
-            let rect = self.recent_doc_rect(idx);
-            let hovered = self.recent_hover == Some(idx);
-            canvas.fill_rounded_rect(
-                rect,
-                8,
-                if hovered {
-                    theme.panel.lighten(10)
-                } else {
-                    theme.panel
-                },
-            );
-            canvas.stroke_rounded_rect(
-                rect,
-                8,
-                1,
-                if hovered {
-                    theme.accent.darken(70)
-                } else {
-                    theme.border
-                },
-            );
-            if let Some(icon) = self.icons.get(IconId::Doc) {
-                canvas.draw_tga_icon_tinted(
-                    icon,
-                    Rect::new(rect.x + 8, rect.y + 10, 16, 16),
-                    if hovered { theme.accent } else { theme.icon_muted },
-                );
-            }
-            draw_text(
-                canvas,
-                doc.title,
-                rect.x + 30,
-                rect.y + 8,
-                &TextStyle::new(FontRole::UiRegular, theme.text),
-            );
-            draw_text(
-                canvas,
-                doc.meta,
-                rect.x + 30,
-                rect.y + 22,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-            );
-        }
-    }
-
-    fn draw_canvas_placeholder(&self, canvas: &mut Canvas, theme: &Theme) {
-        let content = self.content_rect();
-        fill_vertical_gradient(
-            canvas,
-            content,
-            theme.bg.lighten(14),
-            theme.bg.darken(8),
-        );
-
-        let host = self.document_host_rect();
-        canvas.fill_rounded_rect(host, 20, theme.panel.darken(8));
-        canvas.stroke_rounded_rect(host, 20, 1, theme.border);
-
-        let page = self.document_page_rect();
-        let shadow = page.translate(10, 12);
-        canvas.fill_rounded_rect(
-            shadow,
-            10,
-            Color::rgba(theme.bg.r(), theme.bg.g(), theme.bg.b(), 140),
-        );
-        canvas.fill_rounded_rect(page, 10, Color::rgb(0xFB, 0xFA, 0xF7));
-        canvas.stroke_rounded_rect(page, 10, 1, Color::rgb(0xD7, 0xD3, 0xCD));
-
-        let page_top = Rect::new(page.x, page.y, page.w, 62);
-        fill_vertical_gradient(
-            canvas,
-            page_top,
-            Color::rgb(0xFF, 0xFF, 0xFF),
-            Color::rgb(0xF4, 0xF1, 0xED),
-        );
-        canvas.hbar(page.x, page.y + 61, page.w, 1, Color::rgb(0xE7, 0xE1, 0xD8));
-
-        draw_text(
-            canvas,
-            "Sunlight Canvas Area",
-            page.x + 28,
-            page.y + 22,
-            &TextStyle::new(FontRole::UiLarge, Color::rgb(0x24, 0x24, 0x28)),
-        );
-        draw_text(
-            canvas,
-            "Reserved for the future canvas widget and document surface",
-            page.x + 28,
-            page.y + 40,
-            &TextStyle::new(FontRole::UiSmall, Color::rgb(0x72, 0x72, 0x7C)),
-        );
-
-        let insert_rect = self.canvas_insertion_rect();
-        canvas.fill_rounded_rect(insert_rect, 12, Color::rgb(0xFF, 0xFF, 0xFF));
-        canvas.stroke_rounded_rect(insert_rect, 12, 1, Color::rgb(0xE0, 0xDB, 0xD4));
-        canvas.hbar(
-            insert_rect.x + 1,
-            insert_rect.y + 1,
-            insert_rect.w - 2,
-            4,
-            theme.accent.lighten(34),
-        );
-
-        for idx in 0..18 {
-            let y = insert_rect.y + 56 + idx * 26;
-            if y + 1 >= insert_rect.bottom() - 32 {
-                break;
-            }
-            let line_w = insert_rect.w as i32 - 92 - ((idx % 3) * 38);
-            canvas.fill_rect(
-                Rect::new(insert_rect.x + 30, y, line_w.max(120) as u32, 2),
-                Color::rgb(0xEB, 0xE6, 0xDF),
-            );
-        }
-
-        let badge_w = measure_text("Canvas Widget Placeholder", FontRole::UiMedium).w + 28;
-        let badge = Rect::new(
-            insert_rect.x + ((insert_rect.w as i32 - badge_w as i32) / 2),
-            insert_rect.y + insert_rect.h as i32 / 2 - 18,
-            badge_w,
-            36,
-        );
-        canvas.fill_rounded_rect(badge, 18, theme.panel);
-        canvas.stroke_rounded_rect(badge, 18, 1, theme.accent.darken(80));
-        draw_text_vcenter(
-            canvas,
-            "Canvas Widget Placeholder",
-            badge.x + 14,
-            badge.y,
-            badge.h,
-            &TextStyle::new(FontRole::UiMedium, theme.text),
-        );
-
-        let footer = Rect::new(page.x + 28, page.bottom() - 44, page.w - 56, 20);
-        draw_text(
-            canvas,
-            "Future integration point: replace placeholder drawing inside `canvas_insertion_rect()`.",
-            footer.x,
-            footer.y,
-            &TextStyle::new(FontRole::UiSmall, Color::rgb(0x86, 0x82, 0x7B)),
-        );
-    }
-
-    fn draw_status_bar(&self, canvas: &mut Canvas, theme: &Theme) {
-        StatusBar::new(
-            self.status_rect(),
-            "Page 1 of 1 | Col 1",
-            self.status_center.as_str(),
-            "100% | Canvas Widget Inactive | WYSIWYG",
-        )
-        .draw(canvas, theme);
     }
 }
 
 impl App for WriterApp {
-    fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+    fn view(&mut self, canvas: &mut sunlight_ui::Canvas, theme: &Theme) {
+        let document_items = self.document_items();
+        let document_canvas = self.document_canvas(document_items.as_slice());
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
-        self.draw_top_bar(canvas, theme);
-        self.draw_ribbon(canvas, theme);
-        self.draw_canvas_placeholder(canvas, theme);
-        self.draw_status_bar(canvas, theme);
-        self.draw_app_menu(canvas, theme);
+        self.with_header(|header| header.draw(canvas, theme));
+        self.with_ribbon_bar(|bar| bar.draw(canvas, theme));
+        document_canvas.draw(canvas, theme);
+        StatusBar::new(
+            self.status_rect(),
+            "Page 1 of 1 | Col 1",
+            self.status_center.as_str(),
+            "100% | Document Canvas Active | Editable",
+        )
+        .draw(canvas, theme);
+        if self.menu_open {
+            self.with_app_menu(|menu| menu.draw(canvas, theme));
+        }
     }
 
     fn update(&mut self, event: Event) -> bool {
@@ -1333,7 +1271,7 @@ impl App for WriterApp {
                     self.status_ticks -= 1;
                     if self.status_ticks == 0 {
                         self.status_center.clear();
-                        self.status_center.set("Canvas Widget Placeholder");
+                        self.status_center.set("Document Canvas Ready");
                         return true;
                     }
                 }
@@ -1343,9 +1281,9 @@ impl App for WriterApp {
                 let point = Point::new(x, y);
                 let mut redraw = false;
 
-                let menu_hover = self.menu_button_rect().contains(point);
-                if menu_hover != self.menu_button_hover {
-                    self.menu_button_hover = menu_hover;
+                let menu_button_hover = self.menu_button_hit(point);
+                if menu_button_hover != self.menu_button_hover {
+                    self.menu_button_hover = menu_button_hover;
                     redraw = true;
                 }
 
@@ -1362,11 +1300,11 @@ impl App for WriterApp {
                 }
 
                 if self.menu_open {
-                    let new_menu_hover = self.menu_item_hit(point);
-                    let new_recent_hover = self.recent_doc_hit(point);
-                    if new_menu_hover != self.menu_hover || new_recent_hover != self.recent_hover {
-                        self.menu_hover = new_menu_hover;
-                        self.recent_hover = new_recent_hover;
+                    let menu_hover = self.menu_command_hit(point);
+                    let recent_hover = self.recent_doc_hit(point);
+                    if menu_hover != self.menu_hover || recent_hover != self.recent_hover {
+                        self.menu_hover = menu_hover;
+                        self.recent_hover = recent_hover;
                         redraw = true;
                     }
                 }
@@ -1376,7 +1314,7 @@ impl App for WriterApp {
             Event::Click { x, y } => {
                 let point = Point::new(x, y);
 
-                if self.menu_button_rect().contains(point) {
+                if self.menu_button_hit(point) {
                     self.toggle_menu();
                     return true;
                 }
@@ -1387,7 +1325,7 @@ impl App for WriterApp {
                         return self.dispatch_action(WriterAction::RecentDocument(idx));
                     }
 
-                    if let Some(idx) = self.menu_item_hit(point) {
+                    if let Some(idx) = self.menu_command_hit(point) {
                         let item = APP_MENU_ITEMS[idx];
                         if item.submenu {
                             self.menu_pinned = Some(idx);
@@ -1405,16 +1343,14 @@ impl App for WriterApp {
                     }
                 }
 
-                if let Some((group_idx, control_idx)) = self.ribbon_hit(point) {
-                    return self.dispatch_action(RIBBON_GROUPS[group_idx].controls[control_idx].action);
+                if let Some((group_idx, button_idx)) = self.ribbon_hit(point) {
+                    return self.dispatch_action(Self::ribbon_action(group_idx, button_idx));
                 }
 
                 false
             }
             Event::KeyPress {
-                keycode,
-                pressed,
-                ..
+                keycode, pressed, ..
             } => {
                 if !pressed {
                     return false;
@@ -1434,20 +1370,7 @@ impl App for WriterApp {
     }
 }
 
-fn fill_vertical_gradient(canvas: &mut Canvas, rect: Rect, top: Color, bottom: Color) {
-    let h = rect.h.max(1);
-    for row in 0..h {
-        let mix = row * 255 / h;
-        let r = ((top.r() as u32 * (255 - mix) + bottom.r() as u32 * mix) / 255) as u8;
-        let g = ((top.g() as u32 * (255 - mix) + bottom.g() as u32 * mix) / 255) as u8;
-        let b = ((top.b() as u32 * (255 - mix) + bottom.b() as u32 * mix) / 255) as u8;
-        canvas.fill_rect(
-            Rect::new(rect.x, rect.y + row as i32, rect.w, 1),
-            Color::rgb(r, g, b),
-        );
-    }
-}
-
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
@@ -1477,4 +1400,29 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
     window.run(&mut app);
     ProcessExit::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DocumentCanvasItem, DocumentCanvasMode, WriterDocument};
+
+    #[test]
+    fn sample_document_converts_to_non_empty_canvas_items() {
+        let items = WriterDocument::sample().to_canvas_items();
+        assert!(!items.is_empty());
+    }
+
+    #[test]
+    fn sample_document_contains_link_item() {
+        let items = WriterDocument::sample().to_canvas_items();
+        assert!(items
+            .iter()
+            .any(|item| matches!(item, DocumentCanvasItem::LinkText { .. })));
+    }
+
+    #[test]
+    fn empty_document_converts_without_panic() {
+        let items = WriterDocument::empty(DocumentCanvasMode::Editable).to_canvas_items();
+        assert!(items.is_empty());
+    }
 }
