@@ -1,28 +1,21 @@
 [package]
-name = "sunlight-reminders"
+name = "rappid-rabbit"
 version = "0.2.1046"
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
 [[bin]]
-name = "sunlight-reminders"
+name = "rappid-rabbit"
 path = "src/main.rs"
+
+[lib]
+name = "rappid_rabbit"
+path = "src/lib.rs"
 
 [dependencies]
 sun-font = { path = "../sun-font" }
+sunlight-fetch = { path = "../sunlight-fetch", default-features = false, features = ["sunlightos"] }
+sunlight-http = { path = "../sunlight-http" }
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
-sunlight-tz = { path = "../sunlight-tz" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }

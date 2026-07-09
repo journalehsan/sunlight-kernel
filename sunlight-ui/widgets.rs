@@ -10,6 +10,7 @@ pub mod status;
 pub mod tabbar;
 pub mod table;
 pub mod text_input;
+pub mod text_view;
 pub mod toolbar;
 
 // Re-export the most-used types at the widgets level
@@ -28,4 +29,5 @@ pub use status::StatusBar;
 pub use tabbar::TabBar;
 pub use table::{Column, Table};
 pub use text_input::TextInput;
+pub use text_view::TextView;
 pub use toolbar::{Toolbar, ToolbarItem};

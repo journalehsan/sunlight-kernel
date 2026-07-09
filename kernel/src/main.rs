@@ -186,6 +186,9 @@ static SUNLIGHT_CALENDAR_ELF_BYTES: &[u8] =
 // Sunlight Reminders: native personal tasks and reminders application.
 static SUNLIGHT_REMINDERS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-reminders");
+// Rappid Rabbit: native HTTP inspection application.
+static RAPPID_RABBIT_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/rappid-rabbit");
 // Dialog host: shared native dialog service for GUI apps.
 static SUNLIGHT_DIALOGD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-dialogd");

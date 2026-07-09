@@ -41,8 +41,8 @@ static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
 static ICON_CALENDAR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/office-calendar.tga");
-static ICON_NOTES_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/QOwnNotes.tga");
+static ICON_RABBIT_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
 static ICON_PHOTOS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/accessories-image-viewer.tga");
 
@@ -125,9 +125,8 @@ pub(crate) struct AppCatalogEntry {
     pub(crate) available: bool,
 }
 
-/// Full "All Apps" catalog — 7 real, launchable apps followed by 5
-/// placeholders (no backing binary yet; clicking shows a "coming soon"
-/// notice instead of launching). Exactly fills a 4-column × 3-row grid.
+/// Full "All Apps" catalog — launchable apps plus a couple of remaining
+/// placeholders. Exactly fills a 4-column × 3-row grid.
 static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
     AppCatalogEntry {
         id: CatalogId::App(AppId::Terminal),
@@ -200,11 +199,11 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         available: true,
     },
     AppCatalogEntry {
-        id: CatalogId::Placeholder("notes"),
-        name: "Notes",
-        category: "Productivity",
-        icon_bytes: Some(ICON_NOTES_TGA),
-        available: false,
+        id: CatalogId::App(AppId::RappidRabbit),
+        name: "Rappid Rabbit",
+        category: "Network",
+        icon_bytes: Some(ICON_RABBIT_TGA),
+        available: true,
     },
     AppCatalogEntry {
         id: CatalogId::Placeholder("photo-viewer"),

@@ -80,6 +80,7 @@ members = [
     "sunlight-locale",
     "sunlight-calendar",
     "sunlight-reminders",
+    "rappid-rabbit",
 ]
 
 [workspace.dependencies]

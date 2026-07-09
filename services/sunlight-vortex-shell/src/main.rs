@@ -353,7 +353,9 @@ impl DockTheme {
             AppId::Settings => self.settings,
             AppId::Calendar => self.calendar,
             // Not rendered in the bottom dock; the Start Menu owns their icons.
-            AppId::Tasks | AppId::Bench | AppId::Eyes | AppId::TextEditor => None,
+            AppId::Tasks | AppId::Bench | AppId::Eyes | AppId::TextEditor | AppId::RappidRabbit => {
+                None
+            }
         }
     }
 }
@@ -455,6 +457,7 @@ pub(crate) enum AppId {
     Eyes,
     TextEditor,
     Calendar,
+    RappidRabbit,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -600,9 +603,9 @@ pub(crate) const BOT_Y_OFF: i32 = 8; // distance from screen bottom to bottom of
 const ICON_BTN: u32 = 36; // square size for icon buttons in clusters
 const CLUSTER_PAD: i32 = 6; // inner horizontal padding inside clusters
 const ICON_GAP: i32 = 4; // gap between icon buttons
-// Top-right status cluster spacing. Kept as constants so the balance of the
-// [lan][notif][logout] on the right; workspace indicator (semantic icons) on the
-// left after the SunlightOS brand. All tunable in one place.
+                         // Top-right status cluster spacing. Kept as constants so the balance of the
+                         // [lan][notif][logout] on the right; workspace indicator (semantic icons) on the
+                         // left after the SunlightOS brand. All tunable in one place.
 const TOP_ICON_SIZE: u32 = 18; // status icon size in the top bar
 const TOP_ICON_GAP: i32 = 8; // gap between top-bar status icons (was 4 — too cramped)
 const TOP_RIGHT_PAD: i32 = 8; // right margin of the top-right cluster
@@ -1226,7 +1229,7 @@ struct VortexShell {
     /// entries (Terminal/Calculator/Files/Settings) are also shown in the
     /// bottom dock; Tasks/Bench/Eyes/TextEditor are Start-Menu-only but share
     /// the same launch/state-sync machinery.
-    apps: [DockAppState; 9],
+    apps: [DockAppState; 10],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// User-provided icon overrides loaded from `desktop.toml`.
@@ -1401,6 +1404,7 @@ impl VortexShell {
                 DockAppState::new(AppId::Eyes, "Eyes", AppId::Eyes),
                 DockAppState::new(AppId::TextEditor, "Sunlight Edit", AppId::TextEditor),
                 DockAppState::new(AppId::Calendar, "Sunlight Calendar", AppId::Calendar),
+                DockAppState::new(AppId::RappidRabbit, "Rappid Rabbit", AppId::RappidRabbit),
             ],
             running_apps: Vec::new(),
             icon_overrides,
@@ -1603,6 +1607,7 @@ impl VortexShell {
             AppId::Eyes => "/bin/eyes",
             AppId::TextEditor => "/bin/sunlight-edit",
             AppId::Calendar => "/bin/sunlight-calendar",
+            AppId::RappidRabbit => "/bin/rappid-rabbit",
         }
     }
 
@@ -1617,6 +1622,7 @@ impl VortexShell {
             AppId::Eyes => b"eyes",
             AppId::TextEditor => b"sunlight-edit",
             AppId::Calendar => b"calendar",
+            AppId::RappidRabbit => b"rappid-rabbit",
         }
     }
 
@@ -1631,6 +1637,7 @@ impl VortexShell {
             AppId::Eyes => "app=eyes",
             AppId::TextEditor => "app=sunlight-edit",
             AppId::Calendar => "app=sunlight-calendar",
+            AppId::RappidRabbit => "app=rappid-rabbit",
         }
     }
 
@@ -3109,8 +3116,8 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
         shell.workspace_btn_zones[i] = cell;
         bx += WS_BTN_W as i32 + WS_BTN_GAP;
     }
-    let ws_cluster_w =
-        (WS_INDICATOR_COUNT as i32) * (WS_BTN_W as i32) + ((WS_INDICATOR_COUNT as i32) - 1) * WS_BTN_GAP;
+    let ws_cluster_w = (WS_INDICATOR_COUNT as i32) * (WS_BTN_W as i32)
+        + ((WS_INDICATOR_COUNT as i32) - 1) * WS_BTN_GAP;
     shell.workspace_zone = Rect::new(x, ws_btn_y, ws_cluster_w as u32, WS_BTN_H);
 
     // ── Center: localized date/time (clickable, hoverable) ───────────────────
@@ -4587,6 +4594,9 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "sunlight-text"
         | "kate" => Some(ICON_TEXT_EDITOR_TGA),
         "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_TGA),
+        "rappid-rabbit" | "rabbit" | "internet-web-browser" | "web-browser" => {
+            Some(ICON_GENERIC_APP_TGA)
+        }
         "runner" | "run" | "system-run" => Some(ICON_RUNNER_TGA),
         "tasks" | "task-manager" | "ksysguard" | "sunlight-tasks" => Some(ICON_TASKS_TGA),
         "bench" | "sunlight-bench" | "cpu-x" => Some(ICON_BENCH_TGA),
@@ -6195,8 +6205,7 @@ impl App for VortexShell {
                 // (including leaving the strip entirely), so the >300ms dwell
                 // only counts continuous rest on one item.
                 if self.running_hover != prev_running {
-                    self.running_hover_since =
-                        self.running_hover.map(|_| monotonic_millis());
+                    self.running_hover_since = self.running_hover.map(|_| monotonic_millis());
                 }
                 let prev_settings = self.settings_hover;
                 self.settings_hover = self.settings_zone.contains(Point::new(x, y));
