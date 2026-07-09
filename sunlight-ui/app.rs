@@ -22,7 +22,7 @@
 use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 use sunlight_ipc::{
-    ipc_call, ipc_call_timeout,
+    ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
     nameserver_lookup, shm_create, shm_free, shm_map, CapabilityToken, IpcMsg, SgpMsg,
 };
@@ -34,6 +34,8 @@ use crate::theme::Theme;
 /// Default timeout for `EVENT_POLL` (milliseconds).
 /// When no event arrives within this window, the loop delivers `Event::Tick`.
 const POLL_TIMEOUT_MS: u64 = 200;
+const WINDOW_IPC_TIMEOUT_MS: u64 = 500;
+const WINDOW_CREATE_TIMEOUT_MS: u64 = 2_000;
 static CLOSE_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 pub fn request_close() {
@@ -98,6 +100,13 @@ unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
 impl Window {
+    fn display_call(&self, msg: IpcMsg) -> bool {
+        matches!(
+            ipc_call_timeout(self.display_ep, msg, WINDOW_IPC_TIMEOUT_MS),
+            Ok(reply) if reply.label == SgpMsg::REPLY
+        )
+    }
+
     fn frame_len(&self) -> usize {
         self.width as usize * self.height as usize
     }
@@ -138,14 +147,16 @@ impl Window {
         for (i, &b) in title_bytes.iter().enumerate().take(32) {
             title_words[i / 8] |= (b as u64) << ((i % 8) * 8);
         }
-        let reply = ipc_call(
+        let reply = ipc_call_timeout(
             display_ep,
             IpcMsg::with_label(SgpMsg::CREATE_WINDOW)
                 .word(0, config.width as u64 | ((config.height as u64) << 32))
                 .word(1, config.decoration.config_flag_bits())
                 .word(2, pid)
                 .word(3, title_words[0]),
-        );
+            WINDOW_CREATE_TIMEOUT_MS,
+        )
+        .ok()?;
 
         if reply.label != SgpMsg::REPLY || reply.cap_count == 0 {
             return None;
@@ -176,7 +187,7 @@ impl Window {
             cfg.cap_count = 1;
             title_cap = cap;
         }
-        let _ = ipc_call(display_ep, cfg);
+        let _ = ipc_call_timeout(display_ep, cfg, WINDOW_IPC_TIMEOUT_MS);
         if title_cap != CapabilityToken::INVALID {
             let _ = shm_free(title_cap);
         }
@@ -294,10 +305,7 @@ impl Window {
                 ptr::copy_nonoverlapping(self.buffer.add(draw_offset), self.buffer, frame_len);
             }
         }
-        let _ = ipc_call(
-            self.display_ep,
-            IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, self.win_id),
-        );
+        let _ = self.display_call(IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, self.win_id));
     }
 
     /// Tell the compositor to remove this window.
@@ -312,10 +320,7 @@ impl Window {
     /// registered in the compositor — visible, frozen, and unable to receive
     /// input — until something force-closes it (Ctrl+W).
     fn notify_close(&self) {
-        let _ = ipc_call(
-            self.display_ep,
-            IpcMsg::with_label(SgpMsg::CLOSE_WINDOW).word(0, self.win_id),
-        );
+        let _ = self.display_call(IpcMsg::with_label(SgpMsg::CLOSE_WINDOW).word(0, self.win_id));
     }
 
     /// Send a `CONFIGURE_WINDOW` message to update window type, state, and border
@@ -335,8 +340,7 @@ impl Window {
         if flags == 0 {
             return;
         }
-        let _ = ipc_call(
-            self.display_ep,
+        let _ = self.display_call(
             IpcMsg::with_label(SgpMsg::CONFIGURE_WINDOW)
                 .word(0, self.win_id)
                 .word(1, flags)
@@ -444,10 +448,7 @@ impl Drop for Window {
     fn drop(&mut self) {
         // Normal window lifecycle cleanup: tell the compositor to forget this
         // window before we release our local SHM mapping. Drop must stay best-effort.
-        let _ = ipc_call(
-            self.display_ep,
-            IpcMsg::with_label(SgpMsg::CLOSE_WINDOW).word(0, self.win_id),
-        );
+        let _ = self.display_call(IpcMsg::with_label(SgpMsg::CLOSE_WINDOW).word(0, self.win_id));
         // Client-side SHM cleanup still happens even if the display server is
         // already gone or the process is exiting.
         let _ = shm_free(self.shm_cap);

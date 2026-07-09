@@ -8,10 +8,13 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, nameserver_lookup,
+    debug_log, endpoint_create, getpid, ipc_call_timeout, ipc_recv, nameserver_lookup,
     nameserver_lookup_timeout, nameserver_register, DevicedMsg, DriverCaps, DriverKind,
     DriverState, IpcMsg,
 };
+
+const INPUT_FORWARD_TIMEOUT_MS: u64 = 50;
+const TIMEOUT_LOG_INTERVAL: u64 = 32;
 
 /// PS/2 Scancode Set 1 keycodes
 mod keycode {
@@ -328,6 +331,7 @@ pub extern "C" fn _start() -> ! {
 
     let mut modifiers = Modifiers::default();
     let mut extended_prefix = false;
+    let mut tty_timeout_count = 0u64;
     loop {
         while let Some(scancode) = kbd_pop_scancode() {
             if scancode == keycode::EXTENDED_PREFIX {
@@ -336,7 +340,12 @@ pub extern "C" fn _start() -> ! {
             }
             if let Some(event_val) = process_scancode(scancode, extended_prefix, &mut modifiers) {
                 let msg = IpcMsg::with_label(0x1).word(0, event_val);
-                let _ = ipc_call(tty_token, msg);
+                if ipc_call_timeout(tty_token, msg, INPUT_FORWARD_TIMEOUT_MS).is_err() {
+                    tty_timeout_count = tty_timeout_count.saturating_add(1);
+                    if tty_timeout_count == 1 || tty_timeout_count % TIMEOUT_LOG_INTERVAL == 0 {
+                        debug_log("[KBD] tty forward timeout\n");
+                    }
+                }
             }
             extended_prefix = false;
         }

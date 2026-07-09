@@ -74,7 +74,14 @@ impl<'a, const N: usize> TextInput<'a, N> {
         };
 
         if let Some(f) = self.font {
-            f.draw_vcenter(canvas, visible, text_x, self.rect.y, self.rect.h, text_color);
+            f.draw_vcenter(
+                canvas,
+                visible,
+                text_x,
+                self.rect.y,
+                self.rect.h,
+                text_color,
+            );
             if self.active {
                 let cursor_x = text_x + f.measure_w(prefix) as i32;
                 canvas.vline(

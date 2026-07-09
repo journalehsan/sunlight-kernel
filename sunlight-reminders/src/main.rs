@@ -191,11 +191,8 @@ impl TaskEditor {
 
     fn start_new(&mut self, list_idx: usize) {
         let now = local_now_best_effort(get_time_utc());
-        let due_date = sunlight_reminders::format_date(
-            now.year.into(),
-            now.month as i32,
-            now.day as i32,
-        );
+        let due_date =
+            sunlight_reminders::format_date(now.year.into(), now.month as i32, now.day as i32);
         let due_time = format_time_hhmm(now.hour, now.minute);
         self.visible = true;
         self.editing_id = None;

@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-display"
-version = "0.2.1024"
+version = "0.2.1025"
+
 
 build = "build.rs"
 

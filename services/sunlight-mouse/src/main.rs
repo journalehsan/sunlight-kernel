@@ -9,7 +9,7 @@
 #![no_main]
 
 use sunlight_ipc::{
-    endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, nameserver_lookup,
+    endpoint_create, getpid, ipc_call_timeout, ipc_recv, nameserver_lookup,
     nameserver_lookup_timeout, nameserver_register, process_yield, query_display_metrics,
     DevicedMsg, DisplayMetrics, DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
 };
@@ -20,9 +20,11 @@ use profile::{select_profile, FP_SHIFT};
 /// Set to true to print raw packet bytes and decoded dx/dy on every complete packet.
 const MOUSE_DEBUG: bool = false;
 const DIAG_LOG_INTERVAL: u64 = 64;
+const TIMEOUT_LOG_INTERVAL: u64 = 64;
 const NICED_SET_NICE: u64 = 0x9010;
 const NICED_REPLY: u64 = 0x90FF;
 const MOUSE_INPUT_NICE: i8 = -10;
+const INPUT_FORWARD_TIMEOUT_MS: u64 = 50;
 
 #[derive(Clone, Copy)]
 struct MouseDiagnostics {
@@ -114,6 +116,9 @@ struct MouseState {
     screen_height: i32,
     tuning: profile::PointerTuning,
     diagnostics: MouseDiagnostics,
+    display_timeout_count: u64,
+    tty_timeout_count: u64,
+    display_route_logged: bool,
 }
 
 impl MouseState {
@@ -131,6 +136,9 @@ impl MouseState {
             screen_height: height,
             tuning: active.tuning(),
             diagnostics: MouseDiagnostics::new(),
+            display_timeout_count: 0,
+            tty_timeout_count: 0,
+            display_route_logged: false,
         }
     }
 
@@ -594,8 +602,9 @@ fn flush_motion_batch(
 
     if display_token.is_none() {
         *display_token = nameserver_lookup("display_server");
-        if display_token.is_some() {
+        if display_token.is_some() && !mouse_state.display_route_logged {
             syscall::debug_log("[MOUSE] display_server available, routing raw events there\n");
+            mouse_state.display_route_logged = true;
         }
     }
 
@@ -609,18 +618,42 @@ fn flush_motion_batch(
         let msg = IpcMsg::with_label(MouseMsg::RAW_MOTION)
             .word(0, raw)
             .word(1, metadata);
-        let _ = ipc_call(disp, msg);
-        mouse_state.diagnostics.hw_cursor_moves += 1;
-        *next_generation = next_generation.wrapping_add(1);
-        if *next_generation == 0 {
-            *next_generation = 1;
+        match ipc_call_timeout(disp, msg, INPUT_FORWARD_TIMEOUT_MS) {
+            Ok(_) => {
+                mouse_state.diagnostics.hw_cursor_moves += 1;
+                *next_generation = next_generation.wrapping_add(1);
+                if *next_generation == 0 {
+                    *next_generation = 1;
+                }
+            }
+            Err(_) => {
+                mouse_state.display_timeout_count =
+                    mouse_state.display_timeout_count.saturating_add(1);
+                if mouse_state.display_timeout_count == 1
+                    || mouse_state.display_timeout_count % TIMEOUT_LOG_INTERVAL == 0
+                {
+                    syscall::debug_log("[MOUSE] display forward timeout count=");
+                    syscall::debug_log_i32(mouse_state.display_timeout_count as i32);
+                    syscall::debug_log("\n");
+                }
+                *display_token = None;
+            }
         }
     } else {
         let mut abs = batch.abs_x as u64;
         abs |= (batch.abs_y as u64) << 16;
         abs |= (batch.buttons as u64) << 32;
         let msg = IpcMsg::with_label(0x2).word(0, abs);
-        let _ = ipc_call(tty_token, msg);
+        if ipc_call_timeout(tty_token, msg, INPUT_FORWARD_TIMEOUT_MS).is_err() {
+            mouse_state.tty_timeout_count = mouse_state.tty_timeout_count.saturating_add(1);
+            if mouse_state.tty_timeout_count == 1
+                || mouse_state.tty_timeout_count % TIMEOUT_LOG_INTERVAL == 0
+            {
+                syscall::debug_log("[MOUSE] tty fallback forward timeout count=");
+                syscall::debug_log_i32(mouse_state.tty_timeout_count as i32);
+                syscall::debug_log("\n");
+            }
+        }
     }
 }
 

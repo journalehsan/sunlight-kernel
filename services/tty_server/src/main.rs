@@ -33,7 +33,8 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use alloc::boxed::Box;
 use sunlight_ipc::{
-    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_try_recv,
+    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_call_timeout, ipc_recv,
+    ipc_reply_and_try_recv,
     launch_trace::{LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
     sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
@@ -88,6 +89,10 @@ const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
 const PENDING_INPUT_MAX: usize = 128;
 const MAX_TABS: usize = 10;
+const DISPLAY_IPC_TIMEOUT_MS: u64 = 100;
+const SHELL_IPC_TIMEOUT_MS: u64 = 200;
+const TZ_IPC_TIMEOUT_MS: u64 = 100;
+const DISPLAY_TIMEOUT_LOG_INTERVAL: u64 = 32;
 
 const CURSOR_W: usize = 10;
 const CURSOR_H: usize = 15;
@@ -107,6 +112,31 @@ const ARROW_CURSOR: [u8; CURSOR_PIXELS] = [
 
 fn vt_is_active(active_vt: VirtualTerminal, vt: VirtualTerminal) -> bool {
     active_vt == vt
+}
+
+fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) -> bool {
+    if display_cap.is_none() {
+        *display_cap = nameserver_lookup("display_server");
+    }
+    let Some(cap) = *display_cap else {
+        return false;
+    };
+    match ipc_call_timeout(cap, msg, DISPLAY_IPC_TIMEOUT_MS) {
+        Ok(reply) if reply.label == SgpMsg::REPLY => true,
+        _ => {
+            static mut DISPLAY_TIMEOUT_COUNT: u64 = 0;
+            let should_log = unsafe {
+                DISPLAY_TIMEOUT_COUNT = DISPLAY_TIMEOUT_COUNT.saturating_add(1);
+                DISPLAY_TIMEOUT_COUNT == 1
+                    || DISPLAY_TIMEOUT_COUNT % DISPLAY_TIMEOUT_LOG_INTERVAL == 0
+            };
+            if should_log {
+                debug_log("[TTY] display request timeout/failure\n");
+            }
+            *display_cap = None;
+            false
+        }
+    }
 }
 
 struct MouseState {
@@ -523,15 +553,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 KEY_F1 => {
                                     if active_vt != VirtualTerminal::Tty {
                                         debug_log("[SESSION] switched to F1 TTY/Login");
-                                        if display_cap.is_none() {
-                                            display_cap = nameserver_lookup("display_server");
-                                        }
-                                        if let Some(cap) = display_cap {
-                                            let _ = ipc_call(
-                                                cap,
-                                                IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
-                                            );
-                                        }
+                                        let _ = send_display_request(
+                                            &mut display_cap,
+                                            IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
+                                        );
                                     }
                                     active_vt = VirtualTerminal::Tty;
                                     if has_fb {
@@ -548,15 +573,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     }
                                     if active_vt != VirtualTerminal::Desktop {
                                         debug_log("[SESSION] switched to F2 GraphicalDesktop");
-                                        if display_cap.is_none() {
-                                            display_cap = nameserver_lookup("display_server");
-                                        }
-                                        if let Some(cap) = display_cap {
-                                            let _ = ipc_call(
-                                                cap,
-                                                IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
-                                            );
-                                        }
+                                        let _ = send_display_request(
+                                            &mut display_cap,
+                                            IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
+                                        );
                                     }
                                     active_vt = VirtualTerminal::Desktop;
                                     break 'kbd;
@@ -568,12 +588,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if !vt_is_active(active_vt, VirtualTerminal::Tty) {
                             // Desktop mode: forward ALL events (presses AND releases) to
                             // display_server so it can track key-up for Alt+Tab chord end.
-                            if display_cap.is_none() {
-                                display_cap = nameserver_lookup("display_server");
-                            }
-                            if let Some(cap) = display_cap {
-                                let _ = ipc_call(cap, msg);
-                            }
+                            let _ = send_display_request(&mut display_cap, msg);
                             break 'kbd;
                         }
 
@@ -674,15 +689,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             debug_log("[SESSION] switched to F2 GraphicalDesktop");
                                             desktop_unlocked = true;
                                             active_vt = VirtualTerminal::Desktop;
-                                            if display_cap.is_none() {
-                                                display_cap = nameserver_lookup("display_server");
-                                            }
-                                            if let Some(cap) = display_cap {
-                                                let _ = ipc_call(
-                                                    cap,
-                                                    IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
-                                                );
-                                            }
+                                            let _ = send_display_request(
+                                                &mut display_cap,
+                                                IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
+                                            );
                                             login.message = "Desktop session launched.";
                                         }
                                     }
@@ -726,15 +736,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 KEY_F1 => {
                                     if active_vt != VirtualTerminal::Tty {
                                         debug_log("[SESSION] switched to F1 TTY/Login");
-                                        if display_cap.is_none() {
-                                            display_cap = nameserver_lookup("display_server");
-                                        }
-                                        if let Some(cap) = display_cap {
-                                            let _ = ipc_call(
-                                                cap,
-                                                IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
-                                            );
-                                        }
+                                        let _ = send_display_request(
+                                            &mut display_cap,
+                                            IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
+                                        );
                                     }
                                     active_vt = VirtualTerminal::Tty;
                                     // In Shell state, redraw the shell (not the login screen).
@@ -749,15 +754,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 KEY_F2 => {
                                     if active_vt != VirtualTerminal::Desktop {
                                         debug_log("[SESSION] switched to F2 GraphicalDesktop");
-                                        if display_cap.is_none() {
-                                            display_cap = nameserver_lookup("display_server");
-                                        }
-                                        if let Some(cap) = display_cap {
-                                            let _ = ipc_call(
-                                                cap,
-                                                IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
-                                            );
-                                        }
+                                        let _ = send_display_request(
+                                            &mut display_cap,
+                                            IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
+                                        );
                                     }
                                     active_vt = VirtualTerminal::Desktop;
                                     break 'kbd;
@@ -782,29 +782,24 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
                         if !vt_is_active(active_vt, VirtualTerminal::Tty) {
                             // Forward keyboard event to display_server when Desktop session is active.
-                            if display_cap.is_none() {
-                                display_cap = nameserver_lookup("display_server");
-                            }
-                            if let Some(cap) = display_cap {
-                                let (
-                                    fwd_keycode,
-                                    fwd_pressed,
-                                    _fwd_shift,
-                                    fwd_ctrl,
-                                    _fwd_alt,
-                                    _fwd_super,
-                                    fwd_ascii,
-                                ) = unpack_key_event(msg.words[0]);
-                                if fwd_pressed {
-                                    debug_log(&alloc::format!(
+                            let (
+                                fwd_keycode,
+                                fwd_pressed,
+                                _fwd_shift,
+                                fwd_ctrl,
+                                _fwd_alt,
+                                _fwd_super,
+                                fwd_ascii,
+                            ) = unpack_key_event(msg.words[0]);
+                            if fwd_pressed {
+                                debug_log(&alloc::format!(
                                     "[TTY->DISPLAY] shell forward keycode={:#x} ctrl={} ascii={}\n",
                                     fwd_keycode,
                                     fwd_ctrl,
                                     fwd_ascii.unwrap_or(0)
                                 ));
-                                }
-                                let _ = ipc_call(cap, msg);
                             }
+                            let _ = send_display_request(&mut display_cap, msg);
                             break 'kbd;
                         }
 
@@ -1178,8 +1173,14 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if let Some(cap) = cap {
                             let done = IpcMsg::with_label(FG_DONE_LABEL);
                             debug_ipc_msg("[TTY-IPC] before shell ipc_call FG_DONE_LABEL", &done);
-                            let reply = ipc_call(cap, done);
-                            debug_ipc_msg("[TTY-IPC] after shell FG_DONE reply", &reply);
+                            match ipc_call_timeout(cap, done, SHELL_IPC_TIMEOUT_MS) {
+                                Ok(reply) => {
+                                    debug_ipc_msg("[TTY-IPC] after shell FG_DONE reply", &reply);
+                                }
+                                Err(_) => {
+                                    debug_log("[TTY] shell FG_DONE IPC timeout\n");
+                                }
+                            }
                         }
                         if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
                             tab.fg_pid = None;
@@ -1674,7 +1675,14 @@ fn send_key_to_shell(
 ) -> ShellKeyResult {
     let kbd_msg = IpcMsg::with_label(KBD_LABEL).word(0, byte as u64);
     debug_ipc_msg("[TTY-IPC] before shell ipc_call KBD_LABEL", &kbd_msg);
-    let reply = ipc_call(cap, kbd_msg);
+    let reply = match ipc_call_timeout(cap, kbd_msg, SHELL_IPC_TIMEOUT_MS) {
+        Ok(reply) => reply,
+        Err(_) => {
+            append_term(term_output, term_output_len, b"\n[shell timeout]\n");
+            debug_log("[TTY] shell key IPC timeout\n");
+            return ShellKeyResult::Continue;
+        }
+    };
     debug_ipc_msg("[TTY-IPC] after shell ipc_call reply", &reply);
     if reply.label == EXIT_LABEL {
         return ShellKeyResult::Exited;
@@ -1723,7 +1731,13 @@ fn append_shell_reply(
     while remaining > 0 && safety > 0 {
         let drain_msg = IpcMsg::with_label(DRAIN_LABEL).word(0, seq);
         debug_ipc_msg("[TTY-IPC] before shell ipc_call DRAIN_LABEL", &drain_msg);
-        let next = ipc_call(cap, drain_msg);
+        let next = match ipc_call_timeout(cap, drain_msg, SHELL_IPC_TIMEOUT_MS) {
+            Ok(reply) => reply,
+            Err(_) => {
+                debug_log("[TTY] shell drain IPC timeout\n");
+                break;
+            }
+        };
         debug_ipc_msg("[TTY-IPC] after shell drain reply", &next);
         if next.label != OUTPUT_LABEL {
             break;
@@ -1961,7 +1975,9 @@ unsafe fn titlebar(ts: u64) -> ([u8; 64], usize) {
 unsafe fn try_local_clock(dst: &mut [u8], _ts: u64) -> (usize, bool) {
     if let Some(tz_cap) = nameserver_lookup("tz") {
         let req = IpcMsg::with_label(TzMsg::GET_LOCAL_TIME);
-        let reply = ipc_call(tz_cap, req);
+        let Ok(reply) = ipc_call_timeout(tz_cap, req, TZ_IPC_TIMEOUT_MS) else {
+            return (0, false);
+        };
         if reply.label == TzMsg::REPLY && reply.word_count >= 1 {
             // unpack word(0)
             let w0 = reply.words[0];

@@ -145,6 +145,8 @@ static ICON_SETTINGS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
 static ICON_CALENDAR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/office-calendar.tga");
+static ICON_RUNNER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/system-run.tga");
 static MENU_NEW_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.tga");
 static MENU_NEW_TEXT_TGA: &[u8] =
@@ -1205,6 +1207,8 @@ struct VortexShell {
     apps: [DockAppState; 9],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
+    /// Reused scratch buffer for LIST_WINDOWS snapshots.
+    window_snapshots: Vec<WindowSnapshot>,
     /// Clickable bounds for the dynamic running-app strip.
     running_zones: Vec<(Rect, u64)>,
     /// Hovered running-app index, if any.
@@ -1361,6 +1365,7 @@ impl VortexShell {
                 DockAppState::new(AppId::Calendar, "Sunlight Calendar", AppId::Calendar),
             ],
             running_apps: Vec::new(),
+            window_snapshots: Vec::new(),
             running_zones: Vec::new(),
             running_hover: None,
             telemetry,
@@ -1831,8 +1836,8 @@ impl VortexShell {
         debug_log(")\n");
     }
 
-    fn fetch_window_snapshots(&self) -> Option<Vec<WindowSnapshot>> {
-        let mut windows = Vec::new();
+    fn refresh_window_snapshots(&mut self) -> Option<()> {
+        self.window_snapshots.clear();
         let mut idx = 0u64;
         loop {
             let reply = ipc_call_timeout(
@@ -1853,7 +1858,7 @@ impl VortexShell {
                 title[i] = ((reply.words[6] >> (i * 8)) & 0xFF) as u8;
                 title[8 + i] = ((reply.words[7] >> (i * 8)) & 0xFF) as u8;
             }
-            windows.push(WindowSnapshot {
+            self.window_snapshots.push(WindowSnapshot {
                 id: reply.words[0],
                 owner_pid: reply.words[1],
                 state: reply.words[2],
@@ -1865,7 +1870,7 @@ impl VortexShell {
             });
             idx = idx.saturating_add(1);
         }
-        Some(windows)
+        Some(())
     }
 
     fn sync_app_registry(&mut self, now: u64, force: bool) -> bool {
@@ -1874,9 +1879,10 @@ impl VortexShell {
         }
         self.next_app_poll_ms = now.saturating_add(APP_STATE_POLL_MS);
 
-        let Some(windows) = self.fetch_window_snapshots() else {
+        let Some(()) = self.refresh_window_snapshots() else {
             return false;
         };
+        let mut windows = core::mem::take(&mut self.window_snapshots);
 
         let mut dirty = false;
         for app in &mut self.apps {
@@ -2013,6 +2019,9 @@ impl VortexShell {
                 dirty = true;
             }
         }
+
+        windows.clear();
+        self.window_snapshots = windows;
 
         dirty
     }
@@ -4397,13 +4406,20 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "sunlight-text"
         | "kate" => Some(ICON_FILE_TGA),
         "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_TGA),
+        "runner" | "run" | "system-run" => Some(ICON_RUNNER_TGA),
         _ => None,
     }
 }
 
+fn is_generated_app_name(stem: &str) -> bool {
+    stem.strip_prefix("app-")
+        .map(|suffix| !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit()))
+        .unwrap_or(false)
+}
+
 fn try_load_runtime_icon(name: &str) -> Option<Vec<u8>> {
     let stem = normalize_icon_stem(name);
-    if stem.is_empty() {
+    if stem.is_empty() || is_generated_app_name(&stem) {
         return None;
     }
 
