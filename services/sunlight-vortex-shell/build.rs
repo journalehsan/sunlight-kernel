@@ -130,6 +130,7 @@ fn main() {
         ("article", 0xe8e2), // for office-ish
         ("sunny", 0xe430),   // sun / light for logo
         ("close", 0xe5cd),
+        ("do_not_disturb_on", 0xe644),
         ("do_not_disturb_off", 0xe643),
     ];
 

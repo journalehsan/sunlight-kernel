@@ -36,6 +36,7 @@ fn main() {
         .and_then(|bytes| Font::from_bytes(bytes, FontSettings::default()).ok());
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR missing"));
     for (name, cp) in [
+        ("do_not_disturb_on", 0xe644u32),
         ("do_not_disturb_off", 0xe643u32),
         ("notifications", 0xe7f4u32),
     ] {

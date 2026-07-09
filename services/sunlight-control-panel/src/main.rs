@@ -55,6 +55,8 @@ static ICON_SETTINGS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
 static ICON_PREFS_MONO_RAW: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/preferences-symbolic.raw"));
+static ICON_SYM_DND_ON_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icons/do_not_disturb_on.tga"));
 static ICON_SYM_DND_OFF_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/do_not_disturb_off.tga"));
 static ICON_SYM_NOTIFICATIONS_TGA: &[u8] =
@@ -101,6 +103,7 @@ struct ControlPanelApp {
     icon_monitor: Option<TgaImage>,
     icon_wallpaper: Option<TgaImage>,
     icon_notifications: Option<TgaImage>,
+    icon_dnd_on: Option<TgaImage>,
     icon_dnd: Option<TgaImage>,
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
@@ -142,6 +145,7 @@ impl ControlPanelApp {
             icon_monitor: TgaImage::parse(ICON_MONITOR_TGA).ok(),
             icon_wallpaper: TgaImage::parse(ICON_WALLPAPER_TGA).ok(),
             icon_notifications: TgaImage::parse(ICON_SYM_NOTIFICATIONS_TGA).ok(),
+            icon_dnd_on: TgaImage::parse(ICON_SYM_DND_ON_TGA).ok(),
             icon_dnd: TgaImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
             wallpaper_items,
             wallpaper_config,
@@ -431,8 +435,13 @@ impl ControlPanelApp {
             theme,
             FontRole::UiSmall,
         );
-        if let Some(icon) = self.icon_dnd {
-            canvas.draw_tga_icon_tinted(&icon, Rect::new(28, 86, 20, 20), theme.icon_muted);
+        let dnd_icon = if dnd { self.icon_dnd_on } else { self.icon_dnd };
+        if let Some(icon) = dnd_icon {
+            canvas.draw_tga_icon_tinted(
+                &icon,
+                Rect::new(28, 86, 20, 20),
+                if dnd { theme.warn } else { theme.icon_muted },
+            );
         }
         Self::draw_label(
             canvas,

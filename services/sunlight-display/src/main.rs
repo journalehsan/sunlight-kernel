@@ -182,6 +182,7 @@ const NOTIFICATION_MARGIN_X: i32 = 12;
 const NOTIFICATION_MARGIN_Y: i32 = 52;
 const NOTIFICATION_GAP: i32 = 8;
 const NOTIFICATION_TIMEOUT_MS: u64 = 30_000;
+const NOTIFICATION_MIN_TIMEOUT_MS: u64 = 5_000;
 const NOTIFICATION_POLL_MS: u64 = 100;
 const OVERLAY_DECORATION_POLL_MS: u64 = 100;
 const OVERLAY_DECORATION_IDLE_TIMEOUT_MS: u64 = 2_500;
@@ -1388,7 +1389,8 @@ fn ingest_notification(state: &mut CompositorState, msg: &IpcMsg) {
     let timeout_ms = if wire.timeout_ms == 0 {
         NOTIFICATION_TIMEOUT_MS
     } else {
-        wire.timeout_ms.min(NOTIFICATION_TIMEOUT_MS)
+        wire.timeout_ms
+            .clamp(NOTIFICATION_MIN_TIMEOUT_MS, NOTIFICATION_TIMEOUT_MS)
     };
     push_notification(state, kind, title, body, timeout_ms);
 }

@@ -181,6 +181,8 @@ static ICON_SYM_ARTICLE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/i
 static ICON_SYM_SUNNY_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_sunny.tga"));
 static ICON_SYM_START_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_start_menu.tga"));
 static ICON_SYM_CLOSE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_close.tga"));
+static ICON_SYM_DND_ON_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_do_not_disturb_on.tga"));
 static ICON_SYM_DND_OFF_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icon_do_not_disturb_off.tga"));
 
@@ -368,6 +370,7 @@ struct SymbolTheme {
     sunny: Option<TgaImage>,
     start: Option<TgaImage>,
     close: Option<TgaImage>,
+    dnd_on: Option<TgaImage>,
     dnd_off: Option<TgaImage>,
 }
 
@@ -392,6 +395,7 @@ impl SymbolTheme {
             sunny: TgaImage::parse(ICON_SYM_SUNNY_TGA).ok(),
             start: TgaImage::parse(ICON_SYM_START_TGA).ok(),
             close: TgaImage::parse(ICON_SYM_CLOSE_TGA).ok(),
+            dnd_on: TgaImage::parse(ICON_SYM_DND_ON_TGA).ok(),
             dnd_off: TgaImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
         }
     }
@@ -416,6 +420,7 @@ impl SymbolTheme {
             "sunny" => self.sunny,
             "start" | "menu" => self.start.or(self.menu),
             "close" => self.close,
+            "do_not_disturb_on" => self.dnd_on,
             "do_not_disturb_off" => self.dnd_off,
             _ => None,
         }
@@ -5103,8 +5108,17 @@ impl VortexShell {
             16,
             16,
         );
-        if let Some(icon) = self.symbols.dnd_off {
-            canvas.draw_tga_icon_tinted(&icon, dnd_icon_r, theme.text);
+        let dnd_icon = if dnd_on {
+            self.symbols.dnd_on
+        } else {
+            self.symbols.dnd_off
+        };
+        if let Some(icon) = dnd_icon {
+            canvas.draw_tga_icon_tinted(
+                &icon,
+                dnd_icon_r,
+                if dnd_on { theme.text } else { theme.icon_muted },
+            );
         }
         draw_text_vcenter(
             canvas,
@@ -5153,11 +5167,11 @@ impl VortexShell {
             }
             rendered_groups.push(group.clone());
             if rendered_groups.len() > 1 {
-                cy += 5;
+                cy += 8;
             }
             let group_icon_r = Rect::new(panel.x + 14, cy + 1, 16, 16);
             if let Some(icon) = self.symbols.settings {
-                canvas.draw_tga_icon_tinted(&icon, group_icon_r, theme.icon_muted);
+                canvas.draw_tga_icon_tinted(&icon, group_icon_r, theme.text_dim.darken(20));
             }
             let label = ellipsize_label(&group, 30);
             draw_text_vcenter(
@@ -5166,9 +5180,9 @@ impl VortexShell {
                 panel.x + 34,
                 cy,
                 18,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim.darken(10)),
             );
-            cy += 18;
+            cy += 22;
 
             for record in records
                 .iter()
@@ -5237,7 +5251,7 @@ impl VortexShell {
                         &TextStyle::new(FontRole::UiSmall, theme.text_dim),
                     );
                 }
-                cy += card_h as i32 + 8;
+                cy += card_h as i32 + 10;
             }
         }
     }
