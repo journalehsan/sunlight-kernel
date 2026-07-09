@@ -270,7 +270,9 @@ impl TaskEditor {
         updated_at: u64,
         lists: &[TaskList; 3],
     ) -> Option<Task> {
-        self.validate()?;
+        if self.validate().is_some() {
+            return None;
+        }
         let list_idx = self.selected_list_idx.min(2);
         let list_id = lists[list_idx].id.as_str();
         let mut task = Task::blank(id, list_id)?;
