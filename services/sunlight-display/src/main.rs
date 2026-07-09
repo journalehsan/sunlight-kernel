@@ -1336,7 +1336,7 @@ fn ingest_notification(state: &mut CompositorState, msg: &IpcMsg) {
     let timeout_ms = if wire.timeout_ms == 0 {
         NOTIFICATION_TIMEOUT_MS
     } else {
-        wire.timeout_ms
+        wire.timeout_ms.min(NOTIFICATION_TIMEOUT_MS)
     };
     push_notification(state, kind, title, body, timeout_ms);
 }

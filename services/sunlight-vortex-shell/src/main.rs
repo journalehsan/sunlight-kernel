@@ -64,11 +64,11 @@ use sunlight_ipc::{
     debug_log, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, notification_dnd_enabled,
-    notification_history_recent, notification_set_dismissed, notification_set_dnd,
-    notification_set_seen, process_is_alive, process_yield, query_display_metrics, shm_alloc,
-    shm_free, shm_map, show_notification, unpack_iface_summary, CapabilityToken, DisplayMetrics,
-    InterfaceKind, IpcMsg, LinkState, NetworkdMsg, NotificationKind, NotificationPriority,
-    NotificationRecord, ProcessExit, SgpMsg, TzMsg, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SHM_PAGE,
+    notification_kv_get_into, notification_kv_put, notification_set_dnd, process_is_alive,
+    process_yield, query_display_metrics, shm_alloc, shm_free, shm_map, show_notification,
+    unpack_iface_summary, CapabilityToken, DisplayMetrics, InterfaceKind, IpcMsg, LinkState,
+    NetworkdMsg, NotificationKind, NotificationPriority, ProcessExit, SgpMsg, TzMsg,
+    NOTIFICATION_RECENT_KEY, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
 use sunlight_reminders::{
@@ -615,6 +615,7 @@ const MENU_W: u32 = 156;
 const MENU_ITEM_H: u32 = 22;
 const NOTIF_CENTER_W: u32 = 320;
 const NOTIF_CENTER_RECENT_LIMIT: usize = 32;
+const NOTIF_DISMISS_ZONES_MAX: usize = 32;
 
 static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 
@@ -1218,6 +1219,7 @@ struct VortexShell {
     notif_dnd_toggle_r: Rect,
     notif_mark_seen_r: Rect,
     notif_dismiss_r: Rect,
+    notif_dismiss_zones: Vec<(Rect, String)>,
     show_logout_confirm: bool,
 
     // Stash for logout dialog button rects (simple, recomputed often)
@@ -1328,6 +1330,7 @@ impl VortexShell {
             notif_dnd_toggle_r: Rect::new(0, 0, 0, 0),
             notif_mark_seen_r: Rect::new(0, 0, 0, 0),
             notif_dismiss_r: Rect::new(0, 0, 0, 0),
+            notif_dismiss_zones: Vec::new(),
             show_logout_confirm: false,
             logout_cancel_r: Rect::new(0, 0, 0, 0),
             logout_confirm_r: Rect::new(0, 0, 0, 0),
@@ -3383,6 +3386,206 @@ fn ellipsize_label(text: &str, max_chars: usize) -> String {
     out
 }
 
+#[derive(Clone, PartialEq, Eq)]
+struct NotificationRecord {
+    storage_key: String,
+    id: String,
+    timestamp: String,
+    sender_pid: Option<u64>,
+    sender_name: String,
+    sender_icon: Option<String>,
+    owner: String,
+    title: String,
+    body: String,
+    priority: NotificationPriority,
+    seen: bool,
+    dismissed: bool,
+}
+
+fn parse_notification_priority(value: &str) -> NotificationPriority {
+    match value {
+        "low" => NotificationPriority::Low,
+        "high" => NotificationPriority::High,
+        "critical" => NotificationPriority::Critical,
+        _ => NotificationPriority::Normal,
+    }
+}
+
+fn unescape_notification_field(value: &str) -> String {
+    let mut out = String::new();
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            out.push(match ch {
+                'n' => '\n',
+                'e' => '=',
+                '\\' => '\\',
+                other => other,
+            });
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn append_notification_escaped(out: &mut String, value: &str) {
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '=' => out.push_str("\\e"),
+            _ => out.push(ch),
+        }
+    }
+}
+
+fn append_notification_field(out: &mut String, key: &str, value: &str) {
+    out.push_str(key);
+    out.push('=');
+    append_notification_escaped(out, value);
+    out.push('\n');
+}
+
+fn notification_priority_name(priority: NotificationPriority) -> &'static str {
+    match priority {
+        NotificationPriority::Low => "low",
+        NotificationPriority::Normal => "normal",
+        NotificationPriority::High => "high",
+        NotificationPriority::Critical => "critical",
+    }
+}
+
+fn decode_notification_record(storage_key: &str, bytes: &[u8]) -> Option<NotificationRecord> {
+    let text = core::str::from_utf8(bytes).ok()?;
+    let mut record = NotificationRecord {
+        storage_key: String::from(storage_key),
+        id: String::new(),
+        timestamp: String::new(),
+        sender_pid: None,
+        sender_name: String::new(),
+        sender_icon: None,
+        owner: String::new(),
+        title: String::new(),
+        body: String::new(),
+        priority: NotificationPriority::Normal,
+        seen: false,
+        dismissed: false,
+    };
+    for line in text.lines().skip(1) {
+        let Some(eq) = line.find('=') else { continue };
+        let key = &line[..eq];
+        let value = unescape_notification_field(&line[eq + 1..]);
+        match key {
+            "id" => record.id = value,
+            "timestamp" => record.timestamp = value,
+            "sender_pid" => record.sender_pid = parse_u64_ascii(value.as_bytes()),
+            "sender_name" => record.sender_name = value,
+            "sender_icon" => record.sender_icon = if value.is_empty() { None } else { Some(value) },
+            "owner" => record.owner = value,
+            "title" => record.title = value,
+            "body" => record.body = value,
+            "priority" => record.priority = parse_notification_priority(&value),
+            "seen" => record.seen = value == "1" || value == "true",
+            "dismissed" => record.dismissed = value == "1" || value == "true",
+            _ => {}
+        }
+    }
+    if record.id.is_empty() || record.title.is_empty() {
+        return None;
+    }
+    if record.sender_name.is_empty() {
+        record.sender_name = String::from("Unknown sender");
+    }
+    if record.owner.is_empty() {
+        record.owner = String::from("unknown");
+    }
+    Some(record)
+}
+
+fn encode_notification_record(record: &NotificationRecord) -> Vec<u8> {
+    let mut out = String::from("sunlight-notification-v1\n");
+    append_notification_field(&mut out, "id", &record.id);
+    append_notification_field(&mut out, "timestamp", &record.timestamp);
+    append_notification_field(
+        &mut out,
+        "sender_pid",
+        &record
+            .sender_pid
+            .map(|pid| alloc::format!("{}", pid))
+            .unwrap_or_default(),
+    );
+    append_notification_field(&mut out, "sender_name", &record.sender_name);
+    append_notification_field(
+        &mut out,
+        "sender_icon",
+        record.sender_icon.as_deref().unwrap_or(""),
+    );
+    append_notification_field(&mut out, "owner", &record.owner);
+    append_notification_field(&mut out, "title", &record.title);
+    append_notification_field(&mut out, "body", &record.body);
+    append_notification_field(
+        &mut out,
+        "priority",
+        notification_priority_name(record.priority),
+    );
+    append_notification_field(&mut out, "seen", if record.seen { "1" } else { "0" });
+    append_notification_field(
+        &mut out,
+        "dismissed",
+        if record.dismissed { "1" } else { "0" },
+    );
+    out.into_bytes()
+}
+
+fn notification_history_recent(limit: usize, include_dismissed: bool) -> Vec<NotificationRecord> {
+    let mut index = [0u8; SHM_PAGE];
+    let Some(index_len) = notification_kv_get_into(NOTIFICATION_RECENT_KEY, &mut index) else {
+        return Vec::new();
+    };
+    let Ok(text) = core::str::from_utf8(&index[..index_len]) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut value = [0u8; SHM_PAGE];
+    for key in text.lines().filter(|line| !line.is_empty()) {
+        if out.len() >= limit {
+            break;
+        }
+        let Some(value_len) = notification_kv_get_into(key, &mut value) else {
+            continue;
+        };
+        let Some(record) = decode_notification_record(key, &value[..value_len]) else {
+            continue;
+        };
+        if !include_dismissed && record.dismissed {
+            continue;
+        }
+        out.push(record);
+    }
+    out
+}
+
+fn notification_store_record(record: &NotificationRecord) {
+    let encoded = encode_notification_record(record);
+    let _ = notification_kv_put(&record.storage_key, &encoded);
+}
+
+fn notification_set_seen(record: &NotificationRecord, seen: bool) {
+    let mut updated = record.clone();
+    updated.seen = seen;
+    notification_store_record(&updated);
+}
+
+fn notification_set_dismissed(record: &NotificationRecord, dismissed: bool) {
+    let mut updated = record.clone();
+    updated.dismissed = dismissed;
+    notification_store_record(&updated);
+}
+
 fn notification_group_label(record: &NotificationRecord) -> String {
     if record.sender_name == record.owner {
         record.sender_name.clone()
@@ -3403,19 +3606,6 @@ fn notification_priority_color(priority: NotificationPriority) -> Color {
         NotificationPriority::High => Color(0x00D6A94A),
         NotificationPriority::Critical => Color(0x00D95F5F),
     }
-}
-
-fn draw_small_notif_button(canvas: &mut Canvas, theme: &Theme, rect: Rect, label: &str) {
-    canvas.fill_rounded_rect(rect, 5, theme.panel);
-    canvas.stroke_rounded_rect(rect, 5, 1, theme.border);
-    draw_text_vcenter(
-        canvas,
-        label,
-        rect.x + 8,
-        rect.y,
-        rect.h,
-        &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-    );
 }
 
 fn join_path(base: &str, leaf: &str) -> String {
@@ -4878,6 +5068,7 @@ impl VortexShell {
         let records = notification_history_recent(NOTIF_CENTER_RECENT_LIMIT, false);
         self.notif_mark_seen_r = Rect::new(0, 0, 0, 0);
         self.notif_dismiss_r = Rect::new(0, 0, 0, 0);
+        self.notif_dismiss_zones.clear();
 
         if records.is_empty() {
             draw_text_vcenter(
@@ -4894,7 +5085,6 @@ impl VortexShell {
         let mut cy = panel.y + 44;
         let bottom = panel.bottom() - 12;
         let mut rendered_groups: Vec<String> = Vec::new();
-        let mut first_visible = true;
         for group_record in &records {
             if cy + 42 > bottom {
                 draw_text_vcenter(
@@ -4951,7 +5141,12 @@ impl VortexShell {
                     1,
                     notification_priority_color(record.priority),
                 );
-                let title = ellipsize_label(&record.title, 36);
+                let close_r = Rect::new(card.right() - 24, card.y + 6, 16, 16);
+                if self.notif_dismiss_zones.len() < NOTIF_DISMISS_ZONES_MAX {
+                    self.notif_dismiss_zones
+                        .push((close_r, record.storage_key.clone()));
+                }
+                let title = ellipsize_label(&record.title, 32);
                 let body = ellipsize_label(&record.body, 46);
                 let meta = notification_meta(record);
                 draw_text_vcenter(
@@ -4978,13 +5173,16 @@ impl VortexShell {
                     14,
                     &TextStyle::new(FontRole::UiSmall, theme.text_dim),
                 );
-                if first_visible {
-                    self.notif_mark_seen_r = Rect::new(card.right() - 86, card.y + 6, 74, 20);
-                    self.notif_dismiss_r = Rect::new(card.right() - 86, card.y + 34, 74, 20);
-                    draw_small_notif_button(canvas, theme, self.notif_mark_seen_r, "Seen");
-                    draw_small_notif_button(canvas, theme, self.notif_dismiss_r, "Dismiss");
-                    first_visible = false;
-                }
+                canvas.fill_rounded_rect(close_r, 4, theme.panel);
+                canvas.stroke_rounded_rect(close_r, 4, 1, theme.border);
+                draw_text_vcenter(
+                    canvas,
+                    "X",
+                    close_r.x + 5,
+                    close_r.y,
+                    close_r.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
                 cy += card_h as i32 + 8;
             }
         }
@@ -5315,6 +5513,19 @@ impl App for VortexShell {
                         let next = !notification_dnd_enabled();
                         let _ = notification_set_dnd(next);
                         return true;
+                    }
+                    for (rect, key) in &self.notif_dismiss_zones {
+                        if rect.contains(point) {
+                            for record in
+                                notification_history_recent(NOTIF_CENTER_RECENT_LIMIT, false)
+                            {
+                                if record.storage_key == *key {
+                                    notification_set_dismissed(&record, true);
+                                    break;
+                                }
+                            }
+                            return true;
+                        }
                     }
                     if self.notif_mark_seen_r.contains(point) {
                         if let Some(record) =

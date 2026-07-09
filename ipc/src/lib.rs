@@ -1,9 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::{format, string::String, vec::Vec};
-
 pub mod display_metrics;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
@@ -422,29 +418,15 @@ pub enum NotificationPriority {
     Critical,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NotificationRecord {
-    pub id: String,
-    pub timestamp: String,
-    pub sender_pid: Option<u64>,
-    pub sender_name: String,
-    pub sender_icon: Option<String>,
-    pub owner: String,
-    pub title: String,
-    pub body: String,
-    pub priority: NotificationPriority,
-    pub seen: bool,
-    pub dismissed: bool,
-}
-
 const KV_REPLY: u64 = 0x4BFF;
 const KV_ERROR: u64 = 0x4BEE;
 const KV_VALUE: u64 = 0x4B05;
 const KV_PUT_SHM2: u64 = 0x4B08;
 const KV_GET_SHM2: u64 = 0x4B09;
-const NOTIFICATION_RECENT_KEY: &str = "notifications/index/recent";
-const NOTIFICATION_DND_KEY: &str = "notifications/config/dnd";
+pub const NOTIFICATION_RECENT_KEY: &str = "notifications/index/recent";
+pub const NOTIFICATION_DND_KEY: &str = "notifications/config/dnd";
 const NOTIFICATION_RECENT_LIMIT: usize = 64;
+const NOTIFICATION_FIELD_MAX: usize = 256;
 static mut NOTIFICATION_ID_COUNTER: u64 = 1;
 
 #[repr(C)]
@@ -499,163 +481,11 @@ fn notification_priority_str(priority: NotificationPriority) -> &'static str {
     }
 }
 
-fn parse_notification_priority(value: &str) -> NotificationPriority {
-    match value {
-        "low" => NotificationPriority::Low,
-        "high" => NotificationPriority::High,
-        "critical" => NotificationPriority::Critical,
-        _ => NotificationPriority::Normal,
-    }
-}
-
-fn append_escaped(out: &mut String, value: &str) {
-    for ch in value.chars() {
-        match ch {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '=' => out.push_str("\\e"),
-            _ => out.push(ch),
-        }
-    }
-}
-
-fn unescape_notification_field(value: &str) -> String {
-    let mut out = String::new();
-    let mut escaped = false;
-    for ch in value.chars() {
-        if escaped {
-            out.push(match ch {
-                'n' => '\n',
-                'e' => '=',
-                '\\' => '\\',
-                other => other,
-            });
-            escaped = false;
-        } else if ch == '\\' {
-            escaped = true;
-        } else {
-            out.push(ch);
-        }
-    }
-    out
-}
-
-fn append_record_field(out: &mut String, key: &str, value: &str) {
-    out.push_str(key);
-    out.push('=');
-    append_escaped(out, value);
-    out.push('\n');
-}
-
-pub fn encode_notification_record(record: &NotificationRecord) -> Vec<u8> {
-    let mut out = String::from("sunlight-notification-v1\n");
-    append_record_field(&mut out, "id", &record.id);
-    append_record_field(&mut out, "timestamp", &record.timestamp);
-    append_record_field(
-        &mut out,
-        "sender_pid",
-        &record
-            .sender_pid
-            .map(|pid| format!("{}", pid))
-            .unwrap_or_default(),
-    );
-    append_record_field(&mut out, "sender_name", &record.sender_name);
-    append_record_field(
-        &mut out,
-        "sender_icon",
-        record.sender_icon.as_deref().unwrap_or(""),
-    );
-    append_record_field(&mut out, "owner", &record.owner);
-    append_record_field(&mut out, "title", &record.title);
-    append_record_field(&mut out, "body", &record.body);
-    append_record_field(
-        &mut out,
-        "priority",
-        notification_priority_str(record.priority),
-    );
-    append_record_field(&mut out, "seen", if record.seen { "1" } else { "0" });
-    append_record_field(
-        &mut out,
-        "dismissed",
-        if record.dismissed { "1" } else { "0" },
-    );
-    out.into_bytes()
-}
-
-pub fn decode_notification_record(bytes: &[u8]) -> Option<NotificationRecord> {
-    let text = core::str::from_utf8(bytes).ok()?;
-    let mut record = NotificationRecord {
-        id: String::new(),
-        timestamp: String::new(),
-        sender_pid: None,
-        sender_name: String::new(),
-        sender_icon: None,
-        owner: String::new(),
-        title: String::new(),
-        body: String::new(),
-        priority: NotificationPriority::Normal,
-        seen: false,
-        dismissed: false,
-    };
-    for line in text.lines().skip(1) {
-        let Some(eq) = line.find('=') else { continue };
-        let key = &line[..eq];
-        let value = unescape_notification_field(&line[eq + 1..]);
-        match key {
-            "id" => record.id = value,
-            "timestamp" => record.timestamp = value,
-            "sender_pid" => record.sender_pid = value.parse().ok(),
-            "sender_name" => record.sender_name = value,
-            "sender_icon" => record.sender_icon = if value.is_empty() { None } else { Some(value) },
-            "owner" => record.owner = value,
-            "title" => record.title = value,
-            "body" => record.body = value,
-            "priority" => record.priority = parse_notification_priority(&value),
-            "seen" => record.seen = value == "1" || value == "true",
-            "dismissed" => record.dismissed = value == "1" || value == "true",
-            _ => {}
-        }
-    }
-    if record.id.is_empty() || record.title.is_empty() {
-        return None;
-    }
-    if record.sender_name.is_empty() {
-        record.sender_name = String::from("Unknown sender");
-    }
-    if record.owner.is_empty() {
-        record.owner = String::from("unknown");
-    }
-    Some(record)
-}
-
-fn notification_owner_key(owner: &str) -> String {
-    let mut key = String::new();
-    for ch in owner.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
-            key.push(ch.to_ascii_lowercase());
-        } else if ch.is_whitespace() {
-            key.push('-');
-        }
-    }
-    if key.is_empty() {
-        key.push_str("unknown");
-    }
-    key
-}
-
-pub fn notification_record_key(owner: &str, id: &str) -> String {
-    format!(
-        "notifications/history/{}/{}",
-        notification_owner_key(owner),
-        id
-    )
-}
-
 fn notification_kv_cap() -> Option<CapabilityToken> {
     nameserver_lookup_timeout("sunlight-kv", 100)
 }
 
-fn notification_kv_put(key: &str, value: &[u8]) -> bool {
+pub fn notification_kv_put(key: &str, value: &[u8]) -> bool {
     if key.len() > SHM_PAGE || value.len() > SHM_PAGE {
         return false;
     }
@@ -687,7 +517,7 @@ fn notification_kv_put(key: &str, value: &[u8]) -> bool {
     ok
 }
 
-pub fn notification_kv_get(key: &str) -> Option<Vec<u8>> {
+pub fn notification_kv_get_into(key: &str, out: &mut [u8]) -> Option<usize> {
     if key.len() > SHM_PAGE {
         return None;
     }
@@ -709,7 +539,7 @@ pub fn notification_kv_get(key: &str) -> Option<Vec<u8>> {
     }
     let len = (reply.words[0] as usize).min(SHM_PAGE);
     if len == 0 {
-        return Some(Vec::new());
+        return Some(0);
     }
     let tok = reply.caps[0];
     if tok == CapabilityToken::INVALID {
@@ -722,90 +552,116 @@ pub fn notification_kv_get(key: &str) -> Option<Vec<u8>> {
             return None;
         }
     };
-    let bytes = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+    let copy_len = len.min(out.len());
+    unsafe {
+        core::ptr::copy_nonoverlapping(ptr, out.as_mut_ptr(), copy_len);
+    }
     let _ = shm_free(tok);
-    Some(bytes)
+    Some(copy_len)
 }
 
-fn notification_recent_keys() -> Vec<String> {
-    let Some(bytes) = notification_kv_get(NOTIFICATION_RECENT_KEY) else {
-        return Vec::new();
-    };
-    let Ok(text) = core::str::from_utf8(&bytes) else {
-        return Vec::new();
-    };
-    text.lines()
-        .filter(|line| !line.is_empty())
-        .map(String::from)
-        .collect()
+fn append_byte(out: &mut [u8], pos: &mut usize, byte: u8) {
+    if *pos < out.len() {
+        out[*pos] = byte;
+        *pos += 1;
+    }
 }
 
-fn notification_store_record(record: &NotificationRecord) {
-    let key = notification_record_key(&record.owner, &record.id);
-    let encoded = encode_notification_record(record);
-    if !notification_kv_put(&key, &encoded) {
-        return;
+fn append_bytes(out: &mut [u8], pos: &mut usize, bytes: &[u8]) {
+    for &byte in bytes {
+        append_byte(out, pos, byte);
     }
-    let mut keys = notification_recent_keys();
-    keys.retain(|existing| existing != &key);
-    keys.insert(0, key);
-    if keys.len() > NOTIFICATION_RECENT_LIMIT {
-        keys.truncate(NOTIFICATION_RECENT_LIMIT);
-    }
-    let mut index = String::new();
-    for key in keys {
-        index.push_str(&key);
-        index.push('\n');
-    }
-    let _ = notification_kv_put(NOTIFICATION_RECENT_KEY, index.as_bytes());
 }
 
-pub fn notification_history_recent(
-    limit: usize,
-    include_dismissed: bool,
-) -> Vec<NotificationRecord> {
-    let mut out = Vec::new();
-    for key in notification_recent_keys() {
-        if out.len() >= limit {
+fn append_str(out: &mut [u8], pos: &mut usize, value: &str) {
+    append_bytes(out, pos, value.as_bytes());
+}
+
+fn append_u64_hex(out: &mut [u8], pos: &mut usize, value: u64) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut started = false;
+    for shift in (0..16).rev() {
+        let digit = ((value >> (shift * 4)) & 0xf) as usize;
+        if digit != 0 || started || shift == 0 {
+            started = true;
+            append_byte(out, pos, HEX[digit]);
+        }
+    }
+}
+
+fn append_u64_dec(out: &mut [u8], pos: &mut usize, mut value: u64) {
+    let mut tmp = [0u8; 20];
+    let mut idx = tmp.len();
+    loop {
+        idx -= 1;
+        tmp[idx] = b'0' + (value % 10) as u8;
+        value /= 10;
+        if value == 0 {
             break;
         }
-        let Some(bytes) = notification_kv_get(&key) else {
-            continue;
-        };
-        let Some(record) = decode_notification_record(&bytes) else {
-            continue;
-        };
-        if !include_dismissed && record.dismissed {
-            continue;
-        }
-        out.push(record);
     }
-    out
+    append_bytes(out, pos, &tmp[idx..]);
 }
 
-pub fn notification_set_seen(record: &NotificationRecord, seen: bool) {
-    let mut updated = record.clone();
-    updated.seen = seen;
-    notification_store_record(&updated);
+fn append_escaped_limited(out: &mut [u8], pos: &mut usize, value: &str) {
+    let mut used = 0usize;
+    for &byte in value.as_bytes() {
+        if used >= NOTIFICATION_FIELD_MAX {
+            break;
+        }
+        match byte {
+            b'\\' => append_bytes(out, pos, b"\\\\"),
+            b'\n' | b'\r' => append_bytes(out, pos, b"\\n"),
+            b'=' => append_bytes(out, pos, b"\\e"),
+            0x20..=0x7e => append_byte(out, pos, byte),
+            _ => append_byte(out, pos, b'?'),
+        }
+        used += 1;
+    }
 }
 
-pub fn notification_set_dismissed(record: &NotificationRecord, dismissed: bool) {
-    let mut updated = record.clone();
-    updated.dismissed = dismissed;
-    notification_store_record(&updated);
+fn append_field(out: &mut [u8], pos: &mut usize, key: &str, value: &str) {
+    append_str(out, pos, key);
+    append_byte(out, pos, b'=');
+    append_escaped_limited(out, pos, value);
+    append_byte(out, pos, b'\n');
 }
 
-pub fn notification_dnd_enabled() -> bool {
-    notification_kv_get(NOTIFICATION_DND_KEY)
-        .and_then(|bytes| core::str::from_utf8(&bytes).ok().map(|s| s.trim() == "1"))
-        .unwrap_or(false)
+fn notification_owner_key_into(owner: &str, out: &mut [u8]) -> usize {
+    let mut pos = 0usize;
+    for byte in owner.bytes() {
+        let mapped = match byte {
+            b'A'..=b'Z' => byte + 32,
+            b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => byte,
+            b' ' | b'\t' => b'-',
+            _ => continue,
+        };
+        if pos < out.len() {
+            out[pos] = mapped;
+            pos += 1;
+        }
+    }
+    if pos == 0 {
+        let fallback = b"unknown";
+        let len = fallback.len().min(out.len());
+        out[..len].copy_from_slice(&fallback[..len]);
+        pos = len;
+    }
+    pos
 }
 
-pub fn notification_set_dnd(enabled: bool) -> bool {
-    notification_kv_put(NOTIFICATION_DND_KEY, if enabled { b"1" } else { b"0" })
+fn notification_record_key_into(owner: &str, id: &[u8], out: &mut [u8]) -> usize {
+    let mut pos = 0usize;
+    append_bytes(out, &mut pos, b"notifications/history/");
+    let mut owner_buf = [0u8; 64];
+    let owner_len = notification_owner_key_into(owner, &mut owner_buf);
+    append_bytes(out, &mut pos, &owner_buf[..owner_len]);
+    append_byte(out, &mut pos, b'/');
+    append_bytes(out, &mut pos, id);
+    pos
 }
 
-fn next_notification_id() -> String {
+fn notification_next_id_into(out: &mut [u8]) -> usize {
     let unix = get_time_utc();
     let pid = getpid();
     let seq = unsafe {
@@ -813,7 +669,98 @@ fn next_notification_id() -> String {
         NOTIFICATION_ID_COUNTER = NOTIFICATION_ID_COUNTER.saturating_add(1);
         current
     };
-    format!("{:016x}-{:x}-{:x}", unix, pid, seq)
+    let mut pos = 0usize;
+    append_u64_hex(out, &mut pos, unix);
+    append_byte(out, &mut pos, b'-');
+    append_u64_hex(out, &mut pos, pid);
+    append_byte(out, &mut pos, b'-');
+    append_u64_hex(out, &mut pos, seq);
+    pos
+}
+
+fn notification_store_raw_record(
+    id: &[u8],
+    sender_name: &str,
+    owner: &str,
+    sender_icon: Option<&str>,
+    title: &str,
+    body: &str,
+    priority: NotificationPriority,
+) {
+    let mut key = [0u8; 160];
+    let key_len = notification_record_key_into(owner, id, &mut key);
+    let mut value = [0u8; SHM_PAGE];
+    let mut pos = 0usize;
+    append_bytes(&mut value, &mut pos, b"sunlight-notification-v1\n");
+    append_bytes(&mut value, &mut pos, b"id=");
+    append_bytes(&mut value, &mut pos, id);
+    append_byte(&mut value, &mut pos, b'\n');
+    append_bytes(&mut value, &mut pos, b"timestamp=");
+    append_u64_dec(&mut value, &mut pos, get_time_utc());
+    append_byte(&mut value, &mut pos, b'\n');
+    append_bytes(&mut value, &mut pos, b"sender_pid=");
+    append_u64_dec(&mut value, &mut pos, getpid());
+    append_byte(&mut value, &mut pos, b'\n');
+    append_field(&mut value, &mut pos, "sender_name", sender_name);
+    append_field(
+        &mut value,
+        &mut pos,
+        "sender_icon",
+        sender_icon.unwrap_or(""),
+    );
+    append_field(&mut value, &mut pos, "owner", owner);
+    append_field(&mut value, &mut pos, "title", title);
+    append_field(&mut value, &mut pos, "body", body);
+    append_field(
+        &mut value,
+        &mut pos,
+        "priority",
+        notification_priority_str(priority),
+    );
+    append_bytes(&mut value, &mut pos, b"seen=0\n");
+    append_bytes(&mut value, &mut pos, b"dismissed=0\n");
+    if !notification_kv_put(
+        core::str::from_utf8(&key[..key_len]).unwrap_or(""),
+        &value[..pos],
+    ) {
+        return;
+    }
+
+    let mut index = [0u8; SHM_PAGE];
+    let mut index_len = notification_kv_get_into(NOTIFICATION_RECENT_KEY, &mut index).unwrap_or(0);
+    let key_bytes = &key[..key_len];
+    let mut new_index = [0u8; SHM_PAGE];
+    let mut new_len = 0usize;
+    append_bytes(&mut new_index, &mut new_len, key_bytes);
+    append_byte(&mut new_index, &mut new_len, b'\n');
+    let mut count = 1usize;
+    let mut start = 0usize;
+    while start < index_len && count < NOTIFICATION_RECENT_LIMIT {
+        let mut end = start;
+        while end < index_len && index[end] != b'\n' {
+            end += 1;
+        }
+        let line = &index[start..end];
+        if !line.is_empty() && line != key_bytes {
+            append_bytes(&mut new_index, &mut new_len, line);
+            append_byte(&mut new_index, &mut new_len, b'\n');
+            count += 1;
+        }
+        start = end.saturating_add(1);
+    }
+    index_len = new_len;
+    let _ = notification_kv_put(NOTIFICATION_RECENT_KEY, &new_index[..index_len]);
+}
+
+pub fn notification_dnd_enabled() -> bool {
+    let mut buf = [0u8; 8];
+    notification_kv_get_into(NOTIFICATION_DND_KEY, &mut buf)
+        .map(|len| core::str::from_utf8(&buf[..len]).unwrap_or("").trim() == "1")
+        .unwrap_or(false)
+}
+
+pub fn notification_set_dnd(enabled: bool) -> bool {
+    notification_kv_put(NOTIFICATION_DND_KEY, if enabled { b"1" } else { b"0" })
 }
 
 pub fn show_notification_from(
@@ -825,22 +772,19 @@ pub fn show_notification_from(
     body: &str,
     timeout_ms: u64,
 ) -> bool {
-    let record = NotificationRecord {
-        id: next_notification_id(),
-        timestamp: format!("{}", get_time_utc()),
-        sender_pid: Some(getpid()),
-        sender_name: String::from(sender_name),
-        sender_icon: sender_icon.map(String::from),
-        owner: String::from(owner),
-        title: String::from(title),
-        body: String::from(body),
-        priority: notification_priority_for_kind(kind),
-        seen: false,
-        dismissed: false,
-    };
+    let mut id = [0u8; 48];
+    let id_len = notification_next_id_into(&mut id);
     // TODO(notifications): restrict sender permissions, validate process/app manifest identity,
     // and prevent spoofed sender_name/owner values.
-    notification_store_record(&record);
+    notification_store_raw_record(
+        &id[..id_len],
+        sender_name,
+        owner,
+        sender_icon,
+        title,
+        body,
+        notification_priority_for_kind(kind),
+    );
     if notification_dnd_enabled() {
         return true;
     }
