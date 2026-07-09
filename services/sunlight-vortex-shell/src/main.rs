@@ -90,6 +90,7 @@ use sunlight_wallpaper::{is_supported_wallpaper, load_desktop_config, DesktopCon
 // ---------------------------------------------------------------------------
 
 const FALLBACK_BG: u32 = 0x00121214;
+const DESKTOP_CONFIG_PATH: &[u8] = b"/home/root/.config/sunlight/desktop.toml";
 
 // ---------------------------------------------------------------------------
 // Icon theme — SunlightOS icon set (Breeze-inspired, 256×256 BGRA TGA type-2)
@@ -147,6 +148,14 @@ static ICON_CALENDAR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/office-calendar.tga");
 static ICON_RUNNER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/system-run.tga");
+static ICON_GENERIC_APP_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/applications-system.tga");
+static ICON_TASKS_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
+static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
+static ICON_EYES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/kmag.tga");
+static ICON_TEXT_EDITOR_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
 static MENU_NEW_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.tga");
 static MENU_NEW_TEXT_TGA: &[u8] =
@@ -420,7 +429,7 @@ impl SymbolTheme {
             "code" => self.code,
             "article" => self.article,
             "sunny" => self.sunny,
-            "start" | "menu" => self.start.or(self.menu),
+            "start" => self.start.or(self.menu),
             "close" => self.close,
             "do_not_disturb_on" => self.dnd_on,
             "do_not_disturb_off" => self.dnd_off,
@@ -530,10 +539,17 @@ struct WindowSnapshot {
     title: [u8; 16],
 }
 
+#[derive(Clone)]
 enum RunningIcon {
     Static(TgaImage),
     Runtime(Vec<u8>),
     Missing,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct IconOverride {
+    app_key: String,
+    icon_ref: String,
 }
 
 struct RunningAppEntry {
@@ -544,6 +560,7 @@ struct RunningAppEntry {
     label_len: usize,
     cell_w: u32,
     minimized: bool,
+    icon_hint: String,
     icon: Option<RunningIcon>,
     last_click_at: u64,
 }
@@ -562,6 +579,10 @@ impl RunningAppEntry {
     fn refresh_label_cache(&mut self) {
         let label = truncate_label_into(&self.display_name, RUNNING_LABEL_CHARS, &mut self.label);
         self.label_len = label.len();
+        if self.minimized {
+            self.cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON;
+            return;
+        }
         let label_w = measure_text(label, FontRole::UiSmall).w;
         let label_box_w = label_w.clamp(RUNNING_LABEL_MIN_W, RUNNING_LABEL_MAX_W);
         self.cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON + 6 + label_box_w;
@@ -597,6 +618,7 @@ const RUNNING_LABEL_MAX_W: u32 = 90;
 const RUNNING_LABEL_CHARS: usize = 14;
 const RUNNING_NAME_BUF: usize = 64;
 const RUNNING_LABEL_BUF: usize = 32;
+const RUNNING_MINIMIZED_DOT: u32 = 6;
 const MAX_RUNNING_TRACKED: usize = 32;
 const ENABLE_RUNNING_TASKBAR: bool = true;
 
@@ -1207,6 +1229,8 @@ struct VortexShell {
     apps: [DockAppState; 9],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
+    /// User-provided icon overrides loaded from `desktop.toml`.
+    icon_overrides: Vec<IconOverride>,
     /// Reused scratch buffer for LIST_WINDOWS snapshots.
     window_snapshots: Vec<WindowSnapshot>,
     /// Clickable bounds for the dynamic running-app strip.
@@ -1265,6 +1289,7 @@ impl VortexShell {
     fn new(display_ep: CapabilityToken) -> Self {
         let wallpaper_config = load_desktop_config();
         let (wallpaper, wallpaper_error) = load_wallpaper_from_config(&wallpaper_config);
+        let icon_overrides = load_desktop_icon_overrides();
         let desktop_paths = resolve_desktop_paths();
         ensure_directory(&desktop_paths.desktop_dir);
         if wallpaper.is_some() {
@@ -1365,6 +1390,7 @@ impl VortexShell {
                 DockAppState::new(AppId::Calendar, "Sunlight Calendar", AppId::Calendar),
             ],
             running_apps: Vec::new(),
+            icon_overrides,
             window_snapshots: Vec::new(),
             running_zones: Vec::new(),
             running_hover: None,
@@ -1383,6 +1409,13 @@ impl VortexShell {
         let res_changed = self.screen_w != width || self.screen_h != height;
         if !res_changed && now.saturating_sub(self.wallpaper_last_reload_ms) < 1000 {
             return;
+        }
+        let next_overrides = load_desktop_icon_overrides();
+        if next_overrides != self.icon_overrides {
+            self.icon_overrides = next_overrides;
+            for entry in &mut self.running_apps {
+                entry.icon = None;
+            }
         }
         let next = load_desktop_config();
         if next == self.wallpaper_config {
@@ -1816,6 +1849,11 @@ impl VortexShell {
         core::str::from_utf8(&buf[..len]).unwrap_or("App")
     }
 
+    fn is_rtl_locale(&self) -> bool {
+        let locale = core::str::from_utf8(&self.locale[..self.locale_len]).unwrap_or("");
+        locale.starts_with("fa") || locale.starts_with("ar") || locale.starts_with("he")
+    }
+
     fn log_app_click(&self, app_id: AppId) {
         let app = self.app(app_id);
         debug_log("[VORTEX] dock_app_click(");
@@ -2068,17 +2106,24 @@ impl VortexShell {
                 }
                 if entry.minimized != minimized {
                     entry.minimized = minimized;
+                    entry.refresh_label_cache();
                     dirty = true;
                 }
                 if entry.display_name.as_str() != display_name {
                     entry.display_name.clear();
                     entry.display_name.push_str(display_name);
                     entry.refresh_label_cache();
-                    entry.icon = resolve_running_icon(proc_name, entry.display_name.as_str());
                     dirty = true;
                 }
-                if pid_changed {
-                    entry.icon = resolve_running_icon(proc_name, entry.display_name.as_str());
+                let next_icon_hint =
+                    build_icon_resolution_key(proc_name, entry.display_name.as_str());
+                if pid_changed || entry.icon_hint != next_icon_hint || entry.icon.is_none() {
+                    entry.icon_hint = next_icon_hint;
+                    entry.icon = resolve_running_icon(
+                        proc_name,
+                        entry.display_name.as_str(),
+                        &self.icon_overrides,
+                    );
                 }
                 continue;
             }
@@ -2095,7 +2140,8 @@ impl VortexShell {
                 label_len: 0,
                 cell_w: 0,
                 minimized,
-                icon: resolve_running_icon(proc_name, display_name),
+                icon_hint: build_icon_resolution_key(proc_name, display_name),
+                icon: resolve_running_icon(proc_name, display_name, &self.icon_overrides),
                 last_click_at: 0,
             };
             entry.refresh_label_cache();
@@ -2455,7 +2501,6 @@ fn draw_app_button(
     let mut fill = theme.panel;
     let mut border = theme.border;
     let mut icon_color = theme.text_dim;
-    let mut top_marker = false;
     let mut bottom_marker = false;
 
     match app.state {
@@ -2480,21 +2525,20 @@ fn draw_app_button(
             };
         }
         AppLaunchState::Running => {
-            fill = theme.panel_alt;
+            fill = theme.accent.darken(68);
             border = theme.accent;
-            icon_color = theme.accent;
-            bottom_marker = true;
+            icon_color = theme.text;
             if hovered {
-                fill = theme.accent.darken(74);
+                fill = theme.accent.darken(58);
             }
         }
         AppLaunchState::Minimized => {
-            fill = theme.panel_alt;
-            border = theme.accent;
-            icon_color = theme.accent;
-            top_marker = true;
+            fill = theme.panel;
+            border = theme.border;
+            icon_color = theme.text;
+            bottom_marker = true;
             if hovered {
-                fill = theme.accent.darken(74);
+                fill = theme.panel_alt;
             }
         }
         AppLaunchState::Closing => {
@@ -2525,17 +2569,8 @@ fn draw_app_button(
 
     canvas.fill_rounded_rect(cell, 5, fill);
     canvas.stroke_rounded_rect(cell, 5, 1, border);
-    if top_marker {
-        canvas.fill_rect(
-            Rect::new(cell.x + 4, cell.y + 1, cell.w.saturating_sub(8), 2),
-            theme.accent,
-        );
-    }
     if bottom_marker {
-        canvas.fill_rect(
-            Rect::new(cell.x + 4, cell.bottom() - 3, cell.w.saturating_sub(8), 2),
-            theme.accent,
-        );
+        draw_taskbar_dot(canvas, cell, theme.accent);
     }
 
     if let Some(tga) = dock.icon_for_app(app.icon) {
@@ -2574,8 +2609,6 @@ fn draw_tga_tinted_orange(canvas: &mut Canvas, img: &TgaImage, dst: Rect, tint: 
                 continue;
             }
             // Blend tint over dst using src alpha
-            let idx = (dy as usize) * (canvas.width as usize) + (dx as usize); // rough, use internal? use put with blend
-                                                                               // Simpler: use canvas blend if avail, else direct approx
             let ia = 255 - a;
             // Read dst? Canvas doesn't expose easy read for all; approximate by direct write scaled
             // For small icons we just write the tinted value (overwrites, good for panel bg)
@@ -2694,6 +2727,13 @@ fn draw_generic_app_icon(canvas: &mut Canvas, rect: Rect, fill: Color, border: C
     }
 }
 
+fn draw_taskbar_dot(canvas: &mut Canvas, cell: Rect, color: Color) {
+    let dot_w = RUNNING_MINIMIZED_DOT;
+    let dot_x = cell.x + (cell.w as i32 - dot_w as i32) / 2;
+    let dot_y = cell.bottom() - dot_w as i32 - 2;
+    canvas.fill_rect(Rect::new(dot_x, dot_y, dot_w, dot_w), color);
+}
+
 fn draw_running_app_button(
     canvas: &mut Canvas,
     cell: Rect,
@@ -2701,26 +2741,31 @@ fn draw_running_app_button(
     entry: &RunningAppEntry,
     label: &str,
     hovered: bool,
+    rtl: bool,
     now: u64,
 ) {
     let pressed = now.saturating_sub(entry.last_click_at) < APP_PRESS_MS;
     let mut fill;
-    let mut border = theme.accent;
-    let mut icon_color = theme.accent;
+    let mut border;
+    let mut icon_color = theme.text;
     let mut label_color = theme.text;
-    let mut top_marker = false;
     let mut bottom_marker = false;
 
     if entry.minimized {
-        top_marker = true;
-        fill = theme.panel_alt;
+        fill = theme.panel;
+        border = theme.border;
     } else {
+        fill = theme.accent.darken(68);
+        border = theme.accent;
         bottom_marker = true;
-        fill = theme.panel_alt;
     }
 
     if hovered {
-        fill = theme.accent.darken(74);
+        fill = if entry.minimized {
+            theme.panel_alt
+        } else {
+            theme.accent.darken(58)
+        };
         label_color = theme.text;
     }
     if pressed {
@@ -2732,21 +2777,24 @@ fn draw_running_app_button(
 
     canvas.fill_rounded_rect(cell, 5, fill);
     canvas.stroke_rounded_rect(cell, 5, 1, border);
-    if top_marker {
-        canvas.fill_rect(
-            Rect::new(cell.x + 4, cell.y + 1, cell.w.saturating_sub(8), 2),
-            theme.accent,
-        );
-    }
     if bottom_marker {
-        canvas.fill_rect(
-            Rect::new(cell.x + 4, cell.bottom() - 3, cell.w.saturating_sub(8), 2),
-            theme.accent,
-        );
+        if entry.minimized {
+            draw_taskbar_dot(canvas, cell, theme.accent);
+        } else {
+            canvas.fill_rect(
+                Rect::new(cell.x + 4, cell.bottom() - 3, cell.w.saturating_sub(8), 2),
+                theme.accent,
+            );
+        }
     }
 
+    let icon_x = if entry.minimized || !rtl {
+        cell.x + RUNNING_CELL_PAD
+    } else {
+        cell.right() - RUNNING_CELL_PAD - RUNNING_ICON as i32
+    };
     let icon_rect = Rect::new(
-        cell.x + RUNNING_CELL_PAD,
+        icon_x,
         cell.y + (cell.h as i32 - RUNNING_ICON as i32) / 2,
         RUNNING_ICON,
         RUNNING_ICON,
@@ -2759,11 +2807,24 @@ fn draw_running_app_button(
         }
     }
 
-    let label_x = icon_rect.right() + 6;
+    if entry.minimized {
+        draw_taskbar_dot(canvas, cell, theme.accent);
+        return;
+    }
+
+    let label_x = if rtl {
+        cell.x + RUNNING_CELL_PAD
+    } else {
+        icon_rect.right() + 6
+    };
     let label_rect = Rect::new(
         label_x,
         cell.y,
-        cell.right().saturating_sub(label_x + 6) as u32,
+        if rtl {
+            icon_rect.x.saturating_sub(label_x + 6) as u32
+        } else {
+            cell.right().saturating_sub(label_x + 6) as u32
+        },
         cell.h,
     );
     draw_text_vcenter(
@@ -4370,6 +4431,134 @@ fn normalize_icon_stem(name: &str) -> String {
     out
 }
 
+fn build_icon_resolution_key(proc_name: Option<&str>, display_name: &str) -> String {
+    let mut key = normalize_icon_stem(display_name);
+    if let Some(proc_name) = proc_name {
+        let proc_key = normalize_icon_stem(proc_name);
+        if !proc_key.is_empty() {
+            if !key.is_empty() {
+                key.push('|');
+            }
+            key.push_str(&proc_key);
+        }
+    }
+    key
+}
+
+fn parse_toml_string(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if !trimmed.starts_with('"') {
+        let bare = trimmed.split('#').next().unwrap_or("").trim();
+        return (!bare.is_empty()).then(|| String::from(bare));
+    }
+
+    let mut out = String::new();
+    let mut escape = false;
+    for ch in trimmed[1..].chars() {
+        if escape {
+            out.push(match ch {
+                'n' => '\n',
+                't' => '\t',
+                '"' => '"',
+                '\\' => '\\',
+                other => other,
+            });
+            escape = false;
+            continue;
+        }
+        match ch {
+            '\\' => escape = true,
+            '"' => return Some(out),
+            other => out.push(other),
+        }
+    }
+    None
+}
+
+fn parse_toml_key(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with('"') {
+        return parse_toml_string(trimmed);
+    }
+    Some(String::from(trimmed))
+}
+
+fn parse_desktop_icon_overrides(bytes: &[u8]) -> Vec<IconOverride> {
+    let mut overrides = Vec::new();
+    let Ok(text) = core::str::from_utf8(bytes) else {
+        return overrides;
+    };
+    let mut in_icons = false;
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') {
+            in_icons = matches!(line, "[icons]" | "[taskbar.icons]" | "[desktop.icons]");
+            continue;
+        }
+        if !in_icons {
+            continue;
+        }
+        let Some((raw_key, raw_value)) = line.split_once('=') else {
+            continue;
+        };
+        let Some(key) = parse_toml_key(raw_key) else {
+            continue;
+        };
+        let Some(icon_ref) = parse_toml_string(raw_value) else {
+            continue;
+        };
+        let app_key = normalize_icon_stem(&key);
+        if app_key.is_empty() || icon_ref.is_empty() {
+            continue;
+        }
+        if let Some(existing) = overrides.iter_mut().find(|entry| entry.app_key == app_key) {
+            existing.icon_ref.clear();
+            existing.icon_ref.push_str(&icon_ref);
+        } else {
+            overrides.push(IconOverride { app_key, icon_ref });
+        }
+    }
+    overrides
+}
+
+fn load_desktop_icon_overrides() -> Vec<IconOverride> {
+    read_file_bytes(DESKTOP_CONFIG_PATH, 4096)
+        .map(|bytes| parse_desktop_icon_overrides(&bytes))
+        .unwrap_or_default()
+}
+
+fn icon_override_for<'a>(overrides: &'a [IconOverride], name: &str) -> Option<&'a str> {
+    let key = normalize_icon_stem(name);
+    if key.is_empty() {
+        return None;
+    }
+    overrides
+        .iter()
+        .find(|entry| entry.app_key == key)
+        .map(|entry| entry.icon_ref.as_str())
+}
+
+fn resolve_icon_ref(icon_ref: &str) -> Option<RunningIcon> {
+    if icon_ref.starts_with('/') {
+        return read_file_bytes(icon_ref.as_bytes(), 32 * 1024).map(RunningIcon::Runtime);
+    }
+    if let Some(bytes) = resolve_icon_bytes(icon_ref) {
+        if let Ok(img) = TgaImage::parse(bytes) {
+            return Some(RunningIcon::Static(img));
+        }
+    }
+    try_load_runtime_icon(icon_ref).map(RunningIcon::Runtime)
+}
+
 fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
     let stem = normalize_icon_stem(name);
     match stem.as_str() {
@@ -4386,6 +4575,7 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "file-manager"
         | icon_name::FILE_MANAGER
         | "dolphin"
+        | "org.kde.dolphin"
         | "nautilus"
         | "thunar"
         | "sunlight-files" => Some(ICON_FILES_TGA),
@@ -4400,13 +4590,21 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         "text"
         | icon_name::TEXT_GENERIC
         | "editor"
+        | "text-editor"
+        | "accessories-text-editor"
         | "writer"
         | "notes"
         | "sunlight-edit"
         | "sunlight-text"
-        | "kate" => Some(ICON_FILE_TGA),
+        | "kate" => Some(ICON_TEXT_EDITOR_TGA),
         "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_TGA),
         "runner" | "run" | "system-run" => Some(ICON_RUNNER_TGA),
+        "tasks" | "task-manager" | "ksysguard" | "sunlight-tasks" => Some(ICON_TASKS_TGA),
+        "bench" | "sunlight-bench" | "cpu-x" => Some(ICON_BENCH_TGA),
+        "eyes" | "kmag" | "sunlight-eyes" => Some(ICON_EYES_TGA),
+        "generic-app" | "app" | "application" | "applications-system" | "windows" => {
+            Some(ICON_GENERIC_APP_TGA)
+        }
         _ => None,
     }
 }
@@ -4453,14 +4651,39 @@ fn try_load_runtime_icon(name: &str) -> Option<Vec<u8>> {
     None
 }
 
-fn resolve_running_icon(proc_name: Option<&str>, display_name: &str) -> Option<RunningIcon> {
-    let hint = proc_name.unwrap_or(display_name);
-    if let Some(bytes) = resolve_icon_bytes(hint) {
+fn resolve_running_icon(
+    proc_name: Option<&str>,
+    display_name: &str,
+    overrides: &[IconOverride],
+) -> Option<RunningIcon> {
+    for candidate in [proc_name, Some(display_name)].into_iter().flatten() {
+        if let Some(icon_ref) = icon_override_for(overrides, candidate) {
+            if let Some(icon) = resolve_icon_ref(icon_ref) {
+                return Some(icon);
+            }
+        }
+    }
+
+    for candidate in [proc_name, Some(display_name)].into_iter().flatten() {
+        if let Some(bytes) = resolve_icon_bytes(candidate) {
+            if let Ok(img) = TgaImage::parse(bytes) {
+                return Some(RunningIcon::Static(img));
+            }
+        }
+    }
+
+    for candidate in [proc_name, Some(display_name)].into_iter().flatten() {
+        if let Some(bytes) = try_load_runtime_icon(candidate) {
+            return Some(RunningIcon::Runtime(bytes));
+        }
+    }
+
+    if let Some(bytes) = resolve_icon_bytes("generic-app") {
         if let Ok(img) = TgaImage::parse(bytes) {
             return Some(RunningIcon::Static(img));
         }
     }
-    if let Some(bytes) = try_load_runtime_icon(hint) {
+    if let Some(bytes) = try_load_runtime_icon("generic-app") {
         return Some(RunningIcon::Runtime(bytes));
     }
     Some(RunningIcon::Missing)
@@ -4543,11 +4766,13 @@ fn draw_bot_center(
     dock: DockTheme,
     sym: SymbolTheme,
     terminal_app: &DockAppState,
+    calendar_app: &DockAppState,
     calc_app: &DockAppState,
     files_app: &DockAppState,
     running_apps: &[RunningAppEntry],
     running_zones: &mut Vec<(Rect, u64)>,
     menu_open: bool,
+    rtl: bool,
     now: u64,
 ) -> (Rect, [Rect; 4]) {
     let icons: &[&[u16; 16]; 5] = &[
@@ -4616,6 +4841,16 @@ fn draw_bot_center(
                 is_hover,
                 now,
             ),
+            2 => draw_app_button(
+                canvas,
+                cell,
+                theme,
+                &dock,
+                rows,
+                calendar_app,
+                is_hover,
+                now,
+            ),
             3 => draw_app_button(canvas, cell, theme, &dock, rows, calc_app, is_hover, now),
             4 => draw_app_button(canvas, cell, theme, &dock, rows, files_app, is_hover, now),
             _ => {
@@ -4660,6 +4895,7 @@ fn draw_bot_center(
                 entry,
                 entry.label_str(),
                 running_hover.map_or(false, |h| h == i),
+                rtl,
                 now,
             );
             if let Some(zone) = running_zones.get_mut(i) {
@@ -5421,6 +5657,7 @@ impl App for VortexShell {
         let dock_theme = self.dock_theme;
         let settings_app = *self.app(AppId::Settings);
         let terminal_app = *self.app(AppId::Terminal);
+        let calendar_app = *self.app(AppId::Calendar);
         let calc_app = *self.app(AppId::Calculator);
         let files_app = *self.app(AppId::Files);
         self.settings_zone = draw_bot_left(
@@ -5438,6 +5675,7 @@ impl App for VortexShell {
         } else {
             &[]
         };
+        let rtl = self.is_rtl_locale();
         let (launcher_rect, dock_cells) = draw_bot_center(
             canvas,
             theme,
@@ -5448,11 +5686,13 @@ impl App for VortexShell {
             dock_theme,
             self.symbols,
             &terminal_app,
+            &calendar_app,
             &calc_app,
             &files_app,
             running_apps,
             &mut self.running_zones,
             self.start_menu.is_open(),
+            rtl,
             now,
         );
         self.launcher_zone = launcher_rect;

@@ -600,6 +600,13 @@ pub static INITRAMFS: &[RamEntry] = &[
         include_bytes!("../../docs/icons/SunlightOS/apps/48/system-run.tga"),
     ),
     RamEntry::file(
+        "/var/sunlightos/icons/SunlightOS/apps/48/generic-app.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/icons/SunlightOS/apps/48/applications-system.tga"),
+    ),
+    RamEntry::file(
         "/system/share/wallpapers/default.tga",
         0,
         0,
