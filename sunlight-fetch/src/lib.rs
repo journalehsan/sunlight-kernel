@@ -20,6 +20,7 @@ extern crate alloc;
 
 mod prelude;
 
+pub mod backend;
 pub mod cli;
 pub mod downloader;
 pub mod error;

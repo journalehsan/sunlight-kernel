@@ -1,13 +1,12 @@
 //! Chunked download engine with Range-request parallelism.
 
+use crate::backend::{self, RequestEvent};
 use crate::cli::{FetchConfig, HttpMethod};
 use crate::error::{FetchError, FetchResult};
 use crate::http::{HttpRequest, ParsedUrl};
 use crate::ipc::{self, ResolvedAddr};
 use crate::prelude::{String, ToString, Vec};
 use crate::progress::ProgressTracker;
-
-const MAX_REDIRECTS: usize = 10;
 
 /// Main download entry point — routes by URL scheme.
 pub fn execute_download(config: &FetchConfig) -> FetchResult<()> {
@@ -75,18 +74,42 @@ fn do_https_fetch(config: &FetchConfig) -> FetchResult<()> {
 }
 
 fn execute_get(
-    config: &FetchConfig,
+    _config: &FetchConfig,
     url: &ParsedUrl,
     addr: &ResolvedAddr,
     output_name: &str,
 ) -> FetchResult<()> {
-    let (response, mut handle, initial_body, _) =
-        fetch_with_redirects(config, url, addr, HttpMethod::Get, None, vec![])?;
+    let request = HttpRequest {
+        method: HttpMethod::Get.as_str(),
+        path: url.path.clone(),
+        host: url.host_header(),
+        headers: vec![(String::from("accept"), String::from("*/*"))],
+        body: None,
+    };
+    let mut on_event = |event: RequestEvent| match event {
+        RequestEvent::Connecting { url } => eprintln_fetch(&format!(
+            "Connecting to {}:{} ({})...",
+            url.host,
+            url.port,
+            if url.uses_tls() { "TLS" } else { "plain" }
+        )),
+        RequestEvent::Redirect { status, next_url } => eprintln_fetch(&format!(
+            "Following redirect {} -> {}:{}{}",
+            status, next_url.host, next_url.port, next_url.path
+        )),
+    };
+    let pending = backend::begin_request_from_resolved(
+        url.clone(),
+        addr.clone(),
+        request,
+        Some(&mut on_event),
+    )?;
+    let response = &pending.response;
 
     if response.status_code != 200 {
         return Err(FetchError::HttpError {
             status: response.status_code,
-            message: response.status_text,
+            message: response.status_text.clone(),
         });
     }
 
@@ -108,15 +131,19 @@ fn execute_get(
         }
     };
 
-    let body = ipc::read_body_full(&mut handle, &initial_body, total, Some(&mut on_progress))?;
+    let result = pending.read_body(Some(&mut on_progress))?;
 
     progress.finish();
     progress.render(&mut render_buf);
     eprint_progress(&render_buf);
 
-    write_atomic(output_name, &body)?;
+    write_atomic(output_name, &result.body)?;
 
-    eprintln_fetch(&format!("Saved {} ({} bytes)", output_name, body.len()));
+    eprintln_fetch(&format!(
+        "Saved {} ({} bytes)",
+        output_name,
+        result.body.len()
+    ));
     Ok(())
 }
 
@@ -133,131 +160,56 @@ fn execute_post(
 
     eprintln_fetch(&format!("POST {}...", config.url));
 
-    let (response, mut handle, initial_body, _) = fetch_with_redirects(
-        config,
-        url,
-        addr,
-        HttpMethod::Post,
-        Some(body_data),
-        vec![(
+    let request = HttpRequest {
+        method: HttpMethod::Post.as_str(),
+        path: url.path.clone(),
+        host: url.host_header(),
+        headers: vec![(
             String::from("content-type"),
             String::from("application/x-www-form-urlencoded"),
         )],
-    )?;
-
-    if response.status_code >= 400 {
-        return Err(FetchError::HttpError {
-            status: response.status_code,
-            message: response.status_text,
-        });
-    }
-
-    let total = response.content_length();
-    let body = ipc::read_body_full(&mut handle, &initial_body, total, None)?;
-    write_atomic(output_name, &body)?;
-
-    eprintln_fetch(&format!(
-        "HTTP {} {} — saved {} ({} bytes)",
-        response.status_code,
-        response.status_text,
-        output_name,
-        body.len()
-    ));
-
-    Ok(())
-}
-
-fn fetch_with_redirects(
-    config: &FetchConfig,
-    start_url: &ParsedUrl,
-    start_addr: &ResolvedAddr,
-    method: HttpMethod,
-    body: Option<Vec<u8>>,
-    extra_headers: Vec<(String, String)>,
-) -> FetchResult<(
-    crate::http::HttpResponse,
-    ipc::TcpHandle,
-    Vec<u8>,
-    ParsedUrl,
-)> {
-    let mut url = start_url.clone();
-    let mut addr = start_addr.clone();
-
-    for redirect in 0..=MAX_REDIRECTS {
-        let mut headers = vec![(String::from("accept"), String::from("*/*"))];
-        headers.extend(extra_headers.clone());
-
-        let request = HttpRequest {
-            method: method.as_str(),
-            path: url.path.clone(),
-            host: url.host_header(),
-            headers,
-            body: body.clone(),
-        };
-
-        eprintln_fetch(&format!(
+        body: Some(body_data),
+    };
+    let mut on_event = |event: RequestEvent| match event {
+        RequestEvent::Connecting { url } => eprintln_fetch(&format!(
             "Connecting to {}:{} ({})...",
             url.host,
             url.port,
             if url.uses_tls() { "TLS" } else { "plain" }
-        ));
+        )),
+        RequestEvent::Redirect { status, next_url } => eprintln_fetch(&format!(
+            "Following redirect {} -> {}:{}{}",
+            status, next_url.host, next_url.port, next_url.path
+        )),
+    };
+    let pending = backend::begin_request_from_resolved(
+        url.clone(),
+        addr.clone(),
+        request,
+        Some(&mut on_event),
+    )?;
+    let status_code = pending.response.status_code;
+    let status_text = pending.response.status_text.clone();
 
-        let (response, mut handle, initial_body) =
-            ipc::http_request(&url.host, &addr, url.port, url.uses_tls(), &request)?;
-
-        if matches!(response.status_code, 301 | 302 | 303 | 307 | 308) {
-            let location = response
-                .header("location")
-                .ok_or_else(|| FetchError::HttpError {
-                    status: response.status_code,
-                    message: String::from("redirect without Location header"),
-                })?;
-
-            if redirect == MAX_REDIRECTS {
-                return Err(FetchError::HttpError {
-                    status: response.status_code,
-                    message: format!("too many redirects (>{MAX_REDIRECTS})"),
-                });
-            }
-
-            let next_url = resolve_redirect_location(&config.url, location)?;
-            eprintln_fetch(&format!(
-                "Following redirect {} -> {}:{}{}",
-                response.status_code, next_url.host, next_url.port, next_url.path
-            ));
-            addr = ipc::dns_resolve(&next_url.host)?;
-            url = next_url;
-            let _ = handle.close();
-            continue;
-        }
-
-        return Ok((response, handle, initial_body, url));
-    }
-
-    Err(FetchError::HttpError {
-        status: 0,
-        message: String::from("redirect loop exhausted"),
-    })
-}
-
-fn resolve_redirect_location(base_url: &str, location: &str) -> FetchResult<ParsedUrl> {
-    if location.starts_with("http://") || location.starts_with("https://") {
-        return ParsedUrl::parse(location).map_err(Into::into);
-    }
-
-    let base = ParsedUrl::parse(base_url)?;
-    if location.starts_with('/') {
-        return Ok(ParsedUrl {
-            scheme: base.scheme,
-            host: base.host,
-            port: base.port,
-            path: String::from(location),
+    if status_code >= 400 {
+        return Err(FetchError::HttpError {
+            status: status_code,
+            message: status_text,
         });
     }
 
-    Err(FetchError::InvalidUrl(format!(
-        "unsupported redirect location: {location}"
-    )))
+    let result = pending.read_body(None)?;
+    write_atomic(output_name, &result.body)?;
+
+    eprintln_fetch(&format!(
+        "HTTP {} {} — saved {} ({} bytes)",
+        status_code,
+        status_text,
+        output_name,
+        result.body.len()
+    ));
+
+    Ok(())
 }
 
 fn write_atomic(path: &str, data: &[u8]) -> FetchResult<()> {

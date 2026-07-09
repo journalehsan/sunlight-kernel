@@ -18,14 +18,23 @@ impl From<sunlight_http::HttpError> for FetchError {
     fn from(e: sunlight_http::HttpError) -> Self {
         match e {
             sunlight_http::HttpError::InvalidUrl(msg) => FetchError::InvalidUrl(msg),
-            sunlight_http::HttpError::Protocol(msg) => FetchError::HttpError { status: 0, message: msg },
-            sunlight_http::HttpError::Status { code, text } => FetchError::HttpError { status: code, message: text },
+            sunlight_http::HttpError::Protocol(msg) => FetchError::HttpError {
+                status: 0,
+                message: msg,
+            },
+            sunlight_http::HttpError::Status { code, text } => FetchError::HttpError {
+                status: code,
+                message: text,
+            },
             sunlight_http::HttpError::Transport(msg) => FetchError::IoError(msg), // transport errors surface as I/O at this layer
             sunlight_http::HttpError::UnsupportedHttps => FetchError::HttpError {
                 status: 0,
                 message: String::from("https not supported by backend"),
             },
-            sunlight_http::HttpError::Other(msg) => FetchError::HttpError { status: 0, message: msg },
+            sunlight_http::HttpError::Other(msg) => FetchError::HttpError {
+                status: 0,
+                message: msg,
+            },
         }
     }
 }

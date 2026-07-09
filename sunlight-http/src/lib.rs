@@ -329,14 +329,14 @@ fn find_header_end(data: &[u8]) -> Option<usize> {
 fn parse_status_line(line: &str) -> Result<(u16, String), HttpError> {
     let mut parts = line.splitn(3, ' ');
     let _version = parts.next(); // "HTTP/1.1"
-    let code_str = parts.next().ok_or_else(|| HttpError::Protocol(String::from(
-        "missing status code in response",
-    )))?;
+    let code_str = parts
+        .next()
+        .ok_or_else(|| HttpError::Protocol(String::from("missing status code in response")))?;
     let text = parts.next().unwrap_or("");
 
-    let code = code_str.parse::<u16>().map_err(|_| HttpError::Protocol(format!(
-        "invalid status code: '{code_str}'"
-    )))?;
+    let code = code_str
+        .parse::<u16>()
+        .map_err(|_| HttpError::Protocol(format!("invalid status code: '{code_str}'")))?;
 
     Ok((code, String::from(text)))
 }
@@ -453,7 +453,10 @@ mod tests {
             method: "POST",
             path: String::from("/submit"),
             host: String::from("example.com"),
-            headers: vec![(String::from("content-type"), String::from("application/x-www-form-urlencoded"))],
+            headers: vec![(
+                String::from("content-type"),
+                String::from("application/x-www-form-urlencoded"),
+            )],
             body: Some(body),
         };
         let wire = req.serialize();
