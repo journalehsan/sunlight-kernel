@@ -48,6 +48,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --relea
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-gcd --release
@@ -102,6 +103,10 @@ printf '\x03' | dd of="$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/he
 
 # --- Step 2: Build the kernel ELF ---
 echo "[build] Building kernel..."
+# The kernel embeds userspace ELF blobs via include_bytes!, but Cargo does not
+# track those release artifacts as kernel inputs. Force a fresh kernel compile
+# so changed services are actually baked into the ISO.
+touch "$PROJECT_ROOT/kernel/src/main.rs"
 cargo build --package sunlight-kernel
 
 # --- Step 3: Download Limine if not cached ---

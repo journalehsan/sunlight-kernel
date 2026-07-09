@@ -30,6 +30,7 @@ members = [
     "sunlight-net",
     "sunlight-utils",
     "sunlight-net-utils",
+    "sunlight-http",
     "sunlight-fetch",
     "services/sunlight-niced",
     "services/sunlight-gcd",

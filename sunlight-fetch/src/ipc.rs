@@ -395,6 +395,7 @@ mod host {
                 let initial_body = buf[body_start..].to_vec();
                 (response, handle, initial_body)
             })
+            .map_err(Into::into)
     }
 
     pub(super) fn read_body_full_impl(
@@ -918,6 +919,7 @@ mod sunlight {
                 let initial_body = buf[body_start..].to_vec();
                 (response, handle, initial_body)
             })
+            .map_err(Into::into)
     }
 
     pub(super) fn read_body_full_impl(

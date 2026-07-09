@@ -242,7 +242,7 @@ fn fetch_with_redirects(
 
 fn resolve_redirect_location(base_url: &str, location: &str) -> FetchResult<ParsedUrl> {
     if location.starts_with("http://") || location.starts_with("https://") {
-        return ParsedUrl::parse(location);
+        return ParsedUrl::parse(location).map_err(Into::into);
     }
 
     let base = ParsedUrl::parse(base_url)?;

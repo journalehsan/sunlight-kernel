@@ -1,0 +1,16 @@
+[package]
+name = "sunlight-http"
+version = "0.2.1031"
+
+edition = "2021"
+authors = ["SunlightOS Contributors"]
+description = "Shared HTTP/1.1 request/response types and client facade for SunlightOS (fetch, Rappid Rabbit, etc.)"
+
+[features]
+default = []
+# "std" enables std-only helpers if needed later (currently unused; types are no_std + alloc).
+std = []
+
+[dependencies]
+# No external crates for core types. Uses alloc on sunlightos builds.
+# Future: optional reqwless adapter behind a feature (adds async + crypto deps).

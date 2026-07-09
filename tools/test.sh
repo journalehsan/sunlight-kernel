@@ -16,6 +16,7 @@ KERNEL_RUSTFLAGS="-C link-arg=-Tkernel/src/arch/x86_64/linker.ld -C relocation-m
 # v2 enables better code generation for userspace services without requiring AVX.
 # v3 (AVX/AVX2) is runtime-only for selected apps until kernel adds XSAVE/YMM switching.
 SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone"
+TLS_RUSTFLAGS="$SERVICE_RUSTFLAGS --cfg aes_force_soft --cfg polyval_force_soft --cfg poly1305_force_soft --cfg chacha20_force_soft --cfg curve25519_dalek_backend=\"serial\""
 BUILD_LOG=$(mktemp)
 PHASE="${1:-phase3.0}"
 
@@ -222,6 +223,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --relea
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-gcd --release >>"$BUILD_LOG" 2>&1
@@ -230,6 +232,8 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-uac --release >>"$
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sm --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kv --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kvctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$TLS_RUSTFLAGS" cargo build --package sunlight-tls --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package certificatectl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 # sunshell (includes localectl builtin + pulls in support libs e.g. sunlight-locale, sunlight-tz)
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release >>"$BUILD_LOG" 2>&1
@@ -286,6 +290,7 @@ elif [[ "$PHASE" == "phase4.5" ]]; then
 elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* || "$PHASE" == "dns_hosts" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE="$PHASE")
 fi
+touch kernel/src/main.rs
 env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
 
 # --- Step 3: Ensure Limine is available ---
