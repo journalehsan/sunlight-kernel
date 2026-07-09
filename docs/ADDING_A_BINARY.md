@@ -36,7 +36,7 @@ Each user-space crate also needs `.cargo/config.toml` targeting
 `RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static"`.
 Plain `cargo build` of userland yields a `SegmentOutOfRange` panic at spawn.
 
-### 2. Build scripts — `tools/build.sh`, `tools/test.sh`, and `tools/runs.sh --build`
+### 2. Build scripts — `tools/build.sh`, `tools/test.sh`, `tools/runs.sh --build`, and image writers
 Add a build line in *Step 1* (services are built before the kernel because the
 kernel `include_bytes!`es their output):
 ```sh
@@ -45,7 +45,9 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package <crate> --release
 Building the package builds **all** its bins, so multi-bin crates need only one
 line. Mirror the same line into `tools/test.sh` (redirected to `$BUILD_LOG`).
 If you use `./tools/runs.sh --build` as your normal workflow, add the same line
-there too so the embedded binary exists before the kernel compile starts.
+there too so the embedded binary exists before the kernel compile starts. Any
+script that rebuilds the kernel from embedded user-space artifacts should carry
+the same package build line as well; today that also includes `tools/write.sh`.
 
 ### 3. Embed bytes — `kernel/src/main.rs`
 Add a static near the other `*_ELF_BYTES` entries:

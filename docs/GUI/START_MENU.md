@@ -65,7 +65,7 @@ gap convention as the desktop icon area), roughly 600px wide:
      - **Pinned** — a fixed row of 6 core apps (Terminal, Files, Calculator,
        Settings, Task Manager, Eyes).
      - **All Apps** — a 4-column grid covering the full catalog (12 tiles:
-       7 real apps + 5 placeholders).
+       11 real apps + 1 placeholder).
      - **Recent** (or **Suggested** when there's no session history yet) —
        up to 6 tiles.
    - **Searching:** a single "Results" grid (same 4-column tile layout)
@@ -95,6 +95,10 @@ Real, launchable apps (share `AppId` with the dock's existing registry):
 | Task Manager  | `Tasks`      | `apps/48/ksysguard.tga`            |
 | Sunlight Bench| `Bench`      | `apps/48/cpu-x.tga`                |
 | Eyes          | `Eyes`       | `apps/48/kmag.tga`                 |
+| Sunlight Writer | `Writer`   | `apps/48/libreoffice-writer.tga`   |
+| Text Editor   | `TextEditor` | `apps/48/kate.tga`                 |
+| Sunlight Calendar | `Calendar` | `apps/48/office-calendar.tga`    |
+| Rappid Rabbit | `RappidRabbit` | `apps/48/internet-web-browser.tga` |
 
 Placeholder tiles (no backing binary yet; `CatalogId::Placeholder(slug)`,
 `available: false`). Clicking one shows a "Coming soon" notification
@@ -102,17 +106,13 @@ instead of launching, and the tile renders dimmed with a small "Soon" tag:
 
 | App           | Slug            | Icon                                   |
 |---------------|-----------------|------------------------------------------|
-| Video Player  | `video-player`  | `apps/48/vlc.tga`                        |
-| Music Player  | `music-player`  | `apps/48/gnome-music.tga`                |
-| Text Editor   | `text-editor`   | `apps/48/kate.tga`                       |
-| Notes         | `notes`         | `apps/48/QOwnNotes.tga`                  |
 | Photo Viewer  | `photo-viewer`  | `apps/48/accessories-image-viewer.tga`   |
 
-`Tasks`, `Bench`, and `Eyes` were added to `VortexShell.apps` (the shared
-app-state registry used for launch/focus tracking) as Start-Menu-only
-entries — they are not shown in the fixed 4-icon bottom dock, but they use
-identical launch/state-sync logic (`sync_app_registry`, duplicate-launch
-guarding, running-window activation).
+`Tasks`, `Bench`, `Eyes`, `TextEditor`, and `Writer` were added to
+`VortexShell.apps` (the shared app-state registry used for launch/focus
+tracking) as Start-Menu-only entries — they are not shown in the fixed
+4-icon bottom dock, but they use identical launch/state-sync logic
+(`sync_app_registry`, duplicate-launch guarding, running-window activation).
 
 `DEFAULT_PINNED` is a static list today (no persistent user pinning yet —
 see Future Ideas).

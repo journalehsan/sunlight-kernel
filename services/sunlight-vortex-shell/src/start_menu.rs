@@ -34,11 +34,10 @@ static ICON_TASKS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
 static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
 static ICON_EYES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/kmag.tga");
-static ICON_VIDEO_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/vlc.tga");
-static ICON_MUSIC_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/gnome-music.tga");
 static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
+static ICON_WRITER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.tga");
 static ICON_CALENDAR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/office-calendar.tga");
 static ICON_RABBIT_TGA: &[u8] =
@@ -185,11 +184,11 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         available: true,
     },
     AppCatalogEntry {
-        id: CatalogId::Placeholder("music-player"),
-        name: "Music Player",
-        category: "Media",
-        icon_bytes: Some(ICON_MUSIC_TGA),
-        available: false,
+        id: CatalogId::App(AppId::Writer),
+        name: "Sunlight Writer",
+        category: "Productivity",
+        icon_bytes: Some(ICON_WRITER_TGA),
+        available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::TextEditor),

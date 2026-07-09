@@ -297,6 +297,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-edit --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --release

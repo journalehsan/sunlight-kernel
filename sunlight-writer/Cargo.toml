@@ -1,0 +1,18 @@
+[package]
+name = "sunlight-writer"
+version = "0.2.1062"
+
+edition = "2021"
+
+[[bin]]
+name = "sunlight-writer"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc" }
+sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
+sun-font = { path = "../sun-font" }
+
+[build-dependencies]
+fontdue = "0.7"

@@ -1109,6 +1109,13 @@ max_ttys = 6
         mode::FILE_755,
         b"#!/sunlight/sunlight-text\n",
     ),
+    RamEntry::file(
+        "/bin/sunlight-writer",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-writer\n",
+    ),
     // Sunlight Calendar: graphical calendar client
     RamEntry::file(
         "/bin/sunlight-calendar",
@@ -1706,6 +1713,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/sunlight-text\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sunlight-writer",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-writer\n",
     ),
     // Sunlight Calendar: graphical calendar client
     RamEntry::file(

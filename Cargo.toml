@@ -46,6 +46,7 @@ members = [
     "sunlight-hangman", "helios-note",
     "cpu-utils",
     "sunlight-edit",
+    "sunlight-writer",
     "services/sunlight-kbd",
     "services/sunlight-mouse",
     "services/sunlight-display",

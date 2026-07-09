@@ -180,6 +180,9 @@ static LIGHT_LENS_ELF_BYTES: &[u8] =
 // Sunlight Edit: native graphical text editor.
 static SUNLIGHT_EDIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-edit");
+// Sunlight Writer: professional document shell.
+static SUNLIGHT_WRITER_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-writer");
 // Sunlight Calendar: native graphical calendar application.
 static SUNLIGHT_CALENDAR_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-calendar");
