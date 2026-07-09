@@ -22,6 +22,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use core::alloc::GlobalAlloc;
 use core::cmp;
+use sun_font::{self, FontRole, TextStyle, Typography};
 use sunlight_ipc::{
     debug_log, ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -54,6 +55,10 @@ static ICON_SETTINGS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
 static ICON_PREFS_MONO_RAW: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/preferences-symbolic.raw"));
+static ICON_SYM_DND_OFF_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icons/do_not_disturb_off.tga"));
+static ICON_SYM_NOTIFICATIONS_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icons/notifications.tga"));
 
 const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO_RAW);
 
@@ -95,6 +100,8 @@ struct ControlPanelApp {
     /// TGA icon for the Monitor settings card / page.
     icon_monitor: Option<TgaImage>,
     icon_wallpaper: Option<TgaImage>,
+    icon_notifications: Option<TgaImage>,
+    icon_dnd: Option<TgaImage>,
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
@@ -134,6 +141,8 @@ impl ControlPanelApp {
             icon_mouse: TgaImage::parse(ICON_MOUSE_TGA).ok(),
             icon_monitor: TgaImage::parse(ICON_MONITOR_TGA).ok(),
             icon_wallpaper: TgaImage::parse(ICON_WALLPAPER_TGA).ok(),
+            icon_notifications: TgaImage::parse(ICON_SYM_NOTIFICATIONS_TGA).ok(),
+            icon_dnd: TgaImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
             wallpaper_items,
             wallpaper_config,
             wallpaper_selected,
@@ -150,6 +159,32 @@ impl ControlPanelApp {
 
     fn status_str(&self) -> &str {
         core::str::from_utf8(&self.status_msg[..self.status_len]).unwrap_or("")
+    }
+
+    fn draw_label(canvas: &mut Canvas, rect: Rect, text: &str, theme: &Theme, role: FontRole) {
+        sun_font::draw_text_vcenter(
+            canvas,
+            text,
+            rect.x,
+            rect.y,
+            rect.h,
+            &TextStyle::new(role, theme.text),
+        );
+    }
+
+    fn draw_dim_label(canvas: &mut Canvas, rect: Rect, text: &str, theme: &Theme, role: FontRole) {
+        sun_font::draw_text_vcenter(
+            canvas,
+            text,
+            rect.x,
+            rect.y,
+            rect.h,
+            &TextStyle::new(role, theme.text_dim),
+        );
+    }
+
+    fn draw_button(canvas: &mut Canvas, theme: &Theme, button: Button<'_>) {
+        button.with_font(&Typography::UI_MEDIUM).draw(canvas, theme);
     }
 
     fn wallpaper_status_str(&self) -> &str {
@@ -263,8 +298,8 @@ impl ControlPanelApp {
 
         let label_rect = Rect::new(rect.x + 8, rect.bottom() - 42, rect.w - 16, 18);
         let sub_rect = Rect::new(rect.x + 8, rect.bottom() - 24, rect.w - 16, 14);
-        Label::new(label_rect, label).draw(canvas, theme);
-        Label::new(sub_rect, sublabel).draw(canvas, theme);
+        Self::draw_label(canvas, label_rect, label, theme, FontRole::UiMedium);
+        Self::draw_dim_label(canvas, sub_rect, sublabel, theme, FontRole::UiSmall);
     }
 
     fn draw_grid(&mut self, canvas: &mut Canvas, theme: &Theme) {
@@ -285,7 +320,13 @@ impl ControlPanelApp {
             Point::new(18, 14),
             theme.icon_foreground,
         );
-        Label::new(Rect::new(46, 12, WIN_W - 58, 20), "System Preferences").draw(canvas, theme);
+        Self::draw_label(
+            canvas,
+            Rect::new(46, 12, WIN_W - 58, 20),
+            "System Preferences",
+            theme,
+            FontRole::UiTitle,
+        );
 
         let (c1, c2, c3, c4) = self.card_rects();
         Self::draw_card(
@@ -322,7 +363,7 @@ impl ControlPanelApp {
             theme.icon_foreground,
             "Notifications",
             "History & DND",
-            None,
+            self.icon_notifications,
         );
     }
 
@@ -358,39 +399,66 @@ impl ControlPanelApp {
     }
 
     fn notification_dnd_rect() -> Rect {
-        Rect::new(WIN_W as i32 - 128, WIN_H as i32 - 44, 100, 28)
+        Rect::new(WIN_W as i32 - 148, WIN_H as i32 - 44, 120, 28)
     }
 
     fn draw_notifications_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
-        Panel::with_title(content, "Notifications").draw(canvas, theme);
+        Panel::new(content).draw(canvas, theme);
+        let title_bar = Rect::new(content.x, content.y, content.w, 28);
+        canvas.fill_rect(title_bar, theme.panel_alt);
+        canvas.draw_rect(
+            Rect::new(title_bar.x, title_bar.bottom(), title_bar.w, 1),
+            theme.border,
+        );
+        sun_font::draw_text_vcenter(
+            canvas,
+            "Notifications",
+            title_bar.x + 12,
+            title_bar.y,
+            title_bar.h,
+            &TextStyle::new(FontRole::UiTitle, theme.accent),
+        );
         let dnd = notification_dnd_enabled();
-        Label::new(
-            Rect::new(28, 58, WIN_W - 56, 18),
+        if let Some(icon) = self.icon_notifications {
+            canvas.draw_tga_icon_tinted(&icon, Rect::new(28, 56, 20, 20), theme.accent);
+        }
+        Self::draw_label(
+            canvas,
+            Rect::new(54, 58, WIN_W - 82, 18),
             "Open Notification Center from the top-right bell in Vortex Shell.",
-        )
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(28, 88, WIN_W - 56, 18),
-            if dnd {
-                "Do Not Disturb is currently enabled."
-            } else {
-                "Do Not Disturb is currently disabled."
-            },
-        )
-        .draw(canvas, theme);
+            theme,
+            FontRole::UiSmall,
+        );
+        if let Some(icon) = self.icon_dnd {
+            canvas.draw_tga_icon_tinted(&icon, Rect::new(28, 86, 20, 20), theme.icon_muted);
+        }
+        Self::draw_label(
+            canvas,
+            Rect::new(54, 88, WIN_W - 82, 18),
+            if dnd { "DND is On." } else { "DND is Off." },
+            theme,
+            FontRole::UiMedium,
+        );
+        Self::draw_dim_label(
+            canvas,
+            Rect::new(28, 116, WIN_W - 56, 18),
+            "When DND is on, notifications are saved to history but popups are hidden.",
+            theme,
+            FontRole::UiSmall,
+        );
 
         let mut back = Button::secondary(Self::notification_back_rect(), "Back");
         back.state = ButtonState::Normal;
-        back.draw(canvas, theme);
+        Self::draw_button(canvas, theme, back);
 
         let mut dnd_btn = Button::new(
             Self::notification_dnd_rect(),
-            if dnd { "DND Off" } else { "DND On" },
+            if dnd { "Turn DND Off" } else { "Turn DND On" },
         );
         dnd_btn.state = ButtonState::Normal;
-        dnd_btn.draw(canvas, theme);
+        Self::draw_button(canvas, theme, dnd_btn);
     }
 
     fn update_notifications_page(&mut self, event: Event) -> bool {

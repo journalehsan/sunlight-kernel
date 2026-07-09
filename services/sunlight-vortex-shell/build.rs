@@ -129,6 +129,8 @@ fn main() {
         ("code", 0xe86f),
         ("article", 0xe8e2), // for office-ish
         ("sunny", 0xe430),   // sun / light for logo
+        ("close", 0xe5cd),
+        ("do_not_disturb_off", 0xe643),
     ];
 
     for (name, cp) in icons {

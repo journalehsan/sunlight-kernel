@@ -61,7 +61,7 @@ use sunlight_calendar::{
     build_selected_day_previews, SelectedDayReminderPreview, SelectedDayTaskPreview,
 };
 use sunlight_ipc::{
-    debug_log, ipc_call_timeout,
+    debug_log, get_time_utc, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, notification_dnd_enabled,
     notification_kv_get_into, notification_kv_put, notification_set_dnd, process_is_alive,
@@ -180,6 +180,9 @@ static ICON_SYM_CODE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon
 static ICON_SYM_ARTICLE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_article.tga"));
 static ICON_SYM_SUNNY_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_sunny.tga"));
 static ICON_SYM_START_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_start_menu.tga"));
+static ICON_SYM_CLOSE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_close.tga"));
+static ICON_SYM_DND_OFF_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_do_not_disturb_off.tga"));
 
 /// Theme icons for desktop shortcuts. All fields are `Copy` (TgaImage borrows `&'static [u8]`).
 #[derive(Clone, Copy)]
@@ -364,6 +367,8 @@ struct SymbolTheme {
     article: Option<TgaImage>,
     sunny: Option<TgaImage>,
     start: Option<TgaImage>,
+    close: Option<TgaImage>,
+    dnd_off: Option<TgaImage>,
 }
 
 impl SymbolTheme {
@@ -386,6 +391,8 @@ impl SymbolTheme {
             article: TgaImage::parse(ICON_SYM_ARTICLE_TGA).ok(),
             sunny: TgaImage::parse(ICON_SYM_SUNNY_TGA).ok(),
             start: TgaImage::parse(ICON_SYM_START_TGA).ok(),
+            close: TgaImage::parse(ICON_SYM_CLOSE_TGA).ok(),
+            dnd_off: TgaImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
         }
     }
 
@@ -408,6 +415,8 @@ impl SymbolTheme {
             "article" => self.article,
             "sunny" => self.sunny,
             "start" | "menu" => self.start.or(self.menu),
+            "close" => self.close,
+            "do_not_disturb_off" => self.dnd_off,
             _ => None,
         }
     }
@@ -3594,9 +3603,28 @@ fn notification_group_label(record: &NotificationRecord) -> String {
     }
 }
 
+fn notification_time_label(record: &NotificationRecord) -> String {
+    let Some(timestamp) = parse_u64_ascii(record.timestamp.as_bytes()) else {
+        return String::from("recently");
+    };
+    let now = get_time_utc();
+    if timestamp == 0 || now < timestamp {
+        return String::from("recently");
+    }
+    let age = now.saturating_sub(timestamp);
+    if age < 60 {
+        String::from("just now")
+    } else if age < 3_600 {
+        alloc::format!("{}m ago", age / 60)
+    } else if age < 86_400 {
+        alloc::format!("{}h ago", age / 3_600)
+    } else {
+        alloc::format!("{}d ago", age / 86_400)
+    }
+}
+
 fn notification_meta(record: &NotificationRecord) -> String {
-    let state = if record.seen { "seen" } else { "new" };
-    alloc::format!("{} · {} · {}", record.sender_name, record.timestamp, state)
+    notification_time_label(record)
 }
 
 fn notification_priority_color(priority: NotificationPriority) -> Color {
@@ -5039,27 +5067,49 @@ impl VortexShell {
         canvas.fill_rounded_rect(panel, 10, theme.panel);
         canvas.stroke_rounded_rect(panel, 10, 1, theme.border);
 
+        let header_icon_r = Rect::new(panel.x + 14, panel.y + 11, 18, 18);
+        if let Some(icon) = self.symbols.notifications {
+            canvas.draw_tga_icon_tinted(&icon, header_icon_r, theme.accent);
+        }
         draw_text_vcenter(
             canvas,
             "Notifications",
-            panel.x + 14,
+            panel.x + 38,
             panel.y + 10,
             22,
             &TextStyle::new(FontRole::UiMedium, theme.text),
         );
 
         let dnd_on = notification_dnd_enabled();
-        self.notif_dnd_toggle_r = Rect::new(panel.right() - 92, panel.y + 10, 76, 22);
+        self.notif_dnd_toggle_r = Rect::new(panel.right() - 98, panel.y + 10, 82, 22);
         canvas.fill_rounded_rect(
             self.notif_dnd_toggle_r,
             6,
             if dnd_on { theme.warn } else { theme.panel_alt },
         );
-        canvas.stroke_rounded_rect(self.notif_dnd_toggle_r, 6, 1, theme.border);
+        canvas.stroke_rounded_rect(
+            self.notif_dnd_toggle_r,
+            6,
+            1,
+            if dnd_on {
+                theme.warn.darken(40)
+            } else {
+                theme.border
+            },
+        );
+        let dnd_icon_r = Rect::new(
+            self.notif_dnd_toggle_r.x + 7,
+            self.notif_dnd_toggle_r.y + 3,
+            16,
+            16,
+        );
+        if let Some(icon) = self.symbols.dnd_off {
+            canvas.draw_tga_icon_tinted(&icon, dnd_icon_r, theme.text);
+        }
         draw_text_vcenter(
             canvas,
             if dnd_on { "DND On" } else { "DND Off" },
-            self.notif_dnd_toggle_r.x + 9,
+            self.notif_dnd_toggle_r.x + 26,
             self.notif_dnd_toggle_r.y,
             self.notif_dnd_toggle_r.h,
             &TextStyle::new(FontRole::UiSmall, theme.text),
@@ -5073,7 +5123,7 @@ impl VortexShell {
         if records.is_empty() {
             draw_text_vcenter(
                 canvas,
-                "No notifications yet",
+                "No notifications yet.",
                 panel.x + 14,
                 panel.y + 52,
                 18,
@@ -5105,26 +5155,26 @@ impl VortexShell {
             if rendered_groups.len() > 1 {
                 cy += 5;
             }
-            let label = ellipsize_label(&group, 34);
+            let group_icon_r = Rect::new(panel.x + 14, cy + 1, 16, 16);
+            if let Some(icon) = self.symbols.settings {
+                canvas.draw_tga_icon_tinted(&icon, group_icon_r, theme.icon_muted);
+            }
+            let label = ellipsize_label(&group, 30);
             draw_text_vcenter(
                 canvas,
                 &label,
-                panel.x + 14,
+                panel.x + 34,
                 cy,
                 18,
                 &TextStyle::new(FontRole::UiSmall, theme.text_dim),
             );
-            cy += 20;
+            cy += 18;
 
             for record in records
                 .iter()
                 .filter(|record| notification_group_label(record) == group)
             {
-                if cy + 42 > bottom {
-                    break;
-                }
-
-                let card_h = 64u32;
+                let card_h = 70u32;
                 if cy + card_h as i32 > bottom {
                     break;
                 }
@@ -5141,48 +5191,52 @@ impl VortexShell {
                     1,
                     notification_priority_color(record.priority),
                 );
-                let close_r = Rect::new(card.right() - 24, card.y + 6, 16, 16);
+                let close_r = Rect::new(card.right() - 26, card.y + 8, 16, 16);
                 if self.notif_dismiss_zones.len() < NOTIF_DISMISS_ZONES_MAX {
                     self.notif_dismiss_zones
                         .push((close_r, record.storage_key.clone()));
                 }
-                let title = ellipsize_label(&record.title, 32);
-                let body = ellipsize_label(&record.body, 46);
+                let title = ellipsize_label(&record.title, 30);
+                let body = ellipsize_label(&record.body, 44);
                 let meta = notification_meta(record);
                 draw_text_vcenter(
                     canvas,
                     &title,
-                    card.x + 10,
-                    card.y + 6,
+                    card.x + 12,
+                    card.y + 8,
                     16,
                     &TextStyle::new(FontRole::UiSmall, theme.text),
                 );
                 draw_text_vcenter(
                     canvas,
                     &body,
-                    card.x + 10,
-                    card.y + 24,
+                    card.x + 12,
+                    card.y + 30,
                     16,
                     &TextStyle::new(FontRole::UiSmall, theme.text_dim),
                 );
                 draw_text_vcenter(
                     canvas,
                     &meta,
-                    card.x + 10,
-                    card.y + 42,
+                    card.x + 12,
+                    card.y + 50,
                     14,
                     &TextStyle::new(FontRole::UiSmall, theme.text_dim),
                 );
                 canvas.fill_rounded_rect(close_r, 4, theme.panel);
                 canvas.stroke_rounded_rect(close_r, 4, 1, theme.border);
-                draw_text_vcenter(
-                    canvas,
-                    "X",
-                    close_r.x + 5,
-                    close_r.y,
-                    close_r.h,
-                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-                );
+                if let Some(icon) = self.symbols.close {
+                    canvas.draw_tga_icon_tinted(&icon, close_r, theme.text_dim);
+                } else {
+                    draw_text_vcenter(
+                        canvas,
+                        "x",
+                        close_r.x + 5,
+                        close_r.y,
+                        close_r.h,
+                        &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                    );
+                }
                 cy += card_h as i32 + 8;
             }
         }

@@ -25,6 +25,7 @@ use sunlight_ui::{Canvas, Color, Point, Rect, UiSymbol};
 /// Wallpaper asset staged at /var/sunlightos/wallpapers/wallpaper.tga.
 /// Embedded directly so the compositor can decode without a VFS read at startup.
 static WALLPAPER_TGA_BYTES: &[u8] = include_bytes!("../../../docs/images/wallpaper.tga");
+static ICON_SYM_CLOSE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_close.tga"));
 
 mod app_lifecycle;
 mod backend;
@@ -176,16 +177,16 @@ const KEY_RIGHT_SUPER: u8 = 0x5C;
 const ALT_TAB_REPEAT_MS: u64 = 120;
 const NOTIFICATION_MAX_COUNT: usize = 4;
 const NOTIFICATION_WIDTH: u32 = 320;
-const NOTIFICATION_HEIGHT: u32 = 54;
+const NOTIFICATION_HEIGHT: u32 = 78;
 const NOTIFICATION_MARGIN_X: i32 = 12;
-const NOTIFICATION_MARGIN_Y: i32 = 12;
+const NOTIFICATION_MARGIN_Y: i32 = 52;
 const NOTIFICATION_GAP: i32 = 8;
 const NOTIFICATION_TIMEOUT_MS: u64 = 30_000;
 const NOTIFICATION_POLL_MS: u64 = 100;
 const OVERLAY_DECORATION_POLL_MS: u64 = 100;
 const OVERLAY_DECORATION_IDLE_TIMEOUT_MS: u64 = 2_500;
-const NOTIFICATION_TEXT_MARGIN_X: i32 = 12;
-const NOTIFICATION_TEXT_MARGIN_Y: i32 = 10;
+const NOTIFICATION_TEXT_MARGIN_X: i32 = 14;
+const NOTIFICATION_TEXT_MARGIN_Y: i32 = 12;
 const NOTIFICATION_CLOSE_SIZE: u32 = 18;
 
 // ---------------------------------------------------------------------------
@@ -1406,10 +1407,13 @@ fn draw_notifications(canvas: &mut Canvas<'_>, state: &CompositorState) {
         return;
     }
 
-    let title_max_chars = ((max_width as i32 - NOTIFICATION_TEXT_MARGIN_X * 2) / 7).max(8) as usize;
+    let text_width = max_width as i32 - NOTIFICATION_TEXT_MARGIN_X * 2 - 28;
+    let title_max_chars = (text_width / 7).max(8) as usize;
     let body_max_chars = ((max_width as i32 - NOTIFICATION_TEXT_MARGIN_X * 2) / 7).max(12) as usize;
     let title_y = NOTIFICATION_TEXT_MARGIN_Y;
-    let body_y = title_y + 16;
+    let body_y = title_y + 22;
+    let time_y = body_y + 22;
+    let close_icon = TgaImage::parse(ICON_SYM_CLOSE_TGA).ok();
 
     for (idx, note) in state.notifications.iter().rev().enumerate() {
         let Some(rect) = notification_toast_rect(canvas.width, idx) else {
@@ -1421,7 +1425,11 @@ fn draw_notifications(canvas: &mut Canvas<'_>, state: &CompositorState) {
 
         let _ = note.id;
         let accent = notification_color(note.kind);
-        let panel = Color(0x001E1E26);
+        let panel = if idx == 0 {
+            Color(0x001E1E26)
+        } else {
+            Color(0x00181820)
+        };
         let border = accent.darken(30);
         canvas.fill_rounded_rect(rect, 8, panel);
         canvas.stroke_rounded_rect(rect, 8, 1, border);
@@ -1429,21 +1437,34 @@ fn draw_notifications(canvas: &mut Canvas<'_>, state: &CompositorState) {
         let close = notification_close_rect(rect);
         canvas.fill_rounded_rect(close, 4, Color(0x002A2A34));
         canvas.stroke_rounded_rect(close, 4, 1, border);
-        canvas.draw_text(close.x + 5, close.y + 3, "X", Color(0x00CCCCD8));
+        if let Some(icon) = close_icon {
+            canvas.draw_tga_icon_tinted(&icon, close, Color(0x00CCCCD8));
+        } else {
+            canvas.draw_text(close.x + 5, close.y + 3, "x", Color(0x00CCCCD8));
+        }
 
         let title = notification_fit(&note.title, title_max_chars);
         let body = notification_fit(&note.body, body_max_chars);
-        canvas.draw_text(
+        sun_font::draw_text(
+            canvas,
+            &title,
             rect.x + NOTIFICATION_TEXT_MARGIN_X,
             rect.y + title_y,
-            &title,
-            Color(TITLE_TEXT_COLOR),
+            &sun_font::TextStyle::new(sun_font::FontRole::UiMedium, Color(TITLE_TEXT_COLOR)),
         );
-        canvas.draw_text(
+        sun_font::draw_text(
+            canvas,
+            &body,
             rect.x + NOTIFICATION_TEXT_MARGIN_X,
             rect.y + body_y,
-            &body,
-            Color(0x00888899),
+            &sun_font::TextStyle::new(sun_font::FontRole::UiSmall, Color(0x00AAAAB6)),
+        );
+        sun_font::draw_text(
+            canvas,
+            "just now",
+            rect.x + NOTIFICATION_TEXT_MARGIN_X,
+            rect.y + time_y,
+            &sun_font::TextStyle::new(sun_font::FontRole::UiSmall, Color(0x00747482)),
         );
     }
 }

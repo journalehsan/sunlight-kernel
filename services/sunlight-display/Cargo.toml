@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-display"
-version = "0.2.1020"
+version = "0.2.1024"
+
+build = "build.rs"
 
 
 
@@ -167,6 +169,9 @@ sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ui = { path = "../../sunlight-ui" }
 sun-font = { path = "../../sun-font" }
+
+[build-dependencies]
+fontdue = "0.7"
 
 [[bin]]
 name = "sunlight-display"
