@@ -600,6 +600,18 @@ pub(crate) const BOT_Y_OFF: i32 = 8; // distance from screen bottom to bottom of
 const ICON_BTN: u32 = 36; // square size for icon buttons in clusters
 const CLUSTER_PAD: i32 = 6; // inner horizontal padding inside clusters
 const ICON_GAP: i32 = 4; // gap between icon buttons
+// Top-right status cluster spacing. Kept as constants so the balance of the
+// [lan][notif][logout] on the right; workspace indicator (semantic icons) on the
+// left after the SunlightOS brand. All tunable in one place.
+const TOP_ICON_SIZE: u32 = 18; // status icon size in the top bar
+const TOP_ICON_GAP: i32 = 8; // gap between top-bar status icons (was 4 — too cramped)
+const TOP_RIGHT_PAD: i32 = 8; // right margin of the top-right cluster
+const TOP_WS_LEFT_GAP: i32 = 12; // gap between brand and workspace indicator
+const WS_INDICATOR_COUNT: usize = 4; // workspaces 1..=4
+const WS_BTN_W: u32 = 18; // workspace indicator button width
+const WS_BTN_H: u32 = 18; // workspace indicator button height
+const WS_ICON_SIZE: u32 = 16; // glyph drawn inside a workspace button
+const WS_BTN_GAP: i32 = 4; // gap between workspace indicator buttons
 const RUNNING_ICON: u32 = 24; // icon size inside running-app cells
 const RUNNING_CELL_PAD: i32 = 6; // inner padding inside running-app cells
 const RUNNING_NAME_BUF: usize = 64;
@@ -1234,6 +1246,13 @@ struct VortexShell {
     net_zone: Rect,
     notif_zone: Rect,
     logout_zone: Rect,
+    /// Active workspace (1..=4), mirrored from the display server via snapshot
+    /// refresh. Kept runtime-only — never persisted.
+    current_workspace: u8,
+    /// Bounds of the whole [1][2][3][4] cluster, for hit-testing clicks.
+    workspace_zone: Rect,
+    /// Per-button click targets inside the workspace indicator.
+    workspace_btn_zones: [Rect; WS_INDICATOR_COUNT],
 
     // Popover / dialog / tooltip state (conservative, no overengineer)
     show_datetime_tooltip: bool,
@@ -1348,6 +1367,9 @@ impl VortexShell {
             net_zone: Rect::new(0, 0, 0, 0),
             notif_zone: Rect::new(0, 0, 0, 0),
             logout_zone: Rect::new(0, 0, 0, 0),
+            current_workspace: 1,
+            workspace_zone: Rect::new(0, 0, 0, 0),
+            workspace_btn_zones: [Rect::new(0, 0, 0, 0); WS_INDICATOR_COUNT],
             show_datetime_tooltip: false,
             show_calendar_popover: false,
             cal_popup_open_btn: Rect::new(0, 0, 0, 0),
@@ -1895,6 +1917,14 @@ impl VortexShell {
                 break;
             }
             let metadata = reply.words[3];
+            // The display server packs the active workspace id into bits 16..23
+            // of words[3]. Mirror it so the shell's indicator + taskbar filter
+            // follow both Super+1..4 (handled in the compositor) and the
+            // clickable indicator (which sends SET_WORKSPACE).
+            let active_ws = ((metadata >> 16) & 0xFF) as u8;
+            if (1..=4).contains(&active_ws) {
+                self.current_workspace = active_ws;
+            }
             let mut title = [0u8; 16];
             for i in 0..8usize {
                 title[i] = ((reply.words[6] >> (i * 8)) & 0xFF) as u8;
@@ -1921,12 +1951,16 @@ impl VortexShell {
         }
         self.next_app_poll_ms = now.saturating_add(APP_STATE_POLL_MS);
 
+        let prev_ws = self.current_workspace;
         let Some(()) = self.refresh_window_snapshots() else {
             return false;
         };
         let mut windows = core::mem::take(&mut self.window_snapshots);
 
-        let mut dirty = false;
+        // A workspace switch (via Super+1..4 in the compositor) changes no app
+        // state, so it wouldn't otherwise mark dirty — but the indicator + taskbar
+        // filter must redraw to reflect the new active workspace.
+        let mut dirty = self.current_workspace != prev_ws;
         for app in &mut self.apps {
             let prev_state = app.state;
             let prev_window = app.main_window_id;
@@ -2079,7 +2113,7 @@ impl VortexShell {
 
         for window in windows {
             if window.hidden
-                || window.workspace_id != 0
+                || window.workspace_id != self.current_workspace as u64
                 || window.window_type == 2
                 || window.window_type == 3
             {
@@ -3042,23 +3076,42 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
     let brand_w = measure_text(brand, FontRole::UiSmall).w as i32;
     x += brand_w + 8;
 
-    // Quick static shortcuts (no config yet; prepared for future file)
-    let shortcuts = ["home", "public", "code", "terminal", "article"];
-    let sc_size = 16u32;
-    for &name in &shortcuts {
-        let cell = Rect::new(
-            x,
-            bar.y + (TOP_H as i32 - sc_size as i32) / 2,
-            sc_size,
-            sc_size,
-        );
-        if let Some(tga) = sym.get(name) {
-            draw_tga_tinted_orange(canvas, &tga, cell, theme.accent);
+    // Workspace indicator (semantic glyphs) — sits on the left right after the
+    // brand, replacing the old static shortcut icons. Each button maps to a
+    // workspace: home(1) · browser/public(2) · code(3) · office/article(4).
+    // Glyphs come from the build-time Material Symbols rasteriser (see build.rs).
+    x += TOP_WS_LEFT_GAP;
+    let ws_glyphs = [sym.home, sym.public, sym.code, sym.article];
+    let ws_btn_y = bar.y + (TOP_H - WS_BTN_H) as i32 / 2;
+    let mut bx = x;
+    for i in 0..WS_INDICATOR_COUNT {
+        let cell = Rect::new(bx, ws_btn_y, WS_BTN_W, WS_BTN_H);
+        let active = (i as u8) + 1 == shell.current_workspace;
+        if active {
+            // Filled accent pill makes the active workspace clearly distinct.
+            canvas.fill_rounded_rect(cell, 5, theme.accent);
         }
-        x += sc_size as i32 + 2;
+        if let Some(tga) = ws_glyphs[i] {
+            let ic = WS_ICON_SIZE as i32;
+            let ic_cell = Rect::new(
+                bx + (WS_BTN_W as i32 - ic) / 2,
+                ws_btn_y + (WS_BTN_H as i32 - ic) / 2,
+                WS_ICON_SIZE,
+                WS_ICON_SIZE,
+            );
+            let tint = if active {
+                theme.text_on_accent
+            } else {
+                theme.text_dim
+            };
+            draw_tga_tinted_orange(canvas, &tga, ic_cell, tint);
+        }
+        shell.workspace_btn_zones[i] = cell;
+        bx += WS_BTN_W as i32 + WS_BTN_GAP;
     }
-
-    // Record left area not needed for zones in v1 (shortcuts static for now)
+    let ws_cluster_w =
+        (WS_INDICATOR_COUNT as i32) * (WS_BTN_W as i32) + ((WS_INDICATOR_COUNT as i32) - 1) * WS_BTN_GAP;
+    shell.workspace_zone = Rect::new(x, ws_btn_y, ws_cluster_w as u32, WS_BTN_H);
 
     // ── Center: localized date/time (clickable, hoverable) ───────────────────
     // Use cached full time + locale. Format per spec. Updates on minute change only.
@@ -3086,9 +3139,10 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
     shell.datetime_zone = Rect::new(cx - pad, cy, (tw + pad * 2) as u32, bar.h);
 
     // ── Right: meaningful indicators (no duplicate time) ─────────────────────
-    // [lan] [notif] [logout]
-    let mut rx = bar.right() - 8;
-    let ic = 18u32; // icon size
+    // [lan] [notif] [logout]   (workspace indicator lives on the left now)
+    // Spacing is driven by small constants so the cluster stays balanced.
+    let mut rx = bar.right() - TOP_RIGHT_PAD;
+    let ic = TOP_ICON_SIZE; // status icon size
 
     // Logout
     rx -= ic as i32;
@@ -3097,7 +3151,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
         draw_tga_tinted_orange(canvas, &tga, logout_cell, theme.accent);
     }
     shell.logout_zone = logout_cell;
-    rx -= 4;
+    rx -= TOP_ICON_GAP;
 
     // Notifications
     rx -= ic as i32;
@@ -3106,7 +3160,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
         draw_tga_tinted_orange(canvas, &tga, notif_cell, theme.text_dim);
     }
     shell.notif_zone = notif_cell;
-    rx -= 4;
+    rx -= TOP_ICON_GAP;
 
     // Network (lan)
     rx -= ic as i32;
@@ -5952,7 +6006,24 @@ impl App for VortexShell {
                     return true;
                 }
 
-                // Right side indicators
+                // Workspace indicator (semantic glyphs on the left) — switch
+                // the active workspace. Set it optimistically so the redraw we
+                // trigger on return shows the new active color immediately; the
+                // next snapshot refresh confirms it from the compositor.
+                if self.workspace_zone.contains(point) {
+                    for (i, r) in self.workspace_btn_zones.iter().enumerate() {
+                        if r.contains(point) {
+                            let ws = (i + 1) as u64;
+                            self.current_workspace = ws as u8;
+                            let _ = ipc_call_timeout(
+                                self.display_ep,
+                                IpcMsg::with_label(SgpMsg::SET_WORKSPACE).word(0, ws),
+                                DISPLAY_IPC_TIMEOUT_MS,
+                            );
+                            return true;
+                        }
+                    }
+                }
                 if self.logout_zone.contains(point) {
                     self.show_logout_confirm = true;
                     self.show_notif_panel = false;

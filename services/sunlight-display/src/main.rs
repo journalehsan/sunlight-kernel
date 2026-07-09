@@ -1112,10 +1112,19 @@ fn mark_dirty_full(state: &mut CompositorState) {
     state.dirty.mark_full();
 }
 
+/// Desktop/Widget windows (the shell's desktop surface: wallpaper, top panel,
+/// dock) are workspace-agnostic and stay visible on every workspace. Normal and
+/// Dialog windows are only visible on their owning workspace.
+fn window_visible_on_workspace(win: &Window, active_workspace_id: u32) -> bool {
+    win.config.window_type == WindowType::Desktop
+        || win.config.window_type == WindowType::Widget
+        || win.workspace_id == active_workspace_id
+}
+
 fn is_window_visible(state: &CompositorState, win: &Window) -> bool {
     !win.hidden
-        && win.workspace_id == state.active_workspace_id
         && win.config.state != WindowState::Minimized
+        && window_visible_on_workspace(win, state.active_workspace_id)
 }
 
 fn is_focusable_window(win: &Window) -> bool {
@@ -1138,7 +1147,7 @@ fn focused_window_id(state: &CompositorState) -> Option<u64> {
 fn pointer_eligible_window(state: &CompositorState, win: &Window) -> bool {
     win.config.state != WindowState::Minimized
         && !win.hidden
-        && win.workspace_id == state.active_workspace_id
+        && window_visible_on_workspace(win, state.active_workspace_id)
 }
 
 fn topmost_window_idx_at(state: &CompositorState, cx: u32, cy: u32) -> Option<usize> {
@@ -1673,7 +1682,7 @@ fn prune_dead_owner_windows(state: &mut CompositorState) -> bool {
     dirty
 }
 
-fn list_window_reply(win: &Window) -> IpcMsg {
+fn list_window_reply(win: &Window, active_ws: u32) -> IpcMsg {
     let rolled_up = if win.rolled_up { 1u64 } else { 0u64 };
     let window_type = win.config.window_type as u64;
     let state = win.config.state as u64;
@@ -1689,7 +1698,7 @@ fn list_window_reply(win: &Window) -> IpcMsg {
         .word(0, win.id)
         .word(1, win.owner_pid)
         .word(2, state)
-        .word(3, window_type | (rolled_up << 8))
+        .word(3, window_type | (rolled_up << 8) | ((active_ws as u64) << 16))
         .word(4, win.workspace_id as u64)
         .word(5, win.hidden as u64)
         .word(6, title0)
@@ -1700,7 +1709,7 @@ fn list_window_at(state: &CompositorState, idx: usize) -> IpcMsg {
     state
         .windows
         .get(idx)
-        .map(list_window_reply)
+        .map(|win| list_window_reply(win, state.active_workspace_id))
         .unwrap_or_else(|| IpcMsg::with_label(SgpMsg::REPLY))
 }
 
@@ -3153,7 +3162,7 @@ mod tests {
         CompositorState {
             windows,
             launch_traces: Vec::new(),
-            active_workspace_id: 0,
+            active_workspace_id: 1,
             mouse_x: 0,
             mouse_y: 0,
             pointer: PointerPolicy::new(800, 600),
@@ -3653,7 +3662,7 @@ pub extern "C" fn _start() -> ! {
     let mut state = CompositorState {
         windows: Vec::new(),
         launch_traces: Vec::new(),
-        active_workspace_id: 0,
+        active_workspace_id: 1,
         mouse_x: (render_width / 2) as u16,
         mouse_y: (render_height / 2) as u16,
         pointer: PointerPolicy::new(render_width, render_height),
@@ -3852,7 +3861,7 @@ pub extern "C" fn _start() -> ! {
                                 last_buttons: 0,
                                 rolled_up: false,
                                 saved_unrolled_h: h,
-                                workspace_id: 0,
+                                workspace_id: state.active_workspace_id,
                                 hidden: false,
                                 overlay_decorations_visible: false,
                                 overlay_last_motion_ms: 0,
@@ -4051,6 +4060,21 @@ pub extern "C" fn _start() -> ! {
             }
 
             // -------------------------------------------------------------------
+            // SET_WORKSPACE — switch the active workspace (1..=4).
+            // words[0] = workspace id. Hides/filters windows whose workspace_id
+            // differs; Desktop/Widget windows stay visible on all workspaces.
+            // -------------------------------------------------------------------
+            SgpMsg::SET_WORKSPACE => {
+                let ws = msg.words[0] as u32;
+                if (1..=4).contains(&ws) && state.active_workspace_id != ws {
+                    state.active_workspace_id = ws;
+                    mark_dirty_full(&mut state);
+                    redraw_scene(&mut state);
+                }
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
+            // -------------------------------------------------------------------
             // GET_SCREEN_INFO — reply with compositor display metrics.
             // No input words needed.
             // -------------------------------------------------------------------
@@ -4238,6 +4262,24 @@ pub extern "C" fn _start() -> ! {
                         }
                     }
                     consumed = true;
+                } else if pressed && !was_down && super_down {
+                    // Super + 1..4 → switch to workspace 1..4. PC/AT Set 1
+                    // scancodes for the top row digits.
+                    let ws = match keycode {
+                        0x02 => Some(1u32), // KEY_1
+                        0x03 => Some(2),    // KEY_2
+                        0x04 => Some(3),    // KEY_3
+                        0x05 => Some(4),    // KEY_4
+                        _ => None,
+                    };
+                    if let Some(ws) = ws {
+                        if state.active_workspace_id != ws {
+                            state.active_workspace_id = ws;
+                            mark_dirty_full(&mut state);
+                            redraw_scene(&mut state);
+                        }
+                        consumed = true;
+                    }
                 }
 
                 if !consumed && state.session_active {

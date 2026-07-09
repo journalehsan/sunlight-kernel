@@ -349,7 +349,8 @@ pub mod sgp {
         /// Reply: words[0]=win_id (0 when no more windows),
         ///        words[1]=owner_pid,
         ///        words[2]=window_state,
-        ///        words[3]=window_type|rolled_up metadata,
+        ///        words[3]=window_type(low byte) | rolled_up(bit 8)
+        ///                | active_workspace_id(bits 16..23),
         ///        words[6..7]=first 16 bytes of the window title (LE packed).
         pub const LIST_WINDOWS: u64 = 0xA10A;
         /// Bring the window to the front and restore it if minimized.
@@ -358,6 +359,11 @@ pub mod sgp {
         /// Register launch-trace metadata for a child pid.
         /// words[0] = launch_id, words[1] = source, words[2] = pid, words[3] = requested_at_ms
         pub const LAUNCH_TRACE: u64 = 0xA10C;
+        /// Set the active workspace (1..=4). words[0] = workspace id.
+        /// Windows whose workspace_id differs become invisible and non-interactive.
+        /// Desktop/Widget windows remain visible on all workspaces.
+        /// Reply: SgpMsg::REPLY.
+        pub const SET_WORKSPACE: u64 = 0xA10D;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)
