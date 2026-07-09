@@ -556,8 +556,6 @@ struct RunningAppEntry {
     win_id: u64,
     pid: u64,
     display_name: String,
-    label: [u8; RUNNING_LABEL_BUF],
-    label_len: usize,
     cell_w: u32,
     minimized: bool,
     icon_hint: String,
@@ -572,20 +570,11 @@ struct CalendarMiniEvent {
 }
 
 impl RunningAppEntry {
-    fn label_str(&self) -> &str {
-        core::str::from_utf8(&self.label[..self.label_len]).unwrap_or("")
-    }
-
-    fn refresh_label_cache(&mut self) {
-        let label = truncate_label_into(&self.display_name, RUNNING_LABEL_CHARS, &mut self.label);
-        self.label_len = label.len();
-        if self.minimized {
-            self.cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON;
-            return;
-        }
-        let label_w = measure_text(label, FontRole::UiSmall).w;
-        let label_box_w = label_w.clamp(RUNNING_LABEL_MIN_W, RUNNING_LABEL_MAX_W);
-        self.cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON + 6 + label_box_w;
+    /// Recompute the cell width. Running-app cells are icon-only (the full
+    /// title is shown via the hover tooltip), so every cell is the same
+    /// icon-only width regardless of minimized state.
+    fn refresh_cell_width(&mut self) {
+        self.cell_w = RUNNING_CELL_PAD as u32 * 2 + RUNNING_ICON;
     }
 }
 
@@ -613,11 +602,7 @@ const CLUSTER_PAD: i32 = 6; // inner horizontal padding inside clusters
 const ICON_GAP: i32 = 4; // gap between icon buttons
 const RUNNING_ICON: u32 = 24; // icon size inside running-app cells
 const RUNNING_CELL_PAD: i32 = 6; // inner padding inside running-app cells
-const RUNNING_LABEL_MIN_W: u32 = 60;
-const RUNNING_LABEL_MAX_W: u32 = 90;
-const RUNNING_LABEL_CHARS: usize = 14;
 const RUNNING_NAME_BUF: usize = 64;
-const RUNNING_LABEL_BUF: usize = 32;
 const RUNNING_MINIMIZED_DOT: u32 = 6;
 /// How long the pointer must rest on a running-app cell before its title
 /// tooltip appears (ms). Keeps the bar calm while sweeping across items.
@@ -2125,13 +2110,11 @@ impl VortexShell {
                 }
                 if entry.minimized != minimized {
                     entry.minimized = minimized;
-                    entry.refresh_label_cache();
                     dirty = true;
                 }
                 if entry.display_name.as_str() != display_name {
                     entry.display_name.clear();
                     entry.display_name.push_str(display_name);
-                    entry.refresh_label_cache();
                     dirty = true;
                 }
                 let next_icon_hint =
@@ -2155,15 +2138,13 @@ impl VortexShell {
                 win_id: window.id,
                 pid: window.owner_pid,
                 display_name: String::from(display_name),
-                label: [0u8; RUNNING_LABEL_BUF],
-                label_len: 0,
                 cell_w: 0,
                 minimized,
                 icon_hint: build_icon_resolution_key(proc_name, display_name),
                 icon: resolve_running_icon(proc_name, display_name, &self.icon_overrides),
                 last_click_at: 0,
             };
-            entry.refresh_label_cache();
+            entry.refresh_cell_width();
             self.running_apps.push(entry);
             dirty = true;
         }
@@ -2758,16 +2739,13 @@ fn draw_running_app_button(
     cell: Rect,
     theme: &Theme,
     entry: &RunningAppEntry,
-    label: &str,
     hovered: bool,
-    rtl: bool,
     now: u64,
 ) {
     let pressed = now.saturating_sub(entry.last_click_at) < APP_PRESS_MS;
     let mut fill;
     let mut border;
     let mut icon_color = theme.text;
-    let mut label_color = theme.text;
 
     if entry.minimized {
         fill = theme.panel;
@@ -2783,13 +2761,11 @@ fn draw_running_app_button(
         } else {
             theme.accent.darken(58)
         };
-        label_color = theme.text;
     }
     if pressed {
         fill = theme.accent_hover.darken(35);
         border = theme.accent_hover;
         icon_color = theme.text;
-        label_color = theme.text;
     }
 
     canvas.fill_rounded_rect(cell, 5, fill);
@@ -2804,13 +2780,9 @@ fn draw_running_app_button(
         );
     }
 
-    let icon_x = if entry.minimized || !rtl {
-        cell.x + RUNNING_CELL_PAD
-    } else {
-        cell.right() - RUNNING_CELL_PAD - RUNNING_ICON as i32
-    };
+    // Cells are icon-only; the full title is shown via the hover tooltip.
     let icon_rect = Rect::new(
-        icon_x,
+        cell.x + (cell.w as i32 - RUNNING_ICON as i32) / 2,
         cell.y + (cell.h as i32 - RUNNING_ICON as i32) / 2,
         RUNNING_ICON,
         RUNNING_ICON,
@@ -2825,32 +2797,7 @@ fn draw_running_app_button(
 
     if entry.minimized {
         draw_taskbar_dot(canvas, cell, theme.accent);
-        return;
     }
-
-    let label_x = if rtl {
-        cell.x + RUNNING_CELL_PAD
-    } else {
-        icon_rect.right() + 6
-    };
-    let label_rect = Rect::new(
-        label_x,
-        cell.y,
-        if rtl {
-            icon_rect.x.saturating_sub(label_x + 6) as u32
-        } else {
-            cell.right().saturating_sub(label_x + 6) as u32
-        },
-        cell.h,
-    );
-    draw_text_vcenter(
-        canvas,
-        label,
-        label_rect.x,
-        label_rect.y,
-        label_rect.h,
-        &TextStyle::new(FontRole::UiSmall, label_color),
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -4393,34 +4340,6 @@ fn write_fallback_app_name(pid: u64, out: &mut [u8; RUNNING_NAME_BUF]) -> usize 
     len
 }
 
-fn truncate_label_into<'a>(
-    text: &str,
-    max_chars: usize,
-    out: &'a mut [u8; RUNNING_LABEL_BUF],
-) -> &'a str {
-    let char_count = text.chars().count();
-    let mut len = 0usize;
-    let keep = if char_count > max_chars {
-        max_chars.saturating_sub(3)
-    } else {
-        max_chars
-    };
-    for ch in text.chars().take(keep) {
-        if !ch.is_ascii() || len >= out.len() {
-            break;
-        }
-        out[len] = ch as u8;
-        len += 1;
-    }
-    if char_count > max_chars && len + 3 <= out.len() {
-        out[len] = b'.';
-        out[len + 1] = b'.';
-        out[len + 2] = b'.';
-        len += 3;
-    }
-    core::str::from_utf8(&out[..len]).unwrap_or("")
-}
-
 fn normalize_icon_stem(name: &str) -> String {
     let mut stem = name.trim();
     if let Some(rest) = stem.strip_prefix("sunlight-") {
@@ -4788,7 +4707,7 @@ fn draw_bot_center(
     running_apps: &[RunningAppEntry],
     running_zones: &mut Vec<(Rect, u64)>,
     menu_open: bool,
-    rtl: bool,
+    _rtl: bool,
     now: u64,
 ) -> (Rect, [Rect; 4]) {
     let icons: &[&[u16; 16]; 5] = &[
@@ -4909,9 +4828,7 @@ fn draw_bot_center(
                 cell,
                 theme,
                 entry,
-                entry.label_str(),
                 running_hover.map_or(false, |h| h == i),
-                rtl,
                 now,
             );
             if let Some(zone) = running_zones.get_mut(i) {
