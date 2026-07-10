@@ -1,19 +1,15 @@
 [package]
-name = "rappid-rabbit"
+name = "sunlight-api-lab"
 version = "0.2.1088"
-
-
-
-
 
 edition = "2021"
 
 [[bin]]
-name = "rappid-rabbit"
+name = "sunlight-api-lab"
 path = "src/main.rs"
 
 [lib]
-name = "rappid_rabbit"
+name = "sunlight_api_lab"
 path = "src/lib.rs"
 
 [dependencies]

@@ -1139,6 +1139,13 @@ max_ttys = 6
         mode::FILE_755,
         b"#!/sunlight/rappid-rabbit\n",
     ),
+    RamEntry::file(
+        "/bin/sunlight-api-lab",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-api-lab\n",
+    ),
     // System Preferences (Control Panel)
     RamEntry::file("/bin/control-panel", 0, 0, mode::FILE_755, b"#!/sunlight/control-panel\n"),
     RamEntry::file(
@@ -1743,6 +1750,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/rappid-rabbit\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sunlight-api-lab",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-api-lab\n",
     ),
     // System Preferences (Control Panel)
     RamEntry::file(

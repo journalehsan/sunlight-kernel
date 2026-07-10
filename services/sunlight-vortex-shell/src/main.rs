@@ -145,11 +145,13 @@ static ICON_FILES_TGA: &[u8] =
 static ICON_SETTINGS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
 static ICON_CALENDAR_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/office-calendar.tga");
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/org.kde.merkuro.calendar.tga");
 static ICON_RUNNER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/system-run.tga");
 static ICON_GENERIC_APP_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/applications-system.tga");
+static ICON_API_LAB_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.tga");
 static ICON_TASKS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
 static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
@@ -360,7 +362,8 @@ impl DockTheme {
             | AppId::Eyes
             | AppId::TextEditor
             | AppId::Writer
-            | AppId::RappidRabbit => None,
+            | AppId::RappidRabbit
+            | AppId::ApiLab => None,
         }
     }
 }
@@ -465,6 +468,7 @@ pub(crate) enum AppId {
     Writer,
     Calendar,
     RappidRabbit,
+    ApiLab,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1236,7 +1240,7 @@ struct VortexShell {
     /// entries (Terminal/Calculator/Files/Settings) are also shown in the
     /// bottom dock; Tasks/Bench/Eyes/TextEditor/Writer are Start-Menu-only
     /// but share the same launch/state-sync machinery.
-    apps: [DockAppState; 11],
+    apps: [DockAppState; 12],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// User-provided icon overrides loaded from `desktop.toml`.
@@ -1413,6 +1417,7 @@ impl VortexShell {
                 DockAppState::new(AppId::Writer, "Sunlight Writer", AppId::Writer),
                 DockAppState::new(AppId::Calendar, "Sunlight Calendar", AppId::Calendar),
                 DockAppState::new(AppId::RappidRabbit, "Rappid Rabbit", AppId::RappidRabbit),
+                DockAppState::new(AppId::ApiLab, "Sunlight API Lab", AppId::ApiLab),
             ],
             running_apps: Vec::new(),
             icon_overrides,
@@ -1617,6 +1622,7 @@ impl VortexShell {
             AppId::Writer => "/bin/sunlight-writer",
             AppId::Calendar => "/bin/sunlight-calendar",
             AppId::RappidRabbit => "/bin/rappid-rabbit",
+            AppId::ApiLab => "/bin/sunlight-api-lab",
         }
     }
 
@@ -1633,6 +1639,7 @@ impl VortexShell {
             AppId::Writer => b"sunlight-writer",
             AppId::Calendar => b"calendar",
             AppId::RappidRabbit => b"rappid-rabbit",
+            AppId::ApiLab => b"sunlight-api-lab",
         }
     }
 
@@ -1649,6 +1656,7 @@ impl VortexShell {
             AppId::Writer => "app=sunlight-writer",
             AppId::Calendar => "app=sunlight-calendar",
             AppId::RappidRabbit => "app=rappid-rabbit",
+            AppId::ApiLab => "app=sunlight-api-lab",
         }
     }
 
@@ -4609,6 +4617,7 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         "rappid-rabbit" | "rabbit" | "internet-web-browser" | "web-browser" => {
             Some(ICON_GENERIC_APP_TGA)
         }
+        "sunlight-api-lab" | "api-lab" | "apifox" => Some(ICON_API_LAB_TGA),
         "runner" | "run" | "system-run" => Some(ICON_RUNNER_TGA),
         "tasks" | "task-manager" | "ksysguard" | "sunlight-tasks" => Some(ICON_TASKS_TGA),
         "bench" | "sunlight-bench" | "cpu-x" => Some(ICON_BENCH_TGA),

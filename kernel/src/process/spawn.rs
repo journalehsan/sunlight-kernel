@@ -496,6 +496,10 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         }
         // rappid-rabbit: native HTTP inspection application.
         "/bin/rappid-rabbit" | "/usr/bin/rappid-rabbit" => Ok(crate::RAPPID_RABBIT_ELF_BYTES),
+        // sunlight-api-lab: native REST/API testing application.
+        "/bin/sunlight-api-lab" | "/usr/bin/sunlight-api-lab" => {
+            Ok(crate::SUNLIGHT_API_LAB_ELF_BYTES)
+        }
         "/sbin/sunlight-dialogd" | "/usr/sbin/sunlight-dialogd" => {
             Ok(crate::SUNLIGHT_DIALOGD_ELF_BYTES)
         }

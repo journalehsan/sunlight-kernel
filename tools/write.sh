@@ -189,6 +189,9 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release
 
     # sunshell must use the kernel target (user-space VA range)
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --release --features sunlight --no-default-features --target x86_64-unknown-none

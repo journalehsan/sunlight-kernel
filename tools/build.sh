@@ -87,6 +87,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dialogd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-control-panel --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release

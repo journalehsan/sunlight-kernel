@@ -192,6 +192,9 @@ static SUNLIGHT_REMINDERS_ELF_BYTES: &[u8] =
 // Rappid Rabbit: native HTTP inspection application.
 static RAPPID_RABBIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/rappid-rabbit");
+// Sunlight API Lab: native REST/API testing application.
+static SUNLIGHT_API_LAB_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-api-lab");
 // Dialog host: shared native dialog service for GUI apps.
 static SUNLIGHT_DIALOGD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-dialogd");

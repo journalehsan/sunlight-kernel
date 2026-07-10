@@ -82,6 +82,7 @@ members = [
     "sunlight-calendar",
     "sunlight-reminders",
     "rappid-rabbit",
+    "sunlight-api-lab",
 ]
 
 [workspace.dependencies]
