@@ -1,6 +1,7 @@
 [package]
 name = "rappid-rabbit"
-version = "0.2.1110"
+version = "0.2.1117"
+
 
 
 
@@ -25,3 +26,11 @@ sunlight-http = { path = "../sunlight-http" }
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
+golden-fish = { path = "../golden-fish", optional = true }
+
+[features]
+default = []
+# "dom" enables Golden Fish HTML parser + DOM tree inspector.
+# Requires a target with std (e.g. host development builds) because
+# the current parser backend (tl) depends on std.
+dom = ["dep:golden-fish"]

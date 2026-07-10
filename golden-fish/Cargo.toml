@@ -1,0 +1,13 @@
+[package]
+name = "golden-fish"
+version = "0.2.1117"
+
+edition = "2021"
+authors = ["SunlightOS Contributors"]
+description = "HTML parsing and DOM construction engine for SunlightOS (Rappid Rabbit)"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+tl = "0.7.8"

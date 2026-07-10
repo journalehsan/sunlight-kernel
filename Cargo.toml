@@ -83,6 +83,7 @@ members = [
     "sunlight-reminders",
     "rappid-rabbit",
     "sunlight-api-lab",
+    "golden-fish",
 ]
 
 [workspace.dependencies]

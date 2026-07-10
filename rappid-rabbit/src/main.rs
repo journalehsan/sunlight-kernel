@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(any(test, feature = "dom")), no_std)]
 #![no_main]
 
 extern crate alloc;
@@ -10,6 +10,9 @@ use rappid_rabbit::{
     body_is_probably_text, build_get_request, format_url, looks_like_html, normalize_url_input,
     scan_html_resources,
 };
+
+#[cfg(feature = "dom")]
+use golden_fish::parse_html;
 use sun_font::{FontRole, VecFont};
 use sunlight_fetch::backend::{perform_request, RequestResult};
 use sunlight_fetch::FetchError;
@@ -64,9 +67,11 @@ unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
+#[cfg(not(any(test, feature = "dom")))]
 #[global_allocator]
 static ALLOC: BumpAllocator = BumpAllocator;
 
+#[cfg(not(any(test, feature = "dom")))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[RABBIT] panic\n");
@@ -224,6 +229,28 @@ impl RabbitApp {
         } else {
             self.console_text.clear();
             self.console_severity = ConsoleSeverity::Quiet;
+        }
+
+        // Golden Fish DOM tree (only when dom feature enabled and response looks like HTML)
+        #[cfg(feature = "dom")]
+        {
+            let source_text = self.source.as_str();
+            if looks_like_html(Some(content_type), source_text) {
+                match parse_html(source_text) {
+                    Ok(doc) => {
+                        let tree = doc.debug_tree();
+                        self.inspector_text
+                            .push_str("\n--- DOM Tree (golden-fish) ---\n");
+                        self.inspector_text.push_str(&tree);
+                    }
+                    Err(e) => {
+                        self.inspector_text
+                            .push_str("\n--- DOM Tree (golden-fish) ---\nParse error: ");
+                        self.inspector_text.push_str(&alloc::format!("{e}"));
+                        self.inspector_text.push('\n');
+                    }
+                }
+            }
         }
     }
 
@@ -600,6 +627,7 @@ impl App for RabbitApp {
     }
 }
 
+#[cfg(not(any(test, feature = "dom")))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
