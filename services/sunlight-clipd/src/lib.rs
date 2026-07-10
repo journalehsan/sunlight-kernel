@@ -1,6 +1,8 @@
 #![no_std]
 
 extern crate alloc;
+#[cfg(test)]
+extern crate std;
 
 use alloc::borrow::Cow;
 use alloc::format;
@@ -685,4 +687,33 @@ fn take_vec(bytes: &[u8], index: &mut usize, len: usize) -> Result<Vec<u8>, Clip
     let out = bytes[*index..*index + len].to_vec();
     *index += len;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::ToString;
+
+    use super::{validate_request, ClipError, ClipboardKind, ClipboardSetRequest};
+
+    #[test]
+    fn accepts_plain_text_mime() {
+        let request = ClipboardSetRequest {
+            kind: ClipboardKind::Text,
+            mime: "text/plain".to_string(),
+            payload: b"hello".to_vec(),
+            source_app: Some("test".to_string()),
+        };
+        assert_eq!(validate_request(&request), Ok(()));
+    }
+
+    #[test]
+    fn rejects_text_plain_with_charset_suffix() {
+        let request = ClipboardSetRequest {
+            kind: ClipboardKind::Text,
+            mime: "text/plain;charset=utf-8".to_string(),
+            payload: b"hello".to_vec(),
+            source_app: Some("test".to_string()),
+        };
+        assert_eq!(validate_request(&request), Err(ClipError::BadRequest));
+    }
 }

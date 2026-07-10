@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-api-lab"
-version = "0.2.1088"
+version = "0.2.1110"
+
+
 
 edition = "2021"
 
@@ -13,6 +15,7 @@ name = "sunlight_api_lab"
 path = "src/lib.rs"
 
 [dependencies]
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
 sun-font = { path = "../sun-font" }
 sunlight-fetch = { path = "../sunlight-fetch", default-features = false, features = ["sunlightos"] }
 sunlight-http = { path = "../sunlight-http" }

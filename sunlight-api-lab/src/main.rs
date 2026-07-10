@@ -3,23 +3,31 @@
 
 extern crate alloc;
 
-use alloc::{borrow::Cow, format, string::String, vec::Vec};
+mod clipboard;
+mod request_timing;
+mod text_area;
+
+use alloc::{format, string::String, vec, vec::Vec};
 use core::alloc::GlobalAlloc;
 
+use clipboard::set_clipboard_text;
+use request_timing::RequestTimer;
 use sun_font::{FontRole, VecFont};
 use sunlight_api_lab::{
-    body_is_probably_text, build_request, format_url, normalize_url_input, HttpMethod,
+    build_request, describe_fetch_error, parse_response, BasicAuthInput, BodyFormat, HttpMethod,
+    KeyValueEntry, NoticeSeverity, ParsedResponseDisplay, RequestBuildError, RequestBuildInput,
 };
-use sunlight_fetch::backend::{perform_request, RequestResult};
-use sunlight_fetch::FetchError;
-use sunlight_http::ParsedUrl;
+use sunlight_fetch::backend::perform_request;
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, ProcessExit,
 };
 use sunlight_ui::widgets::{Button, ButtonState, Label, Panel, TabBar, TextInput, TextView};
-use sunlight_ui::{request_close, App, Event, Point, Rect, Window, WindowConfig, WindowDecoration};
+use sunlight_ui::{
+    request_close, App, Canvas, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
+};
+use text_area::TextArea;
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
@@ -30,15 +38,21 @@ const WIN_H: u32 = 760;
 const PAD: i32 = 12;
 const TOP_BAR_H: u32 = 42;
 const CONSOLE_H: u32 = 88;
-const REQUEST_H: u32 = 168;
+const REQUEST_H: u32 = 272;
 const SIDEBAR_W: u32 = 156;
-const METHOD_W: u32 = 64;
 const SEND_W: u32 = 88;
-const STATUS_W: u32 = 220;
+const STATUS_W: u32 = 228;
+const METHOD_BAR_W: u32 = 360;
+const ACTION_W: u32 = 92;
+const ACTION_H: u32 = 28;
 const GUTTER: i32 = 10;
-const URL_INPUT_CAP: usize = 512;
-const BODY_INPUT_CAP: usize = 2048;
-const CONTENT_TYPE_CAP: usize = 128;
+const ROW_H: u32 = 28;
+const ROW_GAP: i32 = 6;
+const URL_INPUT_CAP: usize = 768;
+const ROW_KEY_CAP: usize = 96;
+const ROW_VALUE_CAP: usize = 256;
+const BODY_INPUT_CAP: usize = 16 * 1024;
+const AUTH_INPUT_CAP: usize = 128;
 
 const KEY_Q: u8 = 0x10;
 const KEY_UP: u8 = 0x48;
@@ -49,6 +63,8 @@ const KEY_PGUP: u8 = 0x49;
 const KEY_PGDN: u8 = 0x51;
 
 const REQUEST_TABS: [&str; 4] = ["Params", "Headers", "Body", "Auth"];
+const METHOD_TABS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+const BODY_FORMAT_TABS: [&str; 4] = ["Raw", "JSON", "XML", "Form"];
 
 struct BumpAllocator;
 
@@ -82,7 +98,6 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusPane {
-    Request,
     ResponseBody,
     ResponseDetails,
     Console,
@@ -95,28 +110,53 @@ enum ConsoleSeverity {
     Error,
 }
 
-enum ResponseContent {
-    Placeholder(&'static str),
-    Utf8(Vec<u8>),
-    Text(String),
-    Message(String),
+impl From<NoticeSeverity> for ConsoleSeverity {
+    fn from(value: NoticeSeverity) -> Self {
+        match value {
+            NoticeSeverity::Quiet => Self::Quiet,
+            NoticeSeverity::Warn => Self::Warn,
+            NoticeSeverity::Error => Self::Error,
+        }
+    }
 }
 
-impl ResponseContent {
-    fn as_str(&self) -> &str {
-        match self {
-            Self::Placeholder(text) => text,
-            Self::Utf8(bytes) => core::str::from_utf8(bytes).unwrap_or(""),
-            Self::Text(text) | Self::Message(text) => text.as_str(),
+struct EditableRow {
+    enabled: bool,
+    key_input: TextInput<'static, ROW_KEY_CAP>,
+    value_input: TextInput<'static, ROW_VALUE_CAP>,
+}
+
+impl EditableRow {
+    fn new(key_placeholder: &'static str, value_placeholder: &'static str) -> Self {
+        Self {
+            enabled: true,
+            key_input: TextInput::new(Rect::default())
+                .with_font(&F_MONO)
+                .with_placeholder(key_placeholder),
+            value_input: TextInput::new(Rect::default())
+                .with_font(&F_MONO)
+                .with_placeholder(value_placeholder),
+        }
+    }
+
+    fn to_entry(&self) -> KeyValueEntry {
+        KeyValueEntry {
+            enabled: self.enabled,
+            key: String::from(self.key_input.value()),
+            value: String::from(self.value_input.value()),
         }
     }
 }
 
 struct ApiLabApp {
     url_input: TextInput<'static, URL_INPUT_CAP>,
-    body_input: TextInput<'static, BODY_INPUT_CAP>,
-    content_type_input: TextInput<'static, CONTENT_TYPE_CAP>,
+    params: Vec<EditableRow>,
+    headers: Vec<EditableRow>,
+    body_input: TextArea<'static, BODY_INPUT_CAP>,
+    auth_username: TextInput<'static, AUTH_INPUT_CAP>,
+    auth_password: TextInput<'static, AUTH_INPUT_CAP>,
     method: HttpMethod,
+    body_format: BodyFormat,
     request_tab: usize,
     status: String,
     pending_send: bool,
@@ -124,12 +164,12 @@ struct ApiLabApp {
     response_scroll: usize,
     details_scroll: usize,
     console_scroll: usize,
-    request_scroll: usize,
-    response: ResponseContent,
+    response_body_text: String,
+    response_headers_text: String,
+    response_copy_text: String,
     details_text: String,
     console_text: String,
     console_severity: ConsoleSeverity,
-    request_tab_display: String,
 }
 
 impl ApiLabApp {
@@ -139,83 +179,121 @@ impl ApiLabApp {
             .with_placeholder("Enter URL (http:// or https://)");
         url_input.set_text("http://example.com/");
 
-        let body_input = TextInput::new(Rect::default())
+        let body_input = TextArea::new(Rect::default())
             .with_font(&F_MONO)
-            .with_placeholder("Raw request body (ignored for GET)");
-        let content_type_input = TextInput::new(Rect::default())
+            .with_placeholder("Request body");
+
+        let auth_username = TextInput::new(Rect::default())
             .with_font(&F_MONO)
-            .with_placeholder("Content-Type (defaults to text/plain when body is set)");
+            .with_placeholder("Username");
+        let auth_password = TextInput::new(Rect::default())
+            .with_font(&F_MONO)
+            .with_placeholder("Password");
 
         Self {
             url_input,
+            params: vec![Self::blank_param_row()],
+            headers: vec![Self::blank_header_row()],
             body_input,
-            content_type_input,
+            auth_username,
+            auth_password,
             method: HttpMethod::Get,
-            request_tab: 2,
+            body_format: BodyFormat::RawText,
+            request_tab: 0,
             status: String::from("Ready"),
             pending_send: false,
             focus: FocusPane::ResponseBody,
             response_scroll: 0,
             details_scroll: 0,
             console_scroll: 0,
-            request_scroll: 0,
-            response: ResponseContent::Placeholder(
-                "Send a request to inspect the response body here.",
-            ),
-            details_text: String::from(
-                "Status: \nFinal URL: \nDuration: \nBody Size: \nResponse Headers:\n",
-            ),
+            response_body_text: String::from("Send a request to inspect the response body here."),
+            response_headers_text: String::from("(none)"),
+            response_copy_text: String::new(),
+            details_text: Self::placeholder_details(),
             console_text: String::new(),
             console_severity: ConsoleSeverity::Quiet,
-            request_tab_display: String::new(),
         }
     }
 
-    fn refresh_request_tab_display(&mut self) {
-        self.request_tab_display = match self.request_tab {
-            0 => String::from(
-                "Query parameters\n\n\
-                 Params table coming soon.\n\
-                 Use the URL path for query strings in this MVP.",
-            ),
-            1 => {
-                let mut text = String::from(
-                    "Request headers\n\n\
-                     Custom header rows coming soon.\n\
-                     Content-Type (POST):\n  ",
-                );
-                let content_type = self.content_type_input.value().trim();
-                if content_type.is_empty() {
-                    text.push_str("(defaults to text/plain when body is set)");
-                } else {
-                    text.push_str(content_type);
-                }
-                text.push_str("\n\nEdit Content-Type in the Body tab field below.");
-                text
-            }
-            2 => {
-                let mut text = String::from("Request body\n\n");
-                let body = self.body_input.value().trim();
-                if body.is_empty() {
-                    text.push_str("(empty — POST sends no body)");
-                } else {
-                    text.push_str(body);
-                }
-                text.push_str("\n\nNote: single-line raw body editor for this MVP.");
-                text
-            }
-            _ => String::from(
-                "Auth: None\n\n\
-                 Basic Auth and Bearer token support coming soon.",
-            ),
-        };
+    fn blank_param_row() -> EditableRow {
+        EditableRow::new("key", "value")
+    }
+
+    fn blank_header_row() -> EditableRow {
+        EditableRow::new("Header-Name", "Header value")
+    }
+
+    fn placeholder_details() -> String {
+        String::from(
+            "Status Code: \n\
+Status Text: \n\
+Final URL: \n\
+Duration: \n\
+Body Size: \n\
+Content Type: \n\n\
+Response Headers:\n(none)",
+        )
+    }
+
+    fn clear_request(&mut self) {
+        self.url_input.set_text("");
+        self.method = HttpMethod::Get;
+        self.body_format = BodyFormat::RawText;
+        self.request_tab = 0;
+        self.params.clear();
+        self.params.push(Self::blank_param_row());
+        self.headers.clear();
+        self.headers.push(Self::blank_header_row());
+        self.body_input.set_text("");
+        self.auth_username.set_text("");
+        self.auth_password.set_text("");
+        self.pending_send = false;
+        self.clear_response_state();
+        self.set_console("Request cleared.", ConsoleSeverity::Quiet);
+    }
+
+    fn clear_response(&mut self) {
+        self.clear_response_state();
+        self.set_console("Response cleared.", ConsoleSeverity::Quiet);
+    }
+
+    fn clear_response_state(&mut self) {
+        self.response_body_text.clear();
+        self.response_headers_text = String::from("(none)");
+        self.response_copy_text.clear();
+        self.details_text = Self::placeholder_details();
+        self.response_scroll = 0;
+        self.details_scroll = 0;
+        self.console_scroll = 0;
+        self.status = String::from("Ready");
+    }
+
+    fn mark_response_pending(&mut self) {
+        self.response_body_text.clear();
+        self.response_headers_text = String::from("(pending)");
+        self.response_copy_text.clear();
+        self.details_text = String::from(
+            "Status Code: pending\n\
+Status Text: waiting for response\n\
+Final URL: \n\
+Duration: pending\n\
+Body Size: pending\n\
+Content Type: pending\n\n\
+Response Headers:\n(pending)",
+        );
+        self.response_scroll = 0;
+        self.details_scroll = 0;
+        self.console_scroll = 0;
     }
 
     fn queue_send(&mut self) {
+        if self.pending_send {
+            return;
+        }
         self.pending_send = true;
         self.status = String::from("Sending...");
-        self.console_text.clear();
-        self.console_severity = ConsoleSeverity::Quiet;
+        self.set_console("Request in progress...", ConsoleSeverity::Quiet);
+        self.mark_response_pending();
     }
 
     fn perform_pending_send(&mut self) {
@@ -224,166 +302,131 @@ impl ApiLabApp {
         self.details_scroll = 0;
         self.console_scroll = 0;
 
-        let normalized = match normalize_url_input(self.url_input.value()) {
-            Ok(url) => url,
+        let parameters = self.collect_entries(&self.params);
+        let headers = self.collect_entries(&self.headers);
+        let input = RequestBuildInput {
+            method: self.method,
+            url_input: self.url_input.value(),
+            parameters: &parameters,
+            headers: &headers,
+            auth: BasicAuthInput {
+                username: self.auth_username.value(),
+                password: self.auth_password.value(),
+            },
+            body_format: self.body_format,
+            body_text: self.body_input.value(),
+        };
+
+        let built = match build_request(input) {
+            Ok(built) => built,
             Err(err) => {
-                self.set_error(format!("{err}"));
+                self.apply_request_build_error(err);
                 return;
             }
         };
-        self.url_input.set_text(&normalized);
 
-        let parsed = match ParsedUrl::parse(&normalized) {
-            Ok(url) => url,
-            Err(err) => {
-                self.set_error(format!("{err}"));
-                return;
+        self.url_input.set_text(&built.normalized_url);
+        let timer = RequestTimer::start_now();
+        match perform_request(built.parsed_url, built.request) {
+            Ok(result) => self.apply_response(parse_response(
+                self.method,
+                &built.normalized_url,
+                result,
+                Some(timer.elapsed_ms()),
+            )),
+            Err(err) => self.apply_response(describe_fetch_error(&err, Some(timer.elapsed_ms()))),
+        }
+    }
+
+    fn apply_response(&mut self, parsed: ParsedResponseDisplay) {
+        self.status = parsed.status_label;
+        self.response_body_text = parsed.body_text;
+        self.response_headers_text = parsed.headers_text;
+        self.response_copy_text = parsed.copy_response_text;
+        self.details_text = parsed.details_text;
+        self.console_text = parsed.console_text;
+        self.console_severity = parsed.console_severity.into();
+        self.clamp_scrolls();
+    }
+
+    fn apply_request_build_error(&mut self, err: RequestBuildError) {
+        self.status = match err {
+            RequestBuildError::InvalidUrl(ref message)
+                if message.contains("only http:// and https://") =>
+            {
+                String::from("Unsupported URL scheme")
             }
+            RequestBuildError::InvalidUrl(_) => String::from("Invalid URL"),
+            RequestBuildError::DuplicateHeader(_) => String::from("Duplicate header"),
+            RequestBuildError::ManagedHeader(_) => String::from("Managed header"),
         };
-
-        let request = build_request(
-            self.method,
-            &parsed,
-            self.content_type_input.value(),
-            self.body_input.value(),
-        );
-        match perform_request(parsed, request) {
-            Ok(result) => self.apply_result(&normalized, result),
-            Err(err) => self.apply_fetch_error(err),
-        }
+        self.response_body_text.clear();
+        self.response_headers_text = String::from("(none)");
+        self.response_copy_text = self.response_body_text.clone();
+        self.details_text = Self::placeholder_details();
+        self.set_console(&format!("{err}"), ConsoleSeverity::Warn);
     }
 
-    fn apply_result(&mut self, requested_url: &str, result: RequestResult) {
-        let status_code = result.response.status_code;
-        let status_text = if result.response.status_text.is_empty() {
-            String::from("(no reason phrase)")
+    fn collect_entries(&self, rows: &[EditableRow]) -> Vec<KeyValueEntry> {
+        rows.iter().map(EditableRow::to_entry).collect()
+    }
+
+    fn copy_response_body(&mut self) {
+        let payload = self.response_body_text.as_bytes().to_vec();
+        self.copy_text(&payload, "Response body copied.")
+    }
+
+    fn copy_response_headers(&mut self) {
+        let payload = self.response_headers_text.as_bytes().to_vec();
+        self.copy_text(&payload, "Response headers copied.")
+    }
+
+    fn copy_response(&mut self) {
+        let payload = if self.response_copy_text.is_empty() {
+            self.response_body_text.as_bytes().to_vec()
         } else {
-            result.response.status_text.clone()
+            self.response_copy_text.as_bytes().to_vec()
         };
-        let final_url = result
-            .final_url
-            .as_ref()
-            .map(format_url)
-            .unwrap_or_else(|| String::from(requested_url));
-        let content_type = result
-            .response
-            .header("content-type")
-            .map_or("(missing)", |value| value);
-        let body_size = result.body.len();
+        self.copy_text(&payload, "Response copied.")
+    }
 
-        self.status = format!("HTTP {status_code} {status_text}");
-        self.response = self.build_response_content(content_type, result.body);
-        self.details_text = self.build_details_text(
-            status_code,
-            &status_text,
-            &final_url,
-            content_type,
-            body_size,
-            result.duration_ms,
-            &result.response.headers,
-        );
-
-        if (400..500).contains(&status_code) {
-            self.console_text = format!("Client error: HTTP {status_code} {status_text}");
-            self.console_severity = ConsoleSeverity::Warn;
-        } else if status_code >= 500 {
-            self.console_text = format!("Server error: HTTP {status_code} {status_text}");
-            self.console_severity = ConsoleSeverity::Error;
-        } else {
-            self.console_text.clear();
-            self.console_severity = ConsoleSeverity::Quiet;
+    fn copy_text(&mut self, payload: &[u8], success_message: &str) {
+        match set_clipboard_text(payload) {
+            Ok(()) => self.set_console(success_message, ConsoleSeverity::Quiet),
+            Err(message) => self.set_console(message, ConsoleSeverity::Warn),
         }
     }
 
-    fn build_response_content(&self, content_type: &str, body: Vec<u8>) -> ResponseContent {
-        if body.is_empty() {
-            return ResponseContent::Message(String::from("Empty response body."));
-        }
-
-        if core::str::from_utf8(&body).is_ok() {
-            return ResponseContent::Utf8(body);
-        }
-
-        if body_is_probably_text(Some(content_type), &body) {
-            let lossy: Cow<'_, str> = String::from_utf8_lossy(&body);
-            return ResponseContent::Text(lossy.into_owned());
-        }
-
-        ResponseContent::Message(format!(
-            "Binary response body ({} bytes).\nContent-Type: {content_type}",
-            body.len()
-        ))
+    fn set_console(&mut self, message: &str, severity: ConsoleSeverity) {
+        self.console_text = String::from(message);
+        self.console_severity = severity;
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn build_details_text(
-        &self,
-        status_code: u16,
-        status_text: &str,
-        final_url: &str,
-        content_type: &str,
-        body_size: usize,
-        duration_ms: Option<u64>,
-        headers: &[(String, String)],
-    ) -> String {
-        let mut text = String::new();
-        append_line(&mut text, "Method", self.method.as_str());
-        append_line(&mut text, "Status", &format!("{status_code} {status_text}"));
-        append_line(&mut text, "Final URL", final_url);
-        append_line(&mut text, "Content-Type", content_type);
-        append_line(&mut text, "Body Size", &format!("{body_size} bytes"));
-        append_line(
-            &mut text,
-            "Duration",
-            &duration_ms.map_or_else(|| String::from("n/a"), |ms| format!("{ms} ms")),
-        );
-        text.push_str("Response Headers:\n");
-        if headers.is_empty() {
-            text.push_str("  (none)\n");
-        } else {
-            for (key, value) in headers {
-                text.push_str("  ");
-                text.push_str(key);
-                text.push_str(": ");
-                text.push_str(value);
-                text.push('\n');
+    fn duplicate_header_message(&self) -> Option<&'static str> {
+        for (index, row) in self.headers.iter().enumerate() {
+            if !row.enabled {
+                continue;
+            }
+            let key = row.key_input.value().trim();
+            if key.is_empty() {
+                continue;
+            }
+            if self.headers.iter().skip(index + 1).any(|other| {
+                other.enabled && key.eq_ignore_ascii_case(other.key_input.value().trim())
+            }) {
+                return Some("Duplicate enabled header names will block Send.");
             }
         }
-        text
-    }
-
-    fn apply_fetch_error(&mut self, err: FetchError) {
-        self.status = String::from("Request failed");
-        self.response = ResponseContent::Message(String::from(
-            "No response body was captured for this request.",
-        ));
-        self.details_text = String::from(
-            "Status: failed\nFinal URL: \nDuration: n/a\nBody Size: 0 bytes\nResponse Headers:\n",
-        );
-        self.console_text = format!("{err}");
-        self.console_severity = match err {
-            FetchError::InvalidUrl(_) | FetchError::HttpError { .. } => ConsoleSeverity::Warn,
-            _ => ConsoleSeverity::Error,
-        };
-    }
-
-    fn set_error(&mut self, message: String) {
-        self.status = String::from("Invalid URL");
-        self.response = ResponseContent::Message(String::from("Fix the URL and send again."));
-        self.details_text = String::from(
-            "Status: not sent\nFinal URL: \nDuration: n/a\nBody Size: 0 bytes\nResponse Headers:\n",
-        );
-        self.console_text = message;
-        self.console_severity = ConsoleSeverity::Warn;
+        None
     }
 
     fn top_bar_rect(&self) -> Rect {
         Rect::new(PAD, PAD, WIN_W.saturating_sub((PAD * 2) as u32), TOP_BAR_H)
     }
 
-    fn method_rect(&self) -> Rect {
+    fn method_bar_rect(&self) -> Rect {
         let top = self.top_bar_rect();
-        Rect::new(top.x + 8, top.y + 7, METHOD_W, 28)
+        Rect::new(top.x + 8, top.y + 7, METHOD_BAR_W, 28)
     }
 
     fn send_rect(&self) -> Rect {
@@ -402,13 +445,13 @@ impl ApiLabApp {
     }
 
     fn url_rect(&self) -> Rect {
-        let method = self.method_rect();
+        let methods = self.method_bar_rect();
         let send = self.send_rect();
         Rect::new(
-            method.right() + 8,
-            method.y,
-            (send.x - method.right() - 16).max(120) as u32,
-            method.h,
+            methods.right() + 8,
+            methods.y,
+            (send.x - methods.right() - 16).max(160) as u32,
+            methods.h,
         )
     }
 
@@ -449,6 +492,94 @@ impl ApiLabApp {
         Rect::new(content.x, content.y, content.w, REQUEST_H.min(content.h))
     }
 
+    fn request_inner_rect(&self) -> Rect {
+        Panel::with_title(self.request_panel_rect(), "Request")
+            .content_rect()
+            .inset(8)
+    }
+
+    fn request_action_rect(&self) -> Rect {
+        let inner = self.request_inner_rect();
+        Rect::new(inner.x, inner.y, inner.w, ACTION_H)
+    }
+
+    fn clear_request_rect(&self) -> Rect {
+        let row = self.request_action_rect();
+        Rect::new(row.right() - ACTION_W as i32, row.y, ACTION_W, ACTION_H)
+    }
+
+    fn request_tab_bar_rect(&self) -> Rect {
+        let action = self.request_action_rect();
+        Rect::new(action.x, action.bottom() + 8, action.w, 28)
+    }
+
+    fn request_tab_content_rect(&self) -> Rect {
+        let tabs = self.request_tab_bar_rect();
+        let inner = self.request_inner_rect();
+        Rect::new(
+            inner.x,
+            tabs.bottom() + 8,
+            inner.w,
+            (inner.bottom() - tabs.bottom() - 8).max(60) as u32,
+        )
+    }
+
+    fn entry_add_rect(&self) -> Rect {
+        let content = self.request_tab_content_rect();
+        Rect::new(
+            content.right() - ACTION_W as i32,
+            content.y,
+            ACTION_W,
+            ACTION_H,
+        )
+    }
+
+    fn rows_area_rect(&self) -> Rect {
+        let content = self.request_tab_content_rect();
+        Rect::new(
+            content.x,
+            content.y + ACTION_H as i32 + 8,
+            content.w,
+            (content.h as i32 - ACTION_H as i32 - 8).max(40) as u32,
+        )
+    }
+
+    fn body_format_rect(&self) -> Rect {
+        let content = self.request_tab_content_rect();
+        Rect::new(content.x, content.y, content.w.min(360), 28)
+    }
+
+    fn body_note_rect(&self) -> Rect {
+        let format = self.body_format_rect();
+        Rect::new(
+            format.x,
+            format.bottom() + 6,
+            self.request_tab_content_rect().w,
+            18,
+        )
+    }
+
+    fn body_editor_rect(&self) -> Rect {
+        let note = self.body_note_rect();
+        let content = self.request_tab_content_rect();
+        Rect::new(
+            content.x,
+            note.bottom() + 6,
+            content.w,
+            (content.bottom() - note.bottom() - 6).max(48) as u32,
+        )
+    }
+
+    fn auth_username_rect(&self) -> Rect {
+        let content = self.request_tab_content_rect();
+        Rect::new(content.x, content.y + 26, content.w, ROW_H)
+    }
+
+    fn auth_password_rect(&self) -> Rect {
+        let user = self.auth_username_rect();
+        Rect::new(user.x, user.bottom() + 32, user.w, ROW_H)
+    }
+
     fn response_area_rect(&self) -> Rect {
         let content = self.content_rect();
         let request = self.request_panel_rect();
@@ -460,40 +591,49 @@ impl ApiLabApp {
         )
     }
 
-    fn request_tab_bar_rect(&self) -> Rect {
-        let panel = self.request_panel_rect();
-        Rect::new(panel.x + 8, panel.y + 28, panel.w.saturating_sub(16), 28)
+    fn response_actions_rect(&self) -> Rect {
+        let area = self.response_area_rect();
+        Rect::new(area.x, area.y, area.w, ACTION_H)
     }
 
-    fn request_tab_content_rect(&self) -> Rect {
-        let panel = self.request_panel_rect();
-        let tabs = self.request_tab_bar_rect();
+    fn clear_response_rect(&self) -> Rect {
+        let row = self.response_actions_rect();
+        Rect::new(row.right() - ACTION_W as i32, row.y, ACTION_W, ACTION_H)
+    }
+
+    fn copy_response_rect(&self) -> Rect {
+        let clear = self.clear_response_rect();
+        Rect::new(clear.x - ACTION_W as i32 - 8, clear.y, ACTION_W, ACTION_H)
+    }
+
+    fn copy_headers_rect(&self) -> Rect {
+        let copy = self.copy_response_rect();
+        Rect::new(copy.x - ACTION_W as i32 - 8, copy.y, ACTION_W, ACTION_H)
+    }
+
+    fn copy_body_rect(&self) -> Rect {
+        let copy = self.copy_headers_rect();
+        Rect::new(copy.x - ACTION_W as i32 - 8, copy.y, ACTION_W, ACTION_H)
+    }
+
+    fn response_panels_rect(&self) -> Rect {
+        let area = self.response_area_rect();
         Rect::new(
-            panel.x + 8,
-            tabs.bottom() + 4,
-            panel.w.saturating_sub(16),
-            (panel.bottom() - tabs.bottom() - 12).max(48) as u32,
+            area.x,
+            area.y + ACTION_H as i32 + 8,
+            area.w,
+            (area.h as i32 - ACTION_H as i32 - 8).max(80) as u32,
         )
     }
 
-    fn body_editor_rect(&self) -> Rect {
-        let content = self.request_tab_content_rect();
-        Rect::new(content.x, content.bottom() - 30, content.w, 28)
-    }
-
-    fn content_type_editor_rect(&self) -> Rect {
-        let body = self.body_editor_rect();
-        Rect::new(body.x, body.y - 34, body.w, 28)
-    }
-
     fn response_body_rect(&self) -> Rect {
-        let area = self.response_area_rect();
-        let body_w = ((area.w as i32 * 62) / 100).max(300) as u32;
+        let area = self.response_panels_rect();
+        let body_w = ((area.w as i32 * 58) / 100).max(280) as u32;
         Rect::new(area.x, area.y, body_w, area.h)
     }
 
     fn response_details_rect(&self) -> Rect {
-        let area = self.response_area_rect();
+        let area = self.response_panels_rect();
         let body = self.response_body_rect();
         Rect::new(
             body.right() + GUTTER,
@@ -503,26 +643,18 @@ impl ApiLabApp {
         )
     }
 
-    fn request_tab_view(&self) -> TextView<'_> {
-        let content = self.request_tab_content_rect();
-        TextView::new(content, self.request_tab_display.as_str())
-            .with_scroll_offset(self.request_scroll)
-            .with_focus(self.focus == FocusPane::Request)
-            .with_font(&F_MONO)
-    }
-
     fn response_view(&self) -> TextView<'_> {
         let content = Panel::with_title(self.response_body_rect(), "Response Body")
             .content_rect()
             .inset(8);
-        TextView::new(content, self.response.as_str())
+        TextView::new(content, self.response_body_text.as_str())
             .with_scroll_offset(self.response_scroll)
             .with_focus(self.focus == FocusPane::ResponseBody)
             .with_font(&F_MONO)
     }
 
     fn details_view(&self) -> TextView<'_> {
-        let content = Panel::with_title(self.response_details_rect(), "Response")
+        let content = Panel::with_title(self.response_details_rect(), "Response Info")
             .content_rect()
             .inset(8);
         TextView::new(content, self.details_text.as_str())
@@ -531,49 +663,33 @@ impl ApiLabApp {
             .with_font(&F_MONO)
     }
 
-    fn console_view(&self) -> TextView<'_> {
+    fn console_view(&self, theme: &Theme) -> TextView<'_> {
         let content = Panel::with_title(self.console_panel_rect(), "Console")
             .content_rect()
             .inset(8);
-        let color = match self.console_severity {
-            ConsoleSeverity::Quiet => None,
-            ConsoleSeverity::Warn => Some(sunlight_ui::Theme::sunlight_dark().warn),
-            ConsoleSeverity::Error => Some(sunlight_ui::Theme::sunlight_dark().danger),
-        };
         let mut view = TextView::new(content, self.console_text.as_str())
             .with_scroll_offset(self.console_scroll)
             .with_focus(self.focus == FocusPane::Console)
             .with_font(&F_MONO);
-        if let Some(color) = color {
-            view = view.with_text_color(color);
-        }
+        view = match self.console_severity {
+            ConsoleSeverity::Quiet => view,
+            ConsoleSeverity::Warn => view.with_text_color(theme.warn),
+            ConsoleSeverity::Error => view.with_text_color(theme.danger),
+        };
         view
     }
 
     fn clamp_scrolls(&mut self) {
-        self.request_scroll = self.request_scroll.min(self.request_tab_view().max_scroll());
         self.response_scroll = self.response_scroll.min(self.response_view().max_scroll());
         self.details_scroll = self.details_scroll.min(self.details_view().max_scroll());
-        self.console_scroll = self.console_scroll.min(self.console_view().max_scroll());
+        let theme = Theme::sunlight_dark();
+        self.console_scroll = self
+            .console_scroll
+            .min(self.console_view(&theme).max_scroll());
     }
 
     fn scroll_focused(&mut self, delta: i32, page: bool, home: bool, end: bool) {
         match self.focus {
-            FocusPane::Request => {
-                let (visible, max_scroll) = {
-                    let view = self.request_tab_view();
-                    (view.visible_line_count(), view.max_scroll())
-                };
-                adjust_scroll(
-                    &mut self.request_scroll,
-                    delta,
-                    page,
-                    home,
-                    end,
-                    visible,
-                    max_scroll,
-                );
-            }
             FocusPane::ResponseBody => {
                 let (visible, max_scroll) = {
                     let view = self.response_view();
@@ -605,8 +721,9 @@ impl ApiLabApp {
                 );
             }
             FocusPane::Console => {
+                let theme = Theme::sunlight_dark();
                 let (visible, max_scroll) = {
-                    let view = self.console_view();
+                    let view = self.console_view(&theme);
                     (view.visible_line_count(), view.max_scroll())
                 };
                 adjust_scroll(
@@ -621,137 +738,396 @@ impl ApiLabApp {
             }
         }
     }
+
+    fn update_active_request_inputs(&mut self, event: Event) -> bool {
+        if self.url_input.update(event) {
+            return true;
+        }
+
+        match self.request_tab {
+            0 => self.update_rows(event, false),
+            1 => self.update_rows(event, true),
+            2 => {
+                self.body_input.rect = self.body_editor_rect();
+                self.body_input.update(event)
+            }
+            _ => {
+                self.auth_username.rect = self.auth_username_rect();
+                if self.auth_username.update(event) {
+                    return true;
+                }
+                self.auth_password.rect = self.auth_password_rect();
+                self.auth_password.update(event)
+            }
+        }
+    }
+
+    fn update_rows(&mut self, event: Event, headers: bool) -> bool {
+        let area = self.rows_area_rect();
+        let rows = if headers {
+            &mut self.headers
+        } else {
+            &mut self.params
+        };
+
+        for (index, row) in rows.iter_mut().enumerate() {
+            let row_rect = entry_row_rect(area, index);
+            row.key_input.rect = entry_key_rect(row_rect);
+            row.value_input.rect = entry_value_rect(row_rect);
+            if row.key_input.update(event) || row.value_input.update(event) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn handle_request_click(&mut self, x: i32, y: i32) -> bool {
+        let point = Point::new(x, y);
+
+        let mut send = Button::new(self.send_rect(), "Send");
+        if self.pending_send {
+            send.state = ButtonState::Disabled;
+        }
+        if send.hit_test(x, y) {
+            self.queue_send();
+            return true;
+        }
+        if let Some(index) =
+            TabBar::new(self.method_bar_rect(), &METHOD_TABS, self.method.index()).hit_test(x, y)
+        {
+            self.method = HttpMethod::ALL[index];
+            return true;
+        }
+        if Button::secondary(self.clear_request_rect(), "Clear Req").hit_test(x, y) {
+            self.clear_request();
+            return true;
+        }
+        if let Some(tab) =
+            TabBar::new(self.request_tab_bar_rect(), &REQUEST_TABS, self.request_tab).hit_test(x, y)
+        {
+            self.request_tab = tab;
+            return true;
+        }
+
+        match self.request_tab {
+            0 => {
+                if self.handle_row_click(x, y, false) {
+                    return true;
+                }
+            }
+            1 => {
+                if self.handle_row_click(x, y, true) {
+                    return true;
+                }
+            }
+            2 => {
+                if let Some(index) = TabBar::new(
+                    self.body_format_rect(),
+                    &BODY_FORMAT_TABS,
+                    self.body_format.index(),
+                )
+                .hit_test(x, y)
+                {
+                    self.body_format = BodyFormat::ALL[index];
+                    return true;
+                }
+            }
+            _ => {}
+        }
+
+        if Button::secondary(self.copy_body_rect(), "Copy Body").hit_test(x, y) {
+            self.copy_response_body();
+            return true;
+        }
+        if Button::secondary(self.copy_headers_rect(), "Copy Headers").hit_test(x, y) {
+            self.copy_response_headers();
+            return true;
+        }
+        if Button::secondary(self.copy_response_rect(), "Copy All").hit_test(x, y) {
+            self.copy_response();
+            return true;
+        }
+        if Button::secondary(self.clear_response_rect(), "Clear Resp").hit_test(x, y) {
+            self.clear_response();
+            return true;
+        }
+
+        if self.response_body_rect().contains(point) {
+            self.focus = FocusPane::ResponseBody;
+            return true;
+        }
+        if self.response_details_rect().contains(point) {
+            self.focus = FocusPane::ResponseDetails;
+            return true;
+        }
+        if self.console_panel_rect().contains(point) {
+            self.focus = FocusPane::Console;
+            return true;
+        }
+
+        false
+    }
+
+    fn handle_row_click(&mut self, x: i32, y: i32, headers: bool) -> bool {
+        if Button::secondary(self.entry_add_rect(), "Add Row").hit_test(x, y) {
+            if headers {
+                self.headers.push(Self::blank_header_row());
+            } else {
+                self.params.push(Self::blank_param_row());
+            }
+            return true;
+        }
+
+        let area = self.rows_area_rect();
+        let rows = if headers {
+            &mut self.headers
+        } else {
+            &mut self.params
+        };
+
+        let mut remove_index = None;
+        for (index, row) in rows.iter_mut().enumerate() {
+            let row_rect = entry_row_rect(area, index);
+            if entry_checkbox_rect(row_rect).contains(Point::new(x, y)) {
+                row.enabled = !row.enabled;
+                return true;
+            }
+            if Button::secondary(entry_remove_rect(row_rect), "X").hit_test(x, y) {
+                remove_index = Some(index);
+                break;
+            }
+        }
+
+        if let Some(index) = remove_index {
+            rows.remove(index);
+            if rows.is_empty() {
+                rows.push(if headers {
+                    Self::blank_header_row()
+                } else {
+                    Self::blank_param_row()
+                });
+            }
+            return true;
+        }
+
+        false
+    }
+
+    fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme) {
+        let sidebar = Panel::with_title(self.sidebar_rect(), "Library");
+        sidebar.draw(canvas, theme);
+        let content = sidebar.content_rect().inset(8);
+        Label::new(
+            Rect::new(content.x, content.y, content.w, 20),
+            "Collections are out of scope",
+        )
+        .with_font(&F_SMALL)
+        .draw(canvas, theme);
+        Label::new(
+            Rect::new(content.x, content.y + 28, content.w, 20),
+            "Request history arrives later",
+        )
+        .with_font(&F_SMALL)
+        .draw(canvas, theme);
+    }
+
+    fn draw_request_panel(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        let request_panel = Panel::with_title(self.request_panel_rect(), "Request");
+        request_panel.draw(canvas, theme);
+
+        let action = self.request_action_rect();
+        let add_note_rect = Rect::new(
+            action.x,
+            action.y,
+            action.w.saturating_sub(ACTION_W + 12),
+            ACTION_H,
+        );
+        Label::new(
+            add_note_rect,
+            "Stable REST workflow powered by sunlight-fetch",
+        )
+        .with_font(&F_SMALL)
+        .draw(canvas, theme);
+        Button::secondary(self.clear_request_rect(), "Clear Req")
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
+
+        TabBar::new(self.request_tab_bar_rect(), &REQUEST_TABS, self.request_tab)
+            .draw(canvas, theme);
+
+        match self.request_tab {
+            0 => self.draw_rows_tab(canvas, theme, false),
+            1 => self.draw_rows_tab(canvas, theme, true),
+            2 => self.draw_body_tab(canvas, theme),
+            _ => self.draw_auth_tab(canvas, theme),
+        }
+    }
+
+    fn draw_rows_tab(&mut self, canvas: &mut Canvas, theme: &Theme, headers: bool) {
+        let content = self.request_tab_content_rect();
+        let rows_area = self.rows_area_rect();
+        let content_bottom = self.request_tab_content_rect().bottom();
+        let note = if headers {
+            self.duplicate_header_message()
+                .unwrap_or("Host, User-Agent, Connection, and Content-Length are automatic.")
+        } else {
+            "Enabled parameters are appended to the query string before Send."
+        };
+
+        let note_color = if headers && self.duplicate_header_message().is_some() {
+            theme.warn
+        } else {
+            theme.text_dim
+        };
+        canvas.draw_text(content.x, content.y + 8, note, note_color);
+        Button::secondary(self.entry_add_rect(), "Add Row")
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
+
+        let rows = if headers {
+            &mut self.headers
+        } else {
+            &mut self.params
+        };
+        for (index, row) in rows.iter_mut().enumerate() {
+            let row_rect = entry_row_rect(rows_area, index);
+            if row_rect.bottom() > content_bottom {
+                break;
+            }
+
+            let checkbox = entry_checkbox_rect(row_rect);
+            draw_checkbox(canvas, theme, checkbox, row.enabled);
+
+            row.key_input.rect = entry_key_rect(row_rect);
+            row.value_input.rect = entry_value_rect(row_rect);
+            row.key_input.draw(canvas, theme);
+            row.value_input.draw(canvas, theme);
+
+            Button::secondary(entry_remove_rect(row_rect), "X")
+                .with_font(&F_SMALL)
+                .draw(canvas, theme);
+        }
+    }
+
+    fn draw_body_tab(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        TabBar::new(
+            self.body_format_rect(),
+            &BODY_FORMAT_TABS,
+            self.body_format.index(),
+        )
+        .draw(canvas, theme);
+        let message = if self.method.allows_body() {
+            format!(
+                "Content-Type defaults to {} unless you override it in Headers.",
+                self.body_format.default_content_type()
+            )
+        } else {
+            String::from("This method sends no request body in API Lab.")
+        };
+        canvas.draw_text(
+            self.body_note_rect().x,
+            self.body_note_rect().y + 4,
+            message.as_str(),
+            if self.method.allows_body() {
+                theme.text_dim
+            } else {
+                theme.warn
+            },
+        );
+        self.body_input.rect = self.body_editor_rect();
+        self.body_input.draw(canvas, theme);
+    }
+
+    fn draw_auth_tab(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        let content = self.request_tab_content_rect();
+        canvas.draw_text(
+            content.x,
+            content.y + 6,
+            "Basic auth generates Authorization automatically.",
+            theme.text_dim,
+        );
+        canvas.draw_text(content.x, content.y + 28, "Username", theme.text_dim);
+        self.auth_username.rect = self.auth_username_rect();
+        self.auth_username.draw(canvas, theme);
+        canvas.draw_text(
+            content.x,
+            self.auth_password_rect().y - 20,
+            "Password",
+            theme.text_dim,
+        );
+        self.auth_password.rect = self.auth_password_rect();
+        self.auth_password.draw(canvas, theme);
+    }
+
+    fn draw_response_area(&self, canvas: &mut Canvas, theme: &Theme) {
+        Button::secondary(self.copy_body_rect(), "Copy Body")
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
+        Button::secondary(self.copy_headers_rect(), "Copy Headers")
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
+        Button::secondary(self.copy_response_rect(), "Copy All")
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
+        Button::secondary(self.clear_response_rect(), "Clear Resp")
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
+
+        Panel::with_title(self.response_body_rect(), "Response Body").draw(canvas, theme);
+        self.response_view().draw(canvas, theme);
+
+        Panel::with_title(self.response_details_rect(), "Response Info").draw(canvas, theme);
+        self.details_view().draw(canvas, theme);
+    }
 }
 
 impl App for ApiLabApp {
-    fn view(&mut self, canvas: &mut sunlight_ui::Canvas, theme: &sunlight_ui::Theme) {
-        self.refresh_request_tab_display();
+    fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
 
         let top = self.top_bar_rect();
         Panel::new(top).draw(canvas, theme);
 
-        let mut method = Button::secondary(self.method_rect(), self.method.as_str()).with_font(&F_UI);
-        method.state = ButtonState::Normal;
-        method.draw(canvas, theme);
+        TabBar::new(self.method_bar_rect(), &METHOD_TABS, self.method.index()).draw(canvas, theme);
 
         self.url_input.rect = self.url_rect();
         self.url_input.draw(canvas, theme);
 
         let mut send = Button::new(self.send_rect(), "Send").with_font(&F_UI);
-        send.state = ButtonState::Normal;
+        send.state = if self.pending_send {
+            ButtonState::Disabled
+        } else {
+            ButtonState::Normal
+        };
         send.draw(canvas, theme);
 
         Label::new(self.status_rect(), self.status.as_str())
             .with_font(&F_SMALL)
             .draw(canvas, theme);
 
-        let sidebar = Panel::with_title(self.sidebar_rect(), "Library");
-        sidebar.draw(canvas, theme);
-        let sidebar_content = sidebar.content_rect().inset(8);
-        Label::new(
-            Rect::new(sidebar_content.x, sidebar_content.y, sidebar_content.w, 20),
-            "Collections (coming soon)",
-        )
-        .with_font(&F_SMALL)
-        .draw(canvas, theme);
-        Label::new(
-            Rect::new(
-                sidebar_content.x,
-                sidebar_content.y + 28,
-                sidebar_content.w,
-                20,
-            ),
-            "Recent Requests (coming soon)",
-        )
-        .with_font(&F_SMALL)
-        .draw(canvas, theme);
-
-        let request_panel = Panel::with_title(self.request_panel_rect(), "Request");
-        request_panel.draw(canvas, theme);
-        TabBar::new(self.request_tab_bar_rect(), &REQUEST_TABS, self.request_tab)
-            .draw(canvas, theme);
-
-        if self.request_tab == 2 {
-            self.content_type_input.rect = self.content_type_editor_rect();
-            self.content_type_input.draw(canvas, theme);
-            self.body_input.rect = self.body_editor_rect();
-            self.body_input.draw(canvas, theme);
-        }
-
-        self.request_tab_view().draw(canvas, theme);
-
-        let response_panel = Panel::with_title(self.response_body_rect(), "Response Body");
-        response_panel.draw(canvas, theme);
-        self.response_view().draw(canvas, theme);
-
-        let details_panel = Panel::with_title(self.response_details_rect(), "Response");
-        details_panel.draw(canvas, theme);
-        self.details_view().draw(canvas, theme);
+        self.draw_sidebar(canvas, theme);
+        self.draw_request_panel(canvas, theme);
+        self.draw_response_area(canvas, theme);
 
         let console_panel = Panel::with_title(self.console_panel_rect(), "Console");
         console_panel.draw(canvas, theme);
-        self.console_view().draw(canvas, theme);
+        self.console_view(theme).draw(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {
-        if self.url_input.update(event) {
+        if self.update_active_request_inputs(event) {
             return true;
-        }
-        if self.request_tab == 2 {
-            if self.content_type_input.update(event) {
-                return true;
-            }
-            if self.body_input.update(event) {
-                return true;
-            }
         }
 
         match event {
             Event::Tick => {
                 if self.pending_send {
                     self.perform_pending_send();
-                    self.clamp_scrolls();
                     return true;
                 }
                 false
             }
-            Event::Click { x, y } => {
-                let point = Point::new(x, y);
-                if Button::new(self.send_rect(), "Send").hit_test(x, y) {
-                    self.queue_send();
-                    return true;
-                }
-                if Button::secondary(self.method_rect(), self.method.as_str()).hit_test(x, y) {
-                    self.method = self.method.next();
-                    return true;
-                }
-                if let Some(tab) = TabBar::new(self.request_tab_bar_rect(), &REQUEST_TABS, 0)
-                    .hit_test(x, y)
-                {
-                    self.request_tab = tab;
-                    self.request_scroll = 0;
-                    self.refresh_request_tab_display();
-                    return true;
-                }
-                if self.request_panel_rect().contains(point) {
-                    self.focus = FocusPane::Request;
-                    return true;
-                }
-                if self.response_body_rect().contains(point) {
-                    self.focus = FocusPane::ResponseBody;
-                    return true;
-                }
-                if self.response_details_rect().contains(point) {
-                    self.focus = FocusPane::ResponseDetails;
-                    return true;
-                }
-                if self.console_panel_rect().contains(point) {
-                    self.focus = FocusPane::Console;
-                    return true;
-                }
-                false
-            }
+            Event::Click { x, y } => self.handle_request_click(x, y),
             Event::Key('\n') if self.url_input.active => {
                 self.queue_send();
                 true
@@ -809,11 +1185,49 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     ProcessExit::exit(0);
 }
 
-fn append_line(out: &mut String, label: &str, value: &str) {
-    out.push_str(label);
-    out.push_str(": ");
-    out.push_str(value);
-    out.push('\n');
+fn draw_checkbox(canvas: &mut Canvas, theme: &Theme, rect: Rect, checked: bool) {
+    canvas.fill_rect(rect, theme.panel);
+    canvas.draw_rect(rect, theme.border);
+    if checked {
+        canvas.hbar(rect.x + 3, rect.y + 8, 10, 2, theme.accent);
+        canvas.vline(rect.x + 8, rect.y + 3, 10, theme.accent);
+    }
+}
+
+fn entry_row_rect(area: Rect, index: usize) -> Rect {
+    Rect::new(
+        area.x,
+        area.y + index as i32 * (ROW_H as i32 + ROW_GAP),
+        area.w,
+        ROW_H,
+    )
+}
+
+fn entry_checkbox_rect(row_rect: Rect) -> Rect {
+    Rect::new(row_rect.x, row_rect.y + 5, 18, 18)
+}
+
+fn entry_remove_rect(row_rect: Rect) -> Rect {
+    Rect::new(row_rect.right() - 28, row_rect.y, 28, ROW_H)
+}
+
+fn entry_key_rect(row_rect: Rect) -> Rect {
+    let start_x = row_rect.x + 24;
+    let remove = entry_remove_rect(row_rect);
+    let available = (remove.x - start_x - 8).max(80) as u32;
+    let key_w = available.min(((available as i32 * 35) / 100).max(140) as u32);
+    Rect::new(start_x, row_rect.y, key_w, ROW_H)
+}
+
+fn entry_value_rect(row_rect: Rect) -> Rect {
+    let key = entry_key_rect(row_rect);
+    let remove = entry_remove_rect(row_rect);
+    Rect::new(
+        key.right() + 8,
+        row_rect.y,
+        (remove.x - key.right() - 16).max(60) as u32,
+        ROW_H,
+    )
 }
 
 fn adjust_scroll(

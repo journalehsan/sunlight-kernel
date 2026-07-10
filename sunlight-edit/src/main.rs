@@ -2743,7 +2743,7 @@ struct ClipboardItemView<'a> {
 
 fn set_clipboard_text(payload: &[u8]) -> Result<(), &'static str> {
     let cap = ensure_clipboard_service().ok_or("Clipboard service unavailable")?;
-    let mime = b"text/plain;charset=utf-8";
+    let mime = b"text/plain";
     let total_len = 16 + mime.len() + CLIP_SOURCE_APP.len() + payload.len();
     if total_len > SHM_PAGE {
         return Err("Clipboard payload is too large");
@@ -2849,6 +2849,7 @@ fn ensure_clipboard_service() -> Option<CapabilityToken> {
 
 fn clip_error_label(code: u64) -> &'static str {
     match code {
+        x if x == ClipMsg::ERR_BAD_REQUEST => "Clipboard request is invalid",
         x if x == ClipMsg::ERR_NOT_FOUND => "Clipboard item not found",
         x if x == ClipMsg::ERR_TOO_LARGE => "Clipboard payload is too large",
         x if x == ClipMsg::ERR_UNSUPPORTED => "Paste not supported for this clipboard type",

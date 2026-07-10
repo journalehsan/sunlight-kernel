@@ -127,12 +127,13 @@ pub fn http_request(
 /// Read the remaining body from a TCP handle.
 pub fn read_body_full(
     handle: &mut TcpHandle,
+    request_method: &str,
+    response: &HttpResponse,
     initial_body: &[u8],
-    content_length: Option<usize>,
     progress: Option<&mut dyn FnMut(usize)>,
 ) -> FetchResult<Vec<u8>> {
     check_interrupted()?;
-    read_body_full_impl(handle, initial_body, content_length, progress)
+    read_body_full_impl(handle, request_method, response, initial_body, progress)
 }
 
 fn check_interrupted() -> FetchResult<()> {
@@ -141,6 +142,83 @@ fn check_interrupted() -> FetchResult<()> {
     } else {
         Ok(())
     }
+}
+
+fn response_has_no_body(request_method: &str, response: &HttpResponse) -> bool {
+    request_method.eq_ignore_ascii_case("HEAD")
+        || (100..200).contains(&response.status_code)
+        || response.status_code == 204
+        || response.status_code == 304
+}
+
+fn decode_chunked_body(encoded: &[u8]) -> FetchResult<Vec<u8>> {
+    let mut decoded = Vec::new();
+    let mut offset = 0usize;
+    let mut chunk_id = 0usize;
+
+    loop {
+        let line_end = find_crlf(encoded, offset).ok_or(FetchError::HttpError {
+            status: 0,
+            message: String::from("invalid chunked body: missing chunk size line ending"),
+        })?;
+        let size_line = core::str::from_utf8(&encoded[offset..line_end]).map_err(|_| {
+            FetchError::HttpError {
+                status: 0,
+                message: String::from("invalid chunked body: non-UTF8 chunk size"),
+            }
+        })?;
+        let size_text = size_line.split(';').next().unwrap_or("").trim();
+        let size = usize::from_str_radix(size_text, 16).map_err(|_| FetchError::HttpError {
+            status: 0,
+            message: format!("invalid chunked body: bad chunk size '{size_text}'"),
+        })?;
+        offset = line_end + 2;
+
+        if size == 0 {
+            consume_chunked_trailers(encoded, offset)?;
+            return Ok(decoded);
+        }
+
+        let chunk_end = offset.saturating_add(size);
+        if chunk_end > encoded.len() {
+            return Err(FetchError::ChunkIntegrityError {
+                chunk_id,
+                expected: size,
+                got: encoded.len().saturating_sub(offset),
+            });
+        }
+        decoded.extend_from_slice(&encoded[offset..chunk_end]);
+        offset = chunk_end;
+
+        if encoded.get(offset..offset + 2) != Some(b"\r\n") {
+            return Err(FetchError::HttpError {
+                status: 0,
+                message: String::from("invalid chunked body: missing chunk terminator"),
+            });
+        }
+        offset += 2;
+        chunk_id += 1;
+    }
+}
+
+fn consume_chunked_trailers(encoded: &[u8], mut offset: usize) -> FetchResult<()> {
+    loop {
+        let line_end = find_crlf(encoded, offset).ok_or(FetchError::HttpError {
+            status: 0,
+            message: String::from("invalid chunked body: unterminated trailer"),
+        })?;
+        if line_end == offset {
+            return Ok(());
+        }
+        offset = line_end + 2;
+    }
+}
+
+fn find_crlf(bytes: &[u8], start: usize) -> Option<usize> {
+    bytes[start..]
+        .windows(2)
+        .position(|window| window == b"\r\n")
+        .map(|index| start + index)
 }
 
 // ── host-linux implementation ────────────────────────────────────────────────
@@ -400,16 +478,35 @@ mod host {
 
     pub(super) fn read_body_full_impl(
         handle: &mut TcpHandle,
+        request_method: &str,
+        response: &HttpResponse,
         initial_body: &[u8],
-        content_length: Option<usize>,
         mut progress: Option<&mut dyn FnMut(usize)>,
     ) -> FetchResult<Vec<u8>> {
+        if response_has_no_body(request_method, response) {
+            return Ok(Vec::new());
+        }
+
         let mut body = Vec::from(initial_body);
         if let Some(progress) = progress.as_deref_mut() {
             progress(initial_body.len());
         }
 
-        if let Some(expected) = content_length {
+        if response.is_chunked() {
+            loop {
+                let chunk = recv_impl(handle, 64 * 1024)?;
+                if chunk.is_empty() {
+                    break;
+                }
+                body.extend_from_slice(&chunk);
+                if let Some(progress) = progress.as_deref_mut() {
+                    progress(chunk.len());
+                }
+            }
+            return decode_chunked_body(&body);
+        }
+
+        if let Some(expected) = response.content_length() {
             while body.len() < expected {
                 let chunk = recv_impl(handle, 64 * 1024)?;
                 if chunk.is_empty() {
@@ -924,16 +1021,35 @@ mod sunlight {
 
     pub(super) fn read_body_full_impl(
         handle: &mut TcpHandle,
+        request_method: &str,
+        response: &HttpResponse,
         initial_body: &[u8],
-        content_length: Option<usize>,
         mut progress: Option<&mut dyn FnMut(usize)>,
     ) -> FetchResult<Vec<u8>> {
+        if response_has_no_body(request_method, response) {
+            return Ok(Vec::new());
+        }
+
         let mut body = Vec::from(initial_body);
         if let Some(progress) = progress.as_deref_mut() {
             progress(initial_body.len());
         }
 
-        if let Some(expected) = content_length {
+        if response.is_chunked() {
+            loop {
+                let chunk = recv_impl(handle, SHM_PAGE)?;
+                if chunk.is_empty() {
+                    break;
+                }
+                body.extend_from_slice(&chunk);
+                if let Some(progress) = progress.as_deref_mut() {
+                    progress(chunk.len());
+                }
+            }
+            return decode_chunked_body(&body);
+        }
+
+        if let Some(expected) = response.content_length() {
             while body.len() < expected {
                 let chunk = recv_impl(handle, expected - body.len())?;
                 if chunk.is_empty() {

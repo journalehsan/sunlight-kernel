@@ -274,6 +274,16 @@ impl HttpResponse {
             .map(|v| v.contains("bytes"))
             .unwrap_or(false)
     }
+
+    /// Whether Transfer-Encoding declares `chunked`.
+    pub fn is_chunked(&self) -> bool {
+        self.header("transfer-encoding")
+            .map(|v| {
+                v.split(',')
+                    .any(|value| value.trim().eq_ignore_ascii_case("chunked"))
+            })
+            .unwrap_or(false)
+    }
 }
 
 /// Minimal error type for the HTTP layer (reusable across backends).
@@ -485,6 +495,13 @@ mod tests {
         // keys are lowercased at parse time, so lookup must use lower
         assert_eq!(resp.header("content-type"), Some("text/html"));
         assert!(resp.accepts_ranges());
+    }
+
+    #[test]
+    fn test_chunked_transfer_encoding_detection() {
+        let raw = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, chunked\r\n\r\n";
+        let resp = HttpResponse::parse(raw).unwrap().unwrap();
+        assert!(resp.is_chunked());
     }
 
     #[test]

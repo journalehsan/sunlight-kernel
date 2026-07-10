@@ -27,6 +27,7 @@ pub(crate) enum RequestEvent {
 pub(crate) struct PendingRequest {
     pub response: HttpResponse,
     pub final_url: ParsedUrl,
+    request_method: &'static str,
     handle: TcpHandle,
     initial_body: Vec<u8>,
     started_at: RequestTimer,
@@ -39,8 +40,9 @@ impl PendingRequest {
     ) -> FetchResult<RequestResult> {
         let body = ipc::read_body_full(
             &mut self.handle,
+            self.request_method,
+            &self.response,
             &self.initial_body,
-            self.response.content_length(),
             progress,
         )?;
 
@@ -110,6 +112,7 @@ pub(crate) fn begin_request_from_resolved(
         return Ok(PendingRequest {
             response,
             final_url: url,
+            request_method: request.method,
             handle,
             initial_body,
             started_at,
@@ -352,6 +355,73 @@ mod tests {
             | FetchError::HttpError { .. } => {}
             other => panic!("unexpected error variant: {other:?}"),
         }
+    }
+
+    #[cfg(feature = "host-linux")]
+    #[test]
+    fn perform_request_decodes_chunked_body() {
+        let Some(listener) = bind_test_listener() else {
+            return;
+        };
+        let port = listener.local_addr().unwrap().port();
+
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let _ = read_http_request(&mut stream);
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/html\r\n\r\n4\r\nWiki\r\n6\r\npedia!\r\n0\r\nX-Test: done\r\n\r\n",
+                )
+                .unwrap();
+        });
+
+        let url = ParsedUrl::parse(&format!("http://127.0.0.1:{port}/chunked")).unwrap();
+        let request = HttpRequest {
+            method: "GET",
+            path: url.path.clone(),
+            host: url.host_header(),
+            headers: vec![],
+            body: None,
+        };
+
+        let result = perform_request(url, request).unwrap();
+        server.join().unwrap();
+
+        assert_eq!(result.body, b"Wikipedia!");
+        assert!(core::str::from_utf8(&result.body)
+            .unwrap()
+            .starts_with("Wiki"));
+    }
+
+    #[cfg(feature = "host-linux")]
+    #[test]
+    fn head_request_ignores_declared_content_length_body() {
+        let Some(listener) = bind_test_listener() else {
+            return;
+        };
+        let port = listener.local_addr().unwrap().port();
+
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let _ = read_http_request(&mut stream);
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n")
+                .unwrap();
+        });
+
+        let url = ParsedUrl::parse(&format!("http://127.0.0.1:{port}/head")).unwrap();
+        let request = HttpRequest {
+            method: "HEAD",
+            path: url.path.clone(),
+            host: url.host_header(),
+            headers: vec![],
+            body: None,
+        };
+
+        let result = perform_request(url, request).unwrap();
+        server.join().unwrap();
+
+        assert!(result.body.is_empty());
     }
 
     #[cfg(feature = "host-linux")]

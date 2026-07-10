@@ -3395,6 +3395,7 @@ fn first_file_list_path(payload: &[u8]) -> Result<(&str, usize), ()> {
 
 fn clip_error_label(code: u64) -> &'static str {
     match code {
+        x if x == ClipMsg::ERR_BAD_REQUEST => "Clipboard request is invalid",
         x if x == ClipMsg::ERR_NOT_FOUND => "Clipboard item not found",
         x if x == ClipMsg::ERR_TOO_LARGE => "Clipboard payload is too large",
         x if x == ClipMsg::ERR_UNSUPPORTED => "Paste not supported for this clipboard type",
