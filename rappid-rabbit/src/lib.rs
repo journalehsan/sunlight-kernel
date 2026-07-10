@@ -6,6 +6,9 @@ use alloc::{format, string::String, vec::Vec};
 
 use sunlight_http::{HttpError, HttpRequest, ParsedUrl, UrlScheme};
 
+pub mod developer_tools;
+pub mod resources;
+
 pub const MAX_DISCOVERED_RESOURCES: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
