@@ -1,4 +1,4 @@
-#![cfg_attr(not(any(test, feature = "dom")), no_std)]
+#![cfg_attr(not(test), no_std)]
 #![cfg_attr(feature = "dom", allow(dead_code, unused_imports))]
 #![no_main]
 
@@ -35,7 +35,8 @@ use sunlight_ipc::{
     process_yield, ProcessExit,
 };
 use sunlight_ui::widgets::{
-    Button, ButtonState, Column, Label, Panel, TabBar, Table, TextInput, TextView,
+    Button, ButtonState, Column, Label, Panel, TabBar, Table, TextInput, TextView, TreeHitTarget,
+    TreeView,
 };
 use sunlight_ui::{
     request_close, App, Canvas, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
@@ -60,12 +61,12 @@ const URL_INPUT_CAP: usize = 512;
 const KEY_Q: u8 = 0x10;
 const KEY_UP: u8 = 0x48;
 const KEY_DOWN: u8 = 0x50;
+const KEY_LEFT: u8 = 0x4B;
+const KEY_RIGHT: u8 = 0x4D;
 const KEY_HOME: u8 = 0x47;
 const KEY_END: u8 = 0x4F;
 const KEY_PGUP: u8 = 0x49;
 const KEY_PGDN: u8 = 0x51;
-
-const DOM_TREE_ROW_H: u32 = 18;
 const NETWORK_DETAIL_H: u32 = 110;
 
 struct BumpAllocator;
@@ -87,11 +88,11 @@ unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
-#[cfg(not(any(test, feature = "dom")))]
+#[cfg(not(test))]
 #[global_allocator]
 static ALLOC: BumpAllocator = BumpAllocator;
 
-#[cfg(not(any(test, feature = "dom")))]
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[RABBIT] panic\n");
@@ -736,52 +737,24 @@ impl RabbitApp {
             return;
         }
 
-        let visible = ((content.h.saturating_sub(4)) / DOM_TREE_ROW_H).max(1) as usize;
-        let max_scroll = rows.len().saturating_sub(visible);
-        let scroll = self.developer_tools.dom.tree_scroll().min(max_scroll);
-        let base_x = content.x + 4;
-        let selected = self.developer_tools.dom.selected_node();
+        TreeView::new(content, &rows)
+            .with_scroll_offset(self.developer_tools.dom.tree_scroll())
+            .with_focus(
+                self.focus == FocusPane::DeveloperTools
+                    && self.developer_tools.dom.focused_pane() == DomInspectorPane::Tree,
+            )
+            .with_font(&F_MONO)
+            .draw(canvas, theme);
+    }
 
-        for (local_index, row) in rows.iter().skip(scroll).take(visible).enumerate() {
-            let row_y = content.y + 4 + (local_index as u32 * DOM_TREE_ROW_H) as i32;
-            let row_rect = Rect::new(content.x, row_y - 1, content.w, DOM_TREE_ROW_H);
-            if selected == Some(row.node_id) {
-                canvas.fill_rect(row_rect, theme.accent.darken(180));
-            }
-
-            let indent = (row.depth as i32) * 14;
-            let marker_x = base_x + indent;
-            if row.has_children {
-                let marker = if row.expanded { "[-]" } else { "[+]" };
-                F_MONO.draw_vcenter(
-                    canvas,
-                    marker,
-                    marker_x,
-                    row_y,
-                    DOM_TREE_ROW_H,
-                    if selected == Some(row.node_id) {
-                        theme.accent
-                    } else {
-                        theme.text_dim
-                    },
-                );
-            }
-
-            let label_x = marker_x + if row.has_children { 28 } else { 14 };
-            let clipped = clip_to_width(&row.label, content.right() - label_x - 8, &F_MONO);
-            F_MONO.draw_vcenter(
-                canvas,
-                clipped.as_str(),
-                label_x,
-                row_y,
-                DOM_TREE_ROW_H,
-                if selected == Some(row.node_id) {
-                    theme.accent
-                } else {
-                    theme.text
-                },
-            );
-        }
+    fn dom_tree_visible_rows(&mut self, tree_rect: Rect) -> usize {
+        let content = Panel::with_title(tree_rect, "DOM Tree")
+            .content_rect()
+            .inset(8);
+        let rows = self.developer_tools.dom.tree_rows();
+        TreeView::new(content, &rows)
+            .with_font(&F_MONO)
+            .visible_row_count()
     }
 
     fn network_layout(content_rect: Rect) -> (Rect, Rect) {
@@ -930,17 +903,7 @@ impl RabbitApp {
                     )
                     .with_font(&F_MONO)
                     .max_scroll();
-                    let tree_content = Panel::with_title(tree_rect, "DOM Tree")
-                        .content_rect()
-                        .inset(8);
-                    let visible =
-                        ((tree_content.h.saturating_sub(4)) / DOM_TREE_ROW_H).max(1) as usize;
-                    let tree_max = self
-                        .developer_tools
-                        .dom
-                        .tree_rows()
-                        .len()
-                        .saturating_sub(visible);
+                    let visible = self.dom_tree_visible_rows(tree_rect);
                     self.developer_tools.dom.set_styles_scroll(
                         self.developer_tools.dom.styles_scroll().min(styles_max),
                     );
@@ -950,9 +913,7 @@ impl RabbitApp {
                             .properties_scroll()
                             .min(properties_max),
                     );
-                    self.developer_tools
-                        .dom
-                        .set_tree_scroll(self.developer_tools.dom.tree_scroll().min(tree_max));
+                    self.developer_tools.dom.clamp_tree_scroll(visible);
                 }
                 DeveloperToolTab::Network => {
                     let (table_rect, _) = Self::network_layout(content_rect.inset(8));
@@ -1079,17 +1040,9 @@ impl RabbitApp {
                         self.developer_tools.dom.set_properties_scroll(scroll);
                     }
                     DomInspectorPane::Tree => {
-                        let content = Panel::with_title(tree_rect, "DOM Tree")
-                            .content_rect()
-                            .inset(8);
-                        let visible =
-                            ((content.h.saturating_sub(4)) / DOM_TREE_ROW_H).max(1) as usize;
-                        let max_scroll = self
-                            .developer_tools
-                            .dom
-                            .tree_rows()
-                            .len()
-                            .saturating_sub(visible);
+                        let visible = self.dom_tree_visible_rows(tree_rect);
+                        let row_count = self.developer_tools.dom.tree_rows().len();
+                        let max_scroll = row_count.saturating_sub(visible);
                         let mut scroll = self.developer_tools.dom.tree_scroll();
                         adjust_scroll(&mut scroll, delta, page, home, end, visible, max_scroll);
                         self.developer_tools.dom.set_tree_scroll(scroll);
@@ -1186,25 +1139,14 @@ impl RabbitApp {
             .content_rect()
             .inset(8);
         let rows = self.developer_tools.dom.tree_rows();
-        let visible = ((content.h.saturating_sub(4)) / DOM_TREE_ROW_H).max(1) as usize;
-        let scroll = self.developer_tools.dom.tree_scroll();
-        let local_y = point.y - content.y - 4;
-        if local_y < 0 {
-            return true;
-        }
-        let local_row = (local_y as u32 / DOM_TREE_ROW_H) as usize;
-        if local_row >= visible {
-            return true;
-        }
-        let Some(row) = rows.get(scroll + local_row) else {
-            return true;
-        };
-
-        let toggle_zone_end = content.x + 4 + (row.depth as i32) * 14 + 24;
-        if row.has_children && point.x <= toggle_zone_end {
-            self.developer_tools.dom.toggle_node(row.node_id);
-        } else {
-            self.developer_tools.dom.select_node(row.node_id);
+        let tree_view = TreeView::new(content, &rows)
+            .with_scroll_offset(self.developer_tools.dom.tree_scroll())
+            .with_font(&F_MONO);
+        if let Some(hit) = tree_view.hit_test(point.x, point.y) {
+            match hit.target {
+                TreeHitTarget::Disclosure => self.developer_tools.dom.toggle_node(hit.id),
+                TreeHitTarget::Row => self.developer_tools.dom.select_node(hit.id),
+            }
         }
         self.clamp_scrolls();
         true
@@ -1333,6 +1275,20 @@ impl App for RabbitApp {
                 self.queue_fetch();
                 true
             }
+            Event::Key('\n') | Event::Key(' ')
+                if self.focus == FocusPane::DeveloperTools
+                    && self.developer_tools.panel.active_tab == DeveloperToolTab::DomInspector
+                    && self.developer_tools.dom.focused_pane() == DomInspectorPane::Tree =>
+            {
+                let Some(content_rect) = self.developer_panel_layout().content_rect else {
+                    return false;
+                };
+                let (_, _, tree_rect) = Self::dom_column_rects(content_rect.inset(8));
+                let visible_rows = self.dom_tree_visible_rows(tree_rect);
+                self.developer_tools
+                    .dom
+                    .toggle_selected_tree_node(visible_rows)
+            }
             Event::KeyPress {
                 keycode,
                 pressed: true,
@@ -1342,6 +1298,33 @@ impl App for RabbitApp {
                 if ctrl && keycode == KEY_Q {
                     request_close();
                     return true;
+                }
+                if self.focus == FocusPane::DeveloperTools
+                    && self.developer_tools.panel.active_tab == DeveloperToolTab::DomInspector
+                    && self.developer_tools.dom.focused_pane() == DomInspectorPane::Tree
+                {
+                    let Some(content_rect) = self.developer_panel_layout().content_rect else {
+                        return false;
+                    };
+                    let (_, _, tree_rect) = Self::dom_column_rects(content_rect.inset(8));
+                    let visible_rows = self.dom_tree_visible_rows(tree_rect);
+                    match keycode {
+                        KEY_UP => {
+                            return self
+                                .developer_tools
+                                .dom
+                                .move_tree_selection(-1, visible_rows)
+                        }
+                        KEY_DOWN => {
+                            return self
+                                .developer_tools
+                                .dom
+                                .move_tree_selection(1, visible_rows)
+                        }
+                        KEY_LEFT => return self.developer_tools.dom.tree_left(visible_rows),
+                        KEY_RIGHT => return self.developer_tools.dom.tree_right(visible_rows),
+                        _ => {}
+                    }
                 }
                 match keycode {
                     KEY_UP => self.scroll_focused(-1, false, false, false),
@@ -1359,7 +1342,7 @@ impl App for RabbitApp {
     }
 }
 
-#[cfg(not(any(test, feature = "dom")))]
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
@@ -1417,31 +1400,4 @@ fn adjust_scroll(
     } else if delta > 0 {
         *scroll = (*scroll + step).min(max_scroll);
     }
-}
-
-fn clip_to_width(value: &str, max_width: i32, font: &dyn VecText) -> String {
-    if max_width <= 0 {
-        return String::new();
-    }
-    if font.measure_w(value) as i32 <= max_width {
-        return String::from(value);
-    }
-
-    let ellipsis = "...";
-    let ellipsis_w = font.measure_w(ellipsis) as i32;
-    let mut out = String::new();
-    for ch in value.chars() {
-        let next_len = {
-            let mut candidate = out.clone();
-            candidate.push(ch);
-            candidate.push_str(ellipsis);
-            candidate
-        };
-        if font.measure_w(next_len.as_str()) as i32 > max_width.max(ellipsis_w) {
-            break;
-        }
-        out.push(ch);
-    }
-    out.push_str(ellipsis);
-    out
 }

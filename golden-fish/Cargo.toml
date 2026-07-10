@@ -1,6 +1,8 @@
 [package]
 name = "golden-fish"
-version = "0.2.1144"
+version = "0.2.1160"
+
+
 
 
 edition = "2021"
@@ -10,5 +12,5 @@ description = "HTML parsing and DOM construction engine for SunlightOS (Rappid R
 [lib]
 path = "src/lib.rs"
 
-[dependencies]
+[target.'cfg(not(target_os = "none"))'.dependencies]
 tl = "0.7.8"

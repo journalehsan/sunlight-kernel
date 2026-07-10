@@ -1,11 +1,17 @@
 #[cfg(feature = "dom")]
-use alloc::string::ToString;
+use alloc::format;
 #[cfg(feature = "dom")]
-use alloc::{format, vec};
+use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
 
 #[cfg(feature = "dom")]
 use golden_fish::{Document, Node, NodeId};
+use sunlight_ui::widgets::{TreeViewRow, TreeViewState};
+
+#[cfg(feature = "dom")]
+use super::dom_tree_adapter::{
+    default_expanded_nodes, default_selected_node, node_kind_label, tree_label, DomTreeAdapter,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DomInspectorPane {
@@ -14,24 +20,14 @@ pub enum DomInspectorPane {
     Tree,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DomTreeRow {
-    pub node_id: usize,
-    pub depth: usize,
-    pub has_children: bool,
-    pub expanded: bool,
-    pub label: String,
-}
-
 #[derive(Debug, Clone)]
 pub struct DomInspectorState {
     selected_node: Option<usize>,
-    tree_scroll: usize,
+    tree: TreeViewState<usize>,
     properties_scroll: usize,
     styles_scroll: usize,
     focused_pane: DomInspectorPane,
     empty_message: String,
-    expanded_node_ids: Vec<usize>,
     #[cfg(feature = "dom")]
     document: Option<Document>,
 }
@@ -46,12 +42,11 @@ impl DomInspectorState {
     pub fn new() -> Self {
         Self {
             selected_node: None,
-            tree_scroll: 0,
+            tree: TreeViewState::new(),
             properties_scroll: 0,
             styles_scroll: 0,
             focused_pane: DomInspectorPane::Tree,
             empty_message: String::from("No document parsed yet."),
-            expanded_node_ids: Vec::new(),
             #[cfg(feature = "dom")]
             document: None,
         }
@@ -59,10 +54,9 @@ impl DomInspectorState {
 
     pub fn clear_with_message(&mut self, message: impl Into<String>) {
         self.selected_node = None;
-        self.tree_scroll = 0;
+        self.tree.clear();
         self.properties_scroll = 0;
         self.styles_scroll = 0;
-        self.expanded_node_ids.clear();
         self.empty_message = message.into();
         #[cfg(feature = "dom")]
         {
@@ -75,11 +69,11 @@ impl DomInspectorState {
     }
 
     pub fn tree_scroll(&self) -> usize {
-        self.tree_scroll
+        self.tree.scroll_offset()
     }
 
     pub fn set_tree_scroll(&mut self, tree_scroll: usize) {
-        self.tree_scroll = tree_scroll;
+        self.tree.set_scroll_offset(tree_scroll);
     }
 
     pub fn properties_scroll(&self) -> usize {
@@ -112,12 +106,18 @@ impl DomInspectorState {
 
     #[cfg(feature = "dom")]
     pub fn set_document(&mut self, document: Document) {
-        self.selected_node = None;
-        self.tree_scroll = 0;
+        let expanded_ids = default_expanded_nodes(&document);
+        let selected_node = default_selected_node(&document);
+
+        self.tree.clear();
         self.properties_scroll = 0;
         self.styles_scroll = 0;
         self.empty_message = String::from("No document parsed yet.");
-        self.expanded_node_ids = default_expanded_nodes(&document);
+        for node_id in expanded_ids {
+            let _ = self.tree.expand(node_id);
+        }
+        let _ = self.tree.set_selected(selected_node);
+        self.selected_node = selected_node;
         self.document = Some(document);
     }
 
@@ -144,8 +144,10 @@ impl DomInspectorState {
             .and_then(|document| document.get(node_id))
             .is_some()
         {
+            let _ = self.tree.set_selected(Some(node_id));
             self.selected_node = Some(node_id);
         } else {
+            let _ = self.tree.set_selected(None);
             self.selected_node = None;
         }
     }
@@ -160,54 +162,120 @@ impl DomInspectorState {
         let Some(document) = self.document.as_ref() else {
             return;
         };
-        if document.children(node_id).is_empty() || node_id == document.root() {
-            return;
-        }
-        if let Some(index) = self
-            .expanded_node_ids
-            .iter()
-            .position(|candidate| *candidate == node_id)
-        {
-            self.expanded_node_ids.remove(index);
-        } else {
-            self.expanded_node_ids.push(node_id);
-        }
+        let adapter = DomTreeAdapter::new(document);
+        let _ = self.tree.toggle(&adapter, node_id);
+        self.selected_node = self.tree.selected_id();
     }
 
     #[cfg(not(feature = "dom"))]
     pub fn toggle_node(&mut self, _node_id: usize) {}
 
     #[cfg(feature = "dom")]
-    pub fn tree_rows(&self) -> Vec<DomTreeRow> {
+    pub fn move_tree_selection(&mut self, delta: i32, visible_rows: usize) -> bool {
+        let Some(document) = self.document.as_ref() else {
+            return false;
+        };
+        let adapter = DomTreeAdapter::new(document);
+        let rows = self.tree.rebuild_rows(&adapter);
+        let changed = self.tree.move_selection(&rows, delta).is_some();
+        self.tree.ensure_selected_visible(&rows, visible_rows);
+        self.selected_node = self.tree.selected_id();
+        changed
+    }
+
+    #[cfg(not(feature = "dom"))]
+    pub fn move_tree_selection(&mut self, _delta: i32, _visible_rows: usize) -> bool {
+        false
+    }
+
+    #[cfg(feature = "dom")]
+    pub fn tree_left(&mut self, visible_rows: usize) -> bool {
+        let Some(document) = self.document.as_ref() else {
+            return false;
+        };
+        let adapter = DomTreeAdapter::new(document);
+        let rows = self.tree.rebuild_rows(&adapter);
+        let changed = self
+            .tree
+            .collapse_or_select_parent(&adapter, &rows)
+            .is_some();
+        self.tree.ensure_selected_visible(&rows, visible_rows);
+        self.selected_node = self.tree.selected_id();
+        changed
+    }
+
+    #[cfg(not(feature = "dom"))]
+    pub fn tree_left(&mut self, _visible_rows: usize) -> bool {
+        false
+    }
+
+    #[cfg(feature = "dom")]
+    pub fn tree_right(&mut self, visible_rows: usize) -> bool {
+        let Some(document) = self.document.as_ref() else {
+            return false;
+        };
+        let adapter = DomTreeAdapter::new(document);
+        let rows = self.tree.rebuild_rows(&adapter);
+        let changed = self.tree.expand_or_select_first_child(&adapter).is_some();
+        self.tree.ensure_selected_visible(&rows, visible_rows);
+        self.selected_node = self.tree.selected_id();
+        changed
+    }
+
+    #[cfg(not(feature = "dom"))]
+    pub fn tree_right(&mut self, _visible_rows: usize) -> bool {
+        false
+    }
+
+    #[cfg(feature = "dom")]
+    pub fn toggle_selected_tree_node(&mut self, visible_rows: usize) -> bool {
+        let Some(document) = self.document.as_ref() else {
+            return false;
+        };
+        let adapter = DomTreeAdapter::new(document);
+        let rows = self.tree.rebuild_rows(&adapter);
+        let changed = self.tree.toggle_selected(&adapter).is_some();
+        self.tree.ensure_selected_visible(&rows, visible_rows);
+        self.selected_node = self.tree.selected_id();
+        changed
+    }
+
+    #[cfg(not(feature = "dom"))]
+    pub fn toggle_selected_tree_node(&mut self, _visible_rows: usize) -> bool {
+        false
+    }
+
+    #[cfg(feature = "dom")]
+    pub fn clamp_tree_scroll(&mut self, visible_rows: usize) {
+        let Some(document) = self.document.as_ref() else {
+            self.tree.set_scroll_offset(0);
+            self.selected_node = None;
+            return;
+        };
+        let adapter = DomTreeAdapter::new(document);
+        let rows = self.tree.rebuild_rows(&adapter);
+        self.tree.clamp_scroll(rows.len(), visible_rows);
+        self.selected_node = self.tree.selected_id();
+    }
+
+    #[cfg(not(feature = "dom"))]
+    pub fn clamp_tree_scroll(&mut self, _visible_rows: usize) {
+        self.tree.set_scroll_offset(0);
+    }
+
+    #[cfg(feature = "dom")]
+    pub fn tree_rows(&mut self) -> Vec<TreeViewRow<NodeId>> {
         let Some(document) = self.document.as_ref() else {
             return Vec::new();
         };
-
-        let mut rows = Vec::with_capacity(document.node_count());
-        let mut stack = vec![(document.root(), 0usize)];
-
-        while let Some((node_id, depth)) = stack.pop() {
-            let children = document.children(node_id);
-            rows.push(DomTreeRow {
-                node_id,
-                depth,
-                has_children: !children.is_empty(),
-                expanded: node_id == document.root() || self.expanded_node_ids.contains(&node_id),
-                label: tree_label(document, node_id),
-            });
-
-            if node_id == document.root() || self.expanded_node_ids.contains(&node_id) {
-                for &child in children.iter().rev() {
-                    stack.push((child, depth + 1));
-                }
-            }
-        }
-
+        let adapter = DomTreeAdapter::new(document);
+        let rows = self.tree.rebuild_rows(&adapter);
+        self.selected_node = self.tree.selected_id();
         rows
     }
 
     #[cfg(not(feature = "dom"))]
-    pub fn tree_rows(&self) -> Vec<DomTreeRow> {
+    pub fn tree_rows(&mut self) -> Vec<TreeViewRow<usize>> {
         Vec::new()
     }
 
@@ -239,6 +307,9 @@ impl DomInspectorState {
             } => {
                 let mut out = String::new();
                 out.push_str("Node Type: Element\n");
+                out.push_str("Kind: ");
+                out.push_str(node_kind_label(document, node_id));
+                out.push('\n');
                 out.push_str("Tag Name: ");
                 out.push_str(tag_name);
                 out.push('\n');
@@ -251,9 +322,6 @@ impl DomInspectorState {
                     out.push_str("class: ");
                     out.push_str(class_attr);
                     out.push('\n');
-                    out.push_str("Class List: ");
-                    out.push_str(class_attr);
-                    out.push('\n');
                 }
                 out.push_str("Child Count: ");
                 out.push_str(&document.children(node_id).len().to_string());
@@ -261,37 +329,29 @@ impl DomInspectorState {
                 out.push_str("Parent: ");
                 out.push_str(&parent_label(document, node_id));
                 out.push('\n');
+                out.push_str("Preview: ");
+                out.push_str(&tree_label(document, node_id));
+                out.push('\n');
                 out.push_str("NodeId: ");
                 out.push_str(&node_id.to_string());
                 out.push('\n');
-                out.push_str("Attributes:\n");
-                if attributes.is_empty() {
-                    out.push_str("  (none)\n");
-                } else {
-                    for attribute in attributes {
-                        out.push_str("  ");
-                        out.push_str(attribute.name());
-                        out.push_str(" = ");
-                        out.push_str(attribute.value());
-                        out.push('\n');
-                    }
-                }
                 out
             }
             Node::Text { content } => {
                 format!(
-                    "Node Type: Text\nText: {}\nCharacter Length: {}\nByte Length: {}\nParent: {}\nNodeId: {}\n",
-                    content,
+                    "Node Type: Text\nKind: {}\nPreview: {}\nCharacter Length: {}\nByte Length: {}\nParent: {}\nNodeId: {}\n",
+                    node_kind_label(document, node_id),
+                    tree_label(document, node_id),
                     content.chars().count(),
                     content.len(),
                     parent_label(document, node_id),
                     node_id
                 )
             }
-            Node::Comment { content } => {
+            Node::Comment { .. } => {
                 format!(
-                    "Node Type: Comment\nComment: {}\nParent: {}\nNodeId: {}\n",
-                    content,
+                    "Node Type: Comment\nPreview: {}\nParent: {}\nNodeId: {}\n",
+                    tree_label(document, node_id),
                     parent_label(document, node_id),
                     node_id
                 )
@@ -321,7 +381,9 @@ impl DomInspectorState {
             ..
         } = node
         else {
-            return String::from("Computed styles are not available yet.\nThis node does not expose inline style attributes.");
+            return String::from(
+                "Computed styles are not available yet.\nThis node does not expose inline style attributes.",
+            );
         };
 
         let mut out = String::new();
@@ -346,21 +408,6 @@ impl DomInspectorState {
 }
 
 #[cfg(feature = "dom")]
-fn default_expanded_nodes(document: &Document) -> Vec<NodeId> {
-    let mut expanded = Vec::new();
-    let mut stack = vec![(document.root(), 0usize)];
-    while let Some((node_id, depth)) = stack.pop() {
-        if depth <= 3 && !document.children(node_id).is_empty() {
-            expanded.push(node_id);
-            for &child in document.children(node_id).iter().rev() {
-                stack.push((child, depth + 1));
-            }
-        }
-    }
-    expanded
-}
-
-#[cfg(feature = "dom")]
 fn parent_label(document: &Document, node_id: NodeId) -> String {
     document.parent(node_id).map_or_else(
         || String::from("(none)"),
@@ -376,67 +423,6 @@ fn attribute_value<'a>(attributes: &'a [golden_fish::Attribute], name: &str) -> 
         .map(golden_fish::Attribute::value)
 }
 
-#[cfg(feature = "dom")]
-fn tree_label(document: &Document, node_id: NodeId) -> String {
-    let Some(node) = document.get(node_id) else {
-        return String::from("(missing node)");
-    };
-
-    match node {
-        Node::Document { .. } => String::from("#document"),
-        Node::Element {
-            tag_name,
-            attributes,
-            ..
-        } => {
-            let mut label = String::from("<");
-            label.push_str(tag_name);
-            if let Some(id_attr) = attribute_value(attributes, "id") {
-                label.push_str(" id=\"");
-                label.push_str(&truncate_value(id_attr, 24));
-                label.push('"');
-            }
-            if let Some(class_attr) = attribute_value(attributes, "class") {
-                label.push_str(" class=\"");
-                label.push_str(&truncate_value(class_attr, 28));
-                label.push('"');
-            }
-            label.push('>');
-            label
-        }
-        Node::Text { content } => {
-            let preview = preview_text(content, 32);
-            format!("\"{preview}\"")
-        }
-        Node::Comment { content } => {
-            let preview = preview_text(content, 32);
-            format!("<!-- {preview} -->")
-        }
-    }
-}
-
-#[cfg(feature = "dom")]
-fn preview_text(value: &str, max_chars: usize) -> String {
-    let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
-    truncate_value(&collapsed, max_chars)
-}
-
-#[cfg(feature = "dom")]
-fn truncate_value(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return String::from(value);
-    }
-    let mut out = String::new();
-    for (index, ch) in value.chars().enumerate() {
-        if index >= max_chars.saturating_sub(1) {
-            break;
-        }
-        out.push(ch);
-    }
-    out.push_str("...");
-    out
-}
-
 #[cfg(all(test, feature = "dom"))]
 mod tests {
     use super::*;
@@ -450,40 +436,17 @@ mod tests {
 
     #[test]
     fn empty_state_is_stable_before_document_load() {
-        let state = DomInspectorState::new();
+        let mut state = DomInspectorState::new();
         assert_eq!(state.empty_message(), "No document parsed yet.");
         assert!(state.tree_rows().is_empty());
     }
 
     #[test]
-    fn dom_tree_labels_include_document_elements_and_text() {
-        let state = build_state(
-            r#"<html><body><div id="main" class="content">hello world</div><!-- note --></body></html>"#,
-        );
-        let labels: Vec<String> = state.tree_rows().into_iter().map(|row| row.label).collect();
-        assert!(labels.iter().any(|label| label == "#document"));
-        assert!(labels.iter().any(|label| label == "<html>"));
-        assert!(labels
-            .iter()
-            .any(|label| label == "<div id=\"main\" class=\"content\">"));
-        assert!(labels.iter().any(|label| label == "\"hello world\""));
-        assert!(labels
-            .iter()
-            .any(|label| label.starts_with("<!--") && label.contains("note")));
-    }
-
-    #[test]
-    fn element_property_extraction_includes_id_and_class() {
+    fn dom_tree_uses_real_parsed_structure() {
         let mut state =
-            build_state(r#"<div id="main" class="content primary" data-role="hero"></div>"#);
-        let document = state.document().unwrap();
-        let node_id = document.find_first_element("div").unwrap();
-        state.select_node(node_id);
-        let properties = state.node_properties_text();
-        assert!(properties.contains("Node Type: Element"));
-        assert!(properties.contains("id: main"));
-        assert!(properties.contains("class: content primary"));
-        assert!(properties.contains("data-role = hero"));
+            build_state("<html><head></head><body><header></header><main></main></body></html>");
+        let labels: Vec<String> = state.tree_rows().into_iter().map(|row| row.label).collect();
+        assert_eq!(labels, vec!["#document", "<html>", "<head>", "<body>"]);
     }
 
     #[test]
@@ -495,6 +458,28 @@ mod tests {
         assert_eq!(state.selected_node(), Some(node_id));
 
         state.set_document(parse_html("<p>fresh</p>").unwrap());
-        assert_eq!(state.selected_node(), None);
+        assert_ne!(state.selected_node(), Some(node_id));
+    }
+
+    #[test]
+    fn default_selection_prefers_html_when_present() {
+        let state = build_state("<html><body></body></html>");
+        let document = state.document().unwrap();
+        assert_eq!(state.selected_node(), document.find_first_element("html"));
+    }
+
+    #[test]
+    fn tree_replacement_resets_old_expansion_state() {
+        let mut state = build_state("<html><body><section><p>first</p></section></body></html>");
+        let document = state.document().unwrap();
+        let body_id = document.find_first_element("body").unwrap();
+        let section_id = document.find_first_element("section").unwrap();
+        state.toggle_node(body_id);
+        state.toggle_node(section_id);
+        assert!(state.tree_rows().iter().any(|row| row.label == "<p>"));
+
+        state.set_document(parse_html("<html><body><div>fresh</div></body></html>").unwrap());
+        let labels: Vec<String> = state.tree_rows().into_iter().map(|row| row.label).collect();
+        assert!(!labels.iter().any(|label| label == "<section>"));
     }
 }

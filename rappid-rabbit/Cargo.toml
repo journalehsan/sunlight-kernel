@@ -1,6 +1,8 @@
 [package]
 name = "rappid-rabbit"
-version = "0.2.1144"
+version = "0.2.1160"
+
+
 
 
 
@@ -31,7 +33,7 @@ golden-fish = { path = "../golden-fish", optional = true }
 
 [features]
 default = []
-# "dom" enables Golden Fish HTML parser + DOM tree inspector.
-# Requires a target with std (e.g. host development builds) because
-# the current parser backend (tl) depends on std.
+# "dom" enables Golden Fish HTML parsing and the interactive DOM tree inspector.
+# Golden Fish uses `tl` on std-capable targets and a no_std fallback parser on
+# SunlightOS freestanding builds, so this feature is supported in both places.
 dom = ["dep:golden-fish"]

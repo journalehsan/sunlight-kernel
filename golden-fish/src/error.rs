@@ -35,4 +35,5 @@ impl fmt::Display for ParseError {
     }
 }
 
+#[cfg(not(target_os = "none"))]
 impl std::error::Error for ParseError {}

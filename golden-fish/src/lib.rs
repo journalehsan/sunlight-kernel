@@ -17,14 +17,16 @@
 //! ```
 //!
 //! ## Parser backend
-//! The `tl` crate ("0.7.8", stable, no SIMD) is used internally.
-//! No `tl`-specific types are exposed in the public API. The internal
-//! representation can be swapped in the future without changing browser code.
+//! The `tl` crate ("0.7.8", stable, no SIMD) is used internally on std-capable
+//! targets. Freestanding `SunlightOS` builds use a `no_std` fallback parser that
+//! produces the same owned DOM types. No backend-specific types are exposed in
+//! the public API.
 //!
 //! ## No unsupported features
 //! This crate does not implement CSS, layout, painting, JavaScript, images,
 //! forms, or browser navigation.
 
+#![cfg_attr(target_os = "none", no_std)]
 #![deny(clippy::all, clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -37,7 +39,10 @@ pub mod error;
 pub mod node;
 pub mod parser;
 
+#[cfg(not(target_os = "none"))]
 mod convert;
+#[cfg(any(target_os = "none", test))]
+mod simple_parser;
 
 pub use attributes::Attribute;
 pub use document::Document;

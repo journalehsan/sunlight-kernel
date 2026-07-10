@@ -4,7 +4,10 @@
 //! based access. Parents are tracked in a parallel array to avoid
 //! self-referential structures and to support future mutation.
 
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::fmt;
 
 use crate::attributes::Attribute;

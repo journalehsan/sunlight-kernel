@@ -14,6 +14,7 @@ pub mod table;
 pub mod text_input;
 pub mod text_view;
 pub mod toolbar;
+pub mod tree_view;
 
 // Re-export the most-used types at the widgets level
 pub use button::{Button, ButtonState};
@@ -41,3 +42,7 @@ pub use table::{Column, Table};
 pub use text_input::TextInput;
 pub use text_view::TextView;
 pub use toolbar::{Toolbar, ToolbarItem};
+pub use tree_view::{
+    TreeHitTarget, TreeItem, TreeModel, TreeView, TreeViewAction, TreeViewHit, TreeViewRow,
+    TreeViewState,
+};
