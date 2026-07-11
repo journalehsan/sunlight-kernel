@@ -18,9 +18,9 @@ use sunlight_ipc::{
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
     AppMenuCommand, AppMenuSecondaryItem, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
-    DocumentRectStyle, DocumentStrokeStyle, DocumentTextStyle, HeaderActionButton, HeaderChip,
-    PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, StatusBar,
-    TwoPaneAppMenu,
+    DocumentCanvasPresentation, DocumentRectStyle, DocumentStrokeStyle, DocumentTextStyle,
+    HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec,
+    RibbonGroupSpec, StatusBar, TwoPaneAppMenu,
 };
 use sunlight_ui::{
     request_close, App, Color, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
@@ -1139,13 +1139,8 @@ impl WriterApp {
     fn document_canvas<'a>(&self, items: &'a [DocumentCanvasItem<'a>]) -> DocumentCanvas<'a> {
         DocumentCanvas::new(self.content_rect(), items)
             .with_mode(self.document.mode)
-            .with_titles(
-                "Sunlight Canvas Area",
-                "Reusable document canvas prepared for editable and read-only surfaces",
-            )
+            .with_presentation(DocumentCanvasPresentation::Writer)
             .with_empty_label("Document Canvas Ready")
-            .with_footer_note("Shared page widget . fixed-coordinate items . shell preserved")
-            .with_guides(true)
             .with_fonts(
                 Some(&FONT_UI_LARGE),
                 Some(&FONT_UI_SMALL),

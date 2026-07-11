@@ -5,15 +5,8 @@ use crate::geom::{Point, Rect, Size};
 use crate::paint::Canvas;
 use crate::theme::{Color, Theme};
 
-const HOST_RADIUS: u32 = 20;
-const PAGE_RADIUS: u32 = 10;
-const SURFACE_RADIUS: u32 = 12;
-const PAGE_HEADER_H: u32 = 62;
-const PAGE_FOOTER_H: u32 = 42;
-const PAGE_INSET: i32 = 24;
-const SURFACE_INSET_X: i32 = 24;
-const SURFACE_TOP_GAP: i32 = 18;
-const CONTENT_INSET: i32 = 28;
+const WRITER_WORKSPACE_GAP: i32 = 16;
+const DOCUMENT_MARGIN: i32 = 28;
 
 /// Generic, document-local identity for the node that owns a render object.
 ///
@@ -373,20 +366,6 @@ pub fn diff_scenes(previous: &DocumentScene, next: &DocumentScene) -> ScenePatch
     patch
 }
 
-fn fill_vertical_gradient(canvas: &mut Canvas, rect: Rect, top: Color, bottom: Color) {
-    let h = rect.h.max(1);
-    for row in 0..h {
-        let mix = row * 255 / h;
-        let r = ((top.r() as u32 * (255 - mix) + bottom.r() as u32 * mix) / 255) as u8;
-        let g = ((top.g() as u32 * (255 - mix) + bottom.g() as u32 * mix) / 255) as u8;
-        let b = ((top.b() as u32 * (255 - mix) + bottom.b() as u32 * mix) / 255) as u8;
-        canvas.fill_rect(
-            Rect::new(rect.x, rect.y + row as i32, rect.w, 1),
-            Color::rgb(r, g, b),
-        );
-    }
-}
-
 fn draw_text(
     canvas: &mut Canvas,
     font: Option<&dyn VecText>,
@@ -500,6 +479,19 @@ impl Default for DocumentCanvasMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocumentCanvasPresentation {
+    Browser,
+    Writer,
+    Preview,
+}
+
+impl Default for DocumentCanvasPresentation {
+    fn default() -> Self {
+        Self::Preview
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct DocumentTextStyle<'a> {
     pub font: Option<&'a dyn VecText>,
@@ -605,18 +597,13 @@ pub enum DocumentCanvasItem<'a> {
 pub struct DocumentCanvas<'a> {
     pub rect: Rect,
     pub mode: DocumentCanvasMode,
-    pub title: &'a str,
-    pub subtitle: &'a str,
     pub empty_label: &'a str,
-    pub footer_note: &'a str,
-    pub show_guides: bool,
+    pub presentation: DocumentCanvasPresentation,
     pub items: &'a [DocumentCanvasItem<'a>],
     /// Optional retained scene for generic read-only document rendering.
     /// Existing Writer callers can continue supplying `items` unchanged.
     pub scene: Option<&'a DocumentScene>,
     pub scroll_y: u32,
-    pub title_font: Option<&'a dyn VecText>,
-    pub subtitle_font: Option<&'a dyn VecText>,
     pub body_font: Option<&'a dyn VecText>,
     pub small_font: Option<&'a dyn VecText>,
     pub scene_heading_font: Option<&'a dyn VecText>,
@@ -627,16 +614,11 @@ impl<'a> DocumentCanvas<'a> {
         Self {
             rect,
             mode: DocumentCanvasMode::Editable,
-            title: "Document Canvas",
-            subtitle: "Reusable fixed-coordinate page surface",
             empty_label: "Document Canvas Ready",
-            footer_note: "Fixed-coordinate page surface",
-            show_guides: true,
+            presentation: DocumentCanvasPresentation::Preview,
             items,
             scene: None,
             scroll_y: 0,
-            title_font: None,
-            subtitle_font: None,
             body_font: None,
             small_font: None,
             scene_heading_font: None,
@@ -648,31 +630,22 @@ impl<'a> DocumentCanvas<'a> {
         self
     }
 
-    pub fn with_titles(mut self, title: &'a str, subtitle: &'a str) -> Self {
-        self.title = title;
-        self.subtitle = subtitle;
-        self
-    }
-
     pub fn with_empty_label(mut self, empty_label: &'a str) -> Self {
         self.empty_label = empty_label;
         self
     }
 
-    pub fn with_footer_note(mut self, footer_note: &'a str) -> Self {
-        self.footer_note = footer_note;
-        self
-    }
-
-    pub fn with_guides(mut self, show_guides: bool) -> Self {
-        self.show_guides = show_guides;
+    pub fn with_presentation(mut self, presentation: DocumentCanvasPresentation) -> Self {
+        self.presentation = presentation;
+        self.scroll_y = self.scene.map_or(self.scroll_y, |scene| {
+            self.scroll_y.min(scene.max_scroll_y(self.content_rect().h))
+        });
         self
     }
 
     pub fn with_scene(mut self, scene: &'a DocumentScene) -> Self {
         self.scene = Some(scene);
         self.mode = DocumentCanvasMode::ReadOnly;
-        self.show_guides = false;
         self.scroll_y = self.scroll_y.min(scene.max_scroll_y(self.content_rect().h));
         self
     }
@@ -705,46 +678,33 @@ impl<'a> DocumentCanvas<'a> {
 
     pub fn with_fonts(
         mut self,
-        title_font: Option<&'a dyn VecText>,
-        subtitle_font: Option<&'a dyn VecText>,
+        _title_font: Option<&'a dyn VecText>,
+        _subtitle_font: Option<&'a dyn VecText>,
         body_font: Option<&'a dyn VecText>,
         small_font: Option<&'a dyn VecText>,
     ) -> Self {
-        self.title_font = title_font;
-        self.subtitle_font = subtitle_font;
         self.body_font = body_font;
         self.small_font = small_font;
-        self.scene_heading_font = title_font;
+        self.scene_heading_font = _title_font;
         self
     }
 
-    pub fn host_rect(&self) -> Rect {
-        self.rect.inset(18)
-    }
-
     pub fn page_rect(&self) -> Rect {
-        let host = self.host_rect();
-        let desired_w = 860u32.min(host.w.saturating_sub(96)).max(620);
-        let desired_h = host.h.saturating_sub(56).max(420);
-        let x = host.x + ((host.w as i32 - desired_w as i32) / 2);
-        let y = host.y + 26;
-        Rect::new(x, y, desired_w, desired_h)
-    }
-
-    pub fn document_rect(&self) -> Rect {
-        let page = self.page_rect();
-        let top = page.y + PAGE_HEADER_H as i32 + SURFACE_TOP_GAP;
-        let bottom = page.bottom() - PAGE_FOOTER_H as i32;
-        Rect::new(
-            page.x + SURFACE_INSET_X,
-            top,
-            page.w.saturating_sub((SURFACE_INSET_X * 2) as u32),
-            (bottom - top).max(0) as u32,
-        )
+        if self.presentation == DocumentCanvasPresentation::Browser {
+            return self.rect;
+        }
+        let workspace = self.rect.inset(WRITER_WORKSPACE_GAP);
+        let desired_w = 860u32.min(workspace.w);
+        let x = workspace.x + ((workspace.w as i32 - desired_w as i32) / 2);
+        Rect::new(x, workspace.y, desired_w, workspace.h)
     }
 
     pub fn content_rect(&self) -> Rect {
-        self.document_rect().inset(CONTENT_INSET)
+        if self.presentation == DocumentCanvasPresentation::Browser {
+            self.rect
+        } else {
+            self.page_rect().inset(DOCUMENT_MARGIN)
+        }
     }
 
     pub fn viewport_size(&self) -> Size {
@@ -752,104 +712,17 @@ impl<'a> DocumentCanvas<'a> {
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
-        fill_vertical_gradient(canvas, self.rect, theme.bg.lighten(14), theme.bg.darken(8));
-
-        let host = self.host_rect();
-        canvas.fill_rounded_rect(host, HOST_RADIUS, theme.panel.darken(8));
-        canvas.stroke_rounded_rect(host, HOST_RADIUS, 1, theme.border);
-
-        let page = self.page_rect();
-        let shadow = page.translate(10, 12);
-        canvas.fill_rounded_rect(shadow, PAGE_RADIUS, Color::rgb(0x16, 0x16, 0x18));
-        canvas.fill_rounded_rect(page, PAGE_RADIUS, Color::rgb(0xFB, 0xFA, 0xF7));
-        canvas.stroke_rounded_rect(page, PAGE_RADIUS, 1, Color::rgb(0xD7, 0xD3, 0xCD));
-
-        let page_top = Rect::new(page.x, page.y, page.w, PAGE_HEADER_H);
-        fill_vertical_gradient(
-            canvas,
-            page_top,
-            Color::rgb(0xFF, 0xFF, 0xFF),
-            Color::rgb(0xF4, 0xF1, 0xED),
-        );
-        canvas.hbar(
-            page.x,
-            page.y + PAGE_HEADER_H as i32 - 1,
-            page.w,
-            1,
-            Color::rgb(0xE7, 0xE1, 0xD8),
-        );
-
-        draw_text(
-            canvas,
-            self.title_font,
-            page.x + PAGE_INSET,
-            page.y + 22,
-            self.title,
-            Color::rgb(0x24, 0x24, 0x28),
-        );
-        draw_text(
-            canvas,
-            self.subtitle_font,
-            page.x + PAGE_INSET,
-            page.y + 40,
-            self.subtitle,
-            Color::rgb(0x72, 0x72, 0x7C),
-        );
-
-        let document = self.document_rect();
-        canvas.fill_rounded_rect(document, SURFACE_RADIUS, Color::rgb(0xFF, 0xFF, 0xFF));
-        canvas.stroke_rounded_rect(document, SURFACE_RADIUS, 1, Color::rgb(0xE0, 0xDB, 0xD4));
-        canvas.hbar(
-            document.x + 1,
-            document.y + 1,
-            document.w.saturating_sub(2),
-            4,
-            theme.accent.lighten(34),
-        );
-
-        let content = self.content_rect();
-        if self.show_guides {
-            self.draw_guides(canvas, content);
+        if self.presentation != DocumentCanvasPresentation::Browser {
+            let page = self.page_rect();
+            canvas.fill_rect(page, Color::rgb(0xFB, 0xFA, 0xF7));
         }
-
+        let content = self.content_rect();
         if let Some(scene) = self.scene {
             self.draw_scene(canvas, content, scene);
         } else if self.items.is_empty() {
             self.draw_empty_label(canvas, content, theme);
         } else {
             self.draw_items(canvas, content);
-        }
-
-        draw_text(
-            canvas,
-            self.small_font,
-            page.x + PAGE_INSET,
-            page.bottom() - 30,
-            self.footer_note,
-            Color::rgb(0x86, 0x82, 0x7B),
-        );
-    }
-
-    fn draw_guides(&self, canvas: &mut Canvas, content: Rect) {
-        let guide_color = Color::rgb(0xEE, 0xE8, 0xE0);
-        let margin_color = Color::rgb(0xF2, 0xEA, 0xE0);
-        let guide_margin_x = content.x + 54;
-        canvas.fill_rect(
-            Rect::new(guide_margin_x, content.y, 1, content.h),
-            margin_color,
-        );
-
-        let mut y = content.y + 26;
-        while y < content.bottom() - 14 {
-            canvas.fill_rect(
-                Rect::new(content.x, y, content.w, 1),
-                if (y - content.y) % 56 == 0 {
-                    guide_color.darken(8)
-                } else {
-                    guide_color
-                },
-            );
-            y += 28;
         }
     }
 
@@ -1089,9 +962,10 @@ impl<'a> DocumentCanvas<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode, DocumentNodeId,
-        DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RenderObject,
-        RenderObjectId, RenderObjectKind, ScenePatchOperation,
+        diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
+        DocumentCanvasPresentation, DocumentNodeId, DocumentScene, DocumentStrokeStyle,
+        DocumentTextStyle, PaintOrder, RenderObject, RenderObjectId, RenderObjectKind,
+        ScenePatchOperation,
     };
     use crate::{Canvas, Color, Point, Rect, Size, Theme};
 
@@ -1124,13 +998,35 @@ mod tests {
 
     #[test]
     fn content_rect_stays_within_page() {
-        let widget = DocumentCanvas::new(Rect::new(0, 0, 1240, 680), &[]);
+        let widget = DocumentCanvas::new(Rect::new(0, 0, 1240, 680), &[])
+            .with_presentation(DocumentCanvasPresentation::Writer);
         assert!(widget
             .page_rect()
             .intersect(widget.content_rect())
             .is_some());
         assert!(widget.content_rect().right() <= widget.page_rect().right());
         assert!(widget.content_rect().bottom() <= widget.page_rect().bottom());
+    }
+
+    #[test]
+    fn browser_presentation_uses_the_entire_canvas_as_document_viewport() {
+        let rect = Rect::new(12, 24, 800, 500);
+        let widget =
+            DocumentCanvas::new(rect, &[]).with_presentation(DocumentCanvasPresentation::Browser);
+        assert_eq!(widget.content_rect(), rect);
+        assert_eq!(widget.page_rect(), rect);
+        assert_eq!(widget.viewport_size(), rect.size());
+    }
+
+    #[test]
+    fn writer_presentation_keeps_only_page_workspace_and_document_margin() {
+        let rect = Rect::new(0, 100, 1_200, 600);
+        let widget =
+            DocumentCanvas::new(rect, &[]).with_presentation(DocumentCanvasPresentation::Writer);
+        assert_eq!(widget.content_rect().y, rect.y + 16 + 28);
+        assert_eq!(widget.content_rect().h, rect.h - 32 - 56);
+        assert!(widget.content_rect().x > rect.x);
+        assert!(widget.content_rect().right() < rect.right());
     }
 
     #[test]
@@ -1157,6 +1053,22 @@ mod tests {
             widget.hit_test(point).map(|object| object.id),
             Some(RenderObjectId(1))
         );
+    }
+
+    #[test]
+    fn browser_hit_testing_starts_at_viewport_origin_and_scrolls_in_document_space() {
+        let mut scene = scene_with_text("link", 8);
+        scene.content_size = Size::new(200, 1_000);
+        let rect = Rect::new(40, 80, 640, 480);
+        let widget = DocumentCanvas::new(rect, &[])
+            .with_presentation(DocumentCanvasPresentation::Browser)
+            .with_scene(&scene)
+            .with_scroll_y(4);
+        assert_eq!(
+            widget.hit_test(Point::new(rect.x + 8, rect.y)),
+            scene.objects.first()
+        );
+        assert_eq!(widget.hit_test(Point::new(rect.x + 8, rect.y - 1)), None);
     }
 
     #[test]

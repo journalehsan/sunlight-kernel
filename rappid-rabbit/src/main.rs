@@ -50,8 +50,8 @@ use sunlight_ipc::{
     process_yield, ProcessExit,
 };
 use sunlight_ui::widgets::{
-    Button, ButtonState, Column, DocumentCanvas, Label, Panel, TabBar, Table, TextInput, TextView,
-    TreeHitTarget, TreeView,
+    Button, ButtonState, Column, DocumentCanvas, DocumentCanvasPresentation, Label, Panel, TabBar,
+    Table, TextInput, TextView, TreeHitTarget, TreeView,
 };
 #[cfg(feature = "dom")]
 use sunlight_ui::widgets::{RenderInteraction, RenderObjectKind};
@@ -826,7 +826,9 @@ impl RabbitApp {
     }
 
     fn render_viewport(&mut self) -> sunlight_ui::Size {
-        DocumentCanvas::new(self.source_panel_rect(), &[]).viewport_size()
+        DocumentCanvas::new(self.source_panel_rect(), &[])
+            .with_presentation(DocumentCanvasPresentation::Browser)
+            .viewport_size()
     }
 
     #[cfg(feature = "dom")]
@@ -887,13 +889,8 @@ impl RabbitApp {
     fn document_canvas(&mut self) -> DocumentCanvas<'_> {
         let rect = self.source_panel_rect();
         let canvas = DocumentCanvas::new(rect, &[])
-            .with_titles(
-                "Rendered Document",
-                "Retained DOM → layout → scene → shared canvas",
-            )
+            .with_presentation(DocumentCanvasPresentation::Browser)
             .with_empty_label(self.render_status.as_str())
-            .with_footer_note("Read-only browser canvas · scene patches retained for diagnostics")
-            .with_guides(false)
             .with_fonts(Some(&F_LARGE), Some(&F_SMALL), Some(&F_UI), Some(&F_SMALL));
         #[cfg(feature = "dom")]
         if let Some(render_state) = self.render_state.as_ref() {
