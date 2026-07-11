@@ -118,15 +118,12 @@
 //! - Resize correctness (rows/cols are still fixed).
 //! - OSC window-title escape support — tab titles are `Tab N` today.
 //! - Drag-to-reorder tabs, split panes, session restore.
-//! - `PtySession::read`/`write` (the per-keystroke hot path) still use the
-//!   unbounded `ipc_call`, matching the pre-existing single-tab behavior.
-//!   Only the *new-tab lifecycle* (create/close) — the reported hang — was
-//!   moved onto bounded, non-blocking primitives; broadening that further
-//!   was judged out of scope for this fix (see `docs/terminal/tab-support.md`).
+//! - PTY reads/writes use short bounded IPC calls so a delayed PTY server
+//!   cannot freeze the window's input and redraw loop.
 
 use sun_font::{self, FontRole, VecFont};
 use sunlight_ipc::{
-    debug_log, ipc_call, ipc_call_timeout,
+    debug_log, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, process_yield, CapabilityToken, IpcCallError, IpcMsg,
     ProcessExit, PtyMsg,
@@ -199,6 +196,11 @@ const SPAWN_DEADLINE_MS: u64 = 1500;
 /// Budget for the best-effort `PtyMsg::CLOSE` sent when a tab/session goes
 /// away. Bounded for the same reason as `SPAWN_STEP_TIMEOUT_MS`.
 const CLOSE_TIMEOUT_MS: u64 = 200;
+/// Budget for PTY reads and writes performed by the window event loop.
+/// These calls must never use the unbounded IPC helper: a delayed PTY reply
+/// would otherwise freeze keyboard polling and framebuffer commits while the
+/// display server continues queueing keys for the window.
+const PTY_IO_TIMEOUT_MS: u64 = 20;
 
 struct BumpAllocator;
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
@@ -300,7 +302,10 @@ impl PtySession {
                 }
                 msg = msg.word(2 + wi, word);
             }
-            let reply = ipc_call(self.cap, msg);
+            let reply = match ipc_call_timeout(self.cap, msg, PTY_IO_TIMEOUT_MS) {
+                Ok(reply) => reply,
+                Err(_) => break,
+            };
             if reply.label != PtyMsg::REPLY {
                 break;
             }
@@ -316,12 +321,16 @@ impl PtySession {
         let mut total = 0;
         while total < out.len() {
             let chunk = (out.len() - total).min(16);
-            let reply = ipc_call(
+            let reply = match ipc_call_timeout(
                 self.cap,
                 IpcMsg::with_label(PtyMsg::READ_MASTER)
                     .word(0, self.id)
                     .word(1, chunk as u64),
-            );
+                PTY_IO_TIMEOUT_MS,
+            ) {
+                Ok(reply) => reply,
+                Err(_) => break,
+            };
             if reply.label != PtyMsg::REPLY {
                 break;
             }
@@ -1788,9 +1797,15 @@ impl App for TerminalApp {
             .draw(canvas, theme);
         } else {
             let prompt_w = sun_font::measure_text(tab.footer.prompt_str(), FontRole::UiSmall).w + 4;
-            let prompt_widths = [prompt_w, WIN_W - 48];
-            let mut prompt_cells = HBox::new(Rect::new(8, footer.y + 4, WIN_W - 16, FOOTER_H - 8))
-                .with_spacing(8)
+            let prompt_area = Rect::new(8, footer.y + 4, WIN_W - 16, FOOTER_H - 8);
+            let spacing = 8;
+            let input_w = prompt_area
+                .w
+                .saturating_sub(prompt_w)
+                .saturating_sub(spacing);
+            let prompt_widths = [prompt_w, input_w];
+            let mut prompt_cells = HBox::new(prompt_area)
+                .with_spacing(spacing)
                 .layout(&prompt_widths);
             if let Some(prompt_rect) = prompt_cells.next() {
                 Label::new(prompt_rect, tab.footer.prompt_str())
