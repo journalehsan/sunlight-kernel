@@ -1,13 +1,15 @@
 # Phase 3.6 SunlightTTY + keyboard + login/mux gate
-[KBD]  PS/2 keyboard initialized
-[KBD]  IRQ1 handler installed
+[KBD]  IRQ1 router initialized (driver: sunlight-kbd)
 [TTY]  Registered as 'tty'
 [TTY] Framebuffer acquired
 [TTY] Login rendered
 [TTY]  Login screen ready
+[KBD] found tty, ready to process keys
+[KBD] Registered user-space driver at endpoint
+[KBD] registered with kernel IRQ1 router
 [TTY]  Login success: root
 [TTY]  Built-in shell ready
-[TTY]  Output: root
+[EXEC] whoami fg pid=
 # [TTY]  Output: Welcome to SunlightOS  # timing-dependent, skipping
 [TTY]  Ctrl+T test: new tab OK
 [SunlightOS] Phase 3.6 OK

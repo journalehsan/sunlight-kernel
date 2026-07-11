@@ -1628,6 +1628,7 @@ fn setup_key_injection() {
 
 /// Phase 3.8 injection: login + whoami + id + useradd/id/userdel.
 /// Scancodes:
+///   Select prefilled root user: Enter
 ///   Password: r,o,o,t,Enter
 ///   whoami+Enter
 ///   Ctrl+T (phase 3.6 gate trigger)
@@ -1638,7 +1639,8 @@ fn setup_key_injection() {
 #[cfg(feature = "key_inject")]
 fn build_phase3_8_sequence() -> [u8; 256] {
     let mut s = [0u8; 256];
-    let codes: [u8; 65] = [
+    let codes: [u8; 66] = [
+        0x1C, // select prefilled root user and focus password
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
         0x11, 0x23, 0x18, 0x1E, 0x32, 0x17, 0x1C, // whoami+Enter
         0x1D, 0x14, 0x94, 0x9D, // Ctrl+T (phase 3.6 marker)

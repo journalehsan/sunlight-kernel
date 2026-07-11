@@ -8,13 +8,10 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, getpid, ipc_call_timeout, ipc_recv, nameserver_lookup,
-    nameserver_lookup_timeout, nameserver_register, DevicedMsg, DriverCaps, DriverKind,
-    DriverState, IpcMsg,
+    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv,
+    nameserver_lookup_timeout, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg,
+    ProcessExit,
 };
-
-const INPUT_FORWARD_TIMEOUT_MS: u64 = 50;
-const TIMEOUT_LOG_INTERVAL: u64 = 32;
 
 /// PS/2 Scancode Set 1 keycodes
 mod keycode {
@@ -237,7 +234,7 @@ fn process_scancode(scancode: u8, extended: bool, mods: &mut Modifiers) -> Optio
 /// Pass the FULL endpoint capability token (u64), not a truncated u32: the
 /// kernel resolves it to the real internal endpoint id so keyboard events are
 /// queued on the same endpoint this driver receives on.
-fn kbd_register(endpoint_token: u64) {
+fn kbd_register(endpoint_token: u64) -> bool {
     let ret: u64;
     unsafe {
         core::arch::asm!(
@@ -249,7 +246,7 @@ fn kbd_register(endpoint_token: u64) {
             options(nostack)
         );
     }
-    let _ = ret;
+    ret == 0
 }
 
 fn kbd_pop_scancode() -> Option<u8> {
@@ -312,26 +309,27 @@ pub extern "C" fn _start() -> ! {
     debug_log("[KBD] sunlight-kbd starting");
 
     let my_endpoint = endpoint_create();
-    nameserver_register("kbd_driver", my_endpoint);
     register_with_deviced();
 
     // Resolve tty BEFORE registering with the kernel IRQ1 router so that no
     // keyboard events (and their wake_pid) are delivered to this process while
     // it is still blocked resolving "tty" — keeping the lookup IPC clean.
     let tty_token = loop {
-        if let Some(t) = nameserver_lookup("tty") {
+        if let Some(t) = nameserver_lookup_timeout("tty", 50) {
             break t;
         }
         sunlight_ipc::process_yield();
     };
     debug_log("[KBD] found tty, ready to process keys");
 
-    kbd_register(my_endpoint.0);
+    if !kbd_register(my_endpoint.0) {
+        debug_log("[KBD] FATAL: kernel IRQ1 router registration failed\n");
+        ProcessExit::exit(1);
+    }
     debug_log("[KBD] registered with kernel IRQ1 router");
 
     let mut modifiers = Modifiers::default();
     let mut extended_prefix = false;
-    let mut tty_timeout_count = 0u64;
     loop {
         while let Some(scancode) = kbd_pop_scancode() {
             if scancode == keycode::EXTENDED_PREFIX {
@@ -340,12 +338,7 @@ pub extern "C" fn _start() -> ! {
             }
             if let Some(event_val) = process_scancode(scancode, extended_prefix, &mut modifiers) {
                 let msg = IpcMsg::with_label(0x1).word(0, event_val);
-                if ipc_call_timeout(tty_token, msg, INPUT_FORWARD_TIMEOUT_MS).is_err() {
-                    tty_timeout_count = tty_timeout_count.saturating_add(1);
-                    if tty_timeout_count == 1 || tty_timeout_count % TIMEOUT_LOG_INTERVAL == 0 {
-                        debug_log("[KBD] tty forward timeout\n");
-                    }
-                }
+                let _ = ipc_call(tty_token, msg);
             }
             extended_prefix = false;
         }
