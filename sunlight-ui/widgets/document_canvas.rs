@@ -127,6 +127,24 @@ pub enum RenderObjectKind {
         intrinsic_height: u32,
         alt: String,
     },
+    /// Generic browser/document control. The producer owns its semantics;
+    /// Canvas only paints the supplied retained visual and caret data.
+    Control {
+        label: String,
+        placeholder: String,
+        value: String,
+        color: Color,
+        background: Color,
+        border_color: Color,
+        border_width: u32,
+        focused: bool,
+        disabled: bool,
+        editable: bool,
+        kind: u8,
+        caret_offset: Option<u32>,
+        font_size: u32,
+        font_family: DocumentFontFamily,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -135,6 +153,9 @@ pub enum RenderInteraction {
         owner_node_id: DocumentNodeId,
         href: String,
         resolved_url: Option<String>,
+    },
+    Control {
+        owner_node_id: DocumentNodeId,
     },
 }
 
@@ -1062,6 +1083,66 @@ impl<'a> DocumentCanvas<'a> {
                 }
                 RenderObjectKind::Image { image, .. } => {
                     draw_raster_image(canvas, clipped, bounds, image);
+                }
+                RenderObjectKind::Control {
+                    label,
+                    placeholder,
+                    value,
+                    color,
+                    background,
+                    border_color,
+                    border_width,
+                    focused,
+                    disabled,
+                    editable: _,
+                    caret_offset,
+                    font_family,
+                    kind,
+                    ..
+                } => {
+                    canvas.fill_rect(clipped, *background);
+                    let width = (*border_width).max(1).min(bounds.w.min(bounds.h).max(1));
+                    for offset in 0..width {
+                        let inset = Rect::new(
+                            bounds.x + offset as i32,
+                            bounds.y + offset as i32,
+                            bounds.w.saturating_sub(offset * 2),
+                            bounds.h.saturating_sub(offset * 2),
+                        );
+                        if let Some(visible) = inset.intersect(content) {
+                            canvas.draw_rect(visible, if *focused { Color::rgb(0x3B, 0x82, 0xF6) } else { *border_color });
+                        }
+                    }
+                    let text = if value.is_empty() { placeholder } else { value };
+                    let text_color = if value.is_empty() { Color::rgb(0x77, 0x77, 0x77) } else if *disabled { Color::rgb(0x77, 0x77, 0x77) } else { *color };
+                    let font = match font_family {
+                        DocumentFontFamily::Serif => self.scene_serif_font.or(self.body_font),
+                        DocumentFontFamily::Monospace => self.scene_mono_font.or(self.body_font),
+                        DocumentFontFamily::SansSerif => self.body_font,
+                    };
+                    let text_rect = Rect::new(bounds.x + width as i32 + 7, bounds.y, bounds.w.saturating_sub(width * 2 + 14), bounds.h);
+                    let visible = clip_text_to_width(font, text, text_rect.w);
+                    if !visible.is_empty() {
+                        draw_text_vcenter(canvas, font, text_rect.x, text_rect.y, text_rect.h, visible, text_color);
+                    }
+                    if *focused {
+                        if let Some(offset) = caret_offset {
+                            let caret_x = text_rect.x + (*offset as i32).min(text_rect.w as i32);
+                            if let Some(caret) = Rect::new(caret_x, text_rect.y + 3, 1, text_rect.h.saturating_sub(6)).intersect(content) {
+                                canvas.fill_rect(caret, Color::rgb(0x25, 0x63, 0xEB));
+                            }
+                        }
+                    }
+                    if !label.is_empty() {
+                        let label = clip_text_to_width(font, label, text_rect.w);
+                        let label_w = measure_text_width(font, label) as i32;
+                        let label_x = if *kind == 1 {
+                            bounds.x + (bounds.w as i32 - label_w).max(0) / 2
+                        } else {
+                            text_rect.x
+                        };
+                        draw_text_vcenter(canvas, font, label_x, text_rect.y, text_rect.h, label, text_color);
+                    }
                 }
                 // A link has interaction metadata but no extra paint.  Its
                 // text fragments contain the resolved visual decoration.

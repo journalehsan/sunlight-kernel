@@ -10,6 +10,8 @@ pub mod css;
 pub mod developer_tools;
 pub mod document_lifecycle;
 #[cfg(feature = "dom")]
+pub mod form;
+#[cfg(feature = "dom")]
 pub mod images;
 #[cfg(feature = "dom")]
 pub mod render;

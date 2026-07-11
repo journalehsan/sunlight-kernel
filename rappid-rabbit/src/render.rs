@@ -21,6 +21,7 @@ use sunlight_ui::{
 use crate::{
     css::{Color as CssColor, ComputedStyle, Property, PropertyValue, StyleContext},
     images::ImageCache,
+    form::FormControlState,
     resources::discovery::resolve_url,
 };
 
@@ -150,6 +151,17 @@ pub struct InlineLayoutBox {
     pub bounds: Rect,
     pub paint: ResolvedPaintStyle,
     pub paint_order: u32,
+    pub control: Option<ControlLayout>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ControlLayout {
+    pub label: String,
+    pub placeholder: String,
+    pub value: String,
+    pub disabled: bool,
+    pub editable: bool,
+    pub kind: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -302,6 +314,26 @@ impl DocumentRenderState {
         self.rebuild(self.viewport, measurer);
     }
 
+    /// Patch one retained control after browser-owned form state changes.
+    pub fn patch_control(&mut self, control_id: DomNodeId, state: &FormControlState, focused: bool, measurer: &dyn TextMeasurer) -> bool {
+        let previous = self.current_scene.clone();
+        let Some(index) = self.current_scene.objects.iter().position(|object| object.owner_node_id == control_id && matches!(object.kind, RenderObjectKind::Control { .. })) else { return false; };
+        let object = &mut self.current_scene.objects[index];
+        let RenderObjectKind::Control { value, focused: visual_focus, caret_offset, .. } = &mut object.kind else { return false; };
+        *visual_focus = focused;
+        match state {
+            FormControlState::Text { state, .. } => {
+                *value = state.current_value.clone();
+                *caret_offset = Some(measurer.measure_width(&state.current_value[..state.cursor_position.min(state.current_value.len())]));
+            }
+            FormControlState::Button { .. } => *caret_offset = None,
+        }
+        self.current_scene.finalize();
+        self.last_patch = diff_scenes(&previous, &self.current_scene);
+        self.previous_scene = Some(previous);
+        true
+    }
+
     /// Returns the stable key that a future bounded in-memory cache will use.
     /// This vertical slice intentionally keeps caching deferred until scene
     /// reuse policy can be introduced without retaining stale browser state.
@@ -347,6 +379,12 @@ enum InlineItem {
     Image {
         image: ImageFragment,
         inline_owners: Vec<InlineOwner>,
+    },
+    Control {
+        owner: InlineOwner,
+        control: ControlLayout,
+        width: u32,
+        height: u32,
     },
 }
 
@@ -706,6 +744,23 @@ impl<'a> LayoutBuilder<'a> {
                     self.tree.nodes[parent_index].image_fragments.push(image);
                     had_content = true;
                 }
+                InlineItem::Control { owner, control, width, height } => {
+                    let width = width.min(w.max(1));
+                    if had_content && line_x.saturating_add(width as i32) > x.saturating_add(w as i32) {
+                        self.finish_line(parent_index, line_start, line_x, x, w, &align);
+                        *cursor_y = cursor_y.saturating_add(line_h as i32);
+                        self.line_count = self.line_count.saturating_add(1);
+                        line_start = self.tree.nodes[parent_index].text_fragments.len();
+                        line_x = x;
+                        line_h = self.measurer.line_height().max(1);
+                        had_content = false;
+                    }
+                    let bounds = Rect::new(line_x, *cursor_y, width, height.max(1));
+                    self.record_inline_box_with_control(owner, bounds, control);
+                    line_x = line_x.saturating_add(width as i32);
+                    line_h = line_h.max(height.max(1));
+                    had_content = true;
+                }
                 InlineItem::Text {
                     owner,
                     inline_owners,
@@ -923,6 +978,38 @@ impl<'a> LayoutBuilder<'a> {
                     style.paint.baseline_offset = (style.paint.line_height / 4) as i32;
                 } else if tag_name.eq_ignore_ascii_case("sup") {
                     style.paint.baseline_offset = -((style.paint.line_height / 4) as i32);
+                }
+                if tag_name.eq_ignore_ascii_case("input") || tag_name.eq_ignore_ascii_case("button") {
+                    let input_type = attr(attributes, "type").unwrap_or("text").to_ascii_lowercase();
+                    let is_button = tag_name.eq_ignore_ascii_case("button")
+                        || matches!(input_type.as_str(), "submit" | "button");
+                    let label = if is_button {
+                        if tag_name.eq_ignore_ascii_case("button") {
+                            let text = collect_text_content(self.document, node_id);
+                            if text.is_empty() { String::from(attr(attributes, "value").unwrap_or("")) } else { text }
+                        } else { String::from(attr(attributes, "value").unwrap_or("")) }
+                    } else { String::new() };
+                    let default_width = if is_button {
+                        self.measurer.measure_width(&label).saturating_add(28)
+                    } else {
+                        attr(attributes, "size").and_then(|v| v.parse::<u32>().ok()).unwrap_or(20).saturating_mul(8).saturating_add(18)
+                    };
+                    let width = style.width.unwrap_or(default_width).max(24);
+                    let height = style.height.unwrap_or(style.paint.line_height.saturating_add(style.padding[0] + style.padding[2] + 2).max(28));
+                    output.push(InlineItem::Control {
+                        owner,
+                        control: ControlLayout {
+                            label,
+                            placeholder: attr(attributes, "placeholder").unwrap_or("").into(),
+                            value: if is_button { String::new() } else { attr(attributes, "value").unwrap_or("").into() },
+                            disabled: attributes.iter().any(|a| a.name().eq_ignore_ascii_case("disabled")),
+                            editable: !is_button && !attributes.iter().any(|a| a.name().eq_ignore_ascii_case("readonly")),
+                            kind: if is_button { 1 } else { 0 },
+                        },
+                        width,
+                        height,
+                    });
+                    return;
                 }
                 if tag_name.eq_ignore_ascii_case("img") {
                     let src = attr(attributes, "src").unwrap_or("");
@@ -1249,6 +1336,17 @@ impl<'a> LayoutBuilder<'a> {
             bounds,
             paint: owner.paint,
             paint_order: owner.paint_order,
+            control: None,
+        });
+    }
+
+    fn record_inline_box_with_control(&mut self, owner: InlineOwner, bounds: Rect, control: ControlLayout) {
+        self.tree.inline_boxes.push(InlineLayoutBox {
+            owner_node_id: owner.node_id,
+            bounds,
+            paint: owner.paint,
+            paint_order: owner.paint_order,
+            control: Some(control),
         });
     }
 
@@ -1442,6 +1540,30 @@ fn value_px(style: Option<&ComputedStyle>, property: Property) -> Option<u32> {
     }
 }
 
+fn attr<'a>(attributes: &'a [Attribute], name: &str) -> Option<&'a str> {
+    attributes
+        .iter()
+        .find(|attribute| attribute.name().eq_ignore_ascii_case(name))
+        .map(Attribute::value)
+}
+
+fn collect_text_content(document: &Document, node_id: NodeId) -> String {
+    let mut result = String::new();
+    let mut stack = vec![node_id];
+    while let Some(id) = stack.pop() {
+        match document.get(id) {
+            Some(Node::Text { content }) => result.push_str(content),
+            Some(Node::Element { children, .. }) => {
+                for child in children.iter().rev() {
+                    stack.push(*child);
+                }
+            }
+            _ => {}
+        }
+    }
+    result.trim().into()
+}
+
 fn css_color(value: Option<&PropertyValue>, fallback: Color) -> Color {
     match value {
         Some(PropertyValue::Color(CssColor::Rgb(r, g, b))) => Color::rgb(*r, *g, *b),
@@ -1577,13 +1699,6 @@ fn format_marker(ordinal: u32, style_type: &str) -> String {
         "upper-roman" => roman(ordinal, true),
         _ => format!("{ordinal}."),
     }
-}
-
-fn attr<'a>(attributes: &'a [Attribute], name: &str) -> Option<&'a str> {
-    attributes
-        .iter()
-        .find(|attribute| attribute.name().eq_ignore_ascii_case(name))
-        .map(Attribute::value)
 }
 
 fn object_id(owner: DomNodeId, role: u8, slot: usize) -> RenderObjectId {
@@ -1802,6 +1917,36 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
         }
     }
     for inline_box in &layout.inline_boxes {
+        if let Some(control) = &inline_box.control {
+            push(
+                &mut scene,
+                RenderObject {
+                    id: object_id(inline_box.owner_node_id, 50, 0),
+                    owner_node_id: inline_box.owner_node_id,
+                    kind: RenderObjectKind::Control {
+                        label: control.label.clone(),
+                        placeholder: control.placeholder.clone(),
+                        value: control.value.clone(),
+                        color: inline_box.paint.color,
+                        background: if control.disabled { Color::rgb(0xDD, 0xDD, 0xDD) } else if inline_box.paint.background == Color::TRANSPARENT { Color::rgb(0xFF, 0xFF, 0xFF) } else { inline_box.paint.background },
+                        border_color: inline_box.paint.border_color,
+                        border_width: inline_box.paint.border_width.max(1),
+                        focused: false,
+                        disabled: control.disabled,
+                        editable: control.editable,
+                        kind: control.kind,
+                        caret_offset: None,
+                        font_size: inline_box.paint.font_size,
+                        font_family: inline_box.paint.font_family,
+                    },
+                    bounds: inline_box.bounds,
+                    clip_bounds: Some(inline_box.bounds),
+                    paint_order: PaintOrder { phase: 5, document_order: inline_box.paint_order, ..PaintOrder::default() },
+                    interaction: Some(RenderInteraction::Control { owner_node_id: inline_box.owner_node_id }),
+                },
+            );
+            continue;
+        }
         push(
             &mut scene,
             RenderObject {
@@ -2384,6 +2529,15 @@ mod tests {
             matches!(&object.kind, RenderObjectKind::Link { href, .. } if href == "/download")
         }));
         assert!(state.current_scene.content_size.h > 0);
+    }
+
+    #[test]
+    fn form_fixture_emits_owned_control_hit_regions() {
+        let state = render(include_str!("../tests/fixtures/form-lesson.html"));
+        let controls = state.current_scene.objects.iter().filter(|object| matches!(object.kind, RenderObjectKind::Control { .. })).collect::<Vec<_>>();
+        assert_eq!(controls.len(), 6);
+        assert!(controls.iter().all(|object| matches!(object.interaction, Some(RenderInteraction::Control { .. }))));
+        assert!(controls.iter().all(|object| object.owner_node_id.0 > 0));
     }
 
     #[test]

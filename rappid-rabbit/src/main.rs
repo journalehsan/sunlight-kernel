@@ -27,6 +27,7 @@ use rappid_rabbit::{
     },
     document_lifecycle::DocumentLifecycle,
     format_url, normalize_url_input,
+    form::{FormControlKind, FormControlState, FormState},
     resources::{
         discovery::{ResourceCandidate, ResourceQueue},
         request::RequestState,
@@ -56,7 +57,7 @@ use sunlight_ui::widgets::{
     Table, TextInput, TextView, TreeHitTarget, TreeView,
 };
 #[cfg(feature = "dom")]
-use sunlight_ui::widgets::{DocumentFontFamily, RenderInteraction, RenderObjectKind};
+use sunlight_ui::widgets::{DocumentFontFamily, DocumentNodeId, RenderInteraction, RenderObjectKind};
 use sunlight_ui::{
     request_close, App, Canvas, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
     WindowDecoration,
@@ -264,6 +265,7 @@ struct RabbitApp {
     render_status: String,
     #[cfg(feature = "dom")]
     render_state: Option<DocumentRenderState>,
+    form_state: FormState,
     active_navigation_request_id: Option<u64>,
     developer_tools: DeveloperToolsState,
     discovered_resources: Vec<ResourceCandidate>,
@@ -308,6 +310,7 @@ impl RabbitApp {
             ),
             #[cfg(feature = "dom")]
             render_state: None,
+            form_state: FormState::new(),
             active_navigation_request_id: None,
             developer_tools,
             discovered_resources: Vec::new(),
@@ -371,6 +374,7 @@ impl RabbitApp {
         #[cfg(feature = "dom")]
         {
             self.render_state = None;
+            self.form_state = FormState::new();
         }
         self.developer_tools.network.clear_for_new_page();
         self.developer_tools
@@ -499,6 +503,10 @@ impl RabbitApp {
                             &RABBIT_FONTS,
                             self.image_cache.clone(),
                         ));
+                        if let Some(render_state) = self.render_state.as_ref() {
+                            self.form_state.build_from_dom(&render_state.dom);
+                        }
+                        self.patch_all_controls();
                         self.log_render_scene("initial scene");
                         self.developer_tools
                             .dom
@@ -1079,6 +1087,9 @@ impl RabbitApp {
             false
         };
         if changed {
+            self.patch_all_controls();
+        }
+        if changed {
             self.log_render_scene("viewport reflow");
         }
     }
@@ -1170,6 +1181,103 @@ impl RabbitApp {
                 .with_scroll_y(self.render_scroll);
         }
         canvas
+    }
+
+    #[cfg(feature = "dom")]
+    fn patch_all_controls(&mut self) {
+        let Some(render_state) = self.render_state.as_mut() else { return; };
+        let focused = self.form_state.focused_control;
+        for (id, state) in &self.form_state.controls {
+            let _ = render_state.patch_control(*id, state, focused == Some(*id), &RABBIT_FONTS);
+        }
+    }
+
+    #[cfg(feature = "dom")]
+    fn patch_focused_control(&mut self) {
+        let Some(id) = self.form_state.focused_control else { self.patch_all_controls(); return; };
+        let Some(state) = self.form_state.controls.get(&id).cloned() else { return; };
+        if let Some(render_state) = self.render_state.as_mut() {
+            let _ = render_state.patch_control(id, &state, true, &RABBIT_FONTS);
+        }
+    }
+
+    #[cfg(feature = "dom")]
+    fn handle_form_control_click(&mut self, point: Point) -> bool {
+        let canvas = self.document_canvas();
+        let Some(object) = canvas.hit_test(point) else { return false; };
+        let Some(RenderInteraction::Control { owner_node_id }) = object.interaction.clone() else { return false; };
+        if let Some(pressed) = self.form_state.pressed_control {
+            if pressed != owner_node_id {
+                self.form_state.pressed_control = None;
+                return true;
+            }
+        }
+        self.form_state.pressed_control = None;
+        let Some(control) = self.form_state.controls.get(&owner_node_id).cloned() else { return true; };
+        if control.is_disabled() { return true; }
+        match control.kind() {
+            FormControlKind::TextInput | FormControlKind::SearchInput => {
+                self.form_state.focus_control(owner_node_id);
+                self.patch_all_controls();
+            }
+            FormControlKind::SubmitInput | FormControlKind::ButtonElement(rappid_rabbit::form::ButtonType::Submit) => {
+                self.form_state.focused_control = Some(owner_node_id);
+                self.submit_form(owner_node_id);
+            }
+            _ => {
+                self.form_state.focused_control = Some(owner_node_id);
+                self.patch_all_controls();
+            }
+        }
+        true
+    }
+
+    #[cfg(feature = "dom")]
+    fn submit_form(&mut self, submitter: DocumentNodeId) -> bool {
+        let Some(render_state) = self.render_state.as_ref() else { return false; };
+        let Some(control) = self.form_state.controls.get(&submitter) else { return false; };
+        let Some(form_id) = control.form_owner() else { return true; };
+        let method = rappid_rabbit::form::get_form_method(&render_state.dom, form_id.0 as usize);
+        if method != "get" {
+            self.developer_tools.console.push(ConsoleSeverity::Warn, ConsoleSource::Browser, format!("[RABBIT][FORM] method={} forms are not supported.", method.to_ascii_uppercase()));
+            return true;
+        }
+        let base = ParsedUrl::parse(&render_state.final_url).ok();
+        let target = rappid_rabbit::form::build_get_submission_url(&self.form_state, &render_state.dom, form_id, &render_state.final_url, base.as_ref(), Some(submitter));
+        self.developer_tools.console.push(ConsoleSeverity::Quiet, ConsoleSource::Browser, format!("[RABBIT][FORM] submit form={} method=GET action={} controls={}", form_id.0, target, self.form_state.controls.values().filter(|c| c.form_owner() == Some(form_id) && !c.is_disabled()).count()));
+        self.url_input.set_text(&target);
+        self.queue_fetch();
+        true
+    }
+
+    #[cfg(feature = "dom")]
+    fn handle_form_key(&mut self, event: Event) -> bool {
+        let Some(id) = self.form_state.focused_control else { return false; };
+        let Some(control) = self.form_state.controls.get(&id) else { return false; };
+        if control.is_disabled() { return false; }
+        match event {
+            Event::Key(ch) if ch == '\n' || ch == '\r' => {
+                if matches!(control.kind(), FormControlKind::TextInput | FormControlKind::SearchInput) { return self.submit_form(id); }
+                false
+            }
+            Event::Key(ch) if ch == '\u{8}' => { let changed = self.form_state.backspace(); if changed { self.patch_focused_control(); } changed }
+            Event::Key(ch) if ch.is_ascii_graphic() || ch == ' ' => { let changed = self.form_state.insert_char(ch); if changed { self.patch_focused_control(); } changed }
+            Event::KeyPress { keycode, pressed: true, shift, .. } => {
+                let changed = match keycode {
+                    KEY_LEFT => self.form_state.move_cursor_left(),
+                    KEY_RIGHT => self.form_state.move_cursor_right(),
+                    KEY_HOME => self.form_state.move_cursor_home(),
+                    KEY_END => self.form_state.move_cursor_end(),
+                    0x53 => self.form_state.delete_forward(),
+                    0x0F if shift => self.form_state.focus_prev_control(&self.render_state.as_ref().unwrap().dom).is_some(),
+                    0x0F => self.form_state.focus_next_control(&self.render_state.as_ref().unwrap().dom).is_some(),
+                    _ => false,
+                };
+                if changed { self.patch_all_controls(); }
+                changed
+            }
+            _ => false,
+        }
     }
 
     #[cfg(feature = "dom")]
@@ -1931,6 +2039,11 @@ impl App for RabbitApp {
             return true;
         }
 
+        #[cfg(feature = "dom")]
+        if self.document_view == DocumentView::Render && self.handle_form_key(event) {
+            return true;
+        }
+
         match event {
             Event::Tick => {
                 if self.pending_fetch {
@@ -1941,6 +2054,16 @@ impl App for RabbitApp {
                 false
             }
             Event::MouseDown { x, y, button: 0 } => {
+                #[cfg(feature = "dom")]
+                if self.document_view == DocumentView::Render {
+                    let canvas = self.document_canvas();
+                    if let Some(object) = canvas.hit_test(Point::new(x, y)) {
+                        if let Some(RenderInteraction::Control { owner_node_id }) = object.interaction.clone() {
+                            self.form_state.pressed_control = Some(owner_node_id);
+                            return true;
+                        }
+                    }
+                }
                 let layout = self.developer_panel_layout();
                 if self
                     .developer_tools
@@ -1963,7 +2086,18 @@ impl App for RabbitApp {
                 }
                 changed
             }
-            Event::MouseUp { .. } => {
+            Event::MouseUp { x, y, .. } => {
+                #[cfg(feature = "dom")]
+                if self.document_view == DocumentView::Render && self.form_state.pressed_control.is_some() {
+                    let canvas = self.document_canvas();
+                    let same_control = canvas.hit_test(Point::new(x, y)).and_then(|object| match object.interaction.clone() {
+                        Some(RenderInteraction::Control { owner_node_id }) => Some(owner_node_id),
+                        _ => None,
+                    }) == self.form_state.pressed_control;
+                    if !same_control {
+                        self.form_state.pressed_control = None;
+                    }
+                }
                 let was_resizing = self.developer_tools.panel.is_resizing();
                 self.developer_tools.panel.finish_resize();
                 was_resizing
@@ -2016,8 +2150,14 @@ impl App for RabbitApp {
                 }
 
                 #[cfg(feature = "dom")]
-                if self.handle_render_click(point) {
+                if self.handle_form_control_click(point) || self.handle_render_click(point) {
                     return true;
+                }
+
+                #[cfg(feature = "dom")]
+                if self.document_view == DocumentView::Render && self.form_state.focused_control.is_some() {
+                    self.form_state.blur();
+                    self.patch_all_controls();
                 }
 
                 if self.handle_developer_tools_click(point) {

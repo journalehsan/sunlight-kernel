@@ -743,6 +743,8 @@ pub fn user_agent_stylesheet() -> Stylesheet {
         html, body, div, header, main, section, article, nav, footer, p, pre, dl, dt, dd, blockquote, hr { display: block; }
         span, a, strong, b, em, i, code, small, mark, del, ins, sub, sup, br { display: inline; }
         img { display: inline-block; }
+        input, button { display: inline-block; font-family: sans-serif; font-size: 14px; color: #111111; background-color: white; border: 1px solid #888888; padding: 5px 7px; }
+        button { background-color: #e9e9e9; color: #111111; }
         ul, ol { display: block; margin: 16px 0; padding-left: 40px; }
         ul { list-style-type: disc; }
         ol { list-style-type: decimal; }
