@@ -45,10 +45,10 @@ mod convert;
 mod simple_parser;
 
 pub use attributes::Attribute;
-pub use document::Document;
+pub use document::{Document, DocumentStats};
 pub use error::ParseError;
 pub use node::{Node, NodeId};
-pub use parser::parse_html;
+pub use parser::{parse_html, parse_html_with_limits, ParseLimits};
 
 #[cfg(test)]
 mod tests {
@@ -213,5 +213,35 @@ mod tests {
             .find_map(|&id| doc.text_content(id))
             .unwrap_or("");
         assert!(text.contains("Example Domain"));
+    }
+
+    #[test]
+    fn example_sized_document_has_bounded_stats() {
+        let html = r#"<!doctype html>
+<html>
+<head><title>Example Domain</title></head>
+<body>
+<div>
+<h1>Example Domain</h1>
+<p>This domain is for use in illustrative examples in documents.</p>
+<p><a href="https://iana.org/domains/example">More information...</a></p>
+</div>
+</body>
+</html>"#;
+        let document = parse(html);
+        let stats = document.stats();
+        assert!(stats.node_count < 64);
+        assert!(stats.max_depth < 16);
+        assert!(stats.total_text_bytes < 1_024);
+    }
+
+    #[test]
+    fn configured_limits_return_errors_instead_of_large_documents() {
+        let limits = ParseLimits {
+            max_nodes: 3,
+            ..ParseLimits::default()
+        };
+        let error = parse_html_with_limits("<div><p>one</p><p>two</p></div>", limits).unwrap_err();
+        assert!(error.message().contains("node"));
     }
 }

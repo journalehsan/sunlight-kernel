@@ -44,16 +44,31 @@ pub struct ConsoleEntry {
     pub timestamp: Option<u64>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ConsoleState {
     entries: Vec<ConsoleEntry>,
     scroll_offset: usize,
+    rendered_text_cache: String,
+    rendered_text_dirty: bool,
+}
+
+impl Default for ConsoleState {
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+            scroll_offset: 0,
+            rendered_text_cache: String::new(),
+            rendered_text_dirty: true,
+        }
+    }
 }
 
 impl ConsoleState {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.scroll_offset = 0;
+        self.rendered_text_cache.clear();
+        self.rendered_text_dirty = true;
     }
 
     pub fn push(
@@ -68,6 +83,7 @@ impl ConsoleState {
             message: message.into(),
             timestamp: None,
         });
+        self.rendered_text_dirty = true;
     }
 
     pub fn entries(&self) -> &[ConsoleEntry] {
@@ -82,9 +98,14 @@ impl ConsoleState {
         self.scroll_offset = scroll_offset;
     }
 
-    pub fn rendered_text(&self) -> String {
+    pub fn rendered_text(&mut self) -> &str {
+        if !self.rendered_text_dirty {
+            return self.rendered_text_cache.as_str();
+        }
         if self.entries.is_empty() {
-            return String::from("No console messages yet.");
+            self.rendered_text_cache = String::from("No console messages yet.");
+            self.rendered_text_dirty = false;
+            return self.rendered_text_cache.as_str();
         }
 
         let mut out = String::new();
@@ -102,6 +123,23 @@ impl ConsoleState {
             out.push_str(&entry.message);
             out.push('\n');
         }
-        out
+        self.rendered_text_cache = out;
+        self.rendered_text_dirty = false;
+        self.rendered_text_cache.as_str()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rendered_console_text_is_cached_between_idle_frames() {
+        let mut state = ConsoleState::default();
+        state.push(ConsoleSeverity::Quiet, ConsoleSource::Browser, "ready");
+        let first_ptr = state.rendered_text().as_ptr();
+        for _ in 0..100 {
+            assert_eq!(state.rendered_text().as_ptr(), first_ptr);
+        }
     }
 }

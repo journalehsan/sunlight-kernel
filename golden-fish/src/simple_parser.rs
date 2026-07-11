@@ -5,6 +5,7 @@
 //! `std` is unavailable.
 
 use alloc::{
+    format,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -14,14 +15,18 @@ use crate::attributes::Attribute;
 use crate::document::Document;
 use crate::error::ParseError;
 use crate::node::{Node, NodeId};
+use crate::parser::ParseLimits;
 
-pub(crate) fn parse_with_fallback(source: &str) -> Result<Document, ParseError> {
+pub(crate) fn parse_with_fallback(
+    source: &str,
+    limits: ParseLimits,
+) -> Result<Document, ParseError> {
     if source.len() > u32::MAX as usize {
         return Err(ParseError::new("parse error: input is too large"));
     }
 
-    let mut parser = FallbackParser::new(source);
-    parser.parse();
+    let mut parser = FallbackParser::new(source, limits);
+    parser.parse()?;
     Ok(parser.finish())
 }
 
@@ -30,10 +35,13 @@ struct FallbackParser<'a> {
     pos: usize,
     document: Document,
     stack: Vec<NodeId>,
+    limits: ParseLimits,
+    total_text_bytes: usize,
+    iterations_remaining: usize,
 }
 
 impl<'a> FallbackParser<'a> {
-    fn new(source: &'a str) -> Self {
+    fn new(source: &'a str, limits: ParseLimits) -> Self {
         let document = Document::new();
         let root = document.root();
         Self {
@@ -41,6 +49,12 @@ impl<'a> FallbackParser<'a> {
             pos: 0,
             document,
             stack: vec![root],
+            limits,
+            total_text_bytes: 0,
+            iterations_remaining: source
+                .len()
+                .saturating_mul(limits.iteration_multiplier)
+                .saturating_add(limits.iteration_slack),
         }
     }
 
@@ -48,58 +62,64 @@ impl<'a> FallbackParser<'a> {
         self.document
     }
 
-    fn parse(&mut self) {
+    fn parse(&mut self) -> Result<(), ParseError> {
         while self.pos < self.source.len() {
-            if let Some(tag_name) = self.current_raw_text_tag() {
-                self.parse_raw_text(&tag_name);
-                continue;
+            if self.iterations_remaining == 0 {
+                return Err(ParseError::new(format!(
+                    "ParserIterationBudgetExceeded at byte {}",
+                    self.pos
+                )));
             }
+            self.iterations_remaining -= 1;
+            let start_pos = self.pos;
 
-            if self.starts_with("<!--") {
-                self.parse_comment();
-                continue;
-            }
             if self.starts_with_ci("</") {
                 self.parse_end_tag();
-                continue;
-            }
-            if self.starts_with("<!") || self.starts_with("<?") {
+            } else if let Some(tag_name) = self.current_raw_text_tag() {
+                self.parse_raw_text(&tag_name)?;
+            } else if self.starts_with("<!--") {
+                self.parse_comment()?;
+            } else if self.starts_with("<!") || self.starts_with("<?") {
                 self.skip_declaration();
-                continue;
-            }
-            if self.current_byte() == Some(b'<') {
-                if self.parse_start_tag() {
-                    continue;
+            } else if self.current_byte() == Some(b'<') {
+                if !self.parse_start_tag()? {
+                    self.append_text_slice(self.pos, self.pos + 1)?;
+                    self.pos += 1;
                 }
-                self.append_text_slice(self.pos, self.pos + 1);
-                self.pos += 1;
-                continue;
+            } else {
+                self.parse_text()?;
             }
 
-            self.parse_text();
+            if self.pos <= start_pos {
+                return Err(ParseError::new(format!(
+                    "ParserStalled at byte {} in {}",
+                    start_pos,
+                    self.state_name()
+                )));
+            }
         }
+        Ok(())
     }
 
-    fn parse_text(&mut self) {
+    fn parse_text(&mut self) -> Result<(), ParseError> {
         let start = self.pos;
         while self.pos < self.source.len() && self.current_byte() != Some(b'<') {
             self.pos += 1;
         }
-        self.append_text_slice(start, self.pos);
+        self.append_text_slice(start, self.pos)
     }
 
-    fn parse_comment(&mut self) {
+    fn parse_comment(&mut self) -> Result<(), ParseError> {
         let start = self.pos + 4;
         let end = find_substring(&self.source[start..], "-->")
             .map_or(self.source.len(), |offset| start + offset);
         let content = &self.source[start..end];
-        self.append_leaf(Node::Comment {
-            content: content.to_string(),
-        });
+        self.append_text_leaf(content, true)?;
         self.pos = end;
         if self.starts_with("-->") {
             self.pos += 3;
         }
+        Ok(())
     }
 
     fn parse_end_tag(&mut self) {
@@ -136,15 +156,16 @@ impl<'a> FallbackParser<'a> {
         }
     }
 
-    fn parse_raw_text(&mut self, tag_name: &str) {
+    fn parse_raw_text(&mut self, tag_name: &str) -> Result<(), ParseError> {
         let Some(end) = find_end_tag_case_insensitive(self.source, self.pos, tag_name) else {
-            self.append_text_slice(self.pos, self.source.len());
+            self.append_text_slice(self.pos, self.source.len())?;
             self.pos = self.source.len();
-            return;
+            return Ok(());
         };
 
-        self.append_text_slice(self.pos, end);
+        self.append_text_slice(self.pos, end)?;
         self.pos = end;
+        Ok(())
     }
 
     fn skip_declaration(&mut self) {
@@ -155,14 +176,14 @@ impl<'a> FallbackParser<'a> {
         }
     }
 
-    fn parse_start_tag(&mut self) -> bool {
+    fn parse_start_tag(&mut self) -> Result<bool, ParseError> {
         let tag_open = self.pos;
         self.pos += 1;
         let tag_name_start = self.pos;
         self.consume_name();
         if tag_name_start == self.pos {
             self.pos = tag_open;
-            return false;
+            return Ok(false);
         }
 
         let tag_name = self.source[tag_name_start..self.pos].to_ascii_lowercase();
@@ -202,14 +223,26 @@ impl<'a> FallbackParser<'a> {
             } else {
                 String::new()
             };
+            if attributes.len() >= self.limits.max_attributes_per_element {
+                return Err(ParseError::new(format!(
+                    "DOM limit exceeded: more than {} attributes at byte {}",
+                    self.limits.max_attributes_per_element, self.pos
+                )));
+            }
             attributes.push(Attribute::new(name, value));
         }
 
-        let element_id = self.append_element(&tag_name, attributes);
+        let element_id = self.append_element(&tag_name, attributes)?;
         if !self_closing && !is_void_element(&tag_name) {
+            if self.stack.len() > self.limits.max_depth {
+                return Err(ParseError::new(format!(
+                    "DOM limit exceeded: depth greater than {} at byte {}",
+                    self.limits.max_depth, self.pos
+                )));
+            }
             self.stack.push(element_id);
         }
-        true
+        Ok(true)
     }
 
     fn parse_attr_value(&mut self) -> String {
@@ -242,19 +275,26 @@ impl<'a> FallbackParser<'a> {
         }
     }
 
-    fn append_element(&mut self, tag_name: &str, attributes: Vec<Attribute>) -> NodeId {
+    fn append_element(
+        &mut self,
+        tag_name: &str,
+        attributes: Vec<Attribute>,
+    ) -> Result<NodeId, ParseError> {
+        self.ensure_node_capacity()?;
         let node_id = self.document.alloc_node(Node::Element {
             tag_name: tag_name.to_string(),
             attributes,
             children: Vec::new(),
         });
         self.append_to_current_parent(node_id);
-        node_id
+        Ok(node_id)
     }
 
-    fn append_leaf(&mut self, node: Node) {
+    fn append_leaf(&mut self, node: Node) -> Result<(), ParseError> {
+        self.ensure_node_capacity()?;
         let node_id = self.document.alloc_node(node);
         self.append_to_current_parent(node_id);
+        Ok(())
     }
 
     fn append_to_current_parent(&mut self, node_id: NodeId) {
@@ -267,13 +307,55 @@ impl<'a> FallbackParser<'a> {
         self.document.set_parent(node_id, parent_id);
     }
 
-    fn append_text_slice(&mut self, start: usize, end: usize) {
+    fn append_text_slice(&mut self, start: usize, end: usize) -> Result<(), ParseError> {
         if start >= end {
-            return;
+            return Ok(());
         }
-        self.append_leaf(Node::Text {
-            content: self.source[start..end].to_string(),
-        });
+        self.append_text_leaf(&self.source[start..end], false)
+    }
+
+    fn append_text_leaf(&mut self, content: &str, comment: bool) -> Result<(), ParseError> {
+        if content.len() > self.limits.max_text_node_bytes {
+            return Err(ParseError::new(format!(
+                "DOM limit exceeded: text node has {} bytes (maximum {})",
+                content.len(),
+                self.limits.max_text_node_bytes
+            )));
+        }
+        let next_total = self.total_text_bytes.saturating_add(content.len());
+        if next_total > self.limits.max_total_text_bytes {
+            return Err(ParseError::new(format!(
+                "DOM limit exceeded: stored text exceeds {} bytes",
+                self.limits.max_total_text_bytes
+            )));
+        }
+        self.total_text_bytes = next_total;
+        let content = content.to_string();
+        if comment {
+            self.append_leaf(Node::Comment { content })
+        } else {
+            self.append_leaf(Node::Text { content })
+        }
+    }
+
+    fn ensure_node_capacity(&self) -> Result<(), ParseError> {
+        if self.document.node_count() >= self.limits.max_nodes {
+            return Err(ParseError::new(format!(
+                "DOM limit exceeded: more than {} nodes",
+                self.limits.max_nodes
+            )));
+        }
+        Ok(())
+    }
+
+    fn state_name(&self) -> &'static str {
+        if self.current_raw_text_tag().is_some() {
+            "raw-text"
+        } else if self.current_byte() == Some(b'<') {
+            "tag"
+        } else {
+            "text"
+        }
     }
 
     fn current_raw_text_tag(&self) -> Option<String> {
@@ -421,10 +503,10 @@ fn is_void_element(tag_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::parse_with_fallback;
-    use crate::{Document, Node, NodeId};
+    use crate::{Document, Node, NodeId, ParseLimits};
 
     fn parse(html: &str) -> Document {
-        parse_with_fallback(html).expect("fallback parse should succeed")
+        parse_with_fallback(html, ParseLimits::default()).expect("fallback parse should succeed")
     }
 
     #[test]
@@ -479,5 +561,26 @@ mod tests {
             document.text_content(children[0]),
             Some("if (a < b) { ok(); }")
         );
+    }
+
+    #[test]
+    fn finite_budget_reports_an_explicit_error() {
+        let limits = ParseLimits {
+            iteration_multiplier: 0,
+            iteration_slack: 0,
+            ..ParseLimits::default()
+        };
+        let error = parse_with_fallback("<p>stalled</p>", limits).unwrap_err();
+        assert!(error.message().contains("ParserIterationBudgetExceeded"));
+    }
+
+    #[test]
+    fn rejects_excessive_depth_before_unbounded_growth() {
+        let limits = ParseLimits {
+            max_depth: 2,
+            ..ParseLimits::default()
+        };
+        let error = parse_with_fallback("<a><b><c></c></b></a>", limits).unwrap_err();
+        assert!(error.message().contains("depth"));
     }
 }

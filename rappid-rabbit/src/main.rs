@@ -1,34 +1,40 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(feature = "dom", allow(dead_code, unused_imports))]
 #![no_main]
+// Required for the custom OOM handler below; matches kernel/src/main.rs.
+#![feature(alloc_error_handler)]
 
 extern crate alloc;
 
 use alloc::{borrow::Cow, format, string::String, vec::Vec};
-use core::alloc::GlobalAlloc;
+// Needed for `write!`/`writeln!` against the stack-buffer writer in the fatal handlers.
+use core::fmt::Write as _;
+use linked_list_allocator::LockedHeap;
 
 use rappid_rabbit::{
     body_is_probably_text, build_get_request,
     developer_tools::{
         console::{ConsoleSeverity, ConsoleSource},
         dom_inspector::DomInspectorPane,
+        network::NetworkPaneFocus,
         panel::{DeveloperPanelLayout, DeveloperPanelState, MIN_MAIN_CONTENT_H},
         state::DeveloperToolsState,
         tabs::DeveloperToolTab,
     },
+    document_lifecycle::DocumentLifecycle,
     format_url, normalize_url_input,
     resources::{
-        discovery::{DiscoveryClassification, ResourceCandidate, ResourceQueue},
+        discovery::{ResourceCandidate, ResourceQueue},
         request::RequestState,
     },
 };
 
 #[cfg(feature = "dom")]
-use golden_fish::parse_html;
+use golden_fish::{parse_html_with_limits, ParseLimits};
 use sun_font::{FontRole, VecFont};
 use sunlight_fetch::backend::{perform_request, RequestResult};
 use sunlight_fetch::FetchError;
-use sunlight_http::ParsedUrl;
+use sunlight_http::{HttpRequest, ParsedUrl};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -67,44 +73,97 @@ const KEY_HOME: u8 = 0x47;
 const KEY_END: u8 = 0x4F;
 const KEY_PGUP: u8 = 0x49;
 const KEY_PGDN: u8 = 0x51;
-const NETWORK_DETAIL_H: u32 = 110;
+const NETWORK_LIST_MIN_W: u32 = 320;
+const NETWORK_DETAIL_MIN_W: u32 = 320;
 
-struct BumpAllocator;
+const HEAP_SIZE: usize = 32 * 1024 * 1024;
 
-unsafe impl GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        const HEAP_SIZE: usize = 8 * 1024 * 1024;
-        static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
-        static mut NEXT: usize = 0;
-        let aligned = (NEXT + layout.align() - 1) & !(layout.align() - 1);
-        let end = aligned + layout.size();
-        if end > HEAP_SIZE {
-            return core::ptr::null_mut();
+static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
+#[cfg_attr(not(test), global_allocator)]
+static ALLOC: LockedHeap = LockedHeap::empty();
+
+fn heap_used() -> usize {
+    ALLOC.lock().used()
+}
+
+unsafe fn init_heap() {
+    ALLOC
+        .lock()
+        .init(core::ptr::addr_of_mut!(HEAP).cast::<u8>(), HEAP_SIZE);
+}
+
+/// Stack-buffer writer for fatal-handler messages. Implements `core::fmt::Write` over a
+/// fixed byte array and never allocates, so it is safe to call from the allocation-error
+/// path (where `format!`/`String` would themselves fail). Truncates on overflow; `as_str`
+/// falls back if a truncated multibyte sequence left the buffer non-UTF-8.
+struct LogBuf<const N: usize> {
+    buf: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> LogBuf<N> {
+    fn new() -> Self {
+        Self {
+            buf: [0; N],
+            len: 0,
         }
-        NEXT = end;
-        core::ptr::addr_of_mut!(HEAP).cast::<u8>().add(aligned)
     }
 
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
+    fn as_str(&self) -> &str {
+        core::str::from_utf8(&self.buf[..self.len]).unwrap_or("[rabbit] (log buffer)")
+    }
+}
+
+impl<const N: usize> core::fmt::Write for LogBuf<N> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let bytes = s.as_bytes();
+        let remaining = self.buf.len().saturating_sub(self.len);
+        let take = bytes.len().min(remaining);
+        if take > 0 {
+            self.buf[self.len..self.len + take].copy_from_slice(&bytes[..take]);
+            self.len += take;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(not(test))]
-#[global_allocator]
-static ALLOC: BumpAllocator = BumpAllocator;
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    let mut buf = LogBuf::<256>::new();
+    let _ = write!(buf, "[RABBIT] panic");
+    if let Some(loc) = info.location() {
+        let _ = write!(buf, " at {}:{}:{}", loc.file(), loc.line(), loc.column());
+    }
+    // `PanicInfo::message()` returns a `PanicMessage` (Display) on this nightly, which is
+    // what surfaces the OOM reason ("memory allocation of N bytes failed") when applicable.
+    let _ = write!(buf, ": {}", info.message());
+    let _ = writeln!(buf);
+    debug_log(buf.as_str());
+    // Clean exit instead of an infinite loop: a panic is now a visible one-liner in the
+    // QEMU log and the app closes, rather than silently freezing the window.
+    ProcessExit::exit(1);
+}
 
 #[cfg(not(test))]
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    debug_log("[RABBIT] panic\n");
-    loop {
-        process_yield();
-    }
+#[alloc_error_handler]
+fn alloc_error(layout: core::alloc::Layout) -> ! {
+    let mut buf = LogBuf::<160>::new();
+    let _ = writeln!(
+        buf,
+        "[RABBIT] OOM: alloc {} bytes (align {}) failed; heap {}/{}",
+        layout.size(),
+        layout.align(),
+        heap_used(),
+        HEAP_SIZE
+    );
+    debug_log(buf.as_str());
+    ProcessExit::exit(1);
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusPane {
     Source,
-    Inspector,
     DeveloperTools,
 }
 
@@ -131,12 +190,12 @@ struct RabbitApp {
     pending_fetch: bool,
     focus: FocusPane,
     source_scroll: usize,
-    inspector_scroll: usize,
     source: SourceContent,
-    inspector_text: String,
+    active_navigation_request_id: Option<u64>,
     developer_tools: DeveloperToolsState,
     discovered_resources: Vec<ResourceCandidate>,
     resource_queue: ResourceQueue,
+    document_lifecycle: DocumentLifecycle,
 }
 
 impl RabbitApp {
@@ -159,16 +218,14 @@ impl RabbitApp {
             pending_fetch: false,
             focus: FocusPane::Source,
             source_scroll: 0,
-            inspector_scroll: 0,
             source: SourceContent::Placeholder(
                 "Enter a URL, then click Fetch/Open to inspect the response body.",
             ),
-            inspector_text: String::from(
-                "Method: GET\nURL: \nFinal URL: \nStatus: \nContent-Type: \nBody Size: \nDuration: \nHeaders:\nDiscovered Resources:\n",
-            ),
+            active_navigation_request_id: None,
             developer_tools,
             discovered_resources: Vec::new(),
             resource_queue: ResourceQueue::default(),
+            document_lifecycle: DocumentLifecycle::default(),
         }
     }
 
@@ -185,7 +242,6 @@ impl RabbitApp {
     fn perform_pending_fetch(&mut self) {
         self.pending_fetch = false;
         self.source_scroll = 0;
-        self.inspector_scroll = 0;
 
         let normalized = match normalize_url_input(self.url_input.value()) {
             Ok(url) => url,
@@ -204,16 +260,16 @@ impl RabbitApp {
             }
         };
 
-        self.begin_navigation_session(&normalized);
-
         let request = build_get_request(&parsed);
+        self.begin_navigation_session(&normalized, &request);
         match perform_request(parsed, request) {
             Ok(result) => self.apply_result(&normalized, result),
             Err(err) => self.apply_fetch_error(err),
         }
     }
 
-    fn begin_navigation_session(&mut self, requested_url: &str) {
+    fn begin_navigation_session(&mut self, requested_url: &str, request: &HttpRequest) {
+        let generation = self.document_lifecycle.begin_navigation();
         self.discovered_resources.clear();
         self.resource_queue.clear();
         self.developer_tools.network.clear_for_new_page();
@@ -221,21 +277,25 @@ impl RabbitApp {
             .dom
             .clear_with_message("Waiting for parsed HTML document.");
 
-        let request_index = self
-            .developer_tools
-            .network
-            .begin_main_document_request("GET", String::from(requested_url));
+        let request_id = self.developer_tools.network.begin_main_document_request(
+            request.method,
+            String::from(requested_url),
+            request.headers.clone(),
+        );
+        self.active_navigation_request_id = Some(request_id);
         self.developer_tools
             .network
-            .set_request_state(request_index, RequestState::Connecting);
+            .set_request_state(request_id, RequestState::Connecting);
         self.developer_tools.console.push(
             ConsoleSeverity::Quiet,
             ConsoleSource::Fetch,
             format!("Main document request started: {requested_url}"),
         );
+        self.log_heap_stage("before fetch", generation, None);
     }
 
     fn apply_result(&mut self, requested_url: &str, result: RequestResult) {
+        let generation = self.document_lifecycle.generation();
         let status_code = result.response.status_code;
         let status_text = if result.response.status_text.is_empty() {
             String::from("(no reason phrase)")
@@ -252,22 +312,28 @@ impl RabbitApp {
             .header("content-type")
             .map_or("(missing)", |value| value);
         let body_size = result.body.len();
+        self.log_heap_stage("after response completion", generation, Some(body_size));
 
         self.status = format!("HTTP {status_code} {status_text}");
         self.source = self.build_source_content(content_type, result.body);
-        self.developer_tools
-            .network
-            .set_request_state(0, RequestState::Receiving);
-
-        self.developer_tools.network.complete_request(
-            0,
-            status_code,
-            result.duration_ms,
-            Some(body_size),
-            Some(String::from(content_type)),
-            Some(false),
-            Some(false),
-        );
+        if let Some(request_id) = self.active_navigation_request_id {
+            self.developer_tools
+                .network
+                .set_request_state(request_id, RequestState::Receiving);
+            self.developer_tools.network.complete_request(
+                request_id,
+                Some(final_url.clone()),
+                status_code,
+                status_text.clone(),
+                result.duration_ms,
+                Some(body_size),
+                Some(String::from(content_type)),
+                result.response.headers.clone(),
+                None,
+                Some(false),
+                Some(false),
+            );
+        }
 
         if (400..500).contains(&status_code) {
             self.developer_tools.console.push(
@@ -295,9 +361,13 @@ impl RabbitApp {
             self.resource_queue.clear();
             let source_text = self.source.as_str();
             if rappid_rabbit::looks_like_html(Some(content_type), source_text) {
-                match parse_html(source_text) {
+                if !self.document_lifecycle.start_parse(generation) {
+                    return;
+                }
+                self.log_heap_stage("before DOM parsing", generation, Some(source_text.len()));
+                match parse_html_with_limits(source_text, ParseLimits::default()) {
                     Ok(document) => {
-                        let total_nodes = document.node_count();
+                        let stats = document.stats();
                         if let Some(base_url) = final_url_parsed.as_ref() {
                             let candidates =
                                 rappid_rabbit::resources::discovery::discover_resources(
@@ -307,20 +377,41 @@ impl RabbitApp {
                             self.discovered_resources = candidates;
                         }
                         self.developer_tools.dom.set_document(document);
+                        let visible_rows = self.developer_tools.dom.visible_row_count();
+                        let _ = self.document_lifecycle.finish_ready(generation);
+                        self.log_dom_result(
+                            generation,
+                            stats.node_count,
+                            stats.max_depth,
+                            stats.total_text_bytes,
+                            visible_rows,
+                        );
                         self.developer_tools.console.push(
                             ConsoleSeverity::Quiet,
                             ConsoleSource::Parser,
-                            format!("Golden Fish parsed HTML document ({total_nodes} nodes)."),
+                            format!(
+                                "Golden Fish parsed HTML document ({} nodes).",
+                                stats.node_count
+                            ),
                         );
                     }
                     Err(err) => {
+                        let error = format!("{err}");
+                        let _ = self
+                            .document_lifecycle
+                            .finish_failed(generation, error.clone());
                         self.developer_tools
                             .dom
-                            .clear_with_message(format!("Parser error: {err}"));
+                            .clear_with_message(format!("Parser error: {error}"));
+                        self.log_heap_stage(
+                            "after DOM parsing",
+                            generation,
+                            Some(source_text.len()),
+                        );
                         self.developer_tools.console.push(
                             ConsoleSeverity::Warn,
                             ConsoleSource::Parser,
-                            format!("Golden Fish parse error: {err}"),
+                            format!("Golden Fish parse error: {error}"),
                         );
                     }
                 }
@@ -337,18 +428,49 @@ impl RabbitApp {
                 .dom
                 .clear_with_message("Golden Fish DOM inspector is unavailable in this build.");
         }
+    }
 
-        self.inspector_text = self.build_inspector_text(
-            requested_url,
-            &final_url,
-            status_code,
-            &status_text,
-            content_type,
-            body_size,
-            result.duration_ms,
-            "GET",
-            &result.response.headers,
+    fn log_heap_stage(&self, stage: &str, generation: u64, body_bytes: Option<usize>) {
+        let mut buf = LogBuf::<256>::new();
+        let _ = write!(
+            buf,
+            "[RABBIT][DOM] gen={} stage={} heap={}/{} parse_attempts={}",
+            generation,
+            stage,
+            heap_used(),
+            HEAP_SIZE,
+            self.document_lifecycle.parse_attempts()
         );
+        if let Some(body_bytes) = body_bytes {
+            let _ = write!(buf, " body_bytes={body_bytes}");
+        }
+        let _ = writeln!(buf);
+        debug_log(buf.as_str());
+    }
+
+    #[cfg(feature = "dom")]
+    fn log_dom_result(
+        &self,
+        generation: u64,
+        node_count: usize,
+        max_depth: usize,
+        total_text_bytes: usize,
+        visible_rows: usize,
+    ) {
+        let mut buf = LogBuf::<256>::new();
+        let _ = writeln!(
+            buf,
+            "[RABBIT][DOM] gen={} stage=after DOM parsing heap={}/{} nodes={} max_depth={} text_bytes={} visible_rows={} parse_attempts={} projection_per_tick=no",
+            generation,
+            heap_used(),
+            HEAP_SIZE,
+            node_count,
+            max_depth,
+            total_text_bytes,
+            visible_rows,
+            self.document_lifecycle.parse_attempts()
+        );
+        debug_log(buf.as_str());
     }
 
     fn build_source_content(&self, content_type: &str, body: Vec<u8>) -> SourceContent {
@@ -371,83 +493,31 @@ impl RabbitApp {
         ))
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn build_inspector_text(
-        &self,
-        requested_url: &str,
-        final_url: &str,
-        status_code: u16,
-        status_text: &str,
-        content_type: &str,
-        body_size: usize,
-        duration_ms: Option<u64>,
-        method: &str,
-        headers: &[(String, String)],
-    ) -> String {
-        let mut text = String::new();
-        append_line(&mut text, "Method", method);
-        append_line(&mut text, "URL", requested_url);
-        append_line(&mut text, "Final URL", final_url);
-        append_line(&mut text, "Status", &format!("{status_code} {status_text}"));
-        append_line(&mut text, "Content-Type", content_type);
-        append_line(&mut text, "Body Size", &format!("{body_size} bytes"));
-        append_line(
-            &mut text,
-            "Duration",
-            &duration_ms.map_or_else(|| String::from("n/a"), |ms| format!("{ms} ms")),
-        );
-        text.push_str("Headers:\n");
-        if headers.is_empty() {
-            text.push_str("  (none)\n");
-        } else {
-            for (key, value) in headers {
-                text.push_str("  ");
-                text.push_str(key);
-                text.push_str(": ");
-                text.push_str(value);
-                text.push('\n');
-            }
-        }
-
-        text.push_str("Discovered Resources:\n");
-        if self.discovered_resources.is_empty() {
-            text.push_str("  (none)\n");
-        } else {
-            for resource in &self.discovered_resources {
-                text.push_str("  [");
-                text.push_str(resource.classification.label());
-                text.push_str(" / ");
-                text.push_str(resource.resource_type.label());
-                text.push_str("] ");
-                text.push_str(&resource.resolved_url);
-                if resource.enqueue_for_fetch {
-                    text.push_str(" (queued)");
-                } else if resource.classification == DiscoveryClassification::OrdinaryNavigationLink
-                {
-                    text.push_str(" (not auto-fetched)");
-                }
-                text.push('\n');
-            }
-        }
-        text
-    }
-
     fn apply_fetch_error(&mut self, err: FetchError) {
         self.status = String::from("Request failed");
         self.source = SourceContent::Message(String::from(
             "No response body was captured for this request.",
         ));
-        self.inspector_text = String::from(
-            "Method: GET\nURL: \nFinal URL: \nStatus: failed\nContent-Type: \nBody Size: 0 bytes\nDuration: n/a\nHeaders:\nDiscovered Resources:\n",
-        );
         self.discovered_resources.clear();
         self.resource_queue.clear();
         self.developer_tools
             .dom
             .clear_with_message("No DOM available for the failed request.");
-        self.developer_tools
-            .network
-            .fail_request(0, format!("{err}"));
+        if let Some(request_id) = self.active_navigation_request_id {
+            let (status_code, status_text) = match &err {
+                FetchError::HttpError { status, message } if *status > 0 => {
+                    (Some(*status), Some(message.clone()))
+                }
+                _ => (None, None),
+            };
+            self.developer_tools.network.fail_request(
+                request_id,
+                None,
+                status_code,
+                status_text,
+                format!("{err}"),
+            );
+        }
         self.developer_tools.console.push(
             match err {
                 FetchError::InvalidUrl(_) | FetchError::HttpError { .. } => ConsoleSeverity::Warn,
@@ -461,9 +531,7 @@ impl RabbitApp {
     fn set_error(&mut self, message: String) {
         self.status = String::from("Invalid URL");
         self.source = SourceContent::Message(String::from("Fix the URL and fetch again."));
-        self.inspector_text = String::from(
-            "Method: GET\nURL: \nFinal URL: \nStatus: not sent\nContent-Type: \nBody Size: 0 bytes\nDuration: n/a\nHeaders:\nDiscovered Resources:\n",
-        );
+        self.active_navigation_request_id = None;
         self.developer_tools
             .console
             .push(ConsoleSeverity::Warn, ConsoleSource::Browser, message);
@@ -525,20 +593,7 @@ impl RabbitApp {
     }
 
     fn source_panel_rect(&mut self) -> Rect {
-        let main = self.developer_panel_layout().main_rect;
-        let source_w = ((main.w as i32 * 62) / 100).max(320) as u32;
-        Rect::new(main.x, main.y, source_w, main.h)
-    }
-
-    fn inspector_panel_rect(&mut self) -> Rect {
-        let main = self.developer_panel_layout().main_rect;
-        let source = self.source_panel_rect();
-        Rect::new(
-            source.right() + GUTTER,
-            main.y,
-            (main.right() - source.right() - GUTTER).max(240) as u32,
-            main.h,
-        )
+        self.developer_panel_layout().main_rect
     }
 
     fn source_view(&mut self) -> TextView<'_> {
@@ -548,16 +603,6 @@ impl RabbitApp {
         TextView::new(content, self.source.as_str())
             .with_scroll_offset(self.source_scroll)
             .with_focus(self.focus == FocusPane::Source)
-            .with_font(&F_MONO)
-    }
-
-    fn inspector_view(&mut self) -> TextView<'_> {
-        let content = Panel::with_title(self.inspector_panel_rect(), "Inspector")
-            .content_rect()
-            .inset(8);
-        TextView::new(content, self.inspector_text.as_str())
-            .with_scroll_offset(self.inspector_scroll)
-            .with_focus(self.focus == FocusPane::Inspector)
             .with_font(&F_MONO)
     }
 
@@ -644,14 +689,13 @@ impl RabbitApp {
         match self.developer_tools.panel.active_tab {
             DeveloperToolTab::Console => {
                 let console_rect = content_rect.inset(8);
-                TextView::new(
-                    console_rect,
-                    self.developer_tools.console.rendered_text().as_str(),
-                )
-                .with_scroll_offset(self.developer_tools.console.scroll_offset())
-                .with_focus(self.focus == FocusPane::DeveloperTools)
-                .with_font(&F_MONO)
-                .draw(canvas, theme);
+                let scroll_offset = self.developer_tools.console.scroll_offset();
+                let console_text = self.developer_tools.console.rendered_text();
+                TextView::new(console_rect, console_text)
+                    .with_scroll_offset(scroll_offset)
+                    .with_focus(self.focus == FocusPane::DeveloperTools)
+                    .with_font(&F_MONO)
+                    .draw(canvas, theme);
             }
             DeveloperToolTab::DomInspector => {
                 self.draw_dom_inspector_tab(canvas, theme, content_rect)
@@ -691,31 +735,27 @@ impl RabbitApp {
 
         let styles_panel = Panel::with_title(styles_rect, "Styles");
         styles_panel.draw(canvas, theme);
-        TextView::new(
-            styles_panel.content_rect().inset(8),
-            self.developer_tools.dom.styles_text().as_str(),
-        )
-        .with_scroll_offset(self.developer_tools.dom.styles_scroll())
-        .with_focus(
-            self.focus == FocusPane::DeveloperTools
-                && self.developer_tools.dom.focused_pane() == DomInspectorPane::Styles,
-        )
-        .with_font(&F_MONO)
-        .draw(canvas, theme);
+        let styles_scroll = self.developer_tools.dom.styles_scroll();
+        let styles_focused = self.focus == FocusPane::DeveloperTools
+            && self.developer_tools.dom.focused_pane() == DomInspectorPane::Styles;
+        let styles_text = self.developer_tools.dom.styles_text();
+        TextView::new(styles_panel.content_rect().inset(8), styles_text)
+            .with_scroll_offset(styles_scroll)
+            .with_focus(styles_focused)
+            .with_font(&F_MONO)
+            .draw(canvas, theme);
 
         let properties_panel = Panel::with_title(properties_rect, "Properties");
         properties_panel.draw(canvas, theme);
-        TextView::new(
-            properties_panel.content_rect().inset(8),
-            self.developer_tools.dom.node_properties_text().as_str(),
-        )
-        .with_scroll_offset(self.developer_tools.dom.properties_scroll())
-        .with_focus(
-            self.focus == FocusPane::DeveloperTools
-                && self.developer_tools.dom.focused_pane() == DomInspectorPane::Properties,
-        )
-        .with_font(&F_MONO)
-        .draw(canvas, theme);
+        let properties_scroll = self.developer_tools.dom.properties_scroll();
+        let properties_focused = self.focus == FocusPane::DeveloperTools
+            && self.developer_tools.dom.focused_pane() == DomInspectorPane::Properties;
+        let properties_text = self.developer_tools.dom.node_properties_text();
+        TextView::new(properties_panel.content_rect().inset(8), properties_text)
+            .with_scroll_offset(properties_scroll)
+            .with_focus(properties_focused)
+            .with_font(&F_MONO)
+            .draw(canvas, theme);
 
         self.draw_dom_tree(canvas, theme, tree_rect);
     }
@@ -724,25 +764,22 @@ impl RabbitApp {
         let panel = Panel::with_title(rect, "DOM Tree");
         panel.draw(canvas, theme);
         let content = panel.content_rect().inset(8);
+        let tree_scroll = self.developer_tools.dom.tree_scroll();
+        let tree_focused = self.focus == FocusPane::DeveloperTools
+            && self.developer_tools.dom.focused_pane() == DomInspectorPane::Tree;
         let rows = self.developer_tools.dom.tree_rows();
 
         if rows.is_empty() {
             TextView::new(content, self.developer_tools.dom.empty_message())
-                .with_focus(
-                    self.focus == FocusPane::DeveloperTools
-                        && self.developer_tools.dom.focused_pane() == DomInspectorPane::Tree,
-                )
+                .with_focus(tree_focused)
                 .with_font(&F_MONO)
                 .draw(canvas, theme);
             return;
         }
 
-        TreeView::new(content, &rows)
-            .with_scroll_offset(self.developer_tools.dom.tree_scroll())
-            .with_focus(
-                self.focus == FocusPane::DeveloperTools
-                    && self.developer_tools.dom.focused_pane() == DomInspectorPane::Tree,
-            )
+        TreeView::new(content, rows)
+            .with_scroll_offset(tree_scroll)
+            .with_focus(tree_focused)
             .with_font(&F_MONO)
             .draw(canvas, theme);
     }
@@ -752,31 +789,31 @@ impl RabbitApp {
             .content_rect()
             .inset(8);
         let rows = self.developer_tools.dom.tree_rows();
-        TreeView::new(content, &rows)
+        TreeView::new(content, rows)
             .with_font(&F_MONO)
             .visible_row_count()
     }
 
     fn network_layout(content_rect: Rect) -> (Rect, Rect) {
-        let table_h = content_rect
-            .h
-            .saturating_sub(NETWORK_DETAIL_H)
-            .saturating_sub(GUTTER.max(0) as u32);
-        let table_rect = Rect::new(
-            content_rect.x,
-            content_rect.y,
-            content_rect.w,
-            table_h.max(140),
-        );
+        let gap = GUTTER.max(0) as u32;
+        let available_w = content_rect.w.saturating_sub(gap);
+        let min_list = NETWORK_LIST_MIN_W.min(available_w.max(1));
+        let min_detail = NETWORK_DETAIL_MIN_W.min(available_w.max(1));
+        let preferred_list = ((available_w as i32 * 45) / 100)
+            .max(min_list as i32)
+            .min(available_w.saturating_sub(min_detail).max(1) as i32)
+            as u32;
+        let list_w = preferred_list.max(available_w / 3).min(available_w.max(1));
+        let detail_w = available_w.saturating_sub(list_w).max(1);
+
+        let list_rect = Rect::new(content_rect.x, content_rect.y, list_w, content_rect.h);
         let detail_rect = Rect::new(
-            content_rect.x,
-            table_rect.bottom() + GUTTER,
-            content_rect.w,
-            content_rect
-                .bottom()
-                .saturating_sub(table_rect.bottom() + GUTTER) as u32,
+            list_rect.right() + GUTTER,
+            content_rect.y,
+            detail_w,
+            content_rect.h,
         );
-        (table_rect, detail_rect)
+        (list_rect, detail_rect)
     }
 
     fn network_header_h() -> u32 {
@@ -788,45 +825,47 @@ impl RabbitApp {
     }
 
     fn draw_network_tab(&mut self, canvas: &mut Canvas, theme: &Theme, content_rect: Rect) {
-        let (table_rect, detail_rect) = Self::network_layout(content_rect.inset(8));
-        let table_panel = Panel::with_title(table_rect, "Requests");
-        table_panel.draw(canvas, theme);
+        let (list_rect, detail_rect) = Self::network_layout(content_rect.inset(8));
+        let list_panel = Panel::with_title(list_rect, "Requests");
+        list_panel.draw(canvas, theme);
         let detail_panel = Panel::with_title(detail_rect, "Details");
         detail_panel.draw(canvas, theme);
 
+        let selected_row = self.developer_tools.network.selected_row();
+        let list_scroll_offset = self.developer_tools.network.list_scroll_offset();
         let rows = self.developer_tools.network.summary_rows();
         let columns = [
             Column {
                 header: "Name",
-                width: table_panel
+                width: list_panel
                     .content_rect()
                     .w
-                    .saturating_sub(100 + 100 + 110 + 95 + 100),
+                    .saturating_sub(92 + 108 + 96 + 88 + 92),
                 right_align: false,
             },
             Column {
                 header: "Method",
-                width: 100,
-                right_align: false,
-            },
-            Column {
-                header: "Type",
-                width: 100,
+                width: 92,
                 right_align: false,
             },
             Column {
                 header: "Status",
-                width: 110,
+                width: 108,
+                right_align: false,
+            },
+            Column {
+                header: "Type",
+                width: 96,
                 right_align: false,
             },
             Column {
                 header: "Size",
-                width: 95,
+                width: 88,
                 right_align: true,
             },
             Column {
-                header: "Duration",
-                width: 100,
+                header: "Time",
+                width: 92,
                 right_align: true,
             },
         ];
@@ -846,36 +885,39 @@ impl RabbitApp {
             .collect();
         let row_slices: Vec<&[&str]> = row_refs.iter().map(|row| row.as_slice()).collect();
 
-        Table::new(table_panel.content_rect(), &columns, &row_slices)
-            .with_selected(self.developer_tools.network.selected_entry())
-            .with_scroll_offset(self.developer_tools.network.scroll_offset())
+        Table::new(list_panel.content_rect(), &columns, &row_slices)
+            .with_selected(selected_row)
+            .with_scroll_offset(list_scroll_offset)
             .with_font(&F_SMALL)
             .draw(canvas, theme);
 
-        TextView::new(
-            detail_panel.content_rect().inset(8),
-            self.developer_tools
-                .network
-                .selected_entry_detail_text()
-                .as_str(),
-        )
-        .with_focus(self.focus == FocusPane::DeveloperTools)
-        .with_font(&F_MONO)
-        .draw(canvas, theme);
+        let detail_focused = self.focus == FocusPane::DeveloperTools
+            && self.developer_tools.network.focused_pane() == NetworkPaneFocus::Details;
+        let detail_scroll_offset = self.developer_tools.network.detail_scroll_offset();
+        let detail_text = self.developer_tools.network.selected_request_detail_text();
+        TextView::new(detail_panel.content_rect().inset(8), detail_text)
+            .with_scroll_offset(detail_scroll_offset)
+            .with_focus(detail_focused)
+            .with_font(&F_MONO)
+            .draw(canvas, theme);
+
+        if self.focus == FocusPane::DeveloperTools {
+            match self.developer_tools.network.focused_pane() {
+                NetworkPaneFocus::RequestList => canvas.draw_rect(list_panel.rect, theme.accent),
+                NetworkPaneFocus::Details => canvas.draw_rect(detail_panel.rect, theme.accent),
+            }
+        }
     }
 
     fn clamp_scrolls(&mut self) {
         self.source_scroll = self.source_scroll.min(self.source_view().max_scroll());
-        self.inspector_scroll = self
-            .inspector_scroll
-            .min(self.inspector_view().max_scroll());
 
         let dev_layout = self.developer_panel_layout();
         if let Some(content_rect) = dev_layout.content_rect {
             match self.developer_tools.panel.active_tab {
                 DeveloperToolTab::Console => {
                     let console_text = self.developer_tools.console.rendered_text();
-                    let max = TextView::new(content_rect.inset(8), console_text.as_str())
+                    let max = TextView::new(content_rect.inset(8), console_text)
                         .with_font(&F_MONO)
                         .max_scroll();
                     self.developer_tools
@@ -885,24 +927,28 @@ impl RabbitApp {
                 DeveloperToolTab::DomInspector => {
                     let (styles_rect, properties_rect, tree_rect) =
                         Self::dom_column_rects(content_rect.inset(8));
-                    let styles_text = self.developer_tools.dom.styles_text();
-                    let styles_max = TextView::new(
-                        Panel::with_title(styles_rect, "Styles")
-                            .content_rect()
-                            .inset(8),
-                        styles_text.as_str(),
-                    )
-                    .with_font(&F_MONO)
-                    .max_scroll();
-                    let properties_text = self.developer_tools.dom.node_properties_text();
-                    let properties_max = TextView::new(
-                        Panel::with_title(properties_rect, "Properties")
-                            .content_rect()
-                            .inset(8),
-                        properties_text.as_str(),
-                    )
-                    .with_font(&F_MONO)
-                    .max_scroll();
+                    let styles_max = {
+                        let styles_text = self.developer_tools.dom.styles_text();
+                        TextView::new(
+                            Panel::with_title(styles_rect, "Styles")
+                                .content_rect()
+                                .inset(8),
+                            styles_text,
+                        )
+                        .with_font(&F_MONO)
+                        .max_scroll()
+                    };
+                    let properties_max = {
+                        let properties_text = self.developer_tools.dom.node_properties_text();
+                        TextView::new(
+                            Panel::with_title(properties_rect, "Properties")
+                                .content_rect()
+                                .inset(8),
+                            properties_text,
+                        )
+                        .with_font(&F_MONO)
+                        .max_scroll()
+                    };
                     let visible = self.dom_tree_visible_rows(tree_rect);
                     self.developer_tools.dom.set_styles_scroll(
                         self.developer_tools.dom.styles_scroll().min(styles_max),
@@ -916,9 +962,9 @@ impl RabbitApp {
                     self.developer_tools.dom.clamp_tree_scroll(visible);
                 }
                 DeveloperToolTab::Network => {
-                    let (table_rect, _) = Self::network_layout(content_rect.inset(8));
-                    let content = Panel::with_title(table_rect, "Requests").content_rect();
-                    let visible = ((content.h.saturating_sub(Self::network_header_h()))
+                    let (list_rect, detail_rect) = Self::network_layout(content_rect.inset(8));
+                    let list_content = Panel::with_title(list_rect, "Requests").content_rect();
+                    let visible = ((list_content.h.saturating_sub(Self::network_header_h()))
                         / Self::network_row_h())
                     .max(1) as usize;
                     let max = self
@@ -927,9 +973,25 @@ impl RabbitApp {
                         .entries()
                         .len()
                         .saturating_sub(visible);
-                    self.developer_tools
-                        .network
-                        .set_scroll_offset(self.developer_tools.network.scroll_offset().min(max));
+                    self.developer_tools.network.set_list_scroll_offset(
+                        self.developer_tools.network.list_scroll_offset().min(max),
+                    );
+
+                    let detail_text = self.developer_tools.network.selected_request_detail_text();
+                    let detail_max = TextView::new(
+                        Panel::with_title(detail_rect, "Details")
+                            .content_rect()
+                            .inset(8),
+                        detail_text,
+                    )
+                    .with_font(&F_MONO)
+                    .max_scroll();
+                    self.developer_tools.network.set_detail_scroll_offset(
+                        self.developer_tools
+                            .network
+                            .detail_scroll_offset()
+                            .min(detail_max),
+                    );
                 }
             }
         }
@@ -952,21 +1014,6 @@ impl RabbitApp {
                     max_scroll,
                 );
             }
-            FocusPane::Inspector => {
-                let (visible, max_scroll) = {
-                    let view = self.inspector_view();
-                    (view.visible_line_count(), view.max_scroll())
-                };
-                adjust_scroll(
-                    &mut self.inspector_scroll,
-                    delta,
-                    page,
-                    home,
-                    end,
-                    visible,
-                    max_scroll,
-                );
-            }
             FocusPane::DeveloperTools => self.scroll_developer_tools(delta, page, home, end),
         }
     }
@@ -978,10 +1025,9 @@ impl RabbitApp {
         };
         match self.developer_tools.panel.active_tab {
             DeveloperToolTab::Console => {
-                let console_text = self.developer_tools.console.rendered_text();
-                let view =
-                    TextView::new(content_rect.inset(8), console_text.as_str()).with_font(&F_MONO);
                 let mut scroll = self.developer_tools.console.scroll_offset();
+                let console_text = self.developer_tools.console.rendered_text();
+                let view = TextView::new(content_rect.inset(8), console_text).with_font(&F_MONO);
                 adjust_scroll(
                     &mut scroll,
                     delta,
@@ -998,44 +1044,50 @@ impl RabbitApp {
                     Self::dom_column_rects(content_rect.inset(8));
                 match self.developer_tools.dom.focused_pane() {
                     DomInspectorPane::Styles => {
-                        let styles_text = self.developer_tools.dom.styles_text();
-                        let view = TextView::new(
-                            Panel::with_title(styles_rect, "Styles")
-                                .content_rect()
-                                .inset(8),
-                            styles_text.as_str(),
-                        )
-                        .with_font(&F_MONO);
                         let mut scroll = self.developer_tools.dom.styles_scroll();
+                        let (visible_lines, max_scroll) = {
+                            let styles_text = self.developer_tools.dom.styles_text();
+                            let view = TextView::new(
+                                Panel::with_title(styles_rect, "Styles")
+                                    .content_rect()
+                                    .inset(8),
+                                styles_text,
+                            )
+                            .with_font(&F_MONO);
+                            (view.visible_line_count(), view.max_scroll())
+                        };
                         adjust_scroll(
                             &mut scroll,
                             delta,
                             page,
                             home,
                             end,
-                            view.visible_line_count(),
-                            view.max_scroll(),
+                            visible_lines,
+                            max_scroll,
                         );
                         self.developer_tools.dom.set_styles_scroll(scroll);
                     }
                     DomInspectorPane::Properties => {
-                        let properties_text = self.developer_tools.dom.node_properties_text();
-                        let view = TextView::new(
-                            Panel::with_title(properties_rect, "Properties")
-                                .content_rect()
-                                .inset(8),
-                            properties_text.as_str(),
-                        )
-                        .with_font(&F_MONO);
                         let mut scroll = self.developer_tools.dom.properties_scroll();
+                        let (visible_lines, max_scroll) = {
+                            let properties_text = self.developer_tools.dom.node_properties_text();
+                            let view = TextView::new(
+                                Panel::with_title(properties_rect, "Properties")
+                                    .content_rect()
+                                    .inset(8),
+                                properties_text,
+                            )
+                            .with_font(&F_MONO);
+                            (view.visible_line_count(), view.max_scroll())
+                        };
                         adjust_scroll(
                             &mut scroll,
                             delta,
                             page,
                             home,
                             end,
-                            view.visible_line_count(),
-                            view.max_scroll(),
+                            visible_lines,
+                            max_scroll,
                         );
                         self.developer_tools.dom.set_properties_scroll(scroll);
                     }
@@ -1050,20 +1102,48 @@ impl RabbitApp {
                 }
             }
             DeveloperToolTab::Network => {
-                let (table_rect, _) = Self::network_layout(content_rect.inset(8));
-                let content = Panel::with_title(table_rect, "Requests").content_rect();
-                let visible = ((content.h.saturating_sub(Self::network_header_h()))
-                    / Self::network_row_h())
-                .max(1) as usize;
-                let max_scroll = self
-                    .developer_tools
-                    .network
-                    .entries()
-                    .len()
-                    .saturating_sub(visible);
-                let mut scroll = self.developer_tools.network.scroll_offset();
-                adjust_scroll(&mut scroll, delta, page, home, end, visible, max_scroll);
-                self.developer_tools.network.set_scroll_offset(scroll);
+                let (list_rect, detail_rect) = Self::network_layout(content_rect.inset(8));
+                match self.developer_tools.network.focused_pane() {
+                    NetworkPaneFocus::RequestList => {
+                        let content = Panel::with_title(list_rect, "Requests").content_rect();
+                        let visible = ((content.h.saturating_sub(Self::network_header_h()))
+                            / Self::network_row_h())
+                        .max(1) as usize;
+                        let max_scroll = self
+                            .developer_tools
+                            .network
+                            .entries()
+                            .len()
+                            .saturating_sub(visible);
+                        let mut scroll = self.developer_tools.network.list_scroll_offset();
+                        adjust_scroll(&mut scroll, delta, page, home, end, visible, max_scroll);
+                        self.developer_tools.network.set_list_scroll_offset(scroll);
+                    }
+                    NetworkPaneFocus::Details => {
+                        let mut scroll = self.developer_tools.network.detail_scroll_offset();
+                        let detail_text =
+                            self.developer_tools.network.selected_request_detail_text();
+                        let view = TextView::new(
+                            Panel::with_title(detail_rect, "Details")
+                                .content_rect()
+                                .inset(8),
+                            detail_text,
+                        )
+                        .with_font(&F_MONO);
+                        adjust_scroll(
+                            &mut scroll,
+                            delta,
+                            page,
+                            home,
+                            end,
+                            view.visible_line_count(),
+                            view.max_scroll(),
+                        );
+                        self.developer_tools
+                            .network
+                            .set_detail_scroll_offset(scroll);
+                    }
+                }
             }
         }
     }
@@ -1138,9 +1218,10 @@ impl RabbitApp {
         let content = Panel::with_title(tree_rect, "DOM Tree")
             .content_rect()
             .inset(8);
+        let tree_scroll = self.developer_tools.dom.tree_scroll();
         let rows = self.developer_tools.dom.tree_rows();
-        let tree_view = TreeView::new(content, &rows)
-            .with_scroll_offset(self.developer_tools.dom.tree_scroll())
+        let tree_view = TreeView::new(content, rows)
+            .with_scroll_offset(tree_scroll)
             .with_font(&F_MONO);
         if let Some(hit) = tree_view.hit_test(point.x, point.y) {
             match hit.target {
@@ -1153,23 +1234,31 @@ impl RabbitApp {
     }
 
     fn handle_network_click(&mut self, point: Point, content_rect: Rect) -> bool {
-        let (table_rect, detail_rect) = Self::network_layout(content_rect.inset(8));
+        let (list_rect, detail_rect) = Self::network_layout(content_rect.inset(8));
         if detail_rect.contains(point) {
+            self.developer_tools
+                .network
+                .set_focused_pane(NetworkPaneFocus::Details);
             return true;
         }
-        if !table_rect.contains(point) {
+        if !list_rect.contains(point) {
             return false;
         }
 
-        let content = Panel::with_title(table_rect, "Requests").content_rect();
+        self.developer_tools
+            .network
+            .set_focused_pane(NetworkPaneFocus::RequestList);
+        let content = Panel::with_title(list_rect, "Requests").content_rect();
         let rel_y = point.y - content.y - Self::network_header_h() as i32;
         if rel_y < 0 {
             return true;
         }
         let local_row = (rel_y as u32 / Self::network_row_h()) as usize;
-        let row_index = self.developer_tools.network.scroll_offset() + local_row;
-        if row_index < self.developer_tools.network.entries().len() {
-            self.developer_tools.network.select_entry(Some(row_index));
+        let row_index = self.developer_tools.network.list_scroll_offset() + local_row;
+        if let Some(request_id) = self.developer_tools.network.request_id_at_row(row_index) {
+            self.developer_tools
+                .network
+                .select_request(Some(request_id));
         }
         true
     }
@@ -1183,10 +1272,6 @@ impl App for RabbitApp {
         let source_panel = Panel::with_title(self.source_panel_rect(), "Source");
         source_panel.draw(canvas, theme);
         self.source_view().draw(canvas, theme);
-
-        let inspector_panel = Panel::with_title(self.inspector_panel_rect(), "Inspector");
-        inspector_panel.draw(canvas, theme);
-        self.inspector_view().draw(canvas, theme);
 
         self.draw_developer_tools(canvas, theme);
     }
@@ -1265,10 +1350,6 @@ impl App for RabbitApp {
                     self.focus = FocusPane::Source;
                     return true;
                 }
-                if self.inspector_panel_rect().contains(point) {
-                    self.focus = FocusPane::Inspector;
-                    return true;
-                }
                 false
             }
             Event::Key('\n') if self.url_input.active => {
@@ -1345,6 +1426,9 @@ impl App for RabbitApp {
 #[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
+    unsafe {
+        init_heap();
+    }
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
     let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
     launch_trace::log_phase_now(
@@ -1368,13 +1452,6 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     };
     window.run(&mut app);
     ProcessExit::exit(0);
-}
-
-fn append_line(out: &mut String, label: &str, value: &str) {
-    out.push_str(label);
-    out.push_str(": ");
-    out.push_str(value);
-    out.push('\n');
 }
 
 fn adjust_scroll(

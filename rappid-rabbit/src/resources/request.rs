@@ -1,4 +1,8 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResourceType {
@@ -79,15 +83,21 @@ impl RequestState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NetworkRequestEntry {
+    pub request_id: u64,
     pub sequence_number: usize,
     pub method: String,
-    pub resource_url: String,
+    pub original_url: String,
+    pub final_url: Option<String>,
     pub resource_type: ResourceType,
     pub priority: ResourcePriority,
-    pub status: Option<u16>,
+    pub status_code: Option<u16>,
+    pub status_text: Option<String>,
     pub duration_ms: Option<u64>,
-    pub body_size: Option<usize>,
+    pub response_body_size: Option<usize>,
     pub content_type: Option<String>,
+    pub request_headers: Vec<(String, String)>,
+    pub response_headers: Vec<(String, String)>,
+    pub response_body: Option<Vec<u8>>,
     pub request_state: RequestState,
     pub from_cache: Option<bool>,
     pub from_prefetch: Option<bool>,
@@ -95,26 +105,89 @@ pub struct NetworkRequestEntry {
 }
 
 impl NetworkRequestEntry {
+    pub fn request_url(&self) -> &str {
+        self.original_url.as_str()
+    }
+
+    pub fn final_url_or_requested(&self) -> &str {
+        self.final_url
+            .as_deref()
+            .unwrap_or(self.original_url.as_str())
+    }
+
     pub fn display_name(&self) -> &str {
         let without_query = self
-            .resource_url
+            .final_url_or_requested()
             .split_once('?')
-            .map_or(self.resource_url.as_str(), |(path, _)| path);
+            .map_or(self.final_url_or_requested(), |(path, _)| path);
         let without_fragment = without_query
             .split_once('#')
             .map_or(without_query, |(path, _)| path);
         let segment = without_fragment.rsplit('/').next().unwrap_or_default();
         if segment.is_empty() {
-            self.resource_url.as_str()
+            self.final_url_or_requested()
         } else {
             segment
         }
     }
+
+    pub fn status_display(&self) -> String {
+        match (self.status_code, self.status_text.as_deref()) {
+            (Some(code), Some(text)) if !text.is_empty() => format!("{code} {text}"),
+            (Some(code), _) => code.to_string(),
+            (None, _) => self.request_state.label().to_string(),
+        }
+    }
+
+    pub fn response_body_size_display(&self) -> String {
+        format_body_size(self.response_body_size)
+    }
+
+    pub fn duration_display(&self) -> String {
+        format_duration_ms(self.duration_ms)
+    }
 }
 
-#[derive(Debug, Clone, Default)]
+pub fn format_duration_ms(duration_ms: Option<u64>) -> String {
+    duration_ms.map_or_else(|| String::from("n/a"), |ms| format!("{ms} ms"))
+}
+
+pub fn format_body_size(body_size: Option<usize>) -> String {
+    body_size.map_or_else(|| String::from("n/a"), |size| format!("{size} bytes"))
+}
+
+pub fn format_header_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut uppercase_next = true;
+    for ch in name.chars() {
+        if ch == '-' {
+            out.push(ch);
+            uppercase_next = true;
+            continue;
+        }
+        if uppercase_next {
+            out.push(ch.to_ascii_uppercase());
+            uppercase_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+#[derive(Debug, Clone)]
 pub struct PageNetworkSession {
     entries: Vec<NetworkRequestEntry>,
+    next_request_id: u64,
+}
+
+impl Default for PageNetworkSession {
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+            next_request_id: 1,
+        }
+    }
 }
 
 impl PageNetworkSession {
@@ -130,65 +203,109 @@ impl PageNetworkSession {
         &mut self.entries
     }
 
+    pub fn request_id_at(&self, index: usize) -> Option<u64> {
+        self.entries.get(index).map(|entry| entry.request_id)
+    }
+
+    pub fn index_of(&self, request_id: u64) -> Option<usize> {
+        self.entries
+            .iter()
+            .position(|entry| entry.request_id == request_id)
+    }
+
+    pub fn entry(&self, request_id: u64) -> Option<&NetworkRequestEntry> {
+        self.entries
+            .iter()
+            .find(|entry| entry.request_id == request_id)
+    }
+
+    pub fn entry_mut(&mut self, request_id: u64) -> Option<&mut NetworkRequestEntry> {
+        self.entries
+            .iter_mut()
+            .find(|entry| entry.request_id == request_id)
+    }
+
     pub fn begin_request(
         &mut self,
         method: &str,
-        resource_url: String,
+        original_url: String,
+        request_headers: Vec<(String, String)>,
         resource_type: ResourceType,
         priority: ResourcePriority,
         request_state: RequestState,
-    ) -> usize {
+    ) -> u64 {
+        let request_id = self.next_request_id;
+        self.next_request_id = self.next_request_id.saturating_add(1);
         let index = self.entries.len();
         self.entries.push(NetworkRequestEntry {
+            request_id,
             sequence_number: index + 1,
             method: String::from(method),
-            resource_url,
+            original_url,
+            final_url: None,
             resource_type,
             priority,
-            status: None,
+            status_code: None,
+            status_text: None,
             duration_ms: None,
-            body_size: None,
+            response_body_size: None,
             content_type: None,
+            request_headers,
+            response_headers: Vec::new(),
+            response_body: None,
             request_state,
             from_cache: None,
             from_prefetch: None,
             error_text: None,
         });
-        index
+        request_id
     }
 
-    pub fn begin_main_document(&mut self, method: &str, resource_url: String) -> usize {
+    pub fn begin_main_document(
+        &mut self,
+        method: &str,
+        original_url: String,
+        request_headers: Vec<(String, String)>,
+    ) -> u64 {
         self.begin_request(
             method,
-            resource_url,
+            original_url,
+            request_headers,
             ResourceType::MainDocument,
             ResourcePriority::MainDocument,
             RequestState::Queued,
         )
     }
 
-    pub fn set_request_state(&mut self, index: usize, request_state: RequestState) {
-        if let Some(entry) = self.entries.get_mut(index) {
+    pub fn set_request_state(&mut self, request_id: u64, request_state: RequestState) {
+        if let Some(entry) = self.entry_mut(request_id) {
             entry.request_state = request_state;
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn complete_request(
         &mut self,
-        index: usize,
-        status: u16,
+        request_id: u64,
+        final_url: Option<String>,
+        status_code: u16,
+        status_text: String,
         duration_ms: Option<u64>,
-        body_size: Option<usize>,
+        response_body_size: Option<usize>,
         content_type: Option<String>,
+        response_headers: Vec<(String, String)>,
+        response_body: Option<Vec<u8>>,
         from_cache: Option<bool>,
         from_prefetch: Option<bool>,
     ) {
-        if let Some(entry) = self.entries.get_mut(index) {
-            entry.status = Some(status);
+        if let Some(entry) = self.entry_mut(request_id) {
+            entry.final_url = final_url;
+            entry.status_code = Some(status_code);
+            entry.status_text = Some(status_text);
             entry.duration_ms = duration_ms;
-            entry.body_size = body_size;
+            entry.response_body_size = response_body_size;
             entry.content_type = content_type;
+            entry.response_headers = response_headers;
+            entry.response_body = response_body;
             entry.from_cache = from_cache;
             entry.from_prefetch = from_prefetch;
             entry.error_text = None;
@@ -200,8 +317,20 @@ impl PageNetworkSession {
         }
     }
 
-    pub fn fail_request(&mut self, index: usize, error_text: impl Into<String>) {
-        if let Some(entry) = self.entries.get_mut(index) {
+    pub fn fail_request(
+        &mut self,
+        request_id: u64,
+        final_url: Option<String>,
+        status_code: Option<u16>,
+        status_text: Option<String>,
+        error_text: impl Into<String>,
+    ) {
+        if let Some(entry) = self.entry_mut(request_id) {
+            if final_url.is_some() {
+                entry.final_url = final_url;
+            }
+            entry.status_code = status_code;
+            entry.status_text = status_text;
             entry.request_state = RequestState::Failed;
             entry.error_text = Some(error_text.into());
         }
@@ -215,8 +344,10 @@ mod tests {
     #[test]
     fn main_document_entry_starts_queued() {
         let mut session = PageNetworkSession::default();
-        let index = session.begin_main_document("GET", String::from("https://example.com/"));
-        let entry = &session.entries()[index];
+        let request_id =
+            session.begin_main_document("GET", String::from("https://example.com/"), Vec::new());
+        let entry = session.entry(request_id).unwrap();
+        assert_eq!(entry.request_id, request_id);
         assert_eq!(entry.sequence_number, 1);
         assert_eq!(entry.method, "GET");
         assert_eq!(entry.resource_type, ResourceType::MainDocument);
@@ -227,46 +358,72 @@ mod tests {
     #[test]
     fn completing_request_attaches_response_fields() {
         let mut session = PageNetworkSession::default();
-        let index = session.begin_main_document("GET", String::from("https://example.com/"));
-        session.set_request_state(index, RequestState::Connecting);
+        let request_id =
+            session.begin_main_document("GET", String::from("https://example.com/"), Vec::new());
+        session.set_request_state(request_id, RequestState::Connecting);
         session.complete_request(
-            index,
+            request_id,
+            Some(String::from("https://example.com/final")),
             200,
+            String::from("OK"),
             Some(42),
             Some(512),
             Some(String::from("text/html")),
+            vec![(String::from("content-type"), String::from("text/html"))],
+            None,
             Some(false),
             Some(false),
         );
 
-        let entry = &session.entries()[index];
+        let entry = session.entry(request_id).unwrap();
         assert_eq!(entry.request_state, RequestState::Complete);
-        assert_eq!(entry.status, Some(200));
+        assert_eq!(entry.status_code, Some(200));
+        assert_eq!(entry.status_text.as_deref(), Some("OK"));
+        assert_eq!(
+            entry.final_url.as_deref(),
+            Some("https://example.com/final")
+        );
         assert_eq!(entry.duration_ms, Some(42));
-        assert_eq!(entry.body_size, Some(512));
+        assert_eq!(entry.response_body_size, Some(512));
         assert_eq!(entry.content_type.as_deref(), Some("text/html"));
+        assert_eq!(entry.response_headers.len(), 1);
     }
 
     #[test]
     fn failed_request_preserves_entry_and_error() {
         let mut session = PageNetworkSession::default();
-        let index = session.begin_main_document("GET", String::from("https://example.com/"));
-        session.set_request_state(index, RequestState::Connecting);
-        session.fail_request(index, "connection timed out");
+        let request_id =
+            session.begin_main_document("GET", String::from("https://example.com/"), Vec::new());
+        session.set_request_state(request_id, RequestState::Connecting);
+        session.fail_request(request_id, None, None, None, "connection timed out");
 
-        let entry = &session.entries()[index];
+        let entry = session.entry(request_id).unwrap();
         assert_eq!(entry.request_state, RequestState::Failed);
         assert_eq!(entry.error_text.as_deref(), Some("connection timed out"));
-        assert_eq!(entry.status, None);
+        assert_eq!(entry.status_code, None);
     }
 
     #[test]
     fn clearing_session_resets_entries_for_new_page() {
         let mut session = PageNetworkSession::default();
-        session.begin_main_document("GET", String::from("https://example.com/"));
+        session.begin_main_document("GET", String::from("https://example.com/"), Vec::new());
         session.clear();
-        let index = session.begin_main_document("GET", String::from("https://example.org/"));
-        assert_eq!(session.entries()[index].sequence_number, 1);
+        let request_id =
+            session.begin_main_document("GET", String::from("https://example.org/"), Vec::new());
+        assert_eq!(session.entry(request_id).unwrap().sequence_number, 1);
         assert_eq!(session.entries().len(), 1);
+    }
+
+    #[test]
+    fn request_ids_remain_stable_across_entries() {
+        let mut session = PageNetworkSession::default();
+        let first =
+            session.begin_main_document("GET", String::from("https://example.com/"), Vec::new());
+        let second =
+            session.begin_main_document("GET", String::from("https://example.org/"), Vec::new());
+        assert_ne!(first, second);
+        assert_eq!(session.request_id_at(0), Some(first));
+        assert_eq!(session.request_id_at(1), Some(second));
+        assert_eq!(session.index_of(second), Some(1));
     }
 }

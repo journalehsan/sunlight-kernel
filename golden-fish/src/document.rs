@@ -13,6 +13,14 @@ use core::fmt;
 use crate::attributes::Attribute;
 use crate::node::{Node, NodeId};
 
+/// Aggregate statistics for an owned DOM.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DocumentStats {
+    pub node_count: usize,
+    pub max_depth: usize,
+    pub total_text_bytes: usize,
+}
+
 /// An owned HTML document tree.
 ///
 /// Always contains at least a root `Node::Document`.
@@ -74,6 +82,32 @@ impl Document {
     /// Number of nodes currently allocated in the document (including root).
     pub fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Return bounded-size aggregate statistics without allocating.
+    pub fn stats(&self) -> DocumentStats {
+        let mut stats = DocumentStats {
+            node_count: self.nodes.len(),
+            ..DocumentStats::default()
+        };
+        let mut stack = Vec::new();
+        stack.push((self.root, 0usize));
+        while let Some((node_id, depth)) = stack.pop() {
+            stats.max_depth = stats.max_depth.max(depth);
+            if let Some(node) = self.get(node_id) {
+                match node {
+                    Node::Text { content } | Node::Comment { content } => {
+                        stats.total_text_bytes =
+                            stats.total_text_bytes.saturating_add(content.len());
+                    }
+                    Node::Document { .. } | Node::Element { .. } => {}
+                }
+            }
+            for &child in self.children(node_id).iter().rev() {
+                stack.push((child, depth.saturating_add(1)));
+            }
+        }
+        stats
     }
 
     /// Borrow a node by id.

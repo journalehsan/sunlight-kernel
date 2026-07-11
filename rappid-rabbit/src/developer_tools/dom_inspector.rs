@@ -1,12 +1,16 @@
 #[cfg(feature = "dom")]
 use alloc::format;
+use alloc::string::String;
 #[cfg(feature = "dom")]
 use alloc::string::ToString;
-use alloc::{string::String, vec::Vec};
+#[cfg(feature = "dom")]
+use alloc::vec::Vec;
 
 #[cfg(feature = "dom")]
 use golden_fish::{Document, Node, NodeId};
 use sunlight_ui::widgets::{TreeViewRow, TreeViewState};
+
+pub const MAX_INSPECTOR_PROJECTION_ROWS: usize = 8_192;
 
 #[cfg(feature = "dom")]
 use super::dom_tree_adapter::{
@@ -28,6 +32,16 @@ pub struct DomInspectorState {
     styles_scroll: usize,
     focused_pane: DomInspectorPane,
     empty_message: String,
+    properties_text_cache: String,
+    styles_text_cache: String,
+    properties_text_dirty: bool,
+    styles_text_dirty: bool,
+    #[cfg(feature = "dom")]
+    tree_rows_cache: Vec<TreeViewRow<NodeId>>,
+    #[cfg(feature = "dom")]
+    tree_rows_dirty: bool,
+    #[cfg(feature = "dom")]
+    tree_rebuild_count: usize,
     #[cfg(feature = "dom")]
     document: Option<Document>,
 }
@@ -47,6 +61,16 @@ impl DomInspectorState {
             styles_scroll: 0,
             focused_pane: DomInspectorPane::Tree,
             empty_message: String::from("No document parsed yet."),
+            properties_text_cache: String::new(),
+            styles_text_cache: String::new(),
+            properties_text_dirty: true,
+            styles_text_dirty: true,
+            #[cfg(feature = "dom")]
+            tree_rows_cache: Vec::new(),
+            #[cfg(feature = "dom")]
+            tree_rows_dirty: true,
+            #[cfg(feature = "dom")]
+            tree_rebuild_count: 0,
             #[cfg(feature = "dom")]
             document: None,
         }
@@ -58,8 +82,14 @@ impl DomInspectorState {
         self.properties_scroll = 0;
         self.styles_scroll = 0;
         self.empty_message = message.into();
+        self.properties_text_cache.clear();
+        self.styles_text_cache.clear();
+        self.properties_text_dirty = true;
+        self.styles_text_dirty = true;
         #[cfg(feature = "dom")]
         {
+            self.tree_rows_cache.clear();
+            self.tree_rows_dirty = true;
             self.document = None;
         }
     }
@@ -118,6 +148,9 @@ impl DomInspectorState {
         }
         let _ = self.tree.set_selected(selected_node);
         self.selected_node = selected_node;
+        self.properties_text_dirty = true;
+        self.styles_text_dirty = true;
+        self.tree_rows_dirty = true;
         self.document = Some(document);
     }
 
@@ -146,9 +179,11 @@ impl DomInspectorState {
         {
             let _ = self.tree.set_selected(Some(node_id));
             self.selected_node = Some(node_id);
+            self.invalidate_cached_views();
         } else {
             let _ = self.tree.set_selected(None);
             self.selected_node = None;
+            self.invalidate_cached_views();
         }
     }
 
@@ -165,6 +200,7 @@ impl DomInspectorState {
         let adapter = DomTreeAdapter::new(document);
         let _ = self.tree.toggle(&adapter, node_id);
         self.selected_node = self.tree.selected_id();
+        self.invalidate_cached_views();
     }
 
     #[cfg(not(feature = "dom"))]
@@ -180,6 +216,9 @@ impl DomInspectorState {
         let changed = self.tree.move_selection(&rows, delta).is_some();
         self.tree.ensure_selected_visible(&rows, visible_rows);
         self.selected_node = self.tree.selected_id();
+        if changed {
+            self.invalidate_cached_views();
+        }
         changed
     }
 
@@ -201,6 +240,9 @@ impl DomInspectorState {
             .is_some();
         self.tree.ensure_selected_visible(&rows, visible_rows);
         self.selected_node = self.tree.selected_id();
+        if changed {
+            self.invalidate_cached_views();
+        }
         changed
     }
 
@@ -219,6 +261,9 @@ impl DomInspectorState {
         let changed = self.tree.expand_or_select_first_child(&adapter).is_some();
         self.tree.ensure_selected_visible(&rows, visible_rows);
         self.selected_node = self.tree.selected_id();
+        if changed {
+            self.invalidate_cached_views();
+        }
         changed
     }
 
@@ -237,6 +282,9 @@ impl DomInspectorState {
         let changed = self.tree.toggle_selected(&adapter).is_some();
         self.tree.ensure_selected_visible(&rows, visible_rows);
         self.selected_node = self.tree.selected_id();
+        if changed {
+            self.invalidate_cached_views();
+        }
         changed
     }
 
@@ -264,23 +312,91 @@ impl DomInspectorState {
     }
 
     #[cfg(feature = "dom")]
-    pub fn tree_rows(&mut self) -> Vec<TreeViewRow<NodeId>> {
-        let Some(document) = self.document.as_ref() else {
-            return Vec::new();
-        };
-        let adapter = DomTreeAdapter::new(document);
-        let rows = self.tree.rebuild_rows(&adapter);
-        self.selected_node = self.tree.selected_id();
-        rows
+    pub fn tree_rows(&mut self) -> &[TreeViewRow<NodeId>] {
+        self.refresh_tree_rows_cache();
+        &self.tree_rows_cache
     }
 
     #[cfg(not(feature = "dom"))]
-    pub fn tree_rows(&mut self) -> Vec<TreeViewRow<usize>> {
-        Vec::new()
+    pub fn tree_rows(&mut self) -> &[TreeViewRow<usize>] {
+        &[]
     }
 
     #[cfg(feature = "dom")]
-    pub fn node_properties_text(&self) -> String {
+    pub fn node_properties_text(&mut self) -> &str {
+        if self.properties_text_dirty {
+            self.properties_text_cache = self.build_node_properties_text();
+            self.properties_text_dirty = false;
+        }
+        self.properties_text_cache.as_str()
+    }
+
+    #[cfg(not(feature = "dom"))]
+    pub fn node_properties_text(&mut self) -> &str {
+        "Golden Fish DOM support is unavailable in this build."
+    }
+
+    #[cfg(feature = "dom")]
+    pub fn styles_text(&mut self) -> &str {
+        if self.styles_text_dirty {
+            self.styles_text_cache = self.build_styles_text();
+            self.styles_text_dirty = false;
+        }
+        self.styles_text_cache.as_str()
+    }
+
+    #[cfg(not(feature = "dom"))]
+    pub fn styles_text(&mut self) -> &str {
+        "Computed styles are not available yet."
+    }
+}
+
+#[cfg(feature = "dom")]
+impl DomInspectorState {
+    fn invalidate_cached_views(&mut self) {
+        self.properties_text_dirty = true;
+        self.styles_text_dirty = true;
+        self.tree_rows_dirty = true;
+    }
+
+    fn refresh_tree_rows_cache(&mut self) {
+        if !self.tree_rows_dirty {
+            return;
+        }
+        let Some(document) = self.document.as_ref() else {
+            self.tree_rows_cache.clear();
+            self.selected_node = None;
+            self.tree_rows_dirty = false;
+            return;
+        };
+        let adapter = DomTreeAdapter::new(document);
+        let rows = self.tree.rebuild_rows(&adapter);
+        if rows.len() > MAX_INSPECTOR_PROJECTION_ROWS {
+            self.tree_rows_cache.clear();
+            self.empty_message = format!(
+                "DOM Inspector limit exceeded: {} visible rows (maximum {}).",
+                rows.len(),
+                MAX_INSPECTOR_PROJECTION_ROWS
+            );
+        } else {
+            self.tree_rows_cache = rows;
+        }
+        self.selected_node = self.tree.selected_id();
+        self.tree_rows_dirty = false;
+        self.tree_rebuild_count = self.tree_rebuild_count.saturating_add(1);
+    }
+
+    pub fn visible_row_count(&mut self) -> usize {
+        self.refresh_tree_rows_cache();
+        self.tree_rows_cache.len()
+    }
+
+    #[cfg(test)]
+    pub fn projection_rebuild_count(&self) -> usize {
+        self.tree_rebuild_count
+    }
+
+    fn build_node_properties_text(&self) -> String {
         let Some(document) = self.document.as_ref() else {
             return self.empty_message.clone();
         };
@@ -359,13 +475,7 @@ impl DomInspectorState {
         }
     }
 
-    #[cfg(not(feature = "dom"))]
-    pub fn node_properties_text(&self) -> String {
-        String::from("Golden Fish DOM support is unavailable in this build.")
-    }
-
-    #[cfg(feature = "dom")]
-    pub fn styles_text(&self) -> String {
+    fn build_styles_text(&self) -> String {
         let Some(document) = self.document.as_ref() else {
             return self.empty_message.clone();
         };
@@ -399,11 +509,6 @@ impl DomInspectorState {
         }
         out.push_str("Computed styles are not available yet.\n");
         out
-    }
-
-    #[cfg(not(feature = "dom"))]
-    pub fn styles_text(&self) -> String {
-        String::from("Computed styles are not available yet.")
     }
 }
 
@@ -445,7 +550,11 @@ mod tests {
     fn dom_tree_uses_real_parsed_structure() {
         let mut state =
             build_state("<html><head></head><body><header></header><main></main></body></html>");
-        let labels: Vec<String> = state.tree_rows().into_iter().map(|row| row.label).collect();
+        let labels: Vec<String> = state
+            .tree_rows()
+            .iter()
+            .map(|row| row.label.clone())
+            .collect();
         assert_eq!(labels, vec!["#document", "<html>", "<head>", "<body>"]);
     }
 
@@ -479,7 +588,73 @@ mod tests {
         assert!(state.tree_rows().iter().any(|row| row.label == "<p>"));
 
         state.set_document(parse_html("<html><body><div>fresh</div></body></html>").unwrap());
-        let labels: Vec<String> = state.tree_rows().into_iter().map(|row| row.label).collect();
+        let labels: Vec<String> = state
+            .tree_rows()
+            .iter()
+            .map(|row| row.label.clone())
+            .collect();
         assert!(!labels.iter().any(|label| label == "<section>"));
+    }
+
+    #[test]
+    fn repeated_idle_projection_access_does_not_rebuild_or_append() {
+        let mut state = build_state(
+            "<html><body><main><h1>Example</h1><p>Small document.</p></main></body></html>",
+        );
+        let first_rows = state.tree_rows().len();
+        assert_eq!(state.projection_rebuild_count(), 1);
+        for _ in 0..1_000 {
+            assert_eq!(state.tree_rows().len(), first_rows);
+        }
+        assert_eq!(state.projection_rebuild_count(), 1);
+    }
+
+    #[test]
+    fn projection_rebuild_replaces_previous_rows() {
+        let mut state = build_state("<html><body><main></main></body></html>");
+        let initial_rows = state.tree_rows().len();
+        let document = state.document().unwrap();
+        let body_id = document.find_first_element("body").unwrap();
+        state.toggle_node(body_id);
+        let expanded_rows = state.tree_rows().len();
+        assert!(expanded_rows >= initial_rows);
+
+        state.toggle_node(body_id);
+        assert_eq!(state.tree_rows().len(), initial_rows);
+        assert_eq!(state.projection_rebuild_count(), 3);
+    }
+
+    #[test]
+    fn navigation_replacement_drops_old_document_projection() {
+        let mut state =
+            build_state("<html><body><section><p>old document</p></section></body></html>");
+        let document = state.document().unwrap();
+        let body_id = document.find_first_element("body").unwrap();
+        state.toggle_node(body_id);
+        assert!(state.tree_rows().iter().any(|row| row.label == "<section>"));
+
+        state.set_document(parse_html("<html><body><article>new</article></body></html>").unwrap());
+        let labels: Vec<_> = state
+            .tree_rows()
+            .iter()
+            .map(|row| row.label.as_str())
+            .collect();
+        assert!(!labels.contains(&"<section>"));
+        assert!(state
+            .document()
+            .unwrap()
+            .find_first_element("article")
+            .is_some());
+    }
+
+    #[test]
+    fn example_sized_document_projection_stays_small() {
+        let mut state = build_state(
+            "<!doctype html><html><head><title>Example Domain</title></head><body><div><h1>Example Domain</h1><p>This domain is for examples.</p></div></body></html>",
+        );
+        let stats = state.document().unwrap().stats();
+        assert!(stats.node_count < 64);
+        assert!(state.tree_rows().len() < 64);
+        assert!(state.tree_rows().len() <= MAX_INSPECTOR_PROJECTION_ROWS);
     }
 }
