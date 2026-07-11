@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
+use alloc::{collections::BTreeMap, string::String, sync::Arc, vec, vec::Vec};
 
 use crate::font::VecText;
 use crate::geom::{Point, Rect, Size};
@@ -19,6 +19,17 @@ pub struct DocumentNodeId(pub u64);
 /// Stable identity for one retained object in a [`DocumentScene`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RenderObjectId(pub u64);
+
+/// Generic decoded raster data shared by retained document producers.
+///
+/// Pixels are packed ARGB8888 and top-down. The scene stores this behind an
+/// `Arc` so reflows and duplicated HTML image elements do not copy pixels.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RasterImage {
+    pub width: u32,
+    pub height: u32,
+    pub pixels: Vec<u32>,
+}
 
 /// A small deterministic paint ordering key.  It is deliberately more
 /// expressive than just z-index so later stacking-context work has a stable
@@ -64,6 +75,13 @@ pub enum RenderObjectKind {
     },
     ImagePlaceholder {
         src: String,
+        alt: String,
+    },
+    Image {
+        image: Arc<RasterImage>,
+        source_url: String,
+        intrinsic_width: u32,
+        intrinsic_height: u32,
         alt: String,
     },
 }
@@ -951,10 +969,59 @@ impl<'a> DocumentCanvas<'a> {
                         Color::rgb(0x8B, 0x86, 0x80),
                     );
                 }
+                RenderObjectKind::Image { image, .. } => {
+                    draw_raster_image(canvas, clipped, bounds, image);
+                }
                 // A link has interaction metadata but no extra paint.  Its
                 // text fragments contain the resolved visual decoration.
                 RenderObjectKind::Link { .. } => {}
             }
+        }
+    }
+}
+
+fn draw_raster_image(canvas: &mut Canvas, clipped: Rect, destination: Rect, image: &RasterImage) {
+    if image.width == 0
+        || image.height == 0
+        || image.pixels.len() != (image.width as usize).saturating_mul(image.height as usize)
+    {
+        return;
+    }
+    for destination_y in clipped.y..clipped.bottom() {
+        let relative_y = destination_y.saturating_sub(destination.y) as u32;
+        let source_y = relative_y.saturating_mul(image.height) / destination.h.max(1);
+        for destination_x in clipped.x..clipped.right() {
+            let relative_x = destination_x.saturating_sub(destination.x) as u32;
+            let source_x = relative_x.saturating_mul(image.width) / destination.w.max(1);
+            let source_index = source_y as usize * image.width as usize + source_x as usize;
+            let source = image.pixels[source_index];
+            let alpha = (source >> 24) as u8;
+            if alpha == 0 {
+                continue;
+            }
+            let destination_index =
+                destination_y as usize * canvas.stride as usize + destination_x as usize;
+            if destination_index >= canvas.pixels.len() {
+                continue;
+            }
+            let rgb = source & 0x00ff_ffff;
+            if alpha == 255 {
+                canvas.pixels[destination_index] = rgb;
+                continue;
+            }
+            let existing = canvas.pixels[destination_index];
+            let source_red = (rgb >> 16) & 0xff;
+            let source_green = (rgb >> 8) & 0xff;
+            let source_blue = rgb & 0xff;
+            let destination_red = (existing >> 16) & 0xff;
+            let destination_green = (existing >> 8) & 0xff;
+            let destination_blue = existing & 0xff;
+            let alpha = alpha as u32;
+            let inverse_alpha = 255 - alpha;
+            canvas.pixels[destination_index] =
+                (((source_red * alpha + destination_red * inverse_alpha) >> 8) << 16)
+                    | (((source_green * alpha + destination_green * inverse_alpha) >> 8) << 8)
+                    | ((source_blue * alpha + destination_blue * inverse_alpha) >> 8);
         }
     }
 }
@@ -964,10 +1031,11 @@ mod tests {
     use super::{
         diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
         DocumentCanvasPresentation, DocumentNodeId, DocumentScene, DocumentStrokeStyle,
-        DocumentTextStyle, PaintOrder, RenderObject, RenderObjectId, RenderObjectKind,
+        DocumentTextStyle, PaintOrder, RasterImage, RenderObject, RenderObjectId, RenderObjectKind,
         ScenePatchOperation,
     };
     use crate::{Canvas, Color, Point, Rect, Size, Theme};
+    use alloc::sync::Arc;
 
     fn scene_with_text(text: &str, x: i32) -> DocumentScene {
         let mut scene = DocumentScene::new(7, Size::new(200, 100), Size::new(200, 100));
@@ -1069,6 +1137,39 @@ mod tests {
             scene.objects.first()
         );
         assert_eq!(widget.hit_test(Point::new(rect.x + 8, rect.y - 1)), None);
+    }
+
+    #[test]
+    fn browser_scene_draws_decoded_raster_image() {
+        let mut scene = DocumentScene::new(7, Size::new(2, 2), Size::new(2, 2));
+        assert!(scene.push(RenderObject {
+            id: RenderObjectId(2),
+            owner_node_id: DocumentNodeId(1),
+            kind: RenderObjectKind::Image {
+                image: Arc::new(RasterImage {
+                    width: 1,
+                    height: 1,
+                    pixels: vec![0xFFFF0000],
+                }),
+                source_url: String::from("https://example.com/red.png"),
+                intrinsic_width: 1,
+                intrinsic_height: 1,
+                alt: String::new(),
+            },
+            bounds: Rect::new(0, 0, 2, 2),
+            clip_bounds: None,
+            paint_order: PaintOrder::default(),
+            interaction: None,
+        }));
+        scene.finalize();
+        let widget = DocumentCanvas::new(Rect::new(0, 0, 2, 2), &[])
+            .with_scene(&scene)
+            .with_presentation(DocumentCanvasPresentation::Browser);
+        let mut pixels = [0u32; 4];
+        let mut canvas = Canvas::new(&mut pixels, 2, 2, 2);
+        widget.draw(&mut canvas, &Theme::sunlight_dark());
+        assert_eq!(pixels[0], 0x00FF0000);
+        assert_eq!(pixels[3], 0x00FF0000);
     }
 
     #[test]

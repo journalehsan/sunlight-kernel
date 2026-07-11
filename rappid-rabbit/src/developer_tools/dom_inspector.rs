@@ -454,6 +454,16 @@ impl DomInspectorState {
                     out.push_str(class_attr);
                     out.push('\n');
                 }
+                if tag_name.eq_ignore_ascii_case("img") {
+                    out.push_str("Image Attributes\n");
+                    for name in ["src", "alt", "width", "height"] {
+                        out.push_str(name);
+                        out.push_str(": ");
+                        out.push_str(attribute_value(attributes, name).unwrap_or("(missing)"));
+                        out.push('\n');
+                    }
+                    out.push_str("Resource details: available after image loading.\n");
+                }
                 out.push_str("Child Count: ");
                 out.push_str(&document.children(node_id).len().to_string());
                 out.push('\n');

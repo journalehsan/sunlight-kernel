@@ -12,6 +12,8 @@ use core::fmt::Write as _;
 use linked_list_allocator::LockedHeap;
 
 #[cfg(feature = "dom")]
+use rappid_rabbit::images::{decode_image, ImageCache, MAX_IMAGE_RESPONSE_BYTES};
+#[cfg(feature = "dom")]
 use rappid_rabbit::render::DocumentRenderState;
 use rappid_rabbit::{
     body_is_probably_text, build_get_request,
@@ -220,6 +222,8 @@ struct RabbitApp {
     developer_tools: DeveloperToolsState,
     discovered_resources: Vec<ResourceCandidate>,
     resource_queue: ResourceQueue,
+    #[cfg(feature = "dom")]
+    image_cache: ImageCache,
     document_lifecycle: DocumentLifecycle,
 }
 
@@ -262,6 +266,8 @@ impl RabbitApp {
             developer_tools,
             discovered_resources: Vec::new(),
             resource_queue: ResourceQueue::default(),
+            #[cfg(feature = "dom")]
+            image_cache: ImageCache::default(),
             document_lifecycle: DocumentLifecycle::default(),
         }
     }
@@ -310,6 +316,10 @@ impl RabbitApp {
         let generation = self.document_lifecycle.begin_navigation();
         self.discovered_resources.clear();
         self.resource_queue.clear();
+        #[cfg(feature = "dom")]
+        {
+            self.image_cache = ImageCache::default();
+        }
         self.render_scroll = 0;
         self.render_status = String::from("Loading rendered document...");
         #[cfg(feature = "dom")]
@@ -421,6 +431,7 @@ impl RabbitApp {
                                 );
                             self.resource_queue.replace_from_candidates(&candidates);
                             linked_stylesheets = self.fetch_external_stylesheets(&candidates);
+                            self.fetch_images(&candidates);
                             self.discovered_resources = candidates;
                         }
                         let stylesheets = order_document_stylesheets(
@@ -433,13 +444,14 @@ impl RabbitApp {
                         let inspector_styles = style_context.clone();
                         let viewport = self.render_viewport();
                         self.render_scroll = 0;
-                        self.render_state = Some(DocumentRenderState::new(
+                        self.render_state = Some(DocumentRenderState::new_with_images(
                             generation,
                             final_url.clone(),
                             document,
                             style_context,
                             viewport,
                             &F_UI,
+                            self.image_cache.clone(),
                         ));
                         self.log_render_scene("initial scene");
                         self.developer_tools
@@ -632,6 +644,167 @@ impl RabbitApp {
             }
         }
         stylesheets
+    }
+
+    #[cfg(feature = "dom")]
+    fn fetch_images(&mut self, candidates: &[ResourceCandidate]) {
+        for candidate in candidates {
+            if candidate.resource_type != ResourceType::Image {
+                continue;
+            }
+            if self.image_cache.get(&candidate.resolved_url).is_some() {
+                self.developer_tools.console.push(
+                    ConsoleSeverity::Quiet,
+                    ConsoleSource::Fetch,
+                    format!("[RABBIT][IMAGE] cache hit url={}", candidate.resolved_url),
+                );
+                continue;
+            }
+            self.developer_tools.console.push(
+                ConsoleSeverity::Quiet,
+                ConsoleSource::Fetch,
+                format!("[RABBIT][IMAGE] discovered url={}", candidate.resolved_url),
+            );
+            let parsed_url = match ParsedUrl::parse(&candidate.resolved_url) {
+                Ok(url) => url,
+                Err(error) => {
+                    let reason = format!("invalid image URL: {error}");
+                    self.image_cache
+                        .insert_failed(candidate.resolved_url.clone(), reason.clone());
+                    self.developer_tools.console.push(
+                        ConsoleSeverity::Warn,
+                        ConsoleSource::Fetch,
+                        format!("[RABBIT][IMAGE] failed reason={reason}"),
+                    );
+                    continue;
+                }
+            };
+            let request = build_get_request(&parsed_url);
+            let request_id = self.developer_tools.network.begin_request(
+                request.method,
+                candidate.resolved_url.clone(),
+                request.headers.clone(),
+                ResourceType::Image,
+                ResourcePriority::Embedded,
+                RequestState::Queued,
+            );
+            self.developer_tools
+                .network
+                .set_request_state(request_id, RequestState::Connecting);
+            self.developer_tools.console.push(
+                ConsoleSeverity::Quiet,
+                ConsoleSource::Fetch,
+                format!(
+                    "[RABBIT][IMAGE] request started url={}",
+                    candidate.resolved_url
+                ),
+            );
+            match perform_request(parsed_url, request) {
+                Ok(result) => {
+                    let status_code = result.response.status_code;
+                    let status_text = if result.response.status_text.is_empty() {
+                        String::from("(no reason phrase)")
+                    } else {
+                        result.response.status_text.clone()
+                    };
+                    let final_url = result.final_url.as_ref().map(format_url);
+                    let content_type = result.response.header("content-type").map(String::from);
+                    let byte_size = result.body.len();
+                    self.developer_tools.network.complete_request(
+                        request_id,
+                        final_url.clone(),
+                        status_code,
+                        status_text.clone(),
+                        result.duration_ms,
+                        Some(byte_size),
+                        content_type.clone(),
+                        result.response.headers.clone(),
+                        None,
+                        Some(false),
+                        Some(false),
+                    );
+                    if !(200..400).contains(&status_code) {
+                        let reason = format!("HTTP {status_code} {status_text}");
+                        self.image_cache
+                            .insert_failed(candidate.resolved_url.clone(), reason.clone());
+                        self.developer_tools.console.push(
+                            ConsoleSeverity::Warn,
+                            ConsoleSource::Fetch,
+                            format!("[RABBIT][IMAGE] failed reason={reason}"),
+                        );
+                        continue;
+                    }
+                    if byte_size > MAX_IMAGE_RESPONSE_BYTES {
+                        let reason =
+                            format!("response exceeds {MAX_IMAGE_RESPONSE_BYTES} byte limit");
+                        self.image_cache
+                            .insert_failed(candidate.resolved_url.clone(), reason.clone());
+                        self.developer_tools.console.push(
+                            ConsoleSeverity::Warn,
+                            ConsoleSource::Fetch,
+                            format!("[RABBIT][IMAGE] failed reason={reason}"),
+                        );
+                        continue;
+                    }
+                    match decode_image(
+                        &result.body,
+                        content_type.as_deref(),
+                        final_url
+                            .as_deref()
+                            .unwrap_or(candidate.resolved_url.as_str()),
+                    ) {
+                        Ok(decoded) => {
+                            self.developer_tools.console.push(
+                                ConsoleSeverity::Quiet,
+                                ConsoleSource::Fetch,
+                                format!(
+                                    "[RABBIT][IMAGE] response status={} bytes={}",
+                                    status_code, byte_size
+                                ),
+                            );
+                            self.developer_tools.console.push(
+                                ConsoleSeverity::Quiet,
+                                ConsoleSource::Fetch,
+                                format!(
+                                    "[RABBIT][IMAGE] decoded format={} size={}x{}",
+                                    decoded.format.label(),
+                                    decoded.image.width,
+                                    decoded.image.height
+                                ),
+                            );
+                            self.image_cache
+                                .insert_decoded(candidate.resolved_url.clone(), decoded);
+                        }
+                        Err(reason) => {
+                            self.image_cache
+                                .insert_failed(candidate.resolved_url.clone(), reason.clone());
+                            self.developer_tools.console.push(
+                                ConsoleSeverity::Warn,
+                                ConsoleSource::Fetch,
+                                format!("[RABBIT][IMAGE] failed reason={reason}"),
+                            );
+                        }
+                    }
+                }
+                Err(error) => {
+                    let reason = format!("image request failed: {error}");
+                    self.developer_tools.network.fail_request(
+                        request_id,
+                        None,
+                        None,
+                        None,
+                        reason.clone(),
+                    );
+                    self.image_cache
+                        .insert_failed(candidate.resolved_url.clone(), reason.clone());
+                    self.developer_tools.console.push(
+                        ConsoleSeverity::Warn,
+                        ConsoleSource::Fetch,
+                        format!("[RABBIT][IMAGE] failed reason={reason}"),
+                    );
+                }
+            }
+        }
     }
 
     fn log_heap_stage(&self, stage: &str, generation: u64, body_bytes: Option<usize>) {

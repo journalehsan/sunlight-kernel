@@ -20,6 +20,7 @@ use sunlight_ui::{
 
 use crate::{
     css::{Color as CssColor, ComputedStyle, Property, PropertyValue, StyleContext},
+    images::ImageCache,
     resources::discovery::resolve_url,
 };
 
@@ -103,7 +104,11 @@ pub struct ImageFragment {
     pub owner_node_id: DomNodeId,
     pub bounds: Rect,
     pub src: String,
+    pub resolved_url: Option<String>,
     pub alt: String,
+    pub intrinsic_size: Option<Size>,
+    pub decoded: Option<alloc::sync::Arc<sunlight_ui::widgets::RasterImage>>,
+    pub link: Option<LinkTarget>,
 }
 
 /// Geometry retained for an inline element. Inline elements do not establish
@@ -155,6 +160,7 @@ pub struct DocumentRenderState {
     pub last_patch: ScenePatch,
     pub scene_generation: u64,
     pub viewport: Size,
+    images: ImageCache,
 }
 
 impl DocumentRenderState {
@@ -166,8 +172,34 @@ impl DocumentRenderState {
         viewport: Size,
         measurer: &dyn TextMeasurer,
     ) -> Self {
-        let layout_tree =
-            build_layout_tree_for_url(&dom, &styles, Some(final_url.as_str()), viewport, measurer);
+        Self::new_with_images(
+            document_id,
+            final_url,
+            dom,
+            styles,
+            viewport,
+            measurer,
+            ImageCache::default(),
+        )
+    }
+
+    pub fn new_with_images(
+        document_id: u64,
+        final_url: String,
+        dom: Document,
+        styles: StyleContext,
+        viewport: Size,
+        measurer: &dyn TextMeasurer,
+        images: ImageCache,
+    ) -> Self {
+        let layout_tree = build_layout_tree_for_url_with_images(
+            &dom,
+            &styles,
+            Some(final_url.as_str()),
+            viewport,
+            measurer,
+            &images,
+        );
         let current_scene = scene_from_layout(document_id, viewport, &layout_tree);
         Self {
             document_id,
@@ -180,6 +212,7 @@ impl DocumentRenderState {
             last_patch: ScenePatch::default(),
             scene_generation: 1,
             viewport,
+            images,
         }
     }
 
@@ -195,12 +228,13 @@ impl DocumentRenderState {
     }
 
     pub fn rebuild(&mut self, viewport: Size, measurer: &dyn TextMeasurer) {
-        let layout_tree = build_layout_tree_for_url(
+        let layout_tree = build_layout_tree_for_url_with_images(
             &self.dom,
             &self.styles,
             Some(self.final_url.as_str()),
             viewport,
             measurer,
+            &self.images,
         );
         let scene = scene_from_layout(self.document_id, viewport, &layout_tree);
         self.last_patch = diff_scenes(&self.current_scene, &scene);
@@ -209,6 +243,11 @@ impl DocumentRenderState {
         self.layout_tree = layout_tree;
         self.viewport = viewport;
         self.scene_generation = self.scene_generation.saturating_add(1);
+    }
+
+    pub fn rebuild_for_images(&mut self, measurer: &dyn TextMeasurer, images: ImageCache) {
+        self.images = images;
+        self.rebuild(self.viewport, measurer);
     }
 
     /// Returns the stable key that a future bounded in-memory cache will use.
@@ -263,6 +302,7 @@ struct LayoutBuilder<'a> {
     document: &'a Document,
     styles: &'a StyleContext,
     base_url: Option<ParsedUrl>,
+    images: &'a ImageCache,
     measurer: &'a dyn TextMeasurer,
     tree: LayoutTree,
     line_count: usize,
@@ -275,15 +315,23 @@ pub fn build_layout_tree(
     viewport: Size,
     measurer: &dyn TextMeasurer,
 ) -> LayoutTree {
-    build_layout_tree_for_url(document, styles, None, viewport, measurer)
+    build_layout_tree_for_url_with_images(
+        document,
+        styles,
+        None,
+        viewport,
+        measurer,
+        &ImageCache::default(),
+    )
 }
 
-fn build_layout_tree_for_url(
+fn build_layout_tree_for_url_with_images(
     document: &Document,
     styles: &StyleContext,
     final_url: Option<&str>,
     viewport: Size,
     measurer: &dyn TextMeasurer,
+    images: &ImageCache,
 ) -> LayoutTree {
     let viewport = Size::new(
         viewport.w.clamp(1, MAX_DOCUMENT_DIMENSION),
@@ -293,6 +341,7 @@ fn build_layout_tree_for_url(
         document,
         styles,
         base_url: final_url.and_then(|url| ParsedUrl::parse(url).ok()),
+        images,
         measurer,
         tree: LayoutTree::default(),
         line_count: 0,
@@ -333,6 +382,14 @@ impl<'a> LayoutBuilder<'a> {
         ) {
             // An inline at this level is handled by its nearest block parent.
             return None;
+        }
+        if self
+            .document
+            .get(node_id)
+            .and_then(Node::tag_name)
+            .is_some_and(|tag_name| tag_name.eq_ignore_ascii_case("img"))
+        {
+            return self.layout_block_image(node_id, available_x, available_w, cursor_y, style);
         }
 
         let outer_w = available_w.saturating_sub(style.margin[1].saturating_add(style.margin[3]));
@@ -414,6 +471,83 @@ impl<'a> LayoutBuilder<'a> {
         );
         node.border_box = Rect::new(border_x, border_y, border_w, border_h);
         node.margin_box = Rect::new(available_x, *cursor_y, margin_w.min(available_w), margin_h);
+        *cursor_y = cursor_y.saturating_add(margin_h as i32);
+        Some(index)
+    }
+
+    fn layout_block_image(
+        &mut self,
+        node_id: NodeId,
+        available_x: i32,
+        available_w: u32,
+        cursor_y: &mut i32,
+        style: FlowStyle,
+    ) -> Option<usize> {
+        let Node::Element { attributes, .. } = self.document.get(node_id)? else {
+            return None;
+        };
+        let src = attr(attributes, "src").unwrap_or("");
+        let resolved_url = self
+            .base_url
+            .as_ref()
+            .and_then(|base| resolve_url(base, src).ok());
+        let decoded = resolved_url
+            .as_deref()
+            .and_then(|url| self.images.decoded(url));
+        let intrinsic_size = decoded.map(|image| Size::new(image.image.width, image.image.height));
+        let (content_w, content_h) = image_dimensions(
+            style.width.or(parse_dimension(attr(attributes, "width"))),
+            style.height.or(parse_dimension(attr(attributes, "height"))),
+            intrinsic_size,
+        );
+        let border_x = available_x.saturating_add(style.margin[3] as i32);
+        let border_y = cursor_y.saturating_add(style.margin[0] as i32);
+        let content_x = border_x
+            .saturating_add(style.paint.border_width as i32)
+            .saturating_add(style.padding[3] as i32);
+        let content_y = border_y
+            .saturating_add(style.paint.border_width as i32)
+            .saturating_add(style.padding[0] as i32);
+        let padding_w = content_w
+            .saturating_add(style.padding[1])
+            .saturating_add(style.padding[3]);
+        let padding_h = content_h
+            .saturating_add(style.padding[0])
+            .saturating_add(style.padding[2]);
+        let border_w = padding_w.saturating_add(style.paint.border_width.saturating_mul(2));
+        let border_h = padding_h.saturating_add(style.paint.border_width.saturating_mul(2));
+        let margin_h = border_h
+            .saturating_add(style.margin[0])
+            .saturating_add(style.margin[2]);
+        let index = self.tree.nodes.len();
+        self.tree.nodes.push(LayoutNode {
+            owner_node_id: style.node_id,
+            display: style.display,
+            content_box: Rect::new(content_x, content_y, content_w, content_h),
+            padding_box: Rect::new(
+                border_x.saturating_add(style.paint.border_width as i32),
+                border_y.saturating_add(style.paint.border_width as i32),
+                padding_w,
+                padding_h,
+            ),
+            border_box: Rect::new(border_x, border_y, border_w, border_h),
+            margin_box: Rect::new(available_x, *cursor_y, border_w.min(available_w), margin_h),
+            children: Vec::new(),
+            text_fragments: Vec::new(),
+            image_fragments: vec![ImageFragment {
+                owner_node_id: style.node_id,
+                bounds: Rect::new(content_x, content_y, content_w, content_h),
+                src: src.into(),
+                resolved_url,
+                alt: attr(attributes, "alt").unwrap_or("Image").into(),
+                intrinsic_size,
+                decoded: decoded.map(|image| image.image.clone()),
+                link: None,
+            }],
+            visible: true,
+            paint: style.paint,
+            paint_order: node_id.min(u32::MAX as usize) as u32,
+        });
         *cursor_y = cursor_y.saturating_add(margin_h as i32);
         Some(index)
     }
@@ -610,16 +744,34 @@ impl<'a> LayoutBuilder<'a> {
                     return;
                 }
                 if tag_name.eq_ignore_ascii_case("img") {
-                    let width = style.width.unwrap_or(160).clamp(1, MAX_DOCUMENT_DIMENSION);
-                    let height = style.height.unwrap_or(100).clamp(1, MAX_DOCUMENT_DIMENSION);
+                    let src = attr(attributes, "src").unwrap_or("");
+                    let resolved_url = self
+                        .base_url
+                        .as_ref()
+                        .and_then(|base| resolve_url(base, src).ok());
+                    let decoded = resolved_url
+                        .as_deref()
+                        .and_then(|url| self.images.decoded(url));
+                    let intrinsic_size =
+                        decoded.map(|image| Size::new(image.image.width, image.image.height));
+                    let html_width = parse_dimension(attr(attributes, "width"));
+                    let html_height = parse_dimension(attr(attributes, "height"));
+                    let specified_width = style.width.or(html_width);
+                    let specified_height = style.height.or(html_height);
+                    let (width, height) =
+                        image_dimensions(specified_width, specified_height, intrinsic_size);
                     let mut image_owners = inline_owners;
                     image_owners.push(owner);
                     output.push(InlineItem::Image {
                         image: ImageFragment {
                             owner_node_id: style.node_id,
                             bounds: Rect::new(0, 0, width, height),
-                            src: attr(attributes, "src").unwrap_or("").into(),
+                            src: src.into(),
+                            resolved_url,
                             alt: attr(attributes, "alt").unwrap_or("Image").into(),
+                            intrinsic_size,
+                            decoded: decoded.map(|image| image.image.clone()),
+                            link,
                         },
                         inline_owners: image_owners,
                     });
@@ -833,6 +985,37 @@ fn object_id(owner: DomNodeId, role: u8, slot: usize) -> RenderObjectId {
     RenderObjectId((owner.0 << 32) | ((role as u64) << 24) | (slot.min(0x00ff_ffff) as u64))
 }
 
+fn parse_dimension(value: Option<&str>) -> Option<u32> {
+    value
+        .and_then(|value| value.trim().parse::<u32>().ok())
+        .filter(|value| *value > 0)
+        .map(|value| value.min(MAX_DOCUMENT_DIMENSION))
+}
+
+fn image_dimensions(
+    specified_width: Option<u32>,
+    specified_height: Option<u32>,
+    intrinsic: Option<Size>,
+) -> (u32, u32) {
+    match (specified_width, specified_height, intrinsic) {
+        (Some(width), Some(height), _) => (width, height),
+        (Some(width), None, Some(intrinsic)) => (
+            width,
+            ((width as u64 * intrinsic.h as u64) / intrinsic.w.max(1) as u64)
+                .clamp(1, MAX_DOCUMENT_DIMENSION as u64) as u32,
+        ),
+        (None, Some(height), Some(intrinsic)) => (
+            ((height as u64 * intrinsic.w as u64) / intrinsic.h.max(1) as u64)
+                .clamp(1, MAX_DOCUMENT_DIMENSION as u64) as u32,
+            height,
+        ),
+        (None, None, Some(intrinsic)) => (intrinsic.w, intrinsic.h),
+        (Some(width), None, None) => (width, 100),
+        (None, Some(height), None) => (160, height),
+        (None, None, None) => (160, 100),
+    }
+}
+
 pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) -> DocumentScene {
     let mut scene = DocumentScene::new(document_id, viewport, layout.content_size);
     for node in &layout.nodes {
@@ -924,14 +1107,31 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
             );
         }
         for (slot, image) in node.image_fragments.iter().enumerate() {
+            let interaction = image.link.as_ref().map(|link| RenderInteraction::Link {
+                owner_node_id: link.anchor_node_id,
+                href: link.href.clone(),
+                resolved_url: link.resolved_url.clone(),
+            });
             push(
                 &mut scene,
                 RenderObject {
                     id: object_id(image.owner_node_id, 20, slot),
                     owner_node_id: image.owner_node_id,
-                    kind: RenderObjectKind::ImagePlaceholder {
-                        src: image.src.clone(),
-                        alt: image.alt.clone(),
+                    kind: match &image.decoded {
+                        Some(decoded) => RenderObjectKind::Image {
+                            image: decoded.clone(),
+                            source_url: image
+                                .resolved_url
+                                .clone()
+                                .unwrap_or_else(|| image.src.clone()),
+                            intrinsic_width: image.intrinsic_size.map_or(0, |size| size.w),
+                            intrinsic_height: image.intrinsic_size.map_or(0, |size| size.h),
+                            alt: image.alt.clone(),
+                        },
+                        None => RenderObjectKind::ImagePlaceholder {
+                            src: image.src.clone(),
+                            alt: image.alt.clone(),
+                        },
                     },
                     bounds: image.bounds,
                     clip_bounds: None,
@@ -940,7 +1140,7 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                         document_order: node.paint_order.saturating_add(slot as u32),
                         ..PaintOrder::default()
                     },
-                    interaction: None,
+                    interaction,
                 },
             );
         }
@@ -1382,6 +1582,25 @@ mod tests {
     }
 
     #[test]
+    fn image_lesson_fixture_keeps_duplicate_and_failed_images_as_distinct_nodes() {
+        let state = render(include_str!("../tests/fixtures/image-lesson.html"));
+        let placeholders = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::ImagePlaceholder { .. }))
+            .count();
+        assert_eq!(placeholders, 3);
+        assert!(state.current_scene.objects.iter().any(|object| {
+            matches!(
+                &object.kind,
+                RenderObjectKind::ImagePlaceholder { alt, .. } if alt == "Missing image fallback"
+            ) && object.bounds.w == 180
+                && object.bounds.h == 80
+        }));
+    }
+
+    #[test]
     fn image_placeholder_keeps_owner_and_source_metadata() {
         let state = render("<p><img src='/logo.simg' alt='Sunlight logo'></p>");
         let image_node = state.dom.find_first_element("img").unwrap();
@@ -1401,6 +1620,84 @@ mod tests {
             .current_scene
             .objects_for_node(DocumentNodeId(image_node as u64))
             .contains(&image.id));
+    }
+
+    #[test]
+    fn decoded_image_uses_intrinsic_size_and_retained_image_object() {
+        use crate::images::{decode_image, ImageCache};
+
+        const TINY_PNG: &[u8] = &[
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 207,
+            192, 240, 31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66,
+            96, 130,
+        ];
+        let dom =
+            parse_html("<p><a href='/go'><img src='/rabbit.png' alt='Rabbit'></a></p>").unwrap();
+        let styles = StyleContext::build(&dom, &[]);
+        let mut images = ImageCache::default();
+        images.insert_decoded(
+            String::from("https://example.com/rabbit.png"),
+            decode_image(
+                TINY_PNG,
+                Some("image/png"),
+                "https://example.com/rabbit.png",
+            )
+            .unwrap(),
+        );
+        let state = DocumentRenderState::new_with_images(
+            1,
+            String::from("https://example.com/index.html"),
+            dom.clone(),
+            styles,
+            Size::new(320, 240),
+            &TestMeasure,
+            images,
+        );
+        let image_node = dom.find_first_element("img").unwrap();
+        let image = state
+            .current_scene
+            .objects
+            .iter()
+            .find(|object| matches!(object.kind, RenderObjectKind::Image { .. }))
+            .unwrap();
+        assert_eq!(image.owner_node_id, DocumentNodeId(image_node as u64));
+        assert_eq!(image.bounds.w, 1);
+        assert_eq!(image.bounds.h, 1);
+        assert!(matches!(
+            &image.kind,
+            RenderObjectKind::Image {
+                source_url,
+                intrinsic_width: 1,
+                intrinsic_height: 1,
+                alt,
+                ..
+            } if source_url == "https://example.com/rabbit.png" && alt == "Rabbit"
+        ));
+        assert!(matches!(
+            image.interaction,
+            Some(RenderInteraction::Link { .. })
+        ));
+    }
+
+    #[test]
+    fn image_dimension_priority_preserves_aspect_ratio() {
+        assert_eq!(
+            image_dimensions(Some(120), Some(80), Some(Size::new(20, 10))),
+            (120, 80)
+        );
+        assert_eq!(
+            image_dimensions(Some(120), None, Some(Size::new(20, 10))),
+            (120, 60)
+        );
+        assert_eq!(
+            image_dimensions(None, Some(80), Some(Size::new(20, 10))),
+            (160, 80)
+        );
+        assert_eq!(
+            image_dimensions(None, None, Some(Size::new(20, 10))),
+            (20, 10)
+        );
     }
 
     #[test]

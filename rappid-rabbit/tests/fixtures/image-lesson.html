@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+    <style>
+        body {
+            background: white;
+            color: #222;
+            margin: 16px;
+            font-size: 16px;
+        }
+
+        img {
+            border: 2px solid #cc6600;
+            padding: 4px;
+            margin: 8px;
+        }
+
+        .small {
+            width: 120px;
+        }
+
+        .block {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>Rappid Rabbit Image Lesson</h1>
+
+    <p>
+        Inline image:
+        <img src="/fixtures/rabbit.png" alt="Rabbit logo">
+        followed by text.
+    </p>
+
+    <img class="small block" src="/fixtures/rabbit.png" alt="Small rabbit">
+
+    <img
+        src="/fixtures/missing.png"
+        width="180"
+        height="80"
+        alt="Missing image fallback">
+
+    <p>Image lesson complete.</p>
+</body>
+</html>

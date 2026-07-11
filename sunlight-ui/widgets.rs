@@ -26,8 +26,8 @@ pub use checkbox::Checkbox;
 pub use document_canvas::{
     diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
     DocumentCanvasPresentation, DocumentNodeId, DocumentRectStyle, DocumentScene,
-    DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RenderInteraction, RenderObject,
-    RenderObjectId, RenderObjectKind, ScenePatch, ScenePatchOperation,
+    DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage, RenderInteraction,
+    RenderObject, RenderObjectId, RenderObjectKind, ScenePatch, ScenePatchOperation,
 };
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
 pub use label::Label;
