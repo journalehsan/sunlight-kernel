@@ -24,8 +24,10 @@ pub use calendar::{
 };
 pub use checkbox::Checkbox;
 pub use document_canvas::{
-    DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode, DocumentRectStyle, DocumentStrokeStyle,
-    DocumentTextStyle,
+    diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode, DocumentNodeId,
+    DocumentRectStyle, DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder,
+    RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,
+    ScenePatchOperation,
 };
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
 pub use label::Label;

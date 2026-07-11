@@ -657,8 +657,9 @@ fn is_border_style(value: &str) -> bool {
 pub fn user_agent_stylesheet() -> Stylesheet {
     parse_stylesheet(
         r#"
-        html, body, div, header, main, section, article, nav, footer, p { display: block; }
-        span, a, strong, em, code { display: inline; }
+        html, body, div, header, main, section, article, nav, footer, p, pre { display: block; }
+        span, a, strong, b, em, i, code, br { display: inline; }
+        img { display: inline-block; }
         script, style, head, meta, link, title { display: none; }
         h1 { display: block; font-weight: bold; font-size: 32px; }
         h2 { display: block; font-weight: bold; font-size: 28px; }

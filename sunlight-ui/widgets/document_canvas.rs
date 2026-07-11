@@ -1,5 +1,7 @@
+use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
+
 use crate::font::VecText;
-use crate::geom::{Point, Rect};
+use crate::geom::{Point, Rect, Size};
 use crate::paint::Canvas;
 use crate::theme::{Color, Theme};
 
@@ -12,6 +14,364 @@ const PAGE_INSET: i32 = 24;
 const SURFACE_INSET_X: i32 = 24;
 const SURFACE_TOP_GAP: i32 = 18;
 const CONTENT_INSET: i32 = 28;
+
+/// Generic, document-local identity for the node that owns a render object.
+///
+/// The canvas intentionally does not know whether this identity originated in
+/// HTML, a Writer document, mail, or a help page.  Producers translate their
+/// own stable node identifiers to this opaque value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DocumentNodeId(pub u64);
+
+/// Stable identity for one retained object in a [`DocumentScene`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RenderObjectId(pub u64);
+
+/// A small deterministic paint ordering key.  It is deliberately more
+/// expressive than just z-index so later stacking-context work has a stable
+/// place to grow without changing the scene format.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PaintOrder {
+    pub stacking_context: u32,
+    pub z_index: i32,
+    pub phase: u8,
+    pub document_order: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RenderObjectKind {
+    /// Structural retained box.  It carries geometry and ownership even when
+    /// the element has no visible background or border in this first pass.
+    Box,
+    Text {
+        text: String,
+        color: Color,
+        font_size: u32,
+        bold: bool,
+        italic: bool,
+        underline: bool,
+    },
+    Rectangle {
+        fill: Color,
+    },
+    Border {
+        color: Color,
+        width: u32,
+    },
+    Line {
+        color: Color,
+        width: u32,
+    },
+    /// A non-painting hit region.  Text fragments for this anchor remain
+    /// individual objects so they can be patched independently.
+    Link {
+        href: String,
+        resolved_url: Option<String>,
+        text_object_ids: Vec<RenderObjectId>,
+    },
+    ImagePlaceholder {
+        src: String,
+        alt: String,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RenderInteraction {
+    Link {
+        owner_node_id: DocumentNodeId,
+        href: String,
+        resolved_url: Option<String>,
+    },
+}
+
+/// One retained, generic visual or interactive object.  Bounds are always in
+/// document coordinates; viewport scrolling is a canvas concern.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderObject {
+    pub id: RenderObjectId,
+    pub owner_node_id: DocumentNodeId,
+    pub kind: RenderObjectKind,
+    pub bounds: Rect,
+    pub clip_bounds: Option<Rect>,
+    pub paint_order: PaintOrder,
+    pub interaction: Option<RenderInteraction>,
+}
+
+/// Retained scene shared by read-only document surfaces.  The two indexes are
+/// built once when a producer finalizes the scene, avoiding full scans during
+/// later object or node lookups.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DocumentScene {
+    pub document_id: u64,
+    pub viewport_size: Size,
+    pub content_size: Size,
+    pub objects: Vec<RenderObject>,
+    node_to_object_map: BTreeMap<DocumentNodeId, Vec<RenderObjectId>>,
+    object_index: BTreeMap<RenderObjectId, usize>,
+}
+
+impl DocumentScene {
+    pub fn new(document_id: u64, viewport_size: Size, content_size: Size) -> Self {
+        Self {
+            document_id,
+            viewport_size,
+            content_size,
+            objects: Vec::new(),
+            node_to_object_map: BTreeMap::new(),
+            object_index: BTreeMap::new(),
+        }
+    }
+
+    pub fn push(&mut self, object: RenderObject) -> bool {
+        if self.object_index.contains_key(&object.id) {
+            return false;
+        }
+        let index = self.objects.len();
+        self.node_to_object_map
+            .entry(object.owner_node_id)
+            .or_default()
+            .push(object.id);
+        self.object_index.insert(object.id, index);
+        self.objects.push(object);
+        true
+    }
+
+    /// Sorts objects into deterministic paint order and rebuilds the object
+    /// index.  Call after producing a scene and before comparing or painting.
+    pub fn finalize(&mut self) {
+        self.objects.sort_by_key(|object| object.paint_order);
+        self.rebuild_indexes();
+    }
+
+    pub fn object(&self, id: RenderObjectId) -> Option<&RenderObject> {
+        self.object_index
+            .get(&id)
+            .and_then(|index| self.objects.get(*index))
+    }
+
+    pub fn objects_for_node(&self, node_id: DocumentNodeId) -> &[RenderObjectId] {
+        self.node_to_object_map
+            .get(&node_id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    pub fn max_scroll_y(&self, viewport_h: u32) -> u32 {
+        self.content_size.h.saturating_sub(viewport_h)
+    }
+
+    /// Returns the topmost retained object containing a document-coordinate
+    /// point. Consumers can inspect [`RenderObject::interaction`] to dispatch
+    /// links without teaching the canvas about URLs or navigation.
+    pub fn hit_test(&self, point: Point) -> Option<&RenderObject> {
+        self.objects
+            .iter()
+            .rev()
+            .find(|object| object.bounds.contains(point))
+    }
+
+    /// Applies an incremental object patch to this retained scene. The
+    /// document producer remains responsible for viewport/content metadata;
+    /// a `ReplaceScene` deliberately returns `false` so its caller can swap
+    /// in the new complete scene instead.
+    pub fn apply_patch(&mut self, patch: &ScenePatch) -> bool {
+        if patch
+            .operations
+            .iter()
+            .any(|operation| matches!(operation, ScenePatchOperation::ReplaceScene))
+        {
+            return false;
+        }
+
+        for operation in &patch.operations {
+            match operation {
+                ScenePatchOperation::Insert { object, .. } => {
+                    if self.object(object.id).is_some() {
+                        return false;
+                    }
+                    self.objects.push(object.clone());
+                }
+                ScenePatchOperation::Update { object, .. } => {
+                    let Some(index) = self.object_index.get(&object.id).copied() else {
+                        return false;
+                    };
+                    self.objects[index] = object.clone();
+                }
+                ScenePatchOperation::Remove { id, .. } => {
+                    let Some(index) = self.object_index.get(id).copied() else {
+                        return false;
+                    };
+                    self.objects.remove(index);
+                    self.rebuild_indexes();
+                }
+                ScenePatchOperation::Reorder {
+                    id, paint_order, ..
+                } => {
+                    let Some(index) = self.object_index.get(id).copied() else {
+                        return false;
+                    };
+                    self.objects[index].paint_order = *paint_order;
+                }
+                ScenePatchOperation::ReplaceScene => return false,
+            }
+        }
+        self.finalize();
+        true
+    }
+
+    fn rebuild_indexes(&mut self) {
+        self.node_to_object_map.clear();
+        self.object_index.clear();
+        for (index, object) in self.objects.iter().enumerate() {
+            self.node_to_object_map
+                .entry(object.owner_node_id)
+                .or_default()
+                .push(object.id);
+            self.object_index.insert(object.id, index);
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ScenePatchOperation {
+    Insert {
+        object: RenderObject,
+        dirty: Rect,
+    },
+    Update {
+        object: RenderObject,
+        dirty: Rect,
+    },
+    Remove {
+        id: RenderObjectId,
+        dirty: Rect,
+    },
+    Reorder {
+        id: RenderObjectId,
+        paint_order: PaintOrder,
+        dirty: Rect,
+    },
+    ReplaceScene,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScenePatch {
+    pub operations: Vec<ScenePatchOperation>,
+    pub dirty_regions: Vec<Rect>,
+}
+
+impl ScenePatch {
+    pub fn is_empty(&self) -> bool {
+        self.operations.is_empty()
+    }
+
+    /// Adds a dirty rectangle to a bounded, coalesced region list. This keeps
+    /// diagnostics useful now and gives a future partial compositor a small
+    /// repaint set instead of one allocation per object change.
+    fn add_dirty(&mut self, rect: Rect) {
+        const MAX_DIRTY_REGIONS: usize = 64;
+        if rect.w == 0 || rect.h == 0 {
+            return;
+        }
+        if let Some(existing) = self
+            .dirty_regions
+            .iter_mut()
+            .find(|existing| rects_touch_or_overlap(**existing, rect))
+        {
+            *existing = union_rect(*existing, rect);
+            return;
+        }
+        if self.dirty_regions.len() < MAX_DIRTY_REGIONS {
+            self.dirty_regions.push(rect);
+        } else if let Some(first) = self.dirty_regions.first_mut() {
+            *first = union_rect(*first, rect);
+        }
+    }
+}
+
+fn rects_touch_or_overlap(left: Rect, right: Rect) -> bool {
+    left.x <= right.right()
+        && right.x <= left.right()
+        && left.y <= right.bottom()
+        && right.y <= left.bottom()
+}
+
+fn union_rect(left: Rect, right: Rect) -> Rect {
+    let x = left.x.min(right.x);
+    let y = left.y.min(right.y);
+    let right_edge = left.right().max(right.right());
+    let bottom_edge = left.bottom().max(right.bottom());
+    Rect::new(
+        x,
+        y,
+        (right_edge.saturating_sub(x)).max(0) as u32,
+        (bottom_edge.saturating_sub(y)).max(0) as u32,
+    )
+}
+
+/// Compares retained scenes by stable render-object identity.  The canvas may
+/// currently repaint as a whole, but dirty regions are retained for diagnostics
+/// and a future partial compositor.
+pub fn diff_scenes(previous: &DocumentScene, next: &DocumentScene) -> ScenePatch {
+    if previous.document_id != next.document_id {
+        return ScenePatch {
+            operations: vec![ScenePatchOperation::ReplaceScene],
+            dirty_regions: vec![Rect::new(
+                0,
+                0,
+                previous.content_size.w.max(next.content_size.w),
+                previous.content_size.h.max(next.content_size.h),
+            )],
+        };
+    }
+
+    let mut patch = ScenePatch::default();
+    for old in &previous.objects {
+        if next.object(old.id).is_none() {
+            patch.add_dirty(old.bounds);
+            patch.operations.push(ScenePatchOperation::Remove {
+                id: old.id,
+                dirty: old.bounds,
+            });
+        }
+    }
+    for new in &next.objects {
+        match previous.object(new.id) {
+            None => {
+                patch.add_dirty(new.bounds);
+                patch.operations.push(ScenePatchOperation::Insert {
+                    object: new.clone(),
+                    dirty: new.bounds,
+                });
+            }
+            Some(old) if old == new => {}
+            Some(old) => {
+                let dirty = union_rect(old.bounds, new.bounds);
+                patch.add_dirty(dirty);
+                if old.id == new.id
+                    && old.owner_node_id == new.owner_node_id
+                    && old.kind == new.kind
+                    && old.bounds == new.bounds
+                    && old.clip_bounds == new.clip_bounds
+                    && old.interaction == new.interaction
+                    && old.paint_order != new.paint_order
+                {
+                    patch.operations.push(ScenePatchOperation::Reorder {
+                        id: new.id,
+                        paint_order: new.paint_order,
+                        dirty,
+                    });
+                } else {
+                    patch.operations.push(ScenePatchOperation::Update {
+                        object: new.clone(),
+                        dirty,
+                    });
+                }
+            }
+        }
+    }
+    patch
+}
 
 fn fill_vertical_gradient(canvas: &mut Canvas, rect: Rect, top: Color, bottom: Color) {
     let h = rect.h.max(1);
@@ -251,10 +611,15 @@ pub struct DocumentCanvas<'a> {
     pub footer_note: &'a str,
     pub show_guides: bool,
     pub items: &'a [DocumentCanvasItem<'a>],
+    /// Optional retained scene for generic read-only document rendering.
+    /// Existing Writer callers can continue supplying `items` unchanged.
+    pub scene: Option<&'a DocumentScene>,
+    pub scroll_y: u32,
     pub title_font: Option<&'a dyn VecText>,
     pub subtitle_font: Option<&'a dyn VecText>,
     pub body_font: Option<&'a dyn VecText>,
     pub small_font: Option<&'a dyn VecText>,
+    pub scene_heading_font: Option<&'a dyn VecText>,
 }
 
 impl<'a> DocumentCanvas<'a> {
@@ -268,10 +633,13 @@ impl<'a> DocumentCanvas<'a> {
             footer_note: "Fixed-coordinate page surface",
             show_guides: true,
             items,
+            scene: None,
+            scroll_y: 0,
             title_font: None,
             subtitle_font: None,
             body_font: None,
             small_font: None,
+            scene_heading_font: None,
         }
     }
 
@@ -301,6 +669,40 @@ impl<'a> DocumentCanvas<'a> {
         self
     }
 
+    pub fn with_scene(mut self, scene: &'a DocumentScene) -> Self {
+        self.scene = Some(scene);
+        self.mode = DocumentCanvasMode::ReadOnly;
+        self.show_guides = false;
+        self.scroll_y = self.scroll_y.min(scene.max_scroll_y(self.content_rect().h));
+        self
+    }
+
+    pub fn with_scroll_y(mut self, scroll_y: u32) -> Self {
+        self.scroll_y = self.scene.map_or(scroll_y, |scene| {
+            scroll_y.min(scene.max_scroll_y(self.content_rect().h))
+        });
+        self
+    }
+
+    /// Returns the retained object at a window-local point.  The widget owns
+    /// the conversion from its clipped, scrolled surface into document
+    /// coordinates; the caller remains responsible for interpreting any
+    /// generic interaction metadata.
+    pub fn hit_test(&self, point: Point) -> Option<&RenderObject> {
+        let content = self.content_rect();
+        if !content.contains(point) {
+            return None;
+        }
+        let document_point = Point::new(
+            point.x.saturating_sub(content.x),
+            point
+                .y
+                .saturating_sub(content.y)
+                .saturating_add(self.scroll_y as i32),
+        );
+        self.scene.and_then(|scene| scene.hit_test(document_point))
+    }
+
     pub fn with_fonts(
         mut self,
         title_font: Option<&'a dyn VecText>,
@@ -312,6 +714,7 @@ impl<'a> DocumentCanvas<'a> {
         self.subtitle_font = subtitle_font;
         self.body_font = body_font;
         self.small_font = small_font;
+        self.scene_heading_font = title_font;
         self
     }
 
@@ -342,6 +745,10 @@ impl<'a> DocumentCanvas<'a> {
 
     pub fn content_rect(&self) -> Rect {
         self.document_rect().inset(CONTENT_INSET)
+    }
+
+    pub fn viewport_size(&self) -> Size {
+        self.content_rect().size()
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -405,7 +812,9 @@ impl<'a> DocumentCanvas<'a> {
             self.draw_guides(canvas, content);
         }
 
-        if self.items.is_empty() {
+        if let Some(scene) = self.scene {
+            self.draw_scene(canvas, content, scene);
+        } else if self.items.is_empty() {
             self.draw_empty_label(canvas, content, theme);
         } else {
             self.draw_items(canvas, content);
@@ -580,15 +989,133 @@ impl<'a> DocumentCanvas<'a> {
             }
         }
     }
+
+    fn draw_scene(&self, canvas: &mut Canvas, content: Rect, scene: &DocumentScene) {
+        for object in &scene.objects {
+            let bounds = object
+                .bounds
+                .translate(content.x, content.y - self.scroll_y as i32);
+            let object_clip = object
+                .clip_bounds
+                .map(|clip| clip.translate(content.x, content.y - self.scroll_y as i32));
+            let paint_bounds = match object_clip {
+                Some(clip) => bounds.intersect(clip),
+                None => Some(bounds),
+            };
+            let Some(clipped) = paint_bounds.and_then(|bounds| bounds.intersect(content)) else {
+                continue;
+            };
+            match &object.kind {
+                RenderObjectKind::Box => {}
+                RenderObjectKind::Rectangle { fill } => canvas.fill_rect(clipped, *fill),
+                RenderObjectKind::Border { color, width } => {
+                    let width = (*width).max(1).min(bounds.w.min(bounds.h).max(1));
+                    for offset in 0..width {
+                        let inset = Rect::new(
+                            bounds.x + offset as i32,
+                            bounds.y + offset as i32,
+                            bounds.w.saturating_sub(offset * 2),
+                            bounds.h.saturating_sub(offset * 2),
+                        );
+                        if let Some(visible) = inset.intersect(content) {
+                            canvas.draw_rect(visible, *color);
+                        }
+                    }
+                }
+                RenderObjectKind::Line { color, width } => draw_line_clipped(
+                    canvas,
+                    content,
+                    bounds.x,
+                    bounds.y,
+                    bounds.right().saturating_sub(1),
+                    bounds.bottom().saturating_sub(1),
+                    DocumentStrokeStyle::new(*color, *width),
+                ),
+                RenderObjectKind::Text {
+                    text,
+                    color,
+                    font_size,
+                    underline,
+                    ..
+                } => {
+                    let font = if *font_size >= 24 {
+                        self.scene_heading_font.or(self.body_font)
+                    } else {
+                        self.body_font
+                    };
+                    let visible = clip_text_to_width(font, text, clipped.w);
+                    if !visible.is_empty() {
+                        draw_text(canvas, font, bounds.x, bounds.y, visible, *color);
+                        if *underline {
+                            let underline_y = bounds.y + bounds.h.saturating_sub(2) as i32;
+                            if underline_y >= content.y && underline_y < content.bottom() {
+                                canvas.hbar(
+                                    bounds.x,
+                                    underline_y,
+                                    measure_text_width(font, visible),
+                                    1,
+                                    *color,
+                                );
+                            }
+                        }
+                    }
+                }
+                RenderObjectKind::ImagePlaceholder { alt, .. } => {
+                    canvas.fill_rect(clipped, Color::rgb(0xF6, 0xF3, 0xEE));
+                    canvas.draw_rect(clipped, Color::rgb(0xD3, 0xCD, 0xC4));
+                    let label = if alt.is_empty() {
+                        "Image"
+                    } else {
+                        alt.as_str()
+                    };
+                    draw_text_vcenter(
+                        canvas,
+                        self.small_font,
+                        clipped.x + 6,
+                        clipped.y,
+                        clipped.h,
+                        clip_text_to_width(self.small_font, label, clipped.w.saturating_sub(12)),
+                        Color::rgb(0x8B, 0x86, 0x80),
+                    );
+                }
+                // A link has interaction metadata but no extra paint.  Its
+                // text fragments contain the resolved visual decoration.
+                RenderObjectKind::Link { .. } => {}
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode, DocumentStrokeStyle,
-        DocumentTextStyle,
+        diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode, DocumentNodeId,
+        DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RenderObject,
+        RenderObjectId, RenderObjectKind, ScenePatchOperation,
     };
-    use crate::{Canvas, Color, Rect, Theme};
+    use crate::{Canvas, Color, Point, Rect, Size, Theme};
+
+    fn scene_with_text(text: &str, x: i32) -> DocumentScene {
+        let mut scene = DocumentScene::new(7, Size::new(200, 100), Size::new(200, 100));
+        assert!(scene.push(RenderObject {
+            id: RenderObjectId(1),
+            owner_node_id: DocumentNodeId(3),
+            kind: RenderObjectKind::Text {
+                text: text.into(),
+                color: Color::rgb(1, 2, 3),
+                font_size: 16,
+                bold: false,
+                italic: false,
+                underline: false,
+            },
+            bounds: Rect::new(x, 4, 32, 16),
+            clip_bounds: None,
+            paint_order: PaintOrder::default(),
+            interaction: None,
+        }));
+        scene.finalize();
+        scene
+    }
 
     #[test]
     fn mode_defaults_to_editable() {
@@ -616,6 +1143,23 @@ mod tests {
     }
 
     #[test]
+    fn retained_scene_selects_read_only_mode_and_hit_tests_in_document_coordinates() {
+        let mut scene = scene_with_text("link", 8);
+        scene.content_size = Size::new(200, 1_000);
+        let widget = DocumentCanvas::new(Rect::new(0, 0, 640, 480), &[])
+            .with_scene(&scene)
+            .with_scroll_y(4);
+        assert_eq!(widget.mode, DocumentCanvasMode::ReadOnly);
+
+        let content = widget.content_rect();
+        let point = Point::new(content.x + 10, content.y);
+        assert_eq!(
+            widget.hit_test(point).map(|object| object.id),
+            Some(RenderObjectId(1))
+        );
+    }
+
+    #[test]
     fn sample_items_can_be_constructed() {
         let items = [
             DocumentCanvasItem::Text {
@@ -634,5 +1178,101 @@ mod tests {
         ];
         let widget = DocumentCanvas::new(Rect::new(0, 0, 640, 480), &items);
         assert_eq!(widget.items.len(), 2);
+    }
+
+    #[test]
+    fn retained_scene_indexes_and_diff_are_stable() {
+        let old = scene_with_text("one", 4);
+        assert_eq!(
+            old.objects_for_node(DocumentNodeId(3)),
+            &[RenderObjectId(1)]
+        );
+        assert_eq!(
+            old.object(RenderObjectId(1)).unwrap().owner_node_id,
+            DocumentNodeId(3)
+        );
+        assert!(diff_scenes(&old, &old).is_empty());
+
+        let text_changed = scene_with_text("two", 4);
+        let patch = diff_scenes(&old, &text_changed);
+        assert!(matches!(
+            patch.operations.as_slice(),
+            [ScenePatchOperation::Update { .. }]
+        ));
+
+        let moved = scene_with_text("one", 24);
+        let patch = diff_scenes(&old, &moved);
+        assert!(matches!(
+            patch.operations.as_slice(),
+            [ScenePatchOperation::Update { .. }]
+        ));
+        assert_eq!(patch.dirty_regions[0], Rect::new(4, 4, 52, 16));
+    }
+
+    #[test]
+    fn retained_scene_applies_insert_remove_update_and_reorder() {
+        let mut current = scene_with_text("one", 4);
+
+        let inserted = scene_with_text("one", 4);
+        let mut next = inserted.clone();
+        assert!(next.push(RenderObject {
+            id: RenderObjectId(2),
+            owner_node_id: DocumentNodeId(4),
+            kind: RenderObjectKind::Rectangle {
+                fill: Color::rgb(4, 5, 6),
+            },
+            bounds: Rect::new(40, 4, 20, 16),
+            clip_bounds: None,
+            paint_order: PaintOrder {
+                phase: 1,
+                ..PaintOrder::default()
+            },
+            interaction: None,
+        }));
+        next.finalize();
+        let patch = diff_scenes(&current, &next);
+        assert!(patch
+            .operations
+            .iter()
+            .any(|operation| matches!(operation, ScenePatchOperation::Insert { .. })));
+        assert!(current.apply_patch(&patch));
+        assert_eq!(current.objects, next.objects);
+        assert_eq!(
+            current.objects_for_node(DocumentNodeId(4)),
+            &[RenderObjectId(2)]
+        );
+
+        let mut reordered = current.clone();
+        reordered.objects[0].paint_order.phase = 9;
+        reordered.finalize();
+        let patch = diff_scenes(&current, &reordered);
+        assert!(matches!(
+            patch.operations.as_slice(),
+            [ScenePatchOperation::Reorder { .. }]
+        ));
+        assert!(current.apply_patch(&patch));
+        assert_eq!(current.objects, reordered.objects);
+
+        let empty = DocumentScene::new(7, Size::new(200, 100), Size::new(200, 100));
+        let patch = diff_scenes(&current, &empty);
+        assert!(patch
+            .operations
+            .iter()
+            .all(|operation| matches!(operation, ScenePatchOperation::Remove { .. })));
+        assert!(current.apply_patch(&patch));
+        assert!(current.objects.is_empty());
+    }
+
+    #[test]
+    fn replacement_patch_requires_the_producer_to_swap_the_scene() {
+        let mut old = scene_with_text("old", 4);
+        let next = DocumentScene::new(8, Size::new(200, 100), Size::new(200, 100));
+        let patch = diff_scenes(&old, &next);
+        assert!(matches!(
+            patch.operations.as_slice(),
+            [ScenePatchOperation::ReplaceScene]
+        ));
+        assert!(!old.apply_patch(&patch));
+        assert_eq!(old.objects[0].id, RenderObjectId(1));
     }
 }

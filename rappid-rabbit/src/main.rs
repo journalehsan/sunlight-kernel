@@ -11,6 +11,8 @@ use alloc::{borrow::Cow, format, string::String, vec::Vec};
 use core::fmt::Write as _;
 use linked_list_allocator::LockedHeap;
 
+#[cfg(feature = "dom")]
+use rappid_rabbit::render::DocumentRenderState;
 use rappid_rabbit::{
     body_is_probably_text, build_get_request,
     developer_tools::{
@@ -48,9 +50,11 @@ use sunlight_ipc::{
     process_yield, ProcessExit,
 };
 use sunlight_ui::widgets::{
-    Button, ButtonState, Column, Label, Panel, TabBar, Table, TextInput, TextView, TreeHitTarget,
-    TreeView,
+    Button, ButtonState, Column, DocumentCanvas, Label, Panel, TabBar, Table, TextInput, TextView,
+    TreeHitTarget, TreeView,
 };
+#[cfg(feature = "dom")]
+use sunlight_ui::widgets::{RenderInteraction, RenderObjectKind};
 use sunlight_ui::{
     request_close, App, Canvas, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
     WindowDecoration,
@@ -59,6 +63,7 @@ use sunlight_ui::{
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 static F_MONO: VecFont = VecFont(FontRole::MonoRegular);
+static F_LARGE: VecFont = VecFont(FontRole::UiLarge);
 
 const WIN_W: u32 = 1080;
 const WIN_H: u32 = 720;
@@ -67,6 +72,7 @@ const TOP_BAR_H: u32 = 42;
 const METHOD_W: u32 = 56;
 const FETCH_W: u32 = 104;
 const DEVTOOLS_W: u32 = 96;
+const VIEW_W: u32 = 72;
 const STATUS_W: u32 = 220;
 const GUTTER: i32 = 12;
 const URL_INPUT_CAP: usize = 512;
@@ -171,7 +177,14 @@ fn alloc_error(layout: core::alloc::Layout) -> ! {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusPane {
     Source,
+    Render,
     DeveloperTools,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DocumentView {
+    Source,
+    Render,
 }
 
 enum SourceContent {
@@ -198,6 +211,11 @@ struct RabbitApp {
     focus: FocusPane,
     source_scroll: usize,
     source: SourceContent,
+    document_view: DocumentView,
+    render_scroll: u32,
+    render_status: String,
+    #[cfg(feature = "dom")]
+    render_state: Option<DocumentRenderState>,
     active_navigation_request_id: Option<u64>,
     developer_tools: DeveloperToolsState,
     discovered_resources: Vec<ResourceCandidate>,
@@ -218,6 +236,11 @@ impl RabbitApp {
             ConsoleSource::Browser,
             "Developer tools panel ready.",
         );
+        developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Browser,
+            "DocumentCanvas configured for read-only Render mode.",
+        );
 
         Self {
             url_input,
@@ -228,6 +251,13 @@ impl RabbitApp {
             source: SourceContent::Placeholder(
                 "Enter a URL, then click Fetch/Open to inspect the response body.",
             ),
+            document_view: DocumentView::Source,
+            render_scroll: 0,
+            render_status: String::from(
+                "No rendered document yet. Enter a URL and select Fetch/Open.",
+            ),
+            #[cfg(feature = "dom")]
+            render_state: None,
             active_navigation_request_id: None,
             developer_tools,
             discovered_resources: Vec::new(),
@@ -239,6 +269,7 @@ impl RabbitApp {
     fn queue_fetch(&mut self) {
         self.pending_fetch = true;
         self.status = String::from("Fetching...");
+        self.render_status = String::from("Loading rendered document...");
         self.developer_tools.console.push(
             ConsoleSeverity::Quiet,
             ConsoleSource::Browser,
@@ -279,6 +310,12 @@ impl RabbitApp {
         let generation = self.document_lifecycle.begin_navigation();
         self.discovered_resources.clear();
         self.resource_queue.clear();
+        self.render_scroll = 0;
+        self.render_status = String::from("Loading rendered document...");
+        #[cfg(feature = "dom")]
+        {
+            self.render_state = None;
+        }
         self.developer_tools.network.clear_for_new_page();
         self.developer_tools
             .dom
@@ -392,9 +429,22 @@ impl RabbitApp {
                             linked_stylesheets,
                         );
                         let style_context = StyleContext::build(&document, &stylesheets);
+                        let inspector_document = document.clone();
+                        let inspector_styles = style_context.clone();
+                        let viewport = self.render_viewport();
+                        self.render_scroll = 0;
+                        self.render_state = Some(DocumentRenderState::new(
+                            generation,
+                            final_url.clone(),
+                            document,
+                            style_context,
+                            viewport,
+                            &F_UI,
+                        ));
+                        self.log_render_scene("initial scene");
                         self.developer_tools
                             .dom
-                            .set_document_with_styles(document, style_context);
+                            .set_document_with_styles(inspector_document, inspector_styles);
                         let visible_rows = self.developer_tools.dom.visible_row_count();
                         let _ = self.document_lifecycle.finish_ready(generation);
                         self.log_dom_result(
@@ -421,6 +471,8 @@ impl RabbitApp {
                         self.developer_tools
                             .dom
                             .clear_with_message(format!("Parser error: {error}"));
+                        self.render_state = None;
+                        self.render_status = format!("Render failed: {error}");
                         self.log_heap_stage(
                             "after DOM parsing",
                             generation,
@@ -437,6 +489,8 @@ impl RabbitApp {
                 self.developer_tools
                     .dom
                     .clear_with_message("Current response is not HTML.");
+                self.render_state = None;
+                self.render_status = String::from("This response is not an HTML document.");
             }
         }
 
@@ -645,6 +699,7 @@ impl RabbitApp {
 
     fn apply_fetch_error(&mut self, err: FetchError) {
         self.status = String::from("Request failed");
+        self.render_status = format!("Render unavailable: {err}");
         self.source = SourceContent::Message(String::from(
             "No response body was captured for this request.",
         ));
@@ -653,6 +708,10 @@ impl RabbitApp {
         self.developer_tools
             .dom
             .clear_with_message("No DOM available for the failed request.");
+        #[cfg(feature = "dom")]
+        {
+            self.render_state = None;
+        }
         if let Some(request_id) = self.active_navigation_request_id {
             let (status_code, status_text) = match &err {
                 FetchError::HttpError { status, message } if *status > 0 => {
@@ -680,8 +739,13 @@ impl RabbitApp {
 
     fn set_error(&mut self, message: String) {
         self.status = String::from("Invalid URL");
+        self.render_status = String::from("Render unavailable: fix the URL and fetch again.");
         self.source = SourceContent::Message(String::from("Fix the URL and fetch again."));
         self.active_navigation_request_id = None;
+        #[cfg(feature = "dom")]
+        {
+            self.render_state = None;
+        }
         self.developer_tools
             .console
             .push(ConsoleSeverity::Warn, ConsoleSource::Browser, message);
@@ -711,9 +775,14 @@ impl RabbitApp {
         )
     }
 
-    fn fetch_rect(&self) -> Rect {
+    fn view_button_rect(&self) -> Rect {
         let devtools = self.devtools_button_rect();
-        Rect::new(devtools.x - FETCH_W as i32 - 8, devtools.y, FETCH_W, 28)
+        Rect::new(devtools.x - VIEW_W as i32 - 8, devtools.y, VIEW_W, 28)
+    }
+
+    fn fetch_rect(&self) -> Rect {
+        let view = self.view_button_rect();
+        Rect::new(view.x - FETCH_W as i32 - 8, view.y, FETCH_W, 28)
     }
 
     fn url_rect(&self) -> Rect {
@@ -756,6 +825,119 @@ impl RabbitApp {
             .with_font(&F_MONO)
     }
 
+    fn render_viewport(&mut self) -> sunlight_ui::Size {
+        DocumentCanvas::new(self.source_panel_rect(), &[]).viewport_size()
+    }
+
+    #[cfg(feature = "dom")]
+    fn refresh_render_viewport(&mut self) {
+        let viewport = self.render_viewport();
+        let changed = if let Some(render_state) = self.render_state.as_mut() {
+            if render_state.rebuild_for_viewport(viewport, &F_UI) {
+                self.render_scroll = self
+                    .render_scroll
+                    .min(render_state.current_scene.max_scroll_y(viewport.h));
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if changed {
+            self.log_render_scene("viewport reflow");
+        }
+    }
+
+    #[cfg(feature = "dom")]
+    fn log_render_scene(&mut self, reason: &str) {
+        let Some(render_state) = self.render_state.as_ref() else {
+            return;
+        };
+        let mut text_count = 0usize;
+        let mut rectangle_count = 0usize;
+        let mut link_count = 0usize;
+        for object in &render_state.current_scene.objects {
+            match &object.kind {
+                RenderObjectKind::Text { .. } => text_count += 1,
+                RenderObjectKind::Rectangle { .. } => rectangle_count += 1,
+                RenderObjectKind::Link { .. } => link_count += 1,
+                _ => {}
+            }
+        }
+        self.developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Browser,
+            format!(
+                "DocumentCanvas {reason}: gen={} viewport={}x{} objects={} content={}x{} text={} rectangles={} links={} patches={}",
+                render_state.scene_generation,
+                render_state.viewport.w,
+                render_state.viewport.h,
+                render_state.current_scene.objects.len(),
+                render_state.current_scene.content_size.w,
+                render_state.current_scene.content_size.h,
+                text_count,
+                rectangle_count,
+                link_count,
+                render_state.last_patch.operations.len(),
+            ),
+        );
+    }
+
+    fn document_canvas(&mut self) -> DocumentCanvas<'_> {
+        let rect = self.source_panel_rect();
+        let canvas = DocumentCanvas::new(rect, &[])
+            .with_titles(
+                "Rendered Document",
+                "Retained DOM → layout → scene → shared canvas",
+            )
+            .with_empty_label(self.render_status.as_str())
+            .with_footer_note("Read-only browser canvas · scene patches retained for diagnostics")
+            .with_guides(false)
+            .with_fonts(Some(&F_LARGE), Some(&F_SMALL), Some(&F_UI), Some(&F_SMALL));
+        #[cfg(feature = "dom")]
+        if let Some(render_state) = self.render_state.as_ref() {
+            return canvas
+                .with_scene(&render_state.current_scene)
+                .with_scroll_y(self.render_scroll);
+        }
+        canvas
+    }
+
+    #[cfg(feature = "dom")]
+    fn handle_render_click(&mut self, point: Point) -> bool {
+        if self.document_view != DocumentView::Render {
+            return false;
+        }
+        let interaction = self
+            .document_canvas()
+            .hit_test(point)
+            .and_then(|object| object.interaction.clone());
+        let Some(RenderInteraction::Link {
+            href, resolved_url, ..
+        }) = interaction
+        else {
+            return false;
+        };
+        let target = resolved_url.unwrap_or(href);
+        if target.is_empty() {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Warn,
+                ConsoleSource::Browser,
+                "Canvas link has no navigable URL.",
+            );
+            return true;
+        }
+        self.developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Browser,
+            format!("Canvas link selected: {target}"),
+        );
+        self.url_input.set_text(&target);
+        self.queue_fetch();
+        true
+    }
+
     fn draw_top_bar(&mut self, canvas: &mut Canvas, theme: &Theme) {
         let top = self.top_bar_rect();
         Panel::new(top).draw(canvas, theme);
@@ -780,6 +962,14 @@ impl RabbitApp {
             Button::secondary(self.devtools_button_rect(), tools_label).with_font(&F_UI);
         devtools.state = ButtonState::Normal;
         devtools.draw(canvas, theme);
+
+        let view_label = match self.document_view {
+            DocumentView::Source => "Render",
+            DocumentView::Render => "Source",
+        };
+        let mut view = Button::secondary(self.view_button_rect(), view_label).with_font(&F_UI);
+        view.state = ButtonState::Normal;
+        view.draw(canvas, theme);
 
         Label::new(self.status_rect(), self.status.as_str())
             .with_font(&F_SMALL)
@@ -1061,6 +1251,15 @@ impl RabbitApp {
 
     fn clamp_scrolls(&mut self) {
         self.source_scroll = self.source_scroll.min(self.source_view().max_scroll());
+        #[cfg(feature = "dom")]
+        {
+            let viewport_h = self.render_viewport().h;
+            if let Some(render_state) = self.render_state.as_ref() {
+                self.render_scroll = self
+                    .render_scroll
+                    .min(render_state.current_scene.max_scroll_y(viewport_h));
+            }
+        }
 
         let dev_layout = self.developer_panel_layout();
         if let Some(content_rect) = dev_layout.content_rect {
@@ -1163,6 +1362,34 @@ impl RabbitApp {
                     visible,
                     max_scroll,
                 );
+            }
+            FocusPane::Render => {
+                #[cfg(feature = "dom")]
+                {
+                    let viewport_h = self.render_viewport().h;
+                    if let Some(render_state) = self.render_state.as_ref() {
+                        let max_scroll = render_state.current_scene.max_scroll_y(viewport_h);
+                        if home {
+                            self.render_scroll = 0;
+                        } else if end {
+                            self.render_scroll = max_scroll;
+                        } else {
+                            let step = if page {
+                                viewport_h.saturating_sub(24)
+                            } else {
+                                24
+                            } as i32;
+                            self.render_scroll = if delta < 0 {
+                                self.render_scroll.saturating_sub(step as u32)
+                            } else {
+                                self.render_scroll
+                                    .saturating_add(step as u32)
+                                    .min(max_scroll)
+                            };
+                        }
+                        return;
+                    }
+                }
             }
             FocusPane::DeveloperTools => self.scroll_developer_tools(delta, page, home, end),
         }
@@ -1419,9 +1646,14 @@ impl App for RabbitApp {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
         self.draw_top_bar(canvas, theme);
 
-        let source_panel = Panel::with_title(self.source_panel_rect(), "Source");
-        source_panel.draw(canvas, theme);
-        self.source_view().draw(canvas, theme);
+        match self.document_view {
+            DocumentView::Source => {
+                let source_panel = Panel::with_title(self.source_panel_rect(), "Source");
+                source_panel.draw(canvas, theme);
+                self.source_view().draw(canvas, theme);
+            }
+            DocumentView::Render => self.document_canvas().draw(canvas, theme),
+        }
 
         self.draw_developer_tools(canvas, theme);
     }
@@ -1457,6 +1689,8 @@ impl App for RabbitApp {
                     .panel
                     .update_resize(y, self.content_rect());
                 if changed {
+                    #[cfg(feature = "dom")]
+                    self.refresh_render_viewport();
                     self.clamp_scrolls();
                 }
                 changed
@@ -1488,7 +1722,33 @@ impl App for RabbitApp {
                     } else {
                         self.developer_tools.panel.open();
                     }
+                    #[cfg(feature = "dom")]
+                    self.refresh_render_viewport();
                     self.clamp_scrolls();
+                    return true;
+                }
+
+                let view_label = match self.document_view {
+                    DocumentView::Source => "Render",
+                    DocumentView::Render => "Source",
+                };
+                if Button::secondary(self.view_button_rect(), view_label).hit_test(x, y) {
+                    self.document_view = match self.document_view {
+                        DocumentView::Source => DocumentView::Render,
+                        DocumentView::Render => DocumentView::Source,
+                    };
+                    self.focus = match self.document_view {
+                        DocumentView::Source => FocusPane::Source,
+                        DocumentView::Render => FocusPane::Render,
+                    };
+                    #[cfg(feature = "dom")]
+                    self.refresh_render_viewport();
+                    self.clamp_scrolls();
+                    return true;
+                }
+
+                #[cfg(feature = "dom")]
+                if self.handle_render_click(point) {
                     return true;
                 }
 
@@ -1497,7 +1757,10 @@ impl App for RabbitApp {
                 }
 
                 if self.source_panel_rect().contains(point) {
-                    self.focus = FocusPane::Source;
+                    self.focus = match self.document_view {
+                        DocumentView::Source => FocusPane::Source,
+                        DocumentView::Render => FocusPane::Render,
+                    };
                     return true;
                 }
                 false

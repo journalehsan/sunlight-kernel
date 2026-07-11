@@ -25,7 +25,7 @@ use arch::x86_64::{acpi, cpu, interrupts, keyboard, serial, smp, syscall};
 use memory::{heap, pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
 use process::{layout, Process};
 use x86_64::{
-    structures::paging::{Page, PageTableFlags, PhysFrame},
+    structures::paging::{mapper::MapToError, Page, PageTableFlags, PhysFrame},
     PhysAddr, VirtAddr,
 };
 
@@ -1421,9 +1421,16 @@ fn try_map_kernel_mmio_range(
         return Err("zero-length MMIO range");
     }
 
+    if (virt_start & 0xfff) != (phys_start & 0xfff) {
+        return Err("MMIO virtual/physical page offsets differ");
+    }
+
     let start_phys = phys_start & !0xfff;
     let start_virt = virt_start & !0xfff;
-    let end_phys = (phys_start + len - 1) & !0xfff;
+    let end_phys = phys_start
+        .checked_add(len - 1)
+        .ok_or("MMIO range overflows physical address space")?
+        & !0xfff;
     let page_count = ((end_phys - start_phys) / 4096) + 1;
     let flags = PageTableFlags::PRESENT
         | PageTableFlags::WRITABLE
@@ -1431,9 +1438,30 @@ fn try_map_kernel_mmio_range(
         | PageTableFlags::NO_CACHE
         | PageTableFlags::WRITE_THROUGH;
 
+    let (_, free_before) = pmm.stats();
+    serial_println!(
+        "[MMIO] map virt={:#x} phys={:#x} len={:#x} pages={} free_frames={}",
+        start_virt,
+        start_phys,
+        len,
+        page_count,
+        free_before
+    );
+
+    let mut mapped_pages = 0u64;
+    let mut existing_pages = 0u64;
     for page_idx in 0..page_count {
-        let virt = VirtAddr::new(start_virt + page_idx * 4096);
-        let phys = PhysAddr::new(start_phys + page_idx * 4096);
+        let page_offset = page_idx
+            .checked_mul(4096)
+            .ok_or("MMIO page offset overflow")?;
+        let virt_addr = start_virt
+            .checked_add(page_offset)
+            .ok_or("MMIO range overflows virtual address space")?;
+        let phys_addr = start_phys
+            .checked_add(page_offset)
+            .ok_or("MMIO range overflows physical address space")?;
+        let virt = VirtAddr::new(virt_addr);
+        let phys = PhysAddr::new(phys_addr);
         let page = Page::from_start_address(virt).map_err(|_| "unaligned MMIO virtual address")?;
         let frame = unsafe { PhysFrame::from_start_address_unchecked(phys) };
         if let Some((mapped_frame, mapped_flags)) = vmm.mapping_info(page) {
@@ -1442,11 +1470,52 @@ fn try_map_kernel_mmio_range(
             }
             vmm.update_flags(page, mapped_flags | flags)
                 .map_err(|_| "MMIO flag update failed")?;
+            existing_pages += 1;
+        } else if let Some(mapped_phys) = vmm.translate(virt) {
+            if mapped_phys != phys {
+                return Err("MMIO virtual address already maps another frame");
+            }
+            // Limine may cover the HHDM range with a 2 MiB or 1 GiB page.
+            // `mapping_info` deliberately exposes only 4 KiB leaves because
+            // those are the only entries whose flags can be safely updated
+            // one page at a time.  Do not try to install a 4 KiB leaf beneath
+            // that existing HHDM mapping: the mapper correctly rejects it
+            // with `ParentEntryHugePage`, which was previously mislabeled as
+            // a PMM page-table allocation failure.
+            serial_println!(
+                "[MMIO] HHDM huge mapping already covers virt={:#x} phys={:#x}",
+                virt.as_u64(),
+                phys.as_u64()
+            );
+            existing_pages += 1;
         } else {
-            vmm.map_page(page, frame, flags, pmm)
-                .map_err(|_| "MMIO page-table allocation failed")?;
+            if let Err(error) = vmm.map_page(page, frame, flags, pmm) {
+                let (_, free_after) = pmm.stats();
+                serial_println!(
+                    "[MMIO] map failed virt={:#x} phys={:#x} error={:?} free_frames={}",
+                    virt.as_u64(),
+                    phys.as_u64(),
+                    error,
+                    free_after
+                );
+                return Err(match error {
+                    MapToError::FrameAllocationFailed => "MMIO page-table frame allocation failed",
+                    MapToError::ParentEntryHugePage => "MMIO mapping conflicts with HHDM huge page",
+                    MapToError::PageAlreadyMapped(_) => "MMIO virtual page already mapped",
+                });
+            }
+            mapped_pages += 1;
         }
     }
+    let (_, free_after) = pmm.stats();
+    serial_println!(
+        "[MMIO] complete pages={} new={} existing={} page_table_frames={} free_frames={}",
+        page_count,
+        mapped_pages,
+        existing_pages,
+        free_before.saturating_sub(free_after),
+        free_after
+    );
     Ok(())
 }
 
