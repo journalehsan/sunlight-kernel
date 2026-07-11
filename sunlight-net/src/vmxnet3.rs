@@ -3,6 +3,17 @@ use crate::NetError;
 use core::sync::atomic::{fence, Ordering};
 use sunlight_ipc::Vmxnet3InitStage;
 
+#[used]
+#[no_mangle]
+pub static SUNLIGHT_VMXNET3_BUILD_MARKER: [u8; 38] =
+    *b"SUNLIGHT_VMXNET3_BUILD_20260711-AUDIT\0";
+
+#[no_mangle]
+pub extern "C" fn sunlight_vmxnet3_probe_marker() {}
+
+#[used]
+static _VMXNET3_AUDIT_REF: unsafe extern "C" fn() = sunlight_vmxnet3_probe_marker;
+
 pub const VMXNET3_RING_SIZE: usize = 32;
 pub const VMXNET3_RX_BUFFER_SIZE: usize = 2048;
 pub const VMXNET3_SHARED_PAGES: usize = 1;

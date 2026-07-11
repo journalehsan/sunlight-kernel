@@ -249,6 +249,12 @@ pub extern "C" fn _start() -> ! {
     serial_println!("══════════════════════════════════════");
     serial_println!("  SunlightOS — Kernel Stable Boot    ");
     serial_println!("══════════════════════════════════════");
+    serial_println!("[SUNLIGHT BUILD]");
+    serial_println!("  git=devel");
+    serial_println!("  profile=debug");
+    serial_println!("  timestamp=2026-07-11T00:00:00Z");
+    serial_println!("  net_backends=virtio-net,vmxnet3");
+    serial_println!("  marker=VMXNET3-AUDIT-20260711-A");
 
     // 1. PMM
     serial_println!("[PMM] Initializing...");
@@ -1450,6 +1456,7 @@ fn initialize_network_backend(
     hhdm_offset: VirtAddr,
 ) -> Option<sunlight_net::NetBackend> {
     let hhdm = hhdm_offset.as_u64();
+    serial_println!("[VMXNET3-AUDIT] initialize_network_backend entered");
     NET_BACKEND_ERROR.store(0, core::sync::atomic::Ordering::Release);
     VMXNET3_ERROR_DETAIL.store(0, core::sync::atomic::Ordering::Release);
     VMXNET3_FAILURE_STAGE.store(
@@ -1462,6 +1469,7 @@ fn initialize_network_backend(
         sunlight_net::NetBackendState::Detected as u64,
         core::sync::atomic::Ordering::Release,
     );
+    serial_println!("[VMXNET3-AUDIT] probe call site reached, invoking probe_vmxnet3");
     let vmxnet3_bdf = unsafe { sunlight_virtio::find_vmxnet3_bdf() };
     let vmxnet3_info = match unsafe { sunlight_virtio::probe_vmxnet3() } {
         Ok(info) => info,
@@ -1478,6 +1486,7 @@ fn initialize_network_backend(
         }
     };
     if let Some(info) = vmxnet3_info {
+        serial_println!("[VMXNET3-AUDIT] probe entered — 15ad:07b0 found by probe_vmxnet3");
         serial_println!(
             "[VMXNET3] pci device 15ad:07b0 found at {:02x}:{:02x}.{}",
             info.bus,
@@ -1620,6 +1629,7 @@ fn initialize_network_backend(
         );
         serial_println!("[VMXNET3] pci device 15ad:07b0 not present");
         serial_println!("[VMXNET3] verify ethernet0.virtualDev = \"vmxnet3\"");
+        serial_println!("[VMXNET3-AUDIT] 15ad:07b0 absent — probe returned None, falling back to VirtIO scan");
     }
 
     let Some((bus, slot, _func, io_base)) = (unsafe { sunlight_virtio::find_virtio_net() }) else {
@@ -1908,6 +1918,7 @@ fn fail_network_backend(code: u64, message: &str) -> Option<sunlight_net::NetBac
 unsafe fn log_pci_ethernet_controllers() {
     use sunlight_virtio::pci::{pci_read32, pci_read8};
 
+    let mut found_15ad_07b0 = false;
     for bus in 0u8..8 {
         for slot in 0u8..32 {
             let header0 = pci_read8(bus, slot, 0, 0x0e);
@@ -1924,6 +1935,9 @@ unsafe fn log_pci_ethernet_controllers() {
                 let device = (ids >> 16) as u16;
                 if (base_class != 0x02 || subclass != 0x00) && vendor != 0x15ad {
                     continue;
+                }
+                if vendor == 0x15ad && device == 0x07b0 {
+                    found_15ad_07b0 = true;
                 }
                 let mut msi = false;
                 let mut msix = false;
@@ -1978,6 +1992,11 @@ unsafe fn log_pci_ethernet_controllers() {
                 );
             }
         }
+    }
+    if found_15ad_07b0 {
+        serial_println!("[VMXNET3-AUDIT] found 15ad:07b0 in PCI enumeration (BDF details above)");
+    } else {
+        serial_println!("[VMXNET3-AUDIT] 15ad:07b0 absent from PCI enumeration");
     }
 }
 

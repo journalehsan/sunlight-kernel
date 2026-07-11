@@ -7,6 +7,8 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 
 #[cfg(feature = "dom")]
+use crate::css::{collect_embedded_stylesheets, StyleContext};
+#[cfg(feature = "dom")]
 use golden_fish::{Document, Node, NodeId};
 use sunlight_ui::widgets::{TreeViewRow, TreeViewState};
 
@@ -44,6 +46,8 @@ pub struct DomInspectorState {
     tree_rebuild_count: usize,
     #[cfg(feature = "dom")]
     document: Option<Document>,
+    #[cfg(feature = "dom")]
+    style_context: Option<StyleContext>,
 }
 
 impl Default for DomInspectorState {
@@ -73,6 +77,8 @@ impl DomInspectorState {
             tree_rebuild_count: 0,
             #[cfg(feature = "dom")]
             document: None,
+            #[cfg(feature = "dom")]
+            style_context: None,
         }
     }
 
@@ -91,6 +97,7 @@ impl DomInspectorState {
             self.tree_rows_cache.clear();
             self.tree_rows_dirty = true;
             self.document = None;
+            self.style_context = None;
         }
     }
 
@@ -136,6 +143,13 @@ impl DomInspectorState {
 
     #[cfg(feature = "dom")]
     pub fn set_document(&mut self, document: Document) {
+        let stylesheets = collect_embedded_stylesheets(&document);
+        let style_context = StyleContext::build(&document, &stylesheets);
+        self.set_document_with_styles(document, style_context);
+    }
+
+    #[cfg(feature = "dom")]
+    pub fn set_document_with_styles(&mut self, document: Document, style_context: StyleContext) {
         let expanded_ids = default_expanded_nodes(&document);
         let selected_node = default_selected_node(&document);
 
@@ -152,6 +166,7 @@ impl DomInspectorState {
         self.styles_text_dirty = true;
         self.tree_rows_dirty = true;
         self.document = Some(document);
+        self.style_context = Some(style_context);
     }
 
     #[cfg(feature = "dom")]
@@ -485,15 +500,34 @@ impl DomInspectorState {
         let Some(node) = document.get(node_id) else {
             return String::from("Select a DOM node to inspect inline style data.");
         };
+        let Some(style_context) = self.style_context.as_ref() else {
+            return String::from("Computed styles are not available for this document.");
+        };
+
+        let is_element = matches!(node, Node::Element { .. });
+        if !is_element {
+            let mut out = String::from("This node does not directly match CSS selectors.\n");
+            if let Some(style) = style_context.nearest_element_style(document, node_id) {
+                out.push_str("Inherited text style from nearest element parent\n\n");
+                for property in &style.properties {
+                    if property.property.is_inherited_for_inspector() {
+                        out.push_str(property.property.name());
+                        out.push_str(": ");
+                        out.push_str(&property.value.display());
+                        out.push('\n');
+                    }
+                }
+            }
+            return out;
+        }
+
         let Node::Element {
             tag_name,
             attributes,
             ..
         } = node
         else {
-            return String::from(
-                "Computed styles are not available yet.\nThis node does not expose inline style attributes.",
-            );
+            unreachable!()
         };
 
         let mut out = String::new();
@@ -507,7 +541,46 @@ impl DomInspectorState {
         } else {
             out.push_str("Inline style: (none)\n");
         }
-        out.push_str("Computed styles are not available yet.\n");
+        let Some(style) = style_context.style_for(node_id) else {
+            out.push_str("Computed styles are not available for this element.\n");
+            return out;
+        };
+        out.push_str("\nComputed Styles\n---------------\n");
+        for property in &style.properties {
+            out.push_str(property.property.name());
+            out.push_str(": ");
+            out.push_str(&property.value.display());
+            if property
+                .matched
+                .as_ref()
+                .is_some_and(|matched| matched.inherited)
+            {
+                out.push_str(" (inherited)");
+            }
+            out.push('\n');
+        }
+        out.push_str("\nMatched Rules\n-------------\n");
+        let mut any = false;
+        for property in &style.properties {
+            let Some(matched) = property.matched.as_ref() else {
+                continue;
+            };
+            if matched.inherited {
+                continue;
+            }
+            any = true;
+            out.push_str(&matched.selector);
+            out.push_str(" [");
+            out.push_str(&matched.source);
+            out.push_str("]\n  ");
+            out.push_str(matched.property.name());
+            out.push_str(": ");
+            out.push_str(&matched.value.display());
+            out.push_str(";\n");
+        }
+        if !any {
+            out.push_str("No matched declarations; initial values are shown above.\n");
+        }
         out
     }
 }
@@ -656,5 +729,21 @@ mod tests {
         assert!(stats.node_count < 64);
         assert!(state.tree_rows().len() < 64);
         assert!(state.tree_rows().len() <= MAX_INSPECTOR_PROJECTION_ROWS);
+    }
+
+    #[test]
+    fn styles_panel_shows_computed_values_and_matched_rules() {
+        let mut state = build_state(
+            "<html><head><style>body { color: #222; } .notice { padding: 8px; }</style></head><body><p class='notice'>Hello</p></body></html>",
+        );
+        let document = state.document().unwrap();
+        let notice = document.find_first_element("p").unwrap();
+        state.select_node(notice);
+        let text = state.styles_text();
+        assert!(text.contains("Computed Styles"));
+        assert!(text.contains("color: #222222"));
+        assert!(text.contains("padding-left: 8px"));
+        assert!(text.contains("Matched Rules"));
+        assert!(text.contains(".notice"));
     }
 }

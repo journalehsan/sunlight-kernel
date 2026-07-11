@@ -1,6 +1,6 @@
 [package]
 name = "sunlight-net"
-version = "0.2.1195"
+version = "0.2.1210"
 
 
 
@@ -273,6 +273,8 @@ version = "0.2.1195"
 
 
 
+
+build = "build.rs"
 edition = "2021"
 
 [dependencies]
