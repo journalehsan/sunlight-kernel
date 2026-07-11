@@ -32,6 +32,7 @@ mod backend;
 mod blend;
 mod dirty;
 mod mask;
+mod surface;
 
 // ---------------------------------------------------------------------------
 // Allocator
@@ -697,7 +698,10 @@ struct Window {
     buffer: *mut u32,
     width: u32,  // current client area width
     height: u32, // current client area height
-    buffer_size: usize, // allocated size of SHM buffer in bytes
+    surface_width_pixels: u32,
+    surface_height_rows: u32,
+    surface_stride_bytes: usize,
+    surface_len_bytes: usize,
     x: u32,      // chrome top-left on screen
     y: u32,
     // Saved normal geometry for restore from maximized/fullscreen.
@@ -2461,10 +2465,22 @@ fn composite_window(
     if copy_w == 0 || copy_h == 0 {
         return;
     }
-    let required_bytes = win.width as usize * win.height as usize * 4;
-    if win.buffer_size < required_bytes {
+    let Ok(layout) = surface::SurfaceLayout::validate(
+        win.surface_width_pixels,
+        win.surface_height_rows,
+        win.surface_stride_bytes,
+        win.surface_len_bytes,
+    ) else {
+        return;
+    };
+    let Ok(source) = layout.readable_rect(0, 0, copy_w as u32, copy_h as u32) else {
+        return;
+    };
+    if source.width == 0 || source.height == 0 {
         return;
     }
+    let copy_w = source.width as usize;
+    let copy_h = source.height as usize;
     let stride = fb_stride(state);
     let back_ptr = back_buffer.as_mut_ptr();
     // Inner content area used for anti-aliased rounded-corner clipping.
@@ -2480,7 +2496,9 @@ fn composite_window(
     };
     for row in 0..copy_h {
         unsafe {
-            let src_row = win.buffer.add(row * win.width as usize);
+            let src_row = win
+                .buffer
+                .add((source.y as usize + row) * layout.stride_pixels + source.x as usize);
             let dst_row = back_ptr.add((canvas_y as usize + row) * stride + canvas_x as usize);
             if let Some(rect) = clip_rect {
                 // Rect-local Y coordinate for this row.
@@ -2502,7 +2520,7 @@ fn composite_window(
                             let dst_px = dst_row.add(col).read();
                             dst_row
                                 .add(col)
-                                .write(blend::blend_pixel(src_px, dst_px, a));
+                                .write(blend::blend_xrgb_with_coverage(src_px, dst_px, a));
                         }
                     }
                 }
@@ -2756,14 +2774,23 @@ fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) 
         Some(w) => w,
         None => return,
     };
-    let strip_rows = PANEL_TOP_RESERVED_H
-        .min(state.fb_height)
-        .min(desktop.height) as usize;
-    let blit_w = (desktop.width as usize).min(state.fb_width as usize);
+    let Ok(layout) = surface::SurfaceLayout::validate(
+        desktop.surface_width_pixels,
+        desktop.surface_height_rows,
+        desktop.surface_stride_bytes,
+        desktop.surface_len_bytes,
+    ) else {
+        return;
+    };
+    let Ok(source) = layout.readable_rect(0, 0, state.fb_width, PANEL_TOP_RESERVED_H.min(state.fb_height)) else {
+        return;
+    };
+    let strip_rows = source.height as usize;
+    let blit_w = source.width as usize;
     let stride = fb_stride(state);
     for row in 0..strip_rows {
         let src = unsafe {
-            core::slice::from_raw_parts(desktop.buffer.add(row * desktop.width as usize), blit_w)
+            core::slice::from_raw_parts(desktop.buffer.add(row * layout.stride_pixels), blit_w)
         };
         let dst_start = row * stride;
         back_buffer[dst_start..dst_start + blit_w].copy_from_slice(src);
@@ -3130,7 +3157,10 @@ mod tests {
             buffer: core::ptr::null_mut(),
             width: w,
             height: h,
-            buffer_size: w as usize * h as usize * 4,
+            surface_width_pixels: w,
+            surface_height_rows: h,
+            surface_stride_bytes: w as usize * surface::BYTES_PER_PIXEL as usize,
+            surface_len_bytes: w as usize * h as usize * surface::BYTES_PER_PIXEL as usize,
             x,
             y,
             saved_x: x,
@@ -3778,11 +3808,11 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::CREATE_WINDOW => {
                 let w = (msg.words[0] & 0xffffffff) as u32;
                 let h = (msg.words[0] >> 32) as u32;
-                let Some((w, h)) = blend::validate_surface_dims(w, h) else {
+                let Ok(layout) = surface::SurfaceLayout::for_new_surface(w, h) else {
                     let _ = ipc_reply(IpcMsg::with_label(0xA1FE));
                     continue;
                 };
-                let size = (w as usize * h as usize * 4).max(4096);
+                let size = layout.surface_len_bytes;
                 let config = WindowConfig::from_ipc_words(&msg.words);
                 let is_desktop_window = config.window_type == WindowType::Desktop;
                 let owner_pid = msg.badge;
@@ -3852,7 +3882,10 @@ pub extern "C" fn _start() -> ! {
                                 buffer: our_buf,
                                 width: w,
                                 height: h,
-                                buffer_size: size,
+                                surface_width_pixels: layout.width,
+                                surface_height_rows: layout.height,
+                                surface_stride_bytes: layout.stride_bytes,
+                                surface_len_bytes: layout.surface_len_bytes,
                                 x: win_x,
                                 y: win_y,
                                 saved_x: win_x,
@@ -3927,6 +3960,9 @@ pub extern "C" fn _start() -> ! {
             // words[2] = pid|ppid<<32  (0 = no change)
             // words[3] = title[0..8]   (0 = no change)
             // caps[0]  = SHM page with full null-terminated title (optional)
+            // This operation changes logical geometry/state only; the attached
+            // surface metadata is intentionally not resized or replaced. The
+            // compositor clips logical geometry to that validated allocation.
             // -------------------------------------------------------------------
             SgpMsg::CONFIGURE_WINDOW => {
                 let win_id = msg.words[0];

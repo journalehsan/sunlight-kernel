@@ -1,122 +1,104 @@
-/// Maximum sane dimension for client surface allocation.
-pub const MAX_SURFACE_DIM: u32 = 8192;
-/// Maximum surface allocation in bytes (8192 × 8192 × 4 = 268 MiB).
-pub const MAX_SURFACE_BYTES: usize = MAX_SURFACE_DIM as usize * MAX_SURFACE_DIM as usize * 4;
-
-/// Source-over coverage blend. `src` and `dst` are XRGB pixels (A byte ignored).
-/// `src_alpha` is the coverage/opacity of the source pixel (0=transparent, 255=opaque).
-///
-/// This blends the source RGB over the destination RGB with the given opacity,
-/// ignoring the source pixel's alpha channel. Useful for rounded-corner masking
-/// and window chrome where per-pixel alpha is supplied externally.
+/// Multiply two 8-bit values and divide by 255 with one defined rounding step.
 #[inline(always)]
-pub fn blend_pixel(src: u32, dst: u32, src_alpha: u8) -> u32 {
-    match src_alpha {
-        255 => src,
-        0 => dst,
+pub fn mul_u8_div_255_round(value: u8, factor: u8) -> u8 {
+    (((value as u16 * factor as u16) + 127) / 255) as u8
+}
+
+#[inline(always)]
+fn xrgb(rgb: u32) -> u32 {
+    0xFF00_0000 | (rgb & 0x00FF_FFFF)
+}
+
+/// Blend an XRGB source over an XRGB destination using external coverage.
+/// The source high byte is not interpreted as alpha.
+#[inline(always)]
+pub fn blend_xrgb_with_coverage(src: u32, dst: u32, coverage: u8) -> u32 {
+    match coverage {
+        0 => xrgb(dst),
+        255 => xrgb(src),
         a => {
-            let a = a as u32;
-            let ia = 255 - a;
-            let r = ((src >> 16 & 0xFF) * a + (dst >> 16 & 0xFF) * ia + 127) / 255;
-            let g = ((src >> 8 & 0xFF) * a + (dst >> 8 & 0xFF) * ia + 127) / 255;
-            let b = ((src & 0xFF) * a + (dst & 0xFF) * ia + 127) / 255;
-            (r << 16) | (g << 8) | b
+            let inv = 255 - a as u16;
+            let a = a as u16;
+            let r = (((src >> 16 & 0xFF) as u16 * a + (dst >> 16 & 0xFF) as u16 * inv + 127) / 255)
+                as u32;
+            let g = (((src >> 8 & 0xFF) as u16 * a + (dst >> 8 & 0xFF) as u16 * inv + 127) / 255)
+                as u32;
+            let b = (((src & 0xFF) as u16 * a + (dst & 0xFF) as u16 * inv + 127) / 255) as u32;
+            0xFF00_0000 | (r << 16) | (g << 8) | b
         }
     }
 }
 
-/// Premultiplied-alpha source-over blend.
-///
-/// `src` and `dst` are ARGB pixels where the colour channels are already
-/// multiplied by the alpha channel: `src.r <= src.a`, `src.g <= src.a`, etc.
-/// Output is also premultiplied ARGB.
-///
-/// Formula (Porter-Duff source-over, premultiplied):
-///   out.rgb = src.rgb + dst.rgb * (1 - src.a)
-///   out.a   = src.a   + dst.a   * (1 - src.a)
-///
-/// All arithmetic is integer with correct rounding (+127 before /255).
-/// An opaque source (a=255) passes through unmodified.
-/// A transparent source (a=0) returns the destination unmodified.
+/// Blend a straight-alpha ARGB image pixel over the XRGB destination.
+/// The destination remains XRGB; no alpha is propagated to it.
 #[inline(always)]
-pub fn blend_src_over_premul(src: u32, dst: u32) -> u32 {
-    let sa = (src >> 24) & 0xFF;
-    match sa {
-        0 => dst,
-        255 => src,
+pub fn blend_straight_alpha_over_xrgb(src: u32, dst: u32) -> u32 {
+    let alpha = (src >> 24) as u8;
+    match alpha {
+        0 => xrgb(dst),
+        255 => xrgb(src),
         a => {
-            let a = a as u32;
-            let inv_a = 255 - a;
-            let sr = (src >> 16) & 0xFF;
-            let sg = (src >> 8) & 0xFF;
-            let sb = src & 0xFF;
-            let dr = (dst >> 16) & 0xFF;
-            let dg = (dst >> 8) & 0xFF;
-            let db = dst & 0xFF;
-            let da = (dst >> 24) & 0xFF;
-            let out_r = sr + (dr * inv_a + 127) / 255;
-            let out_g = sg + (dg * inv_a + 127) / 255;
-            let out_b = sb + (db * inv_a + 127) / 255;
-            let out_a = a + (da * inv_a + 127) / 255;
-            (out_r.min(255) << 16) | (out_g.min(255) << 8) | out_b.min(255) | (out_a.min(255) << 24)
+            let inv = 255 - a as u16;
+            let a = a as u16;
+            let r = (((src >> 16 & 0xFF) as u16 * a + (dst >> 16 & 0xFF) as u16 * inv + 127) / 255)
+                as u32;
+            let g = (((src >> 8 & 0xFF) as u16 * a + (dst >> 8 & 0xFF) as u16 * inv + 127) / 255)
+                as u32;
+            let b = (((src & 0xFF) as u16 * a + (dst & 0xFF) as u16 * inv + 127) / 255) as u32;
+            0xFF00_0000 | (r << 16) | (g << 8) | b
         }
     }
 }
 
-/// Straight-alpha (non-premultiplied) source-over blend.
-///
-/// The source colour channels are assumed to be stored in non-premultiplied
-/// form (i.e. `src.r` may be > `src.a`). The operation conceptually:
-///   1. Premultiplies src RGB by src alpha
-///   2. Blends over dst using source-over
-///   3. Returns straight-alpha ARGB
-///
-/// All arithmetic is integer with correct rounding (+127 before /255).
-/// An opaque source (a=255) replaces the destination (fast path).
-/// A transparent source (a=0) returns the destination unmodified (fast path).
-/// An opaque destination (dst.a=255) skips the output alpha computation.
-#[inline(always)]
-pub fn blend_src_over_straight(src: u32, dst: u32) -> u32 {
-    let sa = (src >> 24) & 0xFF;
-    match sa {
-        0 => dst,
-        255 => src | 0xFF00_0000,
-        a => {
-            let a = a as u32;
-            let inv_a = 255 - a;
-            let sr = (src >> 16) & 0xFF;
-            let sg = (src >> 8) & 0xFF;
-            let sb = src & 0xFF;
-            let dr = (dst >> 16) & 0xFF;
-            let dg = (dst >> 8) & 0xFF;
-            let db = dst & 0xFF;
-            let da = (dst >> 24) & 0xFF;
-            let out_r = (sr * a + dr * inv_a + 127) / 255;
-            let out_g = (sg * a + dg * inv_a + 127) / 255;
-            let out_b = (sb * a + db * inv_a + 127) / 255;
-            let out_a = if da == 255 {
-                255
-            } else {
-                (a * 255 + da * inv_a + 127) / 255
-            };
-            (out_r.min(255) << 16) | (out_g.min(255) << 8) | out_b.min(255) | (out_a.min(255) << 24)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multiply_has_exact_endpoints_and_rounding() {
+        assert_eq!(mul_u8_div_255_round(0, 255), 0);
+        assert_eq!(mul_u8_div_255_round(255, 0), 0);
+        assert_eq!(mul_u8_div_255_round(255, 255), 255);
+        assert_eq!(mul_u8_div_255_round(127, 128), 64);
+    }
+
+    #[test]
+    fn coverage_and_straight_alpha_match_for_all_key_values() {
+        let src = 0x0012_34AB;
+        let dst = 0xFFCD_EF10;
+        for a in [0, 1, 127, 128, 254, 255] {
+            assert_eq!(
+                blend_xrgb_with_coverage(src, dst, a),
+                blend_straight_alpha_over_xrgb((a as u32) << 24 | src, dst)
+            );
         }
     }
-}
 
-/// Validate a client-requested surface width and height.
-///
-/// Returns `Some((w, h))` if both dimensions are non-zero and the total
-/// allocation fits within `MAX_SURFACE_BYTES`. Returns `None` on overflow
-/// or out-of-range dimensions.
-#[inline]
-pub fn validate_surface_dims(w: u32, h: u32) -> Option<(u32, u32)> {
-    if w == 0 || h == 0 || w > MAX_SURFACE_DIM || h > MAX_SURFACE_DIM {
-        return None;
+    #[test]
+    fn endpoints_preserve_rgb_and_xrgb_high_byte() {
+        let src = 0x7F_FF_FF_FF;
+        let dst = 0x12_01_02_03;
+        assert_eq!(blend_xrgb_with_coverage(src, dst, 255), 0xFFFF_FFFF);
+        assert_eq!(blend_xrgb_with_coverage(src, dst, 0), 0xFF01_0203);
+        assert_eq!(
+            blend_straight_alpha_over_xrgb(0x00FF_FFFF, dst),
+            0xFF01_0203
+        );
+        assert_eq!(blend_straight_alpha_over_xrgb(0xFF00_1020, dst), 0xFF001020);
     }
-    let bytes = (w as usize).checked_mul(h as usize)?;
-    if bytes.checked_mul(4).is_none() || bytes * 4 > MAX_SURFACE_BYTES {
-        return None;
+
+    #[test]
+    fn channel_order_and_full_coverage_are_stable() {
+        let red = 0x00FF_0000;
+        let green = 0x0000_FF00;
+        let blue = 0x0000_00FF;
+        assert_eq!(blend_xrgb_with_coverage(red, green, 255), 0xFFFF_0000);
+        assert_eq!(blend_xrgb_with_coverage(green, blue, 255), 0xFF00_FF00);
+        assert_eq!(blend_xrgb_with_coverage(blue, red, 255), 0xFF00_00FF);
+        let mut out = 0xFF12_3456;
+        for _ in 0..8 {
+            out = blend_xrgb_with_coverage(0x00FF_FFFF, out, 255);
+        }
+        assert_eq!(out, 0xFFFF_FFFF);
     }
-    Some((w, h))
 }
