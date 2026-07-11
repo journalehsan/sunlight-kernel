@@ -91,6 +91,24 @@ impl rappid_rabbit::render::TextMeasurer for RabbitFonts {
             DocumentFontFamily::SansSerif => VecText::line_height(&F_UI),
         }
     }
+
+    fn measure_width_for_size(
+        &self,
+        family: DocumentFontFamily,
+        font_size: u32,
+        text: &str,
+    ) -> u32 {
+        // This must mirror DocumentCanvas::draw_scene.  CSS headings request
+        // sizes larger than the installed bitmap/vector faces, so measuring a
+        // synthetic 24px advance while painting the 16px large face leaves a
+        // visible gap after every word.
+        match family {
+            DocumentFontFamily::Serif => F_SERIF.measure_w(text),
+            DocumentFontFamily::Monospace => F_MONO.measure_w(text),
+            DocumentFontFamily::SansSerif if font_size >= 24 => F_LARGE.measure_w(text),
+            DocumentFontFamily::SansSerif => F_UI.measure_w(text),
+        }
+    }
 }
 
 static RABBIT_FONTS: RabbitFonts = RabbitFonts;

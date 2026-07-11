@@ -55,6 +55,21 @@ pub trait TextMeasurer {
     fn line_height_for(&self, _family: DocumentFontFamily) -> u32 {
         self.line_height()
     }
+    /// Returns the advance of the face that will actually paint this CSS text
+    /// size.  The default preserves the old proportional approximation for
+    /// simple measurers; applications with a finite font-face set should
+    /// override it so layout and painting share exact metrics.
+    fn measure_width_for_size(
+        &self,
+        family: DocumentFontFamily,
+        font_size: u32,
+        text: &str,
+    ) -> u32 {
+        let measured = self.measure_width_for(family, text).max(1) as u64;
+        ((measured.saturating_mul(font_size.max(1) as u64) / 16)
+            .max(1)
+            .min(MAX_DOCUMENT_DIMENSION as u64)) as u32
+    }
 }
 
 impl<T: VecText + ?Sized> TextMeasurer for T {
@@ -624,6 +639,12 @@ impl<'a> LayoutBuilder<'a> {
         let mut line_x = x;
         let mut line_h = self.measurer.line_height().max(1);
         let mut had_content = false;
+        // Whitespace belongs to the DOM text stream, not to inline wrappers.
+        // In particular, entering or leaving an anchor must neither create nor
+        // remove a collapsed space.  Keep the separator pending until the next
+        // visible word so a line break can discard it as CSS normal whitespace
+        // requires.
+        let mut pending_space = false;
         for item in items {
             if self.text_fragment_count >= MAX_TEXT_FRAGMENTS || self.line_count >= MAX_LINES {
                 break;
@@ -638,6 +659,7 @@ impl<'a> LayoutBuilder<'a> {
                     line_x = x;
                     line_h = self.measurer.line_height().max(1);
                     had_content = false;
+                    pending_space = false;
                 }
                 InlineItem::Image {
                     mut image,
@@ -733,14 +755,18 @@ impl<'a> LayoutBuilder<'a> {
                         }
                         continue;
                     }
-                    for word in text.split_ascii_whitespace() {
+                    if had_content && text.as_bytes().first().is_some_and(u8::is_ascii_whitespace) {
+                        pending_space = true;
+                    }
+                    let words: Vec<&str> = text.split_ascii_whitespace().collect();
+                    for (word_index, word) in words.iter().enumerate() {
                         let word_w = scaled_measure_for(
                             self.measurer,
                             word,
                             paint.font_size,
                             paint.font_family,
                         );
-                        let space_w = if had_content {
+                        let space_w = if had_content && pending_space {
                             scaled_measure_for(
                                 self.measurer,
                                 " ",
@@ -764,8 +790,9 @@ impl<'a> LayoutBuilder<'a> {
                             line_x = x;
                             line_h = self.measurer.line_height().max(1);
                             had_content = false;
+                            pending_space = false;
                         }
-                        if had_content {
+                        if had_content && pending_space {
                             line_x = line_x.saturating_add(space_w as i32);
                         }
                         let fragment_h = paint.line_height.max(1);
@@ -780,7 +807,7 @@ impl<'a> LayoutBuilder<'a> {
                             .push(TextFragment {
                                 owner_node_id: owner,
                                 bounds,
-                                text: String::from(word),
+                                text: String::from(*word),
                                 paint: paint.clone(),
                                 link: link.clone(),
                             });
@@ -791,6 +818,8 @@ impl<'a> LayoutBuilder<'a> {
                         line_x = line_x.saturating_add(word_w as i32);
                         line_h = line_h.max(fragment_h);
                         had_content = true;
+                        pending_space = word_index + 1 < words.len()
+                            || text.as_bytes().last().is_some_and(u8::is_ascii_whitespace);
                     }
                 }
             }
@@ -838,7 +867,11 @@ impl<'a> LayoutBuilder<'a> {
         match node {
             Node::Text { content } => {
                 if let Some(style) = inherited {
-                    if style.paint.white_space != "normal" || !content.trim().is_empty() {
+                    // Keep normal-mode whitespace-only nodes: `flush_inline`
+                    // collapses them into a pending separator between words.
+                    // Dropping them here makes adjacent inline elements look as
+                    // if they were separated (or joined) based on their tag.
+                    if !content.is_empty() {
                         output.push(InlineItem::Text {
                             owner: style.node_id,
                             inline_owners,
@@ -1204,10 +1237,9 @@ fn scaled_measure_for(
     font_size: u32,
     family: DocumentFontFamily,
 ) -> u32 {
-    let measured = measurer.measure_width_for(family, text).max(1) as u64;
-    ((measured.saturating_mul(font_size.max(1) as u64) / 16)
-        .max(1)
-        .min(MAX_DOCUMENT_DIMENSION as u64)) as u32
+    measurer
+        .measure_width_for_size(family, font_size, text)
+        .clamp(1, MAX_DOCUMENT_DIMENSION)
 }
 
 fn format_marker(ordinal: u32, style_type: &str) -> String {
@@ -1581,8 +1613,10 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
             );
         }
     }
-    // Group link text fragments by anchor.  A single anchor may wrap across
-    // lines, so it gets one retained hit object per unioned visible bounds.
+    // Group link fragments by anchor *and visual line*.  The text formatter is
+    // the sole source of inline advances; these retained hit regions only
+    // reuse the final fragment bounds.  Keeping wrapped lines separate avoids
+    // a clickable rectangle across the whitespace between them.
     let mut links: Vec<(LinkTarget, Rect, Vec<RenderObjectId>)> = Vec::new();
     for object in &scene.objects {
         let Some(RenderInteraction::Link {
@@ -1594,10 +1628,12 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
             continue;
         };
         let anchor = *owner_node_id;
-        if let Some((_, bounds, ids)) = links
-            .iter_mut()
-            .find(|(target, _, _)| target.anchor_node_id == anchor && target.href == *href)
-        {
+        if let Some((_, bounds, ids)) = links.iter_mut().find(|(target, bounds, _)| {
+            target.anchor_node_id == anchor
+                && target.href == *href
+                && bounds.y == object.bounds.y
+                && bounds.h == object.bounds.h
+        }) {
             *bounds = union(*bounds, object.bounds);
             ids.push(object.id);
         } else {
@@ -1793,6 +1829,151 @@ mod tests {
             .current_scene
             .objects_for_node(link.owner_node_id)
             .is_empty());
+    }
+
+    fn text_bounds_for(state: &DocumentRenderState, owner: NodeId) -> Vec<Rect> {
+        state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| object.owner_node_id == DocumentNodeId(owner as u64))
+            .filter_map(|object| match object.kind {
+                RenderObjectKind::Text { .. } => Some(object.bounds),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn extent(bounds: &[Rect]) -> u32 {
+        let left = bounds.iter().map(|bounds| bounds.x).min().unwrap();
+        let right = bounds.iter().map(|bounds| bounds.right()).max().unwrap();
+        right.saturating_sub(left) as u32
+    }
+
+    #[test]
+    fn anchor_text_uses_the_same_word_positions_and_advance_as_a_span() {
+        let state = render(
+            "<p><span>Linux mailing list service</span></p><p><a href='/lists'>Linux mailing list service</a></p>",
+        );
+        let span = state.dom.find_first_element("span").unwrap();
+        let anchor = state.dom.find_first_element("a").unwrap();
+        let span_bounds = text_bounds_for(&state, span);
+        let anchor_bounds = text_bounds_for(&state, anchor);
+
+        assert_eq!(span_bounds.len(), 4);
+        assert_eq!(
+            span_bounds
+                .iter()
+                .map(|bounds| bounds.x)
+                .collect::<Vec<_>>(),
+            anchor_bounds
+                .iter()
+                .map(|bounds| bounds.x)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(extent(&span_bounds), extent(&anchor_bounds));
+        assert!(state.current_scene.objects.iter().any(|object| {
+            matches!(&object.kind, RenderObjectKind::Link { href, text_object_ids, .. }
+                if href == "/lists" && text_object_ids.len() == anchor_bounds.len())
+        }));
+        assert!(
+            state
+                .current_scene
+                .objects
+                .iter()
+                .filter(|object| {
+                    object.owner_node_id == DocumentNodeId(anchor as u64)
+                        && matches!(
+                            &object.kind,
+                            RenderObjectKind::Text {
+                                underline: true,
+                                ..
+                            }
+                        )
+                })
+                .count()
+                == anchor_bounds.len()
+        );
+    }
+
+    #[test]
+    fn heading_advances_use_the_metrics_of_its_painted_face() {
+        struct FaceMeasure;
+        impl TextMeasurer for FaceMeasure {
+            fn measure_width(&self, text: &str) -> u32 {
+                text.chars().count() as u32 * 8
+            }
+
+            fn line_height(&self) -> u32 {
+                16
+            }
+
+            fn measure_width_for_size(
+                &self,
+                _family: DocumentFontFamily,
+                _font_size: u32,
+                text: &str,
+            ) -> u32 {
+                // Represents the actual face chosen by the canvas, rather
+                // than a synthetic scale of the body face.
+                text.chars().count() as u32 * 11
+            }
+        }
+
+        let dom = parse_html("<h3>Other articles</h3>").unwrap();
+        let styles = StyleContext::build(&dom, &[]);
+        let layout = build_layout_tree(&dom, &styles, Size::new(320, 240), &FaceMeasure);
+        let fragments = &layout.nodes[0].text_fragments;
+        assert_eq!(fragments.len(), 2);
+        assert_eq!(fragments[1].bounds.x, fragments[0].bounds.right() + 11);
+        assert_eq!(fragments[0].paint.font_size, 24);
+    }
+
+    #[test]
+    fn wrapped_anchor_has_one_tight_hit_region_per_visual_line() {
+        let state = render(
+            "<style>p{display:block;width:104px}</style><p><a href='/lists'>Linux mailing list service</a></p>",
+        );
+        let anchor = state.dom.find_first_element("a").unwrap();
+        let text = text_bounds_for(&state, anchor);
+        assert_eq!(text.len(), 4);
+        let links: Vec<_> = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(&object.kind, RenderObjectKind::Link { href, .. } if href == "/lists"))
+            .collect();
+        let lines: Vec<i32> = text.iter().map(|bounds| bounds.y).collect();
+        assert_eq!(links.len(), 2);
+        for link in links {
+            assert!(lines.contains(&link.bounds.y));
+            assert!(link.bounds.h > 0);
+        }
+    }
+
+    #[test]
+    fn inline_whitespace_is_from_text_nodes_not_anchor_boundaries() {
+        let state = render(
+            "<p>plain <a href='/one'>link</a> tail</p><p><a href='/one'>one</a><a href='/two'>two</a></p>",
+        );
+        let word = |text| {
+            state
+                .current_scene
+                .objects
+                .iter()
+                .find(|object| matches!(&object.kind, RenderObjectKind::Text { text: value, .. } if value == text))
+                .unwrap()
+                .bounds
+        };
+        let plain = word("plain");
+        let link = word("link");
+        let tail = word("tail");
+        assert_eq!(link.x, plain.right() + 8);
+        assert_eq!(tail.x, link.right() + 8);
+
+        let one = word("one");
+        let two = word("two");
+        assert_eq!(two.x, one.right());
     }
 
     #[test]
