@@ -218,6 +218,8 @@ fn decode_png(bytes: &[u8]) -> Result<RasterImage, String> {
     let mut bit_depth = 0u8;
     let mut color_type = 0u8;
     let mut interlace = 0u8;
+    let mut palette = Vec::new();
+    let mut palette_alpha = Vec::new();
     let mut idat = Vec::new();
     let mut saw_ihdr = false;
     while offset.checked_add(12).is_some_and(|end| end <= bytes.len()) {
@@ -257,6 +259,26 @@ fn decode_png(bytes: &[u8]) -> Result<RasterImage, String> {
                 return Err(String::from("PNG compressed data exceeds limit"));
             }
             idat.extend_from_slice(data);
+        } else if kind == b"PLTE" {
+            if !saw_ihdr || !idat.is_empty() || data.is_empty() || data.len() % 3 != 0 {
+                return Err(String::from("invalid PNG palette"));
+            }
+            if data.len() / 3 > 256 {
+                return Err(String::from("PNG palette exceeds 256 entries"));
+            }
+            palette.clear();
+            palette.extend_from_slice(data);
+        } else if kind == b"tRNS" {
+            if !saw_ihdr || !idat.is_empty() {
+                return Err(String::from("invalid PNG transparency chunk"));
+            }
+            if color_type != 3 {
+                return Err(String::from(
+                    "PNG transparency is only supported for indexed images",
+                ));
+            }
+            palette_alpha.clear();
+            palette_alpha.extend_from_slice(data);
         } else if kind == b"IEND" {
             break;
         }
@@ -268,12 +290,19 @@ fn decode_png(bytes: &[u8]) -> Result<RasterImage, String> {
     if width == 0 || height == 0 || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
         return Err(String::from("PNG dimensions exceed limit"));
     }
-    if bit_depth != 8 || interlace != 0 || !matches!(color_type, 0 | 2 | 4 | 6) {
+    if bit_depth != 8 || interlace != 0 || !matches!(color_type, 0 | 2 | 3 | 4 | 6) {
         return Err(String::from("unsupported PNG color format"));
+    }
+    if color_type == 3 && (palette.is_empty() || palette.len() % 3 != 0) {
+        return Err(String::from("indexed PNG is missing a valid palette"));
+    }
+    if palette_alpha.len() > palette.len() / 3 {
+        return Err(String::from("PNG transparency exceeds palette size"));
     }
     let channels = match color_type {
         0 => 1usize,
         2 => 3,
+        3 => 1,
         4 => 2,
         6 => 4,
         _ => return Err(String::from("unsupported PNG color format")),
@@ -323,6 +352,18 @@ fn decode_png(bytes: &[u8]) -> Result<RasterImage, String> {
                         | ((source[0] as u32) << 16)
                         | ((source[1] as u32) << 8)
                         | source[2] as u32
+                }
+                3 => {
+                    let index = source[0] as usize;
+                    let palette_offset = index.saturating_mul(3);
+                    if palette_offset + 2 >= palette.len() {
+                        return Err(String::from("PNG palette index is out of range"));
+                    }
+                    let alpha = palette_alpha.get(index).copied().unwrap_or(0xFF) as u32;
+                    (alpha << 24)
+                        | ((palette[palette_offset] as u32) << 16)
+                        | ((palette[palette_offset + 1] as u32) << 8)
+                        | palette[palette_offset + 2] as u32
                 }
                 4 => {
                     let gray = source[0] as u32;
@@ -430,6 +471,7 @@ fn be_u32(bytes: &[u8]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use miniz_oxide::deflate::compress_to_vec_zlib;
 
     const TINY_PNG: &[u8] = &[
         137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,
@@ -470,5 +512,67 @@ mod tests {
         assert!(cache.decoded("https://x/rabbit.png").is_some());
         cache.insert_failed(String::from("https://x/missing.png"), "HTTP 404");
         assert_eq!(cache.failed("https://x/missing.png"), Some("HTTP 404"));
+    }
+
+    #[test]
+    fn decodes_indexed_png_with_palette_and_transparency() {
+        let png = png_with_chunks(
+            2,
+            1,
+            3,
+            &[b"PLTE", &[0xFF, 0, 0, 0, 0x80, 0xFF]],
+            &[b"tRNS", &[0xFF, 0x80]],
+            &[b"IDAT", &compress_to_vec_zlib(&[0, 0, 1], 6)],
+        );
+        let decoded = decode_image(&png, Some("image/png"), "https://x/indexed.png").unwrap();
+        assert_eq!(decoded.image.width, 2);
+        assert_eq!(decoded.image.height, 1);
+        assert_eq!(decoded.image.pixels, vec![0xFFFF_0000, 0x8000_80FF]);
+    }
+
+    #[test]
+    fn indexed_png_without_palette_reports_its_specific_error() {
+        let png = png_with_chunks(
+            1,
+            1,
+            3,
+            &[],
+            &[],
+            &[b"IDAT", &compress_to_vec_zlib(&[0, 0], 6)],
+        );
+        assert_eq!(
+            decode_image(&png, Some("image/png"), "https://x/indexed.png"),
+            Err(String::from("indexed PNG is missing a valid palette"))
+        );
+    }
+
+    fn png_with_chunks(
+        width: u32,
+        height: u32,
+        color_type: u8,
+        first: &[&[u8]],
+        second: &[&[u8]],
+        idat: &[&[u8]],
+    ) -> Vec<u8> {
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        let mut ihdr = Vec::new();
+        ihdr.extend_from_slice(&width.to_be_bytes());
+        ihdr.extend_from_slice(&height.to_be_bytes());
+        ihdr.extend_from_slice(&[8, color_type, 0, 0, 0]);
+        push_png_chunk(&mut png, b"IHDR", &ihdr);
+        for chunk in [first, second, idat] {
+            if let [kind, data] = chunk {
+                push_png_chunk(&mut png, kind, data);
+            }
+        }
+        push_png_chunk(&mut png, b"IEND", &[]);
+        png
+    }
+
+    fn push_png_chunk(png: &mut Vec<u8>, kind: &[u8], data: &[u8]) {
+        png.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        png.extend_from_slice(kind);
+        png.extend_from_slice(data);
+        png.extend_from_slice(&0u32.to_be_bytes());
     }
 }

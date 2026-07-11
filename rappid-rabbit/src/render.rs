@@ -1717,4 +1717,178 @@ mod tests {
         assert_eq!(state.viewport, Size::new(120, 240));
         assert_eq!(state.scene_generation, 2);
     }
+
+    #[test]
+    fn image_resources_are_shared_by_url_but_each_img_node_has_its_own_object() {
+        use crate::images::ImageCache;
+        use alloc::sync::Arc;
+        use sunlight_ui::widgets::ScenePatchOperation;
+
+        let dom =
+            parse_html("<p><img src='/red.png'><img src='/blue.png'><img src='/red.png'></p>")
+                .unwrap();
+        let styles = StyleContext::build(&dom, &[]);
+        let mut only_red = ImageCache::default();
+        only_red.insert_decoded(
+            String::from("https://example.com/red.png"),
+            decoded_solid_image(0xFFFF_0000),
+        );
+        let mut state = DocumentRenderState::new_with_images(
+            1,
+            String::from("https://example.com/index.html"),
+            dom,
+            styles,
+            Size::new(320, 240),
+            &TestMeasure,
+            only_red.clone(),
+        );
+
+        let initial_images: Vec<_> = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::Image { .. }))
+            .collect();
+        assert_eq!(initial_images.len(), 2);
+        assert_ne!(initial_images[0].id, initial_images[1].id);
+        let (first_pixels, second_pixels) = match (&initial_images[0].kind, &initial_images[1].kind)
+        {
+            (
+                RenderObjectKind::Image { image: first, .. },
+                RenderObjectKind::Image { image: second, .. },
+            ) => (first, second),
+            _ => unreachable!(),
+        };
+        assert!(Arc::ptr_eq(first_pixels, second_pixels));
+        assert_eq!(
+            state
+                .current_scene
+                .objects
+                .iter()
+                .filter(|object| matches!(object.kind, RenderObjectKind::ImagePlaceholder { .. }))
+                .count(),
+            1
+        );
+
+        let mut completed = only_red;
+        completed.insert_decoded(
+            String::from("https://example.com/blue.png"),
+            decoded_solid_image(0xFF00_00FF),
+        );
+        state.rebuild_for_images(&TestMeasure, completed);
+        let images: Vec<_> = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::Image { .. }))
+            .collect();
+        assert_eq!(images.len(), 3);
+        assert!(images
+            .iter()
+            .all(|object| object.bounds.w > 0 && object.bounds.h > 0));
+        assert!(state.last_patch.operations.iter().any(|operation| matches!(
+            operation,
+            ScenePatchOperation::Update { object, .. }
+                if matches!(&object.kind, RenderObjectKind::Image { source_url, .. }
+                    if source_url == "https://example.com/blue.png")
+        )));
+    }
+
+    #[test]
+    fn image_scene_is_independent_of_resource_completion_order() {
+        use crate::images::ImageCache;
+
+        let render_with_order = |urls: &[(&str, u32)]| {
+            let dom = parse_html("<p><img src='/a.png'><img src='/b.png'><img src='/c.png'></p>")
+                .unwrap();
+            let styles = StyleContext::build(&dom, &[]);
+            let mut images = ImageCache::default();
+            for (url, color) in urls {
+                images.insert_decoded(
+                    format!("https://example.com/{url}"),
+                    decoded_solid_image(*color),
+                );
+            }
+            DocumentRenderState::new_with_images(
+                1,
+                String::from("https://example.com/index.html"),
+                dom,
+                styles,
+                Size::new(320, 240),
+                &TestMeasure,
+                images,
+            )
+        };
+        let forward = render_with_order(&[
+            ("a.png", 0xFFFF_0000),
+            ("b.png", 0xFF00_FF00),
+            ("c.png", 0xFF00_00FF),
+        ]);
+        let reverse = render_with_order(&[
+            ("c.png", 0xFF00_00FF),
+            ("b.png", 0xFF00_FF00),
+            ("a.png", 0xFFFF_0000),
+        ]);
+        assert_eq!(forward.current_scene, reverse.current_scene);
+    }
+
+    #[test]
+    fn deterministic_image_matrix_keeps_every_decoded_node_visible() {
+        use crate::images::ImageCache;
+
+        let dom = parse_html(include_str!("../tests/fixtures/image-matrix.html")).unwrap();
+        let styles = StyleContext::build(&dom, &[]);
+        let mut images = ImageCache::default();
+        for (name, color) in [
+            ("rgb-red.png", 0xFFFF_0000),
+            ("rgb-blue.png", 0xFF00_00FF),
+            ("rgba.png", 0x8000_FF00),
+            ("indexed.png", 0xFFFF_FF00),
+            ("gray.png", 0xFF80_8080),
+        ] {
+            images.insert_decoded(
+                format!("https://example.com/{name}"),
+                decoded_solid_image(color),
+            );
+        }
+        let state = DocumentRenderState::new_with_images(
+            1,
+            String::from("https://example.com/index.html"),
+            dom,
+            styles,
+            Size::new(320, 240),
+            &TestMeasure,
+            images,
+        );
+        let objects: Vec<_> = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::Image { .. }))
+            .collect();
+        assert_eq!(objects.len(), 6);
+        assert_eq!(
+            objects
+                .iter()
+                .map(|object| object.id)
+                .collect::<alloc::collections::BTreeSet<_>>()
+                .len(),
+            6
+        );
+        assert!(objects
+            .iter()
+            .all(|object| object.bounds.w > 0 && object.bounds.h > 0));
+    }
+
+    fn decoded_solid_image(pixel: u32) -> crate::images::DecodedImage {
+        crate::images::DecodedImage {
+            image: alloc::sync::Arc::new(sunlight_ui::widgets::RasterImage {
+                width: 1,
+                height: 1,
+                pixels: vec![pixel],
+            }),
+            format: crate::images::ImageFormat::Png,
+            byte_size: 4,
+        }
+    }
 }

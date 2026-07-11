@@ -758,22 +758,35 @@ impl RabbitApp {
                                 ConsoleSeverity::Quiet,
                                 ConsoleSource::Fetch,
                                 format!(
-                                    "[RABBIT][IMAGE] response status={} bytes={}",
-                                    status_code, byte_size
+                                    "[RABBIT][IMAGE] response url={} status={} content_type={} bytes={}",
+                                    candidate.resolved_url,
+                                    status_code,
+                                    content_type.as_deref().unwrap_or("(missing)"),
+                                    byte_size,
                                 ),
                             );
                             self.developer_tools.console.push(
                                 ConsoleSeverity::Quiet,
                                 ConsoleSource::Fetch,
                                 format!(
-                                    "[RABBIT][IMAGE] decoded format={} size={}x{}",
+                                    "[RABBIT][IMAGE] decode url={} result=ok format={} size={}x{} pixels={}",
+                                    candidate.resolved_url,
                                     decoded.format.label(),
                                     decoded.image.width,
-                                    decoded.image.height
+                                    decoded.image.height,
+                                    decoded.image.pixels.len(),
                                 ),
                             );
                             self.image_cache
                                 .insert_decoded(candidate.resolved_url.clone(), decoded);
+                            self.developer_tools.console.push(
+                                ConsoleSeverity::Quiet,
+                                ConsoleSource::Fetch,
+                                format!(
+                                    "[RABBIT][IMAGE] cache key={} state=Decoded",
+                                    candidate.resolved_url
+                                ),
+                            );
                         }
                         Err(reason) => {
                             self.image_cache
@@ -1032,11 +1045,40 @@ impl RabbitApp {
         let mut text_count = 0usize;
         let mut rectangle_count = 0usize;
         let mut link_count = 0usize;
+        let mut image_count = 0usize;
+        let mut placeholder_count = 0usize;
+        let mut image_transitions = Vec::new();
         for object in &render_state.current_scene.objects {
             match &object.kind {
                 RenderObjectKind::Text { .. } => text_count += 1,
                 RenderObjectKind::Rectangle { .. } => rectangle_count += 1,
                 RenderObjectKind::Link { .. } => link_count += 1,
+                RenderObjectKind::Image { source_url, .. } => {
+                    image_count += 1;
+                    image_transitions.push(format!(
+                        "[RABBIT][IMAGE] scene node={} object={} kind=Image url={} bounds={},{} {}x{}",
+                        object.owner_node_id.0,
+                        object.id.0,
+                        source_url,
+                        object.bounds.x,
+                        object.bounds.y,
+                        object.bounds.w,
+                        object.bounds.h,
+                    ));
+                }
+                RenderObjectKind::ImagePlaceholder { src, .. } => {
+                    placeholder_count += 1;
+                    image_transitions.push(format!(
+                        "[RABBIT][IMAGE] scene node={} object={} kind=ImagePlaceholder url={} bounds={},{} {}x{}",
+                        object.owner_node_id.0,
+                        object.id.0,
+                        src,
+                        object.bounds.x,
+                        object.bounds.y,
+                        object.bounds.w,
+                        object.bounds.h,
+                    ));
+                }
                 _ => {}
             }
         }
@@ -1044,7 +1086,7 @@ impl RabbitApp {
             ConsoleSeverity::Quiet,
             ConsoleSource::Browser,
             format!(
-                "DocumentCanvas {reason}: gen={} viewport={}x{} objects={} content={}x{} text={} rectangles={} links={} patches={}",
+                "DocumentCanvas {reason}: gen={} viewport={}x{} objects={} content={}x{} text={} rectangles={} links={} images={} placeholders={} patches={}",
                 render_state.scene_generation,
                 render_state.viewport.w,
                 render_state.viewport.h,
@@ -1054,9 +1096,18 @@ impl RabbitApp {
                 text_count,
                 rectangle_count,
                 link_count,
+                image_count,
+                placeholder_count,
                 render_state.last_patch.operations.len(),
             ),
         );
+        for transition in image_transitions {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Quiet,
+                ConsoleSource::Browser,
+                transition,
+            );
+        }
     }
 
     fn document_canvas(&mut self) -> DocumentCanvas<'_> {
