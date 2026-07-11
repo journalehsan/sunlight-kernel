@@ -5,12 +5,12 @@ extern crate alloc;
 
 use smoltcp::iface::{Config, Interface, SocketSet, SocketStorage};
 use smoltcp::time::Instant;
-use smoltcp::wire::{EthernetAddress, HardwareAddress, IpCidr, Ipv4Address, Ipv4Cidr};
+use smoltcp::wire::{EthernetAddress, HardwareAddress};
 use sunlight_ipc::{
-    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
-    nameserver_lookup, nameserver_lookup_timeout, nameserver_register, shm_alloc, shm_map,
-    CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, IpcMsg, NetworkdMsg,
-    ResolvedMsg, VfsMsg,
+    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply,
+    ipc_reply_and_wait, nameserver_lookup, nameserver_lookup_timeout, nameserver_register,
+    shm_alloc, shm_map, CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState,
+    EndpointId, IpcMsg, NetworkdMsg, ResolvedMsg, VfsMsg,
 };
 use sunlight_net::netop::NetOp;
 use sunlight_net::ProxyNetDevice;
@@ -38,6 +38,7 @@ static mut RESOLVER_CHAIN: Option<sunlight_net::ResolverChain> = None;
 /// static QEMU user-net config as NetOp::GETIP (10.0.2.15/24 via 10.0.2.2).
 static mut NET_DEVICE: Option<ProxyNetDevice> = None;
 static mut NET_IFACE: Option<Interface> = None;
+static mut LIVE_CONFIG: Option<sunlight_net::DhcpConfig> = None;
 /// Backing storage for the TCP SocketSet managed by TcpManager (main loop).
 static mut SOCKET_STORAGE: [SocketStorage; 128] = [SocketStorage::EMPTY; 128];
 /// Separate backing storage for the DNS SocketSet (RESOLVE handler).
@@ -72,54 +73,108 @@ pub extern "C" fn _start() -> ! {
     let ep = endpoint_create();
     nameserver_register("net", ep);
     debug_log("[NET]  Registered as 'net' with init");
-    register_with_deviced();
-    debug_log("[NET]  Interface: eth0 MAC=52:54:00:12:34:56");
-    debug_log("[NET]  NetOp handlers registered");
+    let nic_info = wait_for_publishable_backend(ep);
 
-    // Phase 3.0: VFS /etc/hosts -> ResolverChain (hosts -> TTL cache -> upstream DNS).
-    // We read via capability-gated VFS IPC (existing VfsMsg + nameserver).
-    let hosts_content = load_hosts_from_vfs();
-    let mut chain = sunlight_net::ResolverChain::new(&hosts_content);
-    // QEMU user-net (slirp) built-in DNS forwarder — reliably reachable inside
-    // the guest's NAT'd subnet and forwards to the host's real resolver.
-    chain.upstream = [10, 0, 2, 3];
-    // v0 resolved integration: if resolved is present, prefer its first configured server.
-    // If unavailable, keep the working QEMU / prior value (graceful).
-    refresh_upstream_from_resolved(&mut chain);
-    unsafe {
-        // SAFETY: written exactly once, before any messages are handled (single-threaded
-        // userspace service, no interrupts in this model). Subsequent reads/writes in
-        // handle_msg happen after this point and never alias.
-        RESOLVER_CHAIN = Some(chain);
-    }
-    debug_log("[DNS] /etc/hosts loaded into resolver chain");
-
-    // Phase 3.4: bring up the smoltcp interface over the kernel frame proxy
-    // using the same static QEMU user-net config as NetOp::GETIP.
-    let mac = EthernetAddress([0x52, 0x54, 0x00, 0x12, 0x34, 0x56]);
+    // Construct the same backend-neutral frame proxy for either hardware
+    // driver before any deviced/networkd publication is attempted.
+    let mac = EthernetAddress(nic_info.mac);
     let mut device = ProxyNetDevice::new(mac.0);
     let config = Config::new(HardwareAddress::Ethernet(mac));
     let mut iface = Interface::new(config, &mut device, Instant::from_millis(0));
-    iface.update_ip_addrs(|addrs| {
-        let _ = addrs.push(IpCidr::Ipv4(Ipv4Cidr::new(
-            Ipv4Address::new(10, 0, 2, 15),
-            24,
-        )));
-    });
-    let _ = iface
-        .routes_mut()
-        .add_default_ipv4_route(Ipv4Address::new(10, 0, 2, 2));
-    unsafe {
-        // SAFETY: written exactly once before the receive loop; see RESOLVER_CHAIN.
-        NET_DEVICE = Some(device);
-        NET_IFACE = Some(iface);
+    let marked =
+        sunlight_ipc::net_mark_backend_event(sunlight_ipc::NetBackendEvent::FrameProxyRegistered);
+    debug_log(&alloc::format!(
+        "[NET] generic frame backend registered kind={} mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        nic_info.backend.map(|kind| kind.interface_kind().label()).unwrap_or("unknown"),
+        nic_info.mac[0], nic_info.mac[1], nic_info.mac[2], nic_info.mac[3], nic_info.mac[4],
+        nic_info.mac[5]
+    ));
+    if marked.as_ref().and_then(|info| info.backend) != nic_info.backend {
+        debug_log("[NET] frame backend authoritative re-query mismatch");
     }
-    debug_log("[NET]  smoltcp interface up over kernel frame proxy (10.0.2.15/24)");
+    if !register_with_deviced(nic_info.backend) {
+        debug_log("[NET] interface publication failed at deviced registration");
+    }
+    debug_log("[NET]  NetOp handlers registered");
 
-    // Main service loop — one SocketSet for the process lifetime (TCP handles persist).
+    // Phase 3.4: bring up smoltcp over the backend-neutral kernel frame proxy.
+    debug_log(&alloc::format!(
+        "[NET] backend MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        nic_info.mac[0],
+        nic_info.mac[1],
+        nic_info.mac[2],
+        nic_info.mac[3],
+        nic_info.mac[4],
+        nic_info.mac[5]
+    ));
+    debug_log(&alloc::format!(
+        "[NET] frame-proxy MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        device.mac_address()[0],
+        device.mac_address()[1],
+        device.mac_address()[2],
+        device.mac_address()[3],
+        device.mac_address()[4],
+        device.mac_address()[5]
+    ));
+    debug_log(&alloc::format!(
+        "[NET] smoltcp MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        mac.0[0],
+        mac.0[1],
+        mac.0[2],
+        mac.0[3],
+        mac.0[4],
+        mac.0[5]
+    ));
+
     let sockets_storage: &'static mut [SocketStorage; 128] =
         unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_STORAGE) };
     let mut sockets = SocketSet::new(&mut sockets_storage[..]);
+    let lease = sunlight_net::acquire_lease(&mut iface, &mut sockets, &mut device).ok();
+
+    let hosts_content = load_hosts_from_vfs();
+    let mut chain = sunlight_net::ResolverChain::new(&hosts_content);
+    if let Some(ref config) = lease {
+        if config.dns[0] != [0, 0, 0, 0] {
+            chain.upstream = config.dns[0];
+        }
+    }
+    refresh_upstream_from_resolved(&mut chain);
+    unsafe {
+        RESOLVER_CHAIN = Some(chain);
+        LIVE_CONFIG = lease;
+        NET_DEVICE = Some(device);
+        NET_IFACE = Some(iface);
+    }
+    debug_log("[DNS] /etc/hosts loaded into resolver chain");
+    if nic_info.link_up {
+        debug_log("[NET]  Ethernet backend link up");
+    } else {
+        debug_log("[NET]  Ethernet backend link down");
+    }
+    if unsafe { LIVE_CONFIG.is_some() } {
+        let lease = unsafe { LIVE_CONFIG.as_ref().unwrap() };
+        debug_log(&alloc::format!(
+            "[DHCP] lease acquired address={}.{}.{}.{}/{} gateway={}.{}.{}.{} dns={}.{}.{}.{}",
+            lease.ip[0],
+            lease.ip[1],
+            lease.ip[2],
+            lease.ip[3],
+            lease.mask,
+            lease.gateway[0],
+            lease.gateway[1],
+            lease.gateway[2],
+            lease.gateway[3],
+            lease.dns[0][0],
+            lease.dns[0][1],
+            lease.dns[0][2],
+            lease.dns[0][3]
+        ));
+    } else {
+        debug_log("[DHCP] no lease acquired");
+    }
+    debug_log("[NET]  smoltcp interface up over kernel frame proxy");
+
+    // Main service loop — one SocketSet for the process lifetime (TCP handles persist).
     let mut poll_counter = 0u32; // Antigravity Phase 3: Garbage collection counter
     let mut msg = ipc_recv(ep);
     loop {
@@ -149,24 +204,97 @@ fn pack_short_name(name: &str) -> u64 {
     word
 }
 
-fn register_with_deviced() {
-    let Some(cap) = nameserver_lookup_timeout("deviced", 100) else {
-        debug_log("[NET]  deviced unavailable; continuing without registration");
-        return;
+fn register_with_deviced(backend: Option<sunlight_ipc::NetworkBackendKind>) -> bool {
+    let Some(backend) = backend else {
+        debug_log("[NET] no initialized backend; skipping deviced registration");
+        return false;
     };
-    let meta = (DriverKind::Virtio as u64) | ((DriverState::Ready as u64) << 16);
-    let caps = DriverCaps::VIRTIO | DriverCaps::BUS | DriverCaps::NETWORK;
-    let msg = IpcMsg::with_label(DevicedMsg::REGISTER_DRIVER)
-        .word(0, pack_short_name("virtio"))
-        .word(1, getpid())
-        .word(2, meta)
-        .word(3, caps);
-    match ipc_call_timeout(cap, msg, 100) {
-        Ok(reply) if reply.label == DevicedMsg::REPLY => {
-            debug_log("[NET]  registered virtio with deviced");
+    let meta = (DriverKind::Network as u64) | ((DriverState::Ready as u64) << 16);
+    let caps = DriverCaps::BUS
+        | DriverCaps::NETWORK
+        | if backend == sunlight_ipc::NetworkBackendKind::VirtioNet {
+            DriverCaps::VIRTIO
+        } else {
+            0
+        };
+    for _ in 0..8 {
+        if let Some(cap) = nameserver_lookup_timeout("deviced", 100) {
+            let msg = IpcMsg::with_label(DevicedMsg::REGISTER_DRIVER)
+                .word(0, pack_short_name(backend.driver_name()))
+                .word(1, getpid())
+                .word(2, meta)
+                .word(3, caps);
+            if let Ok(reply) = ipc_call_timeout(cap, msg, 100) {
+                if reply.label == DevicedMsg::REPLY {
+                    debug_log(&alloc::format!(
+                        "[NET] registered {} with deviced",
+                        backend.driver_name()
+                    ));
+                    return true;
+                }
+            }
         }
-        _ => debug_log("[NET]  deviced registration failed; continuing"),
+        sunlight_ipc::process_yield();
     }
+    debug_log("[NET]  deviced registration failed");
+    false
+}
+
+fn wait_for_publishable_backend(ep: EndpointId) -> sunlight_ipc::NetDeviceInfo {
+    let mut unavailable_logged = false;
+    loop {
+        if let Some(info) = sunlight_ipc::net_device_info() {
+            if info.publishable() {
+                debug_log(&alloc::format!(
+                    "[NET] active backend query returned {}",
+                    info.backend
+                        .map(|kind| kind.interface_kind().label())
+                        .unwrap_or("unknown")
+                ));
+                return info;
+            }
+            if !unavailable_logged {
+                debug_log(&alloc::format!(
+                    "[NET] backend unavailable state={} error={} stage={} detail={:#x}",
+                    info.state,
+                    sunlight_ipc::Vmxnet3ErrorCode::from_u64(info.error).label(),
+                    info.vmxnet3_stage.label(),
+                    info.vmxnet3_error_detail
+                ));
+                debug_log("[NET] DHCP disabled until a hardware frame backend is registered");
+                unavailable_logged = true;
+            }
+        } else if !unavailable_logged {
+            debug_log("[NET] frame backend query failed; waiting for authoritative backend");
+            unavailable_logged = true;
+        }
+
+        let msg = ipc_recv(ep);
+        let reply = match msg.label {
+            NetOp::GET_BACKEND => backend_info_reply(),
+            NetOp::GETIP => IpcMsg::with_label(NetOp::GETIP)
+                .word(0, 0)
+                .word(1, 0)
+                .word(2, 0)
+                .word(3, 0),
+            _ => IpcMsg::with_label(msg.label).word(0, 0),
+        };
+        ipc_reply(reply);
+    }
+}
+
+fn backend_info_reply() -> IpcMsg {
+    let info = sunlight_ipc::net_device_info().unwrap_or_default();
+    let mut mac_bytes = [0u8; 8];
+    mac_bytes[..6].copy_from_slice(&info.mac);
+    IpcMsg::with_label(NetOp::GET_BACKEND)
+        .word(0, info.backend.map(|kind| kind as u64).unwrap_or(0))
+        .word(1, u64::from_le_bytes(mac_bytes))
+        .word(
+            2,
+            (info.present as u64) | ((info.link_up as u64) << 1) | ((info.mtu as u64) << 16),
+        )
+        .word(3, info.state | (info.error << 32))
 }
 
 /// Best-effort: pull first DNS server from resolved and use as our upstream.
@@ -250,42 +378,28 @@ const IPC_CHUNK: usize = 16;
 
 fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
     match msg.label {
+        NetOp::GET_BACKEND => backend_info_reply(),
         NetOp::GETIP => {
-            // Ask networkd first (policy + discovery). Preserve classic QEMU slirp if absent.
+            // Ask networkd first for explicit policy; otherwise report the live DHCP lease.
             if let Some((raw_ip, raw_pfx, raw_gw, dns_from_net)) = try_get_config_from_networkd() {
-                // Sanitize: if networkd only has a discovery stub (addr/gw 0), serve the
-                // effective live QEMU numbers so that networkd.ingest can populate its model
-                // on first refresh. This lets networkctl show real addr/gw/dns and handoff
-                // DNS to resolved. Once networkd has explicit numbers they will be returned.
-                let ip = if raw_ip == [0, 0, 0, 0] {
-                    [10, 0, 2, 15]
-                } else {
-                    raw_ip
-                };
-                let pfx = if raw_pfx == 0 { 24 } else { raw_pfx };
-                let gw = if raw_gw == [0, 0, 0, 0] {
-                    [10, 0, 2, 2]
-                } else {
-                    raw_gw
-                };
-                let dns = if dns_from_net != [0, 0, 0, 0] {
-                    dns_from_net
-                } else {
-                    [10, 0, 2, 3]
-                };
                 debug_log("[NET] GETIP served from networkd policy");
                 IpcMsg::with_label(NetOp::GETIP)
-                    .word(0, pack_ipv4(ip))
-                    .word(1, pfx as u64)
-                    .word(2, pack_ipv4(gw))
-                    .word(3, pack_ipv4(dns))
-            } else {
-                // QEMU user-net defaults (also returned by real DHCP in a full impl).
+                    .word(0, pack_ipv4(raw_ip))
+                    .word(1, raw_pfx as u64)
+                    .word(2, pack_ipv4(raw_gw))
+                    .word(3, pack_ipv4(dns_from_net))
+            } else if let Some(config) = unsafe { LIVE_CONFIG.as_ref() } {
                 IpcMsg::with_label(NetOp::GETIP)
-                    .word(0, pack_ipv4([10, 0, 2, 15]))
-                    .word(1, 24)
-                    .word(2, pack_ipv4([10, 0, 2, 2]))
-                    .word(3, pack_ipv4([10, 0, 2, 3]))
+                    .word(0, pack_ipv4(config.ip))
+                    .word(1, config.mask as u64)
+                    .word(2, pack_ipv4(config.gateway))
+                    .word(3, pack_ipv4(config.dns[0]))
+            } else {
+                IpcMsg::with_label(NetOp::GETIP)
+                    .word(0, 0)
+                    .word(1, 0)
+                    .word(2, 0)
+                    .word(3, 0)
             }
         }
         NetOp::SOCKET => {
@@ -666,8 +780,7 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 // SAFETY: see RESOLVE above — single-threaded, exclusive access.
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) => {
-                        let mut sockets = SocketSet::new(&mut SOCKET_STORAGE[..]);
-                        match sunlight_net::icmp::ping(target, count, iface, &mut sockets, device) {
+                        match sunlight_net::icmp::ping(target, count, iface, sockets, device) {
                             Ok(stats) => IpcMsg::with_label(NetOp::PING)
                                 .word(0, 1)
                                 .word(1, stats.packets_received as u64)

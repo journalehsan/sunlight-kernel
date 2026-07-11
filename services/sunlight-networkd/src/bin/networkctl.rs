@@ -179,14 +179,7 @@ fn print_list(cap: sunlight_ipc::CapabilityToken) {
         let Some(s) = sunlight_ipc::unpack_iface_summary(&reply) else {
             break;
         };
-        let kind_s = match s.kind {
-            InterfaceKind::Loopback => "Loopback",
-            InterfaceKind::Ethernet => "Ethernet",
-            InterfaceKind::VirtioNet => "VirtioNet",
-            InterfaceKind::Wireless => "Wireless",
-            InterfaceKind::Tunnel => "Tunnel",
-            _ => "Unknown",
-        };
+        let kind_s = s.kind.label();
         let admin_s = if matches!(s.admin, AdminState::Enabled) {
             "enabled"
         } else {
@@ -246,8 +239,33 @@ fn name_from_packed(p: u64) -> alloc::string::String {
 }
 
 fn print_status_all(cap: sunlight_ipc::CapabilityToken) {
-    // simple: delegate to list for v0
     print_list(cap);
+    let info = sunlight_ipc::net_device_info().unwrap_or_default();
+    if !info.present {
+        println!("Ethernet backend: unavailable");
+        println!("VMXNET3 stage: {}", info.vmxnet3_stage.label());
+        println!(
+            "VMXNET3 error: {} (failed_stage={} detail={:#x})",
+            sunlight_ipc::Vmxnet3ErrorCode::from_u64(info.error).label(),
+            info.vmxnet3_failure_stage.label(),
+            info.vmxnet3_error_detail
+        );
+    } else {
+        println!(
+            "backend: {} mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} mtu={} carrier={}",
+            info.backend
+                .map(|backend| backend.driver_name())
+                .unwrap_or("unknown"),
+            info.mac[0],
+            info.mac[1],
+            info.mac[2],
+            info.mac[3],
+            info.mac[4],
+            info.mac[5],
+            info.mtu,
+            if info.link_up { "yes" } else { "no" }
+        );
+    }
 }
 
 fn print_status(cap: sunlight_ipc::CapabilityToken, key: &str) {
@@ -260,22 +278,27 @@ fn print_status(cap: sunlight_ipc::CapabilityToken, key: &str) {
         let name = name_from_packed(s.name);
         println!("{}:", name);
         println!("  id:        {}", s.id);
-        let kind_s = match s.kind {
-            InterfaceKind::Loopback => "Loopback",
-            InterfaceKind::Ethernet => "Ethernet",
-            InterfaceKind::VirtioNet => "VirtioNet",
-            InterfaceKind::Wireless => "Wireless",
-            InterfaceKind::Tunnel => "Tunnel",
-            _ => "Unknown",
-        };
+        let kind_s = s.kind.label();
         println!("  kind:      {}", kind_s);
         // driver: best-effort for v0
         let driver_s = match s.kind {
             InterfaceKind::VirtioNet => "virtio",
+            InterfaceKind::Vmxnet3 => "vmxnet3",
             InterfaceKind::Ethernet => "ethernet",
             _ => "-",
         };
         println!("  driver:    {}", driver_s);
+        if s.kind != InterfaceKind::Loopback {
+            let info = sunlight_ipc::net_device_info().unwrap_or_default();
+            if info.present && info.backend.map(|backend| backend.interface_kind()) == Some(s.kind)
+            {
+                println!(
+                    "  mac:       {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                    info.mac[0], info.mac[1], info.mac[2], info.mac[3], info.mac[4], info.mac[5]
+                );
+                println!("  mtu:       {}", info.mtu);
+            }
+        }
         let admin_s = if matches!(s.admin, AdminState::Enabled) {
             "Enabled"
         } else {
@@ -324,7 +347,7 @@ fn print_status(cap: sunlight_ipc::CapabilityToken, key: &str) {
         println!("  priority:  {}", s.priority);
         println!("  default:   {}", if s.is_default { "yes" } else { "no" });
     } else {
-        println!("networkctl: interface not found: {}", key);
+        println!("networkctl: interface '{}' not found", key);
     }
 }
 
@@ -374,10 +397,7 @@ fn do_enable(cap: sunlight_ipc::CapabilityToken, key: &str, en: bool) -> i32 {
         println!("{} {}", if en { "enabled" } else { "disabled" }, key);
         0
     } else {
-        println!(
-            "networkctl: failed to change {} (err={})",
-            key, reply.words[0]
-        );
+        print_networkd_error("change", Some(key), reply.words[0]);
         1
     }
 }
@@ -549,6 +569,7 @@ fn print_json(cap: sunlight_ipc::CapabilityToken) {
             InterfaceKind::Loopback => "Loopback",
             InterfaceKind::Ethernet => "Ethernet",
             InterfaceKind::VirtioNet => "VirtioNet",
+            InterfaceKind::Vmxnet3 => "VMXNET3",
             InterfaceKind::Wireless => "Wireless",
             InterfaceKind::Tunnel => "Tunnel",
             _ => "Unknown",
@@ -588,6 +609,7 @@ fn print_json(cap: sunlight_ipc::CapabilityToken) {
         };
         let driver_s = match s.kind {
             InterfaceKind::VirtioNet => "virtio",
+            InterfaceKind::Vmxnet3 => "vmxnet3",
             _ => "-",
         };
         // dns_servers as simple array of the primary (v0); "-" if none
@@ -615,6 +637,37 @@ fn print_json(cap: sunlight_ipc::CapabilityToken) {
 }
 
 fn do_refresh(cap: sunlight_ipc::CapabilityToken) {
-    let _ = ipc_call(cap, IpcMsg::with_label(NetworkdMsg::REFRESH));
-    println!("refreshed");
+    let reply = ipc_call(cap, IpcMsg::with_label(NetworkdMsg::REFRESH));
+    if reply.label == NetworkdMsg::REPLY {
+        println!("refreshed ({} interface(s))", reply.words[1]);
+    } else {
+        print_networkd_error("refresh", None, reply.words[0]);
+    }
+}
+
+fn print_networkd_error(action: &str, iface: Option<&str>, code: u64) {
+    let detail = match code {
+        NetworkdMsg::ERR_NOT_FOUND => "interface not found",
+        NetworkdMsg::ERR_BAD_REQUEST => "invalid request",
+        NetworkdMsg::ERR_NO_CARRIER => "link unavailable",
+        NetworkdMsg::ERR_DEVICED_UNAVAILABLE => "device registry unavailable",
+        NetworkdMsg::ERR_BACKEND_UNAVAILABLE => "network backend unavailable",
+        NetworkdMsg::ERR_DEVICE_INITIALIZATION_FAILED => "device initialization failed",
+        NetworkdMsg::ERR_INVALID_STATE => "invalid interface state",
+        NetworkdMsg::ERR_PERMISSION_DENIED => "permission denied",
+        NetworkdMsg::ERR_UNSUPPORTED_OPERATION => "unsupported operation",
+        NetworkdMsg::ERR_IPC_FAILURE => "IPC failure",
+        _ => "unknown error",
+    };
+    if code == NetworkdMsg::ERR_NOT_FOUND {
+        if let Some(name) = iface {
+            println!("networkctl: interface '{}' not found", name);
+            return;
+        }
+    }
+    if let Some(name) = iface {
+        println!("networkctl: failed to {} '{}': {}", action, name, detail);
+    } else {
+        println!("networkctl: failed to {}: {}", action, detail);
+    }
 }

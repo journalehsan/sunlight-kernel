@@ -1,4 +1,5 @@
 use smoltcp::iface::{Interface, SocketSet};
+use smoltcp::phy::Device;
 use smoltcp::socket::dhcpv4::{Event as DhcpEvent, Socket as DhcpSocket};
 use smoltcp::time::Instant;
 
@@ -20,10 +21,10 @@ pub enum DhcpError {
 }
 
 /// Run DHCP to acquire an IP address (real smoltcp implementation)
-pub fn acquire_lease(
+pub fn acquire_lease<D: Device>(
     iface: &mut Interface,
     sockets: &mut SocketSet,
-    device: &mut crate::device::SunlightNetDevice,
+    device: &mut D,
 ) -> Result<DhcpConfig, DhcpError> {
     // SAFETY: Creating a DHCP socket to manage network configuration
     // The socket is added to the SocketSet and managed by the interface
@@ -31,16 +32,15 @@ pub fn acquire_lease(
     let dhcp_handle = sockets.add(dhcp_socket);
 
     // Simple time tracking for timeout (10 seconds = 10000 milliseconds)
-    let start_time = Instant::from_millis(0);
     let deadline = Instant::from_millis(10000);
-    let mut current_time = start_time;
 
     // Poll loop — timeout after 10 seconds worth of simulated time
     let mut poll_count = 0;
     loop {
         // Simulate time progression
-        current_time = Instant::from_millis((poll_count * 10) as i64);
+        let current_time = Instant::from_millis((poll_count * 10) as i64);
         if current_time >= deadline {
+            sockets.remove(dhcp_handle);
             return Err(DhcpError::Timeout);
         }
 
@@ -104,10 +104,9 @@ pub fn acquire_lease(
                 return Err(DhcpError::InvalidOffer);
             }
             None => {
-                // Busy-spin briefly to avoid hogging CPU
-                for _ in 0..100 {
-                    core::hint::spin_loop();
-                }
+                // Yield between bounded polls. VMXNET3 completion processing is
+                // driven by this network-service cadence, never a GUI tick.
+                sunlight_ipc::process_yield();
                 poll_count += 1;
             }
         }

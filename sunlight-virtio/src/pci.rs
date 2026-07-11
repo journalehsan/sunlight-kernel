@@ -9,6 +9,8 @@ pub const VIRTIO_BLK_MODERN: u16 = 0x1042;
 pub const VIRTIO_NET_LEGACY: u16 = 0x1000;
 pub const VIRTIO_NET_MODERN: u16 = 0x1041;
 pub const VIRTIO_GPU_MODERN: u16 = 0x1050;
+pub const VMWARE_VENDOR_ID: u16 = 0x15AD;
+pub const VMXNET3_DEVICE_ID: u16 = 0x07B0;
 
 // VirtIO PCI capability cfg_type values (VirtIO 1.0 spec §4.1.4)
 const VIRTIO_PCI_CAP_COMMON_CFG: u8 = 1;
@@ -40,6 +42,42 @@ pub struct VirtioGpuPciInfo {
     pub isr_off: u32,
     /// Length of the ISR capability window.
     pub isr_len: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PciBarMemoryWidth {
+    Bits32,
+    Bits64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PciMemoryBarInfo {
+    pub index: u8,
+    pub raw_low: u32,
+    pub raw_high: u32,
+    pub width: PciBarMemoryWidth,
+    pub phys: u64,
+    pub size: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Vmxnet3ProbeError {
+    ZeroBar { index: u8, raw: u32 },
+    IoBar { index: u8, raw: u32 },
+    UnsupportedBarType { index: u8, raw: u32 },
+    UnusableAddress { index: u8, address: u64 },
+    InvalidBarSize { index: u8, size: u64 },
+    IncorrectBarRole { index: u8, size: u64 },
+}
+
+pub struct Vmxnet3PciInfo {
+    pub bus: u8,
+    pub slot: u8,
+    pub func: u8,
+    /// BAR0: passthrough region containing queue producer registers.
+    pub passthrough_bar: PciMemoryBarInfo,
+    /// The BAR immediately following BAR0: device registers and commands.
+    pub device_bar: PciMemoryBarInfo,
 }
 
 /// Read a single byte from PCI config space.
@@ -239,6 +277,184 @@ pub unsafe fn find_virtio_net() -> Option<(u8, u8, u8, u16)> {
     None
 }
 
+/// Scan PCI buses 0-7 for a VMware VMXNET3 Ethernet controller.
+///
+/// SAFETY: Caller must be running at ring 0.
+pub unsafe fn probe_vmxnet3() -> Result<Option<Vmxnet3PciInfo>, Vmxnet3ProbeError> {
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            for func in 0u8..8 {
+                let ids = pci_read32(bus, slot, func, 0x00);
+                if ids == 0xFFFF_FFFF {
+                    continue;
+                }
+                let vendor = (ids & 0xFFFF) as u16;
+                let device = ((ids >> 16) & 0xFFFF) as u16;
+                if vendor != VMWARE_VENDOR_ID || device != VMXNET3_DEVICE_ID {
+                    continue;
+                }
+
+                let passthrough_bar = probe_memory_bar(bus, slot, func, 0)?;
+                if passthrough_bar.width != PciBarMemoryWidth::Bits32 {
+                    return Err(Vmxnet3ProbeError::IncorrectBarRole {
+                        index: passthrough_bar.index,
+                        size: passthrough_bar.size,
+                    });
+                }
+                let device_bar = probe_memory_bar(bus, slot, func, 1)?;
+                // The passthrough BAR must cover TXPROD (0x600) and RXPROD
+                // (0x800); VMware defines a 4 KiB aperture for both roles.
+                if passthrough_bar.index != 0 || passthrough_bar.size < 4096 {
+                    return Err(Vmxnet3ProbeError::IncorrectBarRole {
+                        index: passthrough_bar.index,
+                        size: passthrough_bar.size,
+                    });
+                }
+                if device_bar.index != 1
+                    || device_bar.width != PciBarMemoryWidth::Bits32
+                    || device_bar.size < 4096
+                {
+                    return Err(Vmxnet3ProbeError::IncorrectBarRole {
+                        index: device_bar.index,
+                        size: device_bar.size,
+                    });
+                }
+                let command = pci_read32(bus, slot, func, 0x04) & 0xffff;
+                pci_write32(bus, slot, func, 0x04, command | 0x0000_0006);
+                return Ok(Some(Vmxnet3PciInfo {
+                    bus,
+                    slot,
+                    func,
+                    passthrough_bar,
+                    device_bar,
+                }));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Compatibility wrapper for callers that do not need detailed BAR errors.
+pub unsafe fn find_vmxnet3() -> Option<Vmxnet3PciInfo> {
+    probe_vmxnet3().ok().flatten()
+}
+
+unsafe fn probe_memory_bar(
+    bus: u8,
+    slot: u8,
+    func: u8,
+    index: u8,
+) -> Result<PciMemoryBarInfo, Vmxnet3ProbeError> {
+    let offset = 0x10 + index * 4;
+    let raw_low = pci_read32(bus, slot, func, offset);
+    if raw_low == 0 {
+        return Err(Vmxnet3ProbeError::ZeroBar {
+            index,
+            raw: raw_low,
+        });
+    }
+    if raw_low & 1 != 0 {
+        return Err(Vmxnet3ProbeError::IoBar {
+            index,
+            raw: raw_low,
+        });
+    }
+    let width = match (raw_low >> 1) & 0x3 {
+        0 => PciBarMemoryWidth::Bits32,
+        2 if index < 5 => PciBarMemoryWidth::Bits64,
+        _ => {
+            return Err(Vmxnet3ProbeError::UnsupportedBarType {
+                index,
+                raw: raw_low,
+            });
+        }
+    };
+    let raw_high = if width == PciBarMemoryWidth::Bits64 {
+        pci_read32(bus, slot, func, offset + 4)
+    } else {
+        0
+    };
+    let phys = (raw_low as u64 & !0xf)
+        | if width == PciBarMemoryWidth::Bits64 {
+            (raw_high as u64) << 32
+        } else {
+            0
+        };
+    if phys == 0 || phys > 0x000f_ffff_ffff_f000 {
+        return Err(Vmxnet3ProbeError::UnusableAddress {
+            index,
+            address: phys,
+        });
+    }
+
+    // Size the BAR while memory decoding is disabled, then restore every
+    // firmware-programmed value before returning.
+    let command = pci_read32(bus, slot, func, 0x04) & 0xffff;
+    pci_write32(bus, slot, func, 0x04, command & !0x3);
+    pci_write32(bus, slot, func, offset, u32::MAX);
+    if width == PciBarMemoryWidth::Bits64 {
+        pci_write32(bus, slot, func, offset + 4, u32::MAX);
+    }
+    let size_low = pci_read32(bus, slot, func, offset);
+    let size_high = if width == PciBarMemoryWidth::Bits64 {
+        pci_read32(bus, slot, func, offset + 4)
+    } else {
+        0
+    };
+    pci_write32(bus, slot, func, offset, raw_low);
+    if width == PciBarMemoryWidth::Bits64 {
+        pci_write32(bus, slot, func, offset + 4, raw_high);
+    }
+    pci_write32(bus, slot, func, 0x04, command);
+
+    let mask = (size_low as u64 & !0xf)
+        | if width == PciBarMemoryWidth::Bits64 {
+            (size_high as u64) << 32
+        } else {
+            0xffff_ffff_0000_0000
+        };
+    let size = (!mask).wrapping_add(1);
+    if size == 0 || !size.is_power_of_two() || phys & (size - 1) != 0 {
+        return Err(Vmxnet3ProbeError::InvalidBarSize { index, size });
+    }
+    Ok(PciMemoryBarInfo {
+        index,
+        raw_low,
+        raw_high,
+        width,
+        phys,
+        size,
+    })
+}
+
+/// Return true when PCI contains the VMXNET3 vendor/device ID, even if BAR
+/// decoding is invalid and a usable `Vmxnet3PciInfo` cannot be produced.
+///
+/// SAFETY: Caller must be running at ring 0.
+pub unsafe fn vmxnet3_present() -> bool {
+    find_vmxnet3_bdf().is_some()
+}
+
+/// Return the exact PCI address for VMXNET3 without decoding or sizing BARs.
+pub unsafe fn find_vmxnet3_bdf() -> Option<(u8, u8, u8)> {
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            for func in 0u8..8 {
+                let ids = pci_read32(bus, slot, func, 0x00);
+                if ids == 0xFFFF_FFFF {
+                    continue;
+                }
+                if (ids & 0xFFFF) as u16 == VMWARE_VENDOR_ID
+                    && ((ids >> 16) & 0xFFFF) as u16 == VMXNET3_DEVICE_ID
+                {
+                    return Some((bus, slot, func));
+                }
+            }
+        }
+    }
+    None
+}
+
 pub unsafe fn pci_read32(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
     let addr: u32 = 0x8000_0000
         | ((bus as u32) << 16)
@@ -247,6 +463,16 @@ pub unsafe fn pci_read32(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
         | ((offset as u32) & 0xFC);
     outl(CONFIG_ADDRESS, addr);
     inl(CONFIG_DATA)
+}
+
+pub unsafe fn pci_write32(bus: u8, slot: u8, func: u8, offset: u8, value: u32) {
+    let addr: u32 = 0x8000_0000
+        | ((bus as u32) << 16)
+        | ((slot as u32) << 11)
+        | ((func as u32) << 8)
+        | ((offset as u32) & 0xFC);
+    outl(CONFIG_ADDRESS, addr);
+    outl(CONFIG_DATA, value);
 }
 
 // --- Port I/O primitives ---

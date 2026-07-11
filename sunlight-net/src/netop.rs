@@ -17,4 +17,5 @@ pub mod NetOp {
                               // bytes the register-IPC ABI allows. Used by fetch/tls for fast TCP I/O.
     pub const SEND_SHM: u64 = 14; // send(socket_id, len, page_cap) → sent
     pub const RECV_SHM: u64 = 15; // recv(socket_id, max_len) → (len, page_cap)
+    pub const GET_BACKEND: u64 = 16; // query backend kind, MAC, MTU, link, state
 }

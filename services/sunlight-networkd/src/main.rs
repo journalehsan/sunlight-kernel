@@ -9,6 +9,7 @@
 #![no_std]
 #![no_main]
 
+use core::sync::atomic::{AtomicBool, Ordering};
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
     monotonic_millis, nameserver_lookup_timeout, nameserver_register, pack_ipv4, pack_short_name,
@@ -18,6 +19,7 @@ use sunlight_ipc::{
 
 const MAX_IFACES: usize = 8;
 const NET_GETIP_TIMEOUT_MS: u64 = 20;
+static ETHERNET_VISIBLE_LOGGED: AtomicBool = AtomicBool::new(false);
 
 /// Exponential backoff steps (ms) when deviced is unavailable.
 /// 1 s → 2 s → 5 s → 10 s → 30 s → 60 s (cap)
@@ -188,11 +190,11 @@ impl NetworkManager {
     /// - Repeated calls after a stable discovery are no-ops until DISCOVERY_STABLE_INTERVAL_MS.
     /// - Failures back off exponentially (1 s → 2 s → 5 s → 10 s → 30 s → 60 s).
     /// - Logs only on meaningful state changes, not on every tick.
-    fn discover_from_deviced(&mut self) {
+    fn discover_from_deviced(&mut self, force: bool) {
         let now = monotonic_millis();
 
         // Skip if still inside the backoff/stable window.
-        if now < self.discovery.next_retry_ms {
+        if !force && now < self.discovery.next_retry_ms {
             return;
         }
 
@@ -219,6 +221,7 @@ impl NetworkManager {
         let mut idx = 0usize;
         let mut found_net = 0usize;
         let mut new_driver_ids = [0u64; MAX_IFACES];
+        let backend_info = sunlight_ipc::net_device_info();
 
         loop {
             let reply = ipc_call(
@@ -239,6 +242,23 @@ impl NetworkManager {
             // Only Network kind (DeviceKind::Network == 2).
             if kind != 2 {
                 continue;
+            }
+
+            let reported_kind = if name_u64 == pack_short_name("vmxnet3") {
+                InterfaceKind::Vmxnet3
+            } else if name_u64 == pack_short_name("virtio") {
+                InterfaceKind::VirtioNet
+            } else {
+                InterfaceKind::Ethernet
+            };
+            if let Some(info) = backend_info {
+                if info.publishable()
+                    && info.backend.map(|backend| backend.interface_kind()) != Some(reported_kind)
+                {
+                    // deviced can retain a registration from an older backend;
+                    // the kernel active slot is authoritative.
+                    continue;
+                }
             }
 
             if found_net < MAX_IFACES {
@@ -277,15 +297,30 @@ impl NetworkManager {
             };
 
             rec.name = name_buf;
-            rec.kind = InterfaceKind::VirtioNet;
+            rec.kind = reported_kind;
             rec.driver_name = name_u64;
             rec.driver_id = driver_id;
             rec.admin = AdminState::Enabled;
-            rec.link = if state == 2 {
-                LinkState::Carrier
+            if let Some(info) = backend_info {
+                if info.present
+                    && info.backend.map(|backend| backend.interface_kind()) == Some(rec.kind)
+                {
+                    rec.mac = info.mac;
+                    rec.link = if info.link_up {
+                        LinkState::Carrier
+                    } else {
+                        LinkState::NoCarrier
+                    };
+                } else {
+                    rec.link = LinkState::NoCarrier;
+                }
             } else {
-                LinkState::NoCarrier
-            };
+                rec.link = if state == 2 {
+                    LinkState::Carrier
+                } else {
+                    LinkState::NoCarrier
+                };
+            }
             if existing.is_none() {
                 rec.mode = IpConfigMode::Dhcp;
                 rec.priority = 100;
@@ -294,7 +329,80 @@ impl NetworkManager {
             rec.occupied = true;
 
             self.ifaces[slot] = rec;
+            if existing.is_none() {
+                serial_println!(
+                    "[NETWORKD] published interface {} kind={}",
+                    self.ifaces[slot].name_str(),
+                    self.ifaces[slot].kind.label()
+                );
+            }
             found_net += 1;
+        }
+
+        // A forced refresh must not depend on deviced having observed a
+        // backend that initialized after networkd startup. Publish directly
+        // from the same authoritative kernel query used by the frame proxy.
+        if let Some(info) = backend_info.filter(|info| info.publishable()) {
+            let active_kind = info
+                .backend
+                .expect("publishable backend has a kind")
+                .interface_kind();
+            for record in &mut self.ifaces {
+                if record.occupied
+                    && record.kind != InterfaceKind::Loopback
+                    && record.kind != active_kind
+                {
+                    *record = InterfaceRecord::empty();
+                }
+            }
+            if found_net == 0 {
+                let existing = self
+                    .ifaces
+                    .iter()
+                    .position(|record| record.occupied && record.kind == active_kind);
+                if let Some(slot) = existing.or_else(|| self.free_slot()) {
+                    let is_new = existing.is_none();
+                    let mut record = if is_new {
+                        let mut record = InterfaceRecord::empty();
+                        record.id = self.next_id;
+                        self.next_id = self.next_id.wrapping_add(1).max(1);
+                        record.mode = IpConfigMode::Dhcp;
+                        record.priority = 100;
+                        record.auto_connect = true;
+                        record
+                    } else {
+                        self.ifaces[slot]
+                    };
+                    record.name = *b"eth0\0\0\0\0";
+                    record.kind = active_kind;
+                    record.driver_name = pack_short_name(
+                        info.backend
+                            .expect("publishable backend has a kind")
+                            .driver_name(),
+                    );
+                    record.driver_id = 0;
+                    record.admin = AdminState::Enabled;
+                    record.link = if info.link_up {
+                        LinkState::Carrier
+                    } else {
+                        LinkState::NoCarrier
+                    };
+                    record.mac = info.mac;
+                    record.occupied = true;
+                    self.ifaces[slot] = record;
+                    found_net = 1;
+                    new_driver_ids[0] = 0;
+                    if is_new {
+                        serial_println!(
+                            "[NETWORKD] published interface eth0 kind={}",
+                            active_kind.label()
+                        );
+                    }
+                }
+            }
+            let _ = sunlight_ipc::net_mark_backend_event(
+                sunlight_ipc::NetBackendEvent::InterfacePublished,
+            );
         }
 
         // Detect what changed to decide what to log.
@@ -390,6 +498,14 @@ impl NetworkManager {
         for (i, rec) in self.ifaces.iter().enumerate() {
             if rec.occupied {
                 if seen == requested {
+                    if self.ifaces[i].kind != InterfaceKind::Loopback
+                        && !ETHERNET_VISIBLE_LOGGED.swap(true, Ordering::AcqRel)
+                    {
+                        serial_println!(
+                            "[NETWORKD] interface visible to networkctl name={}",
+                            self.ifaces[i].name_str()
+                        );
+                    }
                     return self.reply_summary(i);
                 }
                 seen += 1;
@@ -507,13 +623,15 @@ impl NetworkManager {
     fn refresh(&mut self) -> IpcMsg {
         // Re-seed lo and re-discover (idempotent)
         self.seed_loopback();
-        self.discover_from_deviced();
+        self.discover_from_deviced(true);
         // Ingest live addressing from the executing net stack (least invasive source of truth).
         // This populates addr/gw/prefix/dns for display and default route without duplicating config.
         self.ingest_live_from_net();
+        let count = self.count();
+        serial_println!("[NETWORKD] refresh complete interfaces={}", count);
         IpcMsg::with_label(NetworkdMsg::REPLY)
             .word(0, 0)
-            .word(1, self.count() as u64)
+            .word(1, count as u64)
     }
 
     /// Query the 'net' service (if present) via its NetOp::GETIP and apply observed
@@ -730,7 +848,7 @@ pub extern "C" fn _start() -> ! {
 
     let mut mgr = NetworkManager::new();
     mgr.seed_loopback();
-    mgr.discover_from_deviced();
+    mgr.discover_from_deviced(true);
     mgr.ingest_live_from_net();
 
     // If we discovered something with DHCP intent, note it (actual stack still in net_server v0)

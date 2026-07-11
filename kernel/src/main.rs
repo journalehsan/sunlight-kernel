@@ -8,6 +8,8 @@
 
 extern crate alloc;
 
+use sunlight_net as sunlight_ipc;
+
 mod arch;
 mod capability;
 mod ipc;
@@ -665,74 +667,68 @@ pub extern "C" fn _start() -> ! {
     // Ensure the kernel-owned virtio-net device is initialized for normal boots
     // (not only phase5* test gates), so net_server DNS upstream queries can
     // actually transmit/receive frames via NetTx/NetRx.
-    if NET_DEVICE.lock().is_none() {
-        let net_init_result = {
-            let mut pmm = PMM.lock();
-            let rx_q_phys = pmm
-                .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
-                .map(|f| f.as_u64());
-            let tx_q_phys = pmm
-                .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
-                .map(|f| f.as_u64());
-            // Allocate multiple RX data buffers so the virtio device can have several
-            // descriptors armed. This prevents packet loss ("net lost") while the
-            // driver processes one inbound frame and re-arms.
-            let rx_buf0 = pmm.alloc_frame().map(|f| f.as_u64());
-            let rx_buf1 = pmm.alloc_frame().map(|f| f.as_u64());
-            let rx_buf2 = pmm.alloc_frame().map(|f| f.as_u64());
-            let rx_buf3 = pmm.alloc_frame().map(|f| f.as_u64());
-            let tx_buf_phys = pmm.alloc_frame().map(|f| f.as_u64());
-
-            match (
-                rx_q_phys,
-                tx_q_phys,
-                rx_buf0,
-                rx_buf1,
-                rx_buf2,
-                rx_buf3,
-                tx_buf_phys,
-            ) {
-                (Some(rp), Some(tp), Some(b0), Some(b1), Some(b2), Some(b3), Some(xp)) => {
-                    let h = hhdm_offset.as_u64();
-                    let rx_q_virt = h + rp;
-                    let tx_q_virt = h + tp;
-                    let rx_bufs_phys = [b0, b1, b2, b3];
-                    let rx_bufs_virt = [h + b0, h + b1, h + b2, h + b3];
-                    let tx_b_virt = h + xp;
-                    let pci_info = unsafe { sunlight_virtio::find_virtio_net() };
-                    if let Some((bus, slot, _func, io_base)) = pci_info {
-                        unsafe {
-                            sunlight_net::VirtioNet::init(
-                                io_base,
-                                bus,
-                                slot,
-                                rp,
-                                rx_q_virt,
-                                tp,
-                                tx_q_virt,
-                                rx_bufs_phys,
-                                rx_bufs_virt,
-                                1514,
-                                xp,
-                                tx_b_virt,
-                            )
-                        }
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            }
-        };
+    if ACTIVE_NET_DEVICE.lock().is_none() {
+        let net_init_result = initialize_network_backend(&mut vmm, &mut PMM.lock(), hhdm_offset);
         match net_init_result {
             Some(dev) => {
-                serial_println!("[NET]  virtio-net device ready for frame proxy (pid 5)");
-                *NET_DEVICE.lock() = Some(dev);
+                serial_println!(
+                    "[NET] active backend: {}",
+                    match dev.kind() {
+                        sunlight_net::NetworkBackendKind::VirtioNet => "virtio-net",
+                        sunlight_net::NetworkBackendKind::Vmxnet3 => "vmxnet3",
+                    }
+                );
+                *ACTIVE_NET_DEVICE.lock() = Some(dev);
+                NET_BACKEND_STATE.store(
+                    sunlight_net::NetBackendState::Registered as u64,
+                    core::sync::atomic::Ordering::Release,
+                );
+                let backend = ACTIVE_NET_DEVICE.lock();
+                if let Some(device) = backend.as_ref() {
+                    serial_println!(
+                        "[NET] active backend query returned {}",
+                        match device.kind() {
+                            sunlight_net::NetworkBackendKind::VirtioNet => "VirtioNet",
+                            sunlight_net::NetworkBackendKind::Vmxnet3 => "VMXNET3",
+                        }
+                    );
+                    if device.kind() == sunlight_net::NetworkBackendKind::Vmxnet3 {
+                        vmxnet3_transition(sunlight_ipc::Vmxnet3InitStage::BackendInstalled);
+                        let state = device
+                            .vmxnet3_persistent_state()
+                            .expect("VMXNET3 backend must expose persistent state");
+                        let mac = device.mac();
+                        serial_println!("[VMXNET3] persistent backend check:");
+                        serial_println!(
+                            "  mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                            mac[0],
+                            mac[1],
+                            mac[2],
+                            mac[3],
+                            mac[4],
+                            mac[5]
+                        );
+                        serial_println!(
+                            "  tx_ring={:#x} rx_ring={:#x}",
+                            state.tx_ring,
+                            state.rx_ring
+                        );
+                        serial_println!(
+                            "  shared={:#x} queue_desc={:#x}",
+                            state.shared,
+                            state.queue_desc
+                        );
+                        serial_println!(
+                            "  revision={} upt={} active={}",
+                            state.revision,
+                            state.upt,
+                            device.persistent_state_valid()
+                        );
+                    }
+                }
             }
             None => {
-                serial_println!(
-                    "[NET]  virtio-net not found for frame proxy (no -device or alloc failure)"
-                );
+                serial_println!("[NET]  no supported Ethernet backend found");
             }
         }
     }
@@ -954,6 +950,7 @@ pub extern "C" fn _start() -> ! {
                                     tx_b_virt,
                                 )
                             }
+                            .map(sunlight_net::NetBackend::Virtio)
                         } else {
                             None
                         }
@@ -971,7 +968,7 @@ pub extern "C" fn _start() -> ! {
                     // Phase 3.4: keep the device alive so net_server (pid 5) can
                     // drive it via the NetTx/NetRx syscall frame proxy instead of
                     // touching ports directly (ring-3 has no port I/O access).
-                    *NET_DEVICE.lock() = Some(dev);
+                    *ACTIVE_NET_DEVICE.lock() = Some(dev);
                 }
                 None => {
                     serial_println!("[NET]  virtio-net not found (no -device or alloc failure)");
@@ -1144,11 +1141,20 @@ pub type KernelDisk = sunlight_block::CachedBlockDevice<KernelBlkDev, 16>;
 /// Lock order: never acquire SCHEDULER or PMM while holding this lock.
 pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> = spin::Mutex::new(None);
 
-/// Kernel-owned virtio-net device (Phase 3.4: net_server frame proxy).
-/// Only ring-0 can touch the device's I/O ports; net_server (identified by
+/// Kernel-owned active Ethernet backend (Phase 3.4 frame proxy).
+/// Only ring-0 can touch device registers; net_server (identified by
 /// process name in the syscall gate) exchanges raw Ethernet frames with it via
 /// the NetTx/NetRx syscalls below.
-pub static NET_DEVICE: spin::Mutex<Option<sunlight_net::VirtioNet>> = spin::Mutex::new(None);
+pub static ACTIVE_NET_DEVICE: spin::Mutex<Option<sunlight_net::ActiveNetworkBackend>> =
+    spin::Mutex::new(None);
+pub static NET_BACKEND_STATE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+pub static NET_BACKEND_ERROR: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+pub static VMXNET3_INIT_STAGE: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(sunlight_ipc::Vmxnet3InitStage::NotProbed as u64);
+pub static VMXNET3_FAILURE_STAGE: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(sunlight_ipc::Vmxnet3InitStage::NotProbed as u64);
+pub static VMXNET3_ERROR_DETAIL: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
 
 /// Kernel-owned VirtIO GPU device. display_server drives it through
 /// GpuGetInfo/GpuAttachBacking/GpuSetScanout/GpuFlush/GpuUpdateCursor/GpuMoveCursor
@@ -1394,8 +1400,19 @@ fn map_kernel_mmio_range(
     phys_start: u64,
     len: u64,
 ) {
+    try_map_kernel_mmio_range(vmm, pmm, virt_start, phys_start, len)
+        .expect("kernel MMIO map failed");
+}
+
+fn try_map_kernel_mmio_range(
+    vmm: &mut VirtualMemoryManager,
+    pmm: &mut PhysicalMemoryManager,
+    virt_start: u64,
+    phys_start: u64,
+    len: u64,
+) -> Result<(), &'static str> {
     if len == 0 {
-        return;
+        return Err("zero-length MMIO range");
     }
 
     let start_phys = phys_start & !0xfff;
@@ -1411,19 +1428,555 @@ fn map_kernel_mmio_range(
     for page_idx in 0..page_count {
         let virt = VirtAddr::new(start_virt + page_idx * 4096);
         let phys = PhysAddr::new(start_phys + page_idx * 4096);
-        let page = Page::from_start_address(virt).expect("kernel MMIO virt must be page-aligned");
+        let page = Page::from_start_address(virt).map_err(|_| "unaligned MMIO virtual address")?;
         let frame = unsafe { PhysFrame::from_start_address_unchecked(phys) };
         if let Some((mapped_frame, mapped_flags)) = vmm.mapping_info(page) {
-            assert_eq!(
-                mapped_frame.start_address(),
-                frame.start_address(),
-                "kernel MMIO page already mapped to unexpected frame"
-            );
+            if mapped_frame.start_address() != frame.start_address() {
+                return Err("MMIO virtual address already maps another frame");
+            }
             vmm.update_flags(page, mapped_flags | flags)
-                .expect("kernel MMIO flag update failed");
+                .map_err(|_| "MMIO flag update failed")?;
         } else {
             vmm.map_page(page, frame, flags, pmm)
-                .expect("kernel MMIO map failed");
+                .map_err(|_| "MMIO page-table allocation failed")?;
+        }
+    }
+    Ok(())
+}
+
+fn initialize_network_backend(
+    vmm: &mut VirtualMemoryManager,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Option<sunlight_net::NetBackend> {
+    let hhdm = hhdm_offset.as_u64();
+    NET_BACKEND_ERROR.store(0, core::sync::atomic::Ordering::Release);
+    VMXNET3_ERROR_DETAIL.store(0, core::sync::atomic::Ordering::Release);
+    VMXNET3_FAILURE_STAGE.store(
+        sunlight_ipc::Vmxnet3InitStage::NotProbed as u64,
+        core::sync::atomic::Ordering::Release,
+    );
+    vmxnet3_transition(sunlight_ipc::Vmxnet3InitStage::NotProbed);
+    unsafe { log_pci_ethernet_controllers() };
+    NET_BACKEND_STATE.store(
+        sunlight_net::NetBackendState::Detected as u64,
+        core::sync::atomic::Ordering::Release,
+    );
+    let vmxnet3_bdf = unsafe { sunlight_virtio::find_vmxnet3_bdf() };
+    let vmxnet3_info = match unsafe { sunlight_virtio::probe_vmxnet3() } {
+        Ok(info) => info,
+        Err(error) => {
+            if let Some((bus, slot, func)) = vmxnet3_bdf {
+                serial_println!(
+                    "[VMXNET3] pci device 15ad:07b0 found at {:02x}:{:02x}.{}",
+                    bus,
+                    slot,
+                    func
+                );
+            }
+            return fail_vmxnet3_probe(error);
+        }
+    };
+    if let Some(info) = vmxnet3_info {
+        serial_println!(
+            "[VMXNET3] pci device 15ad:07b0 found at {:02x}:{:02x}.{}",
+            info.bus,
+            info.slot,
+            info.func
+        );
+        vmxnet3_transition(sunlight_ipc::Vmxnet3InitStage::PciMatched);
+        NET_BACKEND_STATE.store(
+            sunlight_net::NetBackendState::Initializing as u64,
+            core::sync::atomic::Ordering::Release,
+        );
+        log_vmxnet3_bar("passthrough", info.passthrough_bar, hhdm);
+        log_vmxnet3_bar("register", info.device_bar, hhdm);
+        if let Err(error) = try_map_kernel_mmio_range(
+            vmm,
+            pmm,
+            hhdm + info.passthrough_bar.phys,
+            info.passthrough_bar.phys,
+            info.passthrough_bar.size,
+        ) {
+            serial_println!("[VMXNET3] BAR mapping detail={}", error);
+            return fail_vmxnet3(
+                sunlight_ipc::Vmxnet3InitStage::BarsMapped,
+                sunlight_ipc::Vmxnet3ErrorCode::BarMappingFailed,
+                info.passthrough_bar.index as u64,
+            );
+        }
+        if let Err(error) = try_map_kernel_mmio_range(
+            vmm,
+            pmm,
+            hhdm + info.device_bar.phys,
+            info.device_bar.phys,
+            info.device_bar.size,
+        ) {
+            serial_println!("[VMXNET3] BAR mapping detail={}", error);
+            return fail_vmxnet3(
+                sunlight_ipc::Vmxnet3InitStage::BarsMapped,
+                sunlight_ipc::Vmxnet3ErrorCode::BarMappingFailed,
+                info.device_bar.index as u64,
+            );
+        }
+        vmxnet3_transition(sunlight_ipc::Vmxnet3InitStage::BarsMapped);
+        let Some(shared_frame) = pmm.alloc_frame() else {
+            return fail_vmxnet3(
+                sunlight_ipc::Vmxnet3InitStage::DmaAllocated,
+                sunlight_ipc::Vmxnet3ErrorCode::SharedDmaAllocation,
+                0,
+            );
+        };
+        let shared_phys = shared_frame.as_u64();
+        let Some(queue_desc_frame) = pmm.alloc_frame() else {
+            return fail_vmxnet3(
+                sunlight_ipc::Vmxnet3InitStage::DmaAllocated,
+                sunlight_ipc::Vmxnet3ErrorCode::QueueDmaAllocation,
+                0,
+            );
+        };
+        let queue_desc_phys = queue_desc_frame.as_u64();
+        let Some(rings_frame) = pmm.alloc_frames(sunlight_net::vmxnet3::VMXNET3_RING_PAGES) else {
+            return fail_vmxnet3(
+                sunlight_ipc::Vmxnet3InitStage::DmaAllocated,
+                sunlight_ipc::Vmxnet3ErrorCode::RingDmaAllocation,
+                0,
+            );
+        };
+        let rings_phys = rings_frame.as_u64();
+        let mut tx_buf_phys = [0u64; sunlight_net::vmxnet3::VMXNET3_RING_SIZE];
+        for physical in &mut tx_buf_phys {
+            let Some(frame) = pmm.alloc_frame() else {
+                return fail_vmxnet3(
+                    sunlight_ipc::Vmxnet3InitStage::DmaAllocated,
+                    sunlight_ipc::Vmxnet3ErrorCode::TxBufferAllocation,
+                    0,
+                );
+            };
+            *physical = frame.as_u64();
+        }
+        let mut tx_buf_virt = [0u64; sunlight_net::vmxnet3::VMXNET3_RING_SIZE];
+        for (virtual_address, physical_address) in tx_buf_virt.iter_mut().zip(tx_buf_phys) {
+            *virtual_address = hhdm + physical_address;
+        }
+        let mut rx_buf_phys = [0u64; sunlight_net::vmxnet3::VMXNET3_RING_SIZE];
+        for physical in &mut rx_buf_phys {
+            let Some(frame) = pmm.alloc_frame() else {
+                return fail_vmxnet3(
+                    sunlight_ipc::Vmxnet3InitStage::DmaAllocated,
+                    sunlight_ipc::Vmxnet3ErrorCode::RxBufferAllocation,
+                    0,
+                );
+            };
+            *physical = frame.as_u64();
+        }
+        let mut rx_buf_virt = [0u64; sunlight_net::vmxnet3::VMXNET3_RING_SIZE];
+        for (virtual_address, physical_address) in rx_buf_virt.iter_mut().zip(rx_buf_phys) {
+            *virtual_address = hhdm + physical_address;
+        }
+
+        let device = unsafe {
+            sunlight_net::Vmxnet3::init(
+                hhdm + info.passthrough_bar.phys,
+                hhdm + info.device_bar.phys,
+                shared_phys,
+                hhdm + shared_phys,
+                queue_desc_phys,
+                hhdm + queue_desc_phys,
+                rings_phys,
+                hhdm + rings_phys,
+                tx_buf_phys,
+                tx_buf_virt,
+                rx_buf_phys,
+                rx_buf_virt,
+                log_vmxnet3_init_event,
+            )
+        };
+        match device {
+            Ok(device) => {
+                serial_println!("[VMXNET3] RX mode=unicast|multicast|broadcast result=0");
+                serial_println!(
+                    "[VMXNET3] link query result={}",
+                    if device.link_up() { "up" } else { "down" }
+                );
+                serial_println!(
+                    "[VMXNET3] completion mode=polling bounded by network-service cadence"
+                );
+                NET_BACKEND_STATE.store(
+                    sunlight_net::NetBackendState::HardwareReady as u64,
+                    core::sync::atomic::Ordering::Release,
+                );
+                return Some(sunlight_net::NetBackend::Vmxnet3(device));
+            }
+            Err(error) => {
+                let (stage, code, detail) = vmxnet3_error_info(error);
+                return fail_vmxnet3(stage, code, detail);
+            }
+        }
+    } else {
+        NET_BACKEND_ERROR.store(
+            sunlight_ipc::Vmxnet3ErrorCode::PciNotPresent as u64,
+            core::sync::atomic::Ordering::Release,
+        );
+        serial_println!("[VMXNET3] pci device 15ad:07b0 not present");
+        serial_println!("[VMXNET3] verify ethernet0.virtualDev = \"vmxnet3\"");
+    }
+
+    let Some((bus, slot, _func, io_base)) = (unsafe { sunlight_virtio::find_virtio_net() }) else {
+        return fail_network_backend(
+            sunlight_ipc::Vmxnet3ErrorCode::PciNotPresent as u64,
+            "[NET] failed stage=no supported PCI Ethernet backend",
+        );
+    };
+    NET_BACKEND_ERROR.store(0, core::sync::atomic::Ordering::Release);
+    NET_BACKEND_STATE.store(
+        sunlight_net::NetBackendState::Initializing as u64,
+        core::sync::atomic::Ordering::Release,
+    );
+    serial_println!("[NET] matched backend=virtio-net");
+    let rx_q_phys = pmm
+        .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)?
+        .as_u64();
+    let tx_q_phys = pmm
+        .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)?
+        .as_u64();
+    let mut rx_bufs_phys = [0u64; sunlight_net::virtio_net::MAX_RX_BUFFERS];
+    for physical in &mut rx_bufs_phys {
+        *physical = pmm.alloc_frame()?.as_u64();
+    }
+    let mut rx_bufs_virt = [0u64; sunlight_net::virtio_net::MAX_RX_BUFFERS];
+    for (virtual_address, physical_address) in rx_bufs_virt.iter_mut().zip(rx_bufs_phys) {
+        *virtual_address = hhdm + physical_address;
+    }
+    let tx_buf_phys = pmm.alloc_frame()?.as_u64();
+    let Some(device) = (unsafe {
+        sunlight_net::VirtioNet::init(
+            io_base,
+            bus,
+            slot,
+            rx_q_phys,
+            hhdm + rx_q_phys,
+            tx_q_phys,
+            hhdm + tx_q_phys,
+            rx_bufs_phys,
+            rx_bufs_virt,
+            1514,
+            tx_buf_phys,
+            hhdm + tx_buf_phys,
+        )
+    }) else {
+        return fail_network_backend(21, "[NET] failed stage=VirtIO-Net initialization");
+    };
+    serial_println!(
+        "[NET]  VirtIO-Net activated at PCI {:02x}:{:02x}.0",
+        bus,
+        slot
+    );
+    NET_BACKEND_STATE.store(
+        sunlight_net::NetBackendState::HardwareReady as u64,
+        core::sync::atomic::Ordering::Release,
+    );
+    Some(sunlight_net::NetBackend::Virtio(device))
+}
+
+pub(crate) fn vmxnet3_transition(stage: sunlight_ipc::Vmxnet3InitStage) {
+    use core::sync::atomic::Ordering;
+    if stage == sunlight_ipc::Vmxnet3InitStage::NotProbed {
+        VMXNET3_INIT_STAGE.store(stage as u64, Ordering::Release);
+        serial_println!("[VMXNET3] stage={}", stage.label());
+        return;
+    }
+    let mut current = VMXNET3_INIT_STAGE.load(Ordering::Acquire);
+    loop {
+        if current >= stage as u64 {
+            return;
+        }
+        match VMXNET3_INIT_STAGE.compare_exchange_weak(
+            current,
+            stage as u64,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => break,
+            Err(observed) => current = observed,
+        }
+    }
+    serial_println!("[VMXNET3] stage={}", stage.label());
+}
+
+fn log_vmxnet3_bar(role: &str, bar: sunlight_virtio::PciMemoryBarInfo, hhdm: u64) {
+    serial_println!(
+        "[VMXNET3] BAR index={} role={} raw={:#010x} type=memory-{} physical={:#x} virtual={:#x} size={:#x}",
+        bar.index,
+        role,
+        bar.raw_low,
+        match bar.width {
+            sunlight_virtio::PciBarMemoryWidth::Bits32 => "32",
+            sunlight_virtio::PciBarMemoryWidth::Bits64 => "64",
+        },
+        bar.phys,
+        hhdm + bar.phys,
+        bar.size
+    );
+}
+
+fn log_vmxnet3_init_event(event: sunlight_net::Vmxnet3InitEvent) {
+    vmxnet3_transition(event.stage());
+    match event {
+        sunlight_net::Vmxnet3InitEvent::Revision {
+            device_mask,
+            driver_mask,
+            selected,
+        } => {
+            serial_println!(
+                "[VMXNET3] VRRS device={:#x} driver-supported={:#x} selected={}",
+                device_mask,
+                driver_mask,
+                selected.trailing_zeros() + 1
+            );
+        }
+        sunlight_net::Vmxnet3InitEvent::Upt {
+            device_mask,
+            driver_mask,
+            selected,
+        } => {
+            serial_println!(
+                "[VMXNET3] UVRS device={:#x} driver-supported={:#x} selected={}",
+                device_mask,
+                driver_mask,
+                selected.trailing_zeros() + 1
+            );
+        }
+        sunlight_net::Vmxnet3InitEvent::Mac(mac) => {
+            serial_println!(
+                "[VMXNET3] MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0],
+                mac[1],
+                mac[2],
+                mac[3],
+                mac[4],
+                mac[5]
+            );
+        }
+        sunlight_net::Vmxnet3InitEvent::Dma {
+            shared,
+            queue_desc,
+            rings,
+        } => {
+            serial_println!(
+                "[VMXNET3] DMA shared={:#x} queue_desc={:#x} rings={:#x}",
+                shared,
+                queue_desc,
+                rings
+            );
+        }
+        sunlight_net::Vmxnet3InitEvent::Rings { tx, rx } => {
+            serial_println!(
+                "[VMXNET3] rings initialized tx={:#x} rx={:#x} entries={}",
+                tx,
+                rx,
+                sunlight_net::vmxnet3::VMXNET3_RING_SIZE
+            );
+        }
+        sunlight_net::Vmxnet3InitEvent::Activated => {
+            serial_println!("[VMXNET3] ACTIVATE_DEV succeeded");
+        }
+    }
+}
+
+fn fail_vmxnet3_probe(
+    error: sunlight_virtio::Vmxnet3ProbeError,
+) -> Option<sunlight_net::NetBackend> {
+    use sunlight_ipc::{Vmxnet3ErrorCode as Code, Vmxnet3InitStage as Stage};
+    let (code, detail) = match error {
+        sunlight_virtio::Vmxnet3ProbeError::ZeroBar { index, raw } => {
+            (Code::BarZero, ((index as u64) << 32) | raw as u64)
+        }
+        sunlight_virtio::Vmxnet3ProbeError::IoBar { index, raw } => {
+            (Code::BarIoUnsupported, ((index as u64) << 32) | raw as u64)
+        }
+        sunlight_virtio::Vmxnet3ProbeError::UnsupportedBarType { index, raw } => (
+            Code::BarTypeUnsupported,
+            ((index as u64) << 32) | raw as u64,
+        ),
+        sunlight_virtio::Vmxnet3ProbeError::UnusableAddress { index, address } => {
+            serial_println!(
+                "[VMXNET3] unusable BAR index={} address={:#x}",
+                index,
+                address
+            );
+            (Code::BarAddressUnusable, address)
+        }
+        sunlight_virtio::Vmxnet3ProbeError::InvalidBarSize { index, size } => {
+            serial_println!("[VMXNET3] invalid BAR index={} size={:#x}", index, size);
+            (Code::BarSizeInvalid, size)
+        }
+        sunlight_virtio::Vmxnet3ProbeError::IncorrectBarRole { index, size } => {
+            serial_println!(
+                "[VMXNET3] incorrect BAR role index={} size={:#x}",
+                index,
+                size
+            );
+            (Code::BarRoleIncorrect, ((index as u64) << 56) | size)
+        }
+    };
+    // The detailed probe is only attempted after the vendor/device ID matches.
+    vmxnet3_transition(Stage::PciMatched);
+    fail_vmxnet3(Stage::BarsMapped, code, detail)
+}
+
+fn fail_vmxnet3(
+    stage: sunlight_ipc::Vmxnet3InitStage,
+    code: sunlight_ipc::Vmxnet3ErrorCode,
+    detail: u64,
+) -> Option<sunlight_net::NetBackend> {
+    NET_BACKEND_ERROR.store(code as u64, core::sync::atomic::Ordering::Release);
+    VMXNET3_ERROR_DETAIL.store(detail, core::sync::atomic::Ordering::Release);
+    VMXNET3_FAILURE_STAGE.store(stage as u64, core::sync::atomic::Ordering::Release);
+    NET_BACKEND_STATE.store(
+        sunlight_net::NetBackendState::Failed as u64,
+        core::sync::atomic::Ordering::Release,
+    );
+    serial_println!(
+        "[VMXNET3] failed stage={} error={} detail={:#x}",
+        stage.label(),
+        code.label(),
+        detail
+    );
+    None
+}
+
+fn vmxnet3_error_info(
+    error: sunlight_net::Vmxnet3InitError,
+) -> (
+    sunlight_ipc::Vmxnet3InitStage,
+    sunlight_ipc::Vmxnet3ErrorCode,
+    u64,
+) {
+    use sunlight_ipc::{Vmxnet3ErrorCode as Code, Vmxnet3InitStage as Stage};
+    match error {
+        sunlight_net::Vmxnet3InitError::Reset(status) => {
+            (Stage::RevisionSelected, Code::ResetFailed, status as u64)
+        }
+        sunlight_net::Vmxnet3InitError::RevisionUnsupported(mask) => (
+            Stage::RevisionSelected,
+            Code::RevisionUnsupported,
+            mask as u64,
+        ),
+        sunlight_net::Vmxnet3InitError::UptUnsupported(mask) => {
+            (Stage::UptSelected, Code::UptUnsupported, mask as u64)
+        }
+        sunlight_net::Vmxnet3InitError::InvalidMac(low, high) => (
+            Stage::MacRead,
+            Code::InvalidMac,
+            ((high as u64) << 32) | low as u64,
+        ),
+        sunlight_net::Vmxnet3InitError::MalformedMacRegisters(low, high) => (
+            Stage::MacRead,
+            Code::MalformedMacRegisters,
+            ((high as u64) << 32) | low as u64,
+        ),
+        sunlight_net::Vmxnet3InitError::Activate(status) => {
+            serial_println!("[VMXNET3] ACTIVATE_DEV failed status={:#x}", status);
+            (
+                Stage::DeviceActivated,
+                Code::ActivationFailed,
+                status as u64,
+            )
+        }
+        sunlight_net::Vmxnet3InitError::UpdateRxMode(status) => (
+            Stage::DeviceActivated,
+            Code::RxModeUpdateFailed,
+            status as u64,
+        ),
+    }
+}
+
+fn fail_network_backend(code: u64, message: &str) -> Option<sunlight_net::NetBackend> {
+    NET_BACKEND_ERROR.store(code, core::sync::atomic::Ordering::Release);
+    NET_BACKEND_STATE.store(
+        sunlight_net::NetBackendState::Failed as u64,
+        core::sync::atomic::Ordering::Release,
+    );
+    serial_println!("{}", message);
+    None
+}
+
+/// Log every PCI Ethernet controller before selecting a backend. BAR values
+/// are the firmware-programmed values; capability flags come from the standard
+/// PCI capability list.
+unsafe fn log_pci_ethernet_controllers() {
+    use sunlight_virtio::pci::{pci_read32, pci_read8};
+
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            let header0 = pci_read8(bus, slot, 0, 0x0e);
+            let functions = if header0 & 0x80 != 0 { 8 } else { 1 };
+            for func in 0..functions {
+                let ids = pci_read32(bus, slot, func, 0x00);
+                if ids == 0xffff_ffff {
+                    continue;
+                }
+                let class = pci_read32(bus, slot, func, 0x08);
+                let base_class = (class >> 24) as u8;
+                let subclass = (class >> 16) as u8;
+                let vendor = ids as u16;
+                let device = (ids >> 16) as u16;
+                if (base_class != 0x02 || subclass != 0x00) && vendor != 0x15ad {
+                    continue;
+                }
+                let mut msi = false;
+                let mut msix = false;
+                let status = pci_read32(bus, slot, func, 0x04) >> 16;
+                if status & (1 << 4) != 0 {
+                    let mut cap = pci_read8(bus, slot, func, 0x34) & !3;
+                    let mut remaining = 48;
+                    while cap >= 0x40 && remaining != 0 {
+                        match pci_read8(bus, slot, func, cap) {
+                            0x05 => msi = true,
+                            0x11 => msix = true,
+                            _ => {}
+                        }
+                        cap = pci_read8(bus, slot, func, cap + 1) & !3;
+                        remaining -= 1;
+                    }
+                }
+                let interrupt_line = pci_read8(bus, slot, func, 0x3c);
+                let driver = if vendor == 0x15ad && device == 0x07b0 {
+                    "vmxnet3"
+                } else if vendor == 0x1af4 && (device == 0x1000 || device == 0x1041) {
+                    "virtio-net"
+                } else {
+                    "none"
+                };
+                serial_println!(
+                    "[PCI] bdf={:02x}:{:02x}.{} class={:02x}{:02x}{:02x} vendor={:04x} device={:04x}",
+                    bus,
+                    slot,
+                    func,
+                    base_class,
+                    subclass,
+                    (class >> 8) as u8,
+                    vendor,
+                    device
+                );
+                serial_println!(
+                    "[PCI]  BAR0={:#010x} BAR1={:#010x} BAR2={:#010x} BAR3={:#010x} BAR4={:#010x} BAR5={:#010x}",
+                    pci_read32(bus, slot, func, 0x10),
+                    pci_read32(bus, slot, func, 0x14),
+                    pci_read32(bus, slot, func, 0x18),
+                    pci_read32(bus, slot, func, 0x1c),
+                    pci_read32(bus, slot, func, 0x20),
+                    pci_read32(bus, slot, func, 0x24)
+                );
+                serial_println!(
+                    "[PCI]  interrupt line={} MSI={} MSI-X={} matched driver={}",
+                    interrupt_line,
+                    msi,
+                    msix,
+                    driver
+                );
+            }
         }
     }
 }

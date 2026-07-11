@@ -1,4 +1,5 @@
 use crate::pci;
+use crate::NetDeviceCounters;
 use core::sync::atomic::{fence, Ordering};
 
 // Virtio feature bits for networking (Phase 5.0: only MAC + STATUS required)
@@ -87,6 +88,7 @@ pub struct VirtioNet {
     // outbound frame write/read — see send().
     tx_buf_phys: u64,
     tx_buf_virt: u64,
+    counters: NetDeviceCounters,
 }
 
 #[derive(Debug)]
@@ -267,6 +269,7 @@ impl VirtioNet {
             tx,
             tx_buf_phys,
             tx_buf_virt,
+            counters: NetDeviceCounters::default(),
         })
     }
 
@@ -278,6 +281,10 @@ impl VirtioNet {
         (self.bus, self.slot)
     }
 
+    pub fn counters(&self) -> NetDeviceCounters {
+        self.counters
+    }
+
     /// Try to receive one packet into `buf` (after the header space in our RX buffer).
     /// Returns number of Ethernet bytes copied (0 if none ready).
     ///
@@ -285,6 +292,7 @@ impl VirtioNet {
     ///
     /// SAFETY: Must only be called while the queues and buffers passed to init remain valid.
     pub unsafe fn recv(&mut self, buf: &mut [u8]) -> usize {
+        self.counters.polls = self.counters.polls.saturating_add(1);
         // Check used ring for completed RX
         // SAFETY: used ring is part of the rx queue memory supplied at init and remains valid.
         let used_idx_ptr = (self.rx.used_virt + 2) as *const u16;
@@ -302,11 +310,13 @@ impl VirtioNet {
         let used_len = unsafe { ((used_entry_base + 4) as *const u32).read_volatile() };
 
         self.rx.last_used_idx = self.rx.last_used_idx.wrapping_add(1);
+        self.counters.rx_completed = self.counters.rx_completed.saturating_add(1);
 
         let buf_idx = used_id as usize;
         if buf_idx >= MAX_RX_BUFFERS {
             // Unexpected desc id (should never happen with our arming); re-arm the id we saw and bail.
             self.rearm_desc(used_id);
+            self.counters.rx_bad_completion = self.counters.rx_bad_completion.saturating_add(1);
             return 0;
         }
 
@@ -315,6 +325,7 @@ impl VirtioNet {
         let hdr_sz = core::mem::size_of::<VirtioNetHeader>();
         if total_written <= hdr_sz {
             self.rearm_desc(used_id);
+            self.counters.rx_bad_completion = self.counters.rx_bad_completion.saturating_add(1);
             return 0;
         }
 
@@ -326,6 +337,8 @@ impl VirtioNet {
         }
 
         self.rearm_desc(used_id);
+        self.counters.rx_delivered = self.counters.rx_delivered.saturating_add(1);
+        self.counters.rx_bytes = self.counters.rx_bytes.saturating_add(frame_len as u64);
         frame_len
     }
 
@@ -424,6 +437,8 @@ impl VirtioNet {
 
             pci::outw(self.io_base + VIRTIO_REG_QUEUE_NOTIFY, 1);
         }
+        self.counters.tx_submitted = self.counters.tx_submitted.saturating_add(1);
+        self.counters.tx_bytes = self.counters.tx_bytes.saturating_add(frame.len() as u64);
 
         // Poll used ring (bounded) — MVI simple blocking TX
         // SAFETY: read from used ring + notify are device-visible via fences.
@@ -434,10 +449,12 @@ impl VirtioNet {
                 fence(Ordering::SeqCst);
                 if used_idx_ptr.read_volatile() != self.tx.last_used_idx {
                     self.tx.last_used_idx = self.tx.last_used_idx.wrapping_add(1);
+                    self.counters.tx_completed = self.counters.tx_completed.saturating_add(1);
                     break;
                 }
                 limit -= 1;
                 if limit == 0 {
+                    self.counters.tx_ring_full = self.counters.tx_ring_full.saturating_add(1);
                     return Err(NetError::QueueError);
                 }
                 core::hint::spin_loop();

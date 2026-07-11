@@ -1,5 +1,6 @@
 use crate::arch::x86_64::interrupts::now_ns;
 use core::arch::naked_asm;
+use sunlight_net as sunlight_ipc;
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -87,6 +88,7 @@ pub enum SunlightSyscall {
     /// Seed-grade only: userland/rand-service expands it with a CSPRNG.
     GetEntropy = 87,
     ClockGetTime = 88,
+    NetInfo = 96,
 
     // Shared memory grant (Bite 4)
     ShmAlloc = 92,
@@ -479,6 +481,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         93 => sys_shm_map(frame),
         94 => sys_shm_free(frame),
         95 => sys_map_telemetry(frame),
+        96 => sys_net_info(frame),
         100 => sys_grant_capability_syscall(frame),
         101 => sys_set_fs_base(frame),
         110 => sys_kbd_register(frame),
@@ -3479,41 +3482,49 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
         core::ptr::copy_nonoverlapping(buf_ptr, kernel_buf.as_mut_ptr(), len);
     }
 
-    let mut dev = crate::NET_DEVICE.lock();
-    let result = match dev.as_mut() {
-        // SAFETY: NET_DEVICE holds the sole VirtioNet instance, initialized
-        // once at boot with valid ring-0 mapped queues; access is serialized
-        // by the mutex.
-        Some(d) => match unsafe { d.send(&kernel_buf[..len]) } {
-            Ok(()) => 1,
-            Err(_) => 0,
-        },
-        None => 0,
+    let mut dev = crate::ACTIVE_NET_DEVICE.lock();
+    let Some(device) = dev.as_mut() else {
+        return 0;
+    };
+    if len < 14 || kernel_buf[6..12] != device.mac() {
+        crate::serial_println!("[NET] TX rejected: frame source MAC does not match active backend");
+        return 0;
+    }
+    let before = device.counters();
+    let backend_kind = device.kind();
+    // SAFETY: ACTIVE_NET_DEVICE holds the sole Layer-2 backend, initialized once at
+    // boot with valid ring-0 mapped queues; the mutex serializes access.
+    let result = match unsafe { device.send(&kernel_buf[..len]) } {
+        Ok(()) => 1,
+        Err(_) => 0,
     };
     crate::telemetry::record_net_tx(len as u64);
-    crate::serial_println!("[NETDBG] tx len={} result={}", len, result);
-    if len >= 14 {
-        // Print dst MAC (first 6 bytes of frame) and ethertype to help debug neighbor/MAC resolution for IP.
-        crate::serial_println!(
-            "[NETDBG] tx dst_mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} ethertype={:02x}{:02x}",
-            kernel_buf[0],
-            kernel_buf[1],
-            kernel_buf[2],
-            kernel_buf[3],
-            kernel_buf[4],
-            kernel_buf[5],
-            kernel_buf[12],
-            kernel_buf[13]
-        );
+    let after = device.counters();
+    if backend_kind == sunlight_net::NetworkBackendKind::Vmxnet3
+        && before.tx_submitted == 0
+        && after.tx_submitted != 0
+    {
+        crate::serial_println!("[VMXNET3] first TX frame submitted");
+        if let Some(desc) = device.first_tx_descriptor() {
+            crate::serial_println!(
+                "[VMXNET3] TX desc index={} dma={:#x} len={} flags={:#x} gen={} producer={}",
+                desc.index,
+                desc.dma_address,
+                desc.length,
+                desc.flags,
+                desc.generation,
+                desc.producer
+            );
+        }
     }
-    if len >= 42 {
-        crate::serial_println!(
-            "[NETDBG] tx ethertype={:02x}{:02x} proto={:02x} src_port={:02x}{:02x} dst_port={:02x}{:02x}",
-            kernel_buf[12], kernel_buf[13],
-            kernel_buf[23],
-            kernel_buf[34], kernel_buf[35],
-            kernel_buf[36], kernel_buf[37],
-        );
+    match dhcp_message_type(&kernel_buf[..len]) {
+        Some(1) => {
+            crate::serial_println!("[DHCP] discover sent");
+        }
+        Some(3) => {
+            crate::serial_println!("[DHCP] request sent");
+        }
+        _ => {}
     }
     result
 }
@@ -3537,14 +3548,42 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
     }
 
     let mut kernel_buf = [0u8; MAX_FRAME];
-    let n = {
-        let mut dev = crate::NET_DEVICE.lock();
+    let (n, backend_kind, before, after, first_rx) = {
+        let mut dev = crate::ACTIVE_NET_DEVICE.lock();
         match dev.as_mut() {
-            // SAFETY: see sys_net_tx — single VirtioNet instance, mutex-serialized.
-            Some(d) => unsafe { d.recv(&mut kernel_buf) },
-            None => 0,
+            // SAFETY: see sys_net_tx — single NIC backend, mutex-serialized.
+            Some(d) => {
+                let before = d.counters();
+                let n = unsafe { d.recv(&mut kernel_buf) };
+                (n, Some(d.kind()), before, d.counters(), d.first_rx())
+            }
+            None => (
+                0,
+                None,
+                sunlight_net::NetDeviceCounters::default(),
+                sunlight_net::NetDeviceCounters::default(),
+                None,
+            ),
         }
     };
+    if backend_kind == Some(sunlight_net::NetworkBackendKind::Vmxnet3) {
+        if before.tx_completed == 0 && after.tx_completed != 0 {
+            crate::serial_println!("[VMXNET3] first TX completion");
+        }
+        if before.rx_completed == 0 && after.rx_completed != 0 {
+            crate::serial_println!("[VMXNET3] first RX completion");
+        }
+        if after.polls != 0
+            && after.polls % 1024 == 0
+            && !DHCP_ACK_SEEN.load(core::sync::atomic::Ordering::Relaxed)
+        {
+            crate::serial_println!(
+                "[VMXNET3] tx_submitted={} tx_completed={} rx_completed={} rx_delivered={} irq={} polls={}",
+                after.tx_submitted, after.tx_completed, after.rx_completed,
+                after.rx_delivered, after.interrupts, after.polls
+            );
+        }
+    }
     let n = n.min(cap);
     if n > 0 {
         // SAFETY: buf_ptr..buf_ptr+cap validated as user memory above; n <= cap.
@@ -3552,24 +3591,170 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
             core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
         }
         crate::telemetry::record_net_rx(n as u64);
-        if n >= 14 {
-            crate::serial_println!(
-                "[NETDBG] rx n={} dst_mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} src_mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} ethertype={:02x}{:02x}",
-                n,
-                kernel_buf[0],kernel_buf[1],kernel_buf[2],kernel_buf[3],kernel_buf[4],kernel_buf[5],
-                kernel_buf[6],kernel_buf[7],kernel_buf[8],kernel_buf[9],kernel_buf[10],kernel_buf[11],
-                kernel_buf[12], kernel_buf[13]
-            );
+        if backend_kind == Some(sunlight_net::NetworkBackendKind::Vmxnet3)
+            && before.rx_delivered == 0
+            && after.rx_delivered != 0
+        {
+            if let Some((length, ethertype)) = first_rx {
+                crate::serial_println!(
+                    "[VMXNET3] first RX frame length={} ethertype={:#06x}",
+                    length,
+                    ethertype
+                );
+            }
+            crate::serial_println!("[NET] first VMXNET3 frame delivered to frame proxy");
         }
-        crate::serial_println!(
-            "[NETDBG] rx detail ethertype={:02x}{:02x} proto={:02x} src_port={:02x}{:02x} dst_port={:02x}{:02x} ...",
-            kernel_buf[12], kernel_buf[13],
-            kernel_buf[23],
-            kernel_buf[34], kernel_buf[35],
-            kernel_buf[36], kernel_buf[37]
-        );
+        match dhcp_message_type(&kernel_buf[..n]) {
+            Some(2) => {
+                crate::serial_println!("[DHCP] offer received");
+            }
+            Some(5) => {
+                DHCP_ACK_SEEN.store(true, core::sync::atomic::Ordering::Relaxed);
+                crate::serial_println!("[DHCP] ACK received");
+            }
+            _ => {}
+        }
     }
     n as u64
+}
+
+fn sys_net_info(frame: &mut SyscallFrame) -> u64 {
+    const INFO_WORDS: usize = 19;
+    let (authorized, may_mark_frame_proxy, may_mark_interface) = {
+        let scheduler = crate::sched::SCHEDULER.lock();
+        let name = scheduler.current_process().name_str();
+        (
+            matches!(name, "net_server" | "networkd" | "networkctl"),
+            name == "net_server",
+            name == "networkd",
+        )
+    };
+    if !authorized {
+        return u64::MAX;
+    }
+    let info_ptr = frame.rdi as *mut u64;
+    if frame.rsi as usize != INFO_WORDS
+        || !is_user_address(info_ptr as u64)
+        || !is_user_address((info_ptr as u64) + (INFO_WORDS * 8) as u64)
+    {
+        return u64::MAX;
+    }
+    let device = crate::ACTIVE_NET_DEVICE.lock();
+    let Some(device) = device.as_ref() else {
+        let info = [
+            0,
+            0,
+            0,
+            0,
+            crate::NET_BACKEND_STATE.load(core::sync::atomic::Ordering::Acquire),
+            crate::NET_BACKEND_ERROR.load(core::sync::atomic::Ordering::Acquire),
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            crate::VMXNET3_INIT_STAGE.load(core::sync::atomic::Ordering::Acquire),
+            crate::VMXNET3_FAILURE_STAGE.load(core::sync::atomic::Ordering::Acquire),
+            crate::VMXNET3_ERROR_DETAIL.load(core::sync::atomic::Ordering::Acquire),
+        ];
+        unsafe {
+            core::ptr::copy_nonoverlapping(info.as_ptr(), info_ptr, INFO_WORDS);
+        }
+        return 1;
+    };
+    if device.kind() == sunlight_net::NetworkBackendKind::Vmxnet3 {
+        let requested_event = frame.rdx;
+        if requested_event == sunlight_ipc::NetBackendEvent::FrameProxyRegistered as u64
+            && may_mark_frame_proxy
+        {
+            crate::vmxnet3_transition(sunlight_ipc::Vmxnet3InitStage::FrameProxyRegistered);
+            let mac = device.mac();
+            crate::serial_println!(
+                "[NET] generic frame backend registered kind=VMXNET3 mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+            );
+        } else if requested_event == sunlight_ipc::NetBackendEvent::InterfacePublished as u64
+            && may_mark_interface
+        {
+            crate::vmxnet3_transition(sunlight_ipc::Vmxnet3InitStage::InterfacePublished);
+        }
+    }
+    let counters = device.counters();
+    let mac = device.mac();
+    let mut packed = [0u8; 8];
+    packed[..6].copy_from_slice(&mac);
+    let info = [
+        u64::from_le_bytes(packed),
+        1 | ((device.link_up() as u64) << 1),
+        device.kind() as u64,
+        device.mtu() as u64,
+        crate::NET_BACKEND_STATE.load(core::sync::atomic::Ordering::Acquire),
+        crate::NET_BACKEND_ERROR.load(core::sync::atomic::Ordering::Acquire),
+        counters.tx_submitted,
+        counters.tx_completed,
+        counters.tx_bytes,
+        counters.rx_completed,
+        counters.rx_delivered,
+        counters.rx_bytes,
+        counters.tx_ring_full,
+        counters.rx_bad_completion,
+        counters.interrupts,
+        counters.polls,
+        crate::VMXNET3_INIT_STAGE.load(core::sync::atomic::Ordering::Acquire),
+        crate::VMXNET3_FAILURE_STAGE.load(core::sync::atomic::Ordering::Acquire),
+        crate::VMXNET3_ERROR_DETAIL.load(core::sync::atomic::Ordering::Acquire),
+    ];
+    unsafe {
+        core::ptr::copy_nonoverlapping(info.as_ptr(), info_ptr, INFO_WORDS);
+    }
+    1
+}
+
+static DHCP_ACK_SEEN: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// Return DHCP option 53 for an unfragmented Ethernet/IPv4/UDP BOOTP frame.
+/// This deliberately inspects protocol headers only and never logs payloads.
+fn dhcp_message_type(frame: &[u8]) -> Option<u8> {
+    if frame.len() < 14 + 20 + 8 || frame[12..14] != [0x08, 0x00] {
+        return None;
+    }
+    let ip = 14;
+    let ihl = ((frame[ip] & 0x0f) as usize) * 4;
+    if ihl < 20 || frame.len() < ip + ihl + 8 || frame[ip + 9] != 17 {
+        return None;
+    }
+    let udp = ip + ihl;
+    let src = u16::from_be_bytes([frame[udp], frame[udp + 1]]);
+    let dst = u16::from_be_bytes([frame[udp + 2], frame[udp + 3]]);
+    if !((src == 68 && dst == 67) || (src == 67 && dst == 68)) {
+        return None;
+    }
+    let mut option = udp + 8 + 240;
+    while option < frame.len() {
+        let code = frame[option];
+        option += 1;
+        if code == 0 {
+            continue;
+        }
+        if code == 255 || option >= frame.len() {
+            return None;
+        }
+        let len = frame[option] as usize;
+        option += 1;
+        if option + len > frame.len() {
+            return None;
+        }
+        if code == 53 && len == 1 {
+            return Some(frame[option]);
+        }
+        option += len;
+    }
+    None
 }
 
 fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {

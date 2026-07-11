@@ -1,7 +1,7 @@
 //! Phase 3.4: smoltcp `Device` backed by the kernel's frame-proxy syscalls
 //! (`NetTx`/`NetRx`), used by `net_server` since ring-3 cannot map the
-//! virtio-net device's I/O ports directly. The kernel keeps the real
-//! `VirtioNet` alive (see `kernel::NET_DEVICE`) and copies raw Ethernet
+//! NIC device's registers directly. The kernel keeps the selected Layer-2
+//! backend alive (see `kernel::NET_DEVICE`) and copies raw Ethernet
 //! frames in and out on net_server's behalf.
 
 use smoltcp::phy::{ChecksumCapabilities, Device, DeviceCapabilities, Medium, RxToken, TxToken};
@@ -38,7 +38,7 @@ impl TxToken for ProxyTxToken {
 }
 
 /// Userspace-side frame proxy device. Each `receive`/`transmit` call costs
-/// one syscall round trip to the kernel-owned `VirtioNet`.
+/// one syscall round trip to the kernel-owned Layer-2 backend.
 pub struct ProxyNetDevice {
     mac: [u8; 6],
 }

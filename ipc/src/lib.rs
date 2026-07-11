@@ -46,6 +46,7 @@ pub enum SunlightSyscall {
     // device (ring-0 port I/O); these exchange raw Ethernet frames.
     NetTx = 90,
     NetRx = 91,
+    NetInfo = 96,
     // Shared memory grant for large zero-copy IPC (Bite 4)
     ShmAlloc = 92,
     ShmMap = 93,
@@ -193,6 +194,7 @@ pub mod TzMsg {
 #[allow(non_snake_case)]
 pub mod NetOp {
     pub const GETIP: u64 = 10;
+    pub const GET_BACKEND: u64 = 16;
 }
 
 /// Random service opcodes (registered as "rand").
@@ -993,6 +995,12 @@ pub mod NetworkdMsg {
     pub const ERR_BAD_REQUEST: u64 = 2;
     pub const ERR_NO_CARRIER: u64 = 3;
     pub const ERR_DEVICED_UNAVAILABLE: u64 = 4;
+    pub const ERR_BACKEND_UNAVAILABLE: u64 = 5;
+    pub const ERR_DEVICE_INITIALIZATION_FAILED: u64 = 6;
+    pub const ERR_INVALID_STATE: u64 = 7;
+    pub const ERR_PERMISSION_DENIED: u64 = 8;
+    pub const ERR_UNSUPPORTED_OPERATION: u64 = 9;
+    pub const ERR_IPC_FAILURE: u64 = 10;
 }
 
 /// resolved v0: DNS resolver configuration management.
@@ -1381,6 +1389,7 @@ pub enum InterfaceKind {
     VirtioNet = 2,
     Wireless = 3,
     Tunnel = 4,
+    Vmxnet3 = 5,
     Unknown = 255,
 }
 
@@ -1392,7 +1401,204 @@ impl InterfaceKind {
             2 => Self::VirtioNet,
             3 => Self::Wireless,
             4 => Self::Tunnel,
+            5 => Self::Vmxnet3,
             _ => Self::Unknown,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Loopback => "Loopback",
+            Self::Ethernet => "Ethernet",
+            Self::VirtioNet => "VirtioNet",
+            Self::Wireless => "Wireless",
+            Self::Tunnel => "Tunnel",
+            Self::Vmxnet3 => "VMXNET3",
+            Self::Unknown => "Unknown",
+        }
+    }
+}
+
+/// Hardware backend selected by the kernel after PCI probing and successful
+/// device initialization. This is the single identity carried from the driver
+/// through the frame proxy into networkd/networkctl.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetworkBackendKind {
+    VirtioNet = 1,
+    Vmxnet3 = 2,
+}
+
+/// Authoritative VMXNET3 bring-up state shared by the kernel and diagnostics.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Vmxnet3InitStage {
+    NotProbed = 0,
+    PciMatched = 1,
+    BarsMapped = 2,
+    RevisionSelected = 3,
+    UptSelected = 4,
+    MacRead = 5,
+    DmaAllocated = 6,
+    RingsInitialized = 7,
+    DeviceActivated = 8,
+    BackendInstalled = 9,
+    FrameProxyRegistered = 10,
+    InterfacePublished = 11,
+    Failed = 12,
+}
+
+impl Vmxnet3InitStage {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            1 => Self::PciMatched,
+            2 => Self::BarsMapped,
+            3 => Self::RevisionSelected,
+            4 => Self::UptSelected,
+            5 => Self::MacRead,
+            6 => Self::DmaAllocated,
+            7 => Self::RingsInitialized,
+            8 => Self::DeviceActivated,
+            9 => Self::BackendInstalled,
+            10 => Self::FrameProxyRegistered,
+            11 => Self::InterfacePublished,
+            12 => Self::Failed,
+            _ => Self::NotProbed,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::NotProbed => "NotProbed",
+            Self::PciMatched => "PciMatched",
+            Self::BarsMapped => "BarsMapped",
+            Self::RevisionSelected => "RevisionSelected",
+            Self::UptSelected => "UptSelected",
+            Self::MacRead => "MacRead",
+            Self::DmaAllocated => "DmaAllocated",
+            Self::RingsInitialized => "RingsInitialized",
+            Self::DeviceActivated => "DeviceActivated",
+            Self::BackendInstalled => "BackendInstalled",
+            Self::FrameProxyRegistered => "FrameProxyRegistered",
+            Self::InterfacePublished => "InterfacePublished",
+            Self::Failed => "Failed",
+        }
+    }
+}
+
+impl Default for Vmxnet3InitStage {
+    fn default() -> Self {
+        Self::NotProbed
+    }
+}
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetBackendEvent {
+    FrameProxyRegistered = 1,
+    InterfacePublished = 2,
+}
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Vmxnet3ErrorCode {
+    None = 0,
+    PciNotPresent = 1,
+    BarZero = 2,
+    BarIoUnsupported = 3,
+    BarTypeUnsupported = 4,
+    BarAddressUnusable = 5,
+    BarSizeInvalid = 6,
+    BarRoleIncorrect = 7,
+    BarMappingFailed = 8,
+    SharedDmaAllocation = 9,
+    QueueDmaAllocation = 10,
+    RingDmaAllocation = 11,
+    TxBufferAllocation = 12,
+    RxBufferAllocation = 13,
+    ResetFailed = 14,
+    RevisionUnsupported = 15,
+    UptUnsupported = 16,
+    InvalidMac = 17,
+    MalformedMacRegisters = 18,
+    ActivationFailed = 19,
+    RxModeUpdateFailed = 20,
+}
+
+impl Vmxnet3ErrorCode {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            1 => Self::PciNotPresent,
+            2 => Self::BarZero,
+            3 => Self::BarIoUnsupported,
+            4 => Self::BarTypeUnsupported,
+            5 => Self::BarAddressUnusable,
+            6 => Self::BarSizeInvalid,
+            7 => Self::BarRoleIncorrect,
+            8 => Self::BarMappingFailed,
+            9 => Self::SharedDmaAllocation,
+            10 => Self::QueueDmaAllocation,
+            11 => Self::RingDmaAllocation,
+            12 => Self::TxBufferAllocation,
+            13 => Self::RxBufferAllocation,
+            14 => Self::ResetFailed,
+            15 => Self::RevisionUnsupported,
+            16 => Self::UptUnsupported,
+            17 => Self::InvalidMac,
+            18 => Self::MalformedMacRegisters,
+            19 => Self::ActivationFailed,
+            20 => Self::RxModeUpdateFailed,
+            _ => Self::None,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::PciNotPresent => "PCI device 15ad:07b0 not present",
+            Self::BarZero => "zero BAR",
+            Self::BarIoUnsupported => "unsupported I/O BAR",
+            Self::BarTypeUnsupported => "unsupported memory BAR type",
+            Self::BarAddressUnusable => "unusable BAR address",
+            Self::BarSizeInvalid => "invalid BAR size",
+            Self::BarRoleIncorrect => "incorrect BAR role",
+            Self::BarMappingFailed => "BAR mapping failed",
+            Self::SharedDmaAllocation => "driver-shared DMA allocation failed",
+            Self::QueueDmaAllocation => "queue-descriptor DMA allocation failed",
+            Self::RingDmaAllocation => "ring DMA allocation failed",
+            Self::TxBufferAllocation => "TX buffer allocation failed",
+            Self::RxBufferAllocation => "RX buffer allocation failed",
+            Self::ResetFailed => "RESET_DEV failed",
+            Self::RevisionUnsupported => "no supported VMXNET3 revision",
+            Self::UptUnsupported => "no supported UPT version",
+            Self::InvalidMac => "invalid MAC",
+            Self::MalformedMacRegisters => "malformed MAC register result",
+            Self::ActivationFailed => "ACTIVATE_DEV failed",
+            Self::RxModeUpdateFailed => "UPDATE_RX_MODE failed",
+        }
+    }
+}
+
+impl NetworkBackendKind {
+    pub const fn from_u64(value: u64) -> Option<Self> {
+        match value {
+            1 => Some(Self::VirtioNet),
+            2 => Some(Self::Vmxnet3),
+            _ => None,
+        }
+    }
+
+    pub const fn interface_kind(self) -> InterfaceKind {
+        match self {
+            Self::VirtioNet => InterfaceKind::VirtioNet,
+            Self::Vmxnet3 => InterfaceKind::Vmxnet3,
+        }
+    }
+
+    pub const fn driver_name(self) -> &'static str {
+        match self {
+            Self::VirtioNet => "virtio",
+            Self::Vmxnet3 => "vmxnet3",
         }
     }
 }
@@ -2328,6 +2534,91 @@ pub fn net_rx(buf: &mut [u8]) -> usize {
     ret as usize
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NetDeviceInfo {
+    pub present: bool,
+    pub mac: [u8; 6],
+    pub link_up: bool,
+    pub backend: Option<NetworkBackendKind>,
+    pub mtu: u16,
+    pub state: u64,
+    pub error: u64,
+    pub tx_submitted: u64,
+    pub tx_completed: u64,
+    pub tx_bytes: u64,
+    pub rx_completed: u64,
+    pub rx_delivered: u64,
+    pub rx_bytes: u64,
+    pub tx_ring_full: u64,
+    pub rx_bad_completion: u64,
+    pub interrupts: u64,
+    pub polls: u64,
+    pub vmxnet3_stage: Vmxnet3InitStage,
+    pub vmxnet3_failure_stage: Vmxnet3InitStage,
+    pub vmxnet3_error_detail: u64,
+}
+
+impl NetDeviceInfo {
+    pub fn publishable(&self) -> bool {
+        self.present
+            && self.backend.is_some()
+            && self.mac != [0; 6]
+            && self.mtu != 0
+            && self.state == 4
+            && self.error == 0
+    }
+}
+
+pub fn net_device_info() -> Option<NetDeviceInfo> {
+    net_device_info_with_event(None)
+}
+
+pub fn net_mark_backend_event(event: NetBackendEvent) -> Option<NetDeviceInfo> {
+    net_device_info_with_event(Some(event))
+}
+
+fn net_device_info_with_event(event: Option<NetBackendEvent>) -> Option<NetDeviceInfo> {
+    let mut words = [0u64; 19];
+    let (result, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::NetInfo,
+            words.as_mut_ptr() as u64,
+            words.len() as u64,
+            event.map(|value| value as u64).unwrap_or(0),
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if result != 1 {
+        return None;
+    }
+    let bytes = words[0].to_le_bytes();
+    Some(NetDeviceInfo {
+        present: words[1] & 1 != 0,
+        mac: [bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]],
+        link_up: words[1] & 2 != 0,
+        backend: NetworkBackendKind::from_u64(words[2]),
+        mtu: words[3] as u16,
+        state: words[4],
+        error: words[5],
+        tx_submitted: words[6],
+        tx_completed: words[7],
+        tx_bytes: words[8],
+        rx_completed: words[9],
+        rx_delivered: words[10],
+        rx_bytes: words[11],
+        tx_ring_full: words[12],
+        rx_bad_completion: words[13],
+        interrupts: words[14],
+        polls: words[15],
+        vmxnet3_stage: Vmxnet3InitStage::from_u64(words[16]),
+        vmxnet3_failure_stage: Vmxnet3InitStage::from_u64(words[17]),
+        vmxnet3_error_detail: words[18],
+    })
+}
+
 pub fn sysinfo() -> SystemInfo {
     let mut info = SystemInfo::default();
     // SAFETY: passes a pointer to a properly sized and aligned SystemInfo that
@@ -2562,4 +2853,74 @@ pub fn gpu_move_cursor(x: u32, y: u32) -> bool {
     let a1 = (x as u64) | ((y as u64) << 32);
     let (ok, _) = unsafe { raw_syscall(SunlightSyscall::GpuMoveCursor, a1, 0, 0, 0, 0, 0, 0) };
     ok != 0
+}
+
+#[cfg(test)]
+mod network_backend_tests {
+    use super::{
+        AdminState, InterfaceKind, LinkState, NetDeviceInfo, NetworkBackendKind, NetworkdMsg,
+    };
+
+    #[test]
+    fn backend_metadata_produces_hardware_kind_labels() {
+        assert_eq!(
+            NetworkBackendKind::VirtioNet.interface_kind().label(),
+            "VirtioNet"
+        );
+        assert_eq!(
+            NetworkBackendKind::Vmxnet3.interface_kind().label(),
+            "VMXNET3"
+        );
+        assert_eq!(InterfaceKind::from_u64(5).label(), "VMXNET3");
+    }
+
+    fn ready_info(kind: NetworkBackendKind) -> NetDeviceInfo {
+        NetDeviceInfo {
+            present: true,
+            mac: [0x00, 0x50, 0x56, 0x12, 0x34, 0x56],
+            link_up: false,
+            backend: Some(kind),
+            mtu: 1500,
+            state: 4,
+            error: 0,
+            ..NetDeviceInfo::default()
+        }
+    }
+
+    #[test]
+    fn successful_backends_are_publishable_before_carrier_or_dhcp() {
+        assert!(ready_info(NetworkBackendKind::VirtioNet).publishable());
+        assert!(ready_info(NetworkBackendKind::Vmxnet3).publishable());
+    }
+
+    #[test]
+    fn failed_or_incomplete_hardware_is_not_publishable() {
+        let mut info = ready_info(NetworkBackendKind::Vmxnet3);
+        info.state = 5;
+        info.error = 5;
+        assert!(!info.publishable());
+        info.state = 4;
+        info.error = 0;
+        info.mac = [0; 6];
+        assert!(!info.publishable());
+    }
+
+    #[test]
+    fn admin_and_carrier_states_are_independent() {
+        assert_ne!(AdminState::Disabled as u64, LinkState::NoCarrier as u64);
+        assert_ne!(AdminState::Enabled as u64, LinkState::Carrier as u64);
+    }
+
+    #[test]
+    fn semantic_network_errors_have_stable_codes() {
+        assert_eq!(NetworkdMsg::ERR_NOT_FOUND, 1);
+        assert_ne!(
+            NetworkdMsg::ERR_BACKEND_UNAVAILABLE,
+            NetworkdMsg::ERR_DEVICE_INITIALIZATION_FAILED
+        );
+        assert_ne!(
+            NetworkdMsg::ERR_UNSUPPORTED_OPERATION,
+            NetworkdMsg::ERR_IPC_FAILURE
+        );
+    }
 }
