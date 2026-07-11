@@ -20,6 +20,46 @@ pub struct DocumentNodeId(pub u64);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RenderObjectId(pub u64);
 
+/// Generic resolved family identity carried by retained text.  Producers map
+/// their own CSS or document vocabulary here; Canvas only selects a supplied
+/// shared face and never interprets HTML.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DocumentFontFamily {
+    #[default]
+    SansSerif,
+    Serif,
+    Monospace,
+}
+
+impl DocumentFontFamily {
+    pub fn resolve_css_list(value: &str) -> Self {
+        let mut fallback = Self::SansSerif;
+        for raw in value.split(',') {
+            let name = raw
+                .trim()
+                .trim_matches('\"')
+                .trim_matches('\'')
+                .to_ascii_lowercase();
+            match name.as_str() {
+                // The native family names and common web aliases share the
+                // same cached face.  Unknown names are deliberately ignored
+                // until a later generic fallback appears in the list.
+                "sun serif" | "serif" | "times" | "times new roman" | "georgia" | "noto serif" => {
+                    return Self::Serif
+                }
+                "sun font" | "sans-serif" | "arial" | "helvetica" | "verdana" | "inter" => {
+                    fallback = Self::SansSerif
+                }
+                "sun mono" | "monospace" | "fira code" | "courier" | "courier new" | "consolas" => {
+                    return Self::Monospace
+                }
+                _ => {}
+            }
+        }
+        fallback
+    }
+}
+
 /// Generic decoded raster data shared by retained document producers.
 ///
 /// Pixels are packed ARGB8888 and top-down. The scene stores this behind an
@@ -54,6 +94,9 @@ pub enum RenderObjectKind {
         bold: bool,
         italic: bool,
         underline: bool,
+        line_through: bool,
+        monospace: bool,
+        font_family: DocumentFontFamily,
     },
     Rectangle {
         fill: Color,
@@ -625,6 +668,8 @@ pub struct DocumentCanvas<'a> {
     pub body_font: Option<&'a dyn VecText>,
     pub small_font: Option<&'a dyn VecText>,
     pub scene_heading_font: Option<&'a dyn VecText>,
+    pub scene_serif_font: Option<&'a dyn VecText>,
+    pub scene_mono_font: Option<&'a dyn VecText>,
 }
 
 impl<'a> DocumentCanvas<'a> {
@@ -640,6 +685,8 @@ impl<'a> DocumentCanvas<'a> {
             body_font: None,
             small_font: None,
             scene_heading_font: None,
+            scene_serif_font: None,
+            scene_mono_font: None,
         }
     }
 
@@ -704,6 +751,16 @@ impl<'a> DocumentCanvas<'a> {
         self.body_font = body_font;
         self.small_font = small_font;
         self.scene_heading_font = _title_font;
+        self
+    }
+
+    pub fn with_scene_font_families(
+        mut self,
+        serif_font: Option<&'a dyn VecText>,
+        mono_font: Option<&'a dyn VecText>,
+    ) -> Self {
+        self.scene_serif_font = serif_font;
+        self.scene_mono_font = mono_font;
         self
     }
 
@@ -926,23 +983,57 @@ impl<'a> DocumentCanvas<'a> {
                     text,
                     color,
                     font_size,
+                    font_family,
+                    bold,
+                    italic,
                     underline,
+                    line_through,
                     ..
                 } => {
-                    let font = if *font_size >= 24 {
-                        self.scene_heading_font.or(self.body_font)
-                    } else {
-                        self.body_font
+                    let font = match font_family {
+                        DocumentFontFamily::Serif => self.scene_serif_font.or(self.body_font),
+                        DocumentFontFamily::Monospace => self.scene_mono_font.or(self.body_font),
+                        DocumentFontFamily::SansSerif if *font_size >= 24 => {
+                            self.scene_heading_font.or(self.body_font)
+                        }
+                        DocumentFontFamily::SansSerif => self.body_font,
                     };
                     let visible = clip_text_to_width(font, text, clipped.w);
                     if !visible.is_empty() {
-                        draw_text(canvas, font, bounds.x, bounds.y, visible, *color);
+                        // The shared vector font currently has one face.  Keep the
+                        // approximation here generic: a second one-pixel pass gives
+                        // semantic bold useful weight, while a small x shift gives
+                        // italic text a distinct, non-invasive fallback.
+                        let text_x = bounds.x.saturating_add(*italic as i32);
+                        draw_text(canvas, font, text_x, bounds.y, visible, *color);
+                        if *bold {
+                            draw_text(
+                                canvas,
+                                font,
+                                text_x.saturating_add(1),
+                                bounds.y,
+                                visible,
+                                *color,
+                            );
+                        }
                         if *underline {
                             let underline_y = bounds.y + bounds.h.saturating_sub(2) as i32;
                             if underline_y >= content.y && underline_y < content.bottom() {
                                 canvas.hbar(
                                     bounds.x,
                                     underline_y,
+                                    measure_text_width(font, visible),
+                                    1,
+                                    *color,
+                                );
+                            }
+                        }
+                        if *line_through {
+                            let line_y = bounds.y + (bounds.h / 2) as i32;
+                            if line_y >= content.y && line_y < content.bottom() {
+                                canvas.hbar(
+                                    bounds.x,
+                                    line_y,
                                     measure_text_width(font, visible),
                                     1,
                                     *color,
@@ -1030,9 +1121,9 @@ fn draw_raster_image(canvas: &mut Canvas, clipped: Rect, destination: Rect, imag
 mod tests {
     use super::{
         diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
-        DocumentCanvasPresentation, DocumentNodeId, DocumentScene, DocumentStrokeStyle,
-        DocumentTextStyle, PaintOrder, RasterImage, RenderObject, RenderObjectId, RenderObjectKind,
-        ScenePatchOperation,
+        DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentScene,
+        DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage, RenderObject,
+        RenderObjectId, RenderObjectKind, ScenePatchOperation,
     };
     use crate::{Canvas, Color, Point, Rect, Size, Theme};
     use alloc::sync::Arc;
@@ -1049,6 +1140,9 @@ mod tests {
                 bold: false,
                 italic: false,
                 underline: false,
+                line_through: false,
+                monospace: false,
+                font_family: DocumentFontFamily::SansSerif,
             },
             bounds: Rect::new(x, 4, 32, 16),
             clip_bounds: None,
@@ -1057,6 +1151,38 @@ mod tests {
         }));
         scene.finalize();
         scene
+    }
+
+    #[test]
+    fn css_generic_font_lists_resolve_without_html_knowledge() {
+        assert_eq!(
+            DocumentFontFamily::resolve_css_list("serif"),
+            DocumentFontFamily::Serif
+        );
+        assert_eq!(
+            DocumentFontFamily::resolve_css_list("Georgia, 'Times New Roman', serif"),
+            DocumentFontFamily::Serif
+        );
+        assert_eq!(
+            DocumentFontFamily::resolve_css_list("Times New Roman"),
+            DocumentFontFamily::Serif
+        );
+        assert_eq!(
+            DocumentFontFamily::resolve_css_list("Arial, sans-serif"),
+            DocumentFontFamily::SansSerif
+        );
+        assert_eq!(
+            DocumentFontFamily::resolve_css_list("Helvetica"),
+            DocumentFontFamily::SansSerif
+        );
+        assert_eq!(
+            DocumentFontFamily::resolve_css_list("monospace"),
+            DocumentFontFamily::Monospace
+        );
+        assert_eq!(
+            DocumentFontFamily::resolve_css_list("Fira Code"),
+            DocumentFontFamily::Monospace
+        );
     }
 
     #[test]

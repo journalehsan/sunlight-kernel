@@ -75,6 +75,9 @@ pub enum Property {
     FontStyle,
     TextAlign,
     TextDecoration,
+    WhiteSpace,
+    ListStyleType,
+    ListStylePosition,
     LineHeight,
     Width,
     Height,
@@ -105,6 +108,9 @@ impl Property {
             "font-style" => Self::FontStyle,
             "text-align" => Self::TextAlign,
             "text-decoration" => Self::TextDecoration,
+            "white-space" => Self::WhiteSpace,
+            "list-style-type" => Self::ListStyleType,
+            "list-style-position" => Self::ListStylePosition,
             "line-height" => Self::LineHeight,
             "width" => Self::Width,
             "height" => Self::Height,
@@ -135,6 +141,9 @@ impl Property {
             Self::FontStyle => "font-style",
             Self::TextAlign => "text-align",
             Self::TextDecoration => "text-decoration",
+            Self::WhiteSpace => "white-space",
+            Self::ListStyleType => "list-style-type",
+            Self::ListStylePosition => "list-style-position",
             Self::LineHeight => "line-height",
             Self::Width => "width",
             Self::Height => "height",
@@ -164,6 +173,9 @@ impl Property {
                 | Self::FontStyle
                 | Self::TextAlign
                 | Self::TextDecoration
+                | Self::WhiteSpace
+                | Self::ListStyleType
+                | Self::ListStylePosition
         )
     }
 
@@ -259,6 +271,9 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::FontStyle,
     Property::TextAlign,
     Property::TextDecoration,
+    Property::WhiteSpace,
+    Property::ListStyleType,
+    Property::ListStylePosition,
     Property::LineHeight,
     Property::Width,
     Property::Height,
@@ -657,9 +672,19 @@ fn is_border_style(value: &str) -> bool {
 pub fn user_agent_stylesheet() -> Stylesheet {
     parse_stylesheet(
         r#"
-        html, body, div, header, main, section, article, nav, footer, p, pre { display: block; }
-        span, a, strong, b, em, i, code, br { display: inline; }
+        html, body, div, header, main, section, article, nav, footer, p, pre, dl, dt, dd, blockquote, hr { display: block; }
+        span, a, strong, b, em, i, code, small, mark, del, ins, sub, sup, br { display: inline; }
         img { display: inline-block; }
+        ul, ol { display: block; margin: 16px 0; padding-left: 40px; }
+        ul { list-style-type: disc; }
+        ol { list-style-type: decimal; }
+        li { display: list-item; }
+        dl { margin: 16px 0; }
+        dt { display: block; font-weight: bold; }
+        dd { display: block; margin-left: 40px; }
+        blockquote { margin: 16px 40px; }
+        pre { white-space: pre; font-family: monospace; }
+        code { font-family: monospace; }
         script, style, head, meta, link, title { display: none; }
         h1 { display: block; font-weight: bold; font-size: 32px; }
         h2 { display: block; font-weight: bold; font-size: 28px; }
@@ -669,8 +694,14 @@ pub fn user_agent_stylesheet() -> Stylesheet {
         h6 { display: block; font-weight: bold; font-size: 16px; }
         strong, b { font-weight: bold; }
         em, i { font-style: italic; }
+        small { font-size: 12px; }
+        mark { background-color: yellow; color: black; }
+        del { text-decoration: line-through; }
+        ins { text-decoration: underline; }
+        sub, sup { font-size: 12px; }
+        hr { border-top: 1px solid gray; margin: 8px 0; }
         a { text-decoration: underline; color: blue; }
-        body { color: #222222; background-color: white; font-size: 16px; margin: 8px; }
+        body { color: #222222; background-color: white; font-size: 16px; margin: 8px; font-family: sans-serif; }
     "#,
         StylesheetSource::UserAgent,
     )
@@ -1036,7 +1067,10 @@ fn initial_value(property: &Property) -> PropertyValue {
         | Property::FontStyle
         | Property::TextAlign
         | Property::TextDecoration
-        | Property::LineHeight => PropertyValue::Normal,
+        | Property::LineHeight
+        | Property::WhiteSpace => PropertyValue::Normal,
+        Property::ListStyleType => PropertyValue::Keyword(String::from("disc")),
+        Property::ListStylePosition => PropertyValue::Keyword(String::from("outside")),
         Property::Width | Property::Height => PropertyValue::Auto,
         Property::MarginTop
         | Property::MarginRight

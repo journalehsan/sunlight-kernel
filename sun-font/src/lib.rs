@@ -39,6 +39,8 @@ static FONT_MONO_REGULAR: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_regular_14.mtf"));
 static FONT_MONO_MEDIUM: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_medium_14.mtf"));
+static FONT_SERIF_REGULAR: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_serif_regular_16.mtf"));
 
 // ── Font roles ────────────────────────────────────────────────────────────────
 
@@ -61,6 +63,8 @@ pub enum FontRole {
     MonoRegular,
     /// 14 px Fira Code Medium — emphasized monospace (bold terminal output).
     MonoMedium,
+    /// 16 px Noto Serif Regular — native serif document text.
+    SerifRegular,
 }
 
 // ── TextStyle ─────────────────────────────────────────────────────────────────
@@ -102,6 +106,7 @@ fn font_data(role: FontRole) -> &'static [u8] {
         FontRole::UiTitle => FONT_UI_TITLE_18,
         FontRole::MonoRegular => FONT_MONO_REGULAR,
         FontRole::MonoMedium => FONT_MONO_MEDIUM,
+        FontRole::SerifRegular => FONT_SERIF_REGULAR,
     }
 }
 
@@ -332,6 +337,7 @@ pub fn assert_fonts_valid() {
         (FontRole::UiTitle, FONT_UI_TITLE_18),
         (FontRole::MonoRegular, FONT_MONO_REGULAR),
         (FontRole::MonoMedium, FONT_MONO_MEDIUM),
+        (FontRole::SerifRegular, FONT_SERIF_REGULAR),
     ] {
         assert!(
             data.len() >= GLYPH_DATA_START && &data[0..4] == b"MTF1",
@@ -359,6 +365,7 @@ impl Typography {
     pub const UI_TITLE: VecFont = VecFont(FontRole::UiTitle);
     pub const MONO: VecFont = VecFont(FontRole::MonoRegular);
     pub const MONO_MEDIUM: VecFont = VecFont(FontRole::MonoMedium);
+    pub const SERIF: VecFont = VecFont(FontRole::SerifRegular);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -404,6 +411,17 @@ mod tests {
                 || measure_text("W", FontRole::MonoRegular).w
                     == measure_text("i", FontRole::MonoRegular).w,
             "MonoRegular should have fixed-width cells"
+        );
+    }
+
+    #[test]
+    fn serif_regular_is_valid_and_has_distinct_advances() {
+        assert!(FONT_SERIF_REGULAR.len() > GLYPH_DATA_START);
+        assert_eq!(&FONT_SERIF_REGULAR[..4], b"MTF1");
+        assert!(measure_text("The quick brown rabbit", FontRole::SerifRegular).w > 0);
+        assert_ne!(
+            measure_text("WWWiii", FontRole::SerifRegular).w,
+            measure_text("WWWiii", FontRole::MonoRegular).w
         );
     }
 

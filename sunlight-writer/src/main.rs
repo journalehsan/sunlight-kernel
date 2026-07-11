@@ -43,6 +43,7 @@ static FONT_UI_LARGE: VecFont = VecFont(FontRole::UiLarge);
 static FONT_UI_MEDIUM: VecFont = VecFont(FontRole::UiMedium);
 static FONT_UI_REGULAR: VecFont = VecFont(FontRole::UiRegular);
 static FONT_UI_SMALL: VecFont = VecFont(FontRole::UiSmall);
+static FONT_SERIF: VecFont = VecFont(FontRole::SerifRegular);
 
 static ICON_MENU_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_menu.tga"));
 static ICON_NEW_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_new.tga"));
@@ -414,7 +415,9 @@ fn writer_text_style(role: WriterTextRole) -> DocumentTextStyle<'static> {
             DocumentTextStyle::new(Some(&FONT_UI_MEDIUM), Color::rgb(0x37, 0x37, 0x3C))
         }
         WriterTextRole::Callout => {
-            DocumentTextStyle::new(Some(&FONT_UI_SMALL), Color::rgb(0x7A, 0x64, 0x34))
+            // Keep the existing editable document model intact while exposing
+            // the native serif face in the current callout style.
+            DocumentTextStyle::new(Some(&FONT_SERIF), Color::rgb(0x7A, 0x64, 0x34))
         }
     }
 }

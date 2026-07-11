@@ -21,7 +21,8 @@ runs at boot — the pixel data is baked into the binary at compile time.
 | `UiRegular` | Inter Regular | 13 | File names, toolbar labels, general UI |
 | `UiMedium` | Inter Medium | 13 | Selected items, folder names, emphasis |
 | `UiLarge` | Inter Regular | 16 | Window titles, large headings |
-| `MonoRegular` | Inter Regular | 13 | Paths, technical metadata (JetBrains Mono drop-in later) |
+| `MonoRegular` | Fira Code Regular | 14 | Code, terminals, technical metadata |
+| `SerifRegular` | Noto Serif Regular | 16 | Native document/web serif text |
 
 ## Font Asset Paths
 
@@ -32,6 +33,7 @@ docs/fonts/Inter/static/Inter_18pt-Medium.ttf
 docs/fonts/Inter/static/Inter_18pt-SemiBold.ttf
 docs/fonts/FiraCode/ttf/FiraCode-Regular.ttf
 docs/fonts/FiraCode/ttf/FiraCode-Medium.ttf
+/usr/share/fonts/noto/NotoSerif-Regular.ttf          (build-time Sun Serif source)
 assets/fonts/Material-Icons/MaterialIcons-Regular.ttf   (icon symbols)
 ```
 
@@ -45,6 +47,7 @@ $OUT_DIR/sunlight_ui_16.mtf
 $OUT_DIR/sunlight_ui_title_18.mtf
 $OUT_DIR/sunlight_mono_regular_14.mtf
 $OUT_DIR/sunlight_mono_medium_14.mtf
+$OUT_DIR/sunlight_serif_regular_16.mtf
 $OUT_DIR/material_icons_16.mtf
 $OUT_DIR/material_icons_24.mtf
 ```
@@ -60,6 +63,20 @@ For future OS-image installation (dynamic loading path):
 /usr/share/sunlightos/fonts/minitype/
 ```
 These are seeded into the initramfs (see sunlight-fs/src/ramfs.rs INITRAMFS).
+
+## Shared family resolver
+
+`DocumentCanvas` consumes a resolved generic identity rather than CSS strings:
+
+| CSS family or alias | Native MiniType face |
+|---|---|
+| `sans-serif`, `Sun Font`, `Arial`, `Helvetica`, `Verdana`, `Inter` | Sun Font / Inter |
+| `serif`, `Sun Serif`, `Times`, `Times New Roman`, `Georgia`, `Noto Serif` | Sun Serif / Noto Serif Regular |
+| `monospace`, `Sun Mono`, `Fira Code`, `Courier`, `Courier New`, `Consolas` | Sun Mono / Fira Code Regular |
+
+Unknown named faces remain unresolved until a later generic fallback in the
+CSS list is encountered. This preserves `font-family: Georgia, serif` style
+fallback ordering without introducing a second font loader.
 
 ## Material Icons Font
 

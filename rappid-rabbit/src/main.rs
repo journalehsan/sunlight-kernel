@@ -56,7 +56,7 @@ use sunlight_ui::widgets::{
     Table, TextInput, TextView, TreeHitTarget, TreeView,
 };
 #[cfg(feature = "dom")]
-use sunlight_ui::widgets::{RenderInteraction, RenderObjectKind};
+use sunlight_ui::widgets::{DocumentFontFamily, RenderInteraction, RenderObjectKind};
 use sunlight_ui::{
     request_close, App, Canvas, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
     WindowDecoration,
@@ -66,6 +66,34 @@ static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 static F_MONO: VecFont = VecFont(FontRole::MonoRegular);
 static F_LARGE: VecFont = VecFont(FontRole::UiLarge);
+static F_SERIF: VecFont = VecFont(FontRole::SerifRegular);
+
+struct RabbitFonts;
+
+impl rappid_rabbit::render::TextMeasurer for RabbitFonts {
+    fn measure_width(&self, text: &str) -> u32 {
+        F_UI.measure_w(text)
+    }
+    fn line_height(&self) -> u32 {
+        VecText::line_height(&F_UI)
+    }
+    fn measure_width_for(&self, family: DocumentFontFamily, text: &str) -> u32 {
+        match family {
+            DocumentFontFamily::Serif => F_SERIF.measure_w(text),
+            DocumentFontFamily::Monospace => F_MONO.measure_w(text),
+            DocumentFontFamily::SansSerif => F_UI.measure_w(text),
+        }
+    }
+    fn line_height_for(&self, family: DocumentFontFamily) -> u32 {
+        match family {
+            DocumentFontFamily::Serif => VecText::line_height(&F_SERIF),
+            DocumentFontFamily::Monospace => VecText::line_height(&F_MONO),
+            DocumentFontFamily::SansSerif => VecText::line_height(&F_UI),
+        }
+    }
+}
+
+static RABBIT_FONTS: RabbitFonts = RabbitFonts;
 
 const WIN_W: u32 = 1080;
 const WIN_H: u32 = 720;
@@ -450,7 +478,7 @@ impl RabbitApp {
                             document,
                             style_context,
                             viewport,
-                            &F_UI,
+                            &RABBIT_FONTS,
                             self.image_cache.clone(),
                         ));
                         self.log_render_scene("initial scene");
@@ -1021,7 +1049,7 @@ impl RabbitApp {
     fn refresh_render_viewport(&mut self) {
         let viewport = self.render_viewport();
         let changed = if let Some(render_state) = self.render_state.as_mut() {
-            if render_state.rebuild_for_viewport(viewport, &F_UI) {
+            if render_state.rebuild_for_viewport(viewport, &RABBIT_FONTS) {
                 self.render_scroll = self
                     .render_scroll
                     .min(render_state.current_scene.max_scroll_y(viewport.h));
@@ -1115,7 +1143,8 @@ impl RabbitApp {
         let canvas = DocumentCanvas::new(rect, &[])
             .with_presentation(DocumentCanvasPresentation::Browser)
             .with_empty_label(self.render_status.as_str())
-            .with_fonts(Some(&F_LARGE), Some(&F_SMALL), Some(&F_UI), Some(&F_SMALL));
+            .with_fonts(Some(&F_LARGE), Some(&F_SMALL), Some(&F_UI), Some(&F_SMALL))
+            .with_scene_font_families(Some(&F_SERIF), Some(&F_MONO));
         #[cfg(feature = "dom")]
         if let Some(render_state) = self.render_state.as_ref() {
             return canvas

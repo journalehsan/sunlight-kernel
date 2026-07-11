@@ -6,14 +6,14 @@
 //! interpreted here.  The output is a generic `sunlight_ui::DocumentScene` so
 //! the shared canvas stays unaware of HTML and CSS.
 
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{format, string::String, vec, vec::Vec};
 
 use golden_fish::{Attribute, Document, Node, NodeId};
 use sunlight_http::ParsedUrl;
 use sunlight_ui::{
     widgets::{
-        diff_scenes, DocumentNodeId, DocumentScene, PaintOrder, RenderInteraction, RenderObject,
-        RenderObjectId, RenderObjectKind, ScenePatch,
+        diff_scenes, DocumentFontFamily, DocumentNodeId, DocumentScene, PaintOrder,
+        RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,
     },
     Color, Rect, Size, VecText,
 };
@@ -28,6 +28,7 @@ pub const MAX_LAYOUT_DEPTH: usize = 64;
 pub const MAX_RENDER_OBJECTS: usize = 8_192;
 pub const MAX_TEXT_FRAGMENTS: usize = 4_096;
 pub const MAX_LINES: usize = 4_096;
+pub const MAX_LIST_MARKERS: usize = 2_048;
 pub const MAX_DOCUMENT_DIMENSION: u32 = 16_384;
 /// Bump this when a future in-memory cache must invalidate retained scenes.
 pub const DOCUMENT_SCENE_FORMAT_VERSION: u32 = 1;
@@ -48,6 +49,12 @@ pub struct DocumentCacheKey {
 pub trait TextMeasurer {
     fn measure_width(&self, text: &str) -> u32;
     fn line_height(&self) -> u32;
+    fn measure_width_for(&self, _family: DocumentFontFamily, text: &str) -> u32 {
+        self.measure_width(text)
+    }
+    fn line_height_for(&self, _family: DocumentFontFamily) -> u32 {
+        self.line_height()
+    }
 }
 
 impl<T: VecText + ?Sized> TextMeasurer for T {
@@ -63,6 +70,7 @@ impl<T: VecText + ?Sized> TextMeasurer for T {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DisplayType {
     Block,
+    ListItem,
     Inline,
     InlineBlock,
     None,
@@ -77,6 +85,11 @@ pub struct ResolvedPaintStyle {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
+    pub line_through: bool,
+    pub monospace: bool,
+    pub font_family: DocumentFontFamily,
+    pub white_space: String,
+    pub baseline_offset: i32,
     pub text_align: String,
     pub border_color: Color,
     pub border_width: u32,
@@ -133,9 +146,31 @@ pub struct LayoutNode {
     pub children: Vec<usize>,
     pub text_fragments: Vec<TextFragment>,
     pub image_fragments: Vec<ImageFragment>,
+    pub marker: Option<ListMarker>,
     pub visible: bool,
     pub paint: ResolvedPaintStyle,
     pub paint_order: u32,
+}
+
+/// A generated list marker, deliberately separate from DOM text.  Its owner
+/// is the `li`, so retained scene lookup and inspector selection stay stable.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListMarker {
+    pub owner_node_id: DomNodeId,
+    pub bounds: Rect,
+    pub label: Option<String>,
+    pub shape: MarkerShape,
+    pub ordinal: u32,
+    pub style_type: String,
+    pub paint_order: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MarkerShape {
+    Text,
+    Disc,
+    Circle,
+    Square,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -419,19 +454,30 @@ impl<'a> LayoutBuilder<'a> {
             children: Vec::new(),
             text_fragments: Vec::new(),
             image_fragments: Vec::new(),
+            marker: None,
             visible: true,
             paint: style.paint.clone(),
             paint_order: node_id.min(u32::MAX as usize) as u32,
         });
 
         let mut inner_y = content_y;
+        // A fixed outside marker column keeps all wrapped fragments aligned
+        // under their content rather than underneath the marker.
+        let is_list_item = style.display == DisplayType::ListItem;
+        let marker_w = if is_list_item { 24 } else { 0 };
+        if is_list_item {
+            let marker = self.list_marker(node_id, content_x, content_y, marker_w, &style);
+            self.tree.nodes[index].marker = marker;
+        }
+        let child_x = content_x.saturating_add(marker_w as i32);
+        let child_w = content_w.saturating_sub(marker_w);
         let mut inline_nodes = Vec::new();
         for &child in children {
             if self.is_block(child) {
-                self.flush_inline(index, &inline_nodes, content_x, content_w, &mut inner_y);
+                self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
                 inline_nodes.clear();
                 if let Some(child_index) =
-                    self.layout_block(child, content_x, content_w, &mut inner_y, depth + 1)
+                    self.layout_block(child, child_x, child_w, &mut inner_y, depth + 1)
                 {
                     self.tree.nodes[index].children.push(child_index);
                 }
@@ -439,7 +485,7 @@ impl<'a> LayoutBuilder<'a> {
                 inline_nodes.push(child);
             }
         }
-        self.flush_inline(index, &inline_nodes, content_x, content_w, &mut inner_y);
+        self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
 
         let used_content_h = inner_y.saturating_sub(content_y).max(0) as u32;
         let content_h = style
@@ -544,6 +590,7 @@ impl<'a> LayoutBuilder<'a> {
                 decoded: decoded.map(|image| image.image.clone()),
                 link: None,
             }],
+            marker: None,
             visible: true,
             paint: style.paint,
             paint_order: node_id.min(u32::MAX as usize) as u32,
@@ -625,14 +672,86 @@ impl<'a> LayoutBuilder<'a> {
                     paint,
                     link,
                 } => {
+                    if matches!(paint.white_space.as_str(), "pre" | "pre-wrap") {
+                        let parts: Vec<&str> = text
+                            .split('\n')
+                            .take(MAX_LINES.saturating_sub(self.line_count))
+                            .collect();
+                        for (part_index, part) in parts.iter().enumerate() {
+                            let part_w = scaled_measure_for(
+                                self.measurer,
+                                part,
+                                paint.font_size,
+                                paint.font_family,
+                            );
+                            // `pre-wrap` preserves characters but moves a long physical line to
+                            // a new visual line instead of overlapping its parent box.
+                            if paint.white_space == "pre-wrap"
+                                && had_content
+                                && line_x.saturating_add(part_w as i32) > x.saturating_add(w as i32)
+                            {
+                                self.finish_line(parent_index, line_start, line_x, x, w, &align);
+                                *cursor_y = cursor_y.saturating_add(line_h as i32);
+                                self.line_count = self.line_count.saturating_add(1);
+                                line_start = self.tree.nodes[parent_index].text_fragments.len();
+                                line_x = x;
+                            }
+                            if !part.is_empty() {
+                                let bounds = Rect::new(
+                                    line_x,
+                                    cursor_y.saturating_add(paint.baseline_offset),
+                                    part_w,
+                                    paint.line_height.max(1),
+                                );
+                                self.tree.nodes[parent_index]
+                                    .text_fragments
+                                    .push(TextFragment {
+                                        owner_node_id: owner,
+                                        bounds,
+                                        text: String::from(*part),
+                                        paint: paint.clone(),
+                                        link: link.clone(),
+                                    });
+                                for inline_owner in &inline_owners {
+                                    self.record_inline_box(inline_owner.clone(), bounds);
+                                }
+                                self.text_fragment_count =
+                                    self.text_fragment_count.saturating_add(1);
+                                line_x = line_x.saturating_add(part_w as i32);
+                                line_h = line_h.max(paint.line_height);
+                                had_content = true;
+                            }
+                            if part_index + 1 < parts.len() {
+                                self.finish_line(parent_index, line_start, line_x, x, w, &align);
+                                *cursor_y = cursor_y.saturating_add(line_h as i32);
+                                self.line_count = self.line_count.saturating_add(1);
+                                line_start = self.tree.nodes[parent_index].text_fragments.len();
+                                line_x = x;
+                                line_h = self.measurer.line_height().max(1);
+                                had_content = false;
+                            }
+                        }
+                        continue;
+                    }
                     for word in text.split_ascii_whitespace() {
-                        let word_w = scaled_measure(self.measurer, word, paint.font_size);
+                        let word_w = scaled_measure_for(
+                            self.measurer,
+                            word,
+                            paint.font_size,
+                            paint.font_family,
+                        );
                         let space_w = if had_content {
-                            scaled_measure(self.measurer, " ", paint.font_size)
+                            scaled_measure_for(
+                                self.measurer,
+                                " ",
+                                paint.font_size,
+                                paint.font_family,
+                            )
                         } else {
                             0
                         };
-                        if had_content
+                        if paint.white_space != "nowrap"
+                            && had_content
                             && line_x
                                 .saturating_add(space_w as i32)
                                 .saturating_add(word_w as i32)
@@ -650,7 +769,12 @@ impl<'a> LayoutBuilder<'a> {
                             line_x = line_x.saturating_add(space_w as i32);
                         }
                         let fragment_h = paint.line_height.max(1);
-                        let bounds = Rect::new(line_x, *cursor_y, word_w, fragment_h);
+                        let bounds = Rect::new(
+                            line_x,
+                            cursor_y.saturating_add(paint.baseline_offset),
+                            word_w,
+                            fragment_h,
+                        );
                         self.tree.nodes[parent_index]
                             .text_fragments
                             .push(TextFragment {
@@ -714,7 +838,7 @@ impl<'a> LayoutBuilder<'a> {
         match node {
             Node::Text { content } => {
                 if let Some(style) = inherited {
-                    if !content.trim().is_empty() {
+                    if style.paint.white_space != "normal" || !content.trim().is_empty() {
                         output.push(InlineItem::Text {
                             owner: style.node_id,
                             inline_owners,
@@ -730,7 +854,7 @@ impl<'a> LayoutBuilder<'a> {
                 attributes,
                 children,
             } => {
-                let style = self.flow_style(node_id);
+                let mut style = self.flow_style(node_id);
                 if style.display == DisplayType::None {
                     return;
                 }
@@ -742,6 +866,11 @@ impl<'a> LayoutBuilder<'a> {
                 if tag_name.eq_ignore_ascii_case("br") {
                     output.push(InlineItem::Break { owner });
                     return;
+                }
+                if tag_name.eq_ignore_ascii_case("sub") {
+                    style.paint.baseline_offset = (style.paint.line_height / 4) as i32;
+                } else if tag_name.eq_ignore_ascii_case("sup") {
+                    style.paint.baseline_offset = -((style.paint.line_height / 4) as i32);
                 }
                 if tag_name.eq_ignore_ascii_case("img") {
                     let src = attr(attributes, "src").unwrap_or("");
@@ -819,7 +948,10 @@ impl<'a> LayoutBuilder<'a> {
 
     fn is_block(&self, node_id: NodeId) -> bool {
         matches!(self.document.get(node_id), Some(Node::Element { .. }))
-            && self.flow_style(node_id).display == DisplayType::Block
+            && matches!(
+                self.flow_style(node_id).display,
+                DisplayType::Block | DisplayType::ListItem
+            )
     }
 
     fn record_inline_box(&mut self, owner: InlineOwner, bounds: Rect) {
@@ -865,12 +997,96 @@ impl<'a> LayoutBuilder<'a> {
             paint,
         }
     }
+
+    fn list_marker(
+        &self,
+        node_id: NodeId,
+        x: i32,
+        y: i32,
+        width: u32,
+        style: &FlowStyle,
+    ) -> Option<ListMarker> {
+        if self
+            .tree
+            .nodes
+            .iter()
+            .filter(|node| node.marker.is_some())
+            .count()
+            >= MAX_LIST_MARKERS
+        {
+            return None;
+        }
+        let parent = self.document.parent(node_id)?;
+        let parent_tag = self.document.get(parent)?.tag_name()?;
+        let ordered = parent_tag.eq_ignore_ascii_case("ol");
+        if !ordered && !parent_tag.eq_ignore_ascii_case("ul") {
+            return None;
+        }
+        let mut ordinal = if ordered {
+            self.document
+                .get(parent)
+                .and_then(|node| match node {
+                    Node::Element { attributes, .. } => attr(attributes, "start"),
+                    _ => None,
+                })
+                .and_then(|value| value.parse::<u32>().ok())
+                .unwrap_or(1)
+        } else {
+            0
+        };
+        for &sibling in self.document.children(parent) {
+            if sibling == node_id {
+                break;
+            }
+            if self
+                .document
+                .get(sibling)
+                .and_then(Node::tag_name)
+                .is_some_and(|tag| tag.eq_ignore_ascii_case("li"))
+                && self.flow_style(sibling).display != DisplayType::None
+            {
+                ordinal = ordinal.saturating_add(1);
+            }
+        }
+        if ordered {
+            if let Some(Node::Element { attributes, .. }) = self.document.get(node_id) {
+                ordinal = attr(attributes, "value")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(ordinal);
+            }
+        }
+        let style_type = keyword(self.styles.style_for(node_id), Property::ListStyleType);
+        if style_type == "none" {
+            return None;
+        }
+        let (label, shape) = if ordered {
+            (Some(format_marker(ordinal, &style_type)), MarkerShape::Text)
+        } else {
+            match style_type.as_str() {
+                "circle" => (None, MarkerShape::Circle),
+                "square" => (None, MarkerShape::Square),
+                _ => (None, MarkerShape::Disc),
+            }
+        };
+        Some(ListMarker {
+            owner_node_id: style.node_id,
+            bounds: Rect::new(x, y, width, style.paint.line_height.max(1)),
+            label,
+            shape,
+            ordinal,
+            style_type,
+            paint_order: node_id.min(u32::MAX as usize) as u32,
+        })
+    }
 }
 
 fn display(style: Option<&ComputedStyle>) -> DisplayType {
     match style.and_then(|style| style.value(&Property::Display)) {
         Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("block") => {
             DisplayType::Block
+        }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("list-item") => {
+            DisplayType::ListItem
         }
         Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("inline-block") => {
             DisplayType::InlineBlock
@@ -931,7 +1147,10 @@ fn resolved_paint(
     measurer: &dyn TextMeasurer,
 ) -> ResolvedPaintStyle {
     let font_size = value_px(style, Property::FontSize).unwrap_or(16).max(1);
-    let default_line_height = (font_size.saturating_mul(6) / 5).max(measurer.line_height());
+    let requested_family = keyword(style, Property::FontFamily);
+    let font_family = DocumentFontFamily::resolve_css_list(&requested_family);
+    let default_line_height =
+        (font_size.saturating_mul(6) / 5).max(measurer.line_height_for(font_family));
     let line_height = value_px(style, Property::LineHeight)
         .unwrap_or(default_line_height)
         .max(1);
@@ -957,6 +1176,18 @@ fn resolved_paint(
             "italic" | "oblique"
         ),
         underline: keyword(style, Property::TextDecoration).contains("underline"),
+        line_through: keyword(style, Property::TextDecoration).contains("line-through"),
+        monospace: font_family == DocumentFontFamily::Monospace,
+        font_family,
+        white_space: {
+            let value = keyword(style, Property::WhiteSpace);
+            if matches!(value.as_str(), "pre" | "pre-wrap" | "nowrap") {
+                value
+            } else {
+                String::from("normal")
+            }
+        },
+        baseline_offset: 0,
         text_align: keyword(style, Property::TextAlign),
         border_color: css_color(
             style.and_then(|style| style.value(&Property::BorderColor)),
@@ -967,11 +1198,68 @@ fn resolved_paint(
     }
 }
 
-fn scaled_measure(measurer: &dyn TextMeasurer, text: &str, font_size: u32) -> u32 {
-    let measured = measurer.measure_width(text).max(1) as u64;
+fn scaled_measure_for(
+    measurer: &dyn TextMeasurer,
+    text: &str,
+    font_size: u32,
+    family: DocumentFontFamily,
+) -> u32 {
+    let measured = measurer.measure_width_for(family, text).max(1) as u64;
     ((measured.saturating_mul(font_size.max(1) as u64) / 16)
         .max(1)
         .min(MAX_DOCUMENT_DIMENSION as u64)) as u32
+}
+
+fn format_marker(ordinal: u32, style_type: &str) -> String {
+    let alpha = |mut value: u32, upper: bool| {
+        let mut out = String::new();
+        value = value.max(1);
+        while value > 0 {
+            value -= 1;
+            let base = if upper { b'A' } else { b'a' };
+            out.insert(0, (base + (value % 26) as u8) as char);
+            value /= 26;
+        }
+        out
+    };
+    let roman = |mut value: u32, upper: bool| {
+        if value == 0 || value > 3999 {
+            return format!("{value}.");
+        }
+        let mut out = String::new();
+        for (unit, text) in [
+            (1000, "M"),
+            (900, "CM"),
+            (500, "D"),
+            (400, "CD"),
+            (100, "C"),
+            (90, "XC"),
+            (50, "L"),
+            (40, "XL"),
+            (10, "X"),
+            (9, "IX"),
+            (5, "V"),
+            (4, "IV"),
+            (1, "I"),
+        ] {
+            while value >= unit {
+                out.push_str(text);
+                value -= unit;
+            }
+        }
+        if upper {
+            format!("{out}.")
+        } else {
+            format!("{}.", out.to_ascii_lowercase())
+        }
+    };
+    match style_type {
+        "lower-alpha" => format!("{}.", alpha(ordinal, false)),
+        "upper-alpha" => format!("{}.", alpha(ordinal, true)),
+        "lower-roman" => roman(ordinal, false),
+        "upper-roman" => roman(ordinal, true),
+        _ => format!("{ordinal}."),
+    }
 }
 
 fn attr<'a>(attributes: &'a [Attribute], name: &str) -> Option<&'a str> {
@@ -1076,6 +1364,54 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                 },
             );
         }
+        if let Some(marker) = &node.marker {
+            let marker_id = object_id(marker.owner_node_id, 40, 0);
+            let kind = match marker.shape {
+                MarkerShape::Text => RenderObjectKind::Text {
+                    text: marker.label.clone().unwrap_or_default(),
+                    color: node.paint.color,
+                    font_size: node.paint.font_size,
+                    bold: false,
+                    italic: false,
+                    underline: false,
+                    line_through: false,
+                    monospace: false,
+                    font_family: DocumentFontFamily::SansSerif,
+                },
+                MarkerShape::Disc | MarkerShape::Square => RenderObjectKind::Rectangle {
+                    fill: node.paint.color,
+                },
+                MarkerShape::Circle => RenderObjectKind::Border {
+                    color: node.paint.color,
+                    width: 1,
+                },
+            };
+            let bounds = match marker.shape {
+                MarkerShape::Text => marker.bounds,
+                _ => Rect::new(
+                    marker.bounds.x + 8,
+                    marker.bounds.y + (marker.bounds.h / 2) as i32 - 3,
+                    6,
+                    6,
+                ),
+            };
+            push(
+                &mut scene,
+                RenderObject {
+                    id: marker_id,
+                    owner_node_id: marker.owner_node_id,
+                    kind,
+                    bounds,
+                    clip_bounds: None,
+                    paint_order: PaintOrder {
+                        phase: 3,
+                        document_order: marker.paint_order,
+                        ..PaintOrder::default()
+                    },
+                    interaction: None,
+                },
+            );
+        }
         for (slot, fragment) in node.text_fragments.iter().enumerate() {
             let interaction = fragment.link.as_ref().map(|link| RenderInteraction::Link {
                 owner_node_id: link.anchor_node_id,
@@ -1094,6 +1430,9 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                         bold: fragment.paint.bold,
                         italic: fragment.paint.italic,
                         underline: fragment.paint.underline,
+                        line_through: fragment.paint.line_through,
+                        monospace: fragment.paint.monospace,
+                        font_family: fragment.paint.font_family,
                     },
                     bounds: fragment.bounds,
                     clip_bounds: None,
@@ -1878,6 +2217,63 @@ mod tests {
         assert!(objects
             .iter()
             .all(|object| object.bounds.w > 0 && object.bounds.h > 0));
+    }
+
+    #[test]
+    fn lists_have_owned_stable_markers_and_visible_ordinals() {
+        let mut state = render("<ol start=3><li>one</li><li style='display:none'>hidden</li><li>three</li></ol><ul><li>a</li><li>b</li></ul>");
+        let markers: Vec<_> = state
+            .layout_tree
+            .nodes
+            .iter()
+            .filter_map(|node| node.marker.as_ref())
+            .collect();
+        assert_eq!(markers.len(), 4);
+        assert_eq!(markers[0].label.as_deref(), Some("3."));
+        assert_eq!(markers[1].label.as_deref(), Some("4."));
+        let ids: alloc::collections::BTreeSet<_> = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| (object.id.0 >> 24) & 0xff == 40)
+            .map(|object| object.id)
+            .collect();
+        assert_eq!(ids.len(), 4);
+        let before = ids.clone();
+        state.rebuild(Size::new(320, 240), &TestMeasure);
+        let after: alloc::collections::BTreeSet<_> = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| (object.id.0 >> 24) & 0xff == 40)
+            .map(|object| object.id)
+            .collect();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn typography_fixture_preserves_pre_and_emits_semantic_scene_objects() {
+        let state = render(include_str!("../tests/fixtures/typography-lists.html"));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, .. } if text.contains("    println"))));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, bold: true, .. } if text == "Bold")));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, italic: true, .. } if text == "italic")));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, monospace: true, .. } if text == "monospace")));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, line_through: true, .. } if text == "removed")));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, underline: true, .. } if text == "inserted")));
+        assert!(state
+            .current_scene
+            .objects
+            .iter()
+            .any(|object| matches!(object.kind, RenderObjectKind::Border { .. })));
+    }
+
+    #[test]
+    fn css_font_family_fallbacks_are_preserved_in_retained_text() {
+        let state = render(include_str!("../tests/fixtures/font-families.html"));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind,
+            RenderObjectKind::Text { text, font_family: DocumentFontFamily::Serif, .. } if text == "Serif:" || text == "Named")));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind,
+            RenderObjectKind::Text { text, font_family: DocumentFontFamily::Monospace, .. } if text.contains("Sun Mono"))));
     }
 
     fn decoded_solid_image(pixel: u32) -> crate::images::DecodedImage {

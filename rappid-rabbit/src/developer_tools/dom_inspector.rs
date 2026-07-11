@@ -7,7 +7,7 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 
 #[cfg(feature = "dom")]
-use crate::css::{collect_embedded_stylesheets, StyleContext};
+use crate::css::{collect_embedded_stylesheets, Property, StyleContext};
 #[cfg(feature = "dom")]
 use golden_fish::{Document, Node, NodeId};
 use sunlight_ui::widgets::{TreeViewRow, TreeViewState};
@@ -463,6 +463,38 @@ impl DomInspectorState {
                         out.push('\n');
                     }
                     out.push_str("Resource details: available after image loading.\n");
+                }
+                if tag_name.eq_ignore_ascii_case("li")
+                    || tag_name.eq_ignore_ascii_case("pre")
+                    || tag_name.eq_ignore_ascii_case("code")
+                {
+                    if let Some(style) = self
+                        .style_context
+                        .as_ref()
+                        .and_then(|styles| styles.style_for(node_id))
+                    {
+                        let properties: &[Property] = if tag_name.eq_ignore_ascii_case("li") {
+                            &[
+                                Property::Display,
+                                Property::ListStyleType,
+                                Property::ListStylePosition,
+                            ]
+                        } else {
+                            &[Property::WhiteSpace, Property::FontFamily]
+                        };
+                        out.push_str("Typography\n");
+                        for property in properties {
+                            out.push_str(property.name());
+                            out.push_str(": ");
+                            out.push_str(
+                                &style
+                                    .value(property)
+                                    .map(|value| value.display())
+                                    .unwrap_or_else(|| String::from("(initial)")),
+                            );
+                            out.push('\n');
+                        }
+                    }
                 }
                 out.push_str("Child Count: ");
                 out.push_str(&document.children(node_id).len().to_string());

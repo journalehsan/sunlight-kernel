@@ -1879,6 +1879,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         include_bytes!("../../assets/fonts/minitype/sunlight_mono_medium_14.mtf"),
     ),
     RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_serif_regular_16.mtf",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_serif_regular_16.mtf"),
+    ),
+    RamEntry::file(
         "/usr/share/sunlightos/fonts/minitype/material_icons_16.mtf",
         0, 0, mode::FILE_644,
         include_bytes!("../../assets/fonts/minitype/material_icons_16.mtf"),

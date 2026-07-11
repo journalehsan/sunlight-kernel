@@ -41,6 +41,19 @@ fn main() {
     let inter_semibold = inter_dir.join("Inter_18pt-SemiBold.ttf");
     let fira_regular = fira_dir.join("FiraCode-Regular.ttf");
     let fira_medium = fira_dir.join("FiraCode-Medium.ttf");
+    // A static upright Latin serif face. Keep the host lookup explicit so a
+    // missing developer dependency fails loudly rather than silently dropping
+    // the runtime family.
+    let noto_serif = PathBuf::from("/usr/share/fonts/noto/NotoSerif-Regular.ttf");
+    if !noto_serif.is_file() {
+        panic!(
+            "sun-font: Sun Serif source missing; searched /usr/share/fonts/noto/NotoSerif-Regular.ttf"
+        );
+    }
+    println!(
+        "cargo:warning=sun-font: Sun Serif source={}",
+        noto_serif.display()
+    );
 
     let material_dir = workspace_root.join("assets/fonts/Material-Icons");
     let material_regular = material_dir.join("MaterialIcons-Regular.ttf");
@@ -51,6 +64,7 @@ fn main() {
         &inter_semibold,
         &fira_regular,
         &fira_medium,
+        &noto_serif,
         &material_regular,
     ] {
         println!("cargo:rerun-if-changed={}", p.display());
@@ -70,6 +84,7 @@ fn main() {
     let f_semibold = parse(load(&inter_semibold), "Inter SemiBold");
     let f_fira_reg = parse(load(&fira_regular), "FiraCode Regular");
     let f_fira_med = parse(load(&fira_medium), "FiraCode Medium");
+    let f_serif = parse(load(&noto_serif), "Noto Serif Regular");
     let f_material = parse(load(&material_regular), "Material Icons");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -96,6 +111,11 @@ fn main() {
         &f_fira_med,
         14.0,
         &out_dir.join("sunlight_mono_medium_14.mtf"),
+    );
+    generate(
+        &f_serif,
+        16.0,
+        &out_dir.join("sunlight_serif_regular_16.mtf"),
     );
 
     // Material Icons font converted to MiniType (MTF1) format.

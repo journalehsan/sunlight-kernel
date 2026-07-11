@@ -1,6 +1,7 @@
 [package]
 name = "pty_server"
-version = "0.2.1246"
+version = "0.2.1252"
+
 
 
 
