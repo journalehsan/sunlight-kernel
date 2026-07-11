@@ -697,6 +697,7 @@ struct Window {
     buffer: *mut u32,
     width: u32,  // current client area width
     height: u32, // current client area height
+    buffer_size: usize, // allocated size of SHM buffer in bytes
     x: u32,      // chrome top-left on screen
     y: u32,
     // Saved normal geometry for restore from maximized/fullscreen.
@@ -2457,6 +2458,13 @@ fn composite_window(
     }
     let copy_w = client_w.min(state.fb_width - canvas_x) as usize;
     let copy_h = client_h.min(state.fb_height - canvas_y) as usize;
+    if copy_w == 0 || copy_h == 0 {
+        return;
+    }
+    let required_bytes = win.width as usize * win.height as usize * 4;
+    if win.buffer_size < required_bytes {
+        return;
+    }
     let stride = fb_stride(state);
     let back_ptr = back_buffer.as_mut_ptr();
     // Inner content area used for anti-aliased rounded-corner clipping.
@@ -2544,9 +2552,9 @@ fn draw_cursor_sprite(
             } else {
                 let dst = back_buffer[idx];
                 let inv = 255 - a;
-                let r = (((src >> 16) & 0xFF) * a + ((dst >> 16) & 0xFF) * inv) / 255;
-                let g = (((src >> 8) & 0xFF) * a + ((dst >> 8) & 0xFF) * inv) / 255;
-                let b = ((src & 0xFF) * a + (dst & 0xFF) * inv) / 255;
+                let r = (((src >> 16) & 0xFF) * a + ((dst >> 16) & 0xFF) * inv + 127) / 255;
+                let g = (((src >> 8) & 0xFF) * a + ((dst >> 8) & 0xFF) * inv + 127) / 255;
+                let b = ((src & 0xFF) * a + (dst & 0xFF) * inv + 127) / 255;
                 back_buffer[idx] = (r << 16) | (g << 8) | b;
             }
         }
@@ -3122,6 +3130,7 @@ mod tests {
             buffer: core::ptr::null_mut(),
             width: w,
             height: h,
+            buffer_size: w as usize * h as usize * 4,
             x,
             y,
             saved_x: x,
@@ -3769,8 +3778,11 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::CREATE_WINDOW => {
                 let w = (msg.words[0] & 0xffffffff) as u32;
                 let h = (msg.words[0] >> 32) as u32;
-                let surface_bytes = w as usize * h as usize * 4;
-                let size = surface_bytes.saturating_mul(2).max(4096);
+                let Some((w, h)) = blend::validate_surface_dims(w, h) else {
+                    let _ = ipc_reply(IpcMsg::with_label(0xA1FE));
+                    continue;
+                };
+                let size = (w as usize * h as usize * 4).max(4096);
                 let config = WindowConfig::from_ipc_words(&msg.words);
                 let is_desktop_window = config.window_type == WindowType::Desktop;
                 let owner_pid = msg.badge;
@@ -3840,6 +3852,7 @@ pub extern "C" fn _start() -> ! {
                                 buffer: our_buf,
                                 width: w,
                                 height: h,
+                                buffer_size: size,
                                 x: win_x,
                                 y: win_y,
                                 saved_x: win_x,

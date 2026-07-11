@@ -251,9 +251,9 @@ impl<'fb> Canvas<'fb> {
                     let db = dst_px & 0xFF;
                     let af = a as u32;
                     let ia = 255 - af;
-                    let r = (sr * af + dr * ia) >> 8;
-                    let g = (sg * af + dg * ia) >> 8;
-                    let b = (sb * af + db * ia) >> 8;
+                    let r = (sr * af + dr * ia + 127) / 255;
+                    let g = (sg * af + dg * ia + 127) / 255;
+                    let b = (sb * af + db * ia + 127) / 255;
                     self.pixels[idx] = (r << 16) | (g << 8) | b;
                 }
             }
@@ -305,9 +305,9 @@ impl<'fb> Canvas<'fb> {
                     let db = dst_px & 0xFF;
                     let af = a as u32;
                     let ia = 255 - af;
-                    let r = (tr * af + dr * ia) >> 8;
-                    let g = (tg * af + dg * ia) >> 8;
-                    let b = (tb * af + db * ia) >> 8;
+                    let r = (tr * af + dr * ia + 127) / 255;
+                    let g = (tg * af + dg * ia + 127) / 255;
+                    let b = (tb * af + db * ia + 127) / 255;
                     self.pixels[idx] = (r << 16) | (g << 8) | b;
                 }
             }

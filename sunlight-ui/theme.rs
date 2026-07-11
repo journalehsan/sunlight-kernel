@@ -39,6 +39,7 @@ impl Color {
     }
 
     /// Blend `self` over `dst` using `self.alpha`.
+    /// Returns straight-alpha ARGB.
     #[inline]
     pub fn blend_over(self, dst: Color) -> Color {
         let a = self.a() as u32;
@@ -49,10 +50,12 @@ impl Color {
             return dst;
         }
         let ia = 255 - a;
-        let r = (self.r() as u32 * a + dst.r() as u32 * ia) / 255;
-        let g = (self.g() as u32 * a + dst.g() as u32 * ia) / 255;
-        let b = (self.b() as u32 * a + dst.b() as u32 * ia) / 255;
-        Color::rgb(r as u8, g as u8, b as u8)
+        let r = (self.r() as u32 * a + dst.r() as u32 * ia + 127) / 255;
+        let g = (self.g() as u32 * a + dst.g() as u32 * ia + 127) / 255;
+        let b = (self.b() as u32 * a + dst.b() as u32 * ia + 127) / 255;
+        let da = dst.a() as u32;
+        let out_a = if da == 255 { 255 } else { (a * 255 + da * ia + 127) / 255 };
+        Color::rgba(r as u8, g as u8, b as u8, out_a as u8)
     }
 
     /// Lighten by mixing with white by `amount` 0..=255.
