@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><style>
+body { margin: 0; background-color: #121212; color: #eeeeee; font-family: "Sun Font", sans-serif; line-height: 1.6; }
+header { background-color: #1d1d1d; border-bottom: 3px solid #ff8c00; padding: 20px; text-align: center; }
+h1, h2, h3 { color: #ff8c00; } h1 { margin: 0; } h2 { font-size: 0.9em; }
+.container { max-width: 800px; margin: 0 auto; padding: 20px; }
+.mascot-container { text-align: center; margin: 20px 0; } .mascot-container img { max-width: 250px; height: auto; border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; } th, td { display: inline-block; padding: 8px; border-bottom: 1px solid #555555; text-align: left; } th { background-color: #242424; font-weight: bold; }
+a { color: #ff8c00; text-decoration: none; } a:hover { text-decoration: underline; }
+.btn { display: inline-block; background-color: #ff8c00; color: #121212; padding: 10px 16px; font-weight: bold; border: 1px solid #ffb04a; border-radius: 4px; margin: 12px; }
+footer { border-top: 1px solid #555555; margin-top: 20px; padding: 20px; text-align: center; }
+</style></head><body>
+<header><h1>SunlightX Kernel Archives</h1><p>Native releases for the SunlightOS kernel.</p></header>
+<main class="container"><section class="mascot-container"><img src="aslan.png" alt="Aslan mascot"></section>
+<section><h2>Release archive</h2><table><thead><tr><th>Release</th><th>Channel</th><th>Released</th><th>Downloads</th></tr></thead><tbody>
+<tr><td>SunlightX 0.2</td><td>Stable</td><td>2026-07-11</td><td><a href="/downloads/stable">Mirror</a></td></tr>
+<tr><td>SunlightX Nightly</td><td>Nightly</td><td><script>document.write(new Date())</script></td><td><a href="/downloads/nightly">Mirror</a></td></tr>
+</tbody></table></section><section><h3>Architecture</h3><ul><li>x86_64 kernel</li><li>Native applications</li></ul></section>
+<p style="text-align: center"><button class="btn" onclick="status()">Check Mirror Status</button></p><p id="status-message"></p></main><footer>SunlightX archives</footer>
+</body></html>
