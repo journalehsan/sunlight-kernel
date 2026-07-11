@@ -67,6 +67,14 @@ pub struct Declaration {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Property {
     Display,
+    FlexDirection,
+    FlexWrap,
+    JustifyContent,
+    AlignItems,
+    AlignContent,
+    Gap,
+    RowGap,
+    ColumnGap,
     Color,
     BackgroundColor,
     FontSize,
@@ -77,6 +85,7 @@ pub enum Property {
     TextDecoration,
     WhiteSpace,
     ListStyleType,
+    ListStyle,
     ListStylePosition,
     LineHeight,
     Width,
@@ -100,6 +109,14 @@ impl Property {
     pub fn parse(name: &str) -> Self {
         match name.trim().to_ascii_lowercase().as_str() {
             "display" => Self::Display,
+            "flex-direction" => Self::FlexDirection,
+            "flex-wrap" => Self::FlexWrap,
+            "justify-content" => Self::JustifyContent,
+            "align-items" => Self::AlignItems,
+            "align-content" => Self::AlignContent,
+            "gap" => Self::Gap,
+            "row-gap" => Self::RowGap,
+            "column-gap" => Self::ColumnGap,
             "color" => Self::Color,
             "background-color" => Self::BackgroundColor,
             "font-size" => Self::FontSize,
@@ -110,6 +127,7 @@ impl Property {
             "text-decoration" => Self::TextDecoration,
             "white-space" => Self::WhiteSpace,
             "list-style-type" => Self::ListStyleType,
+            "list-style" => Self::ListStyle,
             "list-style-position" => Self::ListStylePosition,
             "line-height" => Self::LineHeight,
             "width" => Self::Width,
@@ -133,6 +151,14 @@ impl Property {
     pub fn name(&self) -> &str {
         match self {
             Self::Display => "display",
+            Self::FlexDirection => "flex-direction",
+            Self::FlexWrap => "flex-wrap",
+            Self::JustifyContent => "justify-content",
+            Self::AlignItems => "align-items",
+            Self::AlignContent => "align-content",
+            Self::Gap => "gap",
+            Self::RowGap => "row-gap",
+            Self::ColumnGap => "column-gap",
             Self::Color => "color",
             Self::BackgroundColor => "background-color",
             Self::FontSize => "font-size",
@@ -143,6 +169,7 @@ impl Property {
             Self::TextDecoration => "text-decoration",
             Self::WhiteSpace => "white-space",
             Self::ListStyleType => "list-style-type",
+            Self::ListStyle => "list-style",
             Self::ListStylePosition => "list-style-position",
             Self::LineHeight => "line-height",
             Self::Width => "width",
@@ -263,6 +290,14 @@ impl ComputedStyle {
 #[cfg(feature = "dom")]
 const PROPERTY_ORDER: &[Property] = &[
     Property::Display,
+    Property::FlexDirection,
+    Property::FlexWrap,
+    Property::JustifyContent,
+    Property::AlignItems,
+    Property::AlignContent,
+    Property::Gap,
+    Property::RowGap,
+    Property::ColumnGap,
     Property::Color,
     Property::BackgroundColor,
     Property::FontSize,
@@ -273,6 +308,7 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::TextDecoration,
     Property::WhiteSpace,
     Property::ListStyleType,
+    Property::ListStyle,
     Property::ListStylePosition,
     Property::LineHeight,
     Property::Width,
@@ -517,6 +553,35 @@ fn expand_declaration(property: Property, raw: &str, order: usize) -> Vec<Declar
     };
     match property {
         Property::Unknown(_) => Vec::new(),
+        Property::Gap => {
+            let values = raw.split_ascii_whitespace().collect::<Vec<_>>();
+            if values.len() == 1 || values.len() == 2 {
+                let row = values[0];
+                let column = values.get(1).copied().unwrap_or(row);
+                vec![
+                    make(Property::Gap, raw, order),
+                    make(Property::RowGap, row, order),
+                    make(Property::ColumnGap, column, order),
+                ]
+            } else {
+                Vec::new()
+            }
+        }
+        Property::ListStyle => {
+            let keyword = raw
+                .split_ascii_whitespace()
+                .find(|part| {
+                    matches!(
+                        part.to_ascii_lowercase().as_str(),
+                        "none" | "disc" | "circle" | "square" | "decimal"
+                    )
+                })
+                .unwrap_or(raw.trim());
+            vec![
+                make(Property::ListStyle, raw, order),
+                make(Property::ListStyleType, keyword, order),
+            ]
+        }
         Property::Border => {
             let mut output = vec![make(Property::Border, raw, order)];
             for part in raw.split_ascii_whitespace() {
@@ -575,6 +640,9 @@ fn parse_value(property: &Property, raw: &str) -> PropertyValue {
             | Property::FontSize
             | Property::LineHeight
             | Property::BorderWidth
+            | Property::RowGap
+            | Property::ColumnGap
+            | Property::Gap
     ) {
         return parse_length(value).unwrap_or_else(|| {
             if value.eq_ignore_ascii_case("auto") {
@@ -1059,6 +1127,12 @@ fn initial_style(parent: Option<&ComputedStyle>) -> ComputedStyle {
 fn initial_value(property: &Property) -> PropertyValue {
     match property {
         Property::Display => PropertyValue::Keyword(String::from("inline")),
+        Property::FlexDirection => PropertyValue::Keyword(String::from("row")),
+        Property::FlexWrap => PropertyValue::Keyword(String::from("nowrap")),
+        Property::JustifyContent => PropertyValue::Keyword(String::from("flex-start")),
+        Property::AlignItems => PropertyValue::Keyword(String::from("stretch")),
+        Property::AlignContent => PropertyValue::Keyword(String::from("stretch")),
+        Property::Gap | Property::RowGap | Property::ColumnGap => PropertyValue::LengthPx(0),
         Property::Color | Property::BorderColor => PropertyValue::Color(Color::Rgb(0, 0, 0)),
         Property::BackgroundColor => PropertyValue::Color(Color::Transparent),
         Property::FontSize => PropertyValue::LengthPx(16),
@@ -1070,6 +1144,7 @@ fn initial_value(property: &Property) -> PropertyValue {
         | Property::LineHeight
         | Property::WhiteSpace => PropertyValue::Normal,
         Property::ListStyleType => PropertyValue::Keyword(String::from("disc")),
+        Property::ListStyle => PropertyValue::Keyword(String::from("disc")),
         Property::ListStylePosition => PropertyValue::Keyword(String::from("outside")),
         Property::Width | Property::Height => PropertyValue::Auto,
         Property::MarginTop
@@ -1130,6 +1205,23 @@ mod tests {
         assert_eq!(parse_color("rgb(1, 2, 3)"), Some(Color::Rgb(1, 2, 3)));
         assert_eq!(parse_color("blue"), Some(Color::Rgb(0, 0, 255)));
         assert_eq!(parse_length("12px"), Some(PropertyValue::LengthPx(12)));
+    }
+
+    #[test]
+    fn parses_flex_and_list_style_values() {
+        let sheet = parse_stylesheet(
+            ".menu { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; align-content: center; gap: 8px 16px; list-style: none; }",
+            StylesheetSource::Embedded,
+        );
+        let properties: Vec<_> = sheet.rules[0]
+            .declarations
+            .iter()
+            .map(|d| &d.property)
+            .collect();
+        assert!(properties.contains(&&Property::Display));
+        assert!(properties.contains(&&Property::RowGap));
+        assert!(properties.contains(&&Property::ColumnGap));
+        assert!(properties.contains(&&Property::ListStyleType));
     }
 
     #[cfg(feature = "dom")]

@@ -86,6 +86,8 @@ impl<T: VecText + ?Sized> TextMeasurer for T {
 pub enum DisplayType {
     Block,
     ListItem,
+    Flex,
+    InlineFlex,
     Inline,
     InlineBlock,
     None,
@@ -321,6 +323,13 @@ struct FlowStyle {
     height: Option<u32>,
     margin: [u32; 4], // top, right, bottom, left
     padding: [u32; 4],
+    flex_direction: String,
+    flex_wrap: String,
+    justify_content: String,
+    align_items: String,
+    align_content: String,
+    row_gap: u32,
+    column_gap: u32,
 }
 
 #[derive(Clone)]
@@ -475,34 +484,44 @@ impl<'a> LayoutBuilder<'a> {
             paint_order: node_id.min(u32::MAX as usize) as u32,
         });
 
-        let mut inner_y = content_y;
-        // A fixed outside marker column keeps all wrapped fragments aligned
-        // under their content rather than underneath the marker.
-        let is_list_item = style.display == DisplayType::ListItem;
-        let marker_w = if is_list_item { 24 } else { 0 };
-        if is_list_item {
-            let marker = self.list_marker(node_id, content_x, content_y, marker_w, &style);
-            self.tree.nodes[index].marker = marker;
-        }
-        let child_x = content_x.saturating_add(marker_w as i32);
-        let child_w = content_w.saturating_sub(marker_w);
-        let mut inline_nodes = Vec::new();
-        for &child in children {
-            if self.is_block(child) {
-                self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
-                inline_nodes.clear();
-                if let Some(child_index) =
-                    self.layout_block(child, child_x, child_w, &mut inner_y, depth + 1)
-                {
-                    self.tree.nodes[index].children.push(child_index);
-                }
+        let used_content_h = if matches!(style.display, DisplayType::Flex | DisplayType::InlineFlex)
+        {
+            self.layout_flex_children(
+                index, children, content_x, content_y, content_w, &style, depth,
+            )
+        } else {
+            // A marker column exists only when computed list style emits a marker.
+            let is_list_item = style.display == DisplayType::ListItem;
+            let marker_w = if is_list_item {
+                self.list_marker(node_id, content_x, content_y, 24, &style)
+                    .map(|marker| {
+                        self.tree.nodes[index].marker = Some(marker);
+                        24
+                    })
+                    .unwrap_or(0)
             } else {
-                inline_nodes.push(child);
+                0
+            };
+            let child_x = content_x.saturating_add(marker_w as i32);
+            let child_w = content_w.saturating_sub(marker_w);
+            let mut inner_y = content_y;
+            let mut inline_nodes = Vec::new();
+            for &child in children {
+                if self.is_block(child) {
+                    self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
+                    inline_nodes.clear();
+                    if let Some(child_index) =
+                        self.layout_block(child, child_x, child_w, &mut inner_y, depth + 1)
+                    {
+                        self.tree.nodes[index].children.push(child_index);
+                    }
+                } else {
+                    inline_nodes.push(child);
+                }
             }
-        }
-        self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
-
-        let used_content_h = inner_y.saturating_sub(content_y).max(0) as u32;
+            self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
+            inner_y.saturating_sub(content_y).max(0) as u32
+        };
         let content_h = style
             .height
             .unwrap_or(0)
@@ -983,8 +1002,236 @@ impl<'a> LayoutBuilder<'a> {
         matches!(self.document.get(node_id), Some(Node::Element { .. }))
             && matches!(
                 self.flow_style(node_id).display,
-                DisplayType::Block | DisplayType::ListItem
+                DisplayType::Block | DisplayType::ListItem | DisplayType::Flex
             )
+    }
+
+    /// Deliberately small flex formatter for ordinary website navigation and
+    /// toolbars. Items are laid out once using their preferred content width,
+    /// then translated as a retained subtree so DOM ownership stays intact.
+    fn layout_flex_children(
+        &mut self,
+        parent: usize,
+        children: &[NodeId],
+        x: i32,
+        y: i32,
+        width: u32,
+        style: &FlowStyle,
+        depth: usize,
+    ) -> u32 {
+        const MAX_FLEX_ITEMS: usize = 256;
+        const MAX_FLEX_LINES: usize = 256;
+        let row = !matches!(style.flex_direction.as_str(), "column" | "column-reverse");
+        let reverse = matches!(
+            style.flex_direction.as_str(),
+            "row-reverse" | "column-reverse"
+        );
+        let mut items: Vec<(usize, u32, u32, usize, usize, usize, usize)> = Vec::new();
+        let mut anonymous_children = Vec::new();
+        for &child in children.iter().take(MAX_FLEX_ITEMS) {
+            if !self.is_block(child) {
+                anonymous_children.push(child);
+                continue;
+            }
+            if !matches!(self.document.get(child), Some(Node::Element { .. }))
+                || self.flow_style(child).display == DisplayType::None
+            {
+                continue;
+            }
+            let preferred = self.preferred_flex_width(child, width).max(1);
+            let start = self.tree.nodes.len();
+            let inline_start = self.tree.inline_boxes.len();
+            let mut child_cursor = 0;
+            let Some(index) = self.layout_block(child, 0, preferred, &mut child_cursor, depth + 1)
+            else {
+                // Direct text/inline children remain handled by the normal
+                // inline fallback; they are not allowed to corrupt flex flow.
+                continue;
+            };
+            let end = self.tree.nodes.len();
+            let inline_end = self.tree.inline_boxes.len();
+            let item_w = self.tree.nodes[index].margin_box.w.max(1);
+            let item_h = self.tree.nodes[index].margin_box.h.max(1);
+            self.tree.nodes[parent].children.push(index);
+            items.push((index, item_w, item_h, start, end, inline_start, inline_end));
+        }
+        if items.is_empty() {
+            let mut fallback_y = y;
+            self.flush_inline(parent, &anonymous_children, x, width, &mut fallback_y);
+            return fallback_y.saturating_sub(y).max(0) as u32;
+        }
+        if reverse {
+            items.reverse();
+        }
+
+        let gap_main = if row { style.column_gap } else { style.row_gap };
+        let mut lines: Vec<Vec<usize>> = Vec::new();
+        let mut line_widths: Vec<u32> = Vec::new();
+        let mut line_cross: Vec<u32> = Vec::new();
+        for item_index in 0..items.len() {
+            let main = if row {
+                items[item_index].1
+            } else {
+                items[item_index].2
+            };
+            let current = line_widths.last().copied().unwrap_or(0);
+            let count = lines.last().map_or(0, Vec::len) as u32;
+            let proposed =
+                current
+                    .saturating_add(main)
+                    .saturating_add(if count > 0 { gap_main } else { 0 });
+            let wrap = style.flex_wrap == "wrap"
+                && !lines.is_empty()
+                && proposed > if row { width } else { MAX_DOCUMENT_DIMENSION };
+            if wrap && lines.len() < MAX_FLEX_LINES {
+                lines.push(Vec::new());
+                line_widths.push(0);
+                line_cross.push(0);
+            }
+            if lines.is_empty() {
+                lines.push(Vec::new());
+                line_widths.push(0);
+                line_cross.push(0);
+            }
+            let line = lines.len() - 1;
+            if !lines[line].is_empty() {
+                line_widths[line] = line_widths[line].saturating_add(gap_main);
+            }
+            lines[line].push(item_index);
+            line_widths[line] = line_widths[line].saturating_add(main);
+            line_cross[line] = line_cross[line].max(if row {
+                items[item_index].2
+            } else {
+                items[item_index].1
+            });
+        }
+
+        let mut cross_cursor = 0u32;
+        for (line_index, line) in lines.iter().enumerate() {
+            let line_main = line_widths[line_index];
+            let main_limit = if row {
+                width
+            } else {
+                line_cross.iter().copied().max().unwrap_or(0)
+            };
+            let free = main_limit.saturating_sub(line_main);
+            let (leading, distributed) =
+                justify_space(&style.justify_content, free, line.len(), gap_main);
+            let mut main_cursor = leading;
+            for item_ref in line {
+                let (node_index, item_w, item_h, start, end, inline_start, inline_end) =
+                    items[*item_ref];
+                let item_main = if row { item_w } else { item_h };
+                let line_size = line_cross[line_index];
+                let item_cross = if row { item_h } else { item_w };
+                let align = match style.align_items.as_str() {
+                    "center" => line_size.saturating_sub(item_cross) / 2,
+                    "flex-end" => line_size.saturating_sub(item_cross),
+                    _ => 0,
+                };
+                let target_x = if row {
+                    x.saturating_add(main_cursor as i32)
+                } else {
+                    x.saturating_add(align as i32)
+                };
+                let target_y = if row {
+                    y.saturating_add(cross_cursor as i32)
+                        .saturating_add(align as i32)
+                } else {
+                    y.saturating_add(main_cursor as i32)
+                };
+                let current_box = self.tree.nodes[node_index].border_box;
+                self.translate_layout_range(
+                    start,
+                    end,
+                    inline_start,
+                    inline_end,
+                    target_x.saturating_sub(current_box.x),
+                    target_y.saturating_sub(current_box.y),
+                );
+                main_cursor = main_cursor
+                    .saturating_add(item_main)
+                    .saturating_add(distributed);
+            }
+            cross_cursor = cross_cursor.saturating_add(line_cross[line_index]);
+            if line_index + 1 < lines.len() {
+                cross_cursor = cross_cursor.saturating_add(style.row_gap);
+            }
+        }
+        if !anonymous_children.is_empty() {
+            let mut fallback_y = y.saturating_add(cross_cursor as i32);
+            self.flush_inline(parent, &anonymous_children, x, width, &mut fallback_y);
+            cross_cursor = cross_cursor.max(fallback_y.saturating_sub(y).max(0) as u32);
+        }
+        if row {
+            cross_cursor
+        } else {
+            cross_cursor.max(line_widths.into_iter().max().unwrap_or(0))
+        }
+    }
+
+    fn preferred_flex_width(&self, node_id: NodeId, available: u32) -> u32 {
+        let style = self.flow_style(node_id);
+        if let Some(width) = style.width {
+            return width.min(available.max(1));
+        }
+        let measured = self.inline_preferred_width(node_id).max(1);
+        measured
+            .saturating_add(style.padding[1])
+            .saturating_add(style.padding[3])
+            .saturating_add(style.paint.border_width.saturating_mul(2))
+            .min(available.max(1))
+    }
+
+    fn inline_preferred_width(&self, node_id: NodeId) -> u32 {
+        match self.document.get(node_id) {
+            Some(Node::Text { content }) => content
+                .split_ascii_whitespace()
+                .map(|word| self.measurer.measure_width(word))
+                .max()
+                .unwrap_or(0),
+            Some(Node::Element { children, .. }) => children
+                .iter()
+                .map(|child| self.inline_preferred_width(*child))
+                .sum::<u32>()
+                .min(MAX_DOCUMENT_DIMENSION),
+            _ => 0,
+        }
+    }
+
+    fn translate_layout_range(
+        &mut self,
+        start: usize,
+        end: usize,
+        inline_start: usize,
+        inline_end: usize,
+        dx: i32,
+        dy: i32,
+    ) {
+        for node in self.tree.nodes.get_mut(start..end).into_iter().flatten() {
+            node.content_box = node.content_box.translate(dx, dy);
+            node.padding_box = node.padding_box.translate(dx, dy);
+            node.border_box = node.border_box.translate(dx, dy);
+            node.margin_box = node.margin_box.translate(dx, dy);
+            for fragment in &mut node.text_fragments {
+                fragment.bounds = fragment.bounds.translate(dx, dy);
+            }
+            for image in &mut node.image_fragments {
+                image.bounds = image.bounds.translate(dx, dy);
+            }
+            if let Some(marker) = &mut node.marker {
+                marker.bounds = marker.bounds.translate(dx, dy);
+            }
+        }
+        for inline_box in self
+            .tree
+            .inline_boxes
+            .get_mut(inline_start..inline_end)
+            .into_iter()
+            .flatten()
+        {
+            inline_box.bounds = inline_box.bounds.translate(dx, dy);
+        }
     }
 
     fn record_inline_box(&mut self, owner: InlineOwner, bounds: Rect) {
@@ -1027,6 +1274,17 @@ impl<'a> LayoutBuilder<'a> {
                 Property::PaddingBottom,
                 Property::PaddingLeft,
             ),
+            flex_direction: keyword(style, Property::FlexDirection),
+            flex_wrap: keyword(style, Property::FlexWrap),
+            justify_content: keyword(style, Property::JustifyContent),
+            align_items: keyword(style, Property::AlignItems),
+            align_content: keyword(style, Property::AlignContent),
+            row_gap: value_px(style, Property::RowGap)
+                .unwrap_or(0)
+                .min(MAX_DOCUMENT_DIMENSION),
+            column_gap: value_px(style, Property::ColumnGap)
+                .unwrap_or(0)
+                .min(MAX_DOCUMENT_DIMENSION),
             paint,
         }
     }
@@ -1121,6 +1379,12 @@ fn display(style: Option<&ComputedStyle>) -> DisplayType {
         Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("list-item") => {
             DisplayType::ListItem
         }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("flex") => {
+            DisplayType::Flex
+        }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("inline-flex") => {
+            DisplayType::InlineFlex
+        }
         Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("inline-block") => {
             DisplayType::InlineBlock
         }
@@ -1129,6 +1393,27 @@ fn display(style: Option<&ComputedStyle>) -> DisplayType {
         }
         // Unknown display values safely use inline behavior in this vertical slice.
         _ => DisplayType::Inline,
+    }
+}
+
+fn justify_space(keyword: &str, free: u32, count: usize, gap: u32) -> (u32, u32) {
+    if count == 0 {
+        return (0, 0);
+    }
+    let free = free.min(MAX_DOCUMENT_DIMENSION);
+    match keyword {
+        "center" => (free / 2, gap),
+        "flex-end" => (free, gap),
+        "space-between" if count > 1 => (0, free / (count as u32 - 1)),
+        "space-around" => {
+            let unit = free / count as u32;
+            (unit / 2, gap.saturating_add(unit))
+        }
+        "space-evenly" => {
+            let unit = free / (count as u32 + 1);
+            (unit, gap.saturating_add(unit))
+        }
+        _ => (0, gap),
     }
 }
 
@@ -2446,6 +2731,49 @@ mod tests {
             .objects
             .iter()
             .any(|object| matches!(object.kind, RenderObjectKind::Border { .. })));
+    }
+
+    #[test]
+    fn flex_navigation_is_horizontal_and_suppresses_only_its_markers() {
+        let state = render(include_str!("../tests/fixtures/flex-navigation.html"));
+        let nav_markers = state
+            .layout_tree
+            .nodes
+            .iter()
+            .filter(|node| node.marker.is_some() && node.border_box.y < 220)
+            .count();
+        assert_eq!(nav_markers, 0);
+        assert!(state
+            .layout_tree
+            .nodes
+            .iter()
+            .any(|node| node.marker.is_some()));
+        let links: Vec<_> = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::Link { .. }))
+            .collect();
+        assert!(links.len() >= 6);
+        let link_text_y: Vec<_> = links.iter().map(|object| object.bounds.y).collect();
+        assert!(link_text_y.iter().take(5).any(|y| *y == link_text_y[0]));
+        let header = state.dom.find_first_element("header").unwrap();
+        let header_node = state
+            .layout_tree
+            .nodes
+            .iter()
+            .find(|node| node.owner_node_id == DocumentNodeId(header as u64))
+            .unwrap();
+        let background = state
+            .current_scene
+            .objects
+            .iter()
+            .find(|object| {
+                object.owner_node_id == DocumentNodeId(header as u64)
+                    && matches!(object.kind, RenderObjectKind::Rectangle { .. })
+            })
+            .unwrap();
+        assert_eq!(background.bounds, header_node.border_box);
     }
 
     #[test]
