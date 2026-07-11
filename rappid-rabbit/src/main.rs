@@ -19,15 +19,15 @@ use rappid_rabbit::{
     body_is_probably_text, build_get_request,
     developer_tools::{
         console::{ConsoleSeverity, ConsoleSource},
-        dom_inspector::DomInspectorPane,
+        dom_inspector::{DomInspectorPane, StylesMode},
         network::NetworkPaneFocus,
         panel::{DeveloperPanelLayout, DeveloperPanelState, MIN_MAIN_CONTENT_H},
         state::DeveloperToolsState,
         tabs::DeveloperToolTab,
     },
     document_lifecycle::DocumentLifecycle,
-    format_url, normalize_url_input,
     form::{FormControlKind, FormControlState, FormState},
+    format_url, normalize_url_input,
     resources::{
         discovery::{ResourceCandidate, ResourceQueue},
         request::RequestState,
@@ -57,7 +57,9 @@ use sunlight_ui::widgets::{
     Table, TextInput, TextView, TreeHitTarget, TreeView,
 };
 #[cfg(feature = "dom")]
-use sunlight_ui::widgets::{DocumentFontFamily, DocumentNodeId, RenderInteraction, RenderObjectKind};
+use sunlight_ui::widgets::{
+    DocumentFontFamily, DocumentNodeId, RenderInteraction, RenderObjectKind,
+};
 use sunlight_ui::{
     request_close, App, Canvas, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
     WindowDecoration,
@@ -1185,7 +1187,9 @@ impl RabbitApp {
 
     #[cfg(feature = "dom")]
     fn patch_all_controls(&mut self) {
-        let Some(render_state) = self.render_state.as_mut() else { return; };
+        let Some(render_state) = self.render_state.as_mut() else {
+            return;
+        };
         let focused = self.form_state.focused_control;
         for (id, state) in &self.form_state.controls {
             let _ = render_state.patch_control(*id, state, focused == Some(*id), &RABBIT_FONTS);
@@ -1194,8 +1198,13 @@ impl RabbitApp {
 
     #[cfg(feature = "dom")]
     fn patch_focused_control(&mut self) {
-        let Some(id) = self.form_state.focused_control else { self.patch_all_controls(); return; };
-        let Some(state) = self.form_state.controls.get(&id).cloned() else { return; };
+        let Some(id) = self.form_state.focused_control else {
+            self.patch_all_controls();
+            return;
+        };
+        let Some(state) = self.form_state.controls.get(&id).cloned() else {
+            return;
+        };
         if let Some(render_state) = self.render_state.as_mut() {
             let _ = render_state.patch_control(id, &state, true, &RABBIT_FONTS);
         }
@@ -1204,8 +1213,12 @@ impl RabbitApp {
     #[cfg(feature = "dom")]
     fn handle_form_control_click(&mut self, point: Point) -> bool {
         let canvas = self.document_canvas();
-        let Some(object) = canvas.hit_test(point) else { return false; };
-        let Some(RenderInteraction::Control { owner_node_id }) = object.interaction.clone() else { return false; };
+        let Some(object) = canvas.hit_test(point) else {
+            return false;
+        };
+        let Some(RenderInteraction::Control { owner_node_id }) = object.interaction.clone() else {
+            return false;
+        };
         if let Some(pressed) = self.form_state.pressed_control {
             if pressed != owner_node_id {
                 self.form_state.pressed_control = None;
@@ -1213,14 +1226,19 @@ impl RabbitApp {
             }
         }
         self.form_state.pressed_control = None;
-        let Some(control) = self.form_state.controls.get(&owner_node_id).cloned() else { return true; };
-        if control.is_disabled() { return true; }
+        let Some(control) = self.form_state.controls.get(&owner_node_id).cloned() else {
+            return true;
+        };
+        if control.is_disabled() {
+            return true;
+        }
         match control.kind() {
             FormControlKind::TextInput | FormControlKind::SearchInput => {
                 self.form_state.focus_control(owner_node_id);
                 self.patch_all_controls();
             }
-            FormControlKind::SubmitInput | FormControlKind::ButtonElement(rappid_rabbit::form::ButtonType::Submit) => {
+            FormControlKind::SubmitInput
+            | FormControlKind::ButtonElement(rappid_rabbit::form::ButtonType::Submit) => {
                 self.form_state.focused_control = Some(owner_node_id);
                 self.submit_form(owner_node_id);
             }
@@ -1234,17 +1252,50 @@ impl RabbitApp {
 
     #[cfg(feature = "dom")]
     fn submit_form(&mut self, submitter: DocumentNodeId) -> bool {
-        let Some(render_state) = self.render_state.as_ref() else { return false; };
-        let Some(control) = self.form_state.controls.get(&submitter) else { return false; };
-        let Some(form_id) = control.form_owner() else { return true; };
+        let Some(render_state) = self.render_state.as_ref() else {
+            return false;
+        };
+        let Some(control) = self.form_state.controls.get(&submitter) else {
+            return false;
+        };
+        let Some(form_id) = control.form_owner() else {
+            return true;
+        };
         let method = rappid_rabbit::form::get_form_method(&render_state.dom, form_id.0 as usize);
         if method != "get" {
-            self.developer_tools.console.push(ConsoleSeverity::Warn, ConsoleSource::Browser, format!("[RABBIT][FORM] method={} forms are not supported.", method.to_ascii_uppercase()));
+            self.developer_tools.console.push(
+                ConsoleSeverity::Warn,
+                ConsoleSource::Browser,
+                format!(
+                    "[RABBIT][FORM] method={} forms are not supported.",
+                    method.to_ascii_uppercase()
+                ),
+            );
             return true;
         }
         let base = ParsedUrl::parse(&render_state.final_url).ok();
-        let target = rappid_rabbit::form::build_get_submission_url(&self.form_state, &render_state.dom, form_id, &render_state.final_url, base.as_ref(), Some(submitter));
-        self.developer_tools.console.push(ConsoleSeverity::Quiet, ConsoleSource::Browser, format!("[RABBIT][FORM] submit form={} method=GET action={} controls={}", form_id.0, target, self.form_state.controls.values().filter(|c| c.form_owner() == Some(form_id) && !c.is_disabled()).count()));
+        let target = rappid_rabbit::form::build_get_submission_url(
+            &self.form_state,
+            &render_state.dom,
+            form_id,
+            &render_state.final_url,
+            base.as_ref(),
+            Some(submitter),
+        );
+        self.developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Browser,
+            format!(
+                "[RABBIT][FORM] submit form={} method=GET action={} controls={}",
+                form_id.0,
+                target,
+                self.form_state
+                    .controls
+                    .values()
+                    .filter(|c| c.form_owner() == Some(form_id) && !c.is_disabled())
+                    .count()
+            ),
+        );
         self.url_input.set_text(&target);
         self.queue_fetch();
         true
@@ -1252,28 +1303,64 @@ impl RabbitApp {
 
     #[cfg(feature = "dom")]
     fn handle_form_key(&mut self, event: Event) -> bool {
-        let Some(id) = self.form_state.focused_control else { return false; };
-        let Some(control) = self.form_state.controls.get(&id) else { return false; };
-        if control.is_disabled() { return false; }
+        let Some(id) = self.form_state.focused_control else {
+            return false;
+        };
+        let Some(control) = self.form_state.controls.get(&id) else {
+            return false;
+        };
+        if control.is_disabled() {
+            return false;
+        }
         match event {
             Event::Key(ch) if ch == '\n' || ch == '\r' => {
-                if matches!(control.kind(), FormControlKind::TextInput | FormControlKind::SearchInput) { return self.submit_form(id); }
+                if matches!(
+                    control.kind(),
+                    FormControlKind::TextInput | FormControlKind::SearchInput
+                ) {
+                    return self.submit_form(id);
+                }
                 false
             }
-            Event::Key(ch) if ch == '\u{8}' => { let changed = self.form_state.backspace(); if changed { self.patch_focused_control(); } changed }
-            Event::Key(ch) if ch.is_ascii_graphic() || ch == ' ' => { let changed = self.form_state.insert_char(ch); if changed { self.patch_focused_control(); } changed }
-            Event::KeyPress { keycode, pressed: true, shift, .. } => {
+            Event::Key(ch) if ch == '\u{8}' => {
+                let changed = self.form_state.backspace();
+                if changed {
+                    self.patch_focused_control();
+                }
+                changed
+            }
+            Event::Key(ch) if ch.is_ascii_graphic() || ch == ' ' => {
+                let changed = self.form_state.insert_char(ch);
+                if changed {
+                    self.patch_focused_control();
+                }
+                changed
+            }
+            Event::KeyPress {
+                keycode,
+                pressed: true,
+                shift,
+                ..
+            } => {
                 let changed = match keycode {
                     KEY_LEFT => self.form_state.move_cursor_left(),
                     KEY_RIGHT => self.form_state.move_cursor_right(),
                     KEY_HOME => self.form_state.move_cursor_home(),
                     KEY_END => self.form_state.move_cursor_end(),
                     0x53 => self.form_state.delete_forward(),
-                    0x0F if shift => self.form_state.focus_prev_control(&self.render_state.as_ref().unwrap().dom).is_some(),
-                    0x0F => self.form_state.focus_next_control(&self.render_state.as_ref().unwrap().dom).is_some(),
+                    0x0F if shift => self
+                        .form_state
+                        .focus_prev_control(&self.render_state.as_ref().unwrap().dom)
+                        .is_some(),
+                    0x0F => self
+                        .form_state
+                        .focus_next_control(&self.render_state.as_ref().unwrap().dom)
+                        .is_some(),
                     _ => false,
                 };
-                if changed { self.patch_all_controls(); }
+                if changed {
+                    self.patch_all_controls();
+                }
                 changed
             }
             _ => false,
@@ -1449,7 +1536,56 @@ impl RabbitApp {
         let (styles_rect, properties_rect, tree_rect) =
             Self::dom_column_rects(content_rect.inset(8));
 
-        let styles_panel = Panel::with_title(styles_rect, "Styles");
+        // Inject render correlation + real box geometry into inspector when available
+        #[cfg(feature = "dom")]
+        if let Some(rs) = self.render_state.as_ref() {
+            if let Some(node) = self.developer_tools.dom.selected_node() {
+                let mut extra = String::new();
+                // Render objects
+                let dom_id = sunlight_ui::widgets::DocumentNodeId(node as u64);
+                let obj_ids = rs.current_scene.objects_for_node(dom_id);
+                if !obj_ids.is_empty() {
+                    extra.push_str("\nRender Objects:\n");
+                    for &oid in obj_ids.iter().take(6) {
+                        if let Some(obj) = rs.current_scene.object(oid) {
+                            extra.push_str("  ");
+                            extra.push_str(&format!(
+                                "{:?} id={:?} bounds={:?}\n",
+                                obj.kind, obj.id, obj.bounds
+                            ));
+                        }
+                    }
+                }
+                // Layout box for the node
+                if let Some(ln) = rs
+                    .layout_tree
+                    .nodes
+                    .iter()
+                    .find(|n| n.owner_node_id.0 == node as u64)
+                {
+                    extra.push_str("\nLayout Box:\n");
+                    extra.push_str(&format!("  content: {}x{}  padding:({},{},{},{})  border:({},{},{},{})  margin:({},{},{},{})\n",
+                        ln.content_box.w, ln.content_box.h,
+                        ln.padding_box.x, ln.padding_box.y, ln.padding_box.w, ln.padding_box.h,
+                        ln.border_box.x, ln.border_box.y, ln.border_box.w, ln.border_box.h,
+                        ln.margin_box.x, ln.margin_box.y, ln.margin_box.w, ln.margin_box.h));
+                    if let Some(m) = &ln.marker {
+                        extra.push_str(&format!(
+                            "  marker: {:?} {}\n",
+                            m.shape,
+                            m.label.as_deref().unwrap_or("")
+                        ));
+                    }
+                }
+                self.developer_tools.dom.set_extra_info(extra);
+            }
+        }
+
+        let styles_title = format!(
+            "Styles [{}]",
+            self.developer_tools.dom.styles_mode().label()
+        );
+        let styles_panel = Panel::with_title(styles_rect, &styles_title);
         styles_panel.draw(canvas, theme);
         let styles_scroll = self.developer_tools.dom.styles_scroll();
         let styles_focused = self.focus == FocusPane::DeveloperTools
@@ -1653,9 +1789,10 @@ impl RabbitApp {
                     let (styles_rect, properties_rect, tree_rect) =
                         Self::dom_column_rects(content_rect.inset(8));
                     let styles_max = {
+                        let mode_label = self.developer_tools.dom.styles_mode().label();
                         let styles_text = self.developer_tools.dom.styles_text();
                         TextView::new(
-                            Panel::with_title(styles_rect, "Styles")
+                            Panel::with_title(styles_rect, &format!("Styles [{}]", mode_label))
                                 .content_rect()
                                 .inset(8),
                             styles_text,
@@ -1799,9 +1936,10 @@ impl RabbitApp {
                     DomInspectorPane::Styles => {
                         let mut scroll = self.developer_tools.dom.styles_scroll();
                         let (visible_lines, max_scroll) = {
+                            let mode_label = self.developer_tools.dom.styles_mode().label();
                             let styles_text = self.developer_tools.dom.styles_text();
                             let view = TextView::new(
-                                Panel::with_title(styles_rect, "Styles")
+                                Panel::with_title(styles_rect, &format!("Styles [{}]", mode_label))
                                     .content_rect()
                                     .inset(8),
                                 styles_text,
@@ -1950,9 +2088,14 @@ impl RabbitApp {
         let (styles_rect, properties_rect, tree_rect) =
             Self::dom_column_rects(content_rect.inset(8));
         if styles_rect.contains(point) {
-            self.developer_tools
-                .dom
-                .set_focused_pane(DomInspectorPane::Styles);
+            if self.developer_tools.dom.focused_pane() == DomInspectorPane::Styles {
+                self.developer_tools.dom.cycle_styles_mode();
+            } else {
+                self.developer_tools
+                    .dom
+                    .set_focused_pane(DomInspectorPane::Styles);
+            }
+            self.developer_tools.dom.styles_text(); // force refresh
             return true;
         }
         if properties_rect.contains(point) {
@@ -2058,7 +2201,9 @@ impl App for RabbitApp {
                 if self.document_view == DocumentView::Render {
                     let canvas = self.document_canvas();
                     if let Some(object) = canvas.hit_test(Point::new(x, y)) {
-                        if let Some(RenderInteraction::Control { owner_node_id }) = object.interaction.clone() {
+                        if let Some(RenderInteraction::Control { owner_node_id }) =
+                            object.interaction.clone()
+                        {
                             self.form_state.pressed_control = Some(owner_node_id);
                             return true;
                         }
@@ -2088,11 +2233,17 @@ impl App for RabbitApp {
             }
             Event::MouseUp { x, y, .. } => {
                 #[cfg(feature = "dom")]
-                if self.document_view == DocumentView::Render && self.form_state.pressed_control.is_some() {
+                if self.document_view == DocumentView::Render
+                    && self.form_state.pressed_control.is_some()
+                {
                     let canvas = self.document_canvas();
-                    let same_control = canvas.hit_test(Point::new(x, y)).and_then(|object| match object.interaction.clone() {
-                        Some(RenderInteraction::Control { owner_node_id }) => Some(owner_node_id),
-                        _ => None,
+                    let same_control = canvas.hit_test(Point::new(x, y)).and_then(|object| {
+                        match object.interaction.clone() {
+                            Some(RenderInteraction::Control { owner_node_id }) => {
+                                Some(owner_node_id)
+                            }
+                            _ => None,
+                        }
                     }) == self.form_state.pressed_control;
                     if !same_control {
                         self.form_state.pressed_control = None;
@@ -2155,7 +2306,9 @@ impl App for RabbitApp {
                 }
 
                 #[cfg(feature = "dom")]
-                if self.document_view == DocumentView::Render && self.form_state.focused_control.is_some() {
+                if self.document_view == DocumentView::Render
+                    && self.form_state.focused_control.is_some()
+                {
                     self.form_state.blur();
                     self.patch_all_controls();
                 }
