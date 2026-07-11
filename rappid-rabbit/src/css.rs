@@ -62,6 +62,7 @@ pub struct Declaration {
     pub value: PropertyValue,
     pub raw_value: String,
     pub order: usize,
+    pub important: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -77,6 +78,11 @@ pub enum Property {
     ColumnGap,
     Color,
     BackgroundColor,
+    BackgroundImage,
+    BackgroundRepeat,
+    BackgroundAttachment,
+    BackgroundPositionX,
+    BackgroundPositionY,
     FontSize,
     FontFamily,
     FontWeight,
@@ -90,6 +96,9 @@ pub enum Property {
     LineHeight,
     Width,
     Height,
+    MinHeight,
+    BoxSizing,
+    LetterSpacing,
     MarginTop,
     MarginRight,
     MarginBottom,
@@ -102,6 +111,8 @@ pub enum Property {
     BorderWidth,
     BorderStyle,
     BorderColor,
+    BorderBottom,
+    Custom(String),
     Unknown(String),
 }
 
@@ -119,6 +130,11 @@ impl Property {
             "column-gap" => Self::ColumnGap,
             "color" => Self::Color,
             "background-color" => Self::BackgroundColor,
+            "background-image" => Self::BackgroundImage,
+            "background-repeat" => Self::BackgroundRepeat,
+            "background-attachment" => Self::BackgroundAttachment,
+            "background-position-x" => Self::BackgroundPositionX,
+            "background-position-y" => Self::BackgroundPositionY,
             "font-size" => Self::FontSize,
             "font-family" => Self::FontFamily,
             "font-weight" => Self::FontWeight,
@@ -132,6 +148,9 @@ impl Property {
             "line-height" => Self::LineHeight,
             "width" => Self::Width,
             "height" => Self::Height,
+            "min-height" => Self::MinHeight,
+            "box-sizing" => Self::BoxSizing,
+            "letter-spacing" => Self::LetterSpacing,
             "margin-top" => Self::MarginTop,
             "margin-right" => Self::MarginRight,
             "margin-bottom" => Self::MarginBottom,
@@ -144,6 +163,8 @@ impl Property {
             "border-width" => Self::BorderWidth,
             "border-style" => Self::BorderStyle,
             "border-color" => Self::BorderColor,
+            "border-bottom" => Self::BorderBottom,
+            other if other.starts_with("--") => Self::Custom(String::from(other)),
             other => Self::Unknown(String::from(other)),
         }
     }
@@ -161,6 +182,11 @@ impl Property {
             Self::ColumnGap => "column-gap",
             Self::Color => "color",
             Self::BackgroundColor => "background-color",
+            Self::BackgroundImage => "background-image",
+            Self::BackgroundRepeat => "background-repeat",
+            Self::BackgroundAttachment => "background-attachment",
+            Self::BackgroundPositionX => "background-position-x",
+            Self::BackgroundPositionY => "background-position-y",
             Self::FontSize => "font-size",
             Self::FontFamily => "font-family",
             Self::FontWeight => "font-weight",
@@ -174,6 +200,9 @@ impl Property {
             Self::LineHeight => "line-height",
             Self::Width => "width",
             Self::Height => "height",
+            Self::MinHeight => "min-height",
+            Self::BoxSizing => "box-sizing",
+            Self::LetterSpacing => "letter-spacing",
             Self::MarginTop => "margin-top",
             Self::MarginRight => "margin-right",
             Self::MarginBottom => "margin-bottom",
@@ -186,6 +215,8 @@ impl Property {
             Self::BorderWidth => "border-width",
             Self::BorderStyle => "border-style",
             Self::BorderColor => "border-color",
+            Self::BorderBottom => "border-bottom",
+            Self::Custom(name) => name,
             Self::Unknown(name) => name,
         }
     }
@@ -203,6 +234,7 @@ impl Property {
                 | Self::WhiteSpace
                 | Self::ListStyleType
                 | Self::ListStylePosition
+                | Self::LetterSpacing
         )
     }
 
@@ -264,6 +296,7 @@ pub struct MatchedDeclaration {
     pub source: String,
     pub specificity: Specificity,
     pub inherited: bool,
+    pub important: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -276,6 +309,7 @@ pub struct ComputedProperty {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ComputedStyle {
     pub properties: Vec<ComputedProperty>,
+    pub custom_properties: Vec<(String, PropertyValue, Option<MatchedDeclaration>)>,
 }
 
 impl ComputedStyle {
@@ -300,6 +334,11 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::ColumnGap,
     Property::Color,
     Property::BackgroundColor,
+    Property::BackgroundImage,
+    Property::BackgroundRepeat,
+    Property::BackgroundAttachment,
+    Property::BackgroundPositionX,
+    Property::BackgroundPositionY,
     Property::FontSize,
     Property::FontFamily,
     Property::FontWeight,
@@ -313,6 +352,9 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::LineHeight,
     Property::Width,
     Property::Height,
+    Property::MinHeight,
+    Property::BoxSizing,
+    Property::LetterSpacing,
     Property::MarginTop,
     Property::MarginRight,
     Property::MarginBottom,
@@ -324,6 +366,7 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::BorderWidth,
     Property::BorderStyle,
     Property::BorderColor,
+    Property::BorderBottom,
 ];
 
 /// Parses an ordinary stylesheet without panicking on malformed website CSS.
@@ -331,37 +374,76 @@ pub fn parse_stylesheet(css: &str, source: StylesheetSource) -> Stylesheet {
     let css = bounded_css(css);
     let clean = strip_comments(css);
     let mut rules = Vec::new();
+    parse_rule_block(&clean, None, &mut rules);
+    Stylesheet { source, rules }
+}
+
+fn parse_rule_block(input: &str, parent: Option<&str>, rules: &mut Vec<Rule>) {
     let mut cursor = 0usize;
-    while cursor < clean.len() && rules.len() < MAX_RULES {
-        let Some(open_rel) = clean[cursor..].find('{') else {
+    while cursor < input.len() && rules.len() < MAX_RULES {
+        let Some(open_rel) = input[cursor..].find('{') else { break };
+        let open = cursor + open_rel;
+        let selector_text = input[cursor..open].trim();
+        let Some(close) = matching_brace(input, open) else { break };
+        let selector_text = if let Some(parent) = parent {
+            selector_text.replace('&', parent)
+        } else { String::from(selector_text) };
+        let body = &input[open + 1..close];
+        let (declaration_text, nested) = split_nested_rules(body);
+        if !selector_text.is_empty() && !selector_text.starts_with('@') {
+            let selectors = selector_text.split(',').filter_map(parse_selector).collect::<Vec<_>>();
+            let declarations = parse_declarations(&declaration_text);
+            if !selectors.is_empty() && !declarations.is_empty() {
+                rules.push(Rule { selectors, declarations });
+            }
+            for (nested_selector, nested_body) in nested {
+                let combined = if nested_selector.contains('&') {
+                    nested_selector.replace('&', &selector_text)
+                } else {
+                    format!("{selector_text} {nested_selector}")
+                };
+                parse_rule_block(&format!("{combined}{{{nested_body}}}"), None, rules);
+            }
+        }
+        cursor = close + 1;
+    }
+}
+
+fn matching_brace(input: &str, open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (offset, byte) in input.as_bytes().iter().enumerate().skip(open) {
+        if *byte == b'{' { depth = depth.saturating_add(1); }
+        if *byte == b'}' {
+            depth = depth.saturating_sub(1);
+            if depth == 0 { return Some(offset); }
+        }
+        if depth > 8 { return None; }
+    }
+    None
+}
+
+fn split_nested_rules(body: &str) -> (String, Vec<(String, String)>) {
+    let mut declarations = String::new();
+    let mut nested = Vec::new();
+    let mut cursor = 0usize;
+    while cursor < body.len() {
+        let Some(open_rel) = body[cursor..].find('{') else {
+            declarations.push_str(&body[cursor..]);
             break;
         };
         let open = cursor + open_rel;
-        let selector_text = clean[cursor..open].trim();
-        let Some(close_rel) = clean[open + 1..].find('}') else {
-            break;
-        };
-        let close = open + 1 + close_rel;
+        let Some(close) = matching_brace(body, open) else { break };
+        let prefix = body[cursor..open].trim();
+        if let Some((before, selector)) = prefix.rsplit_once(';') {
+            declarations.push_str(before);
+            declarations.push(';');
+            nested.push((String::from(selector.trim()), String::from(&body[open + 1..close])));
+        } else if prefix.starts_with('&') || prefix.contains(':') || !prefix.contains(':') {
+            nested.push((String::from(prefix), String::from(&body[open + 1..close])));
+        }
         cursor = close + 1;
-        if selector_text.is_empty() || selector_text.starts_with('@') {
-            continue;
-        }
-        let selectors = selector_text
-            .split(',')
-            .filter_map(parse_selector)
-            .collect::<Vec<_>>();
-        if selectors.is_empty() {
-            continue;
-        }
-        let declarations = parse_declarations(&clean[open + 1..close]);
-        if !declarations.is_empty() {
-            rules.push(Rule {
-                selectors,
-                declarations,
-            });
-        }
     }
-    Stylesheet { source, rules }
+    (declarations, nested)
 }
 
 fn bounded_css(css: &str) -> &str {
@@ -472,12 +554,19 @@ fn parse_declarations(body: &str) -> Vec<Declaration> {
             continue;
         };
         let name = name.trim().to_ascii_lowercase();
+        let (raw_value, important) = strip_important(raw_value.trim());
+        if name == "background" {
+            for declaration in expand_background(raw_value, order, important) {
+                if out.len() < MAX_DECLARATIONS_PER_RULE { out.push(declaration); }
+            }
+            order = order.saturating_add(1);
+            continue;
+        }
         if name == "margin" || name == "padding" {
-            let raw_value = raw_value.trim();
             if raw_value.is_empty() {
                 continue;
             }
-            let declarations = expand_box_shorthand(&name, raw_value, order);
+            let declarations = expand_box_shorthand(&name, raw_value, order, important);
             order = order.saturating_add(declarations.len().max(1));
             for declaration in declarations {
                 if out.len() < MAX_DECLARATIONS_PER_RULE {
@@ -490,11 +579,10 @@ fn parse_declarations(body: &str) -> Vec<Declaration> {
         if matches!(property, Property::Unknown(_)) {
             continue;
         }
-        let raw_value = raw_value.trim();
         if raw_value.is_empty() {
             continue;
         }
-        let declarations = expand_declaration(property, raw_value, order);
+        let declarations = expand_declaration(property, raw_value, order, important);
         order = order.saturating_add(declarations.len().max(1));
         for declaration in declarations {
             if out.len() < MAX_DECLARATIONS_PER_RULE {
@@ -505,7 +593,29 @@ fn parse_declarations(body: &str) -> Vec<Declaration> {
     out
 }
 
-fn expand_box_shorthand(name: &str, raw: &str, order: usize) -> Vec<Declaration> {
+fn expand_background(raw: &str, order: usize, important: bool) -> Vec<Declaration> {
+    let mut out = Vec::new();
+    let tokens = raw.split_ascii_whitespace().collect::<Vec<_>>();
+    for token in tokens {
+        let property = if parse_color(token).is_some() || token.starts_with("var(") { Property::BackgroundColor }
+            else if token.eq_ignore_ascii_case("none") || token.starts_with("url(") { Property::BackgroundImage }
+            else if matches!(token.to_ascii_lowercase().as_str(), "repeat" | "no-repeat" | "repeat-x" | "repeat-y") { Property::BackgroundRepeat }
+            else if token.eq_ignore_ascii_case("scroll") { Property::BackgroundAttachment }
+            else { continue };
+        out.push(Declaration { property: property.clone(), value: parse_value(&property, token), raw_value: String::from(token), order, important });
+    }
+    out
+}
+
+fn strip_important(value: &str) -> (&str, bool) {
+    let trimmed = value.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.ends_with("!important") {
+        (&trimmed[..trimmed.len().saturating_sub("!important".len())].trim_end(), true)
+    } else { (trimmed, false) }
+}
+
+fn expand_box_shorthand(name: &str, raw: &str, order: usize, important: bool) -> Vec<Declaration> {
     let values = raw.split_ascii_whitespace().collect::<Vec<_>>();
     if values.is_empty() || values.len() > 4 {
         return Vec::new();
@@ -540,16 +650,18 @@ fn expand_box_shorthand(name: &str, raw: &str, order: usize) -> Vec<Declaration>
             property,
             raw_value: String::from(value),
             order,
+            important,
         })
         .collect()
 }
 
-fn expand_declaration(property: Property, raw: &str, order: usize) -> Vec<Declaration> {
+fn expand_declaration(property: Property, raw: &str, order: usize, important: bool) -> Vec<Declaration> {
     let make = |property: Property, value: &str, order| Declaration {
         property: property.clone(),
         value: parse_value(&property, value),
         raw_value: String::from(value.trim()),
         order,
+        important,
     };
     match property {
         Property::Unknown(_) => Vec::new(),
@@ -591,6 +703,7 @@ fn expand_declaration(property: Property, raw: &str, order: usize) -> Vec<Declar
                         value: PropertyValue::Color(color),
                         raw_value: String::from(part),
                         order,
+                        important,
                     });
                 } else if let Some(length) = parse_length(part) {
                     output.push(Declaration {
@@ -598,6 +711,7 @@ fn expand_declaration(property: Property, raw: &str, order: usize) -> Vec<Declar
                         value: length,
                         raw_value: String::from(part),
                         order,
+                        important,
                     });
                 } else if is_border_style(part) {
                     output.push(Declaration {
@@ -605,11 +719,29 @@ fn expand_declaration(property: Property, raw: &str, order: usize) -> Vec<Declar
                         value: PropertyValue::Keyword(part.to_ascii_lowercase()),
                         raw_value: String::from(part),
                         order,
+                        important,
                     });
                 }
             }
             output
         }
+        Property::BorderBottom => {
+            let mut output = vec![make(Property::BorderBottom, raw, order)];
+            for part in raw.split_ascii_whitespace() {
+                if parse_color(part).is_some() || part.starts_with("var(") {
+                    output.push(make(Property::BorderColor, part, order));
+                } else if parse_length(part).is_some() {
+                    output.push(make(Property::BorderWidth, part, order));
+                } else if is_border_style(part) {
+                    output.push(make(Property::BorderStyle, part, order));
+                }
+            }
+            output
+        }
+        Property::BackgroundColor | Property::BackgroundImage | Property::BackgroundRepeat
+        | Property::BackgroundAttachment | Property::BackgroundPositionX
+        | Property::BackgroundPositionY | Property::BoxSizing | Property::LetterSpacing
+        | Property::MinHeight | Property::Custom(_) => vec![make(property, raw, order)],
         _ => vec![make(property, raw, order)],
     }
 }
@@ -993,6 +1125,7 @@ fn compute_element_style(
     let mut computed = initial_style(parent);
     let mut winners: Vec<Option<(CascadeKey, MatchedDeclaration)>> =
         vec![None; PROPERTY_ORDER.len()];
+    let mut custom_winners: Vec<(String, CascadeKey, MatchedDeclaration)> = Vec::new();
     let mut source_order = 0usize;
     for (sheet_index, sheet) in sheets.iter().enumerate() {
         for rule in &sheet.rules {
@@ -1002,10 +1135,19 @@ fn compute_element_style(
                 }
                 let specificity = selector_specificity(selector);
                 for declaration in &rule.declarations {
+                    if let Property::Custom(name) = &declaration.property {
+                        let key = CascadeKey { important: declaration.important, origin: if matches!(sheet.source, StylesheetSource::UserAgent) { 0 } else { 1 }, specificity, order: source_order.saturating_add(declaration.order) };
+                        let matched = MatchedDeclaration { property: declaration.property.clone(), value: declaration.value.clone(), selector: selector.text.clone(), source: sheet.source.label(), specificity, inherited: false, important: declaration.important };
+                        if let Some(existing) = custom_winners.iter_mut().find(|entry| entry.0 == *name) {
+                            if key >= existing.1 { *existing = (name.clone(), key, matched); }
+                        } else { custom_winners.push((name.clone(), key, matched)); }
+                        continue;
+                    }
                     let Some(property_index) = property_index(&declaration.property) else {
                         continue;
                     };
                     let key = CascadeKey {
+                        important: declaration.important,
                         origin: if matches!(sheet.source, StylesheetSource::UserAgent) {
                             0
                         } else {
@@ -1021,6 +1163,7 @@ fn compute_element_style(
                         source: sheet.source.label(),
                         specificity,
                         inherited: false,
+                        important: declaration.important,
                     };
                     if winners[property_index]
                         .as_ref()
@@ -1037,6 +1180,12 @@ fn compute_element_style(
     if let Some(Node::Element { attributes, .. }) = document.get(node_id) {
         if let Some(style) = attribute_value(attributes, "style") {
             for declaration in parse_inline_style(style) {
+                if let Property::Custom(name) = &declaration.property {
+                    let key = CascadeKey { important: declaration.important, origin: 2, specificity: Specificity { ids: u16::MAX, classes: 0, tags: 0 }, order: declaration.order };
+                    let matched = MatchedDeclaration { property: declaration.property.clone(), value: declaration.value.clone(), selector: String::from("style=\"\""), source: String::from("inline style"), specificity: key.specificity, inherited: false, important: declaration.important };
+                    if let Some(existing) = custom_winners.iter_mut().find(|entry| entry.0 == *name) { if key >= existing.1 { *existing = (name.clone(), key, matched); } } else { custom_winners.push((name.clone(), key, matched)); }
+                    continue;
+                }
                 let Some(property_index) = property_index(&declaration.property) else {
                     continue;
                 };
@@ -1051,9 +1200,11 @@ fn compute_element_style(
                         tags: 0,
                     },
                     inherited: false,
+                    important: declaration.important,
                 };
                 winners[property_index] = Some((
                     CascadeKey {
+                        important: declaration.important,
                         origin: 2,
                         specificity: matched.specificity,
                         order: declaration.order,
@@ -1065,16 +1216,58 @@ fn compute_element_style(
     }
     for (index, winner) in winners.into_iter().enumerate() {
         if let Some((_, matched)) = winner {
-            computed.properties[index].value = matched.value.clone();
+            let raw = matched.raw_value();
+            let expanded = resolve_vars(&computed.custom_properties, &raw, 0, &mut Vec::new()).unwrap_or_default();
+            if expanded.eq_ignore_ascii_case("unset") {
+                computed.properties[index].value = if matched.property.is_inherited() { computed.properties[index].value.clone() } else { initial_value(&matched.property) };
+            } else if expanded.eq_ignore_ascii_case("initial") {
+                computed.properties[index].value = initial_value(&matched.property);
+            } else if expanded.eq_ignore_ascii_case("inherit") {
+                computed.properties[index].value = computed.properties[index].value.clone();
+            } else if !expanded.is_empty() { computed.properties[index].value = parse_value(&matched.property, &expanded); }
             computed.properties[index].matched = Some(matched);
         }
     }
+    for (name, _, matched) in custom_winners {
+        if let Some(existing) = computed.custom_properties.iter_mut().find(|entry| entry.0 == name) {
+            *existing = (name, matched.value.clone(), Some(matched));
+        } else { computed.custom_properties.push((name, matched.value.clone(), Some(matched))); }
+    }
     computed
+}
+
+trait MatchedRawValue { fn raw_value(&self) -> String; }
+impl MatchedRawValue for MatchedDeclaration { fn raw_value(&self) -> String { self.value.display() } }
+
+fn resolve_vars(properties: &[(String, PropertyValue, Option<MatchedDeclaration>)], input: &str, depth: usize, stack: &mut Vec<String>) -> Option<String> {
+    if depth > 16 || input.len() > 8192 { return None; }
+    let mut out = String::new();
+    let mut rest = input;
+    while let Some(start) = rest.find("var(") {
+        out.push_str(&rest[..start]);
+        let mut level = 0usize;
+        let mut end = None;
+        for (i, byte) in rest.as_bytes()[start + 4..].iter().enumerate() {
+            if *byte == b'(' { level += 1; }
+            if *byte == b')' { if level == 0 { end = Some(start + 4 + i); break } level -= 1; }
+        }
+        let end = end?;
+        let contents = &rest[start + 4..end];
+        let (name, fallback) = contents.split_once(',').map_or((contents.trim(), None), |(n, f)| (n.trim(), Some(f.trim())));
+        if !name.starts_with("--") || stack.iter().any(|item| item == name) { return fallback.and_then(|f| resolve_vars(properties, f, depth + 1, stack)).map(|v| { out.push_str(&v); rest = &rest[end + 1..]; v }); }
+        let value = properties.iter().find(|entry| entry.0 == name).map(|entry| entry.1.display());
+        let replacement = match value { Some(value) => { stack.push(String::from(name)); let result = resolve_vars(properties, &value, depth + 1, stack); stack.pop(); result }, None => fallback.and_then(|f| resolve_vars(properties, f, depth + 1, stack)) }?;
+        out.push_str(&replacement);
+        rest = &rest[end + 1..];
+    }
+    out.push_str(rest);
+    Some(out)
 }
 
 #[cfg(feature = "dom")]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct CascadeKey {
+    important: bool,
     origin: u8,
     specificity: Specificity,
     order: usize,
@@ -1119,10 +1312,11 @@ fn initial_style(parent: Option<&ComputedStyle>) -> ComputedStyle {
                     source: String::from("parent element"),
                     specificity: Specificity::default(),
                     inherited: true,
+                    important: false,
                 }),
         });
     }
-    ComputedStyle { properties }
+    ComputedStyle { properties, custom_properties: parent.map(|style| style.custom_properties.clone()).unwrap_or_default() }
 }
 
 #[cfg(feature = "dom")]
@@ -1159,7 +1353,14 @@ fn initial_value(property: &Property) -> PropertyValue {
         | Property::PaddingLeft
         | Property::BorderWidth => PropertyValue::LengthPx(0),
         Property::BorderStyle => PropertyValue::Keyword(String::from("none")),
-        Property::Border | Property::Unknown(_) => PropertyValue::Raw(String::new()),
+        Property::BackgroundImage => PropertyValue::Keyword(String::from("none")),
+        Property::BackgroundRepeat => PropertyValue::Keyword(String::from("repeat")),
+        Property::BackgroundAttachment => PropertyValue::Keyword(String::from("scroll")),
+        Property::BackgroundPositionX => PropertyValue::Keyword(String::from("0%")),
+        Property::BackgroundPositionY => PropertyValue::Keyword(String::from("0%")),
+        Property::BoxSizing => PropertyValue::Keyword(String::from("content-box")),
+        Property::MinHeight | Property::LetterSpacing => PropertyValue::LengthPx(0),
+        Property::Border | Property::BorderBottom | Property::Unknown(_) | Property::Custom(_) => PropertyValue::Raw(String::new()),
     }
 }
 
@@ -1207,6 +1408,28 @@ mod tests {
         assert_eq!(parse_color("rgb(1, 2, 3)"), Some(Color::Rgb(1, 2, 3)));
         assert_eq!(parse_color("blue"), Some(Color::Rgb(0, 0, 255)));
         assert_eq!(parse_length("12px"), Some(PropertyValue::LengthPx(12)));
+    }
+
+    #[test]
+    fn preserves_custom_properties_importance_and_nested_rules() {
+        let sheet = parse_stylesheet(
+            ":root { --archlinux-blue: #1793d1; } #archnavbar { --logo: url(arch.svg); background: var(--logo) none repeat scroll 0 0 !important; & ul { list-style: none; } }",
+            StylesheetSource::Embedded,
+        );
+        assert!(sheet.rules.iter().any(|rule| rule.selectors[0].text == "#archnavbar"));
+        assert!(sheet.rules.iter().any(|rule| rule.selectors[0].text == "#archnavbar ul"));
+        assert!(sheet.rules.iter().flat_map(|rule| rule.declarations.iter()).any(|decl| decl.important));
+        assert!(sheet.rules.iter().flat_map(|rule| rule.declarations.iter()).any(|decl| matches!(decl.property, Property::Custom(_))));
+    }
+
+    #[test]
+    fn padding_background_border_and_min_height_parse() {
+        let sheet = parse_stylesheet("nav { padding: 10px 15px !important; background: #333 none no-repeat scroll 0 0; border-bottom: 5px solid #1793d1 !important; box-sizing: unset; min-height: 40px; }", StylesheetSource::Embedded);
+        let declarations = &sheet.rules[0].declarations;
+        assert!(declarations.iter().filter(|d| matches!(d.property, Property::PaddingTop | Property::PaddingRight | Property::PaddingBottom | Property::PaddingLeft)).all(|d| d.important));
+        assert!(declarations.iter().any(|d| d.property == Property::BackgroundColor));
+        assert!(declarations.iter().any(|d| d.property == Property::BorderColor));
+        assert!(declarations.iter().any(|d| d.property == Property::MinHeight));
     }
 
     #[test]

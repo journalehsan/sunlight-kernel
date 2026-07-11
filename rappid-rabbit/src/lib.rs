@@ -16,6 +16,8 @@ pub mod images;
 #[cfg(feature = "dom")]
 pub mod render;
 pub mod resources;
+#[cfg(feature = "svg")]
+pub mod svg;
 
 pub const MAX_DISCOVERED_RESOURCES: usize = 64;
 

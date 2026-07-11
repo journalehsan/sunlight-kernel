@@ -19,6 +19,7 @@ pub enum ImageFormat {
     Png,
     Jpeg,
     Tga,
+    Svg,
     Unknown,
 }
 
@@ -28,6 +29,7 @@ impl ImageFormat {
             Self::Png => "png",
             Self::Jpeg => "jpeg",
             Self::Tga => "tga",
+            Self::Svg => "svg",
             Self::Unknown => "unknown",
         }
     }
@@ -147,6 +149,7 @@ pub fn detect_format(bytes: &[u8], content_type: Option<&str>, url: &str) -> Ima
         return ImageFormat::Tga;
     }
     let content_type = content_type.unwrap_or_default().to_ascii_lowercase();
+    if content_type.contains("image/svg") || looks_like_svg(bytes) { return ImageFormat::Svg; }
     if content_type.contains("png") {
         return ImageFormat::Png;
     }
@@ -154,7 +157,9 @@ pub fn detect_format(bytes: &[u8], content_type: Option<&str>, url: &str) -> Ima
         return ImageFormat::Jpeg;
     }
     let path = url.split('?').next().unwrap_or(url).to_ascii_lowercase();
-    if path.ends_with(".png") {
+    if path.ends_with(".svg") {
+        ImageFormat::Svg
+    } else if path.ends_with(".png") {
         ImageFormat::Png
     } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
         ImageFormat::Jpeg
@@ -163,6 +168,12 @@ pub fn detect_format(bytes: &[u8], content_type: Option<&str>, url: &str) -> Ima
     } else {
         ImageFormat::Unknown
     }
+}
+
+fn looks_like_svg(bytes: &[u8]) -> bool {
+    let sample = core::str::from_utf8(&bytes[..bytes.len().min(512)]).unwrap_or_default();
+    let sample = sample.trim_start_matches('\u{feff}').trim_start();
+    sample.starts_with("<svg") || (sample.starts_with("<?xml") && sample.contains("<svg"))
 }
 
 pub fn decode_image(
@@ -178,6 +189,12 @@ pub fn decode_image(
         ImageFormat::Png => decode_png(bytes)?,
         ImageFormat::Tga => decode_tga(bytes)?,
         ImageFormat::Jpeg => return Err(String::from("JPEG decoding is not implemented")),
+        ImageFormat::Svg => {
+            #[cfg(feature = "svg")]
+            { return Ok(DecodedImage { image: Arc::new(crate::svg::rasterize(&crate::svg::parse(bytes)?, crate::svg::SvgRasterKey { target_width: 256, target_height: 256, scale_factor: 1 })?), format, byte_size: bytes.len() }); }
+            #[cfg(not(feature = "svg"))]
+            { return Err(String::from("SVG renderer is unavailable for this target")); }
+        }
         ImageFormat::Unknown => return Err(String::from("unsupported image format")),
     };
     Ok(DecodedImage {
@@ -502,6 +519,13 @@ mod tests {
             detect_format(TINY_PNG, Some("image/jpeg"), "https://x/not-a-jpeg.jpg"),
             ImageFormat::Png
         );
+    }
+
+    #[test]
+    fn detects_svg_by_extension_content_type_and_xml_magic() {
+        assert_eq!(detect_format(b"<svg viewBox='0 0 1 1'/>", None, "x.svg"), ImageFormat::Svg);
+        assert_eq!(detect_format(b"<svg viewBox='0 0 1 1'/>", Some("image/svg+xml"), "x.bin"), ImageFormat::Svg);
+        assert_eq!(detect_format(b"<?xml version='1.0'?><svg/>", None, "x.bin"), ImageFormat::Svg);
     }
 
     #[test]
