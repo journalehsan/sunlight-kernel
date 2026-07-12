@@ -18,6 +18,15 @@ pub struct CpuState {
 }
 
 impl CpuState {
+    pub const FLAG_CF: u16 = 0x0001;
+    pub const FLAG_PF: u16 = 0x0004;
+    pub const FLAG_AF: u16 = 0x0010;
+    pub const FLAG_ZF: u16 = 0x0040;
+    pub const FLAG_SF: u16 = 0x0080;
+    pub const FLAG_IF: u16 = 0x0200;
+    pub const FLAG_DF: u16 = 0x0400;
+    pub const FLAG_OF: u16 = 0x0800;
+
     pub const fn ah(self) -> u8 {
         (self.ax >> 8) as u8
     }
@@ -93,6 +102,34 @@ impl CpuState {
             6 => self.set_dh(value),
             7 => self.set_bh(value),
             _ => unreachable!("three-bit register encoding"),
+        }
+    }
+
+    pub const fn reg8(self, index: u8) -> u8 {
+        match index {
+            0 => self.al(),
+            1 => self.cl(),
+            2 => self.dl(),
+            3 => self.bl(),
+            4 => self.ah(),
+            5 => self.ch(),
+            6 => self.dh(),
+            7 => self.bh(),
+            _ => 0,
+        }
+    }
+
+    pub const fn reg16(self, index: u8) -> u16 {
+        match index {
+            0 => self.ax,
+            1 => self.cx,
+            2 => self.dx,
+            3 => self.bx,
+            4 => self.sp,
+            5 => self.bp,
+            6 => self.si,
+            7 => self.di,
+            _ => 0,
         }
     }
 

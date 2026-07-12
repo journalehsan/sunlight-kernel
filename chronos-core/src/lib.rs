@@ -18,6 +18,9 @@ mod text_mode;
 pub use cpu::CpuState;
 pub use loader::{load_com, LoaderError, PSP_SEGMENT};
 pub use memory::{GuestMemory, MemoryError, MEMORY_SIZE};
-pub use runtime::{GuestState, Runtime, Trap};
-pub use sample::HELLO_CHRONOS_COM;
-pub use text_mode::{display_char, TextCell, TextModeSurface, TEXT_COLUMNS, TEXT_ROWS};
+pub use runtime::{translate_key_press, BiosKey, GuestState, HostKeyEvent, Runtime, Trap};
+pub use sample::{CHRONOS_INTERACTIVE_COM, HELLO_CHRONOS_COM};
+pub use text_mode::{
+    display_char, TextCell, TextModeSurface, DEFAULT_ATTRIBUTE, TEXT_COLUMNS, TEXT_ROWS,
+    VIDEO_BYTES, VIDEO_PHYSICAL, VIDEO_SEGMENT,
+};

@@ -1,3 +1,4 @@
+use crate::text_mode::{TEXT_ROWS, VIDEO_BYTES, VIDEO_PHYSICAL};
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -13,12 +14,14 @@ pub enum MemoryError {
 /// Safe, one-megabyte guest memory with 20-bit real-mode address wrapping.
 pub struct GuestMemory {
     bytes: Vec<u8>,
+    video_dirty_rows: [bool; TEXT_ROWS],
 }
 
 impl GuestMemory {
     pub fn new() -> Self {
         Self {
             bytes: vec![0; MEMORY_SIZE],
+            video_dirty_rows: [true; TEXT_ROWS],
         }
     }
 
@@ -42,6 +45,7 @@ impl GuestMemory {
     pub fn write_u8(&mut self, segment: u16, offset: u16, value: u8) {
         let address = Self::physical_address(segment, offset);
         self.bytes[address] = value;
+        self.mark_video_dirty(address);
     }
 
     pub fn read_u16(&self, segment: u16, offset: u16) -> u16 {
@@ -89,9 +93,23 @@ impl GuestMemory {
 
         let start = Self::physical_address(segment, offset);
         for (index, &byte) in source.iter().enumerate() {
-            self.bytes[Self::wrapped_address(start + index)] = byte;
+            let address = Self::wrapped_address(start + index);
+            self.bytes[address] = byte;
+            self.mark_video_dirty(address);
         }
         Ok(())
+    }
+
+    pub fn take_video_dirty(&mut self) -> [bool; TEXT_ROWS] {
+        let dirty = self.video_dirty_rows;
+        self.video_dirty_rows = [false; TEXT_ROWS];
+        dirty
+    }
+
+    fn mark_video_dirty(&mut self, address: usize) {
+        if (VIDEO_PHYSICAL..VIDEO_PHYSICAL + VIDEO_BYTES).contains(&address) {
+            self.video_dirty_rows[(address - VIDEO_PHYSICAL) / (80 * 2)] = true;
+        }
     }
 }
 
