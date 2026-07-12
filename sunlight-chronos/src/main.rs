@@ -10,25 +10,25 @@ use chronos_core::{
     display_char, translate_key_press, BiosKey, GuestState, HostKeyEvent, Runtime,
     CHRONOS_INTERACTIVE_COM,
 };
-use sun_font::{draw_text, FontRole, TextStyle};
+use sun_font::{draw_text, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{debug_log, monotonic_millis};
 #[cfg(not(test))]
 use sunlight_ipc::{process_yield, ProcessExit};
-use sunlight_ui::{
-    widgets::{Panel, StatusBar},
-    App, Canvas, Event, Rect, Theme,
-};
+use sunlight_ui::{widgets::Panel, App, Canvas, Color, Event, Rect, Theme};
 #[cfg(not(test))]
 use sunlight_ui::{Window, WindowConfig, WindowDecoration};
 
-const WIN_W: u32 = 800;
-const WIN_H: u32 = 560;
-const HEADER_H: u32 = 38;
-const FOOTER_H: u32 = StatusBar::HEIGHT;
-const PAD: i32 = 16;
-const TEXT_CELL_W: i32 = 8;
-const TEXT_CELL_H: i32 = 16;
+const WIN_W: u32 = 840;
+const WIN_H: u32 = 592;
+const HEADER_H: u32 = 48;
+const FOOTER_H: u32 = 24;
+const PAD: i32 = 18;
+const SURFACE_INSET: i32 = 6;
+const DOS_CELL_W: i32 = 9;
+const DOS_CELL_H: i32 = 16;
 const INSTRUCTIONS_PER_TICK: usize = 128;
+const DOS_SURFACE: Color = Color::rgb(12, 20, 37);
+const DOS_CURSOR: Color = Color::rgb(255, 181, 71);
 
 #[cfg(not(test))]
 struct BumpAllocator;
@@ -98,22 +98,23 @@ impl ChronosApp {
     }
 
     fn status_text(&self) -> &str {
-        core::str::from_utf8(&self.status[..self.status_len]).unwrap_or("Guest trapped")
+        core::str::from_utf8(&self.status[..self.status_len]).unwrap_or("Guest Trapped")
     }
 
     fn update_status_from_runtime(&mut self) -> bool {
         match self.runtime.state().clone() {
-            GuestState::Ready | GuestState::Running => self.set_status(b"Running"),
-            GuestState::WaitingForInput => self.set_status(b"Waiting for input"),
+            GuestState::Ready => self.set_status(b"Ready"),
+            GuestState::Running => self.set_status(b"Running"),
+            GuestState::WaitingForInput => self.set_status(b"Waiting for Input"),
             GuestState::Exited { code } => {
                 let mut status = [0; 32];
                 let mut length = copy_bytes(b"Exited with code ", &mut status);
                 length += write_decimal_u8(code, &mut status[length..]);
                 self.set_status(&status[..length])
             }
-            GuestState::Halted => self.set_status(b"Guest halted"),
+            GuestState::Halted => self.set_status(b"Guest Halted"),
             GuestState::Trapped(trap) => {
-                let changed = self.set_status(b"Guest trapped");
+                let changed = self.set_status(b"Guest Trapped");
                 if !self.trap_logged {
                     log_trap(&trap);
                     self.trap_logged = true;
@@ -124,11 +125,14 @@ impl ChronosApp {
     }
 
     fn draw_text_surface(&self, canvas: &mut Canvas, rect: Rect, theme: &Theme) {
-        canvas.fill_rect(rect, dos_color(0));
+        canvas.fill_rect(rect, theme.panel_alt);
         canvas.draw_rect(rect, theme.border);
+        let surface = rect.inset(SURFACE_INSET);
+        canvas.fill_rect(surface, DOS_SURFACE);
+        canvas.draw_rect(surface, dos_color(8));
 
-        let x0 = rect.x + ((rect.w as i32 - 80 * TEXT_CELL_W) / 2).max(0);
-        let y0 = rect.y + ((rect.h as i32 - 25 * TEXT_CELL_H) / 2).max(0);
+        let x0 = surface.x + ((surface.w as i32 - 80 * DOS_CELL_W) / 2).max(0);
+        let y0 = surface.y + ((surface.h as i32 - 25 * DOS_CELL_H) / 2).max(0);
         draw_surface_cells(canvas, &self.runtime, x0, y0);
         if self.cursor_visible
             && matches!(
@@ -136,25 +140,69 @@ impl ChronosApp {
                 GuestState::WaitingForInput | GuestState::Running
             )
         {
-            let cursor_x = x0 + self.runtime.cursor_column() as i32 * TEXT_CELL_W;
-            let cursor_y = y0 + self.runtime.cursor_row() as i32 * TEXT_CELL_H + TEXT_CELL_H - 2;
+            let cursor_x = x0 + self.runtime.cursor_column() as i32 * DOS_CELL_W;
+            let cursor_y = y0 + self.runtime.cursor_row() as i32 * DOS_CELL_H + DOS_CELL_H - 2;
             canvas.fill_rect(
-                Rect::new(cursor_x, cursor_y, TEXT_CELL_W as u32 - 1, 1),
-                dos_color(15),
+                Rect::new(cursor_x, cursor_y, DOS_CELL_W as u32, 2),
+                DOS_CURSOR,
             );
         }
+    }
+
+    fn draw_status_bar(&self, canvas: &mut Canvas, theme: &Theme) {
+        let rect = Rect::new(0, WIN_H as i32 - FOOTER_H as i32, WIN_W, FOOTER_H);
+        let small = FontRole::UiSmall;
+        canvas.fill_rect(rect, theme.panel_alt);
+        canvas.hbar(rect.x, rect.y, rect.w, 1, theme.border);
+
+        let text_y = rect.y + (rect.h as i32 - measure_text("Ag", small).h as i32) / 2;
+        draw_text(
+            canvas,
+            "DOS .COM",
+            rect.x + 10,
+            text_y,
+            &TextStyle::new(small, theme.text_dim),
+        );
+
+        let status_size = measure_text(self.status_text(), small);
+        draw_text(
+            canvas,
+            self.status_text(),
+            rect.x + (rect.w as i32 - status_size.w as i32) / 2,
+            text_y,
+            &TextStyle::new(small, theme.text),
+        );
+
+        let runtime_hint = "INT 16h / B8000";
+        let hint_size = measure_text(runtime_hint, small);
+        draw_text(
+            canvas,
+            runtime_hint,
+            rect.right() - hint_size.w as i32 - 10,
+            text_y,
+            &TextStyle::new(small, theme.text_dim),
+        );
     }
 }
 
 impl App for ChronosApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
-        Panel::with_title(
-            Rect::new(0, 0, WIN_W, HEADER_H),
+        Panel::new(Rect::new(0, 0, WIN_W, HEADER_H)).draw(canvas, theme);
+        draw_text(
+            canvas,
             "Chronos - Sunlight DOS Terminal",
-        )
-        .draw(canvas, theme);
-        canvas.draw_text(16, 12, "16-bit real-mode guest", theme.text_dim);
+            PAD,
+            7,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+        draw_text(
+            canvas,
+            "16-bit real-mode guest",
+            PAD,
+            25,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
 
         let text_rect = Rect::new(
             PAD,
@@ -163,19 +211,17 @@ impl App for ChronosApp {
             WIN_H - HEADER_H - FOOTER_H - PAD as u32 * 2,
         );
         self.draw_text_surface(canvas, text_rect, theme);
-        StatusBar::new(
-            Rect::new(0, WIN_H as i32 - FOOTER_H as i32, WIN_W, FOOTER_H),
-            "DOS .COM",
-            self.status_text(),
-            "INT 16h / B8000",
-        )
-        .draw(canvas, theme);
+        self.draw_status_bar(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Tick => {
-                let cursor_visible = (monotonic_millis() / 500) % 2 == 0;
+                let cursor_active = matches!(
+                    self.runtime.state(),
+                    GuestState::WaitingForInput | GuestState::Running
+                );
+                let cursor_visible = cursor_active && (monotonic_millis() / 500) % 2 == 0;
                 let cursor_changed = self.cursor_visible != cursor_visible;
                 self.cursor_visible = cursor_visible;
                 if matches!(
@@ -188,9 +234,9 @@ impl App for ChronosApp {
                     cursor_changed
                 }
             }
-            Event::Key(ch) if ch.is_ascii() => {
+            Event::Key(ch) if ch.is_ascii_graphic() || ch == ' ' => {
                 self.runtime.inject_key(BiosKey {
-                    ascii: if ch == '\n' { b'\r' } else { ch as u8 },
+                    ascii: ch as u8,
                     scan_code: 0,
                 });
                 self.update_status_from_runtime()
@@ -211,7 +257,7 @@ impl App for ChronosApp {
                     ctrl,
                     alt,
                 });
-                if let Some(key) = key {
+                if let Some(key) = key.filter(|key| key.ascii == 0 || key.ascii < 0x20) {
                     self.runtime.inject_key(key);
                     self.update_status_from_runtime()
                 } else {
@@ -329,10 +375,10 @@ fn draw_surface_cells(canvas: &mut Canvas, runtime: &Runtime, x0: i32, y0: i32) 
             let foreground = dos_color(cell.attribute & 0x0f);
             canvas.fill_rect(
                 Rect::new(
-                    x0 + column as i32 * TEXT_CELL_W,
-                    y0 + row as i32 * TEXT_CELL_H,
-                    TEXT_CELL_W as u32,
-                    TEXT_CELL_H as u32,
+                    x0 + column as i32 * DOS_CELL_W,
+                    y0 + row as i32 * DOS_CELL_H,
+                    DOS_CELL_W as u32,
+                    DOS_CELL_H as u32,
                 ),
                 background,
             );
@@ -342,8 +388,8 @@ fn draw_surface_cells(canvas: &mut Canvas, runtime: &Runtime, x0: i32, y0: i32) 
                 draw_text(
                     canvas,
                     text,
-                    x0 + column as i32 * TEXT_CELL_W,
-                    y0 + row as i32 * TEXT_CELL_H,
+                    x0 + column as i32 * DOS_CELL_W,
+                    y0 + row as i32 * DOS_CELL_H,
                     &TextStyle::new(FontRole::MonoRegular, foreground),
                 );
             }
@@ -353,22 +399,22 @@ fn draw_surface_cells(canvas: &mut Canvas, runtime: &Runtime, x0: i32, y0: i32) 
 
 fn dos_color(index: u8) -> sunlight_ui::Color {
     const COLORS: [(u8, u8, u8); 16] = [
-        (14, 23, 36),
-        (66, 108, 173),
-        (61, 151, 120),
-        (62, 154, 175),
-        (190, 94, 104),
-        (174, 103, 169),
-        (188, 143, 85),
-        (205, 215, 228),
-        (83, 101, 124),
-        (112, 165, 232),
-        (111, 208, 157),
-        (111, 202, 225),
-        (242, 128, 137),
-        (215, 137, 208),
-        (243, 202, 119),
-        (245, 249, 255),
+        (12, 20, 37),
+        (71, 108, 174),
+        (70, 151, 122),
+        (72, 158, 181),
+        (188, 91, 108),
+        (175, 105, 168),
+        (193, 137, 74),
+        (203, 214, 229),
+        (76, 95, 121),
+        (111, 162, 230),
+        (107, 205, 155),
+        (106, 198, 222),
+        (242, 125, 140),
+        (212, 136, 207),
+        (248, 190, 102),
+        (244, 248, 255),
     ];
     let (red, green, blue) = COLORS[index as usize & 0x0f];
     sunlight_ui::Color::rgb(red, green, blue)
@@ -395,8 +441,96 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
 
 #[cfg(test)]
 mod tests {
-    use super::ChronosApp;
+    use super::{dos_color, ChronosApp, DOS_CELL_W, DOS_SURFACE};
     use chronos_core::{BiosKey, GuestState};
+    use sun_font::{measure_text, FontRole};
+    use sunlight_ui::{App, Event};
+
+    #[test]
+    fn status_text_uses_the_precise_waiting_state() {
+        let mut app = ChronosApp::new();
+        assert_eq!(app.status_text(), "Ready");
+
+        app.runtime.run_slice(1024);
+        assert!(app.update_status_from_runtime());
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(app.status_text(), "Waiting for Input");
+    }
+
+    #[test]
+    fn printable_text_and_enter_use_separate_host_event_paths() {
+        let mut app = ChronosApp::new();
+        app.runtime.run_slice(1024);
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+
+        assert!(!app.update(Event::Key('\n')));
+        assert_eq!(app.runtime.cursor_column(), 0);
+        assert!(app.update(Event::KeyPress {
+            keycode: 0x1c,
+            pressed: true,
+            shift: false,
+            ctrl: false,
+            alt: false,
+            super_key: false,
+        }));
+        app.update(Event::Tick);
+        assert_eq!(
+            (app.runtime.cursor_column(), app.runtime.cursor_row()),
+            (0, 7)
+        );
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+    }
+
+    #[test]
+    fn raw_printable_key_events_do_not_duplicate_text_input() {
+        let mut app = ChronosApp::new();
+        app.runtime.run_slice(1024);
+
+        assert!(!app.update(Event::KeyPress {
+            keycode: 0x39,
+            pressed: true,
+            shift: false,
+            ctrl: false,
+            alt: false,
+            super_key: false,
+        }));
+        assert!(app.update(Event::Key('A')));
+        app.update(Event::Tick);
+
+        assert_eq!(app.runtime.cell(0, 6).character, b'A');
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(
+            (app.runtime.cursor_column(), app.runtime.cursor_row()),
+            (1, 6)
+        );
+    }
+
+    #[test]
+    fn dos_grid_uses_fixed_fira_code_cell_widths() {
+        assert_eq!(
+            measure_text("MM", FontRole::MonoRegular).w,
+            (DOS_CELL_W * 2) as u32
+        );
+    }
+
+    #[test]
+    fn dos_palette_keeps_a_navy_surface_and_distinct_dos_colors() {
+        assert_eq!(dos_color(0), DOS_SURFACE);
+        assert_ne!(dos_color(0), dos_color(1));
+        assert_ne!(dos_color(7), dos_color(15));
+        assert!(dos_color(15).r() > dos_color(0).r());
+    }
+
+    #[test]
+    fn idle_cursor_ticks_do_not_wake_a_blocked_guest() {
+        let mut app = ChronosApp::new();
+        app.runtime.run_slice(1024);
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+
+        app.update(Event::Tick);
+        app.update(Event::Tick);
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+    }
 
     #[test]
     fn bundled_interactive_guest_waits_and_exits_from_guest_keyboard_input() {

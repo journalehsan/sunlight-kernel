@@ -1243,6 +1243,65 @@ mod tests {
     }
 
     #[test]
+    fn teletype_places_characters_before_advancing_the_cursor() {
+        let mut runtime = runtime_for(&[]);
+        runtime.set_cursor(0, 0);
+
+        runtime.teletype(b'A', 0x1f);
+        runtime.teletype(b'B', 0x1f);
+
+        assert_eq!(runtime.cell(0, 0).character, b'A');
+        assert_eq!(runtime.cell(1, 0).character, b'B');
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (2, 0));
+    }
+
+    #[test]
+    fn teletype_cr_lf_and_backspace_keep_cursor_and_cells_in_sync() {
+        let mut runtime = runtime_for(&[]);
+        runtime.set_cursor(5, 3);
+
+        runtime.teletype(b'\r', 0x07);
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (0, 3));
+        runtime.teletype(b'\n', 0x07);
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (0, 4));
+
+        runtime.teletype(b'X', 0x1e);
+        runtime.teletype(b'Y', 0x1e);
+        runtime.teletype(0x08, 0x1e);
+        assert_eq!(runtime.cell(0, 4).character, b'X');
+        assert_eq!(runtime.cell(1, 4).character, b' ');
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (1, 4));
+    }
+
+    #[test]
+    fn teletype_wraps_only_after_writing_the_rightmost_cell() {
+        let mut runtime = runtime_for(&[]);
+        runtime.set_cursor(79, 0);
+
+        runtime.teletype(b'Z', 0x2f);
+        assert_eq!(runtime.cell(79, 0).character, b'Z');
+        assert_eq!(runtime.cell(79, 0).attribute, 0x2f);
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (0, 1));
+
+        runtime.teletype(b'N', 0x2f);
+        assert_eq!(runtime.cell(0, 1).character, b'N');
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (1, 1));
+    }
+
+    #[test]
+    fn teletype_scrolls_after_the_bottom_right_cell() {
+        let mut runtime = runtime_for(&[]);
+        runtime.put_cell(0, 1, b'K', 0x07);
+        runtime.set_cursor(79, 24);
+
+        runtime.teletype(b'Z', 0x07);
+
+        assert_eq!(runtime.cell(0, 0).character, b'K');
+        assert_eq!(runtime.cell(79, 23).character, b'Z');
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (0, 24));
+    }
+
+    #[test]
     fn test_and_xchg_follow_guest_visible_register_and_flag_rules() {
         let mut runtime = runtime_for(&[0xb8, 0xf0, 0x00, 0xbb, 0x0f, 0x00, 0x85, 0xd8, 0x93]);
         runtime.run_slice(4);

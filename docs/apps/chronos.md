@@ -49,8 +49,35 @@ Cursor state is synchronized among those fields, BIOS calls, and rendering.
 repeated character writes, teletype, and mode reporting. The native renderer
 uses all sixteen standard DOS colors; attribute bit 7 is treated as VGA blink
 semantics visually ignored for now (background remains bits 4–6). CP437
-conversion is modular and includes common box-drawing glyphs. The native text
-grid uses the MiniType `MonoRegular` Fira Code face at a larger 8×16 cell size.
+conversion is modular and includes common box-drawing glyphs.
+
+## Prompt 2.5 Polish
+
+The native window identity is consistently **Chronos - Sunlight DOS Terminal**,
+with the compact **16-bit real-mode guest** subtitle. The chrome uses MiniType
+UI text, while the 80×25 DOS surface uses the embedded MiniType `MonoRegular`
+Fira Code asset with fixed 9×16 cell metrics. This keeps DOS glyph placement
+cell-perfect without relying on proportional layout or ligatures.
+
+The DOS palette is a deep SunlightOS navy/indigo surface rather than harsh
+black, while retaining differentiated DOS attribute colors and a restrained
+orange cursor accent. The grid is framed with the existing SunlightOS panel
+and border language; no gradients or non-terminal decoration are applied to
+guest cells.
+
+Printable teletype output writes the current cell before advancing exactly one
+column. CR sets column zero, LF preserves the column and advances a row, CR/LF
+therefore starts the next line correctly, Backspace clears one valid preceding
+cell, and automatic wrap or scrolling occurs only after the rightmost cell is
+written. BIOS cursor state, BDA cursor state, and the native caret share this
+single logical cursor model. Direct B8000 writes remain authoritative for
+cells and deliberately do not invent cursor movement.
+
+The status bar reports `Ready`, `Running`, `Waiting for Input`, `Exited with
+code N`, `Guest Halted`, or `Guest Trapped` from the actual runtime state.
+Waiting guests execute no slices; cursor blinking is host-side only and does
+not wake the blocked guest. The UI only requests frames for guest/state changes
+or the normal 500 ms caret phase change.
 
 ## Input
 
