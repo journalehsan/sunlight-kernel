@@ -11,6 +11,7 @@ pub const MAX_RULES: usize = 1_024;
 pub const MAX_SELECTOR_LENGTH: usize = 256;
 pub const MAX_DECLARATIONS_PER_RULE: usize = 128;
 pub const MAX_DESCENDANT_DEPTH: usize = 32;
+pub const MAX_NESTING_DEPTH: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stylesheet {
@@ -52,6 +53,15 @@ pub struct Selector {
     /// The original source form when this selector came from CSS nesting (e.g. "& ul").
     /// None for top-level selectors.
     pub original_text: Option<String>,
+    /// Combinator between each adjacent pair of parts.  A missing entry is
+    /// never allowed; the vector is always parts.len() - 1 long.
+    pub combinators: Vec<Combinator>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Combinator {
+    Descendant,
+    Child,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -60,6 +70,8 @@ pub struct SimpleSelector {
     pub id: Option<String>,
     pub classes: Vec<String>,
     pub universal: bool,
+    pub root: bool,
+    pub hover: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,7 +136,11 @@ pub enum Property {
 
 impl Property {
     pub fn parse(name: &str) -> Self {
-        match name.trim().to_ascii_lowercase().as_str() {
+        let trimmed = name.trim();
+        if trimmed.starts_with("--") {
+            return Self::Custom(String::from(trimmed));
+        }
+        match trimmed.to_ascii_lowercase().as_str() {
             "display" => Self::Display,
             "flex-direction" => Self::FlexDirection,
             "flex-wrap" => Self::FlexWrap,
@@ -170,7 +186,6 @@ impl Property {
             "border-style" => Self::BorderStyle,
             "border-color" => Self::BorderColor,
             "border-bottom" => Self::BorderBottom,
-            other if other.starts_with("--") => Self::Custom(String::from(other)),
             other => Self::Unknown(String::from(other)),
         }
     }
@@ -412,6 +427,20 @@ fn parse_rule_block(
             break;
         };
         let open = cursor + open_rel;
+
+        // A stylesheet may start with statement at-rules, most commonly an
+        // @import, before its first qualified rule.  Do not let that
+        // statement become part of the next selector prelude (which would
+        // make the complete qualified rule look like an unsupported at-rule).
+        // Keep this deliberately narrow: only a semicolon-terminated at-rule
+        // is skipped here; block at-rules are handled below.
+        if let Some(statement_rel) = input[cursor..open].find(';') {
+            let statement_end = cursor + statement_rel;
+            if input[cursor..statement_end].trim_start().starts_with('@') {
+                cursor = statement_end + 1;
+                continue;
+            }
+        }
         let selector_text_raw = input[cursor..open].trim();
         let loc = location_from_offset(original_for_lines, cursor);
         let Some(close) = matching_brace(input, open) else {
@@ -424,7 +453,14 @@ fn parse_rule_block(
         };
         let body = &input[open + 1..close];
         let (declaration_text, nested) = split_nested_rules(body);
-        if !selector_text.is_empty() && !selector_text.starts_with('@') {
+        if !selector_text.is_empty() && selector_text.starts_with('@') {
+            // Preserve the useful qualified rules inside container at-rules.
+            // Media/supports/layer evaluation is intentionally outside this
+            // parser; callers currently provide the active document sheet.
+            // At-rules with declaration bodies (for example @font-face) have
+            // no nested opening brace and consequently produce no rules.
+            parse_rule_block(body, parent, rules, original_for_lines);
+        } else if !selector_text.is_empty() {
             let selectors: Vec<Selector> = selector_text
                 .split(',')
                 .filter_map(|s| {
@@ -559,6 +595,9 @@ fn strip_comments(css: &str) -> String {
             rest = "";
             break;
         };
+        // A comment between selector components is whitespace in CSS.  Keep
+        // that separator so `#nav/**/ul` remains a descendant selector.
+        result.push(' ');
         rest = &after[end + 2..];
     }
     result.push_str(rest);
@@ -575,17 +614,56 @@ fn parse_selector_with_original(input: &str, original: Option<String>) -> Option
         return None;
     }
     let mut parts = Vec::new();
-    for raw_part in text.split_ascii_whitespace() {
-        let simple = parse_simple_selector(raw_part)?;
-        parts.push(simple);
-        if parts.len() > MAX_DESCENDANT_DEPTH {
-            return None;
+    let mut combinators = Vec::new();
+    let mut token = String::new();
+    let mut pending = None;
+    let mut flush = |token: &mut String,
+                     pending: &mut Option<Combinator>,
+                     parts: &mut Vec<SimpleSelector>,
+                     combinators: &mut Vec<Combinator>|
+     -> Option<()> {
+        if token.is_empty() {
+            return Some(());
         }
+        if !parts.is_empty() {
+            combinators.push(pending.take().unwrap_or(Combinator::Descendant));
+        } else {
+            pending.take();
+        }
+        parts.push(parse_simple_selector(token)?);
+        token.clear();
+        Some(())
+    };
+    let mut saw_space = false;
+    for byte in text.as_bytes().iter().copied() {
+        match byte {
+            b' ' | b'\t' | b'\r' | b'\n' => saw_space = true,
+            b'>' => {
+                flush(&mut token, &mut pending, &mut parts, &mut combinators)?;
+                pending = Some(Combinator::Child);
+                saw_space = false;
+            }
+            _ => {
+                if saw_space && !token.is_empty() && pending.is_none() {
+                    flush(&mut token, &mut pending, &mut parts, &mut combinators)?;
+                }
+                token.push(byte as char);
+                saw_space = false;
+            }
+        }
+    }
+    flush(&mut token, &mut pending, &mut parts, &mut combinators)?;
+    if combinators.len() + 1 != parts.len() {
+        return None;
+    }
+    if parts.len() > MAX_DESCENDANT_DEPTH {
+        return None;
     }
     (!parts.is_empty()).then(|| Selector {
         parts,
         text: String::from(text),
         original_text: original,
+        combinators,
     })
 }
 
@@ -626,6 +704,20 @@ fn parse_simple_selector(input: &str) -> Option<SimpleSelector> {
     }
     while index < input.len() {
         let marker = *bytes.get(index)?;
+        if marker == b':' {
+            let pseudo = &input[index + 1..];
+            if pseudo.eq_ignore_ascii_case("root") {
+                out.root = true;
+                index = input.len();
+                continue;
+            }
+            if pseudo.eq_ignore_ascii_case("hover") {
+                out.hover = true;
+                index = input.len();
+                continue;
+            }
+            return None;
+        }
         if marker != b'.' && marker != b'#' {
             return None;
         }
@@ -650,8 +742,13 @@ fn parse_simple_selector(input: &str) -> Option<SimpleSelector> {
             out.classes.push(name);
         }
     }
-    (out.universal || out.tag_name.is_some() || out.id.is_some() || !out.classes.is_empty())
-        .then_some(out)
+    (out.universal
+        || out.root
+        || out.hover
+        || out.tag_name.is_some()
+        || out.id.is_some()
+        || !out.classes.is_empty())
+    .then_some(out)
 }
 
 fn parse_declarations(body: &str) -> Vec<Declaration> {
@@ -664,7 +761,7 @@ fn parse_declarations(body: &str) -> Vec<Declaration> {
         let Some((name, raw_value)) = segment.split_once(':') else {
             continue;
         };
-        let name = name.trim().to_ascii_lowercase();
+        let name = name.trim();
         let (raw_value, important) = strip_important(raw_value.trim());
         if name == "background" {
             for declaration in expand_background(raw_value, order, important) {
@@ -865,6 +962,12 @@ fn expand_declaration(
         }
         Property::BorderBottom => {
             let mut output = vec![make(Property::BorderBottom, raw, order)];
+            // A var() may contain the complete shorthand, so derived longhand
+            // candidates must be produced after substitution, not from the
+            // unspecialized token stream.
+            if raw.trim_start().starts_with("var(") {
+                return output;
+            }
             for part in raw.split_ascii_whitespace() {
                 if parse_color(part).is_some() || part.starts_with("var(") {
                     output.push(make(Property::BorderColor, part, order));
@@ -892,6 +995,9 @@ fn expand_declaration(
 
 fn parse_value(property: &Property, raw: &str) -> PropertyValue {
     let value = raw.trim();
+    if property == &Property::BackgroundImage {
+        return PropertyValue::Raw(String::from(value));
+    }
     if matches!(
         property,
         Property::Color | Property::BackgroundColor | Property::BorderColor
@@ -913,6 +1019,7 @@ fn parse_value(property: &Property, raw: &str) -> PropertyValue {
             | Property::PaddingLeft
             | Property::Width
             | Property::Height
+            | Property::MinHeight
             | Property::FontSize
             | Property::LineHeight
             | Property::BorderWidth
@@ -1204,25 +1311,40 @@ pub fn selector_matches(document: &Document, node_id: NodeId, selector: &Selecto
         return false;
     }
     let mut current = node_id;
-    for part in selector.parts[..selector.parts.len().saturating_sub(1)]
-        .iter()
-        .rev()
-    {
-        let mut found = None;
-        for _ in 0..MAX_DESCENDANT_DEPTH {
-            let Some(parent) = document.parent(current) else {
-                break;
-            };
-            current = parent;
-            if simple_selector_matches(document, current, part) {
-                found = Some(current);
-                break;
+    for index in (0..selector.parts.len().saturating_sub(1)).rev() {
+        let part = &selector.parts[index];
+        let combinator = selector
+            .combinators
+            .get(index)
+            .copied()
+            .unwrap_or(Combinator::Descendant);
+        match combinator {
+            Combinator::Child => {
+                let Some(parent) = document.parent(current) else {
+                    return false;
+                };
+                if !simple_selector_matches(document, parent, part) {
+                    return false;
+                }
+                current = parent;
+            }
+            Combinator::Descendant => {
+                let mut found = None;
+                for _ in 0..MAX_DESCENDANT_DEPTH {
+                    let Some(parent) = document.parent(current) else {
+                        break;
+                    };
+                    current = parent;
+                    if simple_selector_matches(document, current, part) {
+                        found = Some(current);
+                        break;
+                    }
+                }
+                if found.is_none() {
+                    return false;
+                }
             }
         }
-        let Some(ancestor) = found else {
-            return false;
-        };
-        current = ancestor;
     }
     true
 }
@@ -1241,6 +1363,19 @@ fn simple_selector_matches(
     else {
         return false;
     };
+    if selector.hover {
+        // Static style computation has no pointer state.  Keep the rule in
+        // the stylesheet for DevTools and let the interactive state layer
+        // opt into it when it has a hovered node.
+        return false;
+    }
+    if selector.root
+        && !document
+            .parent(node_id)
+            .is_some_and(|parent| matches!(document.get(parent), Some(Node::Document { .. })))
+    {
+        return false;
+    }
     if let Some(expected) = &selector.tag_name {
         if !tag_name.eq_ignore_ascii_case(expected) {
             return false;
@@ -1418,6 +1553,25 @@ fn compute_element_style(
             }
         }
     }
+    // Install declarations from this element before resolving ordinary
+    // properties.  Custom properties are inherited, but declarations on the
+    // consuming element are also visible to var() in that same element.
+    for (name, _, matched) in &custom_winners {
+        if let Some(existing) = computed
+            .custom_properties
+            .iter_mut()
+            .find(|entry| entry.0 == *name)
+        {
+            *existing = (name.clone(), matched.value.clone(), Some(matched.clone()));
+        } else {
+            computed.custom_properties.push((
+                name.clone(),
+                matched.value.clone(),
+                Some(matched.clone()),
+            ));
+        }
+    }
+
     for (index, winner) in winners.into_iter().enumerate() {
         if let Some((_, matched)) = winner {
             let raw = matched.raw_value();
@@ -1435,6 +1589,43 @@ fn compute_element_style(
                 computed.properties[index].value = computed.properties[index].value.clone();
             } else if !expanded.is_empty() {
                 computed.properties[index].value = parse_value(&matched.property, &expanded);
+            }
+            if matched.property == Property::BorderBottom && !expanded.is_empty() {
+                // A custom property can contain the complete border value;
+                // expand it only after var() substitution so `5px solid
+                // var(--color)` follows the normal border grammar.
+                for token in expanded.split_ascii_whitespace() {
+                    let (property, value) = if parse_color(token).is_some() {
+                        (
+                            Property::BorderColor,
+                            parse_value(&Property::BorderColor, token),
+                        )
+                    } else if parse_length(token).is_some() {
+                        (
+                            Property::BorderWidth,
+                            parse_value(&Property::BorderWidth, token),
+                        )
+                    } else if is_border_style(token) {
+                        (
+                            Property::BorderStyle,
+                            parse_value(&Property::BorderStyle, token),
+                        )
+                    } else {
+                        continue;
+                    };
+                    if let Some(derived) = computed
+                        .properties
+                        .iter_mut()
+                        .find(|entry| entry.property == property)
+                    {
+                        if derived.matched.is_none()
+                            || derived.matched.as_ref().is_some_and(|m| m.inherited)
+                        {
+                            derived.value = value;
+                            derived.matched = Some(matched.clone());
+                        }
+                    }
+                }
             }
             computed.properties[index].matched = Some(matched);
         }
@@ -1542,7 +1733,8 @@ fn selector_specificity(selector: &Selector) -> Specificity {
         specificity.ids = specificity.ids.saturating_add(part.id.is_some() as u16);
         specificity.classes = specificity
             .classes
-            .saturating_add(part.classes.len() as u16);
+            .saturating_add(part.classes.len() as u16)
+            .saturating_add((part.root || part.hover) as u16);
         specificity.tags = specificity
             .tags
             .saturating_add(part.tag_name.is_some() as u16);
@@ -1908,5 +2100,287 @@ mod tests {
             context.style_for(p).unwrap().value(&Property::Color),
             Some(&PropertyValue::Color(Color::Rgb(0, 0, 255)))
         );
+    }
+
+    #[cfg(feature = "dom")]
+    #[test]
+    fn arch_nested_fixture_reaches_computed_style() {
+        let document = parse_html(include_str!("../tests/fixtures/arch-navbar.html")).unwrap();
+        let context = StyleContext::build(&document, &collect_embedded_stylesheets(&document));
+        let by_id = |id: &str| {
+            (0..document.node_count()).find(|node_id| {
+                document
+                    .get(*node_id)
+                    .and_then(|node| match node {
+                        golden_fish::Node::Element { attributes, .. } => {
+                            attribute_value(attributes, "id")
+                        }
+                        _ => None,
+                    })
+                    .is_some_and(|value| value == id)
+            })
+        };
+        let navbar = by_id("archnavbar").unwrap();
+        let list = by_id("archnavbarlist").unwrap();
+        let first_li = (0..document.node_count())
+            .find(|node_id| document.tag_name(*node_id) == Some("li"))
+            .unwrap();
+        let navbar_style = context.style_for(navbar).unwrap();
+        let list_style = context.style_for(list).unwrap();
+        assert_eq!(
+            navbar_style.value(&Property::BackgroundColor),
+            Some(&PropertyValue::Color(Color::Rgb(51, 51, 51)))
+        );
+        assert_eq!(
+            navbar_style.value(&Property::BorderWidth),
+            Some(&PropertyValue::LengthPx(5))
+        );
+        assert_eq!(
+            navbar_style.value(&Property::BorderStyle),
+            Some(&PropertyValue::Keyword(String::from("solid")))
+        );
+        assert_eq!(
+            navbar_style.value(&Property::BorderColor),
+            Some(&PropertyValue::Color(Color::Rgb(23, 147, 209)))
+        );
+        assert_eq!(
+            navbar_style.value(&Property::MinHeight),
+            Some(&PropertyValue::LengthPx(40))
+        );
+        assert_eq!(
+            list_style.value(&Property::Display),
+            Some(&PropertyValue::Keyword(String::from("block")))
+        );
+        assert_eq!(
+            list_style.value(&Property::ListStyleType),
+            Some(&PropertyValue::Keyword(String::from("none")))
+        );
+        assert_eq!(
+            list_style.value(&Property::TextAlign),
+            Some(&PropertyValue::Keyword(String::from("right")))
+        );
+        assert_eq!(
+            list_style.value(&Property::FontSize),
+            Some(&PropertyValue::LengthPx(0))
+        );
+        assert_eq!(
+            context
+                .style_for(first_li)
+                .unwrap()
+                .value(&Property::Display),
+            Some(&PropertyValue::Keyword(String::from("inline-block")))
+        );
+        assert_eq!(
+            context
+                .style_for(first_li)
+                .unwrap()
+                .value(&Property::FontSize),
+            Some(&PropertyValue::LengthPx(14))
+        );
+    }
+
+    #[cfg(feature = "dom")]
+    #[test]
+    fn real_arch_navbar_stylesheet_survives_import_and_nested_rules() {
+        let sheet = parse_stylesheet(
+            include_str!("../tests/fixtures/arch-navbar-live.css"),
+            StylesheetSource::External(String::from(
+                "https://archlinux.org/static/archlinux_common_style/navbar.css",
+            )),
+        );
+        assert!(sheet.rules.iter().any(|rule| {
+            rule.selectors
+                .iter()
+                .any(|selector| selector.text == "#archnavbar")
+        }));
+        assert!(sheet.rules.iter().any(|rule| {
+            rule.selectors
+                .iter()
+                .any(|selector| selector.text == "#archnavbar ul")
+        }));
+        assert!(sheet.rules.iter().any(|rule| {
+            rule.selectors
+                .iter()
+                .any(|selector| selector.text == "#archnavbar ul li")
+        }));
+        assert!(sheet.rules.iter().any(|rule| {
+            rule.selectors
+                .iter()
+                .any(|selector| selector.text == "#archnavbar #logo a")
+        }));
+        assert!(sheet
+            .rules
+            .iter()
+            .flat_map(|rule| rule.selectors.iter())
+            .all(|selector| !selector.text.starts_with('@')));
+
+        let document = parse_html(include_str!("../tests/fixtures/arch-navbar.html")).unwrap();
+        let context = StyleContext::build(&document, &[sheet]);
+        let list = document.find_first_element("ul").unwrap();
+        let item = document.find_first_element("li").unwrap();
+        let anchor = document.find_first_element("a").unwrap();
+        assert_eq!(
+            context
+                .style_for(list)
+                .unwrap()
+                .value(&Property::ListStyleType),
+            Some(&PropertyValue::Keyword(String::from("none")))
+        );
+        assert_eq!(
+            context.style_for(list).unwrap().value(&Property::TextAlign),
+            Some(&PropertyValue::Keyword(String::from("right")))
+        );
+        assert_eq!(
+            context.style_for(item).unwrap().value(&Property::Display),
+            Some(&PropertyValue::Keyword(String::from("inline-block")))
+        );
+        assert_eq!(
+            context.style_for(anchor).unwrap().value(&Property::Display),
+            Some(&PropertyValue::Keyword(String::from("block")))
+        );
+    }
+
+    #[cfg(feature = "dom")]
+    #[test]
+    fn selector_combinators_and_root_are_not_collapsed_to_descendants() {
+        let (document, _) = styles(
+            "<html><body><div id='outer'><section><ul><li>x</li></ul></section></div></body></html>",
+            "",
+        );
+        let ul = document.find_first_element("ul").unwrap();
+        assert!(selector_matches(
+            &document,
+            ul,
+            &parse_selector("#outer ul").unwrap()
+        ));
+        assert!(!selector_matches(
+            &document,
+            ul,
+            &parse_selector("#outer > ul").unwrap()
+        ));
+        assert!(selector_matches(
+            &document,
+            ul,
+            &parse_selector("section > ul").unwrap()
+        ));
+        let html = document.find_first_element("html").unwrap();
+        assert!(selector_matches(
+            &document,
+            html,
+            &parse_selector(":root").unwrap()
+        ));
+    }
+
+    #[cfg(feature = "dom")]
+    #[test]
+    fn selector_harness_covers_real_navbar_ancestry_and_exact_classes() {
+        let document = parse_html(
+            "<div id='archnavbar'><div id='archnavbarmenu'><ul id='archnavbarlist'><li id='anb-home' class='nav active'><a id='home-link'>Home</a></li></ul></div></div>",
+        )
+        .unwrap();
+        let node = |id: &str| {
+            (0..document.node_count())
+                .find(|node_id| {
+                    document
+                        .get(*node_id)
+                        .and_then(|node| match node {
+                            Node::Element { attributes, .. } => attribute_value(attributes, "id"),
+                            _ => None,
+                        })
+                        .is_some_and(|value| value == id)
+                })
+                .unwrap()
+        };
+        let assert_matches = |selector: &str, id: &str| {
+            let cleaned = strip_comments(selector);
+            let parsed = parse_selector(&cleaned)
+                .unwrap_or_else(|| panic!("selector parser rejected {selector}"));
+            assert!(
+                selector_matches(&document, node(id), &parsed),
+                "selector {selector} did not match {id}"
+            );
+        };
+        let assert_not_matches = |selector: &str, id: &str| {
+            let cleaned = strip_comments(selector);
+            let parsed = parse_selector(&cleaned)
+                .unwrap_or_else(|| panic!("selector parser rejected {selector}"));
+            assert!(
+                !selector_matches(&document, node(id), &parsed),
+                "selector {selector} unexpectedly matched {id}"
+            );
+        };
+
+        for selector in [
+            "#archnavbar",
+            "#archnavbarmenu",
+            "#archnavbarlist",
+            "#anb-home",
+        ] {
+            assert_matches(selector, selector.trim_start_matches('#'));
+        }
+        for selector in [
+            "#archnavbar ul",
+            "#archnavbar #archnavbarmenu ul",
+            "#archnavbar div ul",
+            "#archnavbar ul li",
+            "#archnavbar ul li a",
+            "#archnavbarmenu > ul",
+            "ul#archnavbarlist",
+            "li#anb-home",
+            "#archnavbarlist > li#anb-home",
+        ] {
+            let target = if selector.ends_with(" a") {
+                "home-link"
+            } else if selector.starts_with("ul")
+                || selector.ends_with(" ul")
+                || selector.ends_with("> ul")
+            {
+                "archnavbarlist"
+            } else {
+                "anb-home"
+            };
+            assert_matches(selector, target);
+        }
+        assert_not_matches("#archnavbar > ul", "archnavbarlist");
+        assert_matches(".nav", "anb-home");
+        assert_matches(".active", "anb-home");
+        assert_not_matches(".act", "anb-home");
+        assert_matches("#archnavbar/**/ul", "archnavbarlist");
+        assert_matches("#archnavbar > div", "archnavbarmenu");
+    }
+
+    #[test]
+    fn parser_keeps_declarations_around_nested_rules_and_container_at_rules() {
+        let sheet = parse_stylesheet(
+            "@media (min-width: 600px) { #archnavbar { color: red; & ul { list-style: none; } padding: 4px; } }",
+            StylesheetSource::Embedded,
+        );
+        assert!(sheet.rules.iter().any(|rule| {
+            rule.selectors
+                .iter()
+                .any(|selector| selector.text == "#archnavbar")
+                && rule
+                    .declarations
+                    .iter()
+                    .any(|decl| decl.property == Property::Color)
+        }));
+        assert!(sheet.rules.iter().any(|rule| {
+            rule.selectors
+                .iter()
+                .any(|selector| selector.text == "#archnavbar ul")
+                && rule
+                    .declarations
+                    .iter()
+                    .any(|decl| decl.property == Property::ListStyleType)
+        }));
+        assert!(sheet.rules.iter().any(|rule| {
+            rule.selectors
+                .iter()
+                .any(|selector| selector.text == "#archnavbar")
+                && rule
+                    .declarations
+                    .iter()
+                    .any(|decl| decl.property == Property::PaddingTop)
+        }));
     }
 }

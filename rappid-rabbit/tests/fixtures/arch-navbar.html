@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<style>
+:root { --archlinux-blue: #1793d1; }
+#archnavbar {
+    --logo: url("archlogo.svg");
+    --logo-width: 190px;
+    --logo-height: 40px;
+    --item-size: 14px;
+    --background: #333;
+    --border: 5px solid var(--archlinux-blue);
+    background: var(--background) none repeat scroll 0 0 !important;
+    border-bottom: var(--border) !important;
+    min-height: var(--logo-height) !important;
+    padding: 10px 15px !important;
+    box-sizing: unset;
+    & ul {
+        display: block;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        text-align: right;
+        font-size: 0;
+        letter-spacing: 0;
+    }
+    & li { display: inline-block; font-size: var(--item-size); }
+}
+#logo a {
+    display: block;
+    width: var(--logo-width);
+    height: var(--logo-height);
+    background-image: var(--logo);
+    background-repeat: no-repeat;
+    background-position: left center;
+    font-size: 0;
+}
+#archnavbar a { color: #999; padding: 6px 8px; }
+</style>
+</head>
+<body>
+<div id="archnavbar">
+    <div id="logo"><a href="/" title="Return home">Arch Linux</a></div>
+    <div id="archnavbarmenu"><ul id="archnavbarlist">
+        <li><a href="/">Home</a></li>
+        <li><a href="/packages/">Packages</a></li>
+        <li><a href="/forums/">Forums</a></li>
+        <li><a href="/wiki/">Wiki</a></li>
+        <li><a href="/download/">Download</a></li>
+    </ul></div>
+</div>
+<main><h1>Content after navbar</h1><ul><li>Ordinary list keeps its marker.</li></ul></main>
+</body>
+</html>
