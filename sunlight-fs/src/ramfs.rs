@@ -1074,6 +1074,8 @@ max_ttys = 6
     RamEntry::file("/bin/sun-open", 0, 0, mode::FILE_755, b"#!/sunlight/sun-open\n"),
     // GUI Terminal emulator
     RamEntry::file("/bin/sunlight-terminal", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-terminal\n"),
+    // Chronos: native DOS compatibility application.
+    RamEntry::file("/bin/sunlight-chronos", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-chronos\n"),
     // GUI Task Monitor
     RamEntry::file("/bin/sunlight-tasks", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-tasks\n"),
     // SunLight-Bench: CPU/multi-core performance benchmark
@@ -1678,6 +1680,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/sunlight-terminal\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sunlight-chronos",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-chronos\n",
     ),
     RamEntry::file(
         "/usr/bin/sunlight-tasks",
@@ -2340,6 +2349,19 @@ mod tests {
         // asset bytes; we just sanity-check a few early distinctive words).
         let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(text.contains("Welcome to SunlightOS") || text.contains("A bright"));
+    }
+
+    #[test]
+    fn chronos_command_stubs_are_present_in_initramfs() {
+        for path in ["/bin/sunlight-chronos", "/usr/bin/sunlight-chronos"] {
+            let entry = INITRAMFS
+                .iter()
+                .find(|entry| entry.path == path)
+                .unwrap_or_else(|| panic!("missing {path}"));
+            assert!(!entry.is_dir);
+            assert_eq!(entry.mode, mode::FILE_755);
+            assert_eq!(entry.data, b"#!/sunlight/sunlight-chronos\n");
+        }
     }
 
     #[test]

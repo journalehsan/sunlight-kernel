@@ -352,6 +352,7 @@ impl DockTheme {
     fn icon_for_app(&self, app_id: AppId) -> Option<TgaImage> {
         match app_id {
             AppId::Terminal => self.terminal,
+            AppId::Chronos => self.terminal,
             AppId::Calculator => self.calc,
             AppId::Files => self.files,
             AppId::Settings => self.settings,
@@ -451,13 +452,13 @@ impl SymbolTheme {
 /// Identifies a launchable SunlightOS app.
 ///
 /// `Terminal`/`Calculator`/`Files`/`Settings` are tracked by both the bottom
-/// dock and the Start Menu. `Tasks`/`Bench`/`Eyes`/`TextEditor`/`Writer` were
-/// added for the Start Menu's "All Apps" grid (see `start_menu.rs`) — they
-/// reuse the same registry/launch machinery but are not shown in the fixed
-/// 4-icon dock.
+/// dock and the Start Menu. Chronos and the remaining apps reuse the same
+/// registry/launch machinery but are shown through the Start Menu rather than
+/// the fixed 4-icon dock.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AppId {
     Terminal,
+    Chronos,
     Calculator,
     Files,
     Settings,
@@ -1240,7 +1241,7 @@ struct VortexShell {
     /// entries (Terminal/Calculator/Files/Settings) are also shown in the
     /// bottom dock; Tasks/Bench/Eyes/TextEditor/Writer are Start-Menu-only
     /// but share the same launch/state-sync machinery.
-    apps: [DockAppState; 12],
+    apps: [DockAppState; 13],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// User-provided icon overrides loaded from `desktop.toml`.
@@ -1406,6 +1407,7 @@ impl VortexShell {
             logout_confirm_r: Rect::new(0, 0, 0, 0),
             apps: [
                 DockAppState::new(AppId::Terminal, "Sunlight Terminal", AppId::Terminal),
+                DockAppState::new(AppId::Chronos, "Chronos", AppId::Chronos),
                 DockAppState::new(AppId::Calculator, "Sunlight Calculator", AppId::Calculator),
                 DockAppState::new(AppId::Files, "Sunlight Files", AppId::Files),
                 DockAppState::new(AppId::Settings, "System Preferences", AppId::Settings),
@@ -1612,6 +1614,7 @@ impl VortexShell {
     fn app_launch_path(app_id: AppId) -> &'static str {
         match app_id {
             AppId::Terminal => "/bin/sunlight-terminal",
+            AppId::Chronos => "/bin/sunlight-chronos",
             AppId::Calculator => "/bin/calculator",
             AppId::Files => "/bin/sunlight-files",
             AppId::Settings => "/bin/control-panel",
@@ -1629,6 +1632,7 @@ impl VortexShell {
     fn app_launch_command(app_id: AppId) -> &'static [u8] {
         match app_id {
             AppId::Terminal => b"terminal",
+            AppId::Chronos => b"chronos",
             AppId::Calculator => b"calculator",
             AppId::Files => b"files",
             AppId::Settings => b"settings",
@@ -1646,6 +1650,7 @@ impl VortexShell {
     fn app_trace_subject(app_id: AppId) -> &'static str {
         match app_id {
             AppId::Terminal => "app=terminal",
+            AppId::Chronos => "app=chronos",
             AppId::Calculator => "app=calculator",
             AppId::Files => "app=files",
             AppId::Settings => "app=control-panel",
@@ -1661,7 +1666,7 @@ impl VortexShell {
     }
 
     fn app_allows_multiple_instances(app_id: AppId) -> bool {
-        matches!(app_id, AppId::Calendar)
+        matches!(app_id, AppId::Calendar | AppId::Chronos)
     }
 
     fn open_file_via_resolver(&mut self, path: &str, source: LaunchSource) -> bool {

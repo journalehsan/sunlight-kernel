@@ -297,6 +297,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-chronos",
+            output: "sunlight-chronos",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-tasks",
             output: "sunlight-tasks",
             rustflags: service_rustflags,

@@ -290,6 +290,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-exec --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-open --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release

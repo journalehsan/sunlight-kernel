@@ -209,6 +209,7 @@ fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
     match command {
         b"calculator" | b"calc" => Some(b"/bin/calculator"),
         b"terminal" | b"term" | b"sunlight-terminal" => Some(b"/bin/sunlight-terminal"),
+        b"chronos" | b"sunlight-chronos" => Some(b"/bin/sunlight-chronos"),
         b"settings" | b"control-panel" | b"preferences" => Some(b"/bin/control-panel"),
         b"files" | b"file-manager" | b"sunlight-files" => Some(b"/bin/sunlight-files"),
         b"tasks" | b"task-manager" | b"sunlight-tasks" => Some(b"/bin/sunlight-tasks"),
@@ -312,4 +313,21 @@ impl Subject {
 
 pub fn next_cli_trace(source: LaunchSource) -> LaunchTrace {
     LaunchTrace::new(monotonic_millis(), source, monotonic_millis())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::map_app_id;
+
+    #[test]
+    fn chronos_aliases_resolve_to_the_native_application() {
+        assert_eq!(
+            map_app_id(b"chronos"),
+            Some(b"/bin/sunlight-chronos".as_slice())
+        );
+        assert_eq!(
+            map_app_id(b"sunlight-chronos"),
+            Some(b"/bin/sunlight-chronos".as_slice())
+        );
+    }
 }

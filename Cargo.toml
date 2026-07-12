@@ -85,6 +85,8 @@ members = [
     "rappid-rabbit",
     "sunlight-api-lab",
     "golden-fish",
+    "chronos-core",
+    "sunlight-chronos",
 ]
 
 [workspace.dependencies]

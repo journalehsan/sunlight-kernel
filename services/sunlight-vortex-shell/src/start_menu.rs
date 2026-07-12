@@ -58,7 +58,7 @@ fn icon(bytes: &'static [u8]) -> Option<TgaImage> {
     TgaImage::parse(bytes).ok()
 }
 
-const APP_CATALOG_LEN: usize = 12;
+const APP_CATALOG_LEN: usize = 13;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
@@ -130,6 +130,13 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         id: CatalogId::App(AppId::Terminal),
         name: "Terminal",
         category: "Utilities",
+        icon_bytes: Some(ICON_TERMINAL_TGA),
+        available: true,
+    },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::Chronos),
+        name: "Chronos",
+        category: "Compatibility",
         icon_bytes: Some(ICON_TERMINAL_TGA),
         available: true,
     },
@@ -474,9 +481,9 @@ impl<T: Copy, const N: usize> FixedList<T, N> {
 }
 
 const PINNED_CAP: usize = 6;
-const ALL_APPS_CAP: usize = 12;
+const ALL_APPS_CAP: usize = 13;
 const RECENT_CAP: usize = 6;
-const SEARCH_RESULTS_CAP: usize = 12;
+const SEARCH_RESULTS_CAP: usize = 13;
 const POWER_CAP: usize = 3;
 
 struct StartMenuLayout {

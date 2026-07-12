@@ -185,6 +185,7 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-runner --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-exec --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release

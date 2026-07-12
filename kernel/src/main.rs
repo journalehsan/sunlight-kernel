@@ -164,6 +164,9 @@ static SUN_OPEN_ELF_BYTES: &[u8] =
 // First PTY-backed graphical terminal client.
 static SUNLIGHT_TERMINAL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-terminal");
+// Chronos: safe user-space DOS `.COM` compatibility runtime.
+static SUNLIGHT_CHRONOS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-chronos");
 // First graphical task monitor client.
 static SUNLIGHT_TASKS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tasks");
