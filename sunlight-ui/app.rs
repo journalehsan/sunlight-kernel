@@ -20,7 +20,7 @@
 //! ```
 
 use core::ptr;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use sunlight_ipc::{
     ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -37,9 +37,66 @@ const POLL_TIMEOUT_MS: u64 = 200;
 const WINDOW_IPC_TIMEOUT_MS: u64 = 500;
 const WINDOW_CREATE_TIMEOUT_MS: u64 = 2_000;
 static CLOSE_REQUESTED: AtomicBool = AtomicBool::new(false);
+static CLIENT_CURSOR: AtomicU8 = AtomicU8::new(u8::MAX);
+
+/// Cursor shape the client requests from the compositor.
+///
+/// Discriminants must stay in sync with the display server's `CursorShape`
+/// enum so that the packed u8 discriminant transmitted via [`SgpMsg::SET_CURSOR`]
+/// maps to the same shape in both processes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CursorShape {
+    Pointer = 0,
+    Hand = 1,
+    ResizeHorizontal = 2,
+    ResizeVertical = 3,
+    ResizeNwse = 4,
+    ResizeNesw = 5,
+    Move = 6,
+    Wait = 7,
+    Help = 8,
+    Text = 9,
+}
+
+/// Request a cursor shape for the active window.  Call this from
+/// [`App::update`] to change the cursor when the pointer moves over
+/// different document regions.  The Window's event loop applies the
+/// request after each update cycle.  If no request is made, the
+/// previously-set cursor remains in effect.
+///
+/// This is a static trampoline because the [`App`] trait does not
+/// receive a mutable reference to the [`Window`].  The initial cursor
+/// is always [`CursorShape::Pointer`].
+pub fn set_client_cursor(shape: CursorShape) {
+    CLIENT_CURSOR.store(shape as u8, Ordering::Relaxed);
+}
+
+impl CursorShape {
+    fn from_discriminant(v: u8) -> Option<Self> {
+        match v {
+            0 => Some(Self::Pointer),
+            1 => Some(Self::Hand),
+            2 => Some(Self::ResizeHorizontal),
+            3 => Some(Self::ResizeVertical),
+            4 => Some(Self::ResizeNwse),
+            5 => Some(Self::ResizeNesw),
+            6 => Some(Self::Move),
+            7 => Some(Self::Wait),
+            8 => Some(Self::Help),
+            9 => Some(Self::Text),
+            _ => None,
+        }
+    }
+}
 
 pub fn request_close() {
     CLOSE_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+fn take_requested_cursor() -> Option<CursorShape> {
+    let v = CLIENT_CURSOR.swap(u8::MAX, Ordering::Relaxed);
+    CursorShape::from_discriminant(v)
 }
 
 fn take_close_requested() -> bool {
@@ -93,6 +150,8 @@ pub struct Window {
     /// Previous cursor position (screen coordinates), for detecting movement.
     prev_mouse_x: i32,
     prev_mouse_y: i32,
+    /// Last cursor shape sent to the compositor, to avoid redundant IPC.
+    current_cursor: CursorShape,
 }
 
 // SAFETY: the buffer pointer is valid for the lifetime of the Window.
@@ -208,6 +267,7 @@ impl Window {
             prev_buttons: 0,
             prev_mouse_x: 0,
             prev_mouse_y: 0,
+            current_cursor: CursorShape::Pointer,
         })
     }
 
@@ -349,6 +409,22 @@ impl Window {
         );
     }
 
+    /// Request a cursor shape for this window's client area.
+    ///
+    /// Sends [`SgpMsg::SET_CURSOR`] to the compositor.  The compositor
+    /// overrides the client-area cursor only when the pointer is inside
+    /// the client area; window-chrome cursors (resize borders,
+    /// title-bar pointer, etc.) always take priority.
+    ///
+    /// Callers should avoid spurious re-requests: the compositor itself
+    /// caches the last known cursor shape, but the IPC is synchronous
+    /// and unnecessary calls waste time.
+    pub fn set_cursor(&self, shape: CursorShape) {
+        let packed = self.win_id | ((shape as u64) << 32);
+        let _ = self
+            .display_call(IpcMsg::with_label(SgpMsg::SET_CURSOR).word(0, packed));
+    }
+
     /// Build a `Canvas` wrapping the shared framebuffer.
     pub fn canvas(&mut self) -> Canvas<'_> {
         let frame_len = self.frame_len();
@@ -410,6 +486,15 @@ impl Window {
 
             // Redraw requested?
             let needs_redraw = app.update(event);
+
+            // Apply any cursor shape the app requested during update().
+            if let Some(shape) = take_requested_cursor() {
+                if shape != self.current_cursor {
+                    self.set_cursor(shape);
+                    self.current_cursor = shape;
+                }
+            }
+
             if take_close_requested() {
                 // Remove our window from the compositor before returning. The
                 // caller will `ProcessExit::exit`, which skips `Drop`, so this

@@ -17,13 +17,16 @@ use sunlight_ipc::{
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
-    AppMenuCommand, AppMenuSecondaryItem, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
-    DocumentCanvasPresentation, DocumentRectStyle, DocumentStrokeStyle, DocumentTextStyle,
-    HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec,
-    RibbonGroupSpec, StatusBar, TextEditState, TwoPaneAppMenu,
+    AppMenuCommand, AppMenuSecondaryItem, CanvasHitTarget, DocumentCanvas, DocumentCanvasItem,
+    DocumentCanvasMode, DocumentCanvasPresentation, DocumentRectStyle, DocumentStrokeStyle,
+    DocumentTextStyle, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar, RibbonButtonKind,
+    RibbonButtonSpec, RibbonGroupSpec, StatusBar, TextEditState, TextLineLayout,
+    TwoPaneAppMenu, find_line_index, layout_text_lines, caret_x_on_line, byte_at_x_on_line,
+    line_home_byte, line_end_byte, click_to_line_and_byte,
 };
 use sunlight_ui::{
-    request_close, App, Color, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
+    request_close, set_client_cursor, App, Color, CursorShape, Event, Point, Rect, Theme, Window,
+    WindowConfig, WindowDecoration,
 };
 
 const WIN_W: u32 = 1240;
@@ -40,6 +43,8 @@ const KEY_ESC: u8 = 0x01;
 
 const KEY_LEFT: u8 = 0x4B;
 const KEY_RIGHT: u8 = 0x4D;
+const KEY_UP: u8 = 0x48;
+const KEY_DOWN: u8 = 0x50;
 const KEY_HOME: u8 = 0x47;
 const KEY_END: u8 = 0x4F;
 const KEY_DELETE: u8 = 0x53;
@@ -797,6 +802,7 @@ struct WriterApp {
     edit_buffer: String,
     edit_state: TextEditState,
     document_modified: bool,
+    prev_document_cursor: CursorShape,
 }
 
 impl WriterApp {
@@ -818,6 +824,7 @@ impl WriterApp {
             edit_buffer: String::from(SAMPLE_EDITABLE_TEXT),
             edit_state: TextEditState::default(),
             document_modified: false,
+            prev_document_cursor: CursorShape::Pointer,
         }
     }
 
@@ -1323,22 +1330,60 @@ impl WriterApp {
                 continue;
             }
             if let DocumentCanvasItem::Text { x, y, text, style } = *item {
-                let item_font = style.font;
-                let item_h = item_font
+                let font = style.font;
+                let line_h = font
                     .map(|f| f.line_height())
-                    .unwrap_or(sunlight_ui::paint::font::GLYPH_H) as i32;
-                if rel_y >= y && rel_y < y + item_h {
-                    let local_x = rel_x - x;
-                    let byte_offset = sunlight_ui::widgets::byte_offset_at_x(
-                        item_font,
-                        text,
-                        local_x,
-                    );
+                    .unwrap_or(sunlight_ui::paint::font::GLYPH_H);
+                let max_w = (content.w as i32 - x).max(1) as u32;
+                let lines = layout_text_lines(font, text, max_w, line_h);
+                if let Some((_line_idx, byte_offset)) =
+                    click_to_line_and_byte(font, text, &lines, y, rel_y, rel_x, x)
+                {
                     return Some(byte_offset);
                 }
             }
         }
         None
+    }
+
+    fn editable_item_font(&self) -> Option<&dyn sunlight_ui::VecText> {
+        let items = self.document_items();
+        if let Some(DocumentCanvasItem::Text { style, .. }) = items.get(EDITABLE_ITEM_INDEX) {
+            return style.font;
+        }
+        None
+    }
+
+    fn editable_item_line_h(&self) -> u32 {
+        self.editable_item_font()
+            .map(|f| f.line_height())
+            .unwrap_or(sunlight_ui::paint::font::GLYPH_H)
+    }
+
+    fn editable_item_max_w(&self) -> u32 {
+        let items = self.document_items();
+        let canvas = self.document_canvas(items.as_slice());
+        let content = canvas.content_rect();
+        let x = if let Some(DocumentCanvasItem::Text { x, .. }) = items.get(EDITABLE_ITEM_INDEX) {
+            *x
+        } else {
+            0
+        };
+        (content.w as i32 - x).max(1) as u32
+    }
+
+    fn compute_edit_lines(&self) -> Vec<TextLineLayout> {
+        layout_text_lines(
+            self.editable_item_font(),
+            self.edit_buffer.as_str(),
+            self.editable_item_max_w(),
+            self.editable_item_line_h(),
+        )
+    }
+
+    fn caret_line_index(&self) -> usize {
+        let lines = self.compute_edit_lines();
+        find_line_index(&lines, self.edit_state.caret_byte).unwrap_or(0)
     }
 
     fn caret_move_left(&self) -> usize {
@@ -1354,21 +1399,71 @@ impl WriterApp {
     }
 
     fn caret_move_right(&self) -> usize {
-        for (idx, ch) in self.edit_buffer.char_indices() {
+        for (idx, _ch) in self.edit_buffer.char_indices() {
             if idx > self.edit_state.caret_byte {
                 return idx;
             }
-            let _ = ch;
         }
         self.edit_buffer.len()
     }
 
     fn caret_move_home(&self) -> usize {
-        0
+        let lines = self.compute_edit_lines();
+        let idx = self.caret_line_index();
+        line_home_byte(&lines, idx)
     }
 
     fn caret_move_end(&self) -> usize {
-        self.edit_buffer.len()
+        let lines = self.compute_edit_lines();
+        let idx = self.caret_line_index();
+        line_end_byte(&lines, idx)
+    }
+
+    fn caret_move_up(&self) -> usize {
+        let lines = self.compute_edit_lines();
+        let cur = self.caret_line_index();
+        if cur == 0 {
+            return self.edit_state.caret_byte;
+        }
+        let target_line_idx = cur.saturating_sub(1);
+        self.caret_on_line_x(&lines, target_line_idx)
+    }
+
+    fn caret_move_down(&self) -> usize {
+        let lines = self.compute_edit_lines();
+        let cur = self.caret_line_index();
+        if cur + 1 >= lines.len() {
+            return self.edit_state.caret_byte;
+        }
+        let target_line_idx = cur + 1;
+        self.caret_on_line_x(&lines, target_line_idx)
+    }
+
+    fn caret_on_line_x(&self, lines: &[TextLineLayout], line_idx: usize) -> usize {
+        let line = match lines.get(line_idx) {
+            Some(l) => l,
+            None => return self.edit_state.caret_byte,
+        };
+        let current_preferred_x = self
+            .edit_state
+            .preferred_caret_x
+            .unwrap_or_else(|| {
+                let cur_line = lines.get(self.caret_line_index());
+                cur_line.map_or(0, |l| {
+                    caret_x_on_line(
+                        self.editable_item_font(),
+                        self.edit_buffer.as_str(),
+                        l,
+                        self.edit_state.caret_byte,
+                    )
+                })
+            });
+        byte_at_x_on_line(
+            self.editable_item_font(),
+            self.edit_buffer.as_str(),
+            line,
+            current_preferred_x as i32,
+        )
     }
 
     fn char_before_caret(&self) -> Option<(usize, char)> {
@@ -1394,6 +1489,7 @@ impl WriterApp {
         self.edit_buffer = new_text;
         self.edit_state.caret_byte = new_caret;
         self.edit_state.selection_anchor_byte = None;
+        self.edit_state.preferred_caret_x = None;
         self.document_modified = true;
         true
     }
@@ -1506,6 +1602,26 @@ impl App for WriterApp {
                         self.recent_hover = recent_hover;
                         redraw = true;
                     }
+                    // When the app menu is open, document cursor semantics
+                    // are suppressed — the menu overlay dominates.
+                    let cursor = CursorShape::Pointer;
+                    if cursor != self.prev_document_cursor {
+                        set_client_cursor(cursor);
+                        self.prev_document_cursor = cursor;
+                    }
+                } else {
+                    let items = self.document_items();
+                    let canvas = self.document_canvas(items.as_slice());
+                    let target = canvas.hit_target(point);
+                    let cursor = match target {
+                        CanvasHitTarget::Link => CursorShape::Hand,
+                        CanvasHitTarget::Text => CursorShape::Text,
+                        CanvasHitTarget::None => CursorShape::Pointer,
+                    };
+                    if cursor != self.prev_document_cursor {
+                        set_client_cursor(cursor);
+                        self.prev_document_cursor = cursor;
+                    }
                 }
 
                 redraw
@@ -1551,6 +1667,7 @@ impl App for WriterApp {
                     self.edit_state.active_item_index = Some(EDITABLE_ITEM_INDEX);
                     self.edit_state.caret_byte = byte_offset;
                     self.edit_state.selection_anchor_byte = None;
+                    self.edit_state.preferred_caret_x = None;
                     return true;
                 }
 
@@ -1565,10 +1682,13 @@ impl App for WriterApp {
                 if ch == '\u{8}' {
                     return self.backspace_at_caret();
                 }
-                if ch == '\n' || ch == '\r' || ch == '\t' || ch == '\u{1b}' {
+                if ch == '\r' {
                     return false;
                 }
-                if ch.is_control() {
+                if ch == '\t' || ch == '\u{1b}' {
+                    return false;
+                }
+                if ch.is_control() && ch != '\n' {
                     return false;
                 }
                 self.insert_text_at_caret(ch)
@@ -1598,6 +1718,7 @@ impl App for WriterApp {
                             if new_caret != self.edit_state.caret_byte {
                                 self.edit_state.caret_byte = new_caret;
                                 self.edit_state.selection_anchor_byte = None;
+                                self.edit_state.preferred_caret_x = None;
                                 return true;
                             }
                         }
@@ -1606,6 +1727,51 @@ impl App for WriterApp {
                             if new_caret != self.edit_state.caret_byte {
                                 self.edit_state.caret_byte = new_caret;
                                 self.edit_state.selection_anchor_byte = None;
+                                self.edit_state.preferred_caret_x = None;
+                                return true;
+                            }
+                        }
+                        KEY_UP => {
+                            let new_caret = self.caret_move_up();
+                            if new_caret != self.edit_state.caret_byte {
+                                let old_x = self.edit_state.preferred_caret_x;
+                                self.edit_state.caret_byte = new_caret;
+                                self.edit_state.selection_anchor_byte = None;
+                                self.edit_state.preferred_caret_x = old_x
+                                    .or_else(|| {
+                                        let lines = self.compute_edit_lines();
+                                        let cur = self.caret_line_index();
+                                        lines.get(cur).map(|l| {
+                                            caret_x_on_line(
+                                                self.editable_item_font(),
+                                                self.edit_buffer.as_str(),
+                                                l,
+                                                new_caret,
+                                            )
+                                        })
+                                    });
+                                return true;
+                            }
+                        }
+                        KEY_DOWN => {
+                            let new_caret = self.caret_move_down();
+                            if new_caret != self.edit_state.caret_byte {
+                                let old_x = self.edit_state.preferred_caret_x;
+                                self.edit_state.caret_byte = new_caret;
+                                self.edit_state.selection_anchor_byte = None;
+                                self.edit_state.preferred_caret_x = old_x
+                                    .or_else(|| {
+                                        let lines = self.compute_edit_lines();
+                                        let cur = self.caret_line_index();
+                                        lines.get(cur).map(|l| {
+                                            caret_x_on_line(
+                                                self.editable_item_font(),
+                                                self.edit_buffer.as_str(),
+                                                l,
+                                                new_caret,
+                                            )
+                                        })
+                                    });
                                 return true;
                             }
                         }
@@ -1614,6 +1780,7 @@ impl App for WriterApp {
                             if new_caret != self.edit_state.caret_byte {
                                 self.edit_state.caret_byte = new_caret;
                                 self.edit_state.selection_anchor_byte = None;
+                                self.edit_state.preferred_caret_x = None;
                                 return true;
                             }
                         }
@@ -1622,6 +1789,7 @@ impl App for WriterApp {
                             if self.edit_state.caret_byte != end {
                                 self.edit_state.caret_byte = end;
                                 self.edit_state.selection_anchor_byte = None;
+                                self.edit_state.preferred_caret_x = None;
                                 return true;
                             }
                         }

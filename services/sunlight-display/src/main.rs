@@ -335,6 +335,7 @@ enum CursorShape {
     Moving = 6,
     Waiting = 7,
     Question = 8,
+    Text = 9,
 }
 
 impl CursorShape {
@@ -348,6 +349,7 @@ impl CursorShape {
             6 => Self::Moving,
             7 => Self::Waiting,
             8 => Self::Question,
+            9 => Self::Text,
             _ => Self::Pointer,
         }
     }
@@ -1865,6 +1867,7 @@ static CURSOR_TGA_RESIZE_NESW: &[u8] = include_bytes!("../../../assets/cursors/r
 static CURSOR_TGA_MOVE: &[u8] = include_bytes!("../../../assets/cursors/move.tga");
 static CURSOR_TGA_WAIT: &[u8] = include_bytes!("../../../assets/cursors/wait.tga");
 static CURSOR_TGA_QUESTION: &[u8] = include_bytes!("../../../assets/cursors/question.tga");
+static CURSOR_TGA_TEXT: &[u8] = include_bytes!("../../../assets/cursors/text.tga");
 
 /// TGA bytes and hotspot (x, y) for a cursor shape.
 fn cursor_asset(shape: CursorShape) -> (&'static [u8], i32, i32) {
@@ -1878,6 +1881,7 @@ fn cursor_asset(shape: CursorShape) -> (&'static [u8], i32, i32) {
         CursorShape::Moving => (CURSOR_TGA_MOVE, 16, 16),
         CursorShape::Waiting => (CURSOR_TGA_WAIT, 16, 16),
         CursorShape::Question => (CURSOR_TGA_QUESTION, 2, 2),
+        CursorShape::Text => (CURSOR_TGA_TEXT, 16, 15),
     }
 }
 
