@@ -12,7 +12,7 @@ use golden_fish::{Attribute, Document, Node, NodeId};
 use sunlight_http::ParsedUrl;
 use sunlight_ui::{
     widgets::{
-        diff_scenes, DocumentFontFamily, DocumentNodeId, DocumentScene, PaintOrder,
+        diff_scenes, CornerRadii, DocumentFontFamily, DocumentNodeId, DocumentScene, PaintOrder,
         RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,
     },
     Color, Rect, Size, VecText,
@@ -20,8 +20,8 @@ use sunlight_ui::{
 
 use crate::{
     css::{Color as CssColor, ComputedStyle, Property, PropertyValue, StyleContext},
-    images::ImageCache,
     form::FormControlState,
+    images::ImageCache,
     resources::discovery::resolve_url,
 };
 
@@ -91,6 +91,12 @@ pub enum DisplayType {
     InlineFlex,
     Inline,
     InlineBlock,
+    Table,
+    TableHeaderGroup,
+    TableRowGroup,
+    TableFooterGroup,
+    TableRow,
+    TableCell,
     None,
 }
 
@@ -112,6 +118,21 @@ pub struct ResolvedPaintStyle {
     pub border_color: Color,
     pub border_width: u32,
     pub border_visible: bool,
+    pub border_colors: [Color; 4],
+    pub border_widths: [u32; 4],
+    pub corner_radii: CornerRadii,
+    pub box_shadow: Option<ResolvedBoxShadow>,
+    pub background_image: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResolvedBoxShadow {
+    pub offset_x: i32,
+    pub offset_y: i32,
+    pub blur: u32,
+    pub spread: i32,
+    pub color: Color,
+    pub inset: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -179,6 +200,10 @@ pub struct LayoutNode {
     pub visible: bool,
     pub paint: ResolvedPaintStyle,
     pub paint_order: u32,
+    pub float_side: String,
+    pub clear: String,
+    pub float_containing_block: Option<DomNodeId>,
+    pub table_dimensions: Option<(usize, usize)>,
 }
 
 /// A generated list marker, deliberately separate from DOM text.  Its owner
@@ -315,16 +340,37 @@ impl DocumentRenderState {
     }
 
     /// Patch one retained control after browser-owned form state changes.
-    pub fn patch_control(&mut self, control_id: DomNodeId, state: &FormControlState, focused: bool, measurer: &dyn TextMeasurer) -> bool {
+    pub fn patch_control(
+        &mut self,
+        control_id: DomNodeId,
+        state: &FormControlState,
+        focused: bool,
+        measurer: &dyn TextMeasurer,
+    ) -> bool {
         let previous = self.current_scene.clone();
-        let Some(index) = self.current_scene.objects.iter().position(|object| object.owner_node_id == control_id && matches!(object.kind, RenderObjectKind::Control { .. })) else { return false; };
+        let Some(index) = self.current_scene.objects.iter().position(|object| {
+            object.owner_node_id == control_id
+                && matches!(object.kind, RenderObjectKind::Control { .. })
+        }) else {
+            return false;
+        };
         let object = &mut self.current_scene.objects[index];
-        let RenderObjectKind::Control { value, focused: visual_focus, caret_offset, .. } = &mut object.kind else { return false; };
+        let RenderObjectKind::Control {
+            value,
+            focused: visual_focus,
+            caret_offset,
+            ..
+        } = &mut object.kind
+        else {
+            return false;
+        };
         *visual_focus = focused;
         match state {
             FormControlState::Text { state, .. } => {
                 *value = state.current_value.clone();
-                *caret_offset = Some(measurer.measure_width(&state.current_value[..state.cursor_position.min(state.current_value.len())]));
+                *caret_offset = Some(measurer.measure_width(
+                    &state.current_value[..state.cursor_position.min(state.current_value.len())],
+                ));
             }
             FormControlState::Button { .. } => *caret_offset = None,
         }
@@ -352,8 +398,13 @@ struct FlowStyle {
     display: DisplayType,
     paint: ResolvedPaintStyle,
     width: Option<u32>,
+    width_percent: Option<u32>,
+    min_width: u32,
+    max_width: Option<u32>,
     height: Option<u32>,
+    min_height: u32,
     margin: [u32; 4], // top, right, bottom, left
+    margin_auto: [bool; 4],
     padding: [u32; 4],
     flex_direction: String,
     flex_wrap: String,
@@ -362,6 +413,8 @@ struct FlowStyle {
     align_content: String,
     row_gap: u32,
     column_gap: u32,
+    float: String,
+    clear: String,
 }
 
 #[derive(Clone)]
@@ -455,6 +508,230 @@ fn build_layout_tree_for_url_with_images(
 }
 
 impl<'a> LayoutBuilder<'a> {
+    fn layout_table(
+        &mut self,
+        node_id: NodeId,
+        available_x: i32,
+        available_w: u32,
+        cursor_y: &mut i32,
+        depth: usize,
+        mut style: FlowStyle,
+    ) -> Option<usize> {
+        const MAX_TABLE_ROWS: usize = 256;
+        const MAX_TABLE_COLUMNS: usize = 32;
+        const MAX_TABLE_CELLS: usize = 4096;
+        let mut rows = Vec::new();
+        self.collect_table_rows(node_id, &mut rows, depth, MAX_TABLE_ROWS);
+        let row_cells = rows
+            .iter()
+            .map(|row| {
+                self.document
+                    .children(*row)
+                    .iter()
+                    .copied()
+                    .filter(|cell| {
+                        self.document
+                            .get(*cell)
+                            .and_then(Node::tag_name)
+                            .is_some_and(|tag| {
+                                tag.eq_ignore_ascii_case("td") || tag.eq_ignore_ascii_case("th")
+                            })
+                    })
+                    .map(|cell| {
+                        let span = match self.document.get(cell) {
+                            Some(Node::Element { attributes, .. }) => attr(attributes, "colspan")
+                                .and_then(|value| value.parse::<usize>().ok())
+                                .unwrap_or(1)
+                                .clamp(1, MAX_TABLE_COLUMNS),
+                            _ => 1,
+                        };
+                        (cell, span)
+                    })
+                    .take(MAX_TABLE_COLUMNS)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let columns = row_cells
+            .iter()
+            .map(|cells| cells.iter().map(|(_, span)| *span).sum::<usize>())
+            .max()
+            .unwrap_or(0)
+            .min(MAX_TABLE_COLUMNS);
+        if columns == 0 {
+            return None;
+        }
+        if let Some(percent) = style.width_percent {
+            style.width = Some(((available_w as u64 * percent as u64) / 10_000) as u32);
+        }
+        let mut preferred = vec![24u32; columns];
+        for cells in &row_cells {
+            let mut column = 0usize;
+            for (cell, span) in cells {
+                let span = (*span).min(columns.saturating_sub(column)).max(1);
+                let cell_style = self.flow_style(*cell);
+                let each = self
+                    .inline_preferred_width(*cell)
+                    .saturating_add(
+                        cell_style.padding[1]
+                            + cell_style.padding[3]
+                            + cell_style.paint.border_width * 2,
+                    )
+                    .min(320)
+                    .div_ceil(span as u32);
+                for width in &mut preferred[column..column + span] {
+                    *width = (*width).max(each);
+                }
+                column += span;
+            }
+        }
+        let preferred_total = preferred.iter().copied().sum::<u32>().max(1);
+        let shrink_to_fit = matches!(style.float.as_str(), "left" | "right");
+        let content_w = style
+            .width
+            .unwrap_or_else(|| {
+                if shrink_to_fit {
+                    preferred_total.min(available_w)
+                } else {
+                    available_w
+                }
+            })
+            .max(style.min_width)
+            .min(style.max_width.unwrap_or(MAX_DOCUMENT_DIMENSION))
+            .min(available_w.max(1));
+        let mut widths = vec![0u32; columns];
+        if preferred_total <= content_w {
+            let extra = content_w - preferred_total;
+            for (index, width) in widths.iter_mut().enumerate() {
+                *width = preferred[index].saturating_add(extra / columns as u32);
+            }
+        } else {
+            for (index, width) in widths.iter_mut().enumerate() {
+                *width =
+                    ((preferred[index] as u64 * content_w as u64) / preferred_total as u64) as u32;
+                *width = (*width).max(16);
+            }
+        }
+        let assigned = widths.iter().copied().sum::<u32>();
+        if assigned != content_w {
+            let last = widths.last_mut().unwrap();
+            if assigned < content_w {
+                *last = last.saturating_add(content_w - assigned);
+            } else {
+                *last = last.saturating_sub(assigned - content_w).max(1);
+            }
+        }
+        let border_x = available_x.saturating_add(style.margin[3] as i32);
+        let border_y = cursor_y.saturating_add(style.margin[0] as i32);
+        let content_x = border_x
+            .saturating_add(style.paint.border_width as i32)
+            .saturating_add(style.padding[3] as i32);
+        let content_y = border_y
+            .saturating_add(style.paint.border_width as i32)
+            .saturating_add(style.padding[0] as i32);
+        let index = self.tree.nodes.len();
+        self.tree.nodes.push(LayoutNode {
+            owner_node_id: style.node_id,
+            display: DisplayType::Table,
+            content_box: Rect::new(content_x, content_y, content_w, 0),
+            padding_box: Rect::new(border_x, border_y, 0, 0),
+            border_box: Rect::new(border_x, border_y, 0, 0),
+            margin_box: Rect::new(available_x, *cursor_y, 0, 0),
+            children: Vec::new(),
+            text_fragments: Vec::new(),
+            image_fragments: Vec::new(),
+            marker: None,
+            visible: true,
+            paint: style.paint.clone(),
+            paint_order: node_id.min(u32::MAX as usize) as u32,
+            float_side: style.float.clone(),
+            clear: style.clear.clone(),
+            float_containing_block: None,
+            table_dimensions: Some((row_cells.len(), columns)),
+        });
+        let mut row_y = content_y;
+        let mut cell_count = 0usize;
+        for cells in row_cells {
+            if cell_count >= MAX_TABLE_CELLS {
+                break;
+            }
+            let mut x = content_x;
+            let mut row_h = 0u32;
+            let mut column = 0usize;
+            for (cell, span) in cells {
+                if cell_count >= MAX_TABLE_CELLS {
+                    break;
+                }
+                let span = span.min(columns.saturating_sub(column)).max(1);
+                let cell_width = widths[column..column + span].iter().copied().sum::<u32>();
+                let mut cell_cursor = row_y;
+                if let Some(cell_index) =
+                    self.layout_block(cell, x, cell_width, &mut cell_cursor, depth + 1)
+                {
+                    row_h = row_h.max(cell_cursor.saturating_sub(row_y).max(0) as u32);
+                    self.tree.nodes[index].children.push(cell_index);
+                }
+                x = x.saturating_add(cell_width as i32);
+                column += span;
+                cell_count += 1;
+            }
+            row_h = row_h.max(1);
+            row_y = row_y.saturating_add(row_h as i32);
+        }
+        let content_h = row_y.saturating_sub(content_y).max(0) as u32;
+        let padding_w = content_w.saturating_add(style.padding[1] + style.padding[3]);
+        let padding_h = content_h.saturating_add(style.padding[0] + style.padding[2]);
+        let border_w = padding_w.saturating_add(style.paint.border_width * 2);
+        let border_h = padding_h.saturating_add(style.paint.border_width * 2);
+        let margin_h = border_h.saturating_add(style.margin[0] + style.margin[2]);
+        let node = &mut self.tree.nodes[index];
+        node.content_box.h = content_h;
+        node.padding_box = Rect::new(
+            border_x + style.paint.border_width as i32,
+            border_y + style.paint.border_width as i32,
+            padding_w,
+            padding_h,
+        );
+        node.border_box = Rect::new(border_x, border_y, border_w, border_h);
+        node.margin_box = Rect::new(
+            available_x,
+            *cursor_y,
+            border_w.saturating_add(style.margin[1] + style.margin[3]),
+            margin_h,
+        );
+        *cursor_y = cursor_y.saturating_add(margin_h as i32);
+        Some(index)
+    }
+
+    fn collect_table_rows(
+        &self,
+        node_id: NodeId,
+        rows: &mut Vec<NodeId>,
+        depth: usize,
+        limit: usize,
+    ) {
+        if rows.len() >= limit || depth > MAX_LAYOUT_DEPTH {
+            return;
+        }
+        for &child in self.document.children(node_id) {
+            let tag = self
+                .document
+                .get(child)
+                .and_then(Node::tag_name)
+                .unwrap_or("");
+            if tag.eq_ignore_ascii_case("tr") {
+                rows.push(child);
+            } else if matches!(
+                tag.to_ascii_lowercase().as_str(),
+                "thead" | "tbody" | "tfoot"
+            ) {
+                self.collect_table_rows(child, rows, depth + 1, limit);
+            }
+            if rows.len() >= limit {
+                break;
+            }
+        }
+    }
+
     fn layout_block(
         &mut self,
         node_id: NodeId,
@@ -469,16 +746,23 @@ impl<'a> LayoutBuilder<'a> {
         let Node::Element { children, .. } = self.document.get(node_id)? else {
             return None;
         };
-        let style = self.flow_style(node_id);
+        let mut style = self.flow_style(node_id);
         if style.display == DisplayType::None {
             return None;
         }
         if matches!(
             style.display,
             DisplayType::Inline | DisplayType::InlineBlock
-        ) {
+        ) && style.float == "none"
+        {
             // An inline at this level is handled by its nearest block parent.
             return None;
+        }
+        if style.display == DisplayType::Table {
+            return self.layout_table(node_id, available_x, available_w, cursor_y, depth, style);
+        }
+        if style.width.is_none() && matches!(style.float.as_str(), "left" | "right") {
+            style.width = Some(self.inline_preferred_width(node_id).min(available_w.max(1)));
         }
         if self
             .document
@@ -489,13 +773,47 @@ impl<'a> LayoutBuilder<'a> {
             return self.layout_block_image(node_id, available_x, available_w, cursor_y, style);
         }
 
-        let outer_w = available_w.saturating_sub(style.margin[1].saturating_add(style.margin[3]));
+        if let Some(percent) = style.width_percent {
+            style.width = Some(
+                ((available_w as u64 * percent as u64) / 10_000).min(MAX_DOCUMENT_DIMENSION as u64)
+                    as u32,
+            );
+        }
         let horizontal_insets = style.padding[1]
             .saturating_add(style.padding[3])
             .saturating_add(style.paint.border_width.saturating_mul(2));
+        if style.width.is_some() && (style.margin_auto[1] || style.margin_auto[3]) {
+            let occupied = style
+                .width
+                .unwrap_or(0)
+                .saturating_add(horizontal_insets)
+                .saturating_add(if style.margin_auto[1] {
+                    0
+                } else {
+                    style.margin[1]
+                })
+                .saturating_add(if style.margin_auto[3] {
+                    0
+                } else {
+                    style.margin[3]
+                });
+            let free = available_w.saturating_sub(occupied);
+            match (style.margin_auto[3], style.margin_auto[1]) {
+                (true, true) => {
+                    style.margin[3] = free / 2;
+                    style.margin[1] = free - style.margin[3];
+                }
+                (true, false) => style.margin[3] = free,
+                (false, true) => style.margin[1] = free,
+                _ => {}
+            }
+        }
+        let outer_w = available_w.saturating_sub(style.margin[1].saturating_add(style.margin[3]));
         let content_w = style
             .width
             .unwrap_or_else(|| outer_w.saturating_sub(horizontal_insets))
+            .max(style.min_width)
+            .min(style.max_width.unwrap_or(MAX_DOCUMENT_DIMENSION))
             .min(MAX_DOCUMENT_DIMENSION);
         let border_x = available_x.saturating_add(style.margin[3] as i32);
         let content_x = border_x
@@ -520,6 +838,10 @@ impl<'a> LayoutBuilder<'a> {
             visible: true,
             paint: style.paint.clone(),
             paint_order: node_id.min(u32::MAX as usize) as u32,
+            float_side: style.float.clone(),
+            clear: style.clear.clone(),
+            float_containing_block: None,
+            table_dimensions: None,
         });
 
         let used_content_h = if matches!(style.display, DisplayType::Flex | DisplayType::InlineFlex)
@@ -544,26 +866,169 @@ impl<'a> LayoutBuilder<'a> {
             let child_w = content_w.saturating_sub(marker_w);
             let mut inner_y = content_y;
             let mut inline_nodes = Vec::new();
-            for &child in children {
-                if self.is_block(child) {
-                    self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
-                    inline_nodes.clear();
-                    if let Some(child_index) =
-                        self.layout_block(child, child_x, child_w, &mut inner_y, depth + 1)
-                    {
-                        self.tree.nodes[index].children.push(child_index);
+            let mut active_floats: Vec<(String, Rect)> = Vec::new();
+            let self_is_floated_anchor = style.float != "none"
+                && self
+                    .document
+                    .get(node_id)
+                    .and_then(Node::tag_name)
+                    .is_some_and(|tag| tag.eq_ignore_ascii_case("a"));
+            if self_is_floated_anchor {
+                self.flush_inline(index, &[node_id], child_x, child_w, &mut inner_y);
+            } else {
+                for &child in children {
+                    if self.is_block(child) {
+                        self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
+                        inline_nodes.clear();
+                        let child_style = self.flow_style(child);
+                        if child_style.clear != "none" {
+                            let clear_left = matches!(child_style.clear.as_str(), "left" | "both");
+                            let clear_right =
+                                matches!(child_style.clear.as_str(), "right" | "both");
+                            let cleared_y = active_floats
+                                .iter()
+                                .filter(|(side, _)| {
+                                    (clear_left && side == "left")
+                                        || (clear_right && side == "right")
+                                })
+                                .map(|(_, bounds)| bounds.bottom())
+                                .max()
+                                .unwrap_or(inner_y);
+                            inner_y = inner_y.max(cleared_y);
+                        }
+                        if matches!(child_style.float.as_str(), "left" | "right") {
+                            const MAX_ACTIVE_FLOATS: usize = 64;
+                            let start = self.tree.nodes.len();
+                            let inline_start = self.tree.inline_boxes.len();
+                            let mut float_y = inner_y;
+                            let mut temp_cursor = float_y;
+                            if let Some(child_index) = self.layout_block(
+                                child,
+                                child_x,
+                                child_w,
+                                &mut temp_cursor,
+                                depth + 1,
+                            ) {
+                                let end = self.tree.nodes.len();
+                                let inline_end = self.tree.inline_boxes.len();
+                                let item_w = self.tree.nodes[child_index]
+                                    .margin_box
+                                    .w
+                                    .min(child_w)
+                                    .max(1);
+                                for _ in 0..MAX_ACTIVE_FLOATS {
+                                    let left_used = active_floats
+                                        .iter()
+                                        .filter(|(side, bounds)| {
+                                            side == "left"
+                                                && bounds.y <= float_y
+                                                && bounds.bottom() > float_y
+                                        })
+                                        .map(|(_, b)| b.w)
+                                        .sum::<u32>();
+                                    let right_used = active_floats
+                                        .iter()
+                                        .filter(|(side, bounds)| {
+                                            side == "right"
+                                                && bounds.y <= float_y
+                                                && bounds.bottom() > float_y
+                                        })
+                                        .map(|(_, b)| b.w)
+                                        .sum::<u32>();
+                                    if item_w <= child_w.saturating_sub(left_used + right_used) {
+                                        break;
+                                    }
+                                    let Some(next_y) = active_floats
+                                        .iter()
+                                        .filter(|(_, b)| b.bottom() > float_y)
+                                        .map(|(_, b)| b.bottom())
+                                        .min()
+                                    else {
+                                        break;
+                                    };
+                                    float_y = next_y;
+                                }
+                                let left_used = active_floats
+                                    .iter()
+                                    .filter(|(side, bounds)| {
+                                        side == "left"
+                                            && bounds.y <= float_y
+                                            && bounds.bottom() > float_y
+                                    })
+                                    .map(|(_, b)| b.w)
+                                    .sum::<u32>();
+                                let right_used = active_floats
+                                    .iter()
+                                    .filter(|(side, bounds)| {
+                                        side == "right"
+                                            && bounds.y <= float_y
+                                            && bounds.bottom() > float_y
+                                    })
+                                    .map(|(_, b)| b.w)
+                                    .sum::<u32>();
+                                let target_x = if child_style.float == "right" {
+                                    child_x.saturating_add(
+                                        child_w.saturating_sub(right_used).saturating_sub(item_w)
+                                            as i32,
+                                    )
+                                } else {
+                                    child_x.saturating_add(left_used as i32)
+                                };
+                                let current = self.tree.nodes[child_index].margin_box;
+                                self.translate_layout_range(
+                                    start,
+                                    end,
+                                    inline_start,
+                                    inline_end,
+                                    target_x - current.x,
+                                    float_y - current.y,
+                                );
+                                if active_floats.len() < MAX_ACTIVE_FLOATS {
+                                    active_floats.push((
+                                        child_style.float.clone(),
+                                        self.tree.nodes[child_index].margin_box,
+                                    ));
+                                }
+                                self.tree.nodes[child_index].float_containing_block =
+                                    Some(self.tree.nodes[index].owner_node_id);
+                                self.tree.nodes[index].children.push(child_index);
+                            }
+                            continue;
+                        }
+                        let left_used = active_floats
+                            .iter()
+                            .filter(|(side, bounds)| {
+                                side == "left" && bounds.y <= inner_y && bounds.bottom() > inner_y
+                            })
+                            .map(|(_, bounds)| bounds.w)
+                            .sum::<u32>();
+                        let right_used = active_floats
+                            .iter()
+                            .filter(|(side, bounds)| {
+                                side == "right" && bounds.y <= inner_y && bounds.bottom() > inner_y
+                            })
+                            .map(|(_, bounds)| bounds.w)
+                            .sum::<u32>();
+                        let flow_x = child_x.saturating_add(left_used as i32);
+                        let flow_w = child_w.saturating_sub(left_used + right_used).max(1);
+                        if let Some(child_index) =
+                            self.layout_block(child, flow_x, flow_w, &mut inner_y, depth + 1)
+                        {
+                            self.tree.nodes[index].children.push(child_index);
+                        }
+                    } else {
+                        inline_nodes.push(child);
                     }
-                } else {
-                    inline_nodes.push(child);
                 }
+                self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
             }
-            self.flush_inline(index, &inline_nodes, child_x, child_w, &mut inner_y);
             inner_y.saturating_sub(content_y).max(0) as u32
         };
         let content_h = style
             .height
             .unwrap_or(0)
             .max(used_content_h)
+            .max(style.min_height)
             .min(MAX_DOCUMENT_DIMENSION);
         let padding_w = content_w
             .saturating_add(style.padding[1])
@@ -581,6 +1046,44 @@ impl<'a> LayoutBuilder<'a> {
             .saturating_add(style.margin[2]);
         let node = &mut self.tree.nodes[index];
         node.content_box.h = content_h;
+        if let Some(raw_url) = style.paint.background_image.as_deref() {
+            if let Some(resolved_url) = self
+                .base_url
+                .as_ref()
+                .and_then(|base| resolve_url(base, raw_url).ok())
+            {
+                let decoded = self.images.decoded(&resolved_url);
+                let link = self.document.get(node_id).and_then(|node| match node {
+                    Node::Element {
+                        tag_name,
+                        attributes,
+                        ..
+                    } if tag_name.eq_ignore_ascii_case("a") => {
+                        let href = attr(attributes, "href").unwrap_or("");
+                        Some(LinkTarget {
+                            anchor_node_id: style.node_id,
+                            href: href.into(),
+                            resolved_url: self
+                                .base_url
+                                .as_ref()
+                                .and_then(|base| resolve_url(base, href).ok()),
+                        })
+                    }
+                    _ => None,
+                });
+                node.image_fragments.push(ImageFragment {
+                    owner_node_id: style.node_id,
+                    bounds: Rect::new(content_x, content_y, content_w, content_h),
+                    src: raw_url.into(),
+                    resolved_url: Some(resolved_url),
+                    alt: String::from(""),
+                    intrinsic_size: decoded
+                        .map(|image| Size::new(image.image.width, image.image.height)),
+                    decoded: decoded.map(|image| image.image.clone()),
+                    link,
+                });
+            }
+        }
         node.padding_box = Rect::new(
             border_x.saturating_add(style.paint.border_width as i32),
             border_y.saturating_add(style.paint.border_width as i32),
@@ -666,6 +1169,10 @@ impl<'a> LayoutBuilder<'a> {
             visible: true,
             paint: style.paint,
             paint_order: node_id.min(u32::MAX as usize) as u32,
+            float_side: style.float.clone(),
+            clear: style.clear.clone(),
+            float_containing_block: None,
+            table_dimensions: None,
         });
         *cursor_y = cursor_y.saturating_add(margin_h as i32);
         Some(index)
@@ -744,9 +1251,16 @@ impl<'a> LayoutBuilder<'a> {
                     self.tree.nodes[parent_index].image_fragments.push(image);
                     had_content = true;
                 }
-                InlineItem::Control { owner, control, width, height } => {
+                InlineItem::Control {
+                    owner,
+                    control,
+                    width,
+                    height,
+                } => {
                     let width = width.min(w.max(1));
-                    if had_content && line_x.saturating_add(width as i32) > x.saturating_add(w as i32) {
+                    if had_content
+                        && line_x.saturating_add(width as i32) > x.saturating_add(w as i32)
+                    {
                         self.finish_line(parent_index, line_start, line_x, x, w, &align);
                         *cursor_y = cursor_y.saturating_add(line_h as i32);
                         self.line_count = self.line_count.saturating_add(1);
@@ -979,31 +1493,61 @@ impl<'a> LayoutBuilder<'a> {
                 } else if tag_name.eq_ignore_ascii_case("sup") {
                     style.paint.baseline_offset = -((style.paint.line_height / 4) as i32);
                 }
-                if tag_name.eq_ignore_ascii_case("input") || tag_name.eq_ignore_ascii_case("button") {
-                    let input_type = attr(attributes, "type").unwrap_or("text").to_ascii_lowercase();
+                if tag_name.eq_ignore_ascii_case("input") || tag_name.eq_ignore_ascii_case("button")
+                {
+                    let input_type = attr(attributes, "type")
+                        .unwrap_or("text")
+                        .to_ascii_lowercase();
                     let is_button = tag_name.eq_ignore_ascii_case("button")
                         || matches!(input_type.as_str(), "submit" | "button");
                     let label = if is_button {
                         if tag_name.eq_ignore_ascii_case("button") {
                             let text = collect_text_content(self.document, node_id);
-                            if text.is_empty() { String::from(attr(attributes, "value").unwrap_or("")) } else { text }
-                        } else { String::from(attr(attributes, "value").unwrap_or("")) }
-                    } else { String::new() };
+                            if text.is_empty() {
+                                String::from(attr(attributes, "value").unwrap_or(""))
+                            } else {
+                                text
+                            }
+                        } else {
+                            String::from(attr(attributes, "value").unwrap_or(""))
+                        }
+                    } else {
+                        String::new()
+                    };
                     let default_width = if is_button {
                         self.measurer.measure_width(&label).saturating_add(28)
                     } else {
-                        attr(attributes, "size").and_then(|v| v.parse::<u32>().ok()).unwrap_or(20).saturating_mul(8).saturating_add(18)
+                        attr(attributes, "size")
+                            .and_then(|v| v.parse::<u32>().ok())
+                            .unwrap_or(20)
+                            .saturating_mul(8)
+                            .saturating_add(18)
                     };
                     let width = style.width.unwrap_or(default_width).max(24);
-                    let height = style.height.unwrap_or(style.paint.line_height.saturating_add(style.padding[0] + style.padding[2] + 2).max(28));
+                    let height = style.height.unwrap_or(
+                        style
+                            .paint
+                            .line_height
+                            .saturating_add(style.padding[0] + style.padding[2] + 2)
+                            .max(28),
+                    );
                     output.push(InlineItem::Control {
                         owner,
                         control: ControlLayout {
                             label,
                             placeholder: attr(attributes, "placeholder").unwrap_or("").into(),
-                            value: if is_button { String::new() } else { attr(attributes, "value").unwrap_or("").into() },
-                            disabled: attributes.iter().any(|a| a.name().eq_ignore_ascii_case("disabled")),
-                            editable: !is_button && !attributes.iter().any(|a| a.name().eq_ignore_ascii_case("readonly")),
+                            value: if is_button {
+                                String::new()
+                            } else {
+                                attr(attributes, "value").unwrap_or("").into()
+                            },
+                            disabled: attributes
+                                .iter()
+                                .any(|a| a.name().eq_ignore_ascii_case("disabled")),
+                            editable: !is_button
+                                && !attributes
+                                    .iter()
+                                    .any(|a| a.name().eq_ignore_ascii_case("readonly")),
                             kind: if is_button { 1 } else { 0 },
                         },
                         width,
@@ -1086,10 +1630,14 @@ impl<'a> LayoutBuilder<'a> {
     }
 
     fn is_block(&self, node_id: NodeId) -> bool {
-        matches!(self.document.get(node_id), Some(Node::Element { .. }))
-            && matches!(
-                self.flow_style(node_id).display,
-                DisplayType::Block | DisplayType::ListItem | DisplayType::Flex
+        if !matches!(self.document.get(node_id), Some(Node::Element { .. })) {
+            return false;
+        }
+        let style = self.flow_style(node_id);
+        matches!(style.float.as_str(), "left" | "right")
+            || matches!(
+                style.display,
+                DisplayType::Block | DisplayType::ListItem | DisplayType::Flex | DisplayType::Table
             )
     }
 
@@ -1340,7 +1888,12 @@ impl<'a> LayoutBuilder<'a> {
         });
     }
 
-    fn record_inline_box_with_control(&mut self, owner: InlineOwner, bounds: Rect, control: ControlLayout) {
+    fn record_inline_box_with_control(
+        &mut self,
+        owner: InlineOwner,
+        bounds: Rect,
+        control: ControlLayout,
+    ) {
         self.tree.inline_boxes.push(InlineLayoutBox {
             owner_node_id: owner.node_id,
             bounds,
@@ -1357,7 +1910,11 @@ impl<'a> LayoutBuilder<'a> {
             node_id: DocumentNodeId(node_id as u64),
             display: display(style),
             width: value_px(style, Property::Width),
+            width_percent: value_percent(style, Property::Width),
+            min_width: value_px(style, Property::MinWidth).unwrap_or(0),
+            max_width: value_px(style, Property::MaxWidth),
             height: value_px(style, Property::Height),
+            min_height: value_px(style, Property::MinHeight).unwrap_or(0),
             margin: sides(
                 style,
                 Property::MarginTop,
@@ -1365,6 +1922,12 @@ impl<'a> LayoutBuilder<'a> {
                 Property::MarginBottom,
                 Property::MarginLeft,
             ),
+            margin_auto: [
+                value_auto(style, Property::MarginTop),
+                value_auto(style, Property::MarginRight),
+                value_auto(style, Property::MarginBottom),
+                value_auto(style, Property::MarginLeft),
+            ],
             padding: sides(
                 style,
                 Property::PaddingTop,
@@ -1383,6 +1946,8 @@ impl<'a> LayoutBuilder<'a> {
             column_gap: value_px(style, Property::ColumnGap)
                 .unwrap_or(0)
                 .min(MAX_DOCUMENT_DIMENSION),
+            float: keyword(style, Property::Float),
+            clear: keyword(style, Property::Clear),
             paint,
         }
     }
@@ -1486,6 +2051,24 @@ fn display(style: Option<&ComputedStyle>) -> DisplayType {
         Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("inline-block") => {
             DisplayType::InlineBlock
         }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("table") => {
+            DisplayType::Table
+        }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("table-header-group") => {
+            DisplayType::TableHeaderGroup
+        }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("table-row-group") => {
+            DisplayType::TableRowGroup
+        }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("table-footer-group") => {
+            DisplayType::TableFooterGroup
+        }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("table-row") => {
+            DisplayType::TableRow
+        }
+        Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("table-cell") => {
+            DisplayType::TableCell
+        }
         Some(PropertyValue::Keyword(value)) if value.eq_ignore_ascii_case("none") => {
             DisplayType::None
         }
@@ -1538,6 +2121,20 @@ fn value_px(style: Option<&ComputedStyle>, property: Property) -> Option<u32> {
         Some(PropertyValue::LengthPx(0)) => Some(0),
         _ => None,
     }
+}
+
+fn value_percent(style: Option<&ComputedStyle>, property: Property) -> Option<u32> {
+    match style.and_then(|style| style.value(&property)) {
+        Some(PropertyValue::Percentage(value)) if *value >= 0 => Some(*value as u32),
+        _ => None,
+    }
+}
+
+fn value_auto(style: Option<&ComputedStyle>, property: Property) -> bool {
+    matches!(
+        style.and_then(|style| style.value(&property)),
+        Some(PropertyValue::Auto)
+    )
 }
 
 fn attr<'a>(attributes: &'a [Attribute], name: &str) -> Option<&'a str> {
@@ -1594,13 +2191,66 @@ fn resolved_paint(
     let line_height = value_px(style, Property::LineHeight)
         .unwrap_or(default_line_height)
         .max(1);
-    let border_width = value_px(style, Property::BorderWidth).unwrap_or(0);
+    let fallback_width = value_px(style, Property::BorderWidth).unwrap_or(0);
+    let border_widths = [
+        Property::BorderTopWidth,
+        Property::BorderRightWidth,
+        Property::BorderBottomWidth,
+        Property::BorderLeftWidth,
+    ]
+    .map(|property| value_px(style, property).unwrap_or(fallback_width));
+    let border_width = border_widths.iter().copied().max().unwrap_or(0);
     let border_style = keyword(style, Property::BorderStyle);
+    let border_styles = [
+        Property::BorderTopStyle,
+        Property::BorderRightStyle,
+        Property::BorderBottomStyle,
+        Property::BorderLeftStyle,
+    ]
+    .map(|property| {
+        let side = keyword(style, property);
+        if side.is_empty() {
+            border_style.clone()
+        } else {
+            side
+        }
+    });
+    let foreground = css_color(
+        style.and_then(|style| style.value(&Property::Color)),
+        Color::rgb(0, 0, 0),
+    );
+    let fallback_border = css_color(
+        style.and_then(|style| style.value(&Property::BorderColor)),
+        foreground,
+    );
+    let border_colors = [
+        Property::BorderTopColor,
+        Property::BorderRightColor,
+        Property::BorderBottomColor,
+        Property::BorderLeftColor,
+    ]
+    .map(|property| {
+        css_color(
+            style.and_then(|style| style.value(&property)),
+            fallback_border,
+        )
+    });
+    let corner_radii = CornerRadii {
+        top_left: value_px(style, Property::BorderTopLeftRadius).unwrap_or(0),
+        top_right: value_px(style, Property::BorderTopRightRadius).unwrap_or(0),
+        bottom_right: value_px(style, Property::BorderBottomRightRadius).unwrap_or(0),
+        bottom_left: value_px(style, Property::BorderBottomLeftRadius).unwrap_or(0),
+    };
+    let box_shadow = style
+        .and_then(|style| style.value(&Property::BoxShadow))
+        .and_then(|value| match value {
+            PropertyValue::Keyword(raw) | PropertyValue::Raw(raw) => {
+                parse_box_shadow(raw, font_size, foreground)
+            }
+            _ => None,
+        });
     ResolvedPaintStyle {
-        color: css_color(
-            style.and_then(|style| style.value(&Property::Color)),
-            Color::rgb(0, 0, 0),
-        ),
+        color: foreground,
         background: css_color(
             style.and_then(|style| style.value(&Property::BackgroundColor)),
             Color::TRANSPARENT,
@@ -1629,12 +2279,28 @@ fn resolved_paint(
         },
         baseline_offset: 0,
         text_align: keyword(style, Property::TextAlign),
-        border_color: css_color(
-            style.and_then(|style| style.value(&Property::BorderColor)),
-            Color::rgb(0, 0, 0),
-        ),
+        border_color: fallback_border,
         border_width,
-        border_visible: border_width > 0 && border_style != "none",
+        border_visible: border_widths
+            .iter()
+            .zip(border_styles.iter())
+            .any(|(width, style)| *width > 0 && style != "none"),
+        border_colors,
+        border_widths,
+        corner_radii,
+        box_shadow,
+        background_image: style
+            .and_then(|style| style.value(&Property::BackgroundImage))
+            .and_then(|value| {
+                let raw = match value {
+                    PropertyValue::Keyword(value) | PropertyValue::Raw(value) => value,
+                    _ => return None,
+                };
+                let inner = raw.strip_prefix("url(")?.strip_suffix(')')?.trim();
+                let inner = inner.trim_matches(['\"', '\'']);
+                (!inner.is_empty() && !inner.eq_ignore_ascii_case("none"))
+                    .then(|| String::from(inner))
+            }),
     }
 }
 
@@ -1647,6 +2313,110 @@ fn scaled_measure_for(
     measurer
         .measure_width_for_size(family, font_size, text)
         .clamp(1, MAX_DOCUMENT_DIMENSION)
+}
+
+fn parse_box_shadow(raw: &str, font_size: u32, current_color: Color) -> Option<ResolvedBoxShadow> {
+    if raw.contains(',') || raw.eq_ignore_ascii_case("none") {
+        return None;
+    }
+    let mut lengths = Vec::new();
+    let mut color = current_color;
+    let mut inset = false;
+    for token in raw.split_ascii_whitespace() {
+        if token.eq_ignore_ascii_case("inset") {
+            inset = true;
+            continue;
+        }
+        if token.eq_ignore_ascii_case("currentcolor") {
+            color = current_color;
+            continue;
+        }
+        if let Some(parsed) = parse_shadow_color(token) {
+            color = parsed;
+            continue;
+        }
+        lengths.push(parse_shadow_length(token, font_size)?);
+    }
+    if !(2..=4).contains(&lengths.len()) {
+        return None;
+    }
+    let blur = lengths.get(2).copied().unwrap_or(0).max(0).min(32) as u32;
+    Some(ResolvedBoxShadow {
+        offset_x: lengths[0],
+        offset_y: lengths[1],
+        blur,
+        spread: lengths.get(3).copied().unwrap_or(0).clamp(-32, 32),
+        color,
+        inset,
+    })
+}
+
+fn parse_shadow_length(token: &str, font_size: u32) -> Option<i32> {
+    if matches!(token, "0" | "+0" | "-0") {
+        return Some(0);
+    }
+    let lower = token.to_ascii_lowercase();
+    let (number, scale) = if let Some(number) = lower.strip_suffix("px") {
+        (number, 1000i32)
+    } else if let Some(number) = lower.strip_suffix("em") {
+        (number, font_size.min(4096) as i32 * 1000)
+    } else {
+        return None;
+    };
+    let negative = number.starts_with('-');
+    let unsigned = number.trim_start_matches(['+', '-']);
+    let (whole, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
+    let whole = if whole.is_empty() {
+        0
+    } else {
+        whole.parse::<i32>().ok()?
+    };
+    let fraction = fraction
+        .as_bytes()
+        .iter()
+        .take(3)
+        .fold((0i32, 1i32), |(value, divisor), digit| {
+            ((value * 10) + (*digit - b'0') as i32, divisor * 10)
+        });
+    let thousandths = whole * 1000
+        + if fraction.1 > 1 {
+            fraction.0 * 1000 / fraction.1
+        } else {
+            0
+        };
+    let value = thousandths.saturating_mul(scale) / 1_000_000;
+    Some(if negative { -value } else { value })
+}
+
+fn parse_shadow_color(token: &str) -> Option<Color> {
+    let lower = token.to_ascii_lowercase();
+    let (r, g, b) = match lower.as_str() {
+        "black" => (0, 0, 0),
+        "white" => (255, 255, 255),
+        "red" => (255, 0, 0),
+        "yellow" => (255, 255, 0),
+        "gray" | "grey" => (128, 128, 128),
+        _ => {
+            let hex = lower.strip_prefix('#')?;
+            if hex.len() == 3 {
+                let d = |byte| char::from(byte).to_digit(16).map(|v| (v * 17) as u8);
+                (
+                    d(hex.as_bytes()[0])?,
+                    d(hex.as_bytes()[1])?,
+                    d(hex.as_bytes()[2])?,
+                )
+            } else if hex.len() == 6 {
+                (
+                    u8::from_str_radix(&hex[0..2], 16).ok()?,
+                    u8::from_str_radix(&hex[2..4], 16).ok()?,
+                    u8::from_str_radix(&hex[4..6], 16).ok()?,
+                )
+            } else {
+                return None;
+            }
+        }
+    };
+    Some(Color::rgb(r, g, b))
 }
 
 fn format_marker(ordinal: u32, style_type: &str) -> String {
@@ -1755,19 +2525,96 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                 interaction: None,
             },
         );
+        if let Some(shadow) = node.paint.box_shadow.filter(|shadow| !shadow.inset) {
+            let extent = shadow
+                .blur
+                .saturating_add(shadow.spread.max(0) as u32)
+                .min(64);
+            let bounds = Rect::new(
+                node.border_box
+                    .x
+                    .saturating_add(shadow.offset_x)
+                    .saturating_sub(extent as i32),
+                node.border_box
+                    .y
+                    .saturating_add(shadow.offset_y)
+                    .saturating_sub(extent as i32),
+                node.border_box.w.saturating_add(extent * 2),
+                node.border_box.h.saturating_add(extent * 2),
+            );
+            push(
+                &mut scene,
+                RenderObject {
+                    id: object_id(node.owner_node_id, 4, 0),
+                    owner_node_id: node.owner_node_id,
+                    kind: RenderObjectKind::BoxShadow {
+                        box_bounds: node.border_box,
+                        radii: node.paint.corner_radii,
+                        offset_x: shadow.offset_x,
+                        offset_y: shadow.offset_y,
+                        blur: shadow.blur,
+                        spread: shadow.spread,
+                        color: shadow.color,
+                        inset: false,
+                    },
+                    bounds,
+                    clip_bounds: None,
+                    paint_order: PaintOrder {
+                        phase: 0,
+                        document_order: node.paint_order,
+                        ..PaintOrder::default()
+                    },
+                    interaction: None,
+                },
+            );
+        }
         if node.paint.background != Color::TRANSPARENT {
             push(
                 &mut scene,
                 RenderObject {
                     id: object_id(node.owner_node_id, 2, 0),
                     owner_node_id: node.owner_node_id,
-                    kind: RenderObjectKind::Rectangle {
-                        fill: node.paint.background,
+                    kind: if node.paint.corner_radii == CornerRadii::default() {
+                        RenderObjectKind::Rectangle {
+                            fill: node.paint.background,
+                        }
+                    } else {
+                        RenderObjectKind::RoundedRectangle {
+                            fill: node.paint.background,
+                            radii: node.paint.corner_radii,
+                        }
                     },
                     bounds: node.border_box,
                     clip_bounds: None,
                     paint_order: PaintOrder {
                         phase: 1,
+                        document_order: node.paint_order,
+                        ..PaintOrder::default()
+                    },
+                    interaction: None,
+                },
+            );
+        }
+        if let Some(shadow) = node.paint.box_shadow.filter(|shadow| shadow.inset) {
+            push(
+                &mut scene,
+                RenderObject {
+                    id: object_id(node.owner_node_id, 5, 0),
+                    owner_node_id: node.owner_node_id,
+                    kind: RenderObjectKind::BoxShadow {
+                        box_bounds: node.border_box,
+                        radii: node.paint.corner_radii,
+                        offset_x: shadow.offset_x,
+                        offset_y: shadow.offset_y,
+                        blur: shadow.blur,
+                        spread: shadow.spread,
+                        color: shadow.color,
+                        inset: true,
+                    },
+                    bounds: node.border_box,
+                    clip_bounds: Some(node.border_box),
+                    paint_order: PaintOrder {
+                        phase: 2,
                         document_order: node.paint_order,
                         ..PaintOrder::default()
                     },
@@ -1781,14 +2628,33 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                 RenderObject {
                     id: object_id(node.owner_node_id, 3, 0),
                     owner_node_id: node.owner_node_id,
-                    kind: RenderObjectKind::Border {
-                        color: node.paint.border_color,
-                        width: node.paint.border_width,
+                    kind: if node.paint.corner_radii == CornerRadii::default()
+                        && node
+                            .paint
+                            .border_colors
+                            .iter()
+                            .all(|color| *color == node.paint.border_colors[0])
+                        && node
+                            .paint
+                            .border_widths
+                            .iter()
+                            .all(|width| *width == node.paint.border_widths[0])
+                    {
+                        RenderObjectKind::Border {
+                            color: node.paint.border_colors[0],
+                            width: node.paint.border_widths[0],
+                        }
+                    } else {
+                        RenderObjectKind::BorderSides {
+                            colors: node.paint.border_colors,
+                            widths: node.paint.border_widths,
+                            radii: node.paint.corner_radii,
+                        }
                     },
                     bounds: node.border_box,
                     clip_bounds: None,
                     paint_order: PaintOrder {
-                        phase: 2,
+                        phase: 3,
                         document_order: node.paint_order,
                         ..PaintOrder::default()
                     },
@@ -1836,7 +2702,7 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                     bounds,
                     clip_bounds: None,
                     paint_order: PaintOrder {
-                        phase: 3,
+                        phase: 4,
                         document_order: marker.paint_order,
                         ..PaintOrder::default()
                     },
@@ -1869,7 +2735,7 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                     bounds: fragment.bounds,
                     clip_bounds: None,
                     paint_order: PaintOrder {
-                        phase: 3,
+                        phase: 4,
                         document_order: node.paint_order.saturating_add(slot as u32),
                         ..PaintOrder::default()
                     },
@@ -1928,7 +2794,13 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                         placeholder: control.placeholder.clone(),
                         value: control.value.clone(),
                         color: inline_box.paint.color,
-                        background: if control.disabled { Color::rgb(0xDD, 0xDD, 0xDD) } else if inline_box.paint.background == Color::TRANSPARENT { Color::rgb(0xFF, 0xFF, 0xFF) } else { inline_box.paint.background },
+                        background: if control.disabled {
+                            Color::rgb(0xDD, 0xDD, 0xDD)
+                        } else if inline_box.paint.background == Color::TRANSPARENT {
+                            Color::rgb(0xFF, 0xFF, 0xFF)
+                        } else {
+                            inline_box.paint.background
+                        },
                         border_color: inline_box.paint.border_color,
                         border_width: inline_box.paint.border_width.max(1),
                         focused: false,
@@ -1941,8 +2813,14 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                     },
                     bounds: inline_box.bounds,
                     clip_bounds: Some(inline_box.bounds),
-                    paint_order: PaintOrder { phase: 5, document_order: inline_box.paint_order, ..PaintOrder::default() },
-                    interaction: Some(RenderInteraction::Control { owner_node_id: inline_box.owner_node_id }),
+                    paint_order: PaintOrder {
+                        phase: 5,
+                        document_order: inline_box.paint_order,
+                        ..PaintOrder::default()
+                    },
+                    interaction: Some(RenderInteraction::Control {
+                        owner_node_id: inline_box.owner_node_id,
+                    }),
                 },
             );
             continue;
@@ -2534,9 +3412,16 @@ mod tests {
     #[test]
     fn form_fixture_emits_owned_control_hit_regions() {
         let state = render(include_str!("../tests/fixtures/form-lesson.html"));
-        let controls = state.current_scene.objects.iter().filter(|object| matches!(object.kind, RenderObjectKind::Control { .. })).collect::<Vec<_>>();
+        let controls = state
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::Control { .. }))
+            .collect::<Vec<_>>();
         assert_eq!(controls.len(), 6);
-        assert!(controls.iter().all(|object| matches!(object.interaction, Some(RenderInteraction::Control { .. }))));
+        assert!(controls
+            .iter()
+            .all(|object| matches!(object.interaction, Some(RenderInteraction::Control { .. }))));
         assert!(controls.iter().all(|object| object.owner_node_id.0 > 0));
     }
 
@@ -2949,5 +3834,87 @@ mod tests {
             format: crate::images::ImageFormat::Png,
             byte_size: 4,
         }
+    }
+
+    #[test]
+    fn classic_kernel_fixture_centers_floats_clears_and_grids_table() {
+        let html = include_str!("../tests/fixtures/kernel-classic-layout.html");
+        let dom = parse_html(html).unwrap();
+        let styles = StyleContext::build(&dom, &collect_embedded_stylesheets(&dom));
+        let state = DocumentRenderState::new(
+            9,
+            String::from("https://fixture.test/"),
+            dom,
+            styles,
+            Size::new(1000, 700),
+            &TestMeasure,
+        );
+        let by_id = |id: &str| {
+            (0..state.dom.node_count())
+                .find_map(|node_id| match state.dom.get(node_id) {
+                    Some(Node::Element { attributes, .. })
+                        if attr(attributes, "id") == Some(id) =>
+                    {
+                        Some(node_id)
+                    }
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let banner_id = by_id("banner");
+        let latest_id = by_id("latest-download");
+        let releases_id = by_id("releases");
+        let node = |id| {
+            state
+                .layout_tree
+                .nodes
+                .iter()
+                .find(|node| node.owner_node_id == DocumentNodeId(id as u64))
+                .unwrap()
+        };
+        let banner = node(banner_id);
+        assert_eq!(banner.content_box.w, 800);
+        assert_eq!(banner.padding_box.w, 832);
+        assert!(banner.border_box.x >= 80 && banner.border_box.x <= 84);
+        assert_eq!(banner.paint.corner_radii.bottom_left, 8);
+        assert_eq!(banner.paint.corner_radii.bottom_right, 8);
+        assert_eq!(banner.paint.corner_radii.top_left, 0);
+        assert_eq!(banner.paint.border_colors[0], Color::rgb(0xdd, 0xda, 0xdf));
+        assert_eq!(banner.paint.border_colors[1], Color::rgb(0xcc, 0xc8, 0xb8));
+        assert_eq!(banner.paint.border_colors[2], Color::rgb(0xbb, 0xb5, 0x9f));
+        assert!(state
+            .current_scene
+            .objects
+            .iter()
+            .any(
+                |object| object.owner_node_id == DocumentNodeId(banner_id as u64)
+                    && matches!(
+                        object.kind,
+                        RenderObjectKind::BoxShadow { inset: false, .. }
+                    )
+            ));
+        let latest = node(latest_id);
+        let releases = node(releases_id);
+        assert!(latest.border_box.x > 700);
+        assert!(releases.border_box.y >= latest.margin_box.bottom());
+        assert_eq!(releases.content_box.w, 1000);
+        assert!(state
+            .current_scene
+            .objects
+            .iter()
+            .any(
+                |object| object.owner_node_id == DocumentNodeId(latest_id as u64)
+                    && matches!(object.kind, RenderObjectKind::BoxShadow { inset: true, .. })
+            ));
+        let cell_nodes = state
+            .layout_tree
+            .nodes
+            .iter()
+            .filter(|node| node.display == DisplayType::TableCell)
+            .collect::<Vec<_>>();
+        assert_eq!(cell_nodes.len(), 12);
+        assert_eq!(cell_nodes[0].border_box.x, cell_nodes[4].border_box.x);
+        assert_eq!(cell_nodes[1].border_box.x, cell_nodes[5].border_box.x);
+        assert!(state.current_scene.objects.iter().any(|object| matches!(object.interaction, Some(RenderInteraction::Link { owner_node_id, .. }) if owner_node_id == DocumentNodeId(latest_id as u64)) && object.bounds.x >= latest.border_box.x));
     }
 }

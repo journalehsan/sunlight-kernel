@@ -82,6 +82,14 @@ pub struct PaintOrder {
     pub document_order: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CornerRadii {
+    pub top_left: u32,
+    pub top_right: u32,
+    pub bottom_right: u32,
+    pub bottom_left: u32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RenderObjectKind {
     /// Structural retained box.  It carries geometry and ownership even when
@@ -101,9 +109,28 @@ pub enum RenderObjectKind {
     Rectangle {
         fill: Color,
     },
+    RoundedRectangle {
+        fill: Color,
+        radii: CornerRadii,
+    },
     Border {
         color: Color,
         width: u32,
+    },
+    BorderSides {
+        colors: [Color; 4],
+        widths: [u32; 4],
+        radii: CornerRadii,
+    },
+    BoxShadow {
+        box_bounds: Rect,
+        radii: CornerRadii,
+        offset_x: i32,
+        offset_y: i32,
+        blur: u32,
+        spread: i32,
+        color: Color,
+        inset: bool,
     },
     Line {
         color: Color,
@@ -977,6 +1004,9 @@ impl<'a> DocumentCanvas<'a> {
             match &object.kind {
                 RenderObjectKind::Box => {}
                 RenderObjectKind::Rectangle { fill } => canvas.fill_rect(clipped, *fill),
+                RenderObjectKind::RoundedRectangle { fill, radii } => {
+                    fill_corner_rounded(canvas, bounds, clipped, *radii, *fill, false);
+                }
                 RenderObjectKind::Border { color, width } => {
                     let width = (*width).max(1).min(bounds.w.min(bounds.h).max(1));
                     for offset in 0..width {
@@ -990,6 +1020,29 @@ impl<'a> DocumentCanvas<'a> {
                             canvas.draw_rect(visible, *color);
                         }
                     }
+                }
+                RenderObjectKind::BorderSides {
+                    colors,
+                    widths,
+                    radii,
+                } => {
+                    paint_corner_border(canvas, bounds, clipped, *radii, *colors, *widths);
+                }
+                RenderObjectKind::BoxShadow {
+                    box_bounds,
+                    radii,
+                    offset_x,
+                    offset_y,
+                    blur,
+                    spread,
+                    color,
+                    inset,
+                } => {
+                    let base = box_bounds.translate(content.x, content.y - self.scroll_y as i32);
+                    paint_box_shadow(
+                        canvas, content, base, *radii, *offset_x, *offset_y, *blur, *spread,
+                        *color, *inset,
+                    );
                 }
                 RenderObjectKind::Line { color, width } => draw_line_clipped(
                     canvas,
@@ -1110,25 +1163,58 @@ impl<'a> DocumentCanvas<'a> {
                             bounds.h.saturating_sub(offset * 2),
                         );
                         if let Some(visible) = inset.intersect(content) {
-                            canvas.draw_rect(visible, if *focused { Color::rgb(0x3B, 0x82, 0xF6) } else { *border_color });
+                            canvas.draw_rect(
+                                visible,
+                                if *focused {
+                                    Color::rgb(0x3B, 0x82, 0xF6)
+                                } else {
+                                    *border_color
+                                },
+                            );
                         }
                     }
                     let text = if value.is_empty() { placeholder } else { value };
-                    let text_color = if value.is_empty() { Color::rgb(0x77, 0x77, 0x77) } else if *disabled { Color::rgb(0x77, 0x77, 0x77) } else { *color };
+                    let text_color = if value.is_empty() {
+                        Color::rgb(0x77, 0x77, 0x77)
+                    } else if *disabled {
+                        Color::rgb(0x77, 0x77, 0x77)
+                    } else {
+                        *color
+                    };
                     let font = match font_family {
                         DocumentFontFamily::Serif => self.scene_serif_font.or(self.body_font),
                         DocumentFontFamily::Monospace => self.scene_mono_font.or(self.body_font),
                         DocumentFontFamily::SansSerif => self.body_font,
                     };
-                    let text_rect = Rect::new(bounds.x + width as i32 + 7, bounds.y, bounds.w.saturating_sub(width * 2 + 14), bounds.h);
+                    let text_rect = Rect::new(
+                        bounds.x + width as i32 + 7,
+                        bounds.y,
+                        bounds.w.saturating_sub(width * 2 + 14),
+                        bounds.h,
+                    );
                     let visible = clip_text_to_width(font, text, text_rect.w);
                     if !visible.is_empty() {
-                        draw_text_vcenter(canvas, font, text_rect.x, text_rect.y, text_rect.h, visible, text_color);
+                        draw_text_vcenter(
+                            canvas,
+                            font,
+                            text_rect.x,
+                            text_rect.y,
+                            text_rect.h,
+                            visible,
+                            text_color,
+                        );
                     }
                     if *focused {
                         if let Some(offset) = caret_offset {
                             let caret_x = text_rect.x + (*offset as i32).min(text_rect.w as i32);
-                            if let Some(caret) = Rect::new(caret_x, text_rect.y + 3, 1, text_rect.h.saturating_sub(6)).intersect(content) {
+                            if let Some(caret) = Rect::new(
+                                caret_x,
+                                text_rect.y + 3,
+                                1,
+                                text_rect.h.saturating_sub(6),
+                            )
+                            .intersect(content)
+                            {
                                 canvas.fill_rect(caret, Color::rgb(0x25, 0x63, 0xEB));
                             }
                         }
@@ -1141,7 +1227,15 @@ impl<'a> DocumentCanvas<'a> {
                         } else {
                             text_rect.x
                         };
-                        draw_text_vcenter(canvas, font, label_x, text_rect.y, text_rect.h, label, text_color);
+                        draw_text_vcenter(
+                            canvas,
+                            font,
+                            label_x,
+                            text_rect.y,
+                            text_rect.h,
+                            label,
+                            text_color,
+                        );
                     }
                 }
                 // A link has interaction metadata but no extra paint.  Its
@@ -1149,6 +1243,200 @@ impl<'a> DocumentCanvas<'a> {
                 RenderObjectKind::Link { .. } => {}
             }
         }
+    }
+}
+
+fn corner_contains(rect: Rect, mut radii: CornerRadii, x: i32, y: i32) -> bool {
+    if !rect.contains(Point::new(x, y)) {
+        return false;
+    }
+    let limit = rect.w.min(rect.h) / 2;
+    radii.top_left = radii.top_left.min(limit);
+    radii.top_right = radii.top_right.min(limit);
+    radii.bottom_right = radii.bottom_right.min(limit);
+    radii.bottom_left = radii.bottom_left.min(limit);
+    let tests = [
+        (
+            rect.x + radii.top_left as i32,
+            rect.y + radii.top_left as i32,
+            radii.top_left,
+            x < rect.x + radii.top_left as i32 && y < rect.y + radii.top_left as i32,
+        ),
+        (
+            rect.right() - radii.top_right as i32 - 1,
+            rect.y + radii.top_right as i32,
+            radii.top_right,
+            x >= rect.right() - radii.top_right as i32 && y < rect.y + radii.top_right as i32,
+        ),
+        (
+            rect.right() - radii.bottom_right as i32 - 1,
+            rect.bottom() - radii.bottom_right as i32 - 1,
+            radii.bottom_right,
+            x >= rect.right() - radii.bottom_right as i32
+                && y >= rect.bottom() - radii.bottom_right as i32,
+        ),
+        (
+            rect.x + radii.bottom_left as i32,
+            rect.bottom() - radii.bottom_left as i32 - 1,
+            radii.bottom_left,
+            x < rect.x + radii.bottom_left as i32 && y >= rect.bottom() - radii.bottom_left as i32,
+        ),
+    ];
+    for (cx, cy, radius, applies) in tests {
+        if applies && radius > 0 {
+            let dx = x - cx;
+            let dy = y - cy;
+            return dx * dx + dy * dy <= (radius as i32 * radius as i32);
+        }
+    }
+    true
+}
+
+fn fill_corner_rounded(
+    canvas: &mut Canvas,
+    rect: Rect,
+    clip: Rect,
+    radii: CornerRadii,
+    color: Color,
+    blend: bool,
+) {
+    let Some(area) = rect.intersect(clip) else {
+        return;
+    };
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            if corner_contains(rect, radii, x, y) {
+                if blend {
+                    canvas.blend_pixel(x, y, color);
+                } else {
+                    canvas.put_pixel(x, y, color);
+                }
+            }
+        }
+    }
+}
+
+fn paint_corner_border(
+    canvas: &mut Canvas,
+    rect: Rect,
+    clip: Rect,
+    radii: CornerRadii,
+    colors: [Color; 4],
+    widths: [u32; 4],
+) {
+    let Some(area) = rect.intersect(clip) else {
+        return;
+    };
+    let inner = Rect::new(
+        rect.x + widths[3] as i32,
+        rect.y + widths[0] as i32,
+        rect.w.saturating_sub(widths[1] + widths[3]),
+        rect.h.saturating_sub(widths[0] + widths[2]),
+    );
+    let inner_radii = CornerRadii {
+        top_left: radii.top_left.saturating_sub(widths[0].max(widths[3])),
+        top_right: radii.top_right.saturating_sub(widths[0].max(widths[1])),
+        bottom_right: radii.bottom_right.saturating_sub(widths[2].max(widths[1])),
+        bottom_left: radii.bottom_left.saturating_sub(widths[2].max(widths[3])),
+    };
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            if !corner_contains(rect, radii, x, y) || corner_contains(inner, inner_radii, x, y) {
+                continue;
+            }
+            let distances = [
+                (y - rect.y).max(0) as u32,
+                (rect.right() - 1 - x).max(0) as u32,
+                (rect.bottom() - 1 - y).max(0) as u32,
+                (x - rect.x).max(0) as u32,
+            ];
+            let side = distances
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, d)| *d)
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            canvas.put_pixel(x, y, colors[side]);
+        }
+    }
+}
+
+fn paint_box_shadow(
+    canvas: &mut Canvas,
+    clip: Rect,
+    base: Rect,
+    radii: CornerRadii,
+    offset_x: i32,
+    offset_y: i32,
+    blur: u32,
+    spread: i32,
+    color: Color,
+    inset: bool,
+) {
+    const MAX_SHADOW_PIXEL_AREA: u64 = 2_000_000;
+    let blur = blur.min(32);
+    let extent = blur.saturating_add(spread.max(0) as u32);
+    if base.w.saturating_add(extent * 2) as u64 * base.h.saturating_add(extent * 2) as u64
+        > MAX_SHADOW_PIXEL_AREA
+    {
+        return;
+    }
+    if inset {
+        let Some(area) = base.intersect(clip) else {
+            return;
+        };
+        let extent = blur.max(1) as i32;
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                if !corner_contains(base, radii, x, y) {
+                    continue;
+                }
+                let d = (x - base.x + offset_x)
+                    .min(base.right() - 1 - x - offset_x)
+                    .min(y - base.y + offset_y)
+                    .min(base.bottom() - 1 - y - offset_y)
+                    .max(0);
+                if d < extent {
+                    let alpha =
+                        (color.a() as u32 * (extent - d) as u32 / extent as u32).min(255) as u8;
+                    canvas.blend_pixel(x, y, Color::rgba(color.r(), color.g(), color.b(), alpha));
+                }
+            }
+        }
+        return;
+    }
+    let spread_rect = Rect::new(
+        base.x + offset_x - spread,
+        base.y + offset_y - spread,
+        base.w.saturating_add((spread.max(0) as u32) * 2),
+        base.h.saturating_add((spread.max(0) as u32) * 2),
+    );
+    for ring in (0..=blur).rev() {
+        let alpha = if blur == 0 {
+            color.a()
+        } else {
+            (color.a() as u32 / (blur + 2)).max(1) as u8
+        };
+        let rect = Rect::new(
+            spread_rect.x - ring as i32,
+            spread_rect.y - ring as i32,
+            spread_rect.w.saturating_add(ring * 2),
+            spread_rect.h.saturating_add(ring * 2),
+        );
+        let expanded = CornerRadii {
+            top_left: radii.top_left + ring,
+            top_right: radii.top_right + ring,
+            bottom_right: radii.bottom_right + ring,
+            bottom_left: radii.bottom_left + ring,
+        };
+        fill_corner_rounded(
+            canvas,
+            rect,
+            clip,
+            expanded,
+            Color::rgba(color.r(), color.g(), color.b(), alpha),
+            true,
+        );
     }
 }
 

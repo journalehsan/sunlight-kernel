@@ -24,7 +24,7 @@ pub use calendar::{
 };
 pub use checkbox::Checkbox;
 pub use document_canvas::{
-    diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
+    diff_scenes, CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
     DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentRectStyle,
     DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage,
     RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,

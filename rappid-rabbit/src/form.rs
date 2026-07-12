@@ -3,13 +3,7 @@
 //! This module keeps runtime control values separate from the parsed DOM and
 //! the retained DocumentScene.  The canvas never sees form semantics.
 
-use alloc::{
-    collections::BTreeMap,
-    format,
-    string::String,
-    vec,
-    vec::Vec,
-};
+use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 use golden_fish::{Attribute, Document, Node};
 use sunlight_http::ParsedUrl;
@@ -133,7 +127,12 @@ impl FormState {
         self.walk_dom(document, root, None);
     }
 
-    fn walk_dom(&mut self, document: &Document, node_id: usize, mut current_form: Option<DocumentNodeId>) {
+    fn walk_dom(
+        &mut self,
+        document: &Document,
+        node_id: usize,
+        mut current_form: Option<DocumentNodeId>,
+    ) {
         let Some(node) = document.get(node_id) else {
             return;
         };
@@ -149,7 +148,8 @@ impl FormState {
                 if let Some(control) =
                     self.build_control(document, node_id, attributes, current_form)
                 {
-                    self.controls.insert(DocumentNodeId(node_id as u64), control);
+                    self.controls
+                        .insert(DocumentNodeId(node_id as u64), control);
                 }
                 for &child in children {
                     self.walk_dom(document, child, current_form);
@@ -249,17 +249,19 @@ impl FormState {
                             placeholder: attr("placeholder").map(String::from),
                             disabled: attr("disabled").is_some(),
                             readonly: has_boolean_attr(attributes, "readonly"),
-                            maxlength: attr("maxlength")
-                                .and_then(|v| v.parse::<usize>().ok()),
-                            size: attr("size")
-                                .and_then(|v| v.parse::<usize>().ok()),
+                            maxlength: attr("maxlength").and_then(|v| v.parse::<usize>().ok()),
+                            size: attr("size").and_then(|v| v.parse::<usize>().ok()),
                             form_owner,
                         })
                     }
                 }
             }
             "button" => {
-                let btn_type = match attr("type").unwrap_or("submit").to_ascii_lowercase().as_str() {
+                let btn_type = match attr("type")
+                    .unwrap_or("submit")
+                    .to_ascii_lowercase()
+                    .as_str()
+                {
                     "submit" | "" => ButtonType::Submit,
                     "button" => ButtonType::Button,
                     _ => ButtonType::Submit,
@@ -311,10 +313,12 @@ impl FormState {
     pub fn focused_text_state_mut(&mut self) -> Option<&mut TextControlState> {
         let id = self.focused_control?;
         match self.controls.get_mut(&id)? {
-                FormControlState::Text {
-                    state, ref readonly, ..
-                } => {
-                    if *readonly {
+            FormControlState::Text {
+                state,
+                ref readonly,
+                ..
+            } => {
+                if *readonly {
                     None
                 } else {
                     Some(state)
@@ -332,18 +336,21 @@ impl FormState {
                 readonly,
                 maxlength,
                 ..
-                } => Some((state, *readonly, *maxlength)),
+            } => Some((state, *readonly, *maxlength)),
             _ => None,
         }
     }
 
     pub fn insert_char(&mut self, ch: char) -> bool {
-        let maxlen = self.focused_control.and_then(|control| {
-            match self.controls.get(&control) {
-                Some(FormControlState::Text { maxlength, .. }) => Some(maxlength.unwrap_or(MAX_CONTROL_VALUE_LEN)),
+        let maxlen = self
+            .focused_control
+            .and_then(|control| match self.controls.get(&control) {
+                Some(FormControlState::Text { maxlength, .. }) => {
+                    Some(maxlength.unwrap_or(MAX_CONTROL_VALUE_LEN))
+                }
                 _ => None,
-            }
-        }).unwrap_or(MAX_CONTROL_VALUE_LEN);
+            })
+            .unwrap_or(MAX_CONTROL_VALUE_LEN);
 
         let Some(state) = self.focused_text_state_mut() else {
             return false;
@@ -397,7 +404,8 @@ impl FormState {
         if state.cursor_position == 0 {
             return false;
         }
-        state.cursor_position = find_prev_char_boundary(&state.current_value, state.cursor_position);
+        state.cursor_position =
+            find_prev_char_boundary(&state.current_value, state.cursor_position);
         true
     }
 
@@ -408,7 +416,8 @@ impl FormState {
         if state.cursor_position >= state.current_value.len() {
             return false;
         }
-        state.cursor_position = find_next_char_boundary(&state.current_value, state.cursor_position);
+        state.cursor_position =
+            find_next_char_boundary(&state.current_value, state.cursor_position);
         true
     }
 
@@ -757,20 +766,28 @@ mod tests {
 
     #[test]
     fn search_input_kind() {
-        let (_doc, state) =
-            build_state(r#"<form><input type="search" name="q"></form>"#);
+        let (_doc, state) = build_state(r#"<form><input type="search" name="q"></form>"#);
         let control = state
             .controls
             .values()
-            .find(|c| matches!(c, FormControlState::Text { kind: FormControlKind::SearchInput, .. }))
+            .find(|c| {
+                matches!(
+                    c,
+                    FormControlState::Text {
+                        kind: FormControlKind::SearchInput,
+                        ..
+                    }
+                )
+            })
             .unwrap();
         assert_eq!(control.kind(), &FormControlKind::SearchInput);
     }
 
     #[test]
     fn placeholder_and_disabled_and_readonly() {
-        let (_doc, state) =
-            build_state(r#"<form><input type="text" placeholder="Search" disabled readonly></form>"#);
+        let (_doc, state) = build_state(
+            r#"<form><input type="text" placeholder="Search" disabled readonly></form>"#,
+        );
         let control = state.controls.values().next().unwrap();
         match control {
             FormControlState::Text {
@@ -789,8 +806,7 @@ mod tests {
 
     #[test]
     fn maxlength_parsed() {
-        let (_doc, state) =
-            build_state(r#"<form><input type="text" maxlength="10"></form>"#);
+        let (_doc, state) = build_state(r#"<form><input type="text" maxlength="10"></form>"#);
         let control = state.controls.values().next().unwrap();
         match control {
             FormControlState::Text { maxlength, .. } => {
@@ -813,9 +829,8 @@ mod tests {
 
     #[test]
     fn form_owner_mapping() {
-        let (doc, state) = build_state(
-            r#"<form><input type="text" name="a"></form><input type="text" name="b">"#,
-        );
+        let (doc, state) =
+            build_state(r#"<form><input type="text" name="a"></form><input type="text" name="b">"#);
         let form_id = doc.find_first_element("form").unwrap();
         for (_, control) in &state.controls {
             match control.name() {
@@ -876,12 +891,27 @@ mod tests {
         let (doc, mut state) = build_state(
             r#"<form action="/lookup?source=rabbit" method="get"><input name="topic" value="Sunlight OS"></form>"#,
         );
-        let input = state.controls.keys().copied().find(|id| state.controls[id].name() == Some("topic")).unwrap();
+        let input = state
+            .controls
+            .keys()
+            .copied()
+            .find(|id| state.controls[id].name() == Some("topic"))
+            .unwrap();
         state.focus_control(input);
         let form = DocumentNodeId(doc.find_first_element("form").unwrap() as u64);
         let base = ParsedUrl::parse("https://example.com/docs/page").unwrap();
-        let url = build_get_submission_url(&state, &doc, form, "https://example.com/docs/page", Some(&base), None);
-        assert_eq!(url, "https://example.com/lookup?source=rabbit&topic=Sunlight+OS");
+        let url = build_get_submission_url(
+            &state,
+            &doc,
+            form,
+            "https://example.com/docs/page",
+            Some(&base),
+            None,
+        );
+        assert_eq!(
+            url,
+            "https://example.com/lookup?source=rabbit&topic=Sunlight+OS"
+        );
     }
 
     #[test]
@@ -903,15 +933,9 @@ mod tests {
         state.focus_control(input_id);
         state.insert_char('a');
         state.insert_char('b');
-        assert_eq!(
-            state.controls[&input_id].current_value(),
-            "ab"
-        );
+        assert_eq!(state.controls[&input_id].current_value(), "ab");
         state.backspace();
-        assert_eq!(
-            state.controls[&input_id].current_value(),
-            "a"
-        );
+        assert_eq!(state.controls[&input_id].current_value(), "a");
     }
 
     #[test]
@@ -923,10 +947,7 @@ mod tests {
         state.insert_char('b');
         state.insert_char('c');
         assert!(!state.insert_char('d'));
-        assert_eq!(
-            state.controls[&input_id].current_value(),
-            "abc"
-        );
+        assert_eq!(state.controls[&input_id].current_value(), "abc");
     }
 
     #[test]
@@ -967,7 +988,8 @@ mod tests {
         let (doc, state) = build_state(r#"<form><button type="button">Cancel</button></form>"#);
         let form_id = DocumentNodeId(doc.find_first_element("form").unwrap() as u64);
         let btn_id = doc.find_first_element("button").unwrap();
-        let serialized = serialize_get_form(&state, &doc, form_id, Some(DocumentNodeId(btn_id as u64)));
+        let serialized =
+            serialize_get_form(&state, &doc, form_id, Some(DocumentNodeId(btn_id as u64)));
         assert_eq!(serialized, "");
     }
 

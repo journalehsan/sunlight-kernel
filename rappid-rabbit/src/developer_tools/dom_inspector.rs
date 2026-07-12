@@ -1171,14 +1171,14 @@ mod tests {
         let notice = document.find_first_element("p").unwrap();
         state.select_node(notice);
         // Default mode = Rules
-        let text = state.styles_text();
+        let text = state.styles_text().to_string();
         assert!(text.contains("Rules (cascade order"));
         assert!(text.contains("color") || text.contains("padding"));
         assert!(text.contains(".notice") || text.contains("body"));
 
         // Switch to Computed
         state.set_styles_mode(StylesMode::Computed);
-        let comp = state.styles_text();
+        let comp = state.styles_text().to_string();
         assert!(text.contains("color") || comp.contains("color"));
         assert!(
             comp.contains("Computed (final values")
@@ -1211,7 +1211,9 @@ mod tests {
         let mut state = build_state(html);
         let document = state.document().unwrap();
         // select the active li (second)
-        let lis = document.find_all_elements("li");
+        let lis: Vec<_> = (0..document.node_count())
+            .filter(|id| document.tag_name(*id) == Some("li"))
+            .collect();
         assert!(lis.len() >= 2);
         let active_li = lis[1];
         state.select_node(active_li);

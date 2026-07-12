@@ -149,7 +149,9 @@ pub fn detect_format(bytes: &[u8], content_type: Option<&str>, url: &str) -> Ima
         return ImageFormat::Tga;
     }
     let content_type = content_type.unwrap_or_default().to_ascii_lowercase();
-    if content_type.contains("image/svg") || looks_like_svg(bytes) { return ImageFormat::Svg; }
+    if content_type.contains("image/svg") || looks_like_svg(bytes) {
+        return ImageFormat::Svg;
+    }
     if content_type.contains("png") {
         return ImageFormat::Png;
     }
@@ -191,9 +193,24 @@ pub fn decode_image(
         ImageFormat::Jpeg => return Err(String::from("JPEG decoding is not implemented")),
         ImageFormat::Svg => {
             #[cfg(feature = "svg")]
-            { return Ok(DecodedImage { image: Arc::new(crate::svg::rasterize(&crate::svg::parse(bytes)?, crate::svg::SvgRasterKey { target_width: 256, target_height: 256, scale_factor: 1 })?), format, byte_size: bytes.len() }); }
+            {
+                return Ok(DecodedImage {
+                    image: Arc::new(crate::svg::rasterize(
+                        &crate::svg::parse(bytes)?,
+                        crate::svg::SvgRasterKey {
+                            target_width: 256,
+                            target_height: 256,
+                            scale_factor: 1,
+                        },
+                    )?),
+                    format,
+                    byte_size: bytes.len(),
+                });
+            }
             #[cfg(not(feature = "svg"))]
-            { return Err(String::from("SVG renderer is unavailable for this target")); }
+            {
+                return Err(String::from("SVG renderer is unavailable for this target"));
+            }
         }
         ImageFormat::Unknown => return Err(String::from("unsupported image format")),
     };
@@ -523,9 +540,18 @@ mod tests {
 
     #[test]
     fn detects_svg_by_extension_content_type_and_xml_magic() {
-        assert_eq!(detect_format(b"<svg viewBox='0 0 1 1'/>", None, "x.svg"), ImageFormat::Svg);
-        assert_eq!(detect_format(b"<svg viewBox='0 0 1 1'/>", Some("image/svg+xml"), "x.bin"), ImageFormat::Svg);
-        assert_eq!(detect_format(b"<?xml version='1.0'?><svg/>", None, "x.bin"), ImageFormat::Svg);
+        assert_eq!(
+            detect_format(b"<svg viewBox='0 0 1 1'/>", None, "x.svg"),
+            ImageFormat::Svg
+        );
+        assert_eq!(
+            detect_format(b"<svg viewBox='0 0 1 1'/>", Some("image/svg+xml"), "x.bin"),
+            ImageFormat::Svg
+        );
+        assert_eq!(
+            detect_format(b"<?xml version='1.0'?><svg/>", None, "x.bin"),
+            ImageFormat::Svg
+        );
     }
 
     #[test]

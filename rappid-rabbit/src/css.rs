@@ -114,6 +114,8 @@ pub enum Property {
     LineHeight,
     Width,
     Height,
+    MinWidth,
+    MaxWidth,
     MinHeight,
     BoxSizing,
     LetterSpacing,
@@ -129,6 +131,28 @@ pub enum Property {
     BorderWidth,
     BorderStyle,
     BorderColor,
+    BorderTopWidth,
+    BorderRightWidth,
+    BorderBottomWidth,
+    BorderLeftWidth,
+    BorderTopStyle,
+    BorderRightStyle,
+    BorderBottomStyle,
+    BorderLeftStyle,
+    BorderTopColor,
+    BorderRightColor,
+    BorderBottomColor,
+    BorderLeftColor,
+    BorderRadius,
+    BorderTopLeftRadius,
+    BorderTopRightRadius,
+    BorderBottomRightRadius,
+    BorderBottomLeftRadius,
+    BoxShadow,
+    Float,
+    Clear,
+    BorderCollapse,
+    BorderSpacing,
     BorderBottom,
     Custom(String),
     Unknown(String),
@@ -170,6 +194,8 @@ impl Property {
             "line-height" => Self::LineHeight,
             "width" => Self::Width,
             "height" => Self::Height,
+            "min-width" => Self::MinWidth,
+            "max-width" => Self::MaxWidth,
             "min-height" => Self::MinHeight,
             "box-sizing" => Self::BoxSizing,
             "letter-spacing" => Self::LetterSpacing,
@@ -185,6 +211,28 @@ impl Property {
             "border-width" => Self::BorderWidth,
             "border-style" => Self::BorderStyle,
             "border-color" => Self::BorderColor,
+            "border-top-width" => Self::BorderTopWidth,
+            "border-right-width" => Self::BorderRightWidth,
+            "border-bottom-width" => Self::BorderBottomWidth,
+            "border-left-width" => Self::BorderLeftWidth,
+            "border-top-style" => Self::BorderTopStyle,
+            "border-right-style" => Self::BorderRightStyle,
+            "border-bottom-style" => Self::BorderBottomStyle,
+            "border-left-style" => Self::BorderLeftStyle,
+            "border-top-color" => Self::BorderTopColor,
+            "border-right-color" => Self::BorderRightColor,
+            "border-bottom-color" => Self::BorderBottomColor,
+            "border-left-color" => Self::BorderLeftColor,
+            "border-radius" => Self::BorderRadius,
+            "border-top-left-radius" => Self::BorderTopLeftRadius,
+            "border-top-right-radius" => Self::BorderTopRightRadius,
+            "border-bottom-right-radius" => Self::BorderBottomRightRadius,
+            "border-bottom-left-radius" => Self::BorderBottomLeftRadius,
+            "box-shadow" => Self::BoxShadow,
+            "float" => Self::Float,
+            "clear" => Self::Clear,
+            "border-collapse" => Self::BorderCollapse,
+            "border-spacing" => Self::BorderSpacing,
             "border-bottom" => Self::BorderBottom,
             other => Self::Unknown(String::from(other)),
         }
@@ -221,6 +269,8 @@ impl Property {
             Self::LineHeight => "line-height",
             Self::Width => "width",
             Self::Height => "height",
+            Self::MinWidth => "min-width",
+            Self::MaxWidth => "max-width",
             Self::MinHeight => "min-height",
             Self::BoxSizing => "box-sizing",
             Self::LetterSpacing => "letter-spacing",
@@ -236,6 +286,28 @@ impl Property {
             Self::BorderWidth => "border-width",
             Self::BorderStyle => "border-style",
             Self::BorderColor => "border-color",
+            Self::BorderTopWidth => "border-top-width",
+            Self::BorderRightWidth => "border-right-width",
+            Self::BorderBottomWidth => "border-bottom-width",
+            Self::BorderLeftWidth => "border-left-width",
+            Self::BorderTopStyle => "border-top-style",
+            Self::BorderRightStyle => "border-right-style",
+            Self::BorderBottomStyle => "border-bottom-style",
+            Self::BorderLeftStyle => "border-left-style",
+            Self::BorderTopColor => "border-top-color",
+            Self::BorderRightColor => "border-right-color",
+            Self::BorderBottomColor => "border-bottom-color",
+            Self::BorderLeftColor => "border-left-color",
+            Self::BorderRadius => "border-radius",
+            Self::BorderTopLeftRadius => "border-top-left-radius",
+            Self::BorderTopRightRadius => "border-top-right-radius",
+            Self::BorderBottomRightRadius => "border-bottom-right-radius",
+            Self::BorderBottomLeftRadius => "border-bottom-left-radius",
+            Self::BoxShadow => "box-shadow",
+            Self::Float => "float",
+            Self::Clear => "clear",
+            Self::BorderCollapse => "border-collapse",
+            Self::BorderSpacing => "border-spacing",
             Self::BorderBottom => "border-bottom",
             Self::Custom(name) => name,
             Self::Unknown(name) => name,
@@ -268,7 +340,12 @@ impl Property {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyValue {
     Color(Color),
+    CurrentColor,
     LengthPx(i32),
+    /// Fixed-point em value in thousandths, retained until the element font is known.
+    LengthEm(i32),
+    /// Fixed-point percentage in hundredths of one percent.
+    Percentage(i32),
     Auto,
     Normal,
     Keyword(String),
@@ -279,7 +356,10 @@ impl PropertyValue {
     pub fn display(&self) -> String {
         match self {
             Self::Color(color) => color.display(),
+            Self::CurrentColor => String::from("currentColor"),
             Self::LengthPx(value) => format!("{value}px"),
+            Self::LengthEm(value) => format!("{}em", *value as f32 / 1000.0),
+            Self::Percentage(value) => format!("{}%", *value as f32 / 100.0),
             Self::Auto => String::from("auto"),
             Self::Normal => String::from("normal"),
             Self::Keyword(value) | Self::Raw(value) => value.clone(),
@@ -389,6 +469,8 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::LineHeight,
     Property::Width,
     Property::Height,
+    Property::MinWidth,
+    Property::MaxWidth,
     Property::MinHeight,
     Property::BoxSizing,
     Property::LetterSpacing,
@@ -403,6 +485,28 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::BorderWidth,
     Property::BorderStyle,
     Property::BorderColor,
+    Property::BorderTopWidth,
+    Property::BorderRightWidth,
+    Property::BorderBottomWidth,
+    Property::BorderLeftWidth,
+    Property::BorderTopStyle,
+    Property::BorderRightStyle,
+    Property::BorderBottomStyle,
+    Property::BorderLeftStyle,
+    Property::BorderTopColor,
+    Property::BorderRightColor,
+    Property::BorderBottomColor,
+    Property::BorderLeftColor,
+    Property::BorderRadius,
+    Property::BorderTopLeftRadius,
+    Property::BorderTopRightRadius,
+    Property::BorderBottomRightRadius,
+    Property::BorderBottomLeftRadius,
+    Property::BoxShadow,
+    Property::Float,
+    Property::Clear,
+    Property::BorderCollapse,
+    Property::BorderSpacing,
     Property::BorderBottom,
 ];
 
@@ -806,6 +910,18 @@ fn parse_declarations(body: &str) -> Vec<Declaration> {
 fn expand_background(raw: &str, order: usize, important: bool) -> Vec<Declaration> {
     let mut out = Vec::new();
     let tokens = raw.split_ascii_whitespace().collect::<Vec<_>>();
+    if !tokens
+        .iter()
+        .any(|token| token.eq_ignore_ascii_case("none") || token.starts_with("url("))
+    {
+        out.push(Declaration {
+            property: Property::BackgroundImage,
+            value: PropertyValue::Raw(String::from("none")),
+            raw_value: String::from("none"),
+            order,
+            important,
+        });
+    }
     for token in tokens {
         let property = if parse_color(token).is_some() || token.starts_with("var(") {
             Property::BackgroundColor
@@ -933,32 +1049,90 @@ fn expand_declaration(
             let mut output = vec![make(Property::Border, raw, order)];
             for part in raw.split_ascii_whitespace() {
                 if let Some(color) = parse_color(part) {
-                    output.push(Declaration {
-                        property: Property::BorderColor,
-                        value: PropertyValue::Color(color),
-                        raw_value: String::from(part),
-                        order,
-                        important,
-                    });
+                    output.push(make(Property::BorderColor, part, order));
+                    for property in [
+                        Property::BorderTopColor,
+                        Property::BorderRightColor,
+                        Property::BorderBottomColor,
+                        Property::BorderLeftColor,
+                    ] {
+                        output.push(make(property, part, order));
+                    }
                 } else if let Some(length) = parse_length(part) {
-                    output.push(Declaration {
-                        property: Property::BorderWidth,
-                        value: length,
-                        raw_value: String::from(part),
-                        order,
-                        important,
-                    });
+                    let _ = length;
+                    output.push(make(Property::BorderWidth, part, order));
+                    for property in [
+                        Property::BorderTopWidth,
+                        Property::BorderRightWidth,
+                        Property::BorderBottomWidth,
+                        Property::BorderLeftWidth,
+                    ] {
+                        output.push(make(property, part, order));
+                    }
                 } else if is_border_style(part) {
-                    output.push(Declaration {
-                        property: Property::BorderStyle,
-                        value: PropertyValue::Keyword(part.to_ascii_lowercase()),
-                        raw_value: String::from(part),
-                        order,
-                        important,
-                    });
+                    output.push(make(Property::BorderStyle, part, order));
+                    for property in [
+                        Property::BorderTopStyle,
+                        Property::BorderRightStyle,
+                        Property::BorderBottomStyle,
+                        Property::BorderLeftStyle,
+                    ] {
+                        output.push(make(property, part, order));
+                    }
+                }
+            }
+            if !raw
+                .split_ascii_whitespace()
+                .any(|part| parse_color(part).is_some())
+            {
+                for property in [
+                    Property::BorderTopColor,
+                    Property::BorderRightColor,
+                    Property::BorderBottomColor,
+                    Property::BorderLeftColor,
+                ] {
+                    output.push(make(property, "currentColor", order));
                 }
             }
             output
+        }
+        Property::BorderColor => {
+            let values = raw.split_ascii_whitespace().collect::<Vec<_>>();
+            if values.is_empty() || values.len() > 4 {
+                return Vec::new();
+            }
+            let (top, right, bottom, left) = match values.len() {
+                1 => (values[0], values[0], values[0], values[0]),
+                2 => (values[0], values[1], values[0], values[1]),
+                3 => (values[0], values[1], values[2], values[1]),
+                _ => (values[0], values[1], values[2], values[3]),
+            };
+            vec![
+                make(Property::BorderColor, raw, order),
+                make(Property::BorderTopColor, top, order),
+                make(Property::BorderRightColor, right, order),
+                make(Property::BorderBottomColor, bottom, order),
+                make(Property::BorderLeftColor, left, order),
+            ]
+        }
+        Property::BorderRadius => {
+            let values = raw.split_ascii_whitespace().collect::<Vec<_>>();
+            if values.is_empty() || values.len() > 4 || raw.contains('/') {
+                return Vec::new();
+            }
+            let (tl, tr, br, bl) = match values.len() {
+                1 => (values[0], values[0], values[0], values[0]),
+                2 => (values[0], values[1], values[0], values[1]),
+                3 => (values[0], values[1], values[2], values[1]),
+                _ => (values[0], values[1], values[2], values[3]),
+            };
+            vec![
+                make(Property::BorderRadius, raw, order),
+                make(Property::BorderTopLeftRadius, tl, order),
+                make(Property::BorderTopRightRadius, tr, order),
+                make(Property::BorderBottomRightRadius, br, order),
+                make(Property::BorderBottomLeftRadius, bl, order),
+            ]
         }
         Property::BorderBottom => {
             let mut output = vec![make(Property::BorderBottom, raw, order)];
@@ -969,12 +1143,18 @@ fn expand_declaration(
                 return output;
             }
             for part in raw.split_ascii_whitespace() {
-                if parse_color(part).is_some() || part.starts_with("var(") {
+                if parse_color(part).is_some()
+                    || part.eq_ignore_ascii_case("currentcolor")
+                    || part.starts_with("var(")
+                {
                     output.push(make(Property::BorderColor, part, order));
+                    output.push(make(Property::BorderBottomColor, part, order));
                 } else if parse_length(part).is_some() {
                     output.push(make(Property::BorderWidth, part, order));
+                    output.push(make(Property::BorderBottomWidth, part, order));
                 } else if is_border_style(part) {
                     output.push(make(Property::BorderStyle, part, order));
+                    output.push(make(Property::BorderBottomStyle, part, order));
                 }
             }
             output
@@ -1000,8 +1180,17 @@ fn parse_value(property: &Property, raw: &str) -> PropertyValue {
     }
     if matches!(
         property,
-        Property::Color | Property::BackgroundColor | Property::BorderColor
+        Property::Color
+            | Property::BackgroundColor
+            | Property::BorderColor
+            | Property::BorderTopColor
+            | Property::BorderRightColor
+            | Property::BorderBottomColor
+            | Property::BorderLeftColor
     ) {
+        if value.eq_ignore_ascii_case("currentcolor") && property != &Property::Color {
+            return PropertyValue::CurrentColor;
+        }
         return parse_color(value).map_or_else(
             || PropertyValue::Raw(String::from(value)),
             PropertyValue::Color,
@@ -1019,10 +1208,22 @@ fn parse_value(property: &Property, raw: &str) -> PropertyValue {
             | Property::PaddingLeft
             | Property::Width
             | Property::Height
+            | Property::MinWidth
+            | Property::MaxWidth
             | Property::MinHeight
             | Property::FontSize
             | Property::LineHeight
             | Property::BorderWidth
+            | Property::BorderTopWidth
+            | Property::BorderRightWidth
+            | Property::BorderBottomWidth
+            | Property::BorderLeftWidth
+            | Property::BorderRadius
+            | Property::BorderTopLeftRadius
+            | Property::BorderTopRightRadius
+            | Property::BorderBottomRightRadius
+            | Property::BorderBottomLeftRadius
+            | Property::BorderSpacing
             | Property::RowGap
             | Property::ColumnGap
             | Property::Gap
@@ -1049,8 +1250,45 @@ fn parse_length(value: &str) -> Option<PropertyValue> {
         return Some(PropertyValue::LengthPx(0));
     }
     let normalized = value.to_ascii_lowercase();
-    let number = normalized.strip_suffix("px")?.trim();
-    number.parse::<i32>().ok().map(PropertyValue::LengthPx)
+    for (suffix, scale, ctor) in [("px", 1, 0u8), ("em", 1000, 1u8), ("%", 100, 2u8)] {
+        if let Some(number) = normalized.strip_suffix(suffix).map(str::trim) {
+            let scaled = parse_fixed(number, scale)?;
+            return Some(match ctor {
+                0 => PropertyValue::LengthPx(scaled),
+                1 => PropertyValue::LengthEm(scaled),
+                _ => PropertyValue::Percentage(scaled),
+            });
+        }
+    }
+    match normalized.as_str() {
+        "thin" => Some(PropertyValue::LengthPx(1)),
+        "medium" => Some(PropertyValue::LengthPx(3)),
+        "thick" => Some(PropertyValue::LengthPx(5)),
+        _ => None,
+    }
+}
+
+fn parse_fixed(value: &str, scale: i32) -> Option<i32> {
+    let negative = value.starts_with('-');
+    let unsigned = value.trim_start_matches(['+', '-']);
+    let (whole, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
+    let whole = if whole.is_empty() {
+        0
+    } else {
+        whole.parse::<i32>().ok()?
+    };
+    let fraction_scale = 10i32.checked_pow(fraction.len().min(6) as u32)?;
+    let fraction_value = if fraction.is_empty() {
+        0
+    } else {
+        fraction[..fraction.len().min(6)].parse::<i32>().ok()?
+    };
+    let result = whole.checked_mul(scale)?.checked_add(
+        fraction_value
+            .checked_mul(scale)?
+            .checked_div(fraction_scale)?,
+    )?;
+    Some(if negative { -result } else { result })
 }
 
 fn parse_color(value: &str) -> Option<Color> {
@@ -1123,9 +1361,16 @@ fn is_border_style(value: &str) -> bool {
 pub fn user_agent_stylesheet() -> Stylesheet {
     parse_stylesheet(
         r#"
-        html, body, div, header, main, section, article, nav, footer, p, pre, dl, dt, dd, blockquote, hr { display: block; }
+        html, body, div, header, main, section, article, aside, nav, footer, address, p, pre, dl, dt, dd, blockquote, hr { display: block; }
         span, a, strong, b, em, i, code, small, mark, del, ins, sub, sup, br { display: inline; }
         img { display: inline-block; }
+        table { display: table; border-collapse: separate; border-spacing: 2px; }
+        thead { display: table-header-group; }
+        tbody { display: table-row-group; }
+        tfoot { display: table-footer-group; }
+        tr { display: table-row; }
+        th, td { display: table-cell; padding: 1px; }
+        th { font-weight: bold; text-align: center; }
         input, button { display: inline-block; font-family: sans-serif; font-size: 14px; color: #111111; background-color: white; border: 1px solid #888888; padding: 5px 7px; }
         button { background-color: #e9e9e9; color: #111111; }
         ul, ol { display: block; margin: 16px 0; padding-left: 40px; }
@@ -1643,8 +1888,50 @@ fn compute_element_style(
                 .push((name, matched.value.clone(), Some(matched)));
         }
     }
+    resolve_element_relative_values(&mut computed, parent);
     computed.matched_declarations = all_candidates;
     computed
+}
+
+#[cfg(feature = "dom")]
+fn resolve_element_relative_values(style: &mut ComputedStyle, parent: Option<&ComputedStyle>) {
+    let parent_font = parent
+        .and_then(|parent| parent.value(&Property::FontSize))
+        .and_then(|value| match value {
+            PropertyValue::LengthPx(px) => Some(*px),
+            _ => None,
+        })
+        .unwrap_or(16)
+        .max(1);
+    let font_index = property_index(&Property::FontSize).expect("font-size property");
+    let font_size = match style.properties[font_index].value {
+        PropertyValue::LengthEm(em) => parent_font.saturating_mul(em) / 1000,
+        PropertyValue::Percentage(percent) => parent_font.saturating_mul(percent) / 10_000,
+        PropertyValue::LengthPx(px) => px,
+        _ => parent_font,
+    }
+    .clamp(0, 4096);
+    style.properties[font_index].value = PropertyValue::LengthPx(font_size);
+
+    let current_color = style
+        .value(&Property::Color)
+        .cloned()
+        .unwrap_or(PropertyValue::Color(Color::Rgb(0, 0, 0)));
+    for entry in &mut style.properties {
+        if entry.property != Property::FontSize {
+            if let PropertyValue::LengthEm(em) = entry.value {
+                entry.value = PropertyValue::LengthPx(font_size.saturating_mul(em) / 1000);
+            } else if entry.property == Property::LineHeight {
+                if let PropertyValue::Percentage(percent) = entry.value {
+                    entry.value =
+                        PropertyValue::LengthPx(font_size.saturating_mul(percent) / 10_000);
+                }
+            }
+        }
+        if matches!(entry.value, PropertyValue::CurrentColor) {
+            entry.value = current_color.clone();
+        }
+    }
 }
 
 trait MatchedRawValue {
@@ -1791,7 +2078,12 @@ fn initial_value(property: &Property) -> PropertyValue {
         Property::AlignItems => PropertyValue::Keyword(String::from("stretch")),
         Property::AlignContent => PropertyValue::Keyword(String::from("stretch")),
         Property::Gap | Property::RowGap | Property::ColumnGap => PropertyValue::LengthPx(0),
-        Property::Color | Property::BorderColor => PropertyValue::Color(Color::Rgb(0, 0, 0)),
+        Property::Color => PropertyValue::Color(Color::Rgb(0, 0, 0)),
+        Property::BorderColor
+        | Property::BorderTopColor
+        | Property::BorderRightColor
+        | Property::BorderBottomColor
+        | Property::BorderLeftColor => PropertyValue::CurrentColor,
         Property::BackgroundColor => PropertyValue::Color(Color::Transparent),
         Property::FontSize => PropertyValue::LengthPx(16),
         Property::FontFamily => PropertyValue::Keyword(String::from("serif")),
@@ -1805,6 +2097,7 @@ fn initial_value(property: &Property) -> PropertyValue {
         Property::ListStyle => PropertyValue::Keyword(String::from("disc")),
         Property::ListStylePosition => PropertyValue::Keyword(String::from("outside")),
         Property::Width | Property::Height => PropertyValue::Auto,
+        Property::MaxWidth => PropertyValue::Keyword(String::from("none")),
         Property::MarginTop
         | Property::MarginRight
         | Property::MarginBottom
@@ -1813,14 +2106,32 @@ fn initial_value(property: &Property) -> PropertyValue {
         | Property::PaddingRight
         | Property::PaddingBottom
         | Property::PaddingLeft
-        | Property::BorderWidth => PropertyValue::LengthPx(0),
-        Property::BorderStyle => PropertyValue::Keyword(String::from("none")),
+        | Property::MinWidth
+        | Property::BorderWidth
+        | Property::BorderTopWidth
+        | Property::BorderRightWidth
+        | Property::BorderBottomWidth
+        | Property::BorderLeftWidth
+        | Property::BorderRadius
+        | Property::BorderTopLeftRadius
+        | Property::BorderTopRightRadius
+        | Property::BorderBottomRightRadius
+        | Property::BorderBottomLeftRadius
+        | Property::BorderSpacing => PropertyValue::LengthPx(0),
+        Property::BorderStyle
+        | Property::BorderTopStyle
+        | Property::BorderRightStyle
+        | Property::BorderBottomStyle
+        | Property::BorderLeftStyle => PropertyValue::Keyword(String::from("none")),
         Property::BackgroundImage => PropertyValue::Keyword(String::from("none")),
         Property::BackgroundRepeat => PropertyValue::Keyword(String::from("repeat")),
         Property::BackgroundAttachment => PropertyValue::Keyword(String::from("scroll")),
         Property::BackgroundPositionX => PropertyValue::Keyword(String::from("0%")),
         Property::BackgroundPositionY => PropertyValue::Keyword(String::from("0%")),
         Property::BoxSizing => PropertyValue::Keyword(String::from("content-box")),
+        Property::BoxShadow => PropertyValue::Keyword(String::from("none")),
+        Property::Float | Property::Clear => PropertyValue::Keyword(String::from("none")),
+        Property::BorderCollapse => PropertyValue::Keyword(String::from("separate")),
         Property::MinHeight | Property::LetterSpacing => PropertyValue::LengthPx(0),
         Property::Border | Property::BorderBottom | Property::Unknown(_) | Property::Custom(_) => {
             PropertyValue::Raw(String::new())
@@ -2382,5 +2693,79 @@ mod tests {
                     .iter()
                     .any(|decl| decl.property == Property::PaddingTop)
         }));
+    }
+
+    #[test]
+    fn classic_lengths_borders_radii_and_shadow_compute() {
+        let document = parse_html("<style>body{font-size:20px;color:#123456} #x{font-size:.5em;width:50em;margin:1em auto;padding:.4em;border:thin solid;border-color:#dddadf #ccc8b8 #bbb59f;border-bottom-left-radius:.5em;box-shadow:-.1em -.3em .5em currentColor inset}</style><body><div id=x>x</div></body>").unwrap();
+        let context = StyleContext::build(&document, &collect_embedded_stylesheets(&document));
+        let node = document.find_first_element("div").unwrap();
+        let style = context.style_for(node).unwrap();
+        assert_eq!(
+            style.value(&Property::FontSize),
+            Some(&PropertyValue::LengthPx(10))
+        );
+        assert_eq!(
+            style.value(&Property::Width),
+            Some(&PropertyValue::LengthPx(500))
+        );
+        assert_eq!(
+            style.value(&Property::MarginTop),
+            Some(&PropertyValue::LengthPx(10))
+        );
+        assert_eq!(
+            style.value(&Property::MarginRight),
+            Some(&PropertyValue::Auto)
+        );
+        assert_eq!(
+            style.value(&Property::PaddingLeft),
+            Some(&PropertyValue::LengthPx(4))
+        );
+        assert_eq!(
+            style.value(&Property::BorderTopWidth),
+            Some(&PropertyValue::LengthPx(1))
+        );
+        assert_eq!(
+            style.value(&Property::BorderTopColor),
+            Some(&PropertyValue::Color(Color::Rgb(0xdd, 0xda, 0xdf)))
+        );
+        assert_eq!(
+            style.value(&Property::BorderRightColor),
+            Some(&PropertyValue::Color(Color::Rgb(0xcc, 0xc8, 0xb8)))
+        );
+        assert_eq!(
+            style.value(&Property::BorderBottomColor),
+            Some(&PropertyValue::Color(Color::Rgb(0xbb, 0xb5, 0x9f)))
+        );
+        assert_eq!(
+            style.value(&Property::BorderBottomLeftRadius),
+            Some(&PropertyValue::LengthPx(5))
+        );
+        assert!(
+            matches!(style.value(&Property::BoxShadow), Some(PropertyValue::Keyword(value)) if value.contains("inset"))
+        );
+    }
+
+    #[test]
+    fn border_side_longhand_obeys_source_order_around_shorthand() {
+        let document = parse_html("<style>#a{border-top-color:red;border-color:#111 #222 #333} #b{border-color:#111 #222 #333;border-top-color:red}</style><div id=a></div><div id=b></div>").unwrap();
+        let context = StyleContext::build(&document, &collect_embedded_stylesheets(&document));
+        let divs = (0..document.node_count())
+            .filter(|id| document.tag_name(*id) == Some("div"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            context
+                .style_for(divs[0])
+                .unwrap()
+                .value(&Property::BorderTopColor),
+            Some(&PropertyValue::Color(Color::Rgb(0x11, 0x11, 0x11)))
+        );
+        assert_eq!(
+            context
+                .style_for(divs[1])
+                .unwrap()
+                .value(&Property::BorderTopColor),
+            Some(&PropertyValue::Color(Color::Rgb(255, 0, 0)))
+        );
     }
 }

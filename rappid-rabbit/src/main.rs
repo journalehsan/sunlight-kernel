@@ -129,6 +129,8 @@ const GUTTER: i32 = 12;
 const URL_INPUT_CAP: usize = 512;
 
 const KEY_Q: u8 = 0x10;
+const KEY_L: u8 = 0x26;
+const KEY_F6: u8 = 0x40;
 const KEY_UP: u8 = 0x48;
 const KEY_DOWN: u8 = 0x50;
 const KEY_LEFT: u8 = 0x4B;
@@ -481,10 +483,16 @@ impl RabbitApp {
                                 rappid_rabbit::resources::discovery::discover_resources(
                                     &document, base_url,
                                 );
-                            self.resource_queue.replace_from_candidates(&candidates);
                             linked_stylesheets = self.fetch_external_stylesheets(&candidates);
-                            self.fetch_images(&candidates);
-                            self.discovered_resources = candidates;
+                            let mut all_candidates = candidates;
+                            discover_stylesheet_images(
+                                &mut all_candidates,
+                                &linked_stylesheets,
+                                base_url,
+                            );
+                            self.resource_queue.replace_from_candidates(&all_candidates);
+                            self.fetch_images(&all_candidates);
+                            self.discovered_resources = all_candidates;
                         }
                         let stylesheets = order_document_stylesheets(
                             &document,
@@ -1564,11 +1572,38 @@ impl RabbitApp {
                     .find(|n| n.owner_node_id.0 == node as u64)
                 {
                     extra.push_str("\nLayout Box:\n");
-                    extra.push_str(&format!("  content: {}x{}  padding:({},{},{},{})  border:({},{},{},{})  margin:({},{},{},{})\n",
-                        ln.content_box.w, ln.content_box.h,
+                    extra.push_str(&format!("  content: ({},{}) {}x{}  padding:({},{},{},{})  border:({},{},{},{})  margin:({},{},{},{})\n",
+                        ln.content_box.x, ln.content_box.y, ln.content_box.w, ln.content_box.h,
                         ln.padding_box.x, ln.padding_box.y, ln.padding_box.w, ln.padding_box.h,
                         ln.border_box.x, ln.border_box.y, ln.border_box.w, ln.border_box.h,
                         ln.margin_box.x, ln.margin_box.y, ln.margin_box.w, ln.margin_box.h));
+                    extra.push_str(&format!(
+                        "  border widths: {:?} colors: {:?}\n  corner radii: {:?}\n",
+                        ln.paint.border_widths, ln.paint.border_colors, ln.paint.corner_radii
+                    ));
+                    if let Some(shadow) = ln.paint.box_shadow {
+                        extra.push_str(&format!(
+                            "  box-shadow: offset=({}, {}) blur={} spread={} color={:?} inset={}\n",
+                            shadow.offset_x,
+                            shadow.offset_y,
+                            shadow.blur,
+                            shadow.spread,
+                            shadow.color,
+                            shadow.inset
+                        ));
+                    }
+                    if ln.float_side != "none" || ln.clear != "none" {
+                        extra.push_str(&format!(
+                            "  float={} clear={} containing-block={:?}\n",
+                            ln.float_side, ln.clear, ln.float_containing_block
+                        ));
+                    }
+                    if let Some((rows, columns)) = ln.table_dimensions {
+                        extra.push_str(&format!(
+                            "  table: rows={} columns={} final-y={}\n",
+                            rows, columns, ln.border_box.y
+                        ));
+                    }
                     if let Some(m) = &ln.marker {
                         extra.push_str(&format!(
                             "  marker: {:?} {}\n",
@@ -2160,6 +2195,54 @@ impl RabbitApp {
     }
 }
 
+#[cfg(feature = "dom")]
+fn discover_stylesheet_images(
+    candidates: &mut Vec<ResourceCandidate>,
+    sheets: &[Option<rappid_rabbit::css::Stylesheet>],
+    document_url: &ParsedUrl,
+) {
+    for sheet in sheets.iter().flatten() {
+        let base = match &sheet.source {
+            StylesheetSource::External(url) => ParsedUrl::parse(url).ok(),
+            _ => Some(document_url.clone()),
+        };
+        let Some(base) = base else { continue };
+        for rule in &sheet.rules {
+            for declaration in &rule.declarations {
+                let raw = declaration.raw_value.trim();
+                let Some(start) = raw.find("url(") else {
+                    continue;
+                };
+                let Some(end_rel) = raw[start + 4..].find(')') else {
+                    continue;
+                };
+                let value = raw[start + 4..start + 4 + end_rel]
+                    .trim()
+                    .trim_matches(['\"', '\'']);
+                if value.is_empty() || value.starts_with("data:") {
+                    continue;
+                }
+                let Ok(resolved) = rappid_rabbit::resources::discovery::resolve_url(&base, value)
+                else {
+                    continue;
+                };
+                if !candidates
+                    .iter()
+                    .any(|candidate| candidate.resolved_url == resolved)
+                {
+                    candidates.push(ResourceCandidate {
+                        raw_url: String::from(value),
+                        resolved_url: resolved,
+                        resource_type: ResourceType::Image,
+                        classification: rappid_rabbit::resources::discovery::DiscoveryClassification::EmbeddedResource,
+                        enqueue_for_fetch: false,
+                    });
+                }
+            }
+        }
+    }
+}
+
 impl App for RabbitApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
@@ -2330,6 +2413,13 @@ impl App for RabbitApp {
                 self.queue_fetch();
                 true
             }
+            // Some keyboard backends surface Ctrl+L as ASCII form-feed while
+            // others retain the raw keycode/modifier tuple below.
+            Event::Key('\u{c}') => {
+                self.url_input.set_text("");
+                self.url_input.active = true;
+                true
+            }
             Event::Key('\n') | Event::Key(' ')
                 if self.focus == FocusPane::DeveloperTools
                     && self.developer_tools.panel.active_tab == DeveloperToolTab::DomInspector
@@ -2352,6 +2442,16 @@ impl App for RabbitApp {
             } => {
                 if ctrl && keycode == KEY_Q {
                     request_close();
+                    return true;
+                }
+                if ctrl && keycode == KEY_L {
+                    self.url_input.set_text("");
+                    self.url_input.active = true;
+                    return true;
+                }
+                if keycode == KEY_F6 {
+                    self.url_input.set_text("");
+                    self.url_input.active = true;
                     return true;
                 }
                 if self.focus == FocusPane::DeveloperTools
