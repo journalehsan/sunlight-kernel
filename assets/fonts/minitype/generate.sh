@@ -24,9 +24,11 @@ echo "Building sun-font to (re)generate all .mtf (including Material Icons)..."
 cargo build -p sun-font
 
 # Locate the most recent sun-font OUT_DIR and copy the fonts.
-OUT_BUILD=$(find "$REPO_ROOT/target" -path '*sun-font*/out/sunlight_ui_13.mtf' | head -1 | xargs dirname || true)
+OUT_BUILD=$(find "$REPO_ROOT/target" -path '*sun-font*/out/sunlight_ui_13.mtf' -printf '%T@ %h\n' 2>/dev/null \
+  | sort -nr | head -1 | cut -d' ' -f2- || true)
 if [ -n "$OUT_BUILD" ] && [ -d "$OUT_BUILD" ]; then
   cp "$OUT_BUILD"/sunlight_*.mtf "$OUT_BUILD"/material_icons_*.mtf "$OUT_DIR/" 2>/dev/null || true
+  cp "$OUT_BUILD"/sunlight_emoji_manifest.txt "$OUT_DIR/" 2>/dev/null || true
   echo "Copied generated .mtf from $OUT_BUILD"
 else
   echo "Warning: could not locate sun-font OUT_DIR"

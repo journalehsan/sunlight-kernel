@@ -1,0 +1,19 @@
+OpenMoji Black artwork and font
+================================
+
+Project: OpenMoji — Open-source emojis for designers, developers and everyone else
+Upstream: HfG Schwäbisch Gmünd and the OpenMoji contributors
+Source: https://github.com/hfg-gmuend/openmoji
+Version: 17.0.0 (2026-04-23)
+Source asset: font/OpenMoji-black-glyf/OpenMoji-black-glyf.ttf
+SHA-256: bfa18b01a9038fe06f0fe72c72bb6ad38e9de4d6ec99951e170f8e5cb776159a
+License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+
+SunlightOS converts the official monochrome TrueType outlines at build time to
+grayscale alpha masks in its MiniType MTF2 format. The generated derivative
+font is exposed as “Sun Emoji”, remains monochrome, and is tinted at runtime by
+the current text color. No OpenMoji color artwork is included.
+
+The OpenMoji artwork and converted Sun Emoji asset are licensed separately
+from the SunlightOS kernel and application source code. See LICENSE.txt in this
+directory for the complete upstream license and attribution information.

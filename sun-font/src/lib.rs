@@ -41,6 +41,7 @@ static FONT_MONO_MEDIUM: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_medium_14.mtf"));
 static FONT_SERIF_REGULAR: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_serif_regular_16.mtf"));
+static FONT_EMOJI: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_emoji_16.mtf"));
 
 // ── Font roles ────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,47 @@ pub enum FontRole {
     MonoMedium,
     /// 16 px Noto Serif Regular — native serif document text.
     SerifRegular,
+    /// 16 px OpenMoji Black — automatic monochrome emoji/symbol fallback.
+    Emoji,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontId {
+    SunFont,
+    SunSerif,
+    SunMono,
+    SunEmoji,
+}
+
+impl FontId {
+    pub const fn family_name(self) -> &'static str {
+        match self {
+            Self::SunFont => "Sun Font",
+            Self::SunSerif => "Sun Serif",
+            Self::SunMono => "Sun Mono",
+            Self::SunEmoji => "Sun Emoji",
+        }
+    }
+
+    pub const fn classification(self) -> &'static str {
+        match self {
+            Self::SunFont => "Sans",
+            Self::SunSerif => "Serif",
+            Self::SunMono => "Monospace",
+            Self::SunEmoji => "Emoji / Symbol",
+        }
+    }
+}
+
+impl FontRole {
+    pub const fn font_id(self) -> FontId {
+        match self {
+            Self::SerifRegular => FontId::SunSerif,
+            Self::MonoRegular | Self::MonoMedium => FontId::SunMono,
+            Self::Emoji => FontId::SunEmoji,
+            _ => FontId::SunFont,
+        }
+    }
 }
 
 // ── TextStyle ─────────────────────────────────────────────────────────────────
@@ -92,8 +134,6 @@ impl TextStyle {
 // ── MTF parsing helpers ───────────────────────────────────────────────────────
 
 const HEADER_SIZE: usize = 8;
-const OFFSET_TABLE_SIZE: usize = 95 * 4;
-const GLYPH_DATA_START: usize = HEADER_SIZE + OFFSET_TABLE_SIZE; // 388
 
 #[inline]
 fn font_data(role: FontRole) -> &'static [u8] {
@@ -107,16 +147,18 @@ fn font_data(role: FontRole) -> &'static [u8] {
         FontRole::MonoRegular => FONT_MONO_REGULAR,
         FontRole::MonoMedium => FONT_MONO_MEDIUM,
         FontRole::SerifRegular => FONT_SERIF_REGULAR,
+        FontRole::Emoji => FONT_EMOJI,
     }
 }
 
 /// Read a u32 little-endian from `data[pos..]`.
 #[inline]
-fn read_u32(data: &[u8], pos: usize) -> u32 {
-    let b = &data[pos..pos + 4];
-    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+fn read_u32(data: &[u8], pos: usize) -> Option<u32> {
+    let b = data.get(pos..pos + 4)?;
+    Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
+#[derive(Clone, Copy, Debug)]
 struct GlyphInfo {
     advance: u8,
     left: i8,
@@ -126,12 +168,16 @@ struct GlyphInfo {
     pixel_offset: usize, // absolute byte offset into font data
 }
 
-/// Look up glyph info for `ch`.  Falls back to '?' for out-of-range characters.
 fn glyph_info(data: &'static [u8], ch: char) -> Option<GlyphInfo> {
-    let idx = if (ch as u32) >= 0x20 && (ch as u32) <= 0x7E {
+    if data.get(..4) == Some(b"MTF2") {
+        let glyph = mtf2_cmap_glyph(data, ch as u32)?;
+        return mtf2_glyph_info(data, glyph);
+    }
+    if data.get(..4) != Some(b"MTF1") {
+        return None;
+    }
+    let idx = if (ch as u32) >= 0x20 && (ch as u32) <= 0x7e {
         (ch as usize) - 0x20
-    } else if ch == '?' || (b'?' as usize) >= 0x20 {
-        b'?' as usize - 0x20 // fallback glyph
     } else {
         return None;
     };
@@ -140,7 +186,11 @@ fn glyph_info(data: &'static [u8], ch: char) -> Option<GlyphInfo> {
     if offset_pos + 4 > data.len() {
         return None;
     }
-    let glyph_start = read_u32(data, offset_pos) as usize;
+    let glyph_start = read_u32(data, offset_pos)? as usize;
+    glyph_info_at(data, glyph_start)
+}
+
+fn glyph_info_at(data: &'static [u8], glyph_start: usize) -> Option<GlyphInfo> {
     if glyph_start + 5 > data.len() {
         return None;
     }
@@ -165,6 +215,214 @@ fn glyph_info(data: &'static [u8], ch: char) -> Option<GlyphInfo> {
         height,
         pixel_offset,
     })
+}
+
+fn mtf2_cmap_glyph(data: &[u8], codepoint: u32) -> Option<u32> {
+    let count = read_u32(data, 12)? as usize;
+    let offset = read_u32(data, 20)? as usize;
+    let mut low = 0usize;
+    let mut high = count;
+    while low < high {
+        let middle = low + (high - low) / 2;
+        let entry = offset.checked_add(middle.checked_mul(8)?)?;
+        match read_u32(data, entry)?.cmp(&codepoint) {
+            core::cmp::Ordering::Less => low = middle + 1,
+            core::cmp::Ordering::Greater => high = middle,
+            core::cmp::Ordering::Equal => return read_u32(data, entry + 4),
+        }
+    }
+    None
+}
+
+fn mtf2_glyph_info(data: &'static [u8], glyph: u32) -> Option<GlyphInfo> {
+    let count = read_u32(data, 8)?;
+    if glyph >= count {
+        return None;
+    }
+    let offsets = read_u32(data, 28)? as usize;
+    let start = read_u32(data, offsets.checked_add(glyph as usize * 4)?)? as usize;
+    glyph_info_at(data, start)
+}
+
+const MAX_SEQUENCE_LEN: usize = 16;
+const SEQUENCE_ENTRY_SIZE: usize = 4 + MAX_SEQUENCE_LEN * 4 + 4;
+
+fn mtf2_sequence_glyph(data: &[u8], sequence: &[u32]) -> Option<u32> {
+    if sequence.len() < 2 || sequence.len() > MAX_SEQUENCE_LEN {
+        return None;
+    }
+    let count = read_u32(data, 16)? as usize;
+    let offset = read_u32(data, 24)? as usize;
+    let mut low = 0usize;
+    let mut high = count;
+    while low < high {
+        let middle = low + (high - low) / 2;
+        let entry = offset.checked_add(middle.checked_mul(SEQUENCE_ENTRY_SIZE)?)?;
+        let stored_len = *data.get(entry)? as usize;
+        let common = stored_len.min(sequence.len());
+        let mut ordering = core::cmp::Ordering::Equal;
+        for (index, expected) in sequence.iter().enumerate().take(common) {
+            let actual = read_u32(data, entry + 4 + index * 4)?;
+            ordering = actual.cmp(expected);
+            if ordering != core::cmp::Ordering::Equal {
+                break;
+            }
+        }
+        if ordering == core::cmp::Ordering::Equal {
+            ordering = stored_len.cmp(&sequence.len());
+        }
+        match ordering {
+            core::cmp::Ordering::Less => low = middle + 1,
+            core::cmp::Ordering::Greater => high = middle,
+            core::cmp::Ordering::Equal => return read_u32(data, entry + 4 + MAX_SEQUENCE_LEN * 4),
+        }
+    }
+    None
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResolvedFont {
+    Primary,
+    SunEmoji,
+    Missing,
+    InvisibleControl,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GlyphPaintKind {
+    MonochromeMask,
+    ColorGlyph,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResolvedCluster {
+    pub byte_len: usize,
+    pub scalar_len: usize,
+    pub font: ResolvedFont,
+    pub glyph_id: u32,
+    pub advance: u8,
+    pub paint_kind: GlyphPaintKind,
+}
+
+fn resolve_cluster(text: &str, role: FontRole) -> Option<(ResolvedCluster, GlyphInfo)> {
+    let first = text.chars().next()?;
+    if matches!(first, '\u{fe0e}' | '\u{fe0f}' | '\u{200d}') {
+        return Some((
+            ResolvedCluster {
+                byte_len: first.len_utf8(),
+                scalar_len: 1,
+                font: ResolvedFont::InvisibleControl,
+                glyph_id: 0,
+                advance: 0,
+                paint_kind: GlyphPaintKind::MonochromeMask,
+            },
+            GlyphInfo {
+                advance: 0,
+                left: 0,
+                top: 0,
+                width: 0,
+                height: 0,
+                pixel_offset: 0,
+            },
+        ));
+    }
+
+    let mut codes = [0u32; MAX_SEQUENCE_LEN];
+    let mut ends = [0usize; MAX_SEQUENCE_LEN];
+    let mut count = 0usize;
+    for (offset, ch) in text.char_indices().take(MAX_SEQUENCE_LEN) {
+        codes[count] = ch as u32;
+        ends[count] = offset + ch.len_utf8();
+        count += 1;
+    }
+    let primary = glyph_info(font_data(role), first);
+    let mut emoji_match = None;
+    for length in (2..=count).rev() {
+        if let Some(glyph) = mtf2_sequence_glyph(FONT_EMOJI, &codes[..length]) {
+            emoji_match = mtf2_glyph_info(FONT_EMOJI, glyph)
+                .map(|info| (glyph, info, length, ends[length - 1]));
+            break;
+        }
+    }
+    let requests_emoji = emoji_match.is_some_and(|(_, _, length, _)| {
+        codes[..length]
+            .iter()
+            .any(|code| matches!(*code, 0xfe0f | 0x200d | 0x20e3 | 0x1f3fb..=0x1f3ff))
+            || (length == 2
+                && codes[0] >= 0x1f1e6
+                && codes[0] <= 0x1f1ff
+                && codes[1] >= 0x1f1e6
+                && codes[1] <= 0x1f1ff)
+    });
+    if (primary.is_none() || requests_emoji) && emoji_match.is_some() {
+        let (glyph, info, scalar_len, byte_len) = emoji_match.unwrap();
+        return Some((
+            ResolvedCluster {
+                byte_len,
+                scalar_len,
+                font: ResolvedFont::SunEmoji,
+                glyph_id: glyph,
+                advance: info.advance,
+                paint_kind: GlyphPaintKind::MonochromeMask,
+            },
+            info,
+        ));
+    }
+    if let Some(info) = primary {
+        let consume_selector = text[first.len_utf8()..].starts_with('\u{fe0e}');
+        return Some((
+            ResolvedCluster {
+                byte_len: first.len_utf8() + usize::from(consume_selector) * 3,
+                scalar_len: 1 + usize::from(consume_selector),
+                font: ResolvedFont::Primary,
+                glyph_id: mtf2_cmap_glyph(font_data(role), first as u32).unwrap_or(first as u32),
+                advance: info.advance,
+                paint_kind: GlyphPaintKind::MonochromeMask,
+            },
+            info,
+        ));
+    }
+    if let Some(info) = glyph_info(FONT_EMOJI, first) {
+        let glyph = mtf2_cmap_glyph(FONT_EMOJI, first as u32)?;
+        return Some((
+            ResolvedCluster {
+                byte_len: first.len_utf8(),
+                scalar_len: 1,
+                font: ResolvedFont::SunEmoji,
+                glyph_id: glyph,
+                advance: info.advance,
+                paint_kind: GlyphPaintKind::MonochromeMask,
+            },
+            info,
+        ));
+    }
+    let fallback = glyph_info(font_data(role), '?')?;
+    Some((
+        ResolvedCluster {
+            byte_len: first.len_utf8(),
+            scalar_len: 1,
+            font: ResolvedFont::Missing,
+            glyph_id: mtf2_cmap_glyph(font_data(role), '?' as u32).unwrap_or(31),
+            advance: fallback.advance,
+            paint_kind: GlyphPaintKind::MonochromeMask,
+        },
+        fallback,
+    ))
+}
+
+pub fn for_each_resolved_cluster(
+    text: &str,
+    role: FontRole,
+    mut visit: impl FnMut(usize, ResolvedCluster),
+) {
+    let mut offset = 0usize;
+    while offset < text.len() {
+        let Some((cluster, _)) = resolve_cluster(&text[offset..], role) else {
+            break;
+        };
+        visit(offset, cluster);
+        offset += cluster.byte_len.max(1);
+    }
 }
 
 // ── Public metrics API ────────────────────────────────────────────────────────
@@ -196,12 +454,14 @@ pub fn line_height(role: FontRole) -> u32 {
 /// Height is always `line_height(role)`.  Does not account for sub-pixel
 /// advance rounding — use this for layout, not pixel-perfect clipping.
 pub fn measure_text(text: &str, role: FontRole) -> Size {
-    let data = font_data(role);
     let mut w = 0u32;
-    for ch in text.chars() {
-        if let Some(g) = glyph_info(data, ch) {
-            w += g.advance as u32;
-        }
+    let mut offset = 0usize;
+    while offset < text.len() {
+        let Some((cluster, _)) = resolve_cluster(&text[offset..], role) else {
+            break;
+        };
+        w = w.saturating_add(cluster.advance as u32);
+        offset += cluster.byte_len.max(1);
     }
     Size::new(w, line_height(role))
 }
@@ -214,18 +474,19 @@ pub fn measure_text(text: &str, role: FontRole) -> Size {
 /// canvas.  Returns the x coordinate immediately after the last glyph so the
 /// caller can continue rendering on the same line.
 pub fn draw_text(canvas: &mut Canvas, text: &str, x: i32, y: i32, style: &TextStyle) -> i32 {
-    let data = font_data(style.role);
     let asc = ascent(style.role) as i32;
     let baseline_y = y + asc;
     let mut cx = x;
+    let mut offset = 0usize;
 
-    for ch in text.chars() {
-        let g = match glyph_info(data, ch) {
-            Some(g) => g,
-            None => {
-                cx += 4;
-                continue;
-            } // unknown char — skip with small gap
+    while offset < text.len() {
+        let Some((cluster, g)) = resolve_cluster(&text[offset..], style.role) else {
+            break;
+        };
+        let data = if cluster.font == ResolvedFont::SunEmoji {
+            FONT_EMOJI
+        } else {
+            font_data(style.role)
         };
 
         if g.width > 0 && g.height > 0 {
@@ -247,6 +508,7 @@ pub fn draw_text(canvas: &mut Canvas, text: &str, x: i32, y: i32, style: &TextSt
         }
 
         cx += g.advance as i32;
+        offset += cluster.byte_len.max(1);
     }
     cx
 }
@@ -338,9 +600,10 @@ pub fn assert_fonts_valid() {
         (FontRole::MonoRegular, FONT_MONO_REGULAR),
         (FontRole::MonoMedium, FONT_MONO_MEDIUM),
         (FontRole::SerifRegular, FONT_SERIF_REGULAR),
+        (FontRole::Emoji, FONT_EMOJI),
     ] {
         assert!(
-            data.len() >= GLYPH_DATA_START && &data[0..4] == b"MTF1",
+            data.len() >= 32 && matches!(&data[0..4], b"MTF1" | b"MTF2"),
             "sun-font: embedded MTF blob for {:?} has invalid magic",
             role,
         );
@@ -366,6 +629,7 @@ impl Typography {
     pub const MONO: VecFont = VecFont(FontRole::MonoRegular);
     pub const MONO_MEDIUM: VecFont = VecFont(FontRole::MonoMedium);
     pub const SERIF: VecFont = VecFont(FontRole::SerifRegular);
+    pub const EMOJI: VecFont = VecFont(FontRole::Emoji);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -377,6 +641,8 @@ mod tests {
     #[test]
     fn fonts_have_valid_magic() {
         assert_fonts_valid();
+        assert_eq!(FontRole::Emoji.font_id().family_name(), "Sun Emoji");
+        assert_eq!(FontRole::Emoji.font_id().classification(), "Emoji / Symbol");
     }
 
     #[test]
@@ -390,6 +656,7 @@ mod tests {
             FontRole::UiTitle,
             FontRole::MonoRegular,
             FontRole::MonoMedium,
+            FontRole::Emoji,
         ] {
             let lh = line_height(role);
             assert!(
@@ -416,8 +683,8 @@ mod tests {
 
     #[test]
     fn serif_regular_is_valid_and_has_distinct_advances() {
-        assert!(FONT_SERIF_REGULAR.len() > GLYPH_DATA_START);
-        assert_eq!(&FONT_SERIF_REGULAR[..4], b"MTF1");
+        assert!(FONT_SERIF_REGULAR.len() > 32);
+        assert_eq!(&FONT_SERIF_REGULAR[..4], b"MTF2");
         assert!(measure_text("The quick brown rabbit", FontRole::SerifRegular).w > 0);
         assert_ne!(
             measure_text("WWWiii", FontRole::SerifRegular).w,
@@ -460,5 +727,62 @@ mod tests {
             x, 10,
             "draw_text with empty string should not advance cursor"
         );
+    }
+
+    #[test]
+    fn sun_emoji_asset_has_full_cmap_and_sequence_tables() {
+        assert_eq!(&FONT_EMOJI[..4], b"MTF2");
+        assert!(read_u32(FONT_EMOJI, 12).unwrap() >= 1_400);
+        assert!(read_u32(FONT_EMOJI, 16).unwrap() >= 2_500);
+        for ch in ['🐇', '🐧', '🦀', '😀'] {
+            assert!(glyph_info(FONT_EMOJI, ch).is_some(), "missing {ch}");
+        }
+    }
+
+    #[test]
+    fn fallback_segments_text_and_sequences_consistently() {
+        let text = "Hello 🐇 ❤️ 👍🏽 👨‍💻 🇩🇪 1️⃣";
+        let mut primary = 0;
+        let mut emoji = 0;
+        for_each_resolved_cluster(text, FontRole::UiRegular, |_, cluster| match cluster.font {
+            ResolvedFont::Primary => primary += 1,
+            ResolvedFont::SunEmoji => emoji += 1,
+            _ => {}
+        });
+        assert!(primary >= 6);
+        assert_eq!(emoji, 6);
+        assert!(
+            measure_text(text, FontRole::UiRegular).w
+                > measure_text("Hello ", FontRole::UiRegular).w
+        );
+    }
+
+    #[test]
+    fn text_font_wins_for_typography_and_variation_controls_are_invisible() {
+        for text in ["©", "→", "“Rabbit”", "…"] {
+            for_each_resolved_cluster(text, FontRole::UiRegular, |_, cluster| {
+                assert_eq!(cluster.font, ResolvedFont::Primary);
+            });
+        }
+        assert_eq!(
+            measure_text("☀️", FontRole::UiRegular).w,
+            measure_text("☀", FontRole::Emoji).w
+        );
+        assert_eq!(measure_text("\u{fe0f}", FontRole::UiRegular).w, 0);
+    }
+
+    #[test]
+    fn emoji_mask_is_tinted_and_has_transparent_holes() {
+        let mut pixels = [0u32; 40 * 40];
+        let mut canvas = Canvas::new(&mut pixels, 40, 40, 40);
+        draw_text(
+            &mut canvas,
+            "🐇",
+            4,
+            4,
+            &TextStyle::new(FontRole::UiRegular, Color::rgb(240, 80, 40)),
+        );
+        assert!(pixels.iter().any(|pixel| (*pixel & 0x00ff_ffff) != 0));
+        assert!(pixels.iter().any(|pixel| *pixel == 0));
     }
 }

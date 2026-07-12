@@ -10,8 +10,8 @@ runs at boot — the pixel data is baked into the binary at compile time.
 |--------|--------|
 | Build-time rasterisation | Zero startup cost; no heap fragmentation from font loading |
 | Inter typeface | Open-source (OFL), designed for screen legibility at small sizes |
-| No FreeType/HarfBuzz/Skia | Keeps the userland binary small; SunlightOS has no dynamic linking |
-| Custom `.mtf` format | Trivial to parse in `no_std`; 8-byte header + alpha bitmap per glyph |
+| No runtime FreeType/HarfBuzz/Skia | Build-time conversion may shape source fonts; boot and painting only read MiniType |
+| Custom `.mtf` format | Trivial to parse in `no_std`; compact headers + alpha bitmap per glyph |
 
 ## Font Roles
 
@@ -23,6 +23,7 @@ runs at boot — the pixel data is baked into the binary at compile time.
 | `UiLarge` | Inter Regular | 16 | Window titles, large headings |
 | `MonoRegular` | Fira Code Regular | 14 | Code, terminals, technical metadata |
 | `SerifRegular` | Noto Serif Regular | 16 | Native document/web serif text |
+| `Emoji` | OpenMoji Black 17.0.0 | 16 | Automatic monochrome emoji fallback (`Sun Emoji`) |
 
 ## Font Asset Paths
 
@@ -37,7 +38,7 @@ docs/fonts/FiraCode/ttf/FiraCode-Medium.ttf
 assets/fonts/Material-Icons/MaterialIcons-Regular.ttf   (icon symbols)
 ```
 
-**Generated MTF files** (baked into the binary at build time, not shipped separately):
+**Generated MTF files** (baked into linked applications and also installed in RAMFS):
 ```
 $OUT_DIR/sunlight_ui_11.mtf
 $OUT_DIR/sunlight_ui_13.mtf
@@ -48,6 +49,8 @@ $OUT_DIR/sunlight_ui_title_18.mtf
 $OUT_DIR/sunlight_mono_regular_14.mtf
 $OUT_DIR/sunlight_mono_medium_14.mtf
 $OUT_DIR/sunlight_serif_regular_16.mtf
+$OUT_DIR/sunlight_emoji_16.mtf
+$OUT_DIR/sunlight_emoji_manifest.txt
 $OUT_DIR/material_icons_16.mtf
 $OUT_DIR/material_icons_24.mtf
 ```
@@ -73,6 +76,11 @@ These are seeded into the initramfs (see sunlight-fs/src/ramfs.rs INITRAMFS).
 | `sans-serif`, `Sun Font`, `Arial`, `Helvetica`, `Verdana`, `Inter` | Sun Font / Inter |
 | `serif`, `Sun Serif`, `Times`, `Times New Roman`, `Georgia`, `Noto Serif` | Sun Serif / Noto Serif Regular |
 | `monospace`, `Sun Mono`, `Fira Code`, `Courier`, `Courier New`, `Consolas` | Sun Mono / Fira Code Regular |
+
+Every `sun-font::VecFont` also performs cluster-local fallback to **Sun Emoji**.
+Normal letters and supported typographic punctuation remain in the requested
+face; missing emoji and emoji-presentation sequences use OpenMoji Black. The
+same resolver drives measurement and painting.
 
 Unknown named faces remain unresolved until a later generic fallback in the
 CSS list is encountered. This preserves `font-family: Georgia, serif` style
@@ -144,6 +152,10 @@ To add **JetBrains Mono** as the proper mono font:
 
 ## MTF Binary Format
 
+The runtime accepts both the original fixed-ASCII `MTF1` format and `MTF2`.
+Current generated text and emoji assets use MTF2; old MTF1 assets remain
+readable.
+
 ```
 [0..4]   magic       : "MTF1"
 [4]      line_height : u8   (px, total vertical advance)
@@ -163,6 +175,18 @@ GlyphHeader (5 bytes):
 Pixels (width × height bytes):
   Alpha mask, 0 = transparent, 255 = fully opaque
 ```
+
+MTF2 adds a 32-byte header, sorted `(Unicode scalar, glyph id)` cmap, optional
+fixed-width sequence records (up to 16 scalars), a glyph-offset table, and the
+same alpha-mask glyph records. Sequence lookup is allocation-free, bounded,
+and longest-match. `GlyphPaintKind::MonochromeMask` is stored explicitly;
+`ColorGlyph` is reserved for a future format revision.
+
+The official source is
+`assets/fonts/OpenMoji-Black/OpenMoji-black-glyf.ttf` (OpenMoji 17.0.0,
+CC BY-SA 4.0). The full included/omitted coverage is recorded in
+`assets/fonts/minitype/sunlight_emoji_manifest.txt`; OpenMoji private-use
+extras are excluded from automatic Unicode fallback.
 
 ## API Quick Reference
 
@@ -187,10 +211,10 @@ let lh: u32 = line_height(FontRole::UiRegular);
 let sz: Size = measure_text("path/to/file", FontRole::MonoRegular);
 ```
 
-## Limitations (v0)
+## Limitations
 
-- Latin / printable ASCII only (0x20 – 0x7E).
-- Characters outside that range render as `?`.
+- Text faces cover printable ASCII, Latin-1, and common web typography/arrows.
+- Sun Emoji covers the official OpenMoji Unicode cmap and supported sequences.
 - No complex text shaping (BiDi, ligatures, kerning pairs).
 - No Persian / Arabic / CJK.
 - Font data embedded in the binary — not hot-swappable at runtime.

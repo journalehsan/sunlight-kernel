@@ -13,6 +13,7 @@ use alloc::{
 
 use crate::attributes::Attribute;
 use crate::document::Document;
+use crate::entities::{decode_character_references, CharacterReferenceContext};
 use crate::error::ParseError;
 use crate::node::{Node, NodeId};
 use crate::parser::ParseLimits;
@@ -106,7 +107,7 @@ impl<'a> FallbackParser<'a> {
         while self.pos < self.source.len() && self.current_byte() != Some(b'<') {
             self.pos += 1;
         }
-        self.append_text_slice(start, self.pos)
+        self.append_decoded_text_slice(start, self.pos)
     }
 
     fn parse_comment(&mut self) -> Result<(), ParseError> {
@@ -254,7 +255,11 @@ impl<'a> FallbackParser<'a> {
                 while self.pos < self.source.len() && self.current_byte() != Some(quote) {
                     self.pos += 1;
                 }
-                let value = self.source[start..self.pos].to_string();
+                let value = decode_character_references(
+                    &self.source[start..self.pos],
+                    CharacterReferenceContext::Attribute,
+                )
+                .into_owned();
                 if self.current_byte() == Some(quote) {
                     self.pos += 1;
                 }
@@ -270,7 +275,11 @@ impl<'a> FallbackParser<'a> {
                         None => break,
                     }
                 }
-                self.source[start..self.pos].to_string()
+                decode_character_references(
+                    &self.source[start..self.pos],
+                    CharacterReferenceContext::Attribute,
+                )
+                .into_owned()
             }
         }
     }
@@ -312,6 +321,15 @@ impl<'a> FallbackParser<'a> {
             return Ok(());
         }
         self.append_text_leaf(&self.source[start..end], false)
+    }
+
+    fn append_decoded_text_slice(&mut self, start: usize, end: usize) -> Result<(), ParseError> {
+        if start >= end {
+            return Ok(());
+        }
+        let decoded =
+            decode_character_references(&self.source[start..end], CharacterReferenceContext::Data);
+        self.append_text_leaf(decoded.as_ref(), false)
     }
 
     fn append_text_leaf(&mut self, content: &str, comment: bool) -> Result<(), ParseError> {
@@ -560,6 +578,23 @@ mod tests {
         assert_eq!(
             document.text_content(children[0]),
             Some("if (a < b) { ok(); }")
+        );
+    }
+
+    #[test]
+    fn fallback_decodes_data_and_attributes_but_not_raw_text() {
+        let document =
+            parse("<p title='&copy;'>&nbsp;&#x1F407;&amp;nbsp;</p><style>&copy;</style>");
+        let paragraph = document.find_first_element("p").unwrap();
+        assert_eq!(
+            document.text_content(document.children(paragraph)[0]),
+            Some("\u{a0}🐇&nbsp;")
+        );
+        assert_eq!(document.attributes(paragraph).unwrap()[0].value(), "©");
+        let style = document.find_first_element("style").unwrap();
+        assert_eq!(
+            document.text_content(document.children(style)[0]),
+            Some("&copy;")
         );
     }
 

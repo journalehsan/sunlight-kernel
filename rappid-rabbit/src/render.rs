@@ -3991,4 +3991,32 @@ mod tests {
                 && matches!(object.kind, RenderObjectKind::BoxShadow { inset: true, .. })
         }));
     }
+
+    #[test]
+    fn decoded_entities_and_emoji_remain_inline_owned_text() {
+        let state = render(include_str!("../tests/fixtures/html-entities-emoji.html"));
+        let text = state
+            .current_scene
+            .objects
+            .iter()
+            .filter_map(|object| match &object.kind {
+                RenderObjectKind::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(text.iter().any(|value| value.contains("©")));
+        assert!(text.iter().any(|value| value.contains("🐇")));
+        assert!(text.iter().any(|value| *value == "Kernel\u{a0}Archives"));
+        assert!(text.iter().any(|value| value.contains("&nbsp;")));
+        assert!(!text.iter().any(|value| value.contains("&#x1F407;")));
+        assert!(!text.iter().any(|value| value.contains("var literal")));
+        assert!(state.current_scene.objects.iter().any(|object| {
+            matches!(&object.kind, RenderObjectKind::Text { text, .. } if text.contains("🐇"))
+                && matches!(object.interaction, Some(RenderInteraction::Link { .. }))
+        }));
+        assert!(state.current_scene.objects.iter().any(|object| {
+            matches!(&object.kind, RenderObjectKind::Text { text, color, .. }
+                if text.contains("foreground") && *color == Color::rgb(255, 255, 255))
+        }));
+    }
 }

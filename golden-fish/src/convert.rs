@@ -10,6 +10,7 @@ use tl::{ParserOptions, VDom};
 
 use crate::attributes::Attribute;
 use crate::document::Document as GoldenDoc;
+use crate::entities::{decode_character_references, CharacterReferenceContext};
 use crate::error::ParseError;
 use crate::node::{Node, NodeId};
 
@@ -40,7 +41,7 @@ fn convert_vdom_to_golden(dom: &VDom<'_>, _source: &str) -> GoldenDoc {
     // VDom::children() returns &[NodeHandle] for top-level nodes.
     for handle in dom.children() {
         if let Some(tl_node) = handle.get(dom.parser()) {
-            let child_id = convert_node(&mut golden, tl_node, dom.parser());
+            let child_id = convert_node(&mut golden, tl_node, dom.parser(), true);
             golden.append_child(root_id, child_id);
             golden.set_parent(child_id, root_id);
         }
@@ -50,16 +51,28 @@ fn convert_vdom_to_golden(dom: &VDom<'_>, _source: &str) -> GoldenDoc {
 }
 
 /// Recursively convert a tl node into a Golden Fish node and return its id.
-fn convert_node(golden: &mut GoldenDoc, tl_node: &tl::Node<'_>, parser: &tl::Parser<'_>) -> NodeId {
+fn convert_node(
+    golden: &mut GoldenDoc,
+    tl_node: &tl::Node<'_>,
+    parser: &tl::Parser<'_>,
+    decode_text: bool,
+) -> NodeId {
     match tl_node {
         tl::Node::Tag(tag) => {
             let tag_name = tag.name().as_utf8_str().into_owned();
+            let decode_child_text = !matches!(tag_name.as_str(), "script" | "style");
 
             // Attributes: iter() yields (Cow<str>, Option<Cow<str>>)
             let mut attrs: Vec<Attribute> = Vec::new();
             for (k, v_opt) in tag.attributes().iter() {
                 let name = k.into_owned();
-                let value = v_opt.map(Cow::into_owned).unwrap_or_default();
+                let value = v_opt
+                    .map(Cow::into_owned)
+                    .map(|value| {
+                        decode_character_references(&value, CharacterReferenceContext::Attribute)
+                            .into_owned()
+                    })
+                    .unwrap_or_default();
                 attrs.push(Attribute::new(name, value));
             }
 
@@ -72,7 +85,7 @@ fn convert_node(golden: &mut GoldenDoc, tl_node: &tl::Node<'_>, parser: &tl::Par
             // Children via tag.children().top() -> &RawChildren (InlineVec)
             for child_handle in tag.children().top().iter() {
                 if let Some(child_tl) = child_handle.get(parser) {
-                    let child_id = convert_node(golden, child_tl, parser);
+                    let child_id = convert_node(golden, child_tl, parser, decode_child_text);
                     golden.append_child(elem_id, child_id);
                     golden.set_parent(child_id, elem_id);
                 }
@@ -83,6 +96,11 @@ fn convert_node(golden: &mut GoldenDoc, tl_node: &tl::Node<'_>, parser: &tl::Par
         tl::Node::Raw(bytes) => {
             // Raw text content
             let content = bytes.as_utf8_str().into_owned();
+            let content = if decode_text {
+                decode_character_references(&content, CharacterReferenceContext::Data).into_owned()
+            } else {
+                content
+            };
             golden.alloc_node(Node::Text { content })
         }
         tl::Node::Comment(bytes) => {

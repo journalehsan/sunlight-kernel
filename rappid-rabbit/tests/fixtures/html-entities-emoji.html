@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { margin: 20px; font-family: sans-serif; font-size: 20px; line-height: 1.5; }
+        .dark { background: #222; color: white; padding: 12px; }
+        .serif { font-family: serif; }
+        .mono { font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>SunlightOS HTML and Emoji Lesson ☀️</h1>
+    <p>Named: &amp; &lt; &gt; &quot; &copy; &reg; &trade; &hellip; &ndash; &mdash; &ldquo;Rabbit&rdquo;</p>
+    <p>Non-breaking: Kernel&nbsp;Archives must keep those words together.</p>
+    <p>Numeric: &#169; &#x00AE; &#128007; &#x1F427; &#x2600;&#xFE0F;</p>
+    <p>Literal: 🐇 🐧 ☀️ ❤️ 👍🏽 👨‍💻 🇩🇪 1️⃣</p>
+    <p class="serif">Serif text with emoji: Sunlight ☀️ and Rabbit 🐇</p>
+    <p class="mono">Mono text with emoji: cargo run 🦀</p>
+    <p class="dark">Monochrome emoji should inherit this light foreground: ☀️ 🐇 🐧</p>
+    <p>Double decoding must not happen: &amp;nbsp;</p>
+    <a href="/rabbit">Linked Rabbit 🐇</a>
+    <script>var literal = "&copy; &#x1F407;";</script>
+</body>
+</html>

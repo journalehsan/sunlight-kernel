@@ -1886,6 +1886,20 @@ StandardOutput=journal\nStandardError=journal\n\n\
         include_bytes!("../../assets/fonts/minitype/sunlight_serif_regular_16.mtf"),
     ),
     RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_emoji_16.mtf",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_emoji_16.mtf"),
+    ),
+    RamEntry::file(
+        "/usr/share/sunlightos/fonts/minitype/sunlight_emoji_manifest.txt",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/fonts/minitype/sunlight_emoji_manifest.txt"),
+    ),
+    RamEntry::file(
         "/usr/share/sunlightos/fonts/minitype/material_icons_16.mtf",
         0, 0, mode::FILE_644,
         include_bytes!("../../assets/fonts/minitype/material_icons_16.mtf"),
@@ -1894,6 +1908,22 @@ StandardOutput=journal\nStandardError=journal\n\n\
         "/usr/share/sunlightos/fonts/minitype/material_icons_24.mtf",
         0, 0, mode::FILE_644,
         include_bytes!("../../assets/fonts/minitype/material_icons_24.mtf"),
+    ),
+    RamEntry::dir("/usr/share/licenses", 0, 0, mode::DIR_755),
+    RamEntry::dir("/usr/share/licenses/openmoji", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/usr/share/licenses/openmoji/LICENSE.txt",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../licenses/openmoji/LICENSE.txt"),
+    ),
+    RamEntry::file(
+        "/usr/share/licenses/openmoji/ATTRIBUTION.txt",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../licenses/openmoji/ATTRIBUTION.txt"),
     ),
     RamEntry::dir("/usr/share/sunlightos/sample-pictures", 0, 0, mode::DIR_755),
     RamEntry::file(
@@ -2372,5 +2402,22 @@ mod tests {
         let text2 = core::str::from_utf8(&buf2[..n2]).unwrap_or("");
         assert!(text2.contains("C.UTF-8"));
         assert!(text2.contains("en_US.UTF-8"));
+    }
+
+    #[test]
+    fn sun_emoji_assets_and_license_are_present_in_initramfs() {
+        for path in [
+            "/usr/share/sunlightos/fonts/minitype/sunlight_emoji_16.mtf",
+            "/usr/share/sunlightos/fonts/minitype/sunlight_emoji_manifest.txt",
+            "/usr/share/licenses/openmoji/LICENSE.txt",
+            "/usr/share/licenses/openmoji/ATTRIBUTION.txt",
+        ] {
+            assert!(
+                INITRAMFS
+                    .iter()
+                    .any(|entry| entry.path == path && !entry.is_dir),
+                "missing {path} in INITRAMFS"
+            );
+        }
     }
 }

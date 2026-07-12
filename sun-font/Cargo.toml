@@ -141,6 +141,8 @@ sunlight-ui = { path = "../sunlight-ui" }
 
 [build-dependencies]
 fontdue = "0.7"
+rustybuzz = "0.10"
+serde_json = "1"
 
 [features]
 default = []

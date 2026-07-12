@@ -35,7 +35,9 @@ extern crate alloc;
 
 pub mod attributes;
 pub mod document;
+pub mod entities;
 pub mod error;
+mod named_entities;
 pub mod node;
 pub mod parser;
 
@@ -165,6 +167,39 @@ mod tests {
         let text = doc.text_content(doc.children(p)[0]).unwrap();
         assert!(text.contains("こんにちは"));
         assert!(text.contains("🌍"));
+    }
+
+    #[test]
+    fn html_references_decode_in_text_and_attributes_once() {
+        let source =
+            r#"<p title="Rabbit&nbsp;&amp;&nbsp;Penguin">&copy; &#169; &#x1F407; &amp;nbsp;</p>"#;
+        let doc = parse(source);
+        let p = doc.find_first_element("p").unwrap();
+        let text = doc.text_content(doc.children(p)[0]).unwrap();
+        assert_eq!(text, "© © 🐇 &nbsp;");
+        let title = doc
+            .attributes(p)
+            .unwrap()
+            .iter()
+            .find(|attribute| attribute.name() == "title")
+            .unwrap();
+        assert_eq!(title.value(), "Rabbit\u{a0}&\u{a0}Penguin");
+        assert!(source.contains("&#x1F407;"));
+    }
+
+    #[test]
+    fn raw_text_and_comments_keep_entity_spelling() {
+        let doc = parse("<script>var x='&copy; &#x1F407;';</script><style>.x{content:'&amp;'}</style><!-- &copy; -->");
+        for (tag, expected) in [
+            ("script", "var x='&copy; &#x1F407;';"),
+            ("style", ".x{content:'&amp;'}"),
+        ] {
+            let element = doc.find_first_element(tag).unwrap();
+            assert_eq!(doc.text_content(doc.children(element)[0]), Some(expected));
+        }
+        assert!((0..doc.node_count()).any(|id| {
+            matches!(doc.get(id), Some(Node::Comment { content }) if content.contains("&copy;"))
+        }));
     }
 
     #[test]

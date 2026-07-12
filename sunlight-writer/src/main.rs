@@ -308,6 +308,12 @@ const SAMPLE_DOCUMENT_BLOCKS: &[WriterBlock<'static>] = &[
         text: "The widget renders a real document page, comfortable margins, subtle guide lines, and a stable primitive list instead of layout logic.",
         role: WriterTextRole::Paragraph,
     },
+    WriterBlock::Text {
+        x: 0,
+        y: 166,
+        text: "SunlightOS ☀️  Rabbit 🐇  Penguin 🐧  Rust 🦀",
+        role: WriterTextRole::Paragraph,
+    },
     WriterBlock::Rect {
         x: 0,
         y: 186,
@@ -1416,6 +1422,15 @@ mod tests {
         assert!(items
             .iter()
             .any(|item| matches!(item, DocumentCanvasItem::LinkText { .. })));
+    }
+
+    #[test]
+    fn sample_document_keeps_editable_unicode_emoji_text() {
+        let document = WriterDocument::sample();
+        assert_eq!(document.mode, DocumentCanvasMode::Editable);
+        assert!(document.blocks.iter().any(|block| {
+            matches!(block, super::WriterBlock::Text { text, .. } if text.contains("🐇") && text.contains("🦀"))
+        }));
     }
 
     #[test]
