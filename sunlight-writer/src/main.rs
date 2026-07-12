@@ -20,7 +20,7 @@ use sunlight_ui::widgets::{
     AppMenuCommand, AppMenuSecondaryItem, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
     DocumentCanvasPresentation, DocumentRectStyle, DocumentStrokeStyle, DocumentTextStyle,
     HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec,
-    RibbonGroupSpec, StatusBar, TwoPaneAppMenu,
+    RibbonGroupSpec, StatusBar, TextEditState, TwoPaneAppMenu,
 };
 use sunlight_ui::{
     request_close, App, Color, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
@@ -37,6 +37,16 @@ const APP_MENU_LEFT_W: u32 = 222;
 const APP_MENU_RIGHT_W: u32 = 300;
 const MSG_LEN: usize = 96;
 const KEY_ESC: u8 = 0x01;
+
+const KEY_LEFT: u8 = 0x4B;
+const KEY_RIGHT: u8 = 0x4D;
+const KEY_HOME: u8 = 0x47;
+const KEY_END: u8 = 0x4F;
+const KEY_DELETE: u8 = 0x53;
+
+const SAMPLE_EDITABLE_TEXT: &str = "SunlightOS ☀️  Rabbit 🐇  Penguin 🐧  Rust 🦀";
+
+const EDITABLE_ITEM_INDEX: usize = 5;
 
 static FONT_UI_TITLE: VecFont = VecFont(FontRole::UiTitle);
 static FONT_UI_LARGE: VecFont = VecFont(FontRole::UiLarge);
@@ -355,6 +365,7 @@ impl<'a> WriterDocument<'a> {
         Self { mode, blocks: &[] }
     }
 
+    #[allow(dead_code)]
     fn to_canvas_items(&self) -> Vec<DocumentCanvasItem<'a>> {
         let mut items = Vec::with_capacity(self.blocks.len());
         for block in self.blocks {
@@ -783,6 +794,9 @@ struct WriterApp {
     menu_button_hover: bool,
     status_center: TextSlot,
     status_ticks: u16,
+    edit_buffer: String,
+    edit_state: TextEditState,
+    document_modified: bool,
 }
 
 impl WriterApp {
@@ -801,6 +815,9 @@ impl WriterApp {
             menu_button_hover: false,
             status_center,
             status_ticks: 0,
+            edit_buffer: String::from(SAMPLE_EDITABLE_TEXT),
+            edit_state: TextEditState::default(),
+            document_modified: false,
         }
     }
 
@@ -1141,11 +1158,65 @@ impl WriterApp {
         })
     }
 
-    fn document_items(&self) -> Vec<DocumentCanvasItem<'static>> {
-        self.document.to_canvas_items()
+    fn document_items(&self) -> Vec<DocumentCanvasItem<'_>> {
+        let mut items = Vec::with_capacity(self.document.blocks.len());
+        for (idx, block) in self.document.blocks.iter().enumerate() {
+            match *block {
+                WriterBlock::Text { x, y, text, role } => {
+                    let resolved_text: &str = if idx == EDITABLE_ITEM_INDEX {
+                        self.edit_buffer.as_str()
+                    } else {
+                        text
+                    };
+                    items.push(DocumentCanvasItem::Text {
+                        x,
+                        y,
+                        text: resolved_text,
+                        style: writer_text_style(role),
+                    });
+                }
+                WriterBlock::Link { x, y, text, url } => {
+                    items.push(DocumentCanvasItem::LinkText {
+                        x,
+                        y,
+                        text,
+                        url,
+                        style: writer_link_style(),
+                    });
+                }
+                WriterBlock::Rect { x, y, w, h, role } => {
+                    items.push(DocumentCanvasItem::Rect {
+                        x,
+                        y,
+                        w,
+                        h,
+                        style: writer_rect_style(role),
+                    });
+                }
+                WriterBlock::Line {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    role,
+                } => {
+                    items.push(DocumentCanvasItem::Line {
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        style: writer_line_style(role),
+                    });
+                }
+                WriterBlock::ImagePlaceholder { x, y, w, h, label } => {
+                    items.push(DocumentCanvasItem::ImagePlaceholder { x, y, w, h, label });
+                }
+            }
+        }
+        items
     }
 
-    fn document_canvas<'a>(&self, items: &'a [DocumentCanvasItem<'a>]) -> DocumentCanvas<'a> {
+    fn document_canvas<'a>(&'a self, items: &'a [DocumentCanvasItem<'a>]) -> DocumentCanvas<'a> {
         DocumentCanvas::new(self.content_rect(), items)
             .with_mode(self.document.mode)
             .with_presentation(DocumentCanvasPresentation::Writer)
@@ -1156,6 +1227,7 @@ impl WriterApp {
                 Some(&FONT_UI_MEDIUM),
                 Some(&FONT_UI_SMALL),
             )
+            .with_edit_state(&self.edit_state)
     }
 
     fn quick_chip_hit(&self, point: Point) -> Option<usize> {
@@ -1237,6 +1309,124 @@ impl WriterApp {
         true
     }
 
+    fn hit_test_editable_item(&self, point: Point) -> Option<usize> {
+        let items = self.document_items();
+        let canvas = self.document_canvas(items.as_slice());
+        let content = canvas.content_rect();
+        if !content.contains(point) {
+            return None;
+        }
+        let rel_x = point.x - content.x;
+        let rel_y = point.y - content.y;
+        for (idx, item) in items.iter().enumerate() {
+            if idx != EDITABLE_ITEM_INDEX {
+                continue;
+            }
+            if let DocumentCanvasItem::Text { x, y, text, style } = *item {
+                let item_font = style.font;
+                let item_h = item_font
+                    .map(|f| f.line_height())
+                    .unwrap_or(sunlight_ui::paint::font::GLYPH_H) as i32;
+                if rel_y >= y && rel_y < y + item_h {
+                    let local_x = rel_x - x;
+                    let byte_offset = sunlight_ui::widgets::byte_offset_at_x(
+                        item_font,
+                        text,
+                        local_x,
+                    );
+                    return Some(byte_offset);
+                }
+            }
+        }
+        None
+    }
+
+    fn caret_move_left(&self) -> usize {
+        let mut prev = 0usize;
+        for (idx, ch) in self.edit_buffer.char_indices() {
+            let next = idx + ch.len_utf8();
+            if next >= self.edit_state.caret_byte {
+                return prev;
+            }
+            prev = next;
+        }
+        prev
+    }
+
+    fn caret_move_right(&self) -> usize {
+        for (idx, ch) in self.edit_buffer.char_indices() {
+            if idx > self.edit_state.caret_byte {
+                return idx;
+            }
+            let _ = ch;
+        }
+        self.edit_buffer.len()
+    }
+
+    fn caret_move_home(&self) -> usize {
+        0
+    }
+
+    fn caret_move_end(&self) -> usize {
+        self.edit_buffer.len()
+    }
+
+    fn char_before_caret(&self) -> Option<(usize, char)> {
+        let mut result = None;
+        for (idx, ch) in self.edit_buffer.char_indices() {
+            let next = idx + ch.len_utf8();
+            if next > self.edit_state.caret_byte {
+                return result;
+            }
+            result = Some((idx, ch));
+        }
+        result
+    }
+
+    fn char_at_caret(&self) -> Option<(usize, char)> {
+        self.edit_buffer[self.edit_state.caret_byte..]
+            .chars()
+            .next()
+            .map(|ch| (self.edit_state.caret_byte, ch))
+    }
+
+    fn apply_text_mutation(&mut self, new_text: String, new_caret: usize) -> bool {
+        self.edit_buffer = new_text;
+        self.edit_state.caret_byte = new_caret;
+        self.edit_state.selection_anchor_byte = None;
+        self.document_modified = true;
+        true
+    }
+
+    fn insert_text_at_caret(&mut self, ch: char) -> bool {
+        let mut new_text = String::from(&self.edit_buffer[..self.edit_state.caret_byte]);
+        new_text.push(ch);
+        new_text.push_str(&self.edit_buffer[self.edit_state.caret_byte..]);
+        let new_caret = self.edit_state.caret_byte + ch.len_utf8();
+        self.apply_text_mutation(new_text, new_caret)
+    }
+
+    fn backspace_at_caret(&mut self) -> bool {
+        if let Some((idx, _)) = self.char_before_caret() {
+            let mut new_text = String::from(&self.edit_buffer[..idx]);
+            new_text.push_str(&self.edit_buffer[self.edit_state.caret_byte..]);
+            self.apply_text_mutation(new_text, idx)
+        } else {
+            false
+        }
+    }
+
+    fn delete_forward_at_caret(&mut self) -> bool {
+        if let Some((_, ch)) = self.char_at_caret() {
+            let end = self.edit_state.caret_byte + ch.len_utf8();
+            let mut new_text = String::from(&self.edit_buffer[..self.edit_state.caret_byte]);
+            new_text.push_str(&self.edit_buffer[end..]);
+            self.apply_text_mutation(new_text, self.edit_state.caret_byte)
+        } else {
+            false
+        }
+    }
+
     fn ribbon_action(group_idx: usize, button_idx: usize) -> WriterAction {
         match group_idx {
             0 => FILE_GROUP_DEFS[button_idx].action,
@@ -1256,11 +1446,16 @@ impl App for WriterApp {
         self.with_header(|header| header.draw(canvas, theme));
         self.with_ribbon_bar(|bar| bar.draw(canvas, theme));
         document_canvas.draw(canvas, theme);
+        let right_status = if self.document_modified {
+            "100% | Modified"
+        } else {
+            "100% | Document Canvas Active | Editable"
+        };
         StatusBar::new(
             self.status_rect(),
             "Page 1 of 1 | Col 1",
             self.status_center.as_str(),
-            "100% | Document Canvas Active | Editable",
+            right_status,
         )
         .draw(canvas, theme);
         if self.menu_open {
@@ -1351,7 +1546,32 @@ impl App for WriterApp {
                     return self.dispatch_action(Self::ribbon_action(group_idx, button_idx));
                 }
 
+                let hit = self.hit_test_editable_item(point);
+                if let Some(byte_offset) = hit {
+                    self.edit_state.active_item_index = Some(EDITABLE_ITEM_INDEX);
+                    self.edit_state.caret_byte = byte_offset;
+                    self.edit_state.selection_anchor_byte = None;
+                    return true;
+                }
+
+                if self.edit_state.is_editing() {
+                    self.edit_state.clear();
+                    return true;
+                }
+
                 false
+            }
+            Event::Key(ch) if self.edit_state.is_editing() => {
+                if ch == '\u{8}' {
+                    return self.backspace_at_caret();
+                }
+                if ch == '\n' || ch == '\r' || ch == '\t' || ch == '\u{1b}' {
+                    return false;
+                }
+                if ch.is_control() {
+                    return false;
+                }
+                self.insert_text_at_caret(ch)
             }
             Event::KeyPress {
                 keycode, pressed, ..
@@ -1365,7 +1585,51 @@ impl App for WriterApp {
                         self.set_status_message("Application menu closed");
                         return true;
                     }
+                    if self.edit_state.is_editing() {
+                        self.edit_state.clear();
+                        return true;
+                    }
                     request_close();
+                }
+                if self.edit_state.is_editing() {
+                    match keycode {
+                        KEY_LEFT => {
+                            let new_caret = self.caret_move_left();
+                            if new_caret != self.edit_state.caret_byte {
+                                self.edit_state.caret_byte = new_caret;
+                                self.edit_state.selection_anchor_byte = None;
+                                return true;
+                            }
+                        }
+                        KEY_RIGHT => {
+                            let new_caret = self.caret_move_right();
+                            if new_caret != self.edit_state.caret_byte {
+                                self.edit_state.caret_byte = new_caret;
+                                self.edit_state.selection_anchor_byte = None;
+                                return true;
+                            }
+                        }
+                        KEY_HOME => {
+                            let new_caret = self.caret_move_home();
+                            if new_caret != self.edit_state.caret_byte {
+                                self.edit_state.caret_byte = new_caret;
+                                self.edit_state.selection_anchor_byte = None;
+                                return true;
+                            }
+                        }
+                        KEY_END => {
+                            let end = self.caret_move_end();
+                            if self.edit_state.caret_byte != end {
+                                self.edit_state.caret_byte = end;
+                                self.edit_state.selection_anchor_byte = None;
+                                return true;
+                            }
+                        }
+                        KEY_DELETE => {
+                            return self.delete_forward_at_caret();
+                        }
+                        _ => {}
+                    }
                 }
                 false
             }

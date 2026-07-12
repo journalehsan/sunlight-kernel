@@ -24,11 +24,11 @@ pub use calendar::{
 };
 pub use checkbox::Checkbox;
 pub use document_canvas::{
-    diff_scenes, CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
-    DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentRectStyle,
-    DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage,
-    RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,
-    ScenePatchOperation,
+    byte_offset_at_x, caret_x_at_byte, diff_scenes, CornerRadii, DocumentCanvas,
+    DocumentCanvasItem, DocumentCanvasMode, DocumentCanvasPresentation, DocumentFontFamily,
+    DocumentNodeId, DocumentRectStyle, DocumentScene, DocumentStrokeStyle, DocumentTextStyle,
+    PaintOrder, RasterImage, RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind,
+    ScenePatch, ScenePatchOperation, TextEditState,
 };
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
 pub use label::Label;

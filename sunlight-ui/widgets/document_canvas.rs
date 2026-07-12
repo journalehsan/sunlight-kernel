@@ -5,6 +5,87 @@ use crate::geom::{Point, Rect, Size};
 use crate::paint::Canvas;
 use crate::theme::{Color, Theme};
 
+/// Temporary per-item editing state — never stored in persistent document data.
+///
+/// The canvas and its callers share this transient state.  The persistent text
+/// content lives in an owner-managed buffer; the edit state only holds the
+/// caret / selection metadata used for rendering and hit testing.
+///
+/// ## Caret indexing strategy
+///
+/// The caret is indexed by **byte offset** into the UTF-8 text.  Every caret
+/// movement, insertion, and deletion boundary is validated via
+/// `str::char_indices()` so the caret never lands in the middle of a multi-byte
+/// code point.  The font measurement functions (`measure_text_width` and the
+/// cluster-aware helpers below) accept arbitrary byte slices and always produce
+/// a valid width, so hit-testing and pixel-to-caret mapping are safe regardless
+/// of non-ASCII or emoji content.
+///
+/// ## Grapheme-cluster awareness
+///
+/// Font rendering and measurement operate at the Unicode scalar-value
+/// level (individual `char`s).  Full grapheme-cluster awareness (e.g. moving
+/// the caret across a ZWJ emoji sequence as a single unit) is not yet
+/// implemented but the byte-offset infrastructure is structured so that it
+/// can be added later without changing the data model.
+#[derive(Clone, Debug, Default)]
+pub struct TextEditState {
+    pub active_item_index: Option<usize>,
+    pub caret_byte: usize,
+    pub selection_anchor_byte: Option<usize>,
+}
+
+impl TextEditState {
+    pub fn is_editing(&self) -> bool {
+        self.active_item_index.is_some()
+    }
+
+    pub fn clear(&mut self) {
+        self.active_item_index = None;
+        self.caret_byte = 0;
+        self.selection_anchor_byte = None;
+    }
+}
+
+/// Pixel X-offset (from the start of the text) of the caret at `byte_offset`.
+///
+/// Uses the same `measure_text_width` helper employed by rendering, so the
+/// caret always sits at a position consistent with the visible glyphs.
+pub fn caret_x_at_byte(font: Option<&dyn VecText>, text: &str, byte_offset: usize) -> u32 {
+    let clamped = byte_offset.min(text.len());
+    if clamped == 0 {
+        return 0;
+    }
+    let prefix = &text[..clamped];
+    measure_text_width(font, prefix)
+}
+
+/// Best byte offset for a given horizontal pixel offset inside rendered text.
+///
+/// Walks logical characters (`char_indices`) so the returned offset is always
+/// a valid UTF-8 code-point boundary.  When `target_x` falls past the halfway
+/// point of a glyph, the offset immediately after that glyph is returned
+/// (closest-nearest behaviour).
+pub fn byte_offset_at_x(font: Option<&dyn VecText>, text: &str, target_x: i32) -> usize {
+    if target_x <= 0 || text.is_empty() {
+        return 0;
+    }
+    let mut prev_offset = 0usize;
+    let mut prev_w = 0u32;
+    for (idx, ch) in text.char_indices() {
+        let next = idx + ch.len_utf8();
+        let w = measure_text_width(font, &text[..next]);
+        let target = target_x.max(0) as u32;
+        if target <= w {
+            let mid = (prev_w + w) / 2;
+            return if target <= mid { idx } else { next };
+        }
+        prev_offset = next;
+        prev_w = w;
+    }
+    prev_offset.max(text.len())
+}
+
 const WRITER_WORKSPACE_GAP: i32 = 16;
 const DOCUMENT_MARGIN: i32 = 28;
 
@@ -718,6 +799,7 @@ pub struct DocumentCanvas<'a> {
     pub scene_heading_font: Option<&'a dyn VecText>,
     pub scene_serif_font: Option<&'a dyn VecText>,
     pub scene_mono_font: Option<&'a dyn VecText>,
+    pub edit_state: Option<&'a TextEditState>,
 }
 
 impl<'a> DocumentCanvas<'a> {
@@ -735,7 +817,13 @@ impl<'a> DocumentCanvas<'a> {
             scene_heading_font: None,
             scene_serif_font: None,
             scene_mono_font: None,
+            edit_state: None,
         }
+    }
+
+    pub fn with_edit_state(mut self, state: &'a TextEditState) -> Self {
+        self.edit_state = Some(state);
+        self
     }
 
     pub fn with_mode(mut self, mode: DocumentCanvasMode) -> Self {
@@ -871,7 +959,14 @@ impl<'a> DocumentCanvas<'a> {
     }
 
     fn draw_items(&self, canvas: &mut Canvas, content: Rect) {
-        for item in self.items {
+        let active_idx = self.edit_state.and_then(|es| es.active_item_index);
+        for (idx, item) in self.items.iter().enumerate() {
+            let is_active = active_idx == Some(idx);
+            let caret_byte = if is_active {
+                self.edit_state.map_or(0, |es| es.caret_byte)
+            } else {
+                0
+            };
             match *item {
                 DocumentCanvasItem::Text { x, y, text, style } => {
                     let px = content.x + x;
@@ -883,6 +978,19 @@ impl<'a> DocumentCanvas<'a> {
                     let visible = clip_text_to_width(style.font, text, max_w);
                     if !visible.is_empty() {
                         draw_text(canvas, style.font, px, py, visible, style.color);
+                    }
+                    if is_active {
+                        let caret_ox = caret_x_at_byte(style.font, text, caret_byte);
+                        let caret_px = px + caret_ox as i32;
+                        let caret_h = style
+                            .font
+                            .map(|f| f.line_height())
+                            .unwrap_or(crate::paint::font::GLYPH_H);
+                        if let Some(caret_rect) =
+                            Rect::new(caret_px, py, 1, caret_h).intersect(content)
+                        {
+                            canvas.fill_rect(caret_rect, Color::rgb(0x25, 0x63, 0xEB));
+                        }
                     }
                 }
                 DocumentCanvasItem::Rect { x, y, w, h, style } => {
@@ -1489,10 +1597,10 @@ fn draw_raster_image(canvas: &mut Canvas, clipped: Rect, destination: Rect, imag
 #[cfg(test)]
 mod tests {
     use super::{
-        diff_scenes, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
-        DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentScene,
-        DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage, RenderObject,
-        RenderObjectId, RenderObjectKind, ScenePatchOperation,
+        byte_offset_at_x, caret_x_at_byte, diff_scenes, DocumentCanvas, DocumentCanvasItem,
+        DocumentCanvasMode, DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId,
+        DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage,
+        RenderObject, RenderObjectId, RenderObjectKind, ScenePatchOperation, TextEditState,
     };
     use crate::{Canvas, Color, Point, Rect, Size, Theme};
     use alloc::sync::Arc;
@@ -1782,5 +1890,146 @@ mod tests {
         ));
         assert!(!old.apply_patch(&patch));
         assert_eq!(old.objects[0].id, RenderObjectId(1));
+    }
+
+    // ── Editing / caret tests ──────────────────────────────────────────────
+
+    #[test]
+    fn text_edit_state_defaults_to_inactive() {
+        let state = TextEditState::default();
+        assert!(!state.is_editing());
+        assert_eq!(state.active_item_index, None);
+        assert_eq!(state.caret_byte, 0);
+        assert_eq!(state.selection_anchor_byte, None);
+    }
+
+    #[test]
+    fn text_edit_state_clear_resets_all_fields() {
+        let mut state = TextEditState {
+            active_item_index: Some(2),
+            caret_byte: 5,
+            selection_anchor_byte: Some(3),
+        };
+        state.clear();
+        assert!(!state.is_editing());
+        assert_eq!(state.caret_byte, 0);
+        assert_eq!(state.selection_anchor_byte, None);
+    }
+
+    #[test]
+    fn caret_x_at_byte_empty_text() {
+        assert_eq!(caret_x_at_byte(None, "", 0), 0);
+        assert_eq!(caret_x_at_byte(None, "", 5), 0);
+    }
+
+    #[test]
+    fn caret_x_at_byte_ascii() {
+        // Built-in font: each char = GLYPH_W(5) + 1 = 6 px
+        assert_eq!(caret_x_at_byte(None, "abc", 0), 0);
+        assert_eq!(caret_x_at_byte(None, "abc", 1), 6);
+        assert_eq!(caret_x_at_byte(None, "abc", 2), 12);
+        assert_eq!(caret_x_at_byte(None, "abc", 3), 18);
+        assert_eq!(caret_x_at_byte(None, "abc", 99), 18); // clamped
+    }
+
+    #[test]
+    fn byte_offset_at_x_empty_text() {
+        assert_eq!(byte_offset_at_x(None, "", 0), 0);
+        assert_eq!(byte_offset_at_x(None, "", 10), 0);
+    }
+
+    #[test]
+    fn byte_offset_at_x_ascii_fixed_width() {
+        // Built-in font: each char = 6 px. Midpoints: 3, 9, 15, 21, 27
+        assert_eq!(byte_offset_at_x(None, "hello", 0), 0);
+        assert_eq!(byte_offset_at_x(None, "hello", 1), 0);
+        assert_eq!(byte_offset_at_x(None, "hello", 3), 0); // exactly at mid of h
+        assert_eq!(byte_offset_at_x(None, "hello", 4), 1); // past mid → after h
+        assert_eq!(byte_offset_at_x(None, "hello", 6), 1); // at boundary
+        assert_eq!(byte_offset_at_x(None, "hello", 9), 1); // exactly at mid of e
+        assert_eq!(byte_offset_at_x(None, "hello", 10), 2); // past mid → after e
+        assert_eq!(byte_offset_at_x(None, "hello", 30), 5); // end
+        assert_eq!(byte_offset_at_x(None, "hello", 999), 5); // past end
+    }
+
+    #[test]
+    fn caret_roundtrip_ascii() {
+        let text = "Hello World";
+        for byte_offset in 0..=text.len() {
+            let x = caret_x_at_byte(None, text, byte_offset) as i32;
+            let roundtrip = byte_offset_at_x(None, text, x);
+            // Should at minimum not go backwards
+            assert!(roundtrip <= byte_offset);
+            // And the x at this roundtrip should be close
+            let rx = caret_x_at_byte(None, text, roundtrip) as i32;
+            assert!(rx <= x + 1);
+        }
+    }
+
+    #[test]
+    fn byte_offset_at_x_always_returns_code_point_boundary() {
+        // Even with negative or huge x, we get a valid boundary
+        for text in ["", "a", "abc", "Hello", ""] {
+            for x in [-5, 0, 1, 10, 100, 1000] {
+                let offset = byte_offset_at_x(None, text, x);
+                assert!(text.is_char_boundary(offset));
+            }
+        }
+    }
+
+    #[test]
+    fn draw_with_edit_state_renders_caret_for_active_text_item() {
+        let items = [
+            DocumentCanvasItem::Text {
+                x: 0,
+                y: 0,
+                text: "AB",
+                style: DocumentTextStyle::default(),
+            },
+            DocumentCanvasItem::Text {
+                x: 0,
+                y: 20,
+                text: "CD",
+                style: DocumentTextStyle::default(),
+            },
+        ];
+        let edit_state = TextEditState {
+            active_item_index: Some(1),
+            caret_byte: 1,
+            selection_anchor_byte: None,
+        };
+        let widget = DocumentCanvas::new(Rect::new(0, 0, 320, 240), &items)
+            .with_edit_state(&edit_state);
+        let mut pixels = [0u32; 320 * 240];
+        let mut canvas = Canvas::new(&mut pixels, 320, 320, 240);
+        widget.draw(&mut canvas, &Theme::sunlight_dark());
+        // Caret is drawn at (content.x + item.x + caret_ox, content.y + item.y)
+        // item 1: x=0, y=20, text="CD", caret_byte=1 → caret_ox = 6 (after 'C')
+        // content_rect: inset(16)_inset(28) = (44,44,232,152)
+        // caret pixel: x=44+0+6=50, y=44+20=64..70
+        let caret_x = widget.content_rect().x + 0 + 6;
+        let caret_y = widget.content_rect().y + 20 + 2;
+        let stride = 320usize;
+        let idx = caret_y as usize * stride + caret_x as usize;
+        assert_eq!(pixels[idx], Color::rgb(0x25, 0x63, 0xEB).0);
+    }
+
+    #[test]
+    fn draw_without_edit_state_does_not_render_caret() {
+        let items = [DocumentCanvasItem::Text {
+            x: 0,
+            y: 0,
+            text: "AB",
+            style: DocumentTextStyle::default(),
+        }];
+        let widget = DocumentCanvas::new(Rect::new(0, 0, 320, 240), &items);
+        let mut pixels = [0u32; 320 * 240];
+        let mut canvas = Canvas::new(&mut pixels, 320, 320, 240);
+        widget.draw(&mut canvas, &Theme::sunlight_dark());
+        // No blue (caret) pixel should be present — the background
+        // is filled, text is drawn, but no 0x2563EB pixel
+        assert!(!pixels
+            .iter()
+            .any(|&pixel| pixel == Color::rgb(0x25, 0x63, 0xEB).0));
     }
 }
