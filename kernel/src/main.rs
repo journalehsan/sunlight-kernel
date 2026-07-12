@@ -215,6 +215,8 @@ static SUNLIGHT_CLIP_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clip");
 static SUNLIGHT_CLIPMAN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
+static EMOJI_PICKER_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-emoji-picker");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;

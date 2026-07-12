@@ -192,6 +192,7 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --features dom --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release
 
     # sunshell must use the kernel target (user-space VA range)
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --release --features sunlight --no-default-features --target x86_64-unknown-none

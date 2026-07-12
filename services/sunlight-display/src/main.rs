@@ -117,6 +117,39 @@ fn toggle_clipman(state: &mut CompositorState) {
     launch_clipman(state);
 }
 
+fn launch_emoji_picker(state: &mut CompositorState) {
+    if libc::spawn(b"/bin/emoji-picker", &[b"emoji-picker"], None).is_err() {
+        debug_log("[DISPLAY] failed to launch emoji-picker\n");
+        push_notification(
+            state,
+            NotificationKind::Error,
+            String::from("Launch failed"),
+            String::from("Could not start /bin/emoji-picker"),
+            NOTIFICATION_TIMEOUT_MS,
+        );
+        mark_dirty_full(state);
+        redraw_scene(state);
+    }
+}
+
+fn toggle_emoji_picker(state: &mut CompositorState) {
+    if let Some((idx, win_id)) = find_window_by_title_prefix(state, b"Sunlight Emoji") {
+        if focused_window_id(state) == Some(win_id) {
+            if close_window(state, win_id, None) {
+                mark_dirty_full(state);
+                redraw_scene(state);
+            }
+            return;
+        }
+        if state.windows[idx].config.state == WindowState::Minimized {
+            state.windows[idx].config.state = WindowState::Normal;
+        }
+        let _ = activate_window(state, win_id);
+        return;
+    }
+    launch_emoji_picker(state);
+}
+
 fn launch_vortex_shell(state: &mut CompositorState) -> bool {
     match libc::spawn(
         b"/bin/sunlight-vortex-shell",
@@ -172,6 +205,7 @@ const KEY_ALT: u8 = 0x38;
 const KEY_R: u8 = 0x13;
 const KEY_V: u8 = 0x2F;
 const KEY_W: u8 = 0x11;
+const KEY_PERIOD: u8 = 0x34;
 const KEY_SPACE: u8 = 0x39;
 const KEY_LEFT_SUPER: u8 = 0x5B;
 const KEY_RIGHT_SUPER: u8 = 0x5C;
@@ -4264,6 +4298,7 @@ pub extern "C" fn _start() -> ! {
             // KEY_EVENT — Global keyboard interceptor.
             // Ctrl + W: close currently active (focused) window.
             // Super + R or Ctrl + Space: launch the Run dialog.
+            // Super + . or Ctrl + .: toggle Emoji Picker.
             // Alt + Tab: rotate focus across app windows in the active z-group.
             // -------------------------------------------------------------------
             sunlight_ipc::KbdMsg::KEY_EVENT => {
@@ -4302,6 +4337,9 @@ pub extern "C" fn _start() -> ! {
                     consumed = true;
                 } else if pressed && !was_down && super_down && keycode == KEY_V {
                     toggle_clipman(&mut state);
+                    consumed = true;
+                } else if pressed && !was_down && (super_down || ctrl_down) && keycode == KEY_PERIOD {
+                    toggle_emoji_picker(&mut state);
                     consumed = true;
                 } else if pressed && !was_down && ctrl_down && keycode == KEY_SPACE {
                     launch_runner(&mut state);

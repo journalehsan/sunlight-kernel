@@ -519,6 +519,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunlight-clipman" | "/usr/bin/sunlight-clipman" => {
             Ok(crate::SUNLIGHT_CLIPMAN_ELF_BYTES)
         }
+        "/bin/emoji-picker" | "/usr/bin/emoji-picker" => {
+            Ok(crate::EMOJI_PICKER_ELF_BYTES)
+        }
         // cpufeat: x86-64 microarchitecture level detection (v2/v3 capability reporting).
         "/bin/cpufeat" | "/usr/bin/cpufeat" => Ok(crate::CPUFEAT_ELF_BYTES),
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.

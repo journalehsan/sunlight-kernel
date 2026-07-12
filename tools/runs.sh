@@ -308,6 +308,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release
     # sunshell (includes localectl builtin + pulls in support libs e.g. sunlight-locale, sunlight-tz)
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --release --features sunlight --no-default-features --target x86_64-unknown-none
     RUSTFLAGS="-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie" cargo build --package helios-note --release --target x86_64-unknown-linux-musl

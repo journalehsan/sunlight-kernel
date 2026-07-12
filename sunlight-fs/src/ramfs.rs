@@ -1197,6 +1197,13 @@ max_ttys = 6
         mode::FILE_755,
         b"#!/sunlight/sunlight-clipman\n",
     ),
+    RamEntry::file(
+        "/bin/emoji-picker",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/emoji-picker\n",
+    ),
     // sunlight-sm binary stub (real ELF embedded in kernel for spawn; entry for FS visibility/stat)
     RamEntry::file(
         "/sbin/sunlight-sm",

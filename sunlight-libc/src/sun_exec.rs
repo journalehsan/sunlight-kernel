@@ -221,6 +221,7 @@ fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
         b"calendar" | b"sunlight-calendar" => Some(b"/bin/sunlight-calendar"),
         b"rappid-rabbit" | b"rabbit" => Some(b"/bin/rappid-rabbit"),
         b"sunlight-api-lab" | b"api-lab" => Some(b"/bin/sunlight-api-lab"),
+        b"emoji-picker" | b"emoji" | b"picker" => Some(b"/bin/emoji-picker"),
         b"sun-open" => Some(b"/bin/sun-open"),
         _ => None,
     }
