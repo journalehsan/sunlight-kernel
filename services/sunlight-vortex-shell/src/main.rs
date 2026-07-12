@@ -6400,6 +6400,10 @@ fn launch_error_text(err: sun_exec::LaunchError) -> &'static str {
         sun_exec::LaunchError::DisplayUnavailable => "display unavailable",
         sun_exec::LaunchError::TooManyArgs => "too many arguments",
         sun_exec::LaunchError::ArgTooLong => "argument too long",
+        sun_exec::LaunchError::InvalidBundle => "invalid application bundle",
+        sun_exec::LaunchError::UnsupportedBundleFormat => "unsupported application bundle format",
+        sun_exec::LaunchError::UnsupportedRuntime => "unsupported application runtime",
+        sun_exec::LaunchError::MissingEntry => "application entry is missing",
     }
 }
 

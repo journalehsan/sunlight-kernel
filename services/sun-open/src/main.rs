@@ -65,6 +65,12 @@ fn debug_log_launch_error(err: sun_exec::LaunchError) {
         sun_exec::LaunchError::DisplayUnavailable => debug_log("display/session unavailable"),
         sun_exec::LaunchError::TooManyArgs => debug_log("too many arguments"),
         sun_exec::LaunchError::ArgTooLong => debug_log("argument too long"),
+        sun_exec::LaunchError::InvalidBundle => debug_log("invalid application bundle"),
+        sun_exec::LaunchError::UnsupportedBundleFormat => {
+            debug_log("unsupported application bundle format")
+        }
+        sun_exec::LaunchError::UnsupportedRuntime => debug_log("unsupported application runtime"),
+        sun_exec::LaunchError::MissingEntry => debug_log("application entry is missing"),
     }
 }
 

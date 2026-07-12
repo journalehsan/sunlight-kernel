@@ -1,8 +1,9 @@
-use alloc::collections::VecDeque;
+use alloc::{collections::VecDeque, vec::Vec};
 
 use crate::{
-    dos, load_com, CpuState, GuestMemory, LoaderError, TextCell, TextModeSurface,
-    DEFAULT_ATTRIBUTE, TEXT_COLUMNS, TEXT_ROWS, VIDEO_SEGMENT,
+    dos, load_com_with_command_tail, CpuState, DosHandleTable, DriveTable, GuestMemory,
+    LoaderError, TextCell, TextModeSurface, DEFAULT_ATTRIBUTE, TEXT_COLUMNS, TEXT_ROWS,
+    VIDEO_SEGMENT,
 };
 
 const BDA_SEGMENT: u16 = 0x0040;
@@ -134,12 +135,25 @@ pub struct Runtime {
     shift: bool,
     ctrl: bool,
     alt: bool,
+    pub(crate) drives: DriveTable,
+    pub(crate) handles: DosHandleTable,
+    pub(crate) dta_segment: u16,
+    pub(crate) dta_offset: u16,
+    pub(crate) searches: Vec<crate::DirectoryEntry>,
+    pub(crate) search_index: usize,
 }
 
 impl Runtime {
     pub fn from_com(image: &[u8]) -> Result<Self, LoaderError> {
+        Self::from_com_with_command_tail(image, &[])
+    }
+
+    pub fn from_com_with_command_tail(
+        image: &[u8],
+        command_tail: &[u8],
+    ) -> Result<Self, LoaderError> {
         let mut memory = GuestMemory::new();
-        let cpu = load_com(&mut memory, image)?;
+        let cpu = load_com_with_command_tail(&mut memory, image, command_tail)?;
         let mut runtime = Self {
             cpu,
             memory,
@@ -153,9 +167,23 @@ impl Runtime {
             shift: false,
             ctrl: false,
             alt: false,
+            drives: DriveTable::new(),
+            handles: DosHandleTable::new(),
+            dta_segment: crate::PSP_SEGMENT,
+            dta_offset: 0x0080,
+            searches: Vec::new(),
+            search_index: 0,
         };
         runtime.reset_video();
         Ok(runtime)
+    }
+
+    pub fn drives(&self) -> &DriveTable {
+        &self.drives
+    }
+
+    pub fn drives_mut(&mut self) -> &mut DriveTable {
+        &mut self.drives
     }
 
     pub fn state(&self) -> &GuestState {

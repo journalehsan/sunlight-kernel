@@ -319,5 +319,9 @@ fn launch_error_prefix(err: sun_exec::LaunchError) -> &'static [u8] {
         sun_exec::LaunchError::DisplayUnavailable => b"Display unavailable: ",
         sun_exec::LaunchError::TooManyArgs => b"Too many args: ",
         sun_exec::LaunchError::ArgTooLong => b"Argument too long: ",
+        sun_exec::LaunchError::InvalidBundle => b"Invalid bundle: ",
+        sun_exec::LaunchError::UnsupportedBundleFormat => b"Unsupported bundle format: ",
+        sun_exec::LaunchError::UnsupportedRuntime => b"Unsupported runtime: ",
+        sun_exec::LaunchError::MissingEntry => b"Missing application entry: ",
     }
 }

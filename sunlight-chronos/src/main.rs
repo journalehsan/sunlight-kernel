@@ -3,6 +3,10 @@
 
 extern crate alloc;
 
+use alloc::string::String;
+#[cfg(not(test))]
+use alloc::{format, vec::Vec};
+
 #[cfg(not(test))]
 use core::alloc::{GlobalAlloc, Layout};
 
@@ -10,10 +14,14 @@ use chronos_core::{
     display_char, translate_key_press, BiosKey, GuestState, HostKeyEvent, Runtime,
     CHRONOS_INTERACTIVE_COM,
 };
+#[cfg(not(test))]
+use chronos_core::{DosDrive, DosEntry};
 use sun_font::{draw_text, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{debug_log, monotonic_millis};
 #[cfg(not(test))]
 use sunlight_ipc::{process_yield, ProcessExit};
+#[cfg(not(test))]
+use sunlight_libc::{crt0, env, O_CREAT, O_TRUNC, O_WRONLY};
 use sunlight_ui::{widgets::Panel, App, Canvas, Color, Event, Rect, Theme};
 #[cfg(not(test))]
 use sunlight_ui::{Window, WindowConfig, WindowDecoration};
@@ -29,6 +37,10 @@ const DOS_CELL_H: i32 = 16;
 const INSTRUCTIONS_PER_TICK: usize = 128;
 const DOS_SURFACE: Color = Color::rgb(12, 20, 37);
 const DOS_CURSOR: Color = Color::rgb(255, 181, 71);
+#[cfg(not(test))]
+const MAX_HOST_FILE: usize = 64 * 1024;
+#[cfg(not(test))]
+const MAX_IMPORT_DEPTH: usize = 8;
 
 #[cfg(not(test))]
 struct BumpAllocator;
@@ -66,6 +78,10 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 
 struct ChronosApp {
     runtime: Runtime,
+    title: String,
+    #[cfg(not(test))]
+    storage: Option<ChronosStorage>,
+    persisted: bool,
     status: [u8; 32],
     status_len: usize,
     trap_logged: bool,
@@ -78,6 +94,33 @@ impl ChronosApp {
             .expect("bundled Chronos COM program must fit the guest process");
         let mut app = Self {
             runtime,
+            title: String::from("Chronos - Sunlight DOS Terminal"),
+            #[cfg(not(test))]
+            storage: None,
+            persisted: false,
+            status: [0; 32],
+            status_len: 0,
+            trap_logged: false,
+            cursor_visible: true,
+        };
+        app.set_status(b"Ready");
+        app
+    }
+
+    #[cfg(not(test))]
+    fn launch(config: ChronosLaunch) -> Self {
+        let image = read_file(&config.entry).unwrap_or_else(|| CHRONOS_INTERACTIVE_COM.to_vec());
+        let mut runtime = Runtime::from_com_with_command_tail(&image, &config.command_tail)
+            .unwrap_or_else(|_| {
+                Runtime::from_com(CHRONOS_INTERACTIVE_COM).expect("fallback guest")
+            });
+        let storage = config.storage();
+        seed_drives(&mut runtime, &storage);
+        let mut app = Self {
+            runtime,
+            title: config.title,
+            storage: Some(storage),
+            persisted: false,
             status: [0; 32],
             status_len: 0,
             trap_logged: false,
@@ -191,7 +234,7 @@ impl App for ChronosApp {
         Panel::new(Rect::new(0, 0, WIN_W, HEADER_H)).draw(canvas, theme);
         draw_text(
             canvas,
-            "Chronos - Sunlight DOS Terminal",
+            self.title.as_str(),
             PAD,
             7,
             &TextStyle::new(FontRole::UiMedium, theme.text),
@@ -229,14 +272,31 @@ impl App for ChronosApp {
                     GuestState::Ready | GuestState::Running
                 ) {
                     let text_or_state_changed = self.runtime.run_slice(INSTRUCTIONS_PER_TICK);
-                    cursor_changed || text_or_state_changed || self.update_status_from_runtime()
+                    let status_changed = self.update_status_from_runtime();
+                    if matches!(self.runtime.state(), GuestState::Exited { .. }) && !self.persisted
+                    {
+                        self.persisted = true;
+                        #[cfg(not(test))]
+                        if let Some(storage) = &self.storage {
+                            persist_drives(&self.runtime, storage);
+                        }
+                    }
+                    cursor_changed || text_or_state_changed || status_changed
                 } else {
                     cursor_changed
                 }
             }
-            Event::Key(ch) if ch.is_ascii_graphic() || ch == ' ' => {
+            Event::Key(ch)
+                if ch.is_ascii_graphic() || matches!(ch, ' ' | '\n' | '\r' | '\u{8}') =>
+            {
+                let ascii = match ch {
+                    '\n' => b'\r',
+                    '\r' => b'\r',
+                    '\u{8}' => 0x08,
+                    _ => ch as u8,
+                };
                 self.runtime.inject_key(BiosKey {
-                    ascii: ch as u8,
+                    ascii,
                     scan_code: 0,
                 });
                 self.update_status_from_runtime()
@@ -423,7 +483,11 @@ fn dos_color(index: u8) -> sunlight_ui::Color {
 #[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *const u8) -> ! {
-    let mut app = ChronosApp::new();
+    sunlight_libc::env::init(_envp);
+    let config = ChronosLaunch::from_argv(_argc, _argv);
+    let mut app = config
+        .map(ChronosApp::launch)
+        .unwrap_or_else(ChronosApp::new);
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
@@ -437,6 +501,247 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
     };
     window.run(&mut app);
     ProcessExit::exit(0);
+}
+
+#[cfg(not(test))]
+#[derive(Clone)]
+struct ChronosLaunch {
+    entry: String,
+    title: String,
+    app_id: String,
+    bundle_root: Option<String>,
+    documents_root: Option<String>,
+    direct: bool,
+    command_tail: Vec<u8>,
+}
+
+#[cfg(not(test))]
+#[derive(Clone)]
+struct ChronosStorage {
+    c_base: String,
+    c_dependencies: Option<String>,
+    c_overlay: String,
+    documents_root: Option<String>,
+}
+
+#[cfg(not(test))]
+impl ChronosLaunch {
+    fn from_argv(argc: u64, argv: *const *const u8) -> Option<Self> {
+        let mut pointers = [core::ptr::null(); 15];
+        let count = unsafe { crt0::collect_raw_args(argc, argv, &mut pointers) };
+        let mut values: Vec<&[u8]> = Vec::new();
+        for pointer in pointers.iter().take(count) {
+            let length = unsafe { crt0::cstr_len(*pointer, 255) };
+            values.push(unsafe { core::slice::from_raw_parts(*pointer, length) });
+        }
+        let bundled = values.iter().any(|value| *value == b"--chronos-bundle");
+        let direct = values.iter().any(|value| *value == b"--chronos-direct");
+        if !bundled && !direct {
+            return None;
+        }
+        let entry = argument(&values, b"--chronos-entry")
+            .or_else(|| argument(&values, b"--chronos-direct"))?;
+        let app_id = argument(&values, b"--chronos-app-id")?;
+        let title = argument(&values, b"--chronos-title")?;
+        let bundle_root = argument(&values, b"--chronos-bundle");
+        let documents_root = argument(&values, b"--chronos-documents");
+        if entry.len() >= 255 || app_id.len() > 80 || title.len() > 100 {
+            return None;
+        }
+        let mut command_tail = Vec::new();
+        let skip = [
+            b"--chronos-bundle".as_slice(),
+            b"--chronos-entry".as_slice(),
+            b"--chronos-direct".as_slice(),
+            b"--chronos-app-id".as_slice(),
+            b"--chronos-title".as_slice(),
+            b"--chronos-documents".as_slice(),
+        ];
+        let mut index = 1usize;
+        while index < values.len() {
+            if skip.iter().any(|key| values[index] == *key) {
+                index += 2;
+            } else if !values[index].starts_with(b"--sunlight-launch=") {
+                if !command_tail.is_empty() {
+                    command_tail.push(b' ');
+                }
+                command_tail.extend_from_slice(values[index]);
+                index += 1;
+            } else {
+                index += 1;
+            }
+        }
+        command_tail.truncate(126);
+        Some(Self {
+            entry: String::from_utf8(entry.to_vec()).ok()?,
+            title: String::from_utf8(title.to_vec()).ok()?,
+            app_id: String::from_utf8(app_id.to_vec()).ok()?,
+            bundle_root: bundle_root.and_then(|value| String::from_utf8(value.to_vec()).ok()),
+            documents_root: documents_root.and_then(|value| String::from_utf8(value.to_vec()).ok()),
+            direct,
+            command_tail,
+        })
+    }
+
+    fn storage(&self) -> ChronosStorage {
+        let home = env::getenv(b"HOME").unwrap_or("/root");
+        let c_base = if self.direct {
+            parent_path(&self.entry)
+        } else {
+            format!("{}/Program", self.bundle_root.as_deref().unwrap_or(""))
+        };
+        let c_overlay = if self.direct {
+            String::from("/tmp/chronos-direct-overlay")
+        } else {
+            format!("{}/.config/sunlight/chronos/{}/overlay", home, self.app_id)
+        };
+        ChronosStorage {
+            c_base,
+            c_dependencies: self
+                .bundle_root
+                .as_ref()
+                .map(|root| format!("{}/Dependencies", root)),
+            c_overlay,
+            documents_root: self.documents_root.clone(),
+        }
+    }
+}
+
+#[cfg(not(test))]
+fn argument<'a>(values: &[&'a [u8]], key: &[u8]) -> Option<&'a [u8]> {
+    values
+        .iter()
+        .position(|value| *value == key)
+        .and_then(|index| values.get(index + 1).copied())
+}
+
+#[cfg(not(test))]
+fn seed_drives(runtime: &mut Runtime, storage: &ChronosStorage) {
+    import_directory(runtime, DosDrive::C, &storage.c_base, "", false, 0);
+    if let Some(dependencies) = &storage.c_dependencies {
+        import_directory(runtime, DosDrive::C, dependencies, "", false, 0);
+    }
+    import_directory(runtime, DosDrive::C, &storage.c_overlay, "", true, 0);
+    if let Some(documents) = &storage.documents_root {
+        import_directory(runtime, DosDrive::D, documents, "", false, 0);
+    } else {
+        runtime
+            .drives_mut()
+            .set_access(DosDrive::D, chronos_core::DriveAccess::ReadOnly);
+    }
+}
+
+#[cfg(not(test))]
+fn import_directory(
+    runtime: &mut Runtime,
+    drive: DosDrive,
+    host_root: &str,
+    guest_prefix: &str,
+    overlay: bool,
+    depth: usize,
+) {
+    if depth >= MAX_IMPORT_DEPTH {
+        return;
+    }
+    let mut entries = [sunlight_libc::DirEntry::zeroed(); 64];
+    let Ok(count) = sunlight_libc::read_dir(host_root.as_bytes(), &mut entries) else {
+        return;
+    };
+    for entry in entries.iter().take(count) {
+        let Ok(name) = core::str::from_utf8(entry.name_bytes()) else {
+            continue;
+        };
+        if name.is_empty() || name.starts_with('.') || name.contains('/') || name.contains('\\') {
+            continue;
+        }
+        let guest = if guest_prefix.is_empty() {
+            name.to_ascii_uppercase()
+        } else {
+            format!("{}/{}", guest_prefix, name.to_ascii_uppercase())
+        };
+        let host = format!("{}/{}", host_root, name);
+        if entry.file_type == sunlight_libc::FT_DIR {
+            if overlay {
+                let _ =
+                    runtime
+                        .drives_mut()
+                        .import_overlay_entry(drive, &guest, DosEntry::directory());
+            } else {
+                let _ = runtime.drives_mut().add_base_directory(drive, &guest);
+            }
+            import_directory(runtime, drive, &host, &guest, overlay, depth + 1);
+        } else if entry.file_type == sunlight_libc::FT_FILE {
+            let Some(data) = read_file(&host) else {
+                continue;
+            };
+            if overlay {
+                let _ = runtime.drives_mut().import_overlay_entry(
+                    drive,
+                    &guest,
+                    DosEntry::file(data, 0),
+                );
+            } else {
+                let _ = runtime.drives_mut().add_base_file(drive, &guest, data);
+            }
+        }
+    }
+}
+
+#[cfg(not(test))]
+fn persist_drives(runtime: &Runtime, storage: &ChronosStorage) {
+    if !storage.c_overlay.starts_with("/tmp/") {
+        persist_drive(runtime, DosDrive::C, &storage.c_overlay);
+    }
+    if let Some(documents) = &storage.documents_root {
+        persist_drive(runtime, DosDrive::D, documents);
+    }
+}
+
+#[cfg(not(test))]
+fn persist_drive(runtime: &Runtime, drive: DosDrive, root: &str) {
+    let Ok(entries) = runtime.drives().overlay_entries(drive) else {
+        return;
+    };
+    for (guest_path, entry) in entries {
+        let target = format!("{}/{}", root, guest_path);
+        if entry.is_directory {
+            let _ = sunlight_libc::mkdir_recursive(target.as_bytes());
+            continue;
+        }
+        let parent = parent_path(&target);
+        let _ = sunlight_libc::mkdir_recursive(parent.as_bytes());
+        let Ok(fd) =
+            sunlight_libc::open_with_flags(target.as_bytes(), O_WRONLY | O_CREAT | O_TRUNC)
+        else {
+            continue;
+        };
+        let _ = sunlight_libc::write_all(fd, &entry.data);
+        let _ = sunlight_libc::close(fd);
+    }
+}
+
+#[cfg(not(test))]
+fn read_file(path: &str) -> Option<Vec<u8>> {
+    let fd = sunlight_libc::open(path.as_bytes()).ok()?;
+    let mut data = Vec::new();
+    let mut buffer = [0u8; 1024];
+    while data.len() < MAX_HOST_FILE {
+        let read = sunlight_libc::read(fd, &mut buffer).ok()?;
+        if read == 0 {
+            break;
+        }
+        let remaining = MAX_HOST_FILE - data.len();
+        data.extend_from_slice(&buffer[..read.min(remaining)]);
+    }
+    let _ = sunlight_libc::close(fd);
+    Some(data)
+}
+
+#[cfg(not(test))]
+fn parent_path(path: &str) -> String {
+    path.rsplit_once('/')
+        .map(|(parent, _)| parent.into())
+        .unwrap_or_else(|| String::from("/"))
 }
 
 #[cfg(test)]
@@ -458,22 +763,35 @@ mod tests {
     }
 
     #[test]
-    fn printable_text_and_enter_use_separate_host_event_paths() {
+    fn decoded_enter_reaches_the_guest_console() {
         let mut app = ChronosApp::new();
         app.runtime.run_slice(1024);
         assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
 
-        assert!(!app.update(Event::Key('\n')));
-        assert_eq!(app.runtime.cursor_column(), 0);
-        assert!(app.update(Event::KeyPress {
-            keycode: 0x1c,
-            pressed: true,
-            shift: false,
-            ctrl: false,
-            alt: false,
-            super_key: false,
-        }));
+        assert!(app.update(Event::Key('\n')));
         app.update(Event::Tick);
+        assert_eq!(
+            (app.runtime.cursor_column(), app.runtime.cursor_row()),
+            (0, 7)
+        );
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+    }
+
+    #[test]
+    fn decoded_enter_and_backspace_reach_the_guest_console() {
+        let mut app = ChronosApp::new();
+        app.runtime.run_slice(1024);
+
+        assert!(app.update(Event::Key('A')));
+        app.update(Event::Tick);
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        assert!(app.update(Event::Key('\u{8}')));
+        app.update(Event::Tick);
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        assert!(app.update(Event::Key('\n')));
+        app.update(Event::Tick);
+
+        assert_eq!(app.runtime.cell(0, 6).character, b' ');
         assert_eq!(
             (app.runtime.cursor_column(), app.runtime.cursor_row()),
             (0, 7)

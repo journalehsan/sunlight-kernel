@@ -20,6 +20,17 @@ impl From<MemoryError> for LoaderError {
 
 /// Installs a small PSP and loads a `.COM` image at `PSP:0100`.
 pub fn load_com(memory: &mut GuestMemory, image: &[u8]) -> Result<CpuState, LoaderError> {
+    load_com_with_command_tail(memory, image, &[])
+}
+
+/// Loads a `.COM` image and initializes the PSP command tail.  DOS command
+/// tails are intentionally capped at 126 bytes so the trailing CR always
+/// fits at `PSP:0081 + length`.
+pub fn load_com_with_command_tail(
+    memory: &mut GuestMemory,
+    image: &[u8],
+    command_tail: &[u8],
+) -> Result<CpuState, LoaderError> {
     if image.starts_with(b"MZ") {
         return Err(LoaderError::MzExecutableUnsupported);
     }
@@ -35,10 +46,14 @@ pub fn load_com(memory: &mut GuestMemory, image: &[u8]) -> Result<CpuState, Load
         });
     }
 
-    // PSP:0000 is a legacy INT 20h termination entry point. PSP:0080 holds
-    // the command-tail length, zero for this initial no-arguments runtime.
+    // PSP:0000 is a legacy INT 20h termination entry point.  The environment
+    // pointer is left at zero until a native adapter provides an environment
+    // block.  The command line is a conventional count + bytes + CR tail.
     memory.write_slice(PSP_SEGMENT, 0, &[0xcd, 0x20])?;
-    memory.write_u8(PSP_SEGMENT, 0x0080, 0);
+    let tail_len = command_tail.len().min(126);
+    memory.write_u8(PSP_SEGMENT, 0x0080, tail_len as u8);
+    memory.write_slice(PSP_SEGMENT, 0x0081, &command_tail[..tail_len])?;
+    memory.write_u8(PSP_SEGMENT, 0x0081u16.wrapping_add(tail_len as u16), b'\r');
     memory.write_slice(PSP_SEGMENT, COM_OFFSET, image)?;
 
     Ok(CpuState {
@@ -55,7 +70,7 @@ pub fn load_com(memory: &mut GuestMemory, image: &[u8]) -> Result<CpuState, Load
 
 #[cfg(test)]
 mod tests {
-    use super::{load_com, LoaderError, PSP_SEGMENT};
+    use super::{load_com, load_com_with_command_tail, LoaderError, PSP_SEGMENT};
     use crate::GuestMemory;
 
     #[test]
@@ -88,5 +103,15 @@ mod tests {
             load_com(&mut memory, b"MZ"),
             Err(LoaderError::MzExecutableUnsupported)
         );
+    }
+
+    #[test]
+    fn loader_writes_a_bounded_psp_command_tail() {
+        let mut memory = GuestMemory::new();
+        load_com_with_command_tail(&mut memory, &[0x90], b" ONE TWO").unwrap();
+
+        assert_eq!(memory.read_u8(PSP_SEGMENT, 0x80), 8);
+        assert_eq!(memory.read_u8(PSP_SEGMENT, 0x81), b' ');
+        assert_eq!(memory.read_u8(PSP_SEGMENT, 0x89), b'\r');
     }
 }

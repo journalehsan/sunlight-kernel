@@ -502,6 +502,18 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/etc", 0, 0, mode::DIR_755),
     RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
     RamEntry::dir("/bin", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/ChronosFileLab.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/ChronosFileLab.sunapp/Program", 0, 0, mode::DIR_755),
+    RamEntry::dir(
+        "/Applications/ChronosFileLab.sunapp/Dependencies",
+        0,
+        0,
+        mode::DIR_755,
+    ),
+    RamEntry::dir("/Applications/ChronosFileLab.sunapp/Resources", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/ChronosFileLab.sunapp/Defaults", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/ChronosFileLab.sunapp/Licenses", 0, 0, mode::DIR_755),
 
     // -- Standard user home directory layout (OS responsibility) ------------
     // These directories are seeded by the OS so every home directory ships
@@ -1071,6 +1083,41 @@ max_ttys = 6
     RamEntry::file("/bin/eyes", 0, 0, mode::FILE_755, b"#!/sunlight/eyes\n"),
     RamEntry::file("/bin/sunlight-runner", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-runner\n"),
     RamEntry::file("/bin/sun-exec", 0, 0, mode::FILE_755, b"#!/sunlight/sun-exec\n"),
+    RamEntry::file(
+        "/Applications/ChronosFileLab.sunapp/Manifest.toml",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosFileLab.sunapp/Manifest.toml"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosFileLab.sunapp/Program/FILELAB.COM",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosFileLab.sunapp/Program/FILELAB.COM"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosFileLab.sunapp/Program/README.TXT",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosFileLab.sunapp/Program/README.TXT"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosFileLab.sunapp/Program/FILELAB.ASM",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosFileLab.sunapp/Program/FILELAB.ASM"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosFileLab.sunapp/Resources/icon.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosFileLab.sunapp/Resources/icon.tga"),
+    ),
     RamEntry::file("/bin/sun-open", 0, 0, mode::FILE_755, b"#!/sunlight/sun-open\n"),
     // GUI Terminal emulator
     RamEntry::file("/bin/sunlight-terminal", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-terminal\n"),
