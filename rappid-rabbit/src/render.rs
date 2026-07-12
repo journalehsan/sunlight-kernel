@@ -3917,4 +3917,78 @@ mod tests {
         assert_eq!(cell_nodes[1].border_box.x, cell_nodes[5].border_box.x);
         assert!(state.current_scene.objects.iter().any(|object| matches!(object.interaction, Some(RenderInteraction::Link { owner_node_id, .. }) if owner_node_id == DocumentNodeId(latest_id as u64)) && object.bounds.x >= latest.border_box.x));
     }
+
+    #[test]
+    fn import_dependent_kernel_cards_reach_layout_and_scene() {
+        let dom = parse_html(include_str!(
+            "../tests/fixtures/import-kernel-cards/index.html"
+        ))
+        .unwrap();
+        let sheets = [
+            parse_stylesheet(
+                include_str!("../tests/fixtures/import-kernel-cards/base.css"),
+                StylesheetSource::External(String::from("https://fixture.test/base.css")),
+            ),
+            parse_stylesheet(
+                include_str!("../tests/fixtures/import-kernel-cards/cards/card.css"),
+                StylesheetSource::External(String::from("https://fixture.test/cards/card.css")),
+            ),
+            parse_stylesheet(
+                include_str!("../tests/fixtures/import-kernel-cards/main.css"),
+                StylesheetSource::External(String::from("https://fixture.test/main.css")),
+            ),
+        ];
+        let styles = StyleContext::build(&dom, &sheets);
+        let state = DocumentRenderState::new(
+            10,
+            String::from("https://fixture.test/index.html"),
+            dom,
+            styles,
+            Size::new(1000, 700),
+            &TestMeasure,
+        );
+        let by_id = |id: &str| {
+            (0..state.dom.node_count())
+                .find(|node_id| match state.dom.get(*node_id) {
+                    Some(Node::Element { attributes, .. }) => attr(attributes, "id") == Some(id),
+                    _ => false,
+                })
+                .unwrap()
+        };
+        let layout = |id| {
+            state
+                .layout_tree
+                .nodes
+                .iter()
+                .find(|node| node.owner_node_id == DocumentNodeId(id as u64))
+                .unwrap()
+        };
+        let banner_id = by_id("banner");
+        let featured_id = by_id("featured");
+        let latest_id = by_id("latest");
+        let releases_id = by_id("releases");
+        let banner = layout(banner_id);
+        let featured = layout(featured_id);
+        let latest = layout(latest_id);
+        let releases = layout(releases_id);
+        assert_eq!(banner.content_box.w, 800);
+        assert!(banner.border_box.x >= 80 && banner.border_box.x <= 84);
+        assert_eq!(banner.paint.background, Color::rgb(255, 255, 255));
+        assert_eq!(featured.paint.background, Color::rgb(255, 255, 255));
+        assert_eq!(latest.paint.background, Color::rgb(0xff, 0xd1, 0x33));
+        assert_eq!(latest.float_side, "right");
+        assert!(latest.border_box.x > featured.content_box.x + featured.content_box.w as i32 / 2);
+        assert!(releases.border_box.y >= latest.margin_box.bottom());
+        assert!(state.current_scene.objects.iter().any(|object| {
+            object.owner_node_id == DocumentNodeId(banner_id as u64)
+                && matches!(
+                    object.kind,
+                    RenderObjectKind::BoxShadow { inset: false, .. }
+                )
+        }));
+        assert!(state.current_scene.objects.iter().any(|object| {
+            object.owner_node_id == DocumentNodeId(latest_id as u64)
+                && matches!(object.kind, RenderObjectKind::BoxShadow { inset: true, .. })
+        }));
+    }
 }

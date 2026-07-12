@@ -6,7 +6,7 @@
 
 extern crate alloc;
 
-use alloc::{borrow::Cow, format, string::String, vec::Vec};
+use alloc::{borrow::Cow, collections::BTreeMap, format, string::String, vec::Vec};
 // Needed for `write!`/`writeln!` against the stack-buffer writer in the fatal handlers.
 use core::fmt::Write as _;
 use linked_list_allocator::LockedHeap;
@@ -38,8 +38,10 @@ use rappid_rabbit::{
 use golden_fish::{parse_html_with_limits, ParseLimits};
 #[cfg(feature = "dom")]
 use rappid_rabbit::css::{
-    collect_embedded_stylesheets, order_document_stylesheets, parse_stylesheet, StyleContext,
-    StylesheetSource, MAX_STYLESHEET_BYTES,
+    collect_embedded_stylesheets, import_media_active, order_document_stylesheets,
+    parse_leading_imports, parse_stylesheet, StyleContext, Stylesheet, StylesheetSource,
+    MAX_IMPORTED_STYLESHEETS, MAX_IMPORT_DEPTH, MAX_STYLESHEET_BYTES, MAX_TOTAL_CSS_RULES,
+    MAX_TOTAL_STYLESHEET_BYTES,
 };
 #[cfg(feature = "dom")]
 use rappid_rabbit::resources::request::{ResourcePriority, ResourceType};
@@ -70,6 +72,23 @@ static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 static F_MONO: VecFont = VecFont(FontRole::MonoRegular);
 static F_LARGE: VecFont = VecFont(FontRole::UiLarge);
 static F_SERIF: VecFont = VecFont(FontRole::SerifRegular);
+
+#[cfg(feature = "dom")]
+#[derive(Clone)]
+struct CachedStylesheetResponse {
+    final_url: String,
+    body: Vec<u8>,
+    request_id: u64,
+}
+
+#[cfg(feature = "dom")]
+#[derive(Default)]
+struct StylesheetLoadState {
+    cache: BTreeMap<String, CachedStylesheetResponse>,
+    stylesheet_count: usize,
+    total_bytes: usize,
+    total_rules: usize,
+}
 
 struct RabbitFonts;
 
@@ -582,111 +601,95 @@ impl RabbitApp {
     fn fetch_external_stylesheets(
         &mut self,
         candidates: &[ResourceCandidate],
-    ) -> Vec<Option<rappid_rabbit::css::Stylesheet>> {
+    ) -> Vec<Option<Vec<Stylesheet>>> {
         let mut stylesheets = Vec::new();
+        let mut state = StylesheetLoadState::default();
         for candidate in candidates {
             if candidate.resource_type != ResourceType::Stylesheet {
                 continue;
             }
-            let parsed_url = match ParsedUrl::parse(&candidate.resolved_url) {
+            let mut stack = Vec::new();
+            stylesheets.push(self.fetch_stylesheet_tree(
+                &candidate.resolved_url,
+                None,
+                0,
+                &mut stack,
+                &mut state,
+            ));
+        }
+        stylesheets
+    }
+
+    #[cfg(feature = "dom")]
+    fn fetch_stylesheet_tree(
+        &mut self,
+        request_url: &str,
+        parent_url: Option<&str>,
+        depth: usize,
+        stack: &mut Vec<String>,
+        state: &mut StylesheetLoadState,
+    ) -> Option<Vec<Stylesheet>> {
+        if depth > MAX_IMPORT_DEPTH
+            || state.stylesheet_count >= MAX_IMPORTED_STYLESHEETS
+            || state.total_bytes >= MAX_TOTAL_STYLESHEET_BYTES
+            || state.total_rules >= MAX_TOTAL_CSS_RULES
+        {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Warn,
+                ConsoleSource::Fetch,
+                format!("Stylesheet import limit reached: {request_url} (depth={depth})"),
+            );
+            return None;
+        }
+        if stack.iter().any(|url| url == request_url) {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Warn,
+                ConsoleSource::Fetch,
+                format!("Stylesheet import cycle ignored: {request_url}"),
+            );
+            return Some(Vec::new());
+        }
+
+        let response = if let Some(cached) = state.cache.get(request_url) {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Quiet,
+                ConsoleSource::Fetch,
+                format!("Stylesheet cache hit: {request_url}"),
+            );
+            cached.clone()
+        } else {
+            let parsed_url = match ParsedUrl::parse(request_url) {
                 Ok(url) => url,
                 Err(error) => {
                     self.developer_tools.console.push(
                         ConsoleSeverity::Warn,
                         ConsoleSource::Fetch,
-                        format!("Stylesheet skipped ({}): {error}", candidate.resolved_url),
+                        format!("Stylesheet skipped ({request_url}): {error}"),
                     );
-                    stylesheets.push(None);
-                    continue;
+                    return None;
                 }
             };
             let request = build_get_request(&parsed_url);
             let request_id = self.developer_tools.network.begin_request(
                 request.method,
-                candidate.resolved_url.clone(),
+                String::from(request_url),
                 request.headers.clone(),
                 ResourceType::Stylesheet,
                 ResourcePriority::RenderCritical,
                 RequestState::Queued,
             );
+            self.developer_tools.network.set_stylesheet_metadata(
+                request_id,
+                parent_url.map(String::from),
+                depth,
+                None,
+                None,
+            );
             self.developer_tools
                 .network
                 .set_request_state(request_id, RequestState::Connecting);
-            match perform_request(parsed_url, request) {
-                Ok(result) => {
-                    let status_code = result.response.status_code;
-                    let status_text = if result.response.status_text.is_empty() {
-                        String::from("(no reason phrase)")
-                    } else {
-                        result.response.status_text.clone()
-                    };
-                    let final_url = result.final_url.as_ref().map(format_url);
-                    let content_type = result.response.header("content-type").map(String::from);
-                    let body_size = result.body.len();
-                    self.developer_tools.network.complete_request(
-                        request_id,
-                        final_url.clone(),
-                        status_code,
-                        status_text.clone(),
-                        result.duration_ms,
-                        Some(body_size),
-                        content_type,
-                        result.response.headers.clone(),
-                        None,
-                        Some(false),
-                        Some(false),
-                    );
-                    if !(200..400).contains(&status_code) {
-                        self.developer_tools.console.push(
-                            ConsoleSeverity::Warn,
-                            ConsoleSource::Fetch,
-                            format!(
-                                "Stylesheet ignored: HTTP {status_code} {status_text} ({})",
-                                candidate.resolved_url
-                            ),
-                        );
-                        stylesheets.push(None);
-                        continue;
-                    }
-                    if body_size > MAX_STYLESHEET_BYTES {
-                        self.developer_tools.console.push(
-                            ConsoleSeverity::Warn,
-                            ConsoleSource::Fetch,
-                            format!(
-                                "Stylesheet ignored: {} bytes exceeds {} byte limit ({})",
-                                body_size, MAX_STYLESHEET_BYTES, candidate.resolved_url
-                            ),
-                        );
-                        stylesheets.push(None);
-                        continue;
-                    }
-                    match core::str::from_utf8(&result.body) {
-                        Ok(css) => {
-                            let source_url =
-                                final_url.unwrap_or_else(|| candidate.resolved_url.clone());
-                            stylesheets.push(Some(parse_stylesheet(
-                                css,
-                                StylesheetSource::External(source_url.clone()),
-                            )));
-                            self.developer_tools.console.push(
-                                ConsoleSeverity::Quiet,
-                                ConsoleSource::Fetch,
-                                format!("Stylesheet loaded: {source_url}"),
-                            );
-                        }
-                        Err(_) => {
-                            self.developer_tools.console.push(
-                                ConsoleSeverity::Warn,
-                                ConsoleSource::Fetch,
-                                format!(
-                                    "Stylesheet ignored: non-UTF-8 response ({})",
-                                    candidate.resolved_url
-                                ),
-                            );
-                            stylesheets.push(None);
-                        }
-                    }
-                }
+            let result = match perform_request(parsed_url, request) {
+                Ok(result) => result,
                 Err(error) => {
                     self.developer_tools.network.fail_request(
                         request_id,
@@ -695,19 +698,186 @@ impl RabbitApp {
                         None,
                         format!("Stylesheet request failed: {error}"),
                     );
-                    self.developer_tools.console.push(
-                        ConsoleSeverity::Warn,
-                        ConsoleSource::Fetch,
-                        format!(
-                            "Stylesheet request failed ({}): {error}",
-                            candidate.resolved_url
-                        ),
-                    );
-                    stylesheets.push(None);
+                    return None;
                 }
+            };
+            let status_code = result.response.status_code;
+            let status_text = if result.response.status_text.is_empty() {
+                String::from("(no reason phrase)")
+            } else {
+                result.response.status_text.clone()
+            };
+            let final_url = result
+                .final_url
+                .as_ref()
+                .map(format_url)
+                .unwrap_or_else(|| String::from(request_url));
+            let body_size = result.body.len();
+            self.developer_tools.network.complete_request(
+                request_id,
+                Some(final_url.clone()),
+                status_code,
+                status_text.clone(),
+                result.duration_ms,
+                Some(body_size),
+                result.response.header("content-type").map(String::from),
+                result.response.headers.clone(),
+                None,
+                Some(false),
+                Some(false),
+            );
+            if !(200..400).contains(&status_code)
+                || body_size > MAX_STYLESHEET_BYTES
+                || state.total_bytes.saturating_add(body_size) > MAX_TOTAL_STYLESHEET_BYTES
+            {
+                self.developer_tools.console.push(
+                    ConsoleSeverity::Warn,
+                    ConsoleSource::Fetch,
+                    format!("Stylesheet ignored: HTTP {status_code} {status_text}, {body_size} bytes ({request_url})"),
+                );
+                return None;
+            }
+            let response = CachedStylesheetResponse {
+                final_url,
+                body: result.body,
+                request_id,
+            };
+            state.total_bytes = state.total_bytes.saturating_add(response.body.len());
+            state
+                .cache
+                .insert(String::from(request_url), response.clone());
+            state
+                .cache
+                .insert(response.final_url.clone(), response.clone());
+            response
+        };
+
+        let css = match core::str::from_utf8(&response.body) {
+            Ok(css) => css,
+            Err(_) => {
+                self.developer_tools.network.set_stylesheet_metadata(
+                    response.request_id,
+                    parent_url.map(String::from),
+                    depth,
+                    Some(false),
+                    Some(0),
+                );
+                self.developer_tools.console.push(
+                    ConsoleSeverity::Warn,
+                    ConsoleSource::Fetch,
+                    format!("Stylesheet ignored: non-UTF-8 response ({request_url})"),
+                );
+                return None;
+            }
+        };
+        if stack.iter().any(|url| url == &response.final_url) {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Warn,
+                ConsoleSource::Fetch,
+                format!(
+                    "Stylesheet import cycle ignored after redirect: {}",
+                    response.final_url
+                ),
+            );
+            return Some(Vec::new());
+        }
+        state.stylesheet_count = state.stylesheet_count.saturating_add(1);
+        stack.push(response.final_url.clone());
+        let mut sheets = Vec::new();
+        let viewport_width = self.render_viewport().w;
+        for import in parse_leading_imports(css) {
+            let (active, unsupported) = import_media_active(&import.media, viewport_width);
+            if let Some(reason) = unsupported {
+                self.developer_tools.console.push(
+                    ConsoleSeverity::Warn,
+                    ConsoleSource::Parser,
+                    format!(
+                        "@import media at {}:{}: {reason}",
+                        import.location.line, import.location.column
+                    ),
+                );
+            }
+            if !active {
+                self.developer_tools.console.push(
+                    ConsoleSeverity::Quiet,
+                    ConsoleSource::Parser,
+                    format!(
+                        "Inactive @import '{}' media='{}' viewport={}px",
+                        import.raw_url, import.media, viewport_width
+                    ),
+                );
+                continue;
+            }
+            let base = match ParsedUrl::parse(&response.final_url) {
+                Ok(base) => base,
+                Err(_) => continue,
+            };
+            let resolved =
+                match rappid_rabbit::resources::discovery::resolve_url(&base, &import.raw_url) {
+                    Ok(url) => url,
+                    Err(error) => {
+                        self.developer_tools.console.push(
+                            ConsoleSeverity::Warn,
+                            ConsoleSource::Fetch,
+                            format!(
+                                "Invalid stylesheet import '{}' from {}: {error:?}",
+                                import.raw_url, response.final_url
+                            ),
+                        );
+                        continue;
+                    }
+                };
+            self.developer_tools.console.push(
+                ConsoleSeverity::Quiet,
+                ConsoleSource::Fetch,
+                format!(
+                    "Stylesheet import scheduled: {resolved} parent={} depth={}",
+                    parent_url.unwrap_or(&response.final_url),
+                    depth + 1
+                ),
+            );
+            if let Some(imported) = self.fetch_stylesheet_tree(
+                &resolved,
+                Some(&response.final_url),
+                depth + 1,
+                stack,
+                state,
+            ) {
+                sheets.extend(imported);
             }
         }
-        stylesheets
+        stack.pop();
+        let sheet = parse_stylesheet(css, StylesheetSource::External(response.final_url.clone()));
+        if state.total_rules.saturating_add(sheet.rules.len()) > MAX_TOTAL_CSS_RULES {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Warn,
+                ConsoleSource::Parser,
+                format!(
+                    "Stylesheet rule limit reached before {}",
+                    response.final_url
+                ),
+            );
+            return Some(sheets);
+        }
+        state.total_rules = state.total_rules.saturating_add(sheet.rules.len());
+        self.developer_tools.network.set_stylesheet_metadata(
+            response.request_id,
+            parent_url.map(String::from),
+            depth,
+            Some(true),
+            Some(sheet.rules.len()),
+        );
+        self.developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Parser,
+            format!(
+                "Stylesheet parsed: {} rules={} depth={depth}",
+                response.final_url,
+                sheet.rules.len()
+            ),
+        );
+        sheets.push(sheet);
+        Some(sheets)
     }
 
     #[cfg(feature = "dom")]
@@ -2198,10 +2368,10 @@ impl RabbitApp {
 #[cfg(feature = "dom")]
 fn discover_stylesheet_images(
     candidates: &mut Vec<ResourceCandidate>,
-    sheets: &[Option<rappid_rabbit::css::Stylesheet>],
+    sheets: &[Option<Vec<rappid_rabbit::css::Stylesheet>>],
     document_url: &ParsedUrl,
 ) {
-    for sheet in sheets.iter().flatten() {
+    for sheet in sheets.iter().flatten().flatten() {
         let base = match &sheet.source {
             StylesheetSource::External(url) => ParsedUrl::parse(url).ok(),
             _ => Some(document_url.clone()),

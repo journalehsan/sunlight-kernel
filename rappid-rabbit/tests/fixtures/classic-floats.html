@@ -1,0 +1,17 @@
+<!doctype html><style>
+.case { display:block; clear:both; width:300px; min-height:48px; margin:4px; border:1px solid #888 }
+.box { display:block; width:72px; padding:4px; background:#ffd133 }
+.left { float:left }.right { float:right }.wide { width:190px }
+.clear-left { clear:left }.clear-right { clear:right }.clear-both { clear:both }
+.margins { margin:1em 2.2em 4em 0 }
+</style>
+<div class="case" id="float-left"><span class="box left">left</span>text beside a left float</div>
+<div class="case" id="float-right"><span class="box right">right</span>text beside a right float</div>
+<div class="case" id="two-fit"><span class="box left">one</span><span class="box left">two</span></div>
+<div class="case" id="two-wrap"><span class="box wide left">one</span><span class="box wide left">two</span></div>
+<div class="case" id="inline-wrap"><span class="box right">float</span>normal inline text wraps beside the float</div>
+<div class="case"><span class="box left">float</span><p class="clear-left">clear left</p></div>
+<div class="case"><span class="box right">float</span><p class="clear-right">clear right</p></div>
+<div class="case"><span class="box left">float</span><p class="clear-both">clear both</p></div>
+<div class="case"><span class="box right margins">margins</span></div>
+<div class="case"><a class="box right" href="/clickable">clickable float</a></div>

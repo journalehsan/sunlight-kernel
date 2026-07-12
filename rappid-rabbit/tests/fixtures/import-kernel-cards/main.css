@@ -1,0 +1,4 @@
+@import "base.css";
+@import url("cards/card.css");
+
+#latest_link { color: #4c3d00; }

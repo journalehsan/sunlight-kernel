@@ -1,0 +1,15 @@
+#banner {
+  text-align: center; background: #fff; margin: 0 auto; padding: 1em; width: 50em;
+  border: thin solid; border-color: #dddadf #ccc8b8 #bbb59f;
+  box-shadow: 0 0.1em 0.3em #ccc8b8;
+  border-bottom-right-radius: 0.5em; border-bottom-left-radius: 0.5em;
+}
+#content, #featured { background: #fff; margin: 1.5em auto; padding: 1em; width: 50em; border: thin solid #ccc8b8; border-radius: 0.5em; }
+#latest { float: right; background: #ffd133; box-shadow: -0.1em -0.3em 0.5em #b39223 inset; color: #4c3d00; border-radius: 0.5em; margin: 1em 2.2em 4em 0; }
+#latest td { padding: 0.6em; }
+#releases { clear: both; width: 100%; margin-bottom: 0.25em; }
+#extras { margin: 1.5em auto; width: 52em; }
+#extras > div { background: #fff; border: thin solid #ccc8b8; border-radius: 0.5em; padding: 1em; }
+#extras > .blogroll { float: left; width: 30em; }
+#extras > .social { float: right; width: 14em; }
+#contentinfo { clear: both; margin: 2em auto; width: 53em; text-align: center; }

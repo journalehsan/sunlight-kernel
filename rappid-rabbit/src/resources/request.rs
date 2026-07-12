@@ -102,6 +102,10 @@ pub struct NetworkRequestEntry {
     pub from_cache: Option<bool>,
     pub from_prefetch: Option<bool>,
     pub error_text: Option<String>,
+    pub initiator: Option<String>,
+    pub import_depth: Option<usize>,
+    pub parse_success: Option<bool>,
+    pub imported_rule_count: Option<usize>,
 }
 
 impl NetworkRequestEntry {
@@ -257,6 +261,10 @@ impl PageNetworkSession {
             from_cache: None,
             from_prefetch: None,
             error_text: None,
+            initiator: None,
+            import_depth: None,
+            parse_success: None,
+            imported_rule_count: None,
         });
         request_id
     }
@@ -280,6 +288,28 @@ impl PageNetworkSession {
     pub fn set_request_state(&mut self, request_id: u64, request_state: RequestState) {
         if let Some(entry) = self.entry_mut(request_id) {
             entry.request_state = request_state;
+        }
+    }
+
+    pub fn set_stylesheet_metadata(
+        &mut self,
+        request_id: u64,
+        initiator: Option<String>,
+        import_depth: usize,
+        parse_success: Option<bool>,
+        imported_rule_count: Option<usize>,
+    ) {
+        if let Some(entry) = self.entry_mut(request_id) {
+            if entry.import_depth.is_none() {
+                entry.initiator = initiator;
+                entry.import_depth = Some(import_depth);
+            }
+            if parse_success.is_some() {
+                entry.parse_success = parse_success;
+            }
+            if imported_rule_count.is_some() {
+                entry.imported_rule_count = imported_rule_count;
+            }
         }
     }
 

@@ -666,28 +666,33 @@ impl DomInspectorState {
 
         // Group matched declarations by (selector, source, important-ish) for rule display
         // Use the full matched_declarations which contains winners + overridden.
-        let mut seen_rules: Vec<(String, String, Specificity, bool, Vec<&MatchedDeclaration>)> =
-            Vec::new();
+        let mut seen_rules: Vec<(
+            String,
+            String,
+            Option<SourceLocation>,
+            Specificity,
+            bool,
+            Vec<&MatchedDeclaration>,
+        )> = Vec::new();
 
         for m in &style.matched_declarations {
             // Skip pure inherited seeds for the "rules" list (they are shown in Inherited section)
             if m.inherited && m.selector == "inherited" {
                 continue;
             }
-            let key = (
-                m.selector.clone(),
-                m.source.clone(),
-                m.specificity,
-                m.important,
-            );
-            if let Some(entry) = seen_rules.iter_mut().find(|(s, src, sp, imp, _)| {
-                s == &m.selector && src == &m.source && *sp == m.specificity && *imp == m.important
+            if let Some(entry) = seen_rules.iter_mut().find(|(s, src, loc, sp, imp, _)| {
+                s == &m.selector
+                    && src == &m.source
+                    && *loc == m.location
+                    && *sp == m.specificity
+                    && *imp == m.important
             }) {
-                entry.4.push(m);
+                entry.5.push(m);
             } else {
                 seen_rules.push((
                     m.selector.clone(),
                     m.source.clone(),
+                    m.location,
                     m.specificity,
                     m.important,
                     alloc::vec![m],
@@ -698,11 +703,11 @@ impl DomInspectorState {
         // Sort rules roughly by "strength" using the best decl in the group (source_order + spec as tie)
         seen_rules.sort_by(|a, b| {
             let best_a =
-                a.4.iter()
+                a.5.iter()
                     .map(|d| (d.important, d.specificity, d.source_order))
                     .max();
             let best_b =
-                b.4.iter()
+                b.5.iter()
                     .map(|d| (d.important, d.specificity, d.source_order))
                     .max();
             best_b.cmp(&best_a) // descending strength
@@ -713,7 +718,7 @@ impl DomInspectorState {
         } else {
             out.push_str("Rules (cascade order, strongest first)\n");
             out.push_str("---------------------------------------\n");
-            for (sel, src, spec, imp, decls) in &seen_rules {
+            for (sel, src, loc, spec, imp, decls) in &seen_rules {
                 // Show original vs expanded when nesting was used.
                 let first = decls.first();
                 let orig = first.and_then(|d| d.original_selector.as_deref());
@@ -731,10 +736,11 @@ impl DomInspectorState {
                 }
                 out.push('\n');
                 out.push_str(&src);
-                if let Some(loc) = /* no per-decl loc; use first if we had rule locs */
-                    None::<SourceLocation>
-                {
-                    // placeholder; full loc support would come from richer attachment
+                if let Some(loc) = loc {
+                    out.push(':');
+                    out.push_str(&loc.line.to_string());
+                    out.push(':');
+                    out.push_str(&loc.column.to_string());
                 }
                 out.push_str("\nspecificity: ");
                 out.push_str(&format!("{},{},{}", spec.ids, spec.classes, spec.tags));

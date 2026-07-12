@@ -12,6 +12,17 @@ pub const MAX_SELECTOR_LENGTH: usize = 256;
 pub const MAX_DECLARATIONS_PER_RULE: usize = 128;
 pub const MAX_DESCENDANT_DEPTH: usize = 32;
 pub const MAX_NESTING_DEPTH: usize = 8;
+pub const MAX_IMPORT_DEPTH: usize = 8;
+pub const MAX_IMPORTED_STYLESHEETS: usize = 32;
+pub const MAX_TOTAL_STYLESHEET_BYTES: usize = 512 * 1024;
+pub const MAX_TOTAL_CSS_RULES: usize = 8_192;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StylesheetImport {
+    pub raw_url: String,
+    pub media: String,
+    pub location: SourceLocation,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stylesheet {
@@ -409,6 +420,7 @@ pub struct MatchedDeclaration {
     pub important: bool,
     /// Source order within the element's cascade (for explaining "earlier rule lost").
     pub source_order: usize,
+    pub location: Option<SourceLocation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -519,6 +531,191 @@ pub fn parse_stylesheet(css: &str, source: StylesheetSource) -> Stylesheet {
     Stylesheet { source, rules }
 }
 
+/// Extract valid, leading statement-form `@import` rules without treating
+/// strings, comments, or parentheses as statement boundaries. Imports after
+/// the first qualified or block rule are deliberately ignored.
+pub fn parse_leading_imports(css: &str) -> Vec<StylesheetImport> {
+    let css = bounded_css(css);
+    let bytes = css.as_bytes();
+    let mut imports = Vec::new();
+    let mut cursor = 0usize;
+    while cursor < bytes.len() {
+        cursor = skip_css_whitespace_and_comments(css, cursor);
+        if cursor >= bytes.len() || bytes[cursor] != b'@' {
+            break;
+        }
+        let name_start = cursor + 1;
+        let mut name_end = name_start;
+        while name_end < bytes.len()
+            && (bytes[name_end].is_ascii_alphanumeric() || bytes[name_end] == b'-')
+        {
+            name_end += 1;
+        }
+        let name = &css[name_start..name_end];
+        let Some(statement_end) = css_statement_end(css, name_end) else {
+            break;
+        };
+        if statement_end.1 {
+            break;
+        }
+        if name.eq_ignore_ascii_case("import") {
+            if let Some((raw_url, media)) = parse_import_prelude(&css[name_end..statement_end.0]) {
+                imports.push(StylesheetImport {
+                    raw_url,
+                    media,
+                    location: location_from_offset(css, cursor),
+                });
+            }
+        } else if !name.eq_ignore_ascii_case("charset") && !name.eq_ignore_ascii_case("layer") {
+            break;
+        }
+        cursor = statement_end.0.saturating_add(1);
+    }
+    imports
+}
+
+/// Evaluates the intentionally small media subset needed by stylesheet
+/// imports. Unknown conditions remain active so usable CSS is not silently
+/// discarded; the returned reason makes that approximation observable.
+pub fn import_media_active(media: &str, viewport_width: u32) -> (bool, Option<String>) {
+    let media = media.trim();
+    if media.is_empty() || media.eq_ignore_ascii_case("all") || media.eq_ignore_ascii_case("screen")
+    {
+        return (true, None);
+    }
+    let lower = media.to_ascii_lowercase();
+    if lower == "print" {
+        return (false, None);
+    }
+    for (feature, is_min) in [("min-width", true), ("max-width", false)] {
+        if let Some(start) = lower.find(feature) {
+            let tail = &lower[start + feature.len()..];
+            let Some(colon) = tail.find(':') else {
+                continue;
+            };
+            let value = tail[colon + 1..]
+                .trim_start()
+                .trim_end_matches(|ch: char| ch == ')' || ch.is_ascii_whitespace());
+            if let Some(px) = value
+                .strip_suffix("px")
+                .and_then(|v| v.trim().parse::<u32>().ok())
+            {
+                return (
+                    if is_min {
+                        viewport_width >= px
+                    } else {
+                        viewport_width <= px
+                    },
+                    None,
+                );
+            }
+        }
+    }
+    (
+        true,
+        Some(format!(
+            "unsupported media condition treated as active: {media}"
+        )),
+    )
+}
+
+fn skip_css_whitespace_and_comments(css: &str, mut cursor: usize) -> usize {
+    let bytes = css.as_bytes();
+    loop {
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor + 1 < bytes.len() && bytes[cursor] == b'/' && bytes[cursor + 1] == b'*' {
+            cursor += 2;
+            while cursor + 1 < bytes.len() && !(bytes[cursor] == b'*' && bytes[cursor + 1] == b'/')
+            {
+                cursor += 1;
+            }
+            cursor = cursor.saturating_add(2).min(bytes.len());
+            continue;
+        }
+        return cursor;
+    }
+}
+
+/// Returns `(terminator_offset, encountered_block)`.
+fn css_statement_end(css: &str, mut cursor: usize) -> Option<(usize, bool)> {
+    let bytes = css.as_bytes();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut parens = 0usize;
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        if let Some(delimiter) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == delimiter {
+                quote = None;
+            }
+            cursor += 1;
+            continue;
+        }
+        match byte {
+            b'\'' | b'"' => quote = Some(byte),
+            b'(' => parens = parens.saturating_add(1),
+            b')' => parens = parens.saturating_sub(1),
+            b';' if parens == 0 => return Some((cursor, false)),
+            b'{' if parens == 0 => return Some((cursor, true)),
+            b'/' if cursor + 1 < bytes.len() && bytes[cursor + 1] == b'*' => {
+                cursor = skip_css_whitespace_and_comments(css, cursor);
+                continue;
+            }
+            _ => {}
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn parse_import_prelude(prelude: &str) -> Option<(String, String)> {
+    let value = prelude.trim();
+    let (raw_url, rest) = if value.starts_with(['\'', '"']) {
+        let delimiter = value.as_bytes()[0];
+        let mut end = 1usize;
+        let mut escaped = false;
+        while end < value.len() {
+            let byte = value.as_bytes()[end];
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == delimiter {
+                break;
+            }
+            end += 1;
+        }
+        if end >= value.len() {
+            return None;
+        }
+        (String::from(&value[1..end]), &value[end + 1..])
+    } else if value
+        .get(..4)
+        .is_some_and(|head| head.eq_ignore_ascii_case("url("))
+    {
+        let close = value[4..].find(')')? + 4;
+        let token = value[4..close].trim();
+        let token = token
+            .strip_prefix(['\'', '"'])
+            .and_then(|inner| inner.strip_suffix(['\'', '"']))
+            .unwrap_or(token);
+        (String::from(token), &value[close + 1..])
+    } else {
+        return None;
+    };
+    if raw_url.is_empty() {
+        None
+    } else {
+        Some((raw_url, String::from(rest.trim())))
+    }
+}
+
 fn parse_rule_block(
     input: &str,
     parent: Option<&str>,
@@ -545,8 +742,13 @@ fn parse_rule_block(
                 continue;
             }
         }
-        let selector_text_raw = input[cursor..open].trim();
-        let loc = location_from_offset(original_for_lines, cursor);
+        let selector_prelude = &input[cursor..open];
+        let selector_text_raw = selector_prelude.trim();
+        let selector_offset = cursor
+            + selector_prelude
+                .len()
+                .saturating_sub(selector_prelude.trim_start().len());
+        let loc = location_from_offset(original_for_lines, selector_offset);
         let Some(close) = matching_brace(input, open) else {
             break;
         };
@@ -696,12 +898,30 @@ fn strip_comments(css: &str) -> String {
         result.push_str(&rest[..start]);
         let after = &rest[start + 2..];
         let Some(end) = after.find("*/") else {
+            for ch in rest[start..].chars() {
+                if ch == '\n' || ch == '\r' {
+                    result.push(ch);
+                } else {
+                    for _ in 0..ch.len_utf8() {
+                        result.push(' ');
+                    }
+                }
+            }
             rest = "";
             break;
         };
-        // A comment between selector components is whitespace in CSS.  Keep
-        // that separator so `#nav/**/ul` remains a descendant selector.
-        result.push(' ');
+        // Preserve byte offsets and line breaks so rule provenance remains
+        // exact. The replacement spaces also keep comments as selector
+        // whitespace (`#nav/**/ul` is a descendant selector).
+        for ch in rest[start..start + 2 + end + 2].chars() {
+            if ch == '\n' || ch == '\r' {
+                result.push(ch);
+            } else {
+                for _ in 0..ch.len_utf8() {
+                    result.push(' ');
+                }
+            }
+        }
         rest = &after[end + 2..];
     }
     result.push_str(rest);
@@ -1502,7 +1722,7 @@ pub fn collect_embedded_stylesheets(document: &Document) -> Vec<Stylesheet> {
 pub fn order_document_stylesheets(
     document: &Document,
     mut embedded: Vec<Stylesheet>,
-    mut linked: Vec<Option<Stylesheet>>,
+    mut linked: Vec<Option<Vec<Stylesheet>>>,
 ) -> Vec<Stylesheet> {
     let mut ordered = Vec::new();
     let mut embedded_index = 0usize;
@@ -1530,8 +1750,8 @@ pub fn order_document_stylesheets(
                         .any(|token| token.eq_ignore_ascii_case("stylesheet"))
                 })
             {
-                if let Some(Some(sheet)) = linked.get_mut(linked_index) {
-                    ordered.push(sheet.clone());
+                if let Some(Some(sheets)) = linked.get_mut(linked_index) {
+                    ordered.extend(sheets.iter().cloned());
                 }
                 linked_index = linked_index.saturating_add(1);
             }
@@ -1681,6 +1901,7 @@ fn compute_element_style(
                             inherited: false,
                             important: declaration.important,
                             source_order: source_order.saturating_add(declaration.order),
+                            location: rule.location,
                         };
                         all_candidates.push(matched.clone());
                         if let Some(existing) =
@@ -1717,6 +1938,7 @@ fn compute_element_style(
                         inherited: false,
                         important: declaration.important,
                         source_order: source_order.saturating_add(declaration.order),
+                        location: rule.location,
                     };
                     all_candidates.push(matched.clone());
                     if winners[property_index]
@@ -1755,6 +1977,7 @@ fn compute_element_style(
                         inherited: false,
                         important: declaration.important,
                         source_order: declaration.order,
+                        location: None,
                     };
                     all_candidates.push(matched.clone());
                     if let Some(existing) = custom_winners.iter_mut().find(|entry| entry.0 == *name)
@@ -1784,6 +2007,7 @@ fn compute_element_style(
                     inherited: false,
                     important: declaration.important,
                     source_order: declaration.order,
+                    location: None,
                 };
                 all_candidates.push(matched.clone());
                 winners[property_index] = Some((
@@ -2056,6 +2280,7 @@ fn initial_style(parent: Option<&ComputedStyle>) -> ComputedStyle {
                     inherited: true,
                     important: false,
                     source_order: 0,
+                    location: None,
                 }),
         });
     }
@@ -2398,10 +2623,10 @@ mod tests {
     fn document_source_order_interleaves_embedded_and_linked_sheets() {
         let document = parse_html("<head><link rel='stylesheet' href='a.css'><style>p { color: blue; }</style></head><body><p>x</p></body>").unwrap();
         let embedded = collect_embedded_stylesheets(&document);
-        let linked = vec![Some(parse_stylesheet(
+        let linked = vec![Some(vec![parse_stylesheet(
             "p { color: red; }",
             StylesheetSource::External(String::from("a.css")),
-        ))];
+        )])];
         let context = StyleContext::build(
             &document,
             &order_document_stylesheets(&document, embedded, linked),
@@ -2767,5 +2992,133 @@ mod tests {
                 .value(&Property::BorderTopColor),
             Some(&PropertyValue::Color(Color::Rgb(255, 0, 0)))
         );
+    }
+
+    #[test]
+    fn parses_leading_import_forms_and_stops_after_qualified_rule() {
+        let imports = parse_leading_imports(
+            r#"@charset "utf-8";
+               @layer reset;
+               @import "base.css";
+               @import url("cards.css") screen;
+               @import url(layout/narrow.css) (max-width: 600px);
+               #banner { color: black; }
+               @import "too-late.css";"#,
+        );
+        assert_eq!(imports.len(), 3);
+        assert_eq!(imports[0].raw_url, "base.css");
+        assert_eq!(imports[1].raw_url, "cards.css");
+        assert_eq!(imports[1].media, "screen");
+        assert_eq!(imports[2].raw_url, "layout/narrow.css");
+        assert_eq!(imports[2].media, "(max-width: 600px)");
+    }
+
+    #[test]
+    fn import_media_uses_viewport_and_keeps_unknown_conditions_observable() {
+        assert_eq!(import_media_active("", 800), (true, None));
+        assert_eq!(import_media_active("screen", 800), (true, None));
+        assert_eq!(import_media_active("(min-width: 600px)", 800), (true, None));
+        assert_eq!(
+            import_media_active("(min-width: 600px)", 500),
+            (false, None)
+        );
+        assert_eq!(import_media_active("(max-width: 600px)", 500), (true, None));
+        assert!(!import_media_active("speech", 800).1.unwrap().is_empty());
+    }
+
+    #[cfg(feature = "dom")]
+    #[test]
+    fn kernel_main_top_level_rules_survive_import_and_font_face() {
+        let css = r#"/** live stylesheet structure */
+            @import "normalize.css";
+            @font-face { font-family: oxygen; src: url('../fonts/oxygen.woff2'); }
+            #banner {
+                text-align: center; background: #fff; margin: 0em auto;
+                padding: 1em; width: 50em; border: thin solid;
+                border-color: #dddadf #ccc8b8 #bbb59f;
+                box-shadow: 0 0.1em 0.3em #ccc8b8;
+                border-bottom-right-radius: 0.5em;
+                border-bottom-left-radius: 0.5em;
+            }
+            #latest { float:right; background:#ffd133; color:#4c3d00; }
+            #releases { clear:both; width:100%; margin-bottom:.25em; }"#;
+        let sheet = parse_stylesheet(
+            css,
+            StylesheetSource::External(String::from("https://www.kernel.org/theme/css/main.css")),
+        );
+        for expected in ["#banner", "#latest", "#releases"] {
+            assert!(sheet.rules.iter().any(|rule| rule
+                .selectors
+                .iter()
+                .any(|selector| selector.text == expected)));
+        }
+        let document = parse_html(
+            "<header id=banner><h1>x</h1><nav></nav></header><aside id=featured><table id=latest></table><table id=releases></table></aside>",
+        )
+        .unwrap();
+        let context = StyleContext::build(&document, &[sheet]);
+        let banner = (0..document.node_count())
+            .find(|id| document.tag_name(*id) == Some("header"))
+            .unwrap();
+        let latest = (0..document.node_count())
+            .find(|id| {
+                document.tag_name(*id) == Some("table")
+                    && document.get(*id).and_then(|node| match node {
+                        Node::Element { attributes, .. } => attribute_value(attributes, "id"),
+                        _ => None,
+                    }) == Some("latest")
+            })
+            .unwrap();
+        assert_eq!(
+            context
+                .style_for(banner)
+                .unwrap()
+                .value(&Property::BackgroundColor),
+            Some(&PropertyValue::Color(Color::Rgb(255, 255, 255)))
+        );
+        assert_eq!(
+            context.style_for(latest).unwrap().value(&Property::Float),
+            Some(&PropertyValue::Keyword(String::from("right")))
+        );
+        let banner_rule = context
+            .style_for(banner)
+            .unwrap()
+            .matched_declarations
+            .iter()
+            .find(|matched| matched.selector == "#banner")
+            .unwrap();
+        assert_eq!(banner_rule.location.unwrap().line, 4);
+        assert!(banner_rule.source.contains("kernel.org/theme/css/main.css"));
+    }
+
+    #[cfg(feature = "dom")]
+    #[test]
+    fn imported_bundle_precedes_parent_override_and_preserves_source() {
+        let document =
+            parse_html("<link rel=stylesheet href=main.css><header id=banner></header>").unwrap();
+        let imported = parse_stylesheet(
+            "#banner { background: white; color: blue; }",
+            StylesheetSource::External(String::from("https://example.test/card.css")),
+        );
+        let parent = parse_stylesheet(
+            "@import 'card.css'; #banner { color: black; }",
+            StylesheetSource::External(String::from("https://example.test/main.css")),
+        );
+        let ordered =
+            order_document_stylesheets(&document, Vec::new(), vec![Some(vec![imported, parent])]);
+        let context = StyleContext::build(&document, &ordered);
+        let banner = document.find_first_element("header").unwrap();
+        let style = context.style_for(banner).unwrap();
+        assert_eq!(
+            style.value(&Property::BackgroundColor),
+            Some(&PropertyValue::Color(Color::Rgb(255, 255, 255)))
+        );
+        assert_eq!(
+            style.value(&Property::Color),
+            Some(&PropertyValue::Color(Color::Rgb(0, 0, 0)))
+        );
+        assert!(style.matched_declarations.iter().any(|matched| {
+            matched.selector == "#banner" && matched.source.contains("card.css")
+        }));
     }
 }

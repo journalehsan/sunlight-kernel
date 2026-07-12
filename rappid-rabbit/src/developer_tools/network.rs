@@ -107,6 +107,24 @@ impl NetworkTabState {
         self.invalidate_caches();
     }
 
+    pub fn set_stylesheet_metadata(
+        &mut self,
+        request_id: u64,
+        initiator: Option<String>,
+        import_depth: usize,
+        parse_success: Option<bool>,
+        imported_rule_count: Option<usize>,
+    ) {
+        self.session.set_stylesheet_metadata(
+            request_id,
+            initiator,
+            import_depth,
+            parse_success,
+            imported_rule_count,
+        );
+        self.invalidate_caches();
+    }
+
     pub fn complete_request(
         &mut self,
         request_id: u64,
@@ -233,6 +251,34 @@ impl NetworkTabState {
             entry.response_body_size_display().as_str(),
         );
         push_field(&mut out, "Duration", entry.duration_display().as_str());
+        if entry.resource_type == ResourceType::Stylesheet {
+            push_field(
+                &mut out,
+                "Initiator",
+                entry.initiator.as_deref().unwrap_or("document"),
+            );
+            push_field(
+                &mut out,
+                "Import Depth",
+                &entry.import_depth.unwrap_or(0).to_string(),
+            );
+            push_field(
+                &mut out,
+                "Parse Success",
+                match entry.parse_success {
+                    Some(true) => "yes",
+                    Some(false) => "no",
+                    None => "pending",
+                },
+            );
+            push_field(
+                &mut out,
+                "Imported Rules",
+                &entry
+                    .imported_rule_count
+                    .map_or_else(|| String::from("pending"), |count| count.to_string()),
+            );
+        }
         out.push('\n');
 
         out.push_str("Request Headers\n");
