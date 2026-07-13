@@ -135,7 +135,7 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Chronos),
-        name: "Chronos",
+        name: "Sunlight DOS Terminal",
         category: "Compatibility",
         icon_bytes: Some(ICON_TERMINAL_TGA),
         available: true,

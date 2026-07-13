@@ -23,12 +23,14 @@ pub const ATTR_ARCHIVE: u8 = 0x20;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
 pub enum DosError {
+    InvalidFunction = 1,
     FileNotFound = 2,
     PathNotFound = 3,
     TooManyOpenFiles = 4,
     AccessDenied = 5,
     InvalidHandle = 6,
     InsufficientMemory = 8,
+    InvalidMemoryBlock = 9,
     InvalidDrive = 15,
     NoMoreFiles = 18,
 }
@@ -727,10 +729,14 @@ pub struct DirectoryEntry {
 }
 
 #[derive(Clone, Debug)]
-pub struct DosHandle {
-    pub path: DosPath,
-    pub position: usize,
-    pub mode: OpenMode,
+pub enum DosHandle {
+    ConsoleInput,
+    ConsoleOutput,
+    File {
+        path: DosPath,
+        position: usize,
+        mode: OpenMode,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -746,15 +752,17 @@ impl Default for DosHandleTable {
 
 impl DosHandleTable {
     pub fn new() -> Self {
-        Self {
-            entries: (0..MAX_OPEN_HANDLES).map(|_| None).collect(),
-        }
+        let mut entries = (0..MAX_OPEN_HANDLES).map(|_| None).collect::<Vec<_>>();
+        entries[0] = Some(DosHandle::ConsoleInput);
+        entries[1] = Some(DosHandle::ConsoleOutput);
+        entries[2] = Some(DosHandle::ConsoleOutput);
+        Self { entries }
     }
 
     pub fn open(&mut self, path: DosPath, mode: OpenMode) -> Result<u16, DosError> {
         for index in 5..self.entries.len() {
             if self.entries[index].is_none() {
-                self.entries[index] = Some(DosHandle {
+                self.entries[index] = Some(DosHandle::File {
                     path,
                     position: 0,
                     mode,
@@ -788,6 +796,36 @@ impl DosHandleTable {
             Ok(())
         } else {
             Err(DosError::InvalidHandle)
+        }
+    }
+
+    pub fn duplicate(&mut self, source: u16) -> Result<u16, DosError> {
+        let descriptor = self.get(source)?.clone();
+        for index in 5..self.entries.len() {
+            if self.entries[index].is_none() {
+                self.entries[index] = Some(descriptor);
+                return Ok(index as u16);
+            }
+        }
+        Err(DosError::TooManyOpenFiles)
+    }
+
+    pub fn force_duplicate(&mut self, source: u16, target: u16) -> Result<(), DosError> {
+        let descriptor = self.get(source)?.clone();
+        let Some(slot) = self.entries.get_mut(target as usize) else {
+            return Err(DosError::InvalidHandle);
+        };
+        *slot = Some(descriptor);
+        Ok(())
+    }
+
+    pub fn inherit_for_child(&self) -> Self {
+        self.clone()
+    }
+
+    pub fn close_nonstandard(&mut self) {
+        for entry in self.entries.iter_mut().skip(5) {
+            *entry = None;
         }
     }
 }

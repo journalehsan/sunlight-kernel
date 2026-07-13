@@ -1,0 +1,35 @@
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.chronos.mzlab"
+name = "Chronos MZ Process Lab"
+version = "1.0.0"
+kind = "terminal-window"
+icon = "Resources/icon.tga"
+
+[runtime]
+type = "chronos"
+
+[entry]
+executable = "C:\\MZLAB.EXE"
+working_directory = "C:\\"
+arguments = []
+
+[chronos]
+cpu = "8086"
+memory_kb = 640
+code_page = 437
+
+[storage]
+c_base = ["Program"]
+c_overlay = "persistent"
+d_scope = "documents"
+t_drive = "temporary"
+
+[permissions]
+documents = "none"
+clipboard = false
+printing = false
+serial = false
+network = false

@@ -503,6 +503,25 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
     RamEntry::dir("/bin", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/ChronosDosShell.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir(
+        "/Applications/ChronosDosShell.sunapp/Program",
+        0,
+        0,
+        mode::DIR_755,
+    ),
+    RamEntry::dir(
+        "/Applications/ChronosDosShell.sunapp/Resources",
+        0,
+        0,
+        mode::DIR_755,
+    ),
+    RamEntry::dir(
+        "/Applications/ChronosDosShell.sunapp/Licenses",
+        0,
+        0,
+        mode::DIR_755,
+    ),
     RamEntry::dir("/Applications/ChronosFileLab.sunapp", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications/ChronosFileLab.sunapp/Program", 0, 0, mode::DIR_755),
     RamEntry::dir(
@@ -1083,6 +1102,55 @@ max_ttys = 6
     RamEntry::file("/bin/eyes", 0, 0, mode::FILE_755, b"#!/sunlight/eyes\n"),
     RamEntry::file("/bin/sunlight-runner", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-runner\n"),
     RamEntry::file("/bin/sun-exec", 0, 0, mode::FILE_755, b"#!/sunlight/sun-exec\n"),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Manifest.toml",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Manifest.toml"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Program/SUNSH.EXE",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Program/AUTOEXEC.BAT",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Program/AUTOEXEC.BAT"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Program/CHILD.BAT",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Program/CHILD.BAT"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Program/MIDTERM.BAT",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Program/MIDTERM.BAT"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Resources/icon.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Resources/icon.tga"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Licenses/README.txt",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Licenses/README.txt"),
+    ),
     RamEntry::file(
         "/Applications/ChronosFileLab.sunapp/Manifest.toml",
         0,
@@ -2408,6 +2476,22 @@ mod tests {
             assert!(!entry.is_dir);
             assert_eq!(entry.mode, mode::FILE_755);
             assert_eq!(entry.data, b"#!/sunlight/sunlight-chronos\n");
+        }
+    }
+
+    #[test]
+    fn chronos_dos_shell_bundle_is_present_in_initramfs() {
+        for path in [
+            "/Applications/ChronosDosShell.sunapp/Manifest.toml",
+            "/Applications/ChronosDosShell.sunapp/Program/SUNSH.EXE",
+            "/Applications/ChronosDosShell.sunapp/Resources/icon.tga",
+        ] {
+            assert!(
+                INITRAMFS
+                    .iter()
+                    .any(|entry| entry.path == path && !entry.is_dir),
+                "missing {path}"
+            );
         }
     }
 

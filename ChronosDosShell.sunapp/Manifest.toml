@@ -1,0 +1,40 @@
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.chronos.shell"
+name = "Sunlight DOS Terminal"
+version = "0.1.0"
+kind = "terminal-window"
+icon = "Resources/icon.tga"
+
+[runtime]
+type = "chronos"
+
+[entry]
+executable = "C:\\SUNSH.EXE"
+working_directory = "C:\\"
+arguments = []
+
+[chronos]
+cpu = "8086"
+memory_kb = 640
+code_page = 437
+
+[storage]
+c_base = ["Program"]
+c_overlay = "persistent"
+d_scope = "documents"
+t_drive = "temporary"
+
+[permissions]
+documents = "read-write"
+clipboard = false
+printing = false
+serial = false
+network = false
+
+[window]
+default_width = 1000
+default_height = 720
+resizable = true

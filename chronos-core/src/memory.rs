@@ -25,6 +25,11 @@ impl GuestMemory {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.bytes.fill(0);
+        self.video_dirty_rows = [true; TEXT_ROWS];
+    }
+
     /// Calculates `((segment << 4) + offset) & 0xFFFFF`.
     #[inline]
     pub const fn physical_address(segment: u16, offset: u16) -> usize {

@@ -11,13 +11,13 @@ use alloc::{format, vec::Vec};
 use core::alloc::{GlobalAlloc, Layout};
 
 use chronos_core::{
-    display_char, translate_key_press, BiosKey, GuestState, HostKeyEvent, Runtime,
-    CHRONOS_INTERACTIVE_COM,
+    display_char, translate_key_press, BiosKey, GuestState, HostKeyEvent, LoaderError, MzError,
+    Runtime, UnsupportedExecutable, CHRONOS_INTERACTIVE_COM,
 };
 #[cfg(not(test))]
 use chronos_core::{DosDrive, DosEntry};
 use sun_font::{draw_text, measure_text, FontRole, TextStyle};
-use sunlight_ipc::{debug_log, monotonic_millis};
+use sunlight_ipc::{debug_log, get_time_utc, monotonic_millis};
 #[cfg(not(test))]
 use sunlight_ipc::{process_yield, ProcessExit};
 #[cfg(not(test))]
@@ -41,6 +41,8 @@ const DOS_CURSOR: Color = Color::rgb(255, 181, 71);
 const MAX_HOST_FILE: usize = 64 * 1024;
 #[cfg(not(test))]
 const MAX_IMPORT_DEPTH: usize = 8;
+#[cfg(not(test))]
+const HEAP_SIZE: usize = 4 * 1024 * 1024;
 
 #[cfg(not(test))]
 struct BumpAllocator;
@@ -48,12 +50,12 @@ struct BumpAllocator;
 #[cfg(not(test))]
 unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        static mut HEAP: [u8; 2 * 1024 * 1024] = [0; 2 * 1024 * 1024];
+        static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
         static mut NEXT: usize = 0;
 
         let aligned = (NEXT + layout.align() - 1) & !(layout.align() - 1);
         let end = aligned.saturating_add(layout.size());
-        if end > 2 * 1024 * 1024 {
+        if end > HEAP_SIZE {
             return core::ptr::null_mut();
         }
         NEXT = end;
@@ -69,8 +71,17 @@ static ALLOC: BumpAllocator = BumpAllocator;
 
 #[cfg(not(test))]
 #[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    debug_log("[CHRONOS] panic\n");
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    debug_log("[CHRONOS] panic");
+    if let Some(location) = info.location() {
+        debug_log(" at ");
+        debug_log(location.file());
+        debug_log(":");
+        debug_log_u32(location.line());
+        debug_log(":");
+        debug_log_u32(location.column());
+    }
+    debug_log("\n");
     loop {
         process_yield();
     }
@@ -110,12 +121,24 @@ impl ChronosApp {
     #[cfg(not(test))]
     fn launch(config: ChronosLaunch) -> Self {
         let image = read_file(&config.entry).unwrap_or_else(|| CHRONOS_INTERACTIVE_COM.to_vec());
-        let mut runtime = Runtime::from_com_with_command_tail(&image, &config.command_tail)
-            .unwrap_or_else(|_| {
-                Runtime::from_com(CHRONOS_INTERACTIVE_COM).expect("fallback guest")
-            });
+        debug_log("[CHRONOS] guest image loaded\n");
+        let (mut runtime, load_error) = match Runtime::from_program(&image, &config.command_tail) {
+            Ok(runtime) => (runtime, None),
+            Err(error) => {
+                log_loader_error(&error);
+                (
+                    Runtime::from_com(&[0xf4]).expect("minimal halted guest must load"),
+                    Some(error),
+                )
+            }
+        };
+        debug_log("[CHRONOS] guest runtime initialized\n");
+        runtime.set_application_id(config.app_id.as_bytes());
+        runtime.set_executable_path(config.entry_name().as_bytes());
+        runtime.set_guest_unix_time(get_time_utc());
         let storage = config.storage();
         seed_drives(&mut runtime, &storage);
+        debug_log("[CHRONOS] DOS drives seeded\n");
         let mut app = Self {
             runtime,
             title: config.title,
@@ -126,7 +149,7 @@ impl ChronosApp {
             trap_logged: false,
             cursor_visible: true,
         };
-        app.set_status(b"Ready");
+        app.set_status(load_error.as_ref().map_or(b"Ready", loader_status));
         app
     }
 
@@ -201,7 +224,7 @@ impl ChronosApp {
         let text_y = rect.y + (rect.h as i32 - measure_text("Ag", small).h as i32) / 2;
         draw_text(
             canvas,
-            "DOS .COM",
+            "DOS .COM / MZ",
             rect.x + 10,
             text_y,
             &TextStyle::new(small, theme.text_dim),
@@ -226,6 +249,34 @@ impl ChronosApp {
             &TextStyle::new(small, theme.text_dim),
         );
     }
+}
+
+#[cfg(not(test))]
+fn loader_status(error: &LoaderError) -> &'static [u8] {
+    match error {
+        LoaderError::Mz(MzError::UnsupportedExtendedFormat(UnsupportedExecutable::Pe)) => {
+            b"Unsupported executable: PE"
+        }
+        LoaderError::Mz(MzError::UnsupportedExtendedFormat(UnsupportedExecutable::Ne)) => {
+            b"Unsupported executable: NE"
+        }
+        LoaderError::Mz(MzError::UnsupportedExtendedFormat(UnsupportedExecutable::Le)) => {
+            b"Unsupported executable: LE"
+        }
+        LoaderError::Mz(MzError::UnsupportedExtendedFormat(UnsupportedExecutable::Lx)) => {
+            b"Unsupported executable: LX"
+        }
+        LoaderError::Mz(_) => b"Invalid MZ header",
+        LoaderError::InsufficientMemory { .. } => b"Insufficient DOS memory",
+        _ => b"Guest program load failed",
+    }
+}
+
+#[cfg(not(test))]
+fn log_loader_error(error: &LoaderError) {
+    debug_log("[CHRONOS] loader rejected guest: ");
+    debug_log(core::str::from_utf8(loader_status(error)).unwrap_or("load failed"));
+    debug_log("\n");
 }
 
 impl App for ChronosApp {
@@ -391,6 +442,22 @@ fn copy_bytes(source: &[u8], destination: &mut [u8]) -> usize {
     length
 }
 
+#[cfg(not(test))]
+fn debug_log_u32(mut value: u32) {
+    let mut buffer = [0u8; 10];
+    let mut index = buffer.len();
+    if value == 0 {
+        debug_log("0");
+        return;
+    }
+    while value != 0 {
+        index -= 1;
+        buffer[index] = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+    debug_log(core::str::from_utf8(&buffer[index..]).unwrap_or("0"));
+}
+
 fn write_hex_u16(value: u16, output: &mut [u8]) -> usize {
     for (index, shift) in [12, 8, 4, 0].iter().enumerate() {
         output[index] = hex_digit((value >> shift) as u8);
@@ -488,6 +555,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
     let mut app = config
         .map(ChronosApp::launch)
         .unwrap_or_else(ChronosApp::new);
+    debug_log("[CHRONOS] connecting display window\n");
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
@@ -499,6 +567,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
             process_yield();
         },
     };
+    debug_log("[CHRONOS] window connected\n");
     window.run(&mut app);
     ProcessExit::exit(0);
 }
@@ -603,6 +672,16 @@ impl ChronosLaunch {
                 .map(|root| format!("{}/Dependencies", root)),
             c_overlay,
             documents_root: self.documents_root.clone(),
+        }
+    }
+
+    fn entry_name(&self) -> String {
+        if self.direct {
+            let name = self.entry.rsplit('/').next().unwrap_or("PROGRAM.EXE");
+            format!("C:\\{}", name.to_ascii_uppercase())
+        } else {
+            let name = self.entry.rsplit('/').next().unwrap_or("PROGRAM.EXE");
+            format!("C:\\{}", name.to_ascii_uppercase())
         }
     }
 }

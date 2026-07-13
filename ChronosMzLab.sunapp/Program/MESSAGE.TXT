@@ -1,0 +1,1 @@
+MZLAB.EXE read this bundled MESSAGE.TXT through DOS handle APIs.

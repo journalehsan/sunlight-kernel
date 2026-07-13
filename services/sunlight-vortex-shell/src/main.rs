@@ -1407,7 +1407,7 @@ impl VortexShell {
             logout_confirm_r: Rect::new(0, 0, 0, 0),
             apps: [
                 DockAppState::new(AppId::Terminal, "Sunlight Terminal", AppId::Terminal),
-                DockAppState::new(AppId::Chronos, "Chronos", AppId::Chronos),
+                DockAppState::new(AppId::Chronos, "Sunlight DOS Terminal", AppId::Chronos),
                 DockAppState::new(AppId::Calculator, "Sunlight Calculator", AppId::Calculator),
                 DockAppState::new(AppId::Files, "Sunlight Files", AppId::Files),
                 DockAppState::new(AppId::Settings, "System Preferences", AppId::Settings),
@@ -1614,7 +1614,7 @@ impl VortexShell {
     fn app_launch_path(app_id: AppId) -> &'static str {
         match app_id {
             AppId::Terminal => "/bin/sunlight-terminal",
-            AppId::Chronos => "/bin/sunlight-chronos",
+            AppId::Chronos => "/Applications/ChronosDosShell.sunapp",
             AppId::Calculator => "/bin/calculator",
             AppId::Files => "/bin/sunlight-files",
             AppId::Settings => "/bin/control-panel",
@@ -1632,7 +1632,7 @@ impl VortexShell {
     fn app_launch_command(app_id: AppId) -> &'static [u8] {
         match app_id {
             AppId::Terminal => b"terminal",
-            AppId::Chronos => b"chronos",
+            AppId::Chronos => b"sunlight-dos-terminal",
             AppId::Calculator => b"calculator",
             AppId::Files => b"files",
             AppId::Settings => b"settings",
@@ -2343,9 +2343,13 @@ impl VortexShell {
                 app.set_error(launch_error_text(err));
                 debug_log("[VORTEX] app_launch_failed(");
                 debug_log(app.display_name);
+                debug_log(", error=");
+                debug_log(launch_error_text(err));
                 debug_log(")\n");
                 let mut body = String::from("Could not start ");
                 body.push_str(Self::app_launch_path(app_id));
+                body.push_str(": ");
+                body.push_str(launch_error_text(err));
                 let _ = show_notification(NotificationKind::Error, "Launch failed", &body, 30_000);
                 false
             }

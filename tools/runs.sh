@@ -255,6 +255,14 @@ if [ "$BUILD_FIRST" = true ]; then
     echo -e "${YELLOW}Updating version...${NC}"
     python3 "$SCRIPT_DIR/version_manager.py" "$PROJECT_ROOT"
 
+    if [[ -n "${PPC8086:-}" && -n "${FPC_I8086_RTL:-}" ]]; then
+        echo -e "${YELLOW}Rebuilding Chronos DOS shell guest...${NC}"
+        PPC8086="$PPC8086" FPC_I8086_RTL="$FPC_I8086_RTL" \
+            "$PROJECT_ROOT/guest/sunshell/build.sh"
+    else
+        echo -e "${YELLOW}Chronos DOS shell:${NC} using checked-in SUNSH.EXE (set PPC8086 and FPC_I8086_RTL to rebuild)"
+    fi
+
     echo -e "${YELLOW}Rebuilding kernel and services...${NC}"
     SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C no-redzone"
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release

@@ -1,7 +1,7 @@
-use alloc::vec;
+use alloc::{vec, vec::Vec};
 
 use crate::{
-    CpuState, DirectoryEntry, DosDrive, DosError, DosPath, OpenMode, Runtime, Trap,
+    CpuState, DirectoryEntry, DosDrive, DosError, DosHandle, DosPath, OpenMode, Runtime, Trap,
     DEFAULT_ATTRIBUTE, TEXT_COLUMNS,
 };
 
@@ -209,9 +209,21 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
             runtime.cpu.set_al(runtime.drives.current_drive.number());
             dos_success(runtime)
         }
+        0x25 => {
+            runtime.set_interrupt_vector(runtime.cpu.al(), runtime.cpu.ds, runtime.cpu.dx);
+            dos_success(runtime)
+        }
+        0x35 => {
+            let (segment, offset) = runtime.interrupt_vector(runtime.cpu.al());
+            runtime.cpu.es = segment;
+            runtime.cpu.bx = offset;
+            dos_success(runtime)
+        }
         0x1a => {
             runtime.dta_segment = runtime.cpu.ds;
             runtime.dta_offset = runtime.cpu.dx;
+            runtime.active_process.dta_segment = runtime.dta_segment;
+            runtime.active_process.dta_offset = runtime.dta_offset;
             dos_success(runtime)
         }
         0x2f => {
@@ -219,6 +231,8 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
             runtime.cpu.bx = runtime.dta_offset;
             dos_success(runtime)
         }
+        0x2a => get_date(runtime),
+        0x2c => get_time(runtime),
         0x39 => {
             let path = read_dos_path(runtime);
             match path.and_then(|path| runtime.drives.mkdir(&path)) {
@@ -257,16 +271,163 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
         }
         0x42 => seek_handle(runtime),
         0x43 => attributes(runtime),
+        0x44 => ioctl(runtime),
+        0x45 => duplicate_handle(runtime),
+        0x46 => force_duplicate_handle(runtime),
         0x47 => get_current_directory(runtime),
+        0x48 => allocate_memory(runtime),
+        0x49 => free_memory(runtime),
+        0x4a => resize_memory(runtime),
+        0x4b => exec(runtime),
+        0x4d => child_result(runtime),
+        0x50 => {
+            if runtime.set_current_psp(runtime.cpu.bx) {
+                dos_success(runtime)
+            } else {
+                dos_error(runtime, DosError::InvalidMemoryBlock)
+            }
+        }
+        0x51 | 0x62 => {
+            runtime.cpu.bx = runtime.current_psp();
+            dos_success(runtime)
+        }
+        0x71 => dos_error(runtime, DosError::InvalidFunction),
         0x4e => find_first(runtime),
         0x4f => find_next(runtime),
         0x56 => rename_file(runtime),
+        0x59 => {
+            runtime.cpu.ax = 0;
+            runtime.cpu.set_bh(0);
+            runtime.cpu.set_bl(0);
+            runtime.cpu.set_ch(0);
+            dos_success(runtime)
+        }
+        0x00 => runtime.exit(0),
         0x4c => runtime.exit(runtime.cpu.al()),
         function => Err(Trap::UnsupportedInterrupt {
             interrupt: 0x21,
             function,
         }),
     }
+}
+
+fn allocate_memory(runtime: &mut Runtime) -> Result<(), Trap> {
+    match runtime.allocate_memory(runtime.cpu.bx) {
+        Ok(segment) => {
+            runtime.cpu.ax = segment;
+            dos_success(runtime)
+        }
+        Err(crate::ArenaError::InsufficientMemory { largest }) => {
+            runtime.cpu.ax = DosError::InsufficientMemory.code();
+            runtime.cpu.bx = largest;
+            runtime.cpu.flags |= CpuState::FLAG_CF;
+            Ok(())
+        }
+        Err(_) => {
+            runtime.cpu.ax = DosError::InsufficientMemory.code();
+            runtime.cpu.bx = runtime.largest_available_memory();
+            runtime.cpu.flags |= CpuState::FLAG_CF;
+            Ok(())
+        }
+    }
+}
+
+fn free_memory(runtime: &mut Runtime) -> Result<(), Trap> {
+    match runtime.free_memory(runtime.cpu.es) {
+        Ok(()) => dos_success(runtime),
+        Err(_) => dos_error(runtime, DosError::InvalidMemoryBlock),
+    }
+}
+
+fn resize_memory(runtime: &mut Runtime) -> Result<(), Trap> {
+    match runtime.resize_memory(runtime.cpu.es, runtime.cpu.bx) {
+        Ok(()) => dos_success(runtime),
+        Err(crate::ArenaError::InsufficientMemory { largest }) => {
+            runtime.cpu.ax = DosError::InsufficientMemory.code();
+            runtime.cpu.bx = largest;
+            runtime.cpu.flags |= CpuState::FLAG_CF;
+            Ok(())
+        }
+        Err(_) => dos_error(runtime, DosError::InvalidMemoryBlock),
+    }
+}
+
+fn exec(runtime: &mut Runtime) -> Result<(), Trap> {
+    if runtime.cpu.al() != 0 {
+        return dos_error(runtime, DosError::AccessDenied);
+    }
+    if !runtime
+        .arena
+        .owns_range(runtime.current_psp(), runtime.cpu.es, runtime.cpu.bx, 14)
+    {
+        return dos_error(runtime, DosError::AccessDenied);
+    }
+    let parameter = runtime.cpu.bx;
+    let environment = runtime.memory.read_u16(runtime.cpu.es, parameter);
+    let tail_offset = runtime
+        .memory
+        .read_u16(runtime.cpu.es, parameter.wrapping_add(2));
+    let tail_segment = runtime
+        .memory
+        .read_u16(runtime.cpu.es, parameter.wrapping_add(4));
+    let path = match read_dos_path(runtime) {
+        Ok(path) => path,
+        Err(error) => return dos_error(runtime, error),
+    };
+    let command_tail = match read_command_tail(runtime, tail_segment, tail_offset) {
+        Ok(value) => value,
+        Err(error) => return dos_error(runtime, error),
+    };
+    match runtime.exec(path, &command_tail, environment) {
+        Ok(()) => dos_success(runtime),
+        Err(crate::LoaderError::InsufficientMemory { largest, .. }) => {
+            runtime.cpu.ax = DosError::InsufficientMemory.code();
+            runtime.cpu.bx = largest;
+            runtime.cpu.flags |= CpuState::FLAG_CF;
+            Ok(())
+        }
+        Err(_) => dos_error(runtime, DosError::FileNotFound),
+    }
+}
+
+fn read_command_tail(runtime: &Runtime, segment: u16, offset: u16) -> Result<Vec<u8>, DosError> {
+    if segment == 0 && offset == 0 {
+        return Ok(Vec::new());
+    }
+    if !runtime
+        .arena
+        .owns_range(runtime.current_psp(), segment, offset, 1)
+    {
+        return Err(DosError::AccessDenied);
+    }
+    let length = runtime.memory.read_u8(segment, offset) as usize;
+    if length > 126
+        || !runtime
+            .arena
+            .owns_range(runtime.current_psp(), segment, offset, length + 2)
+    {
+        return Err(DosError::AccessDenied);
+    }
+    let mut tail = vec![0; length];
+    runtime
+        .memory
+        .read_slice(segment, offset.wrapping_add(1), &mut tail)
+        .map_err(|_| DosError::AccessDenied)?;
+    Ok(tail)
+}
+
+fn child_result(runtime: &mut Runtime) -> Result<(), Trap> {
+    let result = runtime
+        .active_process
+        .child_result
+        .take()
+        .unwrap_or(crate::ChildResult {
+            code: 0,
+            termination: crate::TerminationType::Normal,
+        });
+    runtime.cpu.set_al(result.code);
+    runtime.cpu.set_ah(result.termination as u8);
+    dos_success(runtime)
 }
 
 fn dos_success(runtime: &mut Runtime) -> Result<(), Trap> {
@@ -344,49 +505,48 @@ fn open_file(runtime: &mut Runtime) -> Result<(), Trap> {
 fn read_handle(runtime: &mut Runtime) -> Result<(), Trap> {
     let handle = runtime.cpu.bx;
     let requested = runtime.cpu.cx as usize;
-    if handle == 0 {
-        if requested == 0 {
-            runtime.cpu.ax = 0;
-            return dos_success(runtime);
-        }
-        if let Some(key) = runtime.pop_key() {
-            runtime
-                .memory
-                .write_u8(runtime.cpu.ds, runtime.cpu.dx, key.ascii);
-            runtime.cpu.ax = 1;
-        } else {
-            runtime.cpu.ax = 0;
-        }
-        return dos_success(runtime);
-    }
-    if handle <= 4 {
-        return dos_error(runtime, DosError::InvalidHandle);
-    }
     let descriptor = match runtime.handles.get(handle) {
         Ok(value) => value.clone(),
         Err(error) => return dos_error(runtime, error),
     };
-    if !descriptor.mode.can_read() {
-        return dos_error(runtime, DosError::AccessDenied);
+    match descriptor {
+        DosHandle::ConsoleInput => {
+            if requested == 0 {
+                runtime.cpu.ax = 0;
+            } else {
+                return runtime.wait_for_console_read(runtime.cpu.ds, runtime.cpu.dx);
+            }
+            dos_success(runtime)
+        }
+        DosHandle::ConsoleOutput => dos_error(runtime, DosError::AccessDenied),
+        DosHandle::File {
+            path,
+            position,
+            mode,
+        } => {
+            if !mode.can_read() {
+                return dos_error(runtime, DosError::AccessDenied);
+            }
+            let data = match runtime.drives.read_file(&path) {
+                Ok(data) => data,
+                Err(error) => return dos_error(runtime, error),
+            };
+            let start = position.min(data.len());
+            let count = requested.min(data.len() - start);
+            if runtime
+                .memory
+                .write_slice(runtime.cpu.ds, runtime.cpu.dx, &data[start..start + count])
+                .is_err()
+            {
+                return dos_error(runtime, DosError::InsufficientMemory);
+            }
+            if let Ok(DosHandle::File { position, .. }) = runtime.handles.get_mut(handle) {
+                *position = start + count;
+            }
+            runtime.cpu.ax = count as u16;
+            dos_success(runtime)
+        }
     }
-    let data = match runtime.drives.read_file(&descriptor.path) {
-        Ok(data) => data,
-        Err(error) => return dos_error(runtime, error),
-    };
-    let start = descriptor.position.min(data.len());
-    let count = requested.min(data.len() - start);
-    if runtime
-        .memory
-        .write_slice(runtime.cpu.ds, runtime.cpu.dx, &data[start..start + count])
-        .is_err()
-    {
-        return dos_error(runtime, DosError::InsufficientMemory);
-    }
-    if let Ok(entry) = runtime.handles.get_mut(handle) {
-        entry.position = start + count;
-    }
-    runtime.cpu.ax = count as u16;
-    dos_success(runtime)
 }
 
 fn write_handle(runtime: &mut Runtime) -> Result<(), Trap> {
@@ -400,37 +560,41 @@ fn write_handle(runtime: &mut Runtime) -> Result<(), Trap> {
     {
         return dos_error(runtime, DosError::InsufficientMemory);
     }
-    if matches!(handle, 1 | 2) {
-        for byte in bytes {
-            runtime.teletype(byte, DEFAULT_ATTRIBUTE);
-        }
-        runtime.cpu.ax = requested as u16;
-        return dos_success(runtime);
-    }
-    if handle <= 4 {
-        return dos_error(runtime, DosError::InvalidHandle);
-    }
     let descriptor = match runtime.handles.get(handle) {
         Ok(value) => value.clone(),
         Err(error) => return dos_error(runtime, error),
     };
-    if !descriptor.mode.can_write() {
-        return dos_error(runtime, DosError::AccessDenied);
+    match descriptor {
+        DosHandle::ConsoleInput => dos_error(runtime, DosError::AccessDenied),
+        DosHandle::ConsoleOutput => {
+            for byte in bytes {
+                runtime.teletype(byte, DEFAULT_ATTRIBUTE);
+            }
+            runtime.cpu.ax = requested as u16;
+            dos_success(runtime)
+        }
+        DosHandle::File {
+            path,
+            position,
+            mode,
+        } => {
+            if !mode.can_write() {
+                return dos_error(runtime, DosError::AccessDenied);
+            }
+            let written = match runtime
+                .drives
+                .write_file(&path, position, &bytes, requested == 0)
+            {
+                Ok(value) => value,
+                Err(error) => return dos_error(runtime, error),
+            };
+            if let Ok(DosHandle::File { position, .. }) = runtime.handles.get_mut(handle) {
+                *position = position.saturating_add(written);
+            }
+            runtime.cpu.ax = written as u16;
+            dos_success(runtime)
+        }
     }
-    let written = match runtime.drives.write_file(
-        &descriptor.path,
-        descriptor.position,
-        &bytes,
-        requested == 0,
-    ) {
-        Ok(value) => value,
-        Err(error) => return dos_error(runtime, error),
-    };
-    if let Ok(entry) = runtime.handles.get_mut(handle) {
-        entry.position = entry.position.saturating_add(written);
-    }
-    runtime.cpu.ax = written as u16;
-    dos_success(runtime)
 }
 
 fn seek_handle(runtime: &mut Runtime) -> Result<(), Trap> {
@@ -446,10 +610,18 @@ fn seek_handle(runtime: &mut Runtime) -> Result<(), Trap> {
         Ok(value) => value.clone(),
         Err(error) => return dos_error(runtime, error),
     };
+    let DosHandle::File {
+        path,
+        position,
+        mode: _,
+    } = descriptor
+    else {
+        return dos_error(runtime, DosError::InvalidHandle);
+    };
     let base = match origin {
         0 => 0i64,
-        1 => descriptor.position.min(i64::MAX as usize) as i64,
-        2 => match runtime.drives.file_len(&descriptor.path) {
+        1 => position.min(i64::MAX as usize) as i64,
+        2 => match runtime.drives.file_len(&path) {
             Ok(value) => value.min(i64::MAX as usize) as i64,
             Err(error) => return dos_error(runtime, error),
         },
@@ -461,12 +633,67 @@ fn seek_handle(runtime: &mut Runtime) -> Result<(), Trap> {
     if new_position < 0 {
         return dos_error(runtime, DosError::AccessDenied);
     }
-    if let Ok(entry) = runtime.handles.get_mut(handle) {
-        entry.position = new_position as usize;
+    if let Ok(DosHandle::File { position, .. }) = runtime.handles.get_mut(handle) {
+        *position = new_position as usize;
     }
     let output = new_position as u32;
     runtime.cpu.dx = (output >> 16) as u16;
     runtime.cpu.ax = output as u16;
+    dos_success(runtime)
+}
+
+fn duplicate_handle(runtime: &mut Runtime) -> Result<(), Trap> {
+    match runtime.handles.duplicate(runtime.cpu.bx) {
+        Ok(handle) => {
+            runtime.cpu.ax = handle;
+            dos_success(runtime)
+        }
+        Err(error) => dos_error(runtime, error),
+    }
+}
+
+fn force_duplicate_handle(runtime: &mut Runtime) -> Result<(), Trap> {
+    match runtime
+        .handles
+        .force_duplicate(runtime.cpu.bx, runtime.cpu.cx)
+    {
+        Ok(()) => dos_success(runtime),
+        Err(error) => dos_error(runtime, error),
+    }
+}
+
+fn ioctl(runtime: &mut Runtime) -> Result<(), Trap> {
+    match runtime.cpu.al() {
+        0x00 => {
+            let descriptor = match runtime.handles.get(runtime.cpu.bx) {
+                Ok(value) => value,
+                Err(error) => return dos_error(runtime, error),
+            };
+            runtime.cpu.dx = match descriptor {
+                DosHandle::ConsoleInput | DosHandle::ConsoleOutput => 0x0080,
+                DosHandle::File { .. } => 0,
+            };
+            dos_success(runtime)
+        }
+        _ => dos_error(runtime, DosError::InvalidFunction),
+    }
+}
+
+fn get_date(runtime: &mut Runtime) -> Result<(), Trap> {
+    let date = runtime.guest_date();
+    runtime.cpu.set_al(date.weekday);
+    runtime.cpu.cx = date.year;
+    runtime.cpu.set_dh(date.month);
+    runtime.cpu.set_dl(date.day);
+    dos_success(runtime)
+}
+
+fn get_time(runtime: &mut Runtime) -> Result<(), Trap> {
+    let time = runtime.guest_time();
+    runtime.cpu.set_ch(time.hour);
+    runtime.cpu.set_cl(time.minute);
+    runtime.cpu.set_dh(time.second);
+    runtime.cpu.set_dl(time.hundredths);
     dos_success(runtime)
 }
 
@@ -604,7 +831,7 @@ fn rename_file(runtime: &mut Runtime) -> Result<(), Trap> {
 #[cfg(test)]
 mod tests {
     use super::dispatch;
-    use crate::{CpuState, DosDrive, Runtime, PSP_SEGMENT};
+    use crate::{CpuState, DosDrive, DosError, Runtime, PSP_SEGMENT};
 
     fn path(runtime: &mut Runtime, value: &[u8]) {
         runtime
@@ -669,6 +896,24 @@ mod tests {
     }
 
     #[test]
+    fn console_handle_reads_block_until_a_guest_key_arrives() {
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        runtime.cpu.bx = 0;
+        runtime.cpu.cx = 1;
+        runtime.cpu.dx = 0x0340;
+        runtime.cpu.ds = PSP_SEGMENT;
+        runtime.cpu.set_ah(0x3f);
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_eq!(runtime.state(), &crate::GuestState::WaitingForInput);
+
+        runtime.inject_ascii(b'Q');
+        assert_eq!(runtime.memory.read_u8(PSP_SEGMENT, 0x0340), b'Q');
+        assert_eq!(runtime.cpu.ax, 1);
+        assert_eq!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(runtime.state(), &crate::GuestState::Running);
+    }
+
+    #[test]
     fn drive_selection_and_find_first_write_a_dta_result() {
         let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
         runtime
@@ -697,5 +942,127 @@ mod tests {
         dispatch(&mut runtime, 0x21).unwrap();
         assert_ne!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
         assert_eq!(runtime.cpu.ax, 18);
+    }
+
+    #[test]
+    fn duplicated_stdout_can_be_redirected_and_restored() {
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        path(&mut runtime, b"C:\\OUT.TXT");
+        runtime.cpu.ax = 0x3c00;
+        runtime.cpu.cx = 0;
+        dispatch(&mut runtime, 0x21).unwrap();
+        let output = runtime.cpu.ax;
+
+        runtime.cpu.ax = 0x4500;
+        runtime.cpu.bx = 1;
+        dispatch(&mut runtime, 0x21).unwrap();
+        let saved_stdout = runtime.cpu.ax;
+
+        runtime.cpu.ax = 0x4600;
+        runtime.cpu.bx = output;
+        runtime.cpu.cx = 1;
+        dispatch(&mut runtime, 0x21).unwrap();
+
+        runtime
+            .memory
+            .write_slice(PSP_SEGMENT, 0x0300, b"guest")
+            .unwrap();
+        runtime.cpu.ax = 0x4000;
+        runtime.cpu.bx = 1;
+        runtime.cpu.cx = 5;
+        runtime.cpu.dx = 0x0300;
+        runtime.cpu.ds = PSP_SEGMENT;
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_eq!(runtime.cpu.ax, 5);
+
+        runtime.cpu.ax = 0x4600;
+        runtime.cpu.bx = saved_stdout;
+        runtime.cpu.cx = 1;
+        dispatch(&mut runtime, 0x21).unwrap();
+        runtime.cpu.set_ah(0x3e);
+        runtime.cpu.bx = saved_stdout;
+        dispatch(&mut runtime, 0x21).unwrap();
+        runtime.cpu.set_ah(0x3e);
+        runtime.cpu.bx = output;
+        dispatch(&mut runtime, 0x21).unwrap();
+
+        let file = runtime.drives().parse_path(b"C:\\OUT.TXT").unwrap();
+        assert_eq!(runtime.drives().read_file(&file).unwrap(), b"guest");
+
+        runtime
+            .memory
+            .write_slice(PSP_SEGMENT, 0x0300, b"!")
+            .unwrap();
+        runtime.cpu.ax = 0x4000;
+        runtime.cpu.bx = 1;
+        runtime.cpu.cx = 1;
+        runtime.cpu.dx = 0x0300;
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_eq!(runtime.cell(0, 0).character, b'!');
+    }
+
+    #[test]
+    fn ioctl_reports_console_handles_as_character_devices() {
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        runtime.cpu.ax = 0x4400;
+        runtime.cpu.bx = 1;
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_eq!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(runtime.cpu.dx, 0x0080);
+
+        path(&mut runtime, b"C:\\DATA.TXT");
+        runtime.cpu.ax = 0x3c00;
+        runtime.cpu.cx = 0;
+        dispatch(&mut runtime, 0x21).unwrap();
+        let file = runtime.cpu.ax;
+        runtime.cpu.ax = 0x4400;
+        runtime.cpu.bx = file;
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_eq!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(runtime.cpu.dx, 0);
+    }
+
+    #[test]
+    fn unsupported_lfn_multiplex_returns_a_dos_error_without_trapping() {
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        runtime.cpu.ax = 0x7100;
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_ne!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(runtime.cpu.ax, DosError::InvalidFunction.code());
+    }
+
+    #[test]
+    fn extended_error_query_is_safe_and_reports_no_pending_error() {
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        runtime.cpu.ax = 0x5900;
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_eq!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!((runtime.cpu.ax, runtime.cpu.bx, runtime.cpu.cx), (0, 0, 0));
+    }
+
+    #[test]
+    fn date_and_time_are_guest_visible_but_not_settable() {
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        runtime.set_guest_unix_time(86_400 + 3_723);
+
+        runtime.cpu.set_ah(0x2a);
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_eq!(
+            (runtime.cpu.cx, runtime.cpu.dh(), runtime.cpu.dl()),
+            (1970, 1, 2)
+        );
+        assert_eq!(runtime.cpu.al(), 5);
+
+        runtime.cpu.set_ah(0x2c);
+        dispatch(&mut runtime, 0x21).unwrap();
+        assert_eq!(
+            (
+                runtime.cpu.ch(),
+                runtime.cpu.cl(),
+                runtime.cpu.dh(),
+                runtime.cpu.dl()
+            ),
+            (1, 2, 3, 0)
+        );
     }
 }

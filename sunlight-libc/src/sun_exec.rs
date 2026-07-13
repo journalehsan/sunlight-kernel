@@ -18,6 +18,7 @@ const MAX_ARG_LEN: usize = 96;
 const MAX_MANIFEST_BYTES: usize = 8192;
 const MAX_BUNDLE_PATH: usize = MAX_PATH - 14;
 const CHRONOS_RUNTIME_PATH: &[u8] = b"/bin/sunlight-chronos";
+const CHRONOS_BUNDLE_ARG_COUNT: usize = 8;
 
 /// Runtime selected by a validated external application bundle.  Native
 /// applications keep using the established executable resolver.
@@ -109,7 +110,7 @@ pub fn launch(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
     if is_bundle_path(request.command) {
         return launch_chronos_bundle(request);
     }
-    if is_com_path(request.command) {
+    if is_com_path(request.command) || is_mz_path(request.command) {
         return launch_direct_com(request);
     }
 
@@ -120,6 +121,12 @@ pub fn launch(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
             return Err(LaunchError::AppNotFound);
         }
     };
+    if is_bundle_path(resolved.path()) {
+        return launch_chronos_bundle(LaunchRequest {
+            command: resolved.path(),
+            ..request
+        });
+    }
     launch_trace::log_phase_now(request.trace, resolved.subject(), "app_resolved", None);
 
     if !is_executable(resolved.path()) {
@@ -187,15 +194,16 @@ fn launch_chronos_bundle(request: LaunchRequest<'_>) -> Result<LaunchResult, Lau
     let entry_len = join_bundle_program(&mut entry, bundle, descriptor.entry)?;
     let mut document_root = [0u8; MAX_PATH];
     let document_len = user_documents_path(&mut document_root)?;
-    let mut args: [&[u8]; MAX_ARGS - 1] = [&[]; MAX_ARGS - 1];
-    args[0] = b"--chronos-bundle";
-    args[1] = &bundle[..];
-    args[2] = b"--chronos-entry";
-    args[3] = &entry[..entry_len];
-    args[4] = b"--chronos-app-id";
-    args[5] = descriptor.app_id;
-    args[6] = b"--chronos-title";
-    args[7] = descriptor.display_name;
+    let args: [&[u8]; CHRONOS_BUNDLE_ARG_COUNT] = [
+        b"--chronos-bundle",
+        bundle,
+        b"--chronos-entry",
+        &entry[..entry_len],
+        b"--chronos-app-id",
+        descriptor.app_id,
+        b"--chronos-title",
+        descriptor.display_name,
+    ];
     // The document scope policy is sent as one extra bounded argument when
     // writable.  Chronos defaults to no D: access if it is absent.
     let document_args: [&[u8]; 2] = if descriptor.documents_read_write {
@@ -375,7 +383,7 @@ fn read_bundle_manifest(bundle: &[u8]) -> Result<[u8; MAX_MANIFEST_BYTES], Launc
 
 fn normalize_bundle_path(command: &[u8]) -> Result<[u8; MAX_PATH], LaunchError> {
     let path = normalize_existing_path(command)?;
-    if !is_bundle_path(&path) {
+    if !is_bundle_path(&path[..command.len()]) {
         return Err(LaunchError::InvalidBundle);
     }
     Ok(path)
@@ -401,6 +409,19 @@ fn is_bundle_path(path: &[u8]) -> bool {
 
 fn is_com_path(path: &[u8]) -> bool {
     path.len() >= 4 && path[path.len() - 4..].eq_ignore_ascii_case(b".com")
+}
+
+fn is_mz_path(path: &[u8]) -> bool {
+    if path.len() < 4 || !path[path.len() - 4..].eq_ignore_ascii_case(b".exe") {
+        return false;
+    }
+    let Ok(fd) = libc::open(path) else {
+        return false;
+    };
+    let mut magic = [0u8; 2];
+    let read = libc::read(fd, &mut magic).unwrap_or(0);
+    let _ = libc::close(fd);
+    read == magic.len() && matches!(&magic, b"MZ" | b"ZM")
 }
 
 fn valid_bundle_relative(value: &[u8]) -> bool {
@@ -439,7 +460,11 @@ fn join_bundle_program(
     let mut program = [0u8; MAX_PATH];
     let program_len =
         join_path(&mut program, bundle, b"Program").ok_or(LaunchError::InvalidBundle)?;
-    join_bundle_file(out, &program[..program_len], &dos_entry[3..])
+    let mut index = 3usize;
+    while index < dos_entry.len() && dos_entry[index] == b'\\' {
+        index += 1;
+    }
+    join_bundle_file(out, &program[..program_len], &dos_entry[index..])
 }
 
 fn join_bundle_file(
@@ -572,7 +597,9 @@ fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
     match command {
         b"calculator" | b"calc" => Some(b"/bin/calculator"),
         b"terminal" | b"term" | b"sunlight-terminal" => Some(b"/bin/sunlight-terminal"),
-        b"chronos" | b"sunlight-chronos" => Some(b"/bin/sunlight-chronos"),
+        b"chronos" | b"sunlight-chronos" | b"sunlight-dos-terminal" => {
+            Some(b"/Applications/ChronosDosShell.sunapp")
+        }
         b"settings" | b"control-panel" | b"preferences" => Some(b"/bin/control-panel"),
         b"files" | b"file-manager" | b"sunlight-files" => Some(b"/bin/sunlight-files"),
         b"tasks" | b"task-manager" | b"sunlight-tasks" => Some(b"/bin/sunlight-tasks"),
@@ -680,17 +707,50 @@ pub fn next_cli_trace(source: LaunchSource) -> LaunchTrace {
 
 #[cfg(test)]
 mod tests {
-    use super::map_app_id;
+    use super::{
+        is_bundle_path, join_bundle_program, map_app_id, CHRONOS_BUNDLE_ARG_COUNT, MAX_ARGS,
+        MAX_PATH,
+    };
 
     #[test]
-    fn chronos_aliases_resolve_to_the_native_application() {
+    fn chronos_aliases_resolve_to_the_dos_shell_bundle() {
         assert_eq!(
             map_app_id(b"chronos"),
-            Some(b"/bin/sunlight-chronos".as_slice())
+            Some(b"/Applications/ChronosDosShell.sunapp".as_slice())
         );
         assert_eq!(
             map_app_id(b"sunlight-chronos"),
-            Some(b"/bin/sunlight-chronos".as_slice())
+            Some(b"/Applications/ChronosDosShell.sunapp".as_slice())
         );
+    }
+
+    #[test]
+    fn dos_bundle_entry_collapses_manifest_escaped_root_separators() {
+        let mut path = [0u8; MAX_PATH];
+        let length = join_bundle_program(
+            &mut path,
+            b"/Applications/ChronosDosShell.sunapp",
+            b"C:\\\\SUNSH.EXE",
+        )
+        .unwrap();
+        assert_eq!(
+            &path[..length],
+            b"/Applications/ChronosDosShell.sunapp/Program/SUNSH.EXE"
+        );
+    }
+
+    #[test]
+    fn bundle_detection_uses_the_populated_path_slice() {
+        let command = b"/Applications/ChronosDosShell.sunapp";
+        let mut path = [0u8; MAX_PATH];
+        path[..command.len()].copy_from_slice(command);
+
+        assert!(is_bundle_path(&path[..command.len()]));
+        assert!(!is_bundle_path(&path));
+    }
+
+    #[test]
+    fn chronos_bundle_arguments_fit_with_documents_and_launch_trace() {
+        assert!(CHRONOS_BUNDLE_ARG_COUNT + 2 + 2 <= MAX_ARGS);
     }
 }

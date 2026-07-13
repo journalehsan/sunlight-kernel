@@ -111,6 +111,64 @@ both `/sbin/sunlight-clipd` and `/bin/sunlight-clip`, so it needs one package
 build line, two embedded binaries, two spawn resolver arms, a sunlightd unit
 for the daemon, and a RamFS stub for the CLI.
 
+## Chronos DOS bundles
+
+Chronos guest applications are not native ELF binaries. A `.sunapp` bundle
+contains a DOS `.COM` or real-mode MZ `.EXE` under `Program/`, and the native
+`sunlight-chronos` adapter loads it as interpreted guest code. Do **not** add a
+guest executable to `kernel/src/process/spawn.rs`.
+
+The default DOS terminal is
+`ChronosDosShell.sunapp/Program/SUNSH.EXE`. Its Pascal source is
+`guest/sunshell/sunshell.pas`; it is a 16-bit i8086 MS-DOS MZ executable.
+
+To make a bundled Chronos application available in a normal SunlightOS boot:
+
+1. Add the bundle directories and every required file to
+   `sunlight-fs/src/ramfs.rs` using `include_bytes!`. The bundle root must be
+   mounted at `/Applications/<Name>.sunapp`.
+2. Ensure `Manifest.toml` has `runtime.type = "chronos"` and a `C:\` entry
+   pointing at a file below `Program/`.
+3. Route the launcher command or start-menu entry to the bundle path, for
+   example `/Applications/ChronosDosShell.sunapp`. `sun-exec` validates the
+   manifest and launches `/bin/sunlight-chronos` with the scoped bundle roots.
+4. Build the native `sunlight-chronos` adapter before the kernel; it remains a
+   normal embedded ELF binary.
+
+The Chronos DOS Terminal is launched from the desktop/start menu through the
+`sunlight-dos-terminal` alias. It displays the guest-side `CMD C:\>` prompt,
+not a host-native command interpreter.
+
+### Rebuilding `SUNSH.EXE`
+
+The checked-in MZ executable lets ordinary Rust builds run without Free Pascal.
+When the i8086 cross-compiler and its matching MS-DOS RTL are installed, rebuild
+the guest asset with:
+
+```sh
+PPC8086=/path/to/ppc8086 \
+FPC_I8086_RTL=/path/to/rtl/units/msdos \
+./guest/sunshell/build.sh
+```
+
+The deterministic compiler command is:
+
+```sh
+ppc8086 -Tmsdos -Pi8086 -Mtp -WmLarge -Wh -Xs -O1 \
+  -Fu/path/to/rtl/units/msdos -FD/usr/bin -XP \
+  -oChronosDosShell.sunapp/Program/SUNSH.EXE \
+  guest/sunshell/sunshell.pas
+```
+
+`./tools/runs.sh --build` checks `PPC8086` and `FPC_I8086_RTL`: when both are
+set it rebuilds `SUNSH.EXE` before compiling the initramfs; otherwise it uses
+the checked-in executable and continues normally. After boot, open **Sunlight
+DOS Terminal** from the Compatibility section or run:
+
+```text
+sun-exec /Applications/ChronosDosShell.sunapp
+```
+
 ## Worked example: the three "not found" binaries
 
 `nicectl`, `capabilityctl`, and `runas` all returned "not found" because they
