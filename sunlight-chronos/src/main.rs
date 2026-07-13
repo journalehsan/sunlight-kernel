@@ -3,26 +3,29 @@
 
 extern crate alloc;
 
-use alloc::string::String;
 #[cfg(not(test))]
-use alloc::{format, vec::Vec};
+use alloc::format;
+use alloc::{string::String, vec, vec::Vec};
 
 #[cfg(not(test))]
 use core::alloc::{GlobalAlloc, Layout};
 
 use chronos_core::{
-    display_char, translate_key_press, BiosKey, GuestState, HostKeyEvent, LoaderError, MzError,
-    Runtime, UnsupportedExecutable, CHRONOS_INTERACTIVE_COM,
+    display_char, translate_key_press, BiosKey, GuestState, GuestVideoMode, HostKeyEvent,
+    MouseViewport, Rgb8, Runtime, CHRONOS_INTERACTIVE_COM, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT,
+    VGA_WIDTH,
 };
 #[cfg(not(test))]
-use chronos_core::{DosDrive, DosEntry};
+use chronos_core::{DosDrive, DosEntry, LoaderError, MzError, UnsupportedExecutable};
 use sun_font::{draw_text, measure_text, FontRole, TextStyle};
-use sunlight_ipc::{debug_log, get_time_utc, monotonic_millis};
+use sunlight_ipc::{debug_log, monotonic_millis};
 #[cfg(not(test))]
-use sunlight_ipc::{process_yield, ProcessExit};
+use sunlight_ipc::{get_time_utc, process_yield, ProcessExit};
 #[cfg(not(test))]
 use sunlight_libc::{crt0, env, O_CREAT, O_TRUNC, O_WRONLY};
-use sunlight_ui::{widgets::Panel, App, Canvas, Color, Event, Rect, Theme};
+use sunlight_ui::{
+    set_client_cursor, widgets::Panel, App, Canvas, Color, CursorShape, Event, Rect, Theme,
+};
 #[cfg(not(test))]
 use sunlight_ui::{Window, WindowConfig, WindowDecoration};
 
@@ -34,7 +37,10 @@ const PAD: i32 = 18;
 const SURFACE_INSET: i32 = 6;
 const DOS_CELL_W: i32 = 9;
 const DOS_CELL_H: i32 = 16;
-const INSTRUCTIONS_PER_TICK: usize = 128;
+const INSTRUCTIONS_PER_TICK: usize = 2048;
+const STARTUP_INSTRUCTION_BUDGET: usize = 32 * 1024;
+const RUNNING_PRESENT_INTERVAL_MS: u64 = 16;
+const TEXT_PRESENT_INSTRUCTION_QUANTUM: usize = 32 * 1024;
 const DOS_SURFACE: Color = Color::rgb(12, 20, 37);
 const DOS_CURSOR: Color = Color::rgb(255, 181, 71);
 #[cfg(not(test))]
@@ -97,6 +103,20 @@ struct ChronosApp {
     status_len: usize,
     trap_logged: bool,
     cursor_visible: bool,
+    graphics_cache: Vec<Rgb8>,
+    converted_framebuffer_generation: u64,
+    converted_palette_generation: u64,
+    converted_video_mode_generation: u64,
+    framebuffer_conversions: u64,
+    last_text_present_ms: u64,
+    text_present_pending: bool,
+    text_instructions_since_present: usize,
+    last_graphics_present_ms: u64,
+    graphics_present_pending: bool,
+    graphics_viewport: MouseViewport,
+    focused: bool,
+    old_guest_cursor_rect: Option<Rect>,
+    new_guest_cursor_rect: Option<Rect>,
 }
 
 impl ChronosApp {
@@ -113,6 +133,20 @@ impl ChronosApp {
             status_len: 0,
             trap_logged: false,
             cursor_visible: true,
+            graphics_cache: vec![Rgb8::default(); VGA_FRAMEBUFFER_BYTES],
+            converted_framebuffer_generation: u64::MAX,
+            converted_palette_generation: u64::MAX,
+            converted_video_mode_generation: u64::MAX,
+            framebuffer_conversions: 0,
+            last_text_present_ms: 0,
+            text_present_pending: false,
+            text_instructions_since_present: 0,
+            last_graphics_present_ms: 0,
+            graphics_present_pending: false,
+            graphics_viewport: default_graphics_viewport(),
+            focused: true,
+            old_guest_cursor_rect: None,
+            new_guest_cursor_rect: None,
         };
         app.set_status(b"Ready");
         app
@@ -148,6 +182,20 @@ impl ChronosApp {
             status_len: 0,
             trap_logged: false,
             cursor_visible: true,
+            graphics_cache: vec![Rgb8::default(); VGA_FRAMEBUFFER_BYTES],
+            converted_framebuffer_generation: u64::MAX,
+            converted_palette_generation: u64::MAX,
+            converted_video_mode_generation: u64::MAX,
+            framebuffer_conversions: 0,
+            last_text_present_ms: 0,
+            text_present_pending: false,
+            text_instructions_since_present: 0,
+            last_graphics_present_ms: 0,
+            graphics_present_pending: false,
+            graphics_viewport: default_graphics_viewport(),
+            focused: true,
+            old_guest_cursor_rect: None,
+            new_guest_cursor_rect: None,
         };
         app.set_status(load_error.as_ref().map_or(b"Ready", loader_status));
         app
@@ -201,6 +249,7 @@ impl ChronosApp {
         let y0 = surface.y + ((surface.h as i32 - 25 * DOS_CELL_H) / 2).max(0);
         draw_surface_cells(canvas, &self.runtime, x0, y0);
         if self.cursor_visible
+            && self.runtime.text_cursor_visible()
             && matches!(
                 self.runtime.state(),
                 GuestState::WaitingForInput | GuestState::Running
@@ -215,8 +264,112 @@ impl ChronosApp {
         }
     }
 
+    fn refresh_graphics_cache(&mut self) -> bool {
+        let generation = self.runtime.framebuffer_generation();
+        let palette_generation = self.runtime.palette_generation();
+        let mode_generation = self.runtime.video_mode_generation();
+        if generation == self.converted_framebuffer_generation
+            && palette_generation == self.converted_palette_generation
+            && mode_generation == self.converted_video_mode_generation
+        {
+            return false;
+        }
+        let mut dirty_rows = self.runtime.take_graphics_dirty_rows();
+        if palette_generation != self.converted_palette_generation
+            || mode_generation != self.converted_video_mode_generation
+        {
+            dirty_rows = [true; VGA_HEIGHT];
+        }
+        if !self
+            .runtime
+            .convert_graphics_rows(&dirty_rows, &mut self.graphics_cache)
+        {
+            return false;
+        }
+        self.converted_framebuffer_generation = generation;
+        self.converted_palette_generation = palette_generation;
+        self.converted_video_mode_generation = mode_generation;
+        self.framebuffer_conversions = self.framebuffer_conversions.wrapping_add(1);
+        true
+    }
+
+    fn draw_graphics_surface(&mut self, canvas: &mut Canvas, rect: Rect, theme: &Theme) {
+        self.refresh_graphics_cache();
+        canvas.fill_rect(rect, theme.panel_alt);
+        canvas.draw_rect(rect, theme.border);
+        let surface = rect.inset(SURFACE_INSET);
+        canvas.fill_rect(surface, DOS_SURFACE);
+        canvas.draw_rect(surface, dos_color(8));
+        let (viewport, scale) = graphics_viewport(surface);
+        self.graphics_viewport = MouseViewport::new(viewport.x, viewport.y, viewport.w, viewport.h);
+        draw_scaled_graphics(canvas, viewport, scale, &self.graphics_cache);
+        if self.focused && self.runtime.mouse().cursor_visible() {
+            draw_guest_mouse_cursor(
+                canvas,
+                viewport,
+                scale,
+                self.runtime.mouse().framebuffer_position(),
+            );
+        }
+    }
+
+    fn guest_cursor_rect(&self) -> Option<Rect> {
+        if !self.focused
+            || self.runtime.video_mode() != GuestVideoMode::Vga320x200x256
+            || !self.runtime.mouse().cursor_visible()
+            || self.graphics_viewport.width == 0
+            || self.graphics_viewport.height == 0
+        {
+            return None;
+        }
+        let scale = (self.graphics_viewport.width / VGA_WIDTH as u32)
+            .min(self.graphics_viewport.height / VGA_HEIGHT as u32)
+            .max(1);
+        let (x, y) = self.runtime.mouse().framebuffer_position();
+        Some(Rect::new(
+            self.graphics_viewport.x + i32::from(x) * scale as i32,
+            self.graphics_viewport.y + i32::from(y) * scale as i32,
+            16 * scale,
+            16 * scale,
+        ))
+    }
+
+    fn record_cursor_damage(&mut self, old: Option<Rect>) -> bool {
+        let new = self.guest_cursor_rect();
+        let changed = old != new;
+        if changed {
+            self.old_guest_cursor_rect = old;
+            self.new_guest_cursor_rect = new;
+        }
+        changed
+    }
+
+    fn handle_mouse_motion(&mut self, x: i32, y: i32) -> bool {
+        let old = self.guest_cursor_rect();
+        self.runtime
+            .inject_mouse_motion(self.graphics_viewport, x, y);
+        if !self.runtime.mouse().pointer_inside() {
+            // Sunlight's current compositor has no region-scoped hidden
+            // cursor, so Chronos deliberately keeps the safe host pointer.
+            set_client_cursor(CursorShape::Pointer);
+        }
+        self.record_cursor_damage(old)
+    }
+
+    fn handle_mouse_button(&mut self, x: i32, y: i32, button: u8, pressed: bool) -> bool {
+        let old = self.guest_cursor_rect();
+        self.runtime
+            .inject_mouse_button(self.graphics_viewport, x, y, button, pressed);
+        self.record_cursor_damage(old)
+    }
+
     fn draw_status_bar(&self, canvas: &mut Canvas, theme: &Theme) {
-        let rect = Rect::new(0, WIN_H as i32 - FOOTER_H as i32, WIN_W, FOOTER_H);
+        let rect = Rect::new(
+            0,
+            canvas.height.saturating_sub(FOOTER_H) as i32,
+            canvas.width,
+            FOOTER_H.min(canvas.height),
+        );
         let small = FontRole::UiSmall;
         canvas.fill_rect(rect, theme.panel_alt);
         canvas.hbar(rect.x, rect.y, rect.w, 1, theme.border);
@@ -239,7 +392,10 @@ impl ChronosApp {
             &TextStyle::new(small, theme.text),
         );
 
-        let runtime_hint = "INT 16h / B8000";
+        let runtime_hint = match self.runtime.video_mode() {
+            GuestVideoMode::Text80x25Color => "INT 16h / B8000",
+            GuestVideoMode::Vga320x200x256 => "A0000 / Indexed8",
+        };
         let hint_size = measure_text(runtime_hint, small);
         draw_text(
             canvas,
@@ -248,6 +404,22 @@ impl ChronosApp {
             text_y,
             &TextStyle::new(small, theme.text_dim),
         );
+    }
+
+    /// Native pointer traffic can be continuous, especially with high-rate
+    /// devices. Advance one ordinary bounded slice after every delivered
+    /// event so motion cannot starve shell startup, keyboard handling, or a
+    /// polling graphics guest waiting to observe the new mouse state.
+    fn advance_after_native_event(&mut self, event_changed: bool) -> bool {
+        let guest_changed = if matches!(
+            self.runtime.state(),
+            GuestState::Ready | GuestState::Running
+        ) {
+            self.update(Event::Tick)
+        } else {
+            false
+        };
+        event_changed | guest_changed
     }
 }
 
@@ -281,8 +453,10 @@ fn log_loader_error(error: &LoaderError) {
 
 impl App for ChronosApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
-        Panel::new(Rect::new(0, 0, WIN_W, HEADER_H)).draw(canvas, theme);
+        let width = canvas.width;
+        let height = canvas.height;
+        canvas.fill_rect(Rect::new(0, 0, width, height), theme.bg);
+        Panel::new(Rect::new(0, 0, width, HEADER_H.min(height))).draw(canvas, theme);
         draw_text(
             canvas,
             self.title.as_str(),
@@ -292,29 +466,42 @@ impl App for ChronosApp {
         );
         draw_text(
             canvas,
-            "16-bit real-mode guest",
+            match self.runtime.video_mode() {
+                GuestVideoMode::Text80x25Color => "16-bit real-mode guest",
+                GuestVideoMode::Vga320x200x256 => "VGA 13h 320x200 - guest framebuffer",
+            },
             PAD,
             25,
             &TextStyle::new(FontRole::UiSmall, theme.text_dim),
         );
 
-        let text_rect = Rect::new(
+        let content_height = height
+            .saturating_sub(HEADER_H)
+            .saturating_sub(FOOTER_H)
+            .saturating_sub(PAD as u32 * 2);
+        let surface_rect = Rect::new(
             PAD,
             HEADER_H as i32 + PAD,
-            WIN_W - (PAD as u32 * 2),
-            WIN_H - HEADER_H - FOOTER_H - PAD as u32 * 2,
+            width.saturating_sub(PAD as u32 * 2),
+            content_height,
         );
-        self.draw_text_surface(canvas, text_rect, theme);
+        match self.runtime.video_mode() {
+            GuestVideoMode::Text80x25Color => self.draw_text_surface(canvas, surface_rect, theme),
+            GuestVideoMode::Vga320x200x256 => {
+                self.draw_graphics_surface(canvas, surface_rect, theme)
+            }
+        }
         self.draw_status_bar(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Tick => {
+                let old_guest_cursor = self.guest_cursor_rect();
                 let cursor_active = matches!(
                     self.runtime.state(),
                     GuestState::WaitingForInput | GuestState::Running
-                );
+                ) && self.runtime.text_cursor_visible();
                 let cursor_visible = cursor_active && (monotonic_millis() / 500) % 2 == 0;
                 let cursor_changed = self.cursor_visible != cursor_visible;
                 self.cursor_visible = cursor_visible;
@@ -322,8 +509,88 @@ impl App for ChronosApp {
                     self.runtime.state(),
                     GuestState::Ready | GuestState::Running
                 ) {
+                    let mode_before = self.runtime.video_mode();
                     let text_or_state_changed = self.runtime.run_slice(INSTRUCTIONS_PER_TICK);
-                    let status_changed = self.update_status_from_runtime();
+                    #[cfg(debug_assertions)]
+                    if self.runtime.dac_entries_committed_last_slice() != 0 {
+                        debug_log("[CHRONOS] DAC entries changed this slice: ");
+                        debug_log_u32(self.runtime.dac_entries_committed_last_slice());
+                        debug_log("; palette generation ");
+                        debug_log_u32(self.runtime.palette_generation().min(u32::MAX as u64) as u32);
+                        debug_log("\n");
+                    }
+                    if self.runtime.video_mode() != mode_before {
+                        log_video_state(&self.runtime);
+                    }
+                    let child_failed = if let Some(trap) = self.runtime.take_recovered_child_trap()
+                    {
+                        debug_log("[CHRONOS] child failed; text mode restored: ");
+                        debug_log(trap.summary());
+                        debug_log("\n");
+                        true
+                    } else {
+                        false
+                    };
+                    let status_changed = if child_failed {
+                        self.set_status(b"Child failed; shell resumed")
+                    } else {
+                        self.update_status_from_runtime()
+                    };
+                    if text_or_state_changed {
+                        match self.runtime.video_mode() {
+                            GuestVideoMode::Text80x25Color => self.text_present_pending = true,
+                            GuestVideoMode::Vga320x200x256 => self.graphics_present_pending = true,
+                        }
+                    }
+                    if self.runtime.video_mode() == GuestVideoMode::Text80x25Color
+                        && self.text_present_pending
+                    {
+                        self.text_instructions_since_present = self
+                            .text_instructions_since_present
+                            .saturating_add(INSTRUCTIONS_PER_TICK);
+                    }
+                    let now = monotonic_millis();
+                    let mode_changed = mode_before != self.runtime.video_mode();
+                    let guest_running = matches!(self.runtime.state(), GuestState::Running);
+                    let presentation_changed = match self.runtime.video_mode() {
+                        GuestVideoMode::Text80x25Color => {
+                            self.graphics_present_pending = false;
+                            if self.text_present_pending {
+                                let due = text_presentation_due(
+                                    &mut self.last_text_present_ms,
+                                    now,
+                                    mode_changed,
+                                    guest_running,
+                                    self.text_instructions_since_present,
+                                );
+                                if due {
+                                    self.text_present_pending = false;
+                                    self.text_instructions_since_present = 0;
+                                }
+                                due
+                            } else {
+                                false
+                            }
+                        }
+                        GuestVideoMode::Vga320x200x256 => {
+                            self.text_present_pending = false;
+                            self.text_instructions_since_present = 0;
+                            if self.graphics_present_pending {
+                                let due = running_presentation_due(
+                                    &mut self.last_graphics_present_ms,
+                                    now,
+                                    mode_changed,
+                                    guest_running,
+                                );
+                                if due {
+                                    self.graphics_present_pending = false;
+                                }
+                                due
+                            } else {
+                                false
+                            }
+                        }
+                    };
                     if matches!(self.runtime.state(), GuestState::Exited { .. }) && !self.persisted
                     {
                         self.persisted = true;
@@ -332,10 +599,48 @@ impl App for ChronosApp {
                             persist_drives(&self.runtime, storage);
                         }
                     }
-                    cursor_changed || text_or_state_changed || status_changed
+                    self.record_cursor_damage(old_guest_cursor)
+                        || cursor_changed
+                        || presentation_changed
+                        || status_changed
                 } else {
-                    cursor_changed
+                    self.record_cursor_damage(old_guest_cursor) || cursor_changed
                 }
+            }
+            Event::MouseMove { x, y } => {
+                let changed = self.handle_mouse_motion(x, y);
+                self.advance_after_native_event(changed)
+            }
+            Event::MouseDown { x, y, button } => {
+                let changed = self.handle_mouse_button(x, y, button, true);
+                self.advance_after_native_event(changed)
+            }
+            Event::MouseUp { x, y, button } => {
+                let changed = self.handle_mouse_button(x, y, button, false);
+                self.advance_after_native_event(changed)
+            }
+            Event::Click { x, y } => {
+                let changed = self.handle_mouse_button(x, y, 0, false);
+                self.advance_after_native_event(changed)
+            }
+            Event::FocusChanged { focused } => {
+                let old = self.guest_cursor_rect();
+                self.focused = focused;
+                self.runtime.mouse_focus_changed(focused);
+                set_client_cursor(CursorShape::Pointer);
+                let changed = self.record_cursor_damage(old);
+                self.advance_after_native_event(changed)
+            }
+            Event::PointerOwnership { owned, .. } => {
+                if !owned {
+                    if self.runtime.mouse().captured() {
+                        self.runtime.mouse_pointer_delivery_lost();
+                    } else {
+                        self.runtime.mouse_pointer_left();
+                    }
+                    set_client_cursor(CursorShape::Pointer);
+                }
+                self.advance_after_native_event(false)
             }
             Event::Key(ch)
                 if ch.is_ascii_graphic() || matches!(ch, ' ' | '\n' | '\r' | '\u{8}') =>
@@ -346,11 +651,12 @@ impl App for ChronosApp {
                     '\u{8}' => 0x08,
                     _ => ch as u8,
                 };
-                self.runtime.inject_key(BiosKey {
+                let input_changed = self.runtime.inject_key(BiosKey {
                     ascii,
                     scan_code: 0,
                 });
-                self.update_status_from_runtime()
+                let changed = input_changed | self.update_status_from_runtime();
+                self.advance_after_native_event(changed)
             }
             Event::KeyPress {
                 keycode,
@@ -369,15 +675,98 @@ impl App for ChronosApp {
                     alt,
                 });
                 if let Some(key) = key.filter(|key| key.ascii == 0 || key.ascii < 0x20) {
-                    self.runtime.inject_key(key);
-                    self.update_status_from_runtime()
+                    let input_changed = self.runtime.inject_key(key);
+                    let changed = input_changed | self.update_status_from_runtime();
+                    self.advance_after_native_event(changed)
                 } else {
-                    false
+                    self.advance_after_native_event(false)
                 }
             }
-            _ => false,
+            _ => self.advance_after_native_event(false),
         }
     }
+
+    fn on_ready(&mut self) -> bool {
+        if !matches!(
+            self.runtime.state(),
+            GuestState::Ready | GuestState::Running
+        ) {
+            return false;
+        }
+
+        // The window framework has already committed its first native frame.
+        // Give the guest one bounded startup burst before entering the normal
+        // event-poll loop so a text shell can reach its first BIOS/DOS input
+        // wait without exposing or becoming stranded on an intermediate
+        // banner frame. Blocking input and INT 28h both stop run_slice early.
+        let old_guest_cursor = self.guest_cursor_rect();
+        let mode_before = self.runtime.video_mode();
+        let runtime_changed = self.runtime.run_slice(STARTUP_INSTRUCTION_BUDGET);
+        if self.runtime.video_mode() != mode_before {
+            log_video_state(&self.runtime);
+        }
+        let child_failed = if let Some(trap) = self.runtime.take_recovered_child_trap() {
+            debug_log("[CHRONOS] startup child failed; text mode restored: ");
+            debug_log(trap.summary());
+            debug_log("\n");
+            true
+        } else {
+            false
+        };
+        let status_changed = if child_failed {
+            self.set_status(b"Child failed; shell resumed")
+        } else {
+            self.update_status_from_runtime()
+        };
+        if self.runtime.video_mode() == GuestVideoMode::Vga320x200x256 {
+            self.graphics_present_pending = false;
+        } else {
+            self.text_present_pending = false;
+            self.text_instructions_since_present = 0;
+        }
+        if matches!(self.runtime.state(), GuestState::Exited { .. }) && !self.persisted {
+            self.persisted = true;
+            #[cfg(not(test))]
+            if let Some(storage) = &self.storage {
+                persist_drives(&self.runtime, storage);
+            }
+        }
+        let cursor_changed = self.record_cursor_damage(old_guest_cursor);
+        runtime_changed || status_changed || cursor_changed
+    }
+
+    fn poll_timeout_ms(&self) -> u64 {
+        if self.runtime.cooperative_yielded_last_slice() {
+            return RUNNING_PRESENT_INTERVAL_MS;
+        }
+        if matches!(
+            self.runtime.state(),
+            GuestState::Ready | GuestState::Running
+        ) {
+            1
+        } else {
+            200
+        }
+    }
+}
+
+fn graphics_surface_rect(width: u32, height: u32) -> Rect {
+    let content_height = height
+        .saturating_sub(HEADER_H)
+        .saturating_sub(FOOTER_H)
+        .saturating_sub(PAD as u32 * 2);
+    Rect::new(
+        PAD,
+        HEADER_H as i32 + PAD,
+        width.saturating_sub(PAD as u32 * 2),
+        content_height,
+    )
+}
+
+fn default_graphics_viewport() -> MouseViewport {
+    let surface = graphics_surface_rect(WIN_W, WIN_H).inset(SURFACE_INSET);
+    let (viewport, _) = graphics_viewport(surface);
+    MouseViewport::new(viewport.x, viewport.y, viewport.w, viewport.h)
 }
 
 fn log_trap(trap: &chronos_core::Trap) {
@@ -428,6 +817,40 @@ fn log_trap(trap: &chronos_core::Trap) {
         length += 1;
         length += write_hex_u16(*offset, &mut line[length..]);
     }
+    if let chronos_core::Trap::UnsupportedIoPort {
+        operation,
+        port,
+        width,
+        value,
+        cs,
+        ip,
+        ..
+    } = trap
+    {
+        length += copy_bytes(
+            match operation {
+                chronos_core::IoOperation::Read => b" in port=".as_slice(),
+                chronos_core::IoOperation::Write => b" out port=".as_slice(),
+            },
+            &mut line[length..],
+        );
+        length += write_hex_u16(*port, &mut line[length..]);
+        length += copy_bytes(
+            match width {
+                chronos_core::IoWidth::Byte => b" width=8 cs:ip=".as_slice(),
+                chronos_core::IoWidth::Word => b" width=16 cs:ip=".as_slice(),
+            },
+            &mut line[length..],
+        );
+        length += write_hex_u16(*cs, &mut line[length..]);
+        line[length] = b':';
+        length += 1;
+        length += write_hex_u16(*ip, &mut line[length..]);
+        if let Some(value) = value {
+            length += copy_bytes(b" value=", &mut line[length..]);
+            length += write_hex_u16(*value, &mut line[length..]);
+        }
+    }
     line[length] = b'\n';
     length += 1;
 
@@ -442,7 +865,6 @@ fn copy_bytes(source: &[u8], destination: &mut [u8]) -> usize {
     length
 }
 
-#[cfg(not(test))]
 fn debug_log_u32(mut value: u32) {
     let mut buffer = [0u8; 10];
     let mut index = buffer.len();
@@ -456,6 +878,28 @@ fn debug_log_u32(mut value: u32) {
         value /= 10;
     }
     debug_log(core::str::from_utf8(&buffer[index..]).unwrap_or("0"));
+}
+
+fn log_video_state(runtime: &Runtime) {
+    match runtime.video_mode() {
+        GuestVideoMode::Text80x25Color => {
+            debug_log("[CHRONOS] Video mode: 03h; 80x25; framebuffer B8000\n");
+        }
+        GuestVideoMode::Vga320x200x256 => {
+            debug_log(
+                "[CHRONOS] Video mode: 13h; 320x200; framebuffer A000:0000; palette default VGA; dirty rows ",
+            );
+            let dirty = runtime.memory.graphics_dirty_rows();
+            let first = dirty.iter().position(|row| *row).unwrap_or(0);
+            let last = dirty.iter().rposition(|row| *row).unwrap_or(0);
+            debug_log_u32(first as u32);
+            debug_log("-");
+            debug_log_u32(last as u32);
+            debug_log("; generation ");
+            debug_log_u32(runtime.framebuffer_generation().min(u32::MAX as u64) as u32);
+            debug_log("\n");
+        }
+    }
 }
 
 fn write_hex_u16(value: u16, output: &mut [u8]) -> usize {
@@ -519,6 +963,114 @@ fn draw_surface_cells(canvas: &mut Canvas, runtime: &Runtime, x0: i32, y0: i32) 
                     y0 + row as i32 * DOS_CELL_H,
                     &TextStyle::new(FontRole::MonoRegular, foreground),
                 );
+            }
+        }
+    }
+}
+
+fn graphics_viewport(surface: Rect) -> (Rect, u32) {
+    let horizontal_scale = surface.w / VGA_WIDTH as u32;
+    let vertical_scale = surface.h / VGA_HEIGHT as u32;
+    let scale = horizontal_scale.min(vertical_scale).max(1);
+    let width = VGA_WIDTH as u32 * scale;
+    let height = VGA_HEIGHT as u32 * scale;
+    let x = surface.x + (surface.w as i32 - width as i32) / 2;
+    let y = surface.y + (surface.h as i32 - height as i32) / 2;
+    (Rect::new(x, y, width, height), scale)
+}
+
+fn running_presentation_due(
+    last_present_ms: &mut u64,
+    now_ms: u64,
+    mode_changed: bool,
+    guest_running: bool,
+) -> bool {
+    let due = mode_changed
+        || !guest_running
+        || now_ms.saturating_sub(*last_present_ms) >= RUNNING_PRESENT_INTERVAL_MS;
+    if due {
+        *last_present_ms = now_ms;
+    }
+    due
+}
+
+fn text_presentation_due(
+    last_present_ms: &mut u64,
+    now_ms: u64,
+    mode_changed: bool,
+    guest_running: bool,
+    instructions_since_present: usize,
+) -> bool {
+    let enough_work = instructions_since_present >= TEXT_PRESENT_INSTRUCTION_QUANTUM;
+    let enough_time = now_ms.saturating_sub(*last_present_ms) >= RUNNING_PRESENT_INTERVAL_MS;
+    let due = mode_changed || !guest_running || (enough_work && enough_time);
+    if due {
+        *last_present_ms = now_ms;
+    }
+    due
+}
+
+fn draw_scaled_graphics(canvas: &mut Canvas, viewport: Rect, scale: u32, pixels: &[Rgb8]) {
+    if pixels.len() < VGA_FRAMEBUFFER_BYTES || scale == 0 {
+        return;
+    }
+    for y in 0..VGA_HEIGHT {
+        for x in 0..VGA_WIDTH {
+            let rgb = pixels[y * VGA_WIDTH + x];
+            canvas.fill_rect(
+                Rect::new(
+                    viewport.x + x as i32 * scale as i32,
+                    viewport.y + y as i32 * scale as i32,
+                    scale,
+                    scale,
+                ),
+                Color::rgb(rgb.r, rgb.g, rgb.b),
+            );
+        }
+    }
+}
+
+/// A fixed-hotspot 16x16 classic DOS arrow. It is composited after indexed
+/// conversion and therefore never enters guest memory or either guest
+/// generation counter. Bit 15 is the leftmost pixel.
+const DOS_MOUSE_CURSOR_OUTLINE: [u16; 16] = [
+    0x8000, 0xc000, 0xe000, 0xf000, 0xf800, 0xfc00, 0xfe00, 0xff00, 0xff80, 0xfc00, 0xdc00, 0x8e00,
+    0x0600, 0x0700, 0x0300, 0x0000,
+];
+const DOS_MOUSE_CURSOR_FILL: [u16; 16] = [
+    0x0000, 0x4000, 0x6000, 0x7000, 0x7800, 0x7c00, 0x7e00, 0x7f00, 0x7c00, 0x5800, 0x0c00, 0x0400,
+    0x0200, 0x0200, 0x0000, 0x0000,
+];
+
+fn draw_guest_mouse_cursor(
+    canvas: &mut Canvas,
+    viewport: Rect,
+    scale: u32,
+    framebuffer_position: (u16, u16),
+) {
+    if scale == 0 {
+        return;
+    }
+    let origin_x = viewport.x + i32::from(framebuffer_position.0) * scale as i32;
+    let origin_y = viewport.y + i32::from(framebuffer_position.1) * scale as i32;
+    for (mask, color) in [
+        (&DOS_MOUSE_CURSOR_OUTLINE, Color::rgb(0, 0, 0)),
+        (&DOS_MOUSE_CURSOR_FILL, Color::rgb(255, 255, 255)),
+    ] {
+        for (row, bits) in mask.iter().copied().enumerate() {
+            for column in 0..16 {
+                if bits & (0x8000 >> column) == 0 {
+                    continue;
+                }
+                let pixel = Rect::new(
+                    origin_x + column * scale as i32,
+                    origin_y + row as i32 * scale as i32,
+                    scale,
+                    scale,
+                );
+                if let Some(clipped) = pixel.intersect(viewport) {
+                    canvas.fill_rect(clipped, color);
+                }
             }
         }
     }
@@ -825,10 +1377,14 @@ fn parent_path(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{dos_color, ChronosApp, DOS_CELL_W, DOS_SURFACE};
-    use chronos_core::{BiosKey, GuestState};
+    use super::{
+        dos_color, draw_scaled_graphics, graphics_viewport, running_presentation_due, ChronosApp,
+        DOS_CELL_W, DOS_SURFACE, WIN_H, WIN_W,
+    };
+    use alloc::{format, vec};
+    use chronos_core::{BiosKey, DosDrive, GuestState, GuestVideoMode, Rgb8, Runtime};
     use sun_font::{measure_text, FontRole};
-    use sunlight_ui::{App, Event};
+    use sunlight_ui::{App, Canvas, Color, Event, Rect, Theme};
 
     #[test]
     fn status_text_uses_the_precise_waiting_state() {
@@ -839,6 +1395,151 @@ mod tests {
         assert!(app.update_status_from_runtime());
         assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
         assert_eq!(app.status_text(), "Waiting for Input");
+    }
+
+    #[test]
+    fn native_tick_loop_reaches_and_renders_the_bundled_shell_prompt() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let autoexec = include_bytes!("../../ChronosDosShell.sunapp/Program/AUTOEXEC.BAT");
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_program(shell, b"").unwrap();
+        app.runtime
+            .set_application_id(b"org.sunlight.chronos.shell");
+        app.runtime.set_executable_path(b"C:\\SUNSH.EXE");
+        app.runtime
+            .drives_mut()
+            .add_base_file(DosDrive::C, "AUTOEXEC.BAT", autoexec.to_vec())
+            .unwrap();
+
+        assert!(app.on_ready());
+
+        assert_eq!(
+            app.runtime.state(),
+            &GuestState::WaitingForInput,
+            "cpu={:?}, cursor=({}, {})",
+            app.runtime.cpu,
+            app.runtime.cursor_column(),
+            app.runtime.cursor_row()
+        );
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| app.runtime.cell(index % 80, index / 80).character);
+        assert!(text
+            .windows(b"CMD C:\\>".len())
+            .any(|window| window == b"CMD C:\\>"));
+
+        let mut framebuffer = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut canvas = Canvas::new(&mut framebuffer, WIN_W, WIN_W, WIN_H);
+        app.view(&mut canvas, &Theme::sunlight_dark());
+        let surface_color = DOS_SURFACE.0;
+        assert!(framebuffer.iter().any(|pixel| *pixel != surface_color));
+    }
+
+    #[test]
+    fn native_startup_burst_stops_at_the_first_cooperative_idle_hint() {
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_com(&[
+            0xcd, 0x28, // DOS cooperative idle hint
+            0xeb, 0xfc, // repeat forever, one yield per native slice
+        ])
+        .unwrap();
+
+        assert!(app.on_ready());
+        assert_eq!(app.runtime.state(), &GuestState::Running);
+        assert!(app.runtime.cooperative_yielded_last_slice());
+        assert_eq!(app.runtime.cooperative_yield_count(), 1);
+    }
+
+    #[test]
+    fn native_dir_output_is_coalesced_and_reaches_the_next_prompt() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_program(shell, b"").unwrap();
+        for index in 0..80 {
+            let name = format!("F{index:07}.TXT");
+            app.runtime
+                .drives_mut()
+                .add_base_file(DosDrive::C, &name, vec![index as u8; 32])
+                .unwrap();
+        }
+        assert!(app.on_ready());
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+
+        for ch in ['d', 'i', 'r'] {
+            app.update(Event::Key(ch));
+        }
+        let mut redraws = usize::from(app.update(Event::Key('\n')));
+        let mut slices = 0usize;
+        while app.runtime.state() != &GuestState::WaitingForInput && slices < 10_000 {
+            redraws += usize::from(app.update(Event::Tick));
+            slices += 1;
+        }
+
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        assert!(slices < 1_000, "DIR needed {slices} native slices");
+        assert!(
+            redraws <= 4,
+            "DIR requested {redraws} full client frames instead of coalescing"
+        );
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| app.runtime.cell(index % 80, index / 80).character);
+        assert!(text
+            .windows(b"CMD C:\\>".len())
+            .any(|window| window == b"CMD C:\\>"));
+    }
+
+    #[test]
+    fn text_mode_mouse_state_does_not_request_invisible_frames() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_program(shell, b"").unwrap();
+        assert!(app.on_ready());
+
+        assert!(!app.update(Event::MouseMove { x: 210, y: 210 }));
+        assert!(!app.update(Event::MouseDown {
+            x: 210,
+            y: 210,
+            button: 0,
+        }));
+        assert_eq!(app.runtime.mouse().buttons().bits(), 0);
+        assert!(!app.update(Event::FocusChanged { focused: false }));
+        assert_eq!(app.runtime.mouse().buttons().bits(), 0);
+    }
+
+    #[test]
+    fn continuous_text_mode_pointer_events_cannot_starve_shell_or_keyboard() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_program(shell, b"").unwrap();
+
+        for sample in 0..10_000i32 {
+            app.update(Event::MouseMove {
+                x: sample.rem_euclid(WIN_W as i32),
+                y: (sample * 7).rem_euclid(WIN_H as i32),
+            });
+            if app.runtime.state() == &GuestState::WaitingForInput {
+                break;
+            }
+        }
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+
+        app.update(Event::Key('h'));
+        app.update(Event::Key('e'));
+        for sample in 0..1_000i32 {
+            app.update(Event::MouseMove {
+                x: sample.rem_euclid(WIN_W as i32),
+                y: (sample * 7).rem_euclid(WIN_H as i32),
+            });
+            if app.runtime.state() == &GuestState::WaitingForInput
+                && app.runtime.cursor_column() >= b"CMD C:\\>he".len()
+            {
+                break;
+            }
+        }
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| app.runtime.cell(index % 80, index / 80).character);
+        assert!(text
+            .windows(b"CMD C:\\>he".len())
+            .any(|window| window == b"CMD C:\\>he"));
     }
 
     #[test]
@@ -921,8 +1622,10 @@ mod tests {
     #[test]
     fn idle_cursor_ticks_do_not_wake_a_blocked_guest() {
         let mut app = ChronosApp::new();
+        assert_eq!(app.poll_timeout_ms(), 1);
         app.runtime.run_slice(1024);
         assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(app.poll_timeout_ms(), 200);
 
         app.update(Event::Tick);
         app.update(Event::Tick);
@@ -944,5 +1647,303 @@ mod tests {
         assert!(app.update_status_from_runtime());
         assert_eq!(app.runtime.state(), &GuestState::Exited { code: 0 });
         assert_eq!(app.status_text(), "Exited with code 0");
+    }
+
+    fn mode13_app() -> ChronosApp {
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_com(&[
+            0xb8, 0x13, 0x00, 0xcd, 0x10, 0xb8, 0x00, 0xa0, 0x8e, 0xc0, 0x31, 0xff, 0xb0, 0x04,
+            0xaa, 0xb4, 0x00, 0xcd, 0x16,
+        ])
+        .unwrap();
+        app.runtime.run_slice(32);
+        assert_eq!(app.runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        app
+    }
+
+    #[test]
+    fn graphics_cache_converts_only_when_mode_framebuffer_or_palette_generation_changes() {
+        let mut app = mode13_app();
+        assert!(app.refresh_graphics_cache());
+        assert_eq!(app.framebuffer_conversions, 1);
+        assert_eq!(app.graphics_cache[0], Rgb8::new(170, 0, 0));
+        assert!(!app.refresh_graphics_cache());
+        assert_eq!(app.framebuffer_conversions, 1);
+
+        app.runtime.memory.write_u8(0xa000, 320, 10);
+        assert!(app.refresh_graphics_cache());
+        assert_eq!(app.framebuffer_conversions, 2);
+        assert_eq!(app.graphics_cache[320], Rgb8::new(85, 255, 85));
+        app.runtime.memory.write_u8(0xa000, 320, 10);
+        assert!(!app.refresh_graphics_cache());
+        assert_eq!(app.framebuffer_conversions, 2);
+    }
+
+    #[test]
+    fn palette_only_batch_reconverts_once_without_touching_a0000_generation() {
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_com(&[
+            0xb8, 0x13, 0x00, 0xcd, 0x10, 0xb8, 0x00, 0xa0, 0x8e, 0xc0, 0x31, 0xff, 0xb0, 32, 0xaa,
+            0xba, 0xc8, 0x03, 0xb0, 32, 0xee, 0x42, 0xb0, 63, 0xee, 0x30, 0xc0, 0xee, 0xee, 0xf4,
+        ])
+        .unwrap();
+        app.runtime.run_slice(7);
+        assert!(app.refresh_graphics_cache());
+        assert_eq!(app.framebuffer_conversions, 1);
+        let framebuffer_generation = app.runtime.framebuffer_generation();
+        let index = app.runtime.framebuffer_index(0, 0);
+
+        app.runtime.run_slice(64);
+        assert_eq!(app.runtime.dac_entries_committed_last_slice(), 1);
+        assert_eq!(app.runtime.framebuffer_generation(), framebuffer_generation);
+        assert_eq!(app.runtime.framebuffer_index(0, 0), index);
+        assert!(app.refresh_graphics_cache());
+        assert_eq!(app.framebuffer_conversions, 2);
+        assert_eq!(app.graphics_cache[0], Rgb8::new(255, 0, 0));
+        assert!(!app.refresh_graphics_cache());
+        assert_eq!(app.framebuffer_conversions, 2);
+    }
+
+    #[test]
+    fn running_graphics_presentation_is_batched_and_static_waiting_is_not_polled() {
+        let mut last = 0;
+        let redraws = (1..=1000)
+            .filter(|now| running_presentation_due(&mut last, *now, *now == 1, true))
+            .count();
+        assert_eq!(redraws, 63);
+
+        let app = mode13_app();
+        assert_eq!(
+            app.poll_timeout_ms(),
+            200,
+            "waiting graphics guests stay idle"
+        );
+    }
+
+    #[test]
+    fn viewport_uses_largest_integer_scale_and_centers_without_guest_mutation() {
+        let surface = Rect::new(24, 72, 792, 472);
+        let (viewport, scale) = graphics_viewport(surface);
+        assert_eq!(scale, 2);
+        assert_eq!(viewport, Rect::new(100, 108, 640, 400));
+
+        let app = mode13_app();
+        let checksum = app.runtime.framebuffer_checksum();
+        let (resized, resized_scale) = graphics_viewport(Rect::new(10, 10, 1000, 650));
+        assert_eq!(resized_scale, 3);
+        assert_eq!(resized.w, 960);
+        assert_eq!(resized.h, 600);
+        assert_eq!(app.runtime.framebuffer_checksum(), checksum);
+    }
+
+    #[test]
+    fn nearest_neighbor_renderer_preserves_logical_pixel_blocks() {
+        let mut framebuffer = vec![0u32; 8 * 8];
+        let mut canvas = Canvas::new(&mut framebuffer, 8, 8, 8);
+        let mut pixels = vec![Rgb8::default(); 320 * 200];
+        pixels[0] = Rgb8::new(255, 85, 85);
+        pixels[1] = Rgb8::new(85, 255, 85);
+        draw_scaled_graphics(&mut canvas, Rect::new(0, 0, 640, 400), 2, &pixels);
+        assert_eq!(framebuffer[0], Color::rgb(255, 85, 85).0);
+        assert_eq!(framebuffer[1], Color::rgb(255, 85, 85).0);
+        assert_eq!(framebuffer[8], Color::rgb(255, 85, 85).0);
+        assert_eq!(framebuffer[2], Color::rgb(85, 255, 85).0);
+        assert_eq!(framebuffer[3], Color::rgb(85, 255, 85).0);
+    }
+
+    #[test]
+    fn graphics_view_selects_a0000_and_never_draws_the_text_cursor() {
+        let mut app = mode13_app();
+        app.cursor_visible = true;
+        let mut framebuffer = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut canvas = Canvas::new(&mut framebuffer, WIN_W, WIN_W, WIN_H);
+        app.view(&mut canvas, &Theme::sunlight_dark());
+
+        // Logical (0,0) is palette index 4 and occupies an exact 2x2 block at
+        // the centered graphics viewport origin. No text/cursor pass follows.
+        let red = Color::rgb(170, 0, 0).0;
+        for (x, y) in [(100, 108), (101, 108), (100, 109), (101, 109)] {
+            assert_eq!(framebuffer[y * WIN_W as usize + x], red);
+        }
+    }
+
+    #[test]
+    fn native_shell_path_renders_vgalab_guest_pixels_then_returns_to_text() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let vgalab = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/VGALAB.COM");
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_program(shell, b"").unwrap();
+        app.runtime
+            .drives_mut()
+            .add_base_directory(DosDrive::C, "TESTS")
+            .unwrap();
+        app.runtime
+            .drives_mut()
+            .add_base_file(DosDrive::C, "TESTS/VGALAB.COM", vgalab.to_vec())
+            .unwrap();
+        app.runtime.run_slice(10_000_000);
+        for ascii in [b'V', b'G', b'A', b'L', b'A', b'B', b'\r'] {
+            app.runtime.inject_ascii(ascii);
+            app.runtime.run_slice(10_000_000);
+        }
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(app.runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+
+        let mut framebuffer = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut canvas = Canvas::new(&mut framebuffer, WIN_W, WIN_W, WIN_H);
+        app.view(&mut canvas, &Theme::sunlight_dark());
+        assert_eq!(app.framebuffer_conversions, 1);
+        // Viewport origin is (100,108), scale 2. These host pixels correspond
+        // exactly to guest checker (24,64) and sun (140,84) indices.
+        assert_eq!(
+            canvas.pixels[236 * WIN_W as usize + 148],
+            Color::rgb(85, 255, 255).0
+        );
+        assert_eq!(
+            canvas.pixels[276 * WIN_W as usize + 380],
+            Color::rgb(170, 85, 0).0
+        );
+        app.view(&mut canvas, &Theme::sunlight_dark());
+        assert_eq!(app.framebuffer_conversions, 1);
+
+        app.runtime.inject_key(BiosKey {
+            ascii: 0x1b,
+            scan_code: 0x01,
+        });
+        app.runtime.run_slice(10_000_000);
+        assert_eq!(app.runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| app.runtime.cell(index % 80, index / 80).character);
+        assert_eq!(
+            text.windows(b"CMD C:\\>".len())
+                .filter(|window| *window == b"CMD C:\\>")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn native_surface_changes_from_guest_dac_outs_while_a0000_stays_static() {
+        let palcycle = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM");
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_com(palcycle).unwrap();
+        let mut instructions = 0usize;
+        while app.runtime.palette_generation() < 33 {
+            app.runtime.step();
+            instructions += 1;
+            assert!(instructions < 1_000_000);
+        }
+        let checksum = app.runtime.framebuffer_checksum();
+        let generation = app.runtime.framebuffer_generation();
+
+        let mut framebuffer = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut canvas = Canvas::new(&mut framebuffer, WIN_W, WIN_W, WIN_H);
+        app.view(&mut canvas, &Theme::sunlight_dark());
+        let host_offset = 148 * WIN_W as usize + 100;
+        let first_color = canvas.pixels[host_offset];
+        assert_eq!(app.framebuffer_conversions, 1);
+
+        while app.runtime.palette_generation() < 65 {
+            app.runtime.step();
+            instructions += 1;
+            assert!(instructions < 1_000_000);
+        }
+        app.view(&mut canvas, &Theme::sunlight_dark());
+        assert_ne!(canvas.pixels[host_offset], first_color);
+        assert_eq!(app.framebuffer_conversions, 2);
+        assert_eq!(app.runtime.framebuffer_checksum(), checksum);
+        assert_eq!(app.runtime.framebuffer_generation(), generation);
+        assert_eq!(app.runtime.framebuffer_index(0, 20), Some(32));
+    }
+
+    fn mouse_overlay_app() -> ChronosApp {
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_com(&[
+            0xb8, 0x13, 0x00, 0xcd, 0x10, // mode 13h
+            0xb8, 0x07, 0x00, 0x31, 0xc9, 0xba, 0x3f, 0x01, 0xcd, 0x33, 0xb8, 0x08, 0x00, 0x31,
+            0xc9, 0xba, 0xc7, 0x00, 0xcd, 0x33, 0xb8, 0x01, 0x00, 0xcd, 0x33, 0xf4,
+        ])
+        .unwrap();
+        app.runtime.run_slice(64);
+        app
+    }
+
+    #[test]
+    fn guest_cursor_overlay_changes_native_pixels_not_guest_evidence() {
+        let mut app = mouse_overlay_app();
+        let framebuffer_checksum = app.runtime.framebuffer_checksum();
+        let framebuffer_generation = app.runtime.framebuffer_generation();
+        let palette_checksum = app.runtime.palette_checksum();
+        let palette_generation = app.runtime.palette_generation();
+
+        let mut first = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut first_canvas = Canvas::new(&mut first, WIN_W, WIN_W, WIN_H);
+        app.view(&mut first_canvas, &Theme::sunlight_dark());
+        let conversions = app.framebuffer_conversions;
+
+        assert!(app.update(Event::MouseMove { x: 210, y: 210 }));
+        let mut second = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut second_canvas = Canvas::new(&mut second, WIN_W, WIN_W, WIN_H);
+        app.view(&mut second_canvas, &Theme::sunlight_dark());
+
+        assert_ne!(first, second);
+        assert_eq!(app.framebuffer_conversions, conversions);
+        assert_eq!(app.runtime.framebuffer_checksum(), framebuffer_checksum);
+        assert_eq!(app.runtime.framebuffer_generation(), framebuffer_generation);
+        assert_eq!(app.runtime.palette_checksum(), palette_checksum);
+        assert_eq!(app.runtime.palette_generation(), palette_generation);
+        assert!(app.old_guest_cursor_rect.is_some());
+        assert!(app.new_guest_cursor_rect.is_some());
+        assert_ne!(app.old_guest_cursor_rect, app.new_guest_cursor_rect);
+    }
+
+    #[test]
+    fn cursor_clips_at_edges_and_focus_loss_clears_guest_drag() {
+        let mut app = mouse_overlay_app();
+        let mut pixels = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut canvas = Canvas::new(&mut pixels, WIN_W, WIN_W, WIN_H);
+        app.view(&mut canvas, &Theme::sunlight_dark());
+        let viewport = app.graphics_viewport;
+        let right = viewport.x + viewport.width as i32 - 1;
+        let bottom = viewport.y + viewport.height as i32 - 1;
+        assert!(app.update(Event::MouseDown {
+            x: right,
+            y: bottom,
+            button: 0,
+        }));
+        assert!(app.runtime.mouse().captured());
+        assert_eq!(app.runtime.mouse().buttons().bits(), 1);
+        app.view(&mut canvas, &Theme::sunlight_dark());
+
+        assert!(app.update(Event::FocusChanged { focused: false }));
+        assert_eq!(app.runtime.mouse().buttons().bits(), 0);
+        assert!(!app.runtime.mouse().captured());
+        assert!(app.guest_cursor_rect().is_none());
+        app.update(Event::FocusChanged { focused: true });
+        assert_eq!(app.runtime.mouse().buttons().bits(), 0);
+    }
+
+    #[test]
+    fn title_header_status_and_letterbox_events_do_not_reach_guest_mouse() {
+        let mut app = mouse_overlay_app();
+        let mut pixels = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut canvas = Canvas::new(&mut pixels, WIN_W, WIN_W, WIN_H);
+        app.view(&mut canvas, &Theme::sunlight_dark());
+        let initial = app.runtime.mouse().position();
+        assert!(!app.update(Event::MouseMove { x: 5, y: 5 }));
+        assert_eq!(app.runtime.mouse().position(), initial);
+        assert!(!app.update(Event::MouseDown {
+            x: 20,
+            y: WIN_H as i32 - 2,
+            button: 0,
+        }));
+        assert_eq!(app.runtime.mouse().buttons().bits(), 0);
+        let viewport = app.graphics_viewport;
+        assert!(!app.update(Event::MouseMove {
+            x: viewport.x - 1,
+            y: viewport.y,
+        }));
+        assert_eq!(app.runtime.mouse().position(), initial);
     }
 }

@@ -2,8 +2,10 @@ use alloc::{collections::VecDeque, vec::Vec};
 
 use crate::{
     dos, load_com_with_command_tail, load_program, ArenaError, CpuState, DosHandleTable,
-    DosMemoryArena, DosPath, DriveTable, ExecutableFormat, GuestMemory, LoadedProgram, LoaderError,
-    TextCell, TextModeSurface, DEFAULT_ATTRIBUTE, TEXT_COLUMNS, TEXT_ROWS, VIDEO_SEGMENT,
+    DosMemoryArena, DosPath, DriveTable, ExecutableFormat, GuestMemory, GuestVideoMode,
+    IoOperation, IoTrap, IoWidth, LoadedProgram, LoaderError, Rgb8, TextCell, TextModeSurface,
+    VgaDacEntry, DEFAULT_ATTRIBUTE, TEXT_COLUMNS, TEXT_ROWS, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT,
+    VIDEO_SEGMENT,
 };
 
 const BDA_SEGMENT: u16 = 0x0040;
@@ -40,6 +42,9 @@ pub enum Trap {
         ip: u16,
     },
     InvalidVideoRectangle,
+    UnsupportedVideoMode {
+        mode: u8,
+    },
     DivideError {
         cs: u16,
         ip: u16,
@@ -48,6 +53,16 @@ pub enum Trap {
         cs: u16,
         ip: u16,
         opcode: u8,
+    },
+    UnsupportedIoPort {
+        operation: IoOperation,
+        port: u16,
+        width: IoWidth,
+        value: Option<u16>,
+        cs: u16,
+        ip: u16,
+        active_executable: Vec<u8>,
+        application_id: Vec<u8>,
     },
     ChildLoadFailed {
         error: LoaderError,
@@ -63,8 +78,10 @@ impl Trap {
             Self::InvalidSegmentRegister { .. } => "Invalid segment register",
             Self::MalformedPrefix { .. } => "Malformed instruction prefix",
             Self::InvalidVideoRectangle => "Invalid video rectangle",
+            Self::UnsupportedVideoMode { .. } => "Unsupported BIOS video mode",
             Self::DivideError { .. } => "Guest divide error",
             Self::CpuProfileViolation { .. } => "Instruction unavailable on guest CPU",
+            Self::UnsupportedIoPort { .. } => "Unsupported guest I/O port access",
             Self::ChildLoadFailed { .. } => "Child executable could not be loaded",
         }
     }
@@ -197,6 +214,7 @@ pub struct DosProcess {
     pub allocation_paragraphs: u16,
     pub environment_owned: bool,
     pub child_result: Option<ChildResult>,
+    pub executable_path: Vec<u8>,
 }
 
 /// Complete safe real-mode guest. Text output is always backed by guest
@@ -211,6 +229,13 @@ pub struct Runtime {
     pub(crate) cursor_column: usize,
     pub(crate) cursor_row: usize,
     pub(crate) cursor_shape: u16,
+    video_mode: GuestVideoMode,
+    video_mode_generation: u64,
+    io: crate::io::GuestIoDispatcher,
+    pub(crate) mouse: crate::DosMouse,
+    cooperative_yield_requested: bool,
+    cooperative_yielded_last_slice: bool,
+    cooperative_yield_count: u64,
     shift: bool,
     ctrl: bool,
     alt: bool,
@@ -223,6 +248,8 @@ pub struct Runtime {
     pub(crate) arena: DosMemoryArena,
     pub(crate) active_process: DosProcess,
     pub(crate) parent_process: Option<DosProcess>,
+    recovered_child_trap: Option<Trap>,
+    pub(crate) last_delivered_child_result: Option<ChildResult>,
     pub(crate) cpu_profile: CpuProfile,
     guest_unix_time: u64,
     environment_app_id: Vec<u8>,
@@ -255,6 +282,7 @@ impl Runtime {
             allocation_paragraphs: 0x1000,
             environment_owned: false,
             child_result: None,
+            executable_path: b"C:\\PROGRAM.COM".to_vec(),
         };
         let mut runtime = Self {
             cpu,
@@ -266,6 +294,13 @@ impl Runtime {
             cursor_column: 0,
             cursor_row: 0,
             cursor_shape: 0x0607,
+            video_mode: GuestVideoMode::Text80x25Color,
+            video_mode_generation: 0,
+            io: crate::io::GuestIoDispatcher::default(),
+            mouse: crate::DosMouse::default(),
+            cooperative_yield_requested: false,
+            cooperative_yielded_last_slice: false,
+            cooperative_yield_count: 0,
             shift: false,
             ctrl: false,
             alt: false,
@@ -278,6 +313,8 @@ impl Runtime {
             arena: DosMemoryArena::new(),
             active_process,
             parent_process: None,
+            recovered_child_trap: None,
+            last_delivered_child_result: None,
             cpu_profile: CpuProfile::I8086,
             guest_unix_time: 0,
             environment_app_id: b"org.sunlight.chronos".to_vec(),
@@ -301,7 +338,13 @@ impl Runtime {
         runtime.searches.clear();
         runtime.search_index = 0;
         runtime.parent_process = None;
+        runtime.recovered_child_trap = None;
+        runtime.last_delivered_child_result = None;
         runtime.interrupt_vectors = [(0, 0); 256];
+        runtime.mouse.reset();
+        runtime.cooperative_yield_requested = false;
+        runtime.cooperative_yielded_last_slice = false;
+        runtime.cooperative_yield_count = 0;
         runtime.executable_path = b"C:\\PROGRAM.EXE".to_vec();
         let environment_entries =
             default_environment(&runtime.environment_app_id, &runtime.executable_path);
@@ -345,6 +388,7 @@ impl Runtime {
             allocation_paragraphs: program.paragraphs,
             environment_owned: false,
             child_result: None,
+            executable_path: self.executable_path.clone(),
         };
         self.dta_segment = program.psp_segment;
         self.dta_offset = 0x0080;
@@ -402,6 +446,7 @@ impl Runtime {
             return;
         }
         self.executable_path = executable_path.to_vec();
+        self.active_process.executable_path = self.executable_path.clone();
         self.reset_environment();
     }
 
@@ -511,6 +556,7 @@ impl Runtime {
             allocation_paragraphs: program.paragraphs,
             environment_owned: true,
             child_result: None,
+            executable_path: path.display().as_bytes().to_vec(),
         };
         core::mem::swap(&mut child, &mut self.active_process);
         self.parent_process = Some(child);
@@ -606,6 +652,12 @@ impl Runtime {
     }
 
     fn restore_parent(&mut self, result: ChildResult) {
+        // An interactive text parent must never inherit an unusable graphics
+        // surface from a child that exited or trapped before restoring mode 03h.
+        // This policy is based solely on the parent/child execution context.
+        if self.video_mode != GuestVideoMode::Text80x25Color {
+            self.set_video_mode(GuestVideoMode::Text80x25Color);
+        }
         let mut child = core::mem::replace(
             &mut self.active_process,
             self.parent_process
@@ -638,6 +690,72 @@ impl Runtime {
         &self.state
     }
 
+    pub const fn mouse(&self) -> &crate::DosMouse {
+        &self.mouse
+    }
+
+    pub fn set_mouse_enabled(&mut self, enabled: bool) {
+        self.mouse = crate::DosMouse::new(enabled);
+    }
+
+    pub fn mouse_focus_changed(&mut self, focused: bool) {
+        self.mouse.focus_changed(focused);
+    }
+
+    pub fn mouse_pointer_left(&mut self) {
+        self.mouse.pointer_left();
+    }
+
+    pub fn mouse_pointer_delivery_lost(&mut self) {
+        self.mouse.pointer_delivery_lost();
+    }
+
+    pub fn inject_mouse_motion(&mut self, viewport: crate::MouseViewport, x: i32, y: i32) -> bool {
+        if self.video_mode != GuestVideoMode::Vga320x200x256 {
+            return false;
+        }
+        let changed = self.mouse.native_motion(viewport, x, y);
+        if changed {
+            self.wake_from_idle_hint();
+        }
+        changed
+    }
+
+    pub fn inject_mouse_button(
+        &mut self,
+        viewport: crate::MouseViewport,
+        x: i32,
+        y: i32,
+        button: u8,
+        pressed: bool,
+    ) -> bool {
+        if self.video_mode != GuestVideoMode::Vga320x200x256 {
+            return false;
+        }
+        let changed = self.mouse.native_button(viewport, x, y, button, pressed);
+        if changed {
+            self.wake_from_idle_hint();
+        }
+        changed
+    }
+
+    pub const fn cooperative_yielded_last_slice(&self) -> bool {
+        self.cooperative_yielded_last_slice
+    }
+
+    pub const fn cooperative_yield_count(&self) -> u64 {
+        self.cooperative_yield_count
+    }
+
+    pub(crate) fn cooperative_yield(&mut self) {
+        self.cooperative_yield_requested = true;
+        self.cooperative_yield_count = self.cooperative_yield_count.wrapping_add(1);
+    }
+
+    fn wake_from_idle_hint(&mut self) {
+        self.cooperative_yielded_last_slice = false;
+    }
+
     pub fn cell(&self, column: usize, row: usize) -> TextCell {
         TextModeSurface::cell(&self.memory, column, row)
     }
@@ -652,8 +770,92 @@ impl Runtime {
         self.cursor_shape
     }
 
+    pub const fn video_mode(&self) -> GuestVideoMode {
+        self.video_mode
+    }
+
+    pub const fn video_mode_generation(&self) -> u64 {
+        self.video_mode_generation
+    }
+
+    pub const fn framebuffer_generation(&self) -> u64 {
+        self.memory.framebuffer_generation()
+    }
+
+    pub const fn palette(&self) -> &[Rgb8; 256] {
+        self.io.vga_dac().palette()
+    }
+
+    pub const fn palette_entries(&self) -> &[VgaDacEntry; 256] {
+        self.io.vga_dac().entries()
+    }
+
+    pub const fn palette_generation(&self) -> u64 {
+        self.io.vga_dac().palette_generation()
+    }
+
+    pub fn palette_checksum(&self) -> u64 {
+        self.io.vga_dac().palette_checksum()
+    }
+
+    pub const fn dac_entries_committed_last_slice(&self) -> u32 {
+        self.io.entries_committed_slice()
+    }
+
+    pub const fn unsupported_io_attempts(&self) -> u64 {
+        self.io.unsupported_attempts()
+    }
+
+    pub fn framebuffer_index(&self, x: usize, y: usize) -> Option<u8> {
+        if x >= crate::VGA_WIDTH || y >= VGA_HEIGHT {
+            return None;
+        }
+        Some(self.memory.read_u8(
+            crate::VGA_FRAMEBUFFER_SEGMENT,
+            (y * crate::VGA_WIDTH + x) as u16,
+        ))
+    }
+
+    /// Stable FNV-1a signature of the 64,000 authoritative visible Mode 13h
+    /// bytes. This is intended for deterministic guest regression tests.
+    pub fn framebuffer_checksum(&self) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        for offset in 0..VGA_FRAMEBUFFER_BYTES {
+            hash ^= self
+                .memory
+                .read_u8(crate::VGA_FRAMEBUFFER_SEGMENT, offset as u16) as u64;
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        hash
+    }
+
+    pub fn take_graphics_dirty_rows(&mut self) -> [bool; VGA_HEIGHT] {
+        self.memory.take_graphics_dirty()
+    }
+
+    pub fn convert_graphics_rows(
+        &self,
+        dirty_rows: &[bool; VGA_HEIGHT],
+        destination: &mut [Rgb8],
+    ) -> bool {
+        crate::convert_indexed_rows(&self.memory, self.palette(), dirty_rows, destination)
+    }
+
+    pub fn take_recovered_child_trap(&mut self) -> Option<Trap> {
+        self.recovered_child_trap.take()
+    }
+
+    pub const fn last_delivered_child_result(&self) -> Option<ChildResult> {
+        self.last_delivered_child_result
+    }
+
+    pub const fn text_cursor_visible(&self) -> bool {
+        matches!(self.video_mode, GuestVideoMode::Text80x25Color) && self.cursor_shape & 0x2000 == 0
+    }
+
     pub fn inject_key(&mut self, key: BiosKey) -> bool {
         self.keyboard.push_back(key);
+        self.wake_from_idle_hint();
         if matches!(self.state, GuestState::WaitingForInput) {
             self.complete_pending_input();
             return true;
@@ -682,13 +884,31 @@ impl Runtime {
             return false;
         }
         let state_before = self.state.clone();
+        let mode_generation_before = self.video_mode_generation;
+        let framebuffer_generation_before = self.memory.framebuffer_generation();
+        let palette_generation_before = self.palette_generation();
+        let mouse_generation_before = self.mouse.generation();
+        let overlay_generation_before = self.mouse.overlay_generation();
+        self.cooperative_yield_requested = false;
+        self.cooperative_yielded_last_slice = false;
+        self.io.begin_slice();
         for _ in 0..budget {
             if !matches!(self.state, GuestState::Running) {
                 break;
             }
             self.step();
+            if self.cooperative_yield_requested {
+                self.cooperative_yielded_last_slice = true;
+                break;
+            }
         }
-        self.memory.take_video_dirty().iter().any(|dirty| *dirty) || self.state != state_before
+        self.memory.take_video_dirty().iter().any(|dirty| *dirty)
+            || self.memory.framebuffer_generation() != framebuffer_generation_before
+            || self.palette_generation() != palette_generation_before
+            || self.video_mode_generation != mode_generation_before
+            || self.mouse.generation() != mouse_generation_before
+            || self.mouse.overlay_generation() != overlay_generation_before
+            || self.state != state_before
     }
 
     pub fn step(&mut self) {
@@ -724,8 +944,9 @@ impl Runtime {
         let result = self.execute(opcode, segment_override, repeat, instruction_ip);
         if let Err(trap) = result {
             if self.parent_process.is_some() {
+                self.recovered_child_trap = Some(trap);
                 self.restore_parent(ChildResult {
-                    code: 0,
+                    code: 1,
                     termination: TerminationType::RuntimeTrap,
                 });
             } else {
@@ -910,6 +1131,20 @@ impl Runtime {
                 if self.cpu.cx == 0 {
                     self.cpu.ip = self.cpu.ip.wrapping_add(displacement as i16 as u16);
                 }
+            }
+            0xe4..=0xe7 | 0xec..=0xef => {
+                let immediate_port = if opcode <= 0xe7 {
+                    Some(self.fetch_u8())
+                } else {
+                    None
+                };
+                crate::io::execute_io_instruction(
+                    &mut self.io,
+                    &mut self.cpu,
+                    opcode,
+                    immediate_port,
+                )
+                .map_err(|trap| self.guest_io_trap(trap, start_ip))?;
             }
             0x04 => {
                 let left = self.cpu.al();
@@ -1655,6 +1890,19 @@ impl Runtime {
             cpu: self.cpu,
         }
     }
+
+    fn guest_io_trap(&self, trap: IoTrap, ip: u16) -> Trap {
+        Trap::UnsupportedIoPort {
+            operation: trap.operation,
+            port: trap.port,
+            width: trap.width,
+            value: trap.value,
+            cs: self.cpu.cs,
+            ip,
+            active_executable: self.active_process.executable_path.clone(),
+            application_id: self.environment_app_id.clone(),
+        }
+    }
     fn instruction_bytes(&self, ip: u16) -> [u8; 4] {
         [
             self.memory.read_u8(self.cpu.cs, ip),
@@ -2118,19 +2366,41 @@ impl Runtime {
     }
 
     pub(crate) fn reset_video(&mut self) {
-        TextModeSurface::clear(&mut self.memory, DEFAULT_ATTRIBUTE);
+        self.set_video_mode(GuestVideoMode::Text80x25Color);
+    }
+
+    pub(crate) fn set_video_mode(&mut self, mode: GuestVideoMode) {
+        self.video_mode = mode;
+        self.video_mode_generation = self.video_mode_generation.wrapping_add(1);
         self.cursor_column = 0;
         self.cursor_row = 0;
-        self.cursor_shape = 0x0607;
-        self.memory.write_u8(BDA_SEGMENT, BDA_VIDEO_MODE, 0x03);
         self.memory
-            .write_u16(BDA_SEGMENT, BDA_COLUMNS, TEXT_COLUMNS as u16);
-        self.memory.write_u16(
-            BDA_SEGMENT,
-            BDA_PAGE_SIZE,
-            (TEXT_COLUMNS * TEXT_ROWS * 2) as u16,
-        );
+            .write_u8(BDA_SEGMENT, BDA_VIDEO_MODE, mode.bios_mode());
         self.memory.write_u8(BDA_SEGMENT, BDA_ACTIVE_PAGE, 0);
+        match mode {
+            GuestVideoMode::Text80x25Color => {
+                self.mouse.leave_graphics_mode();
+                TextModeSurface::clear(&mut self.memory, DEFAULT_ATTRIBUTE);
+                self.cursor_shape = 0x0607;
+                self.memory
+                    .write_u16(BDA_SEGMENT, BDA_COLUMNS, TEXT_COLUMNS as u16);
+                self.memory.write_u16(
+                    BDA_SEGMENT,
+                    BDA_PAGE_SIZE,
+                    (TEXT_COLUMNS * TEXT_ROWS * 2) as u16,
+                );
+            }
+            GuestVideoMode::Vga320x200x256 => {
+                self.io.reset_mode13();
+                self.memory.clear_graphics_framebuffer();
+                self.cursor_shape = 0x2000;
+                // Conventional VGA BIOS mode-13h BDA values: 40 character
+                // columns and one 0xFA00-byte visible graphics page.
+                self.memory.write_u16(BDA_SEGMENT, BDA_COLUMNS, 40);
+                self.memory
+                    .write_u16(BDA_SEGMENT, BDA_PAGE_SIZE, VGA_FRAMEBUFFER_BYTES as u16);
+            }
+        }
         self.memory
             .write_u16(BDA_SEGMENT, BDA_CURSOR_SHAPE, self.cursor_shape);
         self.sync_cursor_bda();
@@ -2230,7 +2500,7 @@ impl Runtime {
 fn default_environment(app_id: &[u8], executable_path: &[u8]) -> Vec<u8> {
     let mut entries = Vec::new();
     for entry in [
-        b"PATH=C:\\".as_slice(),
+        b"PATH=C:\\;C:\\TESTS".as_slice(),
         b"TEMP=T:\\".as_slice(),
         b"TMP=T:\\".as_slice(),
     ] {
@@ -2296,10 +2566,39 @@ fn civil_from_days(days: i64) -> (i32, u8, u8) {
 #[cfg(test)]
 mod tests {
     use super::{translate_key_press, BiosKey, GuestState, HostKeyEvent, Runtime};
-    use crate::{CpuState, CHRONOS_INTERACTIVE_COM, HELLO_CHRONOS_COM, PSP_SEGMENT};
+    use crate::{
+        CpuState, DosDrive, GuestVideoMode, IoOperation, IoWidth, MouseViewport, Rgb8,
+        TerminationType, Trap, CHRONOS_INTERACTIVE_COM, DEFAULT_VGA_PALETTE, HELLO_CHRONOS_COM,
+        PSP_SEGMENT, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT,
+    };
 
     fn runtime_for(bytes: &[u8]) -> Runtime {
         Runtime::from_com(bytes).unwrap()
+    }
+
+    fn run_to_palette_generation(runtime: &mut Runtime, generation: u64) {
+        let mut instructions = 0usize;
+        while runtime.palette_generation() < generation {
+            runtime.step();
+            instructions += 1;
+            assert!(
+                instructions < 1_000_000,
+                "palette checkpoint {generation} was not reached: state={:?}",
+                runtime.state()
+            );
+        }
+        assert_eq!(runtime.palette_generation(), generation);
+    }
+
+    fn run_to_next_idle_hint(runtime: &mut Runtime) {
+        let initial = runtime.cooperative_yield_count();
+        for _ in 0..2_000 {
+            runtime.run_slice(4_096);
+            if runtime.cooperative_yield_count() != initial {
+                return;
+            }
+        }
+        panic!("guest did not reach INT 28h: state={:?}", runtime.state());
     }
 
     #[test]
@@ -2891,5 +3190,1014 @@ mod tests {
         allowed.set_cpu_profile(super::CpuProfile::I80186);
         allowed.run_slice(2);
         assert_eq!(allowed.cpu.ax, 0x1234);
+    }
+
+    #[test]
+    fn bios_mode_switching_updates_internal_bda_and_cursor_state() {
+        let mut runtime = runtime_for(&[]);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.memory.read_u8(0x40, 0x49), 0x03);
+        assert!(runtime.text_cursor_visible());
+
+        runtime.cpu.ax = 0x0013;
+        super::dos::dispatch(&mut runtime, 0x10).unwrap();
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert_eq!(runtime.memory.read_u8(0x40, 0x49), 0x13);
+        assert_eq!(runtime.memory.read_u16(0x40, 0x4a), 40);
+        assert_eq!(runtime.memory.read_u16(0x40, 0x4c), 0xfa00);
+        assert_eq!(runtime.memory.read_u8(0x40, 0x62), 0);
+        assert_eq!(runtime.memory.read_u16(0x40, 0x60), 0x2000);
+        assert!(!runtime.text_cursor_visible());
+        assert!(runtime
+            .take_graphics_dirty_rows()
+            .iter()
+            .all(|dirty| *dirty));
+
+        runtime.cpu.set_ah(0x0f);
+        super::dos::dispatch(&mut runtime, 0x10).unwrap();
+        assert_eq!(runtime.cpu.ax, 0x2813);
+
+        runtime.cpu.ax = 0x0003;
+        super::dos::dispatch(&mut runtime, 0x10).unwrap();
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.memory.read_u8(0x40, 0x49), 0x03);
+        assert_eq!(runtime.memory.read_u16(0x40, 0x4a), 80);
+        assert_eq!(runtime.memory.read_u16(0x40, 0x4c), 4000);
+        assert_eq!(runtime.cursor_shape(), 0x0607);
+        assert!(runtime.text_cursor_visible());
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (0, 0));
+    }
+
+    #[test]
+    fn int33_core_functions_report_validate_clamp_and_remain_per_runtime() {
+        let mut runtime = runtime_for(&[0xf4]);
+        runtime.cpu.ax = 0;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        assert_eq!((runtime.cpu.ax, runtime.cpu.bx), (0xffff, 3));
+        assert_eq!(runtime.mouse().ranges(), (0, 639, 0, 199));
+        assert_eq!(runtime.mouse().position(), (319, 99));
+        assert!(!runtime.mouse().cursor_visible());
+
+        runtime.cpu.ax = 1;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        runtime.cpu.ax = 1;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        assert_eq!(runtime.mouse().visibility_counter(), 1);
+        runtime.cpu.ax = 2;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        assert!(runtime.mouse().cursor_visible());
+        runtime.cpu.ax = 2;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        assert!(!runtime.mouse().cursor_visible());
+
+        runtime.cpu.ax = 7;
+        runtime.cpu.cx = 0;
+        runtime.cpu.dx = 319;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        runtime.cpu.ax = 8;
+        runtime.cpu.cx = 0;
+        runtime.cpu.dx = 199;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        runtime.cpu.ax = 4;
+        runtime.cpu.cx = u16::MAX;
+        runtime.cpu.dx = u16::MAX;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        runtime.cpu.ax = 3;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        assert_eq!(
+            (runtime.cpu.bx, runtime.cpu.cx, runtime.cpu.dx),
+            (0, 319, 199)
+        );
+
+        runtime.cpu.ax = 7;
+        runtime.cpu.cx = 200;
+        runtime.cpu.dx = 100;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        assert_ne!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(
+            runtime.cpu.ax,
+            crate::mouse::DOS_MOUSE_ERROR_INVALID_ARGUMENT
+        );
+        assert_eq!(runtime.mouse().ranges(), (0, 319, 0, 199));
+
+        runtime.cpu.ax = 0x0005;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        assert_ne!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(runtime.cpu.ax, crate::mouse::DOS_MOUSE_ERROR_UNSUPPORTED);
+
+        let mut other = runtime_for(&[0xf4]);
+        other.cpu.ax = 0;
+        super::dos::dispatch(&mut other, 0x33).unwrap();
+        assert_eq!(runtime.mouse().ranges(), (0, 319, 0, 199));
+        assert_eq!(other.mouse().ranges(), (0, 639, 0, 199));
+
+        other.set_mouse_enabled(false);
+        other.cpu.ax = 0;
+        super::dos::dispatch(&mut other, 0x33).unwrap();
+        assert_eq!((other.cpu.ax, other.cpu.bx), (0, 0));
+    }
+
+    #[test]
+    fn int28_yields_the_slice_without_clobbering_registers() {
+        let mut runtime = runtime_for(&[
+            0xb8, 0x34, 0x12, 0xbb, 0x78, 0x56, 0xb9, 0xbc, 0x9a, 0xba, 0xf0, 0xde, 0xcd, 0x28,
+            0xf4,
+        ]);
+        runtime.run_slice(100);
+        assert_eq!(runtime.state(), &GuestState::Running);
+        assert!(runtime.cooperative_yielded_last_slice());
+        assert_eq!(runtime.cooperative_yield_count(), 1);
+        assert_eq!((runtime.cpu.ax, runtime.cpu.bx), (0x1234, 0x5678));
+        assert_eq!((runtime.cpu.cx, runtime.cpu.dx), (0x9abc, 0xdef0));
+        runtime.run_slice(1);
+        assert_eq!(runtime.state(), &GuestState::Halted);
+    }
+
+    #[test]
+    fn sunpaint_mouse_unavailable_path_restores_text_and_exits_nonzero() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+        runtime.set_mouse_enabled(false);
+        runtime.run_slice(10_000);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.state(), &GuestState::Exited { code: 1 });
+        let text: [u8; 27] = core::array::from_fn(|index| runtime.cell(index, 0).character);
+        assert_eq!(&text, b"SUNPAINT: mouse unavailable");
+    }
+
+    #[test]
+    fn sunpaint_real_guest_paints_erases_selects_clears_and_exits() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+        run_to_next_idle_hint(&mut runtime);
+        let viewport = MouseViewport::new(0, 0, 320, 200);
+
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert_eq!(runtime.mouse().ranges(), (0, 319, 0, 199));
+        assert_eq!(runtime.mouse().position(), (160, 100));
+        assert!(runtime.mouse().cursor_visible());
+        assert!(runtime.cooperative_yielded_last_slice());
+        assert_eq!(runtime.framebuffer_index(0, 0), Some(4));
+        assert_eq!(runtime.framebuffer_index(40, 0), Some(6));
+        assert_eq!(runtime.framebuffer_index(80, 0), Some(10));
+        assert_eq!(runtime.framebuffer_index(0, 16), Some(0));
+        let initial_checksum = runtime.framebuffer_checksum();
+        assert_eq!(initial_checksum, 0x0fe7_2cec_a639_10da);
+        let palette_checksum = runtime.palette_checksum();
+
+        runtime.inject_mouse_motion(viewport, 20, 30);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 20, 30, 0, true);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_motion(viewport, 50, 45);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 50, 45, 0, false);
+        run_to_next_idle_hint(&mut runtime);
+        for x in 20..=50 {
+            let y = 30 + (x - 20) / 2;
+            assert!(
+                runtime.framebuffer_index(x, y) == Some(12)
+                    || runtime.framebuffer_index(x, y + 1) == Some(12),
+                "guest Bresenham stroke has a gap near ({x},{y})"
+            );
+        }
+        let stroke_checksum = runtime.framebuffer_checksum();
+        assert_eq!(stroke_checksum, 0x6c02_e1e3_952e_ed46);
+        assert_ne!(stroke_checksum, initial_checksum);
+        assert_eq!(runtime.mouse().buttons().bits(), 0);
+        assert_eq!(runtime.palette_checksum(), palette_checksum);
+
+        runtime.inject_mouse_button(viewport, 40, 40, 1, true);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_motion(viewport, 45, 42);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 45, 42, 1, false);
+        run_to_next_idle_hint(&mut runtime);
+        assert_eq!(runtime.framebuffer_index(40, 40), Some(0));
+
+        runtime.inject_mouse_button(viewport, 100, 5, 0, true);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 100, 5, 0, false);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_motion(viewport, 70, 70);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 70, 70, 0, true);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 70, 70, 0, false);
+        run_to_next_idle_hint(&mut runtime);
+        assert_eq!(runtime.framebuffer_index(70, 70), Some(10));
+
+        runtime.inject_ascii(b'3');
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_motion(viewport, 80, 80);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 80, 80, 0, true);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 80, 80, 0, false);
+        run_to_next_idle_hint(&mut runtime);
+        assert_eq!(runtime.framebuffer_index(80, 80), Some(10));
+
+        runtime.inject_ascii(b'C');
+        run_to_next_idle_hint(&mut runtime);
+        let clear_checksum = runtime.framebuffer_checksum();
+        assert_eq!(clear_checksum, 0x74f1_cf81_d4ed_f3ec);
+        for y in 16..200 {
+            for x in 0..320 {
+                if x >= 308 && y >= 188 {
+                    continue;
+                }
+                assert_eq!(runtime.framebuffer_index(x, y), Some(0));
+            }
+        }
+        assert_eq!(runtime.framebuffer_index(80, 0), Some(10));
+        assert_eq!(runtime.framebuffer_index(80, 80), Some(0));
+
+        runtime.inject_key(BiosKey {
+            ascii: 0x1b,
+            scan_code: 0x01,
+        });
+        runtime.run_slice(100_000);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.state(), &GuestState::Exited { code: 0 });
+        assert!(!runtime.mouse().cursor_visible());
+        assert!(!runtime.mouse().captured());
+    }
+
+    #[test]
+    fn sunpaint_focus_loss_and_high_frequency_motion_never_stick_input() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+        run_to_next_idle_hint(&mut runtime);
+        let viewport = MouseViewport::new(0, 0, 320, 200);
+
+        runtime.inject_mouse_motion(viewport, 30, 30);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 30, 30, 0, true);
+        run_to_next_idle_hint(&mut runtime);
+        assert_eq!(runtime.mouse().buttons().bits(), 1);
+        runtime.mouse_focus_changed(false);
+        assert_eq!(runtime.mouse().buttons().bits(), 0);
+        assert!(!runtime.mouse().captured());
+        assert!(!runtime.inject_mouse_button(viewport, 300, 180, 0, false));
+        runtime.mouse_focus_changed(true);
+        run_to_next_idle_hint(&mut runtime);
+        let generation = runtime.framebuffer_generation();
+        runtime.inject_mouse_motion(viewport, 60, 60);
+        run_to_next_idle_hint(&mut runtime);
+        assert_eq!(runtime.framebuffer_generation(), generation);
+
+        let mouse_generation = runtime.mouse().generation();
+        runtime.inject_mouse_button(viewport, 40, 40, 0, true);
+        for index in 0..5_000i32 {
+            runtime.inject_mouse_motion(
+                viewport,
+                40 + index.rem_euclid(260),
+                20 + (index * 7).rem_euclid(170),
+            );
+        }
+        assert!(runtime.mouse().generation() > mouse_generation);
+        assert!(runtime.mouse().captured());
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 319, 199, 0, false);
+        run_to_next_idle_hint(&mut runtime);
+        assert_eq!(runtime.mouse().position(), (319, 199));
+        assert_eq!(runtime.mouse().buttons().bits(), 0);
+        assert!(!runtime.mouse().captured());
+        assert!(runtime.cooperative_yielded_last_slice());
+    }
+
+    #[test]
+    fn mouse_graphics_child_trap_releases_capture_cursor_and_restores_one_shell_prompt() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let mut runtime = Runtime::from_program(shell, b"").unwrap();
+        runtime
+            .drives_mut()
+            .add_base_file(
+                DosDrive::C,
+                "BADMOUSE.COM",
+                vec![
+                    0xb8, 0x13, 0x00, 0xcd, 0x10, // graphics
+                    0x31, 0xc0, 0xcd, 0x33, // reset mouse
+                    0xb8, 0x01, 0x00, 0xcd, 0x33, // show
+                    0xcd, 0x28, // yield so native capture can begin
+                    0x0f, // unsupported opcode
+                ],
+            )
+            .unwrap();
+        runtime.run_slice(10_000_000);
+        let shell_psp = runtime.current_psp();
+        for ascii in b"BADMOUSE\r" {
+            runtime.inject_ascii(*ascii);
+            runtime.run_slice(10_000_000);
+        }
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert!(runtime.mouse().cursor_visible());
+        runtime.inject_mouse_button(MouseViewport::new(0, 0, 320, 200), 50, 50, 0, true);
+        assert!(runtime.mouse().captured());
+        runtime.run_slice(1);
+
+        assert_eq!(runtime.current_psp(), shell_psp);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.mouse().buttons().bits(), 0);
+        assert!(!runtime.mouse().captured());
+        assert!(!runtime.mouse().cursor_visible());
+        assert!(matches!(
+            runtime.take_recovered_child_trap(),
+            Some(Trap::UnsupportedOpcode { .. })
+        ));
+        runtime.run_slice(10_000_000);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| runtime.cell(index % 80, index / 80).character);
+        assert_eq!(
+            text.windows(b"CMD C:\\>".len())
+                .filter(|window| *window == b"CMD C:\\>")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn shell_runs_real_sunpaint_stroke_then_escape_and_dir_with_one_restored_prompt() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let sunpaint = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM");
+        let mut runtime = Runtime::from_program(shell, b"").unwrap();
+        runtime
+            .drives_mut()
+            .add_base_directory(DosDrive::C, "TESTS")
+            .unwrap();
+        runtime
+            .drives_mut()
+            .add_base_file(DosDrive::C, "TESTS/SUNPAINT.COM", sunpaint.to_vec())
+            .unwrap();
+        runtime.run_slice(10_000_000);
+        let shell_psp = runtime.current_psp();
+
+        for ascii in b"SUNPAINT\r" {
+            runtime.inject_ascii(*ascii);
+            runtime.run_slice(10_000_000);
+        }
+        run_to_next_idle_hint(&mut runtime);
+        let child_psp = runtime.current_psp();
+        assert_ne!(child_psp, shell_psp);
+        let viewport = MouseViewport::new(0, 0, 320, 200);
+        runtime.inject_mouse_motion(viewport, 25, 25);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 25, 25, 0, true);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_motion(viewport, 45, 35);
+        run_to_next_idle_hint(&mut runtime);
+        runtime.inject_mouse_button(viewport, 45, 35, 0, false);
+        run_to_next_idle_hint(&mut runtime);
+        assert_eq!(runtime.framebuffer_index(25, 25), Some(12));
+        assert_eq!(runtime.framebuffer_index(45, 35), Some(12));
+
+        runtime.inject_key(BiosKey {
+            ascii: 0x1b,
+            scan_code: 0x01,
+        });
+        runtime.run_slice(100_000);
+        assert_eq!(runtime.current_psp(), shell_psp);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        assert!(runtime.parent_process.is_none());
+        assert!(runtime
+            .arena
+            .blocks()
+            .iter()
+            .all(|block| block.owner_psp != Some(child_psp)));
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| runtime.cell(index % 80, index / 80).character);
+        assert_eq!(
+            text.windows(b"CMD C:\\>".len())
+                .filter(|window| *window == b"CMD C:\\>")
+                .count(),
+            1
+        );
+
+        for ascii in b"DIR\r" {
+            runtime.inject_ascii(*ascii);
+            runtime.run_slice(10_000_000);
+        }
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| runtime.cell(index % 80, index / 80).character);
+        assert_eq!(
+            text.windows(b"CMD C:\\>".len())
+                .filter(|window| *window == b"CMD C:\\>")
+                .count(),
+            2,
+            "DIR must complete and return exactly its next shell prompt"
+        );
+    }
+
+    #[test]
+    fn sunpaint_bounded_interaction_soak_has_no_stuck_state_or_arena_growth() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+        run_to_next_idle_hint(&mut runtime);
+        let viewport = MouseViewport::new(0, 0, 320, 200);
+        let arena_blocks = runtime.arena.blocks().len();
+        let framebuffer_len = runtime.memory.len();
+
+        for cycle in 0..100i32 {
+            let button = if cycle & 1 == 0 { 0 } else { 1 };
+            let start_x = 10 + (cycle * 13).rem_euclid(280);
+            let start_y = 20 + (cycle * 17).rem_euclid(160);
+            runtime.inject_mouse_button(viewport, start_x, start_y, button, true);
+            run_to_next_idle_hint(&mut runtime);
+            for sample in 0..30i32 {
+                runtime.inject_mouse_motion(
+                    viewport,
+                    (start_x + sample * 11).rem_euclid(320),
+                    16 + (start_y + sample * 7).rem_euclid(184),
+                );
+            }
+            run_to_next_idle_hint(&mut runtime);
+            let (x, y) = runtime.mouse().position();
+            runtime.inject_mouse_button(viewport, i32::from(x), i32::from(y), button, false);
+            run_to_next_idle_hint(&mut runtime);
+            if cycle % 10 == 0 {
+                runtime.mouse_focus_changed(false);
+                runtime.mouse_focus_changed(true);
+            }
+            if cycle % 20 == 0 {
+                runtime.inject_ascii(b'C');
+                run_to_next_idle_hint(&mut runtime);
+            }
+        }
+
+        assert_eq!(runtime.memory.len(), framebuffer_len);
+        assert_eq!(runtime.arena.blocks().len(), arena_blocks);
+        assert_eq!(runtime.mouse().buttons().bits(), 0);
+        assert!(!runtime.mouse().captured());
+        assert!(runtime.cooperative_yield_count() > 200);
+        runtime.inject_ascii(0x1b);
+        runtime.run_slice(100_000);
+        assert_eq!(runtime.state(), &GuestState::Exited { code: 0 });
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+    }
+
+    #[test]
+    fn unsupported_bios_video_modes_are_explicit_and_do_not_change_state() {
+        let mut runtime = runtime_for(&[]);
+        runtime.cpu.ax = 0x0012;
+        assert_eq!(
+            super::dos::dispatch(&mut runtime, 0x10),
+            Err(Trap::UnsupportedVideoMode { mode: 0x12 })
+        );
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.memory.read_u8(0x40, 0x49), 0x03);
+    }
+
+    #[test]
+    fn rep_stosb_and_stosw_fill_authoritative_mode13_memory_cooperatively() {
+        let mut byte_fill = runtime_for(&[
+            0xb8, 0x13, 0x00, 0xcd, 0x10, 0xb8, 0x00, 0xa0, 0x8e, 0xc0, 0x31, 0xff, 0xb0, 0x2a,
+            0xb9, 0x00, 0xfa, 0xfc, 0xf3, 0xaa, 0xb4, 0x00, 0xcd, 0x16,
+        ]);
+        byte_fill.run_slice(9);
+        assert_eq!(byte_fill.cpu.cx, 0xf9ff, "REP must remain slice-resumable");
+        byte_fill.run_slice(100_000);
+        assert_eq!(byte_fill.state(), &GuestState::WaitingForInput);
+        assert_eq!(byte_fill.framebuffer_index(0, 0), Some(0x2a));
+        assert_eq!(byte_fill.framebuffer_index(319, 199), Some(0x2a));
+        assert_eq!(byte_fill.framebuffer_generation(), 64_000);
+
+        let mut word_fill = runtime_for(&[
+            0xb8, 0x13, 0x00, 0xcd, 0x10, 0xb8, 0x00, 0xa0, 0x8e, 0xc0, 0x31, 0xff, 0xb8, 0x01,
+            0x02, 0xb9, 0x00, 0x7d, 0xfc, 0xf3, 0xab, 0xb4, 0x00, 0xcd, 0x16,
+        ]);
+        word_fill.run_slice(100_000);
+        assert_eq!(word_fill.state(), &GuestState::WaitingForInput);
+        assert_eq!(word_fill.framebuffer_index(0, 0), Some(1));
+        assert_eq!(word_fill.framebuffer_index(1, 0), Some(2));
+        assert_eq!(word_fill.framebuffer_index(319, 199), Some(2));
+    }
+
+    #[test]
+    fn vgalab_guest_generates_the_static_image_and_waits_without_spinning() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/VGALAB.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+        runtime.run_slice(1_000_000);
+
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(runtime.framebuffer_index(0, 0), Some(0));
+        assert_eq!(runtime.framebuffer_index(0, 32), Some(16));
+        assert_eq!(runtime.framebuffer_index(319, 32), Some(79));
+        assert_eq!(runtime.framebuffer_index(24, 64), Some(11));
+        assert_eq!(runtime.framebuffer_index(8, 56), Some(14));
+        assert_eq!(runtime.framebuffer_index(16, 64), Some(12));
+        assert_eq!(runtime.framebuffer_index(303, 64), Some(10));
+        assert_eq!(runtime.framebuffer_index(140, 84), Some(6));
+        assert_eq!(runtime.framebuffer_index(146, 90), Some(14));
+        assert_eq!(runtime.framebuffer_index(152, 98), Some(15));
+        assert_eq!(runtime.framebuffer_index(0, 199), Some(1));
+        assert_eq!(runtime.framebuffer_checksum(), 0xe775_e5c1_2250_d879);
+
+        let cpu = runtime.cpu;
+        let generation = runtime.framebuffer_generation();
+        assert!(!runtime.run_slice(1_000_000));
+        assert_eq!(runtime.cpu, cpu);
+        assert_eq!(runtime.framebuffer_generation(), generation);
+    }
+
+    #[test]
+    fn vgalab_completes_static_drawing_under_small_execution_slices() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/VGALAB.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+        let mut slices = 0usize;
+        while matches!(runtime.state(), GuestState::Ready | GuestState::Running) {
+            runtime.run_slice(128);
+            slices += 1;
+            assert!(slices < 2_000, "guest drawing exceeded bounded slice limit");
+        }
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(slices, 831);
+    }
+
+    #[test]
+    fn shell_command_path_runs_vgalab_and_escape_returns_one_clean_prompt() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let vgalab = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/VGALAB.COM");
+        let mut runtime = Runtime::from_program(shell, b"").unwrap();
+        runtime
+            .drives_mut()
+            .add_base_directory(DosDrive::C, "TESTS")
+            .unwrap();
+        runtime
+            .drives_mut()
+            .add_base_file(DosDrive::C, "TESTS/VGALAB.COM", vgalab.to_vec())
+            .unwrap();
+        runtime.run_slice(10_000_000);
+        let shell_psp = runtime.current_psp();
+
+        for ascii in [b'V', b'G', b'A', b'L', b'A', b'B', b'\r'] {
+            runtime.inject_ascii(ascii);
+            runtime.run_slice(10_000_000);
+        }
+        let screen: [u8; 400] =
+            core::array::from_fn(|index| runtime.cell(index % 80, index / 80).character);
+        assert_ne!(
+            runtime.current_psp(),
+            shell_psp,
+            "state={:?} screen={screen:?}",
+            runtime.state()
+        );
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(runtime.framebuffer_checksum(), 0xe775_e5c1_2250_d879);
+
+        runtime.inject_key(BiosKey {
+            ascii: 0x1b,
+            scan_code: 0x01,
+        });
+        runtime.run_slice(10_000_000);
+        assert_eq!(runtime.current_psp(), shell_psp);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(
+            runtime.last_delivered_child_result(),
+            Some(super::ChildResult {
+                code: 0,
+                termination: TerminationType::Normal,
+            })
+        );
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| runtime.cell(index % 80, index / 80).character);
+        assert_eq!(
+            text.windows(b"CMD C:\\>".len())
+                .filter(|window| *window == b"CMD C:\\>")
+                .count(),
+            1
+        );
+        runtime.inject_ascii(b'X');
+        runtime.run_slice(10_000);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        runtime.inject_ascii(0x08);
+        runtime.run_slice(10_000);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+    }
+
+    #[test]
+    fn trapped_graphics_child_restores_text_parent_generically() {
+        let parent = mz_program(&[0xeb, 0xfe]);
+        let mut runtime = Runtime::from_program(&parent, b"").unwrap();
+        runtime
+            .drives_mut()
+            .add_base_file(
+                DosDrive::C,
+                "BROKEN.COM",
+                vec![0xb8, 0x13, 0x00, 0xcd, 0x10, 0x0f],
+            )
+            .unwrap();
+        let path = runtime.drives().parse_path(b"C:\\BROKEN.COM").unwrap();
+        let parent_psp = runtime.current_psp();
+        runtime.exec(path, b"", 0).unwrap();
+        runtime.run_slice(3);
+
+        assert_eq!(runtime.current_psp(), parent_psp);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.memory.read_u8(0x40, 0x49), 0x03);
+        assert_eq!(
+            runtime.active_process.child_result,
+            Some(super::ChildResult {
+                code: 1,
+                termination: TerminationType::RuntimeTrap,
+            })
+        );
+        assert!(matches!(
+            runtime.take_recovered_child_trap(),
+            Some(Trap::UnsupportedOpcode { .. })
+        ));
+        assert_eq!(runtime.state(), &GuestState::Running);
+    }
+
+    #[test]
+    fn graphics_child_exit_without_mode_restore_falls_back_to_text_parent() {
+        let parent = mz_program(&[0xeb, 0xfe]);
+        let mut runtime = Runtime::from_program(&parent, b"").unwrap();
+        runtime
+            .drives_mut()
+            .add_base_file(
+                DosDrive::C,
+                "NORESTORE.COM",
+                vec![0xb8, 0x13, 0x00, 0xcd, 0x10, 0xb8, 0x07, 0x4c, 0xcd, 0x21],
+            )
+            .unwrap();
+        let path = runtime.drives().parse_path(b"C:\\NORESTORE.COM").unwrap();
+        runtime.exec(path, b"", 0).unwrap();
+        runtime.run_slice(4);
+
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.memory.read_u8(0x40, 0x49), 0x03);
+        assert_eq!(
+            runtime.active_process.child_result,
+            Some(super::ChildResult {
+                code: 7,
+                termination: TerminationType::Normal,
+            })
+        );
+        assert_eq!(runtime.state(), &GuestState::Running);
+    }
+
+    #[test]
+    fn shell_recovers_from_a_trapped_graphics_child_and_remains_interactive() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let mut runtime = Runtime::from_program(shell, b"").unwrap();
+        runtime
+            .drives_mut()
+            .add_base_file(
+                DosDrive::C,
+                "BROKEN.COM",
+                vec![0xb8, 0x13, 0x00, 0xcd, 0x10, 0x0f],
+            )
+            .unwrap();
+        runtime.run_slice(10_000_000);
+
+        for ascii in [b'B', b'R', b'O', b'K', b'E', b'N', b'\r'] {
+            runtime.inject_ascii(ascii);
+            runtime.run_slice(10_000_000);
+        }
+
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(
+            runtime.last_delivered_child_result(),
+            Some(super::ChildResult {
+                code: 1,
+                termination: TerminationType::RuntimeTrap,
+            })
+        );
+        assert!(matches!(
+            runtime.take_recovered_child_trap(),
+            Some(Trap::UnsupportedOpcode { .. })
+        ));
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| runtime.cell(index % 80, index / 80).character);
+        assert_eq!(
+            text.windows(b"CMD C:\\>".len())
+                .filter(|window| *window == b"CMD C:\\>")
+                .count(),
+            1
+        );
+        runtime.inject_ascii(b'X');
+        runtime.run_slice(10_000);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+    }
+
+    #[test]
+    fn runtime_decodes_every_8086_in_out_form_with_correct_ip_and_register_policy() {
+        for opcode in [0xe4, 0xe5, 0xe6, 0xe7] {
+            let mut runtime = runtime_for(&[opcode, 0xc9]);
+            runtime.cpu.ax = 0x1234;
+            runtime.cpu.dx = 0x5678;
+            runtime.cpu.flags = 0x0ad7;
+            runtime.set_cpu_profile(super::CpuProfile::I8086);
+            runtime.step();
+            let GuestState::Trapped(Trap::UnsupportedIoPort {
+                port,
+                cs,
+                ip,
+                active_executable,
+                application_id,
+                ..
+            }) = runtime.state()
+            else {
+                panic!("immediate I/O opcode {opcode:02x} did not trap structurally");
+            };
+            assert_eq!(*port, 0x00c9, "imm8 ports are zero-extended");
+            assert_eq!((*cs, *ip), (PSP_SEGMENT, 0x0100));
+            assert_eq!(runtime.cpu.ip, 0x0102);
+            assert_eq!(runtime.cpu.dx, 0x5678);
+            assert_eq!(runtime.cpu.flags, 0x0ad7);
+            assert_eq!(active_executable, b"C:\\PROGRAM.COM");
+            assert_eq!(application_id, b"org.sunlight.chronos");
+        }
+
+        let mut out_byte = runtime_for(&[0xee]);
+        out_byte.cpu.dx = 0x03c8;
+        out_byte.cpu.ax = 0x7f20;
+        out_byte.cpu.flags = 0x0ad7;
+        out_byte.step();
+        assert_eq!(out_byte.cpu.ip, 0x0101);
+        assert_eq!(out_byte.cpu.dx, 0x03c8);
+        assert_eq!(out_byte.cpu.flags, 0x0ad7);
+
+        let mut out_word = runtime_for(&[0xef]);
+        out_word.cpu.dx = 0x03c7;
+        out_word.cpu.ax = 0x2020;
+        out_word.step();
+        assert_eq!(out_word.cpu.ip, 0x0101);
+        assert_eq!(out_word.cpu.dx, 0x03c7);
+
+        let mut in_byte = runtime_for(&[0xec]);
+        in_byte.cpu.dx = 0x03c9;
+        in_byte.cpu.ax = 0xaa55;
+        in_byte.cpu.flags = 0x0ad7;
+        in_byte.step();
+        assert_eq!(in_byte.cpu.ip, 0x0101);
+        assert_eq!(in_byte.cpu.ax, 0xaa00);
+        assert_eq!(in_byte.cpu.dx, 0x03c9);
+        assert_eq!(in_byte.cpu.flags, 0x0ad7);
+
+        let mut in_word = runtime_for(&[0xed]);
+        in_word.cpu.dx = 0x03c9;
+        in_word.cpu.ax = 0xaa55;
+        in_word.step();
+        assert_eq!(in_word.cpu.ip, 0x0101);
+        assert_eq!(in_word.cpu.ax, 0xaa55);
+        assert!(matches!(
+            in_word.state(),
+            GuestState::Trapped(Trap::UnsupportedIoPort {
+                operation: IoOperation::Read,
+                port: 0x03c9,
+                width: IoWidth::Word,
+                value: None,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn palette_only_updates_reconvert_pixels_without_faking_framebuffer_damage() {
+        let mut runtime = runtime_for(&[
+            0xb8, 0x13, 0x00, 0xcd, 0x10, 0xb8, 0x00, 0xa0, 0x8e, 0xc0, 0x31, 0xff, 0xb0, 32, 0xaa,
+            0xba, 0xc8, 0x03, 0xb0, 32, 0xee, 0x42, 0xb0, 63, 0xee, 0x30, 0xc0, 0xee, 0xee, 0xf4,
+        ]);
+        runtime.run_slice(7);
+        assert_eq!(runtime.framebuffer_index(0, 0), Some(32));
+        runtime.take_graphics_dirty_rows();
+        let framebuffer_generation = runtime.framebuffer_generation();
+        runtime.run_slice(64);
+        assert_eq!(runtime.palette_generation(), 2);
+        assert!(!runtime
+            .take_graphics_dirty_rows()
+            .iter()
+            .any(|dirty| *dirty));
+        assert_eq!(runtime.framebuffer_generation(), framebuffer_generation);
+
+        let mut converted = alloc::vec![Rgb8::default(); VGA_FRAMEBUFFER_BYTES];
+        let rows = [true; VGA_HEIGHT];
+        assert!(runtime.convert_graphics_rows(&rows, &mut converted));
+        assert_eq!(converted[0], Rgb8::new(255, 0, 0));
+        assert_eq!(runtime.framebuffer_index(0, 0), Some(32));
+    }
+
+    #[test]
+    fn palcycle_guest_has_deterministic_palette_checkpoints_and_static_framebuffer() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+
+        run_to_palette_generation(&mut runtime, 33);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert_eq!(runtime.framebuffer_checksum(), 0x2911_9770_0f65_2b25);
+        assert_eq!(runtime.framebuffer_generation(), 51_840);
+        assert_eq!(runtime.palette_checksum(), 0x055f_8c3d_d0a4_e6de);
+        assert_eq!(runtime.framebuffer_index(0, 20), Some(32));
+        let framebuffer_checksum = runtime.framebuffer_checksum();
+        let framebuffer_generation = runtime.framebuffer_generation();
+
+        let mut pixels = alloc::vec![Rgb8::default(); VGA_FRAMEBUFFER_BYTES];
+        assert!(runtime.convert_graphics_rows(&[true; VGA_HEIGHT], &mut pixels));
+        let checkpoint_zero_pixel = pixels[20 * 320];
+
+        run_to_palette_generation(&mut runtime, 65);
+        assert_eq!(runtime.palette_checksum(), 0xac08_f70b_ac57_1700);
+        assert_eq!(runtime.framebuffer_checksum(), framebuffer_checksum);
+        assert_eq!(runtime.framebuffer_generation(), framebuffer_generation);
+        assert!(runtime.convert_graphics_rows(&[true; VGA_HEIGHT], &mut pixels));
+        assert_ne!(pixels[20 * 320], checkpoint_zero_pixel);
+
+        run_to_palette_generation(&mut runtime, 33 + 32 * 32);
+        assert_eq!(runtime.palette_checksum(), 0x055f_8c3d_d0a4_e6de);
+        assert_eq!(runtime.framebuffer_checksum(), framebuffer_checksum);
+        assert_eq!(runtime.framebuffer_generation(), framebuffer_generation);
+    }
+
+    #[test]
+    fn palcycle_escape_restores_default_dac_and_text_mode() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+        run_to_palette_generation(&mut runtime, 33);
+        runtime.inject_key(BiosKey {
+            ascii: 0x1b,
+            scan_code: 0x01,
+        });
+        runtime.run_slice(20_000);
+        assert_eq!(runtime.state(), &GuestState::Exited { code: 0 });
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.palette(), &DEFAULT_VGA_PALETTE);
+    }
+
+    #[test]
+    fn incomplete_dac_entry_is_never_committed() {
+        let mut runtime = runtime_for(&[
+            0xb8, 0x13, 0x00, 0xcd, 0x10, 0xba, 0xc8, 0x03, 0xb0, 32, 0xee, 0x42, 0xb0, 63, 0xee,
+            0xee, 0xb8, 0x03, 0x00, 0xcd, 0x10, 0xb8, 0x00, 0x4c, 0xcd, 0x21,
+        ]);
+        let original = runtime.palette_entries()[32];
+        runtime.run_slice(64);
+        assert_eq!(runtime.state(), &GuestState::Exited { code: 0 });
+        assert_eq!(runtime.palette_generation(), 1);
+        assert_eq!(runtime.palette_entries()[32], original);
+    }
+
+    #[test]
+    fn repeated_mode13_selection_restores_default_dac_and_resets_sequences() {
+        let mut runtime = runtime_for(&[
+            0xb8, 0x13, 0x00, 0xcd, 0x10, 0xba, 0xc8, 0x03, 0xb0, 32, 0xee, 0x42, 0xb0, 63, 0xee,
+            0x30, 0xc0, 0xee, 0xee, 0xb8, 0x13, 0x00, 0xcd, 0x10, 0xf4,
+        ]);
+        runtime.run_slice(64);
+        assert_eq!(runtime.state(), &GuestState::Halted);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert_eq!(runtime.palette_generation(), 3);
+        assert_eq!(runtime.palette(), &DEFAULT_VGA_PALETTE);
+        assert_eq!(runtime.palette_entries(), &crate::default_vga_dac_entries());
+    }
+
+    #[test]
+    fn unsupported_io_child_trap_restores_parent_and_carries_guest_identity() {
+        let parent = mz_program(&[0xeb, 0xfe]);
+        let mut runtime = Runtime::from_program(&parent, b"").unwrap();
+        runtime.set_application_id(b"org.sunlight.io-test");
+        runtime
+            .drives_mut()
+            .add_base_file(
+                DosDrive::C,
+                "BADIO.COM",
+                alloc::vec![0xba, 0x34, 0x12, 0xb0, 7, 0xee],
+            )
+            .unwrap();
+        let path = runtime.drives().parse_path(b"C:\\BADIO.COM").unwrap();
+        let parent_psp = runtime.current_psp();
+        runtime.exec(path, b"", 0).unwrap();
+        runtime.run_slice(3);
+        assert_eq!(runtime.current_psp(), parent_psp);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert!(matches!(
+            runtime.take_recovered_child_trap(),
+            Some(Trap::UnsupportedIoPort {
+                operation: IoOperation::Write,
+                port: 0x1234,
+                width: IoWidth::Byte,
+                value: Some(7),
+                active_executable,
+                application_id,
+                ..
+            }) if active_executable == b"C:\\BADIO.COM" && application_id == b"org.sunlight.io-test"
+        ));
+    }
+
+    #[test]
+    fn shell_runs_palcycle_escape_then_ver_and_dir_with_one_restored_prompt() {
+        let shell = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let palcycle = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM");
+        let mut runtime = Runtime::from_program(shell, b"").unwrap();
+        runtime
+            .drives_mut()
+            .add_base_directory(DosDrive::C, "TESTS")
+            .unwrap();
+        runtime
+            .drives_mut()
+            .add_base_file(DosDrive::C, "TESTS/PALCYCLE.COM", palcycle.to_vec())
+            .unwrap();
+        runtime.run_slice(10_000_000);
+        let shell_psp = runtime.current_psp();
+
+        for ascii in b"PALCYCLE" {
+            runtime.inject_ascii(*ascii);
+            runtime.run_slice(10_000_000);
+        }
+        runtime.inject_ascii(b'\r');
+        run_to_palette_generation(&mut runtime, 33);
+        assert_ne!(runtime.current_psp(), shell_psp);
+        let child_psp = runtime.current_psp();
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert_eq!(runtime.framebuffer_checksum(), 0x2911_9770_0f65_2b25);
+
+        runtime.inject_key(BiosKey {
+            ascii: 0x1b,
+            scan_code: 0x01,
+        });
+        runtime.run_slice(20_000);
+        assert_eq!(runtime.current_psp(), shell_psp);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        assert!(runtime.parent_process.is_none());
+        assert!(runtime
+            .arena
+            .blocks()
+            .iter()
+            .all(|block| block.owner_psp != Some(child_psp)));
+        assert_eq!(
+            runtime.last_delivered_child_result(),
+            Some(super::ChildResult {
+                code: 0,
+                termination: TerminationType::Normal,
+            })
+        );
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| runtime.cell(index % 80, index / 80).character);
+        assert_eq!(
+            text.windows(b"CMD C:\\>".len())
+                .filter(|window| *window == b"CMD C:\\>")
+                .count(),
+            1
+        );
+
+        for command in [b"VER\r".as_slice(), b"DIR\r".as_slice()] {
+            for ascii in command {
+                runtime.inject_ascii(*ascii);
+                runtime.run_slice(10_000_000);
+            }
+            assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        }
+        let text: [u8; 2000] =
+            core::array::from_fn(|index| runtime.cell(index % 80, index / 80).character);
+        assert!(text
+            .windows(b"Sunlight DOS Shell 0.1".len())
+            .any(|window| window == b"Sunlight DOS Shell 0.1"));
+        assert!(text
+            .windows(b"item(s)".len())
+            .any(|window| window == b"item(s)"));
+    }
+
+    #[test]
+    #[ignore = "bounded three-minute-equivalent PALCYCLE soak"]
+    fn palcycle_three_minute_equivalent_soak_has_no_growth_or_framebuffer_churn() {
+        const FRAMES: u64 = 30 * 60 * 3;
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM");
+        let mut runtime = Runtime::from_com(image).unwrap();
+        run_to_palette_generation(&mut runtime, 33);
+        let framebuffer_checksum = runtime.framebuffer_checksum();
+        let framebuffer_generation = runtime.framebuffer_generation();
+        let process_psp = runtime.current_psp();
+        let arena_blocks = runtime.arena.blocks().to_vec();
+        let open_handles = (0..=u16::MAX)
+            .filter(|handle| runtime.handles.get(*handle).is_ok())
+            .count();
+        let target_generation = 33 + FRAMES * 32;
+        let mut slices = 0usize;
+        while runtime.palette_generation() < target_generation {
+            runtime.run_slice(4096);
+            slices += 1;
+            assert!(slices < 10_000, "bounded soak exceeded its slice cap");
+        }
+        assert_eq!(runtime.current_psp(), process_psp);
+        assert!(runtime.parent_process.is_none());
+        assert_eq!(runtime.arena.blocks(), arena_blocks.as_slice());
+        assert_eq!(
+            (0..=u16::MAX)
+                .filter(|handle| runtime.handles.get(*handle).is_ok())
+                .count(),
+            open_handles
+        );
+        assert_eq!(runtime.framebuffer_checksum(), framebuffer_checksum);
+        assert_eq!(runtime.framebuffer_generation(), framebuffer_generation);
+        assert!(runtime.palette_generation() >= target_generation);
+        assert_eq!(runtime.unsupported_io_attempts(), 0);
     }
 }

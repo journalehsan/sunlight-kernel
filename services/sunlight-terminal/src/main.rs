@@ -1901,7 +1901,10 @@ impl App for TerminalApp {
             Event::MouseDown { .. } => {
                 self.clear_tracked_mods();
             }
-            Event::MouseUp { .. } | Event::MouseMove { .. } => {}
+            Event::MouseUp { .. }
+            | Event::MouseMove { .. }
+            | Event::FocusChanged { .. }
+            | Event::PointerOwnership { .. } => {}
         }
         dirty
     }

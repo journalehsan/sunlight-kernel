@@ -20,6 +20,13 @@ pub enum Event {
     /// Pointer moved (no button change). Coordinates are window-local.
     MouseMove { x: i32, y: i32 },
 
+    /// The compositor changed keyboard/input focus for this window.
+    FocusChanged { focused: bool },
+
+    /// The native pointer entered or left this window's owned client input
+    /// region. Captured drags remain owned until their final release.
+    PointerOwnership { owned: bool, captured: bool },
+
     /// Decoded character input.
     Key(char),
 

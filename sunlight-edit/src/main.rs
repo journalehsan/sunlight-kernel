@@ -2398,6 +2398,16 @@ impl App for EditApp {
                 ctrl,
                 ..
             } => self.handle_key_press(keycode, pressed, shift, ctrl),
+            Event::FocusChanged { focused: false }
+            | Event::PointerOwnership { owned: false, .. } => {
+                self.toolbar_pressed = None;
+                self.selection.drag_anchor = None;
+                self.selection.drag_active = false;
+                false
+            }
+            Event::FocusChanged { focused: true } | Event::PointerOwnership { owned: true, .. } => {
+                false
+            }
         }
     }
 }

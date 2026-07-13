@@ -315,6 +315,15 @@ pub mod sgp {
         pub const CREATE_WINDOW: u64 = 0xA101;
         pub const COMMIT_FRAME: u64 = 0xA102;
         pub const EVENT_POLL: u64 = 0xA103;
+        /// EVENT_POLL reply words[3] low byte is the physical button mask.
+        /// These upper bits describe delivery ownership without exposing any
+        /// compositor object or desktop-global pointer handle.
+        pub const EVENT_FLAG_FOCUSED: u64 = 1 << 8;
+        pub const EVENT_FLAG_POINTER_OWNED: u64 = 1 << 9;
+        pub const EVENT_FLAG_POINTER_CAPTURED: u64 = 1 << 10;
+        /// Focus was acquired by the physical button transition represented in
+        /// this same poll (as opposed to keyboard/window-manager focus).
+        pub const EVENT_FLAG_FOCUS_PRESS: u64 = 1 << 11;
         /// Normal window lifecycle cleanup. Clients should send this before
         /// releasing their local SHM mapping so the compositor can drop its
         /// window metadata and display-side SHM ownership.

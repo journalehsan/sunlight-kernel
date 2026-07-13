@@ -738,7 +738,7 @@ struct Window {
     surface_height_rows: u32,
     surface_stride_bytes: usize,
     surface_len_bytes: usize,
-    x: u32,      // chrome top-left on screen
+    x: u32, // chrome top-left on screen
     y: u32,
     // Saved normal geometry for restore from maximized/fullscreen.
     saved_x: u32,
@@ -760,6 +760,9 @@ struct Window {
     last_mouse_x: u16,
     last_mouse_y: u16,
     last_buttons: u8,
+    /// One-poll marker distinguishing a real focus click from focus gained by
+    /// keyboard/window management while a physical button happens to be held.
+    focus_press_pending: bool,
     /// When true the window is collapsed to its titlebar only (shade/roll-up).
     /// Client content is not blitted. A second titlebar double-click restores it.
     rolled_up: bool,
@@ -971,6 +974,10 @@ struct CompositorState {
     /// Set when a TitleBar click lands; promoted to ActiveDrag::Move once
     /// the cursor travels more than DRAG_THRESHOLD_PX from the press point.
     pending_move_drag: Option<(u64, i32, i32)>,
+    /// Generic client-area drag capture. It only affects delivery to the
+    /// originating window and always ends on final physical button release or
+    /// focus loss; applications still decide whether a nested viewport uses it.
+    client_pointer_capture: Option<u64>,
     prev_buttons: u8,
     #[allow(dead_code)]
     fb: *mut u32,
@@ -1218,19 +1225,39 @@ fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (
     let mouse_x = state.mouse_x;
     let mouse_y = state.mouse_y;
     let target_id = topmost_window_id_at(&state, mouse_x as u32, mouse_y as u32);
+    let focused_id = focused_window_id(state);
+    if state.client_pointer_capture.is_some() && state.client_pointer_capture != focused_id {
+        state.client_pointer_capture = None;
+    }
+    let captured_id = state.client_pointer_capture;
     let win = &mut state.windows[win_idx];
-    if target_id == Some(win.id) {
+    let pointer_owned = target_id == Some(win.id) || captured_id == Some(win.id);
+    let mut flags = 0;
+    if focused_id == Some(win.id) {
+        flags |= SgpMsg::EVENT_FLAG_FOCUSED;
+    }
+    if pointer_owned {
+        flags |= SgpMsg::EVENT_FLAG_POINTER_OWNED;
+    }
+    if captured_id == Some(win.id) {
+        flags |= SgpMsg::EVENT_FLAG_POINTER_CAPTURED;
+    }
+    if win.focus_press_pending {
+        flags |= SgpMsg::EVENT_FLAG_FOCUS_PRESS;
+        win.focus_press_pending = false;
+    }
+    if pointer_owned {
         win.last_mouse_x = mouse_x;
         win.last_mouse_y = mouse_y;
         win.last_buttons = state.prev_buttons;
         (
             (mouse_x as u64) | ((mouse_y as u64) << 16),
-            state.prev_buttons as u64,
+            state.prev_buttons as u64 | flags,
         )
     } else {
         (
             (win.last_mouse_x as u64) | ((win.last_mouse_y as u64) << 16),
-            win.last_buttons as u64,
+            win.last_buttons as u64 | flags,
         )
     }
 }
@@ -1598,6 +1625,9 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
     }
 
     let win = state.windows.remove(pos);
+    if state.client_pointer_capture == Some(win_id) {
+        state.client_pointer_capture = None;
+    }
     let was_desktop = win.config.window_type == WindowType::Desktop;
     let restore_focus_id = if win.config.window_type == WindowType::Dialog {
         (win.parent_focus_window_id != 0).then_some(win.parent_focus_window_id)
@@ -2820,7 +2850,12 @@ fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) 
     ) else {
         return;
     };
-    let Ok(source) = layout.readable_rect(0, 0, state.fb_width, PANEL_TOP_RESERVED_H.min(state.fb_height)) else {
+    let Ok(source) = layout.readable_rect(
+        0,
+        0,
+        state.fb_width,
+        PANEL_TOP_RESERVED_H.min(state.fb_height),
+    ) else {
         return;
     };
     let strip_rows = source.height as usize;
@@ -3227,6 +3262,7 @@ mod tests {
             last_mouse_x: 0,
             last_mouse_y: 0,
             last_buttons: 0,
+            focus_press_pending: false,
             rolled_up: false,
             saved_unrolled_h: h,
             workspace_id: 0,
@@ -3249,6 +3285,7 @@ mod tests {
             keyboard: KeyboardState::new(),
             active_drag: ActiveDrag::None,
             pending_move_drag: None,
+            client_pointer_capture: None,
             prev_buttons: 0,
             fb: core::ptr::null_mut(),
             fb_width: 800,
@@ -3354,10 +3391,54 @@ mod tests {
 
         let top = mouse_poll_words_for_window(&mut state, 1);
         assert_eq!(top.0, 120 | (90 << 16));
-        assert_eq!(top.1, 1);
+        assert_eq!(
+            top.1,
+            1 | SgpMsg::EVENT_FLAG_FOCUSED | SgpMsg::EVENT_FLAG_POINTER_OWNED
+        );
         assert_eq!(state.windows[1].last_mouse_x, 120);
         assert_eq!(state.windows[1].last_mouse_y, 90);
         assert_eq!(state.windows[1].last_buttons, 1);
+    }
+
+    #[test]
+    fn client_capture_delivers_outside_motion_and_focus_loss_ends_it() {
+        let mut state = test_state(vec![test_window(
+            7,
+            40,
+            40,
+            220,
+            180,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        )]);
+        state.mouse_x = 700;
+        state.mouse_y = 500;
+        state.prev_buttons = 1;
+        state.client_pointer_capture = Some(7);
+        let captured = mouse_poll_words_for_window(&mut state, 0);
+        assert_eq!(captured.0, 700 | (500 << 16));
+        assert_eq!(
+            captured.1,
+            1 | SgpMsg::EVENT_FLAG_FOCUSED
+                | SgpMsg::EVENT_FLAG_POINTER_OWNED
+                | SgpMsg::EVENT_FLAG_POINTER_CAPTURED
+        );
+
+        state.windows.push(test_window(
+            8,
+            0,
+            0,
+            100,
+            100,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        ));
+        let old = mouse_poll_words_for_window(&mut state, 0);
+        assert_eq!(state.client_pointer_capture, None);
+        assert_eq!(old.1 & SgpMsg::EVENT_FLAG_FOCUSED, 0);
+        assert_eq!(old.1 & SgpMsg::EVENT_FLAG_POINTER_CAPTURED, 0);
     }
 
     #[test]
@@ -3749,6 +3830,7 @@ pub extern "C" fn _start() -> ! {
         keyboard: KeyboardState::new(),
         active_drag: ActiveDrag::None,
         pending_move_drag: None,
+        client_pointer_capture: None,
         prev_buttons: 0,
         fb: fb_ptr as *mut u32,
         fb_width: render_width,
@@ -3946,6 +4028,7 @@ pub extern "C" fn _start() -> ! {
                                 last_mouse_x: 0,
                                 last_mouse_y: 0,
                                 last_buttons: 0,
+                                focus_press_pending: false,
                                 rolled_up: false,
                                 saved_unrolled_h: h,
                                 workspace_id: state.active_workspace_id,
@@ -4342,7 +4425,8 @@ pub extern "C" fn _start() -> ! {
                 } else if pressed && !was_down && super_down && keycode == KEY_V {
                     toggle_clipman(&mut state);
                     consumed = true;
-                } else if pressed && !was_down && (super_down || ctrl_down) && keycode == KEY_PERIOD {
+                } else if pressed && !was_down && (super_down || ctrl_down) && keycode == KEY_PERIOD
+                {
                     toggle_emoji_picker(&mut state);
                     consumed = true;
                 } else if pressed && !was_down && ctrl_down && keycode == KEY_SPACE {
@@ -4482,6 +4566,23 @@ pub extern "C" fn _start() -> ! {
                     left_down && !was_left_down,
                 );
 
+                // Capture any client-area drag at the generic compositor
+                // boundary. Chronos applies its stricter graphics-viewport
+                // rule before exposing motion to a DOS guest.
+                if prev_buttons == 0 && buttons != 0 {
+                    if let Some(hit_idx) = topmost_window_idx_at(&state, cx, cy) {
+                        let win = &state.windows[hit_idx];
+                        if hit_test_window(win, cx, cy, state.fb_width, state.fb_height)
+                            == HitZone::ClientArea
+                        {
+                            state.client_pointer_capture = Some(win.id);
+                        }
+                    }
+                }
+                if buttons == 0 {
+                    state.client_pointer_capture = None;
+                }
+
                 // ── Left button just pressed ────────────────────────────────
                 if state.session_active && left_down && !was_left_down {
                     if dismiss_notification_at_point(&mut state, Point::new(cx as i32, cy as i32)) {
@@ -4506,6 +4607,9 @@ pub extern "C" fn _start() -> ! {
                         let win_type = state.windows[hit_idx].config.window_type;
                         if win_type != WindowType::Desktop && win_type != WindowType::Widget {
                             raise_window_by_id(&mut state, id);
+                        }
+                        if let Some(win) = state.windows.iter_mut().find(|win| win.id == id) {
+                            win.focus_press_pending = true;
                         }
 
                         let click_now = motion_now;

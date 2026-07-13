@@ -511,6 +511,12 @@ pub static INITRAMFS: &[RamEntry] = &[
         mode::DIR_755,
     ),
     RamEntry::dir(
+        "/Applications/ChronosDosShell.sunapp/Program/TESTS",
+        0,
+        0,
+        mode::DIR_755,
+    ),
+    RamEntry::dir(
         "/Applications/ChronosDosShell.sunapp/Resources",
         0,
         0,
@@ -1136,6 +1142,27 @@ max_ttys = 6
         0,
         mode::FILE_644,
         include_bytes!("../../ChronosDosShell.sunapp/Program/MIDTERM.BAT"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Program/TESTS/VGALAB.COM",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/VGALAB.COM"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM"),
+    ),
+    RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM"),
     ),
     RamEntry::file(
         "/Applications/ChronosDosShell.sunapp/Resources/icon.tga",
@@ -2484,6 +2511,9 @@ mod tests {
         for path in [
             "/Applications/ChronosDosShell.sunapp/Manifest.toml",
             "/Applications/ChronosDosShell.sunapp/Program/SUNSH.EXE",
+            "/Applications/ChronosDosShell.sunapp/Program/TESTS/VGALAB.COM",
+            "/Applications/ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM",
+            "/Applications/ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM",
             "/Applications/ChronosDosShell.sunapp/Resources/icon.tga",
         ] {
             assert!(

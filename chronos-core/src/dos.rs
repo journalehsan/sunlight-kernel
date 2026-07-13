@@ -1,8 +1,8 @@
 use alloc::{vec, vec::Vec};
 
 use crate::{
-    CpuState, DirectoryEntry, DosDrive, DosError, DosHandle, DosPath, OpenMode, Runtime, Trap,
-    DEFAULT_ATTRIBUTE, TEXT_COLUMNS,
+    CpuState, DirectoryEntry, DosDrive, DosError, DosHandle, DosPath, GuestVideoMode, OpenMode,
+    Runtime, Trap, DEFAULT_ATTRIBUTE, TEXT_COLUMNS,
 };
 
 pub const DOS_VERSION_MAJOR: u8 = 5;
@@ -17,6 +17,11 @@ pub fn dispatch(runtime: &mut Runtime, interrupt: u8) -> Result<(), Trap> {
         0x10 => dispatch_video(runtime),
         0x16 => dispatch_keyboard(runtime),
         0x21 => dispatch_dos(runtime),
+        0x28 => {
+            runtime.cooperative_yield();
+            Ok(())
+        }
+        0x33 => crate::mouse::dispatch(runtime),
         _ => Err(Trap::UnsupportedInterrupt {
             interrupt,
             function: runtime.cpu.ah(),
@@ -26,14 +31,17 @@ pub fn dispatch(runtime: &mut Runtime, interrupt: u8) -> Result<(), Trap> {
 
 fn dispatch_video(runtime: &mut Runtime) -> Result<(), Trap> {
     match runtime.cpu.ah() {
-        0x00 if runtime.cpu.al() == 0x03 => {
-            runtime.reset_video();
-            Ok(())
-        }
-        0x00 => Err(Trap::UnsupportedInterrupt {
-            interrupt: 0x10,
-            function: runtime.cpu.ah(),
-        }),
+        0x00 => match runtime.cpu.al() {
+            0x03 => {
+                runtime.set_video_mode(GuestVideoMode::Text80x25Color);
+                Ok(())
+            }
+            0x13 => {
+                runtime.set_video_mode(GuestVideoMode::Vga320x200x256);
+                Ok(())
+            }
+            mode => Err(Trap::UnsupportedVideoMode { mode }),
+        },
         0x02 => {
             if runtime.cpu.bh() != 0 {
                 return Err(Trap::UnsupportedInterrupt {
@@ -95,8 +103,11 @@ fn dispatch_video(runtime: &mut Runtime) -> Result<(), Trap> {
             Ok(())
         }
         0x0f => {
-            runtime.cpu.set_al(0x03);
-            runtime.cpu.set_ah(TEXT_COLUMNS as u8);
+            runtime.cpu.set_al(runtime.video_mode().bios_mode());
+            runtime.cpu.set_ah(match runtime.video_mode() {
+                GuestVideoMode::Text80x25Color => TEXT_COLUMNS as u8,
+                GuestVideoMode::Vga320x200x256 => 40,
+            });
             runtime.cpu.set_bh(0);
             Ok(())
         }
@@ -231,6 +242,7 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
             runtime.cpu.bx = runtime.dta_offset;
             dos_success(runtime)
         }
+        0x29 => parse_filename_into_fcb(runtime),
         0x2a => get_date(runtime),
         0x2c => get_time(runtime),
         0x39 => {
@@ -309,6 +321,166 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
             function,
         }),
     }
+}
+
+/// DOS AH=29h filename parser used by conventional runtimes while searching
+/// PATH. This fills the drive/name/extension portion of an unopened FCB and
+/// leaves DS:SI at the first delimiter after the parsed 8.3 name.
+fn parse_filename_into_fcb(runtime: &mut Runtime) -> Result<(), Trap> {
+    let control = runtime.cpu.al();
+    let segment = runtime.cpu.ds;
+    let mut source = runtime.cpu.si;
+    let destination_segment = runtime.cpu.es;
+    let destination = runtime.cpu.di;
+    let mut remaining = DOS_PATH_BYTES;
+
+    if control & 0x01 != 0 {
+        while remaining != 0 {
+            let byte = runtime.memory.read_u8(segment, source);
+            if matches!(byte, b' ' | b'\t' | b';' | b',' | b'=' | b'+') {
+                source = source.wrapping_add(1);
+                remaining -= 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    let first = runtime.memory.read_u8(segment, source);
+    let second = runtime.memory.read_u8(segment, source.wrapping_add(1));
+    if second == b':' {
+        if first.is_ascii_alphabetic() {
+            runtime.memory.write_u8(
+                destination_segment,
+                destination,
+                first.to_ascii_uppercase() - b'A' + 1,
+            );
+            source = source.wrapping_add(2);
+            remaining = remaining.saturating_sub(2);
+        } else {
+            runtime.cpu.set_al(0xff);
+            runtime.cpu.si = source;
+            return Ok(());
+        }
+    } else if control & 0x02 == 0 {
+        runtime.memory.write_u8(destination_segment, destination, 0);
+    }
+
+    if control & 0x04 == 0 {
+        for index in 0..8 {
+            runtime.memory.write_u8(
+                destination_segment,
+                destination.wrapping_add(1 + index),
+                b' ',
+            );
+        }
+    }
+    if control & 0x08 == 0 {
+        for index in 0..3 {
+            runtime.memory.write_u8(
+                destination_segment,
+                destination.wrapping_add(9 + index),
+                b' ',
+            );
+        }
+    }
+
+    let mut wildcard = false;
+    let mut name_index = 0u16;
+    while name_index < 8 && remaining != 0 {
+        let byte = runtime.memory.read_u8(segment, source);
+        if byte == b'*' {
+            wildcard = true;
+            while name_index < 8 {
+                runtime.memory.write_u8(
+                    destination_segment,
+                    destination.wrapping_add(1 + name_index),
+                    b'?',
+                );
+                name_index += 1;
+            }
+            source = source.wrapping_add(1);
+            remaining -= 1;
+            break;
+        }
+        if byte == b'?' {
+            wildcard = true;
+        }
+        if byte == b'.' || is_fcb_delimiter(byte) {
+            break;
+        }
+        runtime.memory.write_u8(
+            destination_segment,
+            destination.wrapping_add(1 + name_index),
+            byte.to_ascii_uppercase(),
+        );
+        name_index += 1;
+        source = source.wrapping_add(1);
+        remaining -= 1;
+    }
+    // Consume overlong name characters deterministically instead of allowing
+    // them to spill into the extension field.
+    while remaining != 0 && {
+        let byte = runtime.memory.read_u8(segment, source);
+        byte != b'.' && !is_fcb_delimiter(byte)
+    } {
+        source = source.wrapping_add(1);
+        remaining -= 1;
+    }
+
+    if remaining != 0 && runtime.memory.read_u8(segment, source) == b'.' {
+        source = source.wrapping_add(1);
+        remaining -= 1;
+        let mut extension_index = 0u16;
+        while extension_index < 3 && remaining != 0 {
+            let byte = runtime.memory.read_u8(segment, source);
+            if byte == b'*' {
+                wildcard = true;
+                while extension_index < 3 {
+                    runtime.memory.write_u8(
+                        destination_segment,
+                        destination.wrapping_add(9 + extension_index),
+                        b'?',
+                    );
+                    extension_index += 1;
+                }
+                source = source.wrapping_add(1);
+                remaining -= 1;
+                break;
+            }
+            if byte == b'?' {
+                wildcard = true;
+            }
+            if is_fcb_delimiter(byte) || byte == b'.' {
+                break;
+            }
+            runtime.memory.write_u8(
+                destination_segment,
+                destination.wrapping_add(9 + extension_index),
+                byte.to_ascii_uppercase(),
+            );
+            extension_index += 1;
+            source = source.wrapping_add(1);
+            remaining -= 1;
+        }
+        while remaining != 0 && !is_fcb_delimiter(runtime.memory.read_u8(segment, source)) {
+            source = source.wrapping_add(1);
+            remaining -= 1;
+        }
+    }
+
+    runtime.cpu.si = source;
+    runtime.cpu.set_al(if wildcard { 1 } else { 0 });
+    Ok(())
+}
+
+fn is_fcb_delimiter(byte: u8) -> bool {
+    byte == 0
+        || byte <= b' '
+        || matches!(
+            byte,
+            b'"' | b'/' | b'\\' | b'[' | b']' | b':' | b';' | b',' | b'=' | b'+'
+        )
 }
 
 fn allocate_memory(runtime: &mut Runtime) -> Result<(), Trap> {
@@ -425,6 +597,7 @@ fn child_result(runtime: &mut Runtime) -> Result<(), Trap> {
             code: 0,
             termination: crate::TerminationType::Normal,
         });
+    runtime.last_delivered_child_result = Some(result);
     runtime.cpu.set_al(result.code);
     runtime.cpu.set_ah(result.termination as u8);
     dos_success(runtime)
@@ -969,6 +1142,32 @@ mod tests {
         dispatch(&mut runtime, 0x21).unwrap();
         assert_ne!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
         assert_eq!(runtime.cpu.ax, 18);
+    }
+
+    #[test]
+    fn parse_filename_builds_uppercase_fcb_and_reports_wildcards() {
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        runtime
+            .memory
+            .write_slice(PSP_SEGMENT, 0x0200, b" c:vga*.com\0")
+            .unwrap();
+        runtime.cpu.ds = PSP_SEGMENT;
+        runtime.cpu.si = 0x0200;
+        runtime.cpu.es = PSP_SEGMENT;
+        runtime.cpu.di = 0x0300;
+        runtime.cpu.ax = 0x2901;
+        dispatch(&mut runtime, 0x21).unwrap();
+
+        let mut fcb = [0; 12];
+        runtime
+            .memory
+            .read_slice(PSP_SEGMENT, 0x0300, &mut fcb)
+            .unwrap();
+        assert_eq!(runtime.cpu.al(), 1);
+        assert_eq!(fcb[0], 3);
+        assert_eq!(&fcb[1..9], b"VGA?????");
+        assert_eq!(&fcb[9..12], b"COM");
+        assert_eq!(runtime.memory.read_u8(runtime.cpu.ds, runtime.cpu.si), 0);
     }
 
     #[test]

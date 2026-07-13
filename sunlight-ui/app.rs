@@ -150,6 +150,10 @@ pub struct Window {
     /// Previous cursor position (screen coordinates), for detecting movement.
     prev_mouse_x: i32,
     prev_mouse_y: i32,
+    prev_focused: bool,
+    prev_pointer_owned: bool,
+    prev_pointer_captured: bool,
+    pending_event: Option<Event>,
     /// Last cursor shape sent to the compositor, to avoid redundant IPC.
     current_cursor: CursorShape,
 }
@@ -267,6 +271,10 @@ impl Window {
             prev_buttons: 0,
             prev_mouse_x: 0,
             prev_mouse_y: 0,
+            prev_focused: false,
+            prev_pointer_owned: false,
+            prev_pointer_captured: false,
+            pending_event: None,
             current_cursor: CursorShape::Pointer,
         })
     }
@@ -276,10 +284,20 @@ impl Window {
     /// Uses a bounded timeout so the caller can refresh state even when
     /// no user input is arriving.
     pub fn poll_event(&mut self) -> Event {
+        self.poll_event_timeout(POLL_TIMEOUT_MS)
+    }
+
+    /// Poll with an application-selected bounded timeout. Interactive runtimes
+    /// can request short polls while work is runnable, then return to the
+    /// ordinary low-CPU timeout while blocked for input.
+    pub fn poll_event_timeout(&mut self, timeout_ms: u64) -> Event {
+        if let Some(event) = self.pending_event.take() {
+            return event;
+        }
         let reply = match ipc_call_timeout(
             self.display_ep,
             IpcMsg::with_label(SgpMsg::EVENT_POLL).word(0, self.win_id),
-            POLL_TIMEOUT_MS,
+            timeout_ms.clamp(1, POLL_TIMEOUT_MS),
         ) {
             Ok(r) if r.label == SgpMsg::REPLY => r,
             _ => return Event::Tick,
@@ -297,8 +315,39 @@ impl Window {
             self.client_y = (origin >> 32) as i32;
         }
 
-        // words[3]: mouse buttons (low byte)
-        let buttons = (reply.words[3] & 0xFF) as u8;
+        // words[3]: mouse buttons plus focus/input-ownership flags.
+        let input_word = reply.words[3];
+        let buttons = (input_word & 0xFF) as u8;
+        let focused = input_word & SgpMsg::EVENT_FLAG_FOCUSED != 0;
+        let pointer_owned = input_word & SgpMsg::EVENT_FLAG_POINTER_OWNED != 0;
+        let pointer_captured = input_word & SgpMsg::EVENT_FLAG_POINTER_CAPTURED != 0;
+        let focus_press = input_word & SgpMsg::EVENT_FLAG_FOCUS_PRESS != 0;
+        let local_x = mouse_x.saturating_sub(self.client_x);
+        let local_y = mouse_y.saturating_sub(self.client_y);
+        let changed = buttons ^ self.prev_buttons;
+
+        if focused != self.prev_focused {
+            self.prev_focused = focused;
+            // Never synthesize a press when focus returns, and never retain a
+            // stale physical state after focus is lost.
+            if focused && focus_press && changed != 0 {
+                for btn in 0..3u8 {
+                    let mask = 1u8 << btn;
+                    if changed & mask != 0 && buttons & mask != 0 {
+                        self.pending_event = Some(Event::mouse_down(local_x, local_y, btn));
+                        break;
+                    }
+                }
+            }
+            self.prev_buttons = buttons;
+            return Event::FocusChanged { focused };
+        }
+        let ownership_changed = pointer_owned != self.prev_pointer_owned
+            || pointer_captured != self.prev_pointer_captured;
+        if ownership_changed {
+            self.prev_pointer_owned = pointer_owned;
+            self.prev_pointer_captured = pointer_captured;
+        }
 
         // words[2]: packed key event (0 = none)
         let key_word = reply.words[2];
@@ -317,10 +366,6 @@ impl Window {
             }
             return Event::key_press(keycode, pressed, shift, ctrl, alt, super_key);
         }
-
-        let local_x = mouse_x.saturating_sub(self.client_x);
-        let local_y = mouse_y.saturating_sub(self.client_y);
-        let changed = buttons ^ self.prev_buttons;
 
         // Detect button transitions (press/release) for each of the 3 buttons.
         // Priority: left > right > middle.
@@ -342,6 +387,13 @@ impl Window {
                     }
                 };
             }
+        }
+
+        if ownership_changed {
+            return Event::PointerOwnership {
+                owned: pointer_owned,
+                captured: pointer_captured,
+            };
         }
 
         // No button change — report movement if cursor moved.
@@ -421,8 +473,7 @@ impl Window {
     /// and unnecessary calls waste time.
     pub fn set_cursor(&self, shape: CursorShape) {
         let packed = self.win_id | ((shape as u64) << 32);
-        let _ = self
-            .display_call(IpcMsg::with_label(SgpMsg::SET_CURSOR).word(0, packed));
+        let _ = self.display_call(IpcMsg::with_label(SgpMsg::SET_CURSOR).word(0, packed));
     }
 
     /// Build a `Canvas` wrapping the shared framebuffer.
@@ -482,7 +533,7 @@ impl Window {
         );
 
         loop {
-            let event = self.poll_event();
+            let event = self.poll_event_timeout(app.poll_timeout_ms());
 
             // Redraw requested?
             let needs_redraw = app.update(event);
@@ -586,6 +637,13 @@ pub trait App {
     ///
     /// Return `true` to request a redraw (your `view()` will be called).
     fn update(&mut self, event: Event) -> bool;
+
+    /// Maximum event-poll sleep between update opportunities. The default
+    /// preserves the normal low-idle-CPU 200 ms cadence. Apps should request a
+    /// shorter timeout only while bounded cooperative work is runnable.
+    fn poll_timeout_ms(&self) -> u64 {
+        POLL_TIMEOUT_MS
+    }
 
     /// Called once after the **first frame is committed and visible** on screen.
     ///
