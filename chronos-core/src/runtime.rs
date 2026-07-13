@@ -2039,7 +2039,14 @@ impl Runtime {
                 self.memory.write_u8(segment, offset, key.ascii);
                 if key.ascii == b'\r' {
                     self.teletype(b'\r', DEFAULT_ATTRIBUTE);
-                    self.teletype(b'\n', DEFAULT_ATTRIBUTE);
+                    // DOS console handles expose Enter as the two-byte CR/LF
+                    // sequence.  A one-byte read returns CR first, then the
+                    // following read must receive LF without another host
+                    // keypress.  Pascal's ReadLn relies on that second byte.
+                    self.keyboard.push_front(BiosKey {
+                        ascii: b'\n',
+                        scan_code: 0,
+                    });
                 } else {
                     self.teletype(key.ascii, DEFAULT_ATTRIBUTE);
                 }
@@ -2446,6 +2453,25 @@ mod tests {
         );
         let prompt: [u8; 8] = core::array::from_fn(|column| runtime.cell(column, 4).character);
         assert_eq!(&prompt, b"CMD C:\\>");
+    }
+
+    #[test]
+    fn free_pascal_sunshell_executes_help_after_one_enter_keypress() {
+        let image = include_bytes!("../../ChronosDosShell.sunapp/Program/SUNSH.EXE");
+        let mut runtime = Runtime::from_program(image, b"").unwrap();
+        runtime.run_slice(10_000_000);
+
+        for ascii in [b'H', b'E', b'L', b'P', b'\r'] {
+            runtime.inject_ascii(ascii);
+            runtime.run_slice(10_000_000);
+        }
+
+        assert_eq!(runtime.state(), &GuestState::WaitingForInput);
+        let help: [u8; 16] = core::array::from_fn(|column| runtime.cell(column, 5).character);
+        assert_eq!(&help, b"CLS CD DIR ECHO ");
+        let prompt: [u8; 8] = core::array::from_fn(|column| runtime.cell(column, 6).character);
+        assert_eq!(&prompt, b"CMD C:\\>");
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (8, 6));
     }
 
     #[test]

@@ -914,6 +914,33 @@ mod tests {
     }
 
     #[test]
+    fn console_handle_enter_supplies_cr_lf_without_a_second_keypress() {
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        runtime.cpu.bx = 0;
+        runtime.cpu.cx = 1;
+        runtime.cpu.dx = 0x0340;
+        runtime.cpu.ds = PSP_SEGMENT;
+        runtime.cpu.set_ah(0x3f);
+        dispatch(&mut runtime, 0x21).unwrap();
+
+        runtime.inject_ascii(b'\r');
+        assert_eq!(runtime.memory.read_u8(PSP_SEGMENT, 0x0340), b'\r');
+        assert_eq!(runtime.cpu.ax, 1);
+
+        runtime.cpu.bx = 0;
+        runtime.cpu.cx = 1;
+        runtime.cpu.dx = 0x0341;
+        runtime.cpu.ds = PSP_SEGMENT;
+        runtime.cpu.set_ah(0x3f);
+        dispatch(&mut runtime, 0x21).unwrap();
+
+        assert_eq!(runtime.memory.read_u8(PSP_SEGMENT, 0x0341), b'\n');
+        assert_eq!(runtime.cpu.ax, 1);
+        assert_eq!(runtime.state(), &crate::GuestState::Running);
+        assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (0, 1));
+    }
+
+    #[test]
     fn drive_selection_and_find_first_write_a_dta_result() {
         let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
         runtime
