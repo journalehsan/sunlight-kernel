@@ -324,6 +324,9 @@ pub mod sgp {
         /// Focus was acquired by the physical button transition represented in
         /// this same poll (as opposed to keyboard/window-manager focus).
         pub const EVENT_FLAG_FOCUS_PRESS: u64 = 1 << 11;
+        /// The requested window ID resolved to a live compositor window. A
+        /// reply without this flag is an explicit stale/wrong-window result.
+        pub const EVENT_FLAG_WINDOW_VALID: u64 = 1 << 12;
         /// Normal window lifecycle cleanup. Clients should send this before
         /// releasing their local SHM mapping so the compositor can drop its
         /// window metadata and display-side SHM ownership.

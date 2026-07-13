@@ -50,7 +50,8 @@ pub use mz::{
 };
 pub use runtime::{
     translate_key_press, BiosKey, ChildResult, CpuProfile, DosProcess, GuestDate, GuestState,
-    GuestTime, HostKeyEvent, Runtime, TerminationType, Trap,
+    GuestStateKind, GuestTime, GuestWaitReason, GuestWakeSource, HostKeyEvent, Runtime,
+    SliceStopReason, TerminationType, Trap,
 };
 pub use sample::{CHRONOS_INTERACTIVE_COM, HELLO_CHRONOS_COM};
 pub use text_mode::{

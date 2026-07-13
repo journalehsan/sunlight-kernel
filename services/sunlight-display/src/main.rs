@@ -1098,6 +1098,10 @@ struct DebugCounters {
     drag_started_count: u64,
     alt_tab_trigger_count: u64,
     alt_tab_repeat_count: u64,
+    display_poll_count: u64,
+    events_available_count: u64,
+    wrong_window_poll_count: u64,
+    pointer_other_window_count: u64,
 }
 
 impl DebugCounters {
@@ -1126,6 +1130,10 @@ impl DebugCounters {
             drag_started_count: 0,
             alt_tab_trigger_count: 0,
             alt_tab_repeat_count: 0,
+            display_poll_count: 0,
+            events_available_count: 0,
+            wrong_window_poll_count: 0,
+            pointer_other_window_count: 0,
         }
     }
 }
@@ -1190,6 +1198,10 @@ fn focused_window_idx(state: &CompositorState) -> Option<usize> {
 
 fn focused_window_id(state: &CompositorState) -> Option<u64> {
     focused_window_idx(state).map(|idx| state.windows[idx].id)
+}
+
+fn event_poll_window_idx(state: &CompositorState, requested_id: u64) -> Option<usize> {
+    state.windows.iter().position(|win| win.id == requested_id)
 }
 
 fn pointer_eligible_window(state: &CompositorState, win: &Window) -> bool {
@@ -3206,6 +3218,14 @@ fn log_debug_counters(state: &CompositorState, reason: &str) {
     debug_dec_u64(state.debug_counters.alt_tab_trigger_count);
     debug_log(" alt_tab_repeat=");
     debug_dec_u64(state.debug_counters.alt_tab_repeat_count);
+    debug_log(" event_polls=");
+    debug_dec_u64(state.debug_counters.display_poll_count);
+    debug_log(" events_available=");
+    debug_dec_u64(state.debug_counters.events_available_count);
+    debug_log(" wrong_window=");
+    debug_dec_u64(state.debug_counters.wrong_window_poll_count);
+    debug_log(" pointer_other_window=");
+    debug_dec_u64(state.debug_counters.pointer_other_window_count);
     debug_log("\n");
 }
 
@@ -3315,6 +3335,40 @@ mod tests {
             titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
             app_tracker: app_lifecycle::AppTracker::new(),
         }
+    }
+
+    #[test]
+    fn event_poll_resolves_the_requested_content_window_not_parent_or_shell() {
+        let mut shell = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        shell.owner_pid = 25;
+        let mut mines = test_window(
+            2,
+            120,
+            80,
+            840,
+            592,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        mines.owner_pid = 26;
+        mines.parent_focus_window_id = 1;
+        let state = test_state(vec![shell, mines]);
+
+        assert_eq!(event_poll_window_idx(&state, 2), Some(1));
+        assert_eq!(state.windows[1].owner_pid, 26);
+        assert_eq!(event_poll_window_idx(&state, 1), Some(0));
+        assert_eq!(event_poll_window_idx(&state, 26), None);
+        assert_eq!(event_poll_window_idx(&state, 999), None);
     }
 
     #[test]
@@ -4338,7 +4392,9 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::EVENT_POLL => {
                 let win_id = msg.words[0];
                 let mut wake = IpcMsg::with_label(SgpMsg::REPLY);
-                if let Some(win_idx) = state.windows.iter().position(|w| w.id == win_id) {
+                state.debug_counters.display_poll_count =
+                    state.debug_counters.display_poll_count.wrapping_add(1);
+                if let Some(win_idx) = event_poll_window_idx(&state, win_id) {
                     let (cx, cy) = {
                         let win = &state.windows[win_idx];
                         match win.config.state {
@@ -4352,19 +4408,51 @@ pub extern "C" fn _start() -> ! {
                             }
                         }
                     };
+                    let (previous_mouse_x, previous_mouse_y, previous_buttons, focus_press) = {
+                        let win = &state.windows[win_idx];
+                        (
+                            win.last_mouse_x,
+                            win.last_mouse_y,
+                            win.last_buttons,
+                            win.focus_press_pending,
+                        )
+                    };
                     let key_event = {
                         let win = &mut state.windows[win_idx];
                         win.pending_keys.pop()
                     };
                     let (mouse_word, button_word) =
                         mouse_poll_words_for_window(&mut state, win_idx);
+                    let delivered_mouse_x = (mouse_word & 0xffff) as u16;
+                    let delivered_mouse_y = ((mouse_word >> 16) & 0xffff) as u16;
+                    let delivered_buttons = (button_word & 0xff) as u8;
+                    let pointer_owned = button_word & SgpMsg::EVENT_FLAG_POINTER_OWNED != 0;
+                    let event_available = key_event.is_some()
+                        || focus_press
+                        || (pointer_owned
+                            && (delivered_mouse_x != previous_mouse_x
+                                || delivered_mouse_y != previous_mouse_y
+                                || delivered_buttons != previous_buttons));
+                    if event_available {
+                        state.debug_counters.events_available_count =
+                            state.debug_counters.events_available_count.wrapping_add(1);
+                    }
+                    if !pointer_owned {
+                        state.debug_counters.pointer_other_window_count = state
+                            .debug_counters
+                            .pointer_other_window_count
+                            .wrapping_add(1);
+                    }
                     wake = wake
                         .word(0, mouse_word)
                         .word(1, cx | (cy << 32))
-                        .word(3, button_word);
+                        .word(3, button_word | SgpMsg::EVENT_FLAG_WINDOW_VALID);
                     if let Some(key_event) = key_event {
                         wake = wake.word(2, key_event);
                     }
+                } else {
+                    state.debug_counters.wrong_window_poll_count =
+                        state.debug_counters.wrong_window_poll_count.wrapping_add(1);
                 }
                 let _ = ipc_reply(wake);
             }

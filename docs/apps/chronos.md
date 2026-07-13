@@ -20,11 +20,27 @@ SunlightOS keyboard event -> BIOS keyboard queue -> 16-bit guest
 
 ## Execution Model
 
-Guests transition through `Ready`, `Running`, `WaitingForInput`, `Exited`,
-`Halted`, and `Trapped`. `Running` guests are limited to a bounded instruction
-slice per native tick. A blocking `INT 16h` or DOS console read stores pending
-input context and moves to `WaitingForInput`; waiting, exited, halted, and
-trapped guests execute no instructions until an appropriate wake event.
+Guests transition through `Ready`, `Running`, `WaitingForInput`,
+`YieldedUntilTimer`, `Exited`, `Halted`, and `Trapped`. `Running` guests are
+limited to a bounded instruction slice per native tick. Exhausting a slice
+schedules an input-independent continuation. `INT 28h` moves the guest to
+`YieldedUntilTimer` and arms a bounded native deadline; keyboard or mouse input
+may wake it early. A blocking `INT 16h` or DOS console read stores pending input
+context and moves to `WaitingForInput`; waiting, exited, halted, and trapped
+guests execute no instructions until an appropriate wake event.
+
+While a guest is `Running`, Chronos requests app-local ticks from `sunlight-ui`
+instead of placing each continuation behind a display `EVENT_POLL` IPC round
+trip. The app loop limits this to eight local ticks, then performs one bounded
+display poll. This keeps budget continuation independent of input while
+preventing continuous guest execution from starving pointer and keyboard
+delivery. `YieldedUntilTimer` continues to poll normally until its bounded
+deadline or an early input wake.
+
+Chronos records bounded wake evidence containing the wake source, guest state,
+wait reason, CS:IP, retired-instruction count, next deadline, and framebuffer,
+palette, and mouse generations. This separates guest execution liveness from
+native rendering and input delivery when diagnosing partial frames.
 
 The decoder supports the milestone-one instructions plus 16-bit ModR/M memory
 addressing, segment overrides, register/memory and segment `MOV`, `LEA`,
@@ -73,8 +89,9 @@ written. BIOS cursor state, BDA cursor state, and the native caret share this
 single logical cursor model. Direct B8000 writes remain authoritative for
 cells and deliberately do not invent cursor movement.
 
-The status bar reports `Ready`, `Running`, `Waiting for Input`, `Exited with
-code N`, `Guest Halted`, or `Guest Trapped` from the actual runtime state.
+The status bar reports `Ready`, `Running`, `Waiting for Input`,
+`Yielded until timer`, `Exited with code N`, `Guest Halted`, or `Guest Trapped`
+from the actual runtime state.
 Waiting guests execute no slices; cursor blinking is host-side only and does
 not wake the blocked guest. The UI only requests frames for guest/state changes
 or the normal 500 ms caret phase change.
@@ -96,6 +113,26 @@ The DOS buffered-line service checks all guest-provided bounds, supports
 printable insertion, Backspace, and CR termination, and never blocks the host
 thread.
 
+Native pointer snapshots travel from `sunlight-mouse` through the compositor's
+exact content-window ID and the `sunlight-ui` event dequeue into Chronos. Only
+the scaled 320×200 graphics viewport is accepted: title/subtitle/status chrome
+and letterboxing are excluded, all arithmetic is checked, and the four content
+edges map exactly to `(0,0)`, `(319,0)`, `(0,199)`, and `(319,199)`. Button
+capture is retained until release, duplicate physical states do not create a
+second edge, and focus loss releases capture and clears held guest buttons.
+
+`[CHRONOS-MOUSE]` diagnostics record display polls, available/dequeued events,
+wrong-window replies, bounded local ticks, interleaved polls, received motion
+and button events, outside-content rejections, mapped coordinates, state and
+generation changes, button edges, and the latest `INT 33h AX=0003` BX/CX/DX.
+The display server separately reports event polls, available snapshots,
+wrong-window polls, and pointer ownership by another window.
+
+Mode 13h deliberately shows two different cursors today: the compositor's
+native safety cursor and one guest cursor drawn by Chronos from the emulated
+INT 33h state. Chronos does not create two guest overlays and does not hide the
+native cursor globally; region-scoped hiding requires a future compositor API.
+
 ## Security Boundary
 
 Chronos exposes only bounds-checked guest memory and logical BIOS/DOS calls.
@@ -116,17 +153,17 @@ DOS console input               Supported
 80×25 color text mode           Supported
 Direct B8000 writes             Supported
 DOS cursor                      Supported
-MZ EXE                          Not yet
-Filesystem                      Not yet
-Mouse                           Not yet
-VGA graphics                    Not yet
+MZ EXE                          Supported subset
+DOS drives/files                Supported subset
+INT 33h mouse                   Supported
+VGA Mode 13h graphics           Supported
 386/DPMI                        Not yet
 ```
 
 ## Current Limits
 
-Only page zero and text mode 03h are implemented. There are no DOS drives,
-filesystems, EXE loading, mouse/video graphics, ports, timer hardware, or
-protected-mode support. The renderer currently repaints its text rectangle
-when a frame is requested, while guest memory exposes dirty rows for a
-future partial-canvas implementation.
+Only real mode and the documented DOS/BIOS/VGA subsets are implemented; there
+is no protected-mode or DPMI support. Hardware timing is cooperative rather
+than cycle-accurate. The renderer currently repaints its text rectangle when a
+frame is requested, while guest memory exposes dirty rows for a future
+partial-canvas implementation.

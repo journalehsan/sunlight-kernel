@@ -92,9 +92,47 @@ pub enum GuestState {
     Ready,
     Running,
     WaitingForInput,
+    YieldedUntilTimer,
     Exited { code: u8 },
     Halted,
     Trapped(Trap),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuestStateKind {
+    Ready,
+    Running,
+    WaitingForInput,
+    YieldedUntilTimer,
+    Exited,
+    Halted,
+    Trapped,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuestWaitReason {
+    None,
+    KeyboardInput,
+    CooperativeTimer,
+    Stopped,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SliceStopReason {
+    NotRun,
+    BudgetExhausted,
+    WaitingForInput,
+    YieldedUntilTimer,
+    Stopped,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuestWakeSource {
+    Startup,
+    Timer,
+    Keyboard,
+    MouseMotion,
+    MouseButton,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,6 +274,10 @@ pub struct Runtime {
     cooperative_yield_requested: bool,
     cooperative_yielded_last_slice: bool,
     cooperative_yield_count: u64,
+    instructions_retired: u64,
+    last_slice_stop_reason: SliceStopReason,
+    last_wake_source: Option<GuestWakeSource>,
+    wake_generation: u64,
     shift: bool,
     ctrl: bool,
     alt: bool,
@@ -301,6 +343,10 @@ impl Runtime {
             cooperative_yield_requested: false,
             cooperative_yielded_last_slice: false,
             cooperative_yield_count: 0,
+            instructions_retired: 0,
+            last_slice_stop_reason: SliceStopReason::NotRun,
+            last_wake_source: None,
+            wake_generation: 0,
             shift: false,
             ctrl: false,
             alt: false,
@@ -345,6 +391,10 @@ impl Runtime {
         runtime.cooperative_yield_requested = false;
         runtime.cooperative_yielded_last_slice = false;
         runtime.cooperative_yield_count = 0;
+        runtime.instructions_retired = 0;
+        runtime.last_slice_stop_reason = SliceStopReason::NotRun;
+        runtime.last_wake_source = None;
+        runtime.wake_generation = 0;
         runtime.executable_path = b"C:\\PROGRAM.EXE".to_vec();
         let environment_entries =
             default_environment(&runtime.environment_app_id, &runtime.executable_path);
@@ -690,6 +740,45 @@ impl Runtime {
         &self.state
     }
 
+    pub const fn state_kind(&self) -> GuestStateKind {
+        match self.state {
+            GuestState::Ready => GuestStateKind::Ready,
+            GuestState::Running => GuestStateKind::Running,
+            GuestState::WaitingForInput => GuestStateKind::WaitingForInput,
+            GuestState::YieldedUntilTimer => GuestStateKind::YieldedUntilTimer,
+            GuestState::Exited { .. } => GuestStateKind::Exited,
+            GuestState::Halted => GuestStateKind::Halted,
+            GuestState::Trapped(_) => GuestStateKind::Trapped,
+        }
+    }
+
+    pub const fn wait_reason(&self) -> GuestWaitReason {
+        match self.state {
+            GuestState::WaitingForInput => GuestWaitReason::KeyboardInput,
+            GuestState::YieldedUntilTimer => GuestWaitReason::CooperativeTimer,
+            GuestState::Ready | GuestState::Running => GuestWaitReason::None,
+            GuestState::Exited { .. } | GuestState::Halted | GuestState::Trapped(_) => {
+                GuestWaitReason::Stopped
+            }
+        }
+    }
+
+    pub const fn instructions_retired(&self) -> u64 {
+        self.instructions_retired
+    }
+
+    pub const fn last_slice_stop_reason(&self) -> SliceStopReason {
+        self.last_slice_stop_reason
+    }
+
+    pub const fn last_wake_source(&self) -> Option<GuestWakeSource> {
+        self.last_wake_source
+    }
+
+    pub const fn wake_generation(&self) -> u64 {
+        self.wake_generation
+    }
+
     pub const fn mouse(&self) -> &crate::DosMouse {
         &self.mouse
     }
@@ -716,7 +805,7 @@ impl Runtime {
         }
         let changed = self.mouse.native_motion(viewport, x, y);
         if changed {
-            self.wake_from_idle_hint();
+            self.wake_yielded(GuestWakeSource::MouseMotion);
         }
         changed
     }
@@ -734,7 +823,7 @@ impl Runtime {
         }
         let changed = self.mouse.native_button(viewport, x, y, button, pressed);
         if changed {
-            self.wake_from_idle_hint();
+            self.wake_yielded(GuestWakeSource::MouseButton);
         }
         changed
     }
@@ -750,10 +839,26 @@ impl Runtime {
     pub(crate) fn cooperative_yield(&mut self) {
         self.cooperative_yield_requested = true;
         self.cooperative_yield_count = self.cooperative_yield_count.wrapping_add(1);
+        self.state = GuestState::YieldedUntilTimer;
     }
 
-    fn wake_from_idle_hint(&mut self) {
+    pub fn wake_from_timer(&mut self) -> bool {
+        self.wake_yielded(GuestWakeSource::Timer)
+    }
+
+    fn wake_yielded(&mut self, source: GuestWakeSource) -> bool {
+        if !matches!(self.state, GuestState::YieldedUntilTimer) {
+            return false;
+        }
+        self.state = GuestState::Running;
         self.cooperative_yielded_last_slice = false;
+        self.record_wake(source);
+        true
+    }
+
+    fn record_wake(&mut self, source: GuestWakeSource) {
+        self.last_wake_source = Some(source);
+        self.wake_generation = self.wake_generation.wrapping_add(1);
     }
 
     pub fn cell(&self, column: usize, row: usize) -> TextCell {
@@ -855,12 +960,15 @@ impl Runtime {
 
     pub fn inject_key(&mut self, key: BiosKey) -> bool {
         self.keyboard.push_back(key);
-        self.wake_from_idle_hint();
+        let woke = self.wake_yielded(GuestWakeSource::Keyboard);
         if matches!(self.state, GuestState::WaitingForInput) {
             self.complete_pending_input();
+            if matches!(self.state, GuestState::Running) {
+                self.record_wake(GuestWakeSource::Keyboard);
+            }
             return true;
         }
-        false
+        woke
     }
 
     pub fn inject_ascii(&mut self, ascii: u8) -> bool {
@@ -879,8 +987,14 @@ impl Runtime {
     pub fn run_slice(&mut self, budget: usize) -> bool {
         if matches!(self.state, GuestState::Ready) {
             self.state = GuestState::Running;
+            self.record_wake(GuestWakeSource::Startup);
         }
         if !matches!(self.state, GuestState::Running) {
+            self.last_slice_stop_reason = match self.state {
+                GuestState::WaitingForInput => SliceStopReason::WaitingForInput,
+                GuestState::YieldedUntilTimer => SliceStopReason::YieldedUntilTimer,
+                _ => SliceStopReason::Stopped,
+            };
             return false;
         }
         let state_before = self.state.clone();
@@ -902,6 +1016,12 @@ impl Runtime {
                 break;
             }
         }
+        self.last_slice_stop_reason = match self.state {
+            GuestState::Running => SliceStopReason::BudgetExhausted,
+            GuestState::WaitingForInput => SliceStopReason::WaitingForInput,
+            GuestState::YieldedUntilTimer => SliceStopReason::YieldedUntilTimer,
+            _ => SliceStopReason::Stopped,
+        };
         self.memory.take_video_dirty().iter().any(|dirty| *dirty)
             || self.memory.framebuffer_generation() != framebuffer_generation_before
             || self.palette_generation() != palette_generation_before
@@ -914,6 +1034,7 @@ impl Runtime {
     pub fn step(&mut self) {
         if matches!(self.state, GuestState::Ready) {
             self.state = GuestState::Running;
+            self.record_wake(GuestWakeSource::Startup);
         }
         if !matches!(self.state, GuestState::Running) {
             return;
@@ -952,6 +1073,8 @@ impl Runtime {
             } else {
                 self.state = GuestState::Trapped(trap);
             }
+        } else {
+            self.instructions_retired = self.instructions_retired.wrapping_add(1);
         }
     }
 
@@ -2576,6 +2699,23 @@ mod tests {
         Runtime::from_com(bytes).unwrap()
     }
 
+    #[test]
+    fn sunlight_mines_bundle_loads_as_an_mz_guest() {
+        let image = include_bytes!("../../SunlightMines.sunapp/Program/SUNMINE.EXE");
+        let mut runtime = Runtime::from_program(image, &[]).unwrap();
+
+        runtime.run_slice(1_000_000);
+
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
+        assert_eq!(runtime.state(), &GuestState::YieldedUntilTimer);
+        assert!(runtime.cooperative_yielded_last_slice());
+        let drawn_pixels = (0..VGA_HEIGHT)
+            .flat_map(|y| (0..crate::VGA_WIDTH).map(move |x| (x, y)))
+            .filter(|&(x, y)| runtime.framebuffer_index(x, y) != Some(0))
+            .count();
+        assert!(drawn_pixels > 1_000, "guest left the VGA surface blank");
+    }
+
     fn run_to_palette_generation(runtime: &mut Runtime, generation: u64) {
         let mut instructions = 0usize;
         while runtime.palette_generation() < generation {
@@ -2592,6 +2732,7 @@ mod tests {
 
     fn run_to_next_idle_hint(runtime: &mut Runtime) {
         let initial = runtime.cooperative_yield_count();
+        runtime.wake_from_timer();
         for _ in 0..2_000 {
             runtime.run_slice(4_096);
             if runtime.cooperative_yield_count() != initial {
@@ -3268,6 +3409,8 @@ mod tests {
             (runtime.cpu.bx, runtime.cpu.cx, runtime.cpu.dx),
             (0, 319, 199)
         );
+        assert_eq!(runtime.mouse().int33_state_query_count(), 1);
+        assert_eq!(runtime.mouse().last_state_query(), (0, 319, 199));
 
         runtime.cpu.ax = 7;
         runtime.cpu.cx = 200;
@@ -3304,11 +3447,12 @@ mod tests {
             0xf4,
         ]);
         runtime.run_slice(100);
-        assert_eq!(runtime.state(), &GuestState::Running);
+        assert_eq!(runtime.state(), &GuestState::YieldedUntilTimer);
         assert!(runtime.cooperative_yielded_last_slice());
         assert_eq!(runtime.cooperative_yield_count(), 1);
         assert_eq!((runtime.cpu.ax, runtime.cpu.bx), (0x1234, 0x5678));
         assert_eq!((runtime.cpu.cx, runtime.cpu.dx), (0x9abc, 0xdef0));
+        assert!(runtime.wake_from_timer());
         runtime.run_slice(1);
         assert_eq!(runtime.state(), &GuestState::Halted);
     }

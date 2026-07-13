@@ -5,15 +5,15 @@ extern crate alloc;
 
 #[cfg(not(test))]
 use alloc::format;
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{collections::VecDeque, string::String, vec, vec::Vec};
 
 #[cfg(not(test))]
 use core::alloc::{GlobalAlloc, Layout};
 
 use chronos_core::{
-    display_char, translate_key_press, BiosKey, GuestState, GuestVideoMode, HostKeyEvent,
-    MouseViewport, Rgb8, Runtime, CHRONOS_INTERACTIVE_COM, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT,
-    VGA_WIDTH,
+    display_char, translate_key_press, BiosKey, GuestState, GuestStateKind, GuestVideoMode,
+    GuestWaitReason, HostKeyEvent, MouseViewport, Rgb8, Runtime, SliceStopReason,
+    CHRONOS_INTERACTIVE_COM, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT, VGA_WIDTH,
 };
 #[cfg(not(test))]
 use chronos_core::{DosDrive, DosEntry, LoaderError, MzError, UnsupportedExecutable};
@@ -24,7 +24,8 @@ use sunlight_ipc::{get_time_utc, process_yield, ProcessExit};
 #[cfg(not(test))]
 use sunlight_libc::{crt0, env, O_CREAT, O_TRUNC, O_WRONLY};
 use sunlight_ui::{
-    set_client_cursor, widgets::Panel, App, Canvas, Color, CursorShape, Event, Rect, Theme,
+    set_client_cursor, widgets::Panel, App, Canvas, Color, CursorShape, Event, EventPollCounters,
+    Rect, Theme,
 };
 #[cfg(not(test))]
 use sunlight_ui::{Window, WindowConfig, WindowDecoration};
@@ -40,6 +41,9 @@ const DOS_CELL_H: i32 = 16;
 const INSTRUCTIONS_PER_TICK: usize = 2048;
 const STARTUP_INSTRUCTION_BUDGET: usize = 32 * 1024;
 const RUNNING_PRESENT_INTERVAL_MS: u64 = 16;
+const BUDGET_CONTINUATION_INTERVAL_MS: u64 = 0;
+const INT28_TIMER_INTERVAL_MS: u64 = 16;
+const WAKE_EVIDENCE_CAPACITY: usize = 128;
 const TEXT_PRESENT_INSTRUCTION_QUANTUM: usize = 32 * 1024;
 const DOS_SURFACE: Color = Color::rgb(12, 20, 37);
 const DOS_CURSOR: Color = Color::rgb(255, 181, 71);
@@ -74,6 +78,49 @@ unsafe impl GlobalAlloc for BumpAllocator {
 #[cfg(not(test))]
 #[global_allocator]
 static ALLOC: BumpAllocator = BumpAllocator;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RuntimeWakeSource {
+    Startup,
+    BudgetContinuation,
+    Int28Timer,
+    Keyboard,
+    MouseMotion,
+    MouseButton,
+    FocusChanged,
+    PointerOwnership,
+    NativeEvent,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WakeEvidence {
+    sequence: u64,
+    source: RuntimeWakeSource,
+    guest_state: GuestStateKind,
+    wait_reason: GuestWaitReason,
+    cs: u16,
+    ip: u16,
+    instructions_retired: u64,
+    next_wake_deadline: Option<u64>,
+    framebuffer_generation: u64,
+    palette_generation: u64,
+    mouse_generation: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct MouseInputCounters {
+    event_route: EventPollCounters,
+    pointer_moves_received: u64,
+    pointer_buttons_received: u64,
+    rejected_outside_content: u64,
+    mapped_guest_coordinates: u64,
+    mouse_state_updates: u64,
+    mouse_generation_changes: u64,
+    button_edge_updates: u64,
+    duplicate_button_edges: u64,
+    last_mapped_x: u16,
+    last_mapped_y: u16,
+}
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -117,6 +164,11 @@ struct ChronosApp {
     focused: bool,
     old_guest_cursor_rect: Option<Rect>,
     new_guest_cursor_rect: Option<Rect>,
+    next_wake_deadline: Option<u64>,
+    wake_evidence: VecDeque<WakeEvidence>,
+    wake_sequence: u64,
+    mouse_input_counters: MouseInputCounters,
+    mouse_log_generation: u64,
 }
 
 impl ChronosApp {
@@ -147,6 +199,11 @@ impl ChronosApp {
             focused: true,
             old_guest_cursor_rect: None,
             new_guest_cursor_rect: None,
+            next_wake_deadline: None,
+            wake_evidence: VecDeque::with_capacity(WAKE_EVIDENCE_CAPACITY),
+            wake_sequence: 0,
+            mouse_input_counters: MouseInputCounters::default(),
+            mouse_log_generation: 0,
         };
         app.set_status(b"Ready");
         app
@@ -196,6 +253,11 @@ impl ChronosApp {
             focused: true,
             old_guest_cursor_rect: None,
             new_guest_cursor_rect: None,
+            next_wake_deadline: None,
+            wake_evidence: VecDeque::with_capacity(WAKE_EVIDENCE_CAPACITY),
+            wake_sequence: 0,
+            mouse_input_counters: MouseInputCounters::default(),
+            mouse_log_generation: 0,
         };
         app.set_status(load_error.as_ref().map_or(b"Ready", loader_status));
         app
@@ -220,6 +282,7 @@ impl ChronosApp {
             GuestState::Ready => self.set_status(b"Ready"),
             GuestState::Running => self.set_status(b"Running"),
             GuestState::WaitingForInput => self.set_status(b"Waiting for Input"),
+            GuestState::YieldedUntilTimer => self.set_status(b"Yielded until timer"),
             GuestState::Exited { code } => {
                 let mut status = [0; 32];
                 let mut length = copy_bytes(b"Exited with code ", &mut status);
@@ -345,22 +408,113 @@ impl ChronosApp {
     }
 
     fn handle_mouse_motion(&mut self, x: i32, y: i32) -> bool {
+        self.mouse_input_counters.pointer_moves_received = self
+            .mouse_input_counters
+            .pointer_moves_received
+            .wrapping_add(1);
         let old = self.guest_cursor_rect();
+        let inside = self.graphics_viewport.contains(x, y);
+        let captured = self.runtime.mouse().captured();
+        let generation_before = self.runtime.mouse().generation();
         self.runtime
             .inject_mouse_motion(self.graphics_viewport, x, y);
+        if inside || captured {
+            let (guest_x, guest_y) = self.runtime.mouse().position();
+            self.mouse_input_counters.mapped_guest_coordinates = self
+                .mouse_input_counters
+                .mapped_guest_coordinates
+                .wrapping_add(1);
+            self.mouse_input_counters.last_mapped_x = guest_x;
+            self.mouse_input_counters.last_mapped_y = guest_y;
+        } else {
+            self.mouse_input_counters.rejected_outside_content = self
+                .mouse_input_counters
+                .rejected_outside_content
+                .wrapping_add(1);
+        }
+        self.record_mouse_generation_change(generation_before);
         if !self.runtime.mouse().pointer_inside() {
             // Sunlight's current compositor has no region-scoped hidden
             // cursor, so Chronos deliberately keeps the safe host pointer.
             set_client_cursor(CursorShape::Pointer);
         }
-        self.record_cursor_damage(old)
+        let changed = self.record_cursor_damage(old);
+        self.maybe_log_mouse_input(true);
+        changed
     }
 
     fn handle_mouse_button(&mut self, x: i32, y: i32, button: u8, pressed: bool) -> bool {
+        self.mouse_input_counters.pointer_buttons_received = self
+            .mouse_input_counters
+            .pointer_buttons_received
+            .wrapping_add(1);
         let old = self.guest_cursor_rect();
+        let inside = self.graphics_viewport.contains(x, y);
+        let captured = self.runtime.mouse().captured();
+        let generation_before = self.runtime.mouse().generation();
+        let buttons_before = self.runtime.mouse().buttons().bits();
         self.runtime
             .inject_mouse_button(self.graphics_viewport, x, y, button, pressed);
-        self.record_cursor_damage(old)
+        if inside || captured {
+            let (guest_x, guest_y) = self.runtime.mouse().position();
+            self.mouse_input_counters.mapped_guest_coordinates = self
+                .mouse_input_counters
+                .mapped_guest_coordinates
+                .wrapping_add(1);
+            self.mouse_input_counters.last_mapped_x = guest_x;
+            self.mouse_input_counters.last_mapped_y = guest_y;
+        } else {
+            self.mouse_input_counters.rejected_outside_content = self
+                .mouse_input_counters
+                .rejected_outside_content
+                .wrapping_add(1);
+        }
+        let buttons_after = self.runtime.mouse().buttons().bits();
+        if buttons_after != buttons_before {
+            self.mouse_input_counters.button_edge_updates = self
+                .mouse_input_counters
+                .button_edge_updates
+                .wrapping_add(1);
+        } else if inside || captured {
+            self.mouse_input_counters.duplicate_button_edges = self
+                .mouse_input_counters
+                .duplicate_button_edges
+                .wrapping_add(1);
+        }
+        self.record_mouse_generation_change(generation_before);
+        let changed = self.record_cursor_damage(old);
+        self.maybe_log_mouse_input(true);
+        changed
+    }
+
+    fn record_mouse_generation_change(&mut self, generation_before: u64) {
+        let generation_after = self.runtime.mouse().generation();
+        if generation_after != generation_before {
+            self.mouse_input_counters.mouse_state_updates = self
+                .mouse_input_counters
+                .mouse_state_updates
+                .wrapping_add(1);
+            self.mouse_input_counters.mouse_generation_changes = self
+                .mouse_input_counters
+                .mouse_generation_changes
+                .wrapping_add(generation_after.wrapping_sub(generation_before));
+        }
+    }
+
+    fn maybe_log_mouse_input(&mut self, pointer_activity: bool) {
+        let polls = self.mouse_input_counters.event_route.display_polls;
+        let activity = self
+            .mouse_input_counters
+            .pointer_moves_received
+            .wrapping_add(self.mouse_input_counters.pointer_buttons_received);
+        let marker = polls.rotate_left(17) ^ activity;
+        let should_log = pointer_activity || polls <= 8 || (polls != 0 && polls % 64 == 0);
+        if !should_log || marker == self.mouse_log_generation {
+            return;
+        }
+        self.mouse_log_generation = marker;
+        #[cfg(not(test))]
+        log_mouse_input_counters(&self.runtime, self.mouse_input_counters);
     }
 
     fn draw_status_bar(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -406,19 +560,133 @@ impl ChronosApp {
         );
     }
 
+    fn schedule_after_slice(&mut self, now_ms: u64) {
+        self.next_wake_deadline = match self.runtime.last_slice_stop_reason() {
+            SliceStopReason::BudgetExhausted
+                if matches!(self.runtime.state(), GuestState::Running) =>
+            {
+                Some(now_ms.saturating_add(BUDGET_CONTINUATION_INTERVAL_MS))
+            }
+            SliceStopReason::YieldedUntilTimer
+                if matches!(self.runtime.state(), GuestState::YieldedUntilTimer) =>
+            {
+                Some(now_ms.saturating_add(INT28_TIMER_INTERVAL_MS))
+            }
+            _ => None,
+        };
+    }
+
+    fn record_wake_evidence(&mut self, source: RuntimeWakeSource) {
+        self.wake_sequence = self.wake_sequence.wrapping_add(1);
+        let evidence = WakeEvidence {
+            sequence: self.wake_sequence,
+            source,
+            guest_state: self.runtime.state_kind(),
+            wait_reason: self.runtime.wait_reason(),
+            cs: self.runtime.cpu.cs,
+            ip: self.runtime.cpu.ip,
+            instructions_retired: self.runtime.instructions_retired(),
+            next_wake_deadline: self.next_wake_deadline,
+            framebuffer_generation: self.runtime.framebuffer_generation(),
+            palette_generation: self.runtime.palette_generation(),
+            mouse_generation: self.runtime.mouse().generation(),
+        };
+        if self.wake_evidence.len() == WAKE_EVIDENCE_CAPACITY {
+            self.wake_evidence.pop_front();
+        }
+        self.wake_evidence.push_back(evidence);
+        #[cfg(not(test))]
+        if evidence.sequence <= WAKE_EVIDENCE_CAPACITY as u64 {
+            log_wake_evidence(evidence);
+        }
+    }
+
+    fn run_scheduled_slice(
+        &mut self,
+        now_ms: u64,
+        budget: usize,
+        source: RuntimeWakeSource,
+    ) -> Option<bool> {
+        if matches!(self.runtime.state(), GuestState::YieldedUntilTimer) {
+            let deadline_reached = self
+                .next_wake_deadline
+                .is_some_and(|deadline| now_ms >= deadline);
+            if source != RuntimeWakeSource::Int28Timer || !deadline_reached {
+                return None;
+            }
+            if !self.runtime.wake_from_timer() {
+                return None;
+            }
+        }
+        if !matches!(
+            self.runtime.state(),
+            GuestState::Ready | GuestState::Running
+        ) {
+            return None;
+        }
+
+        let changed = self.runtime.run_slice(budget);
+        self.schedule_after_slice(now_ms);
+        self.record_wake_evidence(source);
+        Some(changed)
+    }
+
+    fn due_wake_source(&self, now_ms: u64) -> Option<RuntimeWakeSource> {
+        match self.runtime.state() {
+            GuestState::Ready => Some(RuntimeWakeSource::Startup),
+            GuestState::Running
+                if self
+                    .next_wake_deadline
+                    .is_none_or(|deadline| now_ms >= deadline) =>
+            {
+                Some(RuntimeWakeSource::BudgetContinuation)
+            }
+            GuestState::YieldedUntilTimer
+                if self
+                    .next_wake_deadline
+                    .is_some_and(|deadline| now_ms >= deadline) =>
+            {
+                Some(RuntimeWakeSource::Int28Timer)
+            }
+            _ => None,
+        }
+    }
+
+    fn poll_timeout_at(&self, now_ms: u64) -> u64 {
+        if matches!(
+            self.runtime.state(),
+            GuestState::Ready | GuestState::Running
+        ) {
+            // Do not put a runnable guest behind display EVENT_POLL. The UI
+            // framework interprets zero as a local Tick, so budget continuations
+            // remain independent of display, mouse, and keyboard traffic.
+            return 0;
+        }
+        if self
+            .next_wake_deadline
+            .is_some_and(|deadline| now_ms >= deadline)
+        {
+            return 0;
+        }
+        self.next_wake_deadline.map_or_else(
+            || 200,
+            |deadline| deadline.saturating_sub(now_ms).clamp(1, 200),
+        )
+    }
+
     /// Native pointer traffic can be continuous, especially with high-rate
     /// devices. Advance one ordinary bounded slice after every delivered
     /// event so motion cannot starve shell startup, keyboard handling, or a
     /// polling graphics guest waiting to observe the new mouse state.
-    fn advance_after_native_event(&mut self, event_changed: bool) -> bool {
-        let guest_changed = if matches!(
-            self.runtime.state(),
-            GuestState::Ready | GuestState::Running
-        ) {
-            self.update(Event::Tick)
-        } else {
-            false
-        };
+    fn advance_after_native_event(
+        &mut self,
+        event_changed: bool,
+        source: RuntimeWakeSource,
+    ) -> bool {
+        let now_ms = monotonic_millis();
+        let guest_changed = self
+            .run_scheduled_slice(now_ms, INSTRUCTIONS_PER_TICK, source)
+            .unwrap_or(false);
         event_changed | guest_changed
     }
 }
@@ -500,17 +768,19 @@ impl App for ChronosApp {
                 let old_guest_cursor = self.guest_cursor_rect();
                 let cursor_active = matches!(
                     self.runtime.state(),
-                    GuestState::WaitingForInput | GuestState::Running
+                    GuestState::WaitingForInput
+                        | GuestState::Running
+                        | GuestState::YieldedUntilTimer
                 ) && self.runtime.text_cursor_visible();
                 let cursor_visible = cursor_active && (monotonic_millis() / 500) % 2 == 0;
                 let cursor_changed = self.cursor_visible != cursor_visible;
                 self.cursor_visible = cursor_visible;
-                if matches!(
-                    self.runtime.state(),
-                    GuestState::Ready | GuestState::Running
-                ) {
+                let now = monotonic_millis();
+                if let Some(wake_source) = self.due_wake_source(now) {
                     let mode_before = self.runtime.video_mode();
-                    let text_or_state_changed = self.runtime.run_slice(INSTRUCTIONS_PER_TICK);
+                    let text_or_state_changed = self
+                        .run_scheduled_slice(now, INSTRUCTIONS_PER_TICK, wake_source)
+                        .unwrap_or(false);
                     #[cfg(debug_assertions)]
                     if self.runtime.dac_entries_committed_last_slice() != 0 {
                         debug_log("[CHRONOS] DAC entries changed this slice: ");
@@ -549,9 +819,11 @@ impl App for ChronosApp {
                             .text_instructions_since_present
                             .saturating_add(INSTRUCTIONS_PER_TICK);
                     }
-                    let now = monotonic_millis();
                     let mode_changed = mode_before != self.runtime.video_mode();
-                    let guest_running = matches!(self.runtime.state(), GuestState::Running);
+                    let guest_running = matches!(
+                        self.runtime.state(),
+                        GuestState::Running | GuestState::YieldedUntilTimer
+                    );
                     let presentation_changed = match self.runtime.video_mode() {
                         GuestVideoMode::Text80x25Color => {
                             self.graphics_present_pending = false;
@@ -609,19 +881,19 @@ impl App for ChronosApp {
             }
             Event::MouseMove { x, y } => {
                 let changed = self.handle_mouse_motion(x, y);
-                self.advance_after_native_event(changed)
+                self.advance_after_native_event(changed, RuntimeWakeSource::MouseMotion)
             }
             Event::MouseDown { x, y, button } => {
                 let changed = self.handle_mouse_button(x, y, button, true);
-                self.advance_after_native_event(changed)
+                self.advance_after_native_event(changed, RuntimeWakeSource::MouseButton)
             }
             Event::MouseUp { x, y, button } => {
                 let changed = self.handle_mouse_button(x, y, button, false);
-                self.advance_after_native_event(changed)
+                self.advance_after_native_event(changed, RuntimeWakeSource::MouseButton)
             }
             Event::Click { x, y } => {
                 let changed = self.handle_mouse_button(x, y, 0, false);
-                self.advance_after_native_event(changed)
+                self.advance_after_native_event(changed, RuntimeWakeSource::MouseButton)
             }
             Event::FocusChanged { focused } => {
                 let old = self.guest_cursor_rect();
@@ -629,7 +901,7 @@ impl App for ChronosApp {
                 self.runtime.mouse_focus_changed(focused);
                 set_client_cursor(CursorShape::Pointer);
                 let changed = self.record_cursor_damage(old);
-                self.advance_after_native_event(changed)
+                self.advance_after_native_event(changed, RuntimeWakeSource::FocusChanged)
             }
             Event::PointerOwnership { owned, .. } => {
                 if !owned {
@@ -640,7 +912,7 @@ impl App for ChronosApp {
                     }
                     set_client_cursor(CursorShape::Pointer);
                 }
-                self.advance_after_native_event(false)
+                self.advance_after_native_event(false, RuntimeWakeSource::PointerOwnership)
             }
             Event::Key(ch)
                 if ch.is_ascii_graphic() || matches!(ch, ' ' | '\n' | '\r' | '\u{8}') =>
@@ -656,7 +928,7 @@ impl App for ChronosApp {
                     scan_code: 0,
                 });
                 let changed = input_changed | self.update_status_from_runtime();
-                self.advance_after_native_event(changed)
+                self.advance_after_native_event(changed, RuntimeWakeSource::Keyboard)
             }
             Event::KeyPress {
                 keycode,
@@ -677,12 +949,12 @@ impl App for ChronosApp {
                 if let Some(key) = key.filter(|key| key.ascii == 0 || key.ascii < 0x20) {
                     let input_changed = self.runtime.inject_key(key);
                     let changed = input_changed | self.update_status_from_runtime();
-                    self.advance_after_native_event(changed)
+                    self.advance_after_native_event(changed, RuntimeWakeSource::Keyboard)
                 } else {
-                    self.advance_after_native_event(false)
+                    self.advance_after_native_event(false, RuntimeWakeSource::Keyboard)
                 }
             }
-            _ => self.advance_after_native_event(false),
+            _ => self.advance_after_native_event(false, RuntimeWakeSource::NativeEvent),
         }
     }
 
@@ -701,7 +973,10 @@ impl App for ChronosApp {
         // banner frame. Blocking input and INT 28h both stop run_slice early.
         let old_guest_cursor = self.guest_cursor_rect();
         let mode_before = self.runtime.video_mode();
-        let runtime_changed = self.runtime.run_slice(STARTUP_INSTRUCTION_BUDGET);
+        let now = monotonic_millis();
+        let runtime_changed = self
+            .run_scheduled_slice(now, STARTUP_INSTRUCTION_BUDGET, RuntimeWakeSource::Startup)
+            .unwrap_or(false);
         if self.runtime.video_mode() != mode_before {
             log_video_state(&self.runtime);
         }
@@ -736,17 +1011,12 @@ impl App for ChronosApp {
     }
 
     fn poll_timeout_ms(&self) -> u64 {
-        if self.runtime.cooperative_yielded_last_slice() {
-            return RUNNING_PRESENT_INTERVAL_MS;
-        }
-        if matches!(
-            self.runtime.state(),
-            GuestState::Ready | GuestState::Running
-        ) {
-            1
-        } else {
-            200
-        }
+        self.poll_timeout_at(monotonic_millis())
+    }
+
+    fn event_poll_counters(&mut self, counters: EventPollCounters) {
+        self.mouse_input_counters.event_route = counters;
+        self.maybe_log_mouse_input(false);
     }
 }
 
@@ -767,6 +1037,165 @@ fn default_graphics_viewport() -> MouseViewport {
     let surface = graphics_surface_rect(WIN_W, WIN_H).inset(SURFACE_INSET);
     let (viewport, _) = graphics_viewport(surface);
     MouseViewport::new(viewport.x, viewport.y, viewport.w, viewport.h)
+}
+
+#[cfg(not(test))]
+fn log_wake_evidence(evidence: WakeEvidence) {
+    let mut line = [0u8; 256];
+    let mut length = copy_bytes(b"[CHRONOS-SCHED] seq=", &mut line);
+    length += write_decimal_u64(evidence.sequence, &mut line[length..]);
+    length += copy_bytes(b" wake=", &mut line[length..]);
+    length += copy_bytes(wake_source_name(evidence.source), &mut line[length..]);
+    length += copy_bytes(b" state=", &mut line[length..]);
+    length += copy_bytes(state_kind_name(evidence.guest_state), &mut line[length..]);
+    length += copy_bytes(b" wait=", &mut line[length..]);
+    length += copy_bytes(wait_reason_name(evidence.wait_reason), &mut line[length..]);
+    length += copy_bytes(b" cs:ip=", &mut line[length..]);
+    length += write_hex_u16(evidence.cs, &mut line[length..]);
+    line[length] = b':';
+    length += 1;
+    length += write_hex_u16(evidence.ip, &mut line[length..]);
+    length += copy_bytes(b" retired=", &mut line[length..]);
+    length += write_decimal_u64(evidence.instructions_retired, &mut line[length..]);
+    length += copy_bytes(b" deadline=", &mut line[length..]);
+    if let Some(deadline) = evidence.next_wake_deadline {
+        length += write_decimal_u64(deadline, &mut line[length..]);
+    } else {
+        length += copy_bytes(b"none", &mut line[length..]);
+    }
+    length += copy_bytes(b" fb=", &mut line[length..]);
+    length += write_decimal_u64(evidence.framebuffer_generation, &mut line[length..]);
+    length += copy_bytes(b" palette=", &mut line[length..]);
+    length += write_decimal_u64(evidence.palette_generation, &mut line[length..]);
+    length += copy_bytes(b" mouse=", &mut line[length..]);
+    length += write_decimal_u64(evidence.mouse_generation, &mut line[length..]);
+    line[length] = b'\n';
+    length += 1;
+    if let Ok(text) = core::str::from_utf8(&line[..length]) {
+        debug_log(text);
+    }
+}
+
+#[cfg(not(test))]
+fn log_mouse_input_counters(runtime: &Runtime, counters: MouseInputCounters) {
+    let mut line = [0u8; 512];
+    let mut length = copy_bytes(b"[CHRONOS-MOUSE] win=", &mut line);
+    length += write_decimal_u64(counters.event_route.window_id, &mut line[length..]);
+    length += copy_bytes(b" polls=", &mut line[length..]);
+    length += write_decimal_u64(counters.event_route.display_polls, &mut line[length..]);
+    length += copy_bytes(b" available=", &mut line[length..]);
+    length += write_decimal_u64(counters.event_route.events_available, &mut line[length..]);
+    length += copy_bytes(b" dequeued=", &mut line[length..]);
+    length += write_decimal_u64(counters.event_route.events_dequeued, &mut line[length..]);
+    length += copy_bytes(b" wrong_window=", &mut line[length..]);
+    length += write_decimal_u64(
+        counters.event_route.wrong_window_replies,
+        &mut line[length..],
+    );
+    length += copy_bytes(b" local_ticks=", &mut line[length..]);
+    length += write_decimal_u64(counters.event_route.local_ticks, &mut line[length..]);
+    length += copy_bytes(b" interleaved_polls=", &mut line[length..]);
+    length += write_decimal_u64(counters.event_route.interleaved_polls, &mut line[length..]);
+    length += copy_bytes(b" moves=", &mut line[length..]);
+    length += write_decimal_u64(counters.pointer_moves_received, &mut line[length..]);
+    length += copy_bytes(b" buttons=", &mut line[length..]);
+    length += write_decimal_u64(counters.pointer_buttons_received, &mut line[length..]);
+    length += copy_bytes(b" outside=", &mut line[length..]);
+    length += write_decimal_u64(counters.rejected_outside_content, &mut line[length..]);
+    length += copy_bytes(b" mapped=", &mut line[length..]);
+    length += write_decimal_u64(counters.mapped_guest_coordinates, &mut line[length..]);
+    length += copy_bytes(b" guest=", &mut line[length..]);
+    length += write_decimal_u64(counters.last_mapped_x as u64, &mut line[length..]);
+    line[length] = b',';
+    length += 1;
+    length += write_decimal_u64(counters.last_mapped_y as u64, &mut line[length..]);
+    length += copy_bytes(b" updates=", &mut line[length..]);
+    length += write_decimal_u64(counters.mouse_state_updates, &mut line[length..]);
+    length += copy_bytes(b" gen_changes=", &mut line[length..]);
+    length += write_decimal_u64(counters.mouse_generation_changes, &mut line[length..]);
+    length += copy_bytes(b" mouse_gen=", &mut line[length..]);
+    length += write_decimal_u64(runtime.mouse().generation(), &mut line[length..]);
+    length += copy_bytes(b" edges=", &mut line[length..]);
+    length += write_decimal_u64(counters.button_edge_updates, &mut line[length..]);
+    length += copy_bytes(b" duplicate_edges=", &mut line[length..]);
+    length += write_decimal_u64(counters.duplicate_button_edges, &mut line[length..]);
+    length += copy_bytes(b" int33_0003=", &mut line[length..]);
+    length += write_decimal_u64(
+        runtime.mouse().int33_state_query_count(),
+        &mut line[length..],
+    );
+    let (buttons, x, y) = runtime.mouse().last_state_query();
+    length += copy_bytes(b" bx_cx_dx=", &mut line[length..]);
+    length += write_decimal_u64(buttons as u64, &mut line[length..]);
+    line[length] = b',';
+    length += 1;
+    length += write_decimal_u64(x as u64, &mut line[length..]);
+    line[length] = b',';
+    length += 1;
+    length += write_decimal_u64(y as u64, &mut line[length..]);
+    length += copy_bytes(b" state=", &mut line[length..]);
+    length += copy_bytes(state_kind_name(runtime.state_kind()), &mut line[length..]);
+    line[length] = b'\n';
+    length += 1;
+    if let Ok(text) = core::str::from_utf8(&line[..length]) {
+        debug_log(text);
+    }
+}
+
+#[cfg(not(test))]
+const fn wake_source_name(source: RuntimeWakeSource) -> &'static [u8] {
+    match source {
+        RuntimeWakeSource::Startup => b"startup",
+        RuntimeWakeSource::BudgetContinuation => b"budget-continuation",
+        RuntimeWakeSource::Int28Timer => b"int28-timer",
+        RuntimeWakeSource::Keyboard => b"keyboard",
+        RuntimeWakeSource::MouseMotion => b"mouse-motion",
+        RuntimeWakeSource::MouseButton => b"mouse-button",
+        RuntimeWakeSource::FocusChanged => b"focus",
+        RuntimeWakeSource::PointerOwnership => b"pointer-ownership",
+        RuntimeWakeSource::NativeEvent => b"native-event",
+    }
+}
+
+#[cfg(not(test))]
+const fn state_kind_name(state: GuestStateKind) -> &'static [u8] {
+    match state {
+        GuestStateKind::Ready => b"Ready",
+        GuestStateKind::Running => b"Running",
+        GuestStateKind::WaitingForInput => b"WaitingForInput",
+        GuestStateKind::YieldedUntilTimer => b"YieldedUntilTimer",
+        GuestStateKind::Exited => b"Exited",
+        GuestStateKind::Halted => b"Halted",
+        GuestStateKind::Trapped => b"Trapped",
+    }
+}
+
+#[cfg(not(test))]
+const fn wait_reason_name(reason: GuestWaitReason) -> &'static [u8] {
+    match reason {
+        GuestWaitReason::None => b"none",
+        GuestWaitReason::KeyboardInput => b"keyboard",
+        GuestWaitReason::CooperativeTimer => b"timer",
+        GuestWaitReason::Stopped => b"stopped",
+    }
+}
+
+#[cfg(not(test))]
+fn write_decimal_u64(mut value: u64, output: &mut [u8]) -> usize {
+    let mut reversed = [0u8; 20];
+    let mut count = 0;
+    loop {
+        reversed[count] = b'0' + (value % 10) as u8;
+        count += 1;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    for index in 0..count {
+        output[index] = reversed[count - index - 1];
+    }
+    count
 }
 
 fn log_trap(trap: &chronos_core::Trap) {
@@ -1390,10 +1819,13 @@ fn parent_path(path: &str) -> String {
 mod tests {
     use super::{
         dos_color, draw_scaled_graphics, graphics_viewport, running_presentation_due, ChronosApp,
-        DOS_CELL_W, DOS_SURFACE, WIN_H, WIN_W,
+        RuntimeWakeSource, DOS_CELL_W, DOS_SURFACE, WIN_H, WIN_W,
     };
     use alloc::{format, vec};
-    use chronos_core::{BiosKey, DosDrive, GuestState, GuestVideoMode, Rgb8, Runtime};
+    use chronos_core::{
+        BiosKey, DosDrive, GuestState, GuestStateKind, GuestVideoMode, GuestWaitReason,
+        GuestWakeSource, Rgb8, Runtime, SliceStopReason,
+    };
     use sun_font::{measure_text, FontRole};
     use sunlight_ui::{App, Canvas, Color, Event, Rect, Theme};
 
@@ -1455,9 +1887,267 @@ mod tests {
         .unwrap();
 
         assert!(app.on_ready());
-        assert_eq!(app.runtime.state(), &GuestState::Running);
+        assert_eq!(app.runtime.state(), &GuestState::YieldedUntilTimer);
         assert!(app.runtime.cooperative_yielded_last_slice());
         assert_eq!(app.runtime.cooperative_yield_count(), 1);
+    }
+
+    fn standalone_mines_app() -> ChronosApp {
+        let image = include_bytes!("../../SunlightMines.sunapp/Program/SUNMINE.EXE");
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_program(image, b"").unwrap();
+        app.runtime
+            .set_application_id(b"org.sunlight.chronos.mines");
+        app.runtime.set_executable_path(b"C:\\SUNMINE.EXE");
+        app
+    }
+
+    fn run_mines_until_timer_yield(app: &mut ChronosApp, mut now_ms: u64, budget: usize) {
+        let mut slices = 0usize;
+        while matches!(app.runtime.state(), GuestState::Ready | GuestState::Running) {
+            let source = if matches!(app.runtime.state(), GuestState::Ready) {
+                RuntimeWakeSource::Startup
+            } else {
+                RuntimeWakeSource::BudgetContinuation
+            };
+            app.run_scheduled_slice(now_ms, budget, source)
+                .expect("scheduled Mines slice");
+            slices += 1;
+            now_ms = app.next_wake_deadline.unwrap_or(now_ms.saturating_add(1));
+            assert!(slices < 10_000, "Mines did not reach its timer yield");
+        }
+        assert_eq!(app.runtime.state(), &GuestState::YieldedUntilTimer);
+    }
+
+    fn deliver_mines_event(app: &mut ChronosApp, event: Event, now_ms: u64) {
+        app.update(event);
+        let continuation = app.next_wake_deadline.unwrap_or(now_ms);
+        run_mines_until_timer_yield(app, continuation, 2_048);
+    }
+
+    #[test]
+    fn no_input_budget_continuations_advance_cs_ip_and_retirement() {
+        let mut app = standalone_mines_app();
+        let mouse_generation = app.runtime.mouse().generation();
+
+        assert!(app
+            .run_scheduled_slice(1_000, 1, RuntimeWakeSource::Startup)
+            .is_some());
+        let first = *app.wake_evidence.back().unwrap();
+        assert_eq!(first.source, RuntimeWakeSource::Startup);
+        assert_eq!(first.guest_state, GuestStateKind::Running);
+        assert_eq!(first.wait_reason, GuestWaitReason::None);
+        assert_eq!(first.instructions_retired, 1);
+        assert_eq!(first.mouse_generation, mouse_generation);
+        assert_eq!(first.next_wake_deadline, Some(1_000));
+
+        assert!(app
+            .run_scheduled_slice(1_000, 1, RuntimeWakeSource::BudgetContinuation)
+            .is_some());
+        let second = *app.wake_evidence.back().unwrap();
+        assert_eq!(second.source, RuntimeWakeSource::BudgetContinuation);
+        assert_eq!(second.instructions_retired, 2);
+        assert_ne!((second.cs, second.ip), (first.cs, first.ip));
+        assert_eq!(second.mouse_generation, mouse_generation);
+        assert_eq!(
+            app.runtime.last_slice_stop_reason(),
+            SliceStopReason::BudgetExhausted
+        );
+    }
+
+    #[test]
+    fn standalone_mines_completes_initial_frame_without_native_input() {
+        let mut app = standalone_mines_app();
+        let mut now_ms = 10_000;
+        let mut slices = 0usize;
+
+        loop {
+            let source = if slices == 0 {
+                RuntimeWakeSource::Startup
+            } else {
+                RuntimeWakeSource::BudgetContinuation
+            };
+            assert!(app.run_scheduled_slice(now_ms, 2_048, source).is_some());
+            slices += 1;
+            if app.runtime.state() == &GuestState::YieldedUntilTimer {
+                break;
+            }
+            assert_eq!(app.runtime.state(), &GuestState::Running);
+            now_ms = app.next_wake_deadline.expect("running guest continuation");
+            assert!(
+                slices < 10_000,
+                "standalone Mines startup did not reach INT 28h"
+            );
+        }
+
+        assert!(slices > 1, "test must cover a frame split across slices");
+        assert_eq!(app.runtime.wait_reason(), GuestWaitReason::CooperativeTimer);
+        assert!(app.wake_evidence.iter().all(|entry| matches!(
+            entry.source,
+            RuntimeWakeSource::Startup | RuntimeWakeSource::BudgetContinuation
+        )));
+        assert!(app.runtime.instructions_retired() > 2_048);
+        let drawn_pixels = (0..chronos_core::VGA_HEIGHT)
+            .flat_map(|y| (0..chronos_core::VGA_WIDTH).map(move |x| (x, y)))
+            .filter(|&(x, y)| app.runtime.framebuffer_index(x, y) != Some(0))
+            .count();
+        assert!(
+            drawn_pixels > 1_000,
+            "standalone Mines left its initial frame incomplete"
+        );
+
+        let deadline = app.next_wake_deadline.expect("INT 28h timer deadline");
+        assert_eq!(
+            app.poll_timeout_at(deadline - 1),
+            1,
+            "YieldedUntilTimer must remain in bounded display polling before its wake"
+        );
+        assert_eq!(
+            app.poll_timeout_at(deadline),
+            0,
+            "the due timer wake becomes an app-local continuation"
+        );
+        let retired_at_yield = app.runtime.instructions_retired();
+        assert_eq!(
+            app.run_scheduled_slice(deadline - 1, 2_048, RuntimeWakeSource::Int28Timer,),
+            None
+        );
+        assert_eq!(app.runtime.instructions_retired(), retired_at_yield);
+        assert!(app
+            .run_scheduled_slice(deadline, 2_048, RuntimeWakeSource::Int28Timer)
+            .is_some());
+        assert!(app.runtime.instructions_retired() > retired_at_yield);
+        assert_eq!(app.runtime.last_wake_source(), Some(GuestWakeSource::Timer));
+        assert_eq!(
+            app.wake_evidence.back().unwrap().source,
+            RuntimeWakeSource::Int28Timer
+        );
+        let mut post_timer_slices = 0usize;
+        while app.runtime.state() == &GuestState::Running {
+            let continuation = app.next_wake_deadline.expect("post-timer continuation");
+            app.run_scheduled_slice(continuation, 2_048, RuntimeWakeSource::BudgetContinuation)
+                .expect("post-timer no-input slice");
+            post_timer_slices += 1;
+            assert!(
+                post_timer_slices < 10_000,
+                "timer wake did not reach the next idle hint"
+            );
+        }
+        assert_eq!(app.runtime.state(), &GuestState::YieldedUntilTimer);
+    }
+
+    #[test]
+    fn small_budget_mines_frame_continues_until_complete_without_input() {
+        const SMALL_BUDGET: usize = 64;
+        let mut app = standalone_mines_app();
+        let mut now_ms = 20_000;
+        let mut slices = 0usize;
+        let mut running_continuations = 0usize;
+        let initial_framebuffer_generation = app.runtime.framebuffer_generation();
+
+        loop {
+            let source = if slices == 0 {
+                RuntimeWakeSource::Startup
+            } else {
+                RuntimeWakeSource::BudgetContinuation
+            };
+            app.run_scheduled_slice(now_ms, SMALL_BUDGET, source)
+                .expect("scheduled no-input continuation");
+            slices += 1;
+            if app.runtime.state() == &GuestState::YieldedUntilTimer {
+                break;
+            }
+            assert_eq!(
+                app.runtime.last_slice_stop_reason(),
+                SliceStopReason::BudgetExhausted
+            );
+            running_continuations += 1;
+            now_ms = app
+                .next_wake_deadline
+                .expect("small-budget continuation deadline");
+            assert!(
+                slices < 10_000,
+                "small-budget Mines startup did not converge"
+            );
+        }
+
+        assert!(running_continuations > 1);
+        assert!(app.runtime.framebuffer_generation() > initial_framebuffer_generation);
+        assert_eq!(app.runtime.wait_reason(), GuestWaitReason::CooperativeTimer);
+        assert!(app.runtime.instructions_retired() > SMALL_BUDGET as u64);
+    }
+
+    #[test]
+    fn standalone_mines_center_corners_and_button_edges_reach_int33_once() {
+        let mut app = standalone_mines_app();
+        run_mines_until_timer_yield(&mut app, 30_000, 2_048);
+        assert!(app.runtime.mouse().cursor_visible());
+        assert_eq!(app.runtime.mouse().ranges(), (0, 319, 0, 199));
+
+        let viewport = app.graphics_viewport;
+        let center_x = viewport.x + viewport.width as i32 / 2 + 2;
+        let center_y = viewport.y + viewport.height as i32 / 2 + 2;
+        deliver_mines_event(&mut app, Event::mouse_move(center_x, center_y), 30_001);
+        let (center_guest_x, center_guest_y) = app.runtime.mouse().position();
+        assert!(center_guest_x.abs_diff(160) <= 1);
+        assert!(center_guest_y.abs_diff(100) <= 1);
+        assert_eq!(
+            app.runtime.mouse().last_state_query(),
+            (0, center_guest_x, center_guest_y)
+        );
+
+        let corners = [
+            (viewport.x, viewport.y, 0, 0),
+            (viewport.x + viewport.width as i32 - 1, viewport.y, 319, 0),
+            (viewport.x, viewport.y + viewport.height as i32 - 1, 0, 199),
+            (
+                viewport.x + viewport.width as i32 - 1,
+                viewport.y + viewport.height as i32 - 1,
+                319,
+                199,
+            ),
+        ];
+        for (index, (native_x, native_y, guest_x, guest_y)) in corners.into_iter().enumerate() {
+            deliver_mines_event(
+                &mut app,
+                Event::mouse_move(native_x, native_y),
+                30_010 + index as u64,
+            );
+            assert_eq!(app.runtime.mouse().position(), (guest_x, guest_y));
+            assert_eq!(
+                app.runtime.mouse().last_state_query(),
+                (0, guest_x, guest_y)
+            );
+        }
+        assert_eq!(
+            app.runtime.last_wake_source(),
+            Some(GuestWakeSource::MouseMotion)
+        );
+
+        let framebuffer_before_click = app.runtime.framebuffer_generation();
+        let query_count_before_click = app.runtime.mouse().int33_state_query_count();
+        deliver_mines_event(&mut app, Event::mouse_down(center_x, center_y, 0), 30_020);
+        assert_eq!(app.runtime.mouse().buttons().bits(), 1);
+        assert_eq!(app.runtime.mouse().last_state_query().0, 1);
+        assert_eq!(
+            app.runtime.last_wake_source(),
+            Some(GuestWakeSource::MouseButton)
+        );
+        assert!(app.runtime.framebuffer_generation() > framebuffer_before_click);
+
+        deliver_mines_event(&mut app, Event::click(center_x, center_y), 30_021);
+        assert_eq!(app.runtime.mouse().buttons().bits(), 0);
+        assert_eq!(app.runtime.mouse().last_state_query().0, 0);
+        assert!(app.runtime.mouse().int33_state_query_count() >= query_count_before_click + 2);
+
+        assert_eq!(app.mouse_input_counters.pointer_moves_received, 5);
+        assert_eq!(app.mouse_input_counters.pointer_buttons_received, 2);
+        assert_eq!(app.mouse_input_counters.rejected_outside_content, 0);
+        assert_eq!(app.mouse_input_counters.mapped_guest_coordinates, 7);
+        assert_eq!(app.mouse_input_counters.button_edge_updates, 2);
+        assert_eq!(app.mouse_input_counters.duplicate_button_edges, 0);
+        assert!(app.mouse_input_counters.mouse_state_updates >= 7);
+        assert!(app.mouse_input_counters.mouse_generation_changes >= 7);
     }
 
     #[test]
@@ -1633,7 +2323,7 @@ mod tests {
     #[test]
     fn idle_cursor_ticks_do_not_wake_a_blocked_guest() {
         let mut app = ChronosApp::new();
-        assert_eq!(app.poll_timeout_ms(), 1);
+        assert_eq!(app.poll_timeout_ms(), 0);
         app.runtime.run_slice(1024);
         assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
         assert_eq!(app.poll_timeout_ms(), 200);
@@ -1956,5 +2646,8 @@ mod tests {
             y: viewport.y,
         }));
         assert_eq!(app.runtime.mouse().position(), initial);
+        assert_eq!(app.mouse_input_counters.rejected_outside_content, 3);
+        assert_eq!(app.mouse_input_counters.mapped_guest_coordinates, 0);
+        assert_eq!(app.mouse_input_counters.mouse_state_updates, 0);
     }
 }

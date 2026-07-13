@@ -3,15 +3,35 @@
 bits 16
 org 0
 
+%macro push_all 0
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push bp
+%endmacro
+
+%macro pop_all 0
+    pop bp
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+%endmacro
+
 header:
     db 'MZ'
-    dw file_end - $$
-    dw 1
-    dw 1
+    dw (file_end - $$) % 512
+    dw ((file_end - $$) + 511) / 512
+    dw 0
     dw 2
     dw 0x20
-    dw 0xffff
-    dw 0
+    dw 0x20
+    dw ((file_end - image_start) + 15) / 16
     dw 0x0200
     dw 0
     dw start - image_start
@@ -59,8 +79,7 @@ start:
     call draw_everything
 
 .main:
-    mov ah, 0x28
-    int 0x21
+    int 0x28
 
     ; mouse poll + edges
     mov ax, 3
@@ -131,7 +150,7 @@ game_init:
     mov word [leftm], 10
     mov word [secs], 0
     mov word [trun], 0
-    mov dword [rseed], 0x87654321
+    mov word [rseed], 0x4321
     mov di, board
     mov cx, 81
     xor al, al
@@ -139,13 +158,12 @@ game_init:
     ret
 
 rng:
-    mov eax, [rseed]
-    imul eax, 1103515245
-    add eax, 12345
-    and eax, 0x7fffffff
-    mov [rseed], eax
-    shr eax, 16
-    and ax, 0xffff
+    ; 16-bit LCG so the guest remains valid for the configured 8086 CPU.
+    mov ax, [rseed]
+    mov bx, 25173
+    mul bx
+    add ax, 13849
+    mov [rseed], ax
     ret
 
 place_safe:
@@ -294,7 +312,7 @@ flood:
     ret
 
 show_all_mines:
-    pusha
+    push_all
     mov cx, 81
     mov di, board
 .sa:
@@ -305,11 +323,11 @@ show_all_mines:
 .sa1:
     inc di
     loop .sa
-    popa
+    pop_all
     ret
 
 check_w:
-    pusha
+    push_all
     mov cx, 81
     mov di, board
 .cw:
@@ -318,14 +336,14 @@ check_w:
     jnz .cw1
     test al, 0x40
     jnz .cw1
-    popa
+    pop_all
     ret
 .cw1:
     inc di
     loop .cw
     mov word [won], 1
     mov word [trun], 0
-    popa
+    pop_all
     ret
 
 game_restart:
@@ -334,7 +352,8 @@ game_restart:
 
 ; draw
 draw_everything:
-    pusha
+    push_all
+    push es
     mov ax, 0xa000
     mov es, ax
     xor di, di
@@ -356,7 +375,7 @@ draw_everything:
     ; board cells rough draw
     mov word [ti], 0
     mov word [by], 56
-.bd y:
+.bdy:
     mov word [bxo], 38
     mov cx, 9
 .bdx:
@@ -373,7 +392,7 @@ draw_everything:
     call puts
 
     cmp word [won], 0
-    je .no w
+    je .now
     mov si, wstr
     mov di, 320*92 + 100
     call puts
@@ -384,11 +403,12 @@ draw_everything:
     mov di, 320*92 + 100
     call puts
 .nol:
-    popa
+    pop es
+    pop_all
     ret
 
 drawcell:
-    pusha
+    push_all
     mov ax, [by]
     mov bx, 320
     mul bx
@@ -415,12 +435,12 @@ drawcell:
     jz .dc2
     mov byte [es:di-14*7-7], 8
 .dc2:
-    popa
+    pop_all
     ret
 
 puts:
     ; crude font
-    pusha
+    push_all
 .ps:
     lodsb
     test al, al
@@ -434,7 +454,7 @@ puts:
     add di, 1
     jmp .ps
 .pe:
-    popa
+    pop_all
     ret
 
 install_palette:
@@ -482,7 +502,7 @@ hint: db 'L:REVEAL  R:FLAG  R:RESTART  ESC:EXIT',0
 wstr: db 'FIELD CLEARED',0
 lstr: db 'MINE TRIGGERED',0
 
-rseed: dd 0
+rseed: dw 0
 mousx: dw 0
 mousy: dw 0
 cur_btn: dw 0

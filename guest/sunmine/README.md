@@ -2,9 +2,13 @@
 
 9x9 beginner Minesweeper as 16-bit real-mode DOS MZ.
 
-## Build (when FPC i8086 cross available)
+## Build
 
 PPC8086=ppc8086 FPC_I8086_RTL=/path/to/rtl/units/msdos ./guest/sunmine/build.sh
+
+When the Free Pascal i8086 cross toolchain is unavailable, the script builds
+the checked-in 8086-compatible NASM fallback instead. Both paths refresh the
+application bundle and the DOS shell test copy.
 
 The script also copies to ChronosDosShell.sunapp/Program/TESTS for direct launch tests.
 

@@ -41,9 +41,11 @@ pub(crate) fn dispatch(runtime: &mut Runtime) -> Result<(), Trap> {
         }
         0x0003 => {
             let (x, y) = runtime.mouse.position();
-            runtime.cpu.bx = runtime.mouse.buttons().bits();
+            let buttons = runtime.mouse.buttons().bits();
+            runtime.cpu.bx = buttons;
             runtime.cpu.cx = x;
             runtime.cpu.dx = y;
+            runtime.mouse.record_state_query(buttons, x, y);
             runtime.cpu.flags &= !CpuState::FLAG_CF;
         }
         0x0004 => {
@@ -135,13 +137,15 @@ impl MouseViewport {
         if self.width == 0 || self.height == 0 {
             return false;
         }
-        let right = self
-            .x
-            .saturating_add(self.width.min(i32::MAX as u32) as i32);
-        let bottom = self
-            .y
-            .saturating_add(self.height.min(i32::MAX as u32) as i32);
-        x >= self.x && x < right && y >= self.y && y < bottom
+        let Some(right) = i64::from(self.x).checked_add(i64::from(self.width)) else {
+            return false;
+        };
+        let Some(bottom) = i64::from(self.y).checked_add(i64::from(self.height)) else {
+            return false;
+        };
+        let x = i64::from(x);
+        let y = i64::from(y);
+        x >= i64::from(self.x) && x < right && y >= i64::from(self.y) && y < bottom
     }
 }
 
@@ -170,6 +174,8 @@ pub struct DosMouse {
     focused: bool,
     pointer_inside: bool,
     captured: bool,
+    int33_state_query_count: u64,
+    last_state_query: (u16, u16, u16),
 }
 
 impl DosMouse {
@@ -191,6 +197,8 @@ impl DosMouse {
             focused: true,
             pointer_inside: false,
             captured: false,
+            int33_state_query_count: 0,
+            last_state_query: (0, 0, 0),
         };
         mouse.reset_state(false);
         mouse
@@ -269,6 +277,20 @@ impl DosMouse {
 
     pub const fn captured(&self) -> bool {
         self.captured
+    }
+
+    pub const fn int33_state_query_count(&self) -> u64 {
+        self.int33_state_query_count
+    }
+
+    /// Last BX/CX/DX returned by INT 33h AX=0003.
+    pub const fn last_state_query(&self) -> (u16, u16, u16) {
+        self.last_state_query
+    }
+
+    pub(crate) fn record_state_query(&mut self, buttons: u16, x: u16, y: u16) {
+        self.int33_state_query_count = self.int33_state_query_count.wrapping_add(1);
+        self.last_state_query = (buttons, x, y);
     }
 
     pub fn show(&mut self) {
@@ -458,20 +480,28 @@ pub fn viewport_pixel(viewport: MouseViewport, x: i32, y: i32, clamp: bool) -> O
     if !clamp && !viewport.contains(x, y) {
         return None;
     }
-    let max_native_x = viewport
-        .x
-        .saturating_add(viewport.width.min(i32::MAX as u32) as i32)
-        .saturating_sub(1);
-    let max_native_y = viewport
-        .y
-        .saturating_add(viewport.height.min(i32::MAX as u32) as i32)
-        .saturating_sub(1);
-    let local_x = x.clamp(viewport.x, max_native_x).saturating_sub(viewport.x) as u64;
-    let local_y = y.clamp(viewport.y, max_native_y).saturating_sub(viewport.y) as u64;
-    let pixel_x =
-        (local_x * VGA_WIDTH as u64 / viewport.width as u64).min(VGA_WIDTH as u64 - 1) as u32;
-    let pixel_y =
-        (local_y * VGA_HEIGHT as u64 / viewport.height as u64).min(VGA_HEIGHT as u64 - 1) as u32;
+    let origin_x = i64::from(viewport.x);
+    let origin_y = i64::from(viewport.y);
+    let max_native_x = origin_x
+        .checked_add(i64::from(viewport.width))?
+        .checked_sub(1)?;
+    let max_native_y = origin_y
+        .checked_add(i64::from(viewport.height))?
+        .checked_sub(1)?;
+    let local_x = i64::from(x)
+        .clamp(origin_x, max_native_x)
+        .checked_sub(origin_x)? as u64;
+    let local_y = i64::from(y)
+        .clamp(origin_y, max_native_y)
+        .checked_sub(origin_y)? as u64;
+    let pixel_x = local_x
+        .checked_mul(VGA_WIDTH as u64)?
+        .checked_div(u64::from(viewport.width))?
+        .min(VGA_WIDTH as u64 - 1) as u32;
+    let pixel_y = local_y
+        .checked_mul(VGA_HEIGHT as u64)?
+        .checked_div(u64::from(viewport.height))?
+        .min(VGA_HEIGHT as u64 - 1) as u32;
     Some((pixel_x, pixel_y))
 }
 

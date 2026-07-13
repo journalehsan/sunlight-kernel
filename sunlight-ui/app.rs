@@ -34,10 +34,16 @@ use crate::theme::Theme;
 /// Default timeout for `EVENT_POLL` (milliseconds).
 /// When no event arrives within this window, the loop delivers `Event::Tick`.
 const POLL_TIMEOUT_MS: u64 = 200;
+const RUNNABLE_EVENT_POLL_TIMEOUT_MS: u64 = 16;
+const MAX_LOCAL_TICKS_BEFORE_EVENT_POLL: u8 = 8;
 const WINDOW_IPC_TIMEOUT_MS: u64 = 500;
 const WINDOW_CREATE_TIMEOUT_MS: u64 = 2_000;
 static CLOSE_REQUESTED: AtomicBool = AtomicBool::new(false);
 static CLIENT_CURSOR: AtomicU8 = AtomicU8::new(u8::MAX);
+
+const fn should_deliver_local_tick(timeout_ms: u64, local_tick_streak: u8) -> bool {
+    timeout_ms == 0 && local_tick_streak < MAX_LOCAL_TICKS_BEFORE_EVENT_POLL
+}
 
 /// Cursor shape the client requests from the compositor.
 ///
@@ -126,6 +132,18 @@ pub struct WindowConfig {
     pub decoration: WindowDecoration,
 }
 
+/// Monotonic client-side evidence for the window event route.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EventPollCounters {
+    pub window_id: u64,
+    pub display_polls: u64,
+    pub events_available: u64,
+    pub events_dequeued: u64,
+    pub wrong_window_replies: u64,
+    pub local_ticks: u64,
+    pub interleaved_polls: u64,
+}
+
 /// An event-loop–driven window connected to the display server.
 ///
 /// Owns the SHM-mapped framebuffer and manages the poll–update–commit cycle.
@@ -154,6 +172,7 @@ pub struct Window {
     prev_pointer_owned: bool,
     prev_pointer_captured: bool,
     pending_event: Option<Event>,
+    event_counters: EventPollCounters,
     /// Last cursor shape sent to the compositor, to avoid redundant IPC.
     current_cursor: CursorShape,
 }
@@ -275,6 +294,10 @@ impl Window {
             prev_pointer_owned: false,
             prev_pointer_captured: false,
             pending_event: None,
+            event_counters: EventPollCounters {
+                window_id: win_id,
+                ..EventPollCounters::default()
+            },
             current_cursor: CursorShape::Pointer,
         })
     }
@@ -294,6 +317,7 @@ impl Window {
         if let Some(event) = self.pending_event.take() {
             return event;
         }
+        self.event_counters.display_polls = self.event_counters.display_polls.wrapping_add(1);
         let reply = match ipc_call_timeout(
             self.display_ep,
             IpcMsg::with_label(SgpMsg::EVENT_POLL).word(0, self.win_id),
@@ -302,6 +326,12 @@ impl Window {
             Ok(r) if r.label == SgpMsg::REPLY => r,
             _ => return Event::Tick,
         };
+
+        if reply.words[3] & SgpMsg::EVENT_FLAG_WINDOW_VALID == 0 {
+            self.event_counters.wrong_window_replies =
+                self.event_counters.wrong_window_replies.wrapping_add(1);
+            return Event::Tick;
+        }
 
         // words[0]: mouse_x (low 16) | mouse_y (high 16)
         let packed = reply.words[0];
@@ -532,8 +562,35 @@ impl Window {
             Some(sunlight_ipc::getpid()),
         );
 
+        let mut local_tick_streak = 0u8;
         loop {
-            let event = self.poll_event_timeout(app.poll_timeout_ms());
+            let timeout_ms = app.poll_timeout_ms();
+            // Runnable apps receive a bounded local burst, then one bounded
+            // display poll. This preserves input-independent progress without
+            // allowing continuous execution to starve pointer/key snapshots.
+            let event = if should_deliver_local_tick(timeout_ms, local_tick_streak) {
+                local_tick_streak += 1;
+                self.event_counters.local_ticks = self.event_counters.local_ticks.wrapping_add(1);
+                Event::Tick
+            } else {
+                if timeout_ms == 0 {
+                    self.event_counters.interleaved_polls =
+                        self.event_counters.interleaved_polls.wrapping_add(1);
+                }
+                local_tick_streak = 0;
+                self.poll_event_timeout(if timeout_ms == 0 {
+                    RUNNABLE_EVENT_POLL_TIMEOUT_MS
+                } else {
+                    timeout_ms
+                })
+            };
+            if !matches!(event, Event::Tick) {
+                self.event_counters.events_available =
+                    self.event_counters.events_available.wrapping_add(1);
+                self.event_counters.events_dequeued =
+                    self.event_counters.events_dequeued.wrapping_add(1);
+            }
+            app.event_poll_counters(self.event_counters);
 
             // Redraw requested?
             let needs_redraw = app.update(event);
@@ -566,7 +623,7 @@ impl Window {
 
 #[cfg(test)]
 mod tests {
-    use super::WindowDecoration;
+    use super::{should_deliver_local_tick, WindowDecoration, MAX_LOCAL_TICKS_BEFORE_EVENT_POLL};
 
     #[test]
     fn decoration_flag_bits_match_protocol_layout() {
@@ -577,6 +634,18 @@ mod tests {
             2 << 17
         );
         assert_eq!(WindowDecoration::HiddenOverlay.config_flag_bits(), 3 << 17);
+    }
+
+    #[test]
+    fn runnable_local_ticks_are_bounded_by_an_event_poll() {
+        for streak in 0..MAX_LOCAL_TICKS_BEFORE_EVENT_POLL {
+            assert!(should_deliver_local_tick(0, streak));
+        }
+        assert!(!should_deliver_local_tick(
+            0,
+            MAX_LOCAL_TICKS_BEFORE_EVENT_POLL
+        ));
+        assert!(!should_deliver_local_tick(16, 0));
     }
 }
 
@@ -638,12 +707,17 @@ pub trait App {
     /// Return `true` to request a redraw (your `view()` will be called).
     fn update(&mut self, event: Event) -> bool;
 
-    /// Maximum event-poll sleep between update opportunities. The default
-    /// preserves the normal low-idle-CPU 200 ms cadence. Apps should request a
-    /// shorter timeout only while bounded cooperative work is runnable.
+    /// Maximum event-poll sleep between update opportunities. Returning zero
+    /// requests an immediate app-local [`Event::Tick`] without a display IPC
+    /// round trip. The default preserves the normal low-idle-CPU 200 ms cadence.
+    /// Apps should request immediate ticks only for bounded cooperative work.
     fn poll_timeout_ms(&self) -> u64 {
         POLL_TIMEOUT_MS
     }
+
+    /// Receive monotonic evidence from the window event route. The default is
+    /// a no-op; runtimes can retain or log it alongside their own input state.
+    fn event_poll_counters(&mut self, _counters: EventPollCounters) {}
 
     /// Called once after the **first frame is committed and visible** on screen.
     ///
