@@ -1108,10 +1108,21 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
         .map(ChronosApp::launch)
         .unwrap_or_else(ChronosApp::new);
     debug_log("[CHRONOS] connecting display window\n");
+    // Use the bundle-provided title (e.g. "Sunlight Mines") for ordinary
+    // graphical application bundles. The generic terminal title is only for
+    // the default interactive shell when launched without bundle metadata.
+    // WindowConfig requires &'static str. Leak the title string for bundle launches
+    // so that "Sunlight Mines" (or other bundle name) appears as the OS window title.
+    let window_title: &'static str = if app.title == "Chronos - Sunlight DOS Terminal" {
+        "Chronos - Sunlight DOS Terminal"
+    } else {
+        let s = app.title.clone();
+        &*alloc::boxed::Box::leak(s.into_boxed_str())
+    };
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
-        title: "Chronos - Sunlight DOS Terminal",
+        title: window_title,
         decoration: WindowDecoration::Normal,
     }) {
         Some(window) => window,

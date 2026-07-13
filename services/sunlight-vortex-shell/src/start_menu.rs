@@ -33,7 +33,6 @@ static ICON_CALC_TGA: &[u8] =
 static ICON_TASKS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
 static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
-static ICON_EYES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/kmag.tga");
 static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
 static ICON_WRITER_TGA: &[u8] =
@@ -44,6 +43,8 @@ static ICON_RABBIT_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
 static ICON_API_LAB_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.tga");
+static ICON_MINES_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/bomber.tga");
 
 static ICON_SEARCH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
@@ -176,13 +177,6 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         available: true,
     },
     AppCatalogEntry {
-        id: CatalogId::App(AppId::Eyes),
-        name: "Eyes",
-        category: "Fun",
-        icon_bytes: Some(ICON_EYES_TGA),
-        available: true,
-    },
-    AppCatalogEntry {
         id: CatalogId::App(AppId::Calendar),
         name: "Sunlight Calendar",
         category: "Productivity",
@@ -217,6 +211,13 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         icon_bytes: Some(ICON_API_LAB_TGA),
         available: true,
     },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::Mines),
+        name: "Sunlight Mines",
+        category: "Games",
+        icon_bytes: Some(ICON_MINES_TGA),
+        available: true,
+    },
 ];
 
 /// Default pinned apps — only real/working apps. Trivial to extend once
@@ -227,7 +228,7 @@ static DEFAULT_PINNED: [AppId; 6] = [
     AppId::Calculator,
     AppId::Settings,
     AppId::Tasks,
-    AppId::Eyes,
+    AppId::Mines,
 ];
 
 /// Shown in the "Recent" section as a static fallback until the user has

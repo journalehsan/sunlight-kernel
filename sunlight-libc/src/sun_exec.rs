@@ -204,6 +204,7 @@ fn launch_chronos_bundle(request: LaunchRequest<'_>) -> Result<LaunchResult, Lau
         b"--chronos-title",
         descriptor.display_name,
     ];
+    // terminal=false indicates a pure graphical app (no generic shell banner expected)
     // The document scope policy is sent as one extra bounded argument when
     // writable.  Chronos defaults to no D: access if it is absent.
     let document_args: [&[u8]; 2] = if descriptor.documents_read_write {
@@ -287,6 +288,7 @@ struct ChronosManifest<'a> {
     display_name: &'a [u8],
     entry: &'a [u8],
     documents_read_write: bool,
+    terminal: bool,
 }
 
 fn parse_chronos_manifest<'a>(
@@ -329,11 +331,14 @@ fn parse_chronos_manifest<'a>(
         b"read-write" => true,
         _ => return Err(LaunchError::InvalidBundle),
     };
+    let term_raw = toml_value(source, b"chronos", b"terminal").unwrap_or(b"true");
+    let terminal = term_raw != b"false" && term_raw != b"0";
     Ok(ChronosManifest {
         app_id,
         display_name,
         entry,
         documents_read_write,
+        terminal,
     })
 }
 
@@ -614,6 +619,7 @@ fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
         b"sunlight-api-lab" | b"api-lab" => Some(b"/bin/sunlight-api-lab"),
         b"emoji-picker" | b"emoji" | b"picker" => Some(b"/bin/emoji-picker"),
         b"sun-open" => Some(b"/bin/sun-open"),
+        b"mines" | b"sunlight-mines" => Some(b"/Applications/SunlightMines.sunapp"),
         _ => None,
     }
 }

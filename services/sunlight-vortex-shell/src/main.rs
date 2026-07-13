@@ -155,7 +155,6 @@ static ICON_API_LAB_TGA: &[u8] =
 static ICON_TASKS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
 static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
-static ICON_EYES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/kmag.tga");
 static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
 static ICON_WRITER_TGA: &[u8] =
@@ -360,11 +359,11 @@ impl DockTheme {
             // Not rendered in the bottom dock; the Start Menu owns their icons.
             AppId::Tasks
             | AppId::Bench
-            | AppId::Eyes
             | AppId::TextEditor
             | AppId::Writer
             | AppId::RappidRabbit
-            | AppId::ApiLab => None,
+            | AppId::ApiLab
+            | AppId::Mines => None,
         }
     }
 }
@@ -464,12 +463,12 @@ pub(crate) enum AppId {
     Settings,
     Tasks,
     Bench,
-    Eyes,
     TextEditor,
     Writer,
     Calendar,
     RappidRabbit,
     ApiLab,
+    Mines,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1239,7 +1238,7 @@ struct VortexShell {
     symbols: SymbolTheme,
     /// App registry used for launch/focus/restore behavior. The first four
     /// entries (Terminal/Calculator/Files/Settings) are also shown in the
-    /// bottom dock; Tasks/Bench/Eyes/TextEditor/Writer are Start-Menu-only
+    /// bottom dock; Tasks/Bench/TextEditor/Writer are Start-Menu-only
     /// but share the same launch/state-sync machinery.
     apps: [DockAppState; 13],
     /// Dynamic dock entries for visible non-pinned windows.
@@ -1414,12 +1413,13 @@ impl VortexShell {
                 // Not shown in the bottom dock — launched/tracked only from the Start Menu.
                 DockAppState::new(AppId::Tasks, "Task Manager", AppId::Tasks),
                 DockAppState::new(AppId::Bench, "Sunlight Bench", AppId::Bench),
-                DockAppState::new(AppId::Eyes, "Eyes", AppId::Eyes),
                 DockAppState::new(AppId::TextEditor, "Sunlight Edit", AppId::TextEditor),
                 DockAppState::new(AppId::Writer, "Sunlight Writer", AppId::Writer),
                 DockAppState::new(AppId::Calendar, "Sunlight Calendar", AppId::Calendar),
                 DockAppState::new(AppId::RappidRabbit, "Rappid Rabbit", AppId::RappidRabbit),
                 DockAppState::new(AppId::ApiLab, "Sunlight API Lab", AppId::ApiLab),
+                // Start-Menu only graphical DOS game (Chronos bundle)
+                DockAppState::new(AppId::Mines, "Sunlight Mines", AppId::Mines),
             ],
             running_apps: Vec::new(),
             icon_overrides,
@@ -1620,12 +1620,12 @@ impl VortexShell {
             AppId::Settings => "/bin/control-panel",
             AppId::Tasks => "/bin/sunlight-tasks",
             AppId::Bench => "/bin/sunbench",
-            AppId::Eyes => "/bin/eyes",
             AppId::TextEditor => "/bin/sunlight-edit",
             AppId::Writer => "/bin/sunlight-writer",
             AppId::Calendar => "/bin/sunlight-calendar",
             AppId::RappidRabbit => "/bin/rappid-rabbit",
             AppId::ApiLab => "/bin/sunlight-api-lab",
+            AppId::Mines => "/Applications/SunlightMines.sunapp",
         }
     }
 
@@ -1638,12 +1638,12 @@ impl VortexShell {
             AppId::Settings => b"settings",
             AppId::Tasks => b"tasks",
             AppId::Bench => b"bench",
-            AppId::Eyes => b"eyes",
             AppId::TextEditor => b"sunlight-edit",
             AppId::Writer => b"sunlight-writer",
             AppId::Calendar => b"calendar",
             AppId::RappidRabbit => b"rappid-rabbit",
             AppId::ApiLab => b"sunlight-api-lab",
+            AppId::Mines => b"sunlight-mines",
         }
     }
 
@@ -1656,17 +1656,17 @@ impl VortexShell {
             AppId::Settings => "app=control-panel",
             AppId::Tasks => "app=tasks",
             AppId::Bench => "app=bench",
-            AppId::Eyes => "app=eyes",
             AppId::TextEditor => "app=sunlight-edit",
             AppId::Writer => "app=sunlight-writer",
             AppId::Calendar => "app=sunlight-calendar",
             AppId::RappidRabbit => "app=rappid-rabbit",
             AppId::ApiLab => "app=sunlight-api-lab",
+            AppId::Mines => "app=sunlight-mines",
         }
     }
 
     fn app_allows_multiple_instances(app_id: AppId) -> bool {
-        matches!(app_id, AppId::Calendar | AppId::Chronos)
+        matches!(app_id, AppId::Calendar | AppId::Chronos | AppId::Mines)
     }
 
     fn open_file_via_resolver(&mut self, path: &str, source: LaunchSource) -> bool {
@@ -1856,7 +1856,7 @@ impl VortexShell {
     /// True only for pinned apps that already have a dedicated dock icon
     /// (Terminal, Calendar, Calculator, Files). These are excluded from the
     /// dynamic running-apps strip to avoid showing the same app twice.
-    /// Start-Menu-only pinned apps (Settings, Tasks, Bench, Eyes, TextEditor,
+    /// Start-Menu-only pinned apps (Settings, Tasks, Bench, TextEditor,
     /// Writer)
     /// have no dock icon, so they *are* shown in the running strip when their
     /// window is open — otherwise they'd be invisible in the taskbar.
@@ -4630,7 +4630,6 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         "runner" | "run" | "system-run" => Some(ICON_RUNNER_TGA),
         "tasks" | "task-manager" | "ksysguard" | "sunlight-tasks" => Some(ICON_TASKS_TGA),
         "bench" | "sunlight-bench" | "cpu-x" => Some(ICON_BENCH_TGA),
-        "eyes" | "kmag" | "sunlight-eyes" => Some(ICON_EYES_TGA),
         "generic-app" | "app" | "application" | "applications-system" | "windows" => {
             Some(ICON_GENERIC_APP_TGA)
         }

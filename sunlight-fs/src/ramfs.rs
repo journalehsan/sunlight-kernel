@@ -528,6 +528,13 @@ pub static INITRAMFS: &[RamEntry] = &[
         0,
         mode::DIR_755,
     ),
+
+    RamEntry::dir("/Applications/SunlightMines.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/SunlightMines.sunapp/Program", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/SunlightMines.sunapp/Resources", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/SunlightMines.sunapp/Defaults", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/SunlightMines.sunapp/Licenses", 0, 0, mode::DIR_755),
+
     RamEntry::dir("/Applications/ChronosFileLab.sunapp", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications/ChronosFileLab.sunapp/Program", 0, 0, mode::DIR_755),
     RamEntry::dir(
@@ -1165,6 +1172,13 @@ max_ttys = 6
         include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM"),
     ),
     RamEntry::file(
+        "/Applications/ChronosDosShell.sunapp/Program/TESTS/SUNMINE.EXE",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../ChronosDosShell.sunapp/Program/TESTS/SUNMINE.EXE"),
+    ),
+    RamEntry::file(
         "/Applications/ChronosDosShell.sunapp/Resources/icon.tga",
         0,
         0,
@@ -1178,6 +1192,50 @@ max_ttys = 6
         mode::FILE_644,
         include_bytes!("../../ChronosDosShell.sunapp/Licenses/README.txt"),
     ),
+
+    RamEntry::file(
+        "/Applications/SunlightMines.sunapp/Manifest.toml",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../SunlightMines.sunapp/Manifest.toml"),
+    ),
+    RamEntry::file(
+        "/Applications/SunlightMines.sunapp/Program/SUNMINE.EXE",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../SunlightMines.sunapp/Program/SUNMINE.EXE"),
+    ),
+    RamEntry::file(
+        "/Applications/SunlightMines.sunapp/Resources/icon.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../SunlightMines.sunapp/Resources/icon.tga"),
+    ),
+    RamEntry::file(
+        "/Applications/SunlightMines.sunapp/Resources/icon-large.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../SunlightMines.sunapp/Resources/icon-large.tga"),
+    ),
+    RamEntry::file(
+        "/Applications/SunlightMines.sunapp/README.md",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../SunlightMines.sunapp/README.md"),
+    ),
+    RamEntry::file(
+        "/Applications/SunlightMines.sunapp/Licenses/README.txt",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../SunlightMines.sunapp/Licenses/README.txt"),
+    ),
+
     RamEntry::file(
         "/Applications/ChronosFileLab.sunapp/Manifest.toml",
         0,
