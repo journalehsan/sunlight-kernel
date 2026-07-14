@@ -10,7 +10,7 @@ interface
 type
   TMouseState = record
     X, Y: Integer;
-    Buttons: Word;  { bit0 left, bit1 right }
+    Buttons: Word;
   end;
 
 procedure ResetMouse(var installed: Boolean; var btnCount: Word);
@@ -24,18 +24,16 @@ implementation
 
 procedure ResetMouse(var installed: Boolean; var btnCount: Word);
 var
-  ax, bx: Word;
+  retAx, retBx: Word;
 begin
-  ax := 0;
-  bx := 0;
   asm
-    mov ax, 0
+    xor ax, ax
     int $33
-    mov axResult, ax
-    mov bxResult, bx
+    mov retAx, ax
+    mov retBx, bx
   end;
-  installed := (ax = $FFFF);
-  btnCount := bx;
+  installed := (retAx = $FFFF);
+  btnCount := retBx;
 end;
 
 procedure ShowMouse;
@@ -56,18 +54,18 @@ end;
 
 procedure GetMouseState(var st: TMouseState);
 var
-  bx, cx, dx: Word;
+  mbx, mcx, mdx: Word;
 begin
   asm
     mov ax, 3
     int $33
-    mov bxResult, bx
-    mov cxResult, cx
-    mov dxResult, dx
+    mov mbx, bx
+    mov mcx, cx
+    mov mdx, dx
   end;
-  st.Buttons := bx;
-  st.X := Integer(cx);
-  st.Y := Integer(dx);
+  st.Buttons := mbx;
+  st.X := Integer(mcx);
+  st.Y := Integer(mdx);
 end;
 
 procedure SetMouseRange(minX, minY, maxX, maxY: Integer);

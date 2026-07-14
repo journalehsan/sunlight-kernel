@@ -3,12 +3,12 @@ program SunlightMines;
 {$H-}
 {$IMPLICITEXCEPTIONS OFF}
 
-{ Sunlight Mines - 9x9 / 10 mines graphical DOS app for Chronos.
-  All logic, draw, input, persistence in guest.
-  Uses only supported Chronos interfaces: INT 10h/13h, INT 21h time/file, INT 28h, INT 33h, direct A0000, DAC ports. }
+{ Sunlight Mines - 9x9 / 10 mines text-mode DOS app for Chronos.
+  Uses direct B8000 writes (80x25 text mode 03h).
+  Event-driven: no full-screen redraw per frame. }
 
 uses
-  DosApi, Video13, Mouse33, Game, Draw, Font5x7, Storage;
+  DosApi, Video, Mouse33, Game, Draw, Storage;
 
 var
   Installed: Boolean;
@@ -21,33 +21,8 @@ var
   CmdSeed: LongInt;
   Done: Boolean;
   RestartPending: Boolean;
-
-function ParseSeedFromCmd: LongInt;
-var
-  i: Integer;
-  arg: String;
-  val: LongInt;
-  ch: Char;
-begin
-  ParseSeedFromCmd := 0;
-  { FPC places command tail after PSP, simple scan for /SEED: }
-  { For simplicity we support SUNMINE /SEED:1234 via DOS cmd tail but here we take from paramstr if supported.
-    In real mode TP, use Dos or manual. For now check env or fixed, caller injects via cmd tail.
-    Simple: always 0 unless we parse manually from psp. }
-  { In this build we rely on Seed passed to InitGame from argv parsing if needed. }
-end;
-
-procedure ParseCommandLine;
-var
-  tail: PChar;
-  i: Integer;
-  num: LongInt;
-begin
-  CmdSeed := 0;
-  { DOS command tail at PSP:80h length at 80h, data 81h. For simplicity support fixed test path.
-    Real parsing omitted for size; bundle launches with no arg, test uses direct with /SEED if needed.
-    The binary accepts /SEED:NNNN by manual scan in practice. }
-end;
+  NeedsRedraw: Boolean;
+  PrevWon, PrevLost: Boolean;
 
 procedure UpdateTimer;
 var
@@ -56,7 +31,9 @@ var
 begin
   GetDosTime(t);
   sec := Word(t.Min) * 60 + t.Sec;
-  if sec < LastTimeSec then sec := sec + 3600; { simple rollover }
+  { simple rollover guard }
+  while sec < LastTimeSec do
+    sec := sec + 3600;
   LastTimeSec := sec;
   if TimerRunning then
     TickTimer(sec);
@@ -65,37 +42,27 @@ end;
 procedure HandleLeftClick(cellX, cellY: Integer);
 begin
   if (cellX < 0) or (cellX >= BOARD_W) or (cellY < 0) or (cellY >= BOARD_H) then
-  begin
-    { restart area rough hit test top status }
-    if (MouseSt.Y >= STATUS_Y) and (MouseSt.Y < STATUS_Y + 18) then
-      if (MouseSt.X > 120) and (MouseSt.X < 150) then
-      begin
-        RestartPending := True;
-      end;
     Exit;
-  end;
   if RevealCell(cellX, cellY) then
-  begin
-    { loss handled in reveal }
-  end;
+    { loss - reveal changed cells, will be redrawn }
+  ;
+  NeedsRedraw := True;
 end;
 
 procedure HandleRightClick(cellX, cellY: Integer);
 begin
   if (cellX < 0) or (cellX >= BOARD_W) or (cellY < 0) or (cellY >= BOARD_H) then Exit;
   ToggleFlag(cellX, cellY);
+  DrawCell(cellX, cellY);
+  DrawStatus;
 end;
 
 function ScreenToCell(mx, my: Integer; var cx, cy: Integer): Boolean;
-var
-  relx, rely: Integer;
 begin
-  relx := mx - BOARD_X;
-  rely := my - BOARD_Y;
-  if (relx < 0) or (rely < 0) then begin ScreenToCell := False; Exit; end;
-  cx := relx div CELL_SIZE;
-  cy := rely div CELL_SIZE;
-  ScreenToCell := InBounds(cx, cy);  { note InBounds in game unit }
+  { mouse coords are in text columns/rows (0..79, 0..24) }
+  cx := (mx - BOARD_COL) div CELL_W;
+  cy := (my - BOARD_ROW);
+  ScreenToCell := InBounds(cx, cy);
 end;
 
 procedure GameLoop;
@@ -103,15 +70,28 @@ var
   cx, cy: Integer;
   newLeft, newRight: Boolean;
   key: Char;
+  tickCounter: Byte;
+  timerDrawn: Word;
 begin
   Done := False;
+  tickCounter := 0;
+  timerDrawn := 9999; { force initial status draw }
+
   while not Done do
   begin
-    { yield cooperatively }
-    asm
-      mov ah, $28
-      int $21
+    { cooperative yield only every N iterations to reduce trap overhead }
+    if tickCounter >= 8 then
+    begin
+      asm
+        mov ah, $28
+        int $21
+      end;
+      tickCounter := 0;
     end;
+    Inc(tickCounter);
+
+    NeedsRedraw := False;
+    key := #0;
 
     { mouse }
     GetMouseState(MouseSt);
@@ -123,9 +103,7 @@ begin
     if newLeft then
     begin
       if ScreenToCell(MouseSt.X, MouseSt.Y, cx, cy) then
-        HandleLeftClick(cx, cy)
-      else
-        HandleLeftClick(-1, -1);
+        HandleLeftClick(cx, cy);
     end;
     if newRight then
     begin
@@ -133,7 +111,7 @@ begin
         HandleRightClick(cx, cy);
     end;
 
-    { keyboard via BIOS non block if possible, simple int16 }
+    { keyboard - nonblocking check }
     asm
       mov ah, 1
       int $16
@@ -146,28 +124,56 @@ begin
       mov key, 0
     @havekey:
     end;
+
     if key <> #0 then
     begin
       case UpCase(key) of
-        'R', 'N', #60 {F2 scan?} : RestartPending := True;
-        #27 {Esc}: Done := True;
+        'R', 'N': begin
+          RestartPending := True;
+        end;
+        #27: begin
+          Done := True;
+        end;
       end;
+    end;
+
+    { redraw after click reveals cells that may be many }
+    if NeedsRedraw then
+    begin
+      if GameLost then
+      begin
+        DrawBoard;      { show all mines }
+        DrawBanner('MINE TRIGGERED', ATTR_LOST);
+      end
+      else
+      begin
+        { only cells that changed are already revealed; draw board gives best result }
+        DrawBoard;
+      end;
+      DrawStatus;
     end;
 
     UpdateTimer;
 
-    if RestartPending then
+    { status timer update every ~2 real seconds, or when it changes }
+    if (ElapsedSec <> timerDrawn) and TimerRunning then
     begin
-      Restart;
-      RestartPending := False;
-      Best := LoadBestTime; { refresh display }
-      DrawFullUI(Ptr(FB_SEG, 0));
+      DrawStatus;
+      timerDrawn := ElapsedSec;
     end;
 
-    DrawFullUI(Ptr(FB_SEG, 0));
+    { restart }
+    if RestartPending then
+    begin
+      RestartPending := False;
+      Restart;
+      Best := LoadBestTime;
+      timerDrawn := 9999;
+      RedrawFull;
+    end;
 
-    { win/loss persistence }
-    if GameWon then
+    { win detection }
+    if GameWon and (not PrevWon) then
     begin
       Best := LoadBestTime;
       if (Best = 0) or (ElapsedSec < Best) then
@@ -175,34 +181,27 @@ begin
         SaveBestTime(ElapsedSec);
         Best := ElapsedSec;
       end;
-      { keep board visible until restart or esc }
+      DrawBoard;
+      DrawStatus;
+      DrawBanner('FIELD CLEARED', ATTR_WON);
     end;
 
-    if GameLost then
-    begin
-      { reveal all mines already done by game logic on loss path }
-    end;
-
-    { crude frame limit via yield is enough }
+    PrevWon := GameWon;
+    PrevLost := GameLost;
   end;
 end;
 
 procedure Setup;
-var
-  st: TMouseState;
 begin
-  SetVideoMode13;
-  InstallSunlightPalette;
-
+  SetVideoMode03;
   ResetMouse(Installed, BtnCount);
   if Installed then
   begin
-    SetMouseRange(0, 0, 319, 199);
-    SetMousePos(160, 100);
+    SetMouseRange(0, 0, 79, 24);
+    SetMousePos(40, 13);
     ShowMouse;
   end;
 
-  ParseCommandLine;
   if CmdSeed <> 0 then
     InitGame(CmdSeed)
   else
@@ -212,19 +211,20 @@ begin
   PrevButtons := 0;
   LastTimeSec := 0;
   RestartPending := False;
+  PrevWon := False;
+  PrevLost := False;
 
-  { initial draw }
-  DrawFullUI(Ptr(FB_SEG, 0));
+  RedrawFull;
 end;
 
 procedure Shutdown;
 begin
   HideMouse;
   SetVideoMode03;
-  { files closed by each op }
 end;
 
 begin
+  CmdSeed := 0;
   Setup;
   GameLoop;
   Shutdown;

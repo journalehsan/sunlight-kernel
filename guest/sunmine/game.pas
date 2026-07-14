@@ -40,6 +40,7 @@ procedure PlaceMinesSafe(firstX, firstY: Integer);
 function RevealCell(x, y: Integer): Boolean; { returns true if mine hit }
 procedure ToggleFlag(x, y: Integer);
 function CheckWin: Boolean;
+function InBounds(x, y: Integer): Boolean;
 procedure Restart;
 procedure StopTimer;
 procedure TickTimer(currentSec: Word);

@@ -20,10 +20,11 @@ SUNMINE.EXE is included prebuilt. Ordinary builds use the checked-in asset.
 
 - Safe first click (no mine or immediate neighbors)
 - Iterative bounded queue flood fill (no recursion)
-- Guest 5x7 font and full drawing into A0000
-- Guest VGA DAC palette programming
-- INT 33h mouse with edge press detection
-- INT 28h cooperative yield
+- **Text mode 03h** with direct B8000 writes (no pixel rendering)
+- Event-driven redraw: only changed cells are redrawn
+- DOS text-mode mouse via INT 33h
+- Keyboard via INT 16h
+- INT 28h cooperative yield (every 8 loop iterations)
 - DOS time for timer
 - Best time persistence to C:\STATE\MINEBEST.DAT (SMIN magic, v1, LE u16)
 - R/N restart, Esc clean exit to mode 03h

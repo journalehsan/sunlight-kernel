@@ -3,193 +3,208 @@ unit Draw;
 {$H-}
 {$IMPLICITEXCEPTIONS OFF}
 
-{ All drawing of the Minesweeper UI into A0000 by the guest. }
+{ Text-mode drawing for Sunlight Mines using direct B8000 writes.
+  Board is 9x9, each cell occupies 2 B8000 columns. }
 
 interface
 
-uses Video13, Font5x7, Game;
+uses Video, Game, Storage;
 
 const
-  CELL_SIZE = 14;
-  BOARD_X = 38;   { centered for 9*14 = 126,  (320-126)/2 ~ 97? adjust }
-  BOARD_Y = 56;
-  TITLE_Y = 6;
-  STATUS_Y = 26;
-  HINT_Y = 184;
+  { board positioning in text columns/rows }
+  BOARD_ROW = 3;
+  BOARD_COL = 31;   { 9 cells * 2 cols = 18; (80-18)/2 = 31 }
+  CELL_W    = 2;
 
-procedure DrawFullUI(fb: PByte);
-procedure DrawCell(x, y, cx, cy: Integer; revealed, flagged, isMine: Boolean; neighbor: Byte; lost: Boolean);
-procedure DrawBanner(msg: String; good: Boolean);
+  { UI rows }
+  TITLE_ROW  = 0;
+  STATUS_ROW = 1;
+  HINT_ROW   = 13;
+  BANNER_ROW = 15;
+
+procedure DrawTitle;
+procedure DrawStatus;
+procedure DrawHint;
+procedure DrawBanner(msg: String; attr: Byte);
+procedure DrawBoard;
+procedure DrawCell(x, y: Integer);
+procedure RedrawFull;
 
 implementation
 
-const
-  COL_BG = 0;
-  COL_PANEL = 1;
-  COL_ACCENT = 2;
-  COL_REVEALED = 3;
-  COL_HIDDEN = 4;
-  COL_HILITE = 5;
-  COL_SHADOW = 6;
-  COL_MINE = 7;
-  COL_FLAG = 8;
-  COL_TEXT = 9;
-  { 10-17 for numbers }
-
-procedure DrawCell(x, y, cx, cy: Integer; revealed, flagged, isMine: Boolean; neighbor: Byte; lost: Boolean);
-var
-  px, py, c, nc: Integer;
-  numc: Byte;
+function NumAttr(n: Integer): Byte;
 begin
-  px := x + cx * CELL_SIZE;
-  py := y + cy * CELL_SIZE;
-  if revealed then
+  case n of
+    1: NumAttr := ATTR_NUM1;
+    2: NumAttr := ATTR_NUM2;
+    3: NumAttr := ATTR_NUM3;
+    4: NumAttr := ATTR_NUM4;
+    5: NumAttr := ATTR_NUM5;
+    6: NumAttr := ATTR_NUM6;
+    7: NumAttr := ATTR_NUM7;
+    8: NumAttr := ATTR_NUM8;
+  else
+    NumAttr := ATTR_TEXT;
+  end;
+end;
+
+{ Convert game x,y to screen column/row }
+procedure CellPos(x, y: Integer; var scrRow, scrCol: Integer);
+begin
+  scrRow := BOARD_ROW + y;
+  scrCol := BOARD_COL + x * CELL_W;
+end;
+
+procedure DrawTitle;
+begin
+  PutText(TITLE_ROW, 29, 'SUNLIGHT MINES', ATTR_TITLE);
+end;
+
+procedure DrawStatus;
+var
+  s: String;
+  best: Word;
+begin
+  FillRow(STATUS_ROW, 0, SCREEN_COLS - 1, ' ', ATTR_TEXT);
+  PutText(STATUS_ROW, 4, 'MINES', ATTR_STATUS);
+  if RemainingMines < 0 then
+    PutText(STATUS_ROW, 10, '00', ATTR_TEXT)
+  else if RemainingMines < 10 then
   begin
-    FillRect(px, py, CELL_SIZE, CELL_SIZE, COL_REVEALED);
-    { inner bevel thin }
-    if neighbor > 0 then
+    s := '0';
+    s := s + Chr(Ord('0') + RemainingMines);
+    PutText(STATUS_ROW, 10, s, ATTR_TEXT);
+  end
+  else
+  begin
+    s := Chr(Ord('0') + (RemainingMines div 10));
+    s := s + Chr(Ord('0') + (RemainingMines mod 10));
+    PutText(STATUS_ROW, 10, s, ATTR_TEXT);
+  end;
+  PutText(STATUS_ROW, 26, 'TIME', ATTR_STATUS);
+  if ElapsedSec > 999 then
+    PutText(STATUS_ROW, 31, '999', ATTR_TEXT)
+  else
+  begin
+    s := Chr(Ord('0') + (ElapsedSec div 100));
+    s := s + Chr(Ord('0') + ((ElapsedSec div 10) mod 10));
+    s := s + Chr(Ord('0') + (ElapsedSec mod 10));
+    PutText(STATUS_ROW, 31, s, ATTR_TEXT);
+  end;
+  PutText(STATUS_ROW, 50, 'BEST', ATTR_STATUS);
+  best := LoadBestTime;
+  if best > 0 then
+  begin
+    s := Chr(Ord('0') + (best div 100));
+    s := s + Chr(Ord('0') + ((best div 10) mod 10));
+    s := s + Chr(Ord('0') + (best mod 10));
+    PutText(STATUS_ROW, 55, s, ATTR_TEXT);
+  end
+  else
+    PutText(STATUS_ROW, 55, '---', ATTR_TEXT);
+end;
+
+procedure DrawHint;
+begin
+  FillRow(HINT_ROW, 0, SCREEN_COLS - 1, ' ', ATTR_TEXT);
+  PutText(HINT_ROW, 8, 'Left=Reveal  Right=Flag  R=Restart  Esc=Exit', ATTR_TEXT);
+end;
+
+procedure DrawBanner(msg: String; attr: Byte);
+var
+  col, i: Integer;
+begin
+  col := (SCREEN_COLS - Length(msg)) div 2;
+  { clear banner row }
+  FillRow(BANNER_ROW, 0, SCREEN_COLS - 1, ' ', ATTR_TEXT);
+  FillRow(BANNER_ROW + 1, 0, SCREEN_COLS - 1, ' ', ATTR_TEXT);
+  PutText(BANNER_ROW, col, msg, attr);
+end;
+
+{ Draw a single game cell at board position x,y using current Board state }
+procedure DrawCell(x, y: Integer);
+var
+  sr, sc: Integer;
+  cell: TCell;
+  leftChar, rightChar: Char;
+  leftAttr, rightAttr: Byte;
+begin
+  if not InBounds(x, y) then Exit;
+  CellPos(x, y, sr, sc);
+  cell := Board[y, x];
+
+  if cell.IsRevealed then
+  begin
+    if cell.IsMine then
     begin
-      case neighbor of
-        1: numc := 10;
-        2: numc := 11;
-        3: numc := 12;
-        4: numc := 13;
-        5: numc := 14;
-        6: numc := 15;
-        7: numc := 16;
-      else
-        numc := 17;
-      end;
-      DrawString(px + 4, py + 3, Chr(Ord('0') + neighbor), numc, Ptr(FB_SEG, 0));
+      leftChar := '*'; leftAttr := ATTR_MINE;
+      rightChar := ' '; rightAttr := ATTR_REVEALED;
+    end
+    else if cell.Neighbor > 0 then
+    begin
+      leftChar := ' ';
+      rightChar := Chr(Ord('0') + cell.Neighbor);
+      leftAttr  := ATTR_REVEALED;
+      rightAttr := NumAttr(cell.Neighbor);
+    end
+    else
+    begin
+      leftChar := ' '; leftAttr  := ATTR_REVEALED;
+      rightChar := ' '; rightAttr := ATTR_REVEALED;
+    end;
+  end
+  else if cell.IsFlagged then
+  begin
+    if GameLost and (not cell.IsMine) then
+    begin
+      leftChar := 'X'; leftAttr := ATTR_FLAG_WRONG;
+      rightChar:= #219; rightAttr:= ATTR_FLAG_WRONG;
+    end
+    else
+    begin
+      leftChar := 'F'; leftAttr  := ATTR_FLAG;
+      rightChar:= #219; rightAttr:= ATTR_HIDDEN;
     end;
   end
   else
   begin
-    FillRect(px, py, CELL_SIZE, CELL_SIZE, COL_HIDDEN);
-    { simple bevel }
-    { top/left hilite }
-    FillRect(px, py, CELL_SIZE, 2, COL_HILITE);
-    FillRect(px, py, 2, CELL_SIZE, COL_HILITE);
-    { bottom/right shadow }
-    FillRect(px, py + CELL_SIZE - 2, CELL_SIZE, 2, COL_SHADOW);
-    FillRect(px + CELL_SIZE - 2, py, 2, CELL_SIZE, COL_SHADOW);
-    if flagged then
+    { unrevealed, show mines if lost }
+    if GameLost and cell.IsMine then
     begin
-      { draw flag }
-      FillRect(px + 4, py + 3, 6, 2, COL_FLAG);
-      FillRect(px + 4, py + 5, 2, 6, COL_FLAG);
-      FillRect(px + 3, py + 10, 8, 2, COL_TEXT);
+      leftChar := '*'; leftAttr  := ATTR_MINE_BG;
+      rightChar:= ' '; rightAttr := ATTR_MINE_BG;
+    end
+    else
+    begin
+      leftChar := #219; leftAttr := ATTR_HIDDEN;
+      rightChar:= #219; rightAttr:= ATTR_HIDDEN;
     end;
   end;
-  if lost and isMine and revealed then
-  begin
-    { detonated mine highlight }
-    FillRect(px+2, py+2, CELL_SIZE-4, CELL_SIZE-4, COL_MINE);
-    DrawString(px+4, py+4, '*', COL_TEXT, Ptr(FB_SEG,0));
-  end
-  else if lost and isMine and (not revealed) then
-  begin
-    { show remaining mines }
-    FillRect(px+3, py+3, CELL_SIZE-6, CELL_SIZE-6, COL_MINE);
-  end;
-  if lost and flagged and (not isMine) then
-  begin
-    { incorrect flag mark }
-    DrawString(px + 3, py + 3, 'X', COL_ACCENT, Ptr(FB_SEG,0));
-  end;
+
+  PutCell(sr, sc,   leftChar,  leftAttr);
+  PutCell(sr, sc+1, rightChar, rightAttr);
 end;
 
-procedure DrawBoard(fb: PByte);
+procedure DrawBoard;
 var
   cx, cy: Integer;
 begin
   for cy := 0 to BOARD_H - 1 do
     for cx := 0 to BOARD_W - 1 do
-      DrawCell(BOARD_X, BOARD_Y, cx, cy,
-        Board[cy, cx].IsRevealed,
-        Board[cy, cx].IsFlagged,
-        Board[cy, cx].IsMine,
-        Board[cy, cx].Neighbor,
-        GameLost);
+      DrawCell(cx, cy);
 end;
 
-procedure DrawStatus(fb: PByte);
-var
-  s: String;
-  best: Word;
+procedure RedrawFull;
 begin
-  { mine counter }
-  s := 'MINES ';
-  if RemainingMines < 10 then s := s + '00' else if RemainingMines < 100 then s := s + '0';
-  s := s + IntToStr(RemainingMines); { note: FPC shortstr no IntToStr in tp? use manual }
-  DrawString(20, STATUS_Y, 'MINES', COL_ACCENT, fb);
-  DrawString(20 + 6*6, STATUS_Y, '  ', COL_TEXT, fb);
-  { manual digits for counter }
-  { For simplicity draw two digits }
-  DrawString(70, STATUS_Y, Chr(Ord('0') + (RemainingMines div 10)), COL_TEXT, fb);
-  DrawString(76, STATUS_Y, Chr(Ord('0') + (RemainingMines mod 10)), COL_TEXT, fb);
-
-  { timer }
-  DrawString(160, STATUS_Y, 'TIME', COL_ACCENT, fb);
-  DrawString(200, STATUS_Y, Chr(Ord('0') + (ElapsedSec div 100)), COL_TEXT, fb);
-  DrawString(206, STATUS_Y, Chr(Ord('0') + ((ElapsedSec div 10) mod 10)), COL_TEXT, fb);
-  DrawString(212, STATUS_Y, Chr(Ord('0') + (ElapsedSec mod 10)), COL_TEXT, fb);
-
-  { best time }
-  best := 0; { caller may load }
-  DrawString(250, STATUS_Y, 'BEST', COL_ACCENT, fb);
-  if best > 0 then
-  begin
-    DrawString(280, STATUS_Y, Chr(Ord('0')+(best div 100)), COL_TEXT, fb);
-    DrawString(286, STATUS_Y, Chr(Ord('0')+((best div 10) mod 10)), COL_TEXT, fb);
-    DrawString(292, STATUS_Y, Chr(Ord('0')+(best mod 10)), COL_TEXT, fb);
-  end
-  else
-    DrawString(280, STATUS_Y, '---', COL_TEXT, fb);
-end;
-
-procedure DrawTitle(fb: PByte);
-begin
-  DrawString(92, TITLE_Y, 'SUNLIGHT MINES', COL_ACCENT, fb);
-end;
-
-procedure DrawHint(fb: PByte);
-begin
-  DrawString(20, HINT_Y, 'L:REVEAL  R:FLAG  R:RESTART  ESC:EXIT', COL_TEXT, fb);
-end;
-
-procedure DrawFullUI(fb: PByte);
-begin
-  ClearScreen(COL_BG);
-  FillRect(4, 2, 312, 22, COL_PANEL);
-  FillRect(4, 24, 312, 26, COL_PANEL);
-  DrawTitle(fb);
-  DrawStatus(fb);
-  DrawBoard(fb);
-  DrawHint(fb);
-  if GameWon then DrawBanner('FIELD CLEARED', True);
-  if GameLost then DrawBanner('MINE TRIGGERED', False);
-end;
-
-procedure DrawBanner(msg: String; good: Boolean);
-var
-  col: Byte;
-  len, sx: Integer;
-begin
-  col := COL_ACCENT;
-  len := Length(msg);
-  sx := (SCREEN_W - len * 6) div 2;
-  FillRect(sx - 8, 90, len * 6 + 16, 20, COL_PANEL);
-  DrawString(sx, 94, msg, col, Ptr(FB_SEG, 0));
-end;
-
-{ FPC TP mode lacks IntToStr in base, provide simple for our digits }
-function IntToStr(v: Integer): String;
-var
-  s: String;
-begin
-  Str(v, s);
-  IntToStr := s;
+  ClearScreen;
+  DrawTitle;
+  DrawStatus;
+  DrawBoard;
+  DrawHint;
+  if GameWon then
+    DrawBanner('FIELD CLEARED', ATTR_WON)
+  else if GameLost then
+    DrawBanner('MINE TRIGGERED', ATTR_LOST);
 end;
 
 end.

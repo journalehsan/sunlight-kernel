@@ -17,6 +17,7 @@ procedure GetDosDate(var year: Word; var month, day: Byte);
 function DosCreateFile(const path: String): Word; { returns handle or 0 on fail }
 function DosOpenFile(const path: String; write: Boolean): Word;
 procedure DosClose(handle: Word);
+function DosRead(handle: Word; buf: PByte; count: Word): Word;
 function DosWrite(handle: Word; buf: PByte; count: Word): Word;
 function DosMkdir(const path: String): Boolean;
 procedure DosExit(code: Byte);
@@ -102,6 +103,27 @@ begin
     pop ds
   end;
   DosOpenFile := h;
+end;
+
+function DosRead(handle: Word; buf: PByte; count: Word): Word;
+var
+  n: Word;
+begin
+  n := 0;
+  asm
+    mov bx, handle
+    mov cx, count
+    mov dx, buf
+    mov ah, $3F
+    int $21
+    jc @fail
+    mov n, ax
+    jmp @done
+  @fail:
+    mov n, 0
+  @done:
+  end;
+  DosRead := n;
 end;
 
 procedure DosClose(handle: Word);
