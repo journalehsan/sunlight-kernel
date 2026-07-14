@@ -399,6 +399,20 @@ impl FileSystem for RamFs {
             if self.is_dir(dst_idx) {
                 return Err(FsError::IsDir);
             }
+            if dst_idx < self.entries.len() {
+                let source = self.dynamic.remove(dyn_idx);
+                self.buffers[dst_idx] = Some(source.data);
+                for slot in self.handles.iter_mut() {
+                    if let Some(handle_idx) = *slot {
+                        if handle_idx == entry_idx {
+                            *slot = Some(dst_idx);
+                        } else if handle_idx > entry_idx {
+                            *slot = Some(handle_idx - 1);
+                        }
+                    }
+                }
+                return Ok(());
+            }
             if dst_idx >= self.entries.len() {
                 let ddyn = dst_idx - self.entries.len();
                 for slot in self.handles.iter_mut() {
@@ -2459,6 +2473,24 @@ mod tests {
         assert_eq!(stat.file_type, FileType::File);
         assert_eq!(stat.uid, 1000);
         assert_eq!(stat.mode, mode::S_IFREG | 0o644);
+    }
+
+    #[test]
+    fn rename_dynamic_file_replaces_static_file_contents() {
+        let mut fs = RamFs::new(DIR_ENTRIES);
+        let handle = fs
+            .create_file("/etc/motd.tmp", 0, 0, mode::FILE_644)
+            .unwrap();
+        fs.write(handle, 0, b"updated\n").unwrap();
+        fs.close(handle).unwrap();
+
+        assert_eq!(fs.rename("/etc/motd.tmp", "/etc/motd"), Ok(()));
+        assert_eq!(fs.open("/etc/motd.tmp"), Err(FsError::NotFound));
+
+        let handle = fs.open("/etc/motd").unwrap();
+        let mut buf = [0u8; 16];
+        let read = fs.read(handle, 0, &mut buf).unwrap();
+        assert_eq!(&buf[..read], b"updated\n");
     }
 
     #[test]
