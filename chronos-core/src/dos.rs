@@ -42,6 +42,10 @@ fn dispatch_video(runtime: &mut Runtime) -> Result<(), Trap> {
             }
             mode => Err(Trap::UnsupportedVideoMode { mode }),
         },
+        0x01 => {
+            runtime.set_cursor_shape(runtime.cpu.cx);
+            Ok(())
+        }
         0x02 => {
             if runtime.cpu.bh() != 0 {
                 return Err(Trap::UnsupportedInterrupt {

@@ -3,13 +3,25 @@
 ; Build: nasm -f bin sunmine.asm -o SUNMINE.EXE
 
 %macro push_all 0
-    push ax; push bx; push cx; push dx
-    push si; push di; push bp; push ds
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push bp
+    push ds
 %endmacro
 
 %macro pop_all 0
-    pop ds; pop bp; pop di; pop si
-    pop dx; pop cx; pop bx; pop ax
+    pop ds
+    pop bp
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
 %endmacro
 
 ; =============================================================================
@@ -19,20 +31,20 @@
 ; =============================================================================
 
 bits 16
-org 0
+cpu 8086
 
+section .header start=0 vstart=0
     db 'MZ'
-    dw (the_end - $$) % 512
-    dw ((the_end - $$) + 511) / 512
+    dw file_size % 512
+    dw (file_size + 511) / 512
     dw 0, 2, 0x20, 0x20
-    dw ((the_end - code_start) + 15) / 16
+    dw (image_size + 15) / 16
     dw 0x0200, 0
-    dw entry - code_start
+    dw entry
     dw 0, 0x001c, 0, 0, 0
+    times 32 - ($ - $$) db 0
 
-code_start:
-    dw 0                    ; relocation
-
+section .text start=32 vstart=0
 entry:
     push cs
     pop ds
@@ -221,6 +233,7 @@ init_game:
     push ax
     push cx
     push di
+    push es
     mov byte [mines_placed], 0
     mov word [winner], 0
     mov word [loser], 0
@@ -228,11 +241,15 @@ init_game:
     mov word [left_mines], 10
     mov word [elapsed], 0
     mov word [running], 0
+    mov word [timer_started], 0
     mov word [rng_seed], 0x4321
+    push ds
+    pop es
     mov di, board_data
     mov cx, 81
     xor al, al
     rep stosb
+    pop es
     pop di
     pop cx
     pop ax
@@ -264,21 +281,22 @@ place_mines:
     div cx                     ; dx = y
     mov di, dx
 
-    ; exclude first-click 3x3 zone
+    ; exclude the first-click 3x3 zone
     mov ax, [tmp_sx]
     sub ax, si
     jns .ab1
     neg ax
 .ab1:
-    cmp ax, 2
-    jbe .pm_try
+    cmp ax, 1
+    ja .pm_allowed
     mov ax, [tmp_sy]
     sub ax, di
     jns .ab2
     neg ax
 .ab2:
-    cmp ax, 2
+    cmp ax, 1
     jbe .pm_try
+.pm_allowed:
 
     mov [tmp_x], si
     mov [tmp_y], di
@@ -313,51 +331,135 @@ compute_neighbors:
 
     xor bp, bp
     ; dir0: (si-1,di-1)
-    cmp si,0;je .cd1; cmp di,0;je .cd1
-    push bx; mov ax,di;dec ax;mov dl,9;mul dl;add ax,si;dec ax;mov bx,ax
-    test byte [board_data+bx],0x80;jz .cd1a;inc bp
+    cmp si, 0
+    je .cd1
+    cmp di, 0
+    je .cd1
+    push bx
+    mov ax, di
+    dec ax
+    mov dl, 9
+    mul dl
+    add ax, si
+    dec ax
+    mov bx, ax
+    test byte [board_data + bx], 0x80
+    jz .cd1a
+    inc bp
 .cd1a: pop bx
 .cd1:
     ; dir1: (si,di-1)
-    cmp di,0;je .cd2
-    push bx; mov ax,di;dec ax;mov dl,9;mul dl;add ax,si;mov bx,ax
-    test byte [board_data+bx],0x80;jz .cd2a;inc bp
+    cmp di, 0
+    je .cd2
+    push bx
+    mov ax, di
+    dec ax
+    mov dl, 9
+    mul dl
+    add ax, si
+    mov bx, ax
+    test byte [board_data + bx], 0x80
+    jz .cd2a
+    inc bp
 .cd2a: pop bx
 .cd2:
     ; dir2: (si+1,di-1)
-    cmp si,8;je .cd3; cmp di,0;je .cd3
-    push bx; mov ax,di;dec ax;mov dl,9;mul dl;add ax,si;inc ax;mov bx,ax
-    test byte [board_data+bx],0x80;jz .cd3a;inc bp
+    cmp si, 8
+    je .cd3
+    cmp di, 0
+    je .cd3
+    push bx
+    mov ax, di
+    dec ax
+    mov dl, 9
+    mul dl
+    add ax, si
+    inc ax
+    mov bx, ax
+    test byte [board_data + bx], 0x80
+    jz .cd3a
+    inc bp
 .cd3a: pop bx
 .cd3:
     ; dir3: (si-1,di)
-    cmp si,0;je .cd4
-    push bx; mov ax,di;mov dl,9;mul dl;add ax,si;dec ax;mov bx,ax
-    test byte [board_data+bx],0x80;jz .cd4a;inc bp
+    cmp si, 0
+    je .cd4
+    push bx
+    mov ax, di
+    mov dl, 9
+    mul dl
+    add ax, si
+    dec ax
+    mov bx, ax
+    test byte [board_data + bx], 0x80
+    jz .cd4a
+    inc bp
 .cd4a: pop bx
 .cd4:
     ; dir4: (si+1,di)
-    cmp si,8;je .cd5
-    push bx; mov ax,di;mov dl,9;mul dl;add ax,si;inc ax;mov bx,ax
-    test byte [board_data+bx],0x80;jz .cd5a;inc bp
+    cmp si, 8
+    je .cd5
+    push bx
+    mov ax, di
+    mov dl, 9
+    mul dl
+    add ax, si
+    inc ax
+    mov bx, ax
+    test byte [board_data + bx], 0x80
+    jz .cd5a
+    inc bp
 .cd5a: pop bx
 .cd5:
     ; dir5: (si-1,di+1)
-    cmp si,0;je .cd6; cmp di,8;je .cd6
-    push bx; mov ax,di;inc ax;mov dl,9;mul dl;add ax,si;dec ax;mov bx,ax
-    test byte [board_data+bx],0x80;jz .cd6a;inc bp
+    cmp si, 0
+    je .cd6
+    cmp di, 8
+    je .cd6
+    push bx
+    mov ax, di
+    inc ax
+    mov dl, 9
+    mul dl
+    add ax, si
+    dec ax
+    mov bx, ax
+    test byte [board_data + bx], 0x80
+    jz .cd6a
+    inc bp
 .cd6a: pop bx
 .cd6:
     ; dir6: (si,di+1)
-    cmp di,8;je .cd7
-    push bx; mov ax,di;inc ax;mov dl,9;mul dl;add ax,si;mov bx,ax
-    test byte [board_data+bx],0x80;jz .cd7a;inc bp
+    cmp di, 8
+    je .cd7
+    push bx
+    mov ax, di
+    inc ax
+    mov dl, 9
+    mul dl
+    add ax, si
+    mov bx, ax
+    test byte [board_data + bx], 0x80
+    jz .cd7a
+    inc bp
 .cd7a: pop bx
 .cd7:
     ; dir7: (si+1,di+1)
-    cmp si,8;je .cd_st; cmp di,8;je .cd_st
-    push bx; mov ax,di;inc ax;mov dl,9;mul dl;add ax,si;inc ax;mov bx,ax
-    test byte [board_data+bx],0x80;jz .cd8a;inc bp
+    cmp si, 8
+    je .cd_st
+    cmp di, 8
+    je .cd_st
+    push bx
+    mov ax, di
+    inc ax
+    mov dl, 9
+    mul dl
+    add ax, si
+    inc ax
+    mov bx, ax
+    test byte [board_data + bx], 0x80
+    jz .cd8a
+    inc bp
 .cd8a: pop bx
 .cd_st:
     mov al, [board_data + bx]
@@ -370,7 +472,6 @@ compute_neighbors:
     mov bx, bp
     or al, bl
     pop bx
-    mov [board_data + bx], al
     mov [board_data + bx], al
 
 .cn_skip:
@@ -431,7 +532,8 @@ flood_fill:
     mov word [q_tail], 0
     ; enqueue initial (si, di) - store as X at offset, Y at offset+2
     mov bx, [q_tail]
-    shl bx, 2              ; *4
+    add bx, bx
+    add bx, bx             ; *4
     add bx, flood_queue
     mov word [bx], si      ; x
     mov word [bx+2], di    ; y
@@ -443,7 +545,8 @@ flood_fill:
     jae .ff_done
 
     mov bx, [q_head]
-    shl bx, 2              ; *4
+    add bx, bx
+    add bx, bx             ; *4
     add bx, flood_queue
     mov si, word [bx]      ; x
     mov di, word [bx+2]    ; y
@@ -452,9 +555,6 @@ flood_fill:
     mov [tmp_x], si
     mov [tmp_y], di
     call cell_index
-    test byte [board_data + bx], 0x20
-    jnz .ff_loop
-    or byte [board_data + bx], 0x40
     mov al, [board_data + bx]
     and al, 0x0F
     cmp al, 0
@@ -465,42 +565,92 @@ flood_fill:
 .ff_dir:
     mov ax, si
     mov dx, di
-    cmp bp, 0; jne .fd1; dec ax; dec dx; jmp .fd_chk
-.fd1: cmp bp, 1; jne .fd2;          dec dx; jmp .fd_chk
-.fd2: cmp bp, 2; jne .fd3; inc ax; dec dx; jmp .fd_chk
-.fd3: cmp bp, 3; jne .fd4; dec ax;          jmp .fd_chk
-.fd4: cmp bp, 4; jne .fd5; inc ax;          jmp .fd_chk
-.fd5: cmp bp, 5; jne .fd6; dec ax; inc dx; jmp .fd_chk
-.fd6: cmp bp, 6; jne .fd7;          inc dx; jmp .fd_chk
-.fd7:             inc ax; inc dx
+    cmp bp, 0
+    jne .fd1
+    dec ax
+    dec dx
+    jmp .fd_chk
+.fd1:
+    cmp bp, 1
+    jne .fd2
+    dec dx
+    jmp .fd_chk
+.fd2:
+    cmp bp, 2
+    jne .fd3
+    inc ax
+    dec dx
+    jmp .fd_chk
+.fd3:
+    cmp bp, 3
+    jne .fd4
+    dec ax
+    jmp .fd_chk
+.fd4:
+    cmp bp, 4
+    jne .fd5
+    inc ax
+    jmp .fd_chk
+.fd5:
+    cmp bp, 5
+    jne .fd6
+    dec ax
+    inc dx
+    jmp .fd_chk
+.fd6:
+    cmp bp, 6
+    jne .fd7
+    inc dx
+    jmp .fd_chk
+.fd7:
+    inc ax
+    inc dx
 .fd_chk:
-    cmp ax, 9; jae .fd_next
-    cmp dx, 9; jae .fd_next
-    cmp ax, 0; jb .fd_next
-    cmp dx, 0; jb .fd_next
+    cmp ax, 9
+    jae .fd_next
+    cmp dx, 9
+    jae .fd_next
+    cmp ax, 0
+    jb .fd_next
+    cmp dx, 0
+    jb .fd_next
 
-    push si; push di
-    mov si, ax; mov di, dx
+    push si
+    push di
+    mov si, ax
+    mov di, dx
     mov [tmp_x], si
     mov [tmp_y], di
     call cell_index
     mov al, [board_data + bx]
-    test al, 0x40; jnz .fd_pop
-    test al, 0x20; jnz .fd_pop
-    and al, 0x0F; cmp al, 0; jne .fd_pop
+    test al, 0x40
+    jnz .fd_pop
+    test al, 0x20
+    jnz .fd_pop
+    test al, 0x80
+    jnz .fd_pop
+    or byte [board_data + bx], 0x40
+    and al, 0x0F
+    cmp al, 0
+    jne .fd_pop
 
-    cmp word [q_tail], 254; jae .fd_pop
+    cmp word [q_tail], 81
+    jae .fd_pop
     mov bx, [q_tail]
-    shl bx, 2              ; *4
+    add bx, bx
+    add bx, bx             ; *4
     add bx, flood_queue
     mov word [bx], si      ; x
     mov word [bx+2], di    ; y
     inc word [q_tail]
 
 .fd_pop:
-    pop di; pop si
+    pop di
+    pop si
 .fd_next:
-    inc bp; cmp bp, 8; jb .ff_dir
+    inc bp
+    cmp bp, 8
+    jb .ff_dir
     jmp .ff_loop
 .ff_done:
     pop_all
@@ -629,51 +779,80 @@ do_right_click:
 b8000_put:
     push es
     push bx
+    push dx
     push di
     push ax
     mov bx, 0xB800
     mov es, bx
-    movzx di, ch
-    mov al, 160
-    mul di
+    xor ax, ax
+    mov al, ch
+    mov bx, 160
+    mul bx
     mov di, ax
-    movzx ax, cl
+    xor ax, ax
+    mov al, cl
     shl ax, 1
     add di, ax
     pop ax
     stosw
     pop di
+    pop dx
     pop bx
     pop es
     ret
 
 ; number -> attribute color
 num_color:
-    cmp al, 1; je  .n1
-    cmp al, 2; je  .n2
-    cmp al, 3; je  .n3
-    cmp al, 4; je  .n4
-    cmp al, 5; je  .n5
-    cmp al, 6; je  .n6
-    cmp al, 7; je  .n7
-    cmp al, 8; je  .n8
-    mov al, 0x07; ret
-.n1: mov al, 0x09; ret
-.n2: mov al, 0x0A; ret
-.n3: mov al, 0x0C; ret
-.n4: mov al, 0x01; ret
-.n5: mov al, 0x05; ret
-.n6: mov al, 0x03; ret
-.n7: mov al, 0x07; ret
-.n8: mov al, 0x0E; ret
+    cmp al, 1
+    je .n1
+    cmp al, 2
+    je .n2
+    cmp al, 3
+    je .n3
+    cmp al, 4
+    je .n4
+    cmp al, 5
+    je .n5
+    cmp al, 6
+    je .n6
+    cmp al, 7
+    je .n7
+    cmp al, 8
+    je .n8
+    mov al, 0x07
+    ret
+.n1:
+    mov al, 0x09
+    ret
+.n2:
+    mov al, 0x0A
+    ret
+.n3:
+    mov al, 0x0C
+    ret
+.n4:
+    mov al, 0x01
+    ret
+.n5:
+    mov al, 0x05
+    ret
+.n6:
+    mov al, 0x03
+    ret
+.n7:
+    mov al, 0x07
+    ret
+.n8:
+    mov al, 0x0E
+    ret
 
 ; draw one cell at (si, di) screen position
 draw_one_cell_at_sidi:
     push_all
-    movzx ax, di
+    mov ax, di
     add al, 3                  ; BOARD_ROW
     mov ch, al
-    movzx ax, si
+    mov ax, si
     shl al, 1                  ; * CELL_W
     add al, 31                 ; BOARD_COL
     mov cl, al
@@ -755,10 +934,10 @@ draw_one_cell_at_sidi:
     inc cl
     mov al, bl
     and al, 0x0F
-    push ax
+    mov dl, al
     call num_color
     mov ah, al
-    pop ax
+    mov al, dl
     add al, '0'
     call b8000_put
     jmp .v_done
@@ -794,30 +973,33 @@ draw_board:
 draw_zstring:
     push es
     push di
-    push ax          ; save attr (ah) + junk(al)
+    push bx
+    push dx
+    push ax
+    mov dl, ah
     mov ax, 0xB800
     mov es, ax
-    movzx di, bh
-    push ax
-    mov al, 160
+    xor ax, ax
+    mov al, bh
+    mov di, ax
+    mov ax, 160
     mul di
     mov di, ax
-    pop ax
-    movzx dx, bl
-    shl dx, 1
-    add di, dx
-    pop ax           ; restore attr: ah=attr, al=junk
-    mov dl, ah       ; move attr to dl for stosb/xchg
+    xor ax, ax
+    mov al, bl
+    shl ax, 1
+    add di, ax
 .dz_loop:
     lodsb
     test al, al
     jz .dz_done
-    stosb
-    xchg al, dl
-    stosb
-    xchg al, dl
+    mov ah, dl
+    stosw
     jmp .dz_loop
 .dz_done:
+    pop ax
+    pop dx
+    pop bx
     pop di
     pop es
     ret
@@ -863,30 +1045,80 @@ draw_centered:
 
 ; 2-digit value in ax at row 1, col bl
 write_2digits:
-    push ax; push bx; push di; push es
     push ax
-    mov ax, 0xB800; mov es, ax
-    movzx di, bl; shl di, 1; add di, 160
-    pop ax
     push bx
-    mov bl, 10; div bl
-    add al, '0'; mov ah, 0x07; stosw
-    add ah, '0'; mov al, ah; stosw
+    push cx
+    push dx
+    push di
+    push es
+    mov cx, ax
+    mov ax, 0xB800
+    mov es, ax
+    xor ax, ax
+    mov al, bl
+    mov di, ax
+    shl di, 1
+    add di, 160
+    mov ax, cx
+    xor dx, dx
+    mov bx, 10
+    div bx
+    add al, '0'
+    mov ah, 0x07
+    stosw
+    mov ax, dx
+    add al, '0'
+    mov ah, 0x07
+    stosw
+    pop es
+    pop di
+    pop dx
+    pop cx
     pop bx
-    pop es; pop di; pop bx; pop ax; ret
+    pop ax
+    ret
 
 ; 3-digit value in ax at row 1, col bl
 write_3digits:
-    push ax; push bx; push di; push es
-    mov dx, 0xB800; mov es, dx
-    movzx di, bl; shl di, 1; add di, 160
-    mov bl, 100; div bl
-    add al, '0'; mov ah, 0x07; stosw
-    mov al, ah; xor ah, ah
-    mov bl, 10; div bl
-    add al, '0'; mov ah, 0x07; stosw
-    add ah, '0'; mov al, ah; stosw
-    pop es; pop di; pop bx; pop ax; ret
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push es
+    mov cx, ax
+    mov ax, 0xB800
+    mov es, ax
+    xor ax, ax
+    mov al, bl
+    mov di, ax
+    shl di, 1
+    add di, 160
+    mov ax, cx
+    xor dx, dx
+    mov bx, 100
+    div bx
+    add al, '0'
+    mov ah, 0x07
+    stosw
+    mov ax, dx
+    xor dx, dx
+    mov bx, 10
+    div bx
+    add al, '0'
+    mov ah, 0x07
+    stosw
+    mov ax, dx
+    add al, '0'
+    mov ah, 0x07
+    stosw
+    pop es
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
 
 draw_status:
     push_all
@@ -902,20 +1134,33 @@ draw_status:
 
     ; "MINES"
     mov si, mines_label
-    mov bh, 1; mov bl, 4; mov ah, 0x0F
+    mov bh, 1
+    mov bl, 4
+    mov ah, 0x0F
     call draw_zstring
 
     mov ax, [left_mines]
+    test ax, 0x8000
+    jz .ds_mines_ok
+    xor ax, ax
+.ds_mines_ok:
+    cmp ax, 99
+    jbe .ds_mines_clamped
+    mov ax, 99
+.ds_mines_clamped:
     mov bl, 10
     call write_2digits
 
     ; "TIME"
     mov si, time_label
-    mov bh, 1; mov bl, 26; mov ah, 0x0F
+    mov bh, 1
+    mov bl, 26
+    mov ah, 0x0F
     call draw_zstring
 
     mov ax, [elapsed]
-    cmp ax, 999; jbe .ds_tok
+    cmp ax, 999
+    jbe .ds_tok
     mov ax, 999
 .ds_tok:
     mov bl, 31
@@ -923,32 +1168,48 @@ draw_status:
 
     ; "BEST"
     mov si, best_label
-    mov bh, 1; mov bl, 50; mov ah, 0x0F
+    mov bh, 1
+    mov bl, 50
+    mov ah, 0x0F
     call draw_zstring
 
     mov ax, [best_time]
-    test ax, ax; jnz .ds_bval
+    test ax, ax
+    jnz .ds_bval
     ; write "---"
     push es
-    mov ax, 0xB800; mov es, ax
+    mov ax, 0xB800
+    mov es, ax
     mov di, 160 + 55*2
-    mov ax, 0x072D; stosw; stosw; stosw
+    mov ax, 0x072D
+    stosw
+    stosw
+    stosw
     pop es
     jmp .ds_done
 .ds_bval:
     mov bl, 55
     call write_3digits
 .ds_done:
-    pop_all; ret
+    pop_all
+    ret
 
 clear_screen:
-    push es; push ax; push cx; push di
-    mov ax, 0xB800; mov es, ax
+    push es
+    push ax
+    push cx
+    push di
+    mov ax, 0xB800
+    mov es, ax
     xor di, di
     mov cx, 80*25
     mov ax, 0x0720
     rep stosw
-    pop di; pop cx; pop ax; pop es; ret
+    pop di
+    pop cx
+    pop ax
+    pop es
+    ret
 
 maybe_banner:
     cmp word [winner], 1
@@ -976,15 +1237,43 @@ redraw_all:
     ret
 
 timer_tick:
-    push ax; push cx; push dx
-    mov ah, 0x2C; int 0x21
-    cmp word [running], 0; je .tickx
-    movzx ax, dh
-    cmp ax, 999; jbe .tickok; mov ax, 999
-.tickok:
+    push ax
+    push bx
+    push cx
+    push dx
+    cmp word [running], 0
+    je .tickx
+    mov ah, 0x2C
+    int 0x21
+    xor ax, ax
+    mov al, cl
+    mov bl, 60
+    mul bl
+    xor bx, bx
+    mov bl, dh
+    add ax, bx
+    cmp word [timer_started], 0
+    jne .tick_elapsed
+    mov [timer_origin], ax
+    mov word [timer_started], 1
+    xor ax, ax
+    jmp .tick_store
+.tick_elapsed:
+    sub ax, [timer_origin]
+    jnc .tick_clamp
+    add ax, 3600
+.tick_clamp:
+    cmp ax, 999
+    jbe .tick_store
+    mov ax, 999
+.tick_store:
     mov [elapsed], ax
 .tickx:
-    pop dx; pop cx; pop ax; ret
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
 
 ; ---------------------------------------------------------------------------
 ;  DATA & BSS
@@ -1011,6 +1300,8 @@ first_click: dw 1
 left_mines:  dw 10
 elapsed:     dw 0
 running:     dw 0
+timer_started: dw 0
+timer_origin:  dw 0
 tick_cnt:    dw 0
 post_redraw: dw 0
 ts_last:     dw 0xFFFF
@@ -1024,3 +1315,6 @@ flood_queue: times 512 db 0
 board_data:  times 81 db 0
 
 the_end:
+
+image_size equ the_end - entry
+file_size equ image_size + 32

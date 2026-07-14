@@ -21,6 +21,7 @@ SUNMINE.EXE is included prebuilt. Ordinary builds use the checked-in asset.
 - Safe first click (no mine or immediate neighbors)
 - Iterative bounded queue flood fill (no recursion)
 - **Text mode 03h** with direct B8000 writes (no pixel rendering)
+- BIOS text cursor hidden through INT 10h/AH=01h
 - Event-driven redraw: only changed cells are redrawn
 - DOS text-mode mouse via INT 33h
 - Keyboard via INT 16h

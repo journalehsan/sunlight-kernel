@@ -800,7 +800,7 @@ impl Runtime {
     }
 
     pub fn inject_mouse_motion(&mut self, viewport: crate::MouseViewport, x: i32, y: i32) -> bool {
-        if self.video_mode != GuestVideoMode::Vga320x200x256 {
+        if self.video_mode == GuestVideoMode::Text80x25Color && !self.mouse.cursor_visible() {
             return false;
         }
         let changed = self.mouse.native_motion(viewport, x, y);
@@ -818,7 +818,7 @@ impl Runtime {
         button: u8,
         pressed: bool,
     ) -> bool {
-        if self.video_mode != GuestVideoMode::Vga320x200x256 {
+        if self.video_mode == GuestVideoMode::Text80x25Color && !self.mouse.cursor_visible() {
             return false;
         }
         let changed = self.mouse.native_button(viewport, x, y, button, pressed);
@@ -2540,6 +2540,11 @@ impl Runtime {
         self.cursor_row = row.min(TEXT_ROWS - 1);
         self.sync_cursor_bda();
     }
+    pub(crate) fn set_cursor_shape(&mut self, shape: u16) {
+        self.cursor_shape = shape;
+        self.memory
+            .write_u16(BDA_SEGMENT, BDA_CURSOR_SHAPE, self.cursor_shape);
+    }
     pub(crate) fn put_cell(&mut self, column: usize, row: usize, character: u8, attribute: u8) {
         if column < TEXT_COLUMNS && row < TEXT_ROWS {
             let offset = ((row * TEXT_COLUMNS + column) * 2) as u16;
@@ -2704,16 +2709,32 @@ mod tests {
         let image = include_bytes!("../../SunlightMines.sunapp/Program/SUNMINE.EXE");
         let mut runtime = Runtime::from_program(image, &[]).unwrap();
 
-        runtime.run_slice(1_000_000);
+        for _ in 0..1_000 {
+            runtime.run_slice(4_096);
+            if runtime.state() == &GuestState::YieldedUntilTimer {
+                break;
+            }
+        }
 
-        assert_eq!(runtime.video_mode(), GuestVideoMode::Vga320x200x256);
-        assert_eq!(runtime.state(), &GuestState::YieldedUntilTimer);
+        assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert_eq!(
+            runtime.state(),
+            &GuestState::YieldedUntilTimer,
+            "cpu={:?} retired={}",
+            runtime.cpu,
+            runtime.instructions_retired()
+        );
         assert!(runtime.cooperative_yielded_last_slice());
-        let drawn_pixels = (0..VGA_HEIGHT)
-            .flat_map(|y| (0..crate::VGA_WIDTH).map(move |x| (x, y)))
-            .filter(|&(x, y)| runtime.framebuffer_index(x, y) != Some(0))
-            .count();
-        assert!(drawn_pixels > 1_000, "guest left the VGA surface blank");
+        assert_eq!(runtime.cursor_shape(), 0x2607);
+        assert!(!runtime.text_cursor_visible());
+        assert_eq!(runtime.mouse().ranges(), (0, 79, 0, 24));
+        assert!(runtime.mouse().cursor_visible());
+        let title: [u8; 14] = core::array::from_fn(|column| runtime.cell(29 + column, 0).character);
+        assert_eq!(&title, b"SUNLIGHT MINES");
+        assert_eq!(
+            (runtime.cell(31, 3).character, runtime.cell(32, 3).character),
+            (0xdb, 0xdb)
+        );
     }
 
     fn run_to_palette_generation(runtime: &mut Runtime, generation: u64) {
@@ -3367,6 +3388,38 @@ mod tests {
         assert_eq!(runtime.cursor_shape(), 0x0607);
         assert!(runtime.text_cursor_visible());
         assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (0, 0));
+
+        runtime.cpu.set_ah(0x01);
+        runtime.cpu.cx = 0x2607;
+        super::dos::dispatch(&mut runtime, 0x10).unwrap();
+        assert_eq!(runtime.cursor_shape(), 0x2607);
+        assert_eq!(runtime.memory.read_u16(0x40, 0x60), 0x2607);
+        assert!(!runtime.text_cursor_visible());
+    }
+
+    #[test]
+    fn text_mode_mouse_delivery_uses_guest_selected_ranges() {
+        let mut runtime = runtime_for(&[0xf4]);
+        runtime.cpu.ax = 0;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        runtime.cpu.ax = 1;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        runtime.cpu.ax = 7;
+        runtime.cpu.cx = 0;
+        runtime.cpu.dx = 79;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        runtime.cpu.ax = 8;
+        runtime.cpu.cx = 0;
+        runtime.cpu.dx = 24;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+
+        let viewport = MouseViewport::new(10, 20, 800, 400);
+        assert!(runtime.inject_mouse_motion(viewport, 410, 220));
+        assert_eq!(runtime.mouse().position(), (40, 12));
+        assert!(runtime.inject_mouse_button(viewport, 410, 220, 0, true));
+        assert_eq!(runtime.mouse().buttons().bits(), 1);
+        assert!(runtime.inject_mouse_button(viewport, 410, 220, 0, false));
+        assert_eq!(runtime.mouse().buttons().bits(), 0);
     }
 
     #[test]

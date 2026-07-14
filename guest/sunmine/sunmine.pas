@@ -17,6 +17,7 @@ var
   CurrButtons: Word;
   MouseSt: TMouseState;
   LastTimeSec: Word;
+  TimerOriginSec: Word;
   Best: Word;
   CmdSeed: LongInt;
   Done: Boolean;
@@ -31,12 +32,18 @@ var
 begin
   GetDosTime(t);
   sec := Word(t.Min) * 60 + t.Sec;
-  { simple rollover guard }
-  while sec < LastTimeSec do
-    sec := sec + 3600;
   LastTimeSec := sec;
   if TimerRunning then
-    TickTimer(sec);
+  begin
+    if TimerOriginSec = $FFFF then
+      TimerOriginSec := sec;
+    if sec >= TimerOriginSec then
+      TickTimer(sec - TimerOriginSec)
+    else
+      TickTimer(sec + 3600 - TimerOriginSec);
+  end
+  else
+    TimerOriginSec := $FFFF;
 end;
 
 procedure HandleLeftClick(cellX, cellY: Integer);
@@ -83,8 +90,7 @@ begin
     if tickCounter >= 8 then
     begin
       asm
-        mov ah, $28
-        int $21
+        int $28
       end;
       tickCounter := 0;
     end;
@@ -168,6 +174,7 @@ begin
       RestartPending := False;
       Restart;
       Best := LoadBestTime;
+      TimerOriginSec := $FFFF;
       timerDrawn := 9999;
       RedrawFull;
     end;
@@ -194,6 +201,7 @@ end;
 procedure Setup;
 begin
   SetVideoMode03;
+  HideTextCursor;
   ResetMouse(Installed, BtnCount);
   if Installed then
   begin
@@ -210,6 +218,7 @@ begin
   Best := LoadBestTime;
   PrevButtons := 0;
   LastTimeSec := 0;
+  TimerOriginSec := $FFFF;
   RestartPending := False;
   PrevWon := False;
   PrevLost := False;

@@ -61,7 +61,7 @@ mode (`49h` = `03h`), columns (`4Ah` = 80), page size (`4Ch`), page-zero
 cursor position (`50h`), cursor shape (`60h`), and active page (`62h`).
 Cursor state is synchronized among those fields, BIOS calls, and rendering.
 
-`INT 10h` supports mode 03h, cursor set/get, scroll/clear regions, read cell,
+`INT 10h` supports mode 03h, cursor shape and position set/get, scroll/clear regions, read cell,
 repeated character writes, teletype, and mode reporting. The native renderer
 uses all sixteen standard DOS colors; attribute bit 7 is treated as VGA blink
 semantics visually ignored for now (background remains bits 4–6). CP437
@@ -88,6 +88,10 @@ cell, and automatic wrap or scrolling occurs only after the rightmost cell is
 written. BIOS cursor state, BDA cursor state, and the native caret share this
 single logical cursor model. Direct B8000 writes remain authoritative for
 cells and deliberately do not invent cursor movement.
+
+Polling `INT 33h` mouse input is routed in both mode 03h and mode 13h after
+the guest shows its DOS mouse cursor. Text-mode guests can select ranges such
+as `0..79` and `0..24`; Chronos maps the native 80x25 grid into those ranges.
 
 The status bar reports `Ready`, `Running`, `Waiting for Input`,
 `Yielded until timer`, `Exited with code N`, `Guest Halted`, or `Guest Trapped`

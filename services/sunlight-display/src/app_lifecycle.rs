@@ -73,13 +73,7 @@ impl AppTracker {
             return;
         }
 
-        let policy = if is_desktop || pid <= 1 {
-            LifecyclePolicy::System
-        } else if app_name == "Sunlight Dialog" || app_name == "Sunlight" {
-            LifecyclePolicy::KeepAlive
-        } else {
-            LifecyclePolicy::ExitOnLastWindowClosed
-        };
+        let policy = lifecycle_policy(app_name, is_desktop, pid);
 
         let mut app = AppInstance {
             app_name: String::from(app_name),
@@ -109,6 +103,21 @@ impl AppTracker {
         ));
 
         self.apps.push(app);
+    }
+
+    pub fn update_window_title(&mut self, win_id: u64, app_name: &str) {
+        let Some(app) = self
+            .apps
+            .iter_mut()
+            .find(|app| app.windows.contains(&win_id))
+        else {
+            return;
+        };
+        app.app_name.clear();
+        app.app_name.push_str(app_name);
+        if app.policy != LifecyclePolicy::System {
+            app.policy = lifecycle_policy(app_name, false, app.pid);
+        }
     }
 
     pub fn unregister_window(&mut self, win_id: u64, now_ms: u64) -> AppAction {
@@ -269,5 +278,49 @@ impl AppTracker {
             pids_killed,
             window_ids_to_cleanup: window_ids,
         }
+    }
+}
+
+fn lifecycle_policy(app_name: &str, is_desktop: bool, pid: u64) -> LifecyclePolicy {
+    if is_desktop || pid <= 1 {
+        LifecyclePolicy::System
+    } else if app_name == "Sunlight Dialog" {
+        LifecyclePolicy::KeepAlive
+    } else {
+        LifecyclePolicy::ExitOnLastWindowClosed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AppTracker, LifecyclePolicy};
+
+    #[test]
+    fn generic_sunlight_prefix_is_not_treated_as_a_background_service() {
+        let mut tracker = AppTracker::new();
+        tracker.register_window(26, 2, "Sunlight", false);
+
+        assert_eq!(
+            tracker.apps[0].policy,
+            LifecyclePolicy::ExitOnLastWindowClosed
+        );
+        tracker.update_window_title(2, "Sunlight Mines");
+        assert_eq!(tracker.apps[0].app_name, "Sunlight Mines");
+        assert_eq!(
+            tracker.apps[0].policy,
+            LifecyclePolicy::ExitOnLastWindowClosed
+        );
+    }
+
+    #[test]
+    fn dialog_and_desktop_policies_remain_special() {
+        assert_eq!(
+            super::lifecycle_policy("Sunlight Dialog", false, 42),
+            LifecyclePolicy::KeepAlive
+        );
+        assert_eq!(
+            super::lifecycle_policy("Vortex Shell", true, 25),
+            LifecyclePolicy::System
+        );
     }
 }

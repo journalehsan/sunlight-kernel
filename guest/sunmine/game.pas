@@ -270,8 +270,7 @@ end;
 
 procedure Restart;
 begin
-  InitBoard;
-  { next click will place with new or same seed behavior via caller }
+  InitGame(Seed + 1);
 end;
 
 procedure StopTimer;
@@ -283,9 +282,9 @@ procedure TickTimer(currentSec: Word);
 begin
   if TimerRunning then
   begin
-    if ElapsedSec < currentSec then
-      ElapsedSec := currentSec;
-    if ElapsedSec > 999 then ElapsedSec := 999;
+    ElapsedSec := currentSec;
+    if ElapsedSec > 999 then
+      ElapsedSec := 999;
   end;
 end;
 

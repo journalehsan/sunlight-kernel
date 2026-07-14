@@ -459,10 +459,10 @@ impl DosMouse {
         y: i32,
         clamp: bool,
     ) -> Option<(u16, u16)> {
-        let (pixel_x, pixel_y) = viewport_pixel(viewport, x, y, clamp)?;
+        let (viewport_x, viewport_y) = viewport_offset(viewport, x, y, clamp)?;
         Some((
-            pixel_to_logical(pixel_x, self.min_x, self.max_x, VGA_WIDTH as u32 - 1),
-            pixel_to_logical(pixel_y, self.min_y, self.max_y, VGA_HEIGHT as u32 - 1),
+            viewport_to_logical(viewport_x, viewport.width, self.min_x, self.max_x),
+            viewport_to_logical(viewport_y, viewport.height, self.min_y, self.max_y),
         ))
     }
 }
@@ -474,6 +474,19 @@ impl Default for DosMouse {
 }
 
 pub fn viewport_pixel(viewport: MouseViewport, x: i32, y: i32, clamp: bool) -> Option<(u32, u32)> {
+    let (local_x, local_y) = viewport_offset(viewport, x, y, clamp)?;
+    let pixel_x = local_x
+        .checked_mul(VGA_WIDTH as u64)?
+        .checked_div(u64::from(viewport.width))?
+        .min(VGA_WIDTH as u64 - 1) as u32;
+    let pixel_y = local_y
+        .checked_mul(VGA_HEIGHT as u64)?
+        .checked_div(u64::from(viewport.height))?
+        .min(VGA_HEIGHT as u64 - 1) as u32;
+    Some((pixel_x, pixel_y))
+}
+
+fn viewport_offset(viewport: MouseViewport, x: i32, y: i32, clamp: bool) -> Option<(u64, u64)> {
     if viewport.width == 0 || viewport.height == 0 {
         return None;
     }
@@ -494,23 +507,18 @@ pub fn viewport_pixel(viewport: MouseViewport, x: i32, y: i32, clamp: bool) -> O
     let local_y = i64::from(y)
         .clamp(origin_y, max_native_y)
         .checked_sub(origin_y)? as u64;
-    let pixel_x = local_x
-        .checked_mul(VGA_WIDTH as u64)?
-        .checked_div(u64::from(viewport.width))?
-        .min(VGA_WIDTH as u64 - 1) as u32;
-    let pixel_y = local_y
-        .checked_mul(VGA_HEIGHT as u64)?
-        .checked_div(u64::from(viewport.height))?
-        .min(VGA_HEIGHT as u64 - 1) as u32;
-    Some((pixel_x, pixel_y))
+    Some((local_x, local_y))
 }
 
-fn pixel_to_logical(pixel: u32, min: u16, max: u16, pixel_max: u32) -> u16 {
-    if pixel_max == 0 || min == max {
+fn viewport_to_logical(offset: u64, extent: u32, min: u16, max: u16) -> u16 {
+    if min == max || extent <= 1 {
         return min;
     }
-    let span = u64::from(max - min);
-    (u64::from(min) + u64::from(pixel.min(pixel_max)) * span / u64::from(pixel_max)) as u16
+    if offset >= u64::from(extent - 1) {
+        return max;
+    }
+    let values = u64::from(max - min) + 1;
+    (u64::from(min) + offset * values / u64::from(extent)).min(u64::from(max)) as u16
 }
 
 fn logical_to_pixel(value: u16, min: u16, max: u16, pixel_max: u16) -> u16 {
@@ -589,6 +597,23 @@ mod tests {
                 viewport.y + (100 * scale) as i32,
             );
             assert_eq!(mouse.position(), (160, 100));
+        }
+    }
+
+    #[test]
+    fn text_cell_centers_map_to_the_same_guest_cells() {
+        let viewport = MouseViewport::new(17, 29, 80 * 9, 25 * 16);
+        let mut mouse = DosMouse::default();
+        mouse.set_horizontal_range(0, 79).unwrap();
+        mouse.set_vertical_range(0, 24).unwrap();
+
+        for (column, row) in [(0, 0), (31, 3), (39, 7), (79, 24)] {
+            mouse.native_motion(
+                viewport,
+                viewport.x + column * 9 + 4,
+                viewport.y + row * 16 + 8,
+            );
+            assert_eq!(mouse.position(), (column as u16, row as u16));
         }
     }
 

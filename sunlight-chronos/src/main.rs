@@ -301,7 +301,7 @@ impl ChronosApp {
         }
     }
 
-    fn draw_text_surface(&self, canvas: &mut Canvas, rect: Rect, theme: &Theme) {
+    fn draw_text_surface(&mut self, canvas: &mut Canvas, rect: Rect, theme: &Theme) {
         canvas.fill_rect(rect, theme.panel_alt);
         canvas.draw_rect(rect, theme.border);
         let surface = rect.inset(SURFACE_INSET);
@@ -310,6 +310,8 @@ impl ChronosApp {
 
         let x0 = surface.x + ((surface.w as i32 - 80 * DOS_CELL_W) / 2).max(0);
         let y0 = surface.y + ((surface.h as i32 - 25 * DOS_CELL_H) / 2).max(0);
+        self.graphics_viewport =
+            MouseViewport::new(x0, y0, (80 * DOS_CELL_W) as u32, (25 * DOS_CELL_H) as u32);
         draw_surface_cells(canvas, &self.runtime, x0, y0);
         if self.cursor_visible
             && self.runtime.text_cursor_visible()
@@ -1819,7 +1821,7 @@ fn parent_path(path: &str) -> String {
 mod tests {
     use super::{
         dos_color, draw_scaled_graphics, graphics_viewport, running_presentation_due, ChronosApp,
-        RuntimeWakeSource, DOS_CELL_W, DOS_SURFACE, WIN_H, WIN_W,
+        RuntimeWakeSource, DOS_CELL_H, DOS_CELL_W, DOS_SURFACE, WIN_H, WIN_W,
     };
     use alloc::{format, vec};
     use chronos_core::{
@@ -1914,7 +1916,12 @@ mod tests {
                 .expect("scheduled Mines slice");
             slices += 1;
             now_ms = app.next_wake_deadline.unwrap_or(now_ms.saturating_add(1));
-            assert!(slices < 10_000, "Mines did not reach its timer yield");
+            assert!(
+                slices < 10_000,
+                "Mines did not reach its timer yield: cpu={:?} retired={}",
+                app.runtime.cpu,
+                app.runtime.instructions_retired()
+            );
         }
         assert_eq!(app.runtime.state(), &GuestState::YieldedUntilTimer);
     }
@@ -1976,7 +1983,9 @@ mod tests {
             now_ms = app.next_wake_deadline.expect("running guest continuation");
             assert!(
                 slices < 10_000,
-                "standalone Mines startup did not reach INT 28h"
+                "standalone Mines startup did not reach INT 28h: cpu={:?} retired={}",
+                app.runtime.cpu,
+                app.runtime.instructions_retired()
             );
         }
 
@@ -1987,14 +1996,11 @@ mod tests {
             RuntimeWakeSource::Startup | RuntimeWakeSource::BudgetContinuation
         )));
         assert!(app.runtime.instructions_retired() > 2_048);
-        let drawn_pixels = (0..chronos_core::VGA_HEIGHT)
-            .flat_map(|y| (0..chronos_core::VGA_WIDTH).map(move |x| (x, y)))
-            .filter(|&(x, y)| app.runtime.framebuffer_index(x, y) != Some(0))
-            .count();
-        assert!(
-            drawn_pixels > 1_000,
-            "standalone Mines left its initial frame incomplete"
-        );
+        assert_eq!(app.runtime.video_mode(), GuestVideoMode::Text80x25Color);
+        assert!(!app.runtime.text_cursor_visible());
+        let title: [u8; 14] =
+            core::array::from_fn(|column| app.runtime.cell(29 + column, 0).character);
+        assert_eq!(&title, b"SUNLIGHT MINES");
 
         let deadline = app.next_wake_deadline.expect("INT 28h timer deadline");
         assert_eq!(
@@ -2043,7 +2049,7 @@ mod tests {
         let mut now_ms = 20_000;
         let mut slices = 0usize;
         let mut running_continuations = 0usize;
-        let initial_framebuffer_generation = app.runtime.framebuffer_generation();
+        let initial_title = app.runtime.cell(29, 0);
 
         loop {
             let source = if slices == 0 {
@@ -2072,7 +2078,7 @@ mod tests {
         }
 
         assert!(running_continuations > 1);
-        assert!(app.runtime.framebuffer_generation() > initial_framebuffer_generation);
+        assert_ne!(app.runtime.cell(29, 0), initial_title);
         assert_eq!(app.runtime.wait_reason(), GuestWaitReason::CooperativeTimer);
         assert!(app.runtime.instructions_retired() > SMALL_BUDGET as u64);
     }
@@ -2082,15 +2088,17 @@ mod tests {
         let mut app = standalone_mines_app();
         run_mines_until_timer_yield(&mut app, 30_000, 2_048);
         assert!(app.runtime.mouse().cursor_visible());
-        assert_eq!(app.runtime.mouse().ranges(), (0, 319, 0, 199));
+        assert_eq!(app.runtime.mouse().ranges(), (0, 79, 0, 24));
 
+        let mut framebuffer = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut canvas = Canvas::new(&mut framebuffer, WIN_W, WIN_W, WIN_H);
+        app.view(&mut canvas, &Theme::sunlight_dark());
         let viewport = app.graphics_viewport;
-        let center_x = viewport.x + viewport.width as i32 / 2 + 2;
-        let center_y = viewport.y + viewport.height as i32 / 2 + 2;
+        let center_x = viewport.x + (31 + 9) * DOS_CELL_W + DOS_CELL_W / 2;
+        let center_y = viewport.y + (3 + 4) * DOS_CELL_H + DOS_CELL_H / 2;
         deliver_mines_event(&mut app, Event::mouse_move(center_x, center_y), 30_001);
         let (center_guest_x, center_guest_y) = app.runtime.mouse().position();
-        assert!(center_guest_x.abs_diff(160) <= 1);
-        assert!(center_guest_y.abs_diff(100) <= 1);
+        assert_eq!((center_guest_x, center_guest_y), (40, 7));
         assert_eq!(
             app.runtime.mouse().last_state_query(),
             (0, center_guest_x, center_guest_y)
@@ -2098,13 +2106,13 @@ mod tests {
 
         let corners = [
             (viewport.x, viewport.y, 0, 0),
-            (viewport.x + viewport.width as i32 - 1, viewport.y, 319, 0),
-            (viewport.x, viewport.y + viewport.height as i32 - 1, 0, 199),
+            (viewport.x + viewport.width as i32 - 1, viewport.y, 79, 0),
+            (viewport.x, viewport.y + viewport.height as i32 - 1, 0, 24),
             (
                 viewport.x + viewport.width as i32 - 1,
                 viewport.y + viewport.height as i32 - 1,
-                319,
-                199,
+                79,
+                24,
             ),
         ];
         for (index, (native_x, native_y, guest_x, guest_y)) in corners.into_iter().enumerate() {
@@ -2124,7 +2132,7 @@ mod tests {
             Some(GuestWakeSource::MouseMotion)
         );
 
-        let framebuffer_before_click = app.runtime.framebuffer_generation();
+        let cell_before_click = (app.runtime.cell(39, 7), app.runtime.cell(40, 7));
         let query_count_before_click = app.runtime.mouse().int33_state_query_count();
         deliver_mines_event(&mut app, Event::mouse_down(center_x, center_y, 0), 30_020);
         assert_eq!(app.runtime.mouse().buttons().bits(), 1);
@@ -2133,7 +2141,11 @@ mod tests {
             app.runtime.last_wake_source(),
             Some(GuestWakeSource::MouseButton)
         );
-        assert!(app.runtime.framebuffer_generation() > framebuffer_before_click);
+        assert_ne!(
+            (app.runtime.cell(39, 7), app.runtime.cell(40, 7)),
+            cell_before_click
+        );
+        assert_ne!(app.runtime.cell(39, 7).character, b'*');
 
         deliver_mines_event(&mut app, Event::click(center_x, center_y), 30_021);
         assert_eq!(app.runtime.mouse().buttons().bits(), 0);
@@ -2148,6 +2160,58 @@ mod tests {
         assert_eq!(app.mouse_input_counters.duplicate_button_edges, 0);
         assert!(app.mouse_input_counters.mouse_state_updates >= 7);
         assert!(app.mouse_input_counters.mouse_generation_changes >= 7);
+    }
+
+    #[test]
+    fn standalone_mines_right_click_and_restart_update_the_board() {
+        let mut app = standalone_mines_app();
+        run_mines_until_timer_yield(&mut app, 35_000, 2_048);
+
+        let mut framebuffer = vec![0u32; WIN_W as usize * WIN_H as usize];
+        let mut canvas = Canvas::new(&mut framebuffer, WIN_W, WIN_W, WIN_H);
+        app.view(&mut canvas, &Theme::sunlight_dark());
+        let viewport = app.graphics_viewport;
+        let cell_x = viewport.x + 31 * DOS_CELL_W + DOS_CELL_W / 2;
+        let cell_y = viewport.y + 3 * DOS_CELL_H + DOS_CELL_H / 2;
+
+        deliver_mines_event(&mut app, Event::mouse_down(cell_x, cell_y, 1), 35_001);
+        assert_eq!(app.runtime.mouse().position(), (31, 3));
+        assert_eq!(app.runtime.mouse().buttons().bits(), 2);
+        assert_eq!(app.runtime.mouse().last_state_query(), (2, 31, 3));
+        assert_eq!(app.runtime.cell(31, 3).character, b'F');
+        deliver_mines_event(&mut app, Event::mouse_up(cell_x, cell_y, 1), 35_002);
+        assert_eq!(app.runtime.cell(31, 3).character, b'F');
+        assert_eq!(app.runtime.cell(10, 1).character, b'0');
+        assert_eq!(app.runtime.cell(11, 1).character, b'9');
+
+        app.update(Event::Key('r'));
+        run_mines_until_timer_yield(&mut app, 35_003, 2_048);
+        assert_eq!(app.runtime.cell(31, 3).character, 0xdb);
+        assert_eq!(app.runtime.cell(32, 3).character, 0xdb);
+        assert_eq!(app.runtime.cell(10, 1).character, b'1');
+        assert_eq!(app.runtime.cell(11, 1).character, b'0');
+    }
+
+    #[test]
+    fn standalone_mines_escape_exits_cleanly() {
+        let mut app = standalone_mines_app();
+        run_mines_until_timer_yield(&mut app, 40_000, 2_048);
+
+        app.runtime.inject_key(BiosKey {
+            ascii: 0x1b,
+            scan_code: 0x01,
+        });
+        let deadline = app.next_wake_deadline.expect("Mines timer deadline");
+        app.run_scheduled_slice(deadline, 2_048, RuntimeWakeSource::Int28Timer)
+            .expect("Mines escape wake");
+        while app.runtime.state() == &GuestState::Running {
+            let continuation = app.next_wake_deadline.expect("escape continuation");
+            app.run_scheduled_slice(continuation, 2_048, RuntimeWakeSource::BudgetContinuation)
+                .expect("Mines escape continuation");
+        }
+
+        assert_eq!(app.runtime.state(), &GuestState::Exited { code: 0 });
+        assert!(!app.runtime.mouse().cursor_visible());
     }
 
     #[test]

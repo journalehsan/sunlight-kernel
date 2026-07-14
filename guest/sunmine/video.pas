@@ -21,6 +21,7 @@ type
 function VidPtr(row, col: Integer): PCharAttr;
 
 procedure SetVideoMode03;
+procedure HideTextCursor;
 procedure PutCell(row, col: Integer; ch: Char; attr: Byte);
 procedure PutText(row, col: Integer; const s: String; attr: Byte);
 procedure FillRow(row, startCol, endCol: Integer; ch: Char; attr: Byte);
@@ -60,6 +61,13 @@ end;
 procedure SetVideoMode03; assembler;
 asm
   mov ax, $0003
+  int $10
+end;
+
+procedure HideTextCursor; assembler;
+asm
+  mov ah, $01
+  mov cx, $2607
   int $10
 end;
 

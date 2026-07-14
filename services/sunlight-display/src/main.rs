@@ -4218,6 +4218,9 @@ pub extern "C" fn _start() -> ! {
                             win.config.apply_shm_title(p as *const u8, 4096);
                         }
                     }
+                    state
+                        .app_tracker
+                        .update_window_title(win_id, window_title_str(&win.config.title));
                     // Re-position windows to their designated screen areas once the title
                     // is known (title arrives via CONFIGURE_WINDOW, not CREATE_WINDOW).
                     if win.config.state == WindowState::Normal {
