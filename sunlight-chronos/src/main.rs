@@ -484,6 +484,14 @@ impl ChronosApp {
                 .wrapping_add(1);
         }
         self.record_mouse_generation_change(generation_before);
+        #[cfg(not(test))]
+        log_guest_mouse_button_transition(
+            buttons_before,
+            buttons_after,
+            self.runtime.mouse().generation(),
+            button,
+            pressed,
+        );
         let changed = self.record_cursor_damage(old);
         self.maybe_log_mouse_input(true);
         changed
@@ -1080,7 +1088,7 @@ fn log_wake_evidence(evidence: WakeEvidence) {
 
 #[cfg(not(test))]
 fn log_mouse_input_counters(runtime: &Runtime, counters: MouseInputCounters) {
-    let mut line = [0u8; 512];
+    let mut line = [0u8; 1024];
     let mut length = copy_bytes(b"[CHRONOS-MOUSE] win=", &mut line);
     length += write_decimal_u64(counters.event_route.window_id, &mut line[length..]);
     length += copy_bytes(b" polls=", &mut line[length..]);
@@ -1121,11 +1129,21 @@ fn log_mouse_input_counters(runtime: &Runtime, counters: MouseInputCounters) {
     length += write_decimal_u64(counters.button_edge_updates, &mut line[length..]);
     length += copy_bytes(b" duplicate_edges=", &mut line[length..]);
     length += write_decimal_u64(counters.duplicate_button_edges, &mut line[length..]);
-    length += copy_bytes(b" int33_0003=", &mut line[length..]);
+    length += copy_bytes(b" int33_state_queries=", &mut line[length..]);
     length += write_decimal_u64(
         runtime.mouse().int33_state_query_count(),
         &mut line[length..],
     );
+    for function in [0u16, 1, 2, 3, 4, 5, 6, 7, 8] {
+        length += copy_bytes(b" int33_", &mut line[length..]);
+        length += write_hex_u16(function, &mut line[length..]);
+        line[length] = b'=';
+        length += 1;
+        length += write_decimal_u64(
+            runtime.mouse().int33_function_count(function),
+            &mut line[length..],
+        );
+    }
     let (buttons, x, y) = runtime.mouse().last_state_query();
     length += copy_bytes(b" bx_cx_dx=", &mut line[length..]);
     length += write_decimal_u64(buttons as u64, &mut line[length..]);
@@ -1137,6 +1155,35 @@ fn log_mouse_input_counters(runtime: &Runtime, counters: MouseInputCounters) {
     length += write_decimal_u64(y as u64, &mut line[length..]);
     length += copy_bytes(b" state=", &mut line[length..]);
     length += copy_bytes(state_kind_name(runtime.state_kind()), &mut line[length..]);
+    line[length] = b'\n';
+    length += 1;
+    if let Ok(text) = core::str::from_utf8(&line[..length]) {
+        debug_log(text);
+    }
+}
+
+#[cfg(not(test))]
+fn log_guest_mouse_button_transition(
+    guest_buttons_before: u16,
+    guest_buttons_after: u16,
+    guest_mouse_generation: u64,
+    button: u8,
+    pressed: bool,
+) {
+    let mut line = [0u8; 192];
+    let mut length = copy_bytes(b"[CHRONOS-MOUSE-BUTTON] event_type=", &mut line);
+    length += copy_bytes(
+        if pressed { b"mouse-down" } else { b"mouse-up" },
+        &mut line[length..],
+    );
+    length += copy_bytes(b" button=", &mut line[length..]);
+    length += write_decimal_u64(button as u64, &mut line[length..]);
+    length += copy_bytes(b" guest_buttons_before=", &mut line[length..]);
+    length += write_decimal_u64(guest_buttons_before as u64, &mut line[length..]);
+    length += copy_bytes(b" guest_buttons_after=", &mut line[length..]);
+    length += write_decimal_u64(guest_buttons_after as u64, &mut line[length..]);
+    length += copy_bytes(b" guest_mouse_generation=", &mut line[length..]);
+    length += write_decimal_u64(guest_mouse_generation, &mut line[length..]);
     line[length] = b'\n';
     length += 1;
     if let Ok(text) = core::str::from_utf8(&line[..length]) {
@@ -2084,19 +2131,65 @@ mod tests {
     }
 
     #[test]
-    fn standalone_mines_center_corners_and_button_edges_reach_int33_once() {
+    fn standalone_mines_held_button_reaches_int33_without_duplicate_edges() {
         let mut app = standalone_mines_app();
         run_mines_until_timer_yield(&mut app, 30_000, 2_048);
         assert!(app.runtime.mouse().cursor_visible());
         assert_eq!(app.runtime.mouse().ranges(), (0, 79, 0, 24));
+        assert_eq!(app.runtime.mouse().int33_function_count(0), 1);
+        assert_eq!(app.runtime.mouse().int33_function_count(1), 1);
+        assert_eq!(app.runtime.mouse().int33_function_count(4), 1);
+        assert_eq!(app.runtime.mouse().int33_function_count(5), 0);
+        assert_eq!(app.runtime.mouse().int33_function_count(6), 0);
+        assert_eq!(app.runtime.mouse().int33_function_count(7), 1);
+        assert_eq!(app.runtime.mouse().int33_function_count(8), 1);
 
         let mut framebuffer = vec![0u32; WIN_W as usize * WIN_H as usize];
         let mut canvas = Canvas::new(&mut framebuffer, WIN_W, WIN_W, WIN_H);
         app.view(&mut canvas, &Theme::sunlight_dark());
         let viewport = app.graphics_viewport;
+        let text_40_x = viewport.x + 40 * DOS_CELL_W + DOS_CELL_W / 2;
+        let text_13_y = viewport.y + 13 * DOS_CELL_H + DOS_CELL_H / 2;
+        deliver_mines_event(&mut app, Event::mouse_move(text_40_x, text_13_y), 30_001);
+        assert_eq!(app.runtime.mouse().position(), (40, 13));
+
+        let edges_before = app.mouse_input_counters.button_edge_updates;
+        let duplicates_before = app.mouse_input_counters.duplicate_button_edges;
+        let queries_before = app.runtime.mouse().int33_state_query_count();
+        deliver_mines_event(&mut app, Event::mouse_down(text_40_x, text_13_y, 0), 30_002);
+        assert_eq!(app.runtime.mouse().buttons().bits(), 1);
+        assert_eq!(app.runtime.mouse().last_state_query().0, 1);
+
+        for now_ms in [30_018, 30_034, 30_050] {
+            deliver_mines_event(&mut app, Event::Tick, now_ms);
+            assert_eq!(app.runtime.mouse().buttons().bits(), 1);
+            assert_eq!(app.runtime.mouse().last_state_query().0, 1);
+        }
+        assert!(app.runtime.mouse().int33_state_query_count() > queries_before);
+        assert_eq!(
+            app.mouse_input_counters.button_edge_updates,
+            edges_before + 1
+        );
+        assert_eq!(
+            app.mouse_input_counters.duplicate_button_edges,
+            duplicates_before
+        );
+
+        deliver_mines_event(&mut app, Event::mouse_up(text_40_x, text_13_y, 0), 30_051);
+        assert_eq!(app.runtime.mouse().buttons().bits(), 0);
+        assert_eq!(app.runtime.mouse().last_state_query().0, 0);
+        assert_eq!(
+            app.mouse_input_counters.button_edge_updates,
+            edges_before + 2
+        );
+        assert_eq!(
+            app.mouse_input_counters.duplicate_button_edges,
+            duplicates_before
+        );
+
         let center_x = viewport.x + (31 + 9) * DOS_CELL_W + DOS_CELL_W / 2;
         let center_y = viewport.y + (3 + 4) * DOS_CELL_H + DOS_CELL_H / 2;
-        deliver_mines_event(&mut app, Event::mouse_move(center_x, center_y), 30_001);
+        deliver_mines_event(&mut app, Event::mouse_move(center_x, center_y), 30_060);
         let (center_guest_x, center_guest_y) = app.runtime.mouse().position();
         assert_eq!((center_guest_x, center_guest_y), (40, 7));
         assert_eq!(
@@ -2119,7 +2212,7 @@ mod tests {
             deliver_mines_event(
                 &mut app,
                 Event::mouse_move(native_x, native_y),
-                30_010 + index as u64,
+                30_070 + index as u64,
             );
             assert_eq!(app.runtime.mouse().position(), (guest_x, guest_y));
             assert_eq!(
@@ -2132,34 +2225,71 @@ mod tests {
             Some(GuestWakeSource::MouseMotion)
         );
 
-        let cell_before_click = (app.runtime.cell(39, 7), app.runtime.cell(40, 7));
         let query_count_before_click = app.runtime.mouse().int33_state_query_count();
-        deliver_mines_event(&mut app, Event::mouse_down(center_x, center_y, 0), 30_020);
+        deliver_mines_event(&mut app, Event::mouse_down(center_x, center_y, 0), 30_080);
         assert_eq!(app.runtime.mouse().buttons().bits(), 1);
         assert_eq!(app.runtime.mouse().last_state_query().0, 1);
         assert_eq!(
             app.runtime.last_wake_source(),
             Some(GuestWakeSource::MouseButton)
         );
-        assert_ne!(
-            (app.runtime.cell(39, 7), app.runtime.cell(40, 7)),
-            cell_before_click
-        );
         assert_ne!(app.runtime.cell(39, 7).character, b'*');
 
-        deliver_mines_event(&mut app, Event::click(center_x, center_y), 30_021);
+        deliver_mines_event(&mut app, Event::mouse_up(center_x, center_y, 0), 30_081);
         assert_eq!(app.runtime.mouse().buttons().bits(), 0);
         assert_eq!(app.runtime.mouse().last_state_query().0, 0);
         assert!(app.runtime.mouse().int33_state_query_count() >= query_count_before_click + 2);
 
-        assert_eq!(app.mouse_input_counters.pointer_moves_received, 5);
-        assert_eq!(app.mouse_input_counters.pointer_buttons_received, 2);
+        let board_before = core::array::from_fn::<_, 81, _>(|index| {
+            let board_x = index % 9;
+            let board_y = index / 9;
+            (
+                app.runtime.cell(31 + board_x * 2, 3 + board_y),
+                app.runtime.cell(32 + board_x * 2, 3 + board_y),
+            )
+        });
+        let numbered_x = viewport.x + 33 * DOS_CELL_W + DOS_CELL_W / 2;
+        let numbered_y = viewport.y + 3 * DOS_CELL_H + DOS_CELL_H / 2;
+        deliver_mines_event(&mut app, Event::mouse_move(numbered_x, numbered_y), 30_090);
+        assert_eq!(app.runtime.mouse().position(), (33, 3));
+        deliver_mines_event(
+            &mut app,
+            Event::mouse_down(numbered_x, numbered_y, 0),
+            30_091,
+        );
+        assert_eq!(app.runtime.mouse().last_state_query().0, 1);
+        deliver_mines_event(&mut app, Event::mouse_up(numbered_x, numbered_y, 0), 30_092);
+        assert_eq!(app.runtime.mouse().last_state_query().0, 0);
+
+        let changed_board_cells = board_before
+            .iter()
+            .enumerate()
+            .filter(|(index, before)| {
+                let board_x = *index % 9;
+                let board_y = *index / 9;
+                **before
+                    != (
+                        app.runtime.cell(31 + board_x * 2, 3 + board_y),
+                        app.runtime.cell(32 + board_x * 2, 3 + board_y),
+                    )
+            })
+            .count();
+        assert_eq!(changed_board_cells, 1);
+
+        assert_eq!(app.mouse_input_counters.pointer_moves_received, 7);
+        assert_eq!(app.mouse_input_counters.pointer_buttons_received, 6);
         assert_eq!(app.mouse_input_counters.rejected_outside_content, 0);
-        assert_eq!(app.mouse_input_counters.mapped_guest_coordinates, 7);
-        assert_eq!(app.mouse_input_counters.button_edge_updates, 2);
+        assert_eq!(app.mouse_input_counters.mapped_guest_coordinates, 13);
+        assert_eq!(app.mouse_input_counters.button_edge_updates, 6);
         assert_eq!(app.mouse_input_counters.duplicate_button_edges, 0);
-        assert!(app.mouse_input_counters.mouse_state_updates >= 7);
-        assert!(app.mouse_input_counters.mouse_generation_changes >= 7);
+        assert!(
+            app.mouse_input_counters.mouse_state_updates
+                >= app.mouse_input_counters.button_edge_updates
+        );
+        assert!(
+            app.mouse_input_counters.mouse_generation_changes
+                >= app.mouse_input_counters.button_edge_updates
+        );
     }
 
     #[test]

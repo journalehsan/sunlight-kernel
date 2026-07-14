@@ -6,6 +6,7 @@ extern crate std;
 
 extern crate alloc;
 
+use alloc::collections::VecDeque;
 use alloc::string::String;
 use alloc::vec::Vec;
 use sunlight_libc as libc;
@@ -754,6 +755,7 @@ struct Window {
     /// Cursor shape the client wants when the pointer is in its client area.
     client_cursor: CursorShape,
     pending_keys: KeyEventQueue,
+    pending_pointer_buttons: PointerButtonEventQueue,
     /// Last mouse state delivered to this window while it owned the pointer.
     /// Non-target windows keep their own cached state so they do not synthesize
     /// pointer transitions from someone else's clicks.
@@ -852,6 +854,7 @@ impl Window {
 }
 
 const KEY_EVENT_QUEUE_CAP: usize = 32;
+const POINTER_BUTTON_EVENT_QUEUE_INITIAL_CAPACITY: usize = 32;
 
 #[derive(Clone, Copy)]
 struct KeyEventQueue {
@@ -887,6 +890,46 @@ impl KeyEventQueue {
         self.head = (self.head + 1) % KEY_EVENT_QUEUE_CAP;
         self.len -= 1;
         Some(event)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PointerButtonEvent {
+    x: u16,
+    y: u16,
+    raw_buttons_before: u8,
+    raw_buttons_after: u8,
+    delivered_buttons: u8,
+    target_window: u64,
+    focused_window: u64,
+    captured_window: u64,
+    button: u8,
+    pressed: bool,
+    focus_press: bool,
+}
+
+struct PointerButtonEventQueue {
+    events: VecDeque<PointerButtonEvent>,
+}
+
+impl PointerButtonEventQueue {
+    fn new() -> Self {
+        Self {
+            events: VecDeque::with_capacity(POINTER_BUTTON_EVENT_QUEUE_INITIAL_CAPACITY),
+        }
+    }
+
+    fn push(&mut self, event: PointerButtonEvent) {
+        self.events.push_back(event);
+    }
+
+    fn pop(&mut self) -> Option<PointerButtonEvent> {
+        self.events.pop_front()
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.events.len()
     }
 }
 
@@ -1102,6 +1145,9 @@ struct DebugCounters {
     events_available_count: u64,
     wrong_window_poll_count: u64,
     pointer_other_window_count: u64,
+    pointer_button_queued_count: u64,
+    pointer_button_dequeued_count: u64,
+    pointer_button_queue_drop_count: u64,
 }
 
 impl DebugCounters {
@@ -1134,6 +1180,9 @@ impl DebugCounters {
             events_available_count: 0,
             wrong_window_poll_count: 0,
             pointer_other_window_count: 0,
+            pointer_button_queued_count: 0,
+            pointer_button_dequeued_count: 0,
+            pointer_button_queue_drop_count: 0,
         }
     }
 }
@@ -1233,7 +1282,7 @@ fn topmost_window_id_at(state: &CompositorState, cx: u32, cy: u32) -> Option<u64
     topmost_window_idx_at(state, cx, cy).map(|idx| state.windows[idx].id)
 }
 
-fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (u64, u64) {
+fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (u64, u64, bool) {
     let mouse_x = state.mouse_x;
     let mouse_y = state.mouse_y;
     let target_id = topmost_window_id_at(&state, mouse_x as u32, mouse_y as u32);
@@ -1243,6 +1292,29 @@ fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (
     }
     let captured_id = state.client_pointer_capture;
     let win = &mut state.windows[win_idx];
+    if let Some(event) = win.pending_pointer_buttons.pop() {
+        let mut flags = SgpMsg::EVENT_FLAG_POINTER_OWNED;
+        if event.focused_window == win.id {
+            flags |= SgpMsg::EVENT_FLAG_FOCUSED;
+        }
+        if event.captured_window == win.id {
+            flags |= SgpMsg::EVENT_FLAG_POINTER_CAPTURED;
+        }
+        if event.focus_press {
+            flags |= SgpMsg::EVENT_FLAG_FOCUS_PRESS;
+            win.focus_press_pending = false;
+        }
+        win.last_mouse_x = event.x;
+        win.last_mouse_y = event.y;
+        win.last_buttons = event.delivered_buttons;
+        #[cfg(not(test))]
+        log_pointer_button_event(event, true, true);
+        return (
+            (event.x as u64) | ((event.y as u64) << 16),
+            event.delivered_buttons as u64 | flags,
+            true,
+        );
+    }
     let pointer_owned = target_id == Some(win.id) || captured_id == Some(win.id);
     let mut flags = 0;
     if focused_id == Some(win.id) {
@@ -1265,13 +1337,105 @@ fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (
         (
             (mouse_x as u64) | ((mouse_y as u64) << 16),
             state.prev_buttons as u64 | flags,
+            false,
         )
     } else {
         (
             (win.last_mouse_x as u64) | ((win.last_mouse_y as u64) << 16),
             win.last_buttons as u64 | flags,
+            false,
         )
     }
+}
+
+fn queue_pointer_button_transitions(
+    state: &mut CompositorState,
+    x: u16,
+    y: u16,
+    raw_buttons_before: u8,
+    raw_buttons_after: u8,
+    captured_before: Option<u64>,
+) {
+    let changed = raw_buttons_before ^ raw_buttons_after;
+    if changed == 0 {
+        return;
+    }
+
+    let target_window = topmost_window_id_at(state, x as u32, y as u32).unwrap_or(0);
+    let focused_window = focused_window_id(state).unwrap_or(0);
+    let captured_window = captured_before
+        .or(state.client_pointer_capture)
+        .unwrap_or(0);
+    let route_window = if captured_window != 0 {
+        captured_window
+    } else {
+        target_window
+    };
+    let mut edge_buttons = raw_buttons_before;
+
+    for button in 0..3u8 {
+        let mask = 1u8 << button;
+        if changed & mask == 0 {
+            continue;
+        }
+        let pressed = raw_buttons_after & mask != 0;
+        if pressed {
+            edge_buttons |= mask;
+        } else {
+            edge_buttons &= !mask;
+        }
+        let focus_press = route_window != 0
+            && focused_window == route_window
+            && state
+                .windows
+                .iter()
+                .find(|win| win.id == route_window)
+                .is_some_and(|win| win.focus_press_pending);
+        let event = PointerButtonEvent {
+            x,
+            y,
+            raw_buttons_before,
+            raw_buttons_after,
+            delivered_buttons: edge_buttons,
+            target_window,
+            focused_window,
+            captured_window,
+            button,
+            pressed,
+            focus_press,
+        };
+        let queued = if let Some(win) = state.windows.iter_mut().find(|win| win.id == route_window)
+        {
+            win.pending_pointer_buttons.push(event);
+            if focus_press {
+                win.focus_press_pending = false;
+            }
+            true
+        } else {
+            false
+        };
+        if queued {
+            state.debug_counters.pointer_button_queued_count = state
+                .debug_counters
+                .pointer_button_queued_count
+                .wrapping_add(1);
+        } else {
+            state.debug_counters.pointer_button_queue_drop_count = state
+                .debug_counters
+                .pointer_button_queue_drop_count
+                .wrapping_add(1);
+        }
+        #[cfg(not(test))]
+        log_pointer_button_event(event, queued, false);
+    }
+}
+
+const fn mouse_requires_scene_redraw(
+    scene_changed: bool,
+    had_active_drag: bool,
+    now_dragging: bool,
+) -> bool {
+    scene_changed || had_active_drag || now_dragging
 }
 
 fn raise_window_by_id(state: &mut CompositorState, id: u64) {
@@ -3160,6 +3324,33 @@ fn debug_i32(val: i32) {
     }
 }
 
+#[cfg(not(test))]
+fn log_pointer_button_event(event: PointerButtonEvent, event_queued: bool, event_dequeued: bool) {
+    debug_log("[DISPLAY-MOUSE-BUTTON] raw_buttons_before=");
+    debug_dec(event.raw_buttons_before as u32);
+    debug_log(" raw_buttons_after=");
+    debug_dec(event.raw_buttons_after as u32);
+    debug_log(" target_window=");
+    debug_dec_u64(event.target_window);
+    debug_log(" focused_window=");
+    debug_dec_u64(event.focused_window);
+    debug_log(" captured_window=");
+    debug_dec_u64(event.captured_window);
+    debug_log(" event_type=");
+    debug_log(if event.pressed {
+        "mouse-down"
+    } else {
+        "mouse-up"
+    });
+    debug_log(" button=");
+    debug_dec(event.button as u32);
+    debug_log(" event_queued=");
+    debug_dec(event_queued as u32);
+    debug_log(" event_dequeued=");
+    debug_dec(event_dequeued as u32);
+    debug_log("\n");
+}
+
 fn log_debug_counters(state: &CompositorState, reason: &str) {
     debug_log("[DISPLAY] counters ");
     debug_log(reason);
@@ -3226,6 +3417,12 @@ fn log_debug_counters(state: &CompositorState, reason: &str) {
     debug_dec_u64(state.debug_counters.wrong_window_poll_count);
     debug_log(" pointer_other_window=");
     debug_dec_u64(state.debug_counters.pointer_other_window_count);
+    debug_log(" button_queued=");
+    debug_dec_u64(state.debug_counters.pointer_button_queued_count);
+    debug_log(" button_dequeued=");
+    debug_dec_u64(state.debug_counters.pointer_button_dequeued_count);
+    debug_log(" button_queue_drops=");
+    debug_dec_u64(state.debug_counters.pointer_button_queue_drop_count);
     debug_log("\n");
 }
 
@@ -3279,6 +3476,7 @@ mod tests {
             },
             client_cursor: CursorShape::Pointer,
             pending_keys: KeyEventQueue::new(),
+            pending_pointer_buttons: PointerButtonEventQueue::new(),
             last_mouse_x: 0,
             last_mouse_y: 0,
             last_buttons: 0,
@@ -3440,6 +3638,7 @@ mod tests {
         let bottom = mouse_poll_words_for_window(&mut state, 0);
         assert_eq!(bottom.0, 7 | (9 << 16));
         assert_eq!(bottom.1, 2);
+        assert!(!bottom.2);
         assert_eq!(state.windows[0].last_mouse_x, 7);
         assert_eq!(state.windows[0].last_buttons, 2);
 
@@ -3449,9 +3648,96 @@ mod tests {
             top.1,
             1 | SgpMsg::EVENT_FLAG_FOCUSED | SgpMsg::EVENT_FLAG_POINTER_OWNED
         );
+        assert!(!top.2);
         assert_eq!(state.windows[1].last_mouse_x, 120);
         assert_eq!(state.windows[1].last_mouse_y, 90);
         assert_eq!(state.windows[1].last_buttons, 1);
+    }
+
+    #[test]
+    fn button_press_and_release_are_queued_and_dequeued_exactly_once() {
+        let mut state = test_state(vec![test_window(
+            7,
+            40,
+            40,
+            220,
+            180,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        )]);
+        state.mouse_x = 100;
+        state.mouse_y = 100;
+        state.client_pointer_capture = Some(7);
+        state.windows[0].focus_press_pending = true;
+
+        queue_pointer_button_transitions(&mut state, 100, 100, 0, 1, None);
+        queue_pointer_button_transitions(&mut state, 100, 100, 1, 0, Some(7));
+
+        assert_eq!(state.windows[0].pending_pointer_buttons.len(), 2);
+        assert_eq!(state.debug_counters.pointer_button_queued_count, 2);
+        assert_eq!(state.debug_counters.pointer_button_queue_drop_count, 0);
+
+        let press = mouse_poll_words_for_window(&mut state, 0);
+        assert!(press.2);
+        assert_eq!(press.0, 100 | (100 << 16));
+        assert_eq!(press.1 & 0xff, 1);
+        assert_ne!(press.1 & SgpMsg::EVENT_FLAG_FOCUS_PRESS, 0);
+
+        let release = mouse_poll_words_for_window(&mut state, 0);
+        assert!(release.2);
+        assert_eq!(release.1 & 0xff, 0);
+        assert_eq!(release.1 & SgpMsg::EVENT_FLAG_FOCUS_PRESS, 0);
+
+        let steady = mouse_poll_words_for_window(&mut state, 0);
+        assert!(!steady.2);
+        assert_eq!(steady.1 & 0xff, 0);
+        assert_eq!(state.windows[0].pending_pointer_buttons.len(), 0);
+    }
+
+    #[test]
+    fn held_button_state_does_not_create_duplicate_edges() {
+        let mut state = test_state(vec![test_window(
+            9,
+            40,
+            40,
+            220,
+            180,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        )]);
+        state.mouse_x = 100;
+        state.mouse_y = 100;
+        state.prev_buttons = 1;
+        state.client_pointer_capture = Some(9);
+
+        queue_pointer_button_transitions(&mut state, 100, 100, 0, 1, None);
+        let press = mouse_poll_words_for_window(&mut state, 0);
+        assert!(press.2);
+        assert_eq!(press.1 & 0xff, 1);
+
+        for _ in 0..4 {
+            let held = mouse_poll_words_for_window(&mut state, 0);
+            assert!(!held.2);
+            assert_eq!(held.1 & 0xff, 1);
+        }
+
+        queue_pointer_button_transitions(&mut state, 100, 100, 1, 0, Some(9));
+        state.prev_buttons = 0;
+        state.client_pointer_capture = None;
+        let release = mouse_poll_words_for_window(&mut state, 0);
+        assert!(release.2);
+        assert_eq!(release.1 & 0xff, 0);
+        assert_eq!(state.windows[0].pending_pointer_buttons.len(), 0);
+    }
+
+    #[test]
+    fn client_button_transition_does_not_force_live_surface_recomposition() {
+        assert!(!mouse_requires_scene_redraw(false, false, false));
+        assert!(mouse_requires_scene_redraw(true, false, false));
+        assert!(mouse_requires_scene_redraw(false, true, false));
+        assert!(mouse_requires_scene_redraw(false, false, true));
     }
 
     #[test]
@@ -3478,6 +3764,7 @@ mod tests {
                 | SgpMsg::EVENT_FLAG_POINTER_OWNED
                 | SgpMsg::EVENT_FLAG_POINTER_CAPTURED
         );
+        assert!(!captured.2);
 
         state.windows.push(test_window(
             8,
@@ -4079,6 +4366,7 @@ pub extern "C" fn _start() -> ! {
                                 config,
                                 client_cursor: CursorShape::Pointer,
                                 pending_keys: KeyEventQueue::new(),
+                                pending_pointer_buttons: PointerButtonEventQueue::new(),
                                 last_mouse_x: 0,
                                 last_mouse_y: 0,
                                 last_buttons: 0,
@@ -4424,14 +4712,21 @@ pub extern "C" fn _start() -> ! {
                         let win = &mut state.windows[win_idx];
                         win.pending_keys.pop()
                     };
-                    let (mouse_word, button_word) =
+                    let (mouse_word, button_word, button_event_dequeued) =
                         mouse_poll_words_for_window(&mut state, win_idx);
+                    if button_event_dequeued {
+                        state.debug_counters.pointer_button_dequeued_count = state
+                            .debug_counters
+                            .pointer_button_dequeued_count
+                            .wrapping_add(1);
+                    }
                     let delivered_mouse_x = (mouse_word & 0xffff) as u16;
                     let delivered_mouse_y = ((mouse_word >> 16) & 0xffff) as u16;
                     let delivered_buttons = (button_word & 0xff) as u8;
                     let pointer_owned = button_word & SgpMsg::EVENT_FLAG_POINTER_OWNED != 0;
                     let event_available = key_event.is_some()
                         || focus_press
+                        || button_event_dequeued
                         || (pointer_owned
                             && (delivered_mouse_x != previous_mouse_x
                                 || delivered_mouse_y != previous_mouse_y
@@ -4603,6 +4898,7 @@ pub extern "C" fn _start() -> ! {
                 let prev_cx = state.pointer.x() as u32;
                 let prev_cy = state.pointer.y() as u32;
                 let prev_buttons = state.prev_buttons;
+                let captured_before = state.client_pointer_capture;
                 state.debug_counters.mouse_event_count += 1;
                 state.debug_counters.raw_mouse_packet_count += packet_count as u64;
                 // Snapshot drag state before processing to detect window-geometry changes.
@@ -4656,6 +4952,7 @@ pub extern "C" fn _start() -> ! {
                     cx != prev_cx || cy != prev_cy,
                     left_down && !was_left_down,
                 );
+                let mut scene_changed = overlay_changed;
 
                 // Capture any client-area drag at the generic compositor
                 // boundary. Chronos applies its stricter graphics-viewport
@@ -4686,6 +4983,7 @@ pub extern "C" fn _start() -> ! {
                     }
                     if let Some(hit_idx) = topmost_window_idx_at(&state, cx, cy) {
                         let id = state.windows[hit_idx].id;
+                        let focused_before = focused_window_id(&state);
                         let hit_zone = hit_test_window(
                             &state.windows[hit_idx],
                             cx,
@@ -4698,6 +4996,7 @@ pub extern "C" fn _start() -> ! {
                         let win_type = state.windows[hit_idx].config.window_type;
                         if win_type != WindowType::Desktop && win_type != WindowType::Widget {
                             raise_window_by_id(&mut state, id);
+                            scene_changed |= focused_before != Some(id);
                         }
                         if let Some(win) = state.windows.iter_mut().find(|win| win.id == id) {
                             win.focus_press_pending = true;
@@ -4729,6 +5028,7 @@ pub extern "C" fn _start() -> ! {
                                     state.pending_move_drag = None;
                                     state.last_titlebar_click_win_id = 0;
                                     state.last_titlebar_click_ms = 0;
+                                    scene_changed = true;
                                 } else {
                                     // First click of a potential double-click: record it and
                                     // start a pending drag (drag only fires if cursor moves
@@ -4741,6 +5041,7 @@ pub extern "C" fn _start() -> ! {
                             HitZone::CloseBtn => {
                                 let _ = close_window(&mut state, id, None);
                                 state.active_drag = ActiveDrag::None;
+                                scene_changed = true;
                             }
                             HitZone::MaximizeBtn => {
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
@@ -4764,12 +5065,14 @@ pub extern "C" fn _start() -> ! {
                                     }
                                 }
                                 state.active_drag = ActiveDrag::None;
+                                scene_changed = true;
                             }
                             HitZone::MinimizeBtn => {
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
                                     win.config.state = WindowState::Minimized;
                                 }
                                 state.active_drag = ActiveDrag::None;
+                                scene_changed = true;
                             }
                             HitZone::KeepOnTopBtn => {
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
@@ -4782,6 +5085,7 @@ pub extern "C" fn _start() -> ! {
                                 }
                                 // Sorting logic is handled on next click, but we could enforce it here too
                                 state.active_drag = ActiveDrag::None;
+                                scene_changed = true;
                             }
                             edge @ (HitZone::EdgeLeft
                             | HitZone::EdgeRight
@@ -4831,6 +5135,17 @@ pub extern "C" fn _start() -> ! {
                     state.pending_move_drag = None;
                 }
 
+                let transition_x = state.mouse_x;
+                let transition_y = state.mouse_y;
+                queue_pointer_button_transitions(
+                    &mut state,
+                    transition_x,
+                    transition_y,
+                    prev_buttons,
+                    buttons,
+                    captured_before,
+                );
+
                 // ── Drag / resize in progress ───────────────────────────────
                 if left_down {
                     let dcx = cx as i32 - prev_cx as i32;
@@ -4846,6 +5161,7 @@ pub extern "C" fn _start() -> ! {
                                     // top panel; the panel reserved area is always accessible.
                                     win.y = (win.y as i32 + dcy).max(PANEL_TOP_RESERVED_H as i32)
                                         as u32;
+                                    scene_changed = true;
                                 }
                             }
                         }
@@ -4896,6 +5212,7 @@ pub extern "C" fn _start() -> ! {
                                                 (awh + total_dy).max(MIN_WIN_H as i32) as u32;
                                         }
                                     }
+                                    scene_changed = true;
                                 }
                             }
                         }
@@ -4922,10 +5239,9 @@ pub extern "C" fn _start() -> ! {
 
                 let new_cx = state.mouse_x as u32;
                 let new_cy = state.mouse_y as u32;
-                let button_changed = buttons != prev_buttons;
                 let now_dragging = !matches!(state.active_drag, ActiveDrag::None);
                 let window_changed =
-                    button_changed || had_active_drag || now_dragging || overlay_changed;
+                    mouse_requires_scene_redraw(scene_changed, had_active_drag, now_dragging);
                 let hw_cursor_shape_changed =
                     state.last_hw_cursor_shape != Some(state.active_cursor);
                 let sw_cursor_shape_changed = state.software_cursor.valid

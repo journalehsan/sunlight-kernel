@@ -12,6 +12,7 @@ pub const DOS_MOUSE_DEFAULT_MAX_Y: u16 = 199;
 pub const DOS_MOUSE_BUTTON_COUNT: u16 = 3;
 pub const DOS_MOUSE_ERROR_INVALID_ARGUMENT: u16 = 0x0001;
 pub const DOS_MOUSE_ERROR_UNSUPPORTED: u16 = 0xffff;
+pub const INT33_TRACKED_FUNCTION_COUNT: usize = 9;
 
 /// Initial polling-only INT 33h dispatcher. Successful supported functions
 /// clear CF. Reversed ranges return CF=1/AX=0001h, and deliberately unsupported
@@ -19,6 +20,7 @@ pub const DOS_MOUSE_ERROR_UNSUPPORTED: u16 = 0xffff;
 /// Microsoft Mouse Driver compatibility than it implements.
 pub(crate) fn dispatch(runtime: &mut Runtime) -> Result<(), Trap> {
     let function = runtime.cpu.ax;
+    runtime.mouse.record_int33_function(function);
     match function {
         0x0000 => {
             runtime.mouse.reset();
@@ -175,6 +177,7 @@ pub struct DosMouse {
     pointer_inside: bool,
     captured: bool,
     int33_state_query_count: u64,
+    int33_function_counts: [u64; INT33_TRACKED_FUNCTION_COUNT],
     last_state_query: (u16, u16, u16),
 }
 
@@ -198,6 +201,7 @@ impl DosMouse {
             pointer_inside: false,
             captured: false,
             int33_state_query_count: 0,
+            int33_function_counts: [0; INT33_TRACKED_FUNCTION_COUNT],
             last_state_query: (0, 0, 0),
         };
         mouse.reset_state(false);
@@ -283,6 +287,13 @@ impl DosMouse {
         self.int33_state_query_count
     }
 
+    pub fn int33_function_count(&self, function: u16) -> u64 {
+        self.int33_function_counts
+            .get(function as usize)
+            .copied()
+            .unwrap_or(0)
+    }
+
     /// Last BX/CX/DX returned by INT 33h AX=0003.
     pub const fn last_state_query(&self) -> (u16, u16, u16) {
         self.last_state_query
@@ -291,6 +302,12 @@ impl DosMouse {
     pub(crate) fn record_state_query(&mut self, buttons: u16, x: u16, y: u16) {
         self.int33_state_query_count = self.int33_state_query_count.wrapping_add(1);
         self.last_state_query = (buttons, x, y);
+    }
+
+    fn record_int33_function(&mut self, function: u16) {
+        if let Some(count) = self.int33_function_counts.get_mut(function as usize) {
+            *count = count.wrapping_add(1);
+        }
     }
 
     pub fn show(&mut self) {

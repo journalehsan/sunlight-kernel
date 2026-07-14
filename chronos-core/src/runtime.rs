@@ -3480,6 +3480,20 @@ mod tests {
         super::dos::dispatch(&mut runtime, 0x33).unwrap();
         assert_ne!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
         assert_eq!(runtime.cpu.ax, crate::mouse::DOS_MOUSE_ERROR_UNSUPPORTED);
+        runtime.cpu.ax = 0x0006;
+        super::dos::dispatch(&mut runtime, 0x33).unwrap();
+        assert_ne!(runtime.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(runtime.cpu.ax, crate::mouse::DOS_MOUSE_ERROR_UNSUPPORTED);
+        assert_eq!(runtime.mouse().int33_function_count(0), 1);
+        assert_eq!(runtime.mouse().int33_function_count(1), 2);
+        assert_eq!(runtime.mouse().int33_function_count(2), 2);
+        assert_eq!(runtime.mouse().int33_function_count(3), 1);
+        assert_eq!(runtime.mouse().int33_function_count(4), 1);
+        assert_eq!(runtime.mouse().int33_function_count(5), 1);
+        assert_eq!(runtime.mouse().int33_function_count(6), 1);
+        assert_eq!(runtime.mouse().int33_function_count(7), 2);
+        assert_eq!(runtime.mouse().int33_function_count(8), 1);
+        assert_eq!(runtime.mouse().int33_function_count(9), 0);
 
         let mut other = runtime_for(&[0xf4]);
         other.cpu.ax = 0;

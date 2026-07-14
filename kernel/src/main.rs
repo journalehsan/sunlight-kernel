@@ -1703,7 +1703,9 @@ fn initialize_network_backend(
         );
         serial_println!("[VMXNET3] pci device 15ad:07b0 not present");
         serial_println!("[VMXNET3] verify ethernet0.virtualDev = \"vmxnet3\"");
-        serial_println!("[VMXNET3-AUDIT] 15ad:07b0 absent — probe returned None, falling back to VirtIO scan");
+        serial_println!(
+            "[VMXNET3-AUDIT] 15ad:07b0 absent — probe returned None, falling back to VirtIO scan"
+        );
     }
 
     let Some((bus, slot, _func, io_base)) = (unsafe { sunlight_virtio::find_virtio_net() }) else {
@@ -2186,6 +2188,20 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             serial_println!("[SEC]  IPC multi-caller queue: OK");
         } else {
             serial_println!("[SEC]  IPC multi-caller queue: UNEXPECTED");
+        }
+    }
+
+    {
+        let endpoint_id = 13;
+        let caller_pid = 12;
+        let mut matching = Some((endpoint_id, caller_pid));
+        let mut other_call = Some((endpoint_id, 25));
+        let cleared = crate::ipc::cancel_reply_target(&mut matching, endpoint_id, caller_pid);
+        let preserved = !crate::ipc::cancel_reply_target(&mut other_call, endpoint_id, caller_pid);
+        if cleared && matching.is_none() && preserved && other_call == Some((endpoint_id, 25)) {
+            serial_println!("[SEC]  IPC timeout cancellation target: OK");
+        } else {
+            serial_println!("[SEC]  IPC timeout cancellation target: UNEXPECTED");
         }
     }
 

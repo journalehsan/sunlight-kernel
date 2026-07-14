@@ -267,6 +267,19 @@ fn set_reply_target(sched: &mut Scheduler, server_pid: usize, endpoint_id: u32, 
     }
 }
 
+pub(crate) fn cancel_reply_target(
+    reply_target: &mut Option<(u32, usize)>,
+    endpoint_id: u32,
+    caller_pid: usize,
+) -> bool {
+    if *reply_target == Some((endpoint_id, caller_pid)) {
+        *reply_target = None;
+        true
+    } else {
+        false
+    }
+}
+
 fn deliver_reply_to_current_target(
     server_pid: usize,
     reply: IpcMsg,
@@ -464,12 +477,36 @@ pub fn handle_ipc_cancel(
         return Ok(());
     };
 
-    let endpoint_id = caps
-        .check(CapabilityToken(target_cap), CapabilityRights::SEND)
+    let (endpoint_id, server_pid) = caps
+        .token_owner(CapabilityToken(target_cap), CapabilityRights::SEND)
         .map_err(|_| IpcError::InvalidCapability)?;
 
     bus.remove_pending_calls_for(endpoint_id, caller_pid);
     bus.reply_waiter_remove(endpoint_id, caller_pid);
+    if let Some(server) = sched.process_mut_by_pid(server_pid) {
+        cancel_reply_target(&mut server.ipc_reply_target, endpoint_id, caller_pid);
+    }
     sched.processes[idx].pending_call = None;
+    sched.wake_pid(caller_pid);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cancel_reply_target;
+
+    #[test]
+    fn cancel_reply_target_clears_only_matching_in_flight_call() {
+        let mut target = Some((13, 12));
+        assert!(cancel_reply_target(&mut target, 13, 12));
+        assert_eq!(target, None);
+
+        let mut other_endpoint = Some((9, 12));
+        assert!(!cancel_reply_target(&mut other_endpoint, 13, 12));
+        assert_eq!(other_endpoint, Some((9, 12)));
+
+        let mut other_caller = Some((13, 25));
+        assert!(!cancel_reply_target(&mut other_caller, 13, 12));
+        assert_eq!(other_caller, Some((13, 25)));
+    }
 }

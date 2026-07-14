@@ -119,6 +119,7 @@ struct MouseState {
     display_timeout_count: u64,
     tty_timeout_count: u64,
     display_route_logged: bool,
+    raw_buttons: u8,
 }
 
 impl MouseState {
@@ -139,6 +140,7 @@ impl MouseState {
             display_timeout_count: 0,
             tty_timeout_count: 0,
             display_route_logged: false,
+            raw_buttons: 0,
         }
     }
 
@@ -177,6 +179,10 @@ impl MouseState {
                 let left_btn = (flags & 0x01) != 0;
                 let right_btn = (flags & 0x02) != 0;
                 let middle_btn = (flags & 0x04) != 0;
+                let raw_buttons_before = self.raw_buttons;
+                let raw_buttons_after =
+                    (left_btn as u8) | ((right_btn as u8) << 1) | ((middle_btn as u8) << 2);
+                self.raw_buttons = raw_buttons_after;
 
                 // Sign-extend dx/dy from 9-bit two's complement (sign bit in byte0).
                 let mut dx = self.byte1 as i32;
@@ -205,6 +211,13 @@ impl MouseState {
                     syscall::debug_log_i16(raw_dx);
                     syscall::debug_log(" dy=");
                     syscall::debug_log_i16(raw_dy);
+                    syscall::debug_log("\n");
+                }
+                if raw_buttons_before != raw_buttons_after {
+                    syscall::debug_log("[MOUSE-BUTTON] raw_buttons_before=");
+                    syscall::debug_log_u64(raw_buttons_before as u64);
+                    syscall::debug_log(" raw_buttons_after=");
+                    syscall::debug_log_u64(raw_buttons_after as u64);
                     syscall::debug_log("\n");
                 }
 
