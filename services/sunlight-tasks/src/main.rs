@@ -10,8 +10,8 @@ use sunlight_ipc::{
 use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_CORES, MAX_PROCESSES};
 use sunlight_ui::{
     request_close,
-    widgets::{Button, ButtonState, Column, Label, Panel, StatusBar, Table},
-    App, Event, HBox, Rect, Window, WindowConfig,
+    widgets::{Column, Label, Panel, StatusBar, Table},
+    App, Color, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -19,12 +19,14 @@ static F_MED: VecFont = VecFont(FontRole::UiMedium);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 const WIN_W: u32 = 720;
-const WIN_H: u32 = 460;
+const WIN_H: u32 = 540;
 const STATUS_H: u32 = 18;
-const TITLE_H: u32 = 28;
-const TOOLBAR_H: u32 = 28;
-const INFO_H: u32 = 60;
+const TITLE_H: u32 = 22;
+const TOOLBAR_H: u32 = 32;
+const SUMMARY_H: u32 = 102;
 const CONTENT_MARGIN: i32 = 12;
+const ACTION_GAP: i32 = 8;
+const ACTION_WIDTHS: [u32; 4] = [92, 104, 96, 92];
 const TABLE_COLS: usize = 5;
 const CORE_TABLE_COLS: usize = 8;
 const CELL_BUF: usize = 32;
@@ -150,6 +152,8 @@ struct TasksApp {
     scroll: usize,
     show_system_info: bool,
     view_mode: ViewMode,
+    hovered_action: Option<usize>,
+    pressed_action: Option<usize>,
     order: [usize; MAX_PROCESSES],
     row_bufs: [[[u8; CELL_BUF]; TABLE_COLS]; MAX_PROCESSES],
     row_lens: [[usize; TABLE_COLS]; MAX_PROCESSES],
@@ -172,6 +176,8 @@ impl TasksApp {
             scroll: 0,
             show_system_info: true,
             view_mode: ViewMode::Processes,
+            hovered_action: None,
+            pressed_action: None,
             order: [0; MAX_PROCESSES],
             row_bufs: [[[0; CELL_BUF]; TABLE_COLS]; MAX_PROCESSES],
             row_lens: [[0; TABLE_COLS]; MAX_PROCESSES],
@@ -395,10 +401,8 @@ impl TasksApp {
 
     fn visible_rows(&self) -> usize {
         let content = self.content_rect();
-        let info_h = if self.show_system_info { INFO_H + 8 } else { 0 };
-        let usable = content
-            .h
-            .saturating_sub(TITLE_H + TOOLBAR_H + info_h + STATUS_H + 18);
+        let header_h = TITLE_H + 6 + TOOLBAR_H + 8 + SUMMARY_H + 8;
+        let usable = content.h.saturating_sub(header_h + STATUS_H + 4);
         (usable / 16).max(1) as usize
     }
 
@@ -414,26 +418,66 @@ impl TasksApp {
     fn toolbar_rect(&self) -> Rect {
         let content = self.content_rect();
         Rect::new(
-            content.x,
-            content.y + TITLE_H as i32 + 8,
-            content.w,
+            content.x + 10,
+            content.y + TITLE_H as i32 + 4,
+            content.w.saturating_sub(20),
             TOOLBAR_H,
+        )
+    }
+
+    fn action_rect(&self, index: usize) -> Rect {
+        let toolbar = self.toolbar_rect();
+        let x_offset = ACTION_WIDTHS
+            .iter()
+            .take(index)
+            .fold(0i32, |offset, width| offset + *width as i32 + ACTION_GAP);
+        Rect::new(
+            toolbar.x + x_offset,
+            toolbar.y,
+            ACTION_WIDTHS.get(index).copied().unwrap_or(0),
+            toolbar.h,
+        )
+    }
+
+    fn action_at(&self, x: i32, y: i32) -> Option<usize> {
+        (0..ACTION_WIDTHS.len()).find(|index| self.action_rect(*index).contains(Point::new(x, y)))
+    }
+
+    fn summary_rect(&self) -> Rect {
+        let content = self.content_rect();
+        Rect::new(
+            content.x + 10,
+            self.toolbar_rect().bottom() + 8,
+            content.w.saturating_sub(20),
+            SUMMARY_H,
+        )
+    }
+
+    fn summary_card_rects(&self) -> (Rect, Rect) {
+        let summary = self.summary_rect();
+        let inner = Rect::new(
+            summary.x + 12,
+            summary.y + 32,
+            summary.w.saturating_sub(24),
+            summary.h.saturating_sub(44),
+        );
+        let gap = 12;
+        let card_w = inner.w.saturating_sub(gap) / 2;
+        (
+            Rect::new(inner.x, inner.y, card_w, inner.h),
+            Rect::new(
+                inner.x + card_w as i32 + gap as i32,
+                inner.y,
+                card_w,
+                inner.h,
+            ),
         )
     }
 
     fn table_rect(&self) -> Rect {
         let content = self.content_rect();
-        let top = content.y
-            + TITLE_H as i32
-            + 8
-            + TOOLBAR_H as i32
-            + 8
-            + if self.show_system_info {
-                INFO_H as i32 + 8
-            } else {
-                0
-            };
-        let status_h = STATUS_H + 8;
+        let top = self.summary_rect().bottom() + 8;
+        let status_h = STATUS_H + 4;
         Rect::new(
             content.x,
             top,
@@ -452,26 +496,7 @@ impl TasksApp {
         )
     }
 
-    fn toolbar_buttons(&self) -> [Rect; 4] {
-        let widths = [120, 120, 120, 120];
-        let mut rects = [Rect::default(); 4];
-        for (idx, rect) in HBox::new(self.toolbar_rect())
-            .with_spacing(8)
-            .layout(&widths)
-            .enumerate()
-        {
-            rects[idx] = rect;
-        }
-        rects
-    }
-
-    fn info_strings(
-        &self,
-        uptime: &mut [u8; 24],
-        tasks: &mut [u8; 24],
-        cpu: &mut [u8; 40],
-        ram: &mut [u8; 40],
-    ) {
+    fn overview_strings(&self, uptime: &mut [u8; 24], tasks: &mut [u8; 24]) {
         let mut n = copy_tail(b"Uptime ", uptime);
         n += write_num_into((self.snapshot.uptime_secs / 3600) as u32, &mut uptime[n..]);
         n += copy_tail(b"h ", &mut uptime[n..]);
@@ -483,17 +508,110 @@ impl TasksApp {
 
         let n = copy_tail(b"Tasks ", tasks);
         write_num_into(self.snapshot.proc_count as u32, &mut tasks[n..]);
+    }
 
-        let mut n = copy_tail(b"CPU ", cpu);
-        n += write_bp_into(self.snapshot.cpu_used_bp, &mut cpu[n..]);
-        n += copy_tail(b" used ", &mut cpu[n..]);
-        n += write_bp_into(self.snapshot.cpu_idle_bp, &mut cpu[n..]);
-        copy_tail(b" idle", &mut cpu[n..]);
+    fn draw_action_button(
+        &self,
+        canvas: &mut sunlight_ui::Canvas,
+        theme: &Theme,
+        index: usize,
+        label: &str,
+        active: bool,
+        danger: bool,
+    ) {
+        let rect = self.action_rect(index);
+        let hovered = self.hovered_action == Some(index);
+        let pressed = self.pressed_action == Some(index);
+        let (fill, border, text) = if danger {
+            if pressed {
+                (theme.danger.darken(125), theme.danger, theme.danger_text)
+            } else if hovered {
+                (theme.danger.darken(165), theme.danger, theme.danger_text)
+            } else {
+                (theme.panel_alt, theme.danger.darken(70), theme.text_muted)
+            }
+        } else if active {
+            (
+                theme.accent.darken(if pressed { 125 } else { 165 }),
+                theme.accent,
+                theme.accent_hover,
+            )
+        } else if pressed {
+            (theme.border, theme.accent, theme.text)
+        } else if hovered {
+            (
+                theme.panel_alt.lighten(12),
+                theme.accent.darken(45),
+                theme.text,
+            )
+        } else {
+            (theme.panel_alt, theme.border, theme.text_muted)
+        };
 
-        let mut n = copy_tail(b"RAM ", ram);
-        n += write_mb_into(self.snapshot.used_ram_kb, &mut ram[n..]);
-        n += copy_tail(b" / ", &mut ram[n..]);
-        copy_tail_mb(self.snapshot.total_ram_kb, &mut ram[n..]);
+        canvas.fill_rounded_rect(rect, 8, fill);
+        canvas.stroke_rounded_rect(rect, 8, 1, border);
+        if active {
+            canvas.fill_rounded_rect(
+                Rect::new(rect.x + 9, rect.bottom() - 5, rect.w.saturating_sub(18), 2),
+                1,
+                theme.accent,
+            );
+        }
+        let text_w = F_UI.measure_w(label);
+        F_UI.draw_vcenter(
+            canvas,
+            label,
+            rect.x + (rect.w as i32 - text_w as i32) / 2,
+            rect.y,
+            rect.h,
+            text,
+        );
+    }
+
+    fn draw_metric_card(
+        &self,
+        canvas: &mut sunlight_ui::Canvas,
+        theme: &Theme,
+        rect: Rect,
+        title: &str,
+        value: &str,
+        detail: &str,
+        usage_bp: u16,
+    ) {
+        canvas.fill_rounded_rect(rect, 9, theme.panel);
+        canvas.stroke_rounded_rect(rect, 9, 1, theme.border);
+
+        let title_rect = Rect::new(rect.x + 12, rect.y + 6, rect.w.saturating_sub(24), 16);
+        F_MED.draw_vcenter(
+            canvas,
+            title,
+            title_rect.x,
+            title_rect.y,
+            title_rect.h,
+            theme.text,
+        );
+        let value_w = F_MED.measure_w(value);
+        F_MED.draw_vcenter(
+            canvas,
+            value,
+            title_rect.right() - value_w as i32,
+            title_rect.y,
+            title_rect.h,
+            usage_color(theme, usage_bp),
+        );
+
+        F_SMALL.draw_vcenter(canvas, detail, rect.x + 12, rect.y + 24, 14, theme.text_dim);
+        draw_usage_bar(
+            canvas,
+            theme,
+            Rect::new(
+                rect.x + 12,
+                rect.bottom() - 15,
+                rect.w.saturating_sub(24),
+                7,
+            ),
+            usage_bp,
+        );
     }
 }
 
@@ -504,82 +622,131 @@ impl App for TasksApp {
         let content = self.content_rect();
         Panel::new(content).draw(canvas, theme);
 
-        let title_rect = Rect::new(content.x + 12, content.y + 8, 220, TITLE_H);
+        let title_rect = Rect::new(content.x + 12, content.y + 6, 220, TITLE_H);
         Label::new(title_rect, "Tasks Monitor")
             .with_font(&F_MED)
             .draw(canvas, theme);
         Label::new(
-            Rect::new(content.right() - 88, content.y + 8, 76, TITLE_H),
+            Rect::new(content.right() - 88, content.y + 6, 76, TITLE_H),
             "SunlightOS",
         )
         .dim()
         .with_font(&F_SMALL)
         .draw(canvas, theme);
 
-        let buttons = self.toolbar_buttons();
-        let labels = ["End", "Cores", "Info", "Refresh"];
-        for (idx, rect) in buttons.iter().enumerate() {
-            let active = match idx {
-                1 => self.view_mode == ViewMode::Cores,
-                2 => self.show_system_info,
-                _ => false,
-            };
-            let mut button = if active {
-                Button::new(*rect, labels[idx]).with_font(&F_UI)
+        self.draw_action_button(canvas, theme, 0, "End task", false, true);
+        self.draw_action_button(
+            canvas,
+            theme,
+            1,
+            if self.view_mode == ViewMode::Cores {
+                "Processes"
             } else {
-                Button::secondary(*rect, labels[idx]).with_font(&F_UI)
-            };
-            button.state = ButtonState::Normal;
-            button.draw(canvas, theme);
-        }
+                "CPU cores"
+            },
+            self.view_mode == ViewMode::Cores,
+            false,
+        );
+        self.draw_action_button(
+            canvas,
+            theme,
+            2,
+            if self.show_system_info {
+                "Hide info"
+            } else {
+                "Show info"
+            },
+            self.show_system_info,
+            false,
+        );
+        self.draw_action_button(canvas, theme, 3, "Refresh", false, false);
 
+        let summary = self.summary_rect();
+        canvas.fill_rounded_rect(summary, 11, theme.panel_alt);
+        canvas.stroke_rounded_rect(summary, 11, 1, theme.border);
+        let overview_title = if self.show_system_info {
+            "System overview"
+        } else {
+            "Resource usage"
+        };
+        F_MED.draw_vcenter(
+            canvas,
+            overview_title,
+            summary.x + 14,
+            summary.y + 5,
+            20,
+            theme.text,
+        );
+        let mut uptime = [0u8; 24];
+        let mut tasks = [0u8; 24];
+        self.overview_strings(&mut uptime, &mut tasks);
+        let uptime_str = core::str::from_utf8(trim_zeros(&uptime)).unwrap_or("");
+        let tasks_str = core::str::from_utf8(trim_zeros(&tasks)).unwrap_or("");
         if self.show_system_info {
-            let info_rect = Rect::new(
-                content.x,
-                self.toolbar_rect().bottom() + 8,
-                content.w,
-                INFO_H,
+            let tasks_w = F_SMALL.measure_w(tasks_str);
+            let uptime_w = F_SMALL.measure_w(uptime_str);
+            let info_x = summary.right() - 14 - tasks_w as i32;
+            F_SMALL.draw_vcenter(
+                canvas,
+                tasks_str,
+                info_x,
+                summary.y + 6,
+                18,
+                theme.text_muted,
             );
-            Panel::with_title(info_rect, "System").draw(canvas, theme);
-
-            let row1 = Rect::new(
-                info_rect.x + 12,
-                info_rect.y + 22,
-                info_rect.w.saturating_sub(24),
-                14,
+            F_SMALL.draw_vcenter(
+                canvas,
+                uptime_str,
+                info_x - uptime_w as i32 - 18,
+                summary.y + 6,
+                18,
+                theme.text_muted,
             );
-            let row2 = Rect::new(
-                info_rect.x + 12,
-                info_rect.y + 38,
-                info_rect.w.saturating_sub(24),
-                14,
-            );
-            let mut top_cells = HBox::new(row1).with_spacing(12).layout(&[150, 120]);
-            let mut bottom_cells = HBox::new(row2).with_spacing(12).layout(&[280, 220]);
-            let mut uptime = [0u8; 24];
-            let mut tasks = [0u8; 24];
-            let mut cpu = [0u8; 40];
-            let mut ram = [0u8; 40];
-            self.info_strings(&mut uptime, &mut tasks, &mut cpu, &mut ram);
-            let top_labels = [
-                core::str::from_utf8(trim_zeros(&uptime)).unwrap_or(""),
-                core::str::from_utf8(trim_zeros(&tasks)).unwrap_or(""),
-            ];
-            let bottom_labels = [
-                core::str::from_utf8(trim_zeros(&cpu)).unwrap_or(""),
-                core::str::from_utf8(trim_zeros(&ram)).unwrap_or(""),
-            ];
-            for label in top_labels.iter() {
-                if let Some(rect) = top_cells.next() {
-                    Label::new(rect, label).with_font(&F_UI).draw(canvas, theme);
-                }
-            }
-            for label in bottom_labels.iter() {
-                if let Some(rect) = bottom_cells.next() {
-                    Label::new(rect, label).with_font(&F_UI).draw(canvas, theme);
-                }
-            }
         }
+
+        let mut cpu_value = [0u8; 16];
+        let cpu_value_len = write_bp_into(self.snapshot.cpu_used_bp, &mut cpu_value);
+        let cpu_value_str = core::str::from_utf8(&cpu_value[..cpu_value_len]).unwrap_or("");
+        let mut cpu_detail = [0u8; 40];
+        let mut cpu_detail_len = copy_tail(b"Idle ", &mut cpu_detail);
+        cpu_detail_len +=
+            write_bp_into(self.snapshot.cpu_idle_bp, &mut cpu_detail[cpu_detail_len..]);
+        let cpu_detail_str = core::str::from_utf8(&cpu_detail[..cpu_detail_len]).unwrap_or("");
+
+        let ram_usage_bp = ram_usage_bp(self.snapshot.used_ram_kb, self.snapshot.total_ram_kb);
+        let mut ram_value = [0u8; 16];
+        let ram_value_len = write_bp_into(ram_usage_bp, &mut ram_value);
+        let ram_value_str = core::str::from_utf8(&ram_value[..ram_value_len]).unwrap_or("");
+        let mut ram_detail = [0u8; 40];
+        let mut ram_detail_len = copy_tail(b"Using ", &mut ram_detail);
+        ram_detail_len +=
+            write_mb_into(self.snapshot.used_ram_kb, &mut ram_detail[ram_detail_len..]);
+        ram_detail_len += copy_tail(b" of ", &mut ram_detail[ram_detail_len..]);
+        ram_detail_len += write_mb_into(
+            self.snapshot.total_ram_kb,
+            &mut ram_detail[ram_detail_len..],
+        );
+        let ram_detail_str = core::str::from_utf8(&ram_detail[..ram_detail_len]).unwrap_or("");
+
+        let (cpu_card, ram_card) = self.summary_card_rects();
+        self.draw_metric_card(
+            canvas,
+            theme,
+            cpu_card,
+            "Processor",
+            cpu_value_str,
+            cpu_detail_str,
+            self.snapshot.cpu_used_bp,
+        );
+        self.draw_metric_card(
+            canvas,
+            theme,
+            ram_card,
+            "Memory",
+            ram_value_str,
+            ram_detail_str,
+            ram_usage_bp,
+        );
 
         let table_rect = self.table_rect();
         let visible = self.visible_rows();
@@ -645,45 +812,73 @@ impl App for TasksApp {
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Tick => self.refresh(false),
+            Event::MouseMove { x, y } => {
+                let hovered = self.action_at(x, y);
+                if hovered != self.hovered_action {
+                    self.hovered_action = hovered;
+                    return true;
+                }
+                false
+            }
+            Event::MouseDown { x, y, button: 0 } => {
+                let pressed = self.action_at(x, y);
+                if pressed.is_some() {
+                    self.pressed_action = pressed;
+                    self.hovered_action = pressed;
+                    return true;
+                }
+                false
+            }
+            Event::MouseUp { .. } => {
+                if self.pressed_action.take().is_some() {
+                    return true;
+                }
+                false
+            }
             Event::Click { x, y } => {
-                let buttons = self.toolbar_buttons();
-                for (idx, rect) in buttons.iter().enumerate() {
-                    if rect.contains(sunlight_ui::Point::new(x, y)) {
-                        match idx {
-                            0 => self.set_status(if self.selected_pid.is_some() {
-                                "End process not implemented"
-                            } else {
-                                "Select a process first"
-                            }),
-                            1 => {
-                                self.view_mode = if self.view_mode == ViewMode::Cores {
-                                    ViewMode::Processes
-                                } else {
-                                    ViewMode::Cores
-                                };
-                                self.scroll = 0;
-                                self.set_status(if self.view_mode == ViewMode::Cores {
-                                    "Cores view"
-                                } else {
-                                    "Processes view"
-                                });
-                            }
-                            2 => {
-                                self.show_system_info = !self.show_system_info;
-                                self.set_status(if self.show_system_info {
-                                    "System info shown"
-                                } else {
-                                    "System info hidden"
-                                });
-                            }
-                            3 => {
-                                self.set_status("Refreshing telemetry");
-                                let _ = self.refresh(true);
-                            }
-                            _ => {}
-                        }
+                let released_action = self.action_at(x, y);
+                let pressed_action = self.pressed_action.take();
+                self.hovered_action = released_action;
+                if let Some(pressed_idx) = pressed_action {
+                    if released_action != Some(pressed_idx) {
                         return true;
                     }
+                }
+                if let Some(idx) = released_action {
+                    match idx {
+                        0 => self.set_status(if self.selected_pid.is_some() {
+                            "End process not implemented"
+                        } else {
+                            "Select a process first"
+                        }),
+                        1 => {
+                            self.view_mode = if self.view_mode == ViewMode::Cores {
+                                ViewMode::Processes
+                            } else {
+                                ViewMode::Cores
+                            };
+                            self.scroll = 0;
+                            self.set_status(if self.view_mode == ViewMode::Cores {
+                                "Cores view"
+                            } else {
+                                "Processes view"
+                            });
+                        }
+                        2 => {
+                            self.show_system_info = !self.show_system_info;
+                            self.set_status(if self.show_system_info {
+                                "System info shown"
+                            } else {
+                                "System info hidden"
+                            });
+                        }
+                        3 => {
+                            self.set_status("Refreshing telemetry");
+                            let _ = self.refresh(true);
+                        }
+                        _ => {}
+                    }
+                    return true;
                 }
 
                 if self.view_mode == ViewMode::Processes {
@@ -779,6 +974,41 @@ fn state_text(state: ProcessState) -> &'static str {
         ProcessState::Running => "running",
         ProcessState::Blocked => "blocked",
         ProcessState::Finished => "finished",
+    }
+}
+
+fn ram_usage_bp(used_kb: u64, total_kb: u64) -> u16 {
+    if total_kb == 0 {
+        return 0;
+    }
+    used_kb
+        .saturating_mul(10_000)
+        .checked_div(total_kb)
+        .unwrap_or(0)
+        .min(10_000) as u16
+}
+
+fn usage_color(theme: &Theme, usage_bp: u16) -> Color {
+    if usage_bp >= 8_500 {
+        theme.danger
+    } else if usage_bp >= 6_500 {
+        theme.warn
+    } else {
+        theme.accent
+    }
+}
+
+fn draw_usage_bar(canvas: &mut sunlight_ui::Canvas, theme: &Theme, rect: Rect, usage_bp: u16) {
+    canvas.fill_rounded_rect(rect, 4, theme.bg);
+    canvas.stroke_rounded_rect(rect, 4, 1, theme.border);
+    let inner = rect.inset(2);
+    let fill_w = inner.w.saturating_mul(usage_bp.min(10_000) as u32) / 10_000;
+    if fill_w > 0 {
+        canvas.fill_rounded_rect(
+            Rect::new(inner.x, inner.y, fill_w, inner.h),
+            2,
+            usage_color(theme, usage_bp),
+        );
     }
 }
 
