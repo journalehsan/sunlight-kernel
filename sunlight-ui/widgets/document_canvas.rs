@@ -823,7 +823,9 @@ fn item_bounds(item: DocumentCanvasItem) -> Rect {
                 .unwrap_or(crate::paint::font::GLYPH_H);
             Rect::new(x, y, w.max(1), h.max(1))
         }
-        DocumentCanvasItem::LinkText { x, y, text, style, .. } => {
+        DocumentCanvasItem::LinkText {
+            x, y, text, style, ..
+        } => {
             let w = measure_text_width(style.font, text);
             let h = style
                 .font
@@ -1106,7 +1108,6 @@ pub enum CanvasHitTarget {
 }
 
 impl<'a> DocumentCanvas<'a> {
-
     /// Returns the retained object at a window-local point.  The widget owns
     /// the conversion from its clipped, scrolled surface into document
     /// coordinates; the caller remains responsible for interpreting any
@@ -1145,10 +1146,7 @@ impl<'a> DocumentCanvas<'a> {
                     .saturating_add(self.scroll_y as i32),
             );
             if let Some(obj) = scene.hit_test(document_point) {
-                if matches!(
-                    obj.interaction,
-                    Some(RenderInteraction::Link { .. })
-                ) {
+                if matches!(obj.interaction, Some(RenderInteraction::Link { .. })) {
                     return CanvasHitTarget::Link;
                 }
                 if matches!(obj.kind, RenderObjectKind::Text { .. }) {
@@ -1288,29 +1286,18 @@ impl<'a> DocumentCanvas<'a> {
                             if line.ends_with_newline && line_text.ends_with('\n') {
                                 line_text = &line_text[..line_text.len() - 1];
                             }
-                            let visible = clip_text_to_width(
-                                style.font,
-                                line_text,
-                                max_w,
-                            );
+                            let visible = clip_text_to_width(style.font, line_text, max_w);
                             if !visible.is_empty() {
                                 draw_text(canvas, style.font, px, ly, visible, style.color);
                             }
                         }
-                        let caret_line =
-                            find_line_index(&lines, caret_byte).unwrap_or(0usize);
+                        let caret_line = find_line_index(&lines, caret_byte).unwrap_or(0usize);
                         if let Some(line) = lines.get(caret_line) {
-                            let caret_ox =
-                                caret_x_on_line(style.font, text, line, caret_byte);
+                            let caret_ox = caret_x_on_line(style.font, text, line, caret_byte);
                             let caret_px = px + caret_ox as i32;
                             let caret_py = py + line.y_offset;
-                            if let Some(caret_rect) = Rect::new(
-                                caret_px,
-                                caret_py,
-                                1,
-                                line_h,
-                            )
-                            .intersect(content)
+                            if let Some(caret_rect) =
+                                Rect::new(caret_px, caret_py, 1, line_h).intersect(content)
                             {
                                 canvas.fill_rect(caret_rect, Color::rgb(0x25, 0x63, 0xEB));
                             }
@@ -1936,9 +1923,9 @@ mod tests {
         DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage, RenderObject,
         RenderObjectId, RenderObjectKind, ScenePatchOperation, TextEditState, TextLineLayout,
     };
-    use crate::{Canvas, Color, Point, Rect, Size, Theme};
     #[cfg(feature = "app")]
     use crate::CursorShape;
+    use crate::{Canvas, Color, Point, Rect, Size, Theme};
     use alloc::sync::Arc;
 
     fn scene_with_text(text: &str, x: i32) -> DocumentScene {
@@ -2337,8 +2324,8 @@ mod tests {
             selection_anchor_byte: None,
             preferred_caret_x: None,
         };
-        let widget = DocumentCanvas::new(Rect::new(0, 0, 320, 240), &items)
-            .with_edit_state(&edit_state);
+        let widget =
+            DocumentCanvas::new(Rect::new(0, 0, 320, 240), &items).with_edit_state(&edit_state);
         let mut pixels = [0u32; 320 * 240];
         let mut canvas = Canvas::new(&mut pixels, 320, 320, 240);
         widget.draw(&mut canvas, &Theme::sunlight_dark());
@@ -2496,8 +2483,8 @@ mod tests {
             selection_anchor_byte: None,
             preferred_caret_x: None,
         };
-        let widget = DocumentCanvas::new(Rect::new(0, 0, 320, 240), &items)
-            .with_edit_state(&edit_state);
+        let widget =
+            DocumentCanvas::new(Rect::new(0, 0, 320, 240), &items).with_edit_state(&edit_state);
         let mut pixels = [0u32; 320 * 240];
         let mut canvas = Canvas::new(&mut pixels, 320, 320, 240);
         widget.draw(&mut canvas, &Theme::sunlight_dark());
@@ -2530,10 +2517,9 @@ mod tests {
     #[test]
     fn hit_target_returns_none_for_empty_canvas() {
         let items: &[DocumentCanvasItem] = &[];
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
-                .with_mode(DocumentCanvasMode::Editable)
-                .with_presentation(DocumentCanvasPresentation::Writer);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
+            .with_mode(DocumentCanvasMode::Editable)
+            .with_presentation(DocumentCanvasPresentation::Writer);
         let content = canvas.content_rect();
         let pt = Point::new(content.x + 10, content.y + 10);
         assert_eq!(canvas.hit_target(pt), super::CanvasHitTarget::None);
@@ -2547,10 +2533,9 @@ mod tests {
             text: "Hello",
             style: DocumentTextStyle::default(),
         }];
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
-                .with_mode(DocumentCanvasMode::Editable)
-                .with_presentation(DocumentCanvasPresentation::Writer);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
+            .with_mode(DocumentCanvasMode::Editable)
+            .with_presentation(DocumentCanvasPresentation::Writer);
         let content = canvas.content_rect();
         let pt = Point::new(content.x + 15, content.y + 13);
         assert_eq!(canvas.hit_target(pt), super::CanvasHitTarget::Text);
@@ -2565,10 +2550,9 @@ mod tests {
             url: "https://example.com",
             style: DocumentTextStyle::default(),
         }];
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
-                .with_mode(DocumentCanvasMode::Editable)
-                .with_presentation(DocumentCanvasPresentation::Writer);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
+            .with_mode(DocumentCanvasMode::Editable)
+            .with_presentation(DocumentCanvasPresentation::Writer);
         let content = canvas.content_rect();
         let pt = Point::new(content.x + 15, content.y + 13);
         assert_eq!(canvas.hit_target(pt), super::CanvasHitTarget::Link);
@@ -2583,10 +2567,9 @@ mod tests {
             h: 50,
             style: Default::default(),
         }];
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
-                .with_mode(DocumentCanvasMode::Editable)
-                .with_presentation(DocumentCanvasPresentation::Writer);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
+            .with_mode(DocumentCanvasMode::Editable)
+            .with_presentation(DocumentCanvasPresentation::Writer);
         let content = canvas.content_rect();
         let pt = Point::new(content.x + 20, content.y + 20);
         assert_eq!(canvas.hit_target(pt), super::CanvasHitTarget::None);
@@ -2600,10 +2583,9 @@ mod tests {
             text: "Text",
             style: DocumentTextStyle::default(),
         }];
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
-                .with_mode(DocumentCanvasMode::Editable)
-                .with_presentation(DocumentCanvasPresentation::Writer);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
+            .with_mode(DocumentCanvasMode::Editable)
+            .with_presentation(DocumentCanvasPresentation::Writer);
         let pt = Point::new(-50, -50);
         assert_eq!(canvas.hit_target(pt), super::CanvasHitTarget::None);
     }
@@ -2616,10 +2598,9 @@ mod tests {
             text: "SunlightOS ☀️  🐇  🐧  🦀",
             style: DocumentTextStyle::default(),
         }];
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
-                .with_mode(DocumentCanvasMode::Editable)
-                .with_presentation(DocumentCanvasPresentation::Writer);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
+            .with_mode(DocumentCanvasMode::Editable)
+            .with_presentation(DocumentCanvasPresentation::Writer);
         let content = canvas.content_rect();
         let pt = Point::new(content.x + 15, content.y + 13);
         assert_eq!(canvas.hit_target(pt), super::CanvasHitTarget::Text);
@@ -2633,10 +2614,9 @@ mod tests {
             text: "Stable",
             style: DocumentTextStyle::default(),
         }];
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
-                .with_mode(DocumentCanvasMode::Editable)
-                .with_presentation(DocumentCanvasPresentation::Writer);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), items)
+            .with_mode(DocumentCanvasMode::Editable)
+            .with_presentation(DocumentCanvasPresentation::Writer);
         let content = canvas.content_rect();
         let pt = Point::new(content.x + 15, content.y + 13);
         let a = canvas.hit_target(pt);
@@ -2650,10 +2630,9 @@ mod tests {
     #[test]
     fn hit_target_scene_text_returns_text() {
         let scene = scene_with_text("Hello", 10);
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), &[])
-                .with_scene(&scene)
-                .with_presentation(DocumentCanvasPresentation::Browser);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), &[])
+            .with_scene(&scene)
+            .with_presentation(DocumentCanvasPresentation::Browser);
         let content = canvas.content_rect();
         let pt = Point::new(content.x + 15, content.y + 8);
         assert_eq!(canvas.hit_target(pt), super::CanvasHitTarget::Text);
@@ -2702,10 +2681,9 @@ mod tests {
             }),
         }));
         scene.finalize();
-        let canvas =
-            DocumentCanvas::new(Rect::new(0, 0, 400, 300), &[])
-                .with_scene(&scene)
-                .with_presentation(DocumentCanvasPresentation::Browser);
+        let canvas = DocumentCanvas::new(Rect::new(0, 0, 400, 300), &[])
+            .with_scene(&scene)
+            .with_presentation(DocumentCanvasPresentation::Browser);
         let content = canvas.content_rect();
         let pt = Point::new(content.x + 15, content.y + 8);
         // Link should win — it's drawn on top (pushed after the text object)

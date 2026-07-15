@@ -54,7 +54,11 @@ impl Color {
         let g = (self.g() as u32 * a + dst.g() as u32 * ia + 127) / 255;
         let b = (self.b() as u32 * a + dst.b() as u32 * ia + 127) / 255;
         let da = dst.a() as u32;
-        let out_a = if da == 255 { 255 } else { (a * 255 + da * ia + 127) / 255 };
+        let out_a = if da == 255 {
+            255
+        } else {
+            (a * 255 + da * ia + 127) / 255
+        };
         Color::rgba(r as u8, g as u8, b as u8, out_a as u8)
     }
 

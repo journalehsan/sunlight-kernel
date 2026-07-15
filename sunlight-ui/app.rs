@@ -142,6 +142,8 @@ pub struct EventPollCounters {
     pub wrong_window_replies: u64,
     pub local_ticks: u64,
     pub interleaved_polls: u64,
+    pub active_workspace_id: u8,
+    pub integrated_top_panel: bool,
 }
 
 /// An event-loop–driven window connected to the display server.
@@ -332,6 +334,13 @@ impl Window {
                 self.event_counters.wrong_window_replies.wrapping_add(1);
             return Event::Tick;
         }
+
+        let desktop_state = reply.words[3];
+        self.event_counters.active_workspace_id =
+            ((desktop_state & SgpMsg::EVENT_DESKTOP_ACTIVE_WORKSPACE_MASK)
+                >> SgpMsg::EVENT_DESKTOP_ACTIVE_WORKSPACE_SHIFT) as u8;
+        self.event_counters.integrated_top_panel =
+            desktop_state & SgpMsg::EVENT_DESKTOP_INTEGRATED_PANEL != 0;
 
         // words[0]: mouse_x (low 16) | mouse_y (high 16)
         let packed = reply.words[0];
@@ -590,10 +599,10 @@ impl Window {
                 self.event_counters.events_dequeued =
                     self.event_counters.events_dequeued.wrapping_add(1);
             }
-            app.event_poll_counters(self.event_counters);
+            let event_poll_redraw = app.event_poll_counters(self.event_counters);
 
             // Redraw requested?
-            let needs_redraw = app.update(event);
+            let needs_redraw = app.update(event) || event_poll_redraw;
 
             // Apply any cursor shape the app requested during update().
             if let Some(shape) = take_requested_cursor() {
@@ -717,7 +726,9 @@ pub trait App {
 
     /// Receive monotonic evidence from the window event route. The default is
     /// a no-op; runtimes can retain or log it alongside their own input state.
-    fn event_poll_counters(&mut self, _counters: EventPollCounters) {}
+    fn event_poll_counters(&mut self, _counters: EventPollCounters) -> bool {
+        false
+    }
 
     /// Called once after the **first frame is committed and visible** on screen.
     ///

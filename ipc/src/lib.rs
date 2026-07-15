@@ -327,6 +327,13 @@ pub mod sgp {
         /// The requested window ID resolved to a live compositor window. A
         /// reply without this flag is an explicit stale/wrong-window result.
         pub const EVENT_FLAG_WINDOW_VALID: u64 = 1 << 12;
+        /// EVENT_POLL reply words[3] bits 16..23 contain the active workspace id.
+        pub const EVENT_DESKTOP_ACTIVE_WORKSPACE_SHIFT: u32 = 16;
+        pub const EVENT_DESKTOP_ACTIVE_WORKSPACE_MASK: u64 =
+            0xFF << EVENT_DESKTOP_ACTIVE_WORKSPACE_SHIFT;
+        /// EVENT_POLL reply words[3] bit 24 indicates that a visible maximized
+        /// normal window is driving the shell's integrated top-panel mode.
+        pub const EVENT_DESKTOP_INTEGRATED_PANEL: u64 = 1 << 24;
         /// Normal window lifecycle cleanup. Clients should send this before
         /// releasing their local SHM mapping so the compositor can drop its
         /// window metadata and display-side SHM ownership.
@@ -364,9 +371,17 @@ pub mod sgp {
         ///        words[1]=owner_pid,
         ///        words[2]=window_state,
         ///        words[3]=window_type(low byte) | rolled_up(bit 8)
-        ///                | active_workspace_id(bits 16..23),
+        ///                | hidden(bit 9)
+        ///                | active_workspace_id(bits 16..23)
+        ///                | window_workspace_id(bits 24..31),
         ///        words[6..7]=first 16 bytes of the window title (LE packed).
         pub const LIST_WINDOWS: u64 = 0xA10A;
+        pub const LIST_WINDOW_ROLLED_UP: u64 = 1 << 8;
+        pub const LIST_WINDOW_HIDDEN: u64 = 1 << 9;
+        pub const LIST_ACTIVE_WORKSPACE_SHIFT: u32 = 16;
+        pub const LIST_ACTIVE_WORKSPACE_MASK: u64 = 0xFF << LIST_ACTIVE_WORKSPACE_SHIFT;
+        pub const LIST_WINDOW_WORKSPACE_SHIFT: u32 = 24;
+        pub const LIST_WINDOW_WORKSPACE_MASK: u64 = 0xFF << LIST_WINDOW_WORKSPACE_SHIFT;
         /// Bring the window to the front and restore it if minimized.
         /// words[0] = win_id
         pub const ACTIVATE_WINDOW: u64 = 0xA10B;

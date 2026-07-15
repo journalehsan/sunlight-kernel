@@ -43,8 +43,7 @@ static ICON_RABBIT_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
 static ICON_API_LAB_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.tga");
-static ICON_MINES_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/bomber.tga");
+static ICON_MINES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/bomber.tga");
 
 static ICON_SEARCH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");

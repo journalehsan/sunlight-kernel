@@ -835,9 +835,9 @@ impl Window {
             // remains accessible and visually unobscured.
             WindowState::Maximized => (
                 0,
-                PANEL_TOP_RESERVED_H,
+                self.maximized_top_reserved_h(),
                 fb_w,
-                fb_h.saturating_sub(PANEL_TOP_RESERVED_H),
+                fb_h.saturating_sub(self.maximized_top_reserved_h()),
             ),
             _ => {
                 // Rolled-up (shaded) windows collapse to titlebar + border only.
@@ -849,6 +849,14 @@ impl Window {
                     self.titlebar_height() + client_h + BORDER_W,
                 )
             }
+        }
+    }
+
+    fn maximized_top_reserved_h(&self) -> u32 {
+        if self.config.window_type == WindowType::Normal {
+            INTEGRATED_PANEL_H
+        } else {
+            FLOATING_PANEL_RESERVED_H
         }
     }
 }
@@ -1930,9 +1938,21 @@ fn prune_dead_owner_windows(state: &mut CompositorState) -> bool {
 }
 
 fn list_window_reply(win: &Window, active_ws: u32) -> IpcMsg {
-    let rolled_up = if win.rolled_up { 1u64 } else { 0u64 };
     let window_type = win.config.window_type as u64;
     let state = win.config.state as u64;
+    let metadata = window_type
+        | if win.rolled_up {
+            SgpMsg::LIST_WINDOW_ROLLED_UP
+        } else {
+            0
+        }
+        | if win.hidden {
+            SgpMsg::LIST_WINDOW_HIDDEN
+        } else {
+            0
+        }
+        | ((active_ws as u64) << SgpMsg::LIST_ACTIVE_WORKSPACE_SHIFT)
+        | ((win.workspace_id as u64) << SgpMsg::LIST_WINDOW_WORKSPACE_SHIFT);
     let mut title0 = 0u64;
     let mut title1 = 0u64;
     for i in 0..8usize {
@@ -1945,12 +1965,7 @@ fn list_window_reply(win: &Window, active_ws: u32) -> IpcMsg {
         .word(0, win.id)
         .word(1, win.owner_pid)
         .word(2, state)
-        .word(
-            3,
-            window_type | (rolled_up << 8) | ((active_ws as u64) << 16),
-        )
-        .word(4, win.workspace_id as u64)
-        .word(5, win.hidden as u64)
+        .word(3, metadata)
         .word(6, title0)
         .word(7, title1)
 }
@@ -2004,11 +2019,11 @@ const RESIZE_BORDER: u32 = 6; // effective hit-test width for edges/corners
 const MIN_WIN_W: u32 = 200;
 const MIN_WIN_H: u32 = 100;
 
-// Top panel reserved height: Vortex Shell top-bar occupies approximately
-// y=6..42 (TOP_Y=6, TOP_H=36). We reserve 50px so normal windows cannot
-// be placed or dragged over the panel, and maximized windows start below it.
-// Fullscreen windows are intentionally exempt (they cover everything).
-const PANEL_TOP_RESERVED_H: u32 = 50;
+// Floating Vortex panel occupies y=6..42. Normal windows keep an additional
+// breathing gap below it, while maximized windows meet the integrated panel at
+// its exact bottom edge. Fullscreen windows intentionally cover everything.
+const FLOATING_PANEL_RESERVED_H: u32 = 50;
+const INTEGRATED_PANEL_H: u32 = 36;
 
 // Maximum time between two titlebar clicks to be treated as a double-click
 // (roll-up / shade gesture, like old FVWM/CDE desktops).
@@ -2553,19 +2568,21 @@ fn composite_window(
         (ox, oy, cw, ch)
     } else if maximized {
         // Maximized: confined below the top panel so it doesn't cover the shell bar.
+        let top_reserved_h = win.maximized_top_reserved_h();
         let cw = state.fb_width.saturating_sub(BORDER_W * 2);
         let ch = state
             .fb_height
-            .saturating_sub(PANEL_TOP_RESERVED_H)
+            .saturating_sub(top_reserved_h)
             .saturating_sub(titlebar_h + BORDER_W);
-        (BORDER_W, PANEL_TOP_RESERVED_H + titlebar_h, cw, ch)
+        (BORDER_W, top_reserved_h + titlebar_h, cw, ch)
     } else {
         (win.x + BORDER_W, win.y + titlebar_h, win.width, win.height)
     };
 
     if !no_chrome {
+        let top_reserved_h = win.maximized_top_reserved_h();
         let (wx, wy) = if maximized {
-            (0u32, PANEL_TOP_RESERVED_H)
+            (0u32, top_reserved_h)
         } else {
             (win.x, win.y)
         };
@@ -2575,7 +2592,7 @@ fn composite_window(
             win.width + BORDER_W * 2
         };
         let chrome_h = if maximized {
-            state.fb_height.saturating_sub(PANEL_TOP_RESERVED_H)
+            state.fb_height.saturating_sub(top_reserved_h)
         } else if win.rolled_up {
             titlebar_h + BORDER_W
         } else {
@@ -3001,14 +3018,55 @@ fn move_hw_cursor(state: &mut CompositorState, x: u32, y: u32) -> bool {
     }
 }
 
+fn top_panel_strip_height(state: &CompositorState) -> u32 {
+    if integrated_top_panel_active(state) {
+        INTEGRATED_PANEL_H
+    } else {
+        FLOATING_PANEL_RESERVED_H
+    }
+}
+
+fn integrated_top_panel_active(state: &CompositorState) -> bool {
+    state.windows.iter().any(|win| {
+        win.config.window_type == WindowType::Normal
+            && win.config.state == WindowState::Maximized
+            && !win.hidden
+            && !win.rolled_up
+            && window_visible_on_workspace(win, state.active_workspace_id)
+    })
+}
+
+fn debug_log_window_state(state: &CompositorState, win_id: u64) {
+    let Some(win) = state.windows.iter().find(|win| win.id == win_id) else {
+        return;
+    };
+    debug_log("[DISPLAY] window_state id=");
+    debug_dec(win_id as u32);
+    debug_log(" state=");
+    debug_log(match win.config.state {
+        WindowState::Normal => "normal",
+        WindowState::Minimized => "minimized",
+        WindowState::Maximized => "maximized",
+        WindowState::Fullscreen => "fullscreen",
+    });
+    debug_log(" integrated=");
+    debug_dec(if integrated_top_panel_active(state) {
+        1
+    } else {
+        0
+    });
+    debug_log("\n");
+}
+
 /// Re-blit the top panel strip from the Desktop window onto the back buffer
 /// after all normal windows have been composited.  This ensures the Vortex Shell
 /// top bar is never visually obscured even when a normal window manages to
 /// overlap that region.
 ///
 /// The Desktop window is a full-screen no-chrome surface so its pixel buffer
-/// maps directly to screen coordinates; we just copy the first PANEL_TOP_RESERVED_H
-/// rows back on top.
+/// maps directly to screen coordinates. Floating mode restores the full
+/// reserved strip; integrated mode restores only the exact panel height so the
+/// maximized titlebar touches it without being overpainted.
 fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) {
     let desktop = match state.windows.iter().find(|w| {
         w.config.window_type == WindowType::Desktop
@@ -3026,12 +3084,9 @@ fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) 
     ) else {
         return;
     };
-    let Ok(source) = layout.readable_rect(
-        0,
-        0,
-        state.fb_width,
-        PANEL_TOP_RESERVED_H.min(state.fb_height),
-    ) else {
+    let panel_strip_h = top_panel_strip_height(state);
+    let Ok(source) = layout.readable_rect(0, 0, state.fb_width, panel_strip_h.min(state.fb_height))
+    else {
         return;
     };
     let strip_rows = source.height as usize;
@@ -3899,11 +3954,79 @@ mod tests {
             client_h,
             chrome_w,
             chrome_h,
-            PANEL_TOP_RESERVED_H,
+            FLOATING_PANEL_RESERVED_H,
         );
         assert!(x + chrome_w <= 1366);
         assert!(y + chrome_h <= 768);
-        assert!(y >= PANEL_TOP_RESERVED_H);
+        assert!(y >= FLOATING_PANEL_RESERVED_H);
+    }
+
+    #[test]
+    fn maximized_normal_window_meets_integrated_panel_without_a_gap() {
+        let win = test_window(
+            1,
+            40,
+            FLOATING_PANEL_RESERVED_H,
+            640,
+            480,
+            WindowType::Normal,
+            WindowState::Maximized,
+            ZIndexType::Normal,
+        );
+
+        assert_eq!(
+            win.chrome_rect(800, 600),
+            (0, INTEGRATED_PANEL_H, 800, 600 - INTEGRATED_PANEL_H)
+        );
+    }
+
+    #[test]
+    fn maximized_dialog_keeps_floating_panel_clear() {
+        let win = test_window(
+            1,
+            40,
+            FLOATING_PANEL_RESERVED_H,
+            640,
+            480,
+            WindowType::Dialog,
+            WindowState::Maximized,
+            ZIndexType::Normal,
+        );
+
+        assert_eq!(
+            win.chrome_rect(800, 600),
+            (
+                0,
+                FLOATING_PANEL_RESERVED_H,
+                800,
+                600 - FLOATING_PANEL_RESERVED_H
+            )
+        );
+    }
+
+    #[test]
+    fn panel_strip_tracks_visible_maximized_normal_windows() {
+        let mut win = test_window(
+            1,
+            40,
+            FLOATING_PANEL_RESERVED_H,
+            640,
+            480,
+            WindowType::Normal,
+            WindowState::Maximized,
+            ZIndexType::Normal,
+        );
+        win.workspace_id = 1;
+        let mut state = test_state(vec![win]);
+
+        assert_eq!(top_panel_strip_height(&state), INTEGRATED_PANEL_H);
+
+        state.windows[0].hidden = true;
+        assert_eq!(top_panel_strip_height(&state), FLOATING_PANEL_RESERVED_H);
+
+        state.windows[0].hidden = false;
+        state.active_workspace_id = 2;
+        assert_eq!(top_panel_strip_height(&state), FLOATING_PANEL_RESERVED_H);
     }
 
     #[test]
@@ -4307,7 +4430,7 @@ pub extern "C" fn _start() -> ! {
                                 h,
                                 chrome_w,
                                 chrome_h,
-                                PANEL_TOP_RESERVED_H,
+                                FLOATING_PANEL_RESERVED_H,
                             )
                         };
 
@@ -4741,10 +4864,17 @@ pub extern "C" fn _start() -> ! {
                             .pointer_other_window_count
                             .wrapping_add(1);
                     }
-                    wake = wake
-                        .word(0, mouse_word)
-                        .word(1, cx | (cy << 32))
-                        .word(3, button_word | SgpMsg::EVENT_FLAG_WINDOW_VALID);
+                    let desktop_state = ((state.active_workspace_id as u64)
+                        << SgpMsg::EVENT_DESKTOP_ACTIVE_WORKSPACE_SHIFT)
+                        | if integrated_top_panel_active(&state) {
+                            SgpMsg::EVENT_DESKTOP_INTEGRATED_PANEL
+                        } else {
+                            0
+                        };
+                    wake = wake.word(0, mouse_word).word(1, cx | (cy << 32)).word(
+                        3,
+                        button_word | SgpMsg::EVENT_FLAG_WINDOW_VALID | desktop_state,
+                    );
                     if let Some(key_event) = key_event {
                         wake = wake.word(2, key_event);
                     }
@@ -5044,6 +5174,7 @@ pub extern "C" fn _start() -> ! {
                                 scene_changed = true;
                             }
                             HitZone::MaximizeBtn => {
+                                let mut state_changed = false;
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
                                     if win.config.state == WindowState::Normal {
                                         // Unroll before maximizing so the client area is restored.
@@ -5056,13 +5187,18 @@ pub extern "C" fn _start() -> ! {
                                         win.saved_w = win.width;
                                         win.saved_h = win.height;
                                         win.config.state = WindowState::Maximized;
+                                        state_changed = true;
                                     } else if win.config.state == WindowState::Maximized {
                                         win.x = win.saved_x;
                                         win.y = win.saved_y;
                                         win.width = win.saved_w;
                                         win.height = win.saved_h;
                                         win.config.state = WindowState::Normal;
+                                        state_changed = true;
                                     }
+                                }
+                                if state_changed {
+                                    debug_log_window_state(&state, id);
                                 }
                                 state.active_drag = ActiveDrag::None;
                                 scene_changed = true;
@@ -5159,7 +5295,8 @@ pub extern "C" fn _start() -> ! {
                                     win.x = (win.x as i32 + dcx).max(0) as u32;
                                     // Clamp y so the titlebar cannot be dragged behind the
                                     // top panel; the panel reserved area is always accessible.
-                                    win.y = (win.y as i32 + dcy).max(PANEL_TOP_RESERVED_H as i32)
+                                    win.y = (win.y as i32 + dcy)
+                                        .max(FLOATING_PANEL_RESERVED_H as i32)
                                         as u32;
                                     scene_changed = true;
                                 }

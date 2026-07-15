@@ -24,12 +24,12 @@ pub use calendar::{
 };
 pub use checkbox::Checkbox;
 pub use document_canvas::{
-    byte_at_x_on_line, byte_offset_at_x, caret_x_at_byte, caret_x_on_line,
-    click_to_line_and_byte, diff_scenes, find_line_index, layout_text_lines, line_end_byte,
-    line_home_byte, CanvasHitTarget, CornerRadii, DocumentCanvas, DocumentCanvasItem,
-    DocumentCanvasMode, DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId,
-    DocumentRectStyle, DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder,
-    RasterImage, RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,
+    byte_at_x_on_line, byte_offset_at_x, caret_x_at_byte, caret_x_on_line, click_to_line_and_byte,
+    diff_scenes, find_line_index, layout_text_lines, line_end_byte, line_home_byte,
+    CanvasHitTarget, CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
+    DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentRectStyle,
+    DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage,
+    RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,
     ScenePatchOperation, TextEditState, TextLineLayout,
 };
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};

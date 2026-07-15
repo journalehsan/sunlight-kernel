@@ -81,7 +81,7 @@ use sunlight_ui::{
         icon_theme::{self, category as icon_category, name as icon_name},
         mime_icon, TgaImage,
     },
-    App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
+    App, Canvas, Color, Event, EventPollCounters, Point, Rect, Theme, Window, WindowConfig,
 };
 use sunlight_wallpaper::{is_supported_wallpaper, load_desktop_config, DesktopConfig};
 
@@ -541,16 +541,85 @@ impl DockAppState {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum ShellWindowState {
+    Normal = 0,
+    Minimized = 1,
+    Maximized = 2,
+    Fullscreen = 3,
+}
+
+impl ShellWindowState {
+    fn from_raw(raw: u64) -> Self {
+        match raw as u8 {
+            1 => Self::Minimized,
+            2 => Self::Maximized,
+            3 => Self::Fullscreen,
+            _ => Self::Normal,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum ShellWindowType {
+    Normal = 0,
+    Dialog = 1,
+    Desktop = 2,
+    Widget = 3,
+}
+
+impl ShellWindowType {
+    fn from_raw(raw: u64) -> Self {
+        match raw as u8 {
+            1 => Self::Dialog,
+            2 => Self::Desktop,
+            3 => Self::Widget,
+            _ => Self::Normal,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PanelPresentation {
+    Floating,
+    MaximizedIntegrated,
+}
+
+impl PanelPresentation {
+    fn integrated(self) -> bool {
+        matches!(self, Self::MaximizedIntegrated)
+    }
+}
+
 #[derive(Clone, Copy)]
 struct WindowSnapshot {
     id: u64,
     owner_pid: u64,
-    state: u64,
-    window_type: u64,
+    state: ShellWindowState,
+    window_type: ShellWindowType,
     workspace_id: u64,
     hidden: bool,
     rolled_up: bool,
     title: [u8; 16],
+}
+
+impl WindowSnapshot {
+    fn is_visible_on_workspace(&self, workspace_id: u8) -> bool {
+        !self.hidden && self.workspace_id == workspace_id as u64
+    }
+
+    fn is_minimized(&self) -> bool {
+        self.state == ShellWindowState::Minimized
+    }
+
+    fn drives_integrated_panel(&self, workspace_id: u8) -> bool {
+        self.is_visible_on_workspace(workspace_id)
+            && !self.rolled_up
+            && self.window_type == ShellWindowType::Normal
+            && self.state == ShellWindowState::Maximized
+    }
 }
 
 #[derive(Clone)]
@@ -658,6 +727,7 @@ const STATUS_POLL_MS: u64 = 1000;
 const TIME_IPC_TIMEOUT_MS: u64 = 250;
 const NET_IPC_TIMEOUT_MS: u64 = 50;
 const DISPLAY_IPC_TIMEOUT_MS: u64 = 50;
+const WINDOW_SNAPSHOT_IPC_TIMEOUT_MS: u64 = 250;
 const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
 const KV_IPC_TIMEOUT_MS: u64 = 250;
 const KV_VALUE: u64 = 0x4B05;
@@ -1290,9 +1360,8 @@ struct VortexShell {
     top_panel_hover: Option<usize>,
     /// Keyboard-focused top-panel item, if any.
     top_panel_focus: Option<usize>,
-    /// When a maximized/fullscreen app occupies the active workspace, the top
-    /// panel becomes flush with the display edge.
-    top_panel_flush: bool,
+    /// Current presentation mode for the top panel.
+    top_panel_presentation: PanelPresentation,
 
     // Popover / dialog / tooltip state (conservative, no overengineer)
     show_datetime_tooltip: bool,
@@ -1414,7 +1483,7 @@ impl VortexShell {
             top_panel_item_zones: [Rect::new(0, 0, 0, 0); TOP_PANEL_ITEM_COUNT],
             top_panel_hover: None,
             top_panel_focus: None,
-            top_panel_flush: false,
+            top_panel_presentation: PanelPresentation::Floating,
             show_datetime_tooltip: false,
             show_calendar_popover: false,
             cal_popup_open_btn: Rect::new(0, 0, 0, 0),
@@ -2083,20 +2152,15 @@ impl VortexShell {
         }
     }
 
-    fn detect_flush_top_panel(&self, windows: &[WindowSnapshot]) -> bool {
-        windows.iter().any(|window| {
-            if window.hidden
-                || window.rolled_up
-                || window.window_type == 2
-                || window.window_type == 3
-            {
-                return false;
-            }
-            if window.workspace_id != self.current_workspace as u64 {
-                return false;
-            }
-            matches!(window.state & 0x3, 2 | 3)
-        })
+    fn detect_top_panel_presentation(&self, windows: &[WindowSnapshot]) -> PanelPresentation {
+        if windows
+            .iter()
+            .any(|window| window.drives_integrated_panel(self.current_workspace))
+        {
+            PanelPresentation::MaximizedIntegrated
+        } else {
+            PanelPresentation::Floating
+        }
     }
 
     fn refresh_window_snapshots(&mut self) -> Option<()> {
@@ -2106,7 +2170,7 @@ impl VortexShell {
             let reply = ipc_call_timeout(
                 self.display_ep,
                 IpcMsg::with_label(SgpMsg::LIST_WINDOWS).word(0, idx),
-                DISPLAY_IPC_TIMEOUT_MS,
+                WINDOW_SNAPSHOT_IPC_TIMEOUT_MS,
             )
             .ok()?;
             if reply.label != SgpMsg::REPLY {
@@ -2120,7 +2184,8 @@ impl VortexShell {
             // of words[3]. Mirror it so the shell's indicator + taskbar filter
             // follow both Super+1..4 (handled in the compositor) and the
             // clickable indicator (which sends SET_WORKSPACE).
-            let active_ws = ((metadata >> 16) & 0xFF) as u8;
+            let active_ws = ((metadata & SgpMsg::LIST_ACTIVE_WORKSPACE_MASK)
+                >> SgpMsg::LIST_ACTIVE_WORKSPACE_SHIFT) as u8;
             if (1..=4).contains(&active_ws) {
                 self.current_workspace = active_ws;
             }
@@ -2132,11 +2197,12 @@ impl VortexShell {
             self.window_snapshots.push(WindowSnapshot {
                 id: reply.words[0],
                 owner_pid: reply.words[1],
-                state: reply.words[2],
-                window_type: metadata & 0xFF,
-                workspace_id: reply.words[4],
-                hidden: reply.words[5] != 0,
-                rolled_up: ((metadata >> 8) & 1) != 0,
+                state: ShellWindowState::from_raw(reply.words[2]),
+                window_type: ShellWindowType::from_raw(metadata & 0xFF),
+                workspace_id: (metadata & SgpMsg::LIST_WINDOW_WORKSPACE_MASK)
+                    >> SgpMsg::LIST_WINDOW_WORKSPACE_SHIFT,
+                hidden: metadata & SgpMsg::LIST_WINDOW_HIDDEN != 0,
+                rolled_up: metadata & SgpMsg::LIST_WINDOW_ROLLED_UP != 0,
                 title,
             });
             idx = idx.saturating_add(1);
@@ -2155,14 +2221,25 @@ impl VortexShell {
             return false;
         };
         let mut windows = core::mem::take(&mut self.window_snapshots);
-        let prev_top_panel_flush = self.top_panel_flush;
-        self.top_panel_flush = self.detect_flush_top_panel(&windows);
+        let prev_top_panel_presentation = self.top_panel_presentation;
+        self.top_panel_presentation = self.detect_top_panel_presentation(&windows);
+        if self.top_panel_presentation != prev_top_panel_presentation {
+            debug_log("[VORTEX] top_panel mode=");
+            debug_log(if self.top_panel_presentation.integrated() {
+                "maximized-integrated"
+            } else {
+                "floating"
+            });
+            debug_log(" workspace=");
+            debug_log_u32(self.current_workspace as u32);
+            debug_log("\n");
+        }
 
         // A workspace switch (via Super+1..4 in the compositor) changes no app
         // state, so it wouldn't otherwise mark dirty — but the indicator + taskbar
         // filter must redraw to reflect the new active workspace.
-        let mut dirty =
-            self.current_workspace != prev_ws || self.top_panel_flush != prev_top_panel_flush;
+        let mut dirty = self.current_workspace != prev_ws
+            || self.top_panel_presentation != prev_top_panel_presentation;
         for app in &mut self.apps {
             let prev_state = app.state;
             let prev_window = app.main_window_id;
@@ -2175,7 +2252,7 @@ impl VortexShell {
                 app.pid = Some(win.owner_pid);
                 app.main_window_id = Some(win.id);
                 app.clear_error();
-                let minimized = (win.state & 0x3) == 1;
+                let minimized = win.is_minimized();
                 app.state = if minimized {
                     AppLaunchState::Minimized
                 } else {
@@ -2316,8 +2393,10 @@ impl VortexShell {
         for window in windows {
             if window.hidden
                 || window.workspace_id != self.current_workspace as u64
-                || window.window_type == 2
-                || window.window_type == 3
+                || matches!(
+                    window.window_type,
+                    ShellWindowType::Desktop | ShellWindowType::Widget
+                )
             {
                 continue;
             }
@@ -2329,7 +2408,7 @@ impl VortexShell {
                 seen[seen_len] = window.id;
                 seen_len += 1;
             }
-            let minimized = (window.state & 0x3) == 1 || window.rolled_up;
+            let minimized = window.is_minimized() || window.rolled_up;
             let mut name_buf = [0u8; RUNNING_NAME_BUF];
             let display_name = self.running_display_name(window, telem, &mut name_buf);
             let proc_name = Self::process_name_hint(window, telem);
@@ -2697,8 +2776,8 @@ fn draw_icon16_scaled(canvas: &mut Canvas, cell: Rect, rows: &[u16; 16], color: 
     }
 }
 
-fn top_bar_rect(screen_w: u32, flush: bool) -> Rect {
-    if flush {
+fn top_bar_rect(screen_w: u32, presentation: PanelPresentation) -> Rect {
+    if presentation.integrated() {
         Rect::new(0, 0, screen_w, TOP_H)
     } else {
         Rect::new(
@@ -2714,6 +2793,19 @@ fn top_bar_rect(screen_w: u32, flush: bool) -> Rect {
 fn draw_panel(canvas: &mut Canvas, rect: Rect, fill: Color, border: Color, radius: u32) {
     canvas.fill_rounded_rect(rect, radius, fill);
     canvas.stroke_rounded_rect(rect, radius, 1, border);
+}
+
+fn draw_top_panel_container(
+    canvas: &mut Canvas,
+    theme: &Theme,
+    rect: Rect,
+    presentation: PanelPresentation,
+) {
+    let radius = if presentation.integrated() { 0 } else { RADIUS };
+    canvas.fill_rounded_rect(rect, radius, theme.panel);
+    if !presentation.integrated() {
+        canvas.stroke_rounded_rect(rect, radius, 1, theme.border);
+    }
 }
 
 fn draw_top_panel_item_bg(
@@ -3295,14 +3387,9 @@ fn draw_status_cluster(
 // ---------------------------------------------------------------------------
 
 fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut VortexShell) {
-    let bar = top_bar_rect(screen_w, shell.top_panel_flush);
-    draw_panel(
-        canvas,
-        bar,
-        theme.panel,
-        theme.border,
-        if shell.top_panel_flush { 0 } else { RADIUS },
-    );
+    let presentation = shell.top_panel_presentation;
+    let bar = top_bar_rect(screen_w, presentation);
+    draw_top_panel_container(canvas, theme, bar, presentation);
 
     let sym = shell.symbols;
     let notif_dnd_on = notification_dnd_enabled();
@@ -4431,8 +4518,8 @@ fn load_desktop_icons(paths: &DesktopPaths) -> Vec<DesktopIcon> {
     icons
 }
 
-fn desktop_area(screen_w: u32, screen_h: u32, top_panel_flush: bool) -> Rect {
-    let top = top_bar_rect(screen_w, top_panel_flush);
+fn desktop_area(screen_w: u32, screen_h: u32, presentation: PanelPresentation) -> Rect {
+    let top = top_bar_rect(screen_w, presentation);
     let x = TOP_PAD + 10;
     let y = top.bottom() + 14;
     let bottom = bot_y(screen_h) - 10;
@@ -5739,7 +5826,7 @@ impl VortexShell {
         let pw = NOTIF_CENTER_W.min(canvas.width.saturating_sub(24));
         let ph = canvas.height.saturating_sub(72).clamp(180, 520);
         let x = canvas.width as i32 - pw as i32 - 12;
-        let y = top_bar_rect(canvas.width, self.top_panel_flush).bottom() + 8;
+        let y = top_bar_rect(canvas.width, self.top_panel_presentation).bottom() + 8;
         let panel = Rect::new(x, y, pw, ph);
         canvas.fill_rounded_rect(panel, 10, theme.panel);
         canvas.stroke_rounded_rect(panel, 10, 1, theme.border);
@@ -6033,7 +6120,7 @@ impl App for VortexShell {
             canvas.draw_image_cover(wp);
         }
 
-        let desktop_rect = desktop_area(cw, ch, self.top_panel_flush);
+        let desktop_rect = desktop_area(cw, ch, self.top_panel_presentation);
         layout_desktop_icons(&mut self.desktop_icons, desktop_rect);
         draw_desktop_icons(
             canvas,
@@ -6306,7 +6393,7 @@ impl App for VortexShell {
                     let ph = self.screen_h.saturating_sub(72).clamp(180, 520);
                     let panel = Rect::new(
                         self.screen_w as i32 - pw as i32 - 12,
-                        top_bar_rect(self.screen_w, self.top_panel_flush).bottom() + 8,
+                        top_bar_rect(self.screen_w, self.top_panel_presentation).bottom() + 8,
                         pw,
                         ph,
                     );
@@ -6645,6 +6732,35 @@ impl App for VortexShell {
             }
             _ => false,
         }
+    }
+
+    fn event_poll_counters(&mut self, counters: EventPollCounters) -> bool {
+        let mut dirty = false;
+        if (1..=4).contains(&counters.active_workspace_id)
+            && self.current_workspace != counters.active_workspace_id
+        {
+            self.current_workspace = counters.active_workspace_id;
+            dirty = true;
+        }
+        let presentation = if counters.integrated_top_panel {
+            PanelPresentation::MaximizedIntegrated
+        } else {
+            PanelPresentation::Floating
+        };
+        if self.top_panel_presentation != presentation {
+            self.top_panel_presentation = presentation;
+            debug_log("[VORTEX] top_panel event mode=");
+            debug_log(if presentation.integrated() {
+                "maximized-integrated"
+            } else {
+                "floating"
+            });
+            debug_log(" workspace=");
+            debug_log_u32(self.current_workspace as u32);
+            debug_log("\n");
+            dirty = true;
+        }
+        dirty
     }
 }
 

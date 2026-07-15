@@ -8,9 +8,8 @@ use sunlight_ipc::{
 };
 use sunlight_libc as libc;
 use sunlight_ui::{
-    request_close,
-    widgets::TextInput,
-    App, Canvas, Event, Point, Rect, Theme, Window, WindowConfig, WindowDecoration,
+    request_close, widgets::TextInput, App, Canvas, Event, Point, Rect, Theme, Window,
+    WindowConfig, WindowDecoration,
 };
 
 // ── Layout constants ───────────────────────────────────────────────────────────
@@ -27,9 +26,8 @@ const COLS: usize = 6;
 const ROWS_VISIBLE: usize = 6;
 const CELL_RADIUS: u32 = 8;
 
-const GRID_X: i32 = (WIN_W as i32
-    - (COLS as i32 * (CELL_SIZE + CELL_GAP) as i32 - CELL_GAP as i32))
-    / 2;
+const GRID_X: i32 =
+    (WIN_W as i32 - (COLS as i32 * (CELL_SIZE + CELL_GAP) as i32 - CELL_GAP as i32)) / 2;
 
 // ── Clipboard wire format constants ────────────────────────────────────────────
 
@@ -56,275 +54,1082 @@ struct EmojiEntry {
 }
 
 const ALL_EMOJIS: &[EmojiEntry] = &[
-    EmojiEntry { emoji: "😀", shortcode: "grinning" },
-    EmojiEntry { emoji: "😃", shortcode: "big eyes" },
-    EmojiEntry { emoji: "😄", shortcode: "grin" },
-    EmojiEntry { emoji: "😁", shortcode: "beaming" },
-    EmojiEntry { emoji: "😆", shortcode: "laughing" },
-    EmojiEntry { emoji: "😂", shortcode: "tears of joy" },
-    EmojiEntry { emoji: "🤣", shortcode: "rolling" },
-    EmojiEntry { emoji: "😊", shortcode: "blushing" },
-    EmojiEntry { emoji: "😇", shortcode: "angel" },
-    EmojiEntry { emoji: "😍", shortcode: "heart eyes" },
-    EmojiEntry { emoji: "😘", shortcode: "kiss" },
-    EmojiEntry { emoji: "😜", shortcode: "winking tongue" },
-    EmojiEntry { emoji: "😎", shortcode: "cool" },
-    EmojiEntry { emoji: "🤩", shortcode: "star struck" },
-    EmojiEntry { emoji: "🥳", shortcode: "party" },
-    EmojiEntry { emoji: "😏", shortcode: "smirk" },
-    EmojiEntry { emoji: "😒", shortcode: "unamused" },
-    EmojiEntry { emoji: "😔", shortcode: "pensive" },
-    EmojiEntry { emoji: "😴", shortcode: "sleepy" },
-    EmojiEntry { emoji: "🤒", shortcode: "sick" },
-    EmojiEntry { emoji: "🤕", shortcode: "injured" },
-    EmojiEntry { emoji: "🥵", shortcode: "hot" },
-    EmojiEntry { emoji: "🥶", shortcode: "cold" },
-    EmojiEntry { emoji: "😱", shortcode: "screaming" },
-    EmojiEntry { emoji: "😢", shortcode: "crying" },
-    EmojiEntry { emoji: "😡", shortcode: "angry" },
-    EmojiEntry { emoji: "🤬", shortcode: "cursing" },
-    EmojiEntry { emoji: "💀", shortcode: "skull" },
-    EmojiEntry { emoji: "👻", shortcode: "ghost" },
-    EmojiEntry { emoji: "👽", shortcode: "alien" },
-    EmojiEntry { emoji: "🤖", shortcode: "robot" },
-    EmojiEntry { emoji: "🎃", shortcode: "pumpkin" },
-    EmojiEntry { emoji: "🤡", shortcode: "clown" },
-    EmojiEntry { emoji: "💩", shortcode: "poop" },
-    EmojiEntry { emoji: "👍", shortcode: "thumbs up" },
-    EmojiEntry { emoji: "👎", shortcode: "thumbs down" },
-    EmojiEntry { emoji: "👏", shortcode: "clap" },
-    EmojiEntry { emoji: "🙌", shortcode: "raised hands" },
-    EmojiEntry { emoji: "🤝", shortcode: "handshake" },
-    EmojiEntry { emoji: "✊", shortcode: "fist" },
-    EmojiEntry { emoji: "🤞", shortcode: "crossed fingers" },
-    EmojiEntry { emoji: "✌️", shortcode: "peace" },
-    EmojiEntry { emoji: "🤘", shortcode: "rock on" },
-    EmojiEntry { emoji: "👌", shortcode: "ok hand" },
-    EmojiEntry { emoji: "👉", shortcode: "point right" },
-    EmojiEntry { emoji: "👈", shortcode: "point left" },
-    EmojiEntry { emoji: "👇", shortcode: "point down" },
-    EmojiEntry { emoji: "👆", shortcode: "point up" },
-    EmojiEntry { emoji: "🤙", shortcode: "call me" },
-    EmojiEntry { emoji: "💪", shortcode: "muscle" },
-    EmojiEntry { emoji: "🖖", shortcode: "vulcan" },
-    EmojiEntry { emoji: "✋", shortcode: "raised hand" },
-    EmojiEntry { emoji: "🙏", shortcode: "pray" },
-    EmojiEntry { emoji: "🐱", shortcode: "cat" },
-    EmojiEntry { emoji: "🐶", shortcode: "dog" },
-    EmojiEntry { emoji: "🐰", shortcode: "rabbit" },
-    EmojiEntry { emoji: "🦊", shortcode: "fox" },
-    EmojiEntry { emoji: "🐻", shortcode: "bear" },
-    EmojiEntry { emoji: "🐼", shortcode: "panda" },
-    EmojiEntry { emoji: "🐯", shortcode: "tiger" },
-    EmojiEntry { emoji: "🦁", shortcode: "lion" },
-    EmojiEntry { emoji: "🐮", shortcode: "cow" },
-    EmojiEntry { emoji: "🐷", shortcode: "pig" },
-    EmojiEntry { emoji: "🐸", shortcode: "frog" },
-    EmojiEntry { emoji: "🐵", shortcode: "monkey" },
-    EmojiEntry { emoji: "🐔", shortcode: "chicken" },
-    EmojiEntry { emoji: "🐧", shortcode: "penguin" },
-    EmojiEntry { emoji: "🦅", shortcode: "eagle" },
-    EmojiEntry { emoji: "🦉", shortcode: "owl" },
-    EmojiEntry { emoji: "🐝", shortcode: "bee" },
-    EmojiEntry { emoji: "🦋", shortcode: "butterfly" },
-    EmojiEntry { emoji: "🐢", shortcode: "turtle" },
-    EmojiEntry { emoji: "🐍", shortcode: "snake" },
-    EmojiEntry { emoji: "🦎", shortcode: "lizard" },
-    EmojiEntry { emoji: "🦖", shortcode: "t-rex" },
-    EmojiEntry { emoji: "🐙", shortcode: "octopus" },
-    EmojiEntry { emoji: "🦀", shortcode: "crab" },
-    EmojiEntry { emoji: "🐠", shortcode: "fish" },
-    EmojiEntry { emoji: "🐬", shortcode: "dolphin" },
-    EmojiEntry { emoji: "🐳", shortcode: "whale" },
-    EmojiEntry { emoji: "🦈", shortcode: "shark" },
-    EmojiEntry { emoji: "🐊", shortcode: "crocodile" },
-    EmojiEntry { emoji: "🐆", shortcode: "leopard" },
-    EmojiEntry { emoji: "🦓", shortcode: "zebra" },
-    EmojiEntry { emoji: "🐘", shortcode: "elephant" },
-    EmojiEntry { emoji: "🦒", shortcode: "giraffe" },
-    EmojiEntry { emoji: "🐎", shortcode: "horse" },
-    EmojiEntry { emoji: "🦄", shortcode: "unicorn" },
-    EmojiEntry { emoji: "🐑", shortcode: "sheep" },
-    EmojiEntry { emoji: "🐐", shortcode: "goat" },
-    EmojiEntry { emoji: "🦜", shortcode: "parrot" },
-    EmojiEntry { emoji: "🐇", shortcode: "bunny" },
-    EmojiEntry { emoji: "🦥", shortcode: "sloth" },
-    EmojiEntry { emoji: "🐾", shortcode: "paws" },
-    EmojiEntry { emoji: "🐉", shortcode: "dragon" },
-    EmojiEntry { emoji: "🌵", shortcode: "cactus" },
-    EmojiEntry { emoji: "🌲", shortcode: "evergreen" },
-    EmojiEntry { emoji: "🌴", shortcode: "palm tree" },
-    EmojiEntry { emoji: "🍀", shortcode: "four leaf clover" },
-    EmojiEntry { emoji: "🌻", shortcode: "sunflower" },
-    EmojiEntry { emoji: "🌹", shortcode: "rose" },
-    EmojiEntry { emoji: "🌸", shortcode: "cherry blossom" },
-    EmojiEntry { emoji: "🌺", shortcode: "hibiscus" },
-    EmojiEntry { emoji: "🍄", shortcode: "mushroom" },
-    EmojiEntry { emoji: "🌎", shortcode: "earth" },
-    EmojiEntry { emoji: "🌙", shortcode: "moon" },
-    EmojiEntry { emoji: "⭐", shortcode: "star" },
-    EmojiEntry { emoji: "✨", shortcode: "sparkles" },
-    EmojiEntry { emoji: "⚡", shortcode: "lightning" },
-    EmojiEntry { emoji: "🔥", shortcode: "fire" },
-    EmojiEntry { emoji: "🌈", shortcode: "rainbow" },
-    EmojiEntry { emoji: "☀️", shortcode: "sun" },
-    EmojiEntry { emoji: "☁️", shortcode: "cloud" },
-    EmojiEntry { emoji: "❄️", shortcode: "snowflake" },
-    EmojiEntry { emoji: "⛄", shortcode: "snowman" },
-    EmojiEntry { emoji: "💧", shortcode: "droplet" },
-    EmojiEntry { emoji: "🌊", shortcode: "wave" },
-    EmojiEntry { emoji: "🍎", shortcode: "apple" },
-    EmojiEntry { emoji: "🍌", shortcode: "banana" },
-    EmojiEntry { emoji: "🍇", shortcode: "grape" },
-    EmojiEntry { emoji: "🍓", shortcode: "strawberry" },
-    EmojiEntry { emoji: "🍒", shortcode: "cherry" },
-    EmojiEntry { emoji: "🍑", shortcode: "peach" },
-    EmojiEntry { emoji: "🍋", shortcode: "lemon" },
-    EmojiEntry { emoji: "🍉", shortcode: "watermelon" },
-    EmojiEntry { emoji: "🥑", shortcode: "avocado" },
-    EmojiEntry { emoji: "🧀", shortcode: "cheese" },
-    EmojiEntry { emoji: "🍕", shortcode: "pizza" },
-    EmojiEntry { emoji: "🍔", shortcode: "hamburger" },
-    EmojiEntry { emoji: "🌮", shortcode: "taco" },
-    EmojiEntry { emoji: "🌯", shortcode: "burrito" },
-    EmojiEntry { emoji: "🍣", shortcode: "sushi" },
-    EmojiEntry { emoji: "🍜", shortcode: "ramen" },
-    EmojiEntry { emoji: "🎂", shortcode: "cake" },
-    EmojiEntry { emoji: "🍩", shortcode: "doughnut" },
-    EmojiEntry { emoji: "🍪", shortcode: "cookie" },
-    EmojiEntry { emoji: "🍦", shortcode: "ice cream" },
-    EmojiEntry { emoji: "🍺", shortcode: "beer" },
-    EmojiEntry { emoji: "🍷", shortcode: "wine" },
-    EmojiEntry { emoji: "🍸", shortcode: "cocktail" },
-    EmojiEntry { emoji: "☕", shortcode: "coffee" },
-    EmojiEntry { emoji: "🍵", shortcode: "tea" },
-    EmojiEntry { emoji: "⚽", shortcode: "soccer" },
-    EmojiEntry { emoji: "🏀", shortcode: "basketball" },
-    EmojiEntry { emoji: "🏈", shortcode: "football" },
-    EmojiEntry { emoji: "⚾", shortcode: "baseball" },
-    EmojiEntry { emoji: "🎾", shortcode: "tennis" },
-    EmojiEntry { emoji: "🎱", shortcode: "pool" },
-    EmojiEntry { emoji: "⛳", shortcode: "golf" },
-    EmojiEntry { emoji: "🎣", shortcode: "fishing" },
-    EmojiEntry { emoji: "🥊", shortcode: "boxing" },
-    EmojiEntry { emoji: "🎮", shortcode: "game" },
-    EmojiEntry { emoji: "🎲", shortcode: "dice" },
-    EmojiEntry { emoji: "🎵", shortcode: "music" },
-    EmojiEntry { emoji: "🎤", shortcode: "microphone" },
-    EmojiEntry { emoji: "🎸", shortcode: "guitar" },
-    EmojiEntry { emoji: "🎹", shortcode: "piano" },
-    EmojiEntry { emoji: "🎺", shortcode: "trumpet" },
-    EmojiEntry { emoji: "🥁", shortcode: "drum" },
-    EmojiEntry { emoji: "🎨", shortcode: "paint" },
-    EmojiEntry { emoji: "🧩", shortcode: "puzzle" },
-    EmojiEntry { emoji: "🎯", shortcode: "bullseye" },
-    EmojiEntry { emoji: "🚗", shortcode: "car" },
-    EmojiEntry { emoji: "🚌", shortcode: "bus" },
-    EmojiEntry { emoji: "🚲", shortcode: "bicycle" },
-    EmojiEntry { emoji: "✈️", shortcode: "airplane" },
-    EmojiEntry { emoji: "🚀", shortcode: "rocket" },
-    EmojiEntry { emoji: "🛸", shortcode: "ufo" },
-    EmojiEntry { emoji: "🚁", shortcode: "helicopter" },
-    EmojiEntry { emoji: "⛵", shortcode: "sailboat" },
-    EmojiEntry { emoji: "🚢", shortcode: "ship" },
-    EmojiEntry { emoji: "🚂", shortcode: "train" },
-    EmojiEntry { emoji: "🏠", shortcode: "house" },
-    EmojiEntry { emoji: "🏢", shortcode: "office" },
-    EmojiEntry { emoji: "🏥", shortcode: "hospital" },
-    EmojiEntry { emoji: "🏫", shortcode: "school" },
-    EmojiEntry { emoji: "🏰", shortcode: "castle" },
-    EmojiEntry { emoji: "🗼", shortcode: "tokyo tower" },
-    EmojiEntry { emoji: "🗽", shortcode: "liberty" },
-    EmojiEntry { emoji: "⛪", shortcode: "church" },
-    EmojiEntry { emoji: "🕌", shortcode: "mosque" },
-    EmojiEntry { emoji: "🏖️", shortcode: "beach" },
-    EmojiEntry { emoji: "🌋", shortcode: "volcano" },
-    EmojiEntry { emoji: "📱", shortcode: "phone" },
-    EmojiEntry { emoji: "💻", shortcode: "laptop" },
-    EmojiEntry { emoji: "🖥️", shortcode: "desktop" },
-    EmojiEntry { emoji: "⌨️", shortcode: "keyboard" },
-    EmojiEntry { emoji: "🖱️", shortcode: "mouse" },
-    EmojiEntry { emoji: "💾", shortcode: "floppy" },
-    EmojiEntry { emoji: "💿", shortcode: "cd" },
-    EmojiEntry { emoji: "📷", shortcode: "camera" },
-    EmojiEntry { emoji: "🎥", shortcode: "film" },
-    EmojiEntry { emoji: "📺", shortcode: "tv" },
-    EmojiEntry { emoji: "📻", shortcode: "radio" },
-    EmojiEntry { emoji: "⏰", shortcode: "alarm" },
-    EmojiEntry { emoji: "⌛", shortcode: "hourglass" },
-    EmojiEntry { emoji: "🔋", shortcode: "battery" },
-    EmojiEntry { emoji: "💡", shortcode: "light bulb" },
-    EmojiEntry { emoji: "🔦", shortcode: "flashlight" },
-    EmojiEntry { emoji: "💸", shortcode: "money" },
-    EmojiEntry { emoji: "💰", shortcode: "money bag" },
-    EmojiEntry { emoji: "💳", shortcode: "credit card" },
-    EmojiEntry { emoji: "💎", shortcode: "gem" },
-    EmojiEntry { emoji: "🔧", shortcode: "wrench" },
-    EmojiEntry { emoji: "🔨", shortcode: "hammer" },
-    EmojiEntry { emoji: "🧲", shortcode: "magnet" },
-    EmojiEntry { emoji: "🔫", shortcode: "water pistol" },
-    EmojiEntry { emoji: "💣", shortcode: "bomb" },
-    EmojiEntry { emoji: "🔪", shortcode: "kitchen knife" },
-    EmojiEntry { emoji: "🗡️", shortcode: "dagger" },
-    EmojiEntry { emoji: "🛡️", shortcode: "shield" },
-    EmojiEntry { emoji: "🔮", shortcode: "crystal ball" },
-    EmojiEntry { emoji: "🔭", shortcode: "telescope" },
-    EmojiEntry { emoji: "🔬", shortcode: "microscope" },
-    EmojiEntry { emoji: "💊", shortcode: "pill" },
-    EmojiEntry { emoji: "💉", shortcode: "syringe" },
-    EmojiEntry { emoji: "🧪", shortcode: "test tube" },
-    EmojiEntry { emoji: "🔑", shortcode: "key" },
-    EmojiEntry { emoji: "🔒", shortcode: "locked" },
-    EmojiEntry { emoji: "🔓", shortcode: "unlocked" },
-    EmojiEntry { emoji: "🛒", shortcode: "shopping cart" },
-    EmojiEntry { emoji: "🎁", shortcode: "gift" },
-    EmojiEntry { emoji: "🎈", shortcode: "balloon" },
-    EmojiEntry { emoji: "🎉", shortcode: "party popper" },
-    EmojiEntry { emoji: "📚", shortcode: "books" },
-    EmojiEntry { emoji: "📌", shortcode: "pushpin" },
-    EmojiEntry { emoji: "✂️", shortcode: "scissors" },
-    EmojiEntry { emoji: "✏️", shortcode: "pencil" },
-    EmojiEntry { emoji: "❤️", shortcode: "red heart" },
-    EmojiEntry { emoji: "🧡", shortcode: "orange heart" },
-    EmojiEntry { emoji: "💛", shortcode: "yellow heart" },
-    EmojiEntry { emoji: "💚", shortcode: "green heart" },
-    EmojiEntry { emoji: "💙", shortcode: "blue heart" },
-    EmojiEntry { emoji: "💜", shortcode: "purple heart" },
-    EmojiEntry { emoji: "🖤", shortcode: "black heart" },
-    EmojiEntry { emoji: "🤍", shortcode: "white heart" },
-    EmojiEntry { emoji: "💔", shortcode: "broken heart" },
-    EmojiEntry { emoji: "💯", shortcode: "hundred" },
-    EmojiEntry { emoji: "💥", shortcode: "boom" },
-    EmojiEntry { emoji: "💬", shortcode: "speech" },
-    EmojiEntry { emoji: "💤", shortcode: "sleep" },
-    EmojiEntry { emoji: "⚠️", shortcode: "warning" },
-    EmojiEntry { emoji: "🚫", shortcode: "prohibited" },
-    EmojiEntry { emoji: "✅", shortcode: "check" },
-    EmojiEntry { emoji: "❌", shortcode: "cross" },
-    EmojiEntry { emoji: "❓", shortcode: "question" },
-    EmojiEntry { emoji: "❗", shortcode: "exclamation" },
-    EmojiEntry { emoji: "♻️", shortcode: "recycle" },
-    EmojiEntry { emoji: "🔴", shortcode: "red circle" },
-    EmojiEntry { emoji: "🟠", shortcode: "orange circle" },
-    EmojiEntry { emoji: "🟡", shortcode: "yellow circle" },
-    EmojiEntry { emoji: "🟢", shortcode: "green circle" },
-    EmojiEntry { emoji: "🔵", shortcode: "blue circle" },
-    EmojiEntry { emoji: "🟣", shortcode: "purple circle" },
-    EmojiEntry { emoji: "⚫", shortcode: "black circle" },
-    EmojiEntry { emoji: "⚪", shortcode: "white circle" },
-    EmojiEntry { emoji: "⬛", shortcode: "black square" },
-    EmojiEntry { emoji: "⬜", shortcode: "white square" },
-    EmojiEntry { emoji: "▶️", shortcode: "play" },
-    EmojiEntry { emoji: "⏸️", shortcode: "pause" },
-    EmojiEntry { emoji: "⏹️", shortcode: "stop" },
-    EmojiEntry { emoji: "➡️", shortcode: "right arrow" },
-    EmojiEntry { emoji: "⬅️", shortcode: "left arrow" },
-    EmojiEntry { emoji: "⬆️", shortcode: "up arrow" },
-    EmojiEntry { emoji: "⬇️", shortcode: "down arrow" },
-    EmojiEntry { emoji: "🔄", shortcode: "refresh" },
-    EmojiEntry { emoji: "📎", shortcode: "paperclip" },
-    EmojiEntry { emoji: "🏁", shortcode: "checkered flag" },
-    EmojiEntry { emoji: "🚩", shortcode: "red flag" },
+    EmojiEntry {
+        emoji: "😀",
+        shortcode: "grinning",
+    },
+    EmojiEntry {
+        emoji: "😃",
+        shortcode: "big eyes",
+    },
+    EmojiEntry {
+        emoji: "😄",
+        shortcode: "grin",
+    },
+    EmojiEntry {
+        emoji: "😁",
+        shortcode: "beaming",
+    },
+    EmojiEntry {
+        emoji: "😆",
+        shortcode: "laughing",
+    },
+    EmojiEntry {
+        emoji: "😂",
+        shortcode: "tears of joy",
+    },
+    EmojiEntry {
+        emoji: "🤣",
+        shortcode: "rolling",
+    },
+    EmojiEntry {
+        emoji: "😊",
+        shortcode: "blushing",
+    },
+    EmojiEntry {
+        emoji: "😇",
+        shortcode: "angel",
+    },
+    EmojiEntry {
+        emoji: "😍",
+        shortcode: "heart eyes",
+    },
+    EmojiEntry {
+        emoji: "😘",
+        shortcode: "kiss",
+    },
+    EmojiEntry {
+        emoji: "😜",
+        shortcode: "winking tongue",
+    },
+    EmojiEntry {
+        emoji: "😎",
+        shortcode: "cool",
+    },
+    EmojiEntry {
+        emoji: "🤩",
+        shortcode: "star struck",
+    },
+    EmojiEntry {
+        emoji: "🥳",
+        shortcode: "party",
+    },
+    EmojiEntry {
+        emoji: "😏",
+        shortcode: "smirk",
+    },
+    EmojiEntry {
+        emoji: "😒",
+        shortcode: "unamused",
+    },
+    EmojiEntry {
+        emoji: "😔",
+        shortcode: "pensive",
+    },
+    EmojiEntry {
+        emoji: "😴",
+        shortcode: "sleepy",
+    },
+    EmojiEntry {
+        emoji: "🤒",
+        shortcode: "sick",
+    },
+    EmojiEntry {
+        emoji: "🤕",
+        shortcode: "injured",
+    },
+    EmojiEntry {
+        emoji: "🥵",
+        shortcode: "hot",
+    },
+    EmojiEntry {
+        emoji: "🥶",
+        shortcode: "cold",
+    },
+    EmojiEntry {
+        emoji: "😱",
+        shortcode: "screaming",
+    },
+    EmojiEntry {
+        emoji: "😢",
+        shortcode: "crying",
+    },
+    EmojiEntry {
+        emoji: "😡",
+        shortcode: "angry",
+    },
+    EmojiEntry {
+        emoji: "🤬",
+        shortcode: "cursing",
+    },
+    EmojiEntry {
+        emoji: "💀",
+        shortcode: "skull",
+    },
+    EmojiEntry {
+        emoji: "👻",
+        shortcode: "ghost",
+    },
+    EmojiEntry {
+        emoji: "👽",
+        shortcode: "alien",
+    },
+    EmojiEntry {
+        emoji: "🤖",
+        shortcode: "robot",
+    },
+    EmojiEntry {
+        emoji: "🎃",
+        shortcode: "pumpkin",
+    },
+    EmojiEntry {
+        emoji: "🤡",
+        shortcode: "clown",
+    },
+    EmojiEntry {
+        emoji: "💩",
+        shortcode: "poop",
+    },
+    EmojiEntry {
+        emoji: "👍",
+        shortcode: "thumbs up",
+    },
+    EmojiEntry {
+        emoji: "👎",
+        shortcode: "thumbs down",
+    },
+    EmojiEntry {
+        emoji: "👏",
+        shortcode: "clap",
+    },
+    EmojiEntry {
+        emoji: "🙌",
+        shortcode: "raised hands",
+    },
+    EmojiEntry {
+        emoji: "🤝",
+        shortcode: "handshake",
+    },
+    EmojiEntry {
+        emoji: "✊",
+        shortcode: "fist",
+    },
+    EmojiEntry {
+        emoji: "🤞",
+        shortcode: "crossed fingers",
+    },
+    EmojiEntry {
+        emoji: "✌️",
+        shortcode: "peace",
+    },
+    EmojiEntry {
+        emoji: "🤘",
+        shortcode: "rock on",
+    },
+    EmojiEntry {
+        emoji: "👌",
+        shortcode: "ok hand",
+    },
+    EmojiEntry {
+        emoji: "👉",
+        shortcode: "point right",
+    },
+    EmojiEntry {
+        emoji: "👈",
+        shortcode: "point left",
+    },
+    EmojiEntry {
+        emoji: "👇",
+        shortcode: "point down",
+    },
+    EmojiEntry {
+        emoji: "👆",
+        shortcode: "point up",
+    },
+    EmojiEntry {
+        emoji: "🤙",
+        shortcode: "call me",
+    },
+    EmojiEntry {
+        emoji: "💪",
+        shortcode: "muscle",
+    },
+    EmojiEntry {
+        emoji: "🖖",
+        shortcode: "vulcan",
+    },
+    EmojiEntry {
+        emoji: "✋",
+        shortcode: "raised hand",
+    },
+    EmojiEntry {
+        emoji: "🙏",
+        shortcode: "pray",
+    },
+    EmojiEntry {
+        emoji: "🐱",
+        shortcode: "cat",
+    },
+    EmojiEntry {
+        emoji: "🐶",
+        shortcode: "dog",
+    },
+    EmojiEntry {
+        emoji: "🐰",
+        shortcode: "rabbit",
+    },
+    EmojiEntry {
+        emoji: "🦊",
+        shortcode: "fox",
+    },
+    EmojiEntry {
+        emoji: "🐻",
+        shortcode: "bear",
+    },
+    EmojiEntry {
+        emoji: "🐼",
+        shortcode: "panda",
+    },
+    EmojiEntry {
+        emoji: "🐯",
+        shortcode: "tiger",
+    },
+    EmojiEntry {
+        emoji: "🦁",
+        shortcode: "lion",
+    },
+    EmojiEntry {
+        emoji: "🐮",
+        shortcode: "cow",
+    },
+    EmojiEntry {
+        emoji: "🐷",
+        shortcode: "pig",
+    },
+    EmojiEntry {
+        emoji: "🐸",
+        shortcode: "frog",
+    },
+    EmojiEntry {
+        emoji: "🐵",
+        shortcode: "monkey",
+    },
+    EmojiEntry {
+        emoji: "🐔",
+        shortcode: "chicken",
+    },
+    EmojiEntry {
+        emoji: "🐧",
+        shortcode: "penguin",
+    },
+    EmojiEntry {
+        emoji: "🦅",
+        shortcode: "eagle",
+    },
+    EmojiEntry {
+        emoji: "🦉",
+        shortcode: "owl",
+    },
+    EmojiEntry {
+        emoji: "🐝",
+        shortcode: "bee",
+    },
+    EmojiEntry {
+        emoji: "🦋",
+        shortcode: "butterfly",
+    },
+    EmojiEntry {
+        emoji: "🐢",
+        shortcode: "turtle",
+    },
+    EmojiEntry {
+        emoji: "🐍",
+        shortcode: "snake",
+    },
+    EmojiEntry {
+        emoji: "🦎",
+        shortcode: "lizard",
+    },
+    EmojiEntry {
+        emoji: "🦖",
+        shortcode: "t-rex",
+    },
+    EmojiEntry {
+        emoji: "🐙",
+        shortcode: "octopus",
+    },
+    EmojiEntry {
+        emoji: "🦀",
+        shortcode: "crab",
+    },
+    EmojiEntry {
+        emoji: "🐠",
+        shortcode: "fish",
+    },
+    EmojiEntry {
+        emoji: "🐬",
+        shortcode: "dolphin",
+    },
+    EmojiEntry {
+        emoji: "🐳",
+        shortcode: "whale",
+    },
+    EmojiEntry {
+        emoji: "🦈",
+        shortcode: "shark",
+    },
+    EmojiEntry {
+        emoji: "🐊",
+        shortcode: "crocodile",
+    },
+    EmojiEntry {
+        emoji: "🐆",
+        shortcode: "leopard",
+    },
+    EmojiEntry {
+        emoji: "🦓",
+        shortcode: "zebra",
+    },
+    EmojiEntry {
+        emoji: "🐘",
+        shortcode: "elephant",
+    },
+    EmojiEntry {
+        emoji: "🦒",
+        shortcode: "giraffe",
+    },
+    EmojiEntry {
+        emoji: "🐎",
+        shortcode: "horse",
+    },
+    EmojiEntry {
+        emoji: "🦄",
+        shortcode: "unicorn",
+    },
+    EmojiEntry {
+        emoji: "🐑",
+        shortcode: "sheep",
+    },
+    EmojiEntry {
+        emoji: "🐐",
+        shortcode: "goat",
+    },
+    EmojiEntry {
+        emoji: "🦜",
+        shortcode: "parrot",
+    },
+    EmojiEntry {
+        emoji: "🐇",
+        shortcode: "bunny",
+    },
+    EmojiEntry {
+        emoji: "🦥",
+        shortcode: "sloth",
+    },
+    EmojiEntry {
+        emoji: "🐾",
+        shortcode: "paws",
+    },
+    EmojiEntry {
+        emoji: "🐉",
+        shortcode: "dragon",
+    },
+    EmojiEntry {
+        emoji: "🌵",
+        shortcode: "cactus",
+    },
+    EmojiEntry {
+        emoji: "🌲",
+        shortcode: "evergreen",
+    },
+    EmojiEntry {
+        emoji: "🌴",
+        shortcode: "palm tree",
+    },
+    EmojiEntry {
+        emoji: "🍀",
+        shortcode: "four leaf clover",
+    },
+    EmojiEntry {
+        emoji: "🌻",
+        shortcode: "sunflower",
+    },
+    EmojiEntry {
+        emoji: "🌹",
+        shortcode: "rose",
+    },
+    EmojiEntry {
+        emoji: "🌸",
+        shortcode: "cherry blossom",
+    },
+    EmojiEntry {
+        emoji: "🌺",
+        shortcode: "hibiscus",
+    },
+    EmojiEntry {
+        emoji: "🍄",
+        shortcode: "mushroom",
+    },
+    EmojiEntry {
+        emoji: "🌎",
+        shortcode: "earth",
+    },
+    EmojiEntry {
+        emoji: "🌙",
+        shortcode: "moon",
+    },
+    EmojiEntry {
+        emoji: "⭐",
+        shortcode: "star",
+    },
+    EmojiEntry {
+        emoji: "✨",
+        shortcode: "sparkles",
+    },
+    EmojiEntry {
+        emoji: "⚡",
+        shortcode: "lightning",
+    },
+    EmojiEntry {
+        emoji: "🔥",
+        shortcode: "fire",
+    },
+    EmojiEntry {
+        emoji: "🌈",
+        shortcode: "rainbow",
+    },
+    EmojiEntry {
+        emoji: "☀️",
+        shortcode: "sun",
+    },
+    EmojiEntry {
+        emoji: "☁️",
+        shortcode: "cloud",
+    },
+    EmojiEntry {
+        emoji: "❄️",
+        shortcode: "snowflake",
+    },
+    EmojiEntry {
+        emoji: "⛄",
+        shortcode: "snowman",
+    },
+    EmojiEntry {
+        emoji: "💧",
+        shortcode: "droplet",
+    },
+    EmojiEntry {
+        emoji: "🌊",
+        shortcode: "wave",
+    },
+    EmojiEntry {
+        emoji: "🍎",
+        shortcode: "apple",
+    },
+    EmojiEntry {
+        emoji: "🍌",
+        shortcode: "banana",
+    },
+    EmojiEntry {
+        emoji: "🍇",
+        shortcode: "grape",
+    },
+    EmojiEntry {
+        emoji: "🍓",
+        shortcode: "strawberry",
+    },
+    EmojiEntry {
+        emoji: "🍒",
+        shortcode: "cherry",
+    },
+    EmojiEntry {
+        emoji: "🍑",
+        shortcode: "peach",
+    },
+    EmojiEntry {
+        emoji: "🍋",
+        shortcode: "lemon",
+    },
+    EmojiEntry {
+        emoji: "🍉",
+        shortcode: "watermelon",
+    },
+    EmojiEntry {
+        emoji: "🥑",
+        shortcode: "avocado",
+    },
+    EmojiEntry {
+        emoji: "🧀",
+        shortcode: "cheese",
+    },
+    EmojiEntry {
+        emoji: "🍕",
+        shortcode: "pizza",
+    },
+    EmojiEntry {
+        emoji: "🍔",
+        shortcode: "hamburger",
+    },
+    EmojiEntry {
+        emoji: "🌮",
+        shortcode: "taco",
+    },
+    EmojiEntry {
+        emoji: "🌯",
+        shortcode: "burrito",
+    },
+    EmojiEntry {
+        emoji: "🍣",
+        shortcode: "sushi",
+    },
+    EmojiEntry {
+        emoji: "🍜",
+        shortcode: "ramen",
+    },
+    EmojiEntry {
+        emoji: "🎂",
+        shortcode: "cake",
+    },
+    EmojiEntry {
+        emoji: "🍩",
+        shortcode: "doughnut",
+    },
+    EmojiEntry {
+        emoji: "🍪",
+        shortcode: "cookie",
+    },
+    EmojiEntry {
+        emoji: "🍦",
+        shortcode: "ice cream",
+    },
+    EmojiEntry {
+        emoji: "🍺",
+        shortcode: "beer",
+    },
+    EmojiEntry {
+        emoji: "🍷",
+        shortcode: "wine",
+    },
+    EmojiEntry {
+        emoji: "🍸",
+        shortcode: "cocktail",
+    },
+    EmojiEntry {
+        emoji: "☕",
+        shortcode: "coffee",
+    },
+    EmojiEntry {
+        emoji: "🍵",
+        shortcode: "tea",
+    },
+    EmojiEntry {
+        emoji: "⚽",
+        shortcode: "soccer",
+    },
+    EmojiEntry {
+        emoji: "🏀",
+        shortcode: "basketball",
+    },
+    EmojiEntry {
+        emoji: "🏈",
+        shortcode: "football",
+    },
+    EmojiEntry {
+        emoji: "⚾",
+        shortcode: "baseball",
+    },
+    EmojiEntry {
+        emoji: "🎾",
+        shortcode: "tennis",
+    },
+    EmojiEntry {
+        emoji: "🎱",
+        shortcode: "pool",
+    },
+    EmojiEntry {
+        emoji: "⛳",
+        shortcode: "golf",
+    },
+    EmojiEntry {
+        emoji: "🎣",
+        shortcode: "fishing",
+    },
+    EmojiEntry {
+        emoji: "🥊",
+        shortcode: "boxing",
+    },
+    EmojiEntry {
+        emoji: "🎮",
+        shortcode: "game",
+    },
+    EmojiEntry {
+        emoji: "🎲",
+        shortcode: "dice",
+    },
+    EmojiEntry {
+        emoji: "🎵",
+        shortcode: "music",
+    },
+    EmojiEntry {
+        emoji: "🎤",
+        shortcode: "microphone",
+    },
+    EmojiEntry {
+        emoji: "🎸",
+        shortcode: "guitar",
+    },
+    EmojiEntry {
+        emoji: "🎹",
+        shortcode: "piano",
+    },
+    EmojiEntry {
+        emoji: "🎺",
+        shortcode: "trumpet",
+    },
+    EmojiEntry {
+        emoji: "🥁",
+        shortcode: "drum",
+    },
+    EmojiEntry {
+        emoji: "🎨",
+        shortcode: "paint",
+    },
+    EmojiEntry {
+        emoji: "🧩",
+        shortcode: "puzzle",
+    },
+    EmojiEntry {
+        emoji: "🎯",
+        shortcode: "bullseye",
+    },
+    EmojiEntry {
+        emoji: "🚗",
+        shortcode: "car",
+    },
+    EmojiEntry {
+        emoji: "🚌",
+        shortcode: "bus",
+    },
+    EmojiEntry {
+        emoji: "🚲",
+        shortcode: "bicycle",
+    },
+    EmojiEntry {
+        emoji: "✈️",
+        shortcode: "airplane",
+    },
+    EmojiEntry {
+        emoji: "🚀",
+        shortcode: "rocket",
+    },
+    EmojiEntry {
+        emoji: "🛸",
+        shortcode: "ufo",
+    },
+    EmojiEntry {
+        emoji: "🚁",
+        shortcode: "helicopter",
+    },
+    EmojiEntry {
+        emoji: "⛵",
+        shortcode: "sailboat",
+    },
+    EmojiEntry {
+        emoji: "🚢",
+        shortcode: "ship",
+    },
+    EmojiEntry {
+        emoji: "🚂",
+        shortcode: "train",
+    },
+    EmojiEntry {
+        emoji: "🏠",
+        shortcode: "house",
+    },
+    EmojiEntry {
+        emoji: "🏢",
+        shortcode: "office",
+    },
+    EmojiEntry {
+        emoji: "🏥",
+        shortcode: "hospital",
+    },
+    EmojiEntry {
+        emoji: "🏫",
+        shortcode: "school",
+    },
+    EmojiEntry {
+        emoji: "🏰",
+        shortcode: "castle",
+    },
+    EmojiEntry {
+        emoji: "🗼",
+        shortcode: "tokyo tower",
+    },
+    EmojiEntry {
+        emoji: "🗽",
+        shortcode: "liberty",
+    },
+    EmojiEntry {
+        emoji: "⛪",
+        shortcode: "church",
+    },
+    EmojiEntry {
+        emoji: "🕌",
+        shortcode: "mosque",
+    },
+    EmojiEntry {
+        emoji: "🏖️",
+        shortcode: "beach",
+    },
+    EmojiEntry {
+        emoji: "🌋",
+        shortcode: "volcano",
+    },
+    EmojiEntry {
+        emoji: "📱",
+        shortcode: "phone",
+    },
+    EmojiEntry {
+        emoji: "💻",
+        shortcode: "laptop",
+    },
+    EmojiEntry {
+        emoji: "🖥️",
+        shortcode: "desktop",
+    },
+    EmojiEntry {
+        emoji: "⌨️",
+        shortcode: "keyboard",
+    },
+    EmojiEntry {
+        emoji: "🖱️",
+        shortcode: "mouse",
+    },
+    EmojiEntry {
+        emoji: "💾",
+        shortcode: "floppy",
+    },
+    EmojiEntry {
+        emoji: "💿",
+        shortcode: "cd",
+    },
+    EmojiEntry {
+        emoji: "📷",
+        shortcode: "camera",
+    },
+    EmojiEntry {
+        emoji: "🎥",
+        shortcode: "film",
+    },
+    EmojiEntry {
+        emoji: "📺",
+        shortcode: "tv",
+    },
+    EmojiEntry {
+        emoji: "📻",
+        shortcode: "radio",
+    },
+    EmojiEntry {
+        emoji: "⏰",
+        shortcode: "alarm",
+    },
+    EmojiEntry {
+        emoji: "⌛",
+        shortcode: "hourglass",
+    },
+    EmojiEntry {
+        emoji: "🔋",
+        shortcode: "battery",
+    },
+    EmojiEntry {
+        emoji: "💡",
+        shortcode: "light bulb",
+    },
+    EmojiEntry {
+        emoji: "🔦",
+        shortcode: "flashlight",
+    },
+    EmojiEntry {
+        emoji: "💸",
+        shortcode: "money",
+    },
+    EmojiEntry {
+        emoji: "💰",
+        shortcode: "money bag",
+    },
+    EmojiEntry {
+        emoji: "💳",
+        shortcode: "credit card",
+    },
+    EmojiEntry {
+        emoji: "💎",
+        shortcode: "gem",
+    },
+    EmojiEntry {
+        emoji: "🔧",
+        shortcode: "wrench",
+    },
+    EmojiEntry {
+        emoji: "🔨",
+        shortcode: "hammer",
+    },
+    EmojiEntry {
+        emoji: "🧲",
+        shortcode: "magnet",
+    },
+    EmojiEntry {
+        emoji: "🔫",
+        shortcode: "water pistol",
+    },
+    EmojiEntry {
+        emoji: "💣",
+        shortcode: "bomb",
+    },
+    EmojiEntry {
+        emoji: "🔪",
+        shortcode: "kitchen knife",
+    },
+    EmojiEntry {
+        emoji: "🗡️",
+        shortcode: "dagger",
+    },
+    EmojiEntry {
+        emoji: "🛡️",
+        shortcode: "shield",
+    },
+    EmojiEntry {
+        emoji: "🔮",
+        shortcode: "crystal ball",
+    },
+    EmojiEntry {
+        emoji: "🔭",
+        shortcode: "telescope",
+    },
+    EmojiEntry {
+        emoji: "🔬",
+        shortcode: "microscope",
+    },
+    EmojiEntry {
+        emoji: "💊",
+        shortcode: "pill",
+    },
+    EmojiEntry {
+        emoji: "💉",
+        shortcode: "syringe",
+    },
+    EmojiEntry {
+        emoji: "🧪",
+        shortcode: "test tube",
+    },
+    EmojiEntry {
+        emoji: "🔑",
+        shortcode: "key",
+    },
+    EmojiEntry {
+        emoji: "🔒",
+        shortcode: "locked",
+    },
+    EmojiEntry {
+        emoji: "🔓",
+        shortcode: "unlocked",
+    },
+    EmojiEntry {
+        emoji: "🛒",
+        shortcode: "shopping cart",
+    },
+    EmojiEntry {
+        emoji: "🎁",
+        shortcode: "gift",
+    },
+    EmojiEntry {
+        emoji: "🎈",
+        shortcode: "balloon",
+    },
+    EmojiEntry {
+        emoji: "🎉",
+        shortcode: "party popper",
+    },
+    EmojiEntry {
+        emoji: "📚",
+        shortcode: "books",
+    },
+    EmojiEntry {
+        emoji: "📌",
+        shortcode: "pushpin",
+    },
+    EmojiEntry {
+        emoji: "✂️",
+        shortcode: "scissors",
+    },
+    EmojiEntry {
+        emoji: "✏️",
+        shortcode: "pencil",
+    },
+    EmojiEntry {
+        emoji: "❤️",
+        shortcode: "red heart",
+    },
+    EmojiEntry {
+        emoji: "🧡",
+        shortcode: "orange heart",
+    },
+    EmojiEntry {
+        emoji: "💛",
+        shortcode: "yellow heart",
+    },
+    EmojiEntry {
+        emoji: "💚",
+        shortcode: "green heart",
+    },
+    EmojiEntry {
+        emoji: "💙",
+        shortcode: "blue heart",
+    },
+    EmojiEntry {
+        emoji: "💜",
+        shortcode: "purple heart",
+    },
+    EmojiEntry {
+        emoji: "🖤",
+        shortcode: "black heart",
+    },
+    EmojiEntry {
+        emoji: "🤍",
+        shortcode: "white heart",
+    },
+    EmojiEntry {
+        emoji: "💔",
+        shortcode: "broken heart",
+    },
+    EmojiEntry {
+        emoji: "💯",
+        shortcode: "hundred",
+    },
+    EmojiEntry {
+        emoji: "💥",
+        shortcode: "boom",
+    },
+    EmojiEntry {
+        emoji: "💬",
+        shortcode: "speech",
+    },
+    EmojiEntry {
+        emoji: "💤",
+        shortcode: "sleep",
+    },
+    EmojiEntry {
+        emoji: "⚠️",
+        shortcode: "warning",
+    },
+    EmojiEntry {
+        emoji: "🚫",
+        shortcode: "prohibited",
+    },
+    EmojiEntry {
+        emoji: "✅",
+        shortcode: "check",
+    },
+    EmojiEntry {
+        emoji: "❌",
+        shortcode: "cross",
+    },
+    EmojiEntry {
+        emoji: "❓",
+        shortcode: "question",
+    },
+    EmojiEntry {
+        emoji: "❗",
+        shortcode: "exclamation",
+    },
+    EmojiEntry {
+        emoji: "♻️",
+        shortcode: "recycle",
+    },
+    EmojiEntry {
+        emoji: "🔴",
+        shortcode: "red circle",
+    },
+    EmojiEntry {
+        emoji: "🟠",
+        shortcode: "orange circle",
+    },
+    EmojiEntry {
+        emoji: "🟡",
+        shortcode: "yellow circle",
+    },
+    EmojiEntry {
+        emoji: "🟢",
+        shortcode: "green circle",
+    },
+    EmojiEntry {
+        emoji: "🔵",
+        shortcode: "blue circle",
+    },
+    EmojiEntry {
+        emoji: "🟣",
+        shortcode: "purple circle",
+    },
+    EmojiEntry {
+        emoji: "⚫",
+        shortcode: "black circle",
+    },
+    EmojiEntry {
+        emoji: "⚪",
+        shortcode: "white circle",
+    },
+    EmojiEntry {
+        emoji: "⬛",
+        shortcode: "black square",
+    },
+    EmojiEntry {
+        emoji: "⬜",
+        shortcode: "white square",
+    },
+    EmojiEntry {
+        emoji: "▶️",
+        shortcode: "play",
+    },
+    EmojiEntry {
+        emoji: "⏸️",
+        shortcode: "pause",
+    },
+    EmojiEntry {
+        emoji: "⏹️",
+        shortcode: "stop",
+    },
+    EmojiEntry {
+        emoji: "➡️",
+        shortcode: "right arrow",
+    },
+    EmojiEntry {
+        emoji: "⬅️",
+        shortcode: "left arrow",
+    },
+    EmojiEntry {
+        emoji: "⬆️",
+        shortcode: "up arrow",
+    },
+    EmojiEntry {
+        emoji: "⬇️",
+        shortcode: "down arrow",
+    },
+    EmojiEntry {
+        emoji: "🔄",
+        shortcode: "refresh",
+    },
+    EmojiEntry {
+        emoji: "📎",
+        shortcode: "paperclip",
+    },
+    EmojiEntry {
+        emoji: "🏁",
+        shortcode: "checkered flag",
+    },
+    EmojiEntry {
+        emoji: "🚩",
+        shortcode: "red flag",
+    },
 ];
 
 // ── Alloc stub ─────────────────────────────────────────────────────────────────
@@ -445,14 +1250,9 @@ struct EmojiPickerApp {
 impl EmojiPickerApp {
     fn new() -> Self {
         let mut app = Self {
-            search: TextInput::new(Rect::new(
-                PAD,
-                10,
-                WIN_W - (PAD as u32) * 2,
-                SEARCH_H,
-            ))
-            .with_font(&F_UI)
-            .with_placeholder("Search emoji..."),
+            search: TextInput::new(Rect::new(PAD, 10, WIN_W - (PAD as u32) * 2, SEARCH_H))
+                .with_font(&F_UI)
+                .with_placeholder("Search emoji..."),
             hovered_idx: None,
             scroll_offset: 0,
             filtered_indices: [0; 256],

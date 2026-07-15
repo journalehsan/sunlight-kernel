@@ -5,8 +5,7 @@ use sunlight_ipc::Vmxnet3InitStage;
 
 #[used]
 #[no_mangle]
-pub static SUNLIGHT_VMXNET3_BUILD_MARKER: [u8; 38] =
-    *b"SUNLIGHT_VMXNET3_BUILD_20260711-AUDIT\0";
+pub static SUNLIGHT_VMXNET3_BUILD_MARKER: [u8; 38] = *b"SUNLIGHT_VMXNET3_BUILD_20260711-AUDIT\0";
 
 #[no_mangle]
 pub extern "C" fn sunlight_vmxnet3_probe_marker() {}

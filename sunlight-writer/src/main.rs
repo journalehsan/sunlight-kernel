@@ -17,12 +17,12 @@ use sunlight_ipc::{
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
-    AppMenuCommand, AppMenuSecondaryItem, CanvasHitTarget, DocumentCanvas, DocumentCanvasItem,
-    DocumentCanvasMode, DocumentCanvasPresentation, DocumentRectStyle, DocumentStrokeStyle,
-    DocumentTextStyle, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar, RibbonButtonKind,
-    RibbonButtonSpec, RibbonGroupSpec, StatusBar, TextEditState, TextLineLayout,
-    TwoPaneAppMenu, find_line_index, layout_text_lines, caret_x_on_line, byte_at_x_on_line,
-    line_home_byte, line_end_byte, click_to_line_and_byte,
+    byte_at_x_on_line, caret_x_on_line, click_to_line_and_byte, find_line_index, layout_text_lines,
+    line_end_byte, line_home_byte, AppMenuCommand, AppMenuSecondaryItem, CanvasHitTarget,
+    DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode, DocumentCanvasPresentation,
+    DocumentRectStyle, DocumentStrokeStyle, DocumentTextStyle, HeaderActionButton, HeaderChip,
+    PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, StatusBar,
+    TextEditState, TextLineLayout, TwoPaneAppMenu,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, Color, CursorShape, Event, Point, Rect, Theme, Window,
@@ -1444,20 +1444,17 @@ impl WriterApp {
             Some(l) => l,
             None => return self.edit_state.caret_byte,
         };
-        let current_preferred_x = self
-            .edit_state
-            .preferred_caret_x
-            .unwrap_or_else(|| {
-                let cur_line = lines.get(self.caret_line_index());
-                cur_line.map_or(0, |l| {
-                    caret_x_on_line(
-                        self.editable_item_font(),
-                        self.edit_buffer.as_str(),
-                        l,
-                        self.edit_state.caret_byte,
-                    )
-                })
-            });
+        let current_preferred_x = self.edit_state.preferred_caret_x.unwrap_or_else(|| {
+            let cur_line = lines.get(self.caret_line_index());
+            cur_line.map_or(0, |l| {
+                caret_x_on_line(
+                    self.editable_item_font(),
+                    self.edit_buffer.as_str(),
+                    l,
+                    self.edit_state.caret_byte,
+                )
+            })
+        });
         byte_at_x_on_line(
             self.editable_item_font(),
             self.edit_buffer.as_str(),
@@ -1737,19 +1734,18 @@ impl App for WriterApp {
                                 let old_x = self.edit_state.preferred_caret_x;
                                 self.edit_state.caret_byte = new_caret;
                                 self.edit_state.selection_anchor_byte = None;
-                                self.edit_state.preferred_caret_x = old_x
-                                    .or_else(|| {
-                                        let lines = self.compute_edit_lines();
-                                        let cur = self.caret_line_index();
-                                        lines.get(cur).map(|l| {
-                                            caret_x_on_line(
-                                                self.editable_item_font(),
-                                                self.edit_buffer.as_str(),
-                                                l,
-                                                new_caret,
-                                            )
-                                        })
-                                    });
+                                self.edit_state.preferred_caret_x = old_x.or_else(|| {
+                                    let lines = self.compute_edit_lines();
+                                    let cur = self.caret_line_index();
+                                    lines.get(cur).map(|l| {
+                                        caret_x_on_line(
+                                            self.editable_item_font(),
+                                            self.edit_buffer.as_str(),
+                                            l,
+                                            new_caret,
+                                        )
+                                    })
+                                });
                                 return true;
                             }
                         }
@@ -1759,19 +1755,18 @@ impl App for WriterApp {
                                 let old_x = self.edit_state.preferred_caret_x;
                                 self.edit_state.caret_byte = new_caret;
                                 self.edit_state.selection_anchor_byte = None;
-                                self.edit_state.preferred_caret_x = old_x
-                                    .or_else(|| {
-                                        let lines = self.compute_edit_lines();
-                                        let cur = self.caret_line_index();
-                                        lines.get(cur).map(|l| {
-                                            caret_x_on_line(
-                                                self.editable_item_font(),
-                                                self.edit_buffer.as_str(),
-                                                l,
-                                                new_caret,
-                                            )
-                                        })
-                                    });
+                                self.edit_state.preferred_caret_x = old_x.or_else(|| {
+                                    let lines = self.compute_edit_lines();
+                                    let cur = self.caret_line_index();
+                                    lines.get(cur).map(|l| {
+                                        caret_x_on_line(
+                                            self.editable_item_font(),
+                                            self.edit_buffer.as_str(),
+                                            l,
+                                            new_caret,
+                                        )
+                                    })
+                                });
                                 return true;
                             }
                         }

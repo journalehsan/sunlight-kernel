@@ -1024,9 +1024,10 @@ impl App for ChronosApp {
         self.poll_timeout_at(monotonic_millis())
     }
 
-    fn event_poll_counters(&mut self, counters: EventPollCounters) {
+    fn event_poll_counters(&mut self, counters: EventPollCounters) -> bool {
         self.mouse_input_counters.event_route = counters;
         self.maybe_log_mouse_input(false);
+        false
     }
 }
 
