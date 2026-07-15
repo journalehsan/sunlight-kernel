@@ -617,15 +617,30 @@ const ICON_GAP: i32 = 4; // gap between icon buttons
                          // Top-right status cluster spacing. Kept as constants so the balance of the
                          // [lan][notif][logout] on the right; workspace indicator (semantic icons) on the
                          // left after the SunlightOS brand. All tunable in one place.
-const TOP_ICON_SIZE: u32 = 18; // status icon size in the top bar
-const TOP_ICON_GAP: i32 = 8; // gap between top-bar status icons (was 4 — too cramped)
-const TOP_RIGHT_PAD: i32 = 8; // right margin of the top-right cluster
-const TOP_WS_LEFT_GAP: i32 = 12; // gap between brand and workspace indicator
+const TOP_ICON_BTN: u32 = 24; // compact shell hit target for top-panel icon items
+const TOP_ICON_SIZE: u32 = 16; // icon size inside a top-panel button
+const TOP_ICON_GAP: i32 = 6; // gap between top-bar status icons
+const TOP_RIGHT_PAD: i32 = 6; // right margin of the top-right cluster
+const TOP_WS_LEFT_GAP: i32 = 14; // gap between brand and workspace indicator
 const WS_INDICATOR_COUNT: usize = 4; // workspaces 1..=4
-const WS_BTN_W: u32 = 18; // workspace indicator button width
-const WS_BTN_H: u32 = 18; // workspace indicator button height
-const WS_ICON_SIZE: u32 = 16; // glyph drawn inside a workspace button
-const WS_BTN_GAP: i32 = 4; // gap between workspace indicator buttons
+const WS_BTN_W: u32 = 22; // workspace indicator button width
+const WS_BTN_H: u32 = 22; // workspace indicator button height
+const WS_ICON_SIZE: u32 = 14; // glyph drawn inside a workspace button
+const WS_BTN_GAP: i32 = 6; // gap between workspace indicator buttons
+const TOP_BRAND_ICON_SIZE: u32 = 18;
+const TOP_BRAND_PAD_X: i32 = 8;
+const TOP_BRAND_GAP: i32 = 6;
+const TOP_ITEM_RADIUS: u32 = 6;
+const TOP_PANEL_ITEM_COUNT: usize = 1 + WS_INDICATOR_COUNT + 4;
+const TOP_ITEM_BRAND: usize = 0;
+const TOP_ITEM_WS_FIRST: usize = 1;
+const TOP_ITEM_DATETIME: usize = TOP_ITEM_WS_FIRST + WS_INDICATOR_COUNT;
+const TOP_ITEM_NETWORK: usize = TOP_ITEM_DATETIME + 1;
+const TOP_ITEM_NOTIFICATIONS: usize = TOP_ITEM_NETWORK + 1;
+const TOP_ITEM_LOGOUT: usize = TOP_ITEM_NOTIFICATIONS + 1;
+const KEY_TAB: u8 = 0x0F;
+const KEY_ENTER: u8 = 0x1C;
+const KEY_SPACE: u8 = 0x39;
 const RUNNING_ICON: u32 = 24; // icon size inside running-app cells
 const RUNNING_CELL_PAD: i32 = 6; // inner padding inside running-app cells
 const RUNNING_NAME_BUF: usize = 64;
@@ -1226,6 +1241,8 @@ struct VortexShell {
     next_status_poll_ms: u64,
     /// Bounds of the power button for future click handling.
     power_zone: Rect,
+    /// Bounds of the brand cell on the top-left.
+    brand_zone: Rect,
     /// Bounds of the settings button in the left cluster.
     settings_zone: Rect,
     /// Bounds of the dock's grid icon — toggles the Start Menu.
@@ -1267,6 +1284,15 @@ struct VortexShell {
     workspace_zone: Rect,
     /// Per-button click targets inside the workspace indicator.
     workspace_btn_zones: [Rect; WS_INDICATOR_COUNT],
+    /// Top-panel focus/hover zones in left-to-right traversal order.
+    top_panel_item_zones: [Rect; TOP_PANEL_ITEM_COUNT],
+    /// Hovered top-panel item, if any.
+    top_panel_hover: Option<usize>,
+    /// Keyboard-focused top-panel item, if any.
+    top_panel_focus: Option<usize>,
+    /// When a maximized/fullscreen app occupies the active workspace, the top
+    /// panel becomes flush with the display edge.
+    top_panel_flush: bool,
 
     // Popover / dialog / tooltip state (conservative, no overengineer)
     show_datetime_tooltip: bool,
@@ -1372,6 +1398,7 @@ impl VortexShell {
             status_net_up: false,
             next_status_poll_ms: 0,
             power_zone: Rect::new(0, 0, 0, 0),
+            brand_zone: Rect::new(0, 0, 0, 0),
             settings_zone: Rect::new(0, 0, 0, 0),
             launcher_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
@@ -1384,6 +1411,10 @@ impl VortexShell {
             current_workspace: 1,
             workspace_zone: Rect::new(0, 0, 0, 0),
             workspace_btn_zones: [Rect::new(0, 0, 0, 0); WS_INDICATOR_COUNT],
+            top_panel_item_zones: [Rect::new(0, 0, 0, 0); TOP_PANEL_ITEM_COUNT],
+            top_panel_hover: None,
+            top_panel_focus: None,
+            top_panel_flush: false,
             show_datetime_tooltip: false,
             show_calendar_popover: false,
             cal_popup_open_btn: Rect::new(0, 0, 0, 0),
@@ -1932,6 +1963,142 @@ impl VortexShell {
         debug_log(")\n");
     }
 
+    fn top_panel_item_at_point(&self, point: Point) -> Option<usize> {
+        let mut i = 0usize;
+        while i < self.top_panel_item_zones.len() {
+            if self.top_panel_item_zones[i].contains(point) {
+                return Some(i);
+            }
+            i += 1;
+        }
+        None
+    }
+
+    fn top_panel_focus_step(&mut self, reverse: bool) -> bool {
+        let next = match self.top_panel_focus {
+            Some(idx) if reverse => {
+                if idx == 0 {
+                    TOP_PANEL_ITEM_COUNT - 1
+                } else {
+                    idx - 1
+                }
+            }
+            Some(idx) => (idx + 1) % TOP_PANEL_ITEM_COUNT,
+            None if reverse => TOP_PANEL_ITEM_COUNT - 1,
+            None => 0,
+        };
+        let changed = self.top_panel_focus != Some(next);
+        self.top_panel_focus = Some(next);
+        self.show_datetime_tooltip = false;
+        changed
+    }
+
+    fn set_top_panel_focus(&mut self, item: Option<usize>) -> bool {
+        if self.top_panel_focus == item {
+            return false;
+        }
+        self.top_panel_focus = item;
+        if item != Some(TOP_ITEM_DATETIME) {
+            self.show_datetime_tooltip = false;
+        }
+        true
+    }
+
+    fn switch_workspace(&mut self, ws: u8) -> bool {
+        if !(1..=WS_INDICATOR_COUNT as u8).contains(&ws) {
+            return false;
+        }
+        self.current_workspace = ws;
+        let _ = ipc_call_timeout(
+            self.display_ep,
+            IpcMsg::with_label(SgpMsg::SET_WORKSPACE).word(0, ws as u64),
+            DISPLAY_IPC_TIMEOUT_MS,
+        );
+        true
+    }
+
+    fn toggle_start_menu_from_panel(&mut self) -> bool {
+        self.show_calendar_popover = false;
+        self.show_notif_panel = false;
+        self.show_logout_confirm = false;
+        self.show_datetime_tooltip = false;
+        if self.start_menu.is_open() {
+            self.start_menu.close();
+        } else {
+            self.start_menu.open_menu();
+        }
+        true
+    }
+
+    fn show_network_status_hint(&mut self) -> bool {
+        let (title, body) = if self.status_net_up {
+            ("Network", "Connected")
+        } else {
+            ("Network", "No active connection")
+        };
+        let _ = show_notification(NotificationKind::Info, title, body, 2200);
+        true
+    }
+
+    fn activate_top_panel_item(&mut self, item: usize, secondary: bool) -> bool {
+        self.top_panel_focus = Some(item);
+        match item {
+            TOP_ITEM_BRAND => self.toggle_start_menu_from_panel(),
+            idx if (TOP_ITEM_WS_FIRST..TOP_ITEM_WS_FIRST + WS_INDICATOR_COUNT).contains(&idx) => {
+                self.show_calendar_popover = false;
+                self.show_notif_panel = false;
+                self.show_logout_confirm = false;
+                self.switch_workspace((idx - TOP_ITEM_WS_FIRST + 1) as u8)
+            }
+            TOP_ITEM_DATETIME => {
+                self.show_datetime_tooltip = false;
+                self.show_notif_panel = false;
+                self.show_logout_confirm = false;
+                self.show_calendar_popover = !self.show_calendar_popover;
+                if self.show_calendar_popover {
+                    self.reset_calendar_view_to_today();
+                }
+                true
+            }
+            TOP_ITEM_NETWORK => self.show_network_status_hint(),
+            TOP_ITEM_NOTIFICATIONS => {
+                self.show_calendar_popover = false;
+                self.show_logout_confirm = false;
+                if secondary {
+                    let next = !notification_dnd_enabled();
+                    let _ = notification_set_dnd(next);
+                    true
+                } else {
+                    self.show_notif_panel = !self.show_notif_panel;
+                    true
+                }
+            }
+            TOP_ITEM_LOGOUT => {
+                self.show_calendar_popover = false;
+                self.show_notif_panel = false;
+                self.show_logout_confirm = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn detect_flush_top_panel(&self, windows: &[WindowSnapshot]) -> bool {
+        windows.iter().any(|window| {
+            if window.hidden
+                || window.rolled_up
+                || window.window_type == 2
+                || window.window_type == 3
+            {
+                return false;
+            }
+            if window.workspace_id != self.current_workspace as u64 {
+                return false;
+            }
+            matches!(window.state & 0x3, 2 | 3)
+        })
+    }
+
     fn refresh_window_snapshots(&mut self) -> Option<()> {
         self.window_snapshots.clear();
         let mut idx = 0u64;
@@ -1988,11 +2155,14 @@ impl VortexShell {
             return false;
         };
         let mut windows = core::mem::take(&mut self.window_snapshots);
+        let prev_top_panel_flush = self.top_panel_flush;
+        self.top_panel_flush = self.detect_flush_top_panel(&windows);
 
         // A workspace switch (via Super+1..4 in the compositor) changes no app
         // state, so it wouldn't otherwise mark dirty — but the indicator + taskbar
         // filter must redraw to reflect the new active workspace.
-        let mut dirty = self.current_workspace != prev_ws;
+        let mut dirty =
+            self.current_workspace != prev_ws || self.top_panel_flush != prev_top_panel_flush;
         for app in &mut self.apps {
             let prev_state = app.state;
             let prev_window = app.main_window_id;
@@ -2527,10 +2697,55 @@ fn draw_icon16_scaled(canvas: &mut Canvas, cell: Rect, rows: &[u16; 16], color: 
     }
 }
 
+fn top_bar_rect(screen_w: u32, flush: bool) -> Rect {
+    if flush {
+        Rect::new(0, 0, screen_w, TOP_H)
+    } else {
+        Rect::new(
+            TOP_PAD,
+            TOP_Y,
+            screen_w.saturating_sub((TOP_PAD * 2) as u32),
+            TOP_H,
+        )
+    }
+}
+
 /// Draw a panel pill: filled rounded rect with a 1-px border.
-fn draw_panel(canvas: &mut Canvas, rect: Rect, fill: Color, border: Color) {
-    canvas.fill_rounded_rect(rect, RADIUS, fill);
-    canvas.stroke_rounded_rect(rect, RADIUS, 1, border);
+fn draw_panel(canvas: &mut Canvas, rect: Rect, fill: Color, border: Color, radius: u32) {
+    canvas.fill_rounded_rect(rect, radius, fill);
+    canvas.stroke_rounded_rect(rect, radius, 1, border);
+}
+
+fn draw_top_panel_item_bg(
+    canvas: &mut Canvas,
+    rect: Rect,
+    theme: &Theme,
+    hovered: bool,
+    focused: bool,
+    selected: bool,
+) {
+    let mut fill = theme.panel;
+    let mut border = theme.border;
+
+    if selected {
+        fill = theme.accent.darken(34);
+        border = theme.accent;
+    } else if hovered {
+        fill = theme.panel_alt;
+        border = theme.border.lighten(18);
+    }
+
+    if focused {
+        fill = if selected {
+            theme.accent.darken(28)
+        } else {
+            theme.accent.darken(78)
+        };
+        border = theme.accent_hover;
+    }
+
+    canvas.fill_rounded_rect(rect, TOP_ITEM_RADIUS, fill);
+    canvas.stroke_rounded_rect(rect, TOP_ITEM_RADIUS, 1, border);
 }
 
 /// Draw an icon button cell. `highlight` draws it with the accent tint.
@@ -3080,69 +3295,104 @@ fn draw_status_cluster(
 // ---------------------------------------------------------------------------
 
 fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut VortexShell) {
-    let bar = Rect::new(TOP_PAD, TOP_Y, screen_w - (TOP_PAD * 2) as u32, TOP_H);
-    draw_panel(canvas, bar, theme.panel, theme.border);
+    let bar = top_bar_rect(screen_w, shell.top_panel_flush);
+    draw_panel(
+        canvas,
+        bar,
+        theme.panel,
+        theme.border,
+        if shell.top_panel_flush { 0 } else { RADIUS },
+    );
 
     let sym = shell.symbols;
+    let notif_dnd_on = notification_dnd_enabled();
 
-    // ── Left zone: improved 8-ray sun + SunlightOS + quick shortcuts ─────────
     let mut x = bar.x + 8;
 
-    // Sunlight mark: prefer sunny symbol glyph (orange), else fallback 8-ray-ish pixel
-    let sun_w = 22u32;
-    let sun_cell = Rect::new(x, bar.y + 2, sun_w, TOP_H - 4);
+    // ── Left zone: Sunlight brand, now rendered in a square icon box so the
+    // logo keeps its aspect ratio instead of stretching vertically. ──────────
+    let brand = "SunlightOS";
+    let brand_w = measure_text(brand, FontRole::UiSmall).w as i32;
+    let brand_h = TOP_ICON_BTN;
+    let brand_y = bar.y + (TOP_H as i32 - brand_h as i32) / 2;
+    let brand_w_total =
+        (TOP_BRAND_PAD_X * 2 + TOP_BRAND_ICON_SIZE as i32 + TOP_BRAND_GAP + brand_w) as u32;
+    let brand_zone = Rect::new(x, brand_y, brand_w_total, brand_h);
+    let brand_hover = shell.top_panel_hover == Some(TOP_ITEM_BRAND);
+    let brand_focus = shell.top_panel_focus == Some(TOP_ITEM_BRAND);
+    let brand_active = shell.start_menu.is_open();
+    draw_top_panel_item_bg(
+        canvas,
+        brand_zone,
+        theme,
+        brand_hover,
+        brand_focus,
+        brand_active,
+    );
+
+    let sun_cell = Rect::new(
+        brand_zone.x + TOP_BRAND_PAD_X,
+        brand_zone.y + (brand_zone.h as i32 - TOP_BRAND_ICON_SIZE as i32) / 2,
+        TOP_BRAND_ICON_SIZE,
+        TOP_BRAND_ICON_SIZE,
+    );
     if let Some(tga) = sym.sunny {
-        // Draw white glyph then manually accent tint using simple mask (see helper below)
-        draw_tga_tinted_orange(canvas, &tga, sun_cell, theme.accent);
+        canvas.draw_tga_icon_tinted(&tga, sun_cell, theme.accent);
     } else {
         draw_icon16(canvas, sun_cell, &SUN_ROWS, theme.accent);
     }
-    x += sun_w as i32 + 4;
-
-    // "SunlightOS" label (small, clean)
-    let brand = "SunlightOS";
+    let brand_text_x = sun_cell.right() + TOP_BRAND_GAP;
     draw_text_vcenter(
         canvas,
         brand,
-        x,
-        bar.y,
-        bar.h,
-        &TextStyle::new(FontRole::UiSmall, theme.text),
+        brand_text_x,
+        brand_zone.y,
+        brand_zone.h,
+        &TextStyle::new(
+            FontRole::UiSmall,
+            if brand_active || brand_hover || brand_focus {
+                theme.text
+            } else {
+                theme.text_muted
+            },
+        ),
     );
-    let brand_w = measure_text(brand, FontRole::UiSmall).w as i32;
-    x += brand_w + 8;
+    shell.brand_zone = brand_zone;
+    shell.top_panel_item_zones[TOP_ITEM_BRAND] = brand_zone;
+    x = brand_zone.right() + TOP_WS_LEFT_GAP;
 
     // Workspace indicator (semantic glyphs) — sits on the left right after the
     // brand, replacing the old static shortcut icons. Each button maps to a
     // workspace: home(1) · browser/public(2) · code(3) · office/article(4).
     // Glyphs come from the build-time Material Symbols rasteriser (see build.rs).
-    x += TOP_WS_LEFT_GAP;
     let ws_glyphs = [sym.home, sym.public, sym.code, sym.article];
     let ws_btn_y = bar.y + (TOP_H - WS_BTN_H) as i32 / 2;
     let mut bx = x;
     for i in 0..WS_INDICATOR_COUNT {
         let cell = Rect::new(bx, ws_btn_y, WS_BTN_W, WS_BTN_H);
         let active = (i as u8) + 1 == shell.current_workspace;
-        if active {
-            // Filled accent pill makes the active workspace clearly distinct.
-            canvas.fill_rounded_rect(cell, 5, theme.accent);
-        }
+        let item_idx = TOP_ITEM_WS_FIRST + i;
+        let hovered = shell.top_panel_hover == Some(item_idx);
+        let focused = shell.top_panel_focus == Some(item_idx);
+        draw_top_panel_item_bg(canvas, cell, theme, hovered, focused, active);
         if let Some(tga) = ws_glyphs[i] {
-            let ic = WS_ICON_SIZE as i32;
             let ic_cell = Rect::new(
-                bx + (WS_BTN_W as i32 - ic) / 2,
-                ws_btn_y + (WS_BTN_H as i32 - ic) / 2,
+                bx + (WS_BTN_W as i32 - WS_ICON_SIZE as i32) / 2,
+                ws_btn_y + (WS_BTN_H as i32 - WS_ICON_SIZE as i32) / 2,
                 WS_ICON_SIZE,
                 WS_ICON_SIZE,
             );
             let tint = if active {
                 theme.text_on_accent
+            } else if hovered || focused {
+                theme.text
             } else {
                 theme.text_dim
             };
-            draw_tga_tinted_orange(canvas, &tga, ic_cell, tint);
+            canvas.draw_tga_icon_tinted(&tga, ic_cell, tint);
         }
         shell.workspace_btn_zones[i] = cell;
+        shell.top_panel_item_zones[item_idx] = cell;
         bx += WS_BTN_W as i32 + WS_BTN_GAP;
     }
     let ws_cluster_w = (WS_INDICATOR_COUNT as i32) * (WS_BTN_W as i32)
@@ -3162,54 +3412,152 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
     let tw = measure_text(&center_text, FontRole::UiMedium).w as i32;
     let cx = bar.x + (bar.w as i32 - tw) / 2;
     let cy = bar.y;
+    let pad = 8;
+    let datetime_zone = Rect::new(cx - pad, cy + 3, (tw + pad * 2) as u32, TOP_H - 6);
+    let datetime_hover = shell.top_panel_hover == Some(TOP_ITEM_DATETIME);
+    let datetime_focus = shell.top_panel_focus == Some(TOP_ITEM_DATETIME);
+    draw_top_panel_item_bg(
+        canvas,
+        datetime_zone,
+        theme,
+        datetime_hover,
+        datetime_focus,
+        false,
+    );
     draw_text_vcenter(
         canvas,
         &center_text,
         cx,
-        cy,
-        bar.h,
+        datetime_zone.y,
+        datetime_zone.h,
         &TextStyle::new(FontRole::UiMedium, theme.text),
     );
-    // clickable/hover rect around the text cluster
-    let pad = 6;
-    shell.datetime_zone = Rect::new(cx - pad, cy, (tw + pad * 2) as u32, bar.h);
+    shell.datetime_zone = datetime_zone;
+    shell.top_panel_item_zones[TOP_ITEM_DATETIME] = datetime_zone;
 
     // ── Right: meaningful indicators (no duplicate time) ─────────────────────
     // [lan] [notif] [logout]   (workspace indicator lives on the left now)
     // Spacing is driven by small constants so the cluster stays balanced.
     let mut rx = bar.right() - TOP_RIGHT_PAD;
-    let ic = TOP_ICON_SIZE; // status icon size
+    let item_h = TOP_ICON_BTN;
+    let ic = TOP_ICON_SIZE;
+    let item_y = bar.y + (TOP_H as i32 - item_h as i32) / 2;
 
     // Logout
-    rx -= ic as i32;
-    let logout_cell = Rect::new(rx, bar.y + (TOP_H - ic) as i32 / 2, ic, ic);
+    rx -= item_h as i32;
+    let logout_cell = Rect::new(rx, item_y, item_h, item_h);
+    let logout_hover = shell.top_panel_hover == Some(TOP_ITEM_LOGOUT);
+    let logout_focus = shell.top_panel_focus == Some(TOP_ITEM_LOGOUT);
+    draw_top_panel_item_bg(
+        canvas,
+        logout_cell,
+        theme,
+        logout_hover,
+        logout_focus,
+        false,
+    );
     if let Some(tga) = sym.logout {
-        draw_tga_tinted_orange(canvas, &tga, logout_cell, theme.accent);
+        let icon_rect = Rect::new(
+            logout_cell.x + (logout_cell.w as i32 - ic as i32) / 2,
+            logout_cell.y + (logout_cell.h as i32 - ic as i32) / 2,
+            ic,
+            ic,
+        );
+        canvas.draw_tga_icon_tinted(
+            &tga,
+            icon_rect,
+            if logout_hover || logout_focus {
+                theme.text
+            } else {
+                theme.text_dim
+            },
+        );
     }
     shell.logout_zone = logout_cell;
+    shell.top_panel_item_zones[TOP_ITEM_LOGOUT] = logout_cell;
     rx -= TOP_ICON_GAP;
 
     // Notifications
-    rx -= ic as i32;
-    let notif_cell = Rect::new(rx, bar.y + (TOP_H - ic) as i32 / 2, ic, ic);
-    if let Some(tga) = sym.notifications {
-        draw_tga_tinted_orange(canvas, &tga, notif_cell, theme.text_dim);
+    rx -= item_h as i32;
+    let notif_cell = Rect::new(rx, item_y, item_h, item_h);
+    let notif_hover = shell.top_panel_hover == Some(TOP_ITEM_NOTIFICATIONS);
+    let notif_focus = shell.top_panel_focus == Some(TOP_ITEM_NOTIFICATIONS);
+    let notif_active = shell.show_notif_panel || notif_dnd_on;
+    draw_top_panel_item_bg(
+        canvas,
+        notif_cell,
+        theme,
+        notif_hover,
+        notif_focus,
+        notif_active,
+    );
+    if let Some(tga) = if notif_dnd_on {
+        sym.dnd_on.or(sym.notifications)
+    } else {
+        sym.notifications
+    } {
+        let icon_rect = Rect::new(
+            notif_cell.x + (notif_cell.w as i32 - ic as i32) / 2,
+            notif_cell.y + (notif_cell.h as i32 - ic as i32) / 2,
+            ic,
+            ic,
+        );
+        canvas.draw_tga_icon_tinted(
+            &tga,
+            icon_rect,
+            if notif_dnd_on {
+                theme.warn
+            } else if notif_hover || notif_focus || shell.show_notif_panel {
+                theme.text
+            } else {
+                theme.text_dim
+            },
+        );
     }
     shell.notif_zone = notif_cell;
+    shell.top_panel_item_zones[TOP_ITEM_NOTIFICATIONS] = notif_cell;
     rx -= TOP_ICON_GAP;
 
     // Network (lan)
-    rx -= ic as i32;
-    let net_cell = Rect::new(rx, bar.y + (TOP_H - ic) as i32 / 2, ic, ic);
+    rx -= item_h as i32;
+    let net_cell = Rect::new(rx, item_y, item_h, item_h);
+    let net_hover = shell.top_panel_hover == Some(TOP_ITEM_NETWORK);
+    let net_focus = shell.top_panel_focus == Some(TOP_ITEM_NETWORK);
+    draw_top_panel_item_bg(
+        canvas,
+        net_cell,
+        theme,
+        net_hover,
+        net_focus,
+        shell.status_net_up,
+    );
     let net_color = if shell.status_net_up {
-        theme.accent
+        theme.ok
+    } else if net_hover || net_focus {
+        theme.text
     } else {
         theme.text_dim
     };
     if let Some(tga) = sym.lan {
-        draw_tga_tinted_orange(canvas, &tga, net_cell, net_color);
+        let icon_rect = Rect::new(
+            net_cell.x + (net_cell.w as i32 - ic as i32) / 2,
+            net_cell.y + (net_cell.h as i32 - ic as i32) / 2,
+            ic,
+            ic,
+        );
+        canvas.draw_tga_icon_tinted(&tga, icon_rect, net_color);
+        let dot = Rect::new(net_cell.right() - 6, net_cell.y + 4, 3, 3);
+        canvas.fill_rect(
+            dot,
+            if shell.status_net_up {
+                theme.ok
+            } else {
+                theme.border.lighten(24)
+            },
+        );
     }
     shell.net_zone = net_cell;
+    shell.top_panel_item_zones[TOP_ITEM_NETWORK] = net_cell;
 }
 
 /// Format the center date/time cluster per spec.
@@ -4083,9 +4431,10 @@ fn load_desktop_icons(paths: &DesktopPaths) -> Vec<DesktopIcon> {
     icons
 }
 
-fn desktop_area(screen_w: u32, screen_h: u32) -> Rect {
+fn desktop_area(screen_w: u32, screen_h: u32, top_panel_flush: bool) -> Rect {
+    let top = top_bar_rect(screen_w, top_panel_flush);
     let x = TOP_PAD + 10;
-    let y = TOP_Y + TOP_H as i32 + 14;
+    let y = top.bottom() + 14;
     let bottom = bot_y(screen_h) - 10;
     Rect::new(
         x,
@@ -4749,7 +5098,7 @@ fn draw_bot_left(
     let icons: &[&[u16; 16]] = &[&OVERVIEW_ROWS, &SIDEBAR_ROWS, &SETTINGS_ROWS];
     let cluster_w = dock_cluster_width(icons.len());
     let cluster = Rect::new(TOP_PAD, by, cluster_w, BOT_H);
-    draw_panel(canvas, cluster, theme.panel, theme.border);
+    draw_panel(canvas, cluster, theme.panel, theme.border, RADIUS);
 
     let mut cx = cluster.x + CLUSTER_PAD;
     let mut settings_cell = Rect::new(0, 0, 0, 0);
@@ -4827,7 +5176,7 @@ fn draw_bot_center(
     let max_x = screen_w as i32 - TOP_PAD - SEARCH_W as i32 - 8 - total_w as i32;
     let cx_start = ((screen_w as i32 - total_w as i32) / 2).clamp(min_x, max_x.max(min_x));
     let cluster = Rect::new(cx_start, by, total_w, BOT_H);
-    draw_panel(canvas, cluster, theme.panel, theme.border);
+    draw_panel(canvas, cluster, theme.panel, theme.border, RADIUS);
 
     let mut x = cluster.x + CLUSTER_PAD;
     let mut clickable = [Rect::new(0, 0, 0, 0); 4];
@@ -5390,7 +5739,7 @@ impl VortexShell {
         let pw = NOTIF_CENTER_W.min(canvas.width.saturating_sub(24));
         let ph = canvas.height.saturating_sub(72).clamp(180, 520);
         let x = canvas.width as i32 - pw as i32 - 12;
-        let y = TOP_Y + TOP_H as i32 + 8;
+        let y = top_bar_rect(canvas.width, self.top_panel_flush).bottom() + 8;
         let panel = Rect::new(x, y, pw, ph);
         canvas.fill_rounded_rect(panel, 10, theme.panel);
         canvas.stroke_rounded_rect(panel, 10, 1, theme.border);
@@ -5635,7 +5984,7 @@ fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32, sy
     let sx = screen_w as i32 - TOP_PAD - SEARCH_W as i32;
     let sy = by + (BOT_H as i32 - SEARCH_H as i32) / 2;
     let search_rect = Rect::new(sx, sy, SEARCH_W, SEARCH_H);
-    draw_panel(canvas, search_rect, theme.panel_alt, theme.border);
+    draw_panel(canvas, search_rect, theme.panel_alt, theme.border, RADIUS);
 
     // Search glyph icon on left
     let ic = 14u32;
@@ -5646,7 +5995,6 @@ fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32, sy
 
     // Placeholder text (indented for icon)
     let ph = "Search...";
-    let ph_w = measure_text(ph, FontRole::UiSmall).w;
     let ph_x = sx + 24;
     draw_text_vcenter(
         canvas,
@@ -5685,7 +6033,7 @@ impl App for VortexShell {
             canvas.draw_image_cover(wp);
         }
 
-        let desktop_rect = desktop_area(cw, ch);
+        let desktop_rect = desktop_area(cw, ch, self.top_panel_flush);
         layout_desktop_icons(&mut self.desktop_icons, desktop_rect);
         draw_desktop_icons(
             canvas,
@@ -5958,7 +6306,7 @@ impl App for VortexShell {
                     let ph = self.screen_h.saturating_sub(72).clamp(180, 520);
                     let panel = Rect::new(
                         self.screen_w as i32 - pw as i32 - 12,
-                        TOP_Y + TOP_H as i32 + 8,
+                        top_bar_rect(self.screen_w, self.top_panel_flush).bottom() + 8,
                         pw,
                         ph,
                     );
@@ -5971,6 +6319,10 @@ impl App for VortexShell {
                         }
                         return true;
                     }
+                }
+                if let Some(item) = self.top_panel_item_at_point(point) {
+                    let _ = self.set_top_panel_focus(Some(item));
+                    return self.activate_top_panel_item(item, false);
                 }
                 // Close transient panels on outside click (conservative)
                 let mut closed = false;
@@ -5988,6 +6340,8 @@ impl App for VortexShell {
                 if closed {
                     return true;
                 }
+
+                self.set_top_panel_focus(None);
 
                 // Power button click: no behavior yet. Session/power actions
                 // live in the Start Menu footer (see launcher_zone below).
@@ -6034,52 +6388,6 @@ impl App for VortexShell {
                         LaunchSource::Shortcut,
                     );
                 }
-
-                // Center date/time: click toggles calendar popover, hides tooltip
-                if self.datetime_zone.contains(point) {
-                    self.show_datetime_tooltip = false;
-                    self.show_calendar_popover = !self.show_calendar_popover;
-                    if self.show_calendar_popover {
-                        self.reset_calendar_view_to_today();
-                    }
-                    return true;
-                }
-
-                // Workspace indicator (semantic glyphs on the left) — switch
-                // the active workspace. Set it optimistically so the redraw we
-                // trigger on return shows the new active color immediately; the
-                // next snapshot refresh confirms it from the compositor.
-                if self.workspace_zone.contains(point) {
-                    for (i, r) in self.workspace_btn_zones.iter().enumerate() {
-                        if r.contains(point) {
-                            let ws = (i + 1) as u64;
-                            self.current_workspace = ws as u8;
-                            let _ = ipc_call_timeout(
-                                self.display_ep,
-                                IpcMsg::with_label(SgpMsg::SET_WORKSPACE).word(0, ws),
-                                DISPLAY_IPC_TIMEOUT_MS,
-                            );
-                            return true;
-                        }
-                    }
-                }
-                if self.logout_zone.contains(point) {
-                    self.show_logout_confirm = true;
-                    self.show_notif_panel = false;
-                    self.show_calendar_popover = false;
-                    return true;
-                }
-                if self.notif_zone.contains(point) {
-                    self.show_notif_panel = !self.show_notif_panel;
-                    self.show_calendar_popover = false;
-                    self.show_logout_confirm = false;
-                    return true;
-                }
-                if self.net_zone.contains(point) {
-                    // visual only for now (network status shown by color)
-                    debug_log("[VORTEX] net indicator clicked (visual)\n");
-                    return false;
-                }
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
                     return self.handle_desktop_icon_click(idx, monotonic_millis());
                 }
@@ -6106,6 +6414,11 @@ impl App for VortexShell {
             }
             Event::MouseDown { x, y, button } if button == 0 => {
                 let point = Point::new(x, y);
+                if let Some(item) = self.top_panel_item_at_point(point) {
+                    self.set_top_panel_focus(Some(item));
+                    return true;
+                }
+                self.set_top_panel_focus(None);
                 self.settings_hover = self.settings_zone.contains(point);
                 if self.settings_zone.contains(point) {
                     if let Some(app) = self
@@ -6150,6 +6463,11 @@ impl App for VortexShell {
             }
             Event::MouseDown { x, y, button } if button == 1 => {
                 let point = Point::new(x, y);
+                if let Some(item) = self.top_panel_item_at_point(point) {
+                    let _ = self.set_top_panel_focus(Some(item));
+                    return self.activate_top_panel_item(item, true);
+                }
+                self.set_top_panel_focus(None);
                 self.settings_hover = self.settings_zone.contains(point);
                 if self.settings_zone.contains(point) {
                     return true;
@@ -6204,11 +6522,44 @@ impl App for VortexShell {
                 self.show_datetime_tooltip = false;
                 did
             }
+            Event::FocusChanged { focused: false } => {
+                let mut dirty = self.set_top_panel_focus(None);
+                if self.top_panel_hover.take().is_some() {
+                    dirty = true;
+                }
+                if self.show_datetime_tooltip {
+                    self.show_datetime_tooltip = false;
+                    dirty = true;
+                }
+                dirty
+            }
             Event::KeyPress { keycode: 1, .. } => {
                 // rough esc keycode if used
                 // fall to above via char if possible; keep simple
                 false
             }
+            Event::KeyPress {
+                keycode: KEY_TAB,
+                pressed: true,
+                shift,
+                ..
+            } => self.top_panel_focus_step(shift),
+            Event::KeyPress {
+                keycode: KEY_ENTER,
+                pressed: true,
+                ..
+            } => self
+                .top_panel_focus
+                .map(|item| self.activate_top_panel_item(item, false))
+                .unwrap_or(false),
+            Event::KeyPress {
+                keycode: KEY_SPACE,
+                pressed: true,
+                ..
+            } => self
+                .top_panel_focus
+                .map(|item| self.activate_top_panel_item(item, true))
+                .unwrap_or(false),
             Event::MouseMove { x, y } => {
                 if self.selection_state != DesktopSelectState::Idle {
                     self.update_desktop_marquee(Point::new(x, y));
@@ -6238,21 +6589,25 @@ impl App for VortexShell {
                 }
                 let prev_settings = self.settings_hover;
                 self.settings_hover = self.settings_zone.contains(Point::new(x, y));
-                if self.settings_hover != prev_settings {
+                let prev_top_hover = self.top_panel_hover;
+                self.top_panel_hover = self.top_panel_item_at_point(Point::new(x, y));
+                if self.settings_hover != prev_settings || self.top_panel_hover != prev_top_hover {
                     return true;
                 }
 
                 // Date/time hover for tooltip (no busy, just flag)
                 let p = Point::new(x, y);
                 let prev_tip = self.show_datetime_tooltip;
-                self.show_datetime_tooltip =
-                    self.datetime_zone.contains(p) && !self.show_calendar_popover;
+                self.show_datetime_tooltip = self.datetime_zone.contains(p)
+                    && !self.show_calendar_popover
+                    && self.top_panel_focus != Some(TOP_ITEM_DATETIME);
                 if self.show_datetime_tooltip != prev_tip {
                     return true;
                 }
 
                 self.hover != prev
                     || self.running_hover != prev_running
+                    || self.top_panel_hover != prev_top_hover
                     || self.show_datetime_tooltip != prev_tip
             }
             Event::MouseUp { x, y, button } if button == 0 => {
