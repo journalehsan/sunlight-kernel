@@ -1,5 +1,8 @@
 use core::num::NonZeroU32;
 
+#[cfg(test)]
+extern crate alloc;
+
 /// File descriptor rights (Capsicum-inspired)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CapRights {
@@ -144,16 +147,12 @@ pub struct FileDescriptor {
 /// File descriptor table for a process (max 256 open fds)
 pub struct FdTable {
     entries: [Option<FileDescriptor>; 256],
-    next_fd: usize,
 }
 
 impl FdTable {
     pub fn new() -> Self {
         let entries: [Option<FileDescriptor>; 256] = [None; 256];
-        let mut table = Self {
-            entries,
-            next_fd: 3, // Reserve 0=stdin, 1=stdout, 2=stderr
-        };
+        let mut table = Self { entries };
         // Initialize standard streams
         table.entries[0] = Some(FileDescriptor {
             fd: 0,
@@ -187,7 +186,6 @@ impl FdTable {
             for idx in 0..256 {
                 entries.add(idx).write(None);
             }
-            core::ptr::addr_of_mut!((*ptr).next_fd).write(3);
             let mut table = table.assume_init();
             table.entries[0] = Some(FileDescriptor {
                 fd: 0,
@@ -221,19 +219,21 @@ impl FdTable {
         rights: CapRights,
         flags: u32,
     ) -> Result<i32, FdError> {
-        if self.next_fd >= 256 {
-            return Err(FdError::NoSlots);
-        }
-
-        let fd = self.next_fd as i32;
-        self.entries[self.next_fd] = Some(FileDescriptor {
+        let slot = self
+            .entries
+            .iter()
+            .enumerate()
+            .skip(3)
+            .find_map(|(idx, entry)| entry.is_none().then_some(idx))
+            .ok_or(FdError::NoSlots)?;
+        let fd = slot as i32;
+        self.entries[slot] = Some(FileDescriptor {
             fd,
             handle,
             rights,
             flags,
             offset: 0,
         });
-        self.next_fd += 1;
 
         Ok(fd)
     }
@@ -301,23 +301,8 @@ impl FdTable {
 
     /// Duplicate a file descriptor
     pub fn dup(&mut self, fd: i32) -> Result<i32, FdError> {
-        let orig = self.get(fd).ok_or(FdError::InvalidFd)?;
-        let new_fd = self.next_fd as i32;
-
-        if self.next_fd >= 256 {
-            return Err(FdError::NoSlots);
-        }
-
-        self.entries[self.next_fd] = Some(FileDescriptor {
-            fd: new_fd,
-            handle: orig.handle,
-            rights: orig.rights,
-            flags: orig.flags,
-            offset: orig.offset,
-        });
-        self.next_fd += 1;
-
-        Ok(new_fd)
+        let orig = *self.get(fd).ok_or(FdError::InvalidFd)?;
+        self.open(orig.handle, orig.rights, orig.flags)
     }
 
     /// Duplicate fd to specific fd number (dup2)
@@ -352,7 +337,6 @@ impl FdTable {
             for idx in 0..256 {
                 entries.add(idx).write(self.entries[idx]);
             }
-            core::ptr::addr_of_mut!((*ptr).next_fd).write(self.next_fd);
             table.assume_init()
         }
     }
@@ -374,5 +358,36 @@ impl FdTable {
 impl Default for FdTable {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const READ: CapRights = CapRights::new(CapRights::READ);
+
+    #[test]
+    fn closed_descriptor_is_reused_indefinitely() {
+        let mut table = FdTable::new();
+
+        for handle in 1..1024 {
+            let fd = table.open(FileHandle(handle), READ, 0).unwrap();
+            assert_eq!(fd, 3);
+            table.close(fd).unwrap();
+        }
+    }
+
+    #[test]
+    fn open_and_dup_fill_the_lowest_hole() {
+        let mut table = FdTable::new();
+        let fd3 = table.open(FileHandle(10), READ, 0).unwrap();
+        let fd4 = table.open(FileHandle(11), READ, 0).unwrap();
+        assert_eq!((fd3, fd4), (3, 4));
+
+        table.close(fd3).unwrap();
+        assert_eq!(table.dup(fd4).unwrap(), 3);
+        table.close(fd4).unwrap();
+        assert_eq!(table.open(FileHandle(12), READ, 0).unwrap(), 4);
     }
 }

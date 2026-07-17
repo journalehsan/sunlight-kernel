@@ -1729,10 +1729,7 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             }
         } else {
             match vfs.open(path) {
-                Ok(h) => {
-                    crate::serial_println!("[HELIOS] open({}) -> ok", path);
-                    h
-                }
+                Ok(h) => h,
                 Err(e) => {
                     crate::serial_println!("[HELIOS] open({}) -> err {:?}", path, e);
                     return u64::MAX;
@@ -1754,8 +1751,12 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         .fd_table
         .open(handle, rights, flags as u32)
     {
-        Ok(fd) => fd as u64,
-        Err(_) => {
+        Ok(fd) => {
+            crate::serial_println!("[HELIOS] open({}) -> ok", path);
+            fd as u64
+        }
+        Err(e) => {
+            crate::serial_println!("[HELIOS] open({}) -> fd error {:?}", path, e);
             drop(sched);
             if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
                 let _ = vfs.close(vfs_handle);
