@@ -4,10 +4,11 @@
 //! `errno` is per-thread.  The kernel creates the execution context via
 //! `SYS_THREAD_SPAWN` (22) and schedules it immediately.
 //!
-//! # Phase 1 limitations
+//! # Current limitations
 //! - No `join()`: the `JoinHandle` only carries metadata for future cleanup.
-//! - Thread exit re-uses `SYS_PROCESS_EXIT`; the kernel tears down the whole
-//!   process.  Arc-based AddressSpace ref-counting is deferred to Phase 2.
+//! - Thread exit re-uses `SYS_PROCESS_EXIT`; MM-0 makes the kernel distinguish
+//!   address-space owners from borrower threads, so a borrower exits alone.
+//!   Full per-mapping stack/TLS reclamation remains deferred with real munmap.
 //! - The spawned thread inherits the parent's open file-descriptor table
 //!   (kernel-side shallow copy); mutations in one thread are not visible to
 //!   the other without Arc-based sharing.
@@ -44,7 +45,8 @@ pub struct JoinHandle {
 /// scheduling the thread, so this receives both as normal C arguments.
 extern "C" fn thread_trampoline(func: extern "C" fn(*mut u8) -> *mut u8, arg: *mut u8) -> ! {
     let _ret = func(arg);
-    // Phase 1: reuse ProcessExit to terminate this thread context.
+    // MM-0: ProcessExit terminates this borrower without reclaiming its
+    // owner's shared address space.
     unsafe { crate::sys::syscall1(SYS_PROCESS_EXIT, 0) };
     loop {}
 }

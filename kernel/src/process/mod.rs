@@ -77,8 +77,13 @@ pub struct Process {
     pub state: ProcessState,
     pub address_space: AddressSpace,
     pub owns_address_space: bool,
+    /// True only for a borrower created through native syscall 22. Synthetic
+    /// MM-0 test borrowers leave this false so runtime diagnostics stay exact.
+    pub native_thread: bool,
     pub capabilities: Vec<Capability>,
-    pub kernel_stack: alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]>,
+    /// Present while the task may execute. Reaping drops the allocation before
+    /// the task slot becomes reusable.
+    pub kernel_stack: Option<alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]>>,
     pub kernel_stack_top: u64,
     pub user_stack_top: u64,
     pub entry_point: u64,
@@ -263,8 +268,9 @@ impl Process {
             state: ProcessState::Ready,
             address_space,
             owns_address_space: true,
+            native_thread: false,
             capabilities: Vec::new(),
-            kernel_stack,
+            kernel_stack: Some(kernel_stack),
             kernel_stack_top,
             user_stack_top,
             entry_point: 0,
@@ -416,8 +422,9 @@ impl Process {
             state: ProcessState::Ready,
             address_space,
             owns_address_space: false,
+            native_thread: false,
             capabilities,
-            kernel_stack,
+            kernel_stack: Some(kernel_stack),
             kernel_stack_top,
             user_stack_top: 0,
             entry_point: 0,

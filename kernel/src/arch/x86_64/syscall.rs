@@ -1116,6 +1116,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
         tty_tab,
     );
 
+    thread.native_thread = true;
     thread.cwd = parent_cwd;
     // Set up the iretq frame: RIP = trampoline, RSP = user_stack_top,
     // then override RDI/RSI so the trampoline receives func and arg.
@@ -1125,6 +1126,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
 
     let idx = sched.add_process(thread);
     sched.enqueue_ready_on_cpu(idx, current_cpu);
+    crate::sched::note_native_borrower_created();
 
     crate::serial_println!(
         "[SYSCALL] thread_spawn: parent={} tid={} trampoline={:#x}",

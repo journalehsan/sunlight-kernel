@@ -182,6 +182,14 @@ static SUNLIGHTD_FIRST_SCHED: AtomicBool = AtomicBool::new(false);
 /// === Diagnostic counters for process leak detection ===
 static PROCESS_CREATED: AtomicUsize = AtomicUsize::new(0);
 static PROCESS_FINISHED: AtomicUsize = AtomicUsize::new(0);
+static NATIVE_BORROWERS_CREATED: AtomicUsize = AtomicUsize::new(0);
+static NATIVE_BORROWERS_FINISHED: AtomicUsize = AtomicUsize::new(0);
+static NATIVE_BORROWERS_REAPED: AtomicUsize = AtomicUsize::new(0);
+static BORROWER_USER_RECLAIM_SKIPPED: AtomicUsize = AtomicUsize::new(0);
+static STALE_TERMINAL_WAKEUPS_REJECTED: AtomicUsize = AtomicUsize::new(0);
+static BORROWER_SLOTS_REUSED: AtomicUsize = AtomicUsize::new(0);
+static LIVE_NATIVE_BORROWERS: AtomicUsize = AtomicUsize::new(0);
+static MAX_LIVE_NATIVE_BORROWERS: AtomicUsize = AtomicUsize::new(0);
 
 pub const QUANTUM_MIN: u32 = 5;
 pub const QUANTUM_MAX: u32 = 50;
@@ -492,6 +500,8 @@ impl Scheduler {
             })
             .map(|(idx, _)| idx)
         {
+            let reused_borrower = self.processes[id].native_thread
+                && self.processes[id].state == ProcessState::Reaped;
             self.remove_from_ready_queues(id);
             serial_println!(
                 "[SCHED] process_slot_reused idx={} pid={} (reused reaped slot)",
@@ -500,6 +510,9 @@ impl Scheduler {
             );
             // Drop old (reaped) contents by overwrite; new process owns fresh resources.
             self.processes[id] = process;
+            if reused_borrower {
+                BORROWER_SLOTS_REUSED.fetch_add(1, Ordering::Relaxed);
+            }
             serial_println!(
                 "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused reaped slot)",
                 created_count + 1,
@@ -522,9 +535,13 @@ impl Scheduler {
             })
             .map(|(idx, _)| idx)
         {
+            let reused_borrower = self.processes[id].native_thread;
             self.remove_from_ready_queues(id);
             serial_println!("[SCHED] process_slot_reused idx={} (reaped)", id);
             self.processes[id] = process;
+            if reused_borrower {
+                BORROWER_SLOTS_REUSED.fetch_add(1, Ordering::Relaxed);
+            }
             serial_println!(
                 "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused reaped)",
                 created_count + 1,
@@ -1582,6 +1599,11 @@ impl Scheduler {
             } else {
                 self.enqueue_ready(idx);
             }
+        } else if matches!(
+            self.processes[idx].state,
+            ProcessState::Finished | ProcessState::Reaped
+        ) {
+            STALE_TERMINAL_WAKEUPS_REJECTED.fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -1696,6 +1718,9 @@ impl Scheduler {
             self.processes[idx].exit_code = 128 + 9;
             self.processes[idx].state = ProcessState::Finished;
             self.processes[idx].exit_cleanup_pending = true;
+            if self.processes[idx].native_thread {
+                note_native_borrower_finished();
+            }
             self.remove_from_ready_queues(idx);
             if self.processes[idx].owning_core != u8::MAX {
                 request_reschedule_on(self.processes[idx].owning_core as usize);
@@ -1762,6 +1787,7 @@ impl Scheduler {
 
         let pid = self.processes[idx].pid;
         let name: alloc::string::String = self.processes[idx].name_str().into();
+        let is_native_borrower = self.processes[idx].native_thread;
         if self.processes[idx].owns_address_space {
             let borrowers = self.live_address_space_borrowers(idx);
             if borrowers != 0 {
@@ -1844,6 +1870,9 @@ impl Scheduler {
                     .reclaim_user_space(&mut *pmm, hhdm_offset, true)
             }
         } else {
+            if is_native_borrower {
+                BORROWER_USER_RECLAIM_SKIPPED.fetch_add(1, Ordering::Relaxed);
+            }
             crate::process::address_space::ReclaimStats::default()
         };
 
@@ -1861,12 +1890,19 @@ impl Scheduler {
         self.processes[idx].pending_reply_wait = None;
         self.processes[idx].ipc_reply_target = None;
         self.processes[idx].capabilities.clear();
-        // fd_table is a boxed struct; dropping the box on overwrite or here via default is ok.
-        // We leave fd_table as-is; when slot is reused or dropped it will release.
+        // The dying context has already pivoted to its per-core static idle
+        // stack. Drop the task-local kernel stack before exposing Reaped.
+        self.processes[idx].kernel_stack = None;
+        self.processes[idx].kernel_stack_top = 0;
+        self.processes[idx].context_rsp = 0;
+        self.processes[idx].fs_base = 0;
         self.processes[idx].exit_cleanup_pending = false;
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        if is_native_borrower {
+            NATIVE_BORROWERS_REAPED.fetch_add(1, Ordering::Relaxed);
+        }
 
         serial_println!(
             "[SCHED] process_reaped pid={} name='{}' user_frames={} page_tables={} swap_blocks={} ipc_cleared={}",
@@ -1887,6 +1923,25 @@ impl Scheduler {
             ipc_pending_before
         );
         crate::PMM.lock().diagnostic_report_pid(pid as u32);
+        if is_native_borrower {
+            let (created, finished, reaped, skipped, stale_wakes, reused, max_live) =
+                native_borrower_lifecycle_counts();
+            // One aggregate marker when the current borrower population has
+            // drained is enough to prove the lifecycle without logging an
+            // additional diagnostic for every reaped worker.
+            if reaped == created {
+                serial_println!(
+                    "[THREAD-LIFECYCLE] created={} finished={} reaped={} borrower_reclaim_skipped={} stale_wake_rejected={} borrower_slots_reused={} max_live={}",
+                    created,
+                    finished,
+                    reaped,
+                    skipped,
+                    stale_wakes,
+                    reused,
+                    max_live
+                );
+            }
+        }
     }
 
     /// Centralized reaper. Walks Finished processes and reaps those that are
@@ -1988,6 +2043,9 @@ impl Scheduler {
         self.processes[idx].exit_code = code;
         self.processes[idx].state = ProcessState::Finished;
         self.processes[idx].exit_cleanup_pending = true;
+        if self.processes[idx].native_thread {
+            note_native_borrower_finished();
+        }
         self.remove_from_ready_queues(idx);
         note_process_finished(pid, self.processes[idx].name_str());
         serial_println!(
@@ -2488,77 +2546,135 @@ impl Scheduler {
 }
 
 pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
+    use x86_64::structures::paging::{Page, PhysFrame, Size4KiB};
+
+    fn borrower(pid: usize, owner_pid: usize, pml4: x86_64::PhysAddr) -> Process {
+        crate::process::Process::new_thread(
+            pid,
+            owner_pid,
+            "mm0-thread",
+            pml4,
+            crate::process::fd_table::FdTable::new_boxed(),
+            crate::process::env::EnvMap::new(),
+            0,
+            0,
+            0,
+            alloc::vec::Vec::new(),
+            None,
+        )
+    }
+
     let free_before = crate::PMM.lock().free_page_count();
-    let owner = {
+    let mut owner = {
         let mut pmm = crate::PMM.lock();
         unsafe { crate::process::Process::new(0xA001, 0, "mm0-owner", &mut pmm, hhdm_offset) }
     };
     let pml4 = owner.address_space.pml4_phys;
-    let borrower_one = crate::process::Process::new_thread(
-        0xA002,
-        owner.pid,
-        "mm0-thread",
-        pml4,
-        crate::process::fd_table::FdTable::new_boxed(),
-        crate::process::env::EnvMap::new(),
-        0,
-        0,
-        0,
-        alloc::vec::Vec::new(),
-        None,
-    );
-    let borrower_two = crate::process::Process::new_thread(
-        0xA003,
-        owner.pid,
-        "mm0-thread",
-        pml4,
-        crate::process::fd_table::FdTable::new_boxed(),
-        crate::process::env::EnvMap::new(),
-        0,
-        0,
-        0,
-        alloc::vec::Vec::new(),
-        None,
-    );
+    let owner_pid = owner.pid;
+
+    // Give the owner a real writable/NX user mapping and sentinel. Borrower
+    // teardown must preserve the frame and every lower page-table level.
+    let sentinel_frame = {
+        let mut pmm = crate::PMM.lock();
+        let frame_addr = pmm
+            .alloc_frame_owned(owner_pid as u32)
+            .expect("MM-0 sentinel frame");
+        assert!(crate::memory::security::sanitize_user_frame(
+            frame_addr,
+            hhdm_offset
+        ));
+        let page = Page::<Size4KiB>::from_start_address(x86_64::VirtAddr::new(0x40_0000))
+            .expect("MM-0 sentinel page");
+        let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
+        unsafe {
+            owner.address_space.map_page(
+                page,
+                frame,
+                crate::memory::security::user_stack_flags(),
+                &mut pmm,
+                hhdm_offset,
+            );
+            (hhdm_offset + frame_addr.as_u64())
+                .as_mut_ptr::<u64>()
+                .write_volatile(0x534C_4D4D_3054_4852);
+        }
+        frame_addr
+    };
+    let free_with_owner_mapping = crate::PMM.lock().free_page_count();
 
     let mut sched = Scheduler::new();
     sched.processes.push(owner);
-    sched.processes.push(borrower_one);
-    sched.processes.push(borrower_two);
 
-    for idx in [1usize, 2usize] {
+    // Generation one: twelve concurrent borrower records all finish and reap.
+    for offset in 0..12 {
+        sched
+            .processes
+            .push(borrower(0xA100 + offset, owner_pid, pml4));
+    }
+    assert_eq!(sched.live_address_space_borrowers(0), 12);
+    let stale_wakes_before = STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed);
+    for idx in 1usize..=12 {
+        let pid = sched.processes[idx].pid;
         sched.processes[idx].state = ProcessState::Finished;
         sched.processes[idx].exit_cleanup_pending = true;
         sched.reap_process_resources(idx);
         assert_eq!(sched.processes[idx].state, ProcessState::Reaped);
+        assert!(sched.processes[idx].kernel_stack.is_none());
+        assert_eq!(sched.processes[idx].queued_on_core, u8::MAX);
+        sched.enqueue_ready(idx);
+        sched.enqueue_ready(idx);
+        assert_eq!(sched.diagnostic_ready_occurrences(idx), 0);
+        sched.wake_pid(pid);
+        assert_eq!(sched.processes[idx].state, ProcessState::Reaped);
         assert_eq!(sched.processes[0].address_space.pml4_phys, pml4);
+        let sentinel = unsafe {
+            (hhdm_offset + sentinel_frame.as_u64())
+                .as_ptr::<u64>()
+                .read_volatile()
+        };
+        assert_eq!(sentinel, 0x534C_4D4D_3054_4852);
     }
-    assert_eq!(crate::PMM.lock().free_page_count(), free_before - 1);
-
-    let live_borrower = crate::process::Process::new_thread(
-        0xA004,
-        sched.processes[0].pid,
-        "mm0-thread",
-        pml4,
-        crate::process::fd_table::FdTable::new_boxed(),
-        crate::process::env::EnvMap::new(),
-        0,
-        0,
-        0,
-        alloc::vec::Vec::new(),
-        None,
+    assert_eq!(
+        STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed),
+        stale_wakes_before + 12
     );
-    sched.processes.push(live_borrower);
+    assert_eq!(crate::PMM.lock().free_page_count(), free_with_owner_mapping);
+
+    // Generation two must reuse the twelve Reaped task slots without growing
+    // the table or allowing a generation-one terminal state to wake/run.
+    let slots_before = sched.processes.len();
+    let mut second_generation_slots = alloc::vec::Vec::new();
+    for offset in 0..12 {
+        let idx = sched.add_process(borrower(0xB100 + offset, owner_pid, pml4));
+        assert!(!second_generation_slots.contains(&idx));
+        second_generation_slots.push(idx);
+    }
+    assert_eq!(sched.processes.len(), slots_before);
+    assert_eq!(sched.live_address_space_borrowers(0), 12);
+    for idx in second_generation_slots {
+        sched.processes[idx].state = ProcessState::Finished;
+        sched.processes[idx].exit_cleanup_pending = true;
+        sched.reap_process_resources(idx);
+        assert_eq!(sched.processes[idx].state, ProcessState::Reaped);
+    }
+    assert_eq!(crate::PMM.lock().free_page_count(), free_with_owner_mapping);
+
+    // Owner exit still contains a live borrower and delays address-space
+    // reclamation until that borrower is terminal and Reaped.
+    let live_idx = sched.add_process(borrower(0xC100, owner_pid, pml4));
     sched.processes[0].state = ProcessState::Finished;
     sched.processes[0].exit_cleanup_pending = true;
     sched.reap_process_resources(0);
     assert_eq!(sched.processes[0].state, ProcessState::Finished);
-    assert_eq!(sched.processes[3].state, ProcessState::Finished);
-    sched.reap_process_resources(3);
-    assert_eq!(sched.processes[3].state, ProcessState::Reaped);
+    assert_eq!(sched.processes[live_idx].state, ProcessState::Finished);
+    sched.reap_process_resources(live_idx);
+    assert_eq!(sched.processes[live_idx].state, ProcessState::Reaped);
     sched.reap_process_resources(0);
     assert_eq!(sched.processes[0].state, ProcessState::Reaped);
     assert_eq!(crate::PMM.lock().free_page_count(), free_before);
+    crate::serial_println!(
+        "[MM-0] native borrower lifecycle: 12 finished/reaped + 12 recreated/reaped: OK"
+    );
     crate::serial_println!("[MM-0] thread address-space lifecycle: OK");
 }
 
@@ -2699,6 +2815,31 @@ pub fn note_process_finished(pid: usize, name: &str) {
     serial_println!("[SCHED] FINISHED process pid={} name='{}'", pid, name);
 }
 
+pub fn note_native_borrower_created() {
+    NATIVE_BORROWERS_CREATED.fetch_add(1, Ordering::Relaxed);
+    let live = LIVE_NATIVE_BORROWERS.fetch_add(1, Ordering::Relaxed) + 1;
+    MAX_LIVE_NATIVE_BORROWERS.fetch_max(live, Ordering::Relaxed);
+}
+
+fn note_native_borrower_finished() {
+    NATIVE_BORROWERS_FINISHED.fetch_add(1, Ordering::Relaxed);
+    let _ = LIVE_NATIVE_BORROWERS.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |live| {
+        Some(live.saturating_sub(1))
+    });
+}
+
+pub fn native_borrower_lifecycle_counts() -> (usize, usize, usize, usize, usize, usize, usize) {
+    (
+        NATIVE_BORROWERS_CREATED.load(Ordering::Relaxed),
+        NATIVE_BORROWERS_FINISHED.load(Ordering::Relaxed),
+        NATIVE_BORROWERS_REAPED.load(Ordering::Relaxed),
+        BORROWER_USER_RECLAIM_SKIPPED.load(Ordering::Relaxed),
+        STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed),
+        BORROWER_SLOTS_REUSED.load(Ordering::Relaxed),
+        MAX_LIVE_NATIVE_BORROWERS.load(Ordering::Relaxed),
+    )
+}
+
 /// Mark the current process finished and release resources.
 ///
 /// Returns the **per-core static idle stack top** (NOT the dying process's
@@ -2756,6 +2897,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     );
 
     sched.account_current_runtime();
+    let is_borrower = sched.processes[cur].native_thread;
     {
         let process = &mut sched.processes[cur];
         process.exit_code = code;
@@ -2763,6 +2905,9 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         process.exit_cleanup_pending = true;
         process.owning_core = u8::MAX;
         process.queued_on_core = u8::MAX;
+    }
+    if is_borrower {
+        note_native_borrower_finished();
     }
     sched.set_core_current_task(cpu_id, None);
     sched.set_core_current_ticks(cpu_id, 0);

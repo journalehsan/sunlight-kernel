@@ -13,7 +13,7 @@ use crate::bench::rdtsc;
 use crate::scoring::WorkloadClass;
 use crate::thread::{arrive_and_wait, barrier_reset, spawn};
 use core::hint::black_box;
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use sunlight_ipc::monotonic_millis;
 
 pub const NAME_INTEGER: &str = "Parallel Integer Mix (64M ops/core)";
@@ -46,8 +46,15 @@ static THREAD_PROGRESS: [AtomicU64; MAX_CORES] = {
     const ZERO: AtomicU64 = AtomicU64::new(0);
     [ZERO; MAX_CORES]
 };
+static THREAD_GENERATION: [AtomicU64; MAX_CORES] = {
+    const ZERO: AtomicU64 = AtomicU64::new(0);
+    [ZERO; MAX_CORES]
+};
 
 static TOTAL_CORES: AtomicU64 = AtomicU64::new(1);
+static BATCH_GENERATION: AtomicU64 = AtomicU64::new(0);
+static BATCH_ABORTED: AtomicBool = AtomicBool::new(false);
+static BATCH_RETURNED: AtomicU64 = AtomicU64::new(0);
 static ASYNC_STATE: AtomicU64 = AtomicU64::new(0);
 static ASYNC_RESULT: AtomicU64 = AtomicU64::new(0);
 static ASYNC_CORES: AtomicU64 = AtomicU64::new(1);
@@ -62,10 +69,14 @@ static MATRIX_C_PTR: AtomicU64 = AtomicU64::new(0);
 // ── Integer Mix worker ─────────────────────────────────────────────────────
 
 unsafe extern "C" fn integer_mix_worker(slot: u64) {
+    let (generation, slot_usize) = decode_worker_arg(slot);
     let n = TOTAL_CORES.load(Ordering::SeqCst);
-    arrive_and_wait(n);
+    if !arrive_and_wait(n, &BATCH_ABORTED) {
+        BATCH_RETURNED.fetch_add(1, Ordering::Release);
+        return;
+    }
 
-    let slot_usize = slot as usize;
+    let slot = slot_usize as u64;
     THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
     THREAD_START_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
 
@@ -89,17 +100,21 @@ unsafe extern "C" fn integer_mix_worker(slot: u64) {
     }
 
     black_box(acc);
-    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
-    THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
+    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::Relaxed);
+    THREAD_END[slot_usize].store(rdtsc(), Ordering::Relaxed);
+    publish_worker_completion(slot_usize, generation);
 }
 
 // ── Matrix Multiply worker ──────────────────────────────────────────────────
 
 unsafe extern "C" fn matrix_mix_worker(slot: u64) {
+    let (generation, slot_usize) = decode_worker_arg(slot);
     let ncores = TOTAL_CORES.load(Ordering::SeqCst) as usize;
-    arrive_and_wait(ncores as u64);
+    if !arrive_and_wait(ncores as u64, &BATCH_ABORTED) {
+        BATCH_RETURNED.fetch_add(1, Ordering::Release);
+        return;
+    }
 
-    let slot_usize = slot as usize;
     THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
     THREAD_START_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
 
@@ -140,17 +155,22 @@ unsafe extern "C" fn matrix_mix_worker(slot: u64) {
 
     black_box((a_ptr, c_ptr));
     THREAD_PROGRESS[slot_usize].store(total_ops, Ordering::SeqCst);
-    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
-    THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
+    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::Relaxed);
+    THREAD_END[slot_usize].store(rdtsc(), Ordering::Relaxed);
+    publish_worker_completion(slot_usize, generation);
 }
 
 // ── SHA-256 Hash worker ────────────────────────────────────────────────────
 
 unsafe extern "C" fn sha256_mix_worker(slot: u64) {
+    let (generation, slot_usize) = decode_worker_arg(slot);
     let ncores = TOTAL_CORES.load(Ordering::SeqCst) as usize;
-    arrive_and_wait(ncores as u64);
+    if !arrive_and_wait(ncores as u64, &BATCH_ABORTED) {
+        BATCH_RETURNED.fetch_add(1, Ordering::Release);
+        return;
+    }
 
-    let slot_usize = slot as usize;
+    let slot = slot_usize as u64;
     THREAD_START[slot_usize].store(rdtsc(), Ordering::SeqCst);
     THREAD_START_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
 
@@ -176,28 +196,75 @@ unsafe extern "C" fn sha256_mix_worker(slot: u64) {
     }
 
     THREAD_PROGRESS[slot_usize].store(total_chunks as u64, Ordering::SeqCst);
-    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::SeqCst);
-    THREAD_END[slot_usize].store(rdtsc(), Ordering::SeqCst);
+    THREAD_END_MS[slot_usize].store(monotonic_millis(), Ordering::Relaxed);
+    THREAD_END[slot_usize].store(rdtsc(), Ordering::Relaxed);
+    publish_worker_completion(slot_usize, generation);
 }
 
 // ── Workload runner ─────────────────────────────────────────────────────────
 
-fn reset_statics(ncores: usize) {
+fn reset_statics(ncores: usize) -> u64 {
+    let generation = BATCH_GENERATION
+        .fetch_add(1, Ordering::AcqRel)
+        .wrapping_add(1)
+        .max(1)
+        & u32::MAX as u64;
+    let generation = generation.max(1);
     TOTAL_CORES.store(ncores as u64, Ordering::SeqCst);
+    BATCH_ABORTED.store(false, Ordering::Release);
+    BATCH_RETURNED.store(0, Ordering::Release);
     for idx in 0..ncores {
         THREAD_START[idx].store(0, Ordering::SeqCst);
         THREAD_START_MS[idx].store(0, Ordering::SeqCst);
         THREAD_END_MS[idx].store(0, Ordering::SeqCst);
         THREAD_END[idx].store(0, Ordering::SeqCst);
         THREAD_PROGRESS[idx].store(0, Ordering::SeqCst);
+        THREAD_GENERATION[idx].store(0, Ordering::Release);
     }
     barrier_reset();
+    generation
 }
 
-fn spawn_workers(ncores: usize, worker: unsafe extern "C" fn(u64)) {
-    for slot in 1..ncores {
-        let _ = spawn(worker, slot as u64);
+fn encode_worker_arg(generation: u64, slot: usize) -> u64 {
+    ((generation & u32::MAX as u64) << 32) | slot as u64
+}
+
+fn decode_worker_arg(arg: u64) -> (u64, usize) {
+    (arg >> 32, (arg & u32::MAX as u64) as usize)
+}
+
+fn publish_worker_completion(slot: usize, generation: u64) {
+    // Release publishes every result/progress/timestamp write that precedes it.
+    // The coordinator waits with Acquire before reading any worker result.
+    THREAD_GENERATION[slot].store(generation, Ordering::Release);
+    BATCH_RETURNED.fetch_add(1, Ordering::Release);
+}
+
+fn generation_complete(ncores: usize, generation: u64) -> bool {
+    (0..ncores).all(|idx| THREAD_GENERATION[idx].load(Ordering::Acquire) == generation)
+}
+
+fn wait_for_generation(ncores: usize, generation: u64) {
+    while !generation_complete(ncores, generation) {
+        sunlight_ipc::process_yield();
     }
+}
+
+fn wait_for_returns(count: usize) {
+    while BATCH_RETURNED.load(Ordering::Acquire) < count as u64 {
+        sunlight_ipc::process_yield();
+    }
+}
+
+fn spawn_workers(ncores: usize, generation: u64, worker: unsafe extern "C" fn(u64)) -> usize {
+    let mut spawned = 0;
+    for slot in 1..ncores {
+        if spawn(worker, encode_worker_arg(generation, slot)) == 0 {
+            break;
+        }
+        spawned += 1;
+    }
+    spawned
 }
 
 unsafe fn run_worker_on_core0(slot: u64, worker: unsafe extern "C" fn(u64)) {
@@ -214,15 +281,21 @@ fn measure_elapsed(ncores: usize) -> u64 {
     max_end.saturating_sub(min_start)
 }
 
-pub fn run_integer_mix(ncores: usize) -> u64 {
+pub fn run_integer_mix(ncores: usize) -> Option<u64> {
     let n = ncores.min(MAX_CORES).max(1);
-    reset_statics(n);
-    spawn_workers(n, integer_mix_worker);
-    unsafe { run_worker_on_core0(0, integer_mix_worker) };
-    measure_elapsed(n)
+    let generation = reset_statics(n);
+    let spawned = spawn_workers(n, generation, integer_mix_worker);
+    if spawned != n - 1 {
+        BATCH_ABORTED.store(true, Ordering::Release);
+        wait_for_returns(spawned);
+        return None;
+    }
+    unsafe { run_worker_on_core0(encode_worker_arg(generation, 0), integer_mix_worker) };
+    wait_for_generation(n, generation);
+    Some(measure_elapsed(n))
 }
 
-pub fn run_matrix_mix(ncores: usize) -> u64 {
+pub fn run_matrix_mix(ncores: usize) -> Option<u64> {
     let n = ncores.min(MAX_CORES).max(1);
 
     let mut a = alloc::vec![0i32; N_MATRIX * N_MATRIX];
@@ -239,9 +312,18 @@ pub fn run_matrix_mix(ncores: usize) -> u64 {
     MATRIX_B_PTR.store(b.as_ptr() as u64, Ordering::SeqCst);
     MATRIX_C_PTR.store(c.as_ptr() as u64, Ordering::SeqCst);
 
-    reset_statics(n);
-    spawn_workers(n, matrix_mix_worker);
-    unsafe { run_worker_on_core0(0, matrix_mix_worker) };
+    let generation = reset_statics(n);
+    let spawned = spawn_workers(n, generation, matrix_mix_worker);
+    if spawned != n - 1 {
+        BATCH_ABORTED.store(true, Ordering::Release);
+        wait_for_returns(spawned);
+        MATRIX_A_PTR.store(0, Ordering::Release);
+        MATRIX_B_PTR.store(0, Ordering::Release);
+        MATRIX_C_PTR.store(0, Ordering::Release);
+        return None;
+    }
+    unsafe { run_worker_on_core0(encode_worker_arg(generation, 0), matrix_mix_worker) };
+    wait_for_generation(n, generation);
     let elapsed = measure_elapsed(n);
 
     MATRIX_A_PTR.store(0, Ordering::SeqCst);
@@ -249,15 +331,21 @@ pub fn run_matrix_mix(ncores: usize) -> u64 {
     MATRIX_C_PTR.store(0, Ordering::SeqCst);
 
     black_box(&c);
-    elapsed
+    Some(elapsed)
 }
 
-pub fn run_sha256_mix(ncores: usize) -> u64 {
+pub fn run_sha256_mix(ncores: usize) -> Option<u64> {
     let n = ncores.min(MAX_CORES).max(1);
-    reset_statics(n);
-    spawn_workers(n, sha256_mix_worker);
-    unsafe { run_worker_on_core0(0, sha256_mix_worker) };
-    measure_elapsed(n)
+    let generation = reset_statics(n);
+    let spawned = spawn_workers(n, generation, sha256_mix_worker);
+    if spawned != n - 1 {
+        BATCH_ABORTED.store(true, Ordering::Release);
+        wait_for_returns(spawned);
+        return None;
+    }
+    unsafe { run_worker_on_core0(encode_worker_arg(generation, 0), sha256_mix_worker) };
+    wait_for_generation(n, generation);
+    Some(measure_elapsed(n))
 }
 
 // ── Async dispatch (for GUI integration) ───────────────────────────────────
@@ -321,10 +409,15 @@ unsafe extern "C" fn async_entry(ncores: u64) {
         0 => run_integer_mix(n),
         1 => run_matrix_mix(n),
         2 => run_sha256_mix(n),
-        _ => 0,
+        _ => None,
     };
-    ASYNC_RESULT.store(cycles, Ordering::SeqCst);
-    ASYNC_STATE.store(2, Ordering::SeqCst);
+    match cycles {
+        Some(cycles) => {
+            ASYNC_RESULT.store(cycles, Ordering::Relaxed);
+            ASYNC_STATE.store(2, Ordering::Release);
+        }
+        None => ASYNC_STATE.store(4, Ordering::Release),
+    }
 }
 
 pub struct AsyncHandle;
@@ -384,13 +477,19 @@ pub fn async_progress_bp() -> u16 {
     ((total.min(denom) * 10_000) / denom.max(1)) as u16
 }
 
-pub fn take_async_result() -> Option<u64> {
-    if ASYNC_STATE.load(Ordering::SeqCst) != 2 {
-        return None;
+pub fn take_async_result() -> Option<Result<u64, ()>> {
+    match ASYNC_STATE.load(Ordering::Acquire) {
+        2 => {
+            let cycles = ASYNC_RESULT.load(Ordering::Relaxed);
+            ASYNC_STATE.store(3, Ordering::Release);
+            Some(Ok(cycles))
+        }
+        4 => {
+            ASYNC_STATE.store(3, Ordering::Release);
+            Some(Err(()))
+        }
+        _ => None,
     }
-    let cycles = ASYNC_RESULT.load(Ordering::SeqCst);
-    ASYNC_STATE.store(3, Ordering::SeqCst);
-    Some(cycles)
 }
 
 pub fn reset_async() {
@@ -407,6 +506,7 @@ pub fn reset_async() {
         THREAD_END[idx].store(0, Ordering::SeqCst);
         THREAD_END_MS[idx].store(0, Ordering::SeqCst);
         THREAD_PROGRESS[idx].store(0, Ordering::SeqCst);
+        THREAD_GENERATION[idx].store(0, Ordering::Release);
     }
     barrier_reset();
 }
@@ -448,4 +548,36 @@ pub fn measured_end_ms(ncores: usize) -> u64 {
         .filter(|ms| *ms > 0)
         .max()
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_generation_cannot_complete_recreated_workers() {
+        const WORKERS: usize = 12;
+        for slot in 0..WORKERS {
+            THREAD_GENERATION[slot].store(41, Ordering::Release);
+        }
+        assert!(generation_complete(WORKERS, 41));
+
+        for slot in 0..WORKERS {
+            THREAD_GENERATION[slot].store(0, Ordering::Release);
+        }
+        THREAD_GENERATION[0].store(41, Ordering::Release);
+        assert!(!generation_complete(WORKERS, 42));
+
+        for slot in 0..WORKERS {
+            THREAD_GENERATION[slot].store(42, Ordering::Release);
+        }
+        assert!(generation_complete(WORKERS, 42));
+    }
+
+    #[test]
+    fn worker_argument_keeps_generation_and_slot_distinct() {
+        for slot in 0..12 {
+            assert_eq!(decode_worker_arg(encode_worker_arg(77, slot)), (77, slot));
+        }
+    }
 }

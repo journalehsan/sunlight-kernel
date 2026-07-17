@@ -1336,7 +1336,17 @@ impl BenchApp {
             self.multi_timing_pending = true;
             self.verify_multi_core_activity();
             true
-        } else if let Some(cycles) = multi::take_async_result() {
+        } else if let Some(result) = multi::take_async_result() {
+            let cycles = match result {
+                Ok(cycles) => cycles,
+                Err(()) => {
+                    leave_parallel_phase();
+                    self.set_status("Parallel workload failed");
+                    self.set_detail("A native worker could not be created; the batch was aborted.");
+                    self.running = false;
+                    return true;
+                }
+            };
             self.verify_multi_core_activity();
             if self.multi_timing_pending {
                 self.stage_started_tick = multi::measured_start_tick(workers);
@@ -1834,7 +1844,11 @@ fn run_headless(pid: u64, ncores: usize) -> ! {
     let mut app = BenchApp::new(pid, ncores);
     app.start();
     while app.stage != Stage::Finished {
-        app.tick_benchmark();
+        if app.running {
+            app.tick_benchmark();
+        } else if app.cooldown_target != CooldownTarget::None {
+            app.tick_cooldown();
+        }
         process_yield();
     }
     sunlight_ipc::set_nice(pid, 0);
