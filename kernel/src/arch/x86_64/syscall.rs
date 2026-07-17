@@ -15,6 +15,7 @@ pub enum SunlightSyscall {
     IpcNotifySend = 5,
     IpcNotifyWait = 6,
     IpcCancel = 7,
+    IpcSetDeadline = 8,
     EndpointCreate = 10,
     EndpointBind = 11,
     ProcessExit = 20,
@@ -420,6 +421,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         5 => ipc_notify_send(frame.rdi),
         6 => ipc_notify_wait(frame.rdi),
         7 => ipc_cancel(),
+        8 => ipc_set_deadline(frame.rdi),
         10 => endpoint_create(),
         11 => endpoint_bind(frame.rdi),
         20 => process_exit(frame.rdi as i32),
@@ -604,7 +606,9 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     let msg = IpcMsg::from_registers(frame);
 
     if let Err(e) = validate_ipc_msg(&msg) {
-        let pid = crate::sched::SCHEDULER.lock().current_process().pid;
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let pid = sched.current_process().pid;
+        crate::ipc::clear_next_ipc_deadline(pid, &mut sched);
         crate::serial_println!(
             "[IPC] WARN: invalid msg from pid={} word_count={} cap_count={}",
             pid,
@@ -616,6 +620,10 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
 
     // Check for spawn capability (fast path handled by kernel)
     if token == crate::capability::SPAWN_TOKEN {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let pid = sched.current_process().pid;
+        crate::ipc::clear_next_ipc_deadline(pid, &mut sched);
+        drop(sched);
         return handle_spawn_call(frame, msg);
     }
 
@@ -623,12 +631,12 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     let caps = crate::capability::CAP_BROKER.lock();
     let sender_pid = sched.current_process().pid;
 
-    let (endpoint_id, _) = caps
+    let (endpoint_id, target_owner) = caps
         .token_owner(token, CapabilityRights::SEND)
         .map_err(|_| IpcError::InvalidCapability as u64)
         .unwrap_or((0, 0));
 
-    crate::ipc::with_shard(endpoint_id, |bus| {
+    let result = crate::ipc::with_shard(endpoint_id, |bus| {
         match crate::ipc::handle_ipc_call(sender_pid, token, msg, &caps, &mut sched, bus) {
             Ok(reply) => {
                 reply.to_registers(frame);
@@ -640,7 +648,17 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
             }
             Err(e) => e as u64,
         }
-    })
+    });
+    if result == IpcError::WouldBlock as u64
+        && sched.processes.iter().any(|process| {
+            process.pid == target_owner
+                && process.state == ProcessState::BlockedOnIpc
+                && process.ipc_endpoint == Some(endpoint_id)
+        })
+    {
+        sched.wake_pid(target_owner);
+    }
+    result
 }
 
 /// Handle a spawn IPC call directly in the kernel.
@@ -711,7 +729,7 @@ fn ipc_reply(frame: &mut SyscallFrame) -> u64 {
     let endpoint_id = sched
         .current_process()
         .ipc_reply_target
-        .map(|(ep, _)| ep)
+        .map(|target| target.endpoint_id)
         .unwrap_or(0);
     crate::ipc::with_shard(endpoint_id, |bus| {
         match crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, bus) {
@@ -753,7 +771,10 @@ fn ipc_recv(frame: &mut SyscallFrame) -> u64 {
     let receiver_pid = sched.current_process().pid;
     let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
         Ok(id) => id,
-        Err(_) => return IpcError::InvalidCapability as u64,
+        Err(_) => {
+            crate::ipc::clear_next_ipc_deadline(receiver_pid, &mut sched);
+            return IpcError::InvalidCapability as u64;
+        }
     };
     crate::ipc::with_shard(endpoint_id, |bus| {
         match crate::ipc::handle_ipc_recv(receiver_pid, endpoint_id, &mut sched, bus) {
@@ -787,17 +808,29 @@ fn ipc_notify_wait(_endpoint_token: u64) -> u64 {
 
 fn ipc_cancel() -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
-    let caps = crate::capability::CAP_BROKER.lock();
     let caller_pid = sched.current_process().pid;
 
     let endpoint_id = sched.current_process().ipc_endpoint.unwrap_or(0);
 
     crate::ipc::with_shard(endpoint_id, |bus| {
-        match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &caps, bus) {
+        match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus) {
             Ok(()) => 0,
             Err(e) => e as u64,
         }
     })
+}
+
+fn ipc_set_deadline(absolute_deadline_ms: u64) -> u64 {
+    let deadline_tick = absolute_deadline_ms
+        .saturating_mul(crate::timekeeping::TICK_HZ)
+        .saturating_add(999)
+        / 1000;
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let caller_pid = sched.current_process().pid;
+    match crate::ipc::arm_ipc_deadline(caller_pid, deadline_tick, &mut sched) {
+        Ok(()) => 0,
+        Err(error) => error as u64,
+    }
 }
 
 fn endpoint_create() -> u64 {

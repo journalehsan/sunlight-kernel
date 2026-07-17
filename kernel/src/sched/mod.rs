@@ -876,6 +876,9 @@ impl Scheduler {
         // Compatibility mirror: all legacy scheduler logic still reads
         // `self.global_tick`, but only the centralized timekeeper advances it.
         self.global_tick = self.global_tick.max(global_tick);
+        if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID {
+            crate::ipc::expire_deadlines(self, self.global_tick);
+        }
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             let mut core = CORE_STATES[cpu_id].lock();
             core.current_ticks += 1;
@@ -1724,7 +1727,11 @@ impl Scheduler {
                 bus.remove_pid_references(pid);
             });
             for endpoint_id in &endpoint_ids {
-                crate::ipc::with_shard(*endpoint_id, |bus| bus.remove_endpoint(*endpoint_id));
+                crate::arch::x86_64::keyboard::unregister_kbd_endpoint(*endpoint_id);
+                crate::arch::x86_64::mouse::unregister_mouse_endpoint(*endpoint_id);
+                let calls =
+                    crate::ipc::with_shard(*endpoint_id, |bus| bus.remove_endpoint(*endpoint_id));
+                crate::ipc::finish_peer_closed_calls(*endpoint_id, calls, self);
             }
         }
 
@@ -1737,15 +1744,6 @@ impl Scheduler {
                 &mut *pmm,
                 &mut *caps,
             );
-        }
-
-        for proc in self.processes.iter_mut() {
-            if proc
-                .ipc_reply_target
-                .is_some_and(|(_, client_pid)| client_pid == pid)
-            {
-                proc.ipc_reply_target = None;
-            }
         }
 
         let reclaim = {
@@ -1765,6 +1763,11 @@ impl Scheduler {
         self.processes[idx].ipc_reply = None;
         self.processes[idx].ipc_endpoint = None;
         self.processes[idx].pending_call = None;
+        self.processes[idx].ipc_call_outcome = None;
+        self.processes[idx].ipc_next_deadline_tick = None;
+        self.processes[idx].ipc_deadline = None;
+        self.processes[idx].ipc_recv_deadline = None;
+        self.processes[idx].ipc_recv_timeout = None;
         self.processes[idx].pending_reply_wait = None;
         self.processes[idx].ipc_reply_target = None;
         self.processes[idx].capabilities.clear();
@@ -1977,6 +1980,20 @@ impl Scheduler {
     // ── Diagnostics ──────────────────────────────────────────────────────────
 
     pub fn diagnostic_report(&self) {
+        let ipc = crate::ipc::diagnostic_snapshot();
+        serial_println!(
+            "[IPC-DIAG] depth={} high_water={} enqueue={} dequeue={} full={} coalesced={} deadline={} cancel={} late_reply={} peer_closed={}",
+            ipc.current_queue_depth,
+            ipc.high_watermark,
+            ipc.enqueue_count,
+            ipc.dequeue_count,
+            ipc.queue_full_count,
+            ipc.coalesced_notification_count,
+            ipc.deadline_expired_count,
+            ipc.explicit_cancel_count,
+            ipc.late_reply_drop_count,
+            ipc.peer_closed_wake_count
+        );
         let created = PROCESS_CREATED.load(Ordering::Relaxed);
         let finished = PROCESS_FINISHED.load(Ordering::Relaxed);
         let alive = self
@@ -2234,7 +2251,9 @@ impl Scheduler {
             {
                 let (pending_call_cap, pending_call_label, resolved_ep, resolved_owner) =
                     match p.pending_call {
-                        Some((cap, msg)) => {
+                        Some(pending) => {
+                            let cap = pending.target_cap;
+                            let msg = pending.msg;
                             let resolved = caps.debug_resolve_ipc(
                                 crate::capability::CapabilityToken(cap),
                                 crate::capability::CapabilityRights::SEND,

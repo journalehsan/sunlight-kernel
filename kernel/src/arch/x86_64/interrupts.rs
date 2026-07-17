@@ -758,13 +758,21 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
             let timer_endpoint = sched
                 .processes
                 .iter()
-                .find(|p| p.name_str() == "timer_server")
+                .find(|p| {
+                    p.name_str() == "timer_server"
+                        && !matches!(
+                            p.state,
+                            crate::process::ProcessState::Finished
+                                | crate::process::ProcessState::Reaped
+                        )
+                })
                 .and_then(|p| p.ipc_endpoint.map(|ep| (ep, p.pid)));
 
             if let Some((endpoint_id, timer_pid)) = timer_endpoint {
                 crate::ipc::with_shard(endpoint_id, |bus| {
-                    bus.send_timer_tick(endpoint_id, &mut sched, timer_pid);
+                    bus.send_timer_tick(endpoint_id, ticks_total);
                 });
+                sched.wake_pid(timer_pid);
             }
 
             if ticks_total % TTY_WAKE_INTERVAL_TICKS == 0 {

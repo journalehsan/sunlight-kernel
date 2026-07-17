@@ -51,6 +51,11 @@ pub fn unregister_kbd_driver() {
     KBD_DRIVER_ENDPOINT.store(0, Ordering::Release);
 }
 
+pub fn unregister_kbd_endpoint(endpoint_id: u32) {
+    let _ =
+        KBD_DRIVER_ENDPOINT.compare_exchange(endpoint_id, 0, Ordering::AcqRel, Ordering::Acquire);
+}
+
 /// Push a raw scancode into the ring buffer (non-blocking).
 /// Returns false if buffer is full (scancode dropped).
 fn push_scancode(scancode: u8) -> bool {
@@ -149,7 +154,7 @@ pub fn poll_inject_buffer() {
     }
 }
 
-fn notify_driver(endpoint: u32, scancode: u8) {
+fn notify_driver(endpoint: u32, _scancode: u8) {
     use crate::sched::SCHEDULER;
 
     let mut sched = SCHEDULER.lock();
@@ -157,13 +162,19 @@ fn notify_driver(endpoint: u32, scancode: u8) {
     let server_pid = sched
         .processes
         .iter()
-        .find(|p| p.name_str() == "sunlight-kbd")
+        .find(|p| {
+            p.name_str() == "sunlight-kbd"
+                && !matches!(
+                    p.state,
+                    crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
+                )
+        })
         .map(|p| p.pid)
         .unwrap_or(0);
 
     if server_pid != 0 {
         crate::ipc::with_shard(endpoint, |bus| {
-            bus.send_keyboard_event(endpoint, scancode as u64, &mut sched, server_pid);
+            bus.send_input_notification(endpoint);
         });
         sched.wake_pid(server_pid);
     }

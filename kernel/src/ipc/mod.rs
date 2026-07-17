@@ -1,14 +1,19 @@
 pub mod message;
 
 use crate::capability::{CapabilityBroker, CapabilityRights, CapabilityToken};
-use crate::process::ProcessState;
+use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget, PendingIpcCall, ProcessState};
 use crate::sched::Scheduler;
 use alloc::collections::BTreeMap;
 use alloc::collections::VecDeque;
+use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 pub use message::IpcMsg;
 
 pub const INIT_NAMESERVER_ENDPOINT: u32 = 0;
+/// A 104-byte register message makes this about 6.5 KiB of payload metadata per
+/// saturated endpoint. Existing boot/services traffic stays far below this.
+pub const ENDPOINT_QUEUE_CAPACITY: usize = 64;
 const NUM_SHARDS: usize = 16;
 
 #[allow(non_snake_case)]
@@ -52,12 +57,105 @@ pub enum IpcError {
     InvalidArgument = 4,
     InvalidWordCount = 5,
     InvalidCapCount = 6,
+    QueueFull = 7,
+    DeadlineExpired = 8,
+    Cancelled = 9,
+    PeerClosed = 10,
+}
+
+pub struct IpcDiagnosticSnapshot {
+    pub current_queue_depth: usize,
+    pub high_watermark: usize,
+    pub enqueue_count: u64,
+    pub dequeue_count: u64,
+    pub queue_full_count: u64,
+    pub coalesced_notification_count: u64,
+    pub deadline_expired_count: u64,
+    pub explicit_cancel_count: u64,
+    pub late_reply_drop_count: u64,
+    pub peer_closed_wake_count: u64,
+}
+
+static CURRENT_QUEUE_DEPTH: AtomicUsize = AtomicUsize::new(0);
+static HIGH_WATERMARK: AtomicUsize = AtomicUsize::new(0);
+static ENQUEUE_COUNT: AtomicU64 = AtomicU64::new(0);
+static DEQUEUE_COUNT: AtomicU64 = AtomicU64::new(0);
+static QUEUE_FULL_COUNT: AtomicU64 = AtomicU64::new(0);
+static COALESCED_NOTIFICATION_COUNT: AtomicU64 = AtomicU64::new(0);
+static DEADLINE_EXPIRED_COUNT: AtomicU64 = AtomicU64::new(0);
+static EXPLICIT_CANCEL_COUNT: AtomicU64 = AtomicU64::new(0);
+static LATE_REPLY_DROP_COUNT: AtomicU64 = AtomicU64::new(0);
+static PEER_CLOSED_WAKE_COUNT: AtomicU64 = AtomicU64::new(0);
+
+pub fn diagnostic_snapshot() -> IpcDiagnosticSnapshot {
+    IpcDiagnosticSnapshot {
+        current_queue_depth: CURRENT_QUEUE_DEPTH.load(Ordering::Relaxed),
+        high_watermark: HIGH_WATERMARK.load(Ordering::Relaxed),
+        enqueue_count: ENQUEUE_COUNT.load(Ordering::Relaxed),
+        dequeue_count: DEQUEUE_COUNT.load(Ordering::Relaxed),
+        queue_full_count: QUEUE_FULL_COUNT.load(Ordering::Relaxed),
+        coalesced_notification_count: COALESCED_NOTIFICATION_COUNT.load(Ordering::Relaxed),
+        deadline_expired_count: DEADLINE_EXPIRED_COUNT.load(Ordering::Relaxed),
+        explicit_cancel_count: EXPLICIT_CANCEL_COUNT.load(Ordering::Relaxed),
+        late_reply_drop_count: LATE_REPLY_DROP_COUNT.load(Ordering::Relaxed),
+        peer_closed_wake_count: PEER_CLOSED_WAKE_COUNT.load(Ordering::Relaxed),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MessageKind {
+    Ordinary(IpcCallId),
+    Timer,
+    Input,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PendingMessage {
+    pub msg: IpcMsg,
+    pub call: Option<IpcCallId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotificationStatus {
+    None,
+    Queued,
+    Deferred,
+}
+
+struct QueuedMessage {
+    msg: IpcMsg,
+    kind: MessageKind,
+}
+
+struct EndpointQueue {
+    messages: VecDeque<QueuedMessage>,
+    timer_status: NotificationStatus,
+    timer_base_tick: Option<u64>,
+    timer_latest_tick: u64,
+    input_status: NotificationStatus,
+}
+
+impl EndpointQueue {
+    fn new() -> Self {
+        Self {
+            messages: VecDeque::new(),
+            timer_status: NotificationStatus::None,
+            timer_base_tick: None,
+            timer_latest_tick: 0,
+            input_status: NotificationStatus::None,
+        }
+    }
+
+    fn timer_sequence(&self) -> u64 {
+        self.timer_base_tick
+            .map_or(0, |base| self.timer_latest_tick.saturating_sub(base) + 1)
+    }
 }
 
 /// Per-shard IPC bus with O(1) endpoint lookup.
 pub struct IpcBusShard {
-    queues: BTreeMap<u32, VecDeque<IpcMsg>>,
-    reply_waiters: BTreeMap<u32, VecDeque<usize>>,
+    queues: BTreeMap<u32, EndpointQueue>,
+    reply_waiters: BTreeMap<u32, VecDeque<IpcCallId>>,
 }
 
 impl IpcBusShard {
@@ -68,11 +166,13 @@ impl IpcBusShard {
         }
     }
 
-    fn queue_for(&mut self, endpoint_id: u32) -> &mut VecDeque<IpcMsg> {
-        self.queues.entry(endpoint_id).or_insert_with(VecDeque::new)
+    fn queue_for(&mut self, endpoint_id: u32) -> &mut EndpointQueue {
+        self.queues
+            .entry(endpoint_id)
+            .or_insert_with(EndpointQueue::new)
     }
 
-    fn reply_waiters_for(&mut self, endpoint_id: u32) -> &mut VecDeque<usize> {
+    fn reply_waiters_for(&mut self, endpoint_id: u32) -> &mut VecDeque<IpcCallId> {
         self.reply_waiters
             .entry(endpoint_id)
             .or_insert_with(VecDeque::new)
@@ -87,17 +187,24 @@ impl IpcBusShard {
         &mut self,
         endpoint_id: u32,
         mut msg: IpcMsg,
-        caller_pid: usize,
-        sched: &mut Scheduler,
-        server_pid: usize,
-    ) {
-        msg.badge = caller_pid as u64;
-        self.queue_for(endpoint_id).push_back(msg);
-        let waiters = self.reply_waiters_for(endpoint_id);
-        if !waiters.iter().any(|pid| *pid == caller_pid) {
-            waiters.push_back(caller_pid);
+        call: IpcCallId,
+    ) -> Result<(), IpcError> {
+        let queue = self.queue_for(endpoint_id);
+        if queue.messages.len() >= ENDPOINT_QUEUE_CAPACITY {
+            QUEUE_FULL_COUNT.fetch_add(1, Ordering::Relaxed);
+            return Err(IpcError::QueueFull);
         }
-        sched.wake_pid(server_pid);
+        msg.badge = call.pid as u64;
+        queue.messages.push_back(QueuedMessage {
+            msg,
+            kind: MessageKind::Ordinary(call),
+        });
+        record_enqueue(queue.messages.len());
+        let waiters = self.reply_waiters_for(endpoint_id);
+        if !waiters.iter().any(|waiter| *waiter == call) {
+            waiters.push_back(call);
+        }
+        Ok(())
     }
 
     pub fn block_on_recv(&mut self, endpoint_id: u32, receiver_pid: usize, sched: &mut Scheduler) {
@@ -113,56 +220,86 @@ impl IpcBusShard {
         }
     }
 
-    pub fn pop_pending(&mut self, endpoint_id: u32) -> Option<IpcMsg> {
-        self.queues.get_mut(&endpoint_id)?.pop_front()
+    pub fn pop_pending(&mut self, endpoint_id: u32) -> Option<PendingMessage> {
+        let queue = self.queues.get_mut(&endpoint_id)?;
+        let queued = queue.messages.pop_front()?;
+        CURRENT_QUEUE_DEPTH.fetch_sub(1, Ordering::Relaxed);
+        DEQUEUE_COUNT.fetch_add(1, Ordering::Relaxed);
+        let (mut msg, call) = match queued.kind {
+            MessageKind::Ordinary(call) => (queued.msg, Some(call)),
+            MessageKind::Timer => {
+                queue.timer_status = NotificationStatus::None;
+                let mut msg = queued.msg;
+                msg.words[0] = queue.timer_sequence();
+                msg.word_count = 1;
+                (msg, None)
+            }
+            MessageKind::Input => {
+                queue.input_status = NotificationStatus::None;
+                (queued.msg, None)
+            }
+        };
+        materialize_deferred(queue);
+        if call.is_none() {
+            msg.badge = 0;
+        }
+        Some(PendingMessage { msg, call })
     }
 
-    pub fn reply_waiter_pop_front(&mut self, endpoint_id: u32) -> Option<usize> {
+    pub fn reply_waiter_pop_front(&mut self, endpoint_id: u32) -> Option<IpcCallId> {
         self.reply_waiters.get_mut(&endpoint_id)?.pop_front()
     }
 
-    pub fn reply_waiter_remove(&mut self, endpoint_id: u32, caller_pid: usize) -> bool {
-        let waiters = self.reply_waiters_for(endpoint_id);
+    pub fn reply_waiter_remove(&mut self, endpoint_id: u32, call: IpcCallId) -> bool {
+        let Some(waiters) = self.reply_waiters.get_mut(&endpoint_id) else {
+            return false;
+        };
         let mut removed = false;
         let mut kept = VecDeque::new();
-        while let Some(pid) = waiters.pop_front() {
-            if pid == caller_pid {
+        while let Some(waiter) = waiters.pop_front() {
+            if waiter == call {
                 removed = true;
             } else {
-                kept.push_back(pid);
+                kept.push_back(waiter);
             }
         }
         *waiters = kept;
         removed
     }
 
-    pub fn remove_pending_calls_for(&mut self, endpoint_id: u32, caller_pid: usize) -> usize {
-        let queue = self.queue_for(endpoint_id);
-        let mut removed = 0usize;
+    pub fn remove_pending_call(&mut self, endpoint_id: u32, call: IpcCallId) -> bool {
+        let Some(queue) = self.queues.get_mut(&endpoint_id) else {
+            return false;
+        };
+        let mut removed = false;
         let mut kept = VecDeque::new();
-        while let Some(msg) = queue.pop_front() {
-            if msg.badge == caller_pid as u64 {
-                removed += 1;
+        while let Some(msg) = queue.messages.pop_front() {
+            if msg.kind == MessageKind::Ordinary(call) {
+                removed = true;
+                CURRENT_QUEUE_DEPTH.fetch_sub(1, Ordering::Relaxed);
             } else {
                 kept.push_back(msg);
             }
         }
-        *queue = kept;
+        queue.messages = kept;
+        materialize_deferred(queue);
         removed
     }
 
     pub fn pending_count(&self, endpoint_id: u32) -> usize {
-        self.queues.get(&endpoint_id).map_or(0, |q| q.len())
+        self.queues
+            .get(&endpoint_id)
+            .map_or(0, |q| q.messages.len())
     }
 
     pub fn pending_callers_count(&self, endpoint_id: u32) -> usize {
         self.reply_waiters.get(&endpoint_id).map_or(0, |w| w.len())
     }
 
-    pub fn has_pending_call_from(&self, endpoint_id: u32, caller_pid: usize) -> bool {
+    pub fn has_pending_call(&self, endpoint_id: u32, call: IpcCallId) -> bool {
         self.reply_waiters
             .get(&endpoint_id)
-            .is_some_and(|q| q.iter().any(|pid| *pid == caller_pid))
+            .is_some_and(|q| q.iter().any(|waiter| *waiter == call))
     }
 
     pub fn waiting_receiver_pid(&self, endpoint_id: u32, sched: &Scheduler) -> Option<usize> {
@@ -178,35 +315,64 @@ impl IpcBusShard {
         })
     }
 
-    pub fn send_timer_tick(&mut self, endpoint_id: u32, sched: &mut Scheduler, server_pid: usize) {
-        let msg = IpcMsg::with_label(0x1);
-        self.queue_for(endpoint_id).push_back(msg);
-        sched.wake_pid(server_pid);
+    pub fn send_timer_tick(&mut self, endpoint_id: u32, global_tick: u64) {
+        let queue = self.queue_for(endpoint_id);
+        queue.timer_base_tick.get_or_insert(global_tick);
+        queue.timer_latest_tick = global_tick;
+        if queue.timer_status != NotificationStatus::None {
+            COALESCED_NOTIFICATION_COUNT.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        if queue.messages.len() < ENDPOINT_QUEUE_CAPACITY {
+            queue.messages.push_back(QueuedMessage {
+                msg: IpcMsg::with_label(0x1).word(0, queue.timer_sequence()),
+                kind: MessageKind::Timer,
+            });
+            queue.timer_status = NotificationStatus::Queued;
+            record_enqueue(queue.messages.len());
+        } else {
+            queue.timer_status = NotificationStatus::Deferred;
+        }
     }
 
-    pub fn send_keyboard_event(
-        &mut self,
-        endpoint_id: u32,
-        event_val: u64,
-        sched: &mut Scheduler,
-        server_pid: usize,
-    ) {
-        let msg = IpcMsg::with_label(0x1).word(0, event_val);
-        self.queue_for(endpoint_id).push_back(msg);
-        sched.wake_pid(server_pid);
+    pub fn send_input_notification(&mut self, endpoint_id: u32) {
+        let queue = self.queue_for(endpoint_id);
+        if queue.input_status != NotificationStatus::None {
+            COALESCED_NOTIFICATION_COUNT.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        if queue.messages.len() < ENDPOINT_QUEUE_CAPACITY {
+            queue.messages.push_back(QueuedMessage {
+                msg: IpcMsg::with_label(0x1),
+                kind: MessageKind::Input,
+            });
+            queue.input_status = NotificationStatus::Queued;
+            record_enqueue(queue.messages.len());
+        } else {
+            queue.input_status = NotificationStatus::Deferred;
+        }
     }
 
-    pub fn remove_endpoint(&mut self, endpoint_id: u32) {
-        self.queues.remove(&endpoint_id);
-        self.reply_waiters.remove(&endpoint_id);
+    pub fn remove_endpoint(&mut self, endpoint_id: u32) -> Vec<IpcCallId> {
+        if let Some(queue) = self.queues.remove(&endpoint_id) {
+            CURRENT_QUEUE_DEPTH.fetch_sub(queue.messages.len(), Ordering::Relaxed);
+        }
+        self.reply_waiters
+            .remove(&endpoint_id)
+            .map_or_else(Vec::new, VecDeque::into)
     }
 
     pub fn remove_pid_references(&mut self, pid: usize) {
         for queue in self.queues.values_mut() {
-            queue.retain(|msg| msg.badge != pid as u64);
+            let before = queue.messages.len();
+            queue.messages.retain(
+                |queued| !matches!(queued.kind, MessageKind::Ordinary(call) if call.pid == pid),
+            );
+            CURRENT_QUEUE_DEPTH.fetch_sub(before - queue.messages.len(), Ordering::Relaxed);
+            materialize_deferred(queue);
         }
         for waiters in self.reply_waiters.values_mut() {
-            waiters.retain(|waiter| *waiter != pid);
+            waiters.retain(|waiter| waiter.pid != pid);
         }
     }
 
@@ -214,10 +380,14 @@ impl IpcBusShard {
     pub fn pending_count_for_pid(&mut self, pid: usize) -> usize {
         let mut n = 0usize;
         for queue in self.queues.values() {
-            n += queue.iter().filter(|msg| msg.badge == pid as u64).count();
+            n += queue
+                .messages
+                .iter()
+                .filter(|msg| matches!(msg.kind, MessageKind::Ordinary(call) if call.pid == pid))
+                .count();
         }
         for waiters in self.reply_waiters.values() {
-            n += waiters.iter().filter(|w| **w == pid).count();
+            n += waiters.iter().filter(|w| w.pid == pid).count();
         }
         n
     }
@@ -229,6 +399,46 @@ impl IpcBusShard {
             n += waiters.len();
         }
         n
+    }
+}
+
+impl Drop for IpcBusShard {
+    fn drop(&mut self) {
+        let remaining = self
+            .queues
+            .values()
+            .map(|queue| queue.messages.len())
+            .sum::<usize>();
+        if remaining != 0 {
+            CURRENT_QUEUE_DEPTH.fetch_sub(remaining, Ordering::Relaxed);
+        }
+    }
+}
+
+fn record_enqueue(endpoint_depth: usize) {
+    ENQUEUE_COUNT.fetch_add(1, Ordering::Relaxed);
+    CURRENT_QUEUE_DEPTH.fetch_add(1, Ordering::Relaxed);
+    HIGH_WATERMARK.fetch_max(endpoint_depth, Ordering::Relaxed);
+}
+
+fn materialize_deferred(queue: &mut EndpointQueue) {
+    if queue.messages.len() >= ENDPOINT_QUEUE_CAPACITY {
+        return;
+    }
+    if queue.timer_status == NotificationStatus::Deferred {
+        queue.messages.push_back(QueuedMessage {
+            msg: IpcMsg::with_label(0x1).word(0, queue.timer_sequence()),
+            kind: MessageKind::Timer,
+        });
+        queue.timer_status = NotificationStatus::Queued;
+        record_enqueue(queue.messages.len());
+    } else if queue.input_status == NotificationStatus::Deferred {
+        queue.messages.push_back(QueuedMessage {
+            msg: IpcMsg::with_label(0x1),
+            kind: MessageKind::Input,
+        });
+        queue.input_status = NotificationStatus::Queued;
+        record_enqueue(queue.messages.len());
     }
 }
 
@@ -255,24 +465,24 @@ where
     }
 }
 
-fn set_reply_target(sched: &mut Scheduler, server_pid: usize, endpoint_id: u32, caller_pid: usize) {
+fn set_reply_target(
+    sched: &mut Scheduler,
+    server_pid: usize,
+    endpoint_id: u32,
+    call: Option<IpcCallId>,
+) {
     if let Some(server) = sched.process_mut_by_pid(server_pid) {
         server.ipc_endpoint = Some(endpoint_id);
         server.pending_reply_wait = None;
-        server.ipc_reply_target = if caller_pid == 0 {
-            None
-        } else {
-            Some((endpoint_id, caller_pid))
-        };
+        server.ipc_reply_target = call.map(|call| IpcReplyTarget { endpoint_id, call });
     }
 }
 
 pub(crate) fn cancel_reply_target(
-    reply_target: &mut Option<(u32, usize)>,
-    endpoint_id: u32,
-    caller_pid: usize,
+    reply_target: &mut Option<IpcReplyTarget>,
+    target: IpcReplyTarget,
 ) -> bool {
-    if *reply_target == Some((endpoint_id, caller_pid)) {
+    if *reply_target == Some(target) {
         *reply_target = None;
         true
     } else {
@@ -286,7 +496,7 @@ fn deliver_reply_to_current_target(
     sched: &mut Scheduler,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
-    let Some((endpoint_id, client_pid)) = sched
+    let Some(target) = sched
         .processes
         .iter_mut()
         .find(|p| p.pid == server_pid)
@@ -295,48 +505,130 @@ fn deliver_reply_to_current_target(
         return Ok(());
     };
 
-    let _ = bus.reply_waiter_remove(endpoint_id, client_pid);
+    let _ = bus.reply_waiter_remove(target.endpoint_id, target.call);
 
-    let Some(client_idx) = sched.processes.iter().position(|p| p.pid == client_pid) else {
-        crate::serial_println!(
-            "[IPC] late reply dropped caller={} server={} ep={} label={:#x}",
-            client_pid,
-            server_pid,
-            endpoint_id,
-            reply.label
-        );
+    let Some(client_idx) = sched
+        .processes
+        .iter()
+        .position(|p| p.pid == target.call.pid)
+    else {
+        LATE_REPLY_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
         return Ok(());
     };
 
-    let client = &mut sched.processes[client_idx];
-    if client.pending_call.is_none() {
-        client.ipc_reply = None;
-        crate::serial_println!(
-            "[IPC] late reply dropped caller={} server={} ep={} label={:#x}",
-            client_pid,
-            server_pid,
-            endpoint_id,
-            reply.label
-        );
+    let valid = terminal_transition_allowed(
+        sched.processes[client_idx]
+            .pending_call
+            .map(|pending| pending.generation),
+        sched.processes[client_idx].ipc_call_outcome,
+        target.call.generation,
+    );
+    if !valid {
+        LATE_REPLY_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
         return Ok(());
     }
 
-    client.ipc_reply = Some(reply);
-    client.pending_call = None;
-    if client.state == ProcessState::BlockedOnIpc {
-        client.state = ProcessState::Ready;
-        // If the client is still the live `current_task` of a core, do not
-        // enqueue it on another core (that would run one context twice). Poke
-        // the owner CPU so its next LAPIC tick consumes the wakeup and either
-        // reselects or requeues the now-Ready task. If it is not live anywhere,
-        // enqueue normally.
-        if let Some(cpu_id) = sched.live_owner_core(client_idx) {
-            crate::sched::request_reschedule_on(cpu_id);
-        } else {
-            sched.enqueue_ready(client_idx);
-        }
+    if deadline_should_expire(
+        sched.processes[client_idx].ipc_deadline,
+        Some(target.call.generation),
+        sched.global_tick,
+    ) {
+        finish_call(
+            sched,
+            client_idx,
+            IpcCallOutcome::DeadlineExpired(target.call.generation),
+        );
+        DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
+        LATE_REPLY_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
+        return Ok(());
     }
+
+    let client = &mut sched.processes[client_idx];
+    client.ipc_reply = Some((target.call.generation, reply));
+    client.pending_call = None;
+    client.ipc_deadline = None;
+    client.ipc_call_outcome = Some(IpcCallOutcome::ReplyDelivered(target.call.generation));
+    wake_terminal(sched, client_idx);
     Ok(())
+}
+
+pub(crate) fn take_terminal_result(
+    sched: &mut Scheduler,
+    idx: usize,
+) -> Option<Result<IpcMsg, IpcError>> {
+    let outcome = sched.processes[idx].ipc_call_outcome?;
+    sched.processes[idx].ipc_call_outcome = None;
+    sched.processes[idx].ipc_deadline = None;
+    match outcome {
+        IpcCallOutcome::ReplyDelivered(generation) => {
+            let reply = sched.processes[idx].ipc_reply.take();
+            Some(match reply {
+                Some((reply_generation, msg)) if reply_generation == generation => Ok(msg),
+                _ => Err(IpcError::InvalidArgument),
+            })
+        }
+        IpcCallOutcome::DeadlineExpired(_) => Some(Err(IpcError::DeadlineExpired)),
+        IpcCallOutcome::ExplicitlyCancelled(_) => Some(Err(IpcError::Cancelled)),
+        IpcCallOutcome::PeerClosed(_) => Some(Err(IpcError::PeerClosed)),
+    }
+}
+
+fn finish_call(sched: &mut Scheduler, idx: usize, outcome: IpcCallOutcome) {
+    if terminal_transition_allowed(
+        sched.processes[idx]
+            .pending_call
+            .map(|pending| pending.generation),
+        sched.processes[idx].ipc_call_outcome,
+        outcome.generation(),
+    ) {
+        sched.processes[idx].pending_call = None;
+        sched.processes[idx].ipc_reply = None;
+        sched.processes[idx].ipc_deadline = None;
+        sched.processes[idx].ipc_call_outcome = Some(outcome);
+        wake_terminal(sched, idx);
+    }
+}
+
+pub(crate) fn terminal_transition_allowed(
+    pending_generation: Option<u64>,
+    current_outcome: Option<IpcCallOutcome>,
+    candidate_generation: u64,
+) -> bool {
+    current_outcome.is_none() && pending_generation == Some(candidate_generation)
+}
+
+pub(crate) fn deadline_should_expire(
+    deadline_entry: Option<(u64, u64)>,
+    pending_generation: Option<u64>,
+    now_tick: u64,
+) -> bool {
+    deadline_entry.is_some_and(|(generation, deadline)| {
+        pending_generation == Some(generation) && now_tick >= deadline
+    })
+}
+
+pub(crate) fn recv_deadline_should_expire(
+    deadline_entry: Option<(u64, u64, u32)>,
+    current_generation: u64,
+    endpoint_id: u32,
+    now_tick: u64,
+) -> bool {
+    deadline_entry.is_some_and(|(generation, deadline, deadline_endpoint)| {
+        generation == current_generation && deadline_endpoint == endpoint_id && now_tick >= deadline
+    })
+}
+
+fn wake_terminal(sched: &mut Scheduler, idx: usize) {
+    if sched.processes[idx].state != ProcessState::BlockedOnIpc {
+        return;
+    }
+    sched.processes[idx].state = ProcessState::Ready;
+    sched.remove_from_ready_queues(idx);
+    if let Some(cpu_id) = sched.live_owner_core(idx) {
+        crate::sched::request_reschedule_on(cpu_id);
+    } else {
+        sched.enqueue_ready(idx);
+    }
 }
 
 pub fn handle_ipc_call(
@@ -347,9 +639,25 @@ pub fn handle_ipc_call(
     sched: &mut Scheduler,
     bus: &mut IpcBus,
 ) -> Result<IpcMsg, IpcError> {
-    let (endpoint_id, target_owner) = caps
-        .token_owner(target_cap, CapabilityRights::SEND)
-        .map_err(|_| IpcError::InvalidCapability)?;
+    let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) else {
+        return Err(IpcError::InvalidArgument);
+    };
+    if let Some(result) = take_terminal_result(sched, idx) {
+        return result;
+    }
+
+    let (endpoint_id, target_owner) = match caps.token_owner(target_cap, CapabilityRights::SEND) {
+        Ok(target) => target,
+        Err(_) => {
+            sched.processes[idx].ipc_next_deadline_tick = None;
+            return Err(IpcError::InvalidCapability);
+        }
+    };
+    if let Some(pending) = sched.processes[idx].pending_call {
+        if pending.target_cap != target_cap.0 || pending.endpoint_id != endpoint_id {
+            return Err(IpcError::InvalidArgument);
+        }
+    }
     let fastpath_eligible = caps.check(target_cap, CapabilityRights::SEND).is_ok()
         && sched.is_blocked_on_recv(target_owner)
         && msg.word_count <= message::IPC_REG_WORDS as u32;
@@ -358,42 +666,39 @@ pub fn handle_ipc_call(
         // FASTPATH: will bypass scheduler in Phase 4. For now this falls through.
     }
 
-    let mut should_enqueue = false;
     let global_tick = sched.global_tick;
-    if let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) {
-        if sched.processes[idx].pending_reply_wait.is_some() {
-            // unlikely path, but handle
+    if sched.processes[idx].pending_call.is_none() {
+        let deadline = sched.processes[idx].ipc_next_deadline_tick.take();
+        if deadline.is_some_and(|deadline| global_tick >= deadline) {
+            DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
+            return Err(IpcError::DeadlineExpired);
         }
-        if let Some(reply) = sched.processes[idx].ipc_reply.take() {
-            sched.processes[idx].pending_call = None;
-            return Ok(reply);
+        let generation = sched.processes[idx]
+            .ipc_call_generation
+            .wrapping_add(1)
+            .max(1);
+        let call = IpcCallId {
+            pid: caller_pid,
+            generation,
+        };
+        if let Err(error) = bus.enqueue_call(endpoint_id, msg, call) {
+            return Err(error);
         }
-        if sched.processes[idx].pending_call.is_none() {
-            sched.processes[idx].pending_call = Some((target_cap.0, msg));
-            should_enqueue = true;
-        } else if !bus.has_pending_call_from(endpoint_id, caller_pid) {
-            should_enqueue = true;
-        }
-        sched.account_and_apply_churn_penalty();
-        sched.processes[idx].state = ProcessState::BlockedOnIpc;
-        sched.processes[idx].ipc_endpoint = Some(endpoint_id);
-        sched.processes[idx].block_start_tick = global_tick;
-    }
-    if let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) {
-        sched.remove_from_ready_queues(idx);
-    }
-    if should_enqueue {
-        bus.enqueue_call(endpoint_id, msg, caller_pid, sched, target_owner);
+        sched.processes[idx].ipc_call_generation = generation;
+        sched.processes[idx].pending_call = Some(PendingIpcCall {
+            target_cap: target_cap.0,
+            endpoint_id,
+            msg,
+            generation,
+        });
+        sched.processes[idx].ipc_deadline = deadline.map(|deadline| (generation, deadline));
     }
 
-    if sched.processes.iter().any(|p| {
-        p.pid == target_owner
-            && p.state == ProcessState::BlockedOnIpc
-            && p.ipc_endpoint == Some(endpoint_id)
-    }) && bus.pending_count(endpoint_id) > 0
-    {
-        sched.wake_pid(target_owner);
-    }
+    sched.account_and_apply_churn_penalty();
+    sched.processes[idx].state = ProcessState::BlockedOnIpc;
+    sched.processes[idx].ipc_endpoint = Some(endpoint_id);
+    sched.processes[idx].block_start_tick = global_tick;
+    sched.remove_from_ready_queues(idx);
 
     Err(IpcError::WouldBlock)
 }
@@ -404,9 +709,62 @@ pub fn handle_ipc_recv(
     sched: &mut Scheduler,
     bus: &mut IpcBus,
 ) -> Result<IpcMsg, IpcError> {
+    let Some(idx) = sched
+        .processes
+        .iter()
+        .position(|process| process.pid == receiver_pid)
+    else {
+        return Err(IpcError::InvalidArgument);
+    };
+    if sched.processes[idx].ipc_reply_target.is_some() {
+        // A synchronous server must resolve (or attempt) its current reply
+        // before receiving another call, otherwise reply identity is ambiguous.
+        sched.processes[idx].ipc_next_deadline_tick = None;
+        return Err(IpcError::InvalidArgument);
+    }
+
+    if let Some((_generation, timeout_endpoint)) = sched.processes[idx].ipc_recv_timeout {
+        if timeout_endpoint != endpoint_id {
+            return Err(IpcError::InvalidArgument);
+        }
+        sched.processes[idx].ipc_recv_timeout = None;
+        return Err(IpcError::DeadlineExpired);
+    }
+
+    let now_tick = sched.global_tick;
+    if let Some((generation, deadline, deadline_endpoint)) = sched.processes[idx].ipc_recv_deadline
+    {
+        if deadline_endpoint != endpoint_id
+            || generation != sched.processes[idx].ipc_recv_generation
+        {
+            sched.processes[idx].ipc_recv_deadline = None;
+            return Err(IpcError::InvalidArgument);
+        }
+        // This syscall-side recheck covers a retry that runs before the next
+        // BSP timer interrupt can perform the scheduler transition.
+        if now_tick >= deadline {
+            sched.processes[idx].ipc_recv_deadline = None;
+            DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
+            return Err(IpcError::DeadlineExpired);
+        }
+    } else if let Some(deadline) = sched.processes[idx].ipc_next_deadline_tick.take() {
+        if now_tick >= deadline {
+            DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
+            return Err(IpcError::DeadlineExpired);
+        }
+        let generation = sched.processes[idx]
+            .ipc_recv_generation
+            .wrapping_add(1)
+            .max(1);
+        sched.processes[idx].ipc_recv_generation = generation;
+        sched.processes[idx].ipc_recv_deadline = Some((generation, deadline, endpoint_id));
+    }
+
     if let Some(msg) = bus.pop_pending(endpoint_id) {
-        set_reply_target(sched, receiver_pid, endpoint_id, msg.badge as usize);
-        return Ok(msg);
+        sched.processes[idx].ipc_next_deadline_tick = None;
+        sched.processes[idx].ipc_recv_deadline = None;
+        set_reply_target(sched, receiver_pid, endpoint_id, msg.call);
+        return Ok(msg.msg);
     }
     bus.block_on_recv(endpoint_id, receiver_pid, sched);
     Err(IpcError::WouldBlock)
@@ -440,14 +798,10 @@ pub fn handle_ipc_reply_wait(
 
     if let Some(server) = sched.process_mut_by_pid(server_pid) {
         if let Some(msg) = bus.pop_pending(endpoint_id) {
-            server.ipc_reply_target = if msg.badge == 0 {
-                None
-            } else {
-                Some((endpoint_id, msg.badge as usize))
-            };
+            server.ipc_reply_target = msg.call.map(|call| IpcReplyTarget { endpoint_id, call });
             server.ipc_endpoint = Some(endpoint_id);
             server.pending_reply_wait = None;
-            return Ok(msg);
+            return Ok(msg.msg);
         }
 
         if server.pending_reply_wait.is_none() {
@@ -462,51 +816,283 @@ pub fn handle_ipc_reply_wait(
 pub fn handle_ipc_cancel(
     caller_pid: usize,
     sched: &mut Scheduler,
-    caps: &CapabilityBroker,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
     let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) else {
         return Err(IpcError::InvalidArgument);
     };
 
-    let pending = sched.processes[idx].pending_call;
-    sched.processes[idx].ipc_reply = None;
+    if matches!(
+        sched.processes[idx].ipc_call_outcome,
+        Some(IpcCallOutcome::ReplyDelivered(_))
+    ) {
+        return Ok(());
+    }
 
-    let Some((target_cap, _msg)) = pending else {
-        sched.processes[idx].pending_call = None;
+    let pending = sched.processes[idx].pending_call;
+
+    let Some(pending) = pending else {
         return Ok(());
     };
 
-    let (endpoint_id, server_pid) = caps
-        .token_owner(CapabilityToken(target_cap), CapabilityRights::SEND)
-        .map_err(|_| IpcError::InvalidCapability)?;
-
-    bus.remove_pending_calls_for(endpoint_id, caller_pid);
-    bus.reply_waiter_remove(endpoint_id, caller_pid);
-    if let Some(server) = sched.process_mut_by_pid(server_pid) {
-        cancel_reply_target(&mut server.ipc_reply_target, endpoint_id, caller_pid);
-    }
-    sched.processes[idx].pending_call = None;
-    sched.wake_pid(caller_pid);
+    let call = IpcCallId {
+        pid: caller_pid,
+        generation: pending.generation,
+    };
+    bus.remove_pending_call(pending.endpoint_id, call);
+    bus.reply_waiter_remove(pending.endpoint_id, call);
+    // If the server already consumed the request, retain its generation-tagged
+    // reply target as a one-entry tombstone. Its eventual reply is then counted
+    // and dropped before reply-and-wait installs a target for the next call.
+    finish_call(
+        sched,
+        idx,
+        IpcCallOutcome::ExplicitlyCancelled(pending.generation),
+    );
+    EXPLICIT_CANCEL_COUNT.fetch_add(1, Ordering::Relaxed);
     Ok(())
+}
+
+pub fn arm_ipc_deadline(
+    caller_pid: usize,
+    absolute_deadline_tick: u64,
+    sched: &mut Scheduler,
+) -> Result<(), IpcError> {
+    let Some(caller) = sched.process_mut_by_pid(caller_pid) else {
+        return Err(IpcError::InvalidArgument);
+    };
+    if caller.pending_call.is_some()
+        || caller.ipc_call_outcome.is_some()
+        || caller.ipc_next_deadline_tick.is_some()
+        || caller.ipc_recv_deadline.is_some()
+        || caller.ipc_recv_timeout.is_some()
+    {
+        return Err(IpcError::InvalidArgument);
+    }
+    caller.ipc_next_deadline_tick = Some(absolute_deadline_tick);
+    Ok(())
+}
+
+pub fn clear_next_ipc_deadline(caller_pid: usize, sched: &mut Scheduler) {
+    if let Some(caller) = sched.process_mut_by_pid(caller_pid) {
+        caller.ipc_next_deadline_tick = None;
+    }
+}
+
+/// Called from the BSP scheduler tick. Generation comparisons are the stale
+/// deadline rejection: a deadline can terminate only the operation that armed it.
+pub fn expire_deadlines(sched: &mut Scheduler, now_tick: u64) {
+    for idx in 0..sched.processes.len() {
+        let Some((generation, _deadline)) = sched.processes[idx].ipc_deadline else {
+            continue;
+        };
+        let Some(pending) = sched.processes[idx].pending_call else {
+            sched.processes[idx].ipc_deadline = None;
+            continue;
+        };
+        if !deadline_should_expire(
+            sched.processes[idx].ipc_deadline,
+            Some(pending.generation),
+            now_tick,
+        ) {
+            if pending.generation == generation {
+                continue;
+            }
+            sched.processes[idx].ipc_deadline = None;
+            continue;
+        }
+
+        let call = IpcCallId {
+            pid: sched.processes[idx].pid,
+            generation,
+        };
+        with_shard(pending.endpoint_id, |bus| {
+            bus.remove_pending_call(pending.endpoint_id, call);
+            bus.reply_waiter_remove(pending.endpoint_id, call);
+        });
+        finish_call(sched, idx, IpcCallOutcome::DeadlineExpired(generation));
+        DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    for idx in 0..sched.processes.len() {
+        let Some((generation, _deadline, endpoint_id)) = sched.processes[idx].ipc_recv_deadline
+        else {
+            continue;
+        };
+        if !recv_deadline_should_expire(
+            sched.processes[idx].ipc_recv_deadline,
+            sched.processes[idx].ipc_recv_generation,
+            endpoint_id,
+            now_tick,
+        ) {
+            if generation != sched.processes[idx].ipc_recv_generation {
+                sched.processes[idx].ipc_recv_deadline = None;
+            }
+            continue;
+        }
+        sched.processes[idx].ipc_recv_deadline = None;
+        sched.processes[idx].ipc_recv_timeout = Some((generation, endpoint_id));
+        DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
+        wake_terminal(sched, idx);
+    }
+}
+
+pub fn finish_peer_closed_calls(
+    endpoint_id: u32,
+    calls: impl IntoIterator<Item = IpcCallId>,
+    sched: &mut Scheduler,
+) {
+    for call in calls {
+        let Some(idx) = sched.processes.iter().position(|p| p.pid == call.pid) else {
+            continue;
+        };
+        if !sched.processes[idx].pending_call.is_some_and(|pending| {
+            pending.endpoint_id == endpoint_id && pending.generation == call.generation
+        }) {
+            continue;
+        }
+        finish_call(sched, idx, IpcCallOutcome::PeerClosed(call.generation));
+        PEER_CLOSED_WAKE_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::cancel_reply_target;
+    use super::{
+        cancel_reply_target, deadline_should_expire, recv_deadline_should_expire,
+        terminal_transition_allowed, IpcBus, IpcError, IpcMsg, ENDPOINT_QUEUE_CAPACITY,
+    };
+    use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget};
+
+    fn call(pid: usize, generation: u64) -> IpcCallId {
+        IpcCallId { pid, generation }
+    }
 
     #[test]
     fn cancel_reply_target_clears_only_matching_in_flight_call() {
-        let mut target = Some((13, 12));
-        assert!(cancel_reply_target(&mut target, 13, 12));
+        let expected = IpcReplyTarget {
+            endpoint_id: 13,
+            call: call(12, 7),
+        };
+        let mut target = Some(expected);
+        assert!(cancel_reply_target(&mut target, expected));
         assert_eq!(target, None);
 
-        let mut other_endpoint = Some((9, 12));
-        assert!(!cancel_reply_target(&mut other_endpoint, 13, 12));
-        assert_eq!(other_endpoint, Some((9, 12)));
+        let mut other_endpoint = Some(IpcReplyTarget {
+            endpoint_id: 9,
+            call: call(12, 7),
+        });
+        assert!(!cancel_reply_target(&mut other_endpoint, expected));
 
-        let mut other_caller = Some((13, 25));
-        assert!(!cancel_reply_target(&mut other_caller, 13, 12));
-        assert_eq!(other_caller, Some((13, 25)));
+        let mut newer_call = Some(IpcReplyTarget {
+            endpoint_id: 13,
+            call: call(12, 8),
+        });
+        assert!(!cancel_reply_target(&mut newer_call, expected));
+    }
+
+    #[test]
+    fn multiple_senders_keep_fifo_order() {
+        let mut bus = IpcBus::new();
+        for pid in [11, 22, 33] {
+            bus.enqueue_call(4, IpcMsg::with_label(pid as u64), call(pid, 1))
+                .unwrap();
+        }
+        for pid in [11, 22, 33] {
+            let pending = bus.pop_pending(4).unwrap();
+            assert_eq!(pending.msg.label, pid as u64);
+            assert_eq!(pending.call, Some(call(pid, 1)));
+        }
+    }
+
+    #[test]
+    fn queue_bound_and_receive_reuse_are_explicit() {
+        let mut bus = IpcBus::new();
+        for i in 0..ENDPOINT_QUEUE_CAPACITY {
+            bus.enqueue_call(5, IpcMsg::with_label(i as u64), call(i + 1, 1))
+                .unwrap();
+        }
+        assert_eq!(bus.pending_count(5), ENDPOINT_QUEUE_CAPACITY);
+        assert_eq!(
+            bus.enqueue_call(5, IpcMsg::empty(), call(999, 1)),
+            Err(IpcError::QueueFull)
+        );
+        assert_eq!(bus.pop_pending(5).unwrap().msg.label, 0);
+        bus.enqueue_call(5, IpcMsg::with_label(99), call(999, 1))
+            .unwrap();
+        assert_eq!(bus.pending_count(5), ENDPOINT_QUEUE_CAPACITY);
+    }
+
+    #[test]
+    fn queue_space_is_reused_after_cancel_and_sender_exit() {
+        let mut bus = IpcBus::new();
+        for i in 0..ENDPOINT_QUEUE_CAPACITY {
+            bus.enqueue_call(6, IpcMsg::empty(), call(i + 1, 1))
+                .unwrap();
+        }
+        assert!(bus.remove_pending_call(6, call(1, 1)));
+        bus.reply_waiter_remove(6, call(1, 1));
+        bus.enqueue_call(6, IpcMsg::empty(), call(1000, 1)).unwrap();
+
+        bus.remove_pid_references(2);
+        bus.enqueue_call(6, IpcMsg::empty(), call(1001, 1)).unwrap();
+        assert_eq!(bus.pending_count(6), ENDPOINT_QUEUE_CAPACITY);
+    }
+
+    #[test]
+    fn endpoint_removal_clears_queue_waiters_and_notification_state() {
+        let mut bus = IpcBus::new();
+        bus.enqueue_call(7, IpcMsg::empty(), call(42, 3)).unwrap();
+        bus.send_input_notification(7);
+        let closed = bus.remove_endpoint(7);
+        assert_eq!(closed, [call(42, 3)]);
+        assert_eq!(bus.pending_count(7), 0);
+
+        bus.send_input_notification(7);
+        assert_eq!(bus.pending_count(7), 1);
+    }
+
+    #[test]
+    fn timer_notifications_are_bounded_and_preserve_elapsed_ticks() {
+        let mut bus = IpcBus::new();
+        for tick in 10..=1_000 {
+            bus.send_timer_tick(8, tick);
+        }
+        assert_eq!(bus.pending_count(8), 1);
+        let tick = bus.pop_pending(8).unwrap();
+        assert_eq!(tick.msg.words[0], 991);
+    }
+
+    #[test]
+    fn input_notification_is_level_triggered_and_rearmable() {
+        let mut bus = IpcBus::new();
+        for _ in 0..1_000 {
+            bus.send_input_notification(9);
+        }
+        assert_eq!(bus.pending_count(9), 1);
+        bus.pop_pending(9).unwrap();
+        bus.send_input_notification(9);
+        assert_eq!(bus.pending_count(9), 1);
+    }
+
+    #[test]
+    fn first_terminal_transition_wins_and_stale_generations_lose() {
+        assert!(terminal_transition_allowed(Some(5), None, 5));
+        assert!(!terminal_transition_allowed(
+            Some(5),
+            Some(IpcCallOutcome::ReplyDelivered(5)),
+            5
+        ));
+        assert!(!terminal_transition_allowed(
+            Some(5),
+            Some(IpcCallOutcome::DeadlineExpired(5)),
+            5
+        ));
+        assert!(!terminal_transition_allowed(Some(6), None, 5));
+        assert!(!deadline_should_expire(Some((5, 100)), Some(5), 99));
+        assert!(deadline_should_expire(Some((5, 100)), Some(5), 100));
+        assert!(!deadline_should_expire(Some((5, 100)), Some(6), 1_000));
+        assert!(recv_deadline_should_expire(Some((7, 100, 9)), 7, 9, 100));
+        assert!(!recv_deadline_should_expire(Some((7, 100, 9)), 8, 9, 1_000));
     }
 }

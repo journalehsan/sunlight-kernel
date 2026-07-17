@@ -42,6 +42,11 @@ fn alloc_error(layout: core::alloc::Layout) -> ! {
                 sched.processes[idx].ipc_reply = None;
                 sched.processes[idx].ipc_endpoint = None;
                 sched.processes[idx].pending_call = None;
+                sched.processes[idx].ipc_call_outcome = None;
+                sched.processes[idx].ipc_next_deadline_tick = None;
+                sched.processes[idx].ipc_deadline = None;
+                sched.processes[idx].ipc_recv_deadline = None;
+                sched.processes[idx].ipc_recv_timeout = None;
                 sched.processes[idx].pending_reply_wait = None;
                 sched.processes[idx].ipc_reply_target = None;
                 sched.processes[idx].env = crate::process::env::EnvMap::new();

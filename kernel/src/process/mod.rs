@@ -31,6 +31,45 @@ pub fn new_kernel_stack() -> alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]> {
 }
 
 /// A schedulable process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IpcCallId {
+    pub pid: usize,
+    pub generation: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PendingIpcCall {
+    pub target_cap: u64,
+    pub endpoint_id: u32,
+    pub msg: IpcMsg,
+    pub generation: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IpcCallOutcome {
+    ReplyDelivered(u64),
+    DeadlineExpired(u64),
+    ExplicitlyCancelled(u64),
+    PeerClosed(u64),
+}
+
+impl IpcCallOutcome {
+    pub const fn generation(self) -> u64 {
+        match self {
+            Self::ReplyDelivered(generation)
+            | Self::DeadlineExpired(generation)
+            | Self::ExplicitlyCancelled(generation)
+            | Self::PeerClosed(generation) => generation,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IpcReplyTarget {
+    pub endpoint_id: u32,
+    pub call: IpcCallId,
+}
+
 pub struct Process {
     pub pid: usize,
     pub ppid: usize, // parent pid
@@ -54,10 +93,22 @@ pub struct Process {
     pub env: env::EnvMap,
     pub ipc_queue: VecDeque<IpcMsg>,
     pub ipc_endpoint: Option<u32>,
-    pub ipc_reply: Option<IpcMsg>,
-    pub pending_call: Option<(u64, IpcMsg)>,
+    /// A synchronous call has exactly one terminal outcome. The scheduler lock
+    /// serializes reply, deadline, cancel, and peer-close transitions; the call
+    /// generation rejects stale timer entries and late replies.
+    pub ipc_reply: Option<(u64, IpcMsg)>,
+    pub pending_call: Option<PendingIpcCall>,
+    pub ipc_call_outcome: Option<IpcCallOutcome>,
+    pub ipc_call_generation: u64,
+    pub ipc_next_deadline_tick: Option<u64>,
+    pub ipc_deadline: Option<(u64, u64)>,
+    /// Generation, absolute tick, and endpoint for a blocked timed receive.
+    pub ipc_recv_deadline: Option<(u64, u64, u32)>,
+    /// Completed receive deadline retained until that receive syscall retries.
+    pub ipc_recv_timeout: Option<(u64, u32)>,
+    pub ipc_recv_generation: u64,
     pub pending_reply_wait: Option<(u32, IpcMsg)>,
-    pub ipc_reply_target: Option<(u32, usize)>,
+    pub ipc_reply_target: Option<IpcReplyTarget>,
     pub fd_table: alloc::boxed::Box<fd_table::FdTable>,
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
@@ -225,6 +276,13 @@ impl Process {
             ipc_endpoint: None,
             ipc_reply: None,
             pending_call: None,
+            ipc_call_outcome: None,
+            ipc_call_generation: 0,
+            ipc_next_deadline_tick: None,
+            ipc_deadline: None,
+            ipc_recv_deadline: None,
+            ipc_recv_timeout: None,
+            ipc_recv_generation: 0,
             pending_reply_wait: None,
             ipc_reply_target: None,
             fd_table: fd_table::FdTable::new_boxed(),
@@ -369,6 +427,13 @@ impl Process {
             ipc_endpoint: None,
             ipc_reply: None,
             pending_call: None,
+            ipc_call_outcome: None,
+            ipc_call_generation: 0,
+            ipc_next_deadline_tick: None,
+            ipc_deadline: None,
+            ipc_recv_deadline: None,
+            ipc_recv_timeout: None,
+            ipc_recv_generation: 0,
             pending_reply_wait: None,
             ipc_reply_target: None,
             fd_table,

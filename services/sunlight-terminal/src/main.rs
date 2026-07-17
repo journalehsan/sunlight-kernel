@@ -244,6 +244,8 @@ impl From<IpcCallError> for PtyIoError {
     fn from(err: IpcCallError) -> Self {
         match err {
             IpcCallError::Timeout => PtyIoError::Timeout,
+            IpcCallError::QueueFull | IpcCallError::Cancelled => PtyIoError::Timeout,
+            IpcCallError::PeerClosed => PtyIoError::Rejected,
             _ => PtyIoError::Rejected,
         }
     }

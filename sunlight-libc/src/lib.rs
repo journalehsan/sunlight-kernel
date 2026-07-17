@@ -405,7 +405,12 @@ pub fn openpty() -> Result<(sunlight_ipc::CapabilityToken, sunlight_ipc::Capabil
     );
     let reply = match sunlight_ipc::ipc_call_timeout(pty_cap, req, 1000) {
         Ok(reply) => reply,
-        Err(sunlight_ipc::IpcCallError::Timeout) => return Err(Errno::Again),
+        Err(
+            sunlight_ipc::IpcCallError::Timeout
+            | sunlight_ipc::IpcCallError::QueueFull
+            | sunlight_ipc::IpcCallError::Cancelled,
+        ) => return Err(Errno::Again),
+        Err(sunlight_ipc::IpcCallError::PeerClosed) => return Err(Errno::Failed),
         Err(_) => return Err(Errno::Failed),
     };
 

@@ -137,6 +137,11 @@ pub fn unregister_mouse_driver() {
     MOUSE_DRIVER_ENDPOINT.store(0, Ordering::Release);
 }
 
+pub fn unregister_mouse_endpoint(endpoint_id: u32) {
+    let _ =
+        MOUSE_DRIVER_ENDPOINT.compare_exchange(endpoint_id, 0, Ordering::AcqRel, Ordering::Acquire);
+}
+
 /// Push a raw mouse byte into the ring buffer (non-blocking).
 fn push_mouse_byte(byte: u8) -> bool {
     let write = WRITE_IDX.load(Ordering::Relaxed);
@@ -201,14 +206,22 @@ pub fn handle_irq12() {
         let server_pid = sched
             .processes
             .iter()
-            .find(|p| p.name_str() == "sunlight-mouse")
+            .find(|p| {
+                p.name_str() == "sunlight-mouse"
+                    && !matches!(
+                        p.state,
+                        crate::process::ProcessState::Finished
+                            | crate::process::ProcessState::Reaped
+                    )
+            })
             .map(|p| p.pid)
             .unwrap_or(0);
 
         if server_pid != 0 {
             crate::ipc::with_shard(endpoint, |bus| {
-                bus.send_keyboard_event(endpoint, byte as u64, &mut sched, server_pid);
+                bus.send_input_notification(endpoint);
             });
+            sched.wake_pid(server_pid);
         }
     }
 

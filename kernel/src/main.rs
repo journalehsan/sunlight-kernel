@@ -2136,20 +2136,27 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     //    pid, discarding whatever the caller placed in the message.
     {
         let mut bus = crate::ipc::IpcBus::new();
-        let mut sched = sched::SCHEDULER.lock();
         let mut msg = IpcMsg::with_label(0);
         msg.badge = 0x1337; // forged badge — must be discarded
         let real_caller_pid = 0x4242;
-        bus.enqueue_call(0, msg, real_caller_pid, &mut sched, real_caller_pid);
+        bus.enqueue_call(
+            0,
+            msg,
+            crate::process::IpcCallId {
+                pid: real_caller_pid,
+                generation: 1,
+            },
+        )
+        .expect("test queue has capacity");
         let delivered = bus
             .pop_pending(0)
             .expect("enqueued message must be present");
-        if delivered.badge == real_caller_pid as u64 && delivered.badge != 0x1337 {
+        if delivered.msg.badge == real_caller_pid as u64 && delivered.msg.badge != 0x1337 {
             serial_println!("[SEC]  badge forge attempt: REJECTED (overwritten by kernel)");
         } else {
             serial_println!(
                 "[SEC]  badge forge attempt: UNEXPECTED badge={:#x}",
-                delivered.badge
+                delivered.msg.badge
             );
         }
     }
@@ -2158,32 +2165,34 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     // both message order and reply-waiter order.
     {
         let mut bus = crate::ipc::IpcBus::new();
-        let mut sched = sched::SCHEDULER.lock();
-        let server_pid = 0x5000;
         let first_pid = 0x5101;
         let second_pid = 0x5102;
         bus.enqueue_call(
             0,
             IpcMsg::with_label(0x4B07),
-            first_pid,
-            &mut sched,
-            server_pid,
-        );
+            crate::process::IpcCallId {
+                pid: first_pid,
+                generation: 1,
+            },
+        )
+        .expect("first test call");
         bus.enqueue_call(
             0,
             IpcMsg::with_label(0x4B07),
-            second_pid,
-            &mut sched,
-            server_pid,
-        );
+            crate::process::IpcCallId {
+                pid: second_pid,
+                generation: 1,
+            },
+        )
+        .expect("second test call");
         let first = bus.pop_pending(0).expect("first queued IPC call");
         let second = bus.pop_pending(0).expect("second queued IPC call");
         let first_waiter = bus.reply_waiter_pop_front(0).expect("first reply waiter");
         let second_waiter = bus.reply_waiter_pop_front(0).expect("second reply waiter");
-        if first.badge == first_pid as u64
-            && second.badge == second_pid as u64
-            && first_waiter == first_pid
-            && second_waiter == second_pid
+        if first.msg.badge == first_pid as u64
+            && second.msg.badge == second_pid as u64
+            && first_waiter.pid == first_pid
+            && second_waiter.pid == second_pid
         {
             serial_println!("[SEC]  IPC multi-caller queue: OK");
         } else {
@@ -2194,14 +2203,305 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     {
         let endpoint_id = 13;
         let caller_pid = 12;
-        let mut matching = Some((endpoint_id, caller_pid));
-        let mut other_call = Some((endpoint_id, 25));
-        let cleared = crate::ipc::cancel_reply_target(&mut matching, endpoint_id, caller_pid);
-        let preserved = !crate::ipc::cancel_reply_target(&mut other_call, endpoint_id, caller_pid);
-        if cleared && matching.is_none() && preserved && other_call == Some((endpoint_id, 25)) {
+        let target = crate::process::IpcReplyTarget {
+            endpoint_id,
+            call: crate::process::IpcCallId {
+                pid: caller_pid,
+                generation: 1,
+            },
+        };
+        let mut matching = Some(target);
+        let mut other_call = Some(crate::process::IpcReplyTarget {
+            endpoint_id,
+            call: crate::process::IpcCallId {
+                pid: 25,
+                generation: 1,
+            },
+        });
+        let cleared = crate::ipc::cancel_reply_target(&mut matching, target);
+        let preserved = !crate::ipc::cancel_reply_target(&mut other_call, target);
+        if cleared && matching.is_none() && preserved && other_call.is_some() {
             serial_println!("[SEC]  IPC timeout cancellation target: OK");
         } else {
             serial_println!("[SEC]  IPC timeout cancellation target: UNEXPECTED");
+        }
+    }
+
+    // Phase 1 IPC reliability boot gates. Host `cargo test` cannot link the
+    // bare-metal target's `test` crate, so keep these deterministic and local.
+    {
+        let mut bus = crate::ipc::IpcBus::new();
+        let endpoint = 14;
+        let mut accepted = true;
+        for i in 0..crate::ipc::ENDPOINT_QUEUE_CAPACITY {
+            accepted &= bus
+                .enqueue_call(
+                    endpoint,
+                    IpcMsg::with_label(i as u64),
+                    crate::process::IpcCallId {
+                        pid: i + 1,
+                        generation: 1,
+                    },
+                )
+                .is_ok();
+        }
+        let full = bus.enqueue_call(
+            endpoint,
+            IpcMsg::empty(),
+            crate::process::IpcCallId {
+                pid: 999,
+                generation: 1,
+            },
+        ) == Err(crate::ipc::IpcError::QueueFull);
+        let reusable = bus.pop_pending(endpoint).is_some()
+            && bus
+                .enqueue_call(
+                    endpoint,
+                    IpcMsg::empty(),
+                    crate::process::IpcCallId {
+                        pid: 999,
+                        generation: 1,
+                    },
+                )
+                .is_ok();
+        if accepted && full && reusable {
+            serial_println!("[SEC]  IPC bounded queue/backpressure/reuse: OK");
+        } else {
+            serial_println!("[SEC]  IPC bounded queue/backpressure/reuse: UNEXPECTED");
+        }
+    }
+
+    {
+        let mut bus = crate::ipc::IpcBus::new();
+        for tick in 10..=1_000 {
+            bus.send_timer_tick(15, tick);
+        }
+        let timer = bus.pop_pending(15);
+        for _ in 0..1_000 {
+            bus.send_input_notification(16);
+        }
+        let input_bounded = bus.pending_count(16) == 1;
+        bus.remove_endpoint(16);
+        bus.send_input_notification(16);
+        let endpoint_rearmed = bus.pending_count(16) == 1;
+        if timer.is_some_and(|msg| msg.msg.words[0] == 991) && input_bounded && endpoint_rearmed {
+            serial_println!("[SEC]  IPC notification coalescing/elapsed time: OK");
+        } else {
+            serial_println!("[SEC]  IPC notification coalescing/elapsed time: UNEXPECTED");
+        }
+    }
+
+    {
+        use crate::process::IpcCallOutcome;
+        let reply_wins = !crate::ipc::terminal_transition_allowed(
+            Some(5),
+            Some(IpcCallOutcome::ReplyDelivered(5)),
+            5,
+        );
+        let deadline_wins = !crate::ipc::terminal_transition_allowed(
+            Some(5),
+            Some(IpcCallOutcome::DeadlineExpired(5)),
+            5,
+        );
+        let stale_rejected = !crate::ipc::terminal_transition_allowed(Some(6), None, 5);
+        let deadline_due = crate::ipc::deadline_should_expire(Some((5, 100)), Some(5), 100);
+        let stale_deadline = !crate::ipc::deadline_should_expire(Some((5, 100)), Some(6), 1_000);
+        let recv_deadline_due =
+            crate::ipc::recv_deadline_should_expire(Some((7, 100, 9)), 7, 9, 100);
+        let stale_recv_deadline =
+            !crate::ipc::recv_deadline_should_expire(Some((7, 100, 9)), 8, 9, 1_000);
+        if reply_wins
+            && deadline_wins
+            && stale_rejected
+            && deadline_due
+            && stale_deadline
+            && recv_deadline_due
+            && stale_recv_deadline
+        {
+            serial_println!("[SEC]  IPC terminal arbitration/generation: OK");
+        } else {
+            serial_println!("[SEC]  IPC terminal arbitration/generation: UNEXPECTED");
+        }
+    }
+
+    // Exercise the scheduler-backed transitions with real Process records.
+    // This is a boot gate because the bare-metal target cannot link libtest.
+    {
+        use crate::process::{
+            IpcCallId, IpcCallOutcome, IpcReplyTarget, PendingIpcCall, ProcessState,
+        };
+
+        let (caller, server) = {
+            let mut pmm = PMM.lock();
+            // SAFETY: the boot-provided HHDM is valid for both test address spaces.
+            unsafe {
+                (
+                    Process::new(0x7fff_1001, 0, "ipc-deadline-test", &mut pmm, hhdm_offset),
+                    Process::new(0x7fff_1002, 0, "ipc-reply-test", &mut pmm, hhdm_offset),
+                )
+            }
+        };
+        let caller_pid = caller.pid;
+        let server_pid = server.pid;
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let base = sched.processes.len();
+        sched.processes.push(caller);
+        sched.processes.push(server);
+        let caller_idx = base;
+        let server_idx = base + 1;
+
+        // A timed receive is woken by expire_deadlines alone, then reports the
+        // terminal error on its syscall-side retry.
+        sched.processes[caller_idx].state = ProcessState::BlockedOnIpc;
+        sched.processes[caller_idx].ipc_endpoint = Some(41);
+        sched.processes[caller_idx].ipc_recv_generation = 1;
+        sched.processes[caller_idx].ipc_recv_deadline = Some((1, 10, 41));
+        crate::ipc::expire_deadlines(&mut sched, 10);
+        let recv_woke = sched.processes[caller_idx].state == ProcessState::Ready;
+        sched.remove_from_ready_queues(caller_idx);
+        let recv_timed_out = crate::ipc::with_shard(41, |bus| {
+            matches!(
+                crate::ipc::handle_ipc_recv(caller_pid, 41, &mut sched, bus),
+                Err(crate::ipc::IpcError::DeadlineExpired)
+            )
+        });
+
+        fn install_call(
+            sched: &mut crate::sched::Scheduler,
+            caller_idx: usize,
+            generation: u64,
+            endpoint_id: u32,
+            deadline: u64,
+        ) -> IpcCallId {
+            let caller_pid = sched.processes[caller_idx].pid;
+            let call = IpcCallId {
+                pid: caller_pid,
+                generation,
+            };
+            let msg = IpcMsg::with_label(generation);
+            crate::ipc::with_shard(endpoint_id, |bus| {
+                bus.enqueue_call(endpoint_id, msg, call)
+                    .expect("deadline test queue has capacity");
+            });
+            let caller = &mut sched.processes[caller_idx];
+            caller.state = ProcessState::BlockedOnIpc;
+            caller.ipc_endpoint = Some(endpoint_id);
+            caller.ipc_call_generation = generation;
+            caller.pending_call = Some(PendingIpcCall {
+                target_cap: 0x55,
+                endpoint_id,
+                msg,
+                generation,
+            });
+            caller.ipc_deadline = Some((generation, deadline));
+            caller.ipc_call_outcome = None;
+            caller.ipc_reply = None;
+            call
+        }
+
+        // No peer activity is needed for the deadline to wake the caller and
+        // turn its next retry into DeadlineExpired.
+        let _ = install_call(&mut sched, caller_idx, 2, 42, 20);
+        crate::ipc::expire_deadlines(&mut sched, 20);
+        let call_woke = sched.processes[caller_idx].state == ProcessState::Ready;
+        sched.remove_from_ready_queues(caller_idx);
+        let call_timed_out = matches!(
+            crate::ipc::take_terminal_result(&mut sched, caller_idx),
+            Some(Err(crate::ipc::IpcError::DeadlineExpired))
+        );
+
+        // A committed reply wins over a later cancel.
+        let reply_call = install_call(&mut sched, caller_idx, 3, 43, 100);
+        let _ = crate::ipc::with_shard(43, |bus| bus.pop_pending(43));
+        sched.processes[server_idx].ipc_reply_target = Some(IpcReplyTarget {
+            endpoint_id: 43,
+            call: reply_call,
+        });
+        let reply = IpcMsg::with_label(0xCA11);
+        let mut local_bus = crate::ipc::IpcBus::new();
+        let reply_committed =
+            crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, &mut local_bus).is_ok();
+        let cancel_after_reply =
+            crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &mut local_bus).is_ok();
+        sched.remove_from_ready_queues(caller_idx);
+        let reply_survived = matches!(
+            crate::ipc::take_terminal_result(&mut sched, caller_idx),
+            Some(Ok(delivered)) if delivered.label == reply.label
+        );
+
+        // Once the deadline wins, the old server target is a tombstone. Its
+        // eventual reply cannot mutate the next generation.
+        let late_call = install_call(&mut sched, caller_idx, 4, 44, 30);
+        let _ = crate::ipc::with_shard(44, |bus| bus.pop_pending(44));
+        sched.processes[server_idx].ipc_reply_target = Some(IpcReplyTarget {
+            endpoint_id: 44,
+            call: late_call,
+        });
+        crate::ipc::expire_deadlines(&mut sched, 30);
+        sched.remove_from_ready_queues(caller_idx);
+        let deadline_won = matches!(
+            crate::ipc::take_terminal_result(&mut sched, caller_idx),
+            Some(Err(crate::ipc::IpcError::DeadlineExpired))
+        );
+        let caller = &mut sched.processes[caller_idx];
+        caller.ipc_call_generation = 5;
+        caller.pending_call = Some(PendingIpcCall {
+            target_cap: 0x66,
+            endpoint_id: 45,
+            msg: IpcMsg::with_label(5),
+            generation: 5,
+        });
+        let late_reply_dropped = crate::ipc::handle_ipc_reply(
+            server_pid,
+            IpcMsg::with_label(0x1A7E),
+            &mut sched,
+            &mut local_bus,
+        )
+        .is_ok()
+            && sched.processes[caller_idx]
+                .pending_call
+                .is_some_and(|pending| pending.generation == 5)
+            && sched.processes[caller_idx].ipc_reply.is_none();
+
+        // A stale generation is cleared without waking or terminating the
+        // newer call.
+        sched.processes[caller_idx].state = ProcessState::BlockedOnIpc;
+        sched.processes[caller_idx].ipc_deadline = Some((4, 40));
+        crate::ipc::expire_deadlines(&mut sched, 40);
+        let stale_ignored = sched.processes[caller_idx]
+            .pending_call
+            .is_some_and(|pending| pending.generation == 5)
+            && sched.processes[caller_idx].ipc_call_outcome.is_none()
+            && sched.processes[caller_idx].ipc_deadline.is_none();
+
+        sched.processes[caller_idx].pending_call = None;
+        sched.processes[caller_idx].state = ProcessState::Ready;
+        sched.remove_from_ready_queues(caller_idx);
+        for endpoint in [41, 42, 43, 44, 45] {
+            crate::ipc::with_shard(endpoint, |bus| {
+                bus.remove_endpoint(endpoint);
+            });
+        }
+        let server = sched.processes.pop().expect("test server process");
+        let caller = sched.processes.pop().expect("test caller process");
+        drop(sched);
+        drop(server);
+        drop(caller);
+
+        if recv_woke
+            && recv_timed_out
+            && call_woke
+            && call_timed_out
+            && reply_committed
+            && cancel_after_reply
+            && reply_survived
+            && deadline_won
+            && late_reply_dropped
+            && stale_ignored
+        {
+            serial_println!("[SEC]  IPC deadline wake/race/late reply: OK");
+        } else {
+            serial_println!("[SEC]  IPC deadline wake/race/late reply: UNEXPECTED");
         }
     }
 

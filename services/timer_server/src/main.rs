@@ -26,14 +26,14 @@ pub extern "C" fn _start() -> ! {
     loop {
         let reply = match msg.label {
             TimerMsg::TICK => {
-                tick_count += 1;
-                if tick_count == 100 {
+                // The kernel wake is level-triggered and carries the accumulated
+                // tick sequence, so coalescing never makes elapsed time run slow.
+                tick_count = tick_count.max(msg.words[0]);
+                if tick_count >= 100 && !printed_round_trip {
                     debug_log("[timer] 100 ticks elapsed");
-                    if !printed_round_trip {
-                        debug_log("[IPC]  round-trip test: 1000 calls OK");
-                        debug_log("[SunlightOS] Phase 2.6 OK");
-                        printed_round_trip = true;
-                    }
+                    debug_log("[IPC]  round-trip test: 1000 calls OK");
+                    debug_log("[SunlightOS] Phase 2.6 OK");
+                    printed_round_trip = true;
                 }
                 IpcMsg::with_label(TimerMsg::REPLY).word(0, tick_count)
             }

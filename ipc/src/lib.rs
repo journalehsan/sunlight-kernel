@@ -23,6 +23,7 @@ pub enum SunlightSyscall {
     IpcNotifySend = 5,
     IpcNotifyWait = 6,
     IpcCancel = 7,
+    IpcSetDeadline = 8,
     EndpointCreate = 10,
     EndpointBind = 11,
     ProcessExit = 20,
@@ -1941,6 +1942,10 @@ pub enum IpcError {
     InvalidWordCount = 5,
     /// `cap_count` exceeds `IPC_MAX_CAPS` (2) — forged or malformed register value.
     InvalidCapCount = 6,
+    QueueFull = 7,
+    DeadlineExpired = 8,
+    Cancelled = 9,
+    PeerClosed = 10,
 }
 
 /// Errors from shared memory grant syscalls.
@@ -2093,6 +2098,11 @@ pub fn ipc_call(cap: CapabilityToken, msg: IpcMsg) -> IpcMsg {
     loop {
         // SAFETY: ipc_call passes a capability token and fixed register IPC message.
         let (ret, reply) = unsafe { raw_syscall_ipc(SunlightSyscall::IpcCall, cap.0, msg) };
+        if ret == IpcError::QueueFull as u64 {
+            // Backpressure for the legacy infallible API: yield between retries.
+            process_yield();
+            continue;
+        }
         if !would_block(ret) {
             return reply;
         }
@@ -2111,21 +2121,26 @@ pub enum IpcCallError {
     EndpointNotFound,
     /// Invalid argument (e.g. malformed message counts).
     InvalidArgument,
+    /// The endpoint queue reached its fixed capacity; retry with backoff.
+    QueueFull,
+    /// The call was explicitly cancelled before a reply committed.
+    Cancelled,
+    /// The endpoint owner exited or destroyed the endpoint.
+    PeerClosed,
     /// Other/unknown error code from the kernel.
     Unknown(u64),
 }
 
 /// Client: send a message and wait for reply up to `timeout_ms`.
 ///
-/// This is the safe primitive for interactive/client paths. It uses
-/// `monotonic_millis()` to enforce a deadline and yields between
-/// WouldBlock retries.
+/// This is the safe primitive for interactive/client paths. It arms one
+/// absolute monotonic deadline in the kernel before issuing the call, so a
+/// fully descheduled caller is woken even if the peer remains silent.
 ///
 /// Semantics:
-/// - The kernel IpcCall syscall returns WouldBlock (in rax) to userspace
-///   rather than blocking inside the kernel (confirmed by inspection of
-///   handle_ipc_call + syscall dispatch). Therefore a userspace deadline
-///   loop is sufficient and correct.
+/// - The kernel IpcCall syscall returns WouldBlock while the operation remains
+///   in flight. The scheduler deadline transition returns DeadlineExpired on
+///   the next retry.
 /// - On success (ret==0) the assembled reply IpcMsg is returned.
 /// - Known transport errors are mapped to `IpcCallError`.
 /// - Server-side semantic errors (e.g. KV_ERROR label in reply) are **not**
@@ -2138,31 +2153,46 @@ pub fn ipc_call_timeout(
     msg: IpcMsg,
     timeout_ms: u64,
 ) -> Result<IpcMsg, IpcCallError> {
-    let start = monotonic_millis();
+    let deadline = monotonic_millis().saturating_add(timeout_ms);
+    // SAFETY: IpcSetDeadline takes one absolute monotonic millisecond value.
+    let (arm_ret, _) =
+        unsafe { raw_syscall(SunlightSyscall::IpcSetDeadline, deadline, 0, 0, 0, 0, 0, 0) };
+    if arm_ret != 0 {
+        return Err(map_ipc_call_error(arm_ret));
+    }
     loop {
         let (ret, reply) = unsafe { raw_syscall_ipc(SunlightSyscall::IpcCall, cap.0, msg) };
         if !would_block(ret) {
             if ret == 0 {
                 return Ok(reply);
-            } else if ret == IpcError::InvalidCapability as u64 {
-                return Err(IpcCallError::InvalidCapability);
-            } else if ret == IpcError::EndpointNotFound as u64 {
-                return Err(IpcCallError::EndpointNotFound);
-            } else if ret == IpcError::InvalidArgument as u64
-                || ret == IpcError::InvalidWordCount as u64
-                || ret == IpcError::InvalidCapCount as u64
-            {
-                return Err(IpcCallError::InvalidArgument);
             } else {
-                return Err(IpcCallError::Unknown(ret));
+                return Err(map_ipc_call_error(ret));
             }
         }
-        let elapsed = monotonic_millis().saturating_sub(start);
-        if elapsed >= timeout_ms {
-            ipc_cancel_pending();
-            return Err(IpcCallError::Timeout);
-        }
         process_yield();
+    }
+}
+
+fn map_ipc_call_error(ret: u64) -> IpcCallError {
+    if ret == IpcError::InvalidCapability as u64 {
+        IpcCallError::InvalidCapability
+    } else if ret == IpcError::EndpointNotFound as u64 {
+        IpcCallError::EndpointNotFound
+    } else if ret == IpcError::InvalidArgument as u64
+        || ret == IpcError::InvalidWordCount as u64
+        || ret == IpcError::InvalidCapCount as u64
+    {
+        IpcCallError::InvalidArgument
+    } else if ret == IpcError::QueueFull as u64 {
+        IpcCallError::QueueFull
+    } else if ret == IpcError::DeadlineExpired as u64 {
+        IpcCallError::Timeout
+    } else if ret == IpcError::Cancelled as u64 {
+        IpcCallError::Cancelled
+    } else if ret == IpcError::PeerClosed as u64 {
+        IpcCallError::PeerClosed
+    } else {
+        IpcCallError::Unknown(ret)
     }
 }
 
@@ -2179,20 +2209,23 @@ pub fn ipc_recv(ep: EndpointId) -> IpcMsg {
     }
 }
 
-/// Receive a message with a best-effort timeout.
+/// Receive a message with a kernel-enforced absolute monotonic deadline.
 ///
 /// Returns `None` if no message arrives before `timeout_ms` elapses.
 pub fn ipc_recv_timeout(ep: EndpointId, timeout_ms: u64) -> Option<IpcMsg> {
-    let start = monotonic_millis();
+    let deadline = monotonic_millis().saturating_add(timeout_ms);
+    // SAFETY: IpcSetDeadline takes one absolute monotonic millisecond value.
+    let (arm_ret, _) =
+        unsafe { raw_syscall(SunlightSyscall::IpcSetDeadline, deadline, 0, 0, 0, 0, 0, 0) };
+    if arm_ret != 0 {
+        return None;
+    }
     loop {
         // SAFETY: ipc_recv_timeout passes the endpoint owner token; kernel validates receive rights.
         let (ret, msg) =
             unsafe { raw_syscall_ipc(SunlightSyscall::IpcRecv, ep.0, IpcMsg::empty()) };
         if !would_block(ret) {
-            return Some(msg);
-        }
-        if monotonic_millis().saturating_sub(start) >= timeout_ms {
-            return None;
+            return (ret == 0).then_some(msg);
         }
         process_yield();
     }
@@ -2228,13 +2261,6 @@ pub fn ipc_reply_and_try_recv(ep: EndpointId, reply: IpcMsg) -> Option<IpcMsg> {
         None
     } else {
         Some(msg)
-    }
-}
-
-fn ipc_cancel_pending() {
-    // SAFETY: IpcCancel has no user pointers or additional arguments.
-    unsafe {
-        raw_syscall(SunlightSyscall::IpcCancel, 0, 0, 0, 0, 0, 0, 0);
     }
 }
 

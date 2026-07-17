@@ -317,6 +317,7 @@ fn generate_token(tag: u64) -> CapabilityToken {
 
 /// The capability broker manages endpoints and capability tokens.
 pub struct CapabilityBroker {
+    next_endpoint_id: u32,
     endpoints: alloc::vec::Vec<Endpoint>,
     capabilities: alloc::vec::Vec<(CapabilityToken, u32, CapabilityRights)>,
     shared_regions: alloc::vec::Vec<ShmEntry>,
@@ -326,6 +327,7 @@ pub struct CapabilityBroker {
 impl CapabilityBroker {
     pub const fn new() -> Self {
         Self {
+            next_endpoint_id: 0,
             endpoints: alloc::vec::Vec::new(),
             capabilities: alloc::vec::Vec::new(),
             shared_regions: alloc::vec::Vec::new(),
@@ -335,7 +337,13 @@ impl CapabilityBroker {
 
     /// Create a new endpoint, return its id and a send+recv capability to the owner.
     pub fn create_endpoint(&mut self, owner_pid: usize) -> (u32, CapabilityToken) {
-        let id = self.endpoints.len() as u32;
+        // IDs are never reused. This prevents a delayed IRQ/deadline belonging
+        // to a destroyed endpoint instance from addressing a later endpoint.
+        let id = self.next_endpoint_id;
+        self.next_endpoint_id = self
+            .next_endpoint_id
+            .checked_add(1)
+            .expect("endpoint id space exhausted");
         self.endpoints.push(Endpoint { id, owner_pid });
         let token = generate_token(CapabilityToken::TAG_IPC);
         self.capabilities
