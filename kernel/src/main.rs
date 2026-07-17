@@ -2324,6 +2324,93 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         }
     }
 
+    {
+        use crate::capability::{CapabilityBroker, CapabilityRights};
+
+        let mut broker = CapabilityBroker::new();
+        let owner_pid = 0x7101;
+        let other_pid = 0x7102;
+        let (old_endpoint, owner_cap) = broker.create_endpoint(owner_pid);
+        let public_cap = broker
+            .derive(owner_cap, CapabilityRights::SEND_ONLY)
+            .expect("owner capability can derive SEND-only");
+        let reused_public = broker
+            .derive(owner_cap, CapabilityRights::SEND_ONLY)
+            .expect("SEND-only derivation is reusable");
+        let send_only = broker.check(public_cap, CapabilityRights::SEND_ONLY) == Ok(old_endpoint);
+        let receive_denied = matches!(
+            broker.check(public_cap, CapabilityRights::RECV_ONLY),
+            Err(CapError::InsufficientRights)
+        );
+        let escalation_denied = matches!(
+            broker.derive(public_cap, CapabilityRights::SEND_RECV),
+            Err(CapError::InsufficientRights)
+        );
+        let public_destroy_denied = matches!(
+            broker.destroy_endpoint(owner_pid, public_cap),
+            Err(CapError::InsufficientRights)
+        );
+        let wrong_owner_denied = matches!(
+            broker.destroy_endpoint(other_pid, owner_cap),
+            Err(CapError::InsufficientRights)
+        );
+        let destroyed = broker.destroy_endpoint(owner_pid, owner_cap) == Ok(old_endpoint);
+        let owner_revoked = broker
+            .check(owner_cap, CapabilityRights::SEND_RECV)
+            .is_err();
+        let public_revoked = broker
+            .check(public_cap, CapabilityRights::SEND_ONLY)
+            .is_err();
+        let (new_endpoint, new_owner_cap) = broker.create_endpoint(owner_pid);
+        let stale_isolated = new_endpoint != old_endpoint
+            && new_owner_cap != owner_cap
+            && broker
+                .check(public_cap, CapabilityRights::SEND_ONLY)
+                .is_err();
+
+        if send_only
+            && public_cap == reused_public
+            && receive_denied
+            && escalation_denied
+            && public_destroy_denied
+            && wrong_owner_denied
+            && destroyed
+            && owner_revoked
+            && public_revoked
+            && stale_isolated
+        {
+            serial_println!("[SEC]  IPC capability isolation/lifecycle: OK");
+        } else {
+            serial_println!("[SEC]  IPC capability isolation/lifecycle: UNEXPECTED");
+        }
+    }
+
+    {
+        let owner_registration = crate::ipc::registration_authorized(
+            0x7201,
+            0x7201,
+            "timer_server",
+            crate::ipc::name_hash("time"),
+        );
+        let foreign_endpoint_rejected = !crate::ipc::registration_authorized(
+            0x7202,
+            0x7201,
+            "timer_server",
+            crate::ipc::name_hash("time"),
+        );
+        let wrong_service_rejected = !crate::ipc::registration_authorized(
+            0x7201,
+            0x7201,
+            "timer_server",
+            crate::ipc::name_hash("vfs"),
+        );
+        if owner_registration && foreign_endpoint_rejected && wrong_service_rejected {
+            serial_println!("[SEC]  nameserver REGISTER ownership/identity: OK");
+        } else {
+            serial_println!("[SEC]  nameserver REGISTER ownership/identity: UNEXPECTED");
+        }
+    }
+
     // Exercise the scheduler-backed transitions with real Process records.
     // This is a boot gate because the bare-metal target cannot link libtest.
     {
@@ -2474,6 +2561,160 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             && sched.processes[caller_idx].ipc_call_outcome.is_none()
             && sched.processes[caller_idx].ipc_deadline.is_none();
 
+        const SMP_STRESS_ITERATIONS: u64 = 64;
+        let depth_before = crate::ipc::diagnostic_snapshot().current_queue_depth;
+        let mut smp_stress_ok = true;
+        for iteration in 0..SMP_STRESS_ITERATIONS {
+            let generation = 100 + iteration;
+            let endpoint_id = 100 + (iteration as u32 % 8);
+            let deadline = 1_000 + iteration;
+            let call = install_call(&mut sched, caller_idx, generation, endpoint_id, deadline);
+            match iteration % 4 {
+                0 => {
+                    let pending =
+                        crate::ipc::with_shard(endpoint_id, |bus| bus.pop_pending(endpoint_id));
+                    sched.processes[server_idx].ipc_reply_target = pending
+                        .and_then(|message| message.call)
+                        .map(|call| IpcReplyTarget { endpoint_id, call });
+                    let reply = IpcMsg::with_label(generation);
+                    let replied = crate::ipc::with_shard(endpoint_id, |bus| {
+                        crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, bus).is_ok()
+                    });
+                    crate::ipc::expire_deadlines(&mut sched, deadline);
+                    let cancelled = crate::ipc::with_shard(endpoint_id, |bus| {
+                        crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus).is_ok()
+                    });
+                    smp_stress_ok &= replied
+                        && cancelled
+                        && matches!(
+                            crate::ipc::take_terminal_result(&mut sched, caller_idx),
+                            Some(Ok(delivered)) if delivered.label == generation
+                        );
+                }
+                1 => {
+                    let pending =
+                        crate::ipc::with_shard(endpoint_id, |bus| bus.pop_pending(endpoint_id));
+                    sched.processes[server_idx].ipc_reply_target = pending
+                        .and_then(|message| message.call)
+                        .map(|call| IpcReplyTarget { endpoint_id, call });
+                    let cancelled = crate::ipc::with_shard(endpoint_id, |bus| {
+                        crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus).is_ok()
+                    });
+                    let late_reply = crate::ipc::with_shard(endpoint_id, |bus| {
+                        crate::ipc::handle_ipc_reply(
+                            server_pid,
+                            IpcMsg::with_label(generation),
+                            &mut sched,
+                            bus,
+                        )
+                        .is_ok()
+                    });
+                    smp_stress_ok &= cancelled
+                        && late_reply
+                        && matches!(
+                            crate::ipc::take_terminal_result(&mut sched, caller_idx),
+                            Some(Err(crate::ipc::IpcError::Cancelled))
+                        );
+                }
+                2 => {
+                    crate::ipc::expire_deadlines(&mut sched, deadline);
+                    let cancelled = crate::ipc::with_shard(endpoint_id, |bus| {
+                        crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus).is_ok()
+                    });
+                    smp_stress_ok &= cancelled
+                        && matches!(
+                            crate::ipc::take_terminal_result(&mut sched, caller_idx),
+                            Some(Err(crate::ipc::IpcError::DeadlineExpired))
+                        );
+                }
+                _ => {
+                    let calls =
+                        crate::ipc::with_shard(endpoint_id, |bus| bus.remove_endpoint(endpoint_id));
+                    crate::ipc::finish_peer_closed_calls(endpoint_id, calls, &mut sched);
+                    smp_stress_ok &= matches!(
+                        crate::ipc::take_terminal_result(&mut sched, caller_idx),
+                        Some(Err(crate::ipc::IpcError::PeerClosed))
+                    );
+                }
+            }
+
+            sched.enqueue_ready(caller_idx);
+            sched.enqueue_ready(caller_idx);
+            smp_stress_ok &= sched.diagnostic_ready_occurrences(caller_idx) <= 1
+                && sched.processes[caller_idx].state != ProcessState::BlockedOnIpc
+                && sched.processes[caller_idx].pending_call.is_none()
+                && sched.processes[caller_idx].ipc_call_outcome.is_none()
+                && sched.processes[caller_idx].ipc_reply.is_none()
+                && sched.processes[caller_idx].ipc_deadline.is_none();
+            sched.remove_from_ready_queues(caller_idx);
+            crate::ipc::with_shard(endpoint_id, |bus| {
+                bus.remove_endpoint(endpoint_id);
+            });
+
+            let mut queue_bus = crate::ipc::IpcBus::new();
+            let queue_endpoint = 500 + iteration as u32;
+            for queued in 0..crate::ipc::ENDPOINT_QUEUE_CAPACITY {
+                smp_stress_ok &= queue_bus
+                    .enqueue_call(
+                        queue_endpoint,
+                        IpcMsg::with_label(queued as u64),
+                        IpcCallId {
+                            pid: queued + 1,
+                            generation,
+                        },
+                    )
+                    .is_ok();
+            }
+            smp_stress_ok &= queue_bus.enqueue_call(
+                queue_endpoint,
+                IpcMsg::empty(),
+                IpcCallId {
+                    pid: 999,
+                    generation,
+                },
+            ) == Err(crate::ipc::IpcError::QueueFull);
+            smp_stress_ok &= queue_bus.pop_pending(queue_endpoint).is_some()
+                && queue_bus
+                    .enqueue_call(
+                        queue_endpoint,
+                        IpcMsg::empty(),
+                        IpcCallId {
+                            pid: 999,
+                            generation,
+                        },
+                    )
+                    .is_ok()
+                && queue_bus.pending_count(queue_endpoint) <= crate::ipc::ENDPOINT_QUEUE_CAPACITY;
+            queue_bus.remove_endpoint(queue_endpoint);
+
+            let notification_endpoint = 700 + iteration as u32;
+            queue_bus.send_input_notification(notification_endpoint);
+            queue_bus.send_input_notification(notification_endpoint);
+            smp_stress_ok &= queue_bus.pending_count(notification_endpoint) == 1
+                && queue_bus.pop_pending(notification_endpoint).is_some();
+            queue_bus.send_input_notification(notification_endpoint);
+            smp_stress_ok &= queue_bus.pending_count(notification_endpoint) == 1;
+            queue_bus.remove_endpoint(notification_endpoint);
+
+            let stale_generation = IpcCallId {
+                pid: caller_pid,
+                generation,
+            };
+            let next_generation = IpcCallId {
+                pid: caller_pid,
+                generation: generation + 1,
+            };
+            smp_stress_ok &= stale_generation != next_generation
+                && call.generation == generation
+                && !crate::ipc::terminal_transition_allowed(
+                    Some(next_generation.generation),
+                    None,
+                    stale_generation.generation,
+                );
+        }
+        let depth_after = crate::ipc::diagnostic_snapshot().current_queue_depth;
+        smp_stress_ok &= depth_after == depth_before;
+
         sched.processes[caller_idx].pending_call = None;
         sched.processes[caller_idx].state = ProcessState::Ready;
         sched.remove_from_ready_queues(caller_idx);
@@ -2498,10 +2739,16 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             && deadline_won
             && late_reply_dropped
             && stale_ignored
+            && smp_stress_ok
         {
             serial_println!("[SEC]  IPC deadline wake/race/late reply: OK");
+            serial_println!(
+                "[SEC]  IPC SMP terminal-state stress: {} iterations OK",
+                SMP_STRESS_ITERATIONS
+            );
         } else {
             serial_println!("[SEC]  IPC deadline wake/race/late reply: UNEXPECTED");
+            serial_println!("[SEC]  IPC SMP terminal-state stress: UNEXPECTED");
         }
     }
 

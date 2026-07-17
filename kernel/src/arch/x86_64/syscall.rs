@@ -424,6 +424,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         8 => ipc_set_deadline(frame.rdi),
         10 => endpoint_create(),
         11 => endpoint_bind(frame.rdi),
+        12 => nameserver_endpoint_validate(frame.rdi, frame.rsi),
+        13 => endpoint_destroy(frame.rdi),
+        14 => nameserver_diagnostic_event(frame.rdi),
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
         22 => thread_spawn(frame),
@@ -628,7 +631,7 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     }
 
     let mut sched = crate::sched::SCHEDULER.lock();
-    let caps = crate::capability::CAP_BROKER.lock();
+    let mut caps = crate::capability::CAP_BROKER.lock();
     let sender_pid = sched.current_process().pid;
 
     let (endpoint_id, target_owner) = caps
@@ -637,7 +640,7 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
         .unwrap_or((0, 0));
 
     let result = crate::ipc::with_shard(endpoint_id, |bus| {
-        match crate::ipc::handle_ipc_call(sender_pid, token, msg, &caps, &mut sched, bus) {
+        match crate::ipc::handle_ipc_call(sender_pid, token, msg, &mut caps, &mut sched, bus) {
             Ok(reply) => {
                 reply.to_registers(frame);
                 0
@@ -745,9 +748,17 @@ fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let caps = crate::capability::CAP_BROKER.lock();
     let server_pid = sched.current_process().pid;
-    let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
-        Ok(id) => id,
-        Err(_) => return IpcError::InvalidCapability as u64,
+    let endpoint_id = match caps.token_owner(endpoint_token, CapabilityRights::RECV_ONLY) {
+        Ok((id, owner_pid)) if owner_pid == server_pid => id,
+        _ => {
+            if caps
+                .check(endpoint_token, CapabilityRights::SEND_ONLY)
+                .is_ok()
+            {
+                crate::ipc::note_send_only_management_reject();
+            }
+            return IpcError::InvalidCapability as u64;
+        }
     };
     crate::ipc::with_shard(endpoint_id, |bus| {
         match crate::ipc::handle_ipc_reply_wait(server_pid, endpoint_id, reply, &mut sched, bus) {
@@ -769,9 +780,15 @@ fn ipc_recv(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let caps = crate::capability::CAP_BROKER.lock();
     let receiver_pid = sched.current_process().pid;
-    let endpoint_id = match caps.check(endpoint_token, CapabilityRights::RECV_ONLY) {
-        Ok(id) => id,
-        Err(_) => {
+    let endpoint_id = match caps.token_owner(endpoint_token, CapabilityRights::RECV_ONLY) {
+        Ok((id, owner_pid)) if owner_pid == receiver_pid => id,
+        _ => {
+            if caps
+                .check(endpoint_token, CapabilityRights::SEND_ONLY)
+                .is_ok()
+            {
+                crate::ipc::note_send_only_management_reject();
+            }
             crate::ipc::clear_next_ipc_deadline(receiver_pid, &mut sched);
             return IpcError::InvalidCapability as u64;
         }
@@ -844,12 +861,66 @@ fn endpoint_create() -> u64 {
 
 fn endpoint_bind(token: u64) -> u64 {
     if token == INIT_NAMESERVER_ENDPOINT as u64 {
-        let caps = crate::capability::CAP_BROKER.lock();
+        let mut caps = crate::capability::CAP_BROKER.lock();
+        let Some(owner) = caps.token_for_owner_endpoint(1, CapabilityRights::SEND_RECV) else {
+            return 0;
+        };
         return caps
-            .token_for_owner_endpoint(1, CapabilityRights::SEND)
+            .derive(owner, CapabilityRights::SEND_ONLY)
             .map_or(0, |cap| cap.0);
     }
-    token
+    let caps = crate::capability::CAP_BROKER.lock();
+    if caps
+        .check(CapabilityToken(token), CapabilityRights::SEND_ONLY)
+        .is_ok()
+    {
+        crate::ipc::note_send_only_management_reject();
+    }
+    0
+}
+
+/// PID 1-only liveness query used for lazy nameserver registry cleanup.
+fn nameserver_endpoint_validate(token: u64, endpoint_id: u64) -> u64 {
+    let caller_pid = sched::with_scheduler(|sched| sched.current_process().pid);
+    if caller_pid != 1 || endpoint_id > u32::MAX as u64 {
+        return 0;
+    }
+    let caps = crate::capability::CAP_BROKER.lock();
+    u64::from(caps.endpoint_is_live(CapabilityToken(token), endpoint_id as u32))
+}
+
+fn nameserver_diagnostic_event(event: u64) -> u64 {
+    let caller_pid = sched::with_scheduler(|sched| sched.current_process().pid);
+    if caller_pid != 1 {
+        return IpcError::InvalidCapability as u64;
+    }
+    crate::ipc::note_nameserver_diagnostic(event);
+    0
+}
+
+fn endpoint_destroy(token: u64) -> u64 {
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let caller_pid = sched.current_process().pid;
+    let endpoint_id = {
+        let mut caps = crate::capability::CAP_BROKER.lock();
+        match caps.destroy_endpoint(caller_pid, CapabilityToken(token)) {
+            Ok(endpoint_id) => endpoint_id,
+            Err(_) => {
+                if caps
+                    .check(CapabilityToken(token), CapabilityRights::SEND_ONLY)
+                    .is_ok()
+                {
+                    crate::ipc::note_send_only_management_reject();
+                }
+                return IpcError::InvalidCapability as u64;
+            }
+        }
+    };
+    crate::arch::x86_64::keyboard::unregister_kbd_endpoint(endpoint_id);
+    crate::arch::x86_64::mouse::unregister_mouse_endpoint(endpoint_id);
+    let calls = crate::ipc::with_shard(endpoint_id, |bus| bus.remove_endpoint(endpoint_id));
+    crate::ipc::finish_peer_closed_calls(endpoint_id, calls, &mut sched);
+    0
 }
 
 /// Syscall: ProcessExit

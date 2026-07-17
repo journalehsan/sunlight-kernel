@@ -324,6 +324,22 @@ pub struct CapabilityBroker {
     vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CapabilityDiagnosticSnapshot {
+    pub public_send_derivations: u64,
+    pub rejected_rights_escalations: u64,
+}
+
+static PUBLIC_SEND_DERIVATIONS: AtomicU64 = AtomicU64::new(0);
+static REJECTED_RIGHTS_ESCALATIONS: AtomicU64 = AtomicU64::new(0);
+
+pub fn diagnostic_snapshot() -> CapabilityDiagnosticSnapshot {
+    CapabilityDiagnosticSnapshot {
+        public_send_derivations: PUBLIC_SEND_DERIVATIONS.load(Ordering::Relaxed),
+        rejected_rights_escalations: REJECTED_RIGHTS_ESCALATIONS.load(Ordering::Relaxed),
+    }
+}
+
 impl CapabilityBroker {
     pub const fn new() -> Self {
         Self {
@@ -397,6 +413,52 @@ impl CapabilityBroker {
         Some(token)
     }
 
+    /// Derive an attenuated IPC capability from `source` without modifying it.
+    ///
+    /// The requested rights must be a subset of the source rights and the new
+    /// token always retains the source endpoint identity. Exact-rights tokens
+    /// are reused, so publishing an endpoint does not allocate per LOOKUP.
+    pub fn derive(
+        &mut self,
+        source: CapabilityToken,
+        requested: CapabilityRights,
+    ) -> Result<CapabilityToken, CapError> {
+        if !source.is_ipc() || !requested.is_ipc() {
+            REJECTED_RIGHTS_ESCALATIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(CapError::InvalidToken);
+        }
+        let (endpoint_id, source_rights) = self
+            .capabilities
+            .iter()
+            .find_map(|(token, endpoint_id, rights)| {
+                (*token == source).then_some((*endpoint_id, *rights))
+            })
+            .ok_or(CapError::InvalidToken)?;
+        if !source_rights.satisfies(&requested) {
+            REJECTED_RIGHTS_ESCALATIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(CapError::InsufficientRights);
+        }
+        if !self
+            .endpoints
+            .iter()
+            .any(|endpoint| endpoint.id == endpoint_id)
+        {
+            return Err(CapError::EndpointNotFound);
+        }
+        if let Some(token) = self.capabilities.iter().find_map(|(token, id, rights)| {
+            (*id == endpoint_id && *rights == requested).then_some(*token)
+        }) {
+            return Ok(token);
+        }
+
+        let token = generate_token(CapabilityToken::TAG_IPC);
+        self.capabilities.push((token, endpoint_id, requested));
+        if requested == CapabilityRights::SEND_ONLY {
+            PUBLIC_SEND_DERIVATIONS.fetch_add(1, Ordering::Relaxed);
+        }
+        Ok(token)
+    }
+
     /// Return an existing token for an endpoint if one already has the rights.
     pub fn token_for_endpoint(
         &self,
@@ -448,7 +510,7 @@ impl CapabilityBroker {
     pub fn revoke(&mut self, token: CapabilityToken) {
         if let Some(idx) = self.capabilities.iter().position(|(t, _, _)| *t == token) {
             self.capabilities.swap_remove(idx);
-            serial_println!("[CAP] Revoked token {:#x}", token.as_u64());
+            serial_println!("[CAP] Revoked IPC capability");
         }
     }
 
@@ -458,6 +520,28 @@ impl CapabilityBroker {
             .iter()
             .find(|e| e.id == endpoint_id)
             .map(|e| e.owner_pid)
+    }
+
+    pub fn endpoint_is_live(&self, token: CapabilityToken, endpoint_id: u32) -> bool {
+        self.check(token, CapabilityRights::SEND) == Ok(endpoint_id)
+            && self.endpoint_owner(endpoint_id).is_some()
+    }
+
+    /// Destroy an endpoint using receive/owner authority and revoke every token
+    /// derived for that endpoint.
+    pub fn destroy_endpoint(
+        &mut self,
+        caller_pid: usize,
+        owner_token: CapabilityToken,
+    ) -> Result<u32, CapError> {
+        let endpoint_id = self.check(owner_token, CapabilityRights::RECV_ONLY)?;
+        if self.endpoint_owner(endpoint_id) != Some(caller_pid) {
+            return Err(CapError::InsufficientRights);
+        }
+        self.endpoints.retain(|endpoint| endpoint.id != endpoint_id);
+        self.capabilities
+            .retain(|(_, capability_endpoint, _)| *capability_endpoint != endpoint_id);
+        Ok(endpoint_id)
     }
 
     /// Resolve a token to its endpoint owner after checking rights.

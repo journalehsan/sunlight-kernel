@@ -11,6 +11,7 @@ use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 pub use message::IpcMsg;
 
 pub const INIT_NAMESERVER_ENDPOINT: u32 = 0;
+const NAMESERVER_REGISTER: u64 = 1;
 /// A 104-byte register message makes this about 6.5 KiB of payload metadata per
 /// saturated endpoint. Existing boot/services traffic stays far below this.
 pub const ENDPOINT_QUEUE_CAPACITY: usize = 64;
@@ -74,6 +75,13 @@ pub struct IpcDiagnosticSnapshot {
     pub explicit_cancel_count: u64,
     pub late_reply_drop_count: u64,
     pub peer_closed_wake_count: u64,
+    pub unauthorized_register_count: u64,
+    pub conflicting_live_registration_count: u64,
+    pub stale_registration_removal_count: u64,
+    pub successful_dead_replacement_count: u64,
+    pub stale_lookup_count: u64,
+    pub registry_full_rejection_count: u64,
+    pub send_only_management_reject_count: u64,
 }
 
 static CURRENT_QUEUE_DEPTH: AtomicUsize = AtomicUsize::new(0);
@@ -86,6 +94,28 @@ static DEADLINE_EXPIRED_COUNT: AtomicU64 = AtomicU64::new(0);
 static EXPLICIT_CANCEL_COUNT: AtomicU64 = AtomicU64::new(0);
 static LATE_REPLY_DROP_COUNT: AtomicU64 = AtomicU64::new(0);
 static PEER_CLOSED_WAKE_COUNT: AtomicU64 = AtomicU64::new(0);
+static UNAUTHORIZED_REGISTER_COUNT: AtomicU64 = AtomicU64::new(0);
+static CONFLICTING_LIVE_REGISTRATION_COUNT: AtomicU64 = AtomicU64::new(0);
+static STALE_REGISTRATION_REMOVAL_COUNT: AtomicU64 = AtomicU64::new(0);
+static SUCCESSFUL_DEAD_REPLACEMENT_COUNT: AtomicU64 = AtomicU64::new(0);
+static STALE_LOOKUP_COUNT: AtomicU64 = AtomicU64::new(0);
+static REGISTRY_FULL_REJECTION_COUNT: AtomicU64 = AtomicU64::new(0);
+static SEND_ONLY_MANAGEMENT_REJECT_COUNT: AtomicU64 = AtomicU64::new(0);
+
+pub fn note_send_only_management_reject() {
+    SEND_ONLY_MANAGEMENT_REJECT_COUNT.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn note_nameserver_diagnostic(event: u64) {
+    match event {
+        1 => CONFLICTING_LIVE_REGISTRATION_COUNT.fetch_add(1, Ordering::Relaxed),
+        2 => STALE_REGISTRATION_REMOVAL_COUNT.fetch_add(1, Ordering::Relaxed),
+        3 => SUCCESSFUL_DEAD_REPLACEMENT_COUNT.fetch_add(1, Ordering::Relaxed),
+        4 => STALE_LOOKUP_COUNT.fetch_add(1, Ordering::Relaxed),
+        5 => REGISTRY_FULL_REJECTION_COUNT.fetch_add(1, Ordering::Relaxed),
+        _ => return,
+    };
+}
 
 pub fn diagnostic_snapshot() -> IpcDiagnosticSnapshot {
     IpcDiagnosticSnapshot {
@@ -99,6 +129,16 @@ pub fn diagnostic_snapshot() -> IpcDiagnosticSnapshot {
         explicit_cancel_count: EXPLICIT_CANCEL_COUNT.load(Ordering::Relaxed),
         late_reply_drop_count: LATE_REPLY_DROP_COUNT.load(Ordering::Relaxed),
         peer_closed_wake_count: PEER_CLOSED_WAKE_COUNT.load(Ordering::Relaxed),
+        unauthorized_register_count: UNAUTHORIZED_REGISTER_COUNT.load(Ordering::Relaxed),
+        conflicting_live_registration_count: CONFLICTING_LIVE_REGISTRATION_COUNT
+            .load(Ordering::Relaxed),
+        stale_registration_removal_count: STALE_REGISTRATION_REMOVAL_COUNT.load(Ordering::Relaxed),
+        successful_dead_replacement_count: SUCCESSFUL_DEAD_REPLACEMENT_COUNT
+            .load(Ordering::Relaxed),
+        stale_lookup_count: STALE_LOOKUP_COUNT.load(Ordering::Relaxed),
+        registry_full_rejection_count: REGISTRY_FULL_REJECTION_COUNT.load(Ordering::Relaxed),
+        send_only_management_reject_count: SEND_ONLY_MANAGEMENT_REJECT_COUNT
+            .load(Ordering::Relaxed),
     }
 }
 
@@ -634,8 +674,8 @@ fn wake_terminal(sched: &mut Scheduler, idx: usize) {
 pub fn handle_ipc_call(
     caller_pid: usize,
     target_cap: CapabilityToken,
-    msg: IpcMsg,
-    caps: &CapabilityBroker,
+    mut msg: IpcMsg,
+    caps: &mut CapabilityBroker,
     sched: &mut Scheduler,
     bus: &mut IpcBus,
 ) -> Result<IpcMsg, IpcError> {
@@ -653,6 +693,12 @@ pub fn handle_ipc_call(
             return Err(IpcError::InvalidCapability);
         }
     };
+    if sched.processes[idx].pending_call.is_none()
+        && target_owner == 1
+        && msg.label == NAMESERVER_REGISTER
+    {
+        mediate_nameserver_register(caller_pid, &mut msg, caps, sched)?;
+    }
     if let Some(pending) = sched.processes[idx].pending_call {
         if pending.target_cap != target_cap.0 || pending.endpoint_id != endpoint_id {
             return Err(IpcError::InvalidArgument);
@@ -701,6 +747,122 @@ pub fn handle_ipc_call(
     sched.remove_from_ready_queues(idx);
 
     Err(IpcError::WouldBlock)
+}
+
+fn mediate_nameserver_register(
+    caller_pid: usize,
+    msg: &mut IpcMsg,
+    caps: &mut CapabilityBroker,
+    sched: &Scheduler,
+) -> Result<(), IpcError> {
+    if msg.word_count < 2 {
+        UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
+        return Err(IpcError::InvalidArgument);
+    }
+    let source = CapabilityToken(msg.words[1]);
+    let (endpoint_id, owner_pid) = caps
+        .token_owner(source, CapabilityRights::SEND_RECV)
+        .map_err(|_| {
+            UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
+            IpcError::InvalidCapability
+        })?;
+    let process_name = sched
+        .processes
+        .iter()
+        .find(|process| process.pid == caller_pid)
+        .map(|process| process.name_str())
+        .ok_or(IpcError::InvalidArgument)?;
+    if !registration_authorized(owner_pid, caller_pid, process_name, msg.words[0]) {
+        UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
+        return Err(IpcError::InvalidCapability);
+    }
+    let public = caps
+        .derive(source, CapabilityRights::SEND_ONLY)
+        .map_err(|_| IpcError::InvalidCapability)?;
+    msg.words[1] = public.0;
+    msg.words[2] = endpoint_id as u64;
+    msg.word_count = msg.word_count.max(3);
+    Ok(())
+}
+
+pub(crate) fn registration_authorized(
+    owner_pid: usize,
+    caller_pid: usize,
+    process_name: &str,
+    registered_name: u64,
+) -> bool {
+    owner_pid == caller_pid && registration_identity_matches(process_name, registered_name)
+}
+
+fn registration_identity_matches(process_name: &str, registered_name: u64) -> bool {
+    let expected_process = match registered_name {
+        name if name == name_hash("display_server") => "sunlight-display",
+        name if name == name_hash("mouse_driver") => "sunlight-mouse",
+        name if name == name_hash("time") => "timer_server",
+        name if name == name_hash("net") => "net_server",
+        name if name == name_hash("pty") => "pty_server",
+        name if name == name_hash("vfs") => "vfs_server",
+        name if name == name_hash("tty") => "tty_server",
+        name if name == name_hash("tz") => "timezone_service",
+        name if name == name_hash("uac") => "uac_service",
+        name if name == name_hash("sm") => "sunlight-sm",
+        name if name == name_hash("rand") => "rand_service",
+        name if name == name_hash("clipd") => "sunlight-clipd",
+        name if name == name_hash("dialogd") => "sunlight-dialogd",
+        name if name == name_hash("thumbd") => "sunlight-thumbd",
+        name if name == name_hash("gcd") || name == name_hash("proc") => "gcd",
+        name if name == name_hash("solar") => "solar",
+        name if name == name_hash("sunlight-kv") => "sunlight-kv",
+        name if name == name_hash("sunlight-tls") => "sunlight-tls",
+        name if name == name_hash("sunlightd") => "sunlightd",
+        name if name == name_hash("niced") => "niced",
+        name if name == name_hash("resolved") => "resolved",
+        name if name == name_hash("powerd") => "powerd",
+        name if name == name_hash("networkd") => "networkd",
+        name if name == name_hash("deviced") => "deviced",
+        name if name == name_hash("timed") => "timed",
+        name if name == name_hash("sshl") => "sshl",
+        _ if process_name == "sshl" && registered_name_has_prefix(registered_name, "sshl") => {
+            "sshl"
+        }
+        _ => return registered_name == name_hash(process_name),
+    };
+    process_name == expected_process
+}
+
+fn registered_name_has_prefix(registered_name: u64, prefix: &str) -> bool {
+    let mut suffix = 0u64;
+    while suffix < 1_024 {
+        let mut name = heapless::String::<16>::new();
+        if name.push_str(prefix).is_err() {
+            return false;
+        }
+        use core::fmt::Write;
+        if write!(&mut name, "{}", suffix).is_err() {
+            return false;
+        }
+        if name_hash(name.as_str()) == registered_name {
+            return true;
+        }
+        suffix += 1;
+    }
+    false
+}
+
+pub(crate) const fn name_hash(name: &str) -> u64 {
+    let bytes = name.as_bytes();
+    let mut hash = 0xcbf29ce484222325u64;
+    let mut i = 0;
+    while i < bytes.len() {
+        hash ^= bytes[i] as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+        i += 1;
+    }
+    if hash == 0 {
+        1
+    } else {
+        hash
+    }
 }
 
 pub fn handle_ipc_recv(

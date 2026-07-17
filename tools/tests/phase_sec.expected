@@ -7,6 +7,9 @@
 [SEC]  IPC bounded queue/backpressure/reuse: OK
 [SEC]  IPC notification coalescing/elapsed time: OK
 [SEC]  IPC terminal arbitration/generation: OK
+[SEC]  IPC capability isolation/lifecycle: OK
+[SEC]  nameserver REGISTER ownership/identity: OK
 [SEC]  IPC deadline wake/race/late reply: OK
+[SEC]  IPC SMP terminal-state stress: 64 iterations OK
 [SEC]  dead process cap: REJECTED (CapError::Revoked)
 [SEC]  Security hardening: PASSED

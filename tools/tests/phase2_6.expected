@@ -1,5 +1,5 @@
 # Phase 2.6 IPC foundation gate
-  SunlightOS — Phase 2 Boot Sequence
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
 [PMM] OK
 [VMM] OK
 [IDT] OK
@@ -10,11 +10,12 @@
 [IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait
 [IPC]  Fastpath check: enabled (stub)
 [PROC] Spawning init (pid=1)...
-[PROC] Spawning timer_server (pid=2)...
+[SPAWN] /sbin/timer_server spawned pid=
 [PROC] Entering scheduler — dropping to Ring 3
 [ init] SunlightOS init process started
 [ init] Waiting for system services to register...
 [init] Name server: listening
+[init] nameserver registry integrity tests: OK
 [timer] Timer server started
 [timer] Registered as 'time' with init name server
 [timer] Serving via ipc_reply_and_wait loop

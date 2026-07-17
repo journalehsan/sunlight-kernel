@@ -633,6 +633,32 @@ impl Scheduler {
         self.enqueue_process_once(idx);
     }
 
+    pub(crate) fn diagnostic_ready_occurrences(&self, idx: usize) -> usize {
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            return (0..self.online_cores.min(MAX_CORES))
+                .map(|core_id| {
+                    CORE_STATES[core_id]
+                        .lock()
+                        .rr_queue
+                        .iter()
+                        .filter(|&&queued| queued == idx)
+                        .count()
+                })
+                .sum();
+        }
+        self.cores[..self.online_cores.min(MAX_CORES)]
+            .iter()
+            .map(|core| {
+                core.run_queue_high
+                    .iter()
+                    .chain(core.run_queue_medium.iter())
+                    .chain(core.run_queue_low.iter())
+                    .filter(|&&queued| queued == idx)
+                    .count()
+            })
+            .sum()
+    }
+
     /// Enqueue a freshly created Ready task onto a preferred CPU for its first
     /// dispatch. Once it has run and been preempted, normal scheduler paths
     /// are free to rebalance it across cores.
@@ -1644,6 +1670,21 @@ impl Scheduler {
         })
     }
 
+    fn close_owned_ipc_endpoints(&mut self, pid: usize) {
+        let endpoint_ids = {
+            let mut caps = crate::capability::CAP_BROKER.lock();
+            let endpoint_ids = caps.endpoints_owned_by(pid);
+            caps.revoke_endpoints_owned_by(pid);
+            endpoint_ids
+        };
+        for endpoint_id in endpoint_ids {
+            crate::arch::x86_64::keyboard::unregister_kbd_endpoint(endpoint_id);
+            crate::arch::x86_64::mouse::unregister_mouse_endpoint(endpoint_id);
+            let calls = crate::ipc::with_shard(endpoint_id, |bus| bus.remove_endpoint(endpoint_id));
+            crate::ipc::finish_peer_closed_calls(endpoint_id, calls, self);
+        }
+    }
+
     pub fn reap_process_resources(&mut self, idx: usize) {
         if idx >= self.processes.len() {
             return;
@@ -1981,8 +2022,9 @@ impl Scheduler {
 
     pub fn diagnostic_report(&self) {
         let ipc = crate::ipc::diagnostic_snapshot();
+        let caps = crate::capability::diagnostic_snapshot();
         serial_println!(
-            "[IPC-DIAG] depth={} high_water={} enqueue={} dequeue={} full={} coalesced={} deadline={} cancel={} late_reply={} peer_closed={}",
+            "[IPC-DIAG] depth={} high_water={} enqueue={} dequeue={} full={} coalesced={} deadline={} cancel={} late_reply={} peer_closed={} public_send={} rights_escalation={} unauthorized_register={} live_conflict={} stale_remove={} dead_replace={} stale_lookup={} registry_full={} send_only_reject={}",
             ipc.current_queue_depth,
             ipc.high_watermark,
             ipc.enqueue_count,
@@ -1992,7 +2034,16 @@ impl Scheduler {
             ipc.deadline_expired_count,
             ipc.explicit_cancel_count,
             ipc.late_reply_drop_count,
-            ipc.peer_closed_wake_count
+            ipc.peer_closed_wake_count,
+            caps.public_send_derivations,
+            caps.rejected_rights_escalations,
+            ipc.unauthorized_register_count,
+            ipc.conflicting_live_registration_count,
+            ipc.stale_registration_removal_count,
+            ipc.successful_dead_replacement_count,
+            ipc.stale_lookup_count,
+            ipc.registry_full_rejection_count,
+            ipc.send_only_management_reject_count
         );
         let created = PROCESS_CREATED.load(Ordering::Relaxed);
         let finished = PROCESS_FINISHED.load(Ordering::Relaxed);
@@ -2591,6 +2642,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     sched.set_core_current_task(cpu_id, None);
     sched.set_core_current_ticks(cpu_id, 0);
     sched.remove_from_ready_queues(cur);
+    sched.close_owned_ipc_endpoints(my_pid);
 
     serial_println!(
         "[SCHED] terminating pid={} name='{}' reason={}",

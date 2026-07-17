@@ -26,6 +26,9 @@ pub enum SunlightSyscall {
     IpcSetDeadline = 8,
     EndpointCreate = 10,
     EndpointBind = 11,
+    NameserverEndpointValidate = 12,
+    EndpointDestroy = 13,
+    NameserverDiagnosticEvent = 14,
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
@@ -157,6 +160,24 @@ pub mod InitMsg {
     pub const LOOKUP: u64 = 2;
     pub const GRANT: u64 = 3;
     pub const DENY: u64 = 4;
+}
+
+#[allow(non_snake_case)]
+pub mod InitStatus {
+    pub const OK: u64 = 0;
+    pub const INVALID_REGISTRATION: u64 = 1;
+    pub const LIVE_NAME_CONFLICT: u64 = 2;
+    pub const REGISTRY_FULL: u64 = 3;
+    pub const NOT_FOUND: u64 = 4;
+}
+
+#[allow(non_snake_case)]
+pub mod NameserverDiagnosticEvent {
+    pub const LIVE_CONFLICT: u64 = 1;
+    pub const STALE_REMOVAL: u64 = 2;
+    pub const DEAD_REPLACEMENT: u64 = 3;
+    pub const STALE_LOOKUP: u64 = 4;
+    pub const REGISTRY_FULL: u64 = 5;
 }
 
 #[allow(non_snake_case)]
@@ -2081,6 +2102,61 @@ pub fn endpoint_bind(endpoint: u64) -> CapabilityToken {
     CapabilityToken(ret)
 }
 
+/// Destroy an endpoint using its owner capability. All derived tokens are
+/// revoked atomically with the endpoint.
+pub fn endpoint_destroy(endpoint: EndpointId) -> bool {
+    // SAFETY: EndpointDestroy accepts one opaque owner token.
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::EndpointDestroy,
+            endpoint.0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 0
+}
+
+/// Nameserver-private endpoint identity/liveness query. The kernel accepts it
+/// only from PID 1; other callers receive `false`.
+pub fn nameserver_endpoint_is_live(cap: CapabilityToken, endpoint_id: u32) -> bool {
+    // SAFETY: the syscall takes only a bearer token and numeric endpoint identity.
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::NameserverEndpointValidate,
+            cap.0,
+            endpoint_id as u64,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 1
+}
+
+/// PID 1-only bounded registry diagnostic event.
+pub fn nameserver_note_diagnostic(event: u64) {
+    // SAFETY: the syscall accepts one bounded event code and authenticates PID 1.
+    unsafe {
+        raw_syscall(
+            SunlightSyscall::NameserverDiagnosticEvent,
+            event,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        );
+    }
+}
+
 pub fn get_init_cap() -> CapabilityToken {
     endpoint_bind(INIT_NAMESERVER_ENDPOINT)
 }
@@ -2283,7 +2359,7 @@ pub fn notify_wait(ep: EndpointId) {
     }
 }
 
-pub fn nameserver_register(name: &str, ep: EndpointId) {
+pub fn nameserver_register(name: &str, ep: EndpointId) -> bool {
     let msg = IpcMsg::with_label(InitMsg::REGISTER)
         .word(0, name_to_u64(name))
         .word(1, ep.0);
@@ -2294,10 +2370,10 @@ pub fn nameserver_register(name: &str, ep: EndpointId) {
             continue;
         }
         let reply = ipc_call(init_cap, msg);
-        if reply.label == InitMsg::GRANT {
-            return;
+        if reply.label == InitMsg::GRANT && reply.words[0] == InitStatus::OK {
+            return true;
         }
-        process_yield();
+        return false;
     }
 }
 
