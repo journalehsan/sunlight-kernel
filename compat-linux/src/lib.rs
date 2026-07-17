@@ -381,6 +381,8 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         39 => 33,  // getpid → SunlightOS Getpid(33)
         186 => 33, // gettid → current pid as single-thread tid
         57 => 30,  // fork → SunlightOS Fork(30)
+        58 => -17, // vfork → explicit unsupported process duplication
+        56 => -18, // clone → explicit flag-aware unsupported handling
         59 => 31,  // execve → SunlightOS Exec(31)
         61 => 32,  // wait4 → SunlightOS Waitpid(32)
         218 => -4, // set_tid_address → special single-thread emulation
@@ -439,6 +441,9 @@ mod tests {
         assert_eq!(translate_syscall(12), -2); // brk
         assert_eq!(translate_syscall(158), -3); // arch_prctl
         assert_eq!(translate_syscall(186), 33); // gettid
+        assert_eq!(translate_syscall(57), 30); // fork → native fail-closed gate
+        assert_eq!(translate_syscall(58), -17); // vfork → Linux ENOSYS
+        assert_eq!(translate_syscall(56), -18); // clone → flag-aware Linux ENOSYS
         assert_eq!(translate_syscall(218), -4); // set_tid_address
         assert_eq!(translate_syscall(273), -5); // set_robust_list
         assert_eq!(translate_syscall(334), -6); // rseq

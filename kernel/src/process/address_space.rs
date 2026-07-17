@@ -287,14 +287,14 @@ impl AddressSpace {
             return Err(crate::memory::shared::SharedMemError::OutOfMemory);
         }
         let base = VirtAddr::new(self.shared_bump);
-        let flags =
-            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+        let flags = crate::memory::security::user_shm_flags();
 
         for (i, frame) in frames.iter().enumerate() {
             let v = VirtAddr::new(self.shared_bump + (i as u64) * PAGE_SIZE);
             let page = Page::<Size4KiB>::from_start_address(v)
                 .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
             self.map_page(page, *frame, flags, pmm, hhdm_offset);
+            crate::memory::security::note_nx_shm_mapping();
         }
         self.shared_bump += total;
         Ok(base)

@@ -1,5 +1,6 @@
 pub mod heap;
 pub mod pmm;
+pub mod security;
 pub mod shared;
 pub mod swap;
 pub mod validate;

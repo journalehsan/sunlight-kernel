@@ -766,15 +766,22 @@ fn mediate_nameserver_register(
             UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
             IpcError::InvalidCapability
         })?;
-    let process_name = sched
+    let (process_name, trusted_display_service) = sched
         .processes
         .iter()
         .find(|process| process.pid == caller_pid)
-        .map(|process| process.name_str())
+        .map(|process| (process.name_str(), process.trusted_display_service))
         .ok_or(IpcError::InvalidArgument)?;
     if !registration_authorized(owner_pid, caller_pid, process_name, msg.words[0]) {
         UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
         return Err(IpcError::InvalidCapability);
+    }
+    if msg.words[0] == name_hash("display_server") {
+        if !trusted_display_service {
+            UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
+            return Err(IpcError::InvalidCapability);
+        }
+        crate::memory::security::register_display_authority(owner_pid, endpoint_id, caps);
     }
     let public = caps
         .derive(source, CapabilityRights::SEND_ONLY)

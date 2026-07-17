@@ -444,6 +444,14 @@ pub extern "C" fn _start() -> ! {
             splash.log("[SMP] Single CPU mode");
         }
     }
+    serial_println!(
+        "[MM-0] NXE active on {} CPU(s)",
+        cpu::nxe_enabled_cpu_count()
+    );
+    assert_eq!(
+        cpu::nxe_enabled_cpu_count(),
+        crate::sched::ONLINE_CORES.load(core::sync::atomic::Ordering::Acquire)
+    );
     splash.set_progress(550); // 55%
     splash.redraw();
 
@@ -506,16 +514,19 @@ pub extern "C" fn _start() -> ! {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
                 let frame_addr = pmm.alloc_frame_owned(1).expect("stack alloc");
+                assert!(memory::security::sanitize_user_frame(
+                    frame_addr,
+                    hhdm_offset
+                ));
                 let phys = unsafe {
                     x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
                 };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                let flags = memory::security::user_stack_flags();
                 unsafe {
                     init.address_space
                         .map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
+                memory::security::note_nx_stack_mapping();
             }
             init.init_context(entry, layout::USER_STACK_TOP);
             init.set_initial_args(capability::SPAWN_TOKEN.0, 0, 0, 0);
@@ -557,18 +568,21 @@ pub extern "C" fn _start() -> ! {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
                 let frame_addr = pmm.alloc_frame_owned(3).expect("stack alloc");
+                assert!(memory::security::sanitize_user_frame(
+                    frame_addr,
+                    hhdm_offset
+                ));
                 // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
                 let phys = unsafe {
                     x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
                 };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                let flags = memory::security::user_stack_flags();
                 // SAFETY: page and frame are valid user-stack mappings for this process address space.
                 unsafe {
                     vfs.address_space
                         .map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
+                memory::security::note_nx_stack_mapping();
             }
 
             // Map the FAT32 share page (read-only) at FAT_SHARE_VADDR in the vfs_server.
@@ -579,7 +593,9 @@ pub extern "C" fn _start() -> ! {
                     .expect("FAT_SHARE_VADDR is not page-aligned");
                 let share_frame =
                     unsafe { PhysFrame::from_start_address_unchecked(fat_share_phys) };
-                let share_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+                let share_flags = PageTableFlags::PRESENT
+                    | PageTableFlags::USER_ACCESSIBLE
+                    | PageTableFlags::NO_EXECUTE;
                 unsafe {
                     vfs.address_space.map_page(
                         share_page,
@@ -631,18 +647,21 @@ pub extern "C" fn _start() -> ! {
                 let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
                 let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
                 let frame_addr = pmm.alloc_frame_owned(4).expect("stack alloc");
+                assert!(memory::security::sanitize_user_frame(
+                    frame_addr,
+                    hhdm_offset
+                ));
                 // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
                 let phys = unsafe {
                     x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
                 };
-                let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-                    | x86_64::structures::paging::PageTableFlags::WRITABLE
-                    | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+                let flags = memory::security::user_stack_flags();
                 // SAFETY: page and frame are valid user-stack mappings for this process address space.
                 unsafe {
                     tty.address_space
                         .map_page(page, phys, flags, &mut pmm, hhdm_offset);
                 }
+                memory::security::note_nx_stack_mapping();
             }
             map_tty_framebuffer(
                 &mut tty,
@@ -2082,6 +2101,22 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     use crate::capability::{CapError, CapabilityToken};
     use crate::ipc::message::IpcMsg;
     use crate::memory::validate::{validate_user_ptr, PtrError, KERNEL_START};
+
+    {
+        let mut pmm = PMM.lock();
+        let free_before = pmm.free_page_count();
+        let process_count_before = 0usize;
+        let mut empty_sched = crate::sched::Scheduler::new();
+        assert_eq!(
+            crate::process::fork::fork_current_process(&mut pmm, &mut empty_sched, hhdm_offset),
+            Err(crate::process::fork::ForkError::Unsupported)
+        );
+        assert_eq!(empty_sched.processes.len(), process_count_before);
+        assert_eq!(pmm.free_page_count(), free_before);
+        serial_println!("[MM-0] unsafe fork rejection is atomic: OK");
+        memory::security::run_boot_self_tests(&mut pmm, hhdm_offset);
+    }
+    crate::sched::run_mm0_address_space_lifecycle_test(hhdm_offset);
 
     // 1. Token forge: a token that was never minted must be rejected as NotFound.
     {

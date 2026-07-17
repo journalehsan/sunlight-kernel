@@ -76,6 +76,7 @@ pub struct Process {
     pub name: [u8; 32],
     pub state: ProcessState,
     pub address_space: AddressSpace,
+    pub owns_address_space: bool,
     pub capabilities: Vec<Capability>,
     pub kernel_stack: alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]>,
     pub kernel_stack_top: u64,
@@ -113,6 +114,7 @@ pub struct Process {
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
     pub is_linux_compat: bool, // Phase 4.5: true if running Linux ELF binary
+    pub trusted_display_service: bool,
     /// Linux compatibility heap base for `brk(2)`.
     pub brk_base: u64,
     /// Current Linux compatibility heap break.
@@ -260,6 +262,7 @@ impl Process {
             name: name_arr,
             state: ProcessState::Ready,
             address_space,
+            owns_address_space: true,
             capabilities: Vec::new(),
             kernel_stack,
             kernel_stack_top,
@@ -289,6 +292,7 @@ impl Process {
             capability_mode: false,
             signal_state: signal::SignalState::new(),
             is_linux_compat: false, // default to native SunlightOS
+            trusted_display_service: false,
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,
@@ -411,6 +415,7 @@ impl Process {
             name: name_arr,
             state: ProcessState::Ready,
             address_space,
+            owns_address_space: false,
             capabilities,
             kernel_stack,
             kernel_stack_top,
@@ -440,6 +445,7 @@ impl Process {
             capability_mode: false,
             signal_state: signal::SignalState::new(),
             is_linux_compat: false,
+            trusted_display_service: false,
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,

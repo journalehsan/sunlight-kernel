@@ -20,6 +20,7 @@ pub enum MmapError {
     NoMemory,
     InvalidFlags,
     InvalidProt,
+    PermissionDenied,
 }
 
 /// Convert mprotect flags to x86_64 PageTableFlags
@@ -48,6 +49,11 @@ pub fn sys_mmap(
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
 ) -> Result<u64, MmapError> {
+    if (prot & (PROT_WRITE | PROT_EXEC)) == (PROT_WRITE | PROT_EXEC) {
+        crate::memory::security::note_rwx_mapping_rejected();
+        return Err(MmapError::PermissionDenied);
+    }
+
     // Only support anonymous mappings for now
     if (flags & MAP_ANONYMOUS) == 0 {
         return Err(MmapError::InvalidFlags);
@@ -124,6 +130,10 @@ pub fn sys_mmap(
                     .ok_or(MmapError::NoMemory)?
             }
         };
+        if !crate::memory::security::sanitize_user_frame(frame_addr, hhdm_offset) {
+            pmm.free_frame(frame_addr);
+            return Err(MmapError::NoMemory);
+        }
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
 
         let proc = sched.process_mut_by_pid(pid).ok_or(MmapError::NoMemory)?;

@@ -1661,13 +1661,51 @@ impl Scheduler {
 
     // ── Process lifecycle ────────────────────────────────────────────────────
 
-    fn address_space_is_shared(&self, idx: usize) -> bool {
+    fn live_address_space_borrowers(&self, idx: usize) -> usize {
         let pml4 = self.processes[idx].address_space.pml4_phys;
-        self.processes.iter().enumerate().any(|(other_idx, proc)| {
-            other_idx != idx
-                && !matches!(proc.state, ProcessState::Finished | ProcessState::Reaped)
-                && proc.address_space.pml4_phys == pml4
-        })
+        self.processes
+            .iter()
+            .enumerate()
+            .filter(|(other_idx, proc)| {
+                *other_idx != idx
+                    && !proc.owns_address_space
+                    && proc.state != ProcessState::Reaped
+                    && proc.address_space.pml4_phys == pml4
+            })
+            .count()
+    }
+
+    pub fn current_address_space_has_borrowers(&self) -> bool {
+        self.current_process_index()
+            .is_some_and(|idx| self.live_address_space_borrowers(idx) != 0)
+    }
+
+    fn terminate_address_space_borrowers(&mut self, owner_idx: usize, reason: &str) {
+        let pml4 = self.processes[owner_idx].address_space.pml4_phys;
+        for idx in 0..self.processes.len() {
+            if idx == owner_idx
+                || self.processes[idx].owns_address_space
+                || self.processes[idx].address_space.pml4_phys != pml4
+                || matches!(
+                    self.processes[idx].state,
+                    ProcessState::Finished | ProcessState::Reaped
+                )
+            {
+                continue;
+            }
+            self.processes[idx].exit_code = 128 + 9;
+            self.processes[idx].state = ProcessState::Finished;
+            self.processes[idx].exit_cleanup_pending = true;
+            self.remove_from_ready_queues(idx);
+            if self.processes[idx].owning_core != u8::MAX {
+                request_reschedule_on(self.processes[idx].owning_core as usize);
+            }
+            serial_println!(
+                "[SCHED] shared-address-space borrower pid={} terminated reason={}",
+                self.processes[idx].pid,
+                reason
+            );
+        }
     }
 
     fn close_owned_ipc_endpoints(&mut self, pid: usize) {
@@ -1724,7 +1762,18 @@ impl Scheduler {
 
         let pid = self.processes[idx].pid;
         let name: alloc::string::String = self.processes[idx].name_str().into();
-        let free_root = !self.address_space_is_shared(idx);
+        if self.processes[idx].owns_address_space {
+            let borrowers = self.live_address_space_borrowers(idx);
+            if borrowers != 0 {
+                self.terminate_address_space_borrowers(idx, "address-space-owner-exit");
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason idx={} reason=live_address_space_borrowers count={}",
+                    idx,
+                    borrowers
+                );
+                return;
+            }
+        }
         let hhdm_offset = match crate::HHDM_REQ.response() {
             Some(resp) => x86_64::VirtAddr::new(resp.offset),
             None => {
@@ -1787,15 +1836,15 @@ impl Scheduler {
             );
         }
 
-        let reclaim = {
+        let reclaim = if self.processes[idx].owns_address_space {
             let mut pmm = crate::PMM.lock();
             unsafe {
-                self.processes[idx].address_space.reclaim_user_space(
-                    &mut *pmm,
-                    hhdm_offset,
-                    free_root,
-                )
+                self.processes[idx]
+                    .address_space
+                    .reclaim_user_space(&mut *pmm, hhdm_offset, true)
             }
+        } else {
+            crate::process::address_space::ReclaimStats::default()
         };
 
         // Clear per-process kernel structures (idempotent clears).
@@ -2023,6 +2072,7 @@ impl Scheduler {
     pub fn diagnostic_report(&self) {
         let ipc = crate::ipc::diagnostic_snapshot();
         let caps = crate::capability::diagnostic_snapshot();
+        crate::memory::security::diagnostic_report();
         serial_println!(
             "[IPC-DIAG] depth={} high_water={} enqueue={} dequeue={} full={} coalesced={} deadline={} cancel={} late_reply={} peer_closed={} public_send={} rights_escalation={} unauthorized_register={} live_conflict={} stale_remove={} dead_replace={} stale_lookup={} registry_full={} send_only_reject={}",
             ipc.current_queue_depth,
@@ -2437,6 +2487,81 @@ impl Scheduler {
     }
 }
 
+pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
+    let free_before = crate::PMM.lock().free_page_count();
+    let owner = {
+        let mut pmm = crate::PMM.lock();
+        unsafe { crate::process::Process::new(0xA001, 0, "mm0-owner", &mut pmm, hhdm_offset) }
+    };
+    let pml4 = owner.address_space.pml4_phys;
+    let borrower_one = crate::process::Process::new_thread(
+        0xA002,
+        owner.pid,
+        "mm0-thread",
+        pml4,
+        crate::process::fd_table::FdTable::new_boxed(),
+        crate::process::env::EnvMap::new(),
+        0,
+        0,
+        0,
+        alloc::vec::Vec::new(),
+        None,
+    );
+    let borrower_two = crate::process::Process::new_thread(
+        0xA003,
+        owner.pid,
+        "mm0-thread",
+        pml4,
+        crate::process::fd_table::FdTable::new_boxed(),
+        crate::process::env::EnvMap::new(),
+        0,
+        0,
+        0,
+        alloc::vec::Vec::new(),
+        None,
+    );
+
+    let mut sched = Scheduler::new();
+    sched.processes.push(owner);
+    sched.processes.push(borrower_one);
+    sched.processes.push(borrower_two);
+
+    for idx in [1usize, 2usize] {
+        sched.processes[idx].state = ProcessState::Finished;
+        sched.processes[idx].exit_cleanup_pending = true;
+        sched.reap_process_resources(idx);
+        assert_eq!(sched.processes[idx].state, ProcessState::Reaped);
+        assert_eq!(sched.processes[0].address_space.pml4_phys, pml4);
+    }
+    assert_eq!(crate::PMM.lock().free_page_count(), free_before - 1);
+
+    let live_borrower = crate::process::Process::new_thread(
+        0xA004,
+        sched.processes[0].pid,
+        "mm0-thread",
+        pml4,
+        crate::process::fd_table::FdTable::new_boxed(),
+        crate::process::env::EnvMap::new(),
+        0,
+        0,
+        0,
+        alloc::vec::Vec::new(),
+        None,
+    );
+    sched.processes.push(live_borrower);
+    sched.processes[0].state = ProcessState::Finished;
+    sched.processes[0].exit_cleanup_pending = true;
+    sched.reap_process_resources(0);
+    assert_eq!(sched.processes[0].state, ProcessState::Finished);
+    assert_eq!(sched.processes[3].state, ProcessState::Finished);
+    sched.reap_process_resources(3);
+    assert_eq!(sched.processes[3].state, ProcessState::Reaped);
+    sched.reap_process_resources(0);
+    assert_eq!(sched.processes[0].state, ProcessState::Reaped);
+    assert_eq!(crate::PMM.lock().free_page_count(), free_before);
+    crate::serial_println!("[MM-0] thread address-space lifecycle: OK");
+}
+
 // ─── Queue helpers ────────────────────────────────────────────────────────────
 
 fn pop_ready_excluding_current(
@@ -2642,6 +2767,9 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     sched.set_core_current_task(cpu_id, None);
     sched.set_core_current_ticks(cpu_id, 0);
     sched.remove_from_ready_queues(cur);
+    if sched.processes[cur].owns_address_space {
+        sched.terminate_address_space_borrowers(cur, "address-space-owner-exit");
+    }
     sched.close_owned_ipc_endpoints(my_pid);
 
     serial_println!(

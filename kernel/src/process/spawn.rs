@@ -13,6 +13,13 @@ pub fn name_from_path(path: &str) -> &str {
     path.rfind('/').map(|i| &path[i + 1..]).unwrap_or(path)
 }
 
+pub fn is_trusted_display_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/sbin/sunlight-display" | "/usr/sbin/sunlight-display"
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpawnError {
     NotFound,
@@ -33,6 +40,7 @@ pub fn exec_into_process(
     argv: &[&[u8]],
     envp: &[&[u8]],
 ) -> Result<u64, SpawnError> {
+    process.trusted_display_service = false;
     // Tear down old address space (note: old frames leak; acceptable for minimal scope)
     process.address_space =
         unsafe { crate::process::address_space::AddressSpace::new(pmm, hhdm_offset) };
@@ -56,14 +64,18 @@ pub fn exec_into_process(
         let frame_addr = pmm
             .alloc_frame_owned(process.pid as u32)
             .ok_or(SpawnError::NoMemory)?;
+        if !crate::memory::security::sanitize_user_frame(frame_addr, hhdm_offset) {
+            pmm.free_frame(frame_addr);
+            return Err(SpawnError::NoMemory);
+        }
         let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
-        let flags =
-            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+        let flags = crate::memory::security::user_stack_flags();
         unsafe {
             process
                 .address_space
                 .map_page(page, phys, flags, pmm, hhdm_offset);
         }
+        crate::memory::security::note_nx_stack_mapping();
     }
 
     // Build auxv for Linux-compat processes so musl's _start doesn't scan
@@ -349,6 +361,7 @@ pub fn spawn_from_path_with_env(
     let envp_strings = process.env.to_envp();
     let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
     exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp)?;
+    process.trusted_display_service = is_trusted_display_path(path);
     process.set_initial_args(shell_id.unwrap_or(0), uid as u64, gid as u64, 0);
 
     let actual_pid = process.pid;

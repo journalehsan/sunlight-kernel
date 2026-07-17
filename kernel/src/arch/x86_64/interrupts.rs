@@ -567,8 +567,8 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
     let process = sched.current_process_mut();
 
     // Look up the current physical frame
-    let old_phys = match unsafe { process.address_space.lookup_phys(page, hhdm) } {
-        Some(phys) => phys,
+    let (old_phys, old_flags) = match unsafe { process.address_space.lookup_entry(page, hhdm) } {
+        Some(entry) => entry,
         None => return false,
     };
 
@@ -596,9 +596,7 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
         Err(_) => return false,
     };
 
-    let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-        | x86_64::structures::paging::PageTableFlags::WRITABLE
-        | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE;
+    let flags = old_flags | x86_64::structures::paging::PageTableFlags::WRITABLE;
 
     unsafe {
         process

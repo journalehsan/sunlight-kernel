@@ -400,6 +400,16 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1014; // Internal code for Linux getrandom
                     }
                 }
+                -17 => {
+                    if linux_num == 58 {
+                        num = 1015; // Linux vfork containment
+                    }
+                }
+                -18 => {
+                    if linux_num == 56 {
+                        num = 1016; // Linux clone containment
+                    }
+                }
                 -38 => {
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
                     num = 1005; // Linux ENOSYS
@@ -520,6 +530,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1012 => sys_linux_ioctl(frame),
         1013 => sys_linux_writev(frame),
         1014 => sys_linux_getrandom(frame),
+        1015 => reject_linux_address_space_duplication("vfork"),
+        1016 => sys_linux_clone_unsupported(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1153,22 +1165,28 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 /// Syscall: Fork (30)
 /// Returns: child_pid (parent), 0 (child)
 fn sys_fork(_frame: &mut SyscallFrame) -> u64 {
-    let mut sched = crate::sched::SCHEDULER.lock();
-    let mut pmm = crate::PMM.lock();
-    let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
-
-    // Borrow the parent process momentarily to fork it
-    let parent_pid = sched.current_process().pid;
-    match crate::process::fork::fork_current_process(&mut *pmm, &mut *sched, VirtAddr::new(hhdm)) {
-        Ok(child_pid) => {
-            crate::serial_println!("[SYSCALL] fork {} -> {}", parent_pid, child_pid);
-            child_pid as u64
-        }
-        Err(_) => {
-            crate::serial_println!("[SYSCALL] fork failed for pid={}", parent_pid);
-            u64::MAX
-        }
+    crate::memory::security::note_unsafe_fork_rejected();
+    if crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat) {
+        linux_errno(38)
+    } else {
+        u64::MAX
     }
+}
+
+fn reject_linux_address_space_duplication(operation: &str) -> u64 {
+    crate::memory::security::note_unsafe_fork_rejected();
+    crate::serial_println!("[MM-0] rejected unsafe Linux {}", operation);
+    linux_errno(38)
+}
+
+fn sys_linux_clone_unsupported(frame: &SyscallFrame) -> u64 {
+    const CLONE_VM: u64 = 0x0000_0100;
+    let operation = if frame.rdi & CLONE_VM != 0 {
+        "clone(CLONE_VM)"
+    } else {
+        "clone(process)"
+    };
+    reject_linux_address_space_duplication(operation)
 }
 
 /// Syscall: Exec (31)
@@ -1273,6 +1291,14 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     }
 
     let mut sched = crate::sched::SCHEDULER.lock();
+    if sched.current_address_space_has_borrowers() {
+        crate::serial_println!("[MM-0] exec rejected while address-space borrowers are live");
+        return if sched.current_process().is_linux_compat {
+            linux_errno(38)
+        } else {
+            u64::MAX
+        };
+    }
     let mut pmm = crate::PMM.lock();
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
 
@@ -1508,6 +1534,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         bytes, &mut child, &mut pmm, hhdm, &argv_refs, &envp_refs,
     ) {
         Ok(_) => {
+            child.trusted_display_service =
+                crate::process::spawn::is_trusted_display_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             // [LAUNCH-TRACE] Point 5: spawn returned successfully
             trace.spawn_returned_ns = now_ns();
         }
@@ -3448,9 +3477,17 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
             );
             mapped_addr
         }
-        Err(_) => {
+        Err(error) => {
             crate::serial_println!("[SYSCALL] mmap failed ({:#x}, {:#x})", addr, length);
-            u64::MAX
+            if crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat) {
+                match error {
+                    crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),
+                    crate::process::mmap::MmapError::NoMemory => linux_errno(12),
+                    _ => linux_errno(22),
+                }
+            } else {
+                u64::MAX
+            }
         }
     }
 }
@@ -3928,6 +3965,16 @@ fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
 fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let caller_pid = sched.current_process().pid;
+    {
+        let caps = crate::capability::CAP_BROKER.lock();
+        if !crate::memory::security::framebuffer_authorized(caller_pid, &caps) {
+            crate::memory::security::note_framebuffer_mapping_rejected();
+            return u64::MAX;
+        }
+    }
+
     let fb_resp = crate::FB_REQ.response();
     let fb = match fb_resp.and_then(|r| r.framebuffers().first()) {
         Some(f) => f,
@@ -3951,7 +3998,6 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     let total_bytes = fb_page_offset + bytes_per_row * fb_height;
     let page_count = (total_bytes + 4095) / 4096;
 
-    let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let process = sched.current_process_mut();
 

@@ -1,3 +1,10 @@
+[MM-0] unsafe fork rejection is atomic: OK
+[MM-0] NXE and NX mapping flags: OK
+[MM-0] user-frame reuse sanitization: OK
+[MM-0] anonymous mmap W^X, NX, and zero-fill: OK
+[MM-0] SHM NX, zero-fill, and peer preservation: OK
+[MM-0] framebuffer authority lifecycle: OK
+[MM-0] thread address-space lifecycle: OK
 [SEC]  Token forge attempt: REJECTED (CapError::NotFound)
 [SEC]  word_count=9 attempt: REJECTED (IpcError::InvalidWordCount)
 [SEC]  kernel ptr attempt: REJECTED (PtrError::KernelAddress)

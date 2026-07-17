@@ -541,6 +541,7 @@ impl CapabilityBroker {
         self.endpoints.retain(|endpoint| endpoint.id != endpoint_id);
         self.capabilities
             .retain(|(_, capability_endpoint, _)| *capability_endpoint != endpoint_id);
+        crate::memory::security::revoke_display_authority_for_endpoint(endpoint_id);
         Ok(endpoint_id)
     }
 
@@ -597,6 +598,7 @@ impl CapabilityBroker {
             .retain(|endpoint| endpoint.owner_pid != owner_pid);
         self.capabilities
             .retain(|(_, endpoint_id, _)| !endpoint_ids.iter().any(|id| id == endpoint_id));
+        crate::memory::security::revoke_display_authority_for_owner(owner_pid);
     }
 
     /// Mint a capability token granting access to map a shared physical frame (single-page compat).

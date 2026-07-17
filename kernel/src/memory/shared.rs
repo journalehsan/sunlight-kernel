@@ -45,6 +45,10 @@ pub fn alloc_shared_region(
         let phys = pmm
             .alloc_frame_owned(caller.pid as u32)
             .ok_or(SharedMemError::OutOfMemory)?;
+        if !crate::memory::security::sanitize_user_frame(phys, hhdm_offset) {
+            pmm.free_frame(phys);
+            return Err(SharedMemError::OutOfMemory);
+        }
         let frame = unsafe { PhysFrame::<Size4KiB>::from_start_address_unchecked(phys) };
         frames.push(frame);
     }
