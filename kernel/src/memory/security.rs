@@ -111,9 +111,16 @@ pub fn diagnostic_report() {
         NX_STACK_MAPPINGS.load(Ordering::Relaxed),
         NX_SHM_MAPPINGS.load(Ordering::Relaxed),
     );
+    let user = crate::memory::user::diagnostics();
+    crate::serial_println!(
+        "[MM-1-DIAG] noncanonical={} overflow={} kernel_range={} unmapped={} readonly_write={} string_limit={} array_limit={} multipage={}",
+        user[0], user[1], user[2], user[3], user[4], user[5], user[6], user[7],
+    );
 }
 
 pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
+    crate::memory::user::run_address_policy_self_tests();
+    crate::memory::user::run_mapping_self_tests(pmm, hhdm);
     assert!(crate::arch::x86_64::cpu::nxe_active());
     assert!(user_stack_flags().contains(PageTableFlags::NO_EXECUTE));
     assert!(user_shm_flags().contains(PageTableFlags::NO_EXECUTE));

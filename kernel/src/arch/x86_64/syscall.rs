@@ -556,50 +556,53 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
 use crate::capability::CapabilityRights;
 use crate::capability::CapabilityToken;
 use crate::ipc::{IpcError, IpcMsg, INIT_NAMESERVER_ENDPOINT};
-use crate::process::layout::is_user_address;
 use crate::process::ProcessState;
 use crate::sched;
 use alloc::vec::Vec;
 use heapless::String;
 
-/// Read a null-terminated C string from user space.
-unsafe fn read_user_cstr(ptr: u64, max_len: usize) -> Option<Vec<u8>> {
-    if !is_user_address(ptr) {
-        return None;
-    }
+const USER_PATH_MAX: usize = 256;
+const USER_ARG_MAX: usize = 256;
+const USER_ARG_COUNT_MAX: usize = 16;
+const USER_ARG_TOTAL_MAX: usize = 4096;
 
-    let mut result = Vec::new();
-    let bytes = ptr as *const u8;
-
-    for i in 0..max_len {
-        let byte = *bytes.add(i);
-        if byte == 0 {
-            return Some(result);
-        }
-        result.push(byte);
-    }
-
-    Some(result)
+fn read_user_cstr(
+    ptr: u64,
+    max_len: usize,
+) -> Result<Vec<u8>, crate::memory::user::UserMemoryError> {
+    crate::memory::user::read_c_string(ptr, max_len)
 }
 
-/// Read an array of pointers from user space (null-terminated array of *const u8).
-unsafe fn read_user_ptr_array(ptr: u64, max_entries: usize) -> Option<Vec<u64>> {
-    if !is_user_address(ptr) {
-        return None;
+fn read_user_ptr_array(
+    ptr: u64,
+    max_entries: usize,
+) -> Result<Vec<u64>, crate::memory::user::UserMemoryError> {
+    crate::memory::user::read_pointer_array(ptr, max_entries)
+}
+
+fn user_memory_failure(error: crate::memory::user::UserMemoryError) -> u64 {
+    let is_linux =
+        crate::sched::with_scheduler(|scheduler| scheduler.current_process().is_linux_compat);
+    user_memory_failure_for(is_linux, error)
+}
+
+fn user_memory_failure_for(is_linux: bool, error: crate::memory::user::UserMemoryError) -> u64 {
+    if !is_linux {
+        return u64::MAX;
     }
-
-    let mut result = Vec::new();
-    let ptrs = ptr as *const u64;
-
-    for i in 0..max_entries {
-        let ptr_val = *ptrs.add(i);
-        if ptr_val == 0 {
-            return Some(result);
-        }
-        result.push(ptr_val);
+    match error {
+        crate::memory::user::UserMemoryError::StringTooLong => linux_errno(36),
+        crate::memory::user::UserMemoryError::ArrayTooLarge => linux_errno(7),
+        _ => linux_errno(14),
     }
+}
 
-    Some(result)
+fn copy_from_user(address: u64, destination: &mut [u8]) -> Result<(), u64> {
+    crate::memory::user::copy_from_current(address, destination).map_err(user_memory_failure)
+}
+
+fn copy_to_user(address: u64, source: &[u8]) -> Result<(), u64> {
+    crate::memory::user::copy_to_current(address, source).map_err(user_memory_failure)
 }
 
 /// Reject IpcMsg whose counts exceed the register transport limits. Registers are
@@ -979,18 +982,13 @@ fn process_yield() -> u64 {
 /// foreground app's stdin ring. rdi=tab, rsi=buf, rdx=len. Returns bytes pushed.
 fn sys_tty_stdin_push(frame: &mut SyscallFrame) -> u64 {
     let tab = frame.rdi as usize;
-    let buf = frame.rsi as *const u8;
     let len = (frame.rdx as usize).min(256);
     if len == 0 {
         return 0;
     }
-    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + len as u64) {
-        return u64::MAX;
-    }
     let mut kbuf = [0u8; 256];
-    // SAFETY: buf..buf+len validated as user memory above.
-    unsafe {
-        core::ptr::copy_nonoverlapping(buf, kbuf.as_mut_ptr(), len);
+    if let Err(error) = copy_from_user(frame.rsi, &mut kbuf[..len]) {
+        return error;
     }
     crate::process::tty_io::push_stdin(tab, &kbuf[..len]) as u64
 }
@@ -999,20 +997,15 @@ fn sys_tty_stdin_push(frame: &mut SyscallFrame) -> u64 {
 /// ring to render it. rdi=tab, rsi=buf, rdx=len. Returns bytes pulled.
 fn sys_tty_stdout_pull(frame: &mut SyscallFrame) -> u64 {
     let tab = frame.rdi as usize;
-    let buf = frame.rsi as *mut u8;
     let len = (frame.rdx as usize).min(4096);
     if len == 0 {
         return 0;
     }
-    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + len as u64) {
-        return u64::MAX;
-    }
     let mut kbuf = [0u8; 4096];
     let n = crate::process::tty_io::pull_stdout(tab, &mut kbuf[..len]);
     if n > 0 {
-        // SAFETY: buf..buf+len validated as user memory above; n <= len.
-        unsafe {
-            core::ptr::copy_nonoverlapping(kbuf.as_ptr(), buf, n);
+        if let Err(error) = copy_to_user(frame.rsi, &kbuf[..n]) {
+            return error;
         }
     }
     n as u64
@@ -1045,33 +1038,20 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     let user_stack_top = frame.rsi;
     let tls_ptr = frame.rdx;
 
-    if !is_user_address(trampoline) || !is_user_address(user_stack_top) || !is_user_address(tls_ptr)
+    if crate::memory::user::UserAddress::new(trampoline).is_err()
+        || crate::memory::user::UserAddress::new(user_stack_top).is_err()
+        || crate::memory::user::UserAddress::new(tls_ptr).is_err()
     {
         return u64::MAX;
     }
-    // user_stack_top must have room for the two u64 values libc wrote there.
-    if !is_user_address(user_stack_top + 8) {
-        return u64::MAX;
+    let mut startup = [0u8; 16];
+    if let Err(error) = copy_from_user(user_stack_top, &mut startup) {
+        return error;
     }
+    let func = u64::from_ne_bytes(startup[..8].try_into().unwrap());
+    let arg = u64::from_ne_bytes(startup[8..].try_into().unwrap());
 
-    // Read func and arg from the top of the user stack (written by libc before
-    // the syscall so we don't need extra syscall arguments).
-    // SAFETY: user_stack_top and +8 were validated as user addresses above;
-    // CR3 has not changed since syscall_entry, so these virtual addresses
-    // are accessible from kernel mode.
-    // read_unaligned: the stack top is userland-controlled and may not be
-    // 8-aligned. A plain *const u64 deref would panic the kernel on a
-    // misaligned address (UB / debug alignment check) instead of failing
-    // gracefully in userland.
-    let (func, arg) = unsafe {
-        let base = user_stack_top as *const u64;
-        (
-            core::ptr::read_unaligned(base),
-            core::ptr::read_unaligned(base.add(1)),
-        )
-    };
-
-    if !is_user_address(func) {
+    if crate::memory::user::UserAddress::new(func).is_err() {
         crate::serial_println!("[SYSCALL] thread_spawn: func not in user space");
         return u64::MAX;
     }
@@ -1144,15 +1124,14 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
     if ptr == 0 || len == 0 {
         return 0;
     }
-    if !is_user_address(ptr) {
+    let mut bytes = [0u8; 256];
+    let copy_len = (len as usize).min(bytes.len());
+    if copy_from_user(ptr, &mut bytes[..copy_len]).is_err() {
         return IpcError::InvalidArgument as u64;
     }
 
-    // SAFETY: ptr is validated to be in user space and len is bounded.
-    let slice = unsafe { core::slice::from_raw_parts(ptr as *const u8, len.min(256) as usize) };
-
     // Print valid UTF-8 prefix
-    if let Ok(s) = core::str::from_utf8(slice) {
+    if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
         crate::serial_println!("{}", s);
     } else {
         crate::serial_println!("[SYSCALL] DebugLog: invalid UTF-8");
@@ -1201,11 +1180,11 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     let envp_ptr = frame.rdx;
 
     // Read path from user space
-    let path_bytes = match unsafe { read_user_cstr(path_ptr, 256) } {
-        Some(b) => b,
-        None => {
+    let path_bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => {
             crate::serial_println!("[SYSCALL] exec: bad path pointer");
-            return u64::MAX;
+            return user_memory_failure(error);
         }
     };
 
@@ -1218,21 +1197,32 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     };
 
     // Read argv from user space
-    let argv_ptrs = match unsafe { read_user_ptr_array(argv_ptr, 16) } {
-        Some(a) => a,
-        None => {
+    let argv_ptrs = match read_user_ptr_array(argv_ptr, USER_ARG_COUNT_MAX) {
+        Ok(pointers) => pointers,
+        Err(error) => {
             crate::serial_println!("[SYSCALL] exec: bad argv pointer");
-            return u64::MAX;
+            return user_memory_failure(error);
         }
     };
 
     let mut argv_bytes = alloc::vec::Vec::new();
+    let mut total_arg_bytes = 0usize;
     for &arg_ptr in &argv_ptrs {
-        match unsafe { read_user_cstr(arg_ptr, 256) } {
-            Some(bytes) => argv_bytes.push(bytes),
-            None => {
+        match read_user_cstr(arg_ptr, USER_ARG_MAX) {
+            Ok(bytes) => {
+                total_arg_bytes = match total_arg_bytes.checked_add(bytes.len() + 1) {
+                    Some(total) if total <= USER_ARG_TOTAL_MAX => total,
+                    _ => {
+                        return user_memory_failure(
+                            crate::memory::user::UserMemoryError::ArrayTooLarge,
+                        )
+                    }
+                };
+                argv_bytes.push(bytes);
+            }
+            Err(error) => {
                 crate::serial_println!("[SYSCALL] exec: bad argv[{}] pointer", argv_bytes.len());
-                return u64::MAX;
+                return user_memory_failure(error);
             }
         }
     }
@@ -1240,22 +1230,32 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     // Read envp from user space; NULL means "inherit my environment".
     let mut envp_bytes = alloc::vec::Vec::new();
     if envp_ptr != 0 {
-        let envp_ptrs = match unsafe { read_user_ptr_array(envp_ptr, 16) } {
-            Some(e) => e,
-            None => {
+        let envp_ptrs = match read_user_ptr_array(envp_ptr, USER_ARG_COUNT_MAX) {
+            Ok(pointers) => pointers,
+            Err(error) => {
                 crate::serial_println!("[SYSCALL] exec: bad envp pointer");
-                return u64::MAX;
+                return user_memory_failure(error);
             }
         };
         for &env_ptr in &envp_ptrs {
-            match unsafe { read_user_cstr(env_ptr, 256) } {
-                Some(bytes) => envp_bytes.push(bytes),
-                None => {
+            match read_user_cstr(env_ptr, USER_ARG_MAX) {
+                Ok(bytes) => {
+                    total_arg_bytes = match total_arg_bytes.checked_add(bytes.len() + 1) {
+                        Some(total) if total <= USER_ARG_TOTAL_MAX => total,
+                        _ => {
+                            return user_memory_failure(
+                                crate::memory::user::UserMemoryError::ArrayTooLarge,
+                            )
+                        }
+                    };
+                    envp_bytes.push(bytes);
+                }
+                Err(error) => {
                     crate::serial_println!(
                         "[SYSCALL] exec: bad envp[{}] pointer",
                         envp_bytes.len()
                     );
-                    return u64::MAX;
+                    return user_memory_failure(error);
                 }
             }
         }
@@ -1443,9 +1443,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let argv_ptr = frame.rsi;
     let stdout_fd = frame.rdx;
 
-    let path_bytes = match unsafe { read_user_cstr(path_ptr, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path_str = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
@@ -1457,14 +1457,25 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
 
     let mut argv_bytes = alloc::vec::Vec::new();
     if argv_ptr != 0 {
-        let argv_ptrs = match unsafe { read_user_ptr_array(argv_ptr, 16) } {
-            Some(a) => a,
-            None => return u64::MAX,
+        let argv_ptrs = match read_user_ptr_array(argv_ptr, USER_ARG_COUNT_MAX) {
+            Ok(pointers) => pointers,
+            Err(error) => return user_memory_failure(error),
         };
+        let mut total_arg_bytes = 0usize;
         for &arg_ptr in &argv_ptrs {
-            match unsafe { read_user_cstr(arg_ptr, 256) } {
-                Some(bytes) => argv_bytes.push(bytes),
-                None => return u64::MAX,
+            match read_user_cstr(arg_ptr, USER_ARG_MAX) {
+                Ok(bytes) => {
+                    total_arg_bytes = match total_arg_bytes.checked_add(bytes.len() + 1) {
+                        Some(total) if total <= USER_ARG_TOTAL_MAX => total,
+                        _ => {
+                            return user_memory_failure(
+                                crate::memory::user::UserMemoryError::ArrayTooLarge,
+                            )
+                        }
+                    };
+                    argv_bytes.push(bytes);
+                }
+                Err(error) => return user_memory_failure(error),
             }
         }
     }
@@ -1796,9 +1807,9 @@ fn sys_setnice(frame: &mut SyscallFrame) -> u64 {
 /// rsi = flags (reserved)
 /// rdx = mode (reserved)
 fn sys_open(frame: &mut SyscallFrame) -> u64 {
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let raw = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
@@ -1902,9 +1913,9 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
@@ -1950,17 +1961,21 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_getcwd(frame: &mut SyscallFrame) -> u64 {
-    let buf_ptr = frame.rdi as *mut u8;
     let buf_len = frame.rsi as usize;
-    if buf_ptr.is_null() || buf_len == 0 {
+    if frame.rdi == 0 || buf_len == 0 {
         return u64::MAX;
     }
     let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
     let bytes = cwd.as_bytes();
     let copy_len = bytes.len().min(buf_len - 1);
-    unsafe {
-        core::ptr::copy_nonoverlapping(bytes.as_ptr(), buf_ptr, copy_len);
-        buf_ptr.add(copy_len).write(0);
+    let mut output = alloc::vec::Vec::new();
+    if output.try_reserve_exact(copy_len + 1).is_err() {
+        return u64::MAX;
+    }
+    output.extend_from_slice(&bytes[..copy_len]);
+    output.push(0);
+    if let Err(error) = copy_to_user(frame.rdi, &output) {
+        return error;
     }
     frame.rdi // return buf pointer per Linux getcwd ABI
 }
@@ -2003,9 +2018,9 @@ fn username_for_uid(uid: u32) -> &'static str {
 fn sys_grant_capability_syscall(frame: &mut SyscallFrame) -> u64 {
     let caller_pid = crate::sched::with_scheduler(|sched| sched.current_process().pid as u32);
 
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 64) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, 64) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
@@ -2036,7 +2051,7 @@ fn sys_grant_capability_syscall(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_set_fs_base(frame: &mut SyscallFrame) -> u64 {
     let base = frame.rdi;
-    if !is_user_address(base) {
+    if crate::memory::user::UserAddress::new(base).is_err() {
         return u64::MAX;
     }
 
@@ -2148,7 +2163,7 @@ fn linux_errno(errno: u64) -> u64 {
 
 fn sys_linux_set_tid_address(frame: &mut SyscallFrame) -> u64 {
     let tidptr = frame.rdi;
-    if tidptr != 0 && !is_user_address(tidptr) {
+    if tidptr != 0 && crate::memory::user::UserAddress::new(tidptr).is_err() {
         return linux_errno(14); // EFAULT
     }
 
@@ -2157,7 +2172,7 @@ fn sys_linux_set_tid_address(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_linux_set_robust_list(frame: &mut SyscallFrame) -> u64 {
     let head = frame.rdi;
-    if head != 0 && !is_user_address(head) {
+    if head != 0 && crate::memory::user::UserAddress::new(head).is_err() {
         return linux_errno(14); // EFAULT
     }
 
@@ -2169,22 +2184,13 @@ fn sys_linux_rseq(_frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
-    let buf_ptr = frame.rdi as *mut u8;
     let len = frame.rsi as usize;
     let _flags = frame.rdx;
 
     if len == 0 {
         return 0;
     }
-    if buf_ptr.is_null() || len > isize::MAX as usize {
-        return linux_errno(14); // EFAULT
-    }
-
-    let end = match frame.rdi.checked_add((len - 1) as u64) {
-        Some(end) => end,
-        None => return linux_errno(14), // EFAULT
-    };
-    if !is_user_address(frame.rdi) || !is_user_address(end) {
+    if frame.rdi == 0 || len > isize::MAX as usize {
         return linux_errno(14); // EFAULT
     }
 
@@ -2195,8 +2201,8 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
     while written < len {
         let chunk = sys_get_entropy().to_le_bytes();
         let n = (len - written).min(chunk.len());
-        unsafe {
-            core::ptr::copy_nonoverlapping(chunk.as_ptr(), buf_ptr.add(written), n);
+        if crate::memory::user::copy_to_current(frame.rdi + written as u64, &chunk[..n]).is_err() {
+            return linux_errno(14);
         }
         written += n;
     }
@@ -2205,7 +2211,6 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
-    let fds_ptr = frame.rdi as *mut u8;
     let nfds = frame.rsi;
 
     if nfds == 0 {
@@ -2219,18 +2224,13 @@ fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
         return linux_errno(22); // keep the early compat shim bounded
     }
 
-    let start = fds_ptr as u64;
-    let Some(end) = start.checked_add(bytes - 1) else {
-        return linux_errno(14); // EFAULT
-    };
-    if !is_user_address(start) || !is_user_address(end) {
+    if crate::memory::user::UserRange::new(frame.rdi, bytes as usize).is_err() {
         return linux_errno(14); // EFAULT
     }
 
     for idx in 0..nfds {
-        let revents = unsafe { fds_ptr.add((idx as usize * 8) + 6) as *mut i16 };
-        unsafe {
-            *revents = 0;
+        if crate::memory::user::copy_to_current(frame.rdi + idx * 8 + 6, &[0, 0]).is_err() {
+            return linux_errno(14);
         }
     }
 
@@ -2249,19 +2249,12 @@ fn sys_linux_rt_sigaction(frame: &mut SyscallFrame) -> u64 {
     if sigset_size != 8 && sigset_size != 16 {
         return linux_errno(22); // EINVAL
     }
-    if act != 0 && (!is_user_address(act) || !is_user_address(act + 31)) {
+    if act != 0 && crate::memory::user::UserRange::new(act, 32).is_err() {
         return linux_errno(14); // EFAULT
     }
     if oldact != 0 {
-        if !is_user_address(oldact) || !is_user_address(oldact + 31) {
-            return linux_errno(14); // EFAULT
-        }
-        unsafe {
-            let old = oldact as *mut u64;
-            *old.add(0) = 0; // default handler
-            *old.add(1) = 0; // flags
-            *old.add(2) = 0; // restorer
-            *old.add(3) = 0; // mask
+        if crate::memory::user::copy_to_current(oldact, &[0u8; 32]).is_err() {
+            return linux_errno(14);
         }
     }
 
@@ -2280,15 +2273,13 @@ fn sys_linux_rt_sigprocmask(frame: &mut SyscallFrame) -> u64 {
     if sigset_size != 8 && sigset_size != 16 {
         return linux_errno(22); // EINVAL
     }
-    if set != 0 && (!is_user_address(set) || !is_user_address(set + sigset_size - 1)) {
+    if set != 0 && crate::memory::user::UserRange::new(set, sigset_size as usize).is_err() {
         return linux_errno(14); // EFAULT
     }
     if oldset != 0 {
-        if !is_user_address(oldset) || !is_user_address(oldset + sigset_size - 1) {
-            return linux_errno(14); // EFAULT
-        }
-        unsafe {
-            core::ptr::write_bytes(oldset as *mut u8, 0, sigset_size as usize);
+        let zeros = [0u8; 16];
+        if crate::memory::user::copy_to_current(oldset, &zeros[..sigset_size as usize]).is_err() {
+            return linux_errno(14);
         }
     }
 
@@ -2344,19 +2335,15 @@ fn sys_linux_sigaltstack(frame: &mut SyscallFrame) -> u64 {
     let new_ss = frame.rdi;
     let old_ss = frame.rsi;
 
-    if new_ss != 0 && (!is_user_address(new_ss) || !is_user_address(new_ss + 23)) {
+    if new_ss != 0 && crate::memory::user::UserRange::new(new_ss, 24).is_err() {
         return linux_errno(14); // EFAULT
     }
 
     if old_ss != 0 {
-        if !is_user_address(old_ss) || !is_user_address(old_ss + 23) {
+        let mut old = [0u8; 24];
+        old[8..16].copy_from_slice(&2u64.to_ne_bytes());
+        if crate::memory::user::copy_to_current(old_ss, &old).is_err() {
             return linux_errno(14); // EFAULT
-        }
-        unsafe {
-            let old = old_ss as *mut u64;
-            *old.add(0) = 0; // ss_sp
-            *old.add(1) = 2; // ss_flags = SS_DISABLE
-            *old.add(2) = 0; // ss_size
         }
     }
 
@@ -2430,19 +2417,36 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
             if fd != 0 && fd != 1 && fd != 2 {
                 return linux_errno(25); // ENOTTY
             }
-            if !is_user_address(argp) {
-                return linux_errno(14); // EFAULT
-            }
             if request == TCGETS {
                 let sched = crate::sched::SCHEDULER.lock();
                 let termios = sched.current_process().linux_termios;
                 drop(sched);
-                unsafe {
-                    core::ptr::write(argp as *mut LinuxTermios, termios);
+                let mut wire = [0u8; 60];
+                wire[0..4].copy_from_slice(&termios.c_iflag.to_ne_bytes());
+                wire[4..8].copy_from_slice(&termios.c_oflag.to_ne_bytes());
+                wire[8..12].copy_from_slice(&termios.c_cflag.to_ne_bytes());
+                wire[12..16].copy_from_slice(&termios.c_lflag.to_ne_bytes());
+                wire[16] = termios.c_line;
+                wire[17..49].copy_from_slice(&termios.c_cc);
+                wire[52..56].copy_from_slice(&termios.c_ispeed.to_ne_bytes());
+                wire[56..60].copy_from_slice(&termios.c_ospeed.to_ne_bytes());
+                if crate::memory::user::copy_to_current(argp, &wire).is_err() {
+                    return linux_errno(14);
                 }
             } else {
-                // TCSETS / TCSETSW / TCSETSF — all treated the same (no drain/flush needed)
-                let new_termios = unsafe { core::ptr::read(argp as *const LinuxTermios) };
+                let mut wire = [0u8; 60];
+                if crate::memory::user::copy_from_current(argp, &mut wire).is_err() {
+                    return linux_errno(14);
+                }
+                let mut new_termios = LinuxTermios::default_cooked();
+                new_termios.c_iflag = u32::from_ne_bytes(wire[0..4].try_into().unwrap());
+                new_termios.c_oflag = u32::from_ne_bytes(wire[4..8].try_into().unwrap());
+                new_termios.c_cflag = u32::from_ne_bytes(wire[8..12].try_into().unwrap());
+                new_termios.c_lflag = u32::from_ne_bytes(wire[12..16].try_into().unwrap());
+                new_termios.c_line = wire[16];
+                new_termios.c_cc.copy_from_slice(&wire[17..49]);
+                new_termios.c_ispeed = u32::from_ne_bytes(wire[52..56].try_into().unwrap());
+                new_termios.c_ospeed = u32::from_ne_bytes(wire[56..60].try_into().unwrap());
                 let mut sched = crate::sched::SCHEDULER.lock();
                 let process = sched.current_process_mut();
                 let was_raw = (process.linux_termios.c_lflag & ICANON) == 0;
@@ -2459,17 +2463,11 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
             0
         }
         TIOCGWINSZ => {
-            if !is_user_address(argp) {
-                return linux_errno(14); // EFAULT
-            }
-            let ws = LinuxWinsize {
-                ws_row: 25,
-                ws_col: 80,
-                ws_xpixel: 0,
-                ws_ypixel: 0,
-            };
-            unsafe {
-                core::ptr::write(argp as *mut LinuxWinsize, ws);
+            let mut wire = [0u8; 8];
+            wire[0..2].copy_from_slice(&25u16.to_ne_bytes());
+            wire[2..4].copy_from_slice(&80u16.to_ne_bytes());
+            if crate::memory::user::copy_to_current(argp, &wire).is_err() {
+                return linux_errno(14);
             }
             0
         }
@@ -2501,27 +2499,25 @@ fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
     if iovcnt == 0 {
         return 0;
     }
-    if !is_user_address(iov_ptr) {
-        return u64::MAX;
-    }
-
-    let iov_bytes = match (iovcnt as u64).checked_mul(core::mem::size_of::<LinuxIovec>() as u64) {
-        Some(bytes) => bytes,
-        None => return u64::MAX,
-    };
-    let iov_end = match iov_ptr.checked_add(iov_bytes.saturating_sub(1)) {
-        Some(end) => end,
-        None => return u64::MAX,
-    };
-    if !is_user_address(iov_end) {
-        return u64::MAX;
+    if iovcnt > 1024 || crate::memory::user::UserRange::for_elements(iov_ptr, iovcnt, 16).is_err() {
+        return linux_errno(14);
     }
 
     let mut total_written = 0u64;
-    let iovecs = iov_ptr as *const LinuxIovec;
 
     for idx in 0..iovcnt {
-        let iov = unsafe { *iovecs.add(idx) };
+        let mut wire = [0u8; 16];
+        if crate::memory::user::copy_from_current(iov_ptr + (idx * 16) as u64, &mut wire).is_err() {
+            return if total_written == 0 {
+                linux_errno(14)
+            } else {
+                total_written
+            };
+        }
+        let iov = LinuxIovec {
+            iov_base: u64::from_ne_bytes(wire[..8].try_into().unwrap()),
+            iov_len: u64::from_ne_bytes(wire[8..].try_into().unwrap()),
+        };
         if iov.iov_len == 0 {
             continue;
         }
@@ -2541,19 +2537,9 @@ fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
                     }
                 }
             };
-            let end = match base.checked_add(chunk.saturating_sub(1)) {
-                Some(addr) => addr,
-                None => {
-                    return if total_written == 0 {
-                        u64::MAX
-                    } else {
-                        total_written
-                    }
-                }
-            };
-            if !is_user_address(base) || !is_user_address(end) {
+            if crate::memory::user::UserRange::new(base, chunk as usize).is_err() {
                 return if total_written == 0 {
-                    u64::MAX
+                    linux_errno(14)
                 } else {
                     total_written
                 };
@@ -2622,57 +2608,66 @@ fn sys_readdir(frame: &mut SyscallFrame) -> u64 {
     use sunlight_fs::vfs::FileType;
     const RECORD: usize = 80;
 
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
         Err(_) => return u64::MAX,
     };
 
-    let buf = frame.rsi;
-    let max_entries = (frame.rdx as usize) / RECORD;
-    if max_entries == 0 || !is_user_address(buf) || !is_user_address(buf + frame.rdx - 1) {
+    let max_entries = ((frame.rdx as usize) / RECORD).min(64);
+    if max_entries == 0
+        || crate::memory::user::validate_current_write(frame.rsi, max_entries * RECORD).is_err()
+    {
         return u64::MAX;
     }
 
-    let mut guard = crate::KERNEL_VFS.lock();
-    let Some(vfs) = guard.as_mut() else {
+    let mut records = alloc::vec::Vec::<[u8; RECORD]>::new();
+    if records.try_reserve(max_entries).is_err() {
         return u64::MAX;
-    };
-
-    let mut written = 0usize;
-    let result = vfs.read_dir(path, &mut |entry| {
-        if written >= max_entries {
-            return false;
-        }
-        let mut record = [0u8; RECORD];
-        let name = entry.name_bytes();
-        let len = name.len().min(64);
-        record[..len].copy_from_slice(&name[..len]);
-        record[64] = len as u8;
-        record[65] = match entry.file_type {
-            FileType::File => 1,
-            FileType::Directory => 2,
+    }
+    {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return u64::MAX;
         };
-        record[72..80].copy_from_slice(&(entry.size as u64).to_le_bytes());
-        // SAFETY: destination range was validated as user memory above.
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                record.as_ptr(),
-                (buf as usize + written * RECORD) as *mut u8,
-                RECORD,
-            );
+        if vfs
+            .read_dir(path, &mut |entry| {
+                if records.len() >= max_entries {
+                    return false;
+                }
+                let mut record = [0u8; RECORD];
+                let name = entry.name_bytes();
+                let len = name.len().min(64);
+                record[..len].copy_from_slice(&name[..len]);
+                record[64] = len as u8;
+                record[65] = match entry.file_type {
+                    FileType::File => 1,
+                    FileType::Directory => 2,
+                };
+                record[72..80].copy_from_slice(&(entry.size as u64).to_le_bytes());
+                records.push(record);
+                true
+            })
+            .is_err()
+        {
+            return u64::MAX;
         }
-        written += 1;
-        true
-    });
-
-    match result {
-        Ok(()) => written as u64,
-        Err(_) => u64::MAX,
     }
+    for (index, record) in records.iter().enumerate() {
+        let Some(address) = (index as u64)
+            .checked_mul(RECORD as u64)
+            .and_then(|offset| frame.rsi.checked_add(offset))
+        else {
+            return u64::MAX;
+        };
+        if let Err(error) = copy_to_user(address, record) {
+            return error;
+        }
+    }
+    records.len() as u64
 }
 
 /// Syscall: StatPath (61)
@@ -2682,19 +2677,14 @@ fn sys_readdir(frame: &mut SyscallFrame) -> u64 {
 fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
     use sunlight_fs::vfs::FileType;
 
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
         Err(_) => return u64::MAX,
     };
-
-    let buf = frame.rsi;
-    if !is_user_address(buf) || !is_user_address(buf + 23) {
-        return u64::MAX;
-    }
 
     let stat = {
         let mut guard = crate::KERNEL_VFS.lock();
@@ -2717,9 +2707,8 @@ fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
         FileType::Directory => 2,
     };
     record[20..24].copy_from_slice(&stat.nlinks.to_le_bytes());
-    // SAFETY: destination range was validated as user memory above.
-    unsafe {
-        core::ptr::copy_nonoverlapping(record.as_ptr(), buf as *mut u8, 24);
+    if let Err(error) = copy_to_user(frame.rsi, &record) {
+        return error;
     }
     0
 }
@@ -2728,9 +2717,9 @@ fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
 /// rdi = pathname (user-space pointer)
 /// rsi = mode bits
 fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
@@ -2773,9 +2762,9 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: unlink (65) — remove a file.
 /// rdi = NUL-terminated path
 fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
@@ -2802,13 +2791,13 @@ fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: rename (66) — rename/move a file.
 /// rdi = NUL-terminated old path, rsi = NUL-terminated new path
 fn sys_rename(frame: &mut SyscallFrame) -> u64 {
-    let old_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let old_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
-    let new_bytes = match unsafe { read_user_cstr(frame.rsi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let new_bytes = match read_user_cstr(frame.rsi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let old_path = match core::str::from_utf8(&old_bytes) {
         Ok(s) => s,
@@ -2852,9 +2841,9 @@ fn sys_rename(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: chmod (67) — change file mode.
 /// rdi = NUL-terminated path, rsi = mode (u16)
 fn sys_chmod(frame: &mut SyscallFrame) -> u64 {
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
@@ -2883,9 +2872,9 @@ fn sys_chmod(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: chown (68) — change file owner/group.
 /// rdi = NUL-terminated path, rsi = uid, rdx = gid
 fn sys_chown(frame: &mut SyscallFrame) -> u64 {
-    let path_bytes = match unsafe { read_user_cstr(frame.rdi, 256) } {
-        Some(b) => b,
-        None => return u64::MAX,
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
@@ -2944,10 +2933,13 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
     const EAGAIN: u64 = u64::MAX - 1;
 
     let fd = frame.rdi as i32;
-    let buf_ptr = frame.rsi as *mut u8;
     let count = frame.rdx as usize;
+    if count == 0 {
+        return 0;
+    }
 
     let mut sched = crate::sched::SCHEDULER.lock();
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
     // Check if fd is valid and has READ right
     match sched.current_process().fd_table.check_rights(
@@ -2963,13 +2955,14 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
 
                     match crate::process::pipe::pipe_read(pipe_idx, &mut kernel_buf[..read_size]) {
                         crate::process::pipe::PipeResult::Ok(n) => {
-                            if !is_user_address(buf_ptr as u64)
-                                || !is_user_address((buf_ptr as u64) + n as u64)
-                            {
-                                return u64::MAX;
-                            }
-                            unsafe {
-                                core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
+                            let is_linux = sched.current_process().is_linux_compat;
+                            if let Err(error) = crate::memory::user::copy_to_process_bytes(
+                                sched.current_process(),
+                                hhdm,
+                                frame.rsi,
+                                &kernel_buf[..n],
+                            ) {
+                                return user_memory_failure_for(is_linux, error);
                             }
                             n as u64
                         }
@@ -2978,11 +2971,6 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                         crate::process::pipe::PipeResult::BrokenPipe => u64::MAX,
                     }
                 } else if fd_entry.handle.is_vfs() {
-                    if !is_user_address(buf_ptr as u64)
-                        || !is_user_address((buf_ptr as u64) + count as u64)
-                    {
-                        return u64::MAX;
-                    }
                     let vfs_handle = sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
                     let mut kernel_buf = [0u8; 4096];
                     let to_read = count.min(4096);
@@ -2997,9 +2985,14 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     };
                     match read {
                         Ok(n) => {
-                            // SAFETY: buf_ptr..buf_ptr+n validated as user memory.
-                            unsafe {
-                                core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
+                            let is_linux = sched.current_process().is_linux_compat;
+                            if let Err(error) = crate::memory::user::copy_to_process_bytes(
+                                sched.current_process(),
+                                hhdm,
+                                frame.rsi,
+                                &kernel_buf[..n],
+                            ) {
+                                return user_memory_failure_for(is_linux, error);
                             }
                             if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
                                 entry.offset += n;
@@ -3014,11 +3007,6 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     if count == 0 {
                         return 0;
                     }
-                    if !is_user_address(buf_ptr as u64)
-                        || !is_user_address((buf_ptr as u64) + count as u64)
-                    {
-                        return u64::MAX;
-                    }
                     let tab = fd_entry.handle.tty_tab() as usize;
                     let mut kbuf = [0u8; 256];
                     let to_read = count.min(256);
@@ -3029,9 +3017,14 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                         let is_linux = sched.current_process().is_linux_compat;
                         return if is_linux { linux_errno(11) } else { EAGAIN };
                     }
-                    // SAFETY: buf_ptr..buf_ptr+count validated as user memory above.
-                    unsafe {
-                        core::ptr::copy_nonoverlapping(kbuf.as_ptr(), buf_ptr, n);
+                    let is_linux = sched.current_process().is_linux_compat;
+                    if let Err(error) = crate::memory::user::copy_to_process_bytes(
+                        sched.current_process(),
+                        hhdm,
+                        frame.rsi,
+                        &kbuf[..n],
+                    ) {
+                        return user_memory_failure_for(is_linux, error);
                     }
                     n as u64
                 } else {
@@ -3067,10 +3060,13 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
     const EAGAIN: u64 = u64::MAX - 1;
 
     let fd = frame.rdi as i32;
-    let buf = frame.rsi as *const u8;
     let count = frame.rdx as usize;
+    if count == 0 {
+        return 0;
+    }
 
     let mut sched = crate::sched::SCHEDULER.lock();
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
     // Check if fd is valid and has WRITE right
     match sched.current_process().fd_table.check_rights(
@@ -3080,17 +3076,17 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
         Ok(()) => {
             if let Some(&fd_entry) = sched.current_process().fd_table.get(fd) {
                 if fd_entry.handle.is_pipe() {
-                    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64)
-                    {
-                        return u64::MAX;
-                    }
-
                     let pipe_idx = fd_entry.handle.pipe_index();
                     let write_size = core::cmp::min(count, 4096);
                     let mut kernel_buf = [0u8; 4096];
-
-                    unsafe {
-                        core::ptr::copy_nonoverlapping(buf, kernel_buf.as_mut_ptr(), write_size);
+                    let is_linux = sched.current_process().is_linux_compat;
+                    if let Err(error) = crate::memory::user::copy_from_process_bytes(
+                        sched.current_process(),
+                        hhdm,
+                        frame.rsi,
+                        &mut kernel_buf[..write_size],
+                    ) {
+                        return user_memory_failure_for(is_linux, error);
                     }
 
                     match crate::process::pipe::pipe_write(pipe_idx, &kernel_buf[..write_size]) {
@@ -3100,15 +3096,17 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                         crate::process::pipe::PipeResult::Eof => u64::MAX,
                     }
                 } else if fd_entry.handle.is_vfs() {
-                    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64)
-                    {
-                        return u64::MAX;
-                    }
                     let vfs_handle = sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
                     let write_size = count.min(4096);
                     let mut kernel_buf = [0u8; 4096];
-                    unsafe {
-                        core::ptr::copy_nonoverlapping(buf, kernel_buf.as_mut_ptr(), write_size);
+                    let is_linux = sched.current_process().is_linux_compat;
+                    if let Err(error) = crate::memory::user::copy_from_process_bytes(
+                        sched.current_process(),
+                        hhdm,
+                        frame.rsi,
+                        &mut kernel_buf[..write_size],
+                    ) {
+                        return user_memory_failure_for(is_linux, error);
                     }
                     let written = {
                         let mut guard = crate::KERNEL_VFS.lock();
@@ -3134,16 +3132,17 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                     if count == 0 {
                         return 0;
                     }
-                    if !is_user_address(buf as u64) || !is_user_address((buf as u64) + count as u64)
-                    {
-                        return u64::MAX;
-                    }
                     let tab = fd_entry.handle.tty_tab() as usize;
                     let write_size = count.min(4096);
                     let mut kernel_buf = [0u8; 4096];
-                    // SAFETY: buf..buf+count validated as user memory above.
-                    unsafe {
-                        core::ptr::copy_nonoverlapping(buf, kernel_buf.as_mut_ptr(), write_size);
+                    let is_linux = sched.current_process().is_linux_compat;
+                    if let Err(error) = crate::memory::user::copy_from_process_bytes(
+                        sched.current_process(),
+                        hhdm,
+                        frame.rsi,
+                        &mut kernel_buf[..write_size],
+                    ) {
+                        return user_memory_failure_for(is_linux, error);
                     }
                     crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]);
                     // Report the full count as written even if the ring dropped
@@ -3154,15 +3153,19 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                     match fd {
                         1 | 2 => {
                             // stdout/stderr: write to serial
-                            if buf as u64 != 0 && count > 0 {
-                                if !is_user_address(buf as u64)
-                                    || !is_user_address((buf as u64) + count as u64)
-                                {
-                                    return u64::MAX;
+                            if frame.rsi != 0 {
+                                let mut bytes = [0u8; 256];
+                                let copy_len = count.min(bytes.len());
+                                let is_linux = sched.current_process().is_linux_compat;
+                                if let Err(error) = crate::memory::user::copy_from_process_bytes(
+                                    sched.current_process(),
+                                    hhdm,
+                                    frame.rsi,
+                                    &mut bytes[..copy_len],
+                                ) {
+                                    return user_memory_failure_for(is_linux, error);
                                 }
-                                let slice =
-                                    unsafe { core::slice::from_raw_parts(buf, count.min(256)) };
-                                if let Ok(s) = core::str::from_utf8(slice) {
+                                if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
                                     crate::serial_println!("{}", s);
                                 }
                             }
@@ -3270,10 +3273,7 @@ fn sys_dup2(_frame: &mut SyscallFrame) -> u64 {
 /// Syscall: pipe (47)
 /// rdi = pointer to int[2] array for (read_fd, write_fd)
 fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
-    let fds_ptr = frame.rdi as *mut i32;
-
-    // Check that the pointer is in user space
-    if fds_ptr as u64 >= 0x0000_8000_0000_0000 {
+    if crate::memory::user::validate_current_write(frame.rdi, 8).is_err() {
         return u64::MAX; // EFAULT
     }
 
@@ -3282,10 +3282,15 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
 
     match crate::process::pipe::create_pipe(&mut pmm, &mut sched) {
         Ok((read_fd, write_fd)) => {
-            // Write the fds to user space
-            unsafe {
-                *fds_ptr = read_fd;
-                *fds_ptr.add(1) = write_fd;
+            let mut output = [0u8; 8];
+            output[..4].copy_from_slice(&read_fd.to_ne_bytes());
+            output[4..].copy_from_slice(&write_fd.to_ne_bytes());
+            let process = sched.current_process();
+            let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+            if crate::memory::user::copy_to_process_bytes(process, hhdm, frame.rdi, &output)
+                .is_err()
+            {
+                return u64::MAX;
             }
             0 // Success
         }
@@ -3312,12 +3317,6 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     let buf_ptr = frame.rsi;
 
     let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat);
-    let buf_end_offset = if is_linux { 143u64 } else { 23u64 };
-
-    if !is_user_address(buf_ptr) || !is_user_address(buf_ptr + buf_end_offset) {
-        return u64::MAX;
-    }
-
     // Read vfs_handle from fd table; release scheduler before taking VFS lock.
     let vfs_handle = {
         let sched = crate::sched::SCHEDULER.lock();
@@ -3366,9 +3365,8 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
         let blocks = (stat.size as u64 + 511) / 512;
         record[64..72].copy_from_slice(&blocks.to_le_bytes());
         // timestamps (atim/mtim/ctim) at 72/88/104: zero (no time tracking yet)
-        // SAFETY: buf_ptr..buf_ptr+143 validated as user memory above.
-        unsafe {
-            core::ptr::copy_nonoverlapping(record.as_ptr(), buf_ptr as *mut u8, 144);
+        if let Err(error) = copy_to_user(buf_ptr, &record) {
+            return error;
         }
     } else {
         let mut record = [0u8; 24];
@@ -3381,9 +3379,8 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
             FileType::Directory => 2,
         };
         record[20..24].copy_from_slice(&stat.nlinks.to_le_bytes());
-        // SAFETY: buf_ptr..buf_ptr+23 validated as user memory above.
-        unsafe {
-            core::ptr::copy_nonoverlapping(record.as_ptr(), buf_ptr as *mut u8, 24);
+        if let Err(error) = copy_to_user(buf_ptr, &record) {
+            return error;
         }
     }
     0
@@ -3609,21 +3606,14 @@ fn sys_sigreturn(_frame: &mut SyscallFrame) -> u64 {
 fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
     const MAX_FRAME: usize = 1514;
 
-    let buf_ptr = frame.rdi as *const u8;
     let len = (frame.rsi as usize).min(MAX_FRAME);
 
     if crate::sched::SCHEDULER.lock().current_process().name_str() != "net_server" {
         return u64::MAX;
     }
-    if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + len as u64) {
-        return u64::MAX;
-    }
-
     let mut kernel_buf = [0u8; MAX_FRAME];
-    // SAFETY: buf_ptr..buf_ptr+len validated as a user-space range above;
-    // `len` is capped to MAX_FRAME so the copy cannot overflow kernel_buf.
-    unsafe {
-        core::ptr::copy_nonoverlapping(buf_ptr, kernel_buf.as_mut_ptr(), len);
+    if let Err(error) = copy_from_user(frame.rdi, &mut kernel_buf[..len]) {
+        return error;
     }
 
     let mut dev = crate::ACTIVE_NET_DEVICE.lock();
@@ -3681,14 +3671,13 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
 fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
     const MAX_FRAME: usize = 1514;
 
-    let buf_ptr = frame.rdi as *mut u8;
     let cap = (frame.rsi as usize).min(MAX_FRAME);
 
     if crate::sched::SCHEDULER.lock().current_process().name_str() != "net_server" {
         return u64::MAX;
     }
-    if !is_user_address(buf_ptr as u64) || !is_user_address((buf_ptr as u64) + cap as u64) {
-        return u64::MAX;
+    if let Err(error) = crate::memory::user::validate_current_write(frame.rdi, cap) {
+        return user_memory_failure(error);
     }
 
     let mut kernel_buf = [0u8; MAX_FRAME];
@@ -3730,9 +3719,8 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
     }
     let n = n.min(cap);
     if n > 0 {
-        // SAFETY: buf_ptr..buf_ptr+cap validated as user memory above; n <= cap.
-        unsafe {
-            core::ptr::copy_nonoverlapping(kernel_buf.as_ptr(), buf_ptr, n);
+        if let Err(error) = copy_to_user(frame.rdi, &kernel_buf[..n]) {
+            return error;
         }
         crate::telemetry::record_net_rx(n as u64);
         if backend_kind == Some(sunlight_net::NetworkBackendKind::Vmxnet3)
@@ -3776,11 +3764,7 @@ fn sys_net_info(frame: &mut SyscallFrame) -> u64 {
     if !authorized {
         return u64::MAX;
     }
-    let info_ptr = frame.rdi as *mut u64;
-    if frame.rsi as usize != INFO_WORDS
-        || !is_user_address(info_ptr as u64)
-        || !is_user_address((info_ptr as u64) + (INFO_WORDS * 8) as u64)
-    {
+    if frame.rsi as usize != INFO_WORDS {
         return u64::MAX;
     }
     let device = crate::ACTIVE_NET_DEVICE.lock();
@@ -3806,8 +3790,10 @@ fn sys_net_info(frame: &mut SyscallFrame) -> u64 {
             crate::VMXNET3_FAILURE_STAGE.load(core::sync::atomic::Ordering::Acquire),
             crate::VMXNET3_ERROR_DETAIL.load(core::sync::atomic::Ordering::Acquire),
         ];
-        unsafe {
-            core::ptr::copy_nonoverlapping(info.as_ptr(), info_ptr, INFO_WORDS);
+        let bytes =
+            unsafe { core::slice::from_raw_parts(info.as_ptr() as *const u8, INFO_WORDS * 8) };
+        if let Err(error) = copy_to_user(frame.rdi, bytes) {
+            return error;
         }
         return 1;
     };
@@ -3853,8 +3839,9 @@ fn sys_net_info(frame: &mut SyscallFrame) -> u64 {
         crate::VMXNET3_FAILURE_STAGE.load(core::sync::atomic::Ordering::Acquire),
         crate::VMXNET3_ERROR_DETAIL.load(core::sync::atomic::Ordering::Acquire),
     ];
-    unsafe {
-        core::ptr::copy_nonoverlapping(info.as_ptr(), info_ptr, INFO_WORDS);
+    let bytes = unsafe { core::slice::from_raw_parts(info.as_ptr() as *const u8, INFO_WORDS * 8) };
+    if let Err(error) = copy_to_user(frame.rdi, bytes) {
+        return error;
     }
     1
 }
@@ -4153,32 +4140,26 @@ fn sys_get_entropy() -> u64 {
 /// rsi = pointer to user timespec { tv_sec, tv_nsec }
 fn sys_clock_gettime(frame: &mut SyscallFrame) -> u64 {
     let clockid = frame.rdi as i32;
-    let tp_ptr = frame.rsi as *mut u64;
 
-    if !is_user_address(tp_ptr as u64) || !is_user_address(tp_ptr as u64 + 15) {
-        return u64::MAX;
-    }
-
-    match clockid {
+    let values = match clockid {
         0 => {
             let sec = crate::arch::x86_64::rtc::unix_time();
-            unsafe {
-                *tp_ptr = sec;
-                *tp_ptr.add(1) = 0;
-            }
-            0
+            [sec, 0]
         }
         1 => {
             let ns = crate::arch::x86_64::interrupts::now_ns();
             let sec = ns / 1_000_000_000;
             let nsec = ns % 1_000_000_000;
-            unsafe {
-                *tp_ptr = sec;
-                *tp_ptr.add(1) = nsec;
-            }
-            0
+            [sec, nsec]
         }
-        _ => u64::MAX,
+        _ => return u64::MAX,
+    };
+    let mut bytes = [0u8; 16];
+    bytes[..8].copy_from_slice(&values[0].to_ne_bytes());
+    bytes[8..].copy_from_slice(&values[1].to_ne_bytes());
+    match copy_to_user(frame.rsi, &bytes) {
+        Ok(()) => 0,
+        Err(error) => error,
     }
 }
 
@@ -4192,13 +4173,6 @@ fn sys_clock_gettime(frame: &mut SyscallFrame) -> u64 {
 ///   [5] swap used (KiB)
 ///   [6] swap used, real compressed size (KiB)
 fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
-    const SYSINFO_BYTES: u64 = 7 * 8;
-
-    let ptr = frame.rdi;
-    if !is_user_address(ptr) || !is_user_address(ptr + SYSINFO_BYTES - 1) {
-        return u64::MAX;
-    }
-
     let (total_frames, free_frames) = crate::PMM.lock().stats();
     // 4 KiB frames -> KiB
     let total_kb = (total_frames as u64) * 4;
@@ -4218,8 +4192,9 @@ fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
         swap_used_kb,
         swap_compressed_kb,
     ];
-    unsafe {
-        core::ptr::copy_nonoverlapping(info.as_ptr(), ptr as *mut u64, info.len());
+    let bytes = unsafe { core::slice::from_raw_parts(info.as_ptr() as *const u8, info.len() * 8) };
+    if let Err(error) = copy_to_user(frame.rdi, bytes) {
+        return error;
     }
     0
 }
@@ -4287,19 +4262,12 @@ fn sys_kbd_pop_scancode() -> u64 {
 /// rdi = pointer to [u64; 3] buffer for stats
 /// Returns 0 on success, u64::MAX on error.
 fn sys_kbd_get_stats(frame: &mut SyscallFrame) -> u64 {
-    let ptr = frame.rdi as *mut u64;
-    if !is_user_address(ptr as u64) || !is_user_address((ptr as u64) + 24) {
-        return u64::MAX;
-    }
     let (pending, dropped, capacity) = crate::arch::x86_64::keyboard::get_stats();
-    unsafe {
-        core::ptr::write(ptr, pending as u64);
-    }
-    unsafe {
-        core::ptr::write(ptr.add(1), dropped as u64);
-    }
-    unsafe {
-        core::ptr::write(ptr.add(2), capacity as u64);
+    let values = [pending as u64, dropped as u64, capacity as u64];
+    let bytes =
+        unsafe { core::slice::from_raw_parts(values.as_ptr() as *const u8, values.len() * 8) };
+    if let Err(error) = copy_to_user(frame.rdi, bytes) {
+        return error;
     }
     0
 }
@@ -4370,15 +4338,12 @@ fn sys_mouse_get_stats(frame: &mut SyscallFrame) -> u64 {
     if !current_process_is_mouse_driver() {
         return u64::MAX;
     }
-    let ptr = frame.rdi as *mut u64;
-    if !is_user_address(ptr as u64) || !is_user_address((ptr as u64) + 24) {
-        return u64::MAX;
-    }
     let (pending, dropped, capacity) = crate::arch::x86_64::mouse::get_stats();
-    unsafe {
-        core::ptr::write(ptr, pending as u64);
-        core::ptr::write(ptr.add(1), dropped as u64);
-        core::ptr::write(ptr.add(2), capacity as u64);
+    let values = [pending as u64, dropped as u64, capacity as u64];
+    let bytes =
+        unsafe { core::slice::from_raw_parts(values.as_ptr() as *const u8, values.len() * 8) };
+    if let Err(error) = copy_to_user(frame.rdi, bytes) {
+        return error;
     }
     0
 }
@@ -4416,31 +4381,6 @@ fn current_process_is_display_server() -> bool {
     let sched = crate::sched::SCHEDULER.lock();
     let name = sched.current_process().name_str();
     name == "sunlight-display" || name == "display_server"
-}
-
-/// Helper: copy `len` bytes from the current process's user VA `src_va` to `dst` (kernel ptr).
-/// Returns false if any page is not mapped.
-unsafe fn copy_from_user_va(src_va: u64, dst: *mut u8, len: usize) -> bool {
-    use x86_64::{structures::paging::Page, VirtAddr};
-    let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
-    let hhdm = VirtAddr::new(hhdm);
-    let process = crate::sched::SCHEDULER.lock();
-    let process = process.current_process();
-    let mut copied = 0usize;
-    while copied < len {
-        let va = src_va + copied as u64;
-        let page = Page::containing_address(VirtAddr::new(va));
-        let phys = match unsafe { process.address_space.lookup_phys(page, hhdm) } {
-            Some(p) => p.as_u64(),
-            None => return false,
-        };
-        let offset_in_page = (va & 0xFFF) as usize;
-        let bytes_this_page = (4096 - offset_in_page).min(len - copied);
-        let src = (hhdm.as_u64() + phys + offset_in_page as u64) as *const u8;
-        core::ptr::copy_nonoverlapping(src, dst.add(copied), bytes_this_page);
-        copied += bytes_this_page;
-    }
-    true
 }
 
 /// Syscall 119: GpuGetInfo
@@ -4506,6 +4446,12 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
         );
         return gpu_err(frame, GPU_ERR_BAD_ARGS, (user_va & 0xFFF) as u32);
     }
+    let Some(byte_len) = num_pages.checked_mul(4096) else {
+        return gpu_err(frame, GPU_ERR_BAD_ARGS, num_pages as u32);
+    };
+    if crate::memory::user::UserRange::new(user_va, byte_len).is_err() {
+        return gpu_err(frame, GPU_ERR_BAD_ARGS, 0);
+    }
 
     use x86_64::{structures::paging::Page, VirtAddr};
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
@@ -4519,10 +4465,21 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
         let sched = crate::sched::SCHEDULER.lock();
         let process = sched.current_process();
         for i in 0..num_pages {
-            let va = user_va + (i as u64) * 4096;
+            let va = match (i as u64)
+                .checked_mul(4096)
+                .and_then(|offset| user_va.checked_add(offset))
+            {
+                Some(address) => address,
+                None => return gpu_err(frame, GPU_ERR_BAD_ARGS, i as u32),
+            };
             let page = Page::containing_address(VirtAddr::new(va));
-            let phys = match unsafe { process.address_space.lookup_phys(page, hhdm_va) } {
-                Some(p) => p.as_u64(),
+            let phys = match unsafe { process.address_space.lookup_entry(page, hhdm_va) } {
+                Some((physical, flags))
+                    if flags.contains(PageTableFlags::PRESENT)
+                        && flags.contains(PageTableFlags::USER_ACCESSIBLE) =>
+                {
+                    physical.as_u64()
+                }
                 None => {
                     crate::serial_println!(
                         "[GPU] attach_backing: page {}/{} at va {:#x} not mapped",
@@ -4532,6 +4489,7 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
                     );
                     return gpu_err(frame, GPU_ERR_UNMAPPED_PAGE, i as u32);
                 }
+                Some(_) => return gpu_err(frame, GPU_ERR_UNMAPPED_PAGE, i as u32),
             };
             match entries.last_mut() {
                 Some(last) if last.addr + last.length as u64 == phys => {
@@ -4688,6 +4646,12 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
 
     // Copy pixels from user VA into kernel cursor backing
     let cursor_pixel_bytes = num_pixels * 4;
+    let mut pixels = [0u8; 4 * 4096];
+    if cursor_pixel_bytes > 0 {
+        if let Err(error) = copy_from_user(user_va, &mut pixels[..cursor_pixel_bytes]) {
+            return error;
+        }
+    }
     {
         let mut dev = crate::GPU_DEVICE.lock();
         let gpu = match dev.as_mut() {
@@ -4700,8 +4664,8 @@ fn sys_gpu_update_cursor(frame: &mut SyscallFrame) -> u64 {
             dst.write_bytes(0, 4 * 4096);
         }
         if cursor_pixel_bytes > 0 {
-            if !unsafe { copy_from_user_va(user_va, dst, cursor_pixel_bytes) } {
-                return 0;
+            unsafe {
+                core::ptr::copy_nonoverlapping(pixels.as_ptr(), dst, cursor_pixel_bytes);
             }
         }
     }

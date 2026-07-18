@@ -1,4 +1,6 @@
 [MM-0] unsafe fork rejection is atomic: OK
+[MM-1] user address/range arithmetic: OK
+[MM-1] page-aware copy, strings, permissions, atomic output, and swap policy: OK
 [MM-0] NXE and NX mapping flags: OK
 [MM-0] user-frame reuse sanitization: OK
 [MM-0] anonymous mmap W^X, NX, and zero-fill: OK

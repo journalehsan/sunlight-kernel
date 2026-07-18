@@ -3,6 +3,7 @@ pub mod pmm;
 pub mod security;
 pub mod shared;
 pub mod swap;
+pub mod user;
 pub mod validate;
 pub mod vmm;
 pub mod zram;

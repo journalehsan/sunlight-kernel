@@ -66,9 +66,11 @@ pub fn sys_mmap(
     // Base of the anonymous mmap region for hint-less / hinted mappings.
     const MMAP_REGION_BASE: u64 = 0x10_0000_0000u64;
 
-    // Calculate number of pages needed
-    let page_count = (length + 4095) / 4096;
-    let span = page_count * 4096;
+    let rounded = length.checked_add(4095).ok_or(MmapError::InvalidAddress)?;
+    let page_count = rounded / 4096;
+    let span = page_count
+        .checked_mul(4096)
+        .ok_or(MmapError::InvalidAddress)?;
 
     // Determine the address to map at. For anonymous mappings without a
     // fixed address we hand out fresh VA ranges from a per-process bump
@@ -88,12 +90,12 @@ pub fn sys_mmap(
             cur.mmap_next = MMAP_REGION_BASE;
         }
         let base = cur.mmap_next;
-        cur.mmap_next = base + span;
+        cur.mmap_next = base.checked_add(span).ok_or(MmapError::InvalidAddress)?;
         base
     };
 
-    // Check that the address is in user space
-    if map_addr >= 0x0000_8000_0000_0000 {
+    let span_usize = usize::try_from(span).map_err(|_| MmapError::InvalidAddress)?;
+    if crate::memory::user::UserRange::new(map_addr, span_usize).is_err() {
         return Err(MmapError::InvalidAddress);
     }
 
@@ -103,7 +105,11 @@ pub fn sys_mmap(
     let pid = sched.current_process_mut().pid;
     let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
     for i in 0..page_count {
-        let page_vaddr = VirtAddr::new(map_addr + i * 4096);
+        let page_vaddr = VirtAddr::new(
+            map_addr
+                .checked_add(i.checked_mul(4096).ok_or(MmapError::InvalidAddress)?)
+                .ok_or(MmapError::InvalidAddress)?,
+        );
         let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
 
         let frame_addr = match pmm.alloc_frame_owned(pid as u32) {

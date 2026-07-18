@@ -487,7 +487,7 @@ extern "x86-interrupt" fn page_fault_handler(
 /// Handle a fault on a page that was swapped out to ZRAM.
 /// Returns true if `vaddr`'s page held a swapped marker and was faulted back in.
 fn handle_swap_page_fault(vaddr: u64) -> bool {
-    if vaddr >= 0x0000_8000_0000_0000 {
+    if vaddr >= crate::memory::user::USER_END_EXCLUSIVE {
         return false;
     }
 
@@ -543,7 +543,7 @@ fn handle_swap_page_fault(vaddr: u64) -> bool {
 /// Returns true if handled, false if unrecoverable
 fn handle_cow_page_fault(vaddr: u64) -> bool {
     // Only handle user-space addresses
-    if vaddr >= 0x0000_8000_0000_0000 {
+    if vaddr >= crate::memory::user::USER_END_EXCLUSIVE {
         return false;
     }
 

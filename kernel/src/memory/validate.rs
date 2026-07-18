@@ -2,13 +2,12 @@
 //! from user-space (e.g. shared-memory and read/write buffer arguments).
 
 use crate::process::Process;
-use x86_64::structures::paging::{Page, Size4KiB};
 use x86_64::VirtAddr;
 
 /// Start of the kernel's half of the address space. Any user-supplied pointer
 /// at or above this address is either a forgery or a confused-deputy attempt
 /// to make the kernel dereference kernel memory on the caller's behalf.
-pub const KERNEL_START: u64 = 0xFFFF_8000_0000_0000;
+pub use crate::memory::user::USER_END_EXCLUSIVE as KERNEL_START;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PtrError {
@@ -34,46 +33,26 @@ pub unsafe fn validate_user_ptr(
     process: &Process,
     hhdm_offset: VirtAddr,
 ) -> Result<(), PtrError> {
-    // Rule 1: must be in user-space
-    if ptr >= KERNEL_START {
-        crate::serial_println!(
-            "[SEC] WARN: pid={} passed kernel ptr {:#x}",
-            process.pid,
-            ptr
-        );
-        return Err(PtrError::KernelAddress);
+    let len = usize::try_from(len).map_err(|_| PtrError::Overflow)?;
+    let range = crate::memory::user::UserRange::new(ptr, len).map_err(|error| match error {
+        crate::memory::user::UserMemoryError::Overflow => PtrError::Overflow,
+        crate::memory::user::UserMemoryError::KernelRange
+        | crate::memory::user::UserMemoryError::NonCanonical
+        | crate::memory::user::UserMemoryError::InvalidAddress => PtrError::KernelAddress,
+        _ => PtrError::NotMapped,
+    })?;
+    let mut scratch = [0u8; 256];
+    let mut copied = 0usize;
+    while copied < range.len() {
+        let chunk = scratch.len().min(range.len() - copied);
+        crate::memory::user::copy_from_process_bytes(
+            process,
+            hhdm_offset,
+            range.start() + copied as u64,
+            &mut scratch[..chunk],
+        )
+        .map_err(|_| PtrError::NotMapped)?;
+        copied += chunk;
     }
-
-    // Rule 2: must not overflow
-    let end = ptr.checked_add(len).ok_or(PtrError::Overflow)?;
-
-    // Rule 3: end must also be in user-space
-    if end > KERNEL_START {
-        return Err(PtrError::CrossesBoundary);
-    }
-
-    // Rule 4: range must be mapped (check page table), one page at a time
-    if len > 0 {
-        let first_page = ptr & !0xFFF;
-        let last_page = (end - 1) & !0xFFF;
-        let mut page_addr = first_page;
-        loop {
-            let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(page_addr))
-                .map_err(|_| PtrError::NotMapped)?;
-            if process
-                .address_space
-                .lookup_phys(page, hhdm_offset)
-                .is_none()
-            {
-                crate::serial_println!("[SEC] WARN: pid={} ptr {:#x} not mapped", process.pid, ptr);
-                return Err(PtrError::NotMapped);
-            }
-            if page_addr == last_page {
-                break;
-            }
-            page_addr += 0x1000;
-        }
-    }
-
     Ok(())
 }
