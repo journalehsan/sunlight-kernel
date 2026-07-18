@@ -1560,13 +1560,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     trace.spawn_started_ns = now_ns();
 
     match crate::process::spawn::exec_into_process(
-        bytes,
-        &mut child,
-        &mut pmm,
-        hhdm,
-        &argv_refs,
-        &envp_refs,
-        false,
+        bytes, &mut child, &mut pmm, hhdm, &argv_refs, &envp_refs, false,
     ) {
         Ok(_) => {
             child.trusted_display_service =
@@ -2124,12 +2118,8 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
     if target_page_end > current_page_end {
         let size_to_map = target_page_end - current_page_end;
         let mut pmm = crate::PMM.lock();
-        let result = crate::process::mmap::map_brk(
-            current_page_end,
-            size_to_map,
-            &mut *pmm,
-            &mut *sched,
-        );
+        let result =
+            crate::process::mmap::map_brk(current_page_end, size_to_map, &mut *pmm, &mut *sched);
 
         match result {
             Ok(_) => {
@@ -3511,10 +3501,17 @@ fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
     let addr = frame.rdi;
     let length = frame.rsi;
 
-    match crate::process::mmap::sys_munmap(addr, length) {
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let linux_compat = sched.current_process().is_linux_compat;
+    let mut pmm = crate::PMM.lock();
+    let result = crate::process::mmap::sys_munmap(addr, length, &mut pmm, &mut sched);
+    drop(pmm);
+    drop(sched);
+
+    match result {
         Ok(()) => 0,
-        Err(_) if crate::sched::with_scheduler(|s| s.current_process().is_linux_compat) => {
-            linux_errno(22)
+        Err(error) if linux_compat => {
+            linux_errno(crate::process::mmap::munmap_linux_errno(error) as u64)
         }
         Err(_) => u64::MAX,
     }
@@ -4043,12 +4040,11 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     const DISPLAY_FB_VADDR: u64 = 0x0000_0004_0000_0000; // dedicated region for device FB
 
     let protection = crate::process::region::RegionProtection::READ_WRITE;
-    let flags = match crate::process::address_space::AddressSpace::protection_to_pte_flags(
-        protection,
-    ) {
-        Ok(flags) => flags,
-        Err(_) => return 0,
-    };
+    let flags =
+        match crate::process::address_space::AddressSpace::protection_to_pte_flags(protection) {
+            Ok(flags) => flags,
+            Err(_) => return 0,
+        };
 
     for page_idx in 0..page_count {
         let Some(user_va) = DISPLAY_FB_VADDR.checked_add(page_idx * 4096) else {
@@ -4178,12 +4174,11 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
     let mut pmm = crate::PMM.lock();
     let process = sched.current_process_mut();
     let protection = crate::process::region::RegionProtection::READ_ONLY;
-    let flags = match crate::process::address_space::AddressSpace::protection_to_pte_flags(
-        protection,
-    ) {
-        Ok(flags) => flags,
-        Err(_) => return 0,
-    };
+    let flags =
+        match crate::process::address_space::AddressSpace::protection_to_pte_flags(protection) {
+            Ok(flags) => flags,
+            Err(_) => return 0,
+        };
 
     for i in 0..TELEMETRY_PAGES {
         let Ok(page) =
@@ -4260,9 +4255,8 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
                 user_addr + rollback_idx * PAGE_SIZE,
             )
             .expect("validated telemetry rollback page");
-            let rollback_phys = x86_64::PhysAddr::new(
-                telemetry_phys_page + rollback_idx * PAGE_SIZE,
-            );
+            let rollback_phys =
+                x86_64::PhysAddr::new(telemetry_phys_page + rollback_idx * PAGE_SIZE);
             let _ = unsafe {
                 process.address_space.rollback_mapped_page(
                     rollback_page,

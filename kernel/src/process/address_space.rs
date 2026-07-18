@@ -2,7 +2,7 @@ use crate::memory::pmm::PhysicalMemoryManager;
 use crate::process::mm2b_state::{allocate_identity, AddressSpaceIdentity};
 use crate::process::region::{
     LedgerError, MappingKind, MappingRegion, RangeLookup, RegionBacking, RegionLedger,
-    RegionPolicy, RegionProtection, RegionReservation,
+    RegionPolicy, RegionProtection, RegionReservation, UnmapPlan,
 };
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{
@@ -23,6 +23,7 @@ pub enum MappingError {
     FrameAllocationFailed,
     PageTableAllocationFailed,
     PermissionRejected,
+    ProtectedRegion,
     UnsupportedReplacement,
     LedgerCapacityExhausted,
     LedgerOverlap,
@@ -357,13 +358,26 @@ impl AddressSpace {
             .flatten()
     }
 
-    pub fn lookup_region_range(
-        &self,
-        start: u64,
-        end: u64,
-    ) -> Result<RangeLookup, MappingError> {
+    pub fn lookup_region_range(&self, start: u64, end: u64) -> Result<RangeLookup, MappingError> {
         self.with_ledger(|ledger| ledger.lookup_range(start, end))
             .and_then(|result| result.map_err(Self::map_ledger_error))
+    }
+
+    pub fn preflight_unmap(&self, start: u64, end: u64) -> Result<UnmapPlan, MappingError> {
+        self.with_ledger(|ledger| ledger.preflight_unmap(start, end))
+            .and_then(|result| result.map_err(Self::map_ledger_error))
+    }
+
+    /// Publish the ledger image staged before PTE removal. Expected failures
+    /// cannot occur here; a concurrent ledger mutation is a fail-stop bug.
+    pub fn commit_unmap(&self, plan: UnmapPlan) {
+        if self
+            .with_ledger_mut(|ledger| ledger.commit_unmap(plan))
+            .is_err()
+        {
+            REGION_PTE_CONSISTENCY_FAILURES.fetch_add(1, Ordering::Relaxed);
+            panic!("address-space ledger disappeared during munmap commit");
+        }
     }
 
     pub fn region_count(&self) -> usize {
@@ -429,10 +443,7 @@ impl AddressSpace {
 
     fn allocate_ledger(identity: AddressSpaceIdentity) -> Result<LedgerHandle, MappingError> {
         let mut slots = REGION_LEDGERS.lock();
-        let Some(index) = slots
-            .iter()
-            .position(|slot| !slot.identity.is_valid())
-        else {
+        let Some(index) = slots.iter().position(|slot| !slot.identity.is_valid()) else {
             REGION_CAPACITY_FAILURES.fetch_add(1, Ordering::Relaxed);
             return Err(MappingError::LedgerCapacityExhausted);
         };
@@ -445,7 +456,10 @@ impl AddressSpace {
         })
     }
 
-    fn with_ledger<R>(&self, operation: impl FnOnce(&RegionLedger) -> R) -> Result<R, MappingError> {
+    fn with_ledger<R>(
+        &self,
+        operation: impl FnOnce(&RegionLedger) -> R,
+    ) -> Result<R, MappingError> {
         if self.borrower {
             BORROWER_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
         }
@@ -500,6 +514,7 @@ impl AddressSpace {
             }
             LedgerError::InvalidRange => MappingError::InvalidAddress,
             LedgerError::PermissionRejected => MappingError::PermissionRejected,
+            LedgerError::PolicyRejected => MappingError::ProtectedRegion,
             LedgerError::StaleReservation
             | LedgerError::ExactRecordNotFound
             | LedgerError::Inconsistent => MappingError::InternalInvariant,
@@ -861,6 +876,100 @@ impl AddressSpace {
         (entry.addr().as_u64() >> 12).checked_sub(1)
     }
 
+    /// Clear a leaf only if it still has the exact state established by the
+    /// munmap preflight. TLB invalidation and ownership release are separate so
+    /// callers can batch a bounded range into one synchronous shootdown.
+    pub unsafe fn remove_expected_mapping(
+        &mut self,
+        page: Page<Size4KiB>,
+        expected: ExpectedMapping,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), MappingError> {
+        let entry = &mut *self
+            .p1_entry_ptr(page, hhdm_offset)
+            .ok_or(MappingError::NotMapped)?;
+        let matches = match expected {
+            ExpectedMapping::Present { frame, flags } => {
+                entry.flags().contains(PageTableFlags::PRESENT)
+                    && entry.addr() == frame
+                    && entry.flags() == flags
+            }
+            ExpectedMapping::Swapped { block_id } => {
+                let encoded = block_id
+                    .checked_add(1)
+                    .and_then(|value| value.checked_shl(12))
+                    .ok_or(MappingError::Overflow)?;
+                !entry.is_unused()
+                    && !entry.flags().contains(PageTableFlags::PRESENT)
+                    && entry.addr().as_u64() == encoded
+            }
+        };
+        if !matches {
+            return Err(MappingError::UnsupportedReplacement);
+        }
+        entry.set_unused();
+        Ok(())
+    }
+
+    /// Reclaim empty lower-half page tables after the covering leaf shootdown
+    /// has completed. Tables shared by any surviving mapping are retained.
+    pub unsafe fn reclaim_empty_tables_for_page(
+        &mut self,
+        page: Page<Size4KiB>,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> usize {
+        if self.is_reclaimed() {
+            return 0;
+        }
+        let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
+        let p4e = &mut pml4[page.p4_index()];
+        if p4e.is_unused()
+            || !p4e.flags().contains(PageTableFlags::PRESENT)
+            || p4e.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
+            return 0;
+        }
+        let p3_phys = p4e.addr();
+        let p3 = &mut *((hhdm_offset + p3_phys.as_u64()).as_mut_ptr::<PageTable>());
+        let p3e = &mut p3[page.p3_index()];
+        if p3e.is_unused()
+            || !p3e.flags().contains(PageTableFlags::PRESENT)
+            || p3e.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
+            return 0;
+        }
+        let p2_phys = p3e.addr();
+        let p2 = &mut *((hhdm_offset + p2_phys.as_u64()).as_mut_ptr::<PageTable>());
+        let p2e = &mut p2[page.p2_index()];
+        if p2e.is_unused()
+            || !p2e.flags().contains(PageTableFlags::PRESENT)
+            || p2e.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
+            return 0;
+        }
+        let p1_phys = p2e.addr();
+        let p1 = &mut *((hhdm_offset + p1_phys.as_u64()).as_mut_ptr::<PageTable>());
+        if !p1.iter().all(PageTableEntry::is_unused) {
+            return 0;
+        }
+
+        let mut reclaimed = 1usize;
+        p2e.set_unused();
+        pmm.free_frame(p1_phys);
+        if p2.iter().all(PageTableEntry::is_unused) {
+            reclaimed += 1;
+            p3e.set_unused();
+            pmm.free_frame(p2_phys);
+            if p3.iter().all(PageTableEntry::is_unused) {
+                reclaimed += 1;
+                p4e.set_unused();
+                pmm.free_frame(p3_phys);
+            }
+        }
+        reclaimed
+    }
+
     /// Switch to this address space (write PML4 phys addr to CR3).
     /// SAFETY: `pml4_phys` must be a valid, page-aligned physical address.
     pub unsafe fn activate(&self) {
@@ -923,11 +1032,10 @@ impl AddressSpace {
             let offset = (i as u64)
                 .checked_mul(PAGE_SIZE)
                 .ok_or(crate::memory::shared::SharedMemError::InvalidAddress)?;
-            let page = Page::<Size4KiB>::from_start_address(base + offset)
-                .map_err(|_| {
-                    self.cancel_region(reservation);
-                    crate::memory::shared::SharedMemError::InvalidAddress
-                })?;
+            let page = Page::<Size4KiB>::from_start_address(base + offset).map_err(|_| {
+                self.cancel_region(reservation);
+                crate::memory::shared::SharedMemError::InvalidAddress
+            })?;
             if self.is_occupied(page, hhdm_offset) {
                 MAPPING_COLLISIONS.fetch_add(1, Ordering::Relaxed);
                 self.cancel_region(reservation);
@@ -1123,9 +1231,8 @@ impl AddressSpace {
                                 | ((p3_idx as u64) << 30)
                                 | ((p2_idx as u64) << 21)
                                 | ((p1_idx as u64) << 12);
-                            let externally_owned = self
-                                .lookup_region(virtual_address)
-                                .is_some_and(|region| {
+                            let externally_owned =
+                                self.lookup_region(virtual_address).is_some_and(|region| {
                                     matches!(
                                         region.kind,
                                         MappingKind::SharedMemory

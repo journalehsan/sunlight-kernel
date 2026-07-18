@@ -399,14 +399,18 @@ pub fn handle_test_ipi() {
     }
     let command = mailbox.command.load(Ordering::Relaxed);
     if command == LEAVE {
-        ACTIVE_CPUS.leave(cpu_id);
+        unsafe {
+            activate_kernel_root();
+        }
     } else {
         let identity = AddressSpaceIdentity {
             pml4_phys: mailbox.target_pml4.load(Ordering::Relaxed),
             generation: mailbox.target_generation.load(Ordering::Relaxed),
         };
         if command == ENTER_AND_READ {
-            ACTIVE_CPUS.enter(cpu_id, identity);
+            unsafe {
+                activate(identity);
+            }
         } else {
             assert_eq!(command, READ, "invalid MM-2B test command");
         }
@@ -415,6 +419,26 @@ pub fn handle_test_ipi() {
         mailbox.result.store(value, Ordering::Relaxed);
     }
     mailbox.acknowledgement.store(sequence, Ordering::Release);
+}
+
+#[cfg(feature = "mm2d_munmap_test")]
+pub fn test_activate_and_read(identity: AddressSpaceIdentity, address: u64, targets: u64) {
+    test_broadcast(1, identity, address, targets);
+}
+
+#[cfg(feature = "mm2d_munmap_test")]
+pub fn test_read(identity: AddressSpaceIdentity, address: u64, targets: u64) {
+    test_broadcast(2, identity, address, targets);
+}
+
+#[cfg(feature = "mm2d_munmap_test")]
+pub fn test_leave(targets: u64) {
+    test_broadcast(3, AddressSpaceIdentity::INVALID, 0, targets);
+}
+
+#[cfg(feature = "mm2d_munmap_test")]
+pub fn test_result(cpu_id: usize) -> u64 {
+    TEST_MAILBOXES[cpu_id].result.load(Ordering::Acquire)
 }
 
 #[cfg(feature = "mm2b_smp_test")]

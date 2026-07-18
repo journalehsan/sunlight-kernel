@@ -127,10 +127,7 @@ mod tests {
             ledger.lookup_range(0x1000, 0x2000),
             Ok(RangeLookup::Contained(_))
         ));
-        assert_eq!(
-            ledger.lookup_range(0x2000, 0x5000),
-            Ok(RangeLookup::Hole)
-        );
+        assert_eq!(ledger.lookup_range(0x2000, 0x5000), Ok(RangeLookup::Hole));
     }
 
     #[test]
@@ -167,5 +164,128 @@ mod tests {
         );
         ledger.remove_exact(region).unwrap();
         assert!(ledger.is_empty());
+    }
+
+    #[test]
+    fn munmap_full_prefix_and_suffix_layouts() {
+        let original = anonymous(0x2000, 0x6000);
+
+        let mut full = RegionLedger::new();
+        insert(&mut full, original);
+        let plan = full.preflight_unmap(0x2000, 0x6000).unwrap();
+        assert_eq!(plan.effects().full_regions, 1);
+        full.commit_unmap(plan);
+        assert!(full.is_empty());
+
+        let mut prefix = RegionLedger::new();
+        insert(&mut prefix, original);
+        let plan = prefix.preflight_unmap(0x2000, 0x3000).unwrap();
+        assert_eq!(plan.effects().prefix_regions, 1);
+        prefix.commit_unmap(plan);
+        assert_eq!(prefix.record_at(0).unwrap().start, 0x3000);
+        assert_eq!(prefix.record_at(0).unwrap().end, 0x6000);
+
+        let mut suffix = RegionLedger::new();
+        insert(&mut suffix, original);
+        let plan = suffix.preflight_unmap(0x5000, 0x6000).unwrap();
+        assert_eq!(plan.effects().suffix_regions, 1);
+        suffix.commit_unmap(plan);
+        assert_eq!(suffix.record_at(0).unwrap().start, 0x2000);
+        assert_eq!(suffix.record_at(0).unwrap().end, 0x5000);
+    }
+
+    #[test]
+    fn munmap_middle_split_preserves_policy_protection_and_backing() {
+        let mut ledger = RegionLedger::new();
+        let region = MappingRegion::new(
+            0x2000,
+            0x7000,
+            RegionProtection::READ_ONLY,
+            MappingKind::Anonymous,
+            RegionPolicy::MAY_UNMAP.union(RegionPolicy::OWNER_MANAGED),
+            RegionBacking::AnonymousOwner(77),
+        )
+        .unwrap();
+        insert(&mut ledger, region);
+
+        let plan = ledger.preflight_unmap(0x4000, 0x5000).unwrap();
+        assert_eq!(plan.effects().middle_splits, 1);
+        ledger.commit_unmap(plan);
+        assert_eq!(ledger.len(), 2);
+        assert_eq!(ledger.record_at(0).unwrap().end, 0x4000);
+        assert_eq!(ledger.record_at(1).unwrap().start, 0x5000);
+        for fragment in [ledger.record_at(0).unwrap(), ledger.record_at(1).unwrap()] {
+            assert_eq!(fragment.protection, region.protection);
+            assert_eq!(fragment.kind, region.kind);
+            assert_eq!(fragment.policy, region.policy);
+            assert_eq!(fragment.backing, region.backing);
+        }
+        assert_eq!(ledger.validate(), Ok(()));
+    }
+
+    #[test]
+    fn munmap_split_capacity_failure_is_atomic() {
+        let mut ledger = RegionLedger::new();
+        for index in 0..MAX_REGIONS_PER_ADDRESS_SPACE {
+            let start = 0x1000 + index as u64 * 0x4000;
+            let length = if index == 0 { 0x3000 } else { 0x1000 };
+            let region = MappingRegion::new(
+                start,
+                start + length,
+                RegionProtection::READ_WRITE,
+                MappingKind::Anonymous,
+                RegionPolicy::MAY_UNMAP,
+                RegionBacking::AnonymousOwner(index as u32 + 1),
+            )
+            .unwrap();
+            insert(&mut ledger, region);
+        }
+        let original = ledger.record_at(0).unwrap();
+        assert!(ledger
+            .preflight_unmap(original.start + 0x1000, original.end)
+            .is_ok());
+        // Removing a suffix needs no slot; a true middle split does.
+        assert!(matches!(
+            ledger.preflight_unmap(original.start + 0x1000, original.end - 0x1000),
+            Err(LedgerError::CapacityExhausted)
+        ));
+        assert_eq!(ledger.len(), MAX_REGIONS_PER_ADDRESS_SPACE);
+        assert_eq!(ledger.record_at(0), Some(original));
+    }
+
+    #[test]
+    fn munmap_holes_and_protected_overlap_are_preflighted_atomically() {
+        let mut holes = RegionLedger::new();
+        insert(&mut holes, anonymous(0x3000, 0x4000));
+        let plan = holes.preflight_unmap(0x1000, 0x5000).unwrap();
+        assert_eq!(plan.effects().pages_covered, 1);
+        assert_eq!(plan.effects().hole_pages, 3);
+        holes.commit_unmap(plan);
+        assert!(holes.is_empty());
+
+        for kind in [
+            MappingKind::ElfSegment,
+            MappingKind::UserStack,
+            MappingKind::SharedMemory,
+            MappingKind::Framebuffer,
+            MappingKind::Telemetry,
+        ] {
+            let mut ledger = RegionLedger::new();
+            let protected = MappingRegion::new(
+                0x4000,
+                0x5000,
+                RegionProtection::READ_ONLY,
+                kind,
+                RegionPolicy::SYSTEM,
+                RegionBacking::Internal(kind as u64 + 1),
+            )
+            .unwrap();
+            insert(&mut ledger, protected);
+            assert!(matches!(
+                ledger.preflight_unmap(0x3000, 0x6000),
+                Err(LedgerError::PolicyRejected)
+            ));
+            assert_eq!(ledger.record_at(0), Some(protected));
+        }
     }
 }

@@ -360,6 +360,9 @@ mm2a_test_injection = []
 mm2b_smp_test = []
 # Focused bounded address-space ledger consistency gate.
 mm2c_ledger_test = []
+# Focused policy-aware anonymous munmap/shootdown gate. Reuses the MM-2B test
+# mailbox transport without running the historical MM-2B replacement gate.
+mm2d_munmap_test = ["mm2b_smp_test"]
 # Verbose per-tick / per-alloc diagnostics over the serial port. OFF by default:
 # these logs are written while the global scheduler lock is held and block the
 # UART, stalling every core. Enable only for debugging.

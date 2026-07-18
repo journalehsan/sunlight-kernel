@@ -63,12 +63,11 @@ pub fn load_elf(
     // desktop images have four PT_LOAD entries; excess input is rejected.
     let mut plans = heapless::Vec::<SegmentPlan, MAX_ELF_SEGMENTS>::new();
     let mut too_many_segments = false;
-    let planned =
-        sunlight_elf::plan_segments(elf_bytes, &header, USER_LO, USER_HI, &mut |plan| {
-            if plans.push(*plan).is_err() {
-                too_many_segments = true;
-            }
-        });
+    let planned = sunlight_elf::plan_segments(elf_bytes, &header, USER_LO, USER_HI, &mut |plan| {
+        if plans.push(*plan).is_err() {
+            too_many_segments = true;
+        }
+    });
     if let Err(e) = planned {
         crate::serial_println!("[ELF] segment validation failed: {:?}", e);
         return None;
@@ -191,18 +190,15 @@ fn rollback_elf_pages(
 ) {
     for plan in plans.iter().rev() {
         for page_idx in (0..plan.page_count).rev() {
-            let Some(address) = plan
-                .vaddr_page_start
-                .checked_add(page_idx as u64 * 4096)
-            else {
+            let Some(address) = plan.vaddr_page_start.checked_add(page_idx as u64 * 4096) else {
                 continue;
             };
             let Ok(page) = Page::from_start_address(VirtAddr::new(address)) else {
                 continue;
             };
-            let Some((frame, flags)) = (unsafe {
-                process.address_space.lookup_entry(page, hhdm_offset)
-            }) else {
+            let Some((frame, flags)) =
+                (unsafe { process.address_space.lookup_entry(page, hhdm_offset) })
+            else {
                 continue;
             };
             if !flags.contains(PageTableFlags::PRESENT) {

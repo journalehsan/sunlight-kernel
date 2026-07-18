@@ -112,7 +112,16 @@ pub unsafe fn swap_in_page(
         .swapped_block_id(page, hhdm_offset)
         .ok_or(ZramError::InvalidBlock)? as usize;
 
-    let frame_addr = pmm.alloc_frame().ok_or(ZramError::OutOfSpace)?;
+    let owner_pid = address_space
+        .lookup_region(page.start_address().as_u64())
+        .and_then(|region| match region.backing {
+            crate::process::region::RegionBacking::AnonymousOwner(owner) => Some(owner),
+            _ => None,
+        })
+        .ok_or(ZramError::InvalidBlock)?;
+    let frame_addr = pmm
+        .alloc_frame_owned(owner_pid)
+        .ok_or(ZramError::OutOfSpace)?;
     let dst = &mut *((hhdm_offset + frame_addr.as_u64()).as_mut_ptr::<[u8; ZRAM_BLOCK_SIZE]>());
     if let Err(error) = zram::read_block(block_id, dst) {
         pmm.free_frame(frame_addr);

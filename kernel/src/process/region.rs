@@ -89,6 +89,7 @@ impl RegionPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegionBacking {
     None,
+    AnonymousOwner(u32),
     ElfImage(u64),
     SharedMemory(u64),
     Internal(u64),
@@ -162,12 +163,37 @@ impl MappingRegion {
 pub enum LedgerError {
     InvalidRange,
     PermissionRejected,
+    PolicyRejected,
     Overlap,
     CapacityExhausted,
     TooManyPending,
     StaleReservation,
     ExactRecordNotFound,
     Inconsistent,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct UnmapEffects {
+    pub pages_covered: u64,
+    pub hole_pages: u64,
+    pub full_regions: u64,
+    pub prefix_regions: u64,
+    pub suffix_regions: u64,
+    pub middle_splits: u64,
+}
+
+/// Complete fixed-capacity ledger image staged before an unmap publishes any
+/// PTE changes. Its contents are intentionally opaque outside this module.
+pub struct UnmapPlan {
+    records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+    len: usize,
+    effects: UnmapEffects,
+}
+
+impl UnmapPlan {
+    pub const fn effects(&self) -> UnmapEffects {
+        self.effects
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -252,10 +278,7 @@ impl RegionLedger {
 
     /// Commit is infallible after a successful preflight unless the caller
     /// supplies a stale/cancelled token or corrupts operation ordering.
-    pub fn commit(
-        &mut self,
-        reservation: RegionReservation,
-    ) -> Result<MappingRegion, LedgerError> {
+    pub fn commit(&mut self, reservation: RegionReservation) -> Result<MappingRegion, LedgerError> {
         let index = self
             .pending_index(reservation)
             .ok_or(LedgerError::StaleReservation)?;
@@ -279,6 +302,105 @@ impl RegionLedger {
             .ok_or(LedgerError::ExactRecordNotFound)?;
         self.remove_committed(index);
         Ok(())
+    }
+
+    /// Resolve and stage a policy-authorized anonymous unmap. The complete
+    /// final layout is constructed here, so commit performs no allocation and
+    /// cannot encounter an expected capacity or policy failure.
+    pub fn preflight_unmap(&self, start: u64, end: u64) -> Result<UnmapPlan, LedgerError> {
+        let requested = MappingRegion::new(
+            start,
+            end,
+            RegionProtection::READ_ONLY,
+            MappingKind::InternalUserMapping,
+            RegionPolicy::empty(),
+            RegionBacking::None,
+        )?;
+        if self.pending_len != 0 {
+            return Err(LedgerError::Inconsistent);
+        }
+
+        let requested_pages = (requested.end - requested.start) / PAGE_SIZE;
+        let mut effects = UnmapEffects::default();
+        let mut final_len = self.len;
+
+        // First pass performs every fallible policy and capacity decision.
+        for region in self.records[..self.len].iter().copied() {
+            let overlap_start = region.start.max(requested.start);
+            let overlap_end = region.end.min(requested.end);
+            if overlap_start >= overlap_end {
+                continue;
+            }
+            if region.kind != MappingKind::Anonymous
+                || !region.policy.contains(RegionPolicy::MAY_UNMAP)
+            {
+                return Err(LedgerError::PolicyRejected);
+            }
+            effects.pages_covered += (overlap_end - overlap_start) / PAGE_SIZE;
+            match (overlap_start == region.start, overlap_end == region.end) {
+                (true, true) => {
+                    effects.full_regions += 1;
+                    final_len -= 1;
+                }
+                (true, false) => effects.prefix_regions += 1,
+                (false, true) => effects.suffix_regions += 1,
+                (false, false) => {
+                    effects.middle_splits += 1;
+                    final_len = final_len
+                        .checked_add(1)
+                        .ok_or(LedgerError::CapacityExhausted)?;
+                }
+            }
+        }
+        effects.hole_pages = requested_pages
+            .checked_sub(effects.pages_covered)
+            .ok_or(LedgerError::Inconsistent)?;
+        if final_len + self.pending_len > MAX_REGIONS_PER_ADDRESS_SPACE {
+            return Err(LedgerError::CapacityExhausted);
+        }
+
+        // Second pass builds the exact final sorted layout.
+        let mut records = [MappingRegion::EMPTY; MAX_REGIONS_PER_ADDRESS_SPACE];
+        let mut output = 0usize;
+        for region in self.records[..self.len].iter().copied() {
+            let overlap_start = region.start.max(requested.start);
+            let overlap_end = region.end.min(requested.end);
+            if overlap_start >= overlap_end {
+                records[output] = region;
+                output += 1;
+                continue;
+            }
+
+            if region.start < overlap_start {
+                let mut left = region;
+                left.end = overlap_start;
+                records[output] = left;
+                output += 1;
+            }
+            if overlap_end < region.end {
+                let mut right = region;
+                right.start = overlap_end;
+                records[output] = right;
+                output += 1;
+            }
+        }
+        if output != final_len {
+            return Err(LedgerError::Inconsistent);
+        }
+        Ok(UnmapPlan {
+            records,
+            len: final_len,
+            effects,
+        })
+    }
+
+    /// Publish a fully staged unmap layout. The scheduler serializes mapping
+    /// transactions for an address space, and preflight rejects pending ones.
+    pub fn commit_unmap(&mut self, plan: UnmapPlan) {
+        assert_eq!(self.pending_len, 0, "ledger changed during staged unmap");
+        self.records = plan.records;
+        self.len = plan.len;
+        debug_assert_eq!(self.validate(), Ok(()));
     }
 
     pub fn replace_backing(
@@ -400,7 +522,8 @@ impl RegionLedger {
 
     fn remove_pending(&mut self, index: usize) {
         self.pending_len -= 1;
-        self.pending.copy_within(index + 1..=self.pending_len, index);
+        self.pending
+            .copy_within(index + 1..=self.pending_len, index);
         self.pending[self.pending_len] = PendingRegion::EMPTY;
     }
 
@@ -408,7 +531,8 @@ impl RegionLedger {
         if self.overlaps_committed(region) {
             return Err(LedgerError::Overlap);
         }
-        let mut index = self.records[..self.len].partition_point(|current| current.start < region.start);
+        let mut index =
+            self.records[..self.len].partition_point(|current| current.start < region.start);
         let merge_left = index != 0
             && self.records[index - 1].end == region.start
             && self.records[index - 1].compatible_for_merge(region);

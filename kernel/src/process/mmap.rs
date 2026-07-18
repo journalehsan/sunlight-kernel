@@ -1,13 +1,14 @@
 use super::mm2a_plan::{checked_page_layout, DeferredCursor};
 use crate::memory::pmm::PhysicalMemoryManager;
-use crate::process::address_space::MappingError;
+use crate::process::address_space::{ExpectedMapping, MappingError};
 use crate::process::region::{
     MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection,
 };
 use crate::sched::Scheduler;
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
-use x86_64::VirtAddr;
+use x86_64::{PhysAddr, VirtAddr};
 
 // mmap flags
 pub const MAP_PRIVATE: u32 = 0x02;
@@ -27,9 +28,72 @@ pub enum MmapError {
     InvalidFlags,
     InvalidProt,
     PermissionDenied,
+    Protected,
     AlreadyMapped,
     Unsupported,
     InternalInvariant,
+}
+
+pub const fn munmap_linux_errno(error: MmapError) -> i32 {
+    match error {
+        MmapError::NoMemory => 12,
+        MmapError::PermissionDenied | MmapError::Protected => 13,
+        MmapError::InternalInvariant => 14,
+        _ => 22,
+    }
+}
+
+static MUNMAP_REQUESTS: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_SUCCESSES: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_PAGES: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_FULL_REGIONS: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_PREFIX_REGIONS: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_SUFFIX_REGIONS: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_MIDDLE_SPLITS: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_HOLE_PAGES: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_PROTECTED_REJECTIONS: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_CAPACITY_REJECTIONS: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_SWAPPED_RELEASED: AtomicU64 = AtomicU64::new(0);
+static MUNMAP_INVARIANT_FAILURES: AtomicU64 = AtomicU64::new(0);
+
+const MUNMAP_CHUNK_PAGES: u64 = crate::memory::tlb::RANGE_FLUSH_PAGE_THRESHOLD;
+
+#[derive(Clone, Copy)]
+enum RemovedOwnership {
+    Empty,
+    Present(PhysAddr),
+    Swapped(u64),
+}
+
+#[derive(Clone, Copy)]
+struct RemovedPage {
+    address: u64,
+    ownership: RemovedOwnership,
+}
+
+impl RemovedPage {
+    const EMPTY: Self = Self {
+        address: 0,
+        ownership: RemovedOwnership::Empty,
+    };
+}
+
+pub fn diagnostic_report() {
+    crate::serial_println!(
+        "[MM-2D-DIAG] requests={} successes={} pages={} full={} prefix={} suffix={} middle={} holes={} protected={} capacity={} swapped={} invariant_failures={}",
+        MUNMAP_REQUESTS.load(Ordering::Relaxed),
+        MUNMAP_SUCCESSES.load(Ordering::Relaxed),
+        MUNMAP_PAGES.load(Ordering::Relaxed),
+        MUNMAP_FULL_REGIONS.load(Ordering::Relaxed),
+        MUNMAP_PREFIX_REGIONS.load(Ordering::Relaxed),
+        MUNMAP_SUFFIX_REGIONS.load(Ordering::Relaxed),
+        MUNMAP_MIDDLE_SPLITS.load(Ordering::Relaxed),
+        MUNMAP_HOLE_PAGES.load(Ordering::Relaxed),
+        MUNMAP_PROTECTED_REJECTIONS.load(Ordering::Relaxed),
+        MUNMAP_CAPACITY_REJECTIONS.load(Ordering::Relaxed),
+        MUNMAP_SWAPPED_RELEASED.load(Ordering::Relaxed),
+        MUNMAP_INVARIANT_FAILURES.load(Ordering::Relaxed),
+    );
 }
 
 fn prot_to_protection(prot: u32) -> Result<RegionProtection, MmapError> {
@@ -141,10 +205,9 @@ fn map_anonymous_kind(
     }
 
     let protection = prot_to_protection(prot)?;
-    let page_flags = crate::process::address_space::AddressSpace::protection_to_pte_flags(
-        protection,
-    )
-    .map_err(|_| MmapError::PermissionDenied)?;
+    let page_flags =
+        crate::process::address_space::AddressSpace::protection_to_pte_flags(protection)
+            .map_err(|_| MmapError::PermissionDenied)?;
 
     // Map all the pages
     let pid = sched.current_process().pid;
@@ -180,7 +243,7 @@ fn map_anonymous_kind(
         protection,
         kind,
         policy,
-        RegionBacking::None,
+        RegionBacking::AnonymousOwner(pid as u32),
     )
     .map_err(|_| MmapError::InvalidAddress)?;
     let reservation = sched
@@ -191,15 +254,13 @@ fn map_anonymous_kind(
 
     let page_count_usize = usize::try_from(page_count).map_err(|_| MmapError::InvalidAddress)?;
     let mut installed: Vec<(Page<Size4KiB>, x86_64::PhysAddr)> = Vec::new();
-    installed
-        .try_reserve_exact(page_count_usize)
-        .map_err(|_| {
-            sched
-                .current_process()
-                .address_space
-                .cancel_region(reservation);
-            MmapError::NoMemory
-        })?;
+    installed.try_reserve_exact(page_count_usize).map_err(|_| {
+        sched
+            .current_process()
+            .address_space
+            .cancel_region(reservation);
+        MmapError::NoMemory
+    })?;
     if crate::memory::swap::reserve_candidates(page_count_usize).is_err() {
         sched
             .current_process()
@@ -298,6 +359,7 @@ fn mapping_error(error: MappingError) -> MmapError {
         | MappingError::PageTableAllocationFailed
         | MappingError::LedgerCapacityExhausted => MmapError::NoMemory,
         MappingError::PermissionRejected => MmapError::PermissionDenied,
+        MappingError::ProtectedRegion => MmapError::Protected,
         MappingError::InvalidAddress
         | MappingError::NonCanonical
         | MappingError::Overflow
@@ -330,9 +392,237 @@ fn rollback_anonymous(
     }
 }
 
-/// Unmap memory (stub for now)
-pub fn sys_munmap(_addr: u64, _length: u64) -> Result<(), MmapError> {
-    Err(MmapError::Unsupported)
+/// Remove policy-authorized anonymous mappings from the current address space.
+pub fn sys_munmap(
+    addr: u64,
+    length: u64,
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+) -> Result<(), MmapError> {
+    MUNMAP_REQUESTS.fetch_add(1, Ordering::Relaxed);
+    if addr & 0xfff != 0 || length == 0 {
+        return Err(MmapError::InvalidAddress);
+    }
+    let (page_count, span) = checked_page_layout(length).map_err(|_| MmapError::InvalidAddress)?;
+    let span_usize = usize::try_from(span).map_err(|_| MmapError::InvalidAddress)?;
+    crate::memory::user::UserRange::new(addr, span_usize).map_err(|_| MmapError::InvalidAddress)?;
+    let end = addr.checked_add(span).ok_or(MmapError::InvalidAddress)?;
+    let hhdm_offset = crate::HHDM_REQ
+        .response()
+        .map(|response| VirtAddr::new(response.offset))
+        .ok_or(MmapError::InternalInvariant)?;
+
+    let plan = match sched
+        .current_process()
+        .address_space
+        .preflight_unmap(addr, end)
+    {
+        Ok(plan) => plan,
+        Err(MappingError::ProtectedRegion) => {
+            MUNMAP_PROTECTED_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::Protected);
+        }
+        Err(MappingError::LedgerCapacityExhausted) => {
+            MUNMAP_CAPACITY_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::NoMemory);
+        }
+        Err(error) => return Err(mapping_error(error)),
+    };
+    let effects = plan.effects();
+
+    // Full expected-state/ownership preflight. This is deliberately a second
+    // bounded walk after ledger staging so no PTE is cleared before every
+    // mapped page in the request is proven safe to release.
+    let mut page_address = addr;
+    while page_address < end {
+        if let Some(region) = sched
+            .current_process()
+            .address_space
+            .lookup_region(page_address)
+        {
+            expected_anonymous_leaf(
+                &sched.current_process().address_space,
+                page_address,
+                region,
+                pmm,
+                hhdm_offset,
+            )?;
+        }
+        page_address = page_address
+            .checked_add(4096)
+            .ok_or(MmapError::InvalidAddress)?;
+    }
+
+    let identity = sched.current_process().address_space.identity();
+    let mut chunk_start = addr;
+    while chunk_start < end {
+        let remaining_pages = (end - chunk_start) / 4096;
+        let chunk_pages = remaining_pages.min(MUNMAP_CHUNK_PAGES);
+        let mut removed = [RemovedPage::EMPTY; MUNMAP_CHUNK_PAGES as usize];
+        let mut removed_len = 0usize;
+
+        for offset in 0..chunk_pages {
+            let address = chunk_start + offset * 4096;
+            let Some(region) = sched.current_process().address_space.lookup_region(address) else {
+                continue;
+            };
+            let expected = match expected_anonymous_leaf(
+                &sched.current_process().address_space,
+                address,
+                region,
+                pmm,
+                hhdm_offset,
+            ) {
+                Ok(expected) => expected,
+                Err(_) => {
+                    panic!("MM-2D munmap invariant failure: leaf changed after complete preflight")
+                }
+            };
+            let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address))
+                .unwrap_or_else(|_| munmap_invariant_failure("preflighted page lost alignment"));
+            if unsafe {
+                sched
+                    .current_process_mut()
+                    .address_space
+                    .remove_expected_mapping(page, expected, hhdm_offset)
+            }
+            .is_err()
+            {
+                munmap_invariant_failure("leaf changed after complete preflight");
+            }
+            removed[removed_len] = RemovedPage {
+                address,
+                ownership: match expected {
+                    ExpectedMapping::Present { frame, .. } => RemovedOwnership::Present(frame),
+                    ExpectedMapping::Swapped { block_id } => RemovedOwnership::Swapped(block_id),
+                },
+            };
+            removed_len += 1;
+        }
+
+        if removed_len != 0 {
+            if crate::memory::tlb::invalidate_range(identity, chunk_start, chunk_pages).is_err() {
+                munmap_invariant_failure("validated chunk was rejected by shootdown");
+            }
+
+            // The synchronous acknowledgement above is the ownership-release
+            // barrier: no CPU may retain a translation to any frame freed here.
+            for removed_page in &removed[..removed_len] {
+                match removed_page.ownership {
+                    RemovedOwnership::Present(frame) => {
+                        crate::memory::swap::untrack(frame);
+                        pmm.free_frame(frame);
+                    }
+                    RemovedOwnership::Swapped(block_id) => {
+                        if crate::memory::zram::discard_block(block_id as usize).is_err() {
+                            munmap_invariant_failure("preflighted ZRAM block disappeared");
+                        }
+                        MUNMAP_SWAPPED_RELEASED.fetch_add(1, Ordering::Relaxed);
+                    }
+                    RemovedOwnership::Empty => {
+                        munmap_invariant_failure("empty bounded removal record");
+                    }
+                }
+            }
+            for removed_page in &removed[..removed_len] {
+                let page =
+                    Page::<Size4KiB>::from_start_address(VirtAddr::new(removed_page.address))
+                        .unwrap_or_else(|_| {
+                            munmap_invariant_failure("removed page lost alignment")
+                        });
+                unsafe {
+                    sched
+                        .current_process_mut()
+                        .address_space
+                        .reclaim_empty_tables_for_page(page, pmm, hhdm_offset);
+                }
+            }
+        }
+        chunk_start += chunk_pages * 4096;
+    }
+
+    sched.current_process().address_space.commit_unmap(plan);
+    if !unsafe {
+        sched
+            .current_process()
+            .address_space
+            .validate_ledger_ptes(hhdm_offset)
+    } {
+        munmap_invariant_failure("ledger/PTE validation failed after commit");
+    }
+
+    MUNMAP_SUCCESSES.fetch_add(1, Ordering::Relaxed);
+    MUNMAP_PAGES.fetch_add(effects.pages_covered, Ordering::Relaxed);
+    MUNMAP_FULL_REGIONS.fetch_add(effects.full_regions, Ordering::Relaxed);
+    MUNMAP_PREFIX_REGIONS.fetch_add(effects.prefix_regions, Ordering::Relaxed);
+    MUNMAP_SUFFIX_REGIONS.fetch_add(effects.suffix_regions, Ordering::Relaxed);
+    MUNMAP_MIDDLE_SPLITS.fetch_add(effects.middle_splits, Ordering::Relaxed);
+    MUNMAP_HOLE_PAGES.fetch_add(effects.hole_pages, Ordering::Relaxed);
+    debug_assert_eq!(effects.pages_covered + effects.hole_pages, page_count);
+    Ok(())
+}
+
+fn expected_anonymous_leaf(
+    address_space: &crate::process::address_space::AddressSpace,
+    address: u64,
+    region: MappingRegion,
+    pmm: &PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Result<ExpectedMapping, MmapError> {
+    let owner = match (region.kind, region.policy, region.backing) {
+        (MappingKind::Anonymous, policy, RegionBacking::AnonymousOwner(owner))
+            if policy.contains(RegionPolicy::MAY_UNMAP) =>
+        {
+            owner
+        }
+        _ => return invariant_rejection(),
+    };
+    let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address))
+        .map_err(|_| MmapError::InternalInvariant)?;
+    let Some((frame_or_marker, flags)) = (unsafe { address_space.lookup_entry(page, hhdm_offset) })
+    else {
+        return invariant_rejection();
+    };
+    if flags.contains(PageTableFlags::PRESENT) {
+        if !flags.contains(PageTableFlags::USER_ACCESSIBLE)
+            || pmm.owner_of(frame_or_marker) != Some(owner)
+        {
+            return invariant_rejection();
+        }
+        if let Ok(actual) =
+            crate::process::address_space::AddressSpace::protection_from_pte_flags(flags)
+        {
+            if actual.writable() != region.protection.writable()
+                || actual.executable() != region.protection.executable()
+            {
+                return invariant_rejection();
+            }
+        } else {
+            return invariant_rejection();
+        }
+        Ok(ExpectedMapping::Present {
+            frame: frame_or_marker,
+            flags,
+        })
+    } else {
+        let Some(block_id) = (unsafe { address_space.swapped_block_id(page, hhdm_offset) }) else {
+            return invariant_rejection();
+        };
+        if !crate::memory::zram::block_exists(block_id as usize) {
+            return invariant_rejection();
+        }
+        Ok(ExpectedMapping::Swapped { block_id })
+    }
+}
+
+fn invariant_rejection<T>() -> Result<T, MmapError> {
+    MUNMAP_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+    Err(MmapError::InternalInvariant)
+}
+
+fn munmap_invariant_failure(message: &str) -> ! {
+    MUNMAP_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+    panic!("MM-2D munmap invariant failure: {message}");
 }
 
 /// Change memory protection (stub for now)

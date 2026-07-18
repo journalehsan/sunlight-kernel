@@ -445,7 +445,7 @@ pub extern "C" fn _start() -> ! {
             splash.log("[SMP] Single CPU mode");
         }
     }
-    #[cfg(feature = "mm2b_smp_test")]
+    #[cfg(all(feature = "mm2b_smp_test", not(feature = "mm2d_munmap_test")))]
     crate::memory::tlb::run_smp_regression_gate(hhdm_offset);
     serial_println!(
         "[MM-0] NXE active on {} CPU(s)",
@@ -561,10 +561,9 @@ pub extern "C" fn _start() -> ! {
                 let share_frame =
                     unsafe { PhysFrame::from_start_address_unchecked(fat_share_phys) };
                 let protection = process::region::RegionProtection::READ_ONLY;
-                let share_flags = process::address_space::AddressSpace::protection_to_pte_flags(
-                    protection,
-                )
-                .expect("boot-share protection");
+                let share_flags =
+                    process::address_space::AddressSpace::protection_to_pte_flags(protection)
+                        .expect("boot-share protection");
                 let region = process::region::MappingRegion::new(
                     FAT_SHARE_VADDR,
                     FAT_SHARE_VADDR + 4096,
@@ -2112,6 +2111,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     {
         let mut pmm = PMM.lock();
         memory::security::run_mm2c_ledger_gate(&mut pmm, hhdm_offset);
+    }
+    #[cfg(feature = "mm2d_munmap_test")]
+    {
+        let mut pmm = PMM.lock();
+        memory::security::run_mm2d_munmap_gate(&mut pmm, hhdm_offset);
     }
 
     // 1. Token forge: a token that was never minted must be rejected as NotFound.

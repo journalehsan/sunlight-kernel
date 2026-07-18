@@ -168,8 +168,8 @@ pub fn map_user_stack(
         .ok_or(SpawnError::NoMemory)?;
     for index in 0..stack_pages {
         let address = stack_start + index as u64 * 4096;
-        let page = Page::from_start_address(VirtAddr::new(address))
-            .map_err(|_| SpawnError::NoMemory)?;
+        let page =
+            Page::from_start_address(VirtAddr::new(address)).map_err(|_| SpawnError::NoMemory)?;
         if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
             crate::process::address_space::note_mapping_collision();
             return Err(SpawnError::NoMemory);
@@ -195,8 +195,8 @@ pub fn map_user_stack(
     let mut installed = 0usize;
     while installed < stack_pages {
         let address = stack_start + installed as u64 * 4096;
-        let page = Page::from_start_address(VirtAddr::new(address))
-            .map_err(|_| SpawnError::NoMemory)?;
+        let page =
+            Page::from_start_address(VirtAddr::new(address)).map_err(|_| SpawnError::NoMemory)?;
         let Some(frame_addr) = pmm.alloc_frame_owned(process.pid as u32) else {
             rollback_user_stack(process, stack_start, installed, pmm, hhdm_offset);
             process.address_space.cancel_region(reservation);
@@ -241,8 +241,7 @@ fn rollback_user_stack(
     hhdm_offset: VirtAddr,
 ) {
     for index in (0..installed).rev() {
-        let Ok(page) =
-            Page::from_start_address(VirtAddr::new(stack_start + index as u64 * 4096))
+        let Ok(page) = Page::from_start_address(VirtAddr::new(stack_start + index as u64 * 4096))
         else {
             continue;
         };

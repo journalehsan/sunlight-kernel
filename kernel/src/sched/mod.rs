@@ -2658,7 +2658,10 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     assert_eq!(sched.live_address_space_borrowers(0), 12);
     for borrower in &sched.processes[1..=12] {
         assert_eq!(borrower.address_space.region_count(), 1);
-        assert_eq!(borrower.address_space.lookup_region(0x40_0000), Some(sentinel_region));
+        assert_eq!(
+            borrower.address_space.lookup_region(0x40_0000),
+            Some(sentinel_region)
+        );
     }
     let stale_wakes_before = STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed);
     for idx in 1usize..=12 {
@@ -2694,11 +2697,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     let slots_before = sched.processes.len();
     let mut second_generation_slots = alloc::vec::Vec::new();
     for offset in 0..12 {
-        let idx = sched.add_process(borrower(
-            0xB100 + offset,
-            owner_pid,
-            shared_address_space,
-        ));
+        let idx = sched.add_process(borrower(0xB100 + offset, owner_pid, shared_address_space));
         assert!(!second_generation_slots.contains(&idx));
         second_generation_slots.push(idx);
     }

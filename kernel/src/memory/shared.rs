@@ -110,14 +110,12 @@ pub fn alloc_shared_region(
     }
 
     let virt = match unsafe {
-        caller
-            .address_space
-            .map_shared_region(
-                &frames,
-                crate::process::region::RegionBacking::None,
-                pmm,
-                hhdm_offset,
-            )
+        caller.address_space.map_shared_region(
+            &frames,
+            crate::process::region::RegionBacking::None,
+            pmm,
+            hhdm_offset,
+        )
     } {
         Ok(virt) => virt,
         Err(error) => {
@@ -184,14 +182,12 @@ pub fn map_shared_page(
             .resolve_shared_region(token)
             .ok_or(SharedMemError::InvalidToken)?;
         let virt = match unsafe {
-            receiver
-                .address_space
-                .map_shared_region(
-                    &obj.frames,
-                    crate::process::region::RegionBacking::SharedMemory(token.as_u64()),
-                    pmm,
-                    hhdm_offset,
-                )
+            receiver.address_space.map_shared_region(
+                &obj.frames,
+                crate::process::region::RegionBacking::SharedMemory(token.as_u64()),
+                pmm,
+                hhdm_offset,
+            )
         } {
             Ok(virt) => virt,
             Err(error) => {

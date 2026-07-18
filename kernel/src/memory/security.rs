@@ -112,6 +112,7 @@ pub fn diagnostic_report() {
         NX_SHM_MAPPINGS.load(Ordering::Relaxed),
     );
     crate::process::address_space::diagnostic_report();
+    crate::process::mmap::diagnostic_report();
     crate::memory::tlb::diagnostic_report();
     let user = crate::memory::user::diagnostics();
     crate::serial_println!(
@@ -273,10 +274,7 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
 }
 
 #[cfg(feature = "mm2c_ledger_test")]
-pub fn run_mm2c_ledger_gate(
-    pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
-    hhdm: VirtAddr,
-) {
+pub fn run_mm2c_ledger_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
     use crate::process::region::{MappingKind, RegionPolicy};
 
     let free_before = pmm.free_page_count();
@@ -313,6 +311,433 @@ pub fn run_mm2c_ledger_gate(
     }
     assert_eq!(pmm.free_page_count(), free_before);
     crate::serial_println!("[MM-2C] teardown and PMM accounting: OK");
+}
+
+#[cfg(feature = "mm2d_munmap_test")]
+pub fn run_mm2d_munmap_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
+    use crate::process::mmap::{
+        MmapError, MAP_ANONYMOUS, MAP_FIXED, MAP_PRIVATE, PROT_READ, PROT_WRITE,
+    };
+    use crate::process::region::{
+        MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection,
+        MAX_REGIONS_PER_ADDRESS_SPACE,
+    };
+    use x86_64::structures::paging::{Page, PageTableFlags, Size4KiB};
+
+    const FLAGS: u32 = MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS;
+    const BASE: u64 = 0x0000_0020_0000_0000;
+    const STRIDE: u64 = 0x10_000;
+    const PAGE_SIZE: u64 = 4096;
+    const OLD_VALUE: u64 = 0x4d4d_3244_4f4c_4421;
+    const NEW_VALUE: u64 = 0x4d4d_3244_4e45_5721;
+
+    fn map_fixed(
+        sched: &mut crate::sched::Scheduler,
+        pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
+        address: u64,
+        pages: u64,
+    ) {
+        assert_eq!(
+            crate::process::mmap::sys_mmap(
+                address,
+                pages * 4096,
+                PROT_READ | PROT_WRITE,
+                FLAGS,
+                -1,
+                0,
+                pmm,
+                sched,
+            ),
+            Ok(address)
+        );
+    }
+
+    fn mapped_entry(
+        sched: &crate::sched::Scheduler,
+        address: u64,
+        hhdm: VirtAddr,
+    ) -> Option<(x86_64::PhysAddr, PageTableFlags)> {
+        let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address)).ok()?;
+        unsafe {
+            sched
+                .current_process()
+                .address_space
+                .lookup_entry(page, hhdm)
+        }
+    }
+
+    fn assert_consistent(sched: &crate::sched::Scheduler, hhdm: VirtAddr) {
+        assert!(unsafe {
+            sched
+                .current_process()
+                .address_space
+                .validate_ledger_ptes(hhdm)
+        });
+    }
+
+    let baseline = pmm.free_page_count();
+    let process = unsafe { crate::process::Process::new(0xB2D0, 0, "mm2d-munmap", pmm, hhdm) };
+    let mut sched = crate::sched::Scheduler::new();
+    sched.processes.push(process);
+
+    // Full, prefix, suffix, and middle removal share one P1 table so PMM
+    // deltas reflect exactly the released anonymous data frames.
+    for index in 0..4 {
+        map_fixed(&mut sched, pmm, BASE + index * STRIDE, 4);
+    }
+
+    let free_before = pmm.free_page_count();
+    assert_eq!(
+        crate::process::mmap::sys_munmap(BASE, 4 * PAGE_SIZE, pmm, &mut sched),
+        Ok(())
+    );
+    assert_eq!(pmm.free_page_count(), free_before + 4);
+    assert!(mapped_entry(&sched, BASE, hhdm).is_none());
+    assert!(sched
+        .current_process()
+        .address_space
+        .lookup_region(BASE)
+        .is_none());
+    assert_consistent(&sched, hhdm);
+
+    let prefix = BASE + STRIDE;
+    assert_eq!(
+        crate::process::mmap::sys_munmap(prefix, PAGE_SIZE, pmm, &mut sched),
+        Ok(())
+    );
+    assert_eq!(
+        sched
+            .current_process()
+            .address_space
+            .lookup_region(prefix + PAGE_SIZE)
+            .unwrap()
+            .start,
+        prefix + PAGE_SIZE
+    );
+    assert_consistent(&sched, hhdm);
+
+    let suffix = BASE + 2 * STRIDE;
+    assert_eq!(
+        crate::process::mmap::sys_munmap(suffix + 3 * PAGE_SIZE, PAGE_SIZE, pmm, &mut sched,),
+        Ok(())
+    );
+    assert_eq!(
+        sched
+            .current_process()
+            .address_space
+            .lookup_region(suffix)
+            .unwrap()
+            .end,
+        suffix + 3 * PAGE_SIZE
+    );
+    assert_consistent(&sched, hhdm);
+
+    let middle = BASE + 3 * STRIDE;
+    assert_eq!(
+        crate::process::mmap::sys_munmap(middle + PAGE_SIZE, 2 * PAGE_SIZE, pmm, &mut sched,),
+        Ok(())
+    );
+    assert!(sched
+        .current_process()
+        .address_space
+        .lookup_region(middle)
+        .is_some());
+    assert!(sched
+        .current_process()
+        .address_space
+        .lookup_region(middle + PAGE_SIZE)
+        .is_none());
+    assert!(sched
+        .current_process()
+        .address_space
+        .lookup_region(middle + 3 * PAGE_SIZE)
+        .is_some());
+    assert_consistent(&sched, hhdm);
+    crate::serial_println!("[MM-2D] full/prefix/suffix/middle + exact PMM release: OK");
+
+    // Holes are safe no-ops, including a request containing a hole followed by
+    // an anonymous mapping.
+    let mixed = BASE + 4 * STRIDE + PAGE_SIZE;
+    map_fixed(&mut sched, pmm, mixed, 1);
+    assert_eq!(
+        crate::process::mmap::sys_munmap(mixed - PAGE_SIZE, 2 * PAGE_SIZE, pmm, &mut sched),
+        Ok(())
+    );
+    assert_eq!(
+        crate::process::mmap::sys_munmap(BASE + 5 * STRIDE, 3 * PAGE_SIZE, pmm, &mut sched),
+        Ok(())
+    );
+    assert_consistent(&sched, hhdm);
+    crate::serial_println!("[MM-2D] hole-only and mixed hole/anonymous ranges: OK");
+
+    // Every non-anonymous kind remains protected. The first request includes
+    // a real anonymous PTE before the protected record, proving atomic reject.
+    let protected_kinds = [
+        MappingKind::ElfSegment,
+        MappingKind::UserStack,
+        MappingKind::Brk,
+        MappingKind::Framebuffer,
+        MappingKind::Telemetry,
+        MappingKind::BootSharedData,
+        MappingKind::InternalUserMapping,
+    ];
+    for (index, kind) in protected_kinds.into_iter().enumerate() {
+        let protected = BASE + 0x20_0000 + index as u64 * 4 * PAGE_SIZE;
+        map_fixed(&mut sched, pmm, protected - PAGE_SIZE, 1);
+        let record = MappingRegion::new(
+            protected,
+            protected + PAGE_SIZE,
+            RegionProtection::READ_ONLY,
+            kind,
+            RegionPolicy::SYSTEM.union(RegionPolicy::OWNER_MANAGED),
+            RegionBacking::Internal(0x2D00 + index as u64),
+        )
+        .unwrap();
+        let reservation = sched
+            .current_process()
+            .address_space
+            .preflight_region(record)
+            .unwrap();
+        sched
+            .current_process()
+            .address_space
+            .commit_region(reservation)
+            .unwrap();
+        let before = mapped_entry(&sched, protected - PAGE_SIZE, hhdm);
+        assert_eq!(
+            crate::process::mmap::sys_munmap(protected - PAGE_SIZE, 2 * PAGE_SIZE, pmm, &mut sched,),
+            Err(MmapError::Protected)
+        );
+        assert_eq!(mapped_entry(&sched, protected - PAGE_SIZE, hhdm), before);
+        assert_eq!(
+            sched
+                .current_process()
+                .address_space
+                .lookup_region(protected),
+            Some(record)
+        );
+        sched
+            .current_process()
+            .address_space
+            .remove_region_exact(record)
+            .unwrap();
+        assert_eq!(
+            crate::process::mmap::sys_munmap(protected - PAGE_SIZE, PAGE_SIZE, pmm, &mut sched,),
+            Ok(())
+        );
+    }
+
+    let mut caps = crate::capability::CapabilityBroker::new();
+    let (shm_address, token) = crate::memory::shared::alloc_shared_region(
+        sched.current_process_mut(),
+        pmm,
+        &mut caps,
+        hhdm,
+        PAGE_SIZE as usize,
+    )
+    .unwrap();
+    let shm_count = caps.shared_region_map_count(token);
+    let shm_entry = mapped_entry(&sched, shm_address.as_u64(), hhdm);
+    assert_eq!(
+        crate::process::mmap::sys_munmap(shm_address.as_u64(), PAGE_SIZE, pmm, &mut sched,),
+        Err(MmapError::Protected)
+    );
+    assert_eq!(caps.shared_region_map_count(token), shm_count);
+    assert_eq!(mapped_entry(&sched, shm_address.as_u64(), hhdm), shm_entry);
+    crate::serial_println!("[MM-2D] ELF/stack/brk/SHM/device/internal policy rejection: OK");
+
+    // Invalid native inputs map to EINVAL for Helios, protected policy to
+    // EACCES, and split capacity exhaustion to ENOMEM.
+    assert_eq!(
+        crate::process::mmap::sys_munmap(BASE + 1, PAGE_SIZE, pmm, &mut sched),
+        Err(MmapError::InvalidAddress)
+    );
+    assert_eq!(
+        crate::process::mmap::sys_munmap(BASE, 0, pmm, &mut sched),
+        Err(MmapError::InvalidAddress)
+    );
+    assert_eq!(
+        crate::process::mmap::sys_munmap(u64::MAX - 0xfff, 0x2000, pmm, &mut sched),
+        Err(MmapError::InvalidAddress)
+    );
+    assert_eq!(
+        crate::process::mmap::sys_munmap(
+            crate::memory::user::USER_END_EXCLUSIVE - PAGE_SIZE,
+            2 * PAGE_SIZE,
+            pmm,
+            &mut sched,
+        ),
+        Err(MmapError::InvalidAddress)
+    );
+    assert_eq!(
+        crate::process::mmap::munmap_linux_errno(MmapError::InvalidAddress),
+        22
+    );
+    assert_eq!(
+        crate::process::mmap::munmap_linux_errno(MmapError::Protected),
+        13
+    );
+    assert_eq!(
+        crate::process::mmap::munmap_linux_errno(MmapError::NoMemory),
+        12
+    );
+    crate::serial_println!("[MM-2D] native failure convention and Helios errno classes: OK");
+
+    // Fill the bounded ledger around a real three-page anonymous mapping. A
+    // middle split must fail before its PTE or ledger record changes.
+    let capacity_target = BASE + 0x40_0000;
+    map_fixed(&mut sched, pmm, capacity_target, 3);
+    let capacity_entry = mapped_entry(&sched, capacity_target + PAGE_SIZE, hhdm);
+    let mut fillers = alloc::vec::Vec::new();
+    let mut filler_index = 0u64;
+    while sched.current_process().address_space.region_count() < MAX_REGIONS_PER_ADDRESS_SPACE {
+        let start = BASE + 0x1000_0000 + filler_index * 2 * PAGE_SIZE;
+        filler_index += 1;
+        let filler = MappingRegion::new(
+            start,
+            start + PAGE_SIZE,
+            RegionProtection::READ_ONLY,
+            MappingKind::InternalUserMapping,
+            RegionPolicy::SYSTEM,
+            RegionBacking::Internal(0xCA00 + filler_index),
+        )
+        .unwrap();
+        let reservation = sched
+            .current_process()
+            .address_space
+            .preflight_region(filler)
+            .unwrap();
+        sched
+            .current_process()
+            .address_space
+            .commit_region(reservation)
+            .unwrap();
+        fillers.push(filler);
+    }
+    assert_eq!(
+        crate::process::mmap::sys_munmap(capacity_target + PAGE_SIZE, PAGE_SIZE, pmm, &mut sched,),
+        Err(MmapError::NoMemory)
+    );
+    assert_eq!(
+        mapped_entry(&sched, capacity_target + PAGE_SIZE, hhdm),
+        capacity_entry
+    );
+    assert_eq!(
+        sched
+            .current_process()
+            .address_space
+            .lookup_region(capacity_target)
+            .unwrap()
+            .end,
+        capacity_target + 3 * PAGE_SIZE
+    );
+    for filler in fillers {
+        sched
+            .current_process()
+            .address_space
+            .remove_region_exact(filler)
+            .unwrap();
+    }
+    assert_eq!(
+        crate::process::mmap::sys_munmap(capacity_target, 3 * PAGE_SIZE, pmm, &mut sched,),
+        Ok(())
+    );
+    crate::serial_println!("[MM-2D] middle-split capacity rejection is atomic: OK");
+
+    // Swapped leaves are removed directly: no swap-in, one ZRAM discard, no
+    // stale PTE or candidate frame.
+    let swapped = BASE + 0x50_0000;
+    map_fixed(&mut sched, pmm, swapped, 1);
+    let swapped_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(swapped)).unwrap();
+    let (swapped_frame, _) = mapped_entry(&sched, swapped, hhdm).unwrap();
+    let block_id = unsafe {
+        crate::memory::swap::swap_out_page(
+            &mut sched.current_process_mut().address_space,
+            swapped_page,
+            swapped_frame,
+            hhdm,
+            pmm,
+        )
+    }
+    .unwrap();
+    assert!(crate::memory::zram::block_exists(block_id));
+    assert_eq!(
+        crate::process::mmap::sys_munmap(swapped, PAGE_SIZE, pmm, &mut sched),
+        Ok(())
+    );
+    assert!(!crate::memory::zram::block_exists(block_id));
+    assert!(mapped_entry(&sched, swapped, hhdm).is_none());
+    assert_consistent(&sched, hhdm);
+    crate::serial_println!("[MM-2D] swapped anonymous page released without swap-in: OK");
+
+    // Freed fixed ranges are reusable. All online CPUs pre-touch the old
+    // translation; munmap must acknowledge their shootdowns before the old
+    // frame is reused as a guard and a different frame is remapped at the VA.
+    let remote = BASE + 0x70_000;
+    map_fixed(&mut sched, pmm, remote, 1);
+    let old_frame = mapped_entry(&sched, remote, hhdm).unwrap().0;
+    unsafe {
+        (hhdm + old_frame.as_u64())
+            .as_mut_ptr::<u64>()
+            .write_volatile(OLD_VALUE);
+        sched.current_process().address_space.activate();
+    }
+    assert_eq!(unsafe { (remote as *const u64).read_volatile() }, OLD_VALUE);
+    let online = crate::sched::ONLINE_CORES.load(Ordering::Acquire);
+    let local_cpu = crate::sched::current_cpu_id();
+    let remote_cpus = ((1u64 << online) - 1) & !(1u64 << local_cpu);
+    crate::memory::tlb::test_activate_and_read(
+        sched.current_process().address_space.identity(),
+        remote,
+        remote_cpus,
+    );
+    for cpu_id in 0..online {
+        if cpu_id != local_cpu {
+            assert_eq!(crate::memory::tlb::test_result(cpu_id), OLD_VALUE);
+        }
+    }
+    assert_eq!(
+        crate::process::mmap::sys_munmap(remote, PAGE_SIZE, pmm, &mut sched),
+        Ok(())
+    );
+    let guard = pmm.alloc_frame().unwrap();
+    assert_eq!(guard, old_frame, "MM-2D gate expects immediate frame reuse");
+    map_fixed(&mut sched, pmm, remote, 1);
+    let new_frame = mapped_entry(&sched, remote, hhdm).unwrap().0;
+    assert_ne!(new_frame, old_frame);
+    unsafe {
+        (hhdm + new_frame.as_u64())
+            .as_mut_ptr::<u64>()
+            .write_volatile(NEW_VALUE);
+    }
+    assert_eq!(unsafe { (remote as *const u64).read_volatile() }, NEW_VALUE);
+    crate::memory::tlb::test_read(
+        sched.current_process().address_space.identity(),
+        remote,
+        remote_cpus,
+    );
+    for cpu_id in 0..online {
+        if cpu_id != local_cpu {
+            assert_eq!(crate::memory::tlb::test_result(cpu_id), NEW_VALUE);
+        }
+    }
+    crate::memory::tlb::test_leave(remote_cpus);
+    unsafe {
+        crate::memory::tlb::activate_kernel_root();
+    }
+    pmm.free_frame(guard);
+    crate::serial_println!("[MM-2D] all CPUs dropped translation before frame reuse: OK");
+
+    crate::memory::shared::cleanup_shared_pages(sched.current_process_mut(), pmm, &mut caps);
+    unsafe {
+        sched
+            .current_process_mut()
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), baseline);
+    crate::process::mmap::diagnostic_report();
+    crate::serial_println!("[MM-2D] focused munmap/shootdown gate: OK");
 }
 
 fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {

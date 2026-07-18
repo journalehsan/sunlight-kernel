@@ -162,6 +162,10 @@ pub fn discard_block(id: BlockId) -> Result<(), ZramError> {
     Ok(())
 }
 
+pub fn block_exists(id: BlockId) -> bool {
+    id < ZRAM_BLOCK_COUNT && ZRAM.lock().find_slot(id).is_some()
+}
+
 /// Block ids written by the most recent `freezram_fill`, pending `freezram_verify`.
 static FREEZRAM_BLOCKS: Mutex<Vec<BlockId>> = Mutex::new(Vec::new());
 
