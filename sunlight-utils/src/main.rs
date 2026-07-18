@@ -11,8 +11,8 @@
 
 use libc::{DirEntry, Errno, Fd, FT_DIR, STDOUT};
 use sunlight_ipc::{
-    get_time_utc, ipc_call_timeout, nameserver_lookup, query_display_metrics, DisplayMetrics,
-    IpcMsg, TzMsg,
+    get_time_utc, ipc_call_timeout, nameserver_lookup, query_display_metrics,
+    swap_aggregate_diagnostics, swap_pool_diagnostics, DisplayMetrics, IpcMsg, TzMsg,
 };
 use sunlight_libc as libc;
 
@@ -1500,17 +1500,19 @@ fn cmd_free(args: &[&str]) -> i32 {
 
 /// Demo/verification command for the ZRAM swap pipeline: writes synthetic
 /// compressed pages into ZRAM (`freezram [n]`, default 16) or verifies and
-/// discards a prior fill (`freezram verify`), printing swap usage before and
-/// after so live activity is visible.
+/// discards a prior fill (`freezram verify`). `freezram status` reports every
+/// configured ZRAM pool without changing it. Fill and verify also print the
+/// per-pool layout after completing.
 fn cmd_freezram(args: &[&str]) -> i32 {
     match args {
+        ["status"] => print_zram_devices(),
         ["verify"] => match libc::freezram_verify() {
             Ok(n) => {
                 let _ = write_all(b"freezram: verified ");
                 print_u64(n);
                 let _ = write_all(b" page(s)\n");
                 print_swap_used("after verify: ");
-                0
+                print_zram_devices()
             }
             Err(_) => {
                 let _ = write_all(b"freezram: verify failed (read/decompress error)\n");
@@ -1522,7 +1524,7 @@ fn cmd_freezram(args: &[&str]) -> i32 {
                 [n_str] => match parse_u64(n_str) {
                     Some(n) => n,
                     None => {
-                        let _ = write_all(b"usage: freezram [n] | freezram verify\n");
+                        print_freezram_usage();
                         return 2;
                     }
                 },
@@ -1535,13 +1537,53 @@ fn cmd_freezram(args: &[&str]) -> i32 {
             print_u64(written);
             let _ = write_all(b" page(s)\n");
             print_swap_used("after fill:  ");
-            0
+            print_zram_devices()
         }
         _ => {
-            let _ = write_all(b"usage: freezram [n] | freezram verify\n");
+            print_freezram_usage();
             2
         }
     }
+}
+
+fn print_freezram_usage() {
+    let _ = write_all(b"usage: freezram [n] | freezram verify | freezram status\n");
+}
+
+fn print_zram_devices() -> i32 {
+    let Some(total) = swap_aggregate_diagnostics() else {
+        let _ = write_all(b"freezram: zram diagnostics unavailable\n");
+        return 1;
+    };
+
+    let _ = write_all(b"zram: ");
+    print_u64(total.active_pool_count);
+    let _ = write_all(b" device(s), ");
+    print_human(total.configured_logical_pages.saturating_mul(4));
+    let _ = write_all(b" logical total, ");
+    print_human(total.configured_physical_budget_bytes / 1024);
+    let _ = write_all(b" physical budget\n");
+
+    for index in 0..total.active_pool_count as usize {
+        let Some(pool) = swap_pool_diagnostics(index) else {
+            let _ = write_all(b"  zram");
+            print_u64(index as u64);
+            let _ = write_all(b": diagnostics unavailable\n");
+            continue;
+        };
+        let _ = write_all(b"  zram");
+        print_u64(index as u64);
+        let _ = write_all(b": ");
+        print_human(pool.logical_capacity_pages.saturating_mul(4));
+        let _ = write_all(b" logical, ");
+        print_human(pool.used_logical_pages.saturating_mul(4));
+        let _ = write_all(b" used, ");
+        print_human(pool.used_compressed_bytes.saturating_add(1023) / 1024);
+        let _ = write_all(b" compressed, ");
+        print_human(pool.physical_budget_bytes / 1024);
+        let _ = write_all(b" budget\n");
+    }
+    0
 }
 
 fn print_swap_used(label: &str) {
