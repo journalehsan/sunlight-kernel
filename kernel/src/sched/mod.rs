@@ -1424,6 +1424,9 @@ impl Scheduler {
                 crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
                 return next_rsp;
             }
+            unsafe {
+                crate::memory::tlb::activate_kernel_root();
+            }
             return 0;
         }
 
@@ -1829,15 +1832,17 @@ impl Scheduler {
             }
         }
 
-        let active_mask =
-            crate::memory::tlb::active_cpu_mask(self.processes[idx].address_space.identity());
-        if active_mask != 0 {
-            serial_println!(
-                "[SCHED] process_reap_blocked_reason idx={} reason=active_address_space mask={:#x}",
-                idx,
-                active_mask
-            );
-            return;
+        if self.processes[idx].owns_address_space {
+            let active_mask =
+                crate::memory::tlb::active_cpu_mask(self.processes[idx].address_space.identity());
+            if active_mask != 0 {
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason idx={} reason=active_address_space mask={:#x}",
+                    idx,
+                    active_mask
+                );
+                return;
+            }
         }
 
         crate::memory::swap::untrack_process(pid);
