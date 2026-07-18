@@ -154,6 +154,8 @@ static ICON_API_LAB_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.tga");
 static ICON_TASKS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
+static ICON_DEVICES_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/hwinfo.tga");
 static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
 static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
@@ -709,6 +711,11 @@ const TOP_ITEM_DATETIME: usize = TOP_ITEM_WS_FIRST + WS_INDICATOR_COUNT;
 const TOP_ITEM_NETWORK: usize = TOP_ITEM_DATETIME + 1;
 const TOP_ITEM_NOTIFICATIONS: usize = TOP_ITEM_NETWORK + 1;
 const TOP_ITEM_LOGOUT: usize = TOP_ITEM_NOTIFICATIONS + 1;
+const SYSTEM_MENU_W: u32 = 248;
+const SYSTEM_MENU_HEADER_H: u32 = 34;
+const SYSTEM_MENU_ROW_H: u32 = 40;
+const SYSTEM_MENU_PAD: i32 = 6;
+const SYSTEM_MENU_GAP_Y: i32 = 6;
 const KEY_TAB: u8 = 0x0F;
 const KEY_ENTER: u8 = 0x1C;
 const KEY_SPACE: u8 = 0x39;
@@ -1240,6 +1247,19 @@ struct ContextMenuState {
     items: [MenuItem; 6],
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SystemMenuAction {
+    Devices,
+    Tasks,
+    ControlPanel,
+}
+
+const SYSTEM_MENU_ITEMS: [(&str, SystemMenuAction); 3] = [
+    ("Sunlight Devices", SystemMenuAction::Devices),
+    ("Task Monitor", SystemMenuAction::Tasks),
+    ("Control Panel", SystemMenuAction::ControlPanel),
+];
+
 const MENU_LABELS: [(&str, ContextMenuAction); 6] = [
     ("New Folder", ContextMenuAction::NewFolder),
     ("New Text File", ContextMenuAction::NewTextFile),
@@ -1397,6 +1417,9 @@ struct VortexShell {
     /// Dark Start Menu overlay — search, pinned/all-apps/recent sections,
     /// power actions. See `start_menu.rs` and `docs/GUI/START_MENU.md`.
     start_menu: start_menu::StartMenuState,
+    /// Compact Apple-style system menu anchored below the SunlightOS brand.
+    show_system_menu: bool,
+    system_menu_hover: Option<usize>,
     /// After the Start Menu closes because the user clicked the dock grid
     /// icon, suppress the follow-up `Click` so the menu stays closed.
     suppress_launcher_open: bool,
@@ -1534,6 +1557,8 @@ impl VortexShell {
             next_app_poll_ms: 0,
             next_launch_id: 1,
             start_menu: start_menu::StartMenuState::new(),
+            show_system_menu: false,
+            system_menu_hover: None,
             suppress_launcher_open: false,
             recent_apps: Vec::new(),
         };
@@ -2092,16 +2117,17 @@ impl VortexShell {
         true
     }
 
-    fn toggle_start_menu_from_panel(&mut self) -> bool {
+    fn toggle_system_menu_from_panel(&mut self) -> bool {
         self.show_calendar_popover = false;
         self.show_notif_panel = false;
         self.show_logout_confirm = false;
         self.show_datetime_tooltip = false;
+        self.context_menu = None;
         if self.start_menu.is_open() {
             self.start_menu.close();
-        } else {
-            self.start_menu.open_menu();
         }
+        self.show_system_menu = !self.show_system_menu;
+        self.system_menu_hover = None;
         true
     }
 
@@ -2117,8 +2143,12 @@ impl VortexShell {
 
     fn activate_top_panel_item(&mut self, item: usize, secondary: bool) -> bool {
         self.top_panel_focus = Some(item);
+        if item != TOP_ITEM_BRAND {
+            self.show_system_menu = false;
+            self.system_menu_hover = None;
+        }
         match item {
-            TOP_ITEM_BRAND => self.toggle_start_menu_from_panel(),
+            TOP_ITEM_BRAND => self.toggle_system_menu_from_panel(),
             idx if (TOP_ITEM_WS_FIRST..TOP_ITEM_WS_FIRST + WS_INDICATOR_COUNT).contains(&idx) => {
                 self.show_calendar_popover = false;
                 self.show_notif_panel = false;
@@ -3413,7 +3443,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
     let brand_zone = Rect::new(x, brand_y, brand_w_total, brand_h);
     let brand_hover = shell.top_panel_hover == Some(TOP_ITEM_BRAND);
     let brand_focus = shell.top_panel_focus == Some(TOP_ITEM_BRAND);
-    let brand_active = shell.start_menu.is_open();
+    let brand_active = shell.show_system_menu;
     draw_top_panel_item_bg(
         canvas,
         brand_zone,
@@ -4742,6 +4772,79 @@ fn draw_context_menu(canvas: &mut Canvas, theme: &Theme, menu: &ContextMenuState
             tx,
             item.y,
             item.h,
+            &TextStyle::new(FontRole::UiRegular, theme.text),
+        );
+    }
+}
+
+fn system_menu_rect(brand_zone: Rect, screen_w: u32) -> Rect {
+    let height = SYSTEM_MENU_HEADER_H
+        + SYSTEM_MENU_ROW_H * SYSTEM_MENU_ITEMS.len() as u32
+        + (SYSTEM_MENU_PAD as u32 * 2);
+    let max_x = screen_w as i32 - SYSTEM_MENU_W as i32 - TOP_PAD;
+    Rect::new(
+        brand_zone.x.clamp(TOP_PAD, max_x.max(TOP_PAD)),
+        brand_zone.bottom() + SYSTEM_MENU_GAP_Y,
+        SYSTEM_MENU_W,
+        height,
+    )
+}
+
+fn system_menu_item_rect(menu: Rect, index: usize) -> Rect {
+    Rect::new(
+        menu.x + SYSTEM_MENU_PAD,
+        menu.y + SYSTEM_MENU_HEADER_H as i32 + index as i32 * SYSTEM_MENU_ROW_H as i32,
+        menu.w.saturating_sub((SYSTEM_MENU_PAD * 2) as u32),
+        SYSTEM_MENU_ROW_H,
+    )
+}
+
+fn system_menu_action_at(menu: Rect, point: Point) -> Option<SystemMenuAction> {
+    SYSTEM_MENU_ITEMS
+        .iter()
+        .enumerate()
+        .find(|(index, _)| system_menu_item_rect(menu, *index).contains(point))
+        .map(|(_, (_, action))| *action)
+}
+
+fn draw_system_menu(canvas: &mut Canvas, theme: &Theme, menu: Rect, hovered: Option<usize>) {
+    canvas.fill_rounded_rect(menu, 10, theme.panel);
+    canvas.stroke_rounded_rect(menu, 10, 1, theme.border);
+    draw_text_vcenter(
+        canvas,
+        "SunlightOS",
+        menu.x + 14,
+        menu.y,
+        SYSTEM_MENU_HEADER_H,
+        &TextStyle::new(FontRole::UiBold, theme.accent),
+    );
+    canvas.hbar(
+        menu.x + SYSTEM_MENU_PAD,
+        menu.y + SYSTEM_MENU_HEADER_H as i32 - 1,
+        menu.w.saturating_sub((SYSTEM_MENU_PAD * 2) as u32),
+        1,
+        theme.border,
+    );
+
+    for (index, (label, action)) in SYSTEM_MENU_ITEMS.iter().enumerate() {
+        let row = system_menu_item_rect(menu, index);
+        if hovered == Some(index) {
+            canvas.fill_rounded_rect(row, 6, theme.accent.darken(165));
+        }
+        let icon = match action {
+            SystemMenuAction::Devices => TgaImage::parse(ICON_DEVICES_TGA).ok(),
+            SystemMenuAction::Tasks => TgaImage::parse(ICON_TASKS_TGA).ok(),
+            SystemMenuAction::ControlPanel => TgaImage::parse(ICON_SETTINGS_TGA).ok(),
+        };
+        if let Some(icon) = icon {
+            canvas.draw_tga_icon(&icon, Rect::new(row.x + 8, row.y + 8, 24, 24));
+        }
+        draw_text_vcenter(
+            canvas,
+            label,
+            row.x + 42,
+            row.y,
+            row.h,
             &TextStyle::new(FontRole::UiRegular, theme.text),
         );
     }
@@ -6230,6 +6333,15 @@ impl App for VortexShell {
             (dock_cells[3], Self::dock_zone_app(3)),
         ];
 
+        if self.show_system_menu {
+            draw_system_menu(
+                canvas,
+                theme,
+                system_menu_rect(self.brand_zone, cw),
+                self.system_menu_hover,
+            );
+        }
+
         self.start_menu
             .view(canvas, theme, cw, ch, &self.apps, &self.recent_apps, now);
 
@@ -6279,6 +6391,34 @@ impl App for VortexShell {
                 if self.suppress_next_click {
                     self.suppress_next_click = false;
                     return true;
+                }
+                if self.show_system_menu {
+                    let menu = system_menu_rect(self.brand_zone, self.screen_w);
+                    if let Some(action) = system_menu_action_at(menu, point) {
+                        self.show_system_menu = false;
+                        self.system_menu_hover = None;
+                        let app_id = match action {
+                            SystemMenuAction::Devices => AppId::Devices,
+                            SystemMenuAction::Tasks => AppId::Tasks,
+                            SystemMenuAction::ControlPanel => AppId::Settings,
+                        };
+                        self.note_recent_app(app_id);
+                        return self.handle_app_click(
+                            app_id,
+                            monotonic_millis(),
+                            LaunchSource::Shell,
+                        );
+                    }
+                    if menu.contains(point) {
+                        return true;
+                    }
+                    if self.top_panel_item_at_point(point).is_none()
+                        && !self.launcher_zone.contains(point)
+                    {
+                        self.show_system_menu = false;
+                        self.system_menu_hover = None;
+                        return true;
+                    }
                 }
                 // A left-button release reaches us as `Click` (the display
                 // library aliases left-up to Click). Finish any marquee gesture
@@ -6463,6 +6603,8 @@ impl App for VortexShell {
                     return true;
                 }
                 if self.launcher_zone.contains(point) {
+                    self.show_system_menu = false;
+                    self.system_menu_hover = None;
                     if self.suppress_launcher_open {
                         self.suppress_launcher_open = false;
                         return true;
@@ -6508,7 +6650,21 @@ impl App for VortexShell {
             Event::MouseDown { x, y, button } if button == 0 => {
                 let point = Point::new(x, y);
                 if let Some(item) = self.top_panel_item_at_point(point) {
+                    self.context_menu = None;
                     self.set_top_panel_focus(Some(item));
+                    return true;
+                }
+                if self.show_system_menu {
+                    let menu = system_menu_rect(self.brand_zone, self.screen_w);
+                    if menu.contains(point) {
+                        return true;
+                    }
+                    self.show_system_menu = false;
+                    self.system_menu_hover = None;
+                    if self.launcher_zone.contains(point) {
+                        return true;
+                    }
+                    self.suppress_next_click = true;
                     return true;
                 }
                 self.set_top_panel_focus(None);
@@ -6560,6 +6716,10 @@ impl App for VortexShell {
                     let _ = self.set_top_panel_focus(Some(item));
                     return self.activate_top_panel_item(item, true);
                 }
+                if self.show_system_menu {
+                    self.show_system_menu = false;
+                    self.system_menu_hover = None;
+                }
                 self.set_top_panel_focus(None);
                 self.settings_hover = self.settings_zone.contains(point);
                 if self.settings_zone.contains(point) {
@@ -6600,6 +6760,11 @@ impl App for VortexShell {
             }
             Event::Key('\x1b') => {
                 let mut did = false;
+                if self.show_system_menu {
+                    self.show_system_menu = false;
+                    self.system_menu_hover = None;
+                    did = true;
+                }
                 if self.show_calendar_popover {
                     self.show_calendar_popover = false;
                     did = true;
@@ -6617,6 +6782,11 @@ impl App for VortexShell {
             }
             Event::FocusChanged { focused: false } => {
                 let mut dirty = self.set_top_panel_focus(None);
+                if self.show_system_menu {
+                    self.show_system_menu = false;
+                    self.system_menu_hover = None;
+                    dirty = true;
+                }
                 if self.top_panel_hover.take().is_some() {
                     dirty = true;
                 }
@@ -6626,10 +6796,18 @@ impl App for VortexShell {
                 }
                 dirty
             }
-            Event::KeyPress { keycode: 1, .. } => {
-                // rough esc keycode if used
-                // fall to above via char if possible; keep simple
-                false
+            Event::KeyPress {
+                keycode: 1,
+                pressed: true,
+                ..
+            } => {
+                if self.show_system_menu {
+                    self.show_system_menu = false;
+                    self.system_menu_hover = None;
+                    true
+                } else {
+                    false
+                }
             }
             Event::KeyPress {
                 keycode: KEY_TAB,
@@ -6658,10 +6836,22 @@ impl App for VortexShell {
                     self.update_desktop_marquee(Point::new(x, y));
                     return true;
                 }
+                let point = Point::new(x, y);
+                let previous_system_menu_hover = self.system_menu_hover;
+                self.system_menu_hover = if self.show_system_menu {
+                    let menu = system_menu_rect(self.brand_zone, self.screen_w);
+                    SYSTEM_MENU_ITEMS
+                        .iter()
+                        .enumerate()
+                        .find(|(index, _)| system_menu_item_rect(menu, *index).contains(point))
+                        .map(|(index, _)| index)
+                } else {
+                    None
+                };
                 let prev = self.hover;
                 self.hover = None;
                 for (i, (rect, _)) in self.dock_zones.iter().enumerate() {
-                    if rect.contains(Point::new(x, y)) {
+                    if rect.contains(point) {
                         self.hover = Some(i);
                         break;
                     }
@@ -6669,7 +6859,7 @@ impl App for VortexShell {
                 let prev_running = self.running_hover;
                 self.running_hover = None;
                 for (i, (rect, _)) in self.running_zones.iter().enumerate() {
-                    if rect.contains(Point::new(x, y)) {
+                    if rect.contains(point) {
                         self.running_hover = Some(i);
                         break;
                     }
@@ -6681,10 +6871,13 @@ impl App for VortexShell {
                     self.running_hover_since = self.running_hover.map(|_| monotonic_millis());
                 }
                 let prev_settings = self.settings_hover;
-                self.settings_hover = self.settings_zone.contains(Point::new(x, y));
+                self.settings_hover = self.settings_zone.contains(point);
                 let prev_top_hover = self.top_panel_hover;
-                self.top_panel_hover = self.top_panel_item_at_point(Point::new(x, y));
-                if self.settings_hover != prev_settings || self.top_panel_hover != prev_top_hover {
+                self.top_panel_hover = self.top_panel_item_at_point(point);
+                if self.settings_hover != prev_settings
+                    || self.top_panel_hover != prev_top_hover
+                    || self.system_menu_hover != previous_system_menu_hover
+                {
                     return true;
                 }
 
