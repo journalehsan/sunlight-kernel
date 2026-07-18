@@ -1062,8 +1062,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     // we can release it before calling clone_boxed (which also borrows sched).
     let (
         parent_pid,
-        parent_pml4,
-        parent_identity,
+        shared_address_space,
         uid,
         gid,
         nice,
@@ -1076,8 +1075,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
         let p = sched.current_process();
         (
             p.pid,
-            p.address_space.pml4_phys,
-            p.address_space.identity(),
+            p.address_space.shared_handle(),
             p.uid,
             p.gid,
             p.nice,
@@ -1099,8 +1097,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
         new_tid,
         parent_pid,
         name_str,
-        parent_pml4,
-        parent_identity,
+        shared_address_space,
         thread_fd,
         env,
         uid,
@@ -1337,6 +1334,7 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         VirtAddr::new(hhdm),
         &argv_refs,
         &envp_refs,
+        true,
     ) {
         Ok(entry) => {
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
@@ -1562,7 +1560,13 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     trace.spawn_started_ns = now_ns();
 
     match crate::process::spawn::exec_into_process(
-        bytes, &mut child, &mut pmm, hhdm, &argv_refs, &envp_refs,
+        bytes,
+        &mut child,
+        &mut pmm,
+        hhdm,
+        &argv_refs,
+        &envp_refs,
+        false,
     ) {
         Ok(_) => {
             child.trusted_display_service =
@@ -2120,18 +2124,9 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
     if target_page_end > current_page_end {
         let size_to_map = target_page_end - current_page_end;
         let mut pmm = crate::PMM.lock();
-        let flags = crate::process::mmap::MAP_FIXED
-            | crate::process::mmap::MAP_PRIVATE
-            | crate::process::mmap::MAP_ANONYMOUS;
-        let prot = crate::process::mmap::PROT_READ | crate::process::mmap::PROT_WRITE;
-
-        let result = crate::process::mmap::sys_mmap(
+        let result = crate::process::mmap::map_brk(
             current_page_end,
             size_to_map,
-            prot,
-            flags,
-            -1,
-            0,
             &mut *pmm,
             &mut *sched,
         );
@@ -4047,10 +4042,13 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
 
     const DISPLAY_FB_VADDR: u64 = 0x0000_0004_0000_0000; // dedicated region for device FB
 
-    let flags = PageTableFlags::PRESENT
-        | PageTableFlags::WRITABLE
-        | PageTableFlags::USER_ACCESSIBLE
-        | PageTableFlags::NO_EXECUTE;
+    let protection = crate::process::region::RegionProtection::READ_WRITE;
+    let flags = match crate::process::address_space::AddressSpace::protection_to_pte_flags(
+        protection,
+    ) {
+        Ok(flags) => flags,
+        Err(_) => return 0,
+    };
 
     for page_idx in 0..page_count {
         let Some(user_va) = DISPLAY_FB_VADDR.checked_add(page_idx * 4096) else {
@@ -4064,6 +4062,26 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
             return u64::MAX;
         }
     }
+
+    let Some(region_end) = DISPLAY_FB_VADDR.checked_add(page_count * 4096) else {
+        return 0;
+    };
+    let region = match crate::process::region::MappingRegion::new(
+        DISPLAY_FB_VADDR,
+        region_end,
+        protection,
+        crate::process::region::MappingKind::Framebuffer,
+        crate::process::region::RegionPolicy::SYSTEM
+            .union(crate::process::region::RegionPolicy::OWNER_MANAGED),
+        crate::process::region::RegionBacking::Internal(3),
+    ) {
+        Ok(region) => region,
+        Err(_) => return 0,
+    };
+    let reservation = match process.address_space.preflight_region(region) {
+        Ok(reservation) => reservation,
+        Err(_) => return u64::MAX,
+    };
 
     for page_idx in 0..page_count {
         let user_va = DISPLAY_FB_VADDR + page_idx * 4096;
@@ -4096,8 +4114,28 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
                     )
                 };
             }
+            process.address_space.cancel_region(reservation);
             return u64::MAX;
         }
+    }
+
+    if process.address_space.commit_region(reservation).is_err() {
+        for rollback_idx in (0..page_count).rev() {
+            let rollback_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(
+                DISPLAY_FB_VADDR + rollback_idx * 4096,
+            ))
+            .expect("validated framebuffer rollback page");
+            let rollback_phys = PhysAddr::new((fb_phys_base & !0xfff) + rollback_idx * 4096);
+            let _ = unsafe {
+                process.address_space.rollback_mapped_page(
+                    rollback_page,
+                    rollback_phys,
+                    &mut *pmm,
+                    hhdm_offset,
+                )
+            };
+        }
+        return u64::MAX;
     }
 
     // Return base VA in rax.
@@ -4139,9 +4177,13 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let process = sched.current_process_mut();
-    let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-        | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE
-        | x86_64::structures::paging::PageTableFlags::NO_EXECUTE;
+    let protection = crate::process::region::RegionProtection::READ_ONLY;
+    let flags = match crate::process::address_space::AddressSpace::protection_to_pte_flags(
+        protection,
+    ) {
+        Ok(flags) => flags,
+        Err(_) => return 0,
+    };
 
     for i in 0..TELEMETRY_PAGES {
         let Ok(page) =
@@ -4154,6 +4196,23 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
             return 0;
         }
     }
+
+    let region = match crate::process::region::MappingRegion::new(
+        user_addr.as_u64(),
+        user_addr.as_u64() + TELEMETRY_PAGES * PAGE_SIZE,
+        protection,
+        crate::process::region::MappingKind::Telemetry,
+        crate::process::region::RegionPolicy::SYSTEM
+            .union(crate::process::region::RegionPolicy::OWNER_MANAGED),
+        crate::process::region::RegionBacking::Internal(4),
+    ) {
+        Ok(region) => region,
+        Err(_) => return 0,
+    };
+    let reservation = match process.address_space.preflight_region(region) {
+        Ok(reservation) => reservation,
+        Err(_) => return 0,
+    };
 
     // SAFETY: mapping user-visible read-only pages into current process page tables.
     for i in 0..TELEMETRY_PAGES {
@@ -4191,8 +4250,29 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
                     )
                 };
             }
+            process.address_space.cancel_region(reservation);
             return 0;
         }
+    }
+    if process.address_space.commit_region(reservation).is_err() {
+        for rollback_idx in (0..TELEMETRY_PAGES).rev() {
+            let rollback_page = x86_64::structures::paging::Page::from_start_address(
+                user_addr + rollback_idx * PAGE_SIZE,
+            )
+            .expect("validated telemetry rollback page");
+            let rollback_phys = x86_64::PhysAddr::new(
+                telemetry_phys_page + rollback_idx * PAGE_SIZE,
+            );
+            let _ = unsafe {
+                process.address_space.rollback_mapped_page(
+                    rollback_page,
+                    rollback_phys,
+                    &mut pmm,
+                    hhdm_offset,
+                )
+            };
+        }
+        return 0;
     }
     user_addr.as_u64() + telemetry_page_off
 }

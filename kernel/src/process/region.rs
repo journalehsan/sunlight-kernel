@@ -1,0 +1,452 @@
+//! Bounded software policy ledger for one user address space.
+//!
+//! The page tables remain the hardware truth. This module records range policy
+//! without owning physical frames or duplicating SHM accounting.
+
+pub const PAGE_SIZE: u64 = 4096;
+pub const MAX_REGIONS_PER_ADDRESS_SPACE: usize = 128;
+pub const MAX_PENDING_REGION_INSERTIONS: usize = 16;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum MappingKind {
+    Anonymous,
+    Brk,
+    UserStack,
+    ElfSegment,
+    SharedMemory,
+    Framebuffer,
+    Telemetry,
+    BootSharedData,
+    InternalUserMapping,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct RegionProtection(u8);
+
+impl RegionProtection {
+    const READ: u8 = 1 << 0;
+    const WRITE: u8 = 1 << 1;
+    const EXECUTE: u8 = 1 << 2;
+
+    pub const READ_ONLY: Self = Self(Self::READ);
+    pub const READ_WRITE: Self = Self(Self::READ | Self::WRITE);
+    pub const READ_EXECUTE: Self = Self(Self::READ | Self::EXECUTE);
+
+    pub const fn new(read: bool, write: bool, execute: bool) -> Result<Self, LedgerError> {
+        if write && execute {
+            return Err(LedgerError::PermissionRejected);
+        }
+        Ok(Self(
+            (if read { Self::READ } else { 0 })
+                | (if write { Self::WRITE } else { 0 })
+                | (if execute { Self::EXECUTE } else { 0 }),
+        ))
+    }
+
+    pub const fn readable(self) -> bool {
+        self.0 & Self::READ != 0
+    }
+
+    pub const fn writable(self) -> bool {
+        self.0 & Self::WRITE != 0
+    }
+
+    pub const fn executable(self) -> bool {
+        self.0 & Self::EXECUTE != 0
+    }
+
+    pub const fn is_valid(self) -> bool {
+        !(self.writable() && self.executable()) && self.0 & !0x7 == 0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct RegionPolicy(u8);
+
+impl RegionPolicy {
+    pub const MAY_UNMAP: Self = Self(1 << 0);
+    pub const MAY_CHANGE_PROTECTION: Self = Self(1 << 1);
+    pub const SHARED: Self = Self(1 << 2);
+    pub const SYSTEM: Self = Self(1 << 3);
+    pub const OWNER_MANAGED: Self = Self(1 << 4);
+
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionBacking {
+    None,
+    ElfImage(u64),
+    SharedMemory(u64),
+    Internal(u64),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MappingRegion {
+    pub start: u64,
+    pub end: u64,
+    pub protection: RegionProtection,
+    pub kind: MappingKind,
+    pub policy: RegionPolicy,
+    pub backing: RegionBacking,
+}
+
+impl MappingRegion {
+    const EMPTY: Self = Self {
+        start: 0,
+        end: 0,
+        protection: RegionProtection::READ_ONLY,
+        kind: MappingKind::InternalUserMapping,
+        policy: RegionPolicy::empty(),
+        backing: RegionBacking::None,
+    };
+
+    pub const fn new(
+        start: u64,
+        end: u64,
+        protection: RegionProtection,
+        kind: MappingKind,
+        policy: RegionPolicy,
+        backing: RegionBacking,
+    ) -> Result<Self, LedgerError> {
+        if start >= end || start & (PAGE_SIZE - 1) != 0 || end & (PAGE_SIZE - 1) != 0 {
+            return Err(LedgerError::InvalidRange);
+        }
+        if !protection.is_valid() {
+            return Err(LedgerError::PermissionRejected);
+        }
+        Ok(Self {
+            start,
+            end,
+            protection,
+            kind,
+            policy,
+            backing,
+        })
+    }
+
+    pub const fn contains_address(self, address: u64) -> bool {
+        self.start <= address && address < self.end
+    }
+
+    pub fn compatible_for_merge(self, other: Self) -> bool {
+        if self.kind != other.kind
+            || self.protection != other.protection
+            || self.policy != other.policy
+        {
+            return false;
+        }
+        match (self.kind, self.backing, other.backing) {
+            // Even repeated views of one object have independent broker map
+            // counts and therefore remain independent lifecycle records.
+            (MappingKind::SharedMemory, _, _) => false,
+            (_, left, right) => left == right,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LedgerError {
+    InvalidRange,
+    PermissionRejected,
+    Overlap,
+    CapacityExhausted,
+    TooManyPending,
+    StaleReservation,
+    ExactRecordNotFound,
+    Inconsistent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegionReservation {
+    nonce: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PendingRegion {
+    nonce: u64,
+    region: MappingRegion,
+}
+
+impl PendingRegion {
+    const EMPTY: Self = Self {
+        nonce: 0,
+        region: MappingRegion::EMPTY,
+    };
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RangeLookup {
+    Contained(MappingRegion),
+    CompatibleAdjacent,
+    Hole,
+    Incompatible,
+}
+
+pub struct RegionLedger {
+    records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+    len: usize,
+    pending: [PendingRegion; MAX_PENDING_REGION_INSERTIONS],
+    pending_len: usize,
+    next_nonce: u64,
+}
+
+impl RegionLedger {
+    pub const fn new() -> Self {
+        Self {
+            records: [MappingRegion::EMPTY; MAX_REGIONS_PER_ADDRESS_SPACE],
+            len: 0,
+            pending: [PendingRegion::EMPTY; MAX_PENDING_REGION_INSERTIONS],
+            pending_len: 0,
+            next_nonce: 1,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn record_at(&self, index: usize) -> Option<MappingRegion> {
+        (index < self.len).then(|| self.records[index])
+    }
+
+    pub fn preflight(&mut self, region: MappingRegion) -> Result<RegionReservation, LedgerError> {
+        Self::validate_region(region)?;
+        if self.overlaps_committed(region) || self.overlaps_pending(region) {
+            return Err(LedgerError::Overlap);
+        }
+        if self.pending_len == MAX_PENDING_REGION_INSERTIONS {
+            return Err(LedgerError::TooManyPending);
+        }
+        // Capacity is reserved pessimistically. A later merge may return the
+        // slot, but publication never depends on that optimization succeeding.
+        if self.len + self.pending_len >= MAX_REGIONS_PER_ADDRESS_SPACE {
+            return Err(LedgerError::CapacityExhausted);
+        }
+        let nonce = self.next_nonce;
+        self.next_nonce = self.next_nonce.checked_add(1).unwrap_or(1);
+        if self.next_nonce == 0 {
+            self.next_nonce = 1;
+        }
+        self.pending[self.pending_len] = PendingRegion { nonce, region };
+        self.pending_len += 1;
+        Ok(RegionReservation { nonce })
+    }
+
+    /// Commit is infallible after a successful preflight unless the caller
+    /// supplies a stale/cancelled token or corrupts operation ordering.
+    pub fn commit(
+        &mut self,
+        reservation: RegionReservation,
+    ) -> Result<MappingRegion, LedgerError> {
+        let index = self
+            .pending_index(reservation)
+            .ok_or(LedgerError::StaleReservation)?;
+        let region = self.pending[index].region;
+        self.remove_pending(index);
+        self.insert_committed(region)
+    }
+
+    pub fn cancel(&mut self, reservation: RegionReservation) -> Result<(), LedgerError> {
+        let index = self
+            .pending_index(reservation)
+            .ok_or(LedgerError::StaleReservation)?;
+        self.remove_pending(index);
+        Ok(())
+    }
+
+    pub fn remove_exact(&mut self, expected: MappingRegion) -> Result<(), LedgerError> {
+        let index = self.records[..self.len]
+            .iter()
+            .position(|record| *record == expected)
+            .ok_or(LedgerError::ExactRecordNotFound)?;
+        self.remove_committed(index);
+        Ok(())
+    }
+
+    pub fn replace_backing(
+        &mut self,
+        start: u64,
+        end: u64,
+        kind: MappingKind,
+        expected: RegionBacking,
+        replacement: RegionBacking,
+    ) -> Result<MappingRegion, LedgerError> {
+        let record = self.records[..self.len]
+            .iter_mut()
+            .find(|record| {
+                record.start == start
+                    && record.end == end
+                    && record.kind == kind
+                    && record.backing == expected
+            })
+            .ok_or(LedgerError::ExactRecordNotFound)?;
+        record.backing = replacement;
+        Ok(*record)
+    }
+
+    pub fn lookup_address(&self, address: u64) -> Option<MappingRegion> {
+        let index = self.records[..self.len].partition_point(|region| region.end <= address);
+        self.records[..self.len]
+            .get(index)
+            .copied()
+            .filter(|region| region.contains_address(address))
+    }
+
+    pub fn lookup_range(&self, start: u64, end: u64) -> Result<RangeLookup, LedgerError> {
+        let requested = MappingRegion::new(
+            start,
+            end,
+            RegionProtection::READ_ONLY,
+            MappingKind::InternalUserMapping,
+            RegionPolicy::empty(),
+            RegionBacking::None,
+        )?;
+        let Some(mut index) = self.records[..self.len]
+            .iter()
+            .position(|region| region.contains_address(requested.start))
+        else {
+            return Ok(RangeLookup::Hole);
+        };
+        let first = self.records[index];
+        if requested.end <= first.end {
+            return Ok(RangeLookup::Contained(first));
+        }
+        let mut covered_end = first.end;
+        while covered_end < requested.end {
+            index += 1;
+            let Some(next) = self.records[..self.len].get(index).copied() else {
+                return Ok(RangeLookup::Hole);
+            };
+            if next.start != covered_end {
+                return Ok(RangeLookup::Hole);
+            }
+            if !first.compatible_for_merge(next) {
+                return Ok(RangeLookup::Incompatible);
+            }
+            covered_end = next.end;
+        }
+        Ok(RangeLookup::CompatibleAdjacent)
+    }
+
+    pub fn validate(&self) -> Result<(), LedgerError> {
+        if self.len > MAX_REGIONS_PER_ADDRESS_SPACE
+            || self.pending_len > MAX_PENDING_REGION_INSERTIONS
+        {
+            return Err(LedgerError::Inconsistent);
+        }
+        for (index, region) in self.records[..self.len].iter().copied().enumerate() {
+            Self::validate_region(region)?;
+            if index != 0 && self.records[index - 1].end > region.start {
+                return Err(LedgerError::Inconsistent);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn clear(&mut self) -> usize {
+        let removed = self.len;
+        self.len = 0;
+        self.pending_len = 0;
+        removed
+    }
+
+    fn validate_region(region: MappingRegion) -> Result<(), LedgerError> {
+        MappingRegion::new(
+            region.start,
+            region.end,
+            region.protection,
+            region.kind,
+            region.policy,
+            region.backing,
+        )
+        .map(|_| ())
+    }
+
+    fn overlaps_committed(&self, region: MappingRegion) -> bool {
+        self.records[..self.len]
+            .iter()
+            .any(|current| current.start < region.end && region.start < current.end)
+    }
+
+    fn overlaps_pending(&self, region: MappingRegion) -> bool {
+        self.pending[..self.pending_len]
+            .iter()
+            .any(|current| current.region.start < region.end && region.start < current.region.end)
+    }
+
+    fn pending_index(&self, reservation: RegionReservation) -> Option<usize> {
+        self.pending[..self.pending_len]
+            .iter()
+            .position(|pending| pending.nonce == reservation.nonce)
+    }
+
+    fn remove_pending(&mut self, index: usize) {
+        self.pending_len -= 1;
+        self.pending.copy_within(index + 1..=self.pending_len, index);
+        self.pending[self.pending_len] = PendingRegion::EMPTY;
+    }
+
+    fn insert_committed(&mut self, region: MappingRegion) -> Result<MappingRegion, LedgerError> {
+        if self.overlaps_committed(region) {
+            return Err(LedgerError::Overlap);
+        }
+        let mut index = self.records[..self.len].partition_point(|current| current.start < region.start);
+        let merge_left = index != 0
+            && self.records[index - 1].end == region.start
+            && self.records[index - 1].compatible_for_merge(region);
+        let merge_right = index < self.len
+            && region.end == self.records[index].start
+            && region.compatible_for_merge(self.records[index]);
+
+        if merge_left {
+            index -= 1;
+            self.records[index].end = region.end;
+            if merge_right {
+                self.records[index].end = self.records[index + 1].end;
+                self.remove_committed(index + 1);
+            }
+            return Ok(self.records[index]);
+        }
+        if merge_right {
+            self.records[index].start = region.start;
+            return Ok(self.records[index]);
+        }
+        if self.len == MAX_REGIONS_PER_ADDRESS_SPACE {
+            return Err(LedgerError::CapacityExhausted);
+        }
+        self.records.copy_within(index..self.len, index + 1);
+        self.records[index] = region;
+        self.len += 1;
+        Ok(region)
+    }
+
+    fn remove_committed(&mut self, index: usize) {
+        self.len -= 1;
+        self.records.copy_within(index + 1..=self.len, index);
+        self.records[self.len] = MappingRegion::EMPTY;
+    }
+}
+
+impl Default for RegionLedger {
+    fn default() -> Self {
+        Self::new()
+    }
+}

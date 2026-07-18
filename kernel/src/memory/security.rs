@@ -272,6 +272,49 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
     run_mm2a_self_tests(pmm, hhdm);
 }
 
+#[cfg(feature = "mm2c_ledger_test")]
+pub fn run_mm2c_ledger_gate(
+    pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
+    hhdm: VirtAddr,
+) {
+    use crate::process::region::{MappingKind, RegionPolicy};
+
+    let free_before = pmm.free_page_count();
+    let process = unsafe { crate::process::Process::new(0xB2C0, 0, "mm2c-ledger", pmm, hhdm) };
+    let mut sched = crate::sched::Scheduler::new();
+    sched.processes.push(process);
+    let address = crate::process::mmap::sys_mmap(
+        0,
+        8192,
+        crate::process::mmap::PROT_READ | crate::process::mmap::PROT_WRITE,
+        crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+        -1,
+        0,
+        pmm,
+        &mut sched,
+    )
+    .expect("MM-2C anonymous mapping");
+    let region = sched.processes[0]
+        .address_space
+        .lookup_region(address)
+        .expect("MM-2C anonymous ledger record");
+    assert_eq!(region.kind, MappingKind::Anonymous);
+    assert_eq!(region.start, address);
+    assert_eq!(region.end, address + 8192);
+    assert!(region.policy.contains(RegionPolicy::MAY_UNMAP));
+    assert!(region.policy.contains(RegionPolicy::MAY_CHANGE_PROTECTION));
+    assert!(unsafe { sched.processes[0].address_space.validate_ledger_ptes(hhdm) });
+    crate::serial_println!("[MM-2C] transactional ledger/PTE consistency: OK");
+
+    unsafe {
+        sched.processes[0]
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), free_before);
+    crate::serial_println!("[MM-2C] teardown and PMM accounting: OK");
+}
+
 fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
     use crate::process::address_space::{
         ExpectedMapping, MappingError, OwnershipTransition, ReplacementMapping,

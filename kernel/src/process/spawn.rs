@@ -3,7 +3,7 @@ use crate::capability::{CapabilityBroker, CapabilityRights};
 use crate::memory::pmm::PhysicalMemoryManager;
 use crate::sched::Scheduler;
 use x86_64::{
-    structures::paging::{Page, PageTableFlags, PhysFrame},
+    structures::paging::{Page, PhysFrame},
     VirtAddr,
 };
 
@@ -39,13 +39,18 @@ pub fn exec_into_process(
     hhdm_offset: VirtAddr,
     argv: &[&[u8]],
     envp: &[&[u8]],
+    activate_on_success: bool,
 ) -> Result<u64, SpawnError> {
-    process.trusted_display_service = false;
-    // Tear down old address space (note: old frames leak; acceptable for minimal scope)
-    process.address_space = unsafe {
+    let new_address_space = unsafe {
         crate::process::address_space::AddressSpace::try_new(pmm, hhdm_offset)
             .map_err(|_| SpawnError::NoMemory)?
     };
+    let mut old_address_space = core::mem::replace(&mut process.address_space, new_address_space);
+    let old_trusted_display = process.trusted_display_service;
+    let old_linux_compat = process.is_linux_compat;
+    let old_brk_base = process.brk_base;
+    let old_brk_current = process.brk_current;
+    process.trusted_display_service = false;
 
     // Phase 4.5: Detect if this is a Linux-compatible ELF binary
     process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
@@ -55,35 +60,62 @@ pub fn exec_into_process(
         crate::serial_println!("[EXEC] Linux ELF detected");
     }
 
-    let entry = super::elf_loader::load_elf(bytes, process, pmm, hhdm_offset);
-    let entry = entry.ok_or(SpawnError::ElfLoadFailed)?;
+    let result = build_exec_image(bytes, process, pmm, hhdm_offset, argv, envp);
+    let entry = match result {
+        Ok(entry) => entry,
+        Err(error) => {
+            let mut failed_address_space =
+                core::mem::replace(&mut process.address_space, old_address_space);
+            unsafe {
+                failed_address_space.reclaim_user_space(pmm, hhdm_offset, true);
+            }
+            process.trusted_display_service = old_trusted_display;
+            process.is_linux_compat = old_linux_compat;
+            process.brk_base = old_brk_base;
+            process.brk_current = old_brk_current;
+            if !activate_on_success {
+                unsafe {
+                    process
+                        .address_space
+                        .reclaim_user_space(pmm, hhdm_offset, true);
+                }
+            }
+            return Err(error);
+        }
+    };
 
-    // Allocate user stack
-    let stack_pages = (super::layout::USER_STACK_SIZE + 4095) / 4096;
-    for i in 0..stack_pages {
-        let page_addr = VirtAddr::new(super::layout::USER_STACK_TOP - (i + 1) * 4096);
-        let page = Page::from_start_address(page_addr).map_err(|_| SpawnError::NoMemory)?;
-        let frame_addr = pmm
-            .alloc_frame_owned(process.pid as u32)
-            .ok_or(SpawnError::NoMemory)?;
-        if !crate::memory::security::sanitize_user_frame(frame_addr, hhdm_offset) {
-            pmm.free_frame(frame_addr);
-            return Err(SpawnError::NoMemory);
+    if activate_on_success {
+        unsafe {
+            process.address_space.activate();
         }
-        let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
-        let flags = crate::memory::security::user_stack_flags();
-        if unsafe {
-            process
-                .address_space
-                .map_page(page, phys, flags, pmm, hhdm_offset)
-        }
-        .is_err()
-        {
-            pmm.free_frame(frame_addr);
-            return Err(SpawnError::NoMemory);
-        }
-        crate::memory::security::note_nx_stack_mapping();
     }
+    if !process.mapped_shared.is_empty() || !process.owned_shared.is_empty() {
+        let new_address_space = core::mem::replace(&mut process.address_space, old_address_space);
+        {
+            let mut caps = crate::capability::CAP_BROKER.lock();
+            crate::memory::shared::cleanup_shared_pages(process, pmm, &mut caps);
+        }
+        old_address_space = core::mem::replace(&mut process.address_space, new_address_space);
+    }
+    unsafe {
+        old_address_space.reclaim_user_space(pmm, hhdm_offset, true);
+    }
+
+    Ok(entry)
+}
+
+fn build_exec_image(
+    bytes: &[u8],
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+    argv: &[&[u8]],
+    envp: &[&[u8]],
+) -> Result<u64, SpawnError> {
+    let entry = super::elf_loader::load_elf(bytes, process, pmm, hhdm_offset)
+        .ok_or(SpawnError::ElfLoadFailed)?;
+
+    map_user_stack(process, pmm, hhdm_offset)?;
 
     // Build auxv for Linux-compat processes so musl's _start doesn't scan
     // past the stack top looking for AT_NULL and fault at USER_STACK_TOP.
@@ -119,6 +151,115 @@ pub fn exec_into_process(
         stack.rsp
     );
     Ok(entry)
+}
+
+pub fn map_user_stack(
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Result<(), SpawnError> {
+    use crate::process::region::{
+        MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection,
+    };
+
+    let stack_pages = ((super::layout::USER_STACK_SIZE + 4095) / 4096) as usize;
+    let stack_start = super::layout::USER_STACK_TOP
+        .checked_sub(stack_pages as u64 * 4096)
+        .ok_or(SpawnError::NoMemory)?;
+    for index in 0..stack_pages {
+        let address = stack_start + index as u64 * 4096;
+        let page = Page::from_start_address(VirtAddr::new(address))
+            .map_err(|_| SpawnError::NoMemory)?;
+        if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
+            crate::process::address_space::note_mapping_collision();
+            return Err(SpawnError::NoMemory);
+        }
+    }
+    let protection = RegionProtection::READ_WRITE;
+    let region = MappingRegion::new(
+        stack_start,
+        super::layout::USER_STACK_TOP,
+        protection,
+        MappingKind::UserStack,
+        RegionPolicy::SYSTEM.union(RegionPolicy::OWNER_MANAGED),
+        RegionBacking::None,
+    )
+    .map_err(|_| SpawnError::NoMemory)?;
+    let reservation = process
+        .address_space
+        .preflight_region(region)
+        .map_err(|_| SpawnError::NoMemory)?;
+    let flags = crate::process::address_space::AddressSpace::protection_to_pte_flags(protection)
+        .map_err(|_| SpawnError::NoMemory)?;
+
+    let mut installed = 0usize;
+    while installed < stack_pages {
+        let address = stack_start + installed as u64 * 4096;
+        let page = Page::from_start_address(VirtAddr::new(address))
+            .map_err(|_| SpawnError::NoMemory)?;
+        let Some(frame_addr) = pmm.alloc_frame_owned(process.pid as u32) else {
+            rollback_user_stack(process, stack_start, installed, pmm, hhdm_offset);
+            process.address_space.cancel_region(reservation);
+            return Err(SpawnError::NoMemory);
+        };
+        if !crate::memory::security::sanitize_user_frame(frame_addr, hhdm_offset) {
+            pmm.free_frame(frame_addr);
+            rollback_user_stack(process, stack_start, installed, pmm, hhdm_offset);
+            process.address_space.cancel_region(reservation);
+            return Err(SpawnError::NoMemory);
+        }
+        let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
+        if unsafe {
+            process
+                .address_space
+                .map_page(page, frame, flags, pmm, hhdm_offset)
+        }
+        .is_err()
+        {
+            pmm.free_frame(frame_addr);
+            rollback_user_stack(process, stack_start, installed, pmm, hhdm_offset);
+            process.address_space.cancel_region(reservation);
+            return Err(SpawnError::NoMemory);
+        }
+        installed += 1;
+    }
+    if process.address_space.commit_region(reservation).is_err() {
+        rollback_user_stack(process, stack_start, installed, pmm, hhdm_offset);
+        return Err(SpawnError::NoMemory);
+    }
+    for _ in 0..installed {
+        crate::memory::security::note_nx_stack_mapping();
+    }
+    Ok(())
+}
+
+fn rollback_user_stack(
+    process: &mut Process,
+    stack_start: u64,
+    installed: usize,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) {
+    for index in (0..installed).rev() {
+        let Ok(page) =
+            Page::from_start_address(VirtAddr::new(stack_start + index as u64 * 4096))
+        else {
+            continue;
+        };
+        let Some((frame, _)) = (unsafe { process.address_space.lookup_entry(page, hhdm_offset) })
+        else {
+            continue;
+        };
+        if unsafe {
+            process
+                .address_space
+                .rollback_mapped_page(page, frame, pmm, hhdm_offset)
+        }
+        .is_ok()
+        {
+            pmm.free_frame(frame);
+        }
+    }
 }
 
 /// Final stack state handed to the new process image.
@@ -369,7 +510,7 @@ pub fn spawn_from_path_with_env(
 
     let envp_strings = process.env.to_envp();
     let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
-    exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp)?;
+    exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false)?;
     process.trusted_display_service = is_trusted_display_path(path);
     process.set_initial_args(shell_id.unwrap_or(0), uid as u64, gid as u64, 0);
 

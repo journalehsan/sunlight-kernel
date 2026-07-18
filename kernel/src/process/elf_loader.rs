@@ -1,5 +1,9 @@
 use super::Process;
 use crate::memory::pmm::PhysicalMemoryManager;
+use crate::process::address_space::AddressSpace;
+use crate::process::region::{
+    MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection, RegionReservation,
+};
 use sunlight_elf::{SegmentPlan, SegmentProt};
 use x86_64::{
     structures::paging::{Page, PageTableFlags, PhysFrame},
@@ -12,20 +16,20 @@ use x86_64::{
 const USER_LO: u64 = 0x1000;
 const USER_HI: u64 = super::layout::USER_HEAP_START;
 
-fn prot_flags(prot: SegmentProt) -> PageTableFlags {
+const MAX_ELF_SEGMENTS: usize = 8;
+const MAX_ELF_REGION_RUNS: usize = MAX_ELF_SEGMENTS * 2;
+
+fn region_protection(prot: SegmentProt) -> RegionProtection {
     match prot {
-        // Executable (read + execute). W^X is already enforced by validation.
-        SegmentProt::ReadExec => PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
-        SegmentProt::ReadWrite => {
-            PageTableFlags::PRESENT
-                | PageTableFlags::WRITABLE
-                | PageTableFlags::USER_ACCESSIBLE
-                | PageTableFlags::NO_EXECUTE
-        }
-        SegmentProt::Read => {
-            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE
-        }
+        SegmentProt::ReadExec => RegionProtection::READ_EXECUTE,
+        SegmentProt::ReadWrite => RegionProtection::READ_WRITE,
+        SegmentProt::Read => RegionProtection::READ_ONLY,
     }
+}
+
+fn prot_flags(prot: SegmentProt) -> PageTableFlags {
+    AddressSpace::protection_to_pte_flags(region_protection(prot))
+        .expect("validated ELF protection")
 }
 
 /// Combine protections when two segments share a 4 KiB page (e.g. .rodata
@@ -55,25 +59,166 @@ pub fn load_elf(
         }
     };
 
-    // plan_segments validates every segment (user-range bounds, W^X, entry
-    // coverage) before emitting anything, so mapping never starts on a
-    // binary that will be rejected.
-    let mut map_failed = false;
-    let planned = sunlight_elf::plan_segments(elf_bytes, &header, USER_LO, USER_HI, &mut |plan| {
-        if !map_failed && map_segment(plan, elf_bytes, process, pmm, hhdm_offset).is_none() {
-            map_failed = true;
-        }
-    });
+    // Collect into a fixed plan before publishing PTEs. Normal SunlightOS
+    // desktop images have four PT_LOAD entries; excess input is rejected.
+    let mut plans = heapless::Vec::<SegmentPlan, MAX_ELF_SEGMENTS>::new();
+    let mut too_many_segments = false;
+    let planned =
+        sunlight_elf::plan_segments(elf_bytes, &header, USER_LO, USER_HI, &mut |plan| {
+            if plans.push(*plan).is_err() {
+                too_many_segments = true;
+            }
+        });
     if let Err(e) = planned {
         crate::serial_println!("[ELF] segment validation failed: {:?}", e);
         return None;
     }
+    if too_many_segments || plans.is_empty() {
+        crate::serial_println!("[ELF] segment plan exceeds bounded MM-2C limit");
+        return None;
+    }
+
+    // PTE collision preflight covers the union before any allocation. Repeated
+    // pages caused by overlapping ELF segments are checked harmlessly twice.
+    for plan in &plans {
+        for page_idx in 0..plan.page_count {
+            let address = plan
+                .vaddr_page_start
+                .checked_add((page_idx as u64).checked_mul(4096)?)?;
+            let page = Page::from_start_address(VirtAddr::new(address)).ok()?;
+            if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
+                crate::process::address_space::note_mapping_collision();
+                return None;
+            }
+        }
+    }
+
+    let mut reservations = reserve_final_regions(&plans, process)?;
+    let mut map_failed = false;
+    for plan in &plans {
+        if map_segment(plan, elf_bytes, process, pmm, hhdm_offset).is_none() {
+            map_failed = true;
+            break;
+        }
+    }
     if map_failed {
+        rollback_elf_pages(&plans, process, pmm, hhdm_offset);
+        while let Some(reservation) = reservations.pop() {
+            process.address_space.cancel_region(reservation);
+        }
         crate::serial_println!("[ELF] segment mapping failed (out of frames?)");
         return None;
     }
 
+    for reservation in reservations {
+        if process.address_space.commit_region(reservation).is_err() {
+            rollback_elf_pages(&plans, process, pmm, hhdm_offset);
+            crate::serial_println!("[ELF] ledger commit invariant failed");
+            return None;
+        }
+    }
+
     Some(header.entry)
+}
+
+fn reserve_final_regions(
+    plans: &[SegmentPlan],
+    process: &Process,
+) -> Option<heapless::Vec<RegionReservation, MAX_ELF_REGION_RUNS>> {
+    let mut boundaries = heapless::Vec::<u64, MAX_ELF_REGION_RUNS>::new();
+    for plan in plans {
+        let end = plan
+            .vaddr_page_start
+            .checked_add((plan.page_count as u64).checked_mul(4096)?)?;
+        boundaries.push(plan.vaddr_page_start).ok()?;
+        boundaries.push(end).ok()?;
+    }
+    boundaries.as_mut_slice().sort_unstable();
+
+    let mut reservations = heapless::Vec::<RegionReservation, MAX_ELF_REGION_RUNS>::new();
+    for pair in boundaries.windows(2) {
+        let start = pair[0];
+        let end = pair[1];
+        if start == end {
+            continue;
+        }
+        let mut writable = false;
+        let mut executable = false;
+        let mut covered = false;
+        for plan in plans {
+            let plan_end = plan.vaddr_page_start + plan.page_count as u64 * 4096;
+            if plan.vaddr_page_start < end && start < plan_end {
+                covered = true;
+                let protection = region_protection(plan.prot);
+                writable |= protection.writable();
+                executable |= protection.executable();
+            }
+        }
+        if !covered || writable && executable {
+            while let Some(reservation) = reservations.pop() {
+                process.address_space.cancel_region(reservation);
+            }
+            return None;
+        }
+        let protection = RegionProtection::new(true, writable, executable).ok()?;
+        let region = MappingRegion::new(
+            start,
+            end,
+            protection,
+            MappingKind::ElfSegment,
+            RegionPolicy::SYSTEM.union(RegionPolicy::OWNER_MANAGED),
+            RegionBacking::ElfImage(process.address_space.identity().generation),
+        )
+        .ok()?;
+        match process.address_space.preflight_region(region) {
+            Ok(reservation) => reservations.push(reservation).ok()?,
+            Err(_) => {
+                while let Some(reservation) = reservations.pop() {
+                    process.address_space.cancel_region(reservation);
+                }
+                return None;
+            }
+        }
+    }
+    Some(reservations)
+}
+
+fn rollback_elf_pages(
+    plans: &[SegmentPlan],
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) {
+    for plan in plans.iter().rev() {
+        for page_idx in (0..plan.page_count).rev() {
+            let Some(address) = plan
+                .vaddr_page_start
+                .checked_add(page_idx as u64 * 4096)
+            else {
+                continue;
+            };
+            let Ok(page) = Page::from_start_address(VirtAddr::new(address)) else {
+                continue;
+            };
+            let Some((frame, flags)) = (unsafe {
+                process.address_space.lookup_entry(page, hhdm_offset)
+            }) else {
+                continue;
+            };
+            if !flags.contains(PageTableFlags::PRESENT) {
+                continue;
+            }
+            if unsafe {
+                process
+                    .address_space
+                    .rollback_mapped_page(page, frame, pmm, hhdm_offset)
+            }
+            .is_ok()
+            {
+                pmm.free_frame(frame);
+            }
+        }
+    }
 }
 
 fn map_segment(

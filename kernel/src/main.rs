@@ -512,26 +512,8 @@ pub extern "C" fn _start() -> ! {
         );
         let entry = process::elf_loader::load_elf(INIT_ELF_BYTES, &mut init, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame_owned(1).expect("stack alloc");
-                assert!(memory::security::sanitize_user_frame(
-                    frame_addr,
-                    hhdm_offset
-                ));
-                let phys = unsafe {
-                    x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
-                };
-                let flags = memory::security::user_stack_flags();
-                unsafe {
-                    init.address_space
-                        .map_page(page, phys, flags, &mut pmm, hhdm_offset)
-                        .expect("init stack mapping failed");
-                }
-                memory::security::note_nx_stack_mapping();
-            }
+            process::spawn::map_user_stack(&mut init, &mut pmm, hhdm_offset)
+                .expect("init stack mapping failed");
             init.init_context(entry, layout::USER_STACK_TOP);
             init.set_initial_args(capability::SPAWN_TOKEN.0, 0, 0, 0);
             // Release PMM before taking the scheduler lock. Every other path in
@@ -567,28 +549,8 @@ pub extern "C" fn _start() -> ! {
         let entry =
             process::elf_loader::load_elf(VFS_SERVER_ELF_BYTES, &mut vfs, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame_owned(3).expect("stack alloc");
-                assert!(memory::security::sanitize_user_frame(
-                    frame_addr,
-                    hhdm_offset
-                ));
-                // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
-                let phys = unsafe {
-                    x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
-                };
-                let flags = memory::security::user_stack_flags();
-                // SAFETY: page and frame are valid user-stack mappings for this process address space.
-                unsafe {
-                    vfs.address_space
-                        .map_page(page, phys, flags, &mut pmm, hhdm_offset)
-                        .expect("vfs stack mapping failed");
-                }
-                memory::security::note_nx_stack_mapping();
-            }
+            process::spawn::map_user_stack(&mut vfs, &mut pmm, hhdm_offset)
+                .expect("vfs stack mapping failed");
 
             // Map the FAT32 share page (read-only) at FAT_SHARE_VADDR in the vfs_server.
             // Always mapped: zeroed page when no block device, populated when disk present.
@@ -598,14 +560,33 @@ pub extern "C" fn _start() -> ! {
                     .expect("FAT_SHARE_VADDR is not page-aligned");
                 let share_frame =
                     unsafe { PhysFrame::from_start_address_unchecked(fat_share_phys) };
-                let share_flags = PageTableFlags::PRESENT
-                    | PageTableFlags::USER_ACCESSIBLE
-                    | PageTableFlags::NO_EXECUTE;
+                let protection = process::region::RegionProtection::READ_ONLY;
+                let share_flags = process::address_space::AddressSpace::protection_to_pte_flags(
+                    protection,
+                )
+                .expect("boot-share protection");
+                let region = process::region::MappingRegion::new(
+                    FAT_SHARE_VADDR,
+                    FAT_SHARE_VADDR + 4096,
+                    protection,
+                    process::region::MappingKind::BootSharedData,
+                    process::region::RegionPolicy::SYSTEM
+                        .union(process::region::RegionPolicy::OWNER_MANAGED),
+                    process::region::RegionBacking::Internal(1),
+                )
+                .expect("boot-share ledger range");
+                let reservation = vfs
+                    .address_space
+                    .preflight_region(region)
+                    .expect("boot-share ledger capacity");
                 unsafe {
                     vfs.address_space
                         .map_page(share_page, share_frame, share_flags, &mut pmm, hhdm_offset)
                         .expect("vfs share mapping failed");
                 }
+                vfs.address_space
+                    .commit_region(reservation)
+                    .expect("boot-share ledger commit");
             }
 
             vfs.init_context(entry, layout::USER_STACK_TOP);
@@ -643,28 +624,8 @@ pub extern "C" fn _start() -> ! {
         let entry =
             process::elf_loader::load_elf(TTY_SERVER_ELF_BYTES, &mut tty, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
-            let stack_pages = (layout::USER_STACK_SIZE + 4095) / 4096;
-            for i in 0..stack_pages {
-                let page_addr = VirtAddr::new(layout::USER_STACK_TOP - (i + 1) * 4096);
-                let page = x86_64::structures::paging::Page::from_start_address(page_addr).unwrap();
-                let frame_addr = pmm.alloc_frame_owned(4).expect("stack alloc");
-                assert!(memory::security::sanitize_user_frame(
-                    frame_addr,
-                    hhdm_offset
-                ));
-                // SAFETY: pmm.alloc_frame returns a page-aligned physical frame start.
-                let phys = unsafe {
-                    x86_64::structures::paging::PhysFrame::from_start_address_unchecked(frame_addr)
-                };
-                let flags = memory::security::user_stack_flags();
-                // SAFETY: page and frame are valid user-stack mappings for this process address space.
-                unsafe {
-                    tty.address_space
-                        .map_page(page, phys, flags, &mut pmm, hhdm_offset)
-                        .expect("tty stack mapping failed");
-                }
-                memory::security::note_nx_stack_mapping();
-            }
+            process::spawn::map_user_stack(&mut tty, &mut pmm, hhdm_offset)
+                .expect("tty stack mapping failed");
             map_tty_framebuffer(
                 &mut tty,
                 &mut pmm,
@@ -1409,9 +1370,33 @@ fn map_tty_framebuffer(
     let fb_page_offset = fb_phys_base & 0xfff;
     let page_count = ((fb_page_offset + fb_pitch * fb_height) + 4095) / 4096;
     let flags = PageTableFlags::PRESENT
-        | PageTableFlags::WRITABLE
-        | PageTableFlags::USER_ACCESSIBLE
-        | PageTableFlags::NO_EXECUTE;
+        | process::address_space::AddressSpace::protection_to_pte_flags(
+            process::region::RegionProtection::READ_WRITE,
+        )
+        .expect("framebuffer protection");
+
+    let end = TTY_FB_VADDR
+        .checked_add(page_count * 4096)
+        .expect("boot framebuffer range overflow");
+    let region = process::region::MappingRegion::new(
+        TTY_FB_VADDR,
+        end,
+        process::region::RegionProtection::READ_WRITE,
+        process::region::MappingKind::Framebuffer,
+        process::region::RegionPolicy::SYSTEM.union(process::region::RegionPolicy::OWNER_MANAGED),
+        process::region::RegionBacking::Internal(2),
+    )
+    .expect("boot framebuffer ledger range");
+    let reservation = tty
+        .address_space
+        .preflight_region(region)
+        .expect("boot framebuffer ledger capacity");
+
+    for page_idx in 0..page_count {
+        let user_page = Page::from_start_address(VirtAddr::new(TTY_FB_VADDR + page_idx * 4096))
+            .expect("TTY_FB_VADDR is page-aligned");
+        assert!(unsafe { !tty.address_space.is_occupied(user_page, hhdm_offset) });
+    }
 
     for page_idx in 0..page_count {
         let user_page = Page::from_start_address(VirtAddr::new(TTY_FB_VADDR + page_idx * 4096))
@@ -1424,6 +1409,9 @@ fn map_tty_framebuffer(
                 .expect("boot framebuffer mapping failed");
         }
     }
+    tty.address_space
+        .commit_region(reservation)
+        .expect("boot framebuffer ledger commit");
 }
 
 fn map_kernel_mmio_range(
@@ -2120,6 +2108,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         memory::security::run_boot_self_tests(&mut pmm, hhdm_offset);
     }
     crate::sched::run_mm0_address_space_lifecycle_test(hhdm_offset);
+    #[cfg(feature = "mm2c_ledger_test")]
+    {
+        let mut pmm = PMM.lock();
+        memory::security::run_mm2c_ledger_gate(&mut pmm, hhdm_offset);
+    }
 
     // 1. Token forge: a token that was never minted must be rejected as NotFound.
     {
@@ -2158,7 +2151,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     {
         let mut pmm = PMM.lock();
         // SAFETY: hhdm_offset is the Limine-provided HHDM base, valid at this point in boot.
-        let process = unsafe { Process::new(usize::MAX, 0, "sectest", &mut pmm, hhdm_offset) };
+        let mut process = unsafe { Process::new(usize::MAX, 0, "sectest", &mut pmm, hhdm_offset) };
         // SAFETY: hhdm_offset is correct; this only reads page tables.
         match unsafe { validate_user_ptr(KERNEL_START, 8, &process, hhdm_offset) } {
             Err(PtrError::KernelAddress) => {
@@ -2167,6 +2160,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             other => {
                 serial_println!("[SEC]  kernel ptr attempt: UNEXPECTED {:?}", other);
             }
+        }
+        unsafe {
+            process
+                .address_space
+                .reclaim_user_space(&mut pmm, hhdm_offset, true);
         }
     }
 
@@ -2761,11 +2759,20 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                 bus.remove_endpoint(endpoint);
             });
         }
-        let server = sched.processes.pop().expect("test server process");
-        let caller = sched.processes.pop().expect("test caller process");
+        let mut server = sched.processes.pop().expect("test server process");
+        let mut caller = sched.processes.pop().expect("test caller process");
         drop(sched);
-        drop(server);
-        drop(caller);
+        {
+            let mut pmm = PMM.lock();
+            unsafe {
+                server
+                    .address_space
+                    .reclaim_user_space(&mut pmm, hhdm_offset, true);
+                caller
+                    .address_space
+                    .reclaim_user_space(&mut pmm, hhdm_offset, true);
+            }
+        }
 
         if recv_woke
             && recv_timed_out

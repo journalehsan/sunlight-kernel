@@ -2568,15 +2568,13 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     fn borrower(
         pid: usize,
         owner_pid: usize,
-        pml4: x86_64::PhysAddr,
-        identity: crate::process::mm2b_state::AddressSpaceIdentity,
+        shared_address_space: crate::process::address_space::SharedAddressSpaceHandle,
     ) -> Process {
         crate::process::Process::new_thread(
             pid,
             owner_pid,
             "mm0-thread",
-            pml4,
-            identity,
+            shared_address_space,
             crate::process::fd_table::FdTable::new_boxed(),
             crate::process::env::EnvMap::new(),
             0,
@@ -2594,7 +2592,22 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     };
     let pml4 = owner.address_space.pml4_phys;
     let identity = owner.address_space.identity();
+    let shared_address_space = owner.address_space.shared_handle();
     let owner_pid = owner.pid;
+    let sentinel_region = crate::process::region::MappingRegion::new(
+        0x40_0000,
+        0x40_1000,
+        crate::process::region::RegionProtection::READ_WRITE,
+        crate::process::region::MappingKind::InternalUserMapping,
+        crate::process::region::RegionPolicy::SYSTEM
+            .union(crate::process::region::RegionPolicy::OWNER_MANAGED),
+        crate::process::region::RegionBacking::Internal(0x4D4D_30),
+    )
+    .expect("MM-0 sentinel ledger range");
+    let sentinel_reservation = owner
+        .address_space
+        .preflight_region(sentinel_region)
+        .expect("MM-0 sentinel ledger reservation");
 
     // Give the owner a real writable/NX user mapping and sentinel. Borrower
     // teardown must preserve the frame and every lower page-table level.
@@ -2621,6 +2634,10 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
                     hhdm_offset,
                 )
                 .expect("MM-0 owner sentinel mapping");
+            owner
+                .address_space
+                .commit_region(sentinel_reservation)
+                .expect("MM-0 sentinel ledger commit");
             (hhdm_offset + frame_addr.as_u64())
                 .as_mut_ptr::<u64>()
                 .write_volatile(0x534C_4D4D_3054_4852);
@@ -2636,9 +2653,13 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     for offset in 0..12 {
         sched
             .processes
-            .push(borrower(0xA100 + offset, owner_pid, pml4, identity));
+            .push(borrower(0xA100 + offset, owner_pid, shared_address_space));
     }
     assert_eq!(sched.live_address_space_borrowers(0), 12);
+    for borrower in &sched.processes[1..=12] {
+        assert_eq!(borrower.address_space.region_count(), 1);
+        assert_eq!(borrower.address_space.lookup_region(0x40_0000), Some(sentinel_region));
+    }
     let stale_wakes_before = STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed);
     for idx in 1usize..=12 {
         let pid = sched.processes[idx].pid;
@@ -2654,6 +2675,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
         sched.wake_pid(pid);
         assert_eq!(sched.processes[idx].state, ProcessState::Reaped);
         assert_eq!(sched.processes[0].address_space.pml4_phys, pml4);
+        assert_eq!(sched.processes[0].address_space.region_count(), 1);
         let sentinel = unsafe {
             (hhdm_offset + sentinel_frame.as_u64())
                 .as_ptr::<u64>()
@@ -2672,7 +2694,11 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     let slots_before = sched.processes.len();
     let mut second_generation_slots = alloc::vec::Vec::new();
     for offset in 0..12 {
-        let idx = sched.add_process(borrower(0xB100 + offset, owner_pid, pml4, identity));
+        let idx = sched.add_process(borrower(
+            0xB100 + offset,
+            owner_pid,
+            shared_address_space,
+        ));
         assert!(!second_generation_slots.contains(&idx));
         second_generation_slots.push(idx);
     }
@@ -2688,7 +2714,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
 
     // Owner exit still contains a live borrower and delays address-space
     // reclamation until that borrower is terminal and Reaped.
-    let live_idx = sched.add_process(borrower(0xC100, owner_pid, pml4, identity));
+    let live_idx = sched.add_process(borrower(0xC100, owner_pid, shared_address_space));
     sched.processes[0].state = ProcessState::Finished;
     sched.processes[0].exit_cleanup_pending = true;
     sched.reap_process_resources(0);
@@ -2699,6 +2725,21 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     sched.reap_process_resources(0);
     assert_eq!(sched.processes[0].state, ProcessState::Reaped);
     assert_eq!(crate::PMM.lock().free_page_count(), free_before);
+
+    let mut replacement = {
+        let mut pmm = crate::PMM.lock();
+        unsafe { crate::process::Process::new(0xA002, 0, "mm0-reuse", &mut pmm, hhdm_offset) }
+    };
+    assert_ne!(replacement.address_space.identity(), identity);
+    assert_eq!(replacement.address_space.region_count(), 0);
+    {
+        let mut pmm = crate::PMM.lock();
+        unsafe {
+            replacement
+                .address_space
+                .reclaim_user_space(&mut pmm, hhdm_offset, true);
+        }
+    }
     crate::serial_println!(
         "[MM-0] native borrower lifecycle: 12 finished/reaped + 12 recreated/reaped: OK"
     );

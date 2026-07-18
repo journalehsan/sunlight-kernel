@@ -24,7 +24,10 @@ impl From<crate::process::address_space::MappingError> for SharedMemError {
         use crate::process::address_space::MappingError;
         match error {
             MappingError::AlreadyMapped => Self::AlreadyMapped,
-            MappingError::FrameAllocationFailed => Self::OutOfMemory,
+            MappingError::LedgerOverlap => Self::AlreadyMapped,
+            MappingError::FrameAllocationFailed | MappingError::LedgerCapacityExhausted => {
+                Self::OutOfMemory
+            }
             MappingError::PageTableAllocationFailed => Self::PageTableAllocationFailed,
             MappingError::InvalidAddress
             | MappingError::NonCanonical
@@ -109,7 +112,12 @@ pub fn alloc_shared_region(
     let virt = match unsafe {
         caller
             .address_space
-            .map_shared_region(&frames, pmm, hhdm_offset)
+            .map_shared_region(
+                &frames,
+                crate::process::region::RegionBacking::None,
+                pmm,
+                hhdm_offset,
+            )
     } {
         Ok(virt) => virt,
         Err(error) => {
@@ -124,6 +132,17 @@ pub fn alloc_shared_region(
     // Publication is the commit point: backing frames and the complete owner
     // mapping exist before the token becomes observable.
     let token = caps.mint_shared_region(frames, actual_size, caller.pid);
+
+    caller
+        .address_space
+        .update_region_backing(
+            virt.as_u64(),
+            virt.as_u64() + actual_size as u64,
+            crate::process::region::MappingKind::SharedMemory,
+            crate::process::region::RegionBacking::None,
+            crate::process::region::RegionBacking::SharedMemory(token.as_u64()),
+        )
+        .expect("committed SHM owner ledger record disappeared");
 
     // Track this mapping so the ref count starts at 1 (owner's own mapping).
     caps.increment_map_count(token);
@@ -167,7 +186,12 @@ pub fn map_shared_page(
         let virt = match unsafe {
             receiver
                 .address_space
-                .map_shared_region(&obj.frames, pmm, hhdm_offset)
+                .map_shared_region(
+                    &obj.frames,
+                    crate::process::region::RegionBacking::SharedMemory(token.as_u64()),
+                    pmm,
+                    hhdm_offset,
+                )
         } {
             Ok(virt) => virt,
             Err(error) => {
@@ -230,6 +254,19 @@ pub fn free_shared_page(
         }
     }
 
+    let (_, expected_base, expected_size) = process.mapped_shared[pos];
+    let expected_region = process
+        .address_space
+        .lookup_region(expected_base.as_u64())
+        .filter(|region| {
+            region.start == expected_base.as_u64()
+                && region.end == expected_base.as_u64() + expected_size as u64
+                && region.kind == crate::process::region::MappingKind::SharedMemory
+                && region.backing
+                    == crate::process::region::RegionBacking::SharedMemory(token.as_u64())
+        })
+        .ok_or(SharedMemError::InternalInvariant)?;
+
     {
         let (_, base_virt, sz) = process.mapped_shared.remove(pos);
         let num_pages = if sz == 0 {
@@ -251,6 +288,10 @@ pub fn free_shared_page(
                 }
             }
         }
+        process
+            .address_space
+            .remove_region_exact(expected_region)
+            .map_err(|_| SharedMemError::InternalInvariant)?;
         // Decrement the mapping ref count; the broker returns the frames only
         // when this was the last live mapping, so the PMM is safe to reclaim them.
         if let Some(frames) = caps.decrement_map_count(token) {
@@ -289,6 +330,18 @@ pub fn cleanup_shared_pages(
             unsafe {
                 if let Ok(page) = Page::<Size4KiB>::from_start_address(v) {
                     let _ = process.address_space.unmap_page(page, hhdm_offset);
+                }
+            }
+        }
+        if let Some(region) = process.address_space.lookup_region(base_virt.as_u64()) {
+            if region.start == base_virt.as_u64()
+                && region.end == base_virt.as_u64() + sz as u64
+                && region.kind == crate::process::region::MappingKind::SharedMemory
+                && region.backing
+                    == crate::process::region::RegionBacking::SharedMemory(token.as_u64())
+            {
+                if process.address_space.remove_region_exact(region).is_err() {
+                    crate::process::address_space::note_rollback_invariant_failure();
                 }
             }
         }

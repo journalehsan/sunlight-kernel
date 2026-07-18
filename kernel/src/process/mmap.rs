@@ -1,6 +1,9 @@
 use super::mm2a_plan::{checked_page_layout, DeferredCursor};
 use crate::memory::pmm::PhysicalMemoryManager;
 use crate::process::address_space::MappingError;
+use crate::process::region::{
+    MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection,
+};
 use crate::sched::Scheduler;
 use alloc::vec::Vec;
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
@@ -29,19 +32,13 @@ pub enum MmapError {
     InternalInvariant,
 }
 
-/// Convert mprotect flags to x86_64 PageTableFlags
-fn prot_to_flags(prot: u32) -> PageTableFlags {
-    let mut flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
-
-    if (prot & PROT_WRITE) != 0 {
-        flags |= PageTableFlags::WRITABLE;
-    }
-
-    if (prot & PROT_EXEC) == 0 {
-        flags |= PageTableFlags::NO_EXECUTE;
-    }
-
-    flags
+fn prot_to_protection(prot: u32) -> Result<RegionProtection, MmapError> {
+    RegionProtection::new(
+        prot & PROT_READ != 0,
+        prot & PROT_WRITE != 0,
+        prot & PROT_EXEC != 0,
+    )
+    .map_err(|_| MmapError::PermissionDenied)
 }
 
 /// Map anonymous memory in the current process.
@@ -54,6 +51,43 @@ pub fn sys_mmap(
     _offset: u64,
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
+) -> Result<u64, MmapError> {
+    map_anonymous_kind(
+        addr,
+        length,
+        prot,
+        flags,
+        pmm,
+        sched,
+        MappingKind::Anonymous,
+    )
+}
+
+pub fn map_brk(
+    addr: u64,
+    length: u64,
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+) -> Result<u64, MmapError> {
+    map_anonymous_kind(
+        addr,
+        length,
+        PROT_READ | PROT_WRITE,
+        MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
+        pmm,
+        sched,
+        MappingKind::Brk,
+    )
+}
+
+fn map_anonymous_kind(
+    addr: u64,
+    length: u64,
+    prot: u32,
+    flags: u32,
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+    kind: MappingKind,
 ) -> Result<u64, MmapError> {
     if (prot & (PROT_WRITE | PROT_EXEC)) == (PROT_WRITE | PROT_EXEC) {
         crate::memory::security::note_rwx_mapping_rejected();
@@ -106,7 +140,11 @@ pub fn sys_mmap(
         return Err(MmapError::InvalidAddress);
     }
 
-    let page_flags = prot_to_flags(prot);
+    let protection = prot_to_protection(prot)?;
+    let page_flags = crate::process::address_space::AddressSpace::protection_to_pte_flags(
+        protection,
+    )
+    .map_err(|_| MmapError::PermissionDenied)?;
 
     // Map all the pages
     let pid = sched.current_process().pid;
@@ -127,12 +165,48 @@ pub fn sys_mmap(
         }
     }
 
+    let policy = match kind {
+        MappingKind::Anonymous => RegionPolicy::MAY_UNMAP
+            .union(RegionPolicy::MAY_CHANGE_PROTECTION)
+            .union(RegionPolicy::OWNER_MANAGED),
+        MappingKind::Brk => RegionPolicy::OWNER_MANAGED,
+        _ => return Err(MmapError::InternalInvariant),
+    };
+    let region = MappingRegion::new(
+        map_addr,
+        map_addr
+            .checked_add(span)
+            .ok_or(MmapError::InvalidAddress)?,
+        protection,
+        kind,
+        policy,
+        RegionBacking::None,
+    )
+    .map_err(|_| MmapError::InvalidAddress)?;
+    let reservation = sched
+        .current_process()
+        .address_space
+        .preflight_region(region)
+        .map_err(mapping_error)?;
+
     let page_count_usize = usize::try_from(page_count).map_err(|_| MmapError::InvalidAddress)?;
     let mut installed: Vec<(Page<Size4KiB>, x86_64::PhysAddr)> = Vec::new();
     installed
         .try_reserve_exact(page_count_usize)
-        .map_err(|_| MmapError::NoMemory)?;
-    crate::memory::swap::reserve_candidates(page_count_usize).map_err(|_| MmapError::NoMemory)?;
+        .map_err(|_| {
+            sched
+                .current_process()
+                .address_space
+                .cancel_region(reservation);
+            MmapError::NoMemory
+        })?;
+    if crate::memory::swap::reserve_candidates(page_count_usize).is_err() {
+        sched
+            .current_process()
+            .address_space
+            .cancel_region(reservation);
+        return Err(MmapError::NoMemory);
+    }
     for i in 0..page_count {
         let page_vaddr = VirtAddr::new(
             map_addr
@@ -146,12 +220,20 @@ pub fn sys_mmap(
             None => {
                 crate::process::address_space::note_frame_allocation_failure();
                 rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+                sched
+                    .current_process()
+                    .address_space
+                    .cancel_region(reservation);
                 return Err(MmapError::NoMemory);
             }
         };
         if !crate::memory::security::sanitize_user_frame(frame_addr, hhdm_offset) {
             pmm.free_frame(frame_addr);
             rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+            sched
+                .current_process()
+                .address_space
+                .cancel_region(reservation);
             return Err(MmapError::NoMemory);
         }
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
@@ -161,6 +243,10 @@ pub fn sys_mmap(
             None => {
                 pmm.free_frame(frame_addr);
                 rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+                sched
+                    .current_process()
+                    .address_space
+                    .cancel_region(reservation);
                 return Err(MmapError::InternalInvariant);
             }
         };
@@ -170,6 +256,10 @@ pub fn sys_mmap(
         } {
             pmm.free_frame(frame_addr);
             rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+            sched
+                .current_process()
+                .address_space
+                .cancel_region(reservation);
             return Err(match error {
                 MappingError::AlreadyMapped => MmapError::AlreadyMapped,
                 MappingError::FrameAllocationFailed | MappingError::PageTableAllocationFailed => {
@@ -182,6 +272,15 @@ pub fn sys_mmap(
         installed.push((page, frame_addr));
     }
 
+    if let Err(error) = sched
+        .current_process()
+        .address_space
+        .commit_region(reservation)
+    {
+        rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+        return Err(mapping_error(error));
+    }
+
     for (page, frame) in &installed {
         crate::memory::swap::track_anon(pid, page.start_address(), *frame);
     }
@@ -190,6 +289,21 @@ pub fn sys_mmap(
     }
 
     Ok(map_addr)
+}
+
+fn mapping_error(error: MappingError) -> MmapError {
+    match error {
+        MappingError::AlreadyMapped | MappingError::LedgerOverlap => MmapError::AlreadyMapped,
+        MappingError::FrameAllocationFailed
+        | MappingError::PageTableAllocationFailed
+        | MappingError::LedgerCapacityExhausted => MmapError::NoMemory,
+        MappingError::PermissionRejected => MmapError::PermissionDenied,
+        MappingError::InvalidAddress
+        | MappingError::NonCanonical
+        | MappingError::Overflow
+        | MappingError::Misaligned => MmapError::InvalidAddress,
+        _ => MmapError::InternalInvariant,
+    }
 }
 
 fn rollback_anonymous(

@@ -7,6 +7,7 @@ pub mod layout;
 pub(crate) mod mm2a_plan;
 pub(crate) mod mm2b_state;
 pub mod mmap;
+pub mod region;
 pub mod pipe;
 pub mod signal;
 pub mod spawn;
@@ -397,23 +398,17 @@ impl Process {
         }
     }
 
-    /// Create a new thread that shares `parent_pml4`'s address space.
+    /// Create a new thread that shares the parent's address space and ledger.
     ///
-    /// Unlike `Process::new`, this does not allocate a new page table —
-    /// `AddressSpace::from_pml4` wraps the existing one.  The caller is
+    /// Unlike `Process::new`, this does not allocate a new page table. The
+    /// checked shared handle wraps the existing root and MM-2C ledger. The caller is
     /// responsible for calling `init_context` + `set_initial_args` afterwards.
     ///
-    /// # Phase 1 note
-    /// The address space is shared by raw pointer identity (same pml4_phys).
-    /// There is no reference count on AddressSpace; if the owner process exits
-    /// first the PML4 page is not freed (currently leaked), which keeps the
-    /// thread's page tables accessible.  Arc-based ownership is Phase 2.
     pub fn new_thread(
         pid: usize,
         ppid: usize,
         name: &str,
-        parent_pml4: x86_64::PhysAddr,
-        parent_identity: mm2b_state::AddressSpaceIdentity,
+        shared_address_space: address_space::SharedAddressSpaceHandle,
         fd_table: alloc::boxed::Box<fd_table::FdTable>,
         env: env::EnvMap,
         uid: u32,
@@ -422,7 +417,7 @@ impl Process {
         capabilities: Vec<Capability>,
         tty_tab: Option<u8>,
     ) -> Self {
-        let address_space = address_space::AddressSpace::from_shared(parent_pml4, parent_identity);
+        let address_space = address_space::AddressSpace::from_shared(shared_address_space);
         let kernel_stack = new_kernel_stack();
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
 

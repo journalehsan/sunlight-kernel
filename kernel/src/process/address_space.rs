@@ -1,5 +1,9 @@
 use crate::memory::pmm::PhysicalMemoryManager;
 use crate::process::mm2b_state::{allocate_identity, AddressSpaceIdentity};
+use crate::process::region::{
+    LedgerError, MappingKind, MappingRegion, RangeLookup, RegionBacking, RegionLedger,
+    RegionPolicy, RegionProtection, RegionReservation,
+};
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{
     structures::paging::{
@@ -20,6 +24,9 @@ pub enum MappingError {
     PageTableAllocationFailed,
     PermissionRejected,
     UnsupportedReplacement,
+    LedgerCapacityExhausted,
+    LedgerOverlap,
+    LedgerUnavailable,
     InternalInvariant,
 }
 
@@ -61,6 +68,53 @@ static INTENTIONAL_REPLACEMENTS: AtomicU64 = AtomicU64::new(0);
 static ROLLBACK_INVARIANT_FAILURES: AtomicU64 = AtomicU64::new(0);
 static NEXT_ADDRESS_SPACE_GENERATION: AtomicU64 = AtomicU64::new(1);
 
+static REGION_INSERTIONS: AtomicU64 = AtomicU64::new(0);
+static REGION_ADJACENT_MERGES: AtomicU64 = AtomicU64::new(0);
+static REGION_OVERLAP_REJECTIONS: AtomicU64 = AtomicU64::new(0);
+static REGION_CAPACITY_FAILURES: AtomicU64 = AtomicU64::new(0);
+static REGION_ROLLBACK_REMOVALS: AtomicU64 = AtomicU64::new(0);
+static REGION_TEARDOWN_REMOVALS: AtomicU64 = AtomicU64::new(0);
+static REGION_PTE_CONSISTENCY_FAILURES: AtomicU64 = AtomicU64::new(0);
+static BORROWER_LEDGER_LOOKUPS: AtomicU64 = AtomicU64::new(0);
+static STALE_LEDGER_LOOKUPS: AtomicU64 = AtomicU64::new(0);
+
+/// Matches the existing bounded telemetry process table. Borrowers consume no
+/// slot because they retain the owner's checked handle.
+pub const MAX_ADDRESS_SPACE_LEDGERS: usize = 64;
+const SHARED_REGION_BASE: u64 = 0x0000_0003_0000_0000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LedgerHandle {
+    slot: u8,
+    identity: AddressSpaceIdentity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SharedAddressSpaceHandle {
+    pml4_phys: PhysAddr,
+    identity: AddressSpaceIdentity,
+    ledger: LedgerHandle,
+}
+
+struct LedgerSlot {
+    identity: AddressSpaceIdentity,
+    shared_bump: u64,
+    ledger: RegionLedger,
+}
+
+impl LedgerSlot {
+    const fn empty() -> Self {
+        Self {
+            identity: AddressSpaceIdentity::INVALID,
+            shared_bump: SHARED_REGION_BASE,
+            ledger: RegionLedger::new(),
+        }
+    }
+}
+
+static REGION_LEDGERS: spin::Mutex<[LedgerSlot; MAX_ADDRESS_SPACE_LEDGERS]> =
+    spin::Mutex::new([const { LedgerSlot::empty() }; MAX_ADDRESS_SPACE_LEDGERS]);
+
 pub fn note_mmap_rollback() {
     MMAP_ROLLBACKS.fetch_add(1, Ordering::Relaxed);
 }
@@ -97,12 +151,25 @@ pub fn diagnostic_report() {
         INTENTIONAL_REPLACEMENTS.load(Ordering::Relaxed),
         ROLLBACK_INVARIANT_FAILURES.load(Ordering::Relaxed),
     );
+    crate::serial_println!(
+        "[MM-2C-DIAG] insertions={} merges={} overlap_rejections={} capacity_failures={} rollback_removals={} teardown_removals={} consistency_failures={} borrower_lookups={} stale_lookups={}",
+        REGION_INSERTIONS.load(Ordering::Relaxed),
+        REGION_ADJACENT_MERGES.load(Ordering::Relaxed),
+        REGION_OVERLAP_REJECTIONS.load(Ordering::Relaxed),
+        REGION_CAPACITY_FAILURES.load(Ordering::Relaxed),
+        REGION_ROLLBACK_REMOVALS.load(Ordering::Relaxed),
+        REGION_TEARDOWN_REMOVALS.load(Ordering::Relaxed),
+        REGION_PTE_CONSISTENCY_FAILURES.load(Ordering::Relaxed),
+        BORROWER_LEDGER_LOOKUPS.load(Ordering::Relaxed),
+        STALE_LEDGER_LOOKUPS.load(Ordering::Relaxed),
+    );
 }
 
 pub struct AddressSpace {
     pub pml4_phys: PhysAddr,
     identity: AddressSpaceIdentity,
-    shared_bump: u64,
+    ledger: Option<LedgerHandle>,
+    borrower: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -145,10 +212,19 @@ impl AddressSpace {
             pml4[i].set_addr(current_pml4[i].addr(), current_pml4[i].flags());
         }
 
+        let identity = allocate_identity(&NEXT_ADDRESS_SPACE_GENERATION, pml4_phys.as_u64());
+        let ledger = match Self::allocate_ledger(identity) {
+            Ok(handle) => handle,
+            Err(error) => {
+                pmm.free_frame(pml4_phys);
+                return Err(error);
+            }
+        };
         Ok(Self {
             pml4_phys,
-            identity: allocate_identity(&NEXT_ADDRESS_SPACE_GENERATION, pml4_phys.as_u64()),
-            shared_bump: 0x0000_0003_0000_0000,
+            identity,
+            ledger: Some(ledger),
+            borrower: false,
         })
     }
 
@@ -158,32 +234,327 @@ impl AddressSpace {
         Self {
             pml4_phys,
             identity: AddressSpaceIdentity::INVALID,
-            shared_bump: 0x0000_0003_0000_0000,
+            ledger: None,
+            borrower: false,
         }
     }
 
     /// Construct a borrower wrapper for an existing address-space instance.
-    pub fn from_shared(pml4_phys: PhysAddr, identity: AddressSpaceIdentity) -> Self {
-        assert_eq!(pml4_phys.as_u64(), identity.pml4_phys);
-        assert!(identity.is_valid());
+    pub(crate) fn from_shared(shared: SharedAddressSpaceHandle) -> Self {
+        assert_eq!(shared.pml4_phys.as_u64(), shared.identity.pml4_phys);
+        assert!(shared.identity.is_valid());
         Self {
-            pml4_phys,
-            identity,
-            shared_bump: 0x0000_0003_0000_0000,
+            pml4_phys: shared.pml4_phys,
+            identity: shared.identity,
+            ledger: Some(shared.ledger),
+            borrower: true,
+        }
+    }
+
+    pub(crate) fn shared_handle(&self) -> SharedAddressSpaceHandle {
+        SharedAddressSpaceHandle {
+            pml4_phys: self.pml4_phys,
+            identity: self.identity,
+            ledger: self.ledger.expect("valid address space missing ledger"),
         }
     }
 
     #[cfg(feature = "mm2b_smp_test")]
     pub fn test_root(pml4_phys: PhysAddr) -> Self {
+        let identity = allocate_identity(&NEXT_ADDRESS_SPACE_GENERATION, pml4_phys.as_u64());
         Self {
             pml4_phys,
-            identity: allocate_identity(&NEXT_ADDRESS_SPACE_GENERATION, pml4_phys.as_u64()),
-            shared_bump: 0x0000_0003_0000_0000,
+            identity,
+            ledger: Some(Self::allocate_ledger(identity).expect("MM-2B test ledger allocation")),
+            borrower: false,
         }
     }
 
     pub const fn identity(&self) -> AddressSpaceIdentity {
         self.identity
+    }
+
+    /// Convert software protection policy to user PTE flags in one place.
+    pub fn protection_to_pte_flags(
+        protection: RegionProtection,
+    ) -> Result<PageTableFlags, MappingError> {
+        if !protection.is_valid() {
+            return Err(MappingError::PermissionRejected);
+        }
+        let mut flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+        if protection.writable() {
+            flags |= PageTableFlags::WRITABLE;
+        }
+        if !protection.executable() {
+            flags |= PageTableFlags::NO_EXECUTE;
+        }
+        Ok(flags)
+    }
+
+    pub fn protection_from_pte_flags(
+        flags: PageTableFlags,
+    ) -> Result<RegionProtection, MappingError> {
+        if !flags.contains(PageTableFlags::PRESENT)
+            || !flags.contains(PageTableFlags::USER_ACCESSIBLE)
+        {
+            return Err(MappingError::PermissionRejected);
+        }
+        RegionProtection::new(
+            true,
+            flags.contains(PageTableFlags::WRITABLE),
+            !flags.contains(PageTableFlags::NO_EXECUTE),
+        )
+        .map_err(|_| MappingError::PermissionRejected)
+    }
+
+    /// Callers may already hold SCHEDULER, PMM, and the SHM broker. The ledger
+    /// lock is terminal: it never allocates and is always released before PMM,
+    /// broker, swap, or synchronous TLB operations are invoked.
+    pub fn preflight_region(
+        &self,
+        region: MappingRegion,
+    ) -> Result<RegionReservation, MappingError> {
+        self.with_ledger_mut(|ledger| ledger.preflight(region))
+            .and_then(|result| result.map_err(Self::map_ledger_error))
+    }
+
+    pub fn commit_region(
+        &self,
+        reservation: RegionReservation,
+    ) -> Result<MappingRegion, MappingError> {
+        self.with_ledger_mut(|ledger| {
+            let before = ledger.len();
+            let committed = ledger.commit(reservation)?;
+            REGION_INSERTIONS.fetch_add(1, Ordering::Relaxed);
+            if ledger.len() == before {
+                REGION_ADJACENT_MERGES.fetch_add(1, Ordering::Relaxed);
+            }
+            Ok(committed)
+        })
+        .and_then(|result| result.map_err(Self::map_ledger_error))
+    }
+
+    pub fn cancel_region(&self, reservation: RegionReservation) {
+        if self
+            .with_ledger_mut(|ledger| ledger.cancel(reservation))
+            .and_then(|result| result.map_err(Self::map_ledger_error))
+            .is_err()
+        {
+            ROLLBACK_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn remove_region_exact(&self, expected: MappingRegion) -> Result<(), MappingError> {
+        self.with_ledger_mut(|ledger| ledger.remove_exact(expected))
+            .and_then(|result| result.map_err(Self::map_ledger_error))?;
+        REGION_ROLLBACK_REMOVALS.fetch_add(1, Ordering::Relaxed);
+        Ok(())
+    }
+
+    pub fn lookup_region(&self, address: u64) -> Option<MappingRegion> {
+        self.with_ledger(|ledger| ledger.lookup_address(address))
+            .ok()
+            .flatten()
+    }
+
+    pub fn lookup_region_range(
+        &self,
+        start: u64,
+        end: u64,
+    ) -> Result<RangeLookup, MappingError> {
+        self.with_ledger(|ledger| ledger.lookup_range(start, end))
+            .and_then(|result| result.map_err(Self::map_ledger_error))
+    }
+
+    pub fn region_count(&self) -> usize {
+        self.with_ledger(RegionLedger::len).unwrap_or(0)
+    }
+
+    pub fn region_at(&self, index: usize) -> Option<MappingRegion> {
+        self.with_ledger(|ledger| ledger.record_at(index))
+            .ok()
+            .flatten()
+    }
+
+    /// Bounded debug/gate validation. Residency transitions are accepted, but
+    /// present boundary pages must match ledger W/X protection.
+    pub unsafe fn validate_ledger_ptes(&self, hhdm_offset: VirtAddr) -> bool {
+        let mut valid = true;
+        for index in 0..self.region_count() {
+            let Some(region) = self.region_at(index) else {
+                valid = false;
+                break;
+            };
+            for address in [region.start, region.end - 4096] {
+                let Ok(page) = Page::<Size4KiB>::from_start_address(VirtAddr::new(address)) else {
+                    valid = false;
+                    continue;
+                };
+                let Some((_frame, flags)) = self.lookup_entry(page, hhdm_offset) else {
+                    valid = false;
+                    continue;
+                };
+                if flags.contains(PageTableFlags::PRESENT) {
+                    let Ok(actual) = Self::protection_from_pte_flags(flags) else {
+                        valid = false;
+                        continue;
+                    };
+                    if actual.writable() != region.protection.writable()
+                        || actual.executable() != region.protection.executable()
+                    {
+                        valid = false;
+                    }
+                }
+            }
+        }
+        if !valid {
+            REGION_PTE_CONSISTENCY_FAILURES.fetch_add(1, Ordering::Relaxed);
+        }
+        valid
+    }
+
+    pub fn update_region_backing(
+        &self,
+        start: u64,
+        end: u64,
+        kind: MappingKind,
+        expected: RegionBacking,
+        replacement: RegionBacking,
+    ) -> Result<MappingRegion, MappingError> {
+        self.with_ledger_mut(|ledger| {
+            ledger.replace_backing(start, end, kind, expected, replacement)
+        })
+        .and_then(|result| result.map_err(Self::map_ledger_error))
+    }
+
+    fn allocate_ledger(identity: AddressSpaceIdentity) -> Result<LedgerHandle, MappingError> {
+        let mut slots = REGION_LEDGERS.lock();
+        let Some(index) = slots
+            .iter()
+            .position(|slot| !slot.identity.is_valid())
+        else {
+            REGION_CAPACITY_FAILURES.fetch_add(1, Ordering::Relaxed);
+            return Err(MappingError::LedgerCapacityExhausted);
+        };
+        slots[index].identity = identity;
+        slots[index].shared_bump = SHARED_REGION_BASE;
+        slots[index].ledger.clear();
+        Ok(LedgerHandle {
+            slot: index as u8,
+            identity,
+        })
+    }
+
+    fn with_ledger<R>(&self, operation: impl FnOnce(&RegionLedger) -> R) -> Result<R, MappingError> {
+        if self.borrower {
+            BORROWER_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+        }
+        let handle = self.ledger.ok_or_else(|| {
+            STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+            MappingError::LedgerUnavailable
+        })?;
+        let slots = REGION_LEDGERS.lock();
+        let slot = slots.get(handle.slot as usize).ok_or_else(|| {
+            STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+            MappingError::LedgerUnavailable
+        })?;
+        if slot.identity != handle.identity || slot.identity != self.identity {
+            STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+            return Err(MappingError::LedgerUnavailable);
+        }
+        Ok(operation(&slot.ledger))
+    }
+
+    fn with_ledger_mut<R>(
+        &self,
+        operation: impl FnOnce(&mut RegionLedger) -> R,
+    ) -> Result<R, MappingError> {
+        if self.borrower {
+            BORROWER_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+        }
+        let handle = self.ledger.ok_or_else(|| {
+            STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+            MappingError::LedgerUnavailable
+        })?;
+        let mut slots = REGION_LEDGERS.lock();
+        let slot = slots.get_mut(handle.slot as usize).ok_or_else(|| {
+            STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+            MappingError::LedgerUnavailable
+        })?;
+        if slot.identity != handle.identity || slot.identity != self.identity {
+            STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+            return Err(MappingError::LedgerUnavailable);
+        }
+        Ok(operation(&mut slot.ledger))
+    }
+
+    fn map_ledger_error(error: LedgerError) -> MappingError {
+        match error {
+            LedgerError::Overlap => {
+                REGION_OVERLAP_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+                MappingError::LedgerOverlap
+            }
+            LedgerError::CapacityExhausted | LedgerError::TooManyPending => {
+                REGION_CAPACITY_FAILURES.fetch_add(1, Ordering::Relaxed);
+                MappingError::LedgerCapacityExhausted
+            }
+            LedgerError::InvalidRange => MappingError::InvalidAddress,
+            LedgerError::PermissionRejected => MappingError::PermissionRejected,
+            LedgerError::StaleReservation
+            | LedgerError::ExactRecordNotFound
+            | LedgerError::Inconsistent => MappingError::InternalInvariant,
+        }
+    }
+
+    fn shared_bump(&self) -> Result<u64, MappingError> {
+        let handle = self.ledger.ok_or(MappingError::LedgerUnavailable)?;
+        let slots = REGION_LEDGERS.lock();
+        let slot = slots
+            .get(handle.slot as usize)
+            .filter(|slot| slot.identity == handle.identity && slot.identity == self.identity)
+            .ok_or_else(|| {
+                STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+                MappingError::LedgerUnavailable
+            })?;
+        Ok(slot.shared_bump)
+    }
+
+    fn commit_shared_bump(&self, expected: u64, replacement: u64) -> Result<(), MappingError> {
+        let handle = self.ledger.ok_or(MappingError::LedgerUnavailable)?;
+        let mut slots = REGION_LEDGERS.lock();
+        let slot = slots
+            .get_mut(handle.slot as usize)
+            .filter(|slot| slot.identity == handle.identity && slot.identity == self.identity)
+            .ok_or_else(|| {
+                STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+                MappingError::LedgerUnavailable
+            })?;
+        if slot.shared_bump != expected {
+            return Err(MappingError::InternalInvariant);
+        }
+        slot.shared_bump = replacement;
+        Ok(())
+    }
+
+    fn destroy_ledger(&mut self) -> Result<usize, MappingError> {
+        let handle = self.ledger.take().ok_or(MappingError::LedgerUnavailable)?;
+        let mut slots = REGION_LEDGERS.lock();
+        let slot = slots
+            .get_mut(handle.slot as usize)
+            .filter(|slot| slot.identity == handle.identity && slot.identity == self.identity)
+            .ok_or_else(|| {
+                STALE_LEDGER_LOOKUPS.fetch_add(1, Ordering::Relaxed);
+                MappingError::LedgerUnavailable
+            })?;
+        if slot.ledger.validate().is_err() {
+            REGION_PTE_CONSISTENCY_FAILURES.fetch_add(1, Ordering::Relaxed);
+            return Err(MappingError::InternalInvariant);
+        }
+        let removed = slot.ledger.clear();
+        slot.identity = AddressSpaceIdentity::INVALID;
+        slot.shared_bump = SHARED_REGION_BASE;
+        REGION_TEARDOWN_REMOVALS.fetch_add(removed as u64, Ordering::Relaxed);
+        Ok(removed)
     }
 
     /// True after the address space root has been freed during process teardown.
@@ -506,7 +877,7 @@ impl AddressSpace {
     ) -> Result<VirtAddr, crate::memory::shared::SharedMemError> {
         let frame = PhysFrame::<Size4KiB>::from_start_address(phys)
             .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
-        self.map_shared_region(&[frame], pmm, hhdm_offset)
+        self.map_shared_region(&[frame], RegionBacking::None, pmm, hhdm_offset)
     }
 
     /// Map a (possibly multi-page) shared memory region contiguously into the dedicated shared area.
@@ -515,6 +886,7 @@ impl AddressSpace {
     pub unsafe fn map_shared_region(
         &mut self,
         frames: &[PhysFrame<Size4KiB>],
+        backing: RegionBacking,
         pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<VirtAddr, crate::memory::shared::SharedMemError> {
@@ -526,24 +898,39 @@ impl AddressSpace {
         let total = (n as u64)
             .checked_mul(PAGE_SIZE)
             .ok_or(crate::memory::shared::SharedMemError::InvalidAddress)?;
-        let end = self
-            .shared_bump
+        let base_u64 = self.shared_bump()?;
+        let end = base_u64
             .checked_add(total)
             .ok_or(crate::memory::shared::SharedMemError::InvalidAddress)?;
         if end > 0x0000_0004_0000_0000 {
             return Err(crate::memory::shared::SharedMemError::OutOfMemory);
         }
-        let base = VirtAddr::new(self.shared_bump);
-        let flags = crate::memory::security::user_shm_flags();
+        let base = VirtAddr::new(base_u64);
+        let protection = RegionProtection::READ_WRITE;
+        let region = MappingRegion::new(
+            base_u64,
+            end,
+            protection,
+            MappingKind::SharedMemory,
+            RegionPolicy::SHARED.union(RegionPolicy::OWNER_MANAGED),
+            backing,
+        )
+        .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
+        let reservation = self.preflight_region(region)?;
+        let flags = Self::protection_to_pte_flags(protection)?;
 
         for i in 0..n {
             let offset = (i as u64)
                 .checked_mul(PAGE_SIZE)
                 .ok_or(crate::memory::shared::SharedMemError::InvalidAddress)?;
             let page = Page::<Size4KiB>::from_start_address(base + offset)
-                .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
+                .map_err(|_| {
+                    self.cancel_region(reservation);
+                    crate::memory::shared::SharedMemError::InvalidAddress
+                })?;
             if self.is_occupied(page, hhdm_offset) {
                 MAPPING_COLLISIONS.fetch_add(1, Ordering::Relaxed);
+                self.cancel_region(reservation);
                 return Err(crate::memory::shared::SharedMemError::AlreadyMapped);
             }
         }
@@ -569,11 +956,24 @@ impl AddressSpace {
                         ROLLBACK_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
                     }
                 }
+                self.cancel_region(reservation);
                 return Err(crate::memory::shared::SharedMemError::from(error));
             }
             installed += 1;
         }
-        self.shared_bump = end;
+        if let Err(error) = self.commit_region(reservation) {
+            for rollback_index in (0..installed).rev() {
+                let rollback_page = Page::<Size4KiB>::from_start_address(
+                    base + (rollback_index as u64) * PAGE_SIZE,
+                )
+                .map_err(|_| crate::memory::shared::SharedMemError::InternalInvariant)?;
+                let rollback_frame = frames[rollback_index].start_address();
+                self.rollback_mapped_page(rollback_page, rollback_frame, pmm, hhdm_offset)
+                    .map_err(crate::memory::shared::SharedMemError::from)?;
+            }
+            return Err(crate::memory::shared::SharedMemError::from(error));
+        }
+        self.commit_shared_bump(base_u64, end)?;
         for _ in 0..installed {
             crate::memory::security::note_nx_shm_mapping();
         }
@@ -687,6 +1087,7 @@ impl AddressSpace {
             0,
             "attempted to reclaim an active address space"
         );
+        debug_assert!(self.validate_ledger_ptes(hhdm_offset));
         let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
 
         for p4_idx in 0..256 {
@@ -697,29 +1098,46 @@ impl AddressSpace {
 
             let p3_phys = p4e.addr();
             let p3 = &mut *((hhdm_offset + p3_phys.as_u64()).as_mut_ptr::<PageTable>());
-            for p3e in p3.iter_mut() {
+            for (p3_idx, p3e) in p3.iter_mut().enumerate() {
                 if p3e.is_unused() {
                     continue;
                 }
 
                 let p2_phys = p3e.addr();
                 let p2 = &mut *((hhdm_offset + p2_phys.as_u64()).as_mut_ptr::<PageTable>());
-                for p2e in p2.iter_mut() {
+                for (p2_idx, p2e) in p2.iter_mut().enumerate() {
                     if p2e.is_unused() {
                         continue;
                     }
 
                     let p1_phys = p2e.addr();
                     let p1 = &mut *((hhdm_offset + p1_phys.as_u64()).as_mut_ptr::<PageTable>());
-                    for p1e in p1.iter_mut() {
+                    for (p1_idx, p1e) in p1.iter_mut().enumerate() {
                         if p1e.is_unused() {
                             continue;
                         }
                         if p1e.flags().contains(PageTableFlags::PRESENT) {
                             let phys = p1e.addr();
                             crate::memory::swap::untrack(phys);
-                            pmm.free_frame(phys);
-                            stats.user_frames += 1;
+                            let virtual_address = ((p4_idx as u64) << 39)
+                                | ((p3_idx as u64) << 30)
+                                | ((p2_idx as u64) << 21)
+                                | ((p1_idx as u64) << 12);
+                            let externally_owned = self
+                                .lookup_region(virtual_address)
+                                .is_some_and(|region| {
+                                    matches!(
+                                        region.kind,
+                                        MappingKind::SharedMemory
+                                            | MappingKind::Framebuffer
+                                            | MappingKind::Telemetry
+                                            | MappingKind::BootSharedData
+                                    )
+                                });
+                            if !externally_owned {
+                                pmm.free_frame(phys);
+                                stats.user_frames += 1;
+                            }
                         } else if p1e.addr().as_u64() != 0 {
                             let _ = crate::memory::zram::discard_block(
                                 ((p1e.addr().as_u64() >> 12) - 1) as usize,
@@ -745,6 +1163,8 @@ impl AddressSpace {
         }
 
         if free_root {
+            self.destroy_ledger()
+                .expect("address-space ledger teardown failed");
             pmm.free_frame(self.pml4_phys);
             stats.page_tables += 1;
             self.pml4_phys = PhysAddr::new(0);
