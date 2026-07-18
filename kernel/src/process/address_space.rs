@@ -1313,8 +1313,11 @@ impl AddressSpace {
                                 stats.user_frames += 1;
                             }
                         } else if p1e.addr().as_u64() != 0 {
-                            let _ =
-                                crate::memory::zram::discard_block((p1e.addr().as_u64() >> 12) - 1);
+                            let _ = crate::memory::zram::discard_block(
+                                (p1e.addr().as_u64() >> 12) - 1,
+                                pmm,
+                                hhdm_offset,
+                            );
                             stats.swap_blocks += 1;
                         }
                         p1e.set_unused();

@@ -1,5 +1,6 @@
 //! Bounded, immutable-after-activation, multi-pool in-memory swap storage.
 
+use super::pmm::PhysicalMemoryManager;
 pub use super::swap_slot::SlotId;
 use super::swap_slot::{MAX_SLOT_GENERATION, SLOT_INDEX_MASK};
 use super::zram_codec::{self, CodecError, MAX_COMPRESSED_SIZE, PAGE_SIZE};
@@ -7,9 +8,12 @@ use ::sunlight_ipc::swap_policy::{SwapPolicy, MAX_POOLS, POLICY_VERSION};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use spin::Mutex;
+use x86_64::{PhysAddr, VirtAddr};
 
 pub const ZRAM_BLOCK_SIZE: usize = PAGE_SIZE;
 pub const MAX_GLOBAL_SLOTS: usize = 16 * 1024;
+const STORAGE_CHUNK_BYTES: usize = 64;
+const STORAGE_CHUNKS_PER_PAGE: usize = PAGE_SIZE / STORAGE_CHUNK_BYTES;
 
 pub type BlockId = u64;
 
@@ -20,6 +24,7 @@ pub enum ZramError {
     InvalidPolicy,
     OutOfSpace,
     PhysicalBudgetExceeded,
+    AllocationFailure,
     MetadataExhausted,
     Incompressible,
     InvalidBlock,
@@ -35,6 +40,7 @@ pub struct PoolStats {
     pub physical_budget_bytes: u64,
     pub used_logical_pages: u64,
     pub used_compressed_bytes: u64,
+    pub allocator_consumed_bytes: u64,
     pub compression_successes: u64,
     pub compression_failures: u64,
     pub raw_pages: u64,
@@ -48,6 +54,7 @@ pub struct PoolStats {
     pub checksum_failures: u64,
     pub decompression_failures: u64,
     pub full_events: u64,
+    pub budget_full_events: u64,
     pub slot_releases: u64,
 }
 
@@ -58,6 +65,7 @@ pub struct AggregateStats {
     pub configured_physical_budget_bytes: u64,
     pub stored_pages: u64,
     pub compressed_bytes: u64,
+    pub allocator_consumed_bytes: u64,
     pub pages_stored_raw: u64,
     pub incompressible_rejected: u64,
     pub swap_out_attempts: u64,
@@ -69,6 +77,7 @@ pub struct AggregateStats {
     pub checksum_failures: u64,
     pub decompression_failures: u64,
     pub full_pool_events: u64,
+    pub budget_full_events: u64,
     pub fallback_to_next_pool: u64,
     pub service_configured: bool,
     pub admin_owner_alive: bool,
@@ -77,7 +86,7 @@ pub struct AggregateStats {
 #[derive(Debug, Clone, Copy, Default)]
 struct PoolConfig {
     identity: u8,
-    logical_pages: u64,
+    logical_capacity_pages: u64,
     physical_budget_bytes: u64,
     slot_limit: usize,
 }
@@ -86,7 +95,7 @@ struct Slot {
     generation: u16,
     checksum: u32,
     pte_flags: u64,
-    payload: Option<Vec<u8>>,
+    payload: Option<StoredPayload>,
 }
 
 impl Slot {
@@ -100,10 +109,34 @@ impl Slot {
     }
 }
 
+#[derive(Clone, Copy)]
+struct StoredPayload {
+    storage_page_index: u32,
+    first_chunk: u8,
+    chunk_count: u8,
+    compressed_len: u16,
+}
+
+#[derive(Clone, Copy)]
+struct StoragePage {
+    frame: Option<PhysAddr>,
+    allocated_chunks: u64,
+}
+
+impl StoragePage {
+    const fn vacant() -> Self {
+        Self {
+            frame: None,
+            allocated_chunks: 0,
+        }
+    }
+}
+
 struct PoolState {
     config: PoolConfig,
     slots: Vec<Slot>,
     free: Vec<u32>,
+    storage_pages: Vec<StoragePage>,
     stats: PoolStats,
 }
 
@@ -112,17 +145,19 @@ impl PoolState {
         Self {
             config: PoolConfig {
                 identity: 0,
-                logical_pages: 0,
+                logical_capacity_pages: 0,
                 physical_budget_bytes: 0,
                 slot_limit: 0,
             },
             slots: Vec::new(),
             free: Vec::new(),
+            storage_pages: Vec::new(),
             stats: PoolStats {
                 logical_capacity_pages: 0,
                 physical_budget_bytes: 0,
                 used_logical_pages: 0,
                 used_compressed_bytes: 0,
+                allocator_consumed_bytes: 0,
                 compression_successes: 0,
                 compression_failures: 0,
                 raw_pages: 0,
@@ -136,6 +171,7 @@ impl PoolState {
                 checksum_failures: 0,
                 decompression_failures: 0,
                 full_events: 0,
+                budget_full_events: 0,
                 slot_releases: 0,
             },
         }
@@ -144,7 +180,7 @@ impl PoolState {
     fn configure(&mut self, config: PoolConfig) {
         debug_assert!(self.slots.is_empty());
         self.config = config;
-        self.stats.logical_capacity_pages = config.logical_pages;
+        self.stats.logical_capacity_pages = config.logical_capacity_pages;
         self.stats.physical_budget_bytes = config.physical_budget_bytes;
     }
 
@@ -157,22 +193,133 @@ impl PoolState {
             }
         }
         if self.slots.len() >= self.config.slot_limit
-            || self.slots.len() as u64 >= self.config.logical_pages
+            || self.slots.len() as u64 >= self.config.logical_capacity_pages
             || self.slots.len() as u64 > SLOT_INDEX_MASK
         {
             return Err(ZramError::MetadataExhausted);
         }
         self.slots
             .try_reserve(1)
-            .map_err(|_| ZramError::MetadataExhausted)?;
+            .map_err(|_| ZramError::AllocationFailure)?;
         // Reserve the future discard push before publishing this index. Once a
         // slot exists, release can therefore never require a heap allocation.
         self.free
             .try_reserve(1)
-            .map_err(|_| ZramError::MetadataExhausted)?;
+            .map_err(|_| ZramError::AllocationFailure)?;
         let index = self.slots.len();
         self.slots.push(Slot::vacant(1));
         Ok((index, 1))
+    }
+
+    fn allocate_payload(
+        &mut self,
+        payload: &[u8],
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<StoredPayload, ZramError> {
+        let chunk_count = payload.len().div_ceil(STORAGE_CHUNK_BYTES);
+        if chunk_count == 0 || chunk_count > STORAGE_CHUNKS_PER_PAGE {
+            return Err(ZramError::InvalidData);
+        }
+
+        for (page_index, storage_page) in self.storage_pages.iter_mut().enumerate() {
+            let Some(frame) = storage_page.frame else {
+                continue;
+            };
+            if let Some(first_chunk) =
+                find_free_chunk_run(storage_page.allocated_chunks, chunk_count)
+            {
+                let mask = chunk_mask(first_chunk, chunk_count);
+                storage_page.allocated_chunks |= mask;
+                write_stored_payload(frame, first_chunk, payload, hhdm_offset);
+                return Ok(StoredPayload {
+                    storage_page_index: page_index as u32,
+                    first_chunk: first_chunk as u8,
+                    chunk_count: chunk_count as u8,
+                    compressed_len: payload.len() as u16,
+                });
+            }
+        }
+
+        let new_physical_bytes = self
+            .stats
+            .allocator_consumed_bytes
+            .checked_add(PAGE_SIZE as u64)
+            .ok_or(ZramError::PhysicalBudgetExceeded)?;
+        if new_physical_bytes > self.config.physical_budget_bytes {
+            self.stats.full_events += 1;
+            self.stats.budget_full_events += 1;
+            return Err(ZramError::PhysicalBudgetExceeded);
+        }
+
+        let reusable_index = self
+            .storage_pages
+            .iter()
+            .position(|storage_page| storage_page.frame.is_none());
+        if reusable_index.is_none() {
+            self.storage_pages
+                .try_reserve(1)
+                .map_err(|_| ZramError::AllocationFailure)?;
+        }
+        let frame = pmm.alloc_frame().ok_or(ZramError::AllocationFailure)?;
+        let page_index = reusable_index.unwrap_or(self.storage_pages.len());
+        let mask = chunk_mask(0, chunk_count);
+        if page_index == self.storage_pages.len() {
+            self.storage_pages.push(StoragePage {
+                frame: Some(frame),
+                allocated_chunks: mask,
+            });
+        } else {
+            self.storage_pages[page_index] = StoragePage {
+                frame: Some(frame),
+                allocated_chunks: mask,
+            };
+        }
+        self.stats.allocator_consumed_bytes = new_physical_bytes;
+        write_stored_payload(frame, 0, payload, hhdm_offset);
+        Ok(StoredPayload {
+            storage_page_index: page_index as u32,
+            first_chunk: 0,
+            chunk_count: chunk_count as u8,
+            compressed_len: payload.len() as u16,
+        })
+    }
+
+    fn release_payload(
+        &mut self,
+        payload: StoredPayload,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), ZramError> {
+        let storage_page = self
+            .storage_pages
+            .get_mut(payload.storage_page_index as usize)
+            .ok_or(ZramError::InvalidBlock)?;
+        let frame = storage_page.frame.ok_or(ZramError::NoData)?;
+        let mask = chunk_mask(payload.first_chunk as usize, payload.chunk_count as usize);
+        if storage_page.allocated_chunks & mask != mask {
+            return Err(ZramError::NoData);
+        }
+        let start = payload.first_chunk as usize * STORAGE_CHUNK_BYTES;
+        let length = payload.chunk_count as usize * STORAGE_CHUNK_BYTES;
+        unsafe {
+            core::ptr::write_bytes(
+                (hhdm_offset + frame.as_u64()).as_mut_ptr::<u8>().add(start),
+                0,
+                length,
+            );
+        }
+        storage_page.allocated_chunks &= !mask;
+        if storage_page.allocated_chunks == 0 {
+            storage_page.frame = None;
+            pmm.free_frame(frame);
+            self.stats.allocator_consumed_bytes = self
+                .stats
+                .allocator_consumed_bytes
+                .checked_sub(PAGE_SIZE as u64)
+                .expect("live ZRAM storage frame missing physical accounting");
+        }
+        Ok(())
     }
 
     fn store(
@@ -180,25 +327,15 @@ impl PoolState {
         payload: Vec<u8>,
         checksum: u32,
         pte_flags: u64,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
     ) -> Result<SlotId, (ZramError, Vec<u8>)> {
         self.stats.swap_out_attempts += 1;
-        if self.stats.used_logical_pages >= self.config.logical_pages {
+        if self.stats.used_logical_pages >= self.config.logical_capacity_pages {
             self.stats.full_events += 1;
             self.stats.swap_out_failures += 1;
             return Err((ZramError::OutOfSpace, payload));
         }
-        let new_bytes = match self
-            .stats
-            .used_compressed_bytes
-            .checked_add(payload.len() as u64)
-        {
-            Some(value) if value <= self.config.physical_budget_bytes => value,
-            _ => {
-                self.stats.full_events += 1;
-                self.stats.swap_out_failures += 1;
-                return Err((ZramError::PhysicalBudgetExceeded, payload));
-            }
-        };
         let (index, generation) = match self.allocate_index() {
             Ok(value) => value,
             Err(error) => {
@@ -211,19 +348,34 @@ impl PoolState {
             Some(id) => id,
             None => return Err((ZramError::InvalidBlock, payload)),
         };
+        let stored_payload = match self.allocate_payload(&payload, pmm, hhdm_offset) {
+            Ok(stored_payload) => stored_payload,
+            Err(error) => {
+                if generation < MAX_SLOT_GENERATION {
+                    self.free.push(index as u32);
+                }
+                self.stats.swap_out_failures += 1;
+                return Err((error, payload));
+            }
+        };
         let slot = &mut self.slots[index];
         debug_assert!(slot.payload.is_none());
         slot.checksum = checksum;
         slot.pte_flags = pte_flags;
-        slot.payload = Some(payload);
+        slot.payload = Some(stored_payload);
         self.stats.used_logical_pages += 1;
-        self.stats.used_compressed_bytes = new_bytes;
+        self.stats.used_compressed_bytes += payload.len() as u64;
         self.stats.compression_successes += 1;
         self.stats.swap_out_successes += 1;
         Ok(id)
     }
 
-    fn read(&mut self, id: SlotId, output: &mut [u8; PAGE_SIZE]) -> Result<u64, ZramError> {
+    fn read(
+        &mut self,
+        id: SlotId,
+        output: &mut [u8; PAGE_SIZE],
+        hhdm_offset: VirtAddr,
+    ) -> Result<u64, ZramError> {
         self.stats.swap_in_attempts += 1;
         let Some(slot) = self.slots.get(id.index()) else {
             self.stats.swap_in_failures += 1;
@@ -233,11 +385,31 @@ impl PoolState {
             self.stats.swap_in_failures += 1;
             return Err(ZramError::StaleSlot);
         }
-        let Some(payload) = slot.payload.as_ref() else {
+        let Some(payload) = slot.payload else {
             self.stats.swap_in_failures += 1;
             return Err(ZramError::NoData);
         };
-        let result = zram_codec::decompress_page(payload, slot.checksum, output);
+        let Some(storage_page) = self.storage_pages.get(payload.storage_page_index as usize) else {
+            self.stats.swap_in_failures += 1;
+            return Err(ZramError::InvalidBlock);
+        };
+        let Some(frame) = storage_page.frame else {
+            self.stats.swap_in_failures += 1;
+            return Err(ZramError::NoData);
+        };
+        let mask = chunk_mask(payload.first_chunk as usize, payload.chunk_count as usize);
+        if storage_page.allocated_chunks & mask != mask {
+            self.stats.swap_in_failures += 1;
+            return Err(ZramError::NoData);
+        }
+        let start = payload.first_chunk as usize * STORAGE_CHUNK_BYTES;
+        let compressed = unsafe {
+            core::slice::from_raw_parts(
+                (hhdm_offset + frame.as_u64()).as_ptr::<u8>().add(start),
+                payload.compressed_len as usize,
+            )
+        };
+        let result = zram_codec::decompress_page(compressed, slot.checksum, output);
         match result {
             Ok(()) => {
                 self.stats.swap_in_successes += 1;
@@ -256,25 +428,73 @@ impl PoolState {
         }
     }
 
-    fn discard(&mut self, id: SlotId) -> Result<(), ZramError> {
-        let Some(slot) = self.slots.get_mut(id.index()) else {
+    fn discard(
+        &mut self,
+        id: SlotId,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), ZramError> {
+        let Some(slot) = self.slots.get(id.index()) else {
             return Err(ZramError::InvalidBlock);
         };
         if slot.generation != id.generation() {
             return Err(ZramError::StaleSlot);
         }
-        let payload = slot.payload.take().ok_or(ZramError::NoData)?;
-        self.stats.used_logical_pages -= 1;
-        self.stats.used_compressed_bytes -= payload.len() as u64;
+        let payload = slot.payload.ok_or(ZramError::NoData)?;
+        let compressed_len = payload.compressed_len as u64;
+        self.release_payload(payload, pmm, hhdm_offset)?;
+        let slot = self
+            .slots
+            .get_mut(id.index())
+            .expect("validated ZRAM slot disappeared under pool lock");
+        slot.payload = None;
+        self.stats.used_logical_pages = self
+            .stats
+            .used_logical_pages
+            .checked_sub(1)
+            .expect("live ZRAM slot missing logical-page accounting");
+        self.stats.used_compressed_bytes = self
+            .stats
+            .used_compressed_bytes
+            .checked_sub(compressed_len)
+            .expect("live ZRAM slot missing payload accounting");
         self.stats.slot_releases += 1;
         slot.checksum = 0;
         slot.pte_flags = 0;
-        drop(payload);
         if slot.generation < MAX_SLOT_GENERATION {
             // Capacity was reserved when the slot table entry was created.
             self.free.push(id.index() as u32);
         }
         Ok(())
+    }
+}
+
+fn chunk_mask(first_chunk: usize, chunk_count: usize) -> u64 {
+    if chunk_count == STORAGE_CHUNKS_PER_PAGE {
+        u64::MAX
+    } else {
+        ((1u64 << chunk_count) - 1) << first_chunk
+    }
+}
+
+fn find_free_chunk_run(allocated_chunks: u64, chunk_count: usize) -> Option<usize> {
+    (0..=STORAGE_CHUNKS_PER_PAGE - chunk_count)
+        .find(|first_chunk| allocated_chunks & chunk_mask(*first_chunk, chunk_count) == 0)
+}
+
+fn write_stored_payload(
+    frame: PhysAddr,
+    first_chunk: usize,
+    payload: &[u8],
+    hhdm_offset: VirtAddr,
+) {
+    let start = first_chunk * STORAGE_CHUNK_BYTES;
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            payload.as_ptr(),
+            (hhdm_offset + frame.as_u64()).as_mut_ptr::<u8>().add(start),
+            payload.len(),
+        );
     }
 }
 
@@ -320,13 +540,22 @@ pub fn configure(
     {
         return Err(ZramError::InvalidPolicy);
     }
+    let logical_bytes = policy
+        .total_logical_pages
+        .checked_mul(PAGE_SIZE as u64)
+        .ok_or(ZramError::InvalidPolicy)?;
+    if logical_bytes != policy.total_logical_bytes {
+        return Err(ZramError::InvalidPolicy);
+    }
     let mut config = CONFIGURATION.lock();
     if config.policy.is_some() {
         return Err(ZramError::AlreadyConfigured);
     }
     let logical_sum = policy.pools[..policy.pool_count]
         .iter()
-        .try_fold(0u64, |sum, pool| sum.checked_add(pool.logical_pages))
+        .try_fold(0u64, |sum, pool| {
+            sum.checked_add(pool.logical_capacity_pages)
+        })
         .ok_or(ZramError::InvalidPolicy)?;
     let physical_sum = policy.pools[..policy.pool_count]
         .iter()
@@ -338,7 +567,7 @@ pub fn configure(
         || physical_sum != policy.total_physical_budget_bytes
         || policy.pools[..policy.pool_count]
             .iter()
-            .any(|pool| pool.logical_pages == 0 || pool.physical_budget_bytes == 0)
+            .any(|pool| pool.logical_capacity_pages == 0 || pool.physical_budget_bytes == 0)
     {
         return Err(ZramError::InvalidPolicy);
     }
@@ -346,11 +575,13 @@ pub fn configure(
     let slot_base = MAX_GLOBAL_SLOTS / policy.pool_count;
     let slot_remainder = MAX_GLOBAL_SLOTS % policy.pool_count;
     for (index, pool_policy) in policy.pools[..policy.pool_count].iter().enumerate() {
-        let slot_limit = (slot_base + usize::from(index < slot_remainder))
-            .min(pool_policy.logical_pages as usize);
+        let logical_capacity_pages = usize::try_from(pool_policy.logical_capacity_pages)
+            .map_err(|_| ZramError::InvalidPolicy)?;
+        let slot_limit =
+            (slot_base + usize::from(index < slot_remainder)).min(logical_capacity_pages);
         POOLS[index].lock().configure(PoolConfig {
             identity: index as u8,
-            logical_pages: pool_policy.logical_pages,
+            logical_capacity_pages: pool_policy.logical_capacity_pages,
             physical_budget_bytes: pool_policy.physical_budget_bytes,
             slot_limit,
         });
@@ -378,6 +609,8 @@ pub fn write_page(
     data: &[u8; PAGE_SIZE],
     pte_flags: u64,
     selection_key: u64,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
 ) -> Result<SlotId, ZramError> {
     let pool_count = ACTIVE_POOLS.load(Ordering::Acquire);
     if pool_count == 0 {
@@ -403,10 +636,23 @@ pub fn write_page(
         }
     };
     let mut payload = Vec::new();
-    payload
-        .try_reserve_exact(compressed_len)
-        .map_err(|_| ZramError::MetadataExhausted)?;
+    if payload.try_reserve_exact(compressed_len).is_err() {
+        GLOBAL_OUT_FAILURES.fetch_add(1, Ordering::Relaxed);
+        return Err(ZramError::AllocationFailure);
+    }
     payload.extend_from_slice(&scratch[..compressed_len]);
+    let stored_representation_bytes = zram_codec::allocator_consumed_bytes(payload.capacity())
+        .ok_or(ZramError::AllocationFailure)?;
+    if stored_representation_bytes >= PAGE_SIZE {
+        let preferred = selection_key as usize % pool_count;
+        let mut pool = POOLS[preferred].lock();
+        pool.stats.incompressible_rejected += 1;
+        pool.stats.compression_failures += 1;
+        pool.stats.swap_out_attempts += 1;
+        pool.stats.swap_out_failures += 1;
+        GLOBAL_OUT_FAILURES.fetch_add(1, Ordering::Relaxed);
+        return Err(ZramError::Incompressible);
+    }
     scratch.fill(0);
 
     let start = selection_key as usize % pool_count;
@@ -416,7 +662,10 @@ pub fn write_page(
             FALLBACKS.fetch_add(1, Ordering::Relaxed);
         }
         let pool_index = (start + offset) % pool_count;
-        match POOLS[pool_index].lock().store(payload, checksum, pte_flags) {
+        match POOLS[pool_index]
+            .lock()
+            .store(payload, checksum, pte_flags, pmm, hhdm_offset)
+        {
             Ok(id) => return Ok(id),
             Err((error, returned_payload)) => {
                 last_error = error;
@@ -428,24 +677,40 @@ pub fn write_page(
     Err(last_error)
 }
 
-pub fn read_page(id: SlotId, output: &mut [u8; PAGE_SIZE]) -> Result<u64, ZramError> {
+pub fn read_page(
+    id: SlotId,
+    output: &mut [u8; PAGE_SIZE],
+    hhdm_offset: VirtAddr,
+) -> Result<u64, ZramError> {
     let pool_count = ACTIVE_POOLS.load(Ordering::Acquire);
     if id.pool() >= pool_count {
         return Err(ZramError::InvalidBlock);
     }
-    POOLS[id.pool()].lock().read(id, output)
+    POOLS[id.pool()].lock().read(id, output, hhdm_offset)
 }
 
-pub fn discard(id: SlotId) -> Result<(), ZramError> {
+pub fn discard(
+    id: SlotId,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Result<(), ZramError> {
     let pool_count = ACTIVE_POOLS.load(Ordering::Acquire);
     if id.pool() >= pool_count {
         return Err(ZramError::InvalidBlock);
     }
-    POOLS[id.pool()].lock().discard(id)
+    POOLS[id.pool()].lock().discard(id, pmm, hhdm_offset)
 }
 
-pub fn discard_block(raw: BlockId) -> Result<(), ZramError> {
-    discard(SlotId::from_raw(raw).ok_or(ZramError::InvalidBlock)?)
+pub fn discard_block(
+    raw: BlockId,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Result<(), ZramError> {
+    discard(
+        SlotId::from_raw(raw).ok_or(ZramError::InvalidBlock)?,
+        pmm,
+        hhdm_offset,
+    )
 }
 
 pub fn block_exists(raw: BlockId) -> bool {
@@ -483,6 +748,7 @@ pub fn aggregate_stats() -> AggregateStats {
         result.configured_physical_budget_bytes += stats.physical_budget_bytes;
         result.stored_pages += stats.used_logical_pages;
         result.compressed_bytes += stats.used_compressed_bytes;
+        result.allocator_consumed_bytes += stats.allocator_consumed_bytes;
         result.pages_stored_raw += stats.raw_pages;
         result.incompressible_rejected += stats.incompressible_rejected;
         result.swap_out_successes += stats.swap_out_successes;
@@ -492,6 +758,7 @@ pub fn aggregate_stats() -> AggregateStats {
         result.checksum_failures += stats.checksum_failures;
         result.decompression_failures += stats.decompression_failures;
         result.full_pool_events += stats.full_events;
+        result.budget_full_events += stats.budget_full_events;
     }
     result.swap_out_attempts = GLOBAL_OUT_ATTEMPTS.load(Ordering::Relaxed);
     result.swap_out_failures = GLOBAL_OUT_FAILURES.load(Ordering::Relaxed);
@@ -508,43 +775,30 @@ pub fn stats() -> (usize, usize, usize) {
     )
 }
 
-/// Block ids written by the most recent `freezram_fill`, pending verification.
-static FREEZRAM_BLOCKS: Mutex<Vec<BlockId>> = Mutex::new(Vec::new());
-
-pub fn freezram_fill(n: usize) -> usize {
-    let mut blocks = FREEZRAM_BLOCKS.lock();
-    for id in blocks.drain(..) {
-        let _ = discard_block(id);
+#[cfg(feature = "swap1_test")]
+pub fn corrupt_payload_for_test(id: SlotId, hhdm_offset: VirtAddr) -> Result<(), ZramError> {
+    let pool_count = ACTIVE_POOLS.load(Ordering::Acquire);
+    if id.pool() >= pool_count {
+        return Err(ZramError::InvalidBlock);
     }
-    if blocks.try_reserve(n.min(MAX_GLOBAL_SLOTS)).is_err() {
-        return 0;
+    let mut pool = POOLS[id.pool()].lock();
+    let slot = pool
+        .slots
+        .get_mut(id.index())
+        .ok_or(ZramError::InvalidBlock)?;
+    if slot.generation != id.generation() {
+        return Err(ZramError::StaleSlot);
     }
-    let mut written = 0;
-    for index in 0..n.min(MAX_GLOBAL_SLOTS) {
-        let mut page = [0u8; PAGE_SIZE];
-        page.fill((index & 0xff) as u8);
-        match write_page(&page, 0, index as u64) {
-            Ok(id) => {
-                blocks.push(id.raw());
-                written += 1;
-            }
-            Err(_) => break,
-        }
+    let payload = slot.payload.ok_or(ZramError::NoData)?;
+    let storage_page = pool
+        .storage_pages
+        .get(payload.storage_page_index as usize)
+        .ok_or(ZramError::InvalidBlock)?;
+    let frame = storage_page.frame.ok_or(ZramError::NoData)?;
+    let start = payload.first_chunk as usize * STORAGE_CHUNK_BYTES;
+    unsafe {
+        let byte = (hhdm_offset + frame.as_u64()).as_mut_ptr::<u8>().add(start);
+        *byte ^= 0x5a;
     }
-    written
-}
-
-pub fn freezram_verify() -> Option<usize> {
-    let mut blocks = FREEZRAM_BLOCKS.lock();
-    let mut verified = 0;
-    for (index, raw) in blocks.drain(..).enumerate() {
-        let id = SlotId::from_raw(raw)?;
-        let mut output = [0u8; PAGE_SIZE];
-        read_page(id, &mut output).ok()?;
-        if output.iter().all(|byte| *byte == (index & 0xff) as u8) {
-            verified += 1;
-        }
-        discard(id).ok()?;
-    }
-    Some(verified)
+    Ok(())
 }

@@ -608,7 +608,9 @@ pub fn sys_munmap(
                         pmm.free_frame(frame);
                     }
                     RemovedOwnership::Swapped(block_id) => {
-                        if crate::memory::zram::discard_block(block_id).is_err() {
+                        let hhdm_offset =
+                            VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+                        if crate::memory::zram::discard_block(block_id, pmm, hhdm_offset).is_err() {
                             munmap_invariant_failure("preflighted ZRAM block disappeared");
                         }
                         MUNMAP_SWAPPED_RELEASED.fetch_add(1, Ordering::Relaxed);

@@ -10,6 +10,7 @@ use crate::sched::Scheduler;
 use alloc::collections::VecDeque;
 use core::sync::atomic::{AtomicU64, Ordering};
 use spin::Mutex;
+use sunlight_ipc::swap_policy::{FillDiagnostics, FillError};
 use x86_64::{
     structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB},
     PhysAddr, VirtAddr,
@@ -26,6 +27,9 @@ static CANDIDATE_SCANS: AtomicU64 = AtomicU64::new(0);
 static PAGES_RECLAIMED: AtomicU64 = AtomicU64::new(0);
 static WATERMARK_ACTIVATIONS: AtomicU64 = AtomicU64::new(0);
 static RECLAIM_NO_PROGRESS: AtomicU64 = AtomicU64::new(0);
+static LAST_FILL_REQUESTED: AtomicU64 = AtomicU64::new(0);
+static LAST_FILL_STORED: AtomicU64 = AtomicU64::new(0);
+static LAST_FILL_ERROR: AtomicU64 = AtomicU64::new(FillError::None as u64);
 
 #[derive(Debug, Clone, Copy)]
 pub struct AnonFrame {
@@ -111,7 +115,7 @@ pub unsafe fn swap_out_page(
     let selection_key = identity.generation.wrapping_mul(0x9e37_79b9)
         ^ page.start_address().as_u64().rotate_right(12)
         ^ crate::sched::current_cpu_id() as u64;
-    let slot = zram::write_page(src, flags.bits(), selection_key)?;
+    let slot = zram::write_page(src, flags.bits(), selection_key, pmm, hhdm_offset)?;
 
     if address_space
         .replace_mapping(
@@ -126,11 +130,120 @@ pub unsafe fn swap_out_page(
         )
         .is_err()
     {
-        let _ = zram::discard(slot);
+        let _ = zram::discard(slot, pmm, hhdm_offset);
         return Err(ZramError::InvalidBlock);
     }
     untrack(frame);
     Ok(slot.raw())
+}
+
+pub unsafe fn diagnostic_fill(
+    start_address: u64,
+    requested_pages: u64,
+    sched: &mut Scheduler,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+) -> FillDiagnostics {
+    let mut result = FillDiagnostics {
+        requested_pages,
+        stored_pages: 0,
+        error: FillError::None as u64,
+    };
+    if zram::policy().is_none() {
+        result.error = FillError::SwapNotConfigured as u64;
+        record_fill_result(result);
+        return result;
+    }
+    if requested_pages == 0 || start_address % ZRAM_BLOCK_SIZE as u64 != 0 {
+        result.error = FillError::InvalidRequest as u64;
+        record_fill_result(result);
+        return result;
+    }
+    let Some(length_bytes) = requested_pages.checked_mul(ZRAM_BLOCK_SIZE as u64) else {
+        result.error = FillError::InvalidRequest as u64;
+        record_fill_result(result);
+        return result;
+    };
+    if start_address.checked_add(length_bytes).is_none() {
+        result.error = FillError::InvalidRequest as u64;
+        record_fill_result(result);
+        return result;
+    }
+
+    let process = sched.current_process_mut();
+    let Ok(owner_pid) = u32::try_from(process.pid) else {
+        result.error = FillError::InternalInvariantFailure as u64;
+        record_fill_result(result);
+        return result;
+    };
+    for index in 0..requested_pages {
+        let address = start_address + index * ZRAM_BLOCK_SIZE as u64;
+        let page = match Page::<Size4KiB>::from_start_address(VirtAddr::new(address)) {
+            Ok(page) => page,
+            Err(_) => {
+                result.error = FillError::InvalidRequest as u64;
+                break;
+            }
+        };
+        let Some(region) = process.address_space.lookup_region(address) else {
+            result.error = FillError::NoEligibleCandidate as u64;
+            break;
+        };
+        if region.kind != MappingKind::Anonymous
+            || region.backing != RegionBacking::AnonymousOwner(owner_pid)
+        {
+            result.error = FillError::NoEligibleCandidate as u64;
+            break;
+        }
+        let Some((frame, flags)) = process.address_space.lookup_entry(page, hhdm_offset) else {
+            result.error = FillError::NoEligibleCandidate as u64;
+            break;
+        };
+        if !flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE) {
+            result.error = FillError::NoEligibleCandidate as u64;
+            break;
+        }
+        match swap_out_page(&mut process.address_space, page, frame, hhdm_offset, pmm) {
+            Ok(_) => result.stored_pages += 1,
+            Err(error) => {
+                result.error = fill_error(error) as u64;
+                break;
+            }
+        }
+    }
+    record_fill_result(result);
+    result
+}
+
+fn record_fill_result(result: FillDiagnostics) {
+    LAST_FILL_REQUESTED.store(result.requested_pages, Ordering::Relaxed);
+    LAST_FILL_STORED.store(result.stored_pages, Ordering::Relaxed);
+    LAST_FILL_ERROR.store(result.error, Ordering::Relaxed);
+}
+
+pub fn last_fill_result() -> FillDiagnostics {
+    FillDiagnostics {
+        requested_pages: LAST_FILL_REQUESTED.load(Ordering::Relaxed),
+        stored_pages: LAST_FILL_STORED.load(Ordering::Relaxed),
+        error: LAST_FILL_ERROR.load(Ordering::Relaxed),
+    }
+}
+
+fn fill_error(error: ZramError) -> FillError {
+    match error {
+        ZramError::NotConfigured => FillError::SwapNotConfigured,
+        ZramError::OutOfSpace | ZramError::MetadataExhausted => FillError::PoolFull,
+        ZramError::PhysicalBudgetExceeded => FillError::PhysicalBudgetExhausted,
+        ZramError::AllocationFailure => FillError::AllocationFailure,
+        ZramError::Incompressible => FillError::CompressionNotBeneficial,
+        ZramError::InvalidData | ZramError::ChecksumMismatch => FillError::IntegrityFailure,
+        ZramError::InvalidBlock | ZramError::NoData | ZramError::StaleSlot => {
+            FillError::InternalInvariantFailure
+        }
+        ZramError::AlreadyConfigured | ZramError::InvalidPolicy => {
+            FillError::InternalInvariantFailure
+        }
+    }
 }
 
 /// Restore and validate one page before publishing its new present mapping.
@@ -162,7 +275,7 @@ pub unsafe fn swap_in_page(
         return Err(ZramError::OutOfSpace);
     }
     let dst = &mut *((hhdm_offset + frame_addr.as_u64()).as_mut_ptr::<[u8; ZRAM_BLOCK_SIZE]>());
-    let stored_bits = match zram::read_page(slot, dst) {
+    let stored_bits = match zram::read_page(slot, dst, hhdm_offset) {
         Ok(bits) => bits,
         Err(error) => {
             dst.fill(0);
@@ -209,7 +322,7 @@ pub unsafe fn swap_in_page(
     // Scheduler/address-space serialization makes disappearance impossible.
     // Fail-stop instead of publishing a present page while silently leaking or
     // double-releasing its old ownership token.
-    zram::discard(slot).expect("published swap-in lost its live ZRAM slot");
+    zram::discard(slot, pmm, hhdm_offset).expect("published swap-in lost its live ZRAM slot");
     // Do not enqueue from the page-fault path: that could grow the kernel heap
     // and would make the just-faulted, currently active page an immediate
     // reclaim candidate. A later aging/re-registration mechanism is deferred.

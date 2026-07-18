@@ -3,6 +3,7 @@
 pub const PAGE_SIZE: usize = 4096;
 // Matches lz4_flex 0.11's allocation-free `compress_into` bound.
 pub const MAX_COMPRESSED_SIZE: usize = 20 + PAGE_SIZE * 110 / 100;
+const STORAGE_GRANULE_BYTES: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CodecError {
@@ -11,6 +12,13 @@ pub enum CodecError {
     InvalidLength,
     DecompressionFailed,
     ChecksumMismatch,
+}
+
+pub const fn allocator_consumed_bytes(payload_capacity_bytes: usize) -> Option<usize> {
+    match payload_capacity_bytes.checked_add(STORAGE_GRANULE_BYTES - 1) {
+        Some(value) => Some(value & !(STORAGE_GRANULE_BYTES - 1)),
+        None => None,
+    }
 }
 
 /// FNV-1a is a lightweight accidental-corruption detector, not an
@@ -30,7 +38,10 @@ pub fn compress_page(
 ) -> Result<(usize, u32), CodecError> {
     let written =
         lz4_flex::block::compress_into(src, output).map_err(|_| CodecError::CompressionFailed)?;
-    if written == 0 || written >= PAGE_SIZE {
+    let Some(allocator_bytes) = allocator_consumed_bytes(written) else {
+        return Err(CodecError::CompressionFailed);
+    };
+    if written == 0 || allocator_bytes >= PAGE_SIZE {
         return Err(CodecError::Incompressible);
     }
     Ok((written, checksum(src)))

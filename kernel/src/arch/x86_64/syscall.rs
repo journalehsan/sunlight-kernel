@@ -1337,6 +1337,15 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         true,
     ) {
         Ok(entry) => {
+            process.trusted_display_service =
+                crate::process::spawn::is_trusted_display_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            process.trusted_swap_admin_service =
+                crate::process::spawn::is_trusted_swap_admin_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            process.trusted_zram_diagnostic =
+                crate::process::spawn::is_trusted_zram_diagnostic_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
             // Request immediate reschedule so the next timer tick switches context
             crate::sched::request_reschedule();
@@ -1565,6 +1574,12 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         Ok(_) => {
             child.trusted_display_service =
                 crate::process::spawn::is_trusted_display_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            child.trusted_swap_admin_service =
+                crate::process::spawn::is_trusted_swap_admin_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            child.trusted_zram_diagnostic =
+                crate::process::spawn::is_trusted_zram_diagnostic_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             // [LAUNCH-TRACE] Point 5: spawn returned successfully
             trace.spawn_returned_ns = now_ns();
@@ -4415,34 +4430,48 @@ fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
 
 /// Syscall: swapctl (85).
 ///
-/// Operations 0/1 retain the bounded synthetic `freezram` diagnostic. Op 2
-/// reports online CPUs. Op 3 is the one-shot SwapAdmin configuration request;
+/// Operation 0 performs a bounded, typed diagnostic swap-out over an anonymous
+/// range owned by the exact embedded freezram applet. Op 2 reports online
+/// CPUs. Op 3 is the one-shot SwapAdmin configuration request;
 /// the kernel authenticates the embedded service identity and recomputes the
 /// submitted policy from PMM/scheduler state. Op 4 reports active pool count;
 /// ops 5/6 copy bounded aggregate/per-pool health snapshots to userspace.
 fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
     match frame.rdi {
         0 => {
-            if !crate::sched::SCHEDULER
-                .lock()
-                .current_process()
-                .trusted_swap_admin_service
-            {
+            use ::sunlight_ipc::swap_policy::FillDiagnostics;
+
+            if frame.r8 as usize != core::mem::size_of::<FillDiagnostics>() {
                 return u64::MAX;
             }
-            crate::memory::zram::freezram_fill(frame.rsi as usize) as u64
-        }
-        1 => {
-            if !crate::sched::SCHEDULER
-                .lock()
-                .current_process()
-                .trusted_swap_admin_service
-            {
+            let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+            let result = {
+                let mut sched = crate::sched::SCHEDULER.lock();
+                if !sched.current_process().trusted_zram_diagnostic {
+                    return u64::MAX;
+                }
+                let mut pmm = crate::PMM.lock();
+                unsafe {
+                    crate::memory::swap::diagnostic_fill(
+                        frame.rsi,
+                        frame.rdx,
+                        &mut sched,
+                        hhdm_offset,
+                        &mut pmm,
+                    )
+                }
+            };
+            let bytes = unsafe {
+                core::slice::from_raw_parts(
+                    (&result as *const FillDiagnostics).cast::<u8>(),
+                    core::mem::size_of::<FillDiagnostics>(),
+                )
+            };
+            if copy_to_user(frame.r10, bytes).is_ok() {
+                0
+            } else {
                 return u64::MAX;
             }
-            crate::memory::zram::freezram_verify()
-                .map(|n| n as u64)
-                .unwrap_or(u64::MAX)
         }
         2 => crate::sched::SCHEDULER.lock().online_cores.max(1) as u64,
         3 => {
@@ -4469,7 +4498,7 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
             };
             if frame.rsi != policy.detected_ram_bytes
                 || frame.rdx != u64::from(policy.detected_online_cpus)
-                || frame.r8 != policy.total_logical_pages
+                || frame.r8 != policy.total_logical_bytes
                 || frame.r9 != policy.pool_count as u64
                 || frame.r10 != policy.total_physical_budget_bytes
                 || frame.r12 != u64::from(policy.version)
@@ -4499,12 +4528,15 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
             }
             let zram = crate::memory::zram::aggregate_stats();
             let reclaim = crate::memory::swap::diagnostics();
+            let last_fill = crate::memory::swap::last_fill_result();
+            let policy = crate::memory::zram::policy();
             let diagnostics = AggregateDiagnostics {
                 active_pool_count: zram.active_pool_count as u64,
                 configured_logical_pages: zram.configured_logical_pages,
                 configured_physical_budget_bytes: zram.configured_physical_budget_bytes,
                 stored_pages: zram.stored_pages,
                 compressed_bytes: zram.compressed_bytes,
+                allocator_consumed_bytes: zram.allocator_consumed_bytes,
                 pages_stored_raw: zram.pages_stored_raw,
                 incompressible_rejected: zram.incompressible_rejected,
                 swap_out_attempts: zram.swap_out_attempts,
@@ -4516,12 +4548,19 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
                 checksum_failures: zram.checksum_failures,
                 decompression_failures: zram.decompression_failures,
                 full_pool_events: zram.full_pool_events,
+                budget_full_events: zram.budget_full_events,
                 fallback_to_next_pool: zram.fallback_to_next_pool,
                 candidate_scans: reclaim.candidate_scans,
                 pages_reclaimed: reclaim.pages_reclaimed,
                 watermark_activations: reclaim.watermark_activations,
                 service_configured: u64::from(zram.service_configured),
                 admin_owner_alive: u64::from(zram.admin_owner_alive),
+                detected_ram_bytes: policy.map_or(0, |value| value.detected_ram_bytes),
+                detected_online_cpus: policy
+                    .map_or(0, |value| u64::from(value.detected_online_cpus)),
+                last_fill_requested_pages: last_fill.requested_pages,
+                last_fill_stored_pages: last_fill.stored_pages,
+                last_fill_error: last_fill.error,
             };
             let bytes = unsafe {
                 core::slice::from_raw_parts(
@@ -4549,6 +4588,7 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
                 physical_budget_bytes: pool.physical_budget_bytes,
                 used_logical_pages: pool.used_logical_pages,
                 used_compressed_bytes: pool.used_compressed_bytes,
+                allocator_consumed_bytes: pool.allocator_consumed_bytes,
                 compression_successes: pool.compression_successes,
                 compression_failures: pool.compression_failures,
                 raw_pages: pool.raw_pages,
@@ -4562,6 +4602,7 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
                 checksum_failures: pool.checksum_failures,
                 decompression_failures: pool.decompression_failures,
                 full_events: pool.full_events,
+                budget_full_events: pool.budget_full_events,
                 slot_releases: pool.slot_releases,
             };
             let bytes = unsafe {

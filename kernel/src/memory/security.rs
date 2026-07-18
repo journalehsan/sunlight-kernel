@@ -759,11 +759,11 @@ pub fn run_swap1_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm:
         policy.pool_count >= 2,
         "SWAP-1 gate requires at least two pools"
     );
-    // Make pool 0 deliberately tiny so the bounded normal selector must fall
-    // through to pool 1 without needing thousands of pages in this gate.
-    let original_first_budget = policy.pools[0].physical_budget_bytes;
-    policy.pools[0].physical_budget_bytes = 64;
-    policy.pools[1].physical_budget_bytes += original_first_budget - 64;
+    // Make pool 0's test-only logical capacity deliberately tiny so the
+    // bounded normal selector must fall through to pool 1.
+    let original_first_capacity = policy.pools[0].logical_capacity_pages;
+    policy.pools[0].logical_capacity_pages = 1;
+    policy.pools[1].logical_capacity_pages += original_first_capacity - 1;
     crate::memory::zram::configure(policy, 0x5a01, 1).unwrap();
     crate::serial_println!(
         "[SWAP-1] configured {} pools from {} MiB / {} CPUs",
@@ -805,9 +805,17 @@ pub fn run_swap1_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm:
 
     let reclaimed = crate::memory::swap::force_pressure_gate(PAGES, &mut sched, pmm, hhdm);
     assert_eq!(reclaimed, PAGES);
-    assert_eq!(pmm.free_page_count(), free_after_map + PAGES);
     let aggregate = crate::memory::zram::aggregate_stats();
+    let storage_pages = aggregate.allocator_consumed_bytes / PAGE_BYTES;
+    assert!(storage_pages < PAGES as u64);
+    assert_eq!(
+        pmm.free_page_count(),
+        free_after_map + PAGES - storage_pages as usize
+    );
     assert!(aggregate.fallback_to_next_pool != 0);
+    assert_eq!(aggregate.stored_pages, PAGES as u64);
+    assert_eq!(aggregate.compressed_bytes, 324);
+    assert_eq!(aggregate.allocator_consumed_bytes, 2 * PAGE_BYTES);
     assert!(
         crate::memory::zram::pool_stats(0)
             .unwrap()
@@ -821,11 +829,53 @@ pub fn run_swap1_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm:
             != 0
     );
     crate::serial_println!(
+        "[SWAP-1] sample requested={} stored={} logical_bytes={} compressed_bytes={} physical_bytes={} pool0_pages={} pool1_pages={}",
+        PAGES,
+        aggregate.stored_pages,
+        aggregate.stored_pages * PAGE_BYTES,
+        aggregate.compressed_bytes,
+        aggregate.allocator_consumed_bytes,
+        crate::memory::zram::pool_stats(0)
+            .unwrap()
+            .used_logical_pages,
+        crate::memory::zram::pool_stats(1)
+            .unwrap()
+            .used_logical_pages
+    );
+    crate::serial_println!(
         "[SWAP-1] pressure reclaimed {} pages across pools; fallback bounded: OK",
         reclaimed
     );
 
-    for index in 0..8usize {
+    let before_incompressible = crate::memory::zram::aggregate_stats();
+    let mut incompressible = [0u8; 4096];
+    let mut random_state = 0x4d59_5df4_d0f3_3173u64;
+    for byte in &mut incompressible {
+        random_state ^= random_state << 13;
+        random_state ^= random_state >> 7;
+        random_state ^= random_state << 17;
+        *byte = random_state as u8;
+    }
+    assert_eq!(
+        crate::memory::zram::write_page(&incompressible, 0, 0xfeed, pmm, hhdm),
+        Err(crate::memory::zram::ZramError::Incompressible)
+    );
+    let after_incompressible = crate::memory::zram::aggregate_stats();
+    assert_eq!(
+        after_incompressible.stored_pages,
+        before_incompressible.stored_pages
+    );
+    assert_eq!(
+        after_incompressible.allocator_consumed_bytes,
+        before_incompressible.allocator_consumed_bytes
+    );
+    assert_eq!(
+        after_incompressible.incompressible_rejected,
+        before_incompressible.incompressible_rejected + 1
+    );
+    crate::serial_println!("[SWAP-1] incompressible page rejected without ownership change: OK");
+
+    for index in 0..PAGES {
         let address = BASE + index as u64 * PAGE_BYTES;
         let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address)).unwrap();
         let frame = unsafe {
@@ -850,7 +900,72 @@ pub fn run_swap1_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm:
         };
         assert!(flags.contains(PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE));
     }
-    crate::serial_println!("[SWAP-1] exact patterns and RW/NX metadata restored: OK");
+    assert_eq!(crate::memory::zram::aggregate_stats().stored_pages, 0);
+    assert_eq!(
+        crate::memory::zram::aggregate_stats().allocator_consumed_bytes,
+        0
+    );
+    assert_eq!(pmm.free_page_count(), free_after_map);
+    crate::serial_println!(
+        "[SWAP-1] restored={} exact patterns and RW/NX metadata restored: OK",
+        PAGES
+    );
+
+    for index in [8usize, 9, 10] {
+        let address = BASE + index as u64 * PAGE_BYTES;
+        let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address)).unwrap();
+        let frame = unsafe {
+            sched
+                .current_process()
+                .address_space
+                .lookup_phys(page, hhdm)
+                .unwrap()
+        };
+        unsafe {
+            crate::memory::swap::swap_out_page(
+                &mut sched.current_process_mut().address_space,
+                page,
+                frame,
+                hhdm,
+                pmm,
+            )
+        }
+        .unwrap();
+    }
+
+    let corrupt_page =
+        Page::<Size4KiB>::from_start_address(VirtAddr::new(BASE + 9 * PAGE_BYTES)).unwrap();
+    let corrupt_raw = unsafe {
+        sched
+            .current_process()
+            .address_space
+            .swapped_block_id(corrupt_page, hhdm)
+            .unwrap()
+    };
+    let corrupt_slot = crate::memory::zram::SlotId::from_raw(corrupt_raw).unwrap();
+    crate::memory::zram::corrupt_payload_for_test(corrupt_slot, hhdm).unwrap();
+    assert!(unsafe {
+        crate::memory::swap::swap_in_page(
+            &mut sched.current_process_mut().address_space,
+            corrupt_page,
+            hhdm,
+            pmm,
+        )
+    }
+    .is_err());
+    assert_eq!(
+        unsafe {
+            sched
+                .current_process()
+                .address_space
+                .swapped_block_id(corrupt_page, hhdm)
+        },
+        Some(corrupt_raw)
+    );
+    assert!(crate::memory::zram::block_exists(corrupt_raw));
+    crate::process::mmap::sys_munmap(BASE + 9 * PAGE_BYTES, PAGE_BYTES, pmm, &mut sched).unwrap();
+    assert!(!crate::memory::zram::block_exists(corrupt_raw));
+    crate::serial_println!("[SWAP-1] corrupted payload rejected before PTE publication: OK");
 
     let stale_page =
         Page::<Size4KiB>::from_start_address(VirtAddr::new(BASE + 8 * PAGE_BYTES)).unwrap();
@@ -863,7 +978,20 @@ pub fn run_swap1_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm:
     };
     crate::process::mmap::sys_munmap(BASE + 8 * PAGE_BYTES, PAGE_BYTES, pmm, &mut sched).unwrap();
     assert!(!crate::memory::zram::block_exists(stale));
+    let stale_slot = crate::memory::zram::SlotId::from_raw(stale).unwrap();
+    let replacement_page = [0x5au8; 4096];
+    let replacement =
+        crate::memory::zram::write_page(&replacement_page, 0, stale_slot.pool() as u64, pmm, hhdm)
+            .unwrap();
+    assert_eq!(replacement.index(), stale_slot.index());
+    let mut stale_output = [0u8; 4096];
+    assert_eq!(
+        crate::memory::zram::read_page(stale_slot, &mut stale_output, hhdm),
+        Err(crate::memory::zram::ZramError::StaleSlot)
+    );
+    crate::memory::zram::discard(replacement, pmm, hhdm).unwrap();
     crate::serial_println!("[SWAP-1] munmap released swapped slot without swap-in: OK");
+    crate::serial_println!("[SWAP-1] stale slot generation rejected after reuse: OK");
 
     crate::memory::swap::untrack_process(0x5a01);
     unsafe {

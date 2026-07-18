@@ -125,6 +125,8 @@ pub struct Process {
     pub trusted_display_service: bool,
     /// Set only by the kernel's embedded-path resolver for sunlight-swapd.
     pub trusted_swap_admin_service: bool,
+    /// Set only for the exact embedded freezram diagnostic applet path.
+    pub trusted_zram_diagnostic: bool,
     /// Linux compatibility heap base for `brk(2)`.
     pub brk_base: u64,
     /// Current Linux compatibility heap break.
@@ -318,6 +320,7 @@ impl Process {
             is_linux_compat: false, // default to native SunlightOS
             trusted_display_service: false,
             trusted_swap_admin_service: false,
+            trusted_zram_diagnostic: false,
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,
@@ -468,6 +471,7 @@ impl Process {
             is_linux_compat: false,
             trusted_display_service: false,
             trusted_swap_admin_service: false,
+            trusted_zram_diagnostic: false,
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,

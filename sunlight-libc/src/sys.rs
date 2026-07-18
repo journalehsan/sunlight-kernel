@@ -152,3 +152,15 @@ pub unsafe fn syscall6(n: u64, a1: u64, a2: u64, a3: u64, a4: u64, a5: u64, a6: 
     );
     ret
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_sentinel_is_never_a_successful_count() {
+        assert_eq!(check(ERR_RAW), Err(Errno::Failed));
+        assert_eq!(check(EAGAIN_RAW), Err(Errno::Again));
+        assert_eq!(check(17), Ok(17));
+    }
+}

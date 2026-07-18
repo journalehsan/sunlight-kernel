@@ -1,6 +1,10 @@
 [SWAP-1] configured 2 pools from
+[SWAP-1] sample requested=12 stored=12 logical_bytes=49152 compressed_bytes=
 [SWAP-1] pressure reclaimed 12 pages across pools; fallback bounded: OK
-[SWAP-1] exact patterns and RW/NX metadata restored: OK
+[SWAP-1] incompressible page rejected without ownership change: OK
+[SWAP-1] restored=12 exact patterns and RW/NX metadata restored: OK
+[SWAP-1] corrupted payload rejected before PTE publication: OK
 [SWAP-1] munmap released swapped slot without swap-in: OK
+[SWAP-1] stale slot generation rejected after reuse: OK
 [SWAP-1] exit cleanup and PMM/slot accounting baseline: OK
 [SWAP-1] focused pressure gate: OK

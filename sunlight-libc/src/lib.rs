@@ -365,17 +365,24 @@ pub fn sysinfo() -> Result<SysInfo, Errno> {
     })
 }
 
-/// Write `n` synthetic compressed pages into ZRAM for live demo/verification
-/// of swap activity. Returns the number actually written.
-pub fn freezram_fill(n: u64) -> u64 {
-    unsafe { sys::syscall2(sys::SYS_SWAPCTL, 0, n) }
-}
-
-/// Verify and discard the pages written by `freezram_fill`. Returns the
-/// number that matched their expected pattern, or `Err` if a read failed.
-pub fn freezram_verify() -> Result<u64, Errno> {
-    let ret = unsafe { sys::syscall1(sys::SYS_SWAPCTL, 1) };
-    sys::check(ret)
+/// Swap out a caller-owned anonymous range through the normal MM lifecycle.
+pub fn freezram_fill(
+    start_address: *mut u8,
+    requested_pages: u64,
+) -> Result<sunlight_ipc::swap_policy::FillDiagnostics, Errno> {
+    let mut result = sunlight_ipc::swap_policy::FillDiagnostics::default();
+    let ret = unsafe {
+        sys::syscall6(
+            sys::SYS_SWAPCTL,
+            0,
+            start_address as u64,
+            requested_pages,
+            (&mut result as *mut sunlight_ipc::swap_policy::FillDiagnostics) as u64,
+            core::mem::size_of::<sunlight_ipc::swap_policy::FillDiagnostics>() as u64,
+            0,
+        )
+    };
+    sys::check(ret).map(|_| result)
 }
 
 /// Create an anonymous pipe; returns (read_end, write_end).

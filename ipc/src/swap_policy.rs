@@ -1,19 +1,15 @@
 //! Fixed SWAP-1 boot policy shared by the privileged policy service and kernel.
 
-pub const POLICY_VERSION: u32 = 1;
+pub const POLICY_VERSION: u32 = 2;
 pub const PAGE_SIZE: u64 = 4096;
 pub const GIB: u64 = 1024 * 1024 * 1024;
 pub const MIN_POOL_BYTES: u64 = 256 * 1024 * 1024;
+pub const MIN_PHYSICAL_BUDGET_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_POOLS: usize = 32;
-
-/// The kernel heap is currently a fixed 8 MiB arena. SWAP-1 deliberately gives
-/// compressed payloads at most one quarter of it, leaving bounded headroom for
-/// page tables, process metadata, IPC, and slot metadata.
-pub const MAX_PHYSICAL_BUDGET_BYTES: u64 = 2 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PoolPolicy {
-    pub logical_pages: u64,
+    pub logical_capacity_pages: u64,
     pub physical_budget_bytes: u64,
 }
 
@@ -37,6 +33,7 @@ pub struct AggregateDiagnostics {
     pub configured_physical_budget_bytes: u64,
     pub stored_pages: u64,
     pub compressed_bytes: u64,
+    pub allocator_consumed_bytes: u64,
     pub pages_stored_raw: u64,
     pub incompressible_rejected: u64,
     pub swap_out_attempts: u64,
@@ -48,12 +45,18 @@ pub struct AggregateDiagnostics {
     pub checksum_failures: u64,
     pub decompression_failures: u64,
     pub full_pool_events: u64,
+    pub budget_full_events: u64,
     pub fallback_to_next_pool: u64,
     pub candidate_scans: u64,
     pub pages_reclaimed: u64,
     pub watermark_activations: u64,
     pub service_configured: u64,
     pub admin_owner_alive: u64,
+    pub detected_ram_bytes: u64,
+    pub detected_online_cpus: u64,
+    pub last_fill_requested_pages: u64,
+    pub last_fill_stored_pages: u64,
+    pub last_fill_error: u64,
 }
 
 #[repr(C)]
@@ -63,6 +66,7 @@ pub struct PoolDiagnostics {
     pub physical_budget_bytes: u64,
     pub used_logical_pages: u64,
     pub used_compressed_bytes: u64,
+    pub allocator_consumed_bytes: u64,
     pub compression_successes: u64,
     pub compression_failures: u64,
     pub raw_pages: u64,
@@ -76,6 +80,7 @@ pub struct PoolDiagnostics {
     pub checksum_failures: u64,
     pub decompression_failures: u64,
     pub full_events: u64,
+    pub budget_full_events: u64,
     pub slot_releases: u64,
 }
 
@@ -84,6 +89,47 @@ pub enum PolicyError {
     NoUsableMemory,
     ArithmeticOverflow,
     CapacityExceeded,
+}
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FillError {
+    None = 0,
+    SwapNotConfigured = 1,
+    NoEligibleCandidate = 2,
+    PoolFull = 3,
+    PhysicalBudgetExhausted = 4,
+    CompressionNotBeneficial = 5,
+    AllocationFailure = 6,
+    IntegrityFailure = 7,
+    InternalInvariantFailure = 8,
+    InvalidRequest = 9,
+}
+
+impl FillError {
+    pub const fn from_raw(value: u64) -> Option<Self> {
+        match value {
+            0 => Some(Self::None),
+            1 => Some(Self::SwapNotConfigured),
+            2 => Some(Self::NoEligibleCandidate),
+            3 => Some(Self::PoolFull),
+            4 => Some(Self::PhysicalBudgetExhausted),
+            5 => Some(Self::CompressionNotBeneficial),
+            6 => Some(Self::AllocationFailure),
+            7 => Some(Self::IntegrityFailure),
+            8 => Some(Self::InternalInvariantFailure),
+            9 => Some(Self::InvalidRequest),
+            _ => None,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FillDiagnostics {
+    pub requested_pages: u64,
+    pub stored_pages: u64,
+    pub error: u64,
 }
 
 /// Calculate the immutable SWAP-1 policy from PMM-tracked usable RAM and the
@@ -124,14 +170,21 @@ pub fn calculate(usable_ram_bytes: u64, online_cpus: u32) -> Result<SwapPolicy, 
         return Err(PolicyError::CapacityExceeded);
     }
 
-    // Never promise a compression ratio. This is merely a hard allocation
-    // ceiling: at most RAM/4, at most half the logical target, and at most the
-    // fixed-heap safety cap above.
-    let total_physical_budget_bytes = (ram_bytes / 4)
-        .min(target_bytes / 2)
-        .min(MAX_PHYSICAL_BUDGET_BYTES)
-        / PAGE_SIZE
-        * PAGE_SIZE;
+    // Never promise a compression ratio. This is a non-eager hard ceiling on
+    // compressed-storage allocation: at most RAM/4 and at most half the
+    // logical target. The lower bound only applies on systems with enough RAM
+    // and logical capacity to support it.
+    let ram_quarter = ram_bytes
+        .checked_div(4)
+        .ok_or(PolicyError::ArithmeticOverflow)?;
+    let logical_half = target_bytes
+        .checked_div(2)
+        .ok_or(PolicyError::ArithmeticOverflow)?;
+    let mut physical_target_bytes = ram_quarter.min(logical_half);
+    if ram_bytes >= MIN_PHYSICAL_BUDGET_BYTES * 4 && target_bytes >= MIN_PHYSICAL_BUDGET_BYTES * 2 {
+        physical_target_bytes = physical_target_bytes.max(MIN_PHYSICAL_BUDGET_BYTES);
+    }
+    let total_physical_budget_bytes = physical_target_bytes / PAGE_SIZE * PAGE_SIZE;
     if total_physical_budget_bytes == 0 {
         return Err(PolicyError::NoUsableMemory);
     }
@@ -142,9 +195,9 @@ pub fn calculate(usable_ram_bytes: u64, online_cpus: u32) -> Result<SwapPolicy, 
     let physical_base = total_physical_budget_bytes / pool_count as u64;
     let physical_remainder = total_physical_budget_bytes % pool_count as u64;
     for (index, pool) in pools.iter_mut().take(pool_count).enumerate() {
-        pool.logical_pages = logical_base + u64::from((index as u64) < logical_remainder);
+        pool.logical_capacity_pages = logical_base + u64::from((index as u64) < logical_remainder);
         pool.physical_budget_bytes = physical_base + u64::from((index as u64) < physical_remainder);
-        if pool.logical_pages == 0 {
+        if pool.logical_capacity_pages == 0 || pool.physical_budget_bytes == 0 {
             return Err(PolicyError::NoUsableMemory);
         }
     }
@@ -203,9 +256,12 @@ mod tests {
     fn pool_sums_are_exact_nonzero_and_remainder_is_first() {
         let policy = calculate(gib(8) + 7 * PAGE_SIZE, 12).unwrap();
         let active = &policy.pools[..policy.pool_count];
-        assert!(active.iter().all(|pool| pool.logical_pages != 0));
+        assert!(active.iter().all(|pool| pool.logical_capacity_pages != 0));
         assert_eq!(
-            active.iter().map(|pool| pool.logical_pages).sum::<u64>(),
+            active
+                .iter()
+                .map(|pool| pool.logical_capacity_pages)
+                .sum::<u64>(),
             policy.total_logical_pages
         );
         assert_eq!(
@@ -215,9 +271,29 @@ mod tests {
                 .sum::<u64>(),
             policy.total_physical_budget_bytes
         );
+        assert_eq!(
+            policy.total_logical_pages.checked_mul(PAGE_SIZE),
+            Some(policy.total_logical_bytes)
+        );
         for pair in active.windows(2) {
-            assert!(pair[0].logical_pages >= pair[1].logical_pages);
-            assert!(pair[0].logical_pages - pair[1].logical_pages <= 1);
+            assert!(pair[0].logical_capacity_pages >= pair[1].logical_capacity_pages);
+            assert!(pair[0].logical_capacity_pages - pair[1].logical_capacity_pages <= 1);
+        }
+    }
+
+    #[test]
+    fn physical_budget_matches_non_eager_policy_examples() {
+        for (ram, expected) in [
+            (gib(1), gib(1) / 4),
+            (gib(2), gib(2) / 4),
+            (gib(4), gib(4) / 4),
+            (gib(8), gib(8) / 4),
+            (gib(12), gib(12) / 6),
+        ] {
+            assert_eq!(
+                calculate(ram, 4).unwrap().total_physical_budget_bytes,
+                expected
+            );
         }
     }
 
@@ -240,7 +316,20 @@ mod tests {
             let policy = calculate(ram, 4).unwrap();
             assert_eq!(policy.total_logical_bytes, total);
             assert_eq!(policy.pool_count, 2);
-            assert_eq!(policy.pools[0].logical_pages, policy.pools[1].logical_pages);
+            assert_eq!(
+                policy.pools[0].logical_capacity_pages,
+                policy.pools[1].logical_capacity_pages
+            );
         }
+    }
+
+    #[test]
+    fn fill_error_decoding_rejects_unknown_values() {
+        assert_eq!(FillError::from_raw(0), Some(FillError::None));
+        assert_eq!(
+            FillError::from_raw(4),
+            Some(FillError::PhysicalBudgetExhausted)
+        );
+        assert_eq!(FillError::from_raw(u64::MAX), None);
     }
 }

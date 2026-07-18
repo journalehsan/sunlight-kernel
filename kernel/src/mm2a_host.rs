@@ -71,6 +71,25 @@ mod tests {
         );
     }
 
+    #[test]
+    fn zram_allocator_accounting_includes_alignment_and_rejects_overflow() {
+        assert_eq!(zram_codec::allocator_consumed_bytes(1), Some(64));
+        assert_eq!(zram_codec::allocator_consumed_bytes(17), Some(64));
+        assert_eq!(zram_codec::allocator_consumed_bytes(4090), Some(4096));
+        assert_eq!(zram_codec::allocator_consumed_bytes(usize::MAX), None);
+    }
+
+    #[test]
+    fn swap1_gate_sample_payload_size_is_stable() {
+        let mut total = 0usize;
+        for index in 0..12usize {
+            let page = [(index as u8).wrapping_mul(17); PAGE_SIZE];
+            let mut compressed = [0u8; MAX_COMPRESSED_SIZE];
+            total += zram_codec::compress_page(&page, &mut compressed).unwrap().0;
+        }
+        assert_eq!(total, 324);
+    }
+
     fn anonymous(start: u64, end: u64) -> MappingRegion {
         MappingRegion::new(
             start,

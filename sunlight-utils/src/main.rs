@@ -10,6 +10,7 @@
 #![no_main]
 
 use libc::{DirEntry, Errno, Fd, FT_DIR, STDOUT};
+use sunlight_ipc::swap_policy::FillError;
 use sunlight_ipc::{
     get_time_utc, ipc_call_timeout, nameserver_lookup, query_display_metrics,
     swap_aggregate_diagnostics, swap_pool_diagnostics, DisplayMetrics, IpcMsg, TzMsg,
@@ -1498,46 +1499,29 @@ fn cmd_free(args: &[&str]) -> i32 {
     0
 }
 
-/// Demo/verification command for the ZRAM swap pipeline: writes synthetic
-/// compressed pages into ZRAM (`freezram [n]`, default 16) or verifies and
-/// discards a prior fill (`freezram verify`). `freezram status` reports every
-/// configured ZRAM pool without changing it. Fill and verify also print the
-/// per-pool layout after completing.
+const FREEZRAM_DEFAULT_PAGES: u64 = 32;
+const FREEZRAM_MAX_PAGES: u64 = 4096;
+
+/// Bounded round-trip diagnostic for the real anonymous-page swap pipeline.
 fn cmd_freezram(args: &[&str]) -> i32 {
     match args {
         ["status"] => print_zram_devices(),
-        ["verify"] => match libc::freezram_verify() {
-            Ok(n) => {
-                let _ = write_all(b"freezram: verified ");
-                print_u64(n);
-                let _ = write_all(b" page(s)\n");
-                print_swap_used("after verify: ");
-                print_zram_devices()
-            }
-            Err(_) => {
-                let _ = write_all(b"freezram: verify failed (read/decompress error)\n");
-                1
-            }
-        },
         [] | [_] => {
-            let n = match args {
+            let requested_pages = match args {
                 [n_str] => match parse_u64(n_str) {
-                    Some(n) => n,
+                    Some(n @ 1..=FREEZRAM_MAX_PAGES) => n,
                     None => {
                         print_freezram_usage();
                         return 2;
                     }
+                    Some(_) => {
+                        let _ = write_all(b"freezram: page count must be 1..4096\n");
+                        return 2;
+                    }
                 },
-                _ => 16,
+                _ => FREEZRAM_DEFAULT_PAGES,
             };
-
-            print_swap_used("before fill: ");
-            let written = libc::freezram_fill(n);
-            let _ = write_all(b"freezram: wrote ");
-            print_u64(written);
-            let _ = write_all(b" page(s)\n");
-            print_swap_used("after fill:  ");
-            print_zram_devices()
+            run_freezram_round_trip(requested_pages)
         }
         _ => {
             print_freezram_usage();
@@ -1547,7 +1531,125 @@ fn cmd_freezram(args: &[&str]) -> i32 {
 }
 
 fn print_freezram_usage() {
-    let _ = write_all(b"usage: freezram [n] | freezram verify | freezram status\n");
+    let _ = write_all(b"usage: freezram [pages] | freezram status\n");
+}
+
+fn freezram_pattern(page_index: u64, byte_index: usize) -> u8 {
+    let stripe = (byte_index / 128) as u64;
+    page_index
+        .wrapping_mul(37)
+        .wrapping_add(stripe.wrapping_mul(11)) as u8
+}
+
+fn run_freezram_round_trip(requested_pages: u64) -> i32 {
+    let Some(length_bytes) = requested_pages
+        .checked_mul(4096)
+        .and_then(|value| usize::try_from(value).ok())
+    else {
+        let _ = write_all(b"freezram: requested range overflows address space\n");
+        return 2;
+    };
+    let mapping = match libc::mman::mmap(
+        core::ptr::null_mut(),
+        length_bytes,
+        libc::mman::PROT_READ | libc::mman::PROT_WRITE,
+        libc::mman::MAP_PRIVATE | libc::mman::MAP_ANONYMOUS,
+        -1,
+        0,
+    ) {
+        Ok(mapping) => mapping,
+        Err(_) => {
+            let _ = write_all(b"freezram: anonymous allocation failed\n");
+            return 1;
+        }
+    };
+
+    let bytes = unsafe { core::slice::from_raw_parts_mut(mapping, length_bytes) };
+    for page_index in 0..requested_pages {
+        let page_start = page_index as usize * 4096;
+        for byte_index in 0..4096 {
+            bytes[page_start + byte_index] = freezram_pattern(page_index, byte_index);
+        }
+    }
+
+    print_swap_used("before fill: ");
+    let fill = match libc::freezram_fill(mapping, requested_pages) {
+        Ok(fill) => fill,
+        Err(_) => {
+            let _ = libc::mman::munmap(mapping, length_bytes);
+            let _ = write_all(b"freezram: fill syscall failed\n");
+            return 1;
+        }
+    };
+    let snapshot_ok = print_zram_devices() == 0;
+
+    let mut restored_pages = 0u64;
+    for page_index in 0..fill.stored_pages {
+        let page_start = page_index as usize * 4096;
+        let mut valid = true;
+        for byte_index in 0..4096 {
+            if bytes[page_start + byte_index] != freezram_pattern(page_index, byte_index) {
+                valid = false;
+                break;
+            }
+        }
+        if valid {
+            restored_pages += 1;
+        }
+    }
+    let cleanup_ok = libc::mman::munmap(mapping, length_bytes).is_ok();
+    let failed_pages = requested_pages.saturating_sub(restored_pages);
+
+    let _ = write_all(b"freezram: requested=");
+    print_u64(requested_pages);
+    let _ = write_all(b" stored=");
+    print_u64(fill.stored_pages);
+    let _ = write_all(b" restored=");
+    print_u64(restored_pages);
+    let _ = write_all(b" failed=");
+    print_u64(failed_pages);
+    let _ = write_all(b"\n");
+    if let Some(error) = FillError::from_raw(fill.error) {
+        if error != FillError::None {
+            let _ = write_all(b"freezram: final error: ");
+            print_fill_error(error);
+            let _ = write_all(b"\n");
+        }
+    } else {
+        let _ = write_all(b"freezram: final error: unknown result code\n");
+    }
+    print_swap_used("after cleanup: ");
+    let cleanup_snapshot_ok = print_zram_devices() == 0;
+
+    let complete = fill.error == FillError::None as u64
+        && fill.stored_pages == requested_pages
+        && restored_pages == requested_pages
+        && snapshot_ok
+        && cleanup_ok
+        && cleanup_snapshot_ok;
+    if complete {
+        let _ = write_all(b"freezram: round-trip OK\n");
+        0
+    } else {
+        let _ = write_all(b"freezram: round-trip FAILED\n");
+        1
+    }
+}
+
+fn print_fill_error(error: FillError) {
+    let text = match error {
+        FillError::None => "none",
+        FillError::SwapNotConfigured => "swap not configured",
+        FillError::NoEligibleCandidate => "no eligible candidate",
+        FillError::PoolFull => "pool full",
+        FillError::PhysicalBudgetExhausted => "physical budget exhausted",
+        FillError::CompressionNotBeneficial => "compression not beneficial",
+        FillError::AllocationFailure => "allocation failure",
+        FillError::IntegrityFailure => "integrity/compression failure",
+        FillError::InternalInvariantFailure => "internal invariant failure",
+        FillError::InvalidRequest => "invalid request",
+    };
+    let _ = write_all(text.as_bytes());
 }
 
 fn print_zram_devices() -> i32 {
@@ -1556,13 +1658,67 @@ fn print_zram_devices() -> i32 {
         return 1;
     };
 
-    let _ = write_all(b"zram: ");
+    let _ = write_all(b"zram: configured=");
+    print_u64(total.service_configured);
+    let _ = write_all(b" active=");
+    print_u64(u64::from(total.active_pool_count != 0));
+    let _ = write_all(b" ram=");
+    print_human(total.detected_ram_bytes / 1024);
+    let _ = write_all(b" cpus=");
+    print_u64(total.detected_online_cpus);
+    let _ = write_all(b"\n  ");
     print_u64(total.active_pool_count);
     let _ = write_all(b" device(s), ");
     print_human(total.configured_logical_pages.saturating_mul(4));
     let _ = write_all(b" logical total, ");
     print_human(total.configured_physical_budget_bytes / 1024);
     let _ = write_all(b" physical budget\n");
+    let _ = write_all(b"  logical used: ");
+    print_human(total.stored_pages.saturating_mul(4));
+    let _ = write_all(b" (");
+    print_u64(total.stored_pages);
+    let _ = write_all(b" pages), compressed payload: ");
+    print_human(total.compressed_bytes.saturating_add(1023) / 1024);
+    let _ = write_all(b", allocator consumed: ");
+    print_human(total.allocator_consumed_bytes.saturating_add(1023) / 1024);
+    if total.allocator_consumed_bytes != 0 {
+        let ratio_x10 = total.stored_pages.saturating_mul(4096).saturating_mul(10)
+            / total.allocator_consumed_bytes;
+        let _ = write_all(b", ratio ");
+        print_u64(ratio_x10 / 10);
+        let _ = write_all(b".");
+        print_u64(ratio_x10 % 10);
+        let _ = write_all(b"x");
+    }
+    let _ = write_all(b"\n");
+    let _ = write_all(b"  swap out/in: ");
+    print_u64(total.swap_out_successes);
+    let _ = write_all(b"/");
+    print_u64(total.swap_in_successes);
+    let _ = write_all(b", incompressible: ");
+    print_u64(total.incompressible_rejected);
+    let _ = write_all(b", full/budget events: ");
+    print_u64(total.full_pool_events);
+    let _ = write_all(b"/");
+    print_u64(total.budget_full_events);
+    let _ = write_all(b", integrity failures: ");
+    print_u64(
+        total
+            .checksum_failures
+            .saturating_add(total.decompression_failures),
+    );
+    let _ = write_all(b"\n  last fill: requested=");
+    print_u64(total.last_fill_requested_pages);
+    let _ = write_all(b" stored=");
+    print_u64(total.last_fill_stored_pages);
+    let _ = write_all(b" result=");
+    match FillError::from_raw(total.last_fill_error) {
+        Some(error) => print_fill_error(error),
+        None => {
+            let _ = write_all(b"unknown");
+        }
+    }
+    let _ = write_all(b"\n");
 
     for index in 0..total.active_pool_count as usize {
         let Some(pool) = swap_pool_diagnostics(index) else {
@@ -1580,6 +1736,8 @@ fn print_zram_devices() -> i32 {
         let _ = write_all(b" used, ");
         print_human(pool.used_compressed_bytes.saturating_add(1023) / 1024);
         let _ = write_all(b" compressed, ");
+        print_human(pool.allocator_consumed_bytes.saturating_add(1023) / 1024);
+        let _ = write_all(b" physical used, ");
         print_human(pool.physical_budget_bytes / 1024);
         let _ = write_all(b" budget\n");
     }

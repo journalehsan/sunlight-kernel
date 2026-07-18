@@ -2785,7 +2785,7 @@ pub fn swap_configure(policy: &swap_policy::SwapPolicy) -> bool {
             3,
             policy.detected_ram_bytes,
             u64::from(policy.detected_online_cpus),
-            policy.total_logical_pages,
+            policy.total_logical_bytes,
             policy.pool_count as u64,
             policy.total_physical_budget_bytes,
             u64::from(policy.version),
