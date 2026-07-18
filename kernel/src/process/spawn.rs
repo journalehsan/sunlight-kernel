@@ -681,6 +681,10 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunlight-reminders" | "/usr/bin/sunlight-reminders" => {
             Ok(crate::SUNLIGHT_REMINDERS_ELF_BYTES)
         }
+        // sunlight-devices: read-only graphical hardware inventory viewer.
+        "/bin/sunlight-devices" | "/usr/bin/sunlight-devices" => {
+            Ok(crate::SUNLIGHT_DEVICES_ELF_BYTES)
+        }
         // rappid-rabbit: native HTTP inspection application.
         "/bin/rappid-rabbit" | "/usr/bin/rappid-rabbit" => Ok(crate::RAPPID_RABBIT_ELF_BYTES),
         // sunlight-api-lab: native REST/API testing application.

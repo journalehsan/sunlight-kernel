@@ -26,7 +26,7 @@ pub enum TgaError {
 ///
 /// For 32-bit TGA the stored byte order is BGRA; for 24-bit it is BGR.
 /// Both are converted to XRGB / ARGB on output.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TgaImage {
     pub width: u32,
     pub height: u32,

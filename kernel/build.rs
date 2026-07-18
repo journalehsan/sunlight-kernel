@@ -345,6 +345,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-devices",
+            output: "sunlight-devices",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "rappid-rabbit",
             output: "rappid-rabbit",
             rustflags: service_rustflags,

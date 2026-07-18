@@ -1915,6 +1915,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-devices"
+version = "0.2.1648"
+dependencies = [
+ "fontdue",
+ "linked_list_allocator",
+ "sun-font",
+ "sunlight-deviced",
+ "sunlight-ipc",
+ "sunlight-libc",
+ "sunlight-ui",
+]
+
+[[package]]
 name = "sunlight-dialogd"
 version = "0.2.1648"
 dependencies = [

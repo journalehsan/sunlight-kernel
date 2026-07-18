@@ -8,6 +8,7 @@ use alloc::{
 
 use crate::font::{UiSymbol, VecText};
 use crate::geom::{Point, Rect};
+use crate::image::TgaImage;
 use crate::paint::Canvas;
 use crate::theme::{Color, Theme};
 
@@ -35,6 +36,8 @@ pub trait TreeModel {
 pub struct TreeItem {
     pub label: String,
     pub icon: Option<UiSymbol>,
+    pub image_icon: Option<TgaImage>,
+    pub status_image_icon: Option<TgaImage>,
     pub secondary_text: Option<String>,
     pub disabled: bool,
 }
@@ -44,6 +47,8 @@ impl TreeItem {
         Self {
             label: label.into(),
             icon: None,
+            image_icon: None,
+            status_image_icon: None,
             secondary_text: None,
             disabled: false,
         }
@@ -51,6 +56,16 @@ impl TreeItem {
 
     pub fn with_icon(mut self, icon: UiSymbol) -> Self {
         self.icon = Some(icon);
+        self
+    }
+
+    pub fn with_image_icon(mut self, icon: TgaImage) -> Self {
+        self.image_icon = Some(icon);
+        self
+    }
+
+    pub fn with_status_image_icon(mut self, icon: TgaImage) -> Self {
+        self.status_image_icon = Some(icon);
         self
     }
 
@@ -75,6 +90,8 @@ pub struct TreeViewRow<Id> {
     pub disabled: bool,
     pub label: String,
     pub icon: Option<UiSymbol>,
+    pub image_icon: Option<TgaImage>,
+    pub status_image_icon: Option<TgaImage>,
     pub secondary_text: Option<String>,
 }
 
@@ -323,6 +340,8 @@ where
                 disabled: item.disabled,
                 label: item.label,
                 icon: item.icon,
+                image_icon: item.image_icon,
+                status_image_icon: item.status_image_icon,
                 secondary_text: item.secondary_text,
             });
 
@@ -426,7 +445,16 @@ where
             }
 
             let mut content_x = label_x;
-            if let Some(icon) = row.icon {
+            if let Some(icon) = row.image_icon {
+                let icon_size = (row_rect.h.saturating_sub(4)).min(16);
+                let icon_y = row_rect.y + (row_rect.h as i32 - icon_size as i32) / 2;
+                canvas.draw_tga_icon_tinted(
+                    &icon,
+                    Rect::new(content_x, icon_y, icon_size, icon_size),
+                    text_color,
+                );
+                content_x += icon_size as i32 + ICON_GAP;
+            } else if let Some(icon) = row.icon {
                 let glyph_y = row_rect.y + (row_rect.h as i32 - 9) / 2;
                 canvas.draw_ui_symbol(content_x, glyph_y, icon, text_color);
                 content_x += Canvas::measure_ui_symbol(icon) as i32 + ICON_GAP;
@@ -436,8 +464,14 @@ where
                 .secondary_text
                 .as_ref()
                 .map_or(0, |text| measured_width(self.font, text) as i32 + 8);
+            let status_width = if row.status_image_icon.is_some() {
+                16
+            } else {
+                0
+            };
             let label_max_width =
-                (self.rect.right() - ROW_PAD_X - content_x - secondary_width).max(0) as u32;
+                (self.rect.right() - ROW_PAD_X - content_x - secondary_width - status_width).max(0)
+                    as u32;
             let clipped_label = clip_text_to_width(self.font, &row.label, label_max_width);
             draw_text_vcenter(
                 canvas,
@@ -454,7 +488,8 @@ where
                 let clipped_secondary =
                     clip_text_to_width(self.font, secondary, secondary_max_width.min(120));
                 let secondary_w = measured_width(self.font, clipped_secondary.as_str()) as i32;
-                let secondary_x = (self.rect.right() - ROW_PAD_X - secondary_w).max(content_x);
+                let secondary_x =
+                    (self.rect.right() - ROW_PAD_X - status_width - secondary_w).max(content_x);
                 draw_text_vcenter(
                     canvas,
                     self.font,
@@ -466,6 +501,19 @@ where
                         theme.accent.lighten(24)
                     } else {
                         theme.text_dim
+                    },
+                );
+            }
+            if let Some(status_icon) = row.status_image_icon {
+                let icon_x = self.rect.right() - ROW_PAD_X - 14;
+                let icon_y = row_rect.y + (row_rect.h as i32 - 12) / 2;
+                canvas.draw_tga_icon_tinted(
+                    &status_icon,
+                    Rect::new(icon_x, icon_y, 12, 12),
+                    if row.selected {
+                        theme.accent
+                    } else {
+                        theme.warn
                     },
                 );
             }

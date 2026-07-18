@@ -39,6 +39,8 @@ static ICON_WRITER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.tga");
 static ICON_CALENDAR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/org.kde.merkuro.calendar.tga");
+static ICON_DEVICES_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/hwinfo.tga");
 static ICON_RABBIT_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
 static ICON_API_LAB_TGA: &[u8] =
@@ -58,7 +60,7 @@ fn icon(bytes: &'static [u8]) -> Option<TgaImage> {
     TgaImage::parse(bytes).ok()
 }
 
-const APP_CATALOG_LEN: usize = 13;
+const APP_CATALOG_LEN: usize = 14;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
@@ -180,6 +182,13 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         name: "Sunlight Calendar",
         category: "Productivity",
         icon_bytes: Some(ICON_CALENDAR_TGA),
+        available: true,
+    },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::Devices),
+        name: "Sunlight Devices",
+        category: "System",
+        icon_bytes: Some(ICON_DEVICES_TGA),
         available: true,
     },
     AppCatalogEntry {

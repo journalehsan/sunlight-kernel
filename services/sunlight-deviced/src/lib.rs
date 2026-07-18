@@ -2,8 +2,11 @@
 
 use core::fmt::Write;
 use sunlight_ipc::{
-    ipc_call, CapabilityToken, DevicedMsg, HardwareBus, HardwareFailureStage, HardwareState, IpcMsg,
+    ipc_call, ipc_call_timeout, CapabilityToken, DevicedMsg, HardwareBus, HardwareFailureStage,
+    HardwareState, IpcCallError, IpcMsg,
 };
+
+pub const DEFAULT_INVENTORY_TIMEOUT_MS: u64 = 40;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InventorySummary {
@@ -53,6 +56,55 @@ impl InventorySummary {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InventoryRecord {
+    pub summary: InventorySummary,
+    pub subsystem: u64,
+    pub matched_driver: u64,
+    pub bound_driver: u64,
+    pub diagnostic_state: HardwareState,
+    pub error_code: u64,
+    pub irq: Option<u64>,
+    pub bars: [u64; 6],
+}
+
+impl InventoryRecord {
+    pub const fn key(self) -> u64 {
+        self.summary.key
+    }
+
+    pub const fn state(self) -> HardwareState {
+        self.summary.state
+    }
+
+    pub const fn failure_stage(self) -> HardwareFailureStage {
+        self.summary.failure_stage
+    }
+
+    pub const fn subsystem_vendor_id(self) -> Option<u16> {
+        if self.subsystem == 0 || self.subsystem == 0xffff_ffff {
+            None
+        } else {
+            Some((self.subsystem & 0xffff) as u16)
+        }
+    }
+
+    pub const fn subsystem_device_id(self) -> Option<u16> {
+        if self.subsystem == 0 || self.subsystem == 0xffff_ffff {
+            None
+        } else {
+            Some(((self.subsystem >> 16) & 0xffff) as u16)
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InventoryClientError {
+    Transport(IpcCallError),
+    NotFound,
+    MalformedReply,
+}
+
 pub fn list(cap: CapabilityToken, index: usize) -> Option<InventorySummary> {
     decode_summary(ipc_call(
         cap,
@@ -81,6 +133,97 @@ pub fn field(cap: CapabilityToken, key: u64, field: u64) -> Option<[u64; 3]> {
     }
 }
 
+pub fn list_timeout(
+    cap: CapabilityToken,
+    index: usize,
+    timeout_ms: u64,
+) -> Result<InventorySummary, InventoryClientError> {
+    decode_summary_result(
+        ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(DevicedMsg::LIST_INVENTORY).word(0, index as u64),
+            timeout_ms,
+        )
+        .map_err(InventoryClientError::Transport)?,
+    )
+}
+
+pub fn get_timeout(
+    cap: CapabilityToken,
+    key: u64,
+    timeout_ms: u64,
+) -> Result<InventorySummary, InventoryClientError> {
+    decode_summary_result(
+        ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(DevicedMsg::GET_INVENTORY).word(0, key),
+            timeout_ms,
+        )
+        .map_err(InventoryClientError::Transport)?,
+    )
+}
+
+pub fn field_timeout(
+    cap: CapabilityToken,
+    key: u64,
+    field: u64,
+    timeout_ms: u64,
+) -> Result<[u64; 3], InventoryClientError> {
+    let reply = ipc_call_timeout(
+        cap,
+        IpcMsg::with_label(DevicedMsg::GET_INVENTORY_FIELD)
+            .word(0, key)
+            .word(1, field),
+        timeout_ms,
+    )
+    .map_err(InventoryClientError::Transport)?;
+    if reply.label == DevicedMsg::ERROR && reply.words[0] == DevicedMsg::ERR_NOT_FOUND {
+        return Err(InventoryClientError::NotFound);
+    }
+    if reply.label != DevicedMsg::INVENTORY_REPLY || reply.word_count < 2 || reply.words[0] != key {
+        return Err(InventoryClientError::MalformedReply);
+    }
+    Ok([reply.words[1], reply.words[2], reply.words[3]])
+}
+
+pub fn load_record_timeout(
+    cap: CapabilityToken,
+    summary: InventorySummary,
+    timeout_ms: u64,
+) -> Result<InventoryRecord, InventoryClientError> {
+    let subsystem = field_timeout(cap, summary.key, DevicedMsg::FIELD_SUBSYSTEM, timeout_ms)?[0];
+    let drivers = field_timeout(cap, summary.key, DevicedMsg::FIELD_DRIVERS, timeout_ms)?;
+    let diagnostic = field_timeout(cap, summary.key, DevicedMsg::FIELD_DIAGNOSTIC, timeout_ms)?;
+    let diagnostic_state = HardwareState::from_u64(diagnostic[0] & 0xff);
+    if diagnostic_state != summary.state {
+        return Err(InventoryClientError::MalformedReply);
+    }
+    let irq_value = field_timeout(cap, summary.key, DevicedMsg::FIELD_IRQ, timeout_ms)?[0];
+    let mut bars = [0u64; 6];
+    for (index, value) in bars.iter_mut().enumerate() {
+        *value = field_timeout(
+            cap,
+            summary.key,
+            DevicedMsg::FIELD_BAR0 + index as u64,
+            timeout_ms,
+        )?[0];
+    }
+    Ok(InventoryRecord {
+        summary,
+        subsystem,
+        matched_driver: drivers[0],
+        bound_driver: drivers[1],
+        diagnostic_state,
+        error_code: diagnostic[1],
+        irq: if irq_value == u64::MAX || irq_value == 0xff {
+            None
+        } else {
+            Some(irq_value)
+        },
+        bars,
+    })
+}
+
 pub fn decode_summary(reply: IpcMsg) -> Option<InventorySummary> {
     if reply.label != DevicedMsg::INVENTORY_REPLY || reply.word_count != 4 {
         return None;
@@ -93,6 +236,13 @@ pub fn decode_summary(reply: IpcMsg) -> Option<InventorySummary> {
         failure_stage: HardwareFailureStage::from_u64((reply.words[3] >> 8) & 0xff),
         total: ((reply.words[3] >> 16) & 0xffff) as usize,
     })
+}
+
+pub fn decode_summary_result(reply: IpcMsg) -> Result<InventorySummary, InventoryClientError> {
+    if reply.label == DevicedMsg::ERROR && reply.words[0] == DevicedMsg::ERR_NOT_FOUND {
+        return Err(InventoryClientError::NotFound);
+    }
+    decode_summary(reply).ok_or(InventoryClientError::MalformedReply)
 }
 
 pub const fn inventory_request_valid(label: u64, word_count: u32, field: u64) -> bool {
@@ -145,6 +295,17 @@ pub const fn state_label(state: HardwareState) -> &'static str {
         HardwareState::NoDriver => "no-driver",
         HardwareState::Disabled => "disabled",
         HardwareState::Unknown => "unknown",
+    }
+}
+
+pub const fn state_display_label(state: HardwareState) -> &'static str {
+    match state {
+        HardwareState::Active => "Active",
+        HardwareState::Loaded => "Loaded",
+        HardwareState::ProbeFailed => "Probe failed",
+        HardwareState::NoDriver => "Without driver",
+        HardwareState::Disabled => "Disabled",
+        HardwareState::Unknown => "Unknown",
     }
 }
 
@@ -393,7 +554,7 @@ fn write_optional_name(line: &mut heapless::String<256>, label: &str, value: u64
     }
 }
 
-fn diagnostic_message(summary: InventorySummary, code: u64) -> &'static str {
+pub const fn diagnostic_message(summary: InventorySummary, code: u64) -> &'static str {
     match (summary.vendor_id(), summary.device_id(), code) {
         (Some(0x15ad), Some(0x07b0), 2) => "zero BAR",
         (Some(0x15ad), Some(0x07b0), 14) => "device reset failed",
@@ -404,7 +565,7 @@ fn diagnostic_message(summary: InventorySummary, code: u64) -> &'static str {
     }
 }
 
-fn generic_non_pci_name(summary: InventorySummary) -> &'static str {
+pub const fn generic_non_pci_name(summary: InventorySummary) -> &'static str {
     match (summary.bus(), summary.class(), summary.subclass()) {
         (HardwareBus::Ps2, 0x09, 0x00) => "PS/2 Keyboard",
         (HardwareBus::Ps2, 0x09, 0x02) => "PS/2 Mouse",
@@ -496,6 +657,11 @@ mod tests {
         assert_eq!(state_label(HardwareState::NoDriver), "no-driver");
         assert_eq!(state_label(HardwareState::ProbeFailed), "probe-failed");
         assert_eq!(state_label(HardwareState::Active), "active");
+        assert_eq!(state_display_label(HardwareState::Active), "Active");
+        assert_eq!(
+            state_display_label(HardwareState::NoDriver),
+            "Without driver"
+        );
     }
 
     #[test]

@@ -192,6 +192,7 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-devices --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --features dom --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release

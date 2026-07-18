@@ -361,6 +361,7 @@ impl DockTheme {
             | AppId::Bench
             | AppId::TextEditor
             | AppId::Writer
+            | AppId::Devices
             | AppId::RappidRabbit
             | AppId::ApiLab
             | AppId::Mines => None,
@@ -466,6 +467,7 @@ pub(crate) enum AppId {
     TextEditor,
     Writer,
     Calendar,
+    Devices,
     RappidRabbit,
     ApiLab,
     Mines,
@@ -1327,7 +1329,7 @@ struct VortexShell {
     /// entries (Terminal/Calculator/Files/Settings) are also shown in the
     /// bottom dock; Tasks/Bench/TextEditor/Writer are Start-Menu-only
     /// but share the same launch/state-sync machinery.
-    apps: [DockAppState; 13],
+    apps: [DockAppState; 14],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// User-provided icon overrides loaded from `desktop.toml`.
@@ -1516,6 +1518,7 @@ impl VortexShell {
                 DockAppState::new(AppId::TextEditor, "Sunlight Edit", AppId::TextEditor),
                 DockAppState::new(AppId::Writer, "Sunlight Writer", AppId::Writer),
                 DockAppState::new(AppId::Calendar, "Sunlight Calendar", AppId::Calendar),
+                DockAppState::new(AppId::Devices, "Sunlight Devices", AppId::Devices),
                 DockAppState::new(AppId::RappidRabbit, "Rappid Rabbit", AppId::RappidRabbit),
                 DockAppState::new(AppId::ApiLab, "Sunlight API Lab", AppId::ApiLab),
                 // Start-Menu only graphical DOS game (Chronos bundle)
@@ -1723,6 +1726,7 @@ impl VortexShell {
             AppId::TextEditor => "/bin/sunlight-edit",
             AppId::Writer => "/bin/sunlight-writer",
             AppId::Calendar => "/bin/sunlight-calendar",
+            AppId::Devices => "/bin/sunlight-devices",
             AppId::RappidRabbit => "/bin/rappid-rabbit",
             AppId::ApiLab => "/bin/sunlight-api-lab",
             AppId::Mines => "/Applications/SunlightMines.sunapp",
@@ -1741,6 +1745,7 @@ impl VortexShell {
             AppId::TextEditor => b"sunlight-edit",
             AppId::Writer => b"sunlight-writer",
             AppId::Calendar => b"calendar",
+            AppId::Devices => b"sunlight-devices",
             AppId::RappidRabbit => b"rappid-rabbit",
             AppId::ApiLab => b"sunlight-api-lab",
             AppId::Mines => b"sunlight-mines",
@@ -1759,6 +1764,7 @@ impl VortexShell {
             AppId::TextEditor => "app=sunlight-edit",
             AppId::Writer => "app=sunlight-writer",
             AppId::Calendar => "app=sunlight-calendar",
+            AppId::Devices => "app=sunlight-devices",
             AppId::RappidRabbit => "app=rappid-rabbit",
             AppId::ApiLab => "app=sunlight-api-lab",
             AppId::Mines => "app=sunlight-mines",

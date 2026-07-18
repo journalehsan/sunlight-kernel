@@ -1356,6 +1356,13 @@ max_ttys = 6
         b"#!/sunlight/sunlight-reminders\n",
     ),
     RamEntry::file(
+        "/bin/sunlight-devices",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-devices\n",
+    ),
+    RamEntry::file(
         "/bin/rappid-rabbit",
         0,
         0,
@@ -1987,6 +1994,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/sunlight-reminders\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sunlight-devices",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-devices\n",
     ),
     RamEntry::file(
         "/usr/bin/rappid-rabbit",

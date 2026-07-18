@@ -83,6 +83,7 @@ members = [
     "sunlight-locale",
     "sunlight-calendar",
     "sunlight-reminders",
+    "sunlight-devices",
     "rappid-rabbit",
     "sunlight-api-lab",
     "golden-fish",
@@ -115,4 +116,7 @@ opt-level = "z"
 opt-level = "z"
 
 [profile.release.package.sunlight-files]
+opt-level = "z"
+
+[profile.release.package.sunlight-devices]
 opt-level = "z"
