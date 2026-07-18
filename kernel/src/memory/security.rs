@@ -111,6 +111,7 @@ pub fn diagnostic_report() {
         NX_STACK_MAPPINGS.load(Ordering::Relaxed),
         NX_SHM_MAPPINGS.load(Ordering::Relaxed),
     );
+    crate::process::address_space::diagnostic_report();
     let user = crate::memory::user::diagnostics();
     crate::serial_println!(
         "[MM-1-DIAG] noncanonical={} overflow={} kernel_range={} unmapped={} readonly_write={} string_limit={} array_limit={} multipage={}",
@@ -204,18 +205,23 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
     let (owner_virt, token) =
         crate::memory::shared::alloc_shared_region(&mut shm_owner, pmm, &mut shm_caps, hhdm, 8192)
             .expect("MM-0 SHM allocation");
-    let shm = shm_caps
-        .resolve_shared_region(token)
-        .expect("MM-0 SHM capability");
-    for frame in &shm.frames {
-        let bytes = unsafe { &*((hhdm + frame.start_address().as_u64()).as_ptr::<[u8; 4096]>()) };
-        assert!(bytes.iter().all(|byte| *byte == 0));
-    }
-    unsafe {
-        (hhdm + shm.frames[0].start_address().as_u64())
-            .as_mut_ptr::<u8>()
-            .write_volatile(0x5A);
-    }
+    let shm_first_frame = {
+        let shm = shm_caps
+            .resolve_shared_region(token)
+            .expect("MM-0 SHM capability");
+        for frame in &shm.frames {
+            let bytes =
+                unsafe { &*((hhdm + frame.start_address().as_u64()).as_ptr::<[u8; 4096]>()) };
+            assert!(bytes.iter().all(|byte| *byte == 0));
+        }
+        let first = shm.frames[0].start_address();
+        unsafe {
+            (hhdm + first.as_u64())
+                .as_mut_ptr::<u8>()
+                .write_volatile(0x5A);
+        }
+        first
+    };
     let peer_virt =
         crate::memory::shared::map_shared_page(&mut shm_peer, token, pmm, &mut shm_caps, hhdm)
             .expect("MM-0 SHM peer map");
@@ -233,7 +239,7 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
     }
     assert_eq!(
         unsafe {
-            (hhdm + shm.frames[0].start_address().as_u64())
+            (hhdm + shm_first_frame.as_u64())
                 .as_ptr::<u8>()
                 .read_volatile()
         },
@@ -261,4 +267,406 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
     assert!(framebuffer_authorized(0xD15C, &caps));
     caps.revoke_endpoints_owned_by(0xD15C);
     crate::serial_println!("[MM-0] framebuffer authority lifecycle: OK");
+
+    run_mm2a_self_tests(pmm, hhdm);
+}
+
+fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
+    use crate::process::address_space::{
+        ExpectedMapping, MappingError, OwnershipTransition, ReplacementMapping,
+    };
+    use x86_64::structures::paging::{Page, PhysFrame, Size4KiB};
+
+    let free_before = pmm.free_page_count();
+    let mut collision_process =
+        unsafe { crate::process::Process::new(0xB301, 0, "mm2a-map", pmm, hhdm) };
+    let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(0x0000_0002_2000_0000))
+        .expect("MM-2A collision page");
+    let original = pmm.alloc_frame().expect("MM-2A original frame");
+    let rejected = pmm.alloc_frame().expect("MM-2A rejected frame");
+    assert!(sanitize_user_frame(original, hhdm));
+    assert!(sanitize_user_frame(rejected, hhdm));
+    let original_flags = user_stack_flags();
+    unsafe {
+        collision_process
+            .address_space
+            .map_page(
+                page,
+                PhysFrame::from_start_address_unchecked(original),
+                original_flags,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-2A free page mapping");
+        assert_eq!(
+            collision_process.address_space.map_page(
+                page,
+                PhysFrame::from_start_address_unchecked(rejected),
+                PageTableFlags::PRESENT
+                    | PageTableFlags::USER_ACCESSIBLE
+                    | PageTableFlags::NO_EXECUTE,
+                pmm,
+                hhdm,
+            ),
+            Err(MappingError::AlreadyMapped)
+        );
+        assert_eq!(
+            collision_process.address_space.lookup_entry(page, hhdm),
+            Some((original, original_flags))
+        );
+        collision_process
+            .address_space
+            .rollback_mapped_page(page, original, pmm, hhdm)
+            .expect("MM-2A collision cleanup");
+    }
+    pmm.free_frame(original);
+    pmm.free_frame(rejected);
+    unsafe {
+        collision_process
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), free_before);
+
+    let mut mmap_process =
+        unsafe { crate::process::Process::new(0xB302, 0, "mm2a-mmap", pmm, hhdm) };
+    const MMAP_BASE: u64 = 0x10_0000_0000;
+    mmap_process.mmap_next = MMAP_BASE;
+    let occupied_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(MMAP_BASE + 4096))
+        .expect("MM-2A mmap collision page");
+    let occupied_frame = pmm.alloc_frame().expect("MM-2A mmap collision frame");
+    assert!(sanitize_user_frame(occupied_frame, hhdm));
+    unsafe {
+        mmap_process
+            .address_space
+            .map_page(
+                occupied_page,
+                PhysFrame::from_start_address_unchecked(occupied_frame),
+                original_flags,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-2A mmap collision setup");
+    }
+    let mmap_free_before = pmm.free_page_count();
+    let mut mmap_sched = crate::sched::Scheduler::new();
+    mmap_sched.processes.push(mmap_process);
+    assert_eq!(
+        crate::process::mmap::sys_mmap(
+            0,
+            3 * 4096,
+            crate::process::mmap::PROT_READ | crate::process::mmap::PROT_WRITE,
+            crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+            -1,
+            0,
+            pmm,
+            &mut mmap_sched,
+        ),
+        Err(crate::process::mmap::MmapError::AlreadyMapped)
+    );
+    assert_eq!(mmap_sched.processes[0].mmap_next, MMAP_BASE);
+    assert_eq!(pmm.free_page_count(), mmap_free_before);
+    assert_eq!(
+        unsafe {
+            mmap_sched.processes[0]
+                .address_space
+                .lookup_phys(occupied_page, hhdm)
+        },
+        Some(occupied_frame)
+    );
+    unsafe {
+        mmap_sched.processes[0]
+            .address_space
+            .rollback_mapped_page(occupied_page, occupied_frame, pmm, hhdm)
+            .expect("MM-2A mmap setup cleanup");
+        mmap_sched.processes[0]
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    pmm.free_frame(occupied_frame);
+    assert_eq!(pmm.free_page_count(), free_before);
+
+    let mut shm_owner =
+        unsafe { crate::process::Process::new(0xB303, 0, "mm2a-shm-owner", pmm, hhdm) };
+    let mut shm_peer =
+        unsafe { crate::process::Process::new(0xB304, 0, "mm2a-shm-peer", pmm, hhdm) };
+    let peer_collision_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(
+        crate::memory::shared::SHARED_REGION_BASE,
+    ))
+    .expect("MM-2A SHM collision page");
+    let peer_collision_frame = pmm.alloc_frame().expect("MM-2A SHM collision frame");
+    assert!(sanitize_user_frame(peer_collision_frame, hhdm));
+    unsafe {
+        shm_peer
+            .address_space
+            .map_page(
+                peer_collision_page,
+                PhysFrame::from_start_address_unchecked(peer_collision_frame),
+                original_flags,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-2A SHM collision setup");
+    }
+    let mut shm_caps = crate::capability::CapabilityBroker::new();
+    let (_, token) =
+        crate::memory::shared::alloc_shared_region(&mut shm_owner, pmm, &mut shm_caps, hhdm, 8192)
+            .expect("MM-2A SHM owner map");
+    assert_eq!(shm_caps.shared_region_count(), 1);
+    assert_eq!(shm_caps.shared_region_map_count(token), Some(1));
+    assert_eq!(
+        crate::memory::shared::map_shared_page(&mut shm_peer, token, pmm, &mut shm_caps, hhdm,),
+        Err(crate::memory::shared::SharedMemError::AlreadyMapped)
+    );
+    assert_eq!(shm_caps.shared_region_map_count(token), Some(1));
+    assert_eq!(
+        unsafe {
+            shm_peer
+                .address_space
+                .lookup_phys(peer_collision_page, hhdm)
+        },
+        Some(peer_collision_frame)
+    );
+    unsafe {
+        shm_peer
+            .address_space
+            .rollback_mapped_page(peer_collision_page, peer_collision_frame, pmm, hhdm)
+            .expect("MM-2A SHM collision cleanup");
+    }
+    pmm.free_frame(peer_collision_frame);
+    let object_first_frame = shm_caps
+        .resolve_shared_region(token)
+        .expect("MM-2A SHM object")
+        .frames[0]
+        .start_address();
+    unsafe {
+        (hhdm + object_first_frame.as_u64())
+            .as_mut_ptr::<u8>()
+            .write_volatile(0xA7);
+    }
+    crate::memory::shared::map_shared_page(&mut shm_peer, token, pmm, &mut shm_caps, hhdm)
+        .expect("MM-2A successful SHM peer map");
+    assert_eq!(shm_caps.shared_region_map_count(token), Some(2));
+    assert_eq!(
+        unsafe {
+            (hhdm + object_first_frame.as_u64())
+                .as_ptr::<u8>()
+                .read_volatile()
+        },
+        0xA7
+    );
+    crate::memory::shared::cleanup_shared_pages(&mut shm_peer, pmm, &mut shm_caps);
+    crate::memory::shared::cleanup_shared_pages(&mut shm_owner, pmm, &mut shm_caps);
+    unsafe {
+        shm_peer.address_space.reclaim_user_space(pmm, hhdm, true);
+        shm_owner.address_space.reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), free_before);
+
+    let mut replacement_process =
+        unsafe { crate::process::Process::new(0xB305, 0, "mm2a-replace", pmm, hhdm) };
+    let replacement_page =
+        Page::<Size4KiB>::from_start_address(VirtAddr::new(0x0000_0002_3000_0000))
+            .expect("MM-2A replacement page");
+    let old_frame = pmm.alloc_frame().expect("MM-2A old replacement frame");
+    let new_frame = pmm.alloc_frame().expect("MM-2A new replacement frame");
+    assert!(sanitize_user_frame(old_frame, hhdm));
+    assert!(sanitize_user_frame(new_frame, hhdm));
+    let old_flags =
+        PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE;
+    let new_flags = old_flags | PageTableFlags::WRITABLE;
+    unsafe {
+        replacement_process
+            .address_space
+            .map_page(
+                replacement_page,
+                PhysFrame::from_start_address_unchecked(old_frame),
+                old_flags,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-2A replacement setup");
+        replacement_process
+            .address_space
+            .replace_mapping(
+                replacement_page,
+                ExpectedMapping::Present {
+                    frame: old_frame,
+                    flags: old_flags,
+                },
+                ReplacementMapping::Present {
+                    frame: PhysFrame::from_start_address_unchecked(new_frame),
+                    flags: new_flags,
+                },
+                OwnershipTransition::ReleaseOldFrame,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-2A explicit replacement");
+        assert_eq!(
+            replacement_process
+                .address_space
+                .lookup_entry(replacement_page, hhdm),
+            Some((new_frame, new_flags))
+        );
+        replacement_process
+            .address_space
+            .rollback_mapped_page(replacement_page, new_frame, pmm, hhdm)
+            .expect("MM-2A replacement cleanup");
+        replacement_process
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    pmm.free_frame(new_frame);
+    assert_eq!(pmm.free_page_count(), free_before);
+    #[cfg(feature = "mm2a_test_injection")]
+    run_mm2a_injected_failure_tests(pmm, hhdm);
+    crate::serial_println!(
+        "[MM-2A] collision, cursor, SHM commit, live-content, and NX replacement: OK"
+    );
+}
+
+#[cfg(feature = "mm2a_test_injection")]
+fn run_mm2a_injected_failure_tests(
+    pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
+    hhdm: VirtAddr,
+) {
+    let free_before = pmm.free_page_count();
+
+    // One user frame plus three page-table frames succeed; the second user
+    // frame then fails after the first page is visible and must be rolled back.
+    let mmap_process =
+        unsafe { crate::process::Process::new(0xB311, 0, "mm2a-mmap-oom", pmm, hhdm) };
+    let mut mmap_sched = crate::sched::Scheduler::new();
+    mmap_sched.processes.push(mmap_process);
+    let mmap_free_before = pmm.free_page_count();
+    pmm.fail_test_allocations_after(4);
+    let mmap_result = crate::process::mmap::sys_mmap(
+        0,
+        8192,
+        crate::process::mmap::PROT_READ | crate::process::mmap::PROT_WRITE,
+        crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+        -1,
+        0,
+        pmm,
+        &mut mmap_sched,
+    );
+    pmm.clear_test_allocation_failure();
+    assert_eq!(mmap_result, Err(crate::process::mmap::MmapError::NoMemory));
+    assert_eq!(mmap_sched.processes[0].mmap_next, 0);
+    assert_eq!(pmm.free_page_count(), mmap_free_before);
+    unsafe {
+        mmap_sched.processes[0]
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), free_before);
+
+    // A first-page page-table allocation failure must also return normally,
+    // free the already allocated user frame, and keep the cursor untouched.
+    let pt_process = unsafe { crate::process::Process::new(0xB312, 0, "mm2a-pt-oom", pmm, hhdm) };
+    let mut pt_sched = crate::sched::Scheduler::new();
+    pt_sched.processes.push(pt_process);
+    let pt_free_before = pmm.free_page_count();
+    pmm.fail_test_allocations_after(1);
+    let pt_result = crate::process::mmap::sys_mmap(
+        0,
+        4096,
+        crate::process::mmap::PROT_READ | crate::process::mmap::PROT_WRITE,
+        crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+        -1,
+        0,
+        pmm,
+        &mut pt_sched,
+    );
+    pmm.clear_test_allocation_failure();
+    assert_eq!(pt_result, Err(crate::process::mmap::MmapError::NoMemory));
+    assert_eq!(pt_sched.processes[0].mmap_next, 0);
+    assert_eq!(pmm.free_page_count(), pt_free_before);
+    unsafe {
+        pt_sched.processes[0]
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), free_before);
+
+    let mut shm_process =
+        unsafe { crate::process::Process::new(0xB313, 0, "mm2a-shm-oom", pmm, hhdm) };
+    let mut shm_caps = crate::capability::CapabilityBroker::new();
+    let shm_free_before = pmm.free_page_count();
+    pmm.fail_test_allocations_after(1);
+    let shm_result = crate::memory::shared::alloc_shared_region(
+        &mut shm_process,
+        pmm,
+        &mut shm_caps,
+        hhdm,
+        3 * 4096,
+    );
+    pmm.clear_test_allocation_failure();
+    assert_eq!(
+        shm_result,
+        Err(crate::memory::shared::SharedMemError::OutOfMemory)
+    );
+    assert_eq!(shm_caps.shared_region_count(), 0);
+    assert!(shm_process.owned_shared.is_empty());
+    assert!(shm_process.mapped_shared.is_empty());
+    assert_eq!(pmm.free_page_count(), shm_free_before);
+
+    // Both SHM frames allocate, then owner page-table allocation fails. No
+    // object/token is published and all backing frames are returned.
+    pmm.fail_test_allocations_after(2);
+    let shm_map_result = crate::memory::shared::alloc_shared_region(
+        &mut shm_process,
+        pmm,
+        &mut shm_caps,
+        hhdm,
+        8192,
+    );
+    pmm.clear_test_allocation_failure();
+    assert_eq!(
+        shm_map_result,
+        Err(crate::memory::shared::SharedMemError::PageTableAllocationFailed)
+    );
+    assert_eq!(shm_caps.shared_region_count(), 0);
+    assert_eq!(pmm.free_page_count(), shm_free_before);
+    unsafe {
+        shm_process
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), free_before);
+
+    let mut owner =
+        unsafe { crate::process::Process::new(0xB314, 0, "mm2a-peer-owner", pmm, hhdm) };
+    let mut peer = unsafe { crate::process::Process::new(0xB315, 0, "mm2a-peer-oom", pmm, hhdm) };
+    let mut peer_caps = crate::capability::CapabilityBroker::new();
+    let (_, token) =
+        crate::memory::shared::alloc_shared_region(&mut owner, pmm, &mut peer_caps, hhdm, 4096)
+            .expect("MM-2A injected peer owner setup");
+    assert_eq!(peer_caps.shared_region_map_count(token), Some(1));
+    pmm.fail_test_allocations_after(0);
+    let peer_result =
+        crate::memory::shared::map_shared_page(&mut peer, token, pmm, &mut peer_caps, hhdm);
+    pmm.clear_test_allocation_failure();
+    assert_eq!(
+        peer_result,
+        Err(crate::memory::shared::SharedMemError::PageTableAllocationFailed)
+    );
+    assert_eq!(peer_caps.shared_region_map_count(token), Some(1));
+    let peer_virt =
+        crate::memory::shared::map_shared_page(&mut peer, token, pmm, &mut peer_caps, hhdm)
+            .expect("MM-2A peer retry");
+    assert_eq!(
+        peer_virt.as_u64(),
+        crate::memory::shared::SHARED_REGION_BASE
+    );
+    assert_eq!(peer_caps.shared_region_map_count(token), Some(2));
+    crate::memory::shared::cleanup_shared_pages(&mut peer, pmm, &mut peer_caps);
+    crate::memory::shared::cleanup_shared_pages(&mut owner, pmm, &mut peer_caps);
+    unsafe {
+        peer.address_space.reclaim_user_space(pmm, hhdm, true);
+        owner.address_space.reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), free_before);
+    crate::serial_println!("[MM-2A] injected mmap/SHM allocation rollback: OK");
 }

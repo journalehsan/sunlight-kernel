@@ -497,9 +497,12 @@ pub fn run_mapping_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     let second_phys = pmm.alloc_frame().expect("MM-1 second frame");
     let readonly_phys = pmm.alloc_frame().expect("MM-1 read-only frame");
     let swapped_phys = pmm.alloc_frame().expect("MM-1 swapped frame");
-    let flags =
-        PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
-    let readonly_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+    let flags = PageTableFlags::PRESENT
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::USER_ACCESSIBLE
+        | PageTableFlags::NO_EXECUTE;
+    let readonly_flags =
+        PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE;
     let base = 0x0000_0002_1000_0000;
     let first_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(base)).unwrap();
     let second_page =
@@ -509,34 +512,46 @@ pub fn run_mapping_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     let swapped_page =
         Page::<Size4KiB>::from_start_address(VirtAddr::new(base + 4 * PAGE_SIZE as u64)).unwrap();
     unsafe {
-        process.address_space.map_page(
-            first_page,
-            PhysFrame::from_start_address_unchecked(first_phys),
-            flags,
-            pmm,
-            hhdm,
-        );
-        process.address_space.map_page(
-            second_page,
-            PhysFrame::from_start_address_unchecked(second_phys),
-            flags,
-            pmm,
-            hhdm,
-        );
-        process.address_space.map_page(
-            readonly_page,
-            PhysFrame::from_start_address_unchecked(readonly_phys),
-            readonly_flags,
-            pmm,
-            hhdm,
-        );
-        process.address_space.map_page(
-            swapped_page,
-            PhysFrame::from_start_address_unchecked(swapped_phys),
-            flags,
-            pmm,
-            hhdm,
-        );
+        process
+            .address_space
+            .map_page(
+                first_page,
+                PhysFrame::from_start_address_unchecked(first_phys),
+                flags,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-1 first mapping");
+        process
+            .address_space
+            .map_page(
+                second_page,
+                PhysFrame::from_start_address_unchecked(second_phys),
+                flags,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-1 second mapping");
+        process
+            .address_space
+            .map_page(
+                readonly_page,
+                PhysFrame::from_start_address_unchecked(readonly_phys),
+                readonly_flags,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-1 readonly mapping");
+        process
+            .address_space
+            .map_page(
+                swapped_page,
+                PhysFrame::from_start_address_unchecked(swapped_phys),
+                flags,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-1 swap test mapping");
     }
     unsafe {
         core::ptr::write_bytes(
@@ -628,12 +643,22 @@ pub fn run_mapping_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     assert_eq!(before_first, after_first);
     assert_eq!(before_second, after_second);
 
-    assert!(unsafe {
+    unsafe {
         process
             .address_space
-            .mark_swapped(swapped_page, 0x1234, hhdm)
-    });
-    pmm.free_frame(swapped_phys);
+            .replace_mapping(
+                swapped_page,
+                crate::process::address_space::ExpectedMapping::Present {
+                    frame: swapped_phys,
+                    flags,
+                },
+                crate::process::address_space::ReplacementMapping::Swapped { block_id: 0x1234 },
+                crate::process::address_space::OwnershipTransition::ReleaseOldFrame,
+                pmm,
+                hhdm,
+            )
+            .expect("MM-1 explicit swap replacement");
+    }
     let mut swapped = [0u8; 1];
     assert_eq!(
         copy_from_process_bytes(&process, hhdm, base + 4 * PAGE_SIZE as u64, &mut swapped,),

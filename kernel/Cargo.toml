@@ -327,6 +327,10 @@ edition = "2021"
 name = "sunlight-kernel"
 path = "src/main.rs"
 
+[lib]
+name = "sunlight_kernel_mm2a"
+path = "src/mm2a_host.rs"
+
 [dependencies]
 x86_64 = { version = "0.15", default-features = false, features = ["instructions", "abi_x86_interrupt"] }
 uart_16550 = "0.3"
@@ -347,6 +351,8 @@ lz4_flex = { version = "0.11", default-features = false }
 [features]
 key_inject = []
 launch_trace = []
+# Deterministic PMM allocation failures for the focused MM-2A QEMU gate only.
+mm2a_test_injection = []
 # Verbose per-tick / per-alloc diagnostics over the serial port. OFF by default:
 # these logs are written while the global scheduler lock is held and block the
 # UART, stalling every core. Enable only for debugging.

@@ -1,5 +1,4 @@
 use crate::serial_println;
-use alloc::sync::Arc;
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::structures::paging::{PhysFrame, Size4KiB};
 use x86_64::PhysAddr;
@@ -264,7 +263,7 @@ pub struct ShmObject {
 /// Entry in the shared-region table.
 struct ShmEntry {
     token: CapabilityToken,
-    obj: Arc<ShmObject>,
+    obj: ShmObject,
     owner_pid: usize,
     revoked: bool,
     /// Number of processes that currently have this region mapped.
@@ -349,6 +348,21 @@ impl CapabilityBroker {
             shared_regions: alloc::vec::Vec::new(),
             vfs_caps: alloc::vec::Vec::new(),
         }
+    }
+
+    pub fn reserve_shared_region_slot(&mut self) -> Result<(), ()> {
+        self.shared_regions.try_reserve(1).map_err(|_| ())
+    }
+
+    pub fn shared_region_count(&self) -> usize {
+        self.shared_regions.len()
+    }
+
+    pub fn shared_region_map_count(&self, token: CapabilityToken) -> Option<usize> {
+        self.shared_regions
+            .iter()
+            .find(|entry| entry.token == token)
+            .map(|entry| entry.map_count)
     }
 
     /// Create a new endpoint, return its id and a send+recv capability to the owner.
@@ -615,11 +629,10 @@ impl CapabilityBroker {
         size: usize,
         owner_pid: usize,
     ) -> CapabilityToken {
-        let obj = Arc::new(ShmObject { frames, size });
         let token = generate_token(CapabilityToken::TAG_VFS);
         self.shared_regions.push(ShmEntry {
             token,
-            obj,
+            obj: ShmObject { frames, size },
             owner_pid,
             revoked: false,
             map_count: 0,
@@ -640,10 +653,10 @@ impl CapabilityBroker {
     }
 
     /// Resolve a (possibly multi-page) shared region capability to its object.
-    pub fn resolve_shared_region(&self, token: CapabilityToken) -> Option<Arc<ShmObject>> {
+    pub fn resolve_shared_region(&self, token: CapabilityToken) -> Option<&ShmObject> {
         self.shared_regions.iter().find_map(|e| {
             if e.token == token && !e.revoked {
-                Some(Arc::clone(&e.obj))
+                Some(&e.obj)
             } else {
                 None
             }
@@ -695,7 +708,7 @@ impl CapabilityBroker {
                 "[CAP] Released shm-region {:#x} (last unmap, freeing frames)",
                 entry.token.as_u64()
             );
-            return Some(entry.obj.frames.clone());
+            return Some(entry.obj.frames);
         }
         None
     }

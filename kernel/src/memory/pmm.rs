@@ -22,6 +22,8 @@ extern "C" {
 
 pub struct PhysicalMemoryManager {
     scan_cursor: usize,
+    #[cfg(feature = "mm2a_test_injection")]
+    test_allocations_before_failure: Option<usize>,
 }
 
 pub const PMM_OWNER_FREE: u32 = u32::MAX;
@@ -36,7 +38,11 @@ pub struct KernelReservedSpan {
 
 impl PhysicalMemoryManager {
     pub const fn new() -> Self {
-        Self { scan_cursor: 0 }
+        Self {
+            scan_cursor: 0,
+            #[cfg(feature = "mm2a_test_injection")]
+            test_allocations_before_failure: None,
+        }
     }
 
     /// Initialize from Limine memory map entries.
@@ -105,6 +111,14 @@ impl PhysicalMemoryManager {
 
     /// Allocate one 4 KiB physical frame and record an owner PID.
     pub fn alloc_frame_owned(&mut self, owner_pid: u32) -> Option<PhysAddr> {
+        #[cfg(feature = "mm2a_test_injection")]
+        if let Some(remaining) = self.test_allocations_before_failure.as_mut() {
+            if *remaining == 0 {
+                return None;
+            }
+            *remaining -= 1;
+        }
+
         let free = unsafe { FREE_FRAMES };
         if free == 0 {
             return None;
@@ -139,6 +153,16 @@ impl PhysicalMemoryManager {
         }
 
         None
+    }
+
+    #[cfg(feature = "mm2a_test_injection")]
+    pub fn fail_test_allocations_after(&mut self, successful_allocations: usize) {
+        self.test_allocations_before_failure = Some(successful_allocations);
+    }
+
+    #[cfg(feature = "mm2a_test_injection")]
+    pub fn clear_test_allocation_failure(&mut self) {
+        self.test_allocations_before_failure = None;
     }
 
     unsafe fn claim_frame(

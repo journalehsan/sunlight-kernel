@@ -5,7 +5,9 @@
 
 use super::pmm::PhysicalMemoryManager;
 use super::zram::{self, ZramError, ZRAM_BLOCK_SIZE};
-use crate::process::address_space::AddressSpace;
+use crate::process::address_space::{
+    AddressSpace, ExpectedMapping, OwnershipTransition, ReplacementMapping,
+};
 use alloc::vec::Vec;
 use spin::Mutex;
 use x86_64::{
@@ -22,6 +24,10 @@ pub struct AnonFrame {
 }
 
 static CANDIDATES: Mutex<Vec<AnonFrame>> = Mutex::new(Vec::new());
+
+pub fn reserve_candidates(additional: usize) -> Result<(), ()> {
+    CANDIDATES.lock().try_reserve(additional).map_err(|_| ())
+}
 
 /// Register a freshly mapped anonymous user page as a reclaim candidate.
 pub fn track_anon(pid: usize, vaddr: VirtAddr, frame: PhysAddr) {
@@ -59,13 +65,31 @@ pub unsafe fn swap_out_page(
     let src = &*((hhdm_offset + frame.as_u64()).as_ptr::<[u8; ZRAM_BLOCK_SIZE]>());
     let block_id = zram::write_page(src)?;
 
-    if !address_space.mark_swapped(page, block_id as u64, hhdm_offset) {
+    let (_, flags) = match address_space.lookup_entry(page, hhdm_offset) {
+        Some(entry) if entry.0 == frame => entry,
+        _ => {
+            let _ = zram::discard_block(block_id);
+            return Err(ZramError::InvalidBlock);
+        }
+    };
+    if address_space
+        .replace_mapping(
+            page,
+            ExpectedMapping::Present { frame, flags },
+            ReplacementMapping::Swapped {
+                block_id: block_id as u64,
+            },
+            OwnershipTransition::ReleaseOldFrame,
+            pmm,
+            hhdm_offset,
+        )
+        .is_err()
+    {
         // Roll back the zram write; the page wasn't actually mapped.
         let _ = zram::discard_block(block_id);
         return Err(ZramError::InvalidBlock);
     }
 
-    pmm.free_frame(frame);
     untrack(frame);
     Ok(block_id)
 }
@@ -90,10 +114,28 @@ pub unsafe fn swap_in_page(
 
     let frame_addr = pmm.alloc_frame().ok_or(ZramError::OutOfSpace)?;
     let dst = &mut *((hhdm_offset + frame_addr.as_u64()).as_mut_ptr::<[u8; ZRAM_BLOCK_SIZE]>());
-    zram::read_block(block_id, dst)?;
+    if let Err(error) = zram::read_block(block_id, dst) {
+        pmm.free_frame(frame_addr);
+        return Err(error);
+    }
 
     let frame = PhysFrame::from_start_address_unchecked(frame_addr);
-    address_space.remap_present(page, frame, flags, hhdm_offset);
+    if address_space
+        .replace_mapping(
+            page,
+            ExpectedMapping::Swapped {
+                block_id: block_id as u64,
+            },
+            ReplacementMapping::Present { frame, flags },
+            OwnershipTransition::RetainOld,
+            pmm,
+            hhdm_offset,
+        )
+        .is_err()
+    {
+        pmm.free_frame(frame_addr);
+        return Err(ZramError::InvalidBlock);
+    }
     let _ = zram::discard_block(block_id);
 
     track_anon(pid, page.start_address(), frame_addr);

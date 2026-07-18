@@ -2587,13 +2587,16 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
             .expect("MM-0 sentinel page");
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
         unsafe {
-            owner.address_space.map_page(
-                page,
-                frame,
-                crate::memory::security::user_stack_flags(),
-                &mut pmm,
-                hhdm_offset,
-            );
+            owner
+                .address_space
+                .map_page(
+                    page,
+                    frame,
+                    crate::memory::security::user_stack_flags(),
+                    &mut pmm,
+                    hhdm_offset,
+                )
+                .expect("MM-0 owner sentinel mapping");
             (hhdm_offset + frame_addr.as_u64())
                 .as_mut_ptr::<u64>()
                 .write_volatile(0x534C_4D4D_3054_4852);

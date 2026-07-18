@@ -6,6 +6,8 @@
 [MM-0] anonymous mmap W^X, NX, and zero-fill: OK
 [MM-0] SHM NX, zero-fill, and peer preservation: OK
 [MM-0] framebuffer authority lifecycle: OK
+[MM-2A] injected mmap/SHM allocation rollback: OK
+[MM-2A] collision, cursor, SHM commit, live-content, and NX replacement: OK
 [MM-0] native borrower lifecycle: 12 finished/reaped + 12 recreated/reaped: OK
 [MM-0] thread address-space lifecycle: OK
 [SEC]  Token forge attempt: REJECTED (CapError::NotFound)

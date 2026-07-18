@@ -593,15 +593,34 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
     // Remap the page as writable
     let new_frame = match x86_64::structures::paging::PhysFrame::from_start_address(new_phys) {
         Ok(f) => f,
-        Err(_) => return false,
+        Err(_) => {
+            pmm.free_frame(new_phys);
+            return false;
+        }
     };
 
     let flags = old_flags | x86_64::structures::paging::PageTableFlags::WRITABLE;
 
-    unsafe {
-        process
-            .address_space
-            .map_page(page, new_frame, flags, &mut *pmm, hhdm);
+    if unsafe {
+        process.address_space.replace_mapping(
+            page,
+            crate::process::address_space::ExpectedMapping::Present {
+                frame: old_phys,
+                flags: old_flags,
+            },
+            crate::process::address_space::ReplacementMapping::Present {
+                frame: new_frame,
+                flags,
+            },
+            crate::process::address_space::OwnershipTransition::ReleaseOldFrame,
+            &mut *pmm,
+            hhdm,
+        )
+    }
+    .is_err()
+    {
+        pmm.free_frame(new_phys);
+        return false;
     }
 
     crate::serial_println!(

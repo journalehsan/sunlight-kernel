@@ -4,6 +4,7 @@ pub mod env;
 pub mod fd_table;
 pub mod fork;
 pub mod layout;
+pub(crate) mod mm2a_plan;
 pub mod mmap;
 pub mod pipe;
 pub mod signal;
@@ -250,7 +251,20 @@ impl Process {
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Self {
-        let address_space = AddressSpace::new(pmm, hhdm_offset);
+        Self::try_new(pid, ppid, name, pmm, hhdm_offset)
+            .expect("boot process address-space allocation failed")
+    }
+
+    /// Fallible process construction for syscall-reachable spawn/exec paths.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn try_new(
+        pid: usize,
+        ppid: usize,
+        name: &str,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<Self, address_space::MappingError> {
+        let address_space = AddressSpace::try_new(pmm, hhdm_offset)?;
 
         let kernel_stack = new_kernel_stack();
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
@@ -261,7 +275,7 @@ impl Process {
         let nlen = nb.len().min(31);
         name_arr[..nlen].copy_from_slice(&nb[..nlen]);
 
-        Self {
+        Ok(Self {
             pid,
             ppid,
             name: name_arr,
@@ -327,7 +341,7 @@ impl Process {
             last_start_ns: 0,
             cwd: alloc::string::String::from("/"),
             exit_cleanup_pending: false,
-        }
+        })
     }
 
     /// Build the initial context frame on the kernel stack for first entry.

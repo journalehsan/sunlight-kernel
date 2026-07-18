@@ -42,8 +42,10 @@ pub fn exec_into_process(
 ) -> Result<u64, SpawnError> {
     process.trusted_display_service = false;
     // Tear down old address space (note: old frames leak; acceptable for minimal scope)
-    process.address_space =
-        unsafe { crate::process::address_space::AddressSpace::new(pmm, hhdm_offset) };
+    process.address_space = unsafe {
+        crate::process::address_space::AddressSpace::try_new(pmm, hhdm_offset)
+            .map_err(|_| SpawnError::NoMemory)?
+    };
 
     // Phase 4.5: Detect if this is a Linux-compatible ELF binary
     process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
@@ -60,7 +62,7 @@ pub fn exec_into_process(
     let stack_pages = (super::layout::USER_STACK_SIZE + 4095) / 4096;
     for i in 0..stack_pages {
         let page_addr = VirtAddr::new(super::layout::USER_STACK_TOP - (i + 1) * 4096);
-        let page = Page::from_start_address(page_addr).unwrap();
+        let page = Page::from_start_address(page_addr).map_err(|_| SpawnError::NoMemory)?;
         let frame_addr = pmm
             .alloc_frame_owned(process.pid as u32)
             .ok_or(SpawnError::NoMemory)?;
@@ -70,10 +72,15 @@ pub fn exec_into_process(
         }
         let phys = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
         let flags = crate::memory::security::user_stack_flags();
-        unsafe {
+        if unsafe {
             process
                 .address_space
-                .map_page(page, phys, flags, pmm, hhdm_offset);
+                .map_page(page, phys, flags, pmm, hhdm_offset)
+        }
+        .is_err()
+        {
+            pmm.free_frame(frame_addr);
+            return Err(SpawnError::NoMemory);
         }
         crate::memory::security::note_nx_stack_mapping();
     }
@@ -344,7 +351,9 @@ pub fn spawn_from_path_with_env(
     } else {
         name_from_path(path)
     };
-    let mut process = unsafe { Process::new(pid, 1, proc_name, pmm, hhdm_offset) };
+    let mut process = unsafe {
+        Process::try_new(pid, 1, proc_name, pmm, hhdm_offset).map_err(|_| SpawnError::NoMemory)?
+    };
     process.uid = uid;
     process.gid = gid;
     // Attach this shell to a TTY tab keyed by its shell_id (parsed from the

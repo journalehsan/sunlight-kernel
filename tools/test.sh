@@ -279,6 +279,8 @@ fi
 KERNEL_FEATURES=""
 if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "top" ]]; then
     KERNEL_FEATURES="--features key_inject"
+elif [[ "$PHASE" == "phase_sec" ]]; then
+    KERNEL_FEATURES="--features mm2a_test_injection"
 fi
 EXTRA_ENV=()
 if [[ "$PHASE" == "phase3.9" ]]; then

@@ -1525,7 +1525,11 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
 
     let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
     let proc_name = crate::process::spawn::name_from_path(path_str);
-    let mut child = unsafe { crate::process::Process::new(pid, ppid, proc_name, &mut pmm, hhdm) };
+    let mut child =
+        match unsafe { crate::process::Process::try_new(pid, ppid, proc_name, &mut pmm, hhdm) } {
+            Ok(child) => child,
+            Err(_) => return u64::MAX,
+        };
     child.uid = uid;
     child.gid = gid;
     child.env = env;
@@ -2133,9 +2137,8 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
             }
         }
     } else if target_page_end < current_page_end {
-        let size_to_unmap = current_page_end - target_page_end;
-        let _ = crate::process::mmap::sys_munmap(target_page_end, size_to_unmap);
-        sched.current_process_mut().brk_current = requested_brk;
+        // Real unmapping is deferred; do not claim a shrink that did nothing.
+        return current_brk;
     } else {
         sched.current_process_mut().brk_current = requested_brk;
     }
@@ -3482,6 +3485,7 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
                 match error {
                     crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),
                     crate::process::mmap::MmapError::NoMemory => linux_errno(12),
+                    crate::process::mmap::MmapError::AlreadyMapped => linux_errno(17),
                     _ => linux_errno(22),
                 }
             } else {
@@ -3500,6 +3504,9 @@ fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
 
     match crate::process::mmap::sys_munmap(addr, length) {
         Ok(()) => 0,
+        Err(_) if crate::sched::with_scheduler(|s| s.current_process().is_linux_compat) => {
+            linux_errno(22)
+        }
         Err(_) => u64::MAX,
     }
 }
@@ -3515,6 +3522,9 @@ fn sys_mprotect(frame: &mut SyscallFrame) -> u64 {
 
     match crate::process::mmap::sys_mprotect(addr, length, prot) {
         Ok(()) => 0,
+        Err(_) if crate::sched::with_scheduler(|s| s.current_process().is_linux_compat) => {
+            linux_errno(22)
+        }
         Err(_) => u64::MAX,
     }
 }
@@ -3890,7 +3900,10 @@ fn dhcp_message_type(frame: &[u8]) -> Option<u8> {
 
 fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
     let size = frame.rdi as usize; // 0 => 4KiB (compat); >0 for multi-page regions
-    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+    let Some(hhdm) = crate::HHDM_REQ.response() else {
+        return u64::MAX;
+    };
+    let hhdm_offset = VirtAddr::new(hhdm.offset);
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
@@ -3921,7 +3934,10 @@ fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
 fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
     let token = crate::capability::CapabilityToken(frame.rdi);
     // rsi may carry prot in future (SHM_READ etc); currently always RW for the mapping
-    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+    let Some(hhdm) = crate::HHDM_REQ.response() else {
+        return u64::MAX;
+    };
+    let hhdm_offset = VirtAddr::new(hhdm.offset);
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
@@ -3938,21 +3954,37 @@ fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
     let token = crate::capability::CapabilityToken(frame.rdi);
-    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+    let Some(hhdm) = crate::HHDM_REQ.response() else {
+        return u64::MAX;
+    };
+    let hhdm_offset = VirtAddr::new(hhdm.offset);
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
     let process = sched.current_process_mut();
-    crate::memory::shared::free_shared_page(process, token, &mut *pmm, &mut *caps, hhdm_offset);
-    crate::serial_println!("[SHM]  shm_free: page unmapped OK");
-    0
+    match crate::memory::shared::free_shared_page(
+        process,
+        token,
+        &mut *pmm,
+        &mut *caps,
+        hhdm_offset,
+    ) {
+        Ok(()) => {
+            crate::serial_println!("[SHM]  shm_free: page unmapped OK");
+            0
+        }
+        Err(_) => u64::MAX,
+    }
 }
 
 /// Map the physical Limine framebuffer into the current process for the GUI compositor.
 /// Returns user virtual address of the start of the framebuffer (or 0 on failure).
 /// The caller can read fb dimensions via other means or we pack extra info in rdx/rcx etc.
 fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
-    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+    let Some(hhdm) = crate::HHDM_REQ.response() else {
+        return u64::MAX;
+    };
+    let hhdm_offset = VirtAddr::new(hhdm.offset);
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let caller_pid = sched.current_process().pid;
@@ -3984,8 +4016,17 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     };
     let fb_page_offset = fb_phys_base & 0xfff;
     let bytes_per_row = fb_pitch;
-    let total_bytes = fb_page_offset + bytes_per_row * fb_height;
-    let page_count = (total_bytes + 4095) / 4096;
+    let total_bytes = match bytes_per_row
+        .checked_mul(fb_height)
+        .and_then(|bytes| bytes.checked_add(fb_page_offset))
+    {
+        Some(bytes) => bytes,
+        None => return 0,
+    };
+    let page_count = match total_bytes.checked_add(4095) {
+        Some(rounded) => rounded / 4096,
+        None => return 0,
+    };
 
     let mut pmm = crate::PMM.lock();
     let process = sched.current_process_mut();
@@ -3998,6 +4039,19 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
         | PageTableFlags::NO_EXECUTE;
 
     for page_idx in 0..page_count {
+        let Some(user_va) = DISPLAY_FB_VADDR.checked_add(page_idx * 4096) else {
+            return 0;
+        };
+        let Ok(user_page) = Page::<Size4KiB>::from_start_address(VirtAddr::new(user_va)) else {
+            return 0;
+        };
+        if unsafe { process.address_space.is_occupied(user_page, hhdm_offset) } {
+            crate::process::address_space::note_mapping_collision();
+            return u64::MAX;
+        }
+    }
+
+    for page_idx in 0..page_count {
         let user_va = DISPLAY_FB_VADDR + page_idx * 4096;
         let user_page = match Page::<Size4KiB>::from_start_address(VirtAddr::new(user_va)) {
             Ok(p) => p,
@@ -4005,10 +4059,30 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
         };
         let phys = (fb_phys_base & !0xfff) + page_idx * 4096;
         let fb_frame = unsafe { PhysFrame::from_start_address_unchecked(PhysAddr::new(phys)) };
-        unsafe {
+        if unsafe {
             process
                 .address_space
-                .map_page(user_page, fb_frame, flags, &mut *pmm, hhdm_offset);
+                .map_page(user_page, fb_frame, flags, &mut *pmm, hhdm_offset)
+        }
+        .is_err()
+        {
+            for rollback_idx in (0..page_idx).rev() {
+                let Ok(rollback_page) = Page::<Size4KiB>::from_start_address(VirtAddr::new(
+                    DISPLAY_FB_VADDR + rollback_idx * 4096,
+                )) else {
+                    continue;
+                };
+                let rollback_phys = PhysAddr::new((fb_phys_base & !0xfff) + rollback_idx * 4096);
+                let _ = unsafe {
+                    process.address_space.rollback_mapped_page(
+                        rollback_page,
+                        rollback_phys,
+                        &mut *pmm,
+                        hhdm_offset,
+                    )
+                };
+            }
+            return u64::MAX;
         }
     }
 
@@ -4025,7 +4099,10 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
-    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+    let Some(hhdm) = crate::HHDM_REQ.response() else {
+        return 0;
+    };
+    let hhdm_offset = VirtAddr::new(hhdm.offset);
 
     const TELEMETRY_PAGES: u64 = 2;
     const PAGE_SIZE: u64 = 4096;
@@ -4052,6 +4129,18 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
         | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE
         | x86_64::structures::paging::PageTableFlags::NO_EXECUTE;
 
+    for i in 0..TELEMETRY_PAGES {
+        let Ok(page) =
+            x86_64::structures::paging::Page::from_start_address(user_addr + i * PAGE_SIZE)
+        else {
+            return 0;
+        };
+        if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
+            crate::process::address_space::note_mapping_collision();
+            return 0;
+        }
+    }
+
     // SAFETY: mapping user-visible read-only pages into current process page tables.
     for i in 0..TELEMETRY_PAGES {
         let user_page =
@@ -4064,10 +4153,31 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
                 x86_64::PhysAddr::new(telemetry_phys_page + i * PAGE_SIZE),
             )
         };
-        unsafe {
+        if unsafe {
             process
                 .address_space
-                .map_page(user_page, phys_frame, flags, &mut pmm, hhdm_offset);
+                .map_page(user_page, phys_frame, flags, &mut pmm, hhdm_offset)
+        }
+        .is_err()
+        {
+            for rollback_idx in (0..i).rev() {
+                let Ok(rollback_page) = x86_64::structures::paging::Page::from_start_address(
+                    user_addr + rollback_idx * PAGE_SIZE,
+                ) else {
+                    continue;
+                };
+                let rollback_phys =
+                    x86_64::PhysAddr::new(telemetry_phys_page + rollback_idx * PAGE_SIZE);
+                let _ = unsafe {
+                    process.address_space.rollback_mapped_page(
+                        rollback_page,
+                        rollback_phys,
+                        &mut pmm,
+                        hhdm_offset,
+                    )
+                };
+            }
+            return 0;
         }
     }
     user_addr.as_u64() + telemetry_page_off

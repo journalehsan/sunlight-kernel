@@ -1,8 +1,102 @@
 use crate::memory::pmm::PhysicalMemoryManager;
+use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{
-    structures::paging::{Page, PageTable, PageTableFlags, PhysFrame, Size4KiB},
+    instructions::tlb,
+    structures::paging::{
+        page_table::PageTableEntry, Page, PageTable, PageTableFlags, PhysFrame, Size4KiB,
+    },
     PhysAddr, VirtAddr,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MappingError {
+    InvalidAddress,
+    NonCanonical,
+    Overflow,
+    Misaligned,
+    AlreadyMapped,
+    NotMapped,
+    FrameAllocationFailed,
+    PageTableAllocationFailed,
+    PermissionRejected,
+    UnsupportedReplacement,
+    InternalInvariant,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpectedMapping {
+    Present {
+        frame: PhysAddr,
+        flags: PageTableFlags,
+    },
+    Swapped {
+        block_id: u64,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplacementMapping {
+    Present {
+        frame: PhysFrame<Size4KiB>,
+        flags: PageTableFlags,
+    },
+    Swapped {
+        block_id: u64,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnershipTransition {
+    RetainOld,
+    ReleaseOldFrame,
+}
+
+static MAPPING_COLLISIONS: AtomicU64 = AtomicU64::new(0);
+static MMAP_ROLLBACKS: AtomicU64 = AtomicU64::new(0);
+static SHM_CREATE_ROLLBACKS: AtomicU64 = AtomicU64::new(0);
+static SHM_PEER_ROLLBACKS: AtomicU64 = AtomicU64::new(0);
+static FRAME_ALLOCATION_FAILURES: AtomicU64 = AtomicU64::new(0);
+static PAGE_TABLE_ALLOCATION_FAILURES: AtomicU64 = AtomicU64::new(0);
+static INTENTIONAL_REPLACEMENTS: AtomicU64 = AtomicU64::new(0);
+static ROLLBACK_INVARIANT_FAILURES: AtomicU64 = AtomicU64::new(0);
+
+pub fn note_mmap_rollback() {
+    MMAP_ROLLBACKS.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn note_mapping_collision() {
+    MAPPING_COLLISIONS.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn note_shm_create_rollback() {
+    SHM_CREATE_ROLLBACKS.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn note_shm_peer_rollback() {
+    SHM_PEER_ROLLBACKS.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn note_frame_allocation_failure() {
+    FRAME_ALLOCATION_FAILURES.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn note_rollback_invariant_failure() {
+    ROLLBACK_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn diagnostic_report() {
+    crate::serial_println!(
+        "[MM-2A-DIAG] collisions={} mmap_rollbacks={} shm_create_rollbacks={} shm_peer_rollbacks={} frame_alloc_failures={} pt_alloc_failures={} replacements={} rollback_invariant_failures={}",
+        MAPPING_COLLISIONS.load(Ordering::Relaxed),
+        MMAP_ROLLBACKS.load(Ordering::Relaxed),
+        SHM_CREATE_ROLLBACKS.load(Ordering::Relaxed),
+        SHM_PEER_ROLLBACKS.load(Ordering::Relaxed),
+        FRAME_ALLOCATION_FAILURES.load(Ordering::Relaxed),
+        PAGE_TABLE_ALLOCATION_FAILURES.load(Ordering::Relaxed),
+        INTENTIONAL_REPLACEMENTS.load(Ordering::Relaxed),
+        ROLLBACK_INVARIANT_FAILURES.load(Ordering::Relaxed),
+    );
+}
 
 pub struct AddressSpace {
     pub pml4_phys: PhysAddr,
@@ -20,7 +114,19 @@ impl AddressSpace {
     /// Create a new address space, copying kernel higher-half mappings.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
     pub unsafe fn new(pmm: &mut PhysicalMemoryManager, hhdm_offset: VirtAddr) -> Self {
-        let pml4_phys = pmm.alloc_frame().expect("PML4 allocation failed");
+        Self::try_new(pmm, hhdm_offset).expect("boot PML4 allocation failed")
+    }
+
+    /// Fallible address-space construction for user-triggered process creation.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn try_new(
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<Self, MappingError> {
+        let pml4_phys = pmm.alloc_frame().ok_or_else(|| {
+            PAGE_TABLE_ALLOCATION_FAILURES.fetch_add(1, Ordering::Relaxed);
+            MappingError::PageTableAllocationFailed
+        })?;
 
         // Map the PML4 via HHDM to initialize it.
         let pml4_virt = hhdm_offset + pml4_phys.as_u64();
@@ -37,10 +143,10 @@ impl AddressSpace {
             pml4[i].set_addr(current_pml4[i].addr(), current_pml4[i].flags());
         }
 
-        Self {
+        Ok(Self {
             pml4_phys,
             shared_bump: 0x0000_0003_0000_0000,
-        }
+        })
     }
 
     /// Construct an AddressSpace wrapper for an already-allocated PML4 (used by fork CoW clone).
@@ -66,20 +172,157 @@ impl AddressSpace {
         flags: PageTableFlags,
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
-    ) {
+    ) -> Result<(), MappingError> {
+        if flags.contains(PageTableFlags::USER_ACCESSIBLE)
+            && flags.contains(PageTableFlags::WRITABLE)
+            && !flags.contains(PageTableFlags::NO_EXECUTE)
+        {
+            return Err(MappingError::PermissionRejected);
+        }
         let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
 
+        let mut created: [Option<(*mut PageTableEntry, PhysAddr)>; 3] = [None, None, None];
+
         let p4_entry = &mut pml4[page.p4_index()];
-        let p3_table = Self::create_next_table(p4_entry, pmm, hhdm_offset);
+        let p3_table = match Self::create_next_table(p4_entry, pmm, hhdm_offset, &mut created[0]) {
+            Ok(table) => table,
+            Err(error) => return Err(error),
+        };
 
         let p3_entry = &mut p3_table[page.p3_index()];
-        let p2_table = Self::create_next_table(p3_entry, pmm, hhdm_offset);
+        let p2_table = match Self::create_next_table(p3_entry, pmm, hhdm_offset, &mut created[1]) {
+            Ok(table) => table,
+            Err(error) => {
+                Self::rollback_created_tables(&mut created, pmm);
+                return Err(error);
+            }
+        };
 
         let p2_entry = &mut p2_table[page.p2_index()];
-        let p1_table = Self::create_next_table(p2_entry, pmm, hhdm_offset);
+        let p1_table = match Self::create_next_table(p2_entry, pmm, hhdm_offset, &mut created[2]) {
+            Ok(table) => table,
+            Err(error) => {
+                Self::rollback_created_tables(&mut created, pmm);
+                return Err(error);
+            }
+        };
 
         let p1_entry = &mut p1_table[page.p1_index()];
+        if !p1_entry.is_unused() {
+            MAPPING_COLLISIONS.fetch_add(1, Ordering::Relaxed);
+            Self::rollback_created_tables(&mut created, pmm);
+            return Err(MappingError::AlreadyMapped);
+        }
         p1_entry.set_frame(phys, flags);
+        Ok(())
+    }
+
+    /// Return whether a leaf is occupied by either a present mapping or a
+    /// non-present marker such as a swapped page.
+    pub unsafe fn is_occupied(&self, page: Page<Size4KiB>, hhdm_offset: VirtAddr) -> bool {
+        if self.is_reclaimed() {
+            return true;
+        }
+        let p4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
+        let p4e = &p4[page.p4_index()];
+        if p4e.is_unused() {
+            return false;
+        }
+        if !p4e.flags().contains(PageTableFlags::PRESENT)
+            || p4e.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
+            return true;
+        }
+        let p3 = &*((hhdm_offset + p4e.addr().as_u64()).as_ptr::<PageTable>());
+        let p3e = &p3[page.p3_index()];
+        if p3e.is_unused() {
+            return false;
+        }
+        if !p3e.flags().contains(PageTableFlags::PRESENT)
+            || p3e.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
+            return true;
+        }
+        let p2 = &*((hhdm_offset + p3e.addr().as_u64()).as_ptr::<PageTable>());
+        let p2e = &p2[page.p2_index()];
+        if p2e.is_unused() {
+            return false;
+        }
+        if !p2e.flags().contains(PageTableFlags::PRESENT)
+            || p2e.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
+            return true;
+        }
+        let p1 = &*((hhdm_offset + p2e.addr().as_u64()).as_ptr::<PageTable>());
+        !p1[page.p1_index()].is_unused()
+    }
+
+    /// Replace exactly the expected leaf state. This is the only API for CoW
+    /// and swap transitions; ordinary mapping never replaces a leaf.
+    pub unsafe fn replace_mapping(
+        &mut self,
+        page: Page<Size4KiB>,
+        expected: ExpectedMapping,
+        replacement: ReplacementMapping,
+        ownership: OwnershipTransition,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), MappingError> {
+        let ptr = self
+            .p1_entry_ptr(page, hhdm_offset)
+            .ok_or(MappingError::NotMapped)?;
+        let entry = &mut *ptr;
+        let current_matches = match expected {
+            ExpectedMapping::Present { frame, flags } => {
+                entry.flags().contains(PageTableFlags::PRESENT)
+                    && entry.addr() == frame
+                    && entry.flags() == flags
+            }
+            ExpectedMapping::Swapped { block_id } => {
+                let encoded = block_id
+                    .checked_add(1)
+                    .and_then(|value| value.checked_shl(12))
+                    .ok_or(MappingError::Overflow)?;
+                !entry.is_unused()
+                    && !entry.flags().contains(PageTableFlags::PRESENT)
+                    && entry.addr().as_u64() == encoded
+            }
+        };
+        if !current_matches {
+            return Err(MappingError::UnsupportedReplacement);
+        }
+        if ownership == OwnershipTransition::ReleaseOldFrame
+            && !matches!(expected, ExpectedMapping::Present { .. })
+        {
+            return Err(MappingError::InternalInvariant);
+        }
+
+        match replacement {
+            ReplacementMapping::Present { frame, flags } => {
+                if flags.contains(PageTableFlags::USER_ACCESSIBLE)
+                    && flags.contains(PageTableFlags::WRITABLE)
+                    && !flags.contains(PageTableFlags::NO_EXECUTE)
+                {
+                    return Err(MappingError::PermissionRejected);
+                }
+                entry.set_frame(frame, flags);
+            }
+            ReplacementMapping::Swapped { block_id } => {
+                let encoded = block_id
+                    .checked_add(1)
+                    .and_then(|value| value.checked_shl(12))
+                    .ok_or(MappingError::Overflow)?;
+                entry.set_addr(PhysAddr::new(encoded), PageTableFlags::empty());
+            }
+        }
+        tlb::flush(page.start_address());
+        if ownership == OwnershipTransition::ReleaseOldFrame {
+            if let ExpectedMapping::Present { frame, .. } = expected {
+                pmm.free_frame(frame);
+            }
+        }
+        INTENTIONAL_REPLACEMENTS.fetch_add(1, Ordering::Relaxed);
+        Ok(())
     }
 
     /// Look up the physical address mapped for `page`, if any.
@@ -104,17 +347,26 @@ impl AddressSpace {
         }
         let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
         let p4_entry = &pml4[page.p4_index()];
-        if p4_entry.is_unused() {
+        if p4_entry.is_unused()
+            || !p4_entry.flags().contains(PageTableFlags::PRESENT)
+            || p4_entry.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
             return None;
         }
         let p3_table = &*((hhdm_offset + p4_entry.addr().as_u64()).as_ptr::<PageTable>());
         let p3_entry = &p3_table[page.p3_index()];
-        if p3_entry.is_unused() {
+        if p3_entry.is_unused()
+            || !p3_entry.flags().contains(PageTableFlags::PRESENT)
+            || p3_entry.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
             return None;
         }
         let p2_table = &*((hhdm_offset + p3_entry.addr().as_u64()).as_ptr::<PageTable>());
         let p2_entry = &p2_table[page.p2_index()];
-        if p2_entry.is_unused() {
+        if p2_entry.is_unused()
+            || !p2_entry.flags().contains(PageTableFlags::PRESENT)
+            || p2_entry.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
             return None;
         }
         let p1_table = &*((hhdm_offset + p2_entry.addr().as_u64()).as_ptr::<PageTable>());
@@ -125,41 +377,34 @@ impl AddressSpace {
         Some((p1_entry.addr(), p1_entry.flags()))
     }
 
-    /// Replace the flags of an already-mapped page, keeping its frame.
-    /// Returns false if the page is not mapped.
+    /// Replace flags only if the leaf still has the expected flags.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
     pub unsafe fn update_flags(
         &mut self,
         page: Page<Size4KiB>,
+        expected_flags: PageTableFlags,
         flags: PageTableFlags,
         hhdm_offset: VirtAddr,
-    ) -> bool {
-        if self.is_reclaimed() {
-            return false;
+    ) -> Result<(), MappingError> {
+        if flags.contains(PageTableFlags::USER_ACCESSIBLE)
+            && flags.contains(PageTableFlags::WRITABLE)
+            && !flags.contains(PageTableFlags::NO_EXECUTE)
+        {
+            return Err(MappingError::PermissionRejected);
         }
-        let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
-        let p4_entry = &mut pml4[page.p4_index()];
-        if p4_entry.is_unused() {
-            return false;
+        let entry = &mut *self
+            .p1_entry_ptr(page, hhdm_offset)
+            .ok_or(MappingError::NotMapped)?;
+        if !entry.flags().contains(PageTableFlags::PRESENT) {
+            return Err(MappingError::NotMapped);
         }
-        let p3_table = &mut *((hhdm_offset + p4_entry.addr().as_u64()).as_mut_ptr::<PageTable>());
-        let p3_entry = &mut p3_table[page.p3_index()];
-        if p3_entry.is_unused() {
-            return false;
+        if entry.flags() != expected_flags {
+            return Err(MappingError::UnsupportedReplacement);
         }
-        let p2_table = &mut *((hhdm_offset + p3_entry.addr().as_u64()).as_mut_ptr::<PageTable>());
-        let p2_entry = &mut p2_table[page.p2_index()];
-        if p2_entry.is_unused() {
-            return false;
-        }
-        let p1_table = &mut *((hhdm_offset + p2_entry.addr().as_u64()).as_mut_ptr::<PageTable>());
-        let p1_entry = &mut p1_table[page.p1_index()];
-        if p1_entry.is_unused() {
-            return false;
-        }
-        let frame = p1_entry.addr();
-        p1_entry.set_addr(frame, flags);
-        true
+        let frame = entry.addr();
+        entry.set_addr(frame, flags);
+        tlb::flush(page.start_address());
+        Ok(())
     }
 
     /// Walk to the leaf (P1) entry for `page`, returning a raw pointer to it
@@ -176,40 +421,30 @@ impl AddressSpace {
         }
         let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
         let p4_entry = &pml4[page.p4_index()];
-        if p4_entry.is_unused() {
+        if p4_entry.is_unused()
+            || !p4_entry.flags().contains(PageTableFlags::PRESENT)
+            || p4_entry.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
             return None;
         }
         let p3_table = &*((hhdm_offset + p4_entry.addr().as_u64()).as_ptr::<PageTable>());
         let p3_entry = &p3_table[page.p3_index()];
-        if p3_entry.is_unused() {
+        if p3_entry.is_unused()
+            || !p3_entry.flags().contains(PageTableFlags::PRESENT)
+            || p3_entry.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
             return None;
         }
         let p2_table = &*((hhdm_offset + p3_entry.addr().as_u64()).as_ptr::<PageTable>());
         let p2_entry = &p2_table[page.p2_index()];
-        if p2_entry.is_unused() {
+        if p2_entry.is_unused()
+            || !p2_entry.flags().contains(PageTableFlags::PRESENT)
+            || p2_entry.flags().contains(PageTableFlags::HUGE_PAGE)
+        {
             return None;
         }
         let p1_table = &*((hhdm_offset + p2_entry.addr().as_u64()).as_ptr::<PageTable>());
         Some(&p1_table[page.p1_index()] as *const _ as *mut _)
-    }
-
-    /// Replace a present leaf entry with a swapped marker: PRESENT cleared,
-    /// address field repurposed to hold `block_id` (shifted into the
-    /// page-aligned address bits). Returns false if `page` isn't mapped.
-    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
-    pub unsafe fn mark_swapped(
-        &mut self,
-        page: Page<Size4KiB>,
-        block_id: u64,
-        hhdm_offset: VirtAddr,
-    ) -> bool {
-        match self.p1_entry_ptr(page, hhdm_offset) {
-            Some(ptr) => {
-                (*ptr).set_addr(PhysAddr::new(block_id << 12), PageTableFlags::empty());
-                true
-            }
-            None => false,
-        }
     }
 
     /// If `page`'s leaf entry is a swapped marker (not present, non-zero
@@ -224,26 +459,7 @@ impl AddressSpace {
         if entry.is_unused() || entry.flags().contains(PageTableFlags::PRESENT) {
             return None;
         }
-        Some(entry.addr().as_u64() >> 12)
-    }
-
-    /// Re-map `page` to `frame` with `flags` (used to fault a swapped page
-    /// back in). Returns false if `page`'s leaf entry doesn't exist.
-    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
-    pub unsafe fn remap_present(
-        &mut self,
-        page: Page<Size4KiB>,
-        frame: PhysFrame<Size4KiB>,
-        flags: PageTableFlags,
-        hhdm_offset: VirtAddr,
-    ) -> bool {
-        match self.p1_entry_ptr(page, hhdm_offset) {
-            Some(ptr) => {
-                (*ptr).set_addr(frame.start_address(), flags);
-                true
-            }
-            None => false,
-        }
+        (entry.addr().as_u64() >> 12).checked_sub(1)
     }
 
     /// Switch to this address space (write PML4 phys addr to CR3).
@@ -282,21 +498,60 @@ impl AddressSpace {
         if n == 0 {
             return Err(crate::memory::shared::SharedMemError::InvalidArgument);
         }
-        let total = (n as u64) * PAGE_SIZE;
-        if self.shared_bump + total > 0x0000_0004_0000_0000 {
+        let total = (n as u64)
+            .checked_mul(PAGE_SIZE)
+            .ok_or(crate::memory::shared::SharedMemError::InvalidAddress)?;
+        let end = self
+            .shared_bump
+            .checked_add(total)
+            .ok_or(crate::memory::shared::SharedMemError::InvalidAddress)?;
+        if end > 0x0000_0004_0000_0000 {
             return Err(crate::memory::shared::SharedMemError::OutOfMemory);
         }
         let base = VirtAddr::new(self.shared_bump);
         let flags = crate::memory::security::user_shm_flags();
 
+        for i in 0..n {
+            let offset = (i as u64)
+                .checked_mul(PAGE_SIZE)
+                .ok_or(crate::memory::shared::SharedMemError::InvalidAddress)?;
+            let page = Page::<Size4KiB>::from_start_address(base + offset)
+                .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
+            if self.is_occupied(page, hhdm_offset) {
+                MAPPING_COLLISIONS.fetch_add(1, Ordering::Relaxed);
+                return Err(crate::memory::shared::SharedMemError::AlreadyMapped);
+            }
+        }
+
+        let mut installed = 0usize;
         for (i, frame) in frames.iter().enumerate() {
-            let v = VirtAddr::new(self.shared_bump + (i as u64) * PAGE_SIZE);
+            let v = base + (i as u64) * PAGE_SIZE;
             let page = Page::<Size4KiB>::from_start_address(v)
                 .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
-            self.map_page(page, *frame, flags, pmm, hhdm_offset);
+            if let Err(error) = self.map_page(page, *frame, flags, pmm, hhdm_offset) {
+                for rollback_index in (0..installed).rev() {
+                    let Ok(rollback_page) = Page::<Size4KiB>::from_start_address(
+                        base + (rollback_index as u64) * PAGE_SIZE,
+                    ) else {
+                        ROLLBACK_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+                        continue;
+                    };
+                    let rollback_frame = frames[rollback_index].start_address();
+                    if self
+                        .rollback_mapped_page(rollback_page, rollback_frame, pmm, hhdm_offset)
+                        .is_err()
+                    {
+                        ROLLBACK_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                return Err(crate::memory::shared::SharedMemError::from(error));
+            }
+            installed += 1;
+        }
+        self.shared_bump = end;
+        for _ in 0..installed {
             crate::memory::security::note_nx_shm_mapping();
         }
-        self.shared_bump += total;
         Ok(base)
     }
 
@@ -333,7 +588,60 @@ impl AddressSpace {
         }
         let phys = p1e.addr();
         p1e.set_unused();
+        tlb::flush(page.start_address());
         Some(phys)
+    }
+
+    /// Roll back a leaf only when it still maps the exact frame installed by
+    /// the caller, then reclaim empty lower-level tables. Existing mappings
+    /// and non-present markers are never removed.
+    pub unsafe fn rollback_mapped_page(
+        &mut self,
+        page: Page<Size4KiB>,
+        expected_frame: PhysAddr,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), MappingError> {
+        let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
+        let p4e = &mut pml4[page.p4_index()];
+        if p4e.is_unused() {
+            return Err(MappingError::NotMapped);
+        }
+        let p3_phys = p4e.addr();
+        let p3 = &mut *((hhdm_offset + p3_phys.as_u64()).as_mut_ptr::<PageTable>());
+        let p3e = &mut p3[page.p3_index()];
+        if p3e.is_unused() || p3e.flags().contains(PageTableFlags::HUGE_PAGE) {
+            return Err(MappingError::NotMapped);
+        }
+        let p2_phys = p3e.addr();
+        let p2 = &mut *((hhdm_offset + p2_phys.as_u64()).as_mut_ptr::<PageTable>());
+        let p2e = &mut p2[page.p2_index()];
+        if p2e.is_unused() || p2e.flags().contains(PageTableFlags::HUGE_PAGE) {
+            return Err(MappingError::NotMapped);
+        }
+        let p1_phys = p2e.addr();
+        let p1 = &mut *((hhdm_offset + p1_phys.as_u64()).as_mut_ptr::<PageTable>());
+        let p1e = &mut p1[page.p1_index()];
+        if !p1e.flags().contains(PageTableFlags::PRESENT) || p1e.addr() != expected_frame {
+            ROLLBACK_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+            return Err(MappingError::InternalInvariant);
+        }
+        p1e.set_unused();
+        tlb::flush(page.start_address());
+
+        if p1.iter().all(PageTableEntry::is_unused) {
+            p2e.set_unused();
+            pmm.free_frame(p1_phys);
+            if p2.iter().all(PageTableEntry::is_unused) {
+                p3e.set_unused();
+                pmm.free_frame(p2_phys);
+                if p3.iter().all(PageTableEntry::is_unused) {
+                    p4e.set_unused();
+                    pmm.free_frame(p3_phys);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Free all lower-half user mappings and page tables. The root PML4 frame
@@ -384,7 +692,7 @@ impl AddressSpace {
                             stats.user_frames += 1;
                         } else if p1e.addr().as_u64() != 0 {
                             let _ = crate::memory::zram::discard_block(
-                                (p1e.addr().as_u64() >> 12) as usize,
+                                ((p1e.addr().as_u64() >> 12) - 1) as usize,
                             );
                             stats.swap_blocks += 1;
                         }
@@ -466,12 +774,19 @@ impl AddressSpace {
 
     /// Create or get the next-level page table for an entry.
     fn create_next_table(
-        entry: &mut x86_64::structures::paging::page_table::PageTableEntry,
+        entry: &mut PageTableEntry,
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
-    ) -> &'static mut PageTable {
+        created: &mut Option<(*mut PageTableEntry, PhysAddr)>,
+    ) -> Result<&'static mut PageTable, MappingError> {
         if entry.is_unused() {
-            let frame_addr = pmm.alloc_frame().expect("page table alloc failed");
+            let frame_addr = match pmm.alloc_frame() {
+                Some(frame) => frame,
+                None => {
+                    PAGE_TABLE_ALLOCATION_FAILURES.fetch_add(1, Ordering::Relaxed);
+                    return Err(MappingError::PageTableAllocationFailed);
+                }
+            };
             debug_assert!(
                 frame_addr.as_u64() & 0xFFF == 0,
                 "PMM returned unaligned frame_addr {:#x}",
@@ -486,11 +801,33 @@ impl AddressSpace {
             for e in table.iter_mut() {
                 e.set_unused();
             }
-            table
+            *created = Some((entry as *mut PageTableEntry, frame_addr));
+            Ok(table)
         } else {
+            if entry.flags().contains(PageTableFlags::HUGE_PAGE) {
+                MAPPING_COLLISIONS.fetch_add(1, Ordering::Relaxed);
+                return Err(MappingError::AlreadyMapped);
+            }
+            if !entry.flags().contains(PageTableFlags::PRESENT) {
+                return Err(MappingError::InternalInvariant);
+            }
             let phys = entry.addr();
             let virt = hhdm_offset + phys.as_u64();
-            unsafe { &mut *(virt.as_mut_ptr::<PageTable>()) }
+            Ok(unsafe { &mut *(virt.as_mut_ptr::<PageTable>()) })
+        }
+    }
+
+    fn rollback_created_tables(
+        created: &mut [Option<(*mut PageTableEntry, PhysAddr)>; 3],
+        pmm: &mut PhysicalMemoryManager,
+    ) {
+        for item in created.iter_mut().rev() {
+            if let Some((entry, frame)) = item.take() {
+                unsafe {
+                    (*entry).set_unused();
+                }
+                pmm.free_frame(frame);
+            }
         }
     }
 }

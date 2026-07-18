@@ -524,7 +524,8 @@ pub extern "C" fn _start() -> ! {
                 let flags = memory::security::user_stack_flags();
                 unsafe {
                     init.address_space
-                        .map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                        .map_page(page, phys, flags, &mut pmm, hhdm_offset)
+                        .expect("init stack mapping failed");
                 }
                 memory::security::note_nx_stack_mapping();
             }
@@ -580,7 +581,8 @@ pub extern "C" fn _start() -> ! {
                 // SAFETY: page and frame are valid user-stack mappings for this process address space.
                 unsafe {
                     vfs.address_space
-                        .map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                        .map_page(page, phys, flags, &mut pmm, hhdm_offset)
+                        .expect("vfs stack mapping failed");
                 }
                 memory::security::note_nx_stack_mapping();
             }
@@ -597,13 +599,9 @@ pub extern "C" fn _start() -> ! {
                     | PageTableFlags::USER_ACCESSIBLE
                     | PageTableFlags::NO_EXECUTE;
                 unsafe {
-                    vfs.address_space.map_page(
-                        share_page,
-                        share_frame,
-                        share_flags,
-                        &mut pmm,
-                        hhdm_offset,
-                    );
+                    vfs.address_space
+                        .map_page(share_page, share_frame, share_flags, &mut pmm, hhdm_offset)
+                        .expect("vfs share mapping failed");
                 }
             }
 
@@ -659,7 +657,8 @@ pub extern "C" fn _start() -> ! {
                 // SAFETY: page and frame are valid user-stack mappings for this process address space.
                 unsafe {
                     tty.address_space
-                        .map_page(page, phys, flags, &mut pmm, hhdm_offset);
+                        .map_page(page, phys, flags, &mut pmm, hhdm_offset)
+                        .expect("tty stack mapping failed");
                 }
                 memory::security::note_nx_stack_mapping();
             }
@@ -1418,7 +1417,8 @@ fn map_tty_framebuffer(
         let fb_frame = unsafe { PhysFrame::from_start_address_unchecked(fb_phys) };
         unsafe {
             tty.address_space
-                .map_page(user_page, fb_frame, flags, pmm, hhdm_offset);
+                .map_page(user_page, fb_frame, flags, pmm, hhdm_offset)
+                .expect("boot framebuffer mapping failed");
         }
     }
 }

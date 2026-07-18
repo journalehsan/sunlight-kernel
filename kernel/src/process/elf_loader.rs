@@ -147,20 +147,34 @@ fn map_segment(
             None => {
                 // SAFETY: mapping a fresh user page into the process address space.
                 unsafe {
-                    process
+                    if process
                         .address_space
-                        .map_page(page, phys, flags, pmm, hhdm_offset);
+                        .map_page(page, phys, flags, pmm, hhdm_offset)
+                        .is_err()
+                    {
+                        pmm.free_frame(frame_addr);
+                        return None;
+                    }
                 }
             }
             Some(old_flags) if old_flags != flags => {
                 // Shared page with different protections: union them so e.g.
                 // a .data byte in a mostly-.rodata page stays writable.
+                let merged = union_flags(old_flags, flags);
+                if merged.contains(PageTableFlags::WRITABLE)
+                    && !merged.contains(PageTableFlags::NO_EXECUTE)
+                {
+                    crate::memory::security::note_rwx_mapping_rejected();
+                    return None;
+                }
                 unsafe {
-                    process.address_space.update_flags(
-                        page,
-                        union_flags(old_flags, flags),
-                        hhdm_offset,
-                    );
+                    if process
+                        .address_space
+                        .update_flags(page, old_flags, merged, hhdm_offset)
+                        .is_err()
+                    {
+                        return None;
+                    }
                 }
             }
             Some(_) => {}
