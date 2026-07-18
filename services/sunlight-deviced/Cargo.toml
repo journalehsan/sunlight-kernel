@@ -262,3 +262,7 @@ path = "src/main.rs"
 [[bin]]
 name = "devicectl"
 path = "src/bin/devicectl.rs"
+
+[[bin]]
+name = "sunlight-hwinfo"
+path = "src/bin/sunlight-hwinfo.rs"

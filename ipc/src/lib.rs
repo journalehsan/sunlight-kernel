@@ -71,6 +71,7 @@ pub enum SunlightSyscall {
     GpuFlush = 122,
     GpuUpdateCursor = 123,
     GpuMoveCursor = 124,
+    HardwareInventory = 126,
     DebugLog = 99,
 }
 
@@ -897,6 +898,183 @@ pub mod SmMsg {
 pub type DriverId = u64;
 pub type DeviceId = u64;
 
+pub const HARDWARE_INVENTORY_MAX_RECORDS: usize = 2050;
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HardwareBus {
+    Pci = 1,
+    Ps2 = 2,
+    Platform = 3,
+    Unknown = 255,
+}
+
+impl HardwareBus {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            1 => Self::Pci,
+            2 => Self::Ps2,
+            3 => Self::Platform,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HardwareState {
+    Unknown = 0,
+    Active = 1,
+    Loaded = 2,
+    ProbeFailed = 3,
+    NoDriver = 4,
+    Disabled = 5,
+}
+
+impl HardwareState {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            1 => Self::Active,
+            2 => Self::Loaded,
+            3 => Self::ProbeFailed,
+            4 => Self::NoDriver,
+            5 => Self::Disabled,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HardwareFailureStage {
+    None = 0,
+    Match = 1,
+    ResourceAllocation = 2,
+    ResourceMapping = 3,
+    FeatureNegotiation = 4,
+    QueueSetup = 5,
+    DeviceInitialization = 6,
+    DeviceActivation = 7,
+    ServiceBinding = 8,
+    Unknown = 255,
+}
+
+impl HardwareFailureStage {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            0 => Self::None,
+            1 => Self::Match,
+            2 => Self::ResourceAllocation,
+            3 => Self::ResourceMapping,
+            4 => Self::FeatureNegotiation,
+            5 => Self::QueueSetup,
+            6 => Self::DeviceInitialization,
+            7 => Self::DeviceActivation,
+            8 => Self::ServiceBinding,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HardwareInventoryRecord {
+    pub key: u64,
+    pub identity: u64,
+    pub subsystem: u64,
+    pub matched_driver: u64,
+    pub bound_driver: u64,
+    pub state: u64,
+    pub error_code: u64,
+    pub irq: u64,
+    pub bars: [u64; 6],
+}
+
+impl HardwareInventoryRecord {
+    pub const fn empty() -> Self {
+        Self {
+            key: 0,
+            identity: 0,
+            subsystem: 0,
+            matched_driver: 0,
+            bound_driver: 0,
+            state: HardwareState::Unknown as u64,
+            error_code: 0,
+            irq: u64::MAX,
+            bars: [0; 6],
+        }
+    }
+
+    pub const fn pci_key(domain: u16, bus: u8, device: u8, function: u8) -> u64 {
+        (HardwareBus::Pci as u64)
+            | ((domain as u64) << 8)
+            | ((bus as u64) << 24)
+            | ((device as u64) << 32)
+            | ((function as u64) << 40)
+    }
+
+    pub const fn ps2_key(port: u8) -> u64 {
+        (HardwareBus::Ps2 as u64) | ((port as u64) << 8)
+    }
+
+    pub const fn bus(self) -> HardwareBus {
+        HardwareBus::from_u64(self.key & 0xff)
+    }
+
+    pub const fn pci_location(self) -> Option<(u16, u8, u8, u8)> {
+        if matches!(self.bus(), HardwareBus::Pci) {
+            Some((
+                ((self.key >> 8) & 0xffff) as u16,
+                ((self.key >> 24) & 0xff) as u8,
+                ((self.key >> 32) & 0xff) as u8,
+                ((self.key >> 40) & 0xff) as u8,
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub const fn vendor_id(self) -> Option<u16> {
+        if matches!(self.bus(), HardwareBus::Pci) {
+            Some((self.identity & 0xffff) as u16)
+        } else {
+            None
+        }
+    }
+
+    pub const fn device_id(self) -> Option<u16> {
+        if matches!(self.bus(), HardwareBus::Pci) {
+            Some(((self.identity >> 16) & 0xffff) as u16)
+        } else {
+            None
+        }
+    }
+
+    pub const fn class(self) -> u8 {
+        ((self.identity >> 32) & 0xff) as u8
+    }
+
+    pub const fn subclass(self) -> u8 {
+        ((self.identity >> 40) & 0xff) as u8
+    }
+
+    pub const fn programming_interface(self) -> u8 {
+        ((self.identity >> 48) & 0xff) as u8
+    }
+
+    pub const fn revision(self) -> u8 {
+        ((self.identity >> 56) & 0xff) as u8
+    }
+
+    pub const fn hardware_state(self) -> HardwareState {
+        HardwareState::from_u64(self.state & 0xff)
+    }
+
+    pub const fn failure_stage(self) -> HardwareFailureStage {
+        HardwareFailureStage::from_u64((self.state >> 8) & 0xff)
+    }
+}
+
 #[repr(u64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriverKind {
@@ -1011,13 +1189,25 @@ pub mod DevicedMsg {
     pub const GET_DEVICE: u64 = 0xA007;
     pub const MARK_DRIVER_FAILED: u64 = 0xA008;
     pub const UNREGISTER_DRIVER: u64 = 0xA009;
+    pub const LIST_INVENTORY: u64 = 0xA101;
+    pub const GET_INVENTORY: u64 = 0xA102;
+    pub const GET_INVENTORY_FIELD: u64 = 0xA103;
 
     pub const REPLY: u64 = 0xA0FF;
+    pub const INVENTORY_REPLY: u64 = 0xA1FF;
     pub const ERROR: u64 = 0xA0FE;
 
     pub const ERR_NOT_FOUND: u64 = 1;
     pub const ERR_FULL: u64 = 2;
     pub const ERR_BAD_REQUEST: u64 = 3;
+    pub const ERR_UNSUPPORTED_FIELD: u64 = 4;
+
+    pub const FIELD_SUBSYSTEM: u64 = 1;
+    pub const FIELD_DRIVERS: u64 = 2;
+    pub const FIELD_DIAGNOSTIC: u64 = 3;
+    pub const FIELD_IRQ: u64 = 4;
+    pub const FIELD_BAR0: u64 = 16;
+    pub const FIELD_BAR5: u64 = FIELD_BAR0 + 5;
 }
 
 /// networkd v0 interface and config management.
@@ -2623,6 +2813,27 @@ pub fn monotonic_millis() -> u64 {
     ret
 }
 
+pub fn hardware_inventory_record(index: usize) -> Option<(HardwareInventoryRecord, usize)> {
+    let mut record = HardwareInventoryRecord::empty();
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::HardwareInventory,
+            index as u64,
+            &mut record as *mut HardwareInventoryRecord as u64,
+            core::mem::size_of::<HardwareInventoryRecord>() as u64,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if ret == u64::MAX {
+        None
+    } else {
+        Some((record, ret as usize))
+    }
+}
+
 /// Phase 3.4: hand a raw Ethernet frame to the kernel-owned virtio-net
 /// device for transmission. Returns `true` on success. Restricted to the
 /// net_server process (pid 5) by the kernel.
@@ -3120,5 +3331,14 @@ mod network_backend_tests {
             NetworkdMsg::ERR_UNSUPPORTED_OPERATION,
             NetworkdMsg::ERR_IPC_FAILURE
         );
+    }
+
+    #[test]
+    fn hardware_inventory_record_has_fixed_bounded_layout() {
+        assert_eq!(core::mem::size_of::<crate::HardwareInventoryRecord>(), 112);
+        assert_eq!(crate::HARDWARE_INVENTORY_MAX_RECORDS, 2050);
+        let first = crate::HardwareInventoryRecord::pci_key(0, 0, 3, 0);
+        let second = crate::HardwareInventoryRecord::pci_key(0, 0, 4, 0);
+        assert_ne!(first, second);
     }
 }

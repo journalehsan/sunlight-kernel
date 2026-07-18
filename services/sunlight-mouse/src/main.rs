@@ -534,12 +534,12 @@ fn pack_short_name(name: &str) -> u64 {
     word
 }
 
-fn register_with_deviced() {
+fn register_with_deviced(state: DriverState) {
     let Some(cap) = nameserver_lookup_timeout("deviced", 5) else {
         syscall::debug_log("[MOUSE] deviced unavailable; continuing without registration\n");
         return;
     };
-    let meta = (DriverKind::Mouse as u64) | ((DriverState::Ready as u64) << 16);
+    let meta = (DriverKind::Mouse as u64) | ((state as u64) << 16);
     let caps = DriverCaps::INPUT | DriverCaps::POINTER | DriverCaps::RELATIVE_MOTION;
     let msg = IpcMsg::with_label(DevicedMsg::REGISTER_DRIVER)
         .word(0, pack_short_name("mouse"))
@@ -682,6 +682,7 @@ pub extern "C" fn _start() -> ! {
 
     // Phase 1: Initialize PS/2 mouse hardware
     if init_ps2_mouse().is_err() {
+        register_with_deviced(DriverState::Failed);
         syscall::debug_log("[MOUSE] FATAL: Hardware initialization failed; exiting driver\n");
         ProcessExit::exit(1);
     }
@@ -689,9 +690,9 @@ pub extern "C" fn _start() -> ! {
     // Create IPC endpoint and register with nameserver
     let my_endpoint = endpoint_create();
     nameserver_register("mouse_driver", my_endpoint);
-    register_with_deviced();
     syscall::mouse_register(my_endpoint.0);
     syscall::debug_log("[MOUSE] registered with kernel IRQ12 router\n");
+    register_with_deviced(DriverState::Ready);
 
     // Lookup tty_server capability (for legacy TUI)
     let tty_token = loop {

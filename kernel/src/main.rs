@@ -12,6 +12,7 @@ use sunlight_net as sunlight_ipc;
 
 mod arch;
 mod capability;
+mod hardware_inventory;
 mod ipc;
 mod launch_trace;
 mod memory;
@@ -93,6 +94,8 @@ static SUNLIGHTCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlightctl");
 static DEVICECTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/devicectl");
+static SUNLIGHT_HWINFO_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-hwinfo");
 static NETWORKD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/networkd");
 static NETWORKCTL_ELF_BYTES: &[u8] =
@@ -388,6 +391,7 @@ pub extern "C" fn _start() -> ! {
 
     // 4.5. PCI GPU count (class 0x03 = display controller)
     // SAFETY: PCI port I/O requires ring-0; performed before user-space starts.
+    unsafe { hardware_inventory::enumerate_boot_hardware() };
     let gpu_count = unsafe { count_pci_class(0x03) };
     serial_println!("[PCI]  {} GPU device(s) detected", gpu_count);
     unsafe {
@@ -735,6 +739,16 @@ pub extern "C" fn _start() -> ! {
         let hhdm = hhdm_offset.as_u64();
         let pci_info = unsafe { sunlight_virtio::find_virtio_gpu() };
         if let Some(ref info) = pci_info {
+            hardware_inventory::update_pci(
+                info.bus,
+                info.slot,
+                info.func,
+                hardware_inventory::pack_short_name("virt-gpu"),
+                0,
+                ::sunlight_ipc::HardwareState::Loaded,
+                ::sunlight_ipc::HardwareFailureStage::None,
+                0,
+            );
             map_kernel_mmio_range(
                 &mut vmm,
                 &mut PMM.lock(),
@@ -814,9 +828,29 @@ pub extern "C" fn _start() -> ! {
                                         h
                                     );
                                     serial_println!("[GPU]  VirtIO GPU ready {}x{}", w, h);
+                                    hardware_inventory::update_pci(
+                                        info.bus,
+                                        info.slot,
+                                        info.func,
+                                        hardware_inventory::pack_short_name("virt-gpu"),
+                                        hardware_inventory::pack_short_name("virt-gpu"),
+                                        ::sunlight_ipc::HardwareState::Active,
+                                        ::sunlight_ipc::HardwareFailureStage::None,
+                                        0,
+                                    );
                                 } else {
                                     serial_println!(
                                         "[GPU]  VirtIO GPU: GET_DISPLAY_INFO returned empty scanout 0"
+                                    );
+                                    hardware_inventory::update_pci(
+                                        info.bus,
+                                        info.slot,
+                                        info.func,
+                                        hardware_inventory::pack_short_name("virt-gpu"),
+                                        0,
+                                        ::sunlight_ipc::HardwareState::ProbeFailed,
+                                        ::sunlight_ipc::HardwareFailureStage::DeviceInitialization,
+                                        3,
                                     );
                                 }
                             } else if let Some((w, h)) = unsafe { dev.get_display_info() } {
@@ -824,18 +858,58 @@ pub extern "C" fn _start() -> ! {
                                 dev.height = h;
                                 serial_println!("[display] current virtio scanout: {}x{}", w, h);
                                 serial_println!("[GPU]  VirtIO GPU ready {}x{}", w, h);
+                                hardware_inventory::update_pci(
+                                    info.bus,
+                                    info.slot,
+                                    info.func,
+                                    hardware_inventory::pack_short_name("virt-gpu"),
+                                    hardware_inventory::pack_short_name("virt-gpu"),
+                                    ::sunlight_ipc::HardwareState::Active,
+                                    ::sunlight_ipc::HardwareFailureStage::None,
+                                    0,
+                                );
                             } else {
                                 serial_println!("[GPU]  VirtIO GPU: GET_DISPLAY_INFO failed");
+                                hardware_inventory::update_pci(
+                                    info.bus,
+                                    info.slot,
+                                    info.func,
+                                    hardware_inventory::pack_short_name("virt-gpu"),
+                                    0,
+                                    ::sunlight_ipc::HardwareState::ProbeFailed,
+                                    ::sunlight_ipc::HardwareFailureStage::DeviceInitialization,
+                                    4,
+                                );
                             }
                             *GPU_DEVICE.lock() = Some(dev);
                         }
                         None => {
                             serial_println!("[GPU]  VirtIO GPU init handshake failed");
+                            hardware_inventory::update_pci(
+                                info.bus,
+                                info.slot,
+                                info.func,
+                                hardware_inventory::pack_short_name("virt-gpu"),
+                                0,
+                                ::sunlight_ipc::HardwareState::ProbeFailed,
+                                ::sunlight_ipc::HardwareFailureStage::FeatureNegotiation,
+                                1,
+                            );
                         }
                     }
                 }
                 _ => {
                     serial_println!("[GPU]  VirtIO GPU PMM alloc failed");
+                    hardware_inventory::update_pci(
+                        info.bus,
+                        info.slot,
+                        info.func,
+                        hardware_inventory::pack_short_name("virt-gpu"),
+                        0,
+                        ::sunlight_ipc::HardwareState::ProbeFailed,
+                        ::sunlight_ipc::HardwareFailureStage::ResourceAllocation,
+                        2,
+                    );
                 }
             }
         } else {
@@ -1214,7 +1288,7 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
 
     // SAFETY: PCI port I/O requires ring-0, which we have during kernel boot.
     let blk_info = unsafe { sunlight_virtio::find_virtio_blk() };
-    let (_, _, _, io_base) = match blk_info {
+    let (bus, slot, function, io_base) = match blk_info {
         Some(info) => info,
         None => {
             serial_println!("[BLK]  No virtio-blk found — /boot will be unavailable");
@@ -1236,6 +1310,16 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     let queue_virt = hhdm + queue_phys.as_u64();
     let req_virt = hhdm + req_phys.as_u64();
     serial_println!("[BLK]  Found virtio-blk");
+    hardware_inventory::update_pci(
+        bus,
+        slot,
+        function,
+        hardware_inventory::pack_short_name("virt-blk"),
+        0,
+        ::sunlight_ipc::HardwareState::Loaded,
+        ::sunlight_ipc::HardwareFailureStage::None,
+        0,
+    );
 
     // SAFETY: All physical/virtual addresses are valid kernel-allocated frames;
     // we hold ring-0 privilege for port I/O.
@@ -1251,6 +1335,16 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
         Some(b) => b,
         None => {
             serial_println!("[BLK]  virtio-blk init failed");
+            hardware_inventory::update_pci(
+                bus,
+                slot,
+                function,
+                hardware_inventory::pack_short_name("virt-blk"),
+                0,
+                ::sunlight_ipc::HardwareState::ProbeFailed,
+                ::sunlight_ipc::HardwareFailureStage::QueueSetup,
+                1,
+            );
             return share_phys;
         }
     };
@@ -1263,9 +1357,29 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     // SAFETY: blk was initialized with valid queue/req buffers above.
     if !unsafe { blk.read_block(0, &mut sector0) } {
         serial_println!("[BLK]  Read LBA 0 FAILED");
+        hardware_inventory::update_pci(
+            bus,
+            slot,
+            function,
+            hardware_inventory::pack_short_name("virt-blk"),
+            0,
+            ::sunlight_ipc::HardwareState::ProbeFailed,
+            ::sunlight_ipc::HardwareFailureStage::DeviceInitialization,
+            2,
+        );
         return share_phys;
     }
     serial_println!("[BLK]  Read LBA 0 OK");
+    hardware_inventory::update_pci(
+        bus,
+        slot,
+        function,
+        hardware_inventory::pack_short_name("virt-blk"),
+        hardware_inventory::pack_short_name("virt-blk"),
+        ::sunlight_ipc::HardwareState::Active,
+        ::sunlight_ipc::HardwareFailureStage::None,
+        0,
+    );
 
     // Mount FAT32 over the virtio-blk device through the BlockDevice trait.
     let mut fat = match sunlight_fat::Fat32::mount(VirtioBootDisk { blk: &mut blk }) {
@@ -1574,6 +1688,16 @@ fn initialize_network_backend(
         }
     };
     if let Some(info) = vmxnet3_info {
+        hardware_inventory::update_pci(
+            info.bus,
+            info.slot,
+            info.func,
+            hardware_inventory::pack_short_name("vmxnet3"),
+            0,
+            ::sunlight_ipc::HardwareState::Loaded,
+            ::sunlight_ipc::HardwareFailureStage::None,
+            0,
+        );
         serial_println!("[VMXNET3-AUDIT] probe entered — 15ad:07b0 found by probe_vmxnet3");
         serial_println!(
             "[VMXNET3] pci device 15ad:07b0 found at {:02x}:{:02x}.{}",
@@ -1703,6 +1827,16 @@ fn initialize_network_backend(
                     sunlight_net::NetBackendState::HardwareReady as u64,
                     core::sync::atomic::Ordering::Release,
                 );
+                hardware_inventory::update_pci(
+                    info.bus,
+                    info.slot,
+                    info.func,
+                    hardware_inventory::pack_short_name("vmxnet3"),
+                    hardware_inventory::pack_short_name("vmxnet3"),
+                    ::sunlight_ipc::HardwareState::Active,
+                    ::sunlight_ipc::HardwareFailureStage::None,
+                    0,
+                );
                 return Some(sunlight_net::NetBackend::Vmxnet3(device));
             }
             Err(error) => {
@@ -1728,27 +1862,88 @@ fn initialize_network_backend(
             "[NET] failed stage=no supported PCI Ethernet backend",
         );
     };
+    hardware_inventory::update_pci(
+        bus,
+        slot,
+        0,
+        hardware_inventory::pack_short_name("virt-net"),
+        0,
+        ::sunlight_ipc::HardwareState::Loaded,
+        ::sunlight_ipc::HardwareFailureStage::None,
+        0,
+    );
     NET_BACKEND_ERROR.store(0, core::sync::atomic::Ordering::Release);
     NET_BACKEND_STATE.store(
         sunlight_net::NetBackendState::Initializing as u64,
         core::sync::atomic::Ordering::Release,
     );
     serial_println!("[NET] matched backend=virtio-net");
-    let rx_q_phys = pmm
-        .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)?
-        .as_u64();
-    let tx_q_phys = pmm
-        .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)?
-        .as_u64();
+    let Some(rx_q_phys) = pmm
+        .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+        .map(|frame| frame.as_u64())
+    else {
+        hardware_inventory::update_pci(
+            bus,
+            slot,
+            0,
+            hardware_inventory::pack_short_name("virt-net"),
+            0,
+            ::sunlight_ipc::HardwareState::ProbeFailed,
+            ::sunlight_ipc::HardwareFailureStage::ResourceAllocation,
+            22,
+        );
+        return fail_network_backend(22, "[NET] failed stage=VirtIO-Net RX queue allocation");
+    };
+    let Some(tx_q_phys) = pmm
+        .alloc_frames(sunlight_net::virtio_net::QUEUE_PAGES_PER_NET_QUEUE)
+        .map(|frame| frame.as_u64())
+    else {
+        hardware_inventory::update_pci(
+            bus,
+            slot,
+            0,
+            hardware_inventory::pack_short_name("virt-net"),
+            0,
+            ::sunlight_ipc::HardwareState::ProbeFailed,
+            ::sunlight_ipc::HardwareFailureStage::ResourceAllocation,
+            23,
+        );
+        return fail_network_backend(23, "[NET] failed stage=VirtIO-Net TX queue allocation");
+    };
     let mut rx_bufs_phys = [0u64; sunlight_net::virtio_net::MAX_RX_BUFFERS];
     for physical in &mut rx_bufs_phys {
-        *physical = pmm.alloc_frame()?.as_u64();
+        let Some(frame) = pmm.alloc_frame() else {
+            hardware_inventory::update_pci(
+                bus,
+                slot,
+                0,
+                hardware_inventory::pack_short_name("virt-net"),
+                0,
+                ::sunlight_ipc::HardwareState::ProbeFailed,
+                ::sunlight_ipc::HardwareFailureStage::ResourceAllocation,
+                24,
+            );
+            return fail_network_backend(24, "[NET] failed stage=VirtIO-Net RX buffer allocation");
+        };
+        *physical = frame.as_u64();
     }
     let mut rx_bufs_virt = [0u64; sunlight_net::virtio_net::MAX_RX_BUFFERS];
     for (virtual_address, physical_address) in rx_bufs_virt.iter_mut().zip(rx_bufs_phys) {
         *virtual_address = hhdm + physical_address;
     }
-    let tx_buf_phys = pmm.alloc_frame()?.as_u64();
+    let Some(tx_buf_phys) = pmm.alloc_frame().map(|frame| frame.as_u64()) else {
+        hardware_inventory::update_pci(
+            bus,
+            slot,
+            0,
+            hardware_inventory::pack_short_name("virt-net"),
+            0,
+            ::sunlight_ipc::HardwareState::ProbeFailed,
+            ::sunlight_ipc::HardwareFailureStage::ResourceAllocation,
+            25,
+        );
+        return fail_network_backend(25, "[NET] failed stage=VirtIO-Net TX buffer allocation");
+    };
     let Some(device) = (unsafe {
         sunlight_net::VirtioNet::init(
             io_base,
@@ -1765,6 +1960,16 @@ fn initialize_network_backend(
             hhdm + tx_buf_phys,
         )
     }) else {
+        hardware_inventory::update_pci(
+            bus,
+            slot,
+            0,
+            hardware_inventory::pack_short_name("virt-net"),
+            0,
+            ::sunlight_ipc::HardwareState::ProbeFailed,
+            ::sunlight_ipc::HardwareFailureStage::DeviceInitialization,
+            21,
+        );
         return fail_network_backend(21, "[NET] failed stage=VirtIO-Net initialization");
     };
     serial_println!(
@@ -1775,6 +1980,16 @@ fn initialize_network_backend(
     NET_BACKEND_STATE.store(
         sunlight_net::NetBackendState::HardwareReady as u64,
         core::sync::atomic::Ordering::Release,
+    );
+    hardware_inventory::update_pci(
+        bus,
+        slot,
+        0,
+        hardware_inventory::pack_short_name("virt-net"),
+        hardware_inventory::pack_short_name("virt-net"),
+        ::sunlight_ipc::HardwareState::Active,
+        ::sunlight_ipc::HardwareFailureStage::None,
+        0,
     );
     Some(sunlight_net::NetBackend::Virtio(device))
 }
@@ -1930,6 +2145,36 @@ fn fail_vmxnet3(
     code: sunlight_ipc::Vmxnet3ErrorCode,
     detail: u64,
 ) -> Option<sunlight_net::NetBackend> {
+    if let Some((bus, slot, function)) = unsafe { sunlight_virtio::find_vmxnet3_bdf() } {
+        hardware_inventory::update_pci(
+            bus,
+            slot,
+            function,
+            hardware_inventory::pack_short_name("vmxnet3"),
+            0,
+            ::sunlight_ipc::HardwareState::ProbeFailed,
+            match stage {
+                sunlight_ipc::Vmxnet3InitStage::BarsMapped => {
+                    ::sunlight_ipc::HardwareFailureStage::ResourceMapping
+                }
+                sunlight_ipc::Vmxnet3InitStage::DmaAllocated => {
+                    ::sunlight_ipc::HardwareFailureStage::ResourceAllocation
+                }
+                sunlight_ipc::Vmxnet3InitStage::RevisionSelected
+                | sunlight_ipc::Vmxnet3InitStage::UptSelected => {
+                    ::sunlight_ipc::HardwareFailureStage::FeatureNegotiation
+                }
+                sunlight_ipc::Vmxnet3InitStage::RingsInitialized => {
+                    ::sunlight_ipc::HardwareFailureStage::QueueSetup
+                }
+                sunlight_ipc::Vmxnet3InitStage::DeviceActivated => {
+                    ::sunlight_ipc::HardwareFailureStage::DeviceActivation
+                }
+                _ => ::sunlight_ipc::HardwareFailureStage::DeviceInitialization,
+            },
+            code as u64,
+        );
+    }
     NET_BACKEND_ERROR.store(code as u64, core::sync::atomic::Ordering::Release);
     VMXNET3_ERROR_DETAIL.store(detail, core::sync::atomic::Ordering::Release);
     VMXNET3_FAILURE_STAGE.store(stage as u64, core::sync::atomic::Ordering::Release);

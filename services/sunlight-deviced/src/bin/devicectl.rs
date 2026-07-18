@@ -45,13 +45,39 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     };
 
     let code = match args.get(1).copied().unwrap_or("list") {
-        "list" | "drivers" => {
+        "list" => {
+            let verbose = args.get(2) == Some(&"--verbose");
+            let requested = if verbose {
+                args.get(3).copied()
+            } else {
+                args.get(2).copied()
+            };
+            if sunlight_deviced::print_inventory(cap, verbose, requested, stdout_write) {
+                0
+            } else {
+                1
+            }
+        }
+        "drivers" => {
             print_drivers(cap, false);
             0
         }
         "devices" => {
-            print_devices(cap);
-            0
+            if sunlight_deviced::print_inventory(cap, false, args.get(2).copied(), stdout_write) {
+                0
+            } else {
+                1
+            }
+        }
+        "device" => {
+            if args.len() < 3 {
+                print_usage();
+                1
+            } else if sunlight_deviced::print_inventory(cap, true, Some(args[2]), stdout_write) {
+                0
+            } else {
+                1
+            }
         }
         "json" => {
             print_drivers(cap, true);
@@ -75,7 +101,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
 }
 
 fn print_usage() {
-    println!("Usage: devicectl <list|drivers|devices|status|json> [name-or-id]");
+    println!("Usage: devicectl <list [--verbose] [device-id]|drivers|devices [device-id]|device <device-id>|status|json>");
 }
 
 fn print_drivers(cap: sunlight_ipc::CapabilityToken, json: bool) {
@@ -112,28 +138,6 @@ fn print_drivers(cap: sunlight_ipc::CapabilityToken, json: bool) {
 
     if json {
         println!("]");
-    }
-}
-
-fn print_devices(cap: sunlight_ipc::CapabilityToken) {
-    println!("DEVICE   KIND      DRIVER  STATE");
-    let mut idx = 0u64;
-    loop {
-        let reply = ipc_call(
-            cap,
-            IpcMsg::with_label(DevicedMsg::LIST_DEVICES).word(0, idx),
-        );
-        if reply.label != DevicedMsg::REPLY {
-            break;
-        }
-        let name = ShortName(reply.words[1]);
-        let kind = device_kind_str(reply.words[3] & 0xff);
-        let state = state_str((reply.words[3] >> 8) & 0xff);
-        println!("{:<8} {:<9} {:<7} {}", name, kind, reply.words[2], state);
-        idx += 1;
-        if idx >= ((reply.words[3] >> 32) & 0xff) {
-            break;
-        }
     }
 }
 
@@ -211,18 +215,6 @@ fn kind_str(value: u64) -> &'static str {
         DriverKind::Audio => "Audio",
         DriverKind::Power => "Power",
         DriverKind::Unknown => "Unknown",
-    }
-}
-
-fn device_kind_str(value: u64) -> &'static str {
-    match sunlight_ipc::DeviceKind::from_u64(value) {
-        sunlight_ipc::DeviceKind::Input => "Input",
-        sunlight_ipc::DeviceKind::Network => "Network",
-        sunlight_ipc::DeviceKind::Block => "Block",
-        sunlight_ipc::DeviceKind::Display => "Display",
-        sunlight_ipc::DeviceKind::Audio => "Audio",
-        sunlight_ipc::DeviceKind::Bus => "Bus",
-        sunlight_ipc::DeviceKind::Unknown => "Unknown",
     }
 }
 

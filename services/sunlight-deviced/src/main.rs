@@ -9,9 +9,9 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, monotonic_millis,
-    nameserver_register, DeviceId, DeviceKind, DevicedMsg, DriverId, DriverKind, DriverState,
-    IpcMsg,
+    debug_log, endpoint_create, hardware_inventory_record, ipc_recv, ipc_reply_and_wait,
+    monotonic_millis, nameserver_register, DeviceId, DeviceKind, DevicedMsg, DriverId, DriverKind,
+    DriverState, HardwareInventoryRecord, IpcMsg, HARDWARE_INVENTORY_MAX_RECORDS,
 };
 
 const MAX_DRIVERS: usize = 32;
@@ -85,7 +85,11 @@ struct Registry {
     devices: [DeviceRecord; MAX_DEVICES],
     next_driver_id: DriverId,
     next_device_id: DeviceId,
+    inventory: [HardwareInventoryRecord; HARDWARE_INVENTORY_MAX_RECORDS],
+    inventory_count: usize,
 }
+
+static mut REGISTRY: Registry = Registry::new();
 
 impl Registry {
     const fn new() -> Self {
@@ -94,6 +98,48 @@ impl Registry {
             devices: [DeviceRecord::empty(); MAX_DEVICES],
             next_driver_id: 1,
             next_device_id: 1,
+            inventory: [HardwareInventoryRecord::empty(); HARDWARE_INVENTORY_MAX_RECORDS],
+            inventory_count: 0,
+        }
+    }
+
+    fn import_inventory(&mut self) {
+        let mut count = 0usize;
+        while count < self.inventory.len() {
+            let Some((record, total)) = hardware_inventory_record(count) else {
+                break;
+            };
+            self.inventory[count] = record;
+            count += 1;
+            if count >= total {
+                break;
+            }
+        }
+        self.inventory_count = count;
+    }
+
+    fn bind_registered_hardware(&mut self, driver_idx: usize) {
+        let driver = self.drivers[driver_idx];
+        let key = match driver.kind {
+            DriverKind::Keyboard => HardwareInventoryRecord::ps2_key(0),
+            DriverKind::Mouse => HardwareInventoryRecord::ps2_key(1),
+            _ => return,
+        };
+        if let Some(record) = self.inventory[..self.inventory_count]
+            .iter_mut()
+            .find(|record| record.key == key)
+        {
+            record.matched_driver = driver.name;
+            record.bound_driver = driver.name;
+            record.state = match driver.state {
+                DriverState::Ready => sunlight_ipc::HardwareState::Active as u64,
+                DriverState::Failed => {
+                    (sunlight_ipc::HardwareState::ProbeFailed as u64)
+                        | ((sunlight_ipc::HardwareFailureStage::ServiceBinding as u64) << 8)
+                }
+                DriverState::Stopped => sunlight_ipc::HardwareState::Loaded as u64,
+                _ => sunlight_ipc::HardwareState::Loaded as u64,
+            };
         }
     }
 
@@ -116,6 +162,7 @@ impl Registry {
             self.drivers[idx].capabilities = capabilities;
             self.drivers[idx].last_seen_ms = now;
             self.upsert_logical_device(idx);
+            self.bind_registered_hardware(idx);
             return reply_driver_summary(&self.drivers[idx], self.driver_count());
         }
 
@@ -135,6 +182,7 @@ impl Registry {
                 occupied: true,
             };
             self.upsert_logical_device(idx);
+            self.bind_registered_hardware(idx);
             return reply_driver_summary(&self.drivers[idx], self.driver_count());
         }
 
@@ -217,6 +265,71 @@ impl Registry {
             }
         }
         reply_err(DevicedMsg::ERR_NOT_FOUND)
+    }
+
+    fn list_inventory(&mut self, msg: &IpcMsg) -> IpcMsg {
+        if !sunlight_deviced::inventory_request_valid(msg.label, msg.word_count, 0) {
+            return reply_err(DevicedMsg::ERR_BAD_REQUEST);
+        }
+        let requested = msg.words[0] as usize;
+        match self
+            .inventory
+            .get(requested)
+            .filter(|_| requested < self.inventory_count)
+        {
+            Some(record) => reply_inventory_summary(record, self.inventory_count),
+            None => reply_err(DevicedMsg::ERR_NOT_FOUND).word(1, self.inventory_count as u64),
+        }
+    }
+
+    fn get_inventory(&mut self, msg: &IpcMsg) -> IpcMsg {
+        if !sunlight_deviced::inventory_request_valid(msg.label, msg.word_count, 0) {
+            return reply_err(DevicedMsg::ERR_BAD_REQUEST);
+        }
+        let key = msg.words[0];
+        match self.inventory[..self.inventory_count]
+            .iter()
+            .find(|record| record.key == key)
+        {
+            Some(record) => reply_inventory_summary(record, self.inventory_count),
+            None => reply_err(DevicedMsg::ERR_NOT_FOUND),
+        }
+    }
+
+    fn get_inventory_field(&mut self, msg: &IpcMsg) -> IpcMsg {
+        if !sunlight_deviced::inventory_request_valid(msg.label, msg.word_count, msg.words[1]) {
+            return reply_err(DevicedMsg::ERR_BAD_REQUEST);
+        }
+        let key = msg.words[0];
+        let field = msg.words[1];
+        let Some(record) = self.inventory[..self.inventory_count]
+            .iter()
+            .find(|record| record.key == key)
+        else {
+            return reply_err(DevicedMsg::ERR_NOT_FOUND);
+        };
+        let mut reply = IpcMsg::with_label(DevicedMsg::INVENTORY_REPLY).word(0, key);
+        match field {
+            DevicedMsg::FIELD_SUBSYSTEM => {
+                reply = reply.word(1, record.subsystem);
+            }
+            DevicedMsg::FIELD_DRIVERS => {
+                reply = reply
+                    .word(1, record.matched_driver)
+                    .word(2, record.bound_driver);
+            }
+            DevicedMsg::FIELD_DIAGNOSTIC => {
+                reply = reply.word(1, record.state).word(2, record.error_code);
+            }
+            DevicedMsg::FIELD_IRQ => {
+                reply = reply.word(1, record.irq);
+            }
+            DevicedMsg::FIELD_BAR0..=DevicedMsg::FIELD_BAR5 => {
+                reply = reply.word(1, record.bars[(field - DevicedMsg::FIELD_BAR0) as usize]);
+            }
+            _ => return reply_err(DevicedMsg::ERR_UNSUPPORTED_FIELD),
+        }
+        reply
     }
 
     fn mark_failed(&mut self, msg: &IpcMsg) -> IpcMsg {
@@ -354,6 +467,20 @@ fn reply_device_summary(device: &DeviceRecord, total: usize) -> IpcMsg {
         .word(3, packed)
 }
 
+fn reply_inventory_summary(record: &HardwareInventoryRecord, total: usize) -> IpcMsg {
+    let packed = (record.state & 0xffff) | (((total as u64) & 0xffff) << 16);
+    let driver = if record.bound_driver != 0 {
+        record.bound_driver
+    } else {
+        record.matched_driver
+    };
+    IpcMsg::with_label(DevicedMsg::INVENTORY_REPLY)
+        .word(0, record.key)
+        .word(1, record.identity)
+        .word(2, driver)
+        .word(3, packed)
+}
+
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     serial_println!("[DEVICED] PANIC: {}", info);
@@ -367,7 +494,8 @@ pub extern "C" fn _start() -> ! {
     nameserver_register("deviced", ep);
     debug_log("[DEVICED] registered as 'deviced'");
 
-    let mut registry = Registry::new();
+    let registry = unsafe { &mut *core::ptr::addr_of_mut!(REGISTRY) };
+    registry.import_inventory();
     let mut msg = ipc_recv(ep);
     loop {
         let reply = match msg.label {
@@ -380,6 +508,9 @@ pub extern "C" fn _start() -> ! {
             DevicedMsg::GET_DEVICE => registry.get_device(&msg),
             DevicedMsg::MARK_DRIVER_FAILED => registry.mark_failed(&msg),
             DevicedMsg::UNREGISTER_DRIVER => registry.unregister(&msg),
+            DevicedMsg::LIST_INVENTORY => registry.list_inventory(&msg),
+            DevicedMsg::GET_INVENTORY => registry.get_inventory(&msg),
+            DevicedMsg::GET_INVENTORY_FIELD => registry.get_inventory_field(&msg),
             _ => reply_err(DevicedMsg::ERR_BAD_REQUEST),
         };
         msg = ipc_reply_and_wait(ep, reply);

@@ -169,6 +169,12 @@ fn main() {
             args: &["--release", "--bin", "devicectl"],
         },
         EmbeddedBinary {
+            package: "sunlight-deviced",
+            output: "sunlight-hwinfo",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "sunlight-hwinfo"],
+        },
+        EmbeddedBinary {
             package: "sunlight-networkd",
             output: "networkctl",
             rustflags: service_rustflags,

@@ -278,12 +278,12 @@ fn pack_short_name(name: &str) -> u64 {
     word
 }
 
-fn register_with_deviced() {
+fn register_with_deviced(state: DriverState) {
     let Some(cap) = nameserver_lookup_timeout("deviced", 5) else {
         debug_log("[KBD] deviced unavailable; continuing without registration");
         return;
     };
-    let meta = (DriverKind::Keyboard as u64) | ((DriverState::Ready as u64) << 16);
+    let meta = (DriverKind::Keyboard as u64) | ((state as u64) << 16);
     let caps = DriverCaps::INPUT | DriverCaps::KEYBOARD;
     let msg = IpcMsg::with_label(DevicedMsg::REGISTER_DRIVER)
         .word(0, pack_short_name("keyboard"))
@@ -309,7 +309,6 @@ pub extern "C" fn _start() -> ! {
     debug_log("[KBD] sunlight-kbd starting");
 
     let my_endpoint = endpoint_create();
-    register_with_deviced();
 
     // Resolve tty BEFORE registering with the kernel IRQ1 router so that no
     // keyboard events (and their wake_pid) are delivered to this process while
@@ -323,10 +322,12 @@ pub extern "C" fn _start() -> ! {
     debug_log("[KBD] found tty, ready to process keys");
 
     if !kbd_register(my_endpoint.0) {
+        register_with_deviced(DriverState::Failed);
         debug_log("[KBD] FATAL: kernel IRQ1 router registration failed\n");
         ProcessExit::exit(1);
     }
     debug_log("[KBD] registered with kernel IRQ1 router");
+    register_with_deviced(DriverState::Ready);
 
     let mut modifiers = Modifiers::default();
     let mut extended_prefix = false;

@@ -1073,6 +1073,13 @@ max_ttys = 6
         b"#!/sunlight/devicectl\n",
     ),
     RamEntry::file(
+        "/bin/sunlight-hwinfo",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-hwinfo\n",
+    ),
+    RamEntry::file(
         "/bin/networkctl",
         0,
         0,
@@ -1829,6 +1836,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/devicectl\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sunlight-hwinfo",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-hwinfo\n",
     ),
     RamEntry::file(
         "/usr/bin/networkctl",

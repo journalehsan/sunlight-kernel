@@ -515,6 +515,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         123 => sys_gpu_update_cursor(frame),
         124 => sys_gpu_move_cursor(frame),
         125 => sys_mouse_get_stats(frame),
+        126 => sys_hardware_inventory(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -3884,6 +3885,28 @@ fn sys_net_info(frame: &mut SyscallFrame) -> u64 {
     1
 }
 
+fn sys_hardware_inventory(frame: &mut SyscallFrame) -> u64 {
+    if crate::sched::SCHEDULER.lock().current_process().name_str() != "deviced" {
+        return u64::MAX;
+    }
+    if frame.rdx as usize != core::mem::size_of::<::sunlight_ipc::HardwareInventoryRecord>() {
+        return u64::MAX;
+    }
+    let Some((record, total)) = crate::hardware_inventory::snapshot(frame.rdi as usize) else {
+        return u64::MAX;
+    };
+    let bytes = unsafe {
+        core::slice::from_raw_parts(
+            &record as *const ::sunlight_ipc::HardwareInventoryRecord as *const u8,
+            core::mem::size_of::<::sunlight_ipc::HardwareInventoryRecord>(),
+        )
+    };
+    if let Err(error) = copy_to_user(frame.rsi, bytes) {
+        return error;
+    }
+    total as u64
+}
+
 static DHCP_ACK_SEEN: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 /// Return DHCP option 53 for an unfragmented Ethernet/IPv4/UDP BOOTP frame.
@@ -4642,6 +4665,14 @@ fn sys_kbd_register(frame: &mut SyscallFrame) -> u64 {
     };
     drop(caps);
     crate::arch::x86_64::keyboard::register_kbd_driver(endpoint_id);
+    crate::hardware_inventory::update_ps2(
+        0,
+        crate::hardware_inventory::pack_short_name("keyboard"),
+        crate::hardware_inventory::pack_short_name("keyboard"),
+        ::sunlight_ipc::HardwareState::Active,
+        ::sunlight_ipc::HardwareFailureStage::None,
+        0,
+    );
     0
 }
 
@@ -4689,6 +4720,14 @@ fn sys_mouse_register(frame: &mut SyscallFrame) -> u64 {
     };
     drop(caps);
     crate::arch::x86_64::mouse::register_mouse_driver(endpoint_id);
+    crate::hardware_inventory::update_ps2(
+        1,
+        crate::hardware_inventory::pack_short_name("mouse"),
+        crate::hardware_inventory::pack_short_name("mouse"),
+        ::sunlight_ipc::HardwareState::Active,
+        ::sunlight_ipc::HardwareFailureStage::None,
+        0,
+    );
     0
 }
 
@@ -4716,6 +4755,14 @@ fn sys_mouse_init() -> u64 {
     if crate::arch::x86_64::mouse::init_ps2_mouse() {
         0
     } else {
+        crate::hardware_inventory::update_ps2(
+            1,
+            crate::hardware_inventory::pack_short_name("mouse"),
+            0,
+            ::sunlight_ipc::HardwareState::ProbeFailed,
+            ::sunlight_ipc::HardwareFailureStage::DeviceInitialization,
+            1,
+        );
         u64::MAX
     }
 }
