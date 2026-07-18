@@ -147,6 +147,8 @@ pub fn init() {
     }
     idt.general_protection_fault.set_handler_fn(gpf_handler);
     idt.page_fault.set_handler_fn(page_fault_handler);
+    idt.non_maskable_interrupt
+        .set_handler_fn(tlb_shootdown_nmi_entry);
 
     // Use naked timer handler to enable manual context switching.
     unsafe {
@@ -160,6 +162,11 @@ pub fn init() {
 
     // Mouse IRQ12 handler (vector 0x2C = 32 + 12)
     idt[0x2C].set_handler_fn(mouse_entry);
+
+    // MM-2B synchronous remote TLB shootdown IPI.
+    idt[crate::memory::tlb::SHOOTDOWN_VECTOR].set_handler_fn(tlb_shootdown_ipi_entry);
+    #[cfg(feature = "mm2b_smp_test")]
+    idt[crate::memory::tlb::TEST_VECTOR].set_handler_fn(tlb_test_ipi_entry);
 
     idt.load();
 
@@ -203,6 +210,25 @@ pub fn init() {
 
 fn is_user_frame(stack_frame: &InterruptStackFrame) -> bool {
     stack_frame.code_segment.0 & 0x3 == 0x3
+}
+
+extern "x86-interrupt" fn tlb_shootdown_ipi_entry(_stack_frame: InterruptStackFrame) {
+    crate::memory::tlb::handle_shootdown_ipi();
+    unsafe {
+        crate::arch::x86_64::lapic::send_eoi();
+    }
+}
+
+extern "x86-interrupt" fn tlb_shootdown_nmi_entry(_stack_frame: InterruptStackFrame) {
+    crate::memory::tlb::handle_shootdown_ipi();
+}
+
+#[cfg(feature = "mm2b_smp_test")]
+extern "x86-interrupt" fn tlb_test_ipi_entry(_stack_frame: InterruptStackFrame) {
+    crate::memory::tlb::handle_test_ipi();
+    unsafe {
+        crate::arch::x86_64::lapic::send_eoi();
+    }
 }
 
 fn terminate_current_user_process(reason: &str, code: i32) -> ! {

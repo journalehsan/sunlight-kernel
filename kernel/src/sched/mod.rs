@@ -1512,6 +1512,9 @@ impl Scheduler {
 
             let idle_rsp = self.core_idle_context_rsp(cpu_id);
             if idle_rsp != 0 {
+                unsafe {
+                    crate::memory::tlb::activate_kernel_root();
+                }
                 return idle_rsp;
             }
             let stack_top = unsafe {
@@ -1521,6 +1524,9 @@ impl Scheduler {
             };
             let rsp = build_kernel_idle_frame(stack_top);
             self.set_core_idle_context_rsp(cpu_id, rsp);
+            unsafe {
+                crate::memory::tlb::activate_kernel_root();
+            }
             serial_println!(
                 "[SCHED] WARN: cpu={} lazily initialized idle context",
                 cpu_id
@@ -1684,7 +1690,7 @@ impl Scheduler {
     // ── Process lifecycle ────────────────────────────────────────────────────
 
     fn live_address_space_borrowers(&self, idx: usize) -> usize {
-        let pml4 = self.processes[idx].address_space.pml4_phys;
+        let identity = self.processes[idx].address_space.identity();
         self.processes
             .iter()
             .enumerate()
@@ -1692,7 +1698,7 @@ impl Scheduler {
                 *other_idx != idx
                     && !proc.owns_address_space
                     && proc.state != ProcessState::Reaped
-                    && proc.address_space.pml4_phys == pml4
+                    && proc.address_space.identity() == identity
             })
             .count()
     }
@@ -1703,11 +1709,11 @@ impl Scheduler {
     }
 
     fn terminate_address_space_borrowers(&mut self, owner_idx: usize, reason: &str) {
-        let pml4 = self.processes[owner_idx].address_space.pml4_phys;
+        let identity = self.processes[owner_idx].address_space.identity();
         for idx in 0..self.processes.len() {
             if idx == owner_idx
                 || self.processes[idx].owns_address_space
-                || self.processes[idx].address_space.pml4_phys != pml4
+                || self.processes[idx].address_space.identity() != identity
                 || matches!(
                     self.processes[idx].state,
                     ProcessState::Finished | ProcessState::Reaped
@@ -1821,6 +1827,17 @@ impl Scheduler {
                 );
                 return;
             }
+        }
+
+        let active_mask =
+            crate::memory::tlb::active_cpu_mask(self.processes[idx].address_space.identity());
+        if active_mask != 0 {
+            serial_println!(
+                "[SCHED] process_reap_blocked_reason idx={} reason=active_address_space mask={:#x}",
+                idx,
+                active_mask
+            );
+            return;
         }
 
         crate::memory::swap::untrack_process(pid);
@@ -2548,12 +2565,18 @@ impl Scheduler {
 pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     use x86_64::structures::paging::{Page, PhysFrame, Size4KiB};
 
-    fn borrower(pid: usize, owner_pid: usize, pml4: x86_64::PhysAddr) -> Process {
+    fn borrower(
+        pid: usize,
+        owner_pid: usize,
+        pml4: x86_64::PhysAddr,
+        identity: crate::process::mm2b_state::AddressSpaceIdentity,
+    ) -> Process {
         crate::process::Process::new_thread(
             pid,
             owner_pid,
             "mm0-thread",
             pml4,
+            identity,
             crate::process::fd_table::FdTable::new_boxed(),
             crate::process::env::EnvMap::new(),
             0,
@@ -2570,6 +2593,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
         unsafe { crate::process::Process::new(0xA001, 0, "mm0-owner", &mut pmm, hhdm_offset) }
     };
     let pml4 = owner.address_space.pml4_phys;
+    let identity = owner.address_space.identity();
     let owner_pid = owner.pid;
 
     // Give the owner a real writable/NX user mapping and sentinel. Borrower
@@ -2612,7 +2636,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     for offset in 0..12 {
         sched
             .processes
-            .push(borrower(0xA100 + offset, owner_pid, pml4));
+            .push(borrower(0xA100 + offset, owner_pid, pml4, identity));
     }
     assert_eq!(sched.live_address_space_borrowers(0), 12);
     let stale_wakes_before = STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed);
@@ -2648,7 +2672,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     let slots_before = sched.processes.len();
     let mut second_generation_slots = alloc::vec::Vec::new();
     for offset in 0..12 {
-        let idx = sched.add_process(borrower(0xB100 + offset, owner_pid, pml4));
+        let idx = sched.add_process(borrower(0xB100 + offset, owner_pid, pml4, identity));
         assert!(!second_generation_slots.contains(&idx));
         second_generation_slots.push(idx);
     }
@@ -2664,7 +2688,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
 
     // Owner exit still contains a live borrower and delays address-space
     // reclamation until that borrower is terminal and Reaped.
-    let live_idx = sched.add_process(borrower(0xC100, owner_pid, pml4));
+    let live_idx = sched.add_process(borrower(0xC100, owner_pid, pml4, identity));
     sched.processes[0].state = ProcessState::Finished;
     sched.processes[0].exit_cleanup_pending = true;
     sched.reap_process_resources(0);
@@ -2954,7 +2978,7 @@ where
 /// Enter the first ready user process without holding the scheduler lock across
 /// the privilege transition.
 pub fn enter_first_process() -> ! {
-    let (rsp, pml4_phys, fs_base, kernel_stack_top) = {
+    let (rsp, fs_base, kernel_stack_top) = {
         let mut sched = SCHEDULER.lock();
         let mut first = None;
         for (i, p) in sched.processes.iter().enumerate() {
@@ -2983,16 +3007,18 @@ pub fn enter_first_process() -> ! {
             // APs still block on SCHEDULER.lock() until this function drops it.
             mark_scheduler_ready();
             let rsp = sched.processes[idx].context_rsp;
-            let pml4_phys = sched.processes[idx].address_space.pml4_phys;
             let fs_base = sched.processes[idx].fs_base;
             let kernel_stack_top = sched.processes[idx].kernel_stack_top;
+            unsafe {
+                sched.processes[idx].address_space.activate();
+            }
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",
                 idx,
                 sched.processes[idx].name_str(),
                 rsp
             );
-            (rsp, pml4_phys, fs_base, kernel_stack_top)
+            (rsp, fs_base, kernel_stack_top)
         } else {
             serial_println!("[SCHED] No user processes, entering idle");
             drop(sched);
@@ -3001,10 +3027,6 @@ pub fn enter_first_process() -> ! {
     };
 
     unsafe {
-        x86_64::registers::control::Cr3::write(
-            x86_64::structures::paging::PhysFrame::from_start_address_unchecked(pml4_phys),
-            x86_64::registers::control::Cr3Flags::empty(),
-        );
         x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);
         crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(kernel_stack_top);
         context::iretq_to_context(rsp);

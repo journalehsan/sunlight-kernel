@@ -3,6 +3,9 @@
 #[path = "process/mm2a_plan.rs"]
 pub mod mm2a_plan;
 
+#[path = "process/mm2b_state.rs"]
+pub mod mm2b_state;
+
 #[cfg(test)]
 mod tests {
     use super::mm2a_plan::{checked_page_layout, DeferredCursor, PlanError};

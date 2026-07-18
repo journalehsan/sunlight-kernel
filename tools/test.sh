@@ -195,6 +195,12 @@ case "$PHASE" in
         PASS_LABEL="Security Hardening"
         NEED_DISK=false
         ;;
+    mm2b)
+        EXPECTED_FILE="tools/tests/mm2b.expected"
+        FINAL_MARKER="[MM-2B] PMM accounting returned to baseline: OK"
+        PASS_LABEL="MM-2B 12-core TLB Shootdown"
+        NEED_DISK=false
+        ;;
     top)
         EXPECTED_FILE="tools/tests/top.expected"
         FINAL_MARKER="[TOP] rendering"
@@ -202,7 +208,7 @@ case "$PHASE" in
         NEED_DISK=false
         ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec sunlightd top"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b sunlightd top"
         exit 2
         ;;
 esac
@@ -254,7 +260,9 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-open --release >>"$BUIL
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release >>"$BUILD_LOG" 2>&1
+if [[ "$PHASE" != "mm2b" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release >>"$BUILD_LOG" 2>&1
+fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release >>"$BUILD_LOG" 2>&1
@@ -281,6 +289,8 @@ if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8"
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
+elif [[ "$PHASE" == "mm2b" ]]; then
+    KERNEL_FEATURES="--features mm2b_smp_test"
 fi
 EXTRA_ENV=()
 if [[ "$PHASE" == "phase3.9" ]]; then
@@ -354,12 +364,16 @@ if [[ "$PHASE" == phase5* || "$PHASE" == phase5x* ]]; then
 fi
 
 set +e
+QEMU_SMP=2
+if [[ "$PHASE" == "mm2b" ]]; then
+    QEMU_SMP=12
+fi
 qemu-system-x86_64 \
     -cdrom "$ISO_PATH" \
     -serial file:"$QEMU_OUTPUT" \
     -display none \
     -m 1024M \
-    -smp 2 \
+    -smp "$QEMU_SMP" \
     $KVM_FLAGS \
     $DISK_FLAGS \
     $NET_FLAGS \
@@ -373,8 +387,8 @@ for ((i=0; i<TIMEOUT; i++)); do
         break
     fi
     # Check if the final runtime milestone is present (early exit on success).
-    if grep -Fq "[timer] 100 ticks elapsed" "$QEMU_OUTPUT" 2>/dev/null \
-        && grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT" 2>/dev/null; then
+    if grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT" 2>/dev/null \
+        && { [[ "$PHASE" == "mm2b" ]] || grep -Fq "[timer] 100 ticks elapsed" "$QEMU_OUTPUT" 2>/dev/null; }; then
         sleep 1
         break
     fi

@@ -5,6 +5,7 @@ pub mod fd_table;
 pub mod fork;
 pub mod layout;
 pub(crate) mod mm2a_plan;
+pub(crate) mod mm2b_state;
 pub mod mmap;
 pub mod pipe;
 pub mod signal;
@@ -412,6 +413,7 @@ impl Process {
         ppid: usize,
         name: &str,
         parent_pml4: x86_64::PhysAddr,
+        parent_identity: mm2b_state::AddressSpaceIdentity,
         fd_table: alloc::boxed::Box<fd_table::FdTable>,
         env: env::EnvMap,
         uid: u32,
@@ -420,7 +422,7 @@ impl Process {
         capabilities: Vec<Capability>,
         tty_tab: Option<u8>,
     ) -> Self {
-        let address_space = address_space::AddressSpace::from_pml4(parent_pml4);
+        let address_space = address_space::AddressSpace::from_shared(parent_pml4, parent_identity);
         let kernel_stack = new_kernel_stack();
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
 

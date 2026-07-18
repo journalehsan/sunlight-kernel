@@ -31,6 +31,8 @@ use core::sync::atomic::{AtomicU32, Ordering};
 
 const LAPIC_ID: usize = 0x020; // Local APIC ID register (read)
 const LAPIC_EOI: usize = 0x0B0; // End-of-interrupt register (write 0)
+const LAPIC_ICR_LOW: usize = 0x300; // Interrupt Command Register low
+const LAPIC_ICR_HIGH: usize = 0x310; // Interrupt Command Register high
 const LAPIC_SVR: usize = 0x0F0; // Spurious Interrupt Vector register
 const LAPIC_LVT_TIMER: usize = 0x320; // LVT timer register
 const LAPIC_TIMER_INITIAL: usize = 0x380; // Initial count register
@@ -130,6 +132,40 @@ pub unsafe fn init_lapic() {
 #[inline(always)]
 pub unsafe fn send_eoi() {
     lapic_write(LAPIC_EOI, 0);
+}
+
+fn wait_for_icr_idle() {
+    while unsafe { lapic_read(LAPIC_ICR_LOW) } & (1 << 12) != 0 {
+        core::hint::spin_loop();
+    }
+}
+
+/// Send a fixed-delivery IPI to one logical CPU/APIC ID.
+///
+/// SunlightOS currently uses xAPIC mode and its scheduler CPU index is the
+/// initial APIC ID, capped to the supported 64-core mask.
+pub unsafe fn send_fixed_ipi(cpu_id: usize, vector: u8) {
+    assert!(
+        cpu_id < crate::sched::MAX_CORES,
+        "IPI target is out of range"
+    );
+    wait_for_icr_idle();
+    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
+    lapic_write(LAPIC_ICR_LOW, vector as u32);
+    wait_for_icr_idle();
+}
+
+/// Send an NMI doorbell to a CPU. MM-2B uses this only to make a published
+/// fixed-vector shootdown mailbox consumable while the target has IF cleared.
+pub unsafe fn send_nmi(cpu_id: usize) {
+    assert!(
+        cpu_id < crate::sched::MAX_CORES,
+        "NMI target is out of range"
+    );
+    wait_for_icr_idle();
+    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
+    lapic_write(LAPIC_ICR_LOW, 0b100 << 8);
+    wait_for_icr_idle();
 }
 
 /// Calibrate the LAPIC timer against the TSC and store the result.

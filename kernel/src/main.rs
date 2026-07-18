@@ -424,6 +424,7 @@ pub extern "C" fn _start() -> ! {
     splash.set_status("Starting Application Processors");
     splash.log("[SMP] Starting APs...");
     splash.redraw();
+    crate::memory::tlb::register_kernel_root();
     match MP_REQ.response() {
         Some(mp_resp) => {
             let cpus = mp_resp.cpus();
@@ -444,6 +445,8 @@ pub extern "C" fn _start() -> ! {
             splash.log("[SMP] Single CPU mode");
         }
     }
+    #[cfg(feature = "mm2b_smp_test")]
+    crate::memory::tlb::run_smp_regression_gate(hhdm_offset);
     serial_println!(
         "[MM-0] NXE active on {} CPU(s)",
         cpu::nxe_enabled_cpu_count()

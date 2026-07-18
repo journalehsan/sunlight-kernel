@@ -112,6 +112,7 @@ pub fn diagnostic_report() {
         NX_SHM_MAPPINGS.load(Ordering::Relaxed),
     );
     crate::process::address_space::diagnostic_report();
+    crate::memory::tlb::diagnostic_report();
     let user = crate::memory::user::diagnostics();
     crate::serial_println!(
         "[MM-1-DIAG] noncanonical={} overflow={} kernel_range={} unmapped={} readonly_write={} string_limit={} array_limit={} multipage={}",

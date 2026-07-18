@@ -1,7 +1,7 @@
 use crate::memory::pmm::PhysicalMemoryManager;
+use crate::process::mm2b_state::{allocate_identity, AddressSpaceIdentity};
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{
-    instructions::tlb,
     structures::paging::{
         page_table::PageTableEntry, Page, PageTable, PageTableFlags, PhysFrame, Size4KiB,
     },
@@ -59,6 +59,7 @@ static FRAME_ALLOCATION_FAILURES: AtomicU64 = AtomicU64::new(0);
 static PAGE_TABLE_ALLOCATION_FAILURES: AtomicU64 = AtomicU64::new(0);
 static INTENTIONAL_REPLACEMENTS: AtomicU64 = AtomicU64::new(0);
 static ROLLBACK_INVARIANT_FAILURES: AtomicU64 = AtomicU64::new(0);
+static NEXT_ADDRESS_SPACE_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 pub fn note_mmap_rollback() {
     MMAP_ROLLBACKS.fetch_add(1, Ordering::Relaxed);
@@ -100,6 +101,7 @@ pub fn diagnostic_report() {
 
 pub struct AddressSpace {
     pub pml4_phys: PhysAddr,
+    identity: AddressSpaceIdentity,
     shared_bump: u64,
 }
 
@@ -145,17 +147,43 @@ impl AddressSpace {
 
         Ok(Self {
             pml4_phys,
+            identity: allocate_identity(&NEXT_ADDRESS_SPACE_GENERATION, pml4_phys.as_u64()),
             shared_bump: 0x0000_0003_0000_0000,
         })
     }
 
-    /// Construct an AddressSpace wrapper for an already-allocated PML4 (used by fork CoW clone).
-    /// Shared bump region is reset for the child (no inherited grants).
+    /// Construct a read-only diagnostic wrapper for an already-allocated PML4.
+    /// The invalid identity deliberately prevents activation or mutation.
     pub fn from_pml4(pml4_phys: PhysAddr) -> Self {
         Self {
             pml4_phys,
+            identity: AddressSpaceIdentity::INVALID,
             shared_bump: 0x0000_0003_0000_0000,
         }
+    }
+
+    /// Construct a borrower wrapper for an existing address-space instance.
+    pub fn from_shared(pml4_phys: PhysAddr, identity: AddressSpaceIdentity) -> Self {
+        assert_eq!(pml4_phys.as_u64(), identity.pml4_phys);
+        assert!(identity.is_valid());
+        Self {
+            pml4_phys,
+            identity,
+            shared_bump: 0x0000_0003_0000_0000,
+        }
+    }
+
+    #[cfg(feature = "mm2b_smp_test")]
+    pub fn test_root(pml4_phys: PhysAddr) -> Self {
+        Self {
+            pml4_phys,
+            identity: allocate_identity(&NEXT_ADDRESS_SPACE_GENERATION, pml4_phys.as_u64()),
+            shared_bump: 0x0000_0003_0000_0000,
+        }
+    }
+
+    pub const fn identity(&self) -> AddressSpaceIdentity {
+        self.identity
     }
 
     /// True after the address space root has been freed during process teardown.
@@ -193,7 +221,7 @@ impl AddressSpace {
         let p2_table = match Self::create_next_table(p3_entry, pmm, hhdm_offset, &mut created[1]) {
             Ok(table) => table,
             Err(error) => {
-                Self::rollback_created_tables(&mut created, pmm);
+                Self::rollback_created_tables(&mut created, self.identity, page, pmm);
                 return Err(error);
             }
         };
@@ -202,7 +230,7 @@ impl AddressSpace {
         let p1_table = match Self::create_next_table(p2_entry, pmm, hhdm_offset, &mut created[2]) {
             Ok(table) => table,
             Err(error) => {
-                Self::rollback_created_tables(&mut created, pmm);
+                Self::rollback_created_tables(&mut created, self.identity, page, pmm);
                 return Err(error);
             }
         };
@@ -210,7 +238,7 @@ impl AddressSpace {
         let p1_entry = &mut p1_table[page.p1_index()];
         if !p1_entry.is_unused() {
             MAPPING_COLLISIONS.fetch_add(1, Ordering::Relaxed);
-            Self::rollback_created_tables(&mut created, pmm);
+            Self::rollback_created_tables(&mut created, self.identity, page, pmm);
             return Err(MappingError::AlreadyMapped);
         }
         p1_entry.set_frame(phys, flags);
@@ -315,7 +343,7 @@ impl AddressSpace {
                 entry.set_addr(PhysAddr::new(encoded), PageTableFlags::empty());
             }
         }
-        tlb::flush(page.start_address());
+        crate::memory::tlb::invalidate_page(self.identity, page.start_address());
         if ownership == OwnershipTransition::ReleaseOldFrame {
             if let ExpectedMapping::Present { frame, .. } = expected {
                 pmm.free_frame(frame);
@@ -403,7 +431,7 @@ impl AddressSpace {
         }
         let frame = entry.addr();
         entry.set_addr(frame, flags);
-        tlb::flush(page.start_address());
+        crate::memory::tlb::invalidate_page(self.identity, page.start_address());
         Ok(())
     }
 
@@ -465,10 +493,7 @@ impl AddressSpace {
     /// Switch to this address space (write PML4 phys addr to CR3).
     /// SAFETY: `pml4_phys` must be a valid, page-aligned physical address.
     pub unsafe fn activate(&self) {
-        x86_64::registers::control::Cr3::write(
-            PhysFrame::from_start_address_unchecked(self.pml4_phys),
-            x86_64::registers::control::Cr3Flags::empty(),
-        );
+        crate::memory::tlb::activate(self.identity);
     }
 
     /// Map a single shared physical frame (compat wrapper).
@@ -588,7 +613,7 @@ impl AddressSpace {
         }
         let phys = p1e.addr();
         p1e.set_unused();
-        tlb::flush(page.start_address());
+        crate::memory::tlb::invalidate_page(self.identity, page.start_address());
         Some(phys)
     }
 
@@ -627,7 +652,7 @@ impl AddressSpace {
             return Err(MappingError::InternalInvariant);
         }
         p1e.set_unused();
-        tlb::flush(page.start_address());
+        crate::memory::tlb::invalidate_page(self.identity, page.start_address());
 
         if p1.iter().all(PageTableEntry::is_unused) {
             p2e.set_unused();
@@ -657,6 +682,11 @@ impl AddressSpace {
         if self.is_reclaimed() {
             return stats;
         }
+        assert_eq!(
+            crate::memory::tlb::active_cpu_mask(self.identity),
+            0,
+            "attempted to reclaim an active address space"
+        );
         let pml4 = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
 
         for p4_idx in 0..256 {
@@ -718,6 +748,7 @@ impl AddressSpace {
             pmm.free_frame(self.pml4_phys);
             stats.page_tables += 1;
             self.pml4_phys = PhysAddr::new(0);
+            self.identity = AddressSpaceIdentity::INVALID;
         }
 
         stats
@@ -819,13 +850,24 @@ impl AddressSpace {
 
     fn rollback_created_tables(
         created: &mut [Option<(*mut PageTableEntry, PhysAddr)>; 3],
+        identity: AddressSpaceIdentity,
+        page: Page<Size4KiB>,
         pmm: &mut PhysicalMemoryManager,
     ) {
+        let mut removed_any = false;
         for item in created.iter_mut().rev() {
-            if let Some((entry, frame)) = item.take() {
+            if let Some((entry, _)) = item {
                 unsafe {
-                    (*entry).set_unused();
+                    (**entry).set_unused();
                 }
+                removed_any = true;
+            }
+        }
+        if removed_any {
+            crate::memory::tlb::invalidate_page(identity, page.start_address());
+        }
+        for item in created.iter_mut().rev() {
+            if let Some((_, frame)) = item.take() {
                 pmm.free_frame(frame);
             }
         }

@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.1562"
+version = "0.2.1574"
+
 
 
 
@@ -353,6 +354,8 @@ key_inject = []
 launch_trace = []
 # Deterministic PMM allocation failures for the focused MM-2A QEMU gate only.
 mm2a_test_injection = []
+# Focused 12-core remote TLB replacement gate.
+mm2b_smp_test = []
 # Verbose per-tick / per-alloc diagnostics over the serial port. OFF by default:
 # these logs are written while the global scheduler lock is held and block the
 # UART, stalling every core. Enable only for debugging.

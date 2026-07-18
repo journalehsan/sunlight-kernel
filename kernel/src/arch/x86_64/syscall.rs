@@ -1060,11 +1060,24 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
 
     // Collect everything we need from the parent in one borrow scope so
     // we can release it before calling clone_boxed (which also borrows sched).
-    let (parent_pid, parent_pml4, uid, gid, nice, env, caps, tty_tab, parent_name, parent_cwd) = {
+    let (
+        parent_pid,
+        parent_pml4,
+        parent_identity,
+        uid,
+        gid,
+        nice,
+        env,
+        caps,
+        tty_tab,
+        parent_name,
+        parent_cwd,
+    ) = {
         let p = sched.current_process();
         (
             p.pid,
             p.address_space.pml4_phys,
+            p.address_space.identity(),
             p.uid,
             p.gid,
             p.nice,
@@ -1087,6 +1100,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
         parent_pid,
         name_str,
         parent_pml4,
+        parent_identity,
         thread_fd,
         env,
         uid,
