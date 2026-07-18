@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod display_metrics;
+pub mod swap_policy;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
     BORDER_W as DISPLAY_BORDER_W, MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE,
@@ -46,6 +47,7 @@ pub enum SunlightSyscall {
     SysInfo = 82,
     SetNice = 83,
     GetNice = 84,
+    SwapCtl = 85,
     // Phase 3.4: net_server (pid 5) frame proxy — kernel owns the virtio-net
     // device (ring-0 port I/O); these exchange raw Ethernet frames.
     NetTx = 90,
@@ -2765,6 +2767,73 @@ pub fn sysinfo() -> SystemInfo {
         );
     }
     info
+}
+
+/// Read the scheduler-confirmed online CPU count used by SWAP-1 policy.
+pub fn swap_online_cpu_count() -> u32 {
+    let (value, _) = unsafe { raw_syscall(SunlightSyscall::SwapCtl, 2, 0, 0, 0, 0, 0, 0) };
+    value.max(1).min(u32::MAX as u64) as u32
+}
+
+/// Submit one immutable boot configuration. The kernel authenticates the
+/// caller and independently recomputes every field from kernel-owned system
+/// information before accepting it.
+pub fn swap_configure(policy: &swap_policy::SwapPolicy) -> bool {
+    let (value, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::SwapCtl,
+            3,
+            policy.detected_ram_bytes,
+            u64::from(policy.detected_online_cpus),
+            policy.total_logical_pages,
+            policy.pool_count as u64,
+            policy.total_physical_budget_bytes,
+            u64::from(policy.version),
+        )
+    };
+    value == 0
+}
+
+/// Return active pool count, or zero when swap is not configured.
+pub fn swap_active_pool_count() -> usize {
+    let (value, _) = unsafe { raw_syscall(SunlightSyscall::SwapCtl, 4, 0, 0, 0, 0, 0, 0) };
+    value as usize
+}
+
+/// Read one bounded aggregate SWAP-1 health snapshot.
+pub fn swap_aggregate_diagnostics() -> Option<swap_policy::AggregateDiagnostics> {
+    let mut diagnostics = swap_policy::AggregateDiagnostics::default();
+    let (value, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::SwapCtl,
+            5,
+            (&mut diagnostics as *mut swap_policy::AggregateDiagnostics) as u64,
+            core::mem::size_of::<swap_policy::AggregateDiagnostics>() as u64,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    (value == 0).then_some(diagnostics)
+}
+
+/// Read one bounded per-pool SWAP-1 health snapshot.
+pub fn swap_pool_diagnostics(index: usize) -> Option<swap_policy::PoolDiagnostics> {
+    let mut diagnostics = swap_policy::PoolDiagnostics::default();
+    let (value, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::SwapCtl,
+            6,
+            index as u64,
+            (&mut diagnostics as *mut swap_policy::PoolDiagnostics) as u64,
+            core::mem::size_of::<swap_policy::PoolDiagnostics>() as u64,
+            0,
+            0,
+            0,
+        )
+    };
+    (value == 0).then_some(diagnostics)
 }
 
 pub struct ProcessExit;

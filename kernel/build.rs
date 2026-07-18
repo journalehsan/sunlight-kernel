@@ -43,6 +43,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-swapd",
+            output: "sunlight-swapd",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-kbd",
             output: "sunlight-kbd",
             rustflags: service_rustflags,

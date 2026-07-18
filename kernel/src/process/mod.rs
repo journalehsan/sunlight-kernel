@@ -123,6 +123,8 @@ pub struct Process {
     pub signal_state: signal::SignalState,
     pub is_linux_compat: bool, // Phase 4.5: true if running Linux ELF binary
     pub trusted_display_service: bool,
+    /// Set only by the kernel's embedded-path resolver for sunlight-swapd.
+    pub trusted_swap_admin_service: bool,
     /// Linux compatibility heap base for `brk(2)`.
     pub brk_base: u64,
     /// Current Linux compatibility heap break.
@@ -315,6 +317,7 @@ impl Process {
             signal_state: signal::SignalState::new(),
             is_linux_compat: false, // default to native SunlightOS
             trusted_display_service: false,
+            trusted_swap_admin_service: false,
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,
@@ -464,6 +467,7 @@ impl Process {
             signal_state: signal::SignalState::new(),
             is_linux_compat: false,
             trusted_display_service: false,
+            trusted_swap_admin_service: false,
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,

@@ -66,6 +66,8 @@ pub struct TelemetryPage {
     pub ticks_per_core: [u64; MAX_CORES],
 }
 
+const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 8192);
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ProcessState {
     Ready,

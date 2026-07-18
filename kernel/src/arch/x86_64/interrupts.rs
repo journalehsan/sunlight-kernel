@@ -533,34 +533,12 @@ fn handle_swap_page_fault(vaddr: u64) -> bool {
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let process = sched.current_process_mut();
-    let pid = process.pid;
-
     if unsafe { process.address_space.swapped_block_id(page, hhdm) }.is_none() {
         return false;
     }
 
-    let Some(protection) = process
-        .address_space
-        .lookup_region(page_addr)
-        .map(|region| region.protection)
-    else {
-        return false;
-    };
-    let flags =
-        match crate::process::address_space::AddressSpace::protection_to_pte_flags(protection) {
-            Ok(flags) => flags,
-            Err(_) => return false,
-        };
-
     match unsafe {
-        crate::memory::swap::swap_in_page(
-            &mut process.address_space,
-            page,
-            pid,
-            flags,
-            hhdm,
-            &mut pmm,
-        )
+        crate::memory::swap::swap_in_page(&mut process.address_space, page, hhdm, &mut pmm)
     } {
         Ok(_) => {
             crate::serial_println!("[SWAP] page-in at {:#x}", page_addr);

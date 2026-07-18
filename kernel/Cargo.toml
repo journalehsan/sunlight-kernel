@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.1623"
+version = "0.2.1639"
+
+
 
 
 
@@ -351,6 +353,7 @@ sunlight-elf = { path = "../sunlight-elf" }
 sunlight-fs = { path = "../sunlight-fs" }
 sunlight-compat-linux = { path = "../compat-linux" }
 sunlight-net = { path = "../sunlight-net" }
+sunlight-ipc = { path = "../ipc" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
@@ -367,6 +370,8 @@ mm2c_ledger_test = []
 mm2d_munmap_test = ["mm2b_smp_test"]
 # Focused four-core present-anonymous mprotect and permission shootdown gate.
 mm2e_mprotect_test = ["mm2b_smp_test"]
+# Focused SWAP-1 multi-pool pressure/recovery gate.
+swap1_test = ["mm2b_smp_test"]
 # Verbose per-tick / per-alloc diagnostics over the serial port. OFF by default:
 # these logs are written while the global scheduler lock is held and block the
 # UART, stalling every core. Enable only for debugging.

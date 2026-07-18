@@ -1,0 +1,6 @@
+[SWAP-1] configured 2 pools from
+[SWAP-1] pressure reclaimed 12 pages across pools; fallback bounded: OK
+[SWAP-1] exact patterns and RW/NX metadata restored: OK
+[SWAP-1] munmap released swapped slot without swap-in: OK
+[SWAP-1] exit cleanup and PMM/slot accounting baseline: OK
+[SWAP-1] focused pressure gate: OK

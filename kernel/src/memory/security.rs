@@ -740,6 +740,144 @@ pub fn run_mm2d_munmap_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
     crate::serial_println!("[MM-2D] focused munmap/shootdown gate: OK");
 }
 
+#[cfg(feature = "swap1_test")]
+pub fn run_swap1_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
+    use crate::process::mmap::{MAP_ANONYMOUS, MAP_FIXED, MAP_PRIVATE, PROT_READ, PROT_WRITE};
+    use x86_64::structures::paging::{Page, PageTableFlags, Size4KiB};
+
+    const BASE: u64 = 0x0000_0030_0000_0000;
+    const PAGES: usize = 12;
+    const PAGE_BYTES: u64 = 4096;
+    const FLAGS: u32 = MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS;
+
+    let baseline = pmm.free_page_count();
+    let (total_pages, _) = pmm.stats();
+    let online = crate::sched::ONLINE_CORES.load(Ordering::Acquire).max(1) as u32;
+    let mut policy = sunlight_ipc::swap_policy::calculate(total_pages as u64 * PAGE_BYTES, online)
+        .expect("SWAP-1 test policy calculation failed");
+    assert!(
+        policy.pool_count >= 2,
+        "SWAP-1 gate requires at least two pools"
+    );
+    // Make pool 0 deliberately tiny so the bounded normal selector must fall
+    // through to pool 1 without needing thousands of pages in this gate.
+    let original_first_budget = policy.pools[0].physical_budget_bytes;
+    policy.pools[0].physical_budget_bytes = 64;
+    policy.pools[1].physical_budget_bytes += original_first_budget - 64;
+    crate::memory::zram::configure(policy, 0x5a01, 1).unwrap();
+    crate::serial_println!(
+        "[SWAP-1] configured {} pools from {} MiB / {} CPUs",
+        policy.pool_count,
+        policy.detected_ram_bytes / (1024 * 1024),
+        policy.detected_online_cpus
+    );
+
+    let process = unsafe { crate::process::Process::new(0x5a01, 0, "swap1-gate", pmm, hhdm) };
+    let mut sched = crate::sched::Scheduler::new();
+    sched.processes.push(process);
+    assert_eq!(
+        crate::process::mmap::sys_mmap(
+            BASE,
+            PAGES as u64 * PAGE_BYTES,
+            PROT_READ | PROT_WRITE,
+            FLAGS,
+            -1,
+            0,
+            pmm,
+            &mut sched,
+        ),
+        Ok(BASE)
+    );
+    let free_after_map = pmm.free_page_count();
+    for index in 0..PAGES {
+        let address = BASE + index as u64 * PAGE_BYTES;
+        let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address)).unwrap();
+        let frame = unsafe {
+            sched
+                .current_process()
+                .address_space
+                .lookup_phys(page, hhdm)
+                .unwrap()
+        };
+        let bytes = unsafe { &mut *((hhdm + frame.as_u64()).as_mut_ptr::<[u8; 4096]>()) };
+        bytes.fill((index as u8).wrapping_mul(17));
+    }
+
+    let reclaimed = crate::memory::swap::force_pressure_gate(PAGES, &mut sched, pmm, hhdm);
+    assert_eq!(reclaimed, PAGES);
+    assert_eq!(pmm.free_page_count(), free_after_map + PAGES);
+    let aggregate = crate::memory::zram::aggregate_stats();
+    assert!(aggregate.fallback_to_next_pool != 0);
+    assert!(
+        crate::memory::zram::pool_stats(0)
+            .unwrap()
+            .used_logical_pages
+            != 0
+    );
+    assert!(
+        crate::memory::zram::pool_stats(1)
+            .unwrap()
+            .used_logical_pages
+            != 0
+    );
+    crate::serial_println!(
+        "[SWAP-1] pressure reclaimed {} pages across pools; fallback bounded: OK",
+        reclaimed
+    );
+
+    for index in 0..8usize {
+        let address = BASE + index as u64 * PAGE_BYTES;
+        let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address)).unwrap();
+        let frame = unsafe {
+            crate::memory::swap::swap_in_page(
+                &mut sched.current_process_mut().address_space,
+                page,
+                hhdm,
+                pmm,
+            )
+        }
+        .unwrap();
+        let bytes = unsafe { &*((hhdm + frame.as_u64()).as_ptr::<[u8; 4096]>()) };
+        assert!(bytes
+            .iter()
+            .all(|byte| *byte == (index as u8).wrapping_mul(17)));
+        let (_, flags) = unsafe {
+            sched
+                .current_process()
+                .address_space
+                .lookup_entry(page, hhdm)
+                .unwrap()
+        };
+        assert!(flags.contains(PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE));
+    }
+    crate::serial_println!("[SWAP-1] exact patterns and RW/NX metadata restored: OK");
+
+    let stale_page =
+        Page::<Size4KiB>::from_start_address(VirtAddr::new(BASE + 8 * PAGE_BYTES)).unwrap();
+    let stale = unsafe {
+        sched
+            .current_process()
+            .address_space
+            .swapped_block_id(stale_page, hhdm)
+            .unwrap()
+    };
+    crate::process::mmap::sys_munmap(BASE + 8 * PAGE_BYTES, PAGE_BYTES, pmm, &mut sched).unwrap();
+    assert!(!crate::memory::zram::block_exists(stale));
+    crate::serial_println!("[SWAP-1] munmap released swapped slot without swap-in: OK");
+
+    crate::memory::swap::untrack_process(0x5a01);
+    unsafe {
+        sched
+            .current_process_mut()
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(crate::memory::zram::aggregate_stats().stored_pages, 0);
+    assert_eq!(pmm.free_page_count(), baseline);
+    crate::serial_println!("[SWAP-1] exit cleanup and PMM/slot accounting baseline: OK");
+    crate::serial_println!("[SWAP-1] focused pressure gate: OK");
+}
+
 #[cfg(feature = "mm2e_mprotect_test")]
 pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
     use crate::memory::user::UserMemoryError;

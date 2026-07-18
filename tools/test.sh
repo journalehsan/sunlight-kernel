@@ -213,6 +213,12 @@ case "$PHASE" in
         PASS_LABEL="MM-2E Anonymous Mprotect"
         NEED_DISK=false
         ;;
+    swap1)
+        EXPECTED_FILE="tools/tests/swap1.expected"
+        FINAL_MARKER="[SWAP-1] focused pressure gate: OK"
+        PASS_LABEL="SWAP-1 Multi-pool Pressure"
+        NEED_DISK=false
+        ;;
     top)
         EXPECTED_FILE="tools/tests/top.expected"
         FINAL_MARKER="[TOP] rendering"
@@ -220,7 +226,7 @@ case "$PHASE" in
         NEED_DISK=false
         ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b mm2d mm2e sunlightd top"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b mm2d mm2e swap1 sunlightd top"
         exit 2
         ;;
 esac
@@ -230,6 +236,7 @@ mapfile -t EXPECTED < <(grep -Ev '^[[:space:]]*($|#)' "$EXPECTED_FILE")
 # --- Step 1: Build service binaries first ---
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release >"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-swapd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-mouse --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-deviced --release >>"$BUILD_LOG" 2>&1
@@ -272,7 +279,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-open --release >>"$BUIL
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release >>"$BUILD_LOG" 2>&1
-if [[ "$PHASE" != "mm2b" && "$PHASE" != "mm2d" ]]; then
+if [[ "$PHASE" != "mm2b" && "$PHASE" != "mm2d" && "$PHASE" != "swap1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release >>"$BUILD_LOG" 2>&1
 fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release >>"$BUILD_LOG" 2>&1
@@ -307,6 +314,8 @@ elif [[ "$PHASE" == "mm2d" ]]; then
     KERNEL_FEATURES="--features mm2d_munmap_test"
 elif [[ "$PHASE" == "mm2e" ]]; then
     KERNEL_FEATURES="--features mm2e_mprotect_test"
+elif [[ "$PHASE" == "swap1" ]]; then
+    KERNEL_FEATURES="--features swap1_test"
 fi
 EXTRA_ENV=()
 if [[ "$PHASE" == "phase3.9" ]]; then
@@ -386,6 +395,8 @@ if [[ "$PHASE" == "mm2b" ]]; then
 elif [[ "$PHASE" == "mm2d" ]]; then
     QEMU_SMP=4
 elif [[ "$PHASE" == "mm2e" ]]; then
+    QEMU_SMP=4
+elif [[ "$PHASE" == "swap1" ]]; then
     QEMU_SMP=4
 fi
 qemu-system-x86_64 \

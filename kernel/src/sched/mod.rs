@@ -1841,6 +1841,8 @@ impl Scheduler {
         }
 
         crate::memory::swap::untrack_process(pid);
+        let swap_admin_identity = self.processes[idx].address_space.identity();
+        crate::memory::zram::revoke_admin(pid, swap_admin_identity.generation);
 
         let endpoint_ids = {
             let caps = crate::capability::CAP_BROKER.lock();

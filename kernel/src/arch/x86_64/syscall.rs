@@ -4159,7 +4159,6 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
     };
     let hhdm_offset = VirtAddr::new(hhdm.offset);
 
-    const TELEMETRY_PAGES: u64 = 2;
     const PAGE_SIZE: u64 = 4096;
 
     let telemetry_virt =
@@ -4175,6 +4174,16 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
     };
     let telemetry_phys_page = telemetry_phys.as_u64() & !0xFFF;
     let telemetry_page_off = telemetry_virt.as_u64() & 0xFFF;
+    let telemetry_bytes = core::mem::size_of::<crate::telemetry::TelemetryPage>() as u64;
+    let telemetry_pages = telemetry_page_off
+        .checked_add(telemetry_bytes)
+        .and_then(|bytes| bytes.checked_add(PAGE_SIZE - 1))
+        .map(|bytes| bytes / PAGE_SIZE)
+        .filter(|pages| *pages > 0)
+        .unwrap_or(0);
+    if telemetry_pages == 0 {
+        return 0;
+    }
 
     let user_addr = x86_64::VirtAddr::new(0x0000_0000_0080_0000);
     let mut sched = crate::sched::SCHEDULER.lock();
@@ -4187,7 +4196,7 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
             Err(_) => return 0,
         };
 
-    for i in 0..TELEMETRY_PAGES {
+    for i in 0..telemetry_pages {
         let Ok(page) =
             x86_64::structures::paging::Page::from_start_address(user_addr + i * PAGE_SIZE)
         else {
@@ -4201,7 +4210,7 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
 
     let region = match crate::process::region::MappingRegion::new(
         user_addr.as_u64(),
-        user_addr.as_u64() + TELEMETRY_PAGES * PAGE_SIZE,
+        user_addr.as_u64() + telemetry_pages * PAGE_SIZE,
         protection,
         crate::process::region::MappingKind::Telemetry,
         crate::process::region::RegionPolicy::SYSTEM
@@ -4217,7 +4226,7 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
     };
 
     // SAFETY: mapping user-visible read-only pages into current process page tables.
-    for i in 0..TELEMETRY_PAGES {
+    for i in 0..telemetry_pages {
         let user_page =
             match x86_64::structures::paging::Page::from_start_address(user_addr + i * PAGE_SIZE) {
                 Ok(p) => p,
@@ -4257,7 +4266,7 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
         }
     }
     if process.address_space.commit_region(reservation).is_err() {
-        for rollback_idx in (0..TELEMETRY_PAGES).rev() {
+        for rollback_idx in (0..telemetry_pages).rev() {
             let rollback_page = x86_64::structures::paging::Page::from_start_address(
                 user_addr + rollback_idx * PAGE_SIZE,
             )
@@ -4404,21 +4413,169 @@ fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
     0
 }
 
-/// Syscall: swapctl (85) — controlled ZRAM demo/verification (freezram).
-/// rdi = op (0 = fill, 1 = verify)
-/// rsi = page count (op=0 only)
+/// Syscall: swapctl (85).
 ///
-/// fill: writes `rsi` synthetic compressed pages into ZRAM, returns the
-///       number actually written.
-/// verify: reads back and checks the pages written by the last `fill`,
-///         discarding each afterward; returns the number that matched.
-///         Returns u64::MAX if a read/decompress failed outright.
+/// Operations 0/1 retain the bounded synthetic `freezram` diagnostic. Op 2
+/// reports online CPUs. Op 3 is the one-shot SwapAdmin configuration request;
+/// the kernel authenticates the embedded service identity and recomputes the
+/// submitted policy from PMM/scheduler state. Op 4 reports active pool count;
+/// ops 5/6 copy bounded aggregate/per-pool health snapshots to userspace.
 fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
     match frame.rdi {
-        0 => crate::memory::zram::freezram_fill(frame.rsi as usize) as u64,
-        1 => crate::memory::zram::freezram_verify()
-            .map(|n| n as u64)
-            .unwrap_or(u64::MAX),
+        0 => {
+            if !crate::sched::SCHEDULER
+                .lock()
+                .current_process()
+                .trusted_swap_admin_service
+            {
+                return u64::MAX;
+            }
+            crate::memory::zram::freezram_fill(frame.rsi as usize) as u64
+        }
+        1 => {
+            if !crate::sched::SCHEDULER
+                .lock()
+                .current_process()
+                .trusted_swap_admin_service
+            {
+                return u64::MAX;
+            }
+            crate::memory::zram::freezram_verify()
+                .map(|n| n as u64)
+                .unwrap_or(u64::MAX)
+        }
+        2 => crate::sched::SCHEDULER.lock().online_cores.max(1) as u64,
+        3 => {
+            let (authorized, owner_pid, owner_generation, online_cpus) = {
+                let sched = crate::sched::SCHEDULER.lock();
+                let process = sched.current_process();
+                (
+                    process.trusted_swap_admin_service,
+                    process.pid,
+                    process.address_space.identity().generation,
+                    sched.online_cores.max(1) as u32,
+                )
+            };
+            if !authorized {
+                return u64::MAX;
+            }
+            let total_frames = crate::PMM.lock().stats().0 as u64;
+            let Some(usable_ram_bytes) = total_frames.checked_mul(4096) else {
+                return u64::MAX;
+            };
+            let Ok(policy) = ::sunlight_ipc::swap_policy::calculate(usable_ram_bytes, online_cpus)
+            else {
+                return u64::MAX;
+            };
+            if frame.rsi != policy.detected_ram_bytes
+                || frame.rdx != u64::from(policy.detected_online_cpus)
+                || frame.r8 != policy.total_logical_pages
+                || frame.r9 != policy.pool_count as u64
+                || frame.r10 != policy.total_physical_budget_bytes
+                || frame.r12 != u64::from(policy.version)
+            {
+                return u64::MAX;
+            }
+            match crate::memory::zram::configure(policy, owner_pid, owner_generation) {
+                Ok(()) => {
+                    crate::serial_println!(
+                        "[SWAP-1] enabled pools={} logical_mib={} physical_budget_kib={} admin_pid={}",
+                        policy.pool_count,
+                        policy.total_logical_bytes / (1024 * 1024),
+                        policy.total_physical_budget_bytes / 1024,
+                        owner_pid
+                    );
+                    0
+                }
+                Err(_) => u64::MAX,
+            }
+        }
+        4 => crate::memory::zram::aggregate_stats().active_pool_count as u64,
+        5 => {
+            use ::sunlight_ipc::swap_policy::AggregateDiagnostics;
+
+            if frame.rdx as usize != core::mem::size_of::<AggregateDiagnostics>() {
+                return u64::MAX;
+            }
+            let zram = crate::memory::zram::aggregate_stats();
+            let reclaim = crate::memory::swap::diagnostics();
+            let diagnostics = AggregateDiagnostics {
+                active_pool_count: zram.active_pool_count as u64,
+                configured_logical_pages: zram.configured_logical_pages,
+                configured_physical_budget_bytes: zram.configured_physical_budget_bytes,
+                stored_pages: zram.stored_pages,
+                compressed_bytes: zram.compressed_bytes,
+                pages_stored_raw: zram.pages_stored_raw,
+                incompressible_rejected: zram.incompressible_rejected,
+                swap_out_attempts: zram.swap_out_attempts,
+                swap_out_successes: zram.swap_out_successes,
+                swap_out_failures: zram.swap_out_failures,
+                swap_in_attempts: zram.swap_in_attempts,
+                swap_in_successes: zram.swap_in_successes,
+                swap_in_failures: zram.swap_in_failures,
+                checksum_failures: zram.checksum_failures,
+                decompression_failures: zram.decompression_failures,
+                full_pool_events: zram.full_pool_events,
+                fallback_to_next_pool: zram.fallback_to_next_pool,
+                candidate_scans: reclaim.candidate_scans,
+                pages_reclaimed: reclaim.pages_reclaimed,
+                watermark_activations: reclaim.watermark_activations,
+                service_configured: u64::from(zram.service_configured),
+                admin_owner_alive: u64::from(zram.admin_owner_alive),
+            };
+            let bytes = unsafe {
+                core::slice::from_raw_parts(
+                    (&diagnostics as *const AggregateDiagnostics).cast::<u8>(),
+                    core::mem::size_of::<AggregateDiagnostics>(),
+                )
+            };
+            if copy_to_user(frame.rsi, bytes).is_ok() {
+                0
+            } else {
+                u64::MAX
+            }
+        }
+        6 => {
+            use ::sunlight_ipc::swap_policy::PoolDiagnostics;
+
+            if frame.r8 as usize != core::mem::size_of::<PoolDiagnostics>() {
+                return u64::MAX;
+            }
+            let Some(pool) = crate::memory::zram::pool_stats(frame.rsi as usize) else {
+                return u64::MAX;
+            };
+            let diagnostics = PoolDiagnostics {
+                logical_capacity_pages: pool.logical_capacity_pages,
+                physical_budget_bytes: pool.physical_budget_bytes,
+                used_logical_pages: pool.used_logical_pages,
+                used_compressed_bytes: pool.used_compressed_bytes,
+                compression_successes: pool.compression_successes,
+                compression_failures: pool.compression_failures,
+                raw_pages: pool.raw_pages,
+                incompressible_rejected: pool.incompressible_rejected,
+                swap_out_attempts: pool.swap_out_attempts,
+                swap_out_successes: pool.swap_out_successes,
+                swap_out_failures: pool.swap_out_failures,
+                swap_in_attempts: pool.swap_in_attempts,
+                swap_in_successes: pool.swap_in_successes,
+                swap_in_failures: pool.swap_in_failures,
+                checksum_failures: pool.checksum_failures,
+                decompression_failures: pool.decompression_failures,
+                full_events: pool.full_events,
+                slot_releases: pool.slot_releases,
+            };
+            let bytes = unsafe {
+                core::slice::from_raw_parts(
+                    (&diagnostics as *const PoolDiagnostics).cast::<u8>(),
+                    core::mem::size_of::<PoolDiagnostics>(),
+                )
+            };
+            if copy_to_user(frame.rdx, bytes).is_ok() {
+                0
+            } else {
+                u64::MAX
+            }
+        }
         _ => u64::MAX,
     }
 }

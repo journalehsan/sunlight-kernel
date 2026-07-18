@@ -37,6 +37,7 @@ TLS_RUSTFLAGS="$SERVICE_RUSTFLAGS --cfg aes_force_soft --cfg polyval_force_soft 
 echo "[build] Building user-space services..."
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-swapd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-mouse --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-deviced --release

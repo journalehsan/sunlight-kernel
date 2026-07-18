@@ -32,6 +32,12 @@ SECTIONS
 
     . = ALIGN(4096);
 
+    .telemetry : {
+        *(.telemetry .telemetry.*)
+    } :data
+
+    . = ALIGN(4096);
+
     .bss : {
         *(.bss .bss.*)
         *(COMMON)

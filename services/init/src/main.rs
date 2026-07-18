@@ -19,8 +19,9 @@ use sunlight_ipc::{
 /// still treat deviced as optional and continue if it is unavailable.
 /// sunlight-kbd and sunlight-mouse are spawned AFTER timer_server (so IPC is stable)
 /// but BEFORE tty_server (which depends on input routing).
-const INIT_SERVICES: [&str; 11] = [
+const INIT_SERVICES: [&str; 12] = [
     "/sbin/timer_server",
+    "/sbin/sunlight-swapd",
     "/sbin/deviced",
     "/sbin/sunlightd",
     "/sbin/networkd",

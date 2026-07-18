@@ -364,6 +364,12 @@ fn map_anonymous_kind(
         );
         let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
 
+        crate::memory::swap::maybe_reclaim_for_anonymous_allocation(
+            sched,
+            pmm,
+            hhdm_offset,
+            Some((pid, page_vaddr)),
+        );
         let frame_addr = match pmm.alloc_frame_owned(pid as u32) {
             Some(addr) => addr,
             None => {
@@ -602,7 +608,7 @@ pub fn sys_munmap(
                         pmm.free_frame(frame);
                     }
                     RemovedOwnership::Swapped(block_id) => {
-                        if crate::memory::zram::discard_block(block_id as usize).is_err() {
+                        if crate::memory::zram::discard_block(block_id).is_err() {
                             munmap_invariant_failure("preflighted ZRAM block disappeared");
                         }
                         MUNMAP_SWAPPED_RELEASED.fetch_add(1, Ordering::Relaxed);
@@ -696,7 +702,7 @@ fn expected_anonymous_leaf(
         let Some(block_id) = (unsafe { address_space.swapped_block_id(page, hhdm_offset) }) else {
             return invariant_rejection();
         };
-        if !crate::memory::zram::block_exists(block_id as usize) {
+        if !crate::memory::zram::block_exists(block_id) {
             return invariant_rejection();
         }
         Ok(ExpectedMapping::Swapped { block_id })
@@ -911,7 +917,7 @@ fn preflight_protection_leaf(
     };
     if !flags.contains(PageTableFlags::PRESENT) {
         if let Some(block_id) = unsafe { address_space.swapped_block_id(page, hhdm_offset) } {
-            if !crate::memory::zram::block_exists(block_id as usize) {
+            if !crate::memory::zram::block_exists(block_id) {
                 return mprotect_invariant_rejection();
             }
             MPROTECT_SWAPPED_REJECTIONS.fetch_add(1, Ordering::Relaxed);

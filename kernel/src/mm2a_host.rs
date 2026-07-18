@@ -9,6 +9,12 @@ pub mod mm2b_state;
 #[path = "process/region.rs"]
 pub mod region;
 
+#[path = "memory/zram_codec.rs"]
+pub mod zram_codec;
+
+#[path = "memory/swap_slot.rs"]
+pub mod swap_slot;
+
 #[cfg(test)]
 mod tests {
     use super::mm2a_plan::{checked_page_layout, DeferredCursor, PlanError};
@@ -16,6 +22,54 @@ mod tests {
         LedgerError, MappingKind, MappingRegion, RangeLookup, RegionBacking, RegionLedger,
         RegionPolicy, RegionProtection, MAX_REGIONS_PER_ADDRESS_SPACE,
     };
+    use super::zram_codec::{self, CodecError, MAX_COMPRESSED_SIZE, PAGE_SIZE};
+
+    #[test]
+    fn stale_swap_slot_generation_is_rejected() {
+        let first = super::swap_slot::SlotId::new(3, 77, 41).unwrap();
+        let reused = super::swap_slot::SlotId::new(3, 77, 42).unwrap();
+        assert_ne!(first.raw(), reused.raw());
+        assert!(!first.matches_generation(reused.generation()));
+        assert!(reused.matches_generation(reused.generation()));
+        assert_eq!(super::swap_slot::SlotId::from_raw(first.raw()), Some(first));
+        assert_eq!(super::swap_slot::SlotId::from_raw(0), None);
+    }
+
+    #[test]
+    fn zram_lz4_round_trip_and_integrity() {
+        let mut page = [0u8; PAGE_SIZE];
+        for (index, byte) in page.iter_mut().enumerate() {
+            *byte = ((index / 64) & 0xff) as u8;
+        }
+        let mut compressed = [0u8; MAX_COMPRESSED_SIZE];
+        let (len, checksum) = zram_codec::compress_page(&page, &mut compressed).unwrap();
+        let mut restored = [0u8; PAGE_SIZE];
+        zram_codec::decompress_page(&compressed[..len], checksum, &mut restored).unwrap();
+        assert_eq!(restored, page);
+
+        compressed[0] ^= 0x40;
+        assert!(matches!(
+            zram_codec::decompress_page(&compressed[..len], checksum, &mut restored),
+            Err(CodecError::DecompressionFailed | CodecError::ChecksumMismatch)
+        ));
+    }
+
+    #[test]
+    fn zram_incompressible_page_is_rejected() {
+        let mut page = [0u8; PAGE_SIZE];
+        let mut state = 0x4d59_5df4_d0f3_3173u64;
+        for byte in &mut page {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            *byte = state as u8;
+        }
+        let mut compressed = [0u8; MAX_COMPRESSED_SIZE];
+        assert_eq!(
+            zram_codec::compress_page(&page, &mut compressed),
+            Err(CodecError::Incompressible)
+        );
+    }
 
     fn anonymous(start: u64, end: u64) -> MappingRegion {
         MappingRegion::new(

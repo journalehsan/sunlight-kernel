@@ -54,6 +54,8 @@ static INIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-init");
 static TIMER_SERVER_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
+static SUNLIGHT_SWAPD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-swapd");
 static SUNLIGHT_KBD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kbd");
 static SUNLIGHT_MOUSE_ELF_BYTES: &[u8] =
@@ -356,10 +358,6 @@ pub extern "C" fn _start() -> ! {
     splash.set_progress(400); // 40%
     splash.redraw();
 
-    // Perform a tiny smoke-fill so swap space is visible from day 1 in
-    // user-visible free/swap reporting.
-    init_swap_smoke(&mut PMM.lock());
-
     // 4.5. MADT — enumerate logical processors now that the heap is available.
     // acpi::init() (step 2.5) runs before the heap and only handles power
     // management; MADT parsing needs Vec so it lives here.
@@ -447,7 +445,11 @@ pub extern "C" fn _start() -> ! {
     }
     #[cfg(all(
         feature = "mm2b_smp_test",
-        not(any(feature = "mm2d_munmap_test", feature = "mm2e_mprotect_test"))
+        not(any(
+            feature = "mm2d_munmap_test",
+            feature = "mm2e_mprotect_test",
+            feature = "swap1_test"
+        ))
     ))]
     crate::memory::tlb::run_smp_regression_gate(hhdm_offset);
     serial_println!(
@@ -2125,6 +2127,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let mut pmm = PMM.lock();
         memory::security::run_mm2e_mprotect_gate(&mut pmm, hhdm_offset);
     }
+    #[cfg(feature = "swap1_test")]
+    {
+        let mut pmm = PMM.lock();
+        memory::security::run_swap1_gate(&mut pmm, hhdm_offset);
+    }
 
     // 1. Token forge: a token that was never minted must be rejected as NotFound.
     {
@@ -2832,25 +2839,6 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     }
 
     serial_println!("[SEC]  Security hardening: PASSED");
-}
-
-/// Touch one zram block after heap setup so swap accounting is visible without
-/// forcing zram metadata to allocate during PMM initialization.
-fn init_swap_smoke(pmm: &mut PhysicalMemoryManager) {
-    let frame = match pmm.alloc_frame() {
-        Some(frame) => frame,
-        None => return,
-    };
-    pmm.free_frame(frame);
-
-    let mut page = [0u8; memory::zram::ZRAM_BLOCK_SIZE];
-    page[..4].copy_from_slice(b"swap");
-
-    if let Ok(block_id) = memory::zram::alloc_block() {
-        if memory::zram::write_block(block_id, &page).is_ok() {
-            serial_println!("[SWAP] smoke zram block {} written", block_id);
-        }
-    }
 }
 
 /// Set up key injection buffer for test automation.

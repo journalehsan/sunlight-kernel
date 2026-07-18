@@ -20,6 +20,10 @@ pub fn is_trusted_display_path(path: &str) -> bool {
     )
 }
 
+pub fn is_trusted_swap_admin_path(path: &str) -> bool {
+    matches!(path, "/sbin/sunlight-swapd" | "/usr/sbin/sunlight-swapd")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpawnError {
     NotFound,
@@ -47,10 +51,12 @@ pub fn exec_into_process(
     };
     let mut old_address_space = core::mem::replace(&mut process.address_space, new_address_space);
     let old_trusted_display = process.trusted_display_service;
+    let old_trusted_swap_admin = process.trusted_swap_admin_service;
     let old_linux_compat = process.is_linux_compat;
     let old_brk_base = process.brk_base;
     let old_brk_current = process.brk_current;
     process.trusted_display_service = false;
+    process.trusted_swap_admin_service = false;
 
     // Phase 4.5: Detect if this is a Linux-compatible ELF binary
     process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
@@ -70,6 +76,7 @@ pub fn exec_into_process(
                 failed_address_space.reclaim_user_space(pmm, hhdm_offset, true);
             }
             process.trusted_display_service = old_trusted_display;
+            process.trusted_swap_admin_service = old_trusted_swap_admin;
             process.is_linux_compat = old_linux_compat;
             process.brk_base = old_brk_base;
             process.brk_current = old_brk_current;
@@ -96,6 +103,9 @@ pub fn exec_into_process(
             crate::memory::shared::cleanup_shared_pages(process, pmm, &mut caps);
         }
         old_address_space = core::mem::replace(&mut process.address_space, new_address_space);
+    }
+    if old_trusted_swap_admin {
+        crate::memory::zram::revoke_admin(process.pid, old_address_space.identity().generation);
     }
     unsafe {
         old_address_space.reclaim_user_space(pmm, hhdm_offset, true);
@@ -511,6 +521,7 @@ pub fn spawn_from_path_with_env(
     let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
     exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false)?;
     process.trusted_display_service = is_trusted_display_path(path);
+    process.trusted_swap_admin_service = is_trusted_swap_admin_path(path);
     process.set_initial_args(shell_id.unwrap_or(0), uid as u64, gid as u64, 0);
 
     let actual_pid = process.pid;
@@ -570,6 +581,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         // Base servers spawned by init (pid=1), not hardcoded in kernel boot.
         // These need no privileged memory setup (unlike vfs/tty).
         "/sbin/timer_server" | "/usr/sbin/timer_server" => Ok(crate::TIMER_SERVER_ELF_BYTES),
+        "/sbin/sunlight-swapd" | "/usr/sbin/sunlight-swapd" => Ok(crate::SUNLIGHT_SWAPD_ELF_BYTES),
         "/sbin/sunlight-kbd" | "/usr/sbin/sunlight-kbd" => Ok(crate::SUNLIGHT_KBD_ELF_BYTES),
         "/sbin/sunlight-mouse" | "/usr/sbin/sunlight-mouse" => Ok(crate::SUNLIGHT_MOUSE_ELF_BYTES),
         "/sbin/deviced" | "/usr/sbin/deviced" => Ok(crate::DEVICED_ELF_BYTES),

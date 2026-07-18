@@ -13,6 +13,7 @@ members = [
     "services/vfs_server",
     "services/net_server",
     "services/sunlightd",
+    "services/sunlight-swapd",
     "services/sunlightctl",
     "services/sunlight-uac",
     "sunlight-tui",
