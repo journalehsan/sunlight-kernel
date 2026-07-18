@@ -421,24 +421,29 @@ pub fn handle_test_ipi() {
     mailbox.acknowledgement.store(sequence, Ordering::Release);
 }
 
-#[cfg(feature = "mm2d_munmap_test")]
+#[cfg(any(feature = "mm2d_munmap_test", feature = "mm2e_mprotect_test"))]
 pub fn test_activate_and_read(identity: AddressSpaceIdentity, address: u64, targets: u64) {
     test_broadcast(1, identity, address, targets);
 }
 
-#[cfg(feature = "mm2d_munmap_test")]
+#[cfg(any(feature = "mm2d_munmap_test", feature = "mm2e_mprotect_test"))]
 pub fn test_read(identity: AddressSpaceIdentity, address: u64, targets: u64) {
     test_broadcast(2, identity, address, targets);
 }
 
-#[cfg(feature = "mm2d_munmap_test")]
+#[cfg(any(feature = "mm2d_munmap_test", feature = "mm2e_mprotect_test"))]
 pub fn test_leave(targets: u64) {
     test_broadcast(3, AddressSpaceIdentity::INVALID, 0, targets);
 }
 
-#[cfg(feature = "mm2d_munmap_test")]
+#[cfg(any(feature = "mm2d_munmap_test", feature = "mm2e_mprotect_test"))]
 pub fn test_result(cpu_id: usize) -> u64 {
     TEST_MAILBOXES[cpu_id].result.load(Ordering::Acquire)
+}
+
+#[cfg(feature = "mm2e_mprotect_test")]
+pub fn test_remote_invalidation_count() -> u64 {
+    REMOTE_INVALIDATIONS.load(Ordering::Acquire)
 }
 
 #[cfg(feature = "mm2b_smp_test")]

@@ -539,10 +539,18 @@ fn handle_swap_page_fault(vaddr: u64) -> bool {
         return false;
     }
 
-    let flags = x86_64::structures::paging::PageTableFlags::PRESENT
-        | x86_64::structures::paging::PageTableFlags::WRITABLE
-        | x86_64::structures::paging::PageTableFlags::USER_ACCESSIBLE
-        | x86_64::structures::paging::PageTableFlags::NO_EXECUTE;
+    let Some(protection) = process
+        .address_space
+        .lookup_region(page_addr)
+        .map(|region| region.protection)
+    else {
+        return false;
+    };
+    let flags =
+        match crate::process::address_space::AddressSpace::protection_to_pte_flags(protection) {
+            Ok(flags) => flags,
+            Err(_) => return false,
+        };
 
     match unsafe {
         crate::memory::swap::swap_in_page(
@@ -591,6 +599,20 @@ fn handle_cow_page_fault(vaddr: u64) -> bool {
     let mut pmm = crate::PMM.lock();
 
     let process = sched.current_process_mut();
+
+    // A write-protection fault is a CoW candidate only when software policy
+    // still authorizes writes. In particular, mprotect(R/RX) must not be
+    // undone by allocating a private writable frame on the next user write.
+    let cow_authorized = process
+        .address_space
+        .lookup_region(page_addr)
+        .is_some_and(|region| {
+            region.kind == crate::process::region::MappingKind::Anonymous
+                && region.protection.writable()
+        });
+    if !cow_authorized {
+        return false;
+    }
 
     // Look up the current physical frame
     let (old_phys, old_flags) = match unsafe { process.address_space.lookup_entry(page, hhdm) } {

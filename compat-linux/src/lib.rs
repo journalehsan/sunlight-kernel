@@ -454,6 +454,8 @@ mod tests {
         assert_eq!(translate_syscall(62), 72); // kill
         assert_eq!(translate_syscall(200), -10); // tkill
         assert_eq!(translate_syscall(9), -11); // mmap
+        assert_eq!(translate_syscall(10), 52); // mprotect
+        assert_eq!(translate_syscall(11), 51); // munmap
         assert_eq!(translate_syscall(131), -12); // sigaltstack
         assert_eq!(translate_syscall(231), 20); // exit_group
         assert_eq!(translate_syscall(72), 49); // fcntl → SunlightOS Fcntl

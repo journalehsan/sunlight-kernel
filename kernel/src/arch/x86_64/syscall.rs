@@ -3526,10 +3526,17 @@ fn sys_mprotect(frame: &mut SyscallFrame) -> u64 {
     let length = frame.rsi;
     let prot = frame.rdx as u32;
 
-    match crate::process::mmap::sys_mprotect(addr, length, prot) {
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let linux_compat = sched.current_process().is_linux_compat;
+    let pmm = crate::PMM.lock();
+    let result = crate::process::mmap::sys_mprotect(addr, length, prot, &pmm, &mut sched);
+    drop(pmm);
+    drop(sched);
+
+    match result {
         Ok(()) => 0,
-        Err(_) if crate::sched::with_scheduler(|s| s.current_process().is_linux_compat) => {
-            linux_errno(22)
+        Err(error) if linux_compat => {
+            linux_errno(crate::process::mmap::mprotect_linux_errno(error) as u64)
         }
         Err(_) => u64::MAX,
     }

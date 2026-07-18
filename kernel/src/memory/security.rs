@@ -740,6 +740,434 @@ pub fn run_mm2d_munmap_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
     crate::serial_println!("[MM-2D] focused munmap/shootdown gate: OK");
 }
 
+#[cfg(feature = "mm2e_mprotect_test")]
+pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
+    use crate::memory::user::UserMemoryError;
+    use crate::process::mmap::{
+        MmapError, MAP_ANONYMOUS, MAP_FIXED, MAP_PRIVATE, PROT_EXEC, PROT_NONE, PROT_READ,
+        PROT_WRITE,
+    };
+    use crate::process::region::{
+        MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection,
+        MAX_REGIONS_PER_ADDRESS_SPACE,
+    };
+    use x86_64::structures::paging::{Page, PageTableFlags, Size4KiB};
+
+    const FLAGS: u32 = MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS;
+    const BASE: u64 = 0x0000_0028_0000_0000;
+    const STRIDE: u64 = 0x20_000;
+    const PAGE_SIZE: u64 = 4096;
+    const VALUE: u64 = 0x4d4d_3245_5052_4f54;
+
+    fn map_fixed(
+        sched: &mut crate::sched::Scheduler,
+        pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
+        address: u64,
+        pages: u64,
+        prot: u32,
+    ) {
+        assert_eq!(
+            crate::process::mmap::sys_mmap(
+                address,
+                pages * PAGE_SIZE,
+                prot,
+                FLAGS,
+                -1,
+                0,
+                pmm,
+                sched,
+            ),
+            Ok(address)
+        );
+    }
+
+    fn entry(
+        sched: &crate::sched::Scheduler,
+        address: u64,
+        hhdm: VirtAddr,
+    ) -> (x86_64::PhysAddr, PageTableFlags) {
+        let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address)).unwrap();
+        unsafe {
+            sched
+                .current_process()
+                .address_space
+                .lookup_entry(page, hhdm)
+                .unwrap()
+        }
+    }
+
+    fn protect(
+        sched: &mut crate::sched::Scheduler,
+        pmm: &crate::memory::pmm::PhysicalMemoryManager,
+        address: u64,
+        pages: u64,
+        prot: u32,
+    ) -> Result<(), MmapError> {
+        crate::process::mmap::sys_mprotect(address, pages * PAGE_SIZE, prot, pmm, sched)
+    }
+
+    fn assert_protection(
+        sched: &crate::sched::Scheduler,
+        address: u64,
+        hhdm: VirtAddr,
+        writable: bool,
+        executable: bool,
+    ) -> x86_64::PhysAddr {
+        let (frame, flags) = entry(sched, address, hhdm);
+        assert_eq!(flags.contains(PageTableFlags::WRITABLE), writable);
+        assert_eq!(!flags.contains(PageTableFlags::NO_EXECUTE), executable);
+        assert!(flags.contains(PageTableFlags::PRESENT));
+        assert!(flags.contains(PageTableFlags::USER_ACCESSIBLE));
+        assert!(!(writable && executable));
+        frame
+    }
+
+    let baseline = pmm.free_page_count();
+    let process = unsafe { crate::process::Process::new(0xB2E0, 0, "mm2e-mprotect", pmm, hhdm) };
+    let mut sched = crate::sched::Scheduler::new();
+    sched.processes.push(process);
+
+    // All six real transitions, same-protection no-op, content/frame
+    // preservation, and MM-1 copy permission integration.
+    let transitions = BASE;
+    map_fixed(&mut sched, pmm, transitions, 2, PROT_READ | PROT_WRITE);
+    let free_before = pmm.free_page_count();
+    let original_frame = assert_protection(&sched, transitions, hhdm, true, false);
+    crate::memory::user::copy_to_process_bytes(
+        sched.current_process(),
+        hhdm,
+        transitions,
+        &VALUE.to_ne_bytes(),
+    )
+    .unwrap();
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_READ), Ok(()));
+    assert_eq!(
+        crate::memory::user::copy_to_process_bytes(
+            sched.current_process(),
+            hhdm,
+            transitions,
+            b"x",
+        ),
+        Err(UserMemoryError::NotWritable)
+    );
+    let mut contents = [0u8; 8];
+    crate::memory::user::copy_from_process_bytes(
+        sched.current_process(),
+        hhdm,
+        transitions,
+        &mut contents,
+    )
+    .unwrap();
+    assert_eq!(contents, VALUE.to_ne_bytes());
+    assert_eq!(
+        original_frame,
+        assert_protection(&sched, transitions, hhdm, false, false)
+    );
+    let before_noop = entry(&sched, transitions, hhdm);
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_READ), Ok(()));
+    assert_eq!(entry(&sched, transitions, hhdm), before_noop);
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_WRITE), Ok(()));
+    assert_eq!(
+        original_frame,
+        assert_protection(&sched, transitions, hhdm, true, false)
+    );
+    crate::memory::user::copy_to_process_bytes(sched.current_process(), hhdm, transitions, b"y")
+        .unwrap();
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_EXEC), Ok(()));
+    assert_eq!(
+        original_frame,
+        assert_protection(&sched, transitions, hhdm, false, true)
+    );
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_WRITE), Ok(()));
+    assert_eq!(
+        original_frame,
+        assert_protection(&sched, transitions, hhdm, true, false)
+    );
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_READ), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_READ | PROT_EXEC),
+        Ok(())
+    );
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_READ), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_READ | PROT_EXEC),
+        Ok(())
+    );
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_WRITE), Ok(()));
+    assert_eq!(pmm.free_page_count(), free_before);
+    crate::serial_println!("[MM-2E] R/RW/RX transitions, frames, contents, and MM-1 copies: OK");
+
+    // Middle/prefix/suffix splits merge back to one compatible record.
+    let splits = BASE + STRIDE;
+    map_fixed(&mut sched, pmm, splits, 5, PROT_READ | PROT_WRITE);
+    assert_eq!(
+        protect(&mut sched, pmm, splits + 2 * PAGE_SIZE, 1, PROT_READ),
+        Ok(())
+    );
+    let region_count = sched.current_process().address_space.region_count();
+    assert_eq!(protect(&mut sched, pmm, splits, 2, PROT_READ), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, splits + 3 * PAGE_SIZE, 2, PROT_READ),
+        Ok(())
+    );
+    assert_eq!(
+        sched.current_process().address_space.region_count(),
+        region_count - 2
+    );
+    assert_eq!(protect(&mut sched, pmm, splits, 5, PROT_WRITE), Ok(()));
+    let merged = sched
+        .current_process()
+        .address_space
+        .lookup_region(splits)
+        .unwrap();
+    assert_eq!(merged.start, splits);
+    assert_eq!(merged.end, splits + 5 * PAGE_SIZE);
+    assert_eq!(merged.protection, RegionProtection::READ_WRITE);
+    crate::serial_println!("[MM-2E] middle/prefix/suffix splits and compatible merge: OK");
+
+    // Holes, protected kinds, invalid flags, PROT_NONE, zero length, and
+    // ledger-capacity exhaustion all reject before PTE mutation.
+    let hole = BASE + 2 * STRIDE;
+    map_fixed(&mut sched, pmm, hole, 1, PROT_READ | PROT_WRITE);
+    map_fixed(
+        &mut sched,
+        pmm,
+        hole + 2 * PAGE_SIZE,
+        1,
+        PROT_READ | PROT_WRITE,
+    );
+    let hole_before = entry(&sched, hole, hhdm);
+    assert_eq!(
+        protect(&mut sched, pmm, hole, 3, PROT_READ),
+        Err(MmapError::NoMemory)
+    );
+    assert_eq!(entry(&sched, hole, hhdm), hole_before);
+
+    for (index, kind) in [
+        MappingKind::ElfSegment,
+        MappingKind::UserStack,
+        MappingKind::Brk,
+        MappingKind::SharedMemory,
+        MappingKind::Framebuffer,
+        MappingKind::Telemetry,
+        MappingKind::BootSharedData,
+        MappingKind::InternalUserMapping,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let protected = BASE + 3 * STRIDE + index as u64 * 3 * PAGE_SIZE;
+        map_fixed(
+            &mut sched,
+            pmm,
+            protected - PAGE_SIZE,
+            1,
+            PROT_READ | PROT_WRITE,
+        );
+        let record = MappingRegion::new(
+            protected,
+            protected + PAGE_SIZE,
+            RegionProtection::READ_ONLY,
+            kind,
+            RegionPolicy::SYSTEM.union(RegionPolicy::OWNER_MANAGED),
+            if kind == MappingKind::SharedMemory {
+                RegionBacking::SharedMemory(0x2E00 + index as u64)
+            } else {
+                RegionBacking::Internal(0x2E00 + index as u64)
+            },
+        )
+        .unwrap();
+        let reservation = sched
+            .current_process()
+            .address_space
+            .preflight_region(record)
+            .unwrap();
+        sched
+            .current_process()
+            .address_space
+            .commit_region(reservation)
+            .unwrap();
+        let before = entry(&sched, protected - PAGE_SIZE, hhdm);
+        assert_eq!(
+            protect(&mut sched, pmm, protected - PAGE_SIZE, 2, PROT_READ),
+            Err(MmapError::Protected)
+        );
+        assert_eq!(entry(&sched, protected - PAGE_SIZE, hhdm), before);
+        sched
+            .current_process()
+            .address_space
+            .remove_region_exact(record)
+            .unwrap();
+        crate::process::mmap::sys_munmap(protected - PAGE_SIZE, PAGE_SIZE, pmm, &mut sched)
+            .unwrap();
+    }
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_WRITE | PROT_EXEC),
+        Err(MmapError::PermissionDenied)
+    );
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_NONE),
+        Err(MmapError::Unsupported)
+    );
+    assert_eq!(
+        crate::process::mmap::sys_mprotect(transitions, 0, PROT_READ, pmm, &mut sched),
+        Ok(())
+    );
+    assert_eq!(
+        crate::process::mmap::sys_mprotect(transitions + 1, 0, PROT_READ, pmm, &mut sched),
+        Err(MmapError::InvalidAddress)
+    );
+    assert_eq!(
+        crate::process::mmap::mprotect_linux_errno(MmapError::Protected),
+        13
+    );
+    assert_eq!(
+        crate::process::mmap::mprotect_linux_errno(MmapError::NoMemory),
+        12
+    );
+    assert_eq!(
+        crate::process::mmap::mprotect_linux_errno(MmapError::InvalidProt),
+        22
+    );
+    assert_eq!(
+        crate::process::mmap::mprotect_linux_errno(MmapError::SwappedUnsupported),
+        95
+    );
+
+    let capacity = BASE + 0x80_0000;
+    map_fixed(&mut sched, pmm, capacity, 3, PROT_READ | PROT_WRITE);
+    let capacity_before = entry(&sched, capacity + PAGE_SIZE, hhdm);
+    let mut fillers = alloc::vec::Vec::new();
+    let mut filler_index = 0u64;
+    while sched.current_process().address_space.region_count() < MAX_REGIONS_PER_ADDRESS_SPACE {
+        let start = BASE + 0x1000_0000 + filler_index * 2 * PAGE_SIZE;
+        filler_index += 1;
+        let filler = MappingRegion::new(
+            start,
+            start + PAGE_SIZE,
+            RegionProtection::READ_ONLY,
+            MappingKind::InternalUserMapping,
+            RegionPolicy::SYSTEM,
+            RegionBacking::Internal(0xCE00 + filler_index),
+        )
+        .unwrap();
+        let reservation = sched
+            .current_process()
+            .address_space
+            .preflight_region(filler)
+            .unwrap();
+        sched
+            .current_process()
+            .address_space
+            .commit_region(reservation)
+            .unwrap();
+        fillers.push(filler);
+    }
+    assert_eq!(
+        protect(&mut sched, pmm, capacity + PAGE_SIZE, 1, PROT_READ),
+        Err(MmapError::NoMemory)
+    );
+    assert_eq!(entry(&sched, capacity + PAGE_SIZE, hhdm), capacity_before);
+    for filler in fillers {
+        sched
+            .current_process()
+            .address_space
+            .remove_region_exact(filler)
+            .unwrap();
+    }
+    crate::serial_println!("[MM-2E] holes, policy, flags, errors, and capacity are atomic: OK");
+
+    // Present-only policy rejects a swapped marker without swap-in.
+    let swapped = BASE + 0x90_0000;
+    map_fixed(&mut sched, pmm, swapped, 1, PROT_READ | PROT_WRITE);
+    let swapped_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(swapped)).unwrap();
+    let swapped_frame = entry(&sched, swapped, hhdm).0;
+    let block_id = unsafe {
+        crate::memory::swap::swap_out_page(
+            &mut sched.current_process_mut().address_space,
+            swapped_page,
+            swapped_frame,
+            hhdm,
+            pmm,
+        )
+    }
+    .unwrap();
+    assert_eq!(
+        protect(&mut sched, pmm, swapped, 1, PROT_READ),
+        Err(MmapError::SwappedUnsupported)
+    );
+    assert!(crate::memory::zram::block_exists(block_id));
+    crate::process::mmap::sys_munmap(swapped, PAGE_SIZE, pmm, &mut sched).unwrap();
+    crate::serial_println!("[MM-2E] swapped anonymous page rejected without swap-in: OK");
+
+    // Four active CPUs pre-touch the mapping. Each protection reduction and
+    // increase must synchronously run the MM-2B remote invalidation handler.
+    let remote = BASE + 0xA0_0000;
+    map_fixed(&mut sched, pmm, remote, 1, PROT_READ | PROT_WRITE);
+    let remote_frame = entry(&sched, remote, hhdm).0;
+    unsafe {
+        (hhdm + remote_frame.as_u64())
+            .as_mut_ptr::<u64>()
+            .write_volatile(VALUE);
+        sched.current_process().address_space.activate();
+    }
+    assert_eq!(unsafe { (remote as *const u64).read_volatile() }, VALUE);
+    let online = crate::sched::ONLINE_CORES.load(Ordering::Acquire);
+    assert_eq!(online, 4, "MM-2E gate requires exactly four online CPUs");
+    let local_cpu = crate::sched::current_cpu_id();
+    let remote_cpus = ((1u64 << online) - 1) & !(1u64 << local_cpu);
+    crate::memory::tlb::test_activate_and_read(
+        sched.current_process().address_space.identity(),
+        remote,
+        remote_cpus,
+    );
+    let invalidations_before = crate::memory::tlb::test_remote_invalidation_count();
+    assert_eq!(protect(&mut sched, pmm, remote, 1, PROT_READ), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, remote, 1, PROT_READ | PROT_EXEC),
+        Ok(())
+    );
+    let invalidations_after = crate::memory::tlb::test_remote_invalidation_count();
+    assert!(invalidations_after - invalidations_before >= remote_cpus.count_ones() as u64 * 2);
+    crate::memory::tlb::test_read(
+        sched.current_process().address_space.identity(),
+        remote,
+        remote_cpus,
+    );
+    for cpu_id in 0..online {
+        if cpu_id != local_cpu {
+            assert_eq!(crate::memory::tlb::test_result(cpu_id), VALUE);
+        }
+    }
+    crate::memory::tlb::test_leave(remote_cpus);
+    unsafe {
+        crate::memory::tlb::activate_kernel_root();
+    }
+    crate::serial_println!("[MM-2E] four CPUs acknowledged writable/NX permission shootdowns: OK");
+
+    // MM-2D remains composable after protection fragmentation, and fixed
+    // remapping followed by protection works again.
+    let remap = BASE + 0xB0_0000;
+    map_fixed(&mut sched, pmm, remap, 4, PROT_READ | PROT_WRITE);
+    protect(&mut sched, pmm, remap + PAGE_SIZE, 2, PROT_READ).unwrap();
+    crate::process::mmap::sys_munmap(remap, 4 * PAGE_SIZE, pmm, &mut sched).unwrap();
+    map_fixed(&mut sched, pmm, remap, 4, PROT_READ | PROT_WRITE);
+    protect(&mut sched, pmm, remap, 4, PROT_READ).unwrap();
+    crate::process::mmap::sys_munmap(remap, 4 * PAGE_SIZE, pmm, &mut sched).unwrap();
+
+    unsafe {
+        sched
+            .current_process_mut()
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), baseline);
+    crate::process::mmap::diagnostic_report();
+    crate::memory::tlb::diagnostic_report();
+    crate::serial_println!("[MM-2E] munmap/remap composition and PMM accounting: OK");
+    crate::serial_println!("[MM-2E] focused mprotect/permission shootdown gate: OK");
+}
+
 fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm: VirtAddr) {
     use crate::process::address_space::{
         ExpectedMapping, MappingError, OwnershipTransition, ReplacementMapping,

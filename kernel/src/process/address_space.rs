@@ -1,7 +1,7 @@
 use crate::memory::pmm::PhysicalMemoryManager;
 use crate::process::mm2b_state::{allocate_identity, AddressSpaceIdentity};
 use crate::process::region::{
-    LedgerError, MappingKind, MappingRegion, RangeLookup, RegionBacking, RegionLedger,
+    LedgerError, MappingKind, MappingRegion, ProtectPlan, RangeLookup, RegionBacking, RegionLedger,
     RegionPolicy, RegionProtection, RegionReservation, UnmapPlan,
 };
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -368,6 +368,16 @@ impl AddressSpace {
             .and_then(|result| result.map_err(Self::map_ledger_error))
     }
 
+    pub fn preflight_protect(
+        &self,
+        start: u64,
+        end: u64,
+        protection: RegionProtection,
+    ) -> Result<ProtectPlan, MappingError> {
+        self.with_ledger(|ledger| ledger.preflight_protect(start, end, protection))
+            .and_then(|result| result.map_err(Self::map_ledger_error))
+    }
+
     /// Publish the ledger image staged before PTE removal. Expected failures
     /// cannot occur here; a concurrent ledger mutation is a fail-stop bug.
     pub fn commit_unmap(&self, plan: UnmapPlan) {
@@ -377,6 +387,18 @@ impl AddressSpace {
         {
             REGION_PTE_CONSISTENCY_FAILURES.fetch_add(1, Ordering::Relaxed);
             panic!("address-space ledger disappeared during munmap commit");
+        }
+    }
+
+    /// Publish protection metadata only after all PTE writes and synchronous
+    /// shootdowns have completed.
+    pub fn commit_protect(&self, plan: ProtectPlan) {
+        if self
+            .with_ledger_mut(|ledger| ledger.commit_protect(plan))
+            .is_err()
+        {
+            REGION_PTE_CONSISTENCY_FAILURES.fetch_add(1, Ordering::Relaxed);
+            panic!("address-space ledger disappeared during mprotect commit");
         }
     }
 
@@ -513,6 +535,7 @@ impl AddressSpace {
                 MappingError::LedgerCapacityExhausted
             }
             LedgerError::InvalidRange => MappingError::InvalidAddress,
+            LedgerError::Hole => MappingError::NotMapped,
             LedgerError::PermissionRejected => MappingError::PermissionRejected,
             LedgerError::PolicyRejected => MappingError::ProtectedRegion,
             LedgerError::StaleReservation
@@ -819,6 +842,50 @@ impl AddressSpace {
         entry.set_addr(frame, flags);
         crate::memory::tlb::invalidate_page(self.identity, page.start_address());
         Ok(())
+    }
+
+    /// Replace only W/NX permission bits if the present leaf still has the
+    /// exact frame and flags established by mprotect preflight. The caller is
+    /// responsible for a synchronous batched shootdown before publishing
+    /// software protection metadata.
+    /// SAFETY: `hhdm_offset` must be the correct HHDM base.
+    pub unsafe fn update_permissions_expected(
+        &mut self,
+        page: Page<Size4KiB>,
+        expected_frame: PhysAddr,
+        expected_flags: PageTableFlags,
+        protection: RegionProtection,
+        hhdm_offset: VirtAddr,
+    ) -> Result<bool, MappingError> {
+        let desired = Self::protection_to_pte_flags(protection)?;
+        let entry = &mut *self
+            .p1_entry_ptr(page, hhdm_offset)
+            .ok_or(MappingError::NotMapped)?;
+        if entry.addr() != expected_frame
+            || entry.flags() != expected_flags
+            || !expected_flags.contains(PageTableFlags::PRESENT)
+            || !expected_flags.contains(PageTableFlags::USER_ACCESSIBLE)
+        {
+            return Err(MappingError::UnsupportedReplacement);
+        }
+
+        let permission_bits = PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
+        let mut replacement = expected_flags;
+        replacement.remove(permission_bits);
+        replacement |= desired & permission_bits;
+        if replacement == expected_flags {
+            return Ok(false);
+        }
+        if replacement.contains(PageTableFlags::WRITABLE)
+            && !replacement.contains(PageTableFlags::NO_EXECUTE)
+        {
+            return Err(MappingError::PermissionRejected);
+        }
+        entry.set_addr(expected_frame, replacement);
+        if entry.addr() != expected_frame {
+            return Err(MappingError::InternalInvariant);
+        }
+        Ok(true)
     }
 
     /// Walk to the leaf (P1) entry for `page`, returning a raw pointer to it

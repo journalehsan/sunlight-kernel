@@ -445,7 +445,10 @@ pub extern "C" fn _start() -> ! {
             splash.log("[SMP] Single CPU mode");
         }
     }
-    #[cfg(all(feature = "mm2b_smp_test", not(feature = "mm2d_munmap_test")))]
+    #[cfg(all(
+        feature = "mm2b_smp_test",
+        not(any(feature = "mm2d_munmap_test", feature = "mm2e_mprotect_test"))
+    ))]
     crate::memory::tlb::run_smp_regression_gate(hhdm_offset);
     serial_println!(
         "[MM-0] NXE active on {} CPU(s)",
@@ -2116,6 +2119,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     {
         let mut pmm = PMM.lock();
         memory::security::run_mm2d_munmap_gate(&mut pmm, hhdm_offset);
+    }
+    #[cfg(feature = "mm2e_mprotect_test")]
+    {
+        let mut pmm = PMM.lock();
+        memory::security::run_mm2e_mprotect_gate(&mut pmm, hhdm_offset);
     }
 
     // 1. Token forge: a token that was never minted must be rejected as NotFound.

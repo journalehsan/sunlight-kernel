@@ -1,0 +1,7 @@
+[MM-2E] R/RW/RX transitions, frames, contents, and MM-1 copies: OK
+[MM-2E] middle/prefix/suffix splits and compatible merge: OK
+[MM-2E] holes, policy, flags, errors, and capacity are atomic: OK
+[MM-2E] swapped anonymous page rejected without swap-in: OK
+[MM-2E] four CPUs acknowledged writable/NX permission shootdowns: OK
+[MM-2E] munmap/remap composition and PMM accounting: OK
+[MM-2E] focused mprotect/permission shootdown gate: OK

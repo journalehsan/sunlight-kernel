@@ -207,6 +207,12 @@ case "$PHASE" in
         PASS_LABEL="MM-2D Anonymous Munmap"
         NEED_DISK=false
         ;;
+    mm2e)
+        EXPECTED_FILE="tools/tests/mm2e.expected"
+        FINAL_MARKER="[MM-2E] focused mprotect/permission shootdown gate: OK"
+        PASS_LABEL="MM-2E Anonymous Mprotect"
+        NEED_DISK=false
+        ;;
     top)
         EXPECTED_FILE="tools/tests/top.expected"
         FINAL_MARKER="[TOP] rendering"
@@ -214,7 +220,7 @@ case "$PHASE" in
         NEED_DISK=false
         ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b mm2d sunlightd top"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b mm2d mm2e sunlightd top"
         exit 2
         ;;
 esac
@@ -299,6 +305,8 @@ elif [[ "$PHASE" == "mm2b" ]]; then
     KERNEL_FEATURES="--features mm2b_smp_test"
 elif [[ "$PHASE" == "mm2d" ]]; then
     KERNEL_FEATURES="--features mm2d_munmap_test"
+elif [[ "$PHASE" == "mm2e" ]]; then
+    KERNEL_FEATURES="--features mm2e_mprotect_test"
 fi
 EXTRA_ENV=()
 if [[ "$PHASE" == "phase3.9" ]]; then
@@ -376,6 +384,8 @@ QEMU_SMP=2
 if [[ "$PHASE" == "mm2b" ]]; then
     QEMU_SMP=12
 elif [[ "$PHASE" == "mm2d" ]]; then
+    QEMU_SMP=4
+elif [[ "$PHASE" == "mm2e" ]]; then
     QEMU_SMP=4
 fi
 qemu-system-x86_64 \

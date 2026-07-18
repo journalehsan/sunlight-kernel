@@ -169,6 +169,7 @@ pub enum LedgerError {
     TooManyPending,
     StaleReservation,
     ExactRecordNotFound,
+    Hole,
     Inconsistent,
 }
 
@@ -188,6 +189,13 @@ pub struct UnmapPlan {
     records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
     len: usize,
     effects: UnmapEffects,
+}
+
+/// Complete fixed-capacity ledger image staged before an mprotect publishes
+/// any PTE permission changes.
+pub struct ProtectPlan {
+    records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+    len: usize,
 }
 
 impl UnmapPlan {
@@ -403,6 +411,93 @@ impl RegionLedger {
         debug_assert_eq!(self.validate(), Ok(()));
     }
 
+    /// Resolve and stage a fully covered, policy-authorized anonymous
+    /// protection change. Splits and compatible merges are computed into the
+    /// final bounded image, so no capacity decision remains after PTE writes.
+    pub fn preflight_protect(
+        &self,
+        start: u64,
+        end: u64,
+        protection: RegionProtection,
+    ) -> Result<ProtectPlan, LedgerError> {
+        let requested = MappingRegion::new(
+            start,
+            end,
+            protection,
+            MappingKind::InternalUserMapping,
+            RegionPolicy::empty(),
+            RegionBacking::None,
+        )?;
+        if self.pending_len != 0 {
+            return Err(LedgerError::Inconsistent);
+        }
+
+        // Authorize the entire range first. A gap or protected record rejects
+        // the request before the staging pass makes a capacity decision.
+        let mut covered_end = requested.start;
+        for region in self.records[..self.len].iter().copied() {
+            if region.end <= requested.start {
+                continue;
+            }
+            if region.start >= requested.end {
+                break;
+            }
+            if region.start > covered_end {
+                return Err(LedgerError::Hole);
+            }
+            if region.kind != MappingKind::Anonymous
+                || !region.policy.contains(RegionPolicy::MAY_CHANGE_PROTECTION)
+            {
+                return Err(LedgerError::PolicyRejected);
+            }
+            covered_end = region.end.min(requested.end);
+        }
+        if covered_end != requested.end {
+            return Err(LedgerError::Hole);
+        }
+
+        let mut records = [MappingRegion::EMPTY; MAX_REGIONS_PER_ADDRESS_SPACE];
+        let mut output = 0usize;
+        for region in self.records[..self.len].iter().copied() {
+            let overlap_start = region.start.max(requested.start);
+            let overlap_end = region.end.min(requested.end);
+            if overlap_start >= overlap_end {
+                Self::append_staged(&mut records, &mut output, region)?;
+                continue;
+            }
+
+            if region.start < overlap_start {
+                let mut left = region;
+                left.end = overlap_start;
+                Self::append_staged(&mut records, &mut output, left)?;
+            }
+            let mut protected = region;
+            protected.start = overlap_start;
+            protected.end = overlap_end;
+            protected.protection = protection;
+            Self::append_staged(&mut records, &mut output, protected)?;
+            if overlap_end < region.end {
+                let mut right = region;
+                right.start = overlap_end;
+                Self::append_staged(&mut records, &mut output, right)?;
+            }
+        }
+
+        Ok(ProtectPlan {
+            records,
+            len: output,
+        })
+    }
+
+    /// Publish a fully staged protection layout. The scheduler serializes
+    /// mapping transactions, and preflight rejects pending insertions.
+    pub fn commit_protect(&mut self, plan: ProtectPlan) {
+        assert_eq!(self.pending_len, 0, "ledger changed during staged mprotect");
+        self.records = plan.records;
+        self.len = plan.len;
+        debug_assert_eq!(self.validate(), Ok(()));
+    }
+
     pub fn replace_backing(
         &mut self,
         start: u64,
@@ -560,6 +655,26 @@ impl RegionLedger {
         self.records[index] = region;
         self.len += 1;
         Ok(region)
+    }
+
+    fn append_staged(
+        records: &mut [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+        len: &mut usize,
+        region: MappingRegion,
+    ) -> Result<(), LedgerError> {
+        if *len != 0 {
+            let previous = records[*len - 1];
+            if previous.end == region.start && previous.compatible_for_merge(region) {
+                records[*len - 1].end = region.end;
+                return Ok(());
+            }
+        }
+        if *len == MAX_REGIONS_PER_ADDRESS_SPACE {
+            return Err(LedgerError::CapacityExhausted);
+        }
+        records[*len] = region;
+        *len += 1;
+        Ok(())
     }
 
     fn remove_committed(&mut self, index: usize) {

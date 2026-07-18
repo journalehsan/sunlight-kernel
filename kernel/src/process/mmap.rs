@@ -31,6 +31,7 @@ pub enum MmapError {
     Protected,
     AlreadyMapped,
     Unsupported,
+    SwappedUnsupported,
     InternalInvariant,
 }
 
@@ -39,6 +40,16 @@ pub const fn munmap_linux_errno(error: MmapError) -> i32 {
         MmapError::NoMemory => 12,
         MmapError::PermissionDenied | MmapError::Protected => 13,
         MmapError::InternalInvariant => 14,
+        _ => 22,
+    }
+}
+
+pub const fn mprotect_linux_errno(error: MmapError) -> i32 {
+    match error {
+        MmapError::NoMemory => 12,
+        MmapError::PermissionDenied | MmapError::Protected => 13,
+        MmapError::InternalInvariant => 14,
+        MmapError::Unsupported | MmapError::SwappedUnsupported => 95,
         _ => 22,
     }
 }
@@ -56,7 +67,44 @@ static MUNMAP_CAPACITY_REJECTIONS: AtomicU64 = AtomicU64::new(0);
 static MUNMAP_SWAPPED_RELEASED: AtomicU64 = AtomicU64::new(0);
 static MUNMAP_INVARIANT_FAILURES: AtomicU64 = AtomicU64::new(0);
 
+static MPROTECT_REQUESTS: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_SUCCESSES: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_NOOPS: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_PAGES_CHANGED: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_RW_TO_R: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_RW_TO_RX: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_R_TO_RW: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_R_TO_RX: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_RX_TO_R: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_RX_TO_RW: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_WX_REJECTIONS: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_PROTECTED_REJECTIONS: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_HOLE_REJECTIONS: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_SWAPPED_REJECTIONS: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_NONE_REJECTIONS: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_CAPACITY_FAILURES: AtomicU64 = AtomicU64::new(0);
+static MPROTECT_INVARIANT_FAILURES: AtomicU64 = AtomicU64::new(0);
+
 const MUNMAP_CHUNK_PAGES: u64 = crate::memory::tlb::RANGE_FLUSH_PAGE_THRESHOLD;
+const MPROTECT_CHUNK_PAGES: usize = crate::memory::tlb::RANGE_FLUSH_PAGE_THRESHOLD as usize;
+
+#[derive(Clone, Copy)]
+struct ProtectionPage {
+    address: u64,
+    frame: PhysAddr,
+    flags: PageTableFlags,
+    old: RegionProtection,
+}
+
+#[derive(Default)]
+struct ProtectionTransitions {
+    rw_to_r: u64,
+    rw_to_rx: u64,
+    r_to_rw: u64,
+    r_to_rx: u64,
+    rx_to_r: u64,
+    rx_to_rw: u64,
+}
 
 #[derive(Clone, Copy)]
 enum RemovedOwnership {
@@ -94,13 +142,54 @@ pub fn diagnostic_report() {
         MUNMAP_SWAPPED_RELEASED.load(Ordering::Relaxed),
         MUNMAP_INVARIANT_FAILURES.load(Ordering::Relaxed),
     );
+    crate::serial_println!(
+        "[MM-2E-DIAG] requests={} successes={} noops={} pages={} rw_r={} rw_rx={} r_rw={} r_rx={} rx_r={} rx_rw={} wx={} protected={} holes={} swapped={} prot_none={} capacity={} invariant_failures={}",
+        MPROTECT_REQUESTS.load(Ordering::Relaxed),
+        MPROTECT_SUCCESSES.load(Ordering::Relaxed),
+        MPROTECT_NOOPS.load(Ordering::Relaxed),
+        MPROTECT_PAGES_CHANGED.load(Ordering::Relaxed),
+        MPROTECT_RW_TO_R.load(Ordering::Relaxed),
+        MPROTECT_RW_TO_RX.load(Ordering::Relaxed),
+        MPROTECT_R_TO_RW.load(Ordering::Relaxed),
+        MPROTECT_R_TO_RX.load(Ordering::Relaxed),
+        MPROTECT_RX_TO_R.load(Ordering::Relaxed),
+        MPROTECT_RX_TO_RW.load(Ordering::Relaxed),
+        MPROTECT_WX_REJECTIONS.load(Ordering::Relaxed),
+        MPROTECT_PROTECTED_REJECTIONS.load(Ordering::Relaxed),
+        MPROTECT_HOLE_REJECTIONS.load(Ordering::Relaxed),
+        MPROTECT_SWAPPED_REJECTIONS.load(Ordering::Relaxed),
+        MPROTECT_NONE_REJECTIONS.load(Ordering::Relaxed),
+        MPROTECT_CAPACITY_FAILURES.load(Ordering::Relaxed),
+        MPROTECT_INVARIANT_FAILURES.load(Ordering::Relaxed),
+    );
 }
 
-fn prot_to_protection(prot: u32) -> Result<RegionProtection, MmapError> {
+/// Normalize the ABI protection request to what ordinary x86_64 page tables
+/// can enforce without protection keys. Write-only becomes RW and
+/// execute-only becomes RX; PROT_NONE remains unsupported in MM-2E.
+fn normalize_protection(prot: u32) -> Result<RegionProtection, MmapError> {
+    if prot & !(PROT_READ | PROT_WRITE | PROT_EXEC) != 0 {
+        return Err(MmapError::InvalidProt);
+    }
+    if prot == PROT_NONE {
+        return Err(MmapError::Unsupported);
+    }
+    if prot & PROT_WRITE != 0 && prot & PROT_EXEC != 0 {
+        return Err(MmapError::PermissionDenied);
+    }
+    let protection = if prot & PROT_EXEC != 0 {
+        RegionProtection::READ_EXECUTE
+    } else if prot & PROT_WRITE != 0 {
+        RegionProtection::READ_WRITE
+    } else {
+        RegionProtection::READ_ONLY
+    };
+    // Keep RegionProtection and the architecture PTE conversion as the
+    // authoritative W^X validators even after ABI normalization.
     RegionProtection::new(
-        prot & PROT_READ != 0,
-        prot & PROT_WRITE != 0,
-        prot & PROT_EXEC != 0,
+        protection.readable(),
+        protection.writable(),
+        protection.executable(),
     )
     .map_err(|_| MmapError::PermissionDenied)
 }
@@ -153,13 +242,13 @@ fn map_anonymous_kind(
     sched: &mut Scheduler,
     kind: MappingKind,
 ) -> Result<u64, MmapError> {
-    if (prot & (PROT_WRITE | PROT_EXEC)) == (PROT_WRITE | PROT_EXEC) {
-        crate::memory::security::note_rwx_mapping_rejected();
-        return Err(MmapError::PermissionDenied);
-    }
-    if prot & !(PROT_READ | PROT_WRITE | PROT_EXEC) != 0 {
-        return Err(MmapError::InvalidProt);
-    }
+    let protection = match normalize_protection(prot) {
+        Err(MmapError::PermissionDenied) => {
+            crate::memory::security::note_rwx_mapping_rejected();
+            return Err(MmapError::PermissionDenied);
+        }
+        result => result?,
+    };
 
     if flags & !(MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED) != 0 {
         return Err(MmapError::InvalidFlags);
@@ -204,7 +293,6 @@ fn map_anonymous_kind(
         return Err(MmapError::InvalidAddress);
     }
 
-    let protection = prot_to_protection(prot)?;
     let page_flags =
         crate::process::address_space::AddressSpace::protection_to_pte_flags(protection)
             .map_err(|_| MmapError::PermissionDenied)?;
@@ -625,9 +713,257 @@ fn munmap_invariant_failure(message: &str) -> ! {
     panic!("MM-2D munmap invariant failure: {message}");
 }
 
-/// Change memory protection (stub for now)
-pub fn sys_mprotect(_addr: u64, _length: u64, _prot: u32) -> Result<(), MmapError> {
-    Err(MmapError::Unsupported)
+/// Change protection on fully present, policy-authorized anonymous mappings.
+pub fn sys_mprotect(
+    addr: u64,
+    length: u64,
+    prot: u32,
+    pmm: &PhysicalMemoryManager,
+    sched: &mut Scheduler,
+) -> Result<(), MmapError> {
+    MPROTECT_REQUESTS.fetch_add(1, Ordering::Relaxed);
+    if addr & 0xfff != 0 {
+        return Err(MmapError::InvalidAddress);
+    }
+    crate::memory::user::UserRange::new(addr, 0).map_err(|_| MmapError::InvalidAddress)?;
+    let protection = match normalize_protection(prot) {
+        Err(MmapError::PermissionDenied) => {
+            crate::memory::security::note_rwx_mapping_rejected();
+            MPROTECT_WX_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::PermissionDenied);
+        }
+        Err(MmapError::Unsupported) => {
+            MPROTECT_NONE_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::Unsupported);
+        }
+        result => result?,
+    };
+    // Linux performs the aligned zero-length fast path without consulting the
+    // mapping. We still require a supported protection request above.
+    if length == 0 {
+        MPROTECT_NOOPS.fetch_add(1, Ordering::Relaxed);
+        return Ok(());
+    }
+
+    let (page_count, span) = checked_page_layout(length).map_err(|_| MmapError::InvalidAddress)?;
+    let span_usize = usize::try_from(span).map_err(|_| MmapError::InvalidAddress)?;
+    crate::memory::user::UserRange::new(addr, span_usize).map_err(|_| MmapError::InvalidAddress)?;
+    let end = addr.checked_add(span).ok_or(MmapError::InvalidAddress)?;
+    let hhdm_offset = crate::HHDM_REQ
+        .response()
+        .map(|response| VirtAddr::new(response.offset))
+        .ok_or(MmapError::InternalInvariant)?;
+
+    // Resolve full ledger coverage and policy before inspecting a leaf. This
+    // walk does not retain the terminal ledger lock.
+    let mut covered = addr;
+    while covered < end {
+        let Some(region) = sched.current_process().address_space.lookup_region(covered) else {
+            MPROTECT_HOLE_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::NoMemory);
+        };
+        if region.kind != MappingKind::Anonymous
+            || !region.policy.contains(RegionPolicy::MAY_CHANGE_PROTECTION)
+        {
+            MPROTECT_PROTECTED_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::Protected);
+        }
+        covered = region.end.min(end);
+    }
+
+    // Retain the complete expected leaf image so no PTE changes until every
+    // page is proven present, user accessible, owned by the anonymous mapping,
+    // and consistent with its ledger protection.
+    let page_count_usize = usize::try_from(page_count).map_err(|_| MmapError::InvalidAddress)?;
+    let mut pages = Vec::new();
+    pages
+        .try_reserve_exact(page_count_usize)
+        .map_err(|_| MmapError::NoMemory)?;
+    let mut address = addr;
+    while address < end {
+        let region = sched
+            .current_process()
+            .address_space
+            .lookup_region(address)
+            .ok_or_else(|| {
+                MPROTECT_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+                MmapError::InternalInvariant
+            })?;
+        pages.push(preflight_protection_leaf(
+            &sched.current_process().address_space,
+            address,
+            region,
+            pmm,
+            hhdm_offset,
+        )?);
+        address = address.checked_add(4096).ok_or(MmapError::InvalidAddress)?;
+    }
+
+    // Construct the exact post-change ledger image only after the complete PTE
+    // preflight. Capacity and policy errors still occur before the first write.
+    let plan = match sched
+        .current_process()
+        .address_space
+        .preflight_protect(addr, end, protection)
+    {
+        Ok(plan) => plan,
+        Err(MappingError::NotMapped) => {
+            MPROTECT_HOLE_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::NoMemory);
+        }
+        Err(MappingError::ProtectedRegion) => {
+            MPROTECT_PROTECTED_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::Protected);
+        }
+        Err(MappingError::LedgerCapacityExhausted) => {
+            MPROTECT_CAPACITY_FAILURES.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::NoMemory);
+        }
+        Err(_) => return mprotect_invariant_rejection(),
+    };
+
+    let changed_pages = pages.iter().filter(|page| page.old != protection).count();
+    if changed_pages == 0 {
+        MPROTECT_NOOPS.fetch_add(1, Ordering::Relaxed);
+        return Ok(());
+    }
+
+    let identity = sched.current_process().address_space.identity();
+    let mut transitions = ProtectionTransitions::default();
+    for chunk in pages.chunks(MPROTECT_CHUNK_PAGES) {
+        let mut chunk_changed = false;
+        for expected in chunk {
+            if expected.old == protection {
+                continue;
+            }
+            let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(expected.address))
+                .unwrap_or_else(|_| mprotect_invariant_failure("preflighted page lost alignment"));
+            let updated = unsafe {
+                sched
+                    .current_process_mut()
+                    .address_space
+                    .update_permissions_expected(
+                        page,
+                        expected.frame,
+                        expected.flags,
+                        protection,
+                        hhdm_offset,
+                    )
+            }
+            .unwrap_or_else(|_| {
+                mprotect_invariant_failure("leaf changed after complete preflight")
+            });
+            if !updated {
+                mprotect_invariant_failure("changed protection produced identical PTE flags");
+            }
+            note_transition(&mut transitions, expected.old, protection);
+            chunk_changed = true;
+        }
+        if chunk_changed
+            && crate::memory::tlb::invalidate_range(identity, chunk[0].address, chunk.len() as u64)
+                .is_err()
+        {
+            mprotect_invariant_failure("validated chunk was rejected by shootdown");
+        }
+    }
+
+    sched.current_process().address_space.commit_protect(plan);
+    if !unsafe {
+        sched
+            .current_process()
+            .address_space
+            .validate_ledger_ptes(hhdm_offset)
+    } {
+        mprotect_invariant_failure("ledger/PTE validation failed after commit");
+    }
+
+    MPROTECT_SUCCESSES.fetch_add(1, Ordering::Relaxed);
+    MPROTECT_PAGES_CHANGED.fetch_add(changed_pages as u64, Ordering::Relaxed);
+    MPROTECT_RW_TO_R.fetch_add(transitions.rw_to_r, Ordering::Relaxed);
+    MPROTECT_RW_TO_RX.fetch_add(transitions.rw_to_rx, Ordering::Relaxed);
+    MPROTECT_R_TO_RW.fetch_add(transitions.r_to_rw, Ordering::Relaxed);
+    MPROTECT_R_TO_RX.fetch_add(transitions.r_to_rx, Ordering::Relaxed);
+    MPROTECT_RX_TO_R.fetch_add(transitions.rx_to_r, Ordering::Relaxed);
+    MPROTECT_RX_TO_RW.fetch_add(transitions.rx_to_rw, Ordering::Relaxed);
+    Ok(())
+}
+
+fn preflight_protection_leaf(
+    address_space: &crate::process::address_space::AddressSpace,
+    address: u64,
+    region: MappingRegion,
+    pmm: &PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Result<ProtectionPage, MmapError> {
+    let owner = match (region.kind, region.policy, region.backing) {
+        (MappingKind::Anonymous, policy, RegionBacking::AnonymousOwner(owner))
+            if policy.contains(RegionPolicy::MAY_CHANGE_PROTECTION) =>
+        {
+            owner
+        }
+        _ => return mprotect_invariant_rejection(),
+    };
+    let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address))
+        .map_err(|_| MmapError::InternalInvariant)?;
+    let Some((frame_or_marker, flags)) = (unsafe { address_space.lookup_entry(page, hhdm_offset) })
+    else {
+        return mprotect_invariant_rejection();
+    };
+    if !flags.contains(PageTableFlags::PRESENT) {
+        if let Some(block_id) = unsafe { address_space.swapped_block_id(page, hhdm_offset) } {
+            if !crate::memory::zram::block_exists(block_id as usize) {
+                return mprotect_invariant_rejection();
+            }
+            MPROTECT_SWAPPED_REJECTIONS.fetch_add(1, Ordering::Relaxed);
+            return Err(MmapError::SwappedUnsupported);
+        }
+        return mprotect_invariant_rejection();
+    }
+    if !flags.contains(PageTableFlags::USER_ACCESSIBLE)
+        || pmm.owner_of(frame_or_marker) != Some(owner)
+    {
+        return mprotect_invariant_rejection();
+    }
+    let actual = crate::process::address_space::AddressSpace::protection_from_pte_flags(flags)
+        .map_err(|_| {
+            MPROTECT_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+            MmapError::InternalInvariant
+        })?;
+    if actual != region.protection {
+        return mprotect_invariant_rejection();
+    }
+    Ok(ProtectionPage {
+        address,
+        frame: frame_or_marker,
+        flags,
+        old: actual,
+    })
+}
+
+fn note_transition(
+    transitions: &mut ProtectionTransitions,
+    old: RegionProtection,
+    new: RegionProtection,
+) {
+    match (old, new) {
+        (RegionProtection::READ_WRITE, RegionProtection::READ_ONLY) => transitions.rw_to_r += 1,
+        (RegionProtection::READ_WRITE, RegionProtection::READ_EXECUTE) => transitions.rw_to_rx += 1,
+        (RegionProtection::READ_ONLY, RegionProtection::READ_WRITE) => transitions.r_to_rw += 1,
+        (RegionProtection::READ_ONLY, RegionProtection::READ_EXECUTE) => transitions.r_to_rx += 1,
+        (RegionProtection::READ_EXECUTE, RegionProtection::READ_ONLY) => transitions.rx_to_r += 1,
+        (RegionProtection::READ_EXECUTE, RegionProtection::READ_WRITE) => transitions.rx_to_rw += 1,
+        _ => mprotect_invariant_failure("unsupported protection transition"),
+    }
+}
+
+fn mprotect_invariant_rejection<T>() -> Result<T, MmapError> {
+    MPROTECT_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+    Err(MmapError::InternalInvariant)
+}
+
+fn mprotect_invariant_failure(message: &str) -> ! {
+    MPROTECT_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
+    panic!("MM-2E mprotect invariant failure: {message}");
 }
 
 /// Remap memory (stub for now)

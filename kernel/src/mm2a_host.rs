@@ -288,4 +288,118 @@ mod tests {
             assert_eq!(ledger.record_at(0), Some(protected));
         }
     }
+
+    #[test]
+    fn mprotect_middle_prefix_suffix_and_merge_layouts() {
+        let original = anonymous(0x2000, 0x7000);
+        let mut middle = RegionLedger::new();
+        insert(&mut middle, original);
+        let plan = middle
+            .preflight_protect(0x4000, 0x5000, RegionProtection::READ_ONLY)
+            .unwrap();
+        middle.commit_protect(plan);
+        assert_eq!(middle.len(), 3);
+        assert_eq!(middle.record_at(0).unwrap().end, 0x4000);
+        assert_eq!(
+            middle.record_at(1).unwrap().protection,
+            RegionProtection::READ_ONLY
+        );
+        assert_eq!(middle.record_at(2).unwrap().start, 0x5000);
+        for fragment in [
+            middle.record_at(0).unwrap(),
+            middle.record_at(1).unwrap(),
+            middle.record_at(2).unwrap(),
+        ] {
+            assert_eq!(fragment.kind, original.kind);
+            assert_eq!(fragment.policy, original.policy);
+            assert_eq!(fragment.backing, original.backing);
+        }
+
+        let plan = middle
+            .preflight_protect(0x2000, 0x4000, RegionProtection::READ_ONLY)
+            .unwrap();
+        middle.commit_protect(plan);
+        assert_eq!(middle.len(), 2);
+        assert_eq!(middle.record_at(0).unwrap().start, 0x2000);
+        assert_eq!(middle.record_at(0).unwrap().end, 0x5000);
+
+        let plan = middle
+            .preflight_protect(0x5000, 0x7000, RegionProtection::READ_ONLY)
+            .unwrap();
+        middle.commit_protect(plan);
+        assert_eq!(middle.len(), 1);
+        assert_eq!(
+            middle.record_at(0).unwrap().protection,
+            RegionProtection::READ_ONLY
+        );
+
+        let plan = middle
+            .preflight_protect(0x2000, 0x7000, RegionProtection::READ_WRITE)
+            .unwrap();
+        middle.commit_protect(plan);
+        assert_eq!(middle.len(), 1);
+        assert_eq!(middle.record_at(0), Some(original));
+        assert_eq!(middle.validate(), Ok(()));
+    }
+
+    #[test]
+    fn mprotect_capacity_hole_and_policy_failures_are_atomic() {
+        let mut full = RegionLedger::new();
+        for index in 0..MAX_REGIONS_PER_ADDRESS_SPACE {
+            let start = 0x1000 + index as u64 * 0x4000;
+            let length = if index == 0 { 0x3000 } else { 0x1000 };
+            let region = if index == 0 {
+                anonymous(start, start + length)
+            } else {
+                MappingRegion::new(
+                    start,
+                    start + length,
+                    RegionProtection::READ_ONLY,
+                    MappingKind::InternalUserMapping,
+                    RegionPolicy::SYSTEM,
+                    RegionBacking::Internal(index as u64),
+                )
+                .unwrap()
+            };
+            insert(&mut full, region);
+        }
+        let original = full.record_at(0).unwrap();
+        assert!(matches!(
+            full.preflight_protect(
+                original.start + 0x1000,
+                original.end - 0x1000,
+                RegionProtection::READ_ONLY,
+            ),
+            Err(LedgerError::CapacityExhausted)
+        ));
+        assert_eq!(full.record_at(0), Some(original));
+        assert_eq!(full.len(), MAX_REGIONS_PER_ADDRESS_SPACE);
+
+        let mut holes = RegionLedger::new();
+        insert(&mut holes, anonymous(0x1000, 0x2000));
+        insert(&mut holes, anonymous(0x3000, 0x4000));
+        assert!(matches!(
+            holes.preflight_protect(0x1000, 0x4000, RegionProtection::READ_ONLY),
+            Err(LedgerError::Hole)
+        ));
+        assert_eq!(holes.len(), 2);
+
+        let mut protected = RegionLedger::new();
+        insert(&mut protected, anonymous(0x1000, 0x2000));
+        let stack = MappingRegion::new(
+            0x2000,
+            0x3000,
+            RegionProtection::READ_WRITE,
+            MappingKind::UserStack,
+            RegionPolicy::SYSTEM,
+            RegionBacking::None,
+        )
+        .unwrap();
+        insert(&mut protected, stack);
+        assert!(matches!(
+            protected.preflight_protect(0x1000, 0x3000, RegionProtection::READ_ONLY),
+            Err(LedgerError::PolicyRejected)
+        ));
+        assert_eq!(protected.record_at(1), Some(stack));
+    }
 }
