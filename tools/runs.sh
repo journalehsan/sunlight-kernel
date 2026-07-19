@@ -24,6 +24,13 @@ Usage: $0 [OPTIONS]
 
 Build Options:
   -b, --build           Rebuild kernel + services before launching
+                        (produces a hybrid BIOS+UEFI ISO)
+
+Firmware (QEMU only):
+  (default)             Legacy BIOS / SeaBIOS
+  --uefi                Boot with OVMF (x86_64 UEFI). Paths via
+                        SUNLIGHT_OVMF_CODE / SUNLIGHT_OVMF_VARS or common
+                        distro locations; writable VARS at target/ovmf_vars.fd
 
 Hypervisor:
   (default)             QEMU/KVM (all options below apply)
@@ -66,6 +73,8 @@ Other:
 
 Examples:
   $0 --build
+  $0 --build --uefi --no-display
+  $0 --uefi --sdl
   $0 --vmware
   $0 --vmware --build
   $0 --vmware-vm ~/vms/SunlightOS.vmx
@@ -101,11 +110,16 @@ VMWARE_MODE=false
 VMWARE_VM_PATH="${SUNLIGHT_VMWARE_VM:-$HOME/vmware/SunlightOS/SunlightOS.vmx}"
 VBOX_MODE=false
 VBOX_VM_NAME="SunlightOS"
+UEFI_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -b|--build)
             BUILD_FIRST=true
+            shift
+            ;;
+        --uefi)
+            UEFI_MODE=true
             shift
             ;;
         --vmware)
@@ -330,26 +344,12 @@ if [ "$BUILD_FIRST" = true ]; then
     touch "$PROJECT_ROOT/kernel/src/main.rs"
     cargo build --package sunlight-kernel
 
-    LIMINE_DIR="$PROJECT_ROOT/target/limine"
-    "$SCRIPT_DIR/setup_limine.sh" "$LIMINE_DIR" "v8.x"
-
-    LIMINE_DIR="$PROJECT_ROOT/target/limine"
     KERNEL_ELF="$PROJECT_ROOT/target/x86_64-unknown-none/debug/sunlight-kernel"
-    ISO_ROOT="$PROJECT_ROOT/target/iso_root"
-    rm -rf "$ISO_ROOT"
-    mkdir -p "$ISO_ROOT/boot/limine"
-    cp "$KERNEL_ELF" "$ISO_ROOT/boot/sunlight-kernel.elf"
-    cp "$PROJECT_ROOT/limine.conf" "$ISO_ROOT/boot/limine/"
-    cp "$LIMINE_DIR/bin/limine-bios.sys" "$ISO_ROOT/boot/limine/"
-    cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
-    cp "$LIMINE_DIR/bin/BOOTX64.EFI" "$ISO_ROOT/boot/limine/"
-    xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
-        -no-emul-boot -boot-load-size 4 -boot-info-table \
-        --efi-boot boot/limine/BOOTX64.EFI \
-        -efi-boot-part --efi-boot-image --protective-msdos-label \
-        "$ISO_ROOT" -o "$ISO_PATH" 2>/dev/null
-    "$LIMINE_DIR/bin/limine" bios-install "$ISO_PATH"
-    echo -e "${GREEN}✓${NC} Build complete"
+    LIMINE_DIR="$PROJECT_ROOT/target/limine"
+    echo -e "${YELLOW}Building hybrid ISO (BIOS + UEFI)...${NC}"
+    LIMINE_BRANCH=v8.x "$SCRIPT_DIR/make_hybrid_iso.sh" \
+        "$KERNEL_ELF" "$ISO_PATH" "$LIMINE_DIR" "$PROJECT_ROOT"
+    echo -e "${GREEN}✓${NC} Build complete (hybrid BIOS+UEFI ISO)"
 fi
 
 if [ ! -f "$ISO_PATH" ]; then
@@ -430,6 +430,50 @@ if [[ -n "$QEMU_RESOLUTION" ]]; then
         <<<"$(sunlight_parse_resolution "$QEMU_RESOLUTION")"
 fi
 
+resolve_ovmf_firmware() {
+    # Prefer explicit env overrides, then common distro layouts.
+    local code_candidates=(
+        "${SUNLIGHT_OVMF_CODE:-}"
+        /usr/share/OVMF/OVMF_CODE.fd
+        /usr/share/OVMF/OVMF_CODE_4M.fd
+        /usr/share/edk2/x64/OVMF_CODE.4m.fd
+        /usr/share/edk2-ovmf/x64/OVMF_CODE.fd
+        /usr/share/edk2-ovmf/OVMF_CODE.fd
+        /usr/share/qemu/OVMF_CODE.fd
+    )
+    local vars_candidates=(
+        "${SUNLIGHT_OVMF_VARS:-}"
+        /usr/share/OVMF/OVMF_VARS.fd
+        /usr/share/OVMF/OVMF_VARS_4M.fd
+        /usr/share/edk2/x64/OVMF_VARS.4m.fd
+        /usr/share/edk2-ovmf/x64/OVMF_VARS.fd
+        /usr/share/edk2-ovmf/OVMF_VARS.fd
+        /usr/share/qemu/OVMF_VARS.fd
+    )
+    local c v
+    OVMF_CODE=""
+    OVMF_VARS=""
+    for c in "${code_candidates[@]}"; do
+        [[ -n "$c" && -f "$c" ]] && OVMF_CODE="$c" && break
+    done
+    for v in "${vars_candidates[@]}"; do
+        [[ -n "$v" && -f "$v" ]] && OVMF_VARS="$v" && break
+    done
+    if [[ -z "$OVMF_CODE" || -z "$OVMF_VARS" ]]; then
+        echo -e "${RED}✗ Error: OVMF firmware not found for --uefi${NC}"
+        echo -e "${YELLOW}  Install OVMF/edk2 firmware, or set:${NC}"
+        echo -e "${YELLOW}    SUNLIGHT_OVMF_CODE=/path/to/OVMF_CODE.fd${NC}"
+        echo -e "${YELLOW}    SUNLIGHT_OVMF_VARS=/path/to/OVMF_VARS.fd${NC}"
+        echo -e "${YELLOW}  Searched under /usr/share/OVMF, /usr/share/edk2, /usr/share/edk2-ovmf, /usr/share/qemu${NC}"
+        exit 1
+    fi
+}
+
+if { [ "$VMWARE_MODE" = true ] || [ "$VBOX_MODE" = true ]; } && [ "$UEFI_MODE" = true ]; then
+    echo -e "${YELLOW}Warning:${NC} --uefi is QEMU-only and is ignored for VMware/VirtualBox"
+    UEFI_MODE=false
+fi
+
 QEMU_CMD=(
     qemu-system-x86_64
     -cdrom "$ISO_PATH"
@@ -439,6 +483,24 @@ QEMU_CMD=(
     -serial stdio
     -no-reboot
 )
+
+if [ "$UEFI_MODE" = true ]; then
+    resolve_ovmf_firmware
+    OVMF_VARS_WORK="$PROJECT_ROOT/target/ovmf_vars.fd"
+    # Writable private VARS store; never write the system OVMF VARS image.
+    if [[ ! -f "$OVMF_VARS_WORK" ]] || [[ "$OVMF_VARS" -nt "$OVMF_VARS_WORK" ]]; then
+        cp "$OVMF_VARS" "$OVMF_VARS_WORK"
+    fi
+    QEMU_CMD+=(
+        -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE"
+        -drive "if=pflash,format=raw,file=$OVMF_VARS_WORK"
+    )
+    echo -e "${BLUE}Firmware:${NC} UEFI (OVMF)"
+    echo -e "${BLUE}  CODE:${NC}  $OVMF_CODE"
+    echo -e "${BLUE}  VARS:${NC}  $OVMF_VARS_WORK (writable copy of $OVMF_VARS)"
+else
+    echo -e "${BLUE}Firmware:${NC} Legacy BIOS (SeaBIOS)"
+fi
 
 if [ "$DUAL_GPU_MODE" = true ]; then
     if [[ -n "$QEMU_RESOLUTION" ]]; then

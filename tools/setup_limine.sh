@@ -22,6 +22,7 @@ limine_is_ready() {
     [[ -x "$LIMINE_DIR/bin/limine" ]] &&
         [[ -f "$LIMINE_DIR/bin/limine-bios.sys" ]] &&
         [[ -f "$LIMINE_DIR/bin/limine-bios-cd.bin" ]] &&
+        [[ -f "$LIMINE_DIR/bin/limine-uefi-cd.bin" ]] &&
         [[ -f "$LIMINE_DIR/bin/BOOTX64.EFI" ]]
 }
 
@@ -62,8 +63,14 @@ seed_bootstrap_files() {
 }
 
 if limine_is_ready; then
-    echo "[limine] Limine already built."
+    echo "[limine] Limine already built (BIOS + UEFI CD artifacts present)."
     exit 0
+fi
+
+if ! command -v mtools >/dev/null 2>&1 || ! command -v mformat >/dev/null 2>&1; then
+    echo "[limine] mtools is required to build limine-uefi-cd.bin (hybrid UEFI ISO)." >&2
+    echo "[limine] Install mtools (e.g. apt install mtools) and retry." >&2
+    exit 1
 fi
 
 if [[ ! -d "$LIMINE_DIR" ]]; then
@@ -74,20 +81,24 @@ elif [[ ! -d "$LIMINE_DIR/.git" ]]; then
     echo "[limine] Incomplete non-git directory at $LIMINE_DIR; remove it and retry." >&2
     exit 1
 else
-    echo "[limine] Resuming incomplete Limine setup..."
+    echo "[limine] Resuming incomplete Limine setup (or adding missing UEFI CD artifact)..."
 fi
 
 seed_bootstrap_files
 
 pushd "$LIMINE_DIR" >/dev/null
-./bootstrap
-./configure --enable-uefi-x86-64 --enable-bios-cd --enable-bios-pxe
+if [[ ! -x ./configure ]]; then
+    ./bootstrap
+fi
+# Rebuild with UEFI CD support so hybrid ISO generation matches Limine USAGE.md.
+./configure --enable-uefi-x86-64 --enable-bios-cd --enable-bios-pxe --enable-uefi-cd
 make -j"$(nproc)"
 popd >/dev/null
 
 if ! limine_is_ready; then
-    echo "[limine] Build completed without the required boot files." >&2
+    echo "[limine] Build completed without the required BIOS/UEFI boot files." >&2
+    ls -la "$LIMINE_DIR/bin" 2>/dev/null || true
     exit 1
 fi
 
-echo "[limine] Limine built successfully."
+echo "[limine] Limine built successfully (BIOS + UEFI)."

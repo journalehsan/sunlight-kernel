@@ -32,12 +32,15 @@ use x86_64::{
 
 static PMM: spin::Mutex<PhysicalMemoryManager> = spin::Mutex::new(PhysicalMemoryManager::new());
 
-// Limine requests
+// Limine requests (firmware-neutral; BIOS and UEFI share this path)
 static MEMMAP_REQ: limine::request::MemmapRequest = limine::request::MemmapRequest::new();
 static HHDM_REQ: limine::request::HhdmRequest = limine::request::HhdmRequest::new();
 pub(crate) static FB_REQ: limine::request::FramebufferRequest =
     limine::request::FramebufferRequest::new();
 static RSDP_REQ: limine::request::RsdpRequest = limine::request::RsdpRequest::new();
+/// Limine firmware-type request: reliable Legacy BIOS vs UEFI detection.
+static FIRMWARE_REQ: limine::request::FirmwareTypeRequest =
+    limine::request::FirmwareTypeRequest::new();
 /// Limine MP request: tells the bootloader to enumerate all logical processors
 /// and provide their LAPIC IDs + `MpInfo` pointers.  APs are parked by Limine
 /// until `MpInfo::bootstrap()` is called for each one in `smp::start_aps()`.
@@ -241,6 +244,10 @@ pub extern "C" fn _start() -> ! {
 
     serial::init();
     cpu::init_cpu_features();
+
+    // Early firmware-neutral boot diagnostics (serial only; before FB/splash).
+    // Values come from Limine responses so BIOS and UEFI share one code path.
+    log_boot_firmware_diagnostics();
 
     // Initialize TUI from framebuffer (before PMM, no heap needed)
     let fb_resp = FB_REQ.response().expect("no framebuffer");
@@ -1472,6 +1479,86 @@ fn init_kernel_vfs() {
 
     *KERNEL_VFS.lock() = Some(vfs);
     serial_println!("[VFS] kernel mount OK");
+}
+
+/// Serial boot boundary diagnostics shared by Legacy BIOS and UEFI.
+///
+/// Reports only Limine-provided facts (firmware type, memmap size, HHDM, RSDP,
+/// framebuffer geometry). Optional responses are logged as absent without
+/// panicking — the common init path still enforces required responses later.
+fn log_boot_firmware_diagnostics() {
+    serial_println!("[BOOT] Limine protocol boundary");
+
+    if let Some(fw) = FIRMWARE_REQ.response() {
+        match fw.firmware_type {
+            limine::firmware::FIRMWARE_TYPE_X86BIOS => {
+                serial_println!("[BOOT] firmware mode: Legacy BIOS");
+            }
+            limine::firmware::FIRMWARE_TYPE_EFI32 => {
+                serial_println!("[BOOT] firmware mode: UEFI (32-bit)");
+            }
+            limine::firmware::FIRMWARE_TYPE_EFI64 => {
+                serial_println!("[BOOT] firmware mode: UEFI");
+            }
+            limine::firmware::FIRMWARE_TYPE_SBI => {
+                serial_println!("[BOOT] firmware mode: SBI");
+            }
+            other => {
+                serial_println!("[BOOT] firmware mode: unknown (type={})", other);
+            }
+        }
+    } else {
+        serial_println!("[BOOT] firmware mode: unavailable (no FirmwareType response)");
+    }
+
+    if let Some(mm) = MEMMAP_REQ.response() {
+        serial_println!("[BOOT] memory map entries: {}", mm.entries().len());
+    } else {
+        serial_println!("[BOOT] memory map: absent");
+    }
+
+    if let Some(h) = HHDM_REQ.response() {
+        serial_println!("[BOOT] HHDM offset: {:#x}", h.offset);
+    } else {
+        serial_println!("[BOOT] HHDM: absent");
+    }
+
+    if let Some(r) = RSDP_REQ.response() {
+        serial_println!("[BOOT] ACPI RSDP phys: {:#x}", r.address as u64);
+    } else {
+        serial_println!("[BOOT] ACPI RSDP: absent");
+    }
+
+    if let Some(fb_resp) = FB_REQ.response() {
+        if let Some(fb) = fb_resp.framebuffers().first() {
+            serial_println!(
+                "[BOOT] framebuffer: {}x{} pitch={} bpp={} model={}",
+                fb.width,
+                fb.height,
+                fb.pitch,
+                fb.bpp,
+                fb.memory_model
+            );
+        } else {
+            serial_println!("[BOOT] framebuffer: response present but empty list");
+        }
+    } else {
+        serial_println!("[BOOT] framebuffer: absent");
+    }
+
+    if let Some(mp) = MP_REQ.response() {
+        serial_println!(
+            "[BOOT] SMP: {} CPU(s) reported (BSP lapic={})",
+            mp.cpus().len(),
+            mp.bsp_lapic_id
+        );
+    } else {
+        serial_println!("[BOOT] SMP: no MP response (single-CPU fallback)");
+    }
+
+    // SunlightOS embeds userspace in the kernel; no Limine modules/initrd.
+    serial_println!("[BOOT] modules/initrd: none (embedded userspace)");
+    serial_println!("[BOOT] entering common kernel initialization");
 }
 
 fn map_tty_framebuffer(

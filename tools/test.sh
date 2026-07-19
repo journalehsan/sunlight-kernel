@@ -339,30 +339,10 @@ fi
 touch kernel/src/main.rs
 env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
 
-# --- Step 3: Ensure Limine is available ---
-"$SCRIPT_DIR/setup_limine.sh" "$PROJECT_ROOT/$LIMINE_DIR" "$LIMINE_BRANCH" >>"$BUILD_LOG" 2>&1
-
-# --- Step 4: Create ISO layout ---
-ISO_ROOT="target/iso_root"
-rm -rf "$ISO_ROOT"
-mkdir -p "$ISO_ROOT/boot/limine"
-mkdir -p "$ISO_ROOT/boot"
-
-cp "$KERNEL_ELF" "$ISO_ROOT/boot/sunlight-kernel.elf"
-# Limine v8.x reads limine.conf (new syntax); limine.cfg is the legacy name.
-cp limine.conf "$ISO_ROOT/boot/limine/"
-cp "$LIMINE_DIR/bin/limine-bios.sys" "$ISO_ROOT/boot/limine/"
-cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
-cp "$LIMINE_DIR/bin/BOOTX64.EFI" "$ISO_ROOT/boot/limine/"
-
-# --- Step 5: Build ISO with xorriso ---
-xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-    --efi-boot boot/limine/BOOTX64.EFI \
-    -efi-boot-part --efi-boot-image --protective-msdos-label \
-    "$ISO_ROOT" -o "$ISO_PATH" >>"$BUILD_LOG" 2>&1
-
-"$LIMINE_DIR/bin/limine" bios-install "$ISO_PATH" >>"$BUILD_LOG" 2>&1
+# --- Step 3–5: Hybrid ISO (BIOS + UEFI) via shared helper ---
+LIMINE_BRANCH="$LIMINE_BRANCH" "$SCRIPT_DIR/make_hybrid_iso.sh" \
+    "$KERNEL_ELF" "$ISO_PATH" "$PROJECT_ROOT/$LIMINE_DIR" "$PROJECT_ROOT" \
+    >>"$BUILD_LOG" 2>&1
 
 # --- Step 6: Launch QEMU with timeout ---
 KVM_FLAGS=""

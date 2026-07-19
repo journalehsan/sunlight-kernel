@@ -207,31 +207,12 @@ build_image() {
     touch "$PROJECT_ROOT/kernel/src/main.rs"
     cargo build --package sunlight-kernel
 
-    # Ensure Limine is available
-    LIMINE_DIR="$PROJECT_ROOT/target/limine"
-    "$SCRIPT_DIR/setup_limine.sh" "$LIMINE_DIR" "v8.x"
-
-    # Build the hybrid ISO (Limine BIOS + UEFI)
+    # Hybrid ISO: Limine legacy BIOS + x86_64 UEFI (shared helper).
     KERNEL_ELF="$PROJECT_ROOT/target/x86_64-unknown-none/debug/sunlight-kernel"
-    ISO_ROOT="$PROJECT_ROOT/target/iso_root"
-    rm -rf "$ISO_ROOT"
-    mkdir -p "$ISO_ROOT/boot/limine"
-
-    cp "$KERNEL_ELF" "$ISO_ROOT/boot/sunlight-kernel.elf"
-    cp "$PROJECT_ROOT/limine.conf" "$ISO_ROOT/boot/limine/"
-    cp "$LIMINE_DIR/bin/limine-bios.sys"    "$ISO_ROOT/boot/limine/"
-    cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
-    cp "$LIMINE_DIR/bin/BOOTX64.EFI"        "$ISO_ROOT/boot/limine/"
-
-    echo "Creating ISO..."
-    xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
-        -no-emul-boot -boot-load-size 4 -boot-info-table \
-        --efi-boot boot/limine/BOOTX64.EFI \
-        -efi-boot-part --efi-boot-image --protective-msdos-label \
-        "$ISO_ROOT" -o "$IMAGE"
-
-    # Embed Limine BIOS boot sector into the ISO
-    "$LIMINE_DIR/bin/limine" bios-install "$IMAGE"
+    LIMINE_DIR="$PROJECT_ROOT/target/limine"
+    echo "Creating hybrid ISO (BIOS + UEFI)..."
+    LIMINE_BRANCH=v8.x "$SCRIPT_DIR/make_hybrid_iso.sh" \
+        "$KERNEL_ELF" "$IMAGE" "$LIMINE_DIR" "$PROJECT_ROOT"
 
     echo "Build complete: $IMAGE"
 }

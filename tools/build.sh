@@ -116,31 +116,10 @@ echo "[build] Building kernel..."
 touch "$PROJECT_ROOT/kernel/src/main.rs"
 cargo build --package sunlight-kernel
 
-# --- Step 3: Download and build Limine if needed ---
-"$SCRIPT_DIR/setup_limine.sh" "$LIMINE_DIR" "$LIMINE_BRANCH"
-
-# --- Step 4: Create ISO layout ---
-ISO_ROOT="target/iso_root"
-rm -rf "$ISO_ROOT"
-mkdir -p "$ISO_ROOT/boot/limine"
-mkdir -p "$ISO_ROOT/boot"
-
-cp "$KERNEL_ELF" "$ISO_ROOT/boot/sunlight-kernel.elf"
-cp limine.conf "$ISO_ROOT/boot/limine/"
-cp "$LIMINE_DIR/bin/limine-bios.sys" "$ISO_ROOT/boot/limine/"
-cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
-cp "$LIMINE_DIR/bin/BOOTX64.EFI" "$ISO_ROOT/boot/limine/"
-
-# --- Step 5: Build ISO with xorriso ---
-echo "[build] Building ISO..."
-xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-    --efi-boot boot/limine/BOOTX64.EFI \
-    -efi-boot-part --efi-boot-image --protective-msdos-label \
-    "$ISO_ROOT" -o "$ISO_PATH"
-
-# --- Step 6: Install Limine bootloader into ISO ---
-"$LIMINE_DIR/bin/limine" bios-install "$ISO_PATH"
+# --- Step 3–6: Limine hybrid ISO (legacy BIOS + x86_64 UEFI) ---
+echo "[build] Building hybrid ISO (BIOS + UEFI)..."
+LIMINE_BRANCH="$LIMINE_BRANCH" "$SCRIPT_DIR/make_hybrid_iso.sh" \
+    "$KERNEL_ELF" "$ISO_PATH" "$PROJECT_ROOT/$LIMINE_DIR" "$PROJECT_ROOT"
 
 # --- Step 7: Launch QEMU ---
 echo "[build] Launching QEMU..."
