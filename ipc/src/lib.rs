@@ -72,6 +72,9 @@ pub enum SunlightSyscall {
     GpuUpdateCursor = 123,
     GpuMoveCursor = 124,
     HardwareInventory = 126,
+    /// VMware SVGA II proxy (display_server only).
+    SvgaGetInfo = 127,
+    SvgaUpdate = 128,
     DebugLog = 99,
 }
 
@@ -3291,6 +3294,53 @@ pub fn query_display_metrics(display_ep: CapabilityToken) -> Option<DisplayMetri
 pub fn gpu_move_cursor(x: u32, y: u32) -> bool {
     let a1 = (x as u64) | ((y as u64) << 32);
     let (ok, _) = unsafe { raw_syscall(SunlightSyscall::GpuMoveCursor, a1, 0, 0, 0, 0, 0, 0) };
+    ok != 0
+}
+
+/// Information returned when the kernel VMware SVGA II driver is Active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SvgaDisplayInfo {
+    pub width: u32,
+    pub height: u32,
+    pub pitch_bytes: u32,
+    pub bpp: u32,
+    /// True when the Limine boot framebuffer physical base lies inside SVGA VRAM.
+    pub boot_fb_in_vram: bool,
+}
+
+/// Query the VMware SVGA II backend. Returns `None` when the device is absent
+/// or not fully activated (boot framebuffer remains the fallback).
+pub fn svga_get_info() -> Option<SvgaDisplayInfo> {
+    let (ok, msg) = unsafe { raw_syscall(SunlightSyscall::SvgaGetInfo, 0, 0, 0, 0, 0, 0, 0) };
+    if ok == 0 {
+        return None;
+    }
+    let wh = msg.words[0];
+    let pb = msg.words[1];
+    let flags = msg.words[2];
+    let width = (wh & 0xFFFF_FFFF) as u32;
+    let height = (wh >> 32) as u32;
+    let pitch_bytes = (pb & 0xFFFF_FFFF) as u32;
+    let bpp = (pb >> 32) as u32;
+    if width == 0 || height == 0 || pitch_bytes == 0 || bpp != 32 {
+        return None;
+    }
+    Some(SvgaDisplayInfo {
+        width,
+        height,
+        pitch_bytes,
+        bpp,
+        boot_fb_in_vram: (flags & 1) != 0,
+    })
+}
+
+/// Issue `SVGA_CMD_UPDATE` for a damage rectangle after pixels were written
+/// to the visible framebuffer. Returns false if the backend is not ready or the
+/// rect was rejected.
+pub fn svga_update(x: u32, y: u32, w: u32, h: u32) -> bool {
+    let a1 = (x as u64) | ((y as u64) << 32);
+    let a2 = (w as u64) | ((h as u64) << 32);
+    let (ok, _) = unsafe { raw_syscall(SunlightSyscall::SvgaUpdate, a1, a2, 0, 0, 0, 0, 0) };
     ok != 0
 }
 

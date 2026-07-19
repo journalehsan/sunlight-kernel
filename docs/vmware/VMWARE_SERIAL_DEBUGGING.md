@@ -5,6 +5,14 @@ VMware Workstation, including VMXNET3 networking. It keeps the normal virtual
 machine configuration recoverable and captures kernel serial output without
 depending on the graphical console.
 
+For the VMware SVGA II display driver (PCI `15ad:0405`), see
+[`VMWARE_SVGA.md`](VMWARE_SVGA.md). Extract a bounded SVGA trace with:
+
+```bash
+rg -n '15ad:0405|\[SVGA\]|display_backend=VMwareSVGA|vmware-svga' \
+  /tmp/sunlight-vmware-serial.log
+```
+
 ## Build the ISO
 
 Use the repository's canonical build path:

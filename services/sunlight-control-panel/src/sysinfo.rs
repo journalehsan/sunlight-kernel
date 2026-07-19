@@ -231,7 +231,13 @@ impl SystemInfoSnapshot {
         // Adapter name is not exposed as a stable string today; platform is
         // a reliable hint only for common VM graphics stacks.
         match s.platform.as_str() {
-            "VMware" => s.graphics_adapter.set("VMware virtual display"),
+            "VMware" => {
+                if metrics.backend == ScreenBackend::VmwareSvga {
+                    s.graphics_adapter.set("VMware SVGA II");
+                } else {
+                    s.graphics_adapter.set("VMware virtual display");
+                }
+            }
             "QEMU" => {
                 if metrics.backend == ScreenBackend::VirtioGpu {
                     s.graphics_adapter.set("VirtIO GPU");
@@ -546,6 +552,7 @@ fn backend_label(backend: ScreenBackend) -> &'static str {
         ScreenBackend::VirtioGpu => "virtio-gpu",
         ScreenBackend::LimineFramebuffer => "limine-framebuffer",
         ScreenBackend::Fallback => "fallback",
+        ScreenBackend::VmwareSvga => "vmware-svga",
     }
 }
 

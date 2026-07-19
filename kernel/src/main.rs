@@ -927,6 +927,221 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    // --- VMware SVGA II init (optional; display_server uses proxy syscalls 127-128) ---
+    // Probe/activate only when the PCI ID is present. On QEMU without SVGA this is a
+    // no-op. Prefer VirtIO GPU for presentation when both exist (selection is in
+    // sunlight-display); this path still leaves SVGA unbound/unclaimed until Active.
+    {
+        let hhdm = hhdm_offset.as_u64();
+        match unsafe { sunlight_virtio::probe_vmware_svga() } {
+            Ok(Some(info)) => {
+                serial_println!(
+                    "[SVGA] pci device 15ad:0405 found at {:02x}:{:02x}.{} rev={:#x}",
+                    info.bus,
+                    info.slot,
+                    info.func,
+                    info.revision
+                );
+                serial_println!(
+                    "[SVGA] BAR0 IO port={:#x} size={:#x} raw={:#x}",
+                    info.io_bar.port,
+                    info.io_bar.size,
+                    info.io_bar.raw
+                );
+                serial_println!(
+                    "[SVGA] BAR1 FB phys={:#x} size={:#x} width={:?}",
+                    info.fb_bar.phys,
+                    info.fb_bar.size,
+                    info.fb_bar.width
+                );
+                serial_println!(
+                    "[SVGA] BAR2 FIFO phys={:#x} size={:#x} width={:?}",
+                    info.fifo_bar.phys,
+                    info.fifo_bar.size,
+                    info.fifo_bar.width
+                );
+                hardware_inventory::update_pci(
+                    info.bus,
+                    info.slot,
+                    info.func,
+                    hardware_inventory::pack_short_name("vmw-svga"),
+                    0,
+                    ::sunlight_ipc::HardwareState::Loaded,
+                    ::sunlight_ipc::HardwareFailureStage::None,
+                    0,
+                );
+
+                // Map FIFO (BAR2) via HHDM for command ring access.
+                if let Err(error) = try_map_kernel_mmio_range(
+                    &mut vmm,
+                    &mut PMM.lock(),
+                    hhdm + info.fifo_bar.phys,
+                    info.fifo_bar.phys,
+                    info.fifo_bar.size,
+                ) {
+                    serial_println!("[SVGA] FIFO BAR map failed: {}", error);
+                    hardware_inventory::update_pci(
+                        info.bus,
+                        info.slot,
+                        info.func,
+                        hardware_inventory::pack_short_name("vmw-svga"),
+                        0,
+                        ::sunlight_ipc::HardwareState::ProbeFailed,
+                        ::sunlight_ipc::HardwareFailureStage::ResourceMapping,
+                        1,
+                    );
+                } else {
+                    // Prefer boot Limine geometry so takeover does not change resolution.
+                    let (prefer_w, prefer_h, boot_fb_phys) =
+                        if let Some(fb_resp) = FB_REQ.response() {
+                            if let Some(fb) = fb_resp.framebuffers().first() {
+                                let addr = fb.address() as u64;
+                                let phys = if addr >= hhdm { addr - hhdm } else { addr };
+                                (fb.width as u32, fb.height as u32, Some(phys))
+                            } else {
+                                (0, 0, None)
+                            }
+                        } else {
+                            (0, 0, None)
+                        };
+
+                    // Probe-only diagnostics first (no mode change yet).
+                    match unsafe { sunlight_virtio::VmwareSvga::probe_device(&info) } {
+                        Ok(probe) => {
+                            serial_println!(
+                                "[SVGA] probe version={:#x} caps={:#x} vram={:#x} fb_size={:#x} fb_off={:#x} fifo={:#x}",
+                                probe.version_id,
+                                probe.capabilities,
+                                probe.vram_size,
+                                probe.fb_size,
+                                probe.fb_offset,
+                                probe.fifo_size
+                            );
+                            serial_println!(
+                                "[SVGA] probe mode {}x{} pitch={} bpp={} enable={:#x} config_done={}",
+                                probe.width,
+                                probe.height,
+                                probe.pitch,
+                                probe.bpp,
+                                probe.enabled,
+                                probe.config_done
+                            );
+                            serial_println!(
+                                "[SVGA] probe max {}x{} boot_fb_phys={:?}",
+                                probe.max_width,
+                                probe.max_height,
+                                boot_fb_phys
+                            );
+                            if let Err(e) = sunlight_virtio::VmwareSvga::validate_probe(&probe) {
+                                serial_println!(
+                                    "[SVGA] probe invariant failed: {} (code={})",
+                                    e.as_str(),
+                                    e.code()
+                                );
+                                hardware_inventory::update_pci(
+                                    info.bus,
+                                    info.slot,
+                                    info.func,
+                                    hardware_inventory::pack_short_name("vmw-svga"),
+                                    0,
+                                    ::sunlight_ipc::HardwareState::ProbeFailed,
+                                    ::sunlight_ipc::HardwareFailureStage::DeviceInitialization,
+                                    e.code(),
+                                );
+                            } else {
+                                match unsafe {
+                                    sunlight_virtio::VmwareSvga::activate(
+                                        &info,
+                                        hhdm + info.fifo_bar.phys,
+                                        prefer_w,
+                                        prefer_h,
+                                        boot_fb_phys,
+                                    )
+                                } {
+                                    Ok(dev) => {
+                                        serial_println!(
+                                            "[SVGA] active {}x{} pitch={} bpp={} fb_phys={:#x} boot_fb_in_vram={} stage={}",
+                                            dev.width,
+                                            dev.height,
+                                            dev.pitch,
+                                            dev.bpp,
+                                            dev.fb_phys,
+                                            dev.boot_fb_in_vram,
+                                            dev.stage.as_str()
+                                        );
+                                        hardware_inventory::update_pci(
+                                            info.bus,
+                                            info.slot,
+                                            info.func,
+                                            hardware_inventory::pack_short_name("vmw-svga"),
+                                            hardware_inventory::pack_short_name("vmw-svga"),
+                                            ::sunlight_ipc::HardwareState::Active,
+                                            ::sunlight_ipc::HardwareFailureStage::None,
+                                            0,
+                                        );
+                                        *SVGA_DEVICE.lock() = Some(dev);
+                                    }
+                                    Err(e) => {
+                                        serial_println!(
+                                            "[SVGA] activation failed at stage boundary: {} (code={})",
+                                            e.as_str(),
+                                            e.code()
+                                        );
+                                        hardware_inventory::update_pci(
+                                            info.bus,
+                                            info.slot,
+                                            info.func,
+                                            hardware_inventory::pack_short_name("vmw-svga"),
+                                            0,
+                                            ::sunlight_ipc::HardwareState::ProbeFailed,
+                                            ::sunlight_ipc::HardwareFailureStage::DeviceActivation,
+                                            e.code(),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            serial_println!(
+                                "[SVGA] register probe failed: {} (code={})",
+                                e.as_str(),
+                                e.code()
+                            );
+                            hardware_inventory::update_pci(
+                                info.bus,
+                                info.slot,
+                                info.func,
+                                hardware_inventory::pack_short_name("vmw-svga"),
+                                0,
+                                ::sunlight_ipc::HardwareState::ProbeFailed,
+                                ::sunlight_ipc::HardwareFailureStage::FeatureNegotiation,
+                                e.code(),
+                            );
+                        }
+                    }
+                }
+            }
+            Ok(None) => {
+                serial_println!("[SVGA] VMware SVGA II (15ad:0405) not present");
+            }
+            Err(error) => {
+                serial_println!("[SVGA] PCI probe error: {:?}", error);
+                if let Some((bus, slot, func)) = unsafe { sunlight_virtio::find_vmware_svga_bdf() } {
+                    hardware_inventory::update_pci(
+                        bus,
+                        slot,
+                        func,
+                        hardware_inventory::pack_short_name("vmw-svga"),
+                        0,
+                        ::sunlight_ipc::HardwareState::ProbeFailed,
+                        ::sunlight_ipc::HardwareFailureStage::ResourceAllocation,
+                        1,
+                    );
+                }
+            }
+        }
+    }
+
     // NOTE: net_server and sunlightd are no longer spawned by the kernel.
     // Neither needs privileged memory setup, so init (pid=1) launches them via
     // the spawn cap (the kernel-owned virtio-net device above is still set up
@@ -1241,6 +1456,11 @@ pub static VMXNET3_ERROR_DETAIL: core::sync::atomic::AtomicU64 =
 /// GpuGetInfo/GpuAttachBacking/GpuSetScanout/GpuFlush/GpuUpdateCursor/GpuMoveCursor
 /// proxy syscalls (119-124), gated by process name "display_server".
 pub static GPU_DEVICE: spin::Mutex<Option<sunlight_virtio::VirtioGpu>> = spin::Mutex::new(None);
+
+/// Kernel-owned VMware SVGA II device. display_server drives presentation through
+/// SvgaGetInfo/SvgaUpdate proxy syscalls (127-128), gated by process name
+/// "display_server". Boot Limine framebuffer remains the final fallback.
+pub static SVGA_DEVICE: spin::Mutex<Option<sunlight_virtio::VmwareSvga>> = spin::Mutex::new(None);
 
 /// BlockDevice adapter over the kernel's virtio-blk driver (read-only:
 /// VirtioBlk has no write path yet, and the boot volume is never written).

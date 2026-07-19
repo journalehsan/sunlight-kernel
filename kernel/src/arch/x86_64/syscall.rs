@@ -132,6 +132,14 @@ pub enum SunlightSyscall {
     /// MOVE_CURSOR to new position. rdi = x | (y << 32).
     GpuMoveCursor = 124,
 
+    /// VMware SVGA II: return ready geometry when the kernel driver is Active.
+    /// On success: rax=1, r8=width|(height<<32), r9=pitch|(bpp<<32),
+    /// r10=flags (bit0=boot_fb_in_vram).
+    SvgaGetInfo = 127,
+    /// VMware SVGA II: SVGA_CMD_UPDATE for a damage rect.
+    /// rdi = x | (y << 32), rsi = w | (h << 32).
+    SvgaUpdate = 128,
+
     DebugLog = 99,
 }
 
@@ -516,6 +524,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         124 => sys_gpu_move_cursor(frame),
         125 => sys_mouse_get_stats(frame),
         126 => sys_hardware_inventory(frame),
+        127 => sys_svga_get_info(frame),
+        128 => sys_svga_update(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -5250,6 +5260,64 @@ fn sys_gpu_move_cursor(frame: &mut SyscallFrame) -> u64 {
                 code,
                 sunlight_virtio::gpu::resp_code_name(code)
             );
+            0
+        }
+    }
+}
+
+/// Syscall 127: SvgaGetInfo
+/// Returns 1 when the VMware SVGA II backend is Active and usable.
+/// r8 = width | (height << 32)
+/// r9 = pitch_bytes | (bpp << 32)
+/// r10 = flags (bit0 = boot Limine FB lies inside SVGA VRAM)
+fn sys_svga_get_info(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let dev = crate::SVGA_DEVICE.lock();
+    match dev.as_ref() {
+        Some(svga) if svga.is_ready() => {
+            frame.r8 = (svga.width as u64) | ((svga.height as u64) << 32);
+            frame.r9 = (svga.pitch as u64) | ((svga.bpp as u64) << 32);
+            frame.r10 = if svga.boot_fb_in_vram { 1 } else { 0 };
+            1
+        }
+        _ => 0,
+    }
+}
+
+/// Syscall 128: SvgaUpdate
+/// rdi = x | (y << 32), rsi = w | (h << 32)
+/// Issues SVGA_CMD_UPDATE after the display server wrote pixels to the FB.
+fn sys_svga_update(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let x = (frame.rdi & 0xFFFF_FFFF) as u32;
+    let y = (frame.rdi >> 32) as u32;
+    let w = (frame.rsi & 0xFFFF_FFFF) as u32;
+    let h = (frame.rsi >> 32) as u32;
+
+    let mut dev = crate::SVGA_DEVICE.lock();
+    let svga = match dev.as_mut() {
+        Some(s) if s.is_ready() => s,
+        _ => return 0,
+    };
+    match unsafe { svga.update_rect(x, y, w, h) } {
+        Ok(()) => 1,
+        Err(e) => {
+            // Bounded: do not log every failed rect (idle spam). Only first few
+            // failures are useful; counters live on the device for later dumps.
+            if svga.counters.present_failures <= 4 {
+                crate::serial_println!(
+                    "[SVGA] update {}x{}+{}+{} failed: {}",
+                    w,
+                    h,
+                    x,
+                    y,
+                    e.as_str()
+                );
+            }
             0
         }
     }

@@ -1084,6 +1084,7 @@ impl CompositorState {
     fn display_metrics(&self) -> DisplayMetrics {
         let backend = match self.display_backend {
             backend::DisplayBackend::VirtioGpu { .. } => ScreenBackend::VirtioGpu,
+            backend::DisplayBackend::VmwareSvga { .. } => ScreenBackend::VmwareSvga,
             backend::DisplayBackend::Limine { .. } => ScreenBackend::LimineFramebuffer,
         };
         DisplayMetrics::new(
@@ -2171,6 +2172,30 @@ fn present_back_buffer(state: &mut CompositorState) {
                 }
             }
         }
+        backend::DisplayBackend::VmwareSvga {
+            fb,
+            pitch_words,
+            width,
+            height,
+        } => {
+            state.debug_counters.framebuffer_copy_count += 1;
+            let stride = *pitch_words;
+            let fw = state.fb_width as usize;
+            let fh = state.fb_height as usize;
+            for y in 0..fh {
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        state.back_buffer.as_ptr().add(y * stride),
+                        fb.add(y * stride),
+                        fw,
+                    );
+                }
+            }
+            // Ensure guest FB stores are ordered before the host UPDATE command.
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+            state.debug_counters.full_present_count += 1;
+            let _ = sunlight_ipc::svga_update(0, 0, *width, *height);
+        }
         backend::DisplayBackend::VirtioGpu { width, height } => {
             state.debug_counters.full_present_count += 1;
             sunlight_ipc::gpu_flush(0, 0, *width, *height);
@@ -2201,6 +2226,27 @@ fn present_rect(state: &mut CompositorState, r: Rect) {
                     );
                 }
             }
+        }
+        backend::DisplayBackend::VmwareSvga { fb, pitch_words, .. } => {
+            state.debug_counters.framebuffer_copy_count += 1;
+            let stride = *pitch_words;
+            let len = x1 - x0;
+            for y in y0..y1 {
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        state.back_buffer.as_ptr().add(y * stride + x0),
+                        fb.add(y * stride + x0),
+                        len,
+                    );
+                }
+            }
+            core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+            let x = x0 as u32;
+            let y = y0 as u32;
+            let w = (x1 - x0) as u32;
+            let h = (y1 - y0) as u32;
+            state.debug_counters.present_rect_count += 1;
+            let _ = sunlight_ipc::svga_update(x, y, w, h);
         }
         backend::DisplayBackend::VirtioGpu { .. } => {
             let x = x0 as u32;
@@ -4196,16 +4242,19 @@ pub extern "C" fn _start() -> ! {
             }
         };
 
-    // Backend selection is explicit: VirtIO GPU is only the active backend once
-    // resource create + backing attach succeed (SET_SCANOUT itself is deferred
-    // to SESSION_ACTIVATE so the TTY login stays visible). Any failure logs its
-    // exact reason and reverts every render dimension to the Limine mode, so
-    // VirtIO and Limine dimensions are never mixed.
+    // Backend selection is explicit and ordered:
+    //   1. VirtIO GPU — only after resource create + backing attach succeed
+    //      (SET_SCANOUT deferred to SESSION_ACTIVATE so TTY login stays visible).
+    //   2. VMware SVGA II — only after the kernel reports Active (FIFO + mode).
+    //      Presentation reuses the Limine-mapped FB when geometry matches and
+    //      issues SVGA_CMD_UPDATE; boot FB remains fallback on any failure.
+    //   3. Limine framebuffer — final fallback (never removed).
     let mut render_width = limine_render_w;
     let mut render_height = limine_render_h;
     let mut render_pitch = limine_render_pitch;
     let mut display_backend = limine_backend;
     let mut back_buffer: Vec<u32> = Vec::new();
+    let mut svga_info_log: Option<sunlight_ipc::SvgaDisplayInfo> = None;
 
     if let Some((gw, gh)) = virtio_scanout {
         match setup_virtio_backend(gw, gh) {
@@ -4232,8 +4281,69 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
-    // Limine (or fallback) path: allocate the software back buffer now that the
-    // final render dimensions are known.
+    // VMware SVGA only when VirtIO did not become the active backend.
+    if !matches!(
+        display_backend,
+        backend::DisplayBackend::VirtioGpu { .. }
+    ) {
+        match sunlight_ipc::svga_get_info() {
+            Some(info) => match validate_size(info.width, info.height) {
+                Some((sw, sh)) if info.bpp == 32 && info.pitch_bytes >= sw.saturating_mul(4) => {
+                    // First driver: present through the Limine-mapped pages only when
+                    // the kernel proved those pages lie inside SVGA VRAM, and the
+                    // active mode matches Limine geometry (no mixed pitches).
+                    // A separate SVGA BAR map for non-overlapping boot FBs is
+                    // follow-up work; until then keep the boot framebuffer path.
+                    if !info.boot_fb_in_vram {
+                        diag_reason = "vmware-svga-boot-fb-not-in-vram-limine-fallback";
+                        debug_log(
+                            "[DISPLAY] VMware SVGA Active but boot FB not in VRAM; keeping Limine\n",
+                        );
+                    } else if sw == limine_render_w
+                        && sh == limine_render_h
+                        && info.pitch_bytes == limine_render_pitch
+                    {
+                        display_backend = backend::DisplayBackend::VmwareSvga {
+                            fb: fb_ptr as *mut u32,
+                            pitch_words: (info.pitch_bytes as usize) / 4,
+                            width: sw,
+                            height: sh,
+                        };
+                        render_width = sw;
+                        render_height = sh;
+                        render_pitch = info.pitch_bytes;
+                        diag_reason = "vmware-svga-ok-boot-fb-in-vram";
+                        svga_info_log = Some(info);
+                        debug_log("[DISPLAY] VMware SVGA backend selected ");
+                        debug_dim(sw, sh);
+                        debug_log(" pitch=");
+                        debug_dec(info.pitch_bytes);
+                        debug_log(" boot_fb_in_vram=yes\n");
+                    } else {
+                        diag_reason = "vmware-svga-geometry-mismatch-limine-fallback";
+                        debug_log("[DISPLAY] VMware SVGA ready but geometry mismatch (svga=");
+                        debug_dim(sw, sh);
+                        debug_log(" limine=");
+                        debug_dim(limine_render_w, limine_render_h);
+                        debug_log("); keeping Limine fallback\n");
+                    }
+                }
+                _ => {
+                    diag_reason = "vmware-svga-invalid-size";
+                    debug_log("[DISPLAY] VMware SVGA reported invalid mode; keeping Limine\n");
+                }
+            },
+            None => {
+                if virtio_scanout.is_none() && diag_reason == "no-virtio-gpu" {
+                    // Keep the existing reason string when neither hardware backend
+                    // is available; sunlight-display still has Limine.
+                }
+            }
+        }
+    }
+
+    // Limine / VMware path: allocate the software back buffer now that the
+    // final render dimensions are known (VirtIO already allocated its buffer).
     if back_buffer.is_empty() {
         back_buffer = alloc_page_aligned_pixels(
             (render_pitch as usize / 4) * render_height as usize,
@@ -4248,12 +4358,13 @@ pub extern "C" fn _start() -> ! {
     // Startup summary: single source of truth for the compositor's geometry.
     // `requested` is the mode the host asked for via the VirtIO scanout report
     // (QEMU xres/yres override or window size); without a VirtIO GPU the Limine
-    // framebuffer mode is the only request we can honor.
+    // (or SVGA-matched) framebuffer mode is the request we honor.
     let requested = virtio_scanout.unwrap_or((limine_render_w, limine_render_h));
     let mut diag = LogLine::new();
     diag.push_str("[DISPLAY] display_backend=");
     diag.push_str(match display_backend {
         backend::DisplayBackend::VirtioGpu { .. } => "VirtIO",
+        backend::DisplayBackend::VmwareSvga { .. } => "VMwareSVGA",
         backend::DisplayBackend::Limine { .. } => "Limine",
     });
     diag.push_str(" requested=");
@@ -4261,6 +4372,11 @@ pub extern "C" fn _start() -> ! {
     diag.push_str(" virtio_scanout=");
     match virtio_scanout {
         Some((vw, vh)) => diag.push_dim(vw, vh),
+        None => diag.push_str("none"),
+    }
+    diag.push_str(" svga=");
+    match svga_info_log {
+        Some(info) => diag.push_dim(info.width, info.height),
         None => diag.push_str("none"),
     }
     diag.push_str(" final=");

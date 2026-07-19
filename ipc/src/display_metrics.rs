@@ -47,6 +47,7 @@ pub enum ScreenBackend {
     LimineFramebuffer = 0,
     VirtioGpu = 1,
     Fallback = 2,
+    VmwareSvga = 3,
 }
 
 impl ScreenBackend {
@@ -55,6 +56,7 @@ impl ScreenBackend {
             0 => Self::LimineFramebuffer,
             1 => Self::VirtioGpu,
             2 => Self::Fallback,
+            3 => Self::VmwareSvga,
             _ => Self::Fallback,
         }
     }
@@ -64,6 +66,7 @@ impl ScreenBackend {
             Self::LimineFramebuffer => "limine-framebuffer",
             Self::VirtioGpu => "virtio-gpu",
             Self::Fallback => "fallback",
+            Self::VmwareSvga => "vmware-svga",
         }
     }
 }

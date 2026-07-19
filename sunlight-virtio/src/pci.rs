@@ -11,6 +11,7 @@ pub const VIRTIO_NET_MODERN: u16 = 0x1041;
 pub const VIRTIO_GPU_MODERN: u16 = 0x1050;
 pub const VMWARE_VENDOR_ID: u16 = 0x15AD;
 pub const VMXNET3_DEVICE_ID: u16 = 0x07B0;
+pub const VMWARE_SVGA_DEVICE_ID: u16 = 0x0405;
 
 // VirtIO PCI capability cfg_type values (VirtIO 1.0 spec §4.1.4)
 const VIRTIO_PCI_CAP_COMMON_CFG: u8 = 1;
@@ -78,6 +79,45 @@ pub struct Vmxnet3PciInfo {
     pub passthrough_bar: PciMemoryBarInfo,
     /// The BAR immediately following BAR0: device registers and commands.
     pub device_bar: PciMemoryBarInfo,
+}
+
+/// Parsed PCI I/O BAR (bit 0 set in the BAR register).
+#[derive(Clone, Copy, Debug)]
+pub struct PciIoBarInfo {
+    pub index: u8,
+    pub raw: u32,
+    /// Base I/O port (low bits cleared).
+    pub port: u16,
+    /// Region size in bytes.
+    pub size: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VmwareSvgaProbeError {
+    ZeroBar { index: u8, raw: u32 },
+    ExpectedIoBar { index: u8, raw: u32 },
+    ExpectedMemoryBar { index: u8, raw: u32 },
+    UnsupportedBarType { index: u8, raw: u32 },
+    UnusableAddress { index: u8, address: u64 },
+    InvalidBarSize { index: u8, size: u64 },
+    IncorrectBarRole { index: u8, size: u64 },
+    IoPortUnusable { port: u16, size: u32 },
+}
+
+/// PCI resources for VMware SVGA II (`15ad:0405`).
+///
+/// BAR layout (SVGA II, not SVGA3):
+/// - BAR0: I/O ports (index/value)
+/// - BAR1: framebuffer / VRAM
+/// - BAR2: FIFO memory
+pub struct VmwareSvgaPciInfo {
+    pub bus: u8,
+    pub slot: u8,
+    pub func: u8,
+    pub revision: u8,
+    pub io_bar: PciIoBarInfo,
+    pub fb_bar: PciMemoryBarInfo,
+    pub fifo_bar: PciMemoryBarInfo,
 }
 
 /// Read a single byte from PCI config space.
@@ -337,6 +377,170 @@ pub unsafe fn probe_vmxnet3() -> Result<Option<Vmxnet3PciInfo>, Vmxnet3ProbeErro
 /// Compatibility wrapper for callers that do not need detailed BAR errors.
 pub unsafe fn find_vmxnet3() -> Option<Vmxnet3PciInfo> {
     probe_vmxnet3().ok().flatten()
+}
+
+/// Scan PCI for VMware SVGA II (`15ad:0405`) and parse BAR0/1/2.
+///
+/// Enables I/O + memory decoding on success. Does not touch SVGA registers.
+///
+/// SAFETY: Caller must be running at ring 0.
+pub unsafe fn probe_vmware_svga() -> Result<Option<VmwareSvgaPciInfo>, VmwareSvgaProbeError> {
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            for func in 0u8..8 {
+                let ids = pci_read32(bus, slot, func, 0x00);
+                if ids == 0xFFFF_FFFF {
+                    continue;
+                }
+                let vendor = (ids & 0xFFFF) as u16;
+                let device = ((ids >> 16) & 0xFFFF) as u16;
+                if vendor != VMWARE_VENDOR_ID || device != VMWARE_SVGA_DEVICE_ID {
+                    continue;
+                }
+
+                let revision = pci_read8(bus, slot, func, 0x08);
+                let io_bar = probe_io_bar(bus, slot, func, 0)?;
+                // I/O BAR must cover INDEX (0), VALUE (1), and IRQSTATUS (8).
+                if io_bar.size < 16 || io_bar.port == 0 {
+                    return Err(VmwareSvgaProbeError::IoPortUnusable {
+                        port: io_bar.port,
+                        size: io_bar.size,
+                    });
+                }
+                let fb_bar = probe_memory_bar_svga(bus, slot, func, 1)?;
+                if fb_bar.size < 0x100000 {
+                    return Err(VmwareSvgaProbeError::IncorrectBarRole {
+                        index: fb_bar.index,
+                        size: fb_bar.size,
+                    });
+                }
+                let fifo_bar = probe_memory_bar_svga(bus, slot, func, 2)?;
+                if fifo_bar.size < 0x10000 {
+                    return Err(VmwareSvgaProbeError::IncorrectBarRole {
+                        index: fifo_bar.index,
+                        size: fifo_bar.size,
+                    });
+                }
+
+                // Enable I/O space + memory space (bus master not required for 2D).
+                let command = pci_read32(bus, slot, func, 0x04) & 0xffff;
+                pci_write32(bus, slot, func, 0x04, command | 0x0000_0003);
+
+                return Ok(Some(VmwareSvgaPciInfo {
+                    bus,
+                    slot,
+                    func,
+                    revision,
+                    io_bar,
+                    fb_bar,
+                    fifo_bar,
+                }));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Compatibility wrapper when only presence/BARs are needed.
+pub unsafe fn find_vmware_svga() -> Option<VmwareSvgaPciInfo> {
+    probe_vmware_svga().ok().flatten()
+}
+
+/// Return true when PCI contains SVGA II, even if BAR decode fails.
+pub unsafe fn vmware_svga_present() -> bool {
+    find_vmware_svga_bdf().is_some()
+}
+
+pub unsafe fn find_vmware_svga_bdf() -> Option<(u8, u8, u8)> {
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            for func in 0u8..8 {
+                let ids = pci_read32(bus, slot, func, 0x00);
+                if ids == 0xFFFF_FFFF {
+                    continue;
+                }
+                if (ids & 0xFFFF) as u16 == VMWARE_VENDOR_ID
+                    && ((ids >> 16) & 0xFFFF) as u16 == VMWARE_SVGA_DEVICE_ID
+                {
+                    return Some((bus, slot, func));
+                }
+            }
+        }
+    }
+    None
+}
+
+unsafe fn probe_io_bar(
+    bus: u8,
+    slot: u8,
+    func: u8,
+    index: u8,
+) -> Result<PciIoBarInfo, VmwareSvgaProbeError> {
+    let offset = 0x10 + index * 4;
+    let raw = pci_read32(bus, slot, func, offset);
+    if raw == 0 {
+        return Err(VmwareSvgaProbeError::ZeroBar { index, raw });
+    }
+    if raw & 1 == 0 {
+        return Err(VmwareSvgaProbeError::ExpectedIoBar { index, raw });
+    }
+    let port = (raw & !0x3) as u16;
+    if port == 0 {
+        return Err(VmwareSvgaProbeError::IoPortUnusable { port, size: 0 });
+    }
+
+    let command = pci_read32(bus, slot, func, 0x04) & 0xffff;
+    // Disable I/O + mem decode while sizing.
+    pci_write32(bus, slot, func, 0x04, command & !0x3);
+    pci_write32(bus, slot, func, offset, u32::MAX);
+    let size_raw = pci_read32(bus, slot, func, offset);
+    pci_write32(bus, slot, func, offset, raw);
+    pci_write32(bus, slot, func, 0x04, command);
+
+    let mask = size_raw & !0x3;
+    let size = (!mask).wrapping_add(1);
+    if size == 0 || !size.is_power_of_two() || size > 0x10000 {
+        return Err(VmwareSvgaProbeError::InvalidBarSize {
+            index,
+            size: size as u64,
+        });
+    }
+    Ok(PciIoBarInfo {
+        index,
+        raw,
+        port,
+        size,
+    })
+}
+
+/// Memory BAR probe that returns [`VmwareSvgaProbeError`].
+unsafe fn probe_memory_bar_svga(
+    bus: u8,
+    slot: u8,
+    func: u8,
+    index: u8,
+) -> Result<PciMemoryBarInfo, VmwareSvgaProbeError> {
+    match probe_memory_bar(bus, slot, func, index) {
+        Ok(info) => Ok(info),
+        Err(Vmxnet3ProbeError::ZeroBar { index, raw }) => {
+            Err(VmwareSvgaProbeError::ZeroBar { index, raw })
+        }
+        Err(Vmxnet3ProbeError::IoBar { index, raw }) => {
+            Err(VmwareSvgaProbeError::ExpectedMemoryBar { index, raw })
+        }
+        Err(Vmxnet3ProbeError::UnsupportedBarType { index, raw }) => {
+            Err(VmwareSvgaProbeError::UnsupportedBarType { index, raw })
+        }
+        Err(Vmxnet3ProbeError::UnusableAddress { index, address }) => {
+            Err(VmwareSvgaProbeError::UnusableAddress { index, address })
+        }
+        Err(Vmxnet3ProbeError::InvalidBarSize { index, size }) => {
+            Err(VmwareSvgaProbeError::InvalidBarSize { index, size })
+        }
+        Err(Vmxnet3ProbeError::IncorrectBarRole { index, size }) => {
+            Err(VmwareSvgaProbeError::IncorrectBarRole { index, size })
+        }
+    }
 }
 
 unsafe fn probe_memory_bar(
