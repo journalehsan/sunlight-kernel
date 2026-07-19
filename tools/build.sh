@@ -116,18 +116,8 @@ echo "[build] Building kernel..."
 touch "$PROJECT_ROOT/kernel/src/main.rs"
 cargo build --package sunlight-kernel
 
-# --- Step 3: Download Limine if not cached ---
-if [[ ! -d "$LIMINE_DIR" ]]; then
-    echo "[build] Downloading Limine..."
-    git clone --branch="$LIMINE_BRANCH" --depth=1 https://github.com/limine-bootloader/limine.git "$LIMINE_DIR"
-    pushd "$LIMINE_DIR" >/dev/null
-    ./bootstrap
-    ./configure --enable-uefi-x86-64 --enable-bios-cd --enable-bios-pxe
-    make -j"$(nproc)"
-    popd >/dev/null
-else
-    echo "[build] Limine already cached."
-fi
+# --- Step 3: Download and build Limine if needed ---
+"$SCRIPT_DIR/setup_limine.sh" "$LIMINE_DIR" "$LIMINE_BRANCH"
 
 # --- Step 4: Create ISO layout ---
 ISO_ROOT="target/iso_root"

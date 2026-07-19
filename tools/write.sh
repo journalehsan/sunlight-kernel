@@ -209,15 +209,7 @@ build_image() {
 
     # Ensure Limine is available
     LIMINE_DIR="$PROJECT_ROOT/target/limine"
-    if [[ ! -d "$LIMINE_DIR" ]]; then
-        echo "Downloading and building Limine bootloader..."
-        git clone --branch="v8.x" --depth=1 https://github.com/limine-bootloader/limine.git "$LIMINE_DIR"
-        pushd "$LIMINE_DIR" >/dev/null
-        ./bootstrap
-        ./configure --enable-uefi-x86-64 --enable-bios-cd --enable-bios-pxe
-        make -j"$(nproc)"
-        popd >/dev/null
-    fi
+    "$SCRIPT_DIR/setup_limine.sh" "$LIMINE_DIR" "v8.x"
 
     # Build the hybrid ISO (Limine BIOS + UEFI)
     KERNEL_ELF="$PROJECT_ROOT/target/x86_64-unknown-none/debug/sunlight-kernel"

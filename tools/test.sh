@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # --- Configuration ---
 TIMEOUT=60
 KERNEL_ELF="target/x86_64-unknown-none/debug/sunlight-kernel"
@@ -337,14 +340,7 @@ touch kernel/src/main.rs
 env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
 
 # --- Step 3: Ensure Limine is available ---
-if [[ ! -d "$LIMINE_DIR" ]]; then
-    git clone --branch="$LIMINE_BRANCH" --depth=1 https://github.com/limine-bootloader/limine.git "$LIMINE_DIR" >>"$BUILD_LOG" 2>&1
-    pushd "$LIMINE_DIR" >>"$BUILD_LOG" 2>&1
-    ./bootstrap >>"$BUILD_LOG" 2>&1
-    ./configure --enable-uefi-x86-64 --enable-bios-cd --enable-bios-pxe >>"$BUILD_LOG" 2>&1
-    make -j"$(nproc)" >>"$BUILD_LOG" 2>&1
-    popd >>"$BUILD_LOG" 2>&1
-fi
+"$SCRIPT_DIR/setup_limine.sh" "$PROJECT_ROOT/$LIMINE_DIR" "$LIMINE_BRANCH" >>"$BUILD_LOG" 2>&1
 
 # --- Step 4: Create ISO layout ---
 ISO_ROOT="target/iso_root"
