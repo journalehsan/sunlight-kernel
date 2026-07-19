@@ -1,10 +1,15 @@
 #![no_std]
 
 pub mod display_metrics;
+pub mod display_modes;
 pub mod swap_policy;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
     BORDER_W as DISPLAY_BORDER_W, MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE,
+};
+pub use display_modes::{
+    DisplayMode, DisplayModeCapabilities, DisplayModeManagement, DisplayModeReadOnlyReason,
+    DisplayModeTransaction, DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES,
 };
 
 pub const IPC_MAX_WORDS: usize = 8;
@@ -422,6 +427,12 @@ pub mod sgp {
         /// Desktop/Widget windows remain visible on all workspaces.
         /// Reply: SgpMsg::REPLY.
         pub const SET_WORKSPACE: u64 = 0xA10D;
+        pub const GET_DISPLAY_MODE_CAPABILITIES: u64 = 0xA112;
+        pub const GET_DISPLAY_MODE: u64 = 0xA113;
+        pub const BEGIN_DISPLAY_MODE_CHANGE: u64 = 0xA114;
+        pub const CONFIRM_DISPLAY_MODE_CHANGE: u64 = 0xA115;
+        pub const REVERT_DISPLAY_MODE_CHANGE: u64 = 0xA116;
+        pub const ATTACH_DISPLAY_MODE_DIALOG: u64 = 0xA117;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)
@@ -3291,6 +3302,89 @@ pub fn query_display_metrics(display_ep: CapabilityToken) -> Option<DisplayMetri
     Some(DisplayMetrics::from_reply(&reply.words).clamped_for_clients())
 }
 
+pub fn query_display_mode_capabilities(
+    display_ep: CapabilityToken,
+) -> Option<DisplayModeCapabilities> {
+    let reply = ipc_call(
+        display_ep,
+        IpcMsg::with_label(sgp::SgpMsg::GET_DISPLAY_MODE_CAPABILITIES),
+    );
+    if reply.label != sgp::SgpMsg::REPLY || reply.words[0] == 0 {
+        return None;
+    }
+    let meta = reply.words[2];
+    Some(DisplayModeCapabilities {
+        backend: ScreenBackend::from_discriminant((meta & 0xff) as u8),
+        current_mode: DisplayMode::from_words(reply.words[0], reply.words[1], reply.words[3]),
+        management: DisplayModeManagement::from_u8(((meta >> 8) & 0xff) as u8),
+        read_only_reason: DisplayModeReadOnlyReason::from_u8(((meta >> 16) & 0xff) as u8),
+        mode_count: (meta >> 32) as u32,
+    })
+}
+
+pub fn query_display_mode(display_ep: CapabilityToken, index: u32) -> Option<DisplayMode> {
+    let reply = ipc_call(
+        display_ep,
+        IpcMsg::with_label(sgp::SgpMsg::GET_DISPLAY_MODE).word(0, index as u64),
+    );
+    if reply.label != sgp::SgpMsg::REPLY || reply.words[3] == 0 {
+        return None;
+    }
+    Some(DisplayMode::from_words(
+        reply.words[0],
+        reply.words[1],
+        reply.words[2],
+    ))
+}
+
+pub fn begin_display_mode_change(
+    display_ep: CapabilityToken,
+    width: u32,
+    height: u32,
+    timeout_ms: u64,
+) -> Option<DisplayModeTransaction> {
+    let reply = ipc_call(
+        display_ep,
+        IpcMsg::with_label(sgp::SgpMsg::BEGIN_DISPLAY_MODE_CHANGE)
+            .word(0, width as u64 | ((height as u64) << 32))
+            .word(1, timeout_ms),
+    );
+    if reply.label != sgp::SgpMsg::REPLY || reply.words[0] == 0 {
+        return None;
+    }
+    Some(DisplayModeTransaction {
+        token: reply.words[0],
+        applied_mode: DisplayMode::from_words(reply.words[1], reply.words[2], 2),
+        deadline_ms: reply.words[3],
+    })
+}
+
+pub fn confirm_display_mode_change(display_ep: CapabilityToken, token: u64) -> bool {
+    let reply = ipc_call(
+        display_ep,
+        IpcMsg::with_label(sgp::SgpMsg::CONFIRM_DISPLAY_MODE_CHANGE).word(0, token),
+    );
+    reply.label == sgp::SgpMsg::REPLY && reply.words[0] == 1
+}
+
+pub fn revert_display_mode_change(display_ep: CapabilityToken, token: u64) -> bool {
+    let reply = ipc_call(
+        display_ep,
+        IpcMsg::with_label(sgp::SgpMsg::REVERT_DISPLAY_MODE_CHANGE).word(0, token),
+    );
+    reply.label == sgp::SgpMsg::REPLY && reply.words[0] == 1
+}
+
+pub fn attach_display_mode_dialog(display_ep: CapabilityToken, token: u64, window_id: u64) -> bool {
+    let reply = ipc_call(
+        display_ep,
+        IpcMsg::with_label(sgp::SgpMsg::ATTACH_DISPLAY_MODE_DIALOG)
+            .word(0, token)
+            .word(1, window_id),
+    );
+    reply.label == sgp::SgpMsg::REPLY && reply.words[0] == 1
+}
+
 /// Move the hardware cursor to (x, y) without changing its image.
 pub fn gpu_move_cursor(x: u32, y: u32) -> bool {
     let a1 = (x as u64) | ((y as u64) << 32);
@@ -3311,6 +3405,7 @@ pub struct SvgaDisplayInfo {
     pub max_height: u32,
     /// Mapped FB capacity in bytes (may exceed the current mode for resize room).
     pub map_bytes: u64,
+    pub framebuffer_offset: u32,
 }
 
 /// Result of [`svga_set_mode`].
@@ -3345,7 +3440,7 @@ fn decode_svga_info(words: &[u64; IPC_MAX_WORDS]) -> Option<SvgaDisplayInfo> {
     let boot_fb_in_vram = (packed & 1) != 0;
     let max_width = ((packed >> 8) & 0xFF_FFFF) as u32;
     let max_height = (packed >> 32) as u32;
-    let map_bytes = words[3];
+    let map_bytes = words[3] & 0xFFFF_FFFF;
     Some(SvgaDisplayInfo {
         width,
         height,
@@ -3355,6 +3450,7 @@ fn decode_svga_info(words: &[u64; IPC_MAX_WORDS]) -> Option<SvgaDisplayInfo> {
         max_width: if max_width == 0 { width } else { max_width },
         max_height: if max_height == 0 { height } else { max_height },
         map_bytes,
+        framebuffer_offset: (words[3] >> 32) as u32,
     })
 }
 
@@ -3385,6 +3481,20 @@ pub fn svga_set_mode(host_w: u32, host_h: u32) -> SvgaSetModeResult {
             Some(info) => SvgaSetModeResult::Unchanged(info),
             None => SvgaSetModeResult::Failed,
         },
+        _ => SvgaSetModeResult::Failed,
+    }
+}
+
+pub fn svga_set_exact_mode(width: u32, height: u32) -> SvgaSetModeResult {
+    let a1 = width as u64 | ((height as u64) << 32);
+    let (ok, msg) = unsafe { raw_syscall(SunlightSyscall::SvgaSetMode, a1, 1, 0, 0, 0, 0, 0) };
+    match ok {
+        1 => decode_svga_info(&msg.words)
+            .map(SvgaSetModeResult::Changed)
+            .unwrap_or(SvgaSetModeResult::Failed),
+        2 => decode_svga_info(&msg.words)
+            .map(SvgaSetModeResult::Unchanged)
+            .unwrap_or(SvgaSetModeResult::Failed),
         _ => SvgaSetModeResult::Failed,
     }
 }

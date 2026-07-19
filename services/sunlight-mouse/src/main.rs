@@ -9,9 +9,9 @@
 #![no_main]
 
 use sunlight_ipc::{
-    endpoint_create, getpid, ipc_call_timeout, ipc_recv, nameserver_lookup,
-    nameserver_lookup_timeout, nameserver_register, process_yield, query_display_metrics,
-    DevicedMsg, DisplayMetrics, DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
+    endpoint_create, getpid, ipc_call_timeout, nameserver_lookup, nameserver_lookup_timeout,
+    nameserver_register, process_yield, query_display_metrics, DevicedMsg, DisplayMetrics,
+    DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
 };
 
 mod profile;
@@ -713,18 +713,21 @@ pub extern "C" fn _start() -> ! {
 
     let fallback = DisplayMetrics::safe_fallback();
     let mut mouse_state = MouseState::new(fallback.width_px as i32, fallback.height_px as i32);
-    let mut screen_bounds_synced = false;
+    let mut next_screen_bounds_refresh_ms = 0u64;
 
     loop {
         request_priority_boost(&mut priority_boosted);
-        if !screen_bounds_synced {
+        let now = sunlight_ipc::monotonic_millis();
+        if now >= next_screen_bounds_refresh_ms {
+            next_screen_bounds_refresh_ms = now.saturating_add(1000);
             if display_token.is_none() {
                 display_token = nameserver_lookup("display_server");
             }
             if let Some(ep) = display_token {
                 if let Some(metrics) = query_display_metrics(ep) {
                     mouse_state.set_screen_size(metrics.width_px as i32, metrics.height_px as i32);
-                    screen_bounds_synced = true;
+                } else {
+                    display_token = None;
                 }
             }
         }
@@ -764,6 +767,6 @@ pub extern "C" fn _start() -> ! {
             &mut next_motion_generation,
         );
 
-        let _ = ipc_recv(my_endpoint);
+        let _ = sunlight_ipc::ipc_recv_timeout(my_endpoint, 1000);
     }
 }

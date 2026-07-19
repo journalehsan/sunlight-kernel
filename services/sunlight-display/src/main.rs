@@ -17,8 +17,9 @@ use sunlight_ipc::{
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_register,
     sgp::SgpMsg,
-    validate_size, CapabilityToken, DisplayMetrics, IpcMsg, MouseMsg, NotificationKind,
-    PixelFormat, ScreenBackend, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+    validate_size, CapabilityToken, DisplayMetrics, DisplayMode, DisplayModeManagement,
+    DisplayModeReadOnlyReason, IpcMsg, MouseMsg, NotificationKind, PixelFormat, ScreenBackend,
+    DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Point, Rect, UiSymbol};
@@ -1078,6 +1079,54 @@ struct CompositorState {
     /// termination policy on last-window-close, and periodically sweeps
     /// zombie processes.
     app_tracker: app_lifecycle::AppTracker,
+    mode_transaction: Option<ModeTransaction>,
+}
+
+struct ModeSnapshot {
+    backend: backend::DisplayBackend,
+    width: u32,
+    height: u32,
+    pitch: u32,
+    bits_per_pixel: u32,
+    framebuffer: *mut u32,
+    back_buffer_len: usize,
+    mouse_x: u16,
+    mouse_y: u16,
+    windows: Vec<WindowGeometrySnapshot>,
+    persisted_mode: [u8; 32],
+    persisted_mode_len: usize,
+}
+
+#[derive(Clone, Copy)]
+struct WindowGeometrySnapshot {
+    id: u64,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    saved_x: u32,
+    saved_y: u32,
+    saved_w: u32,
+    saved_h: u32,
+    state: WindowState,
+    rolled_up: bool,
+    saved_unrolled_h: u32,
+}
+
+struct ModeTransaction {
+    token: u64,
+    owner_pid: u64,
+    deadline_ms: u64,
+    previous: ModeSnapshot,
+    confirmation_window_id: Option<u64>,
+}
+
+#[derive(Clone, Copy)]
+enum ModeRevertReason {
+    Explicit,
+    Timeout,
+    OwnerExited,
+    UiClosed,
 }
 
 impl CompositorState {
@@ -1269,6 +1318,16 @@ fn pointer_eligible_window(state: &CompositorState, win: &Window) -> bool {
 }
 
 fn topmost_window_idx_at(state: &CompositorState, cx: u32, cy: u32) -> Option<usize> {
+    if let Some(dialog_id) = state
+        .mode_transaction
+        .as_ref()
+        .and_then(|transaction| transaction.confirmation_window_id)
+    {
+        return state
+            .windows
+            .iter()
+            .position(|window| window.id == dialog_id && is_window_visible(state, window));
+    }
     state
         .windows
         .iter()
@@ -1814,6 +1873,11 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
         state.client_pointer_capture = None;
     }
     let was_desktop = win.config.window_type == WindowType::Desktop;
+    let closes_preview_ui = state.mode_transaction.as_ref().is_some_and(|transaction| {
+        transaction.confirmation_window_id == Some(win_id)
+            || (transaction.owner_pid == win.owner_pid
+                && win.config.title.starts_with(b"System Preferences"))
+    });
     let restore_focus_id = if win.config.window_type == WindowType::Dialog {
         (win.parent_focus_window_id != 0).then_some(win.parent_focus_window_id)
     } else {
@@ -1850,6 +1914,9 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
         if state.session_active {
             ensure_vortex_shell(state);
         }
+    }
+    if closes_preview_ui {
+        let _ = revert_mode_transaction(state, ModeRevertReason::UiClosed);
     }
     true
 }
@@ -2177,6 +2244,7 @@ fn present_back_buffer(state: &mut CompositorState) {
             pitch_words,
             width,
             height,
+            ..
         } => {
             state.debug_counters.framebuffer_copy_count += 1;
             let stride = *pitch_words;
@@ -2227,7 +2295,9 @@ fn present_rect(state: &mut CompositorState, r: Rect) {
                 }
             }
         }
-        backend::DisplayBackend::VmwareSvga { fb, pitch_words, .. } => {
+        backend::DisplayBackend::VmwareSvga {
+            fb, pitch_words, ..
+        } => {
             state.debug_counters.framebuffer_copy_count += 1;
             let stride = *pitch_words;
             let len = x1 - x0;
@@ -2562,12 +2632,14 @@ fn compositor_poll_timeout_ms(state: &CompositorState) -> Option<u64> {
     } else {
         None
     };
-    let base = match (notification_timeout, overlay_timeout) {
-        (Some(a), Some(b)) => Some(a.min(b)),
-        (Some(a), None) => Some(a),
-        (None, Some(b)) => Some(b),
-        (None, None) => None,
-    };
+    let transaction_timeout = state
+        .mode_transaction
+        .as_ref()
+        .map(|transaction| transaction.deadline_ms.saturating_sub(now));
+    let base = [notification_timeout, overlay_timeout, transaction_timeout]
+        .into_iter()
+        .flatten()
+        .min();
     // Always wake up periodically to run the zombie app sweeper.
     match base {
         Some(ms) => Some(ms.min(500)),
@@ -3314,83 +3386,419 @@ fn setup_virtio_backend(gw: u32, gh: u32) -> Result<Vec<u32>, &'static str> {
     Ok(gpu_buffer)
 }
 
-/// Apply a VMware SVGA modeset and resize compositor state when geometry changes.
-///
-/// Relies on the oversized SVGA FB mapping from `map_framebuffer` (covers up to
-/// auto-max when VRAM allows). Returns true when the compositor size changed.
-fn try_svga_modeset_resize(state: &mut CompositorState, host_w: u32, host_h: u32) -> bool {
-    let present_fb = match state.display_backend {
-        backend::DisplayBackend::VmwareSvga { fb, .. } => fb,
+const VMWARE_MODE_CANDIDATES: &[(u32, u32)] = &[
+    (800, 600),
+    (1024, 768),
+    (1280, 960),
+    (1280, 1024),
+    (1280, 720),
+    (1366, 768),
+    (1600, 900),
+    (1920, 1080),
+    (1280, 800),
+    (1440, 900),
+    (1680, 1050),
+    (1920, 1200),
+];
+
+fn current_display_mode(state: &CompositorState) -> DisplayMode {
+    DisplayMode {
+        width: state.fb_width,
+        height: state.fb_height,
+        bits_per_pixel: 32,
+        pitch_bytes: state.fb_pitch,
+        preferred: false,
+        current: true,
+    }
+}
+
+fn vmware_mode_at(state: &CompositorState, index: usize) -> Option<DisplayMode> {
+    let info = sunlight_ipc::svga_get_info()?;
+    let current = (state.fb_width, state.fb_height);
+    let mut filtered = [(0u32, 0u32); MAX_DISPLAY_MODES];
+    let mut count = 0usize;
+    let mut push = |width: u32, height: u32| {
+        if count >= filtered.len()
+            || filtered[..count]
+                .iter()
+                .any(|&(existing_w, existing_h)| existing_w == width && existing_h == height)
+        {
+            return;
+        }
+        let Some(pitch) = width.checked_mul(4) else {
+            return;
+        };
+        let Some(bytes) = pitch.checked_mul(height) else {
+            return;
+        };
+        if width < 640
+            || height < 480
+            || width > info.max_width
+            || height > info.max_height
+            || bytes as u64 > info.map_bytes
+        {
+            return;
+        }
+        filtered[count] = (width, height);
+        count += 1;
+    };
+    push(current.0, current.1);
+    for &(width, height) in VMWARE_MODE_CANDIDATES {
+        push(width, height);
+    }
+    let (width, height) = *filtered.get(index)?;
+    if width == 0 || height == 0 {
+        return None;
+    }
+    Some(DisplayMode {
+        width,
+        height,
+        bits_per_pixel: 32,
+        pitch_bytes: if (width, height) == current {
+            state.fb_pitch
+        } else {
+            0
+        },
+        preferred: (width, height) == (1440, 900),
+        current: (width, height) == current,
+    })
+}
+
+fn display_mode_count(state: &CompositorState) -> u32 {
+    (0..MAX_DISPLAY_MODES)
+        .take_while(|&index| vmware_mode_at(state, index).is_some())
+        .count() as u32
+}
+
+fn mode_management(
+    state: &CompositorState,
+) -> (DisplayModeManagement, DisplayModeReadOnlyReason, u32) {
+    match state.display_backend {
+        backend::DisplayBackend::VmwareSvga { .. } => (
+            DisplayModeManagement::Manual,
+            DisplayModeReadOnlyReason::None,
+            display_mode_count(state),
+        ),
+        backend::DisplayBackend::VirtioGpu { .. } => (
+            DisplayModeManagement::Automatic,
+            DisplayModeReadOnlyReason::AutomaticallyManaged,
+            0,
+        ),
+        backend::DisplayBackend::Limine { .. } => (
+            DisplayModeManagement::ReadOnly,
+            DisplayModeReadOnlyReason::FirmwareFramebuffer,
+            0,
+        ),
+    }
+}
+
+fn restart_desktop_shell(state: &mut CompositorState) {
+    let desktop_windows: Vec<(u64, u64)> = state
+        .windows
+        .iter()
+        .filter(|window| window.config.window_type == WindowType::Desktop)
+        .map(|window| (window.id, window.owner_pid))
+        .collect();
+    let session_active = state.session_active;
+    state.session_active = false;
+    for (window_id, owner_pid) in desktop_windows {
+        let _ = kill(owner_pid, 15);
+        close_window(state, window_id, None);
+    }
+    state.session_active = session_active;
+    if session_active {
+        ensure_vortex_shell(state);
+    }
+}
+
+fn clamp_windows_after_mode_change(state: &mut CompositorState) {
+    for window in state.windows.iter_mut() {
+        if window.config.window_type == WindowType::Desktop {
+            continue;
+        }
+        let chrome_width = window.width.saturating_add(BORDER_W * 2);
+        let chrome_height = window
+            .height
+            .saturating_add(window.titlebar_height())
+            .saturating_add(BORDER_W);
+        window.x = window.x.min(
+            state
+                .fb_width
+                .saturating_sub(chrome_width.min(state.fb_width)),
+        );
+        window.y = window.y.max(FLOATING_PANEL_RESERVED_H).min(
+            state
+                .fb_height
+                .saturating_sub(chrome_height.min(state.fb_height)),
+        );
+    }
+}
+
+fn apply_svga_info(state: &mut CompositorState, info: sunlight_ipc::SvgaDisplayInfo) -> bool {
+    let (aperture, aperture_bytes) = match state.display_backend {
+        backend::DisplayBackend::VmwareSvga {
+            aperture,
+            aperture_bytes,
+            ..
+        } => (aperture, aperture_bytes),
         _ => return false,
     };
+    let Some(visible_bytes) = (info.pitch_bytes as u64).checked_mul(info.height as u64) else {
+        return false;
+    };
+    let Some(visible_end) = (info.framebuffer_offset as u64).checked_add(visible_bytes) else {
+        return false;
+    };
+    let required_words = (info.pitch_bytes as usize / 4).saturating_mul(info.height as usize);
+    if info.bpp != 32
+        || info.pitch_bytes < info.width.saturating_mul(4)
+        || visible_end > aperture_bytes
+        || required_words > state.back_buffer.len()
+    {
+        return false;
+    }
+    let fb = unsafe { aperture.add(info.framebuffer_offset as usize) as *mut u32 };
+    let geometry_changed = state.fb_width != info.width
+        || state.fb_height != info.height
+        || state.fb_pitch != info.pitch_bytes
+        || state.fb != fb;
+    state.fb_width = info.width;
+    state.fb_height = info.height;
+    state.fb_pitch = info.pitch_bytes;
+    state.fb = fb;
+    state.display_backend = backend::DisplayBackend::VmwareSvga {
+        aperture,
+        aperture_bytes,
+        fb,
+        pitch_words: info.pitch_bytes as usize / 4,
+        width: info.width,
+        height: info.height,
+    };
+    state.pointer = PointerPolicy::new(info.width, info.height);
+    state.mouse_x = state.mouse_x.min(info.width.saturating_sub(1) as u16);
+    state.mouse_y = state.mouse_y.min(info.height.saturating_sub(1) as u16);
+    state.software_cursor.valid = false;
+    if geometry_changed {
+        clamp_windows_after_mode_change(state);
+        restart_desktop_shell(state);
+        clear_back_buffer(state);
+        mark_dirty_full(state);
+    }
+    debug_log("[DISPLAY] display_buffers_reconfigured ");
+    debug_dim(info.width, info.height);
+    debug_log(" pitch=");
+    debug_dec(info.pitch_bytes);
+    debug_log(" mapped_bytes=");
+    debug_dec_u64(aperture_bytes);
+    debug_log("\n[DISPLAY] full_redraw_requested\n");
+    true
+}
+
+fn apply_exact_vmware_mode(state: &mut CompositorState, width: u32, height: u32) -> bool {
+    if !matches!(
+        state.display_backend,
+        backend::DisplayBackend::VmwareSvga { .. }
+    ) {
+        return false;
+    }
     use sunlight_ipc::SvgaSetModeResult;
-    match sunlight_ipc::svga_set_mode(host_w, host_h) {
-        SvgaSetModeResult::Changed(info) => {
-            let need = (info.pitch_bytes as u64).saturating_mul(info.height as u64);
-            if info.map_bytes != 0 && need > info.map_bytes {
-                debug_log("[DISPLAY] SVGA modeset skipped: mode exceeds mapped FB capacity\n");
-                return false;
-            }
-            let pitch_words = (info.pitch_bytes as usize) / 4;
-            let pixels = pitch_words.saturating_mul(info.height as usize);
-            if pixels == 0 {
-                return false;
-            }
-            let new_back = alloc_page_aligned_pixels(pixels, DESKTOP_COLOR);
-            if new_back.is_empty() {
-                debug_log("[DISPLAY] SVGA modeset: back buffer realloc failed\n");
-                return false;
-            }
-            state.back_buffer = new_back;
-            state.fb_width = info.width;
-            state.fb_height = info.height;
-            state.fb_pitch = info.pitch_bytes;
-            state.fb = present_fb;
-            state.display_backend = backend::DisplayBackend::VmwareSvga {
-                fb: present_fb,
-                pitch_words,
-                width: info.width,
-                height: info.height,
-            };
-            state.pointer = PointerPolicy::new(info.width, info.height);
-            state.mouse_x = (info.width / 2) as u16;
-            state.mouse_y = (info.height / 2) as u16;
-            for win in state.windows.iter_mut() {
-                if win.x >= info.width {
-                    win.x = info.width.saturating_sub(32);
-                }
-                if win.y >= info.height {
-                    win.y = info.height.saturating_sub(32);
-                }
-            }
-            debug_log("[DISPLAY] SVGA resized to ");
+    let requested_supported = (0..MAX_DISPLAY_MODES).any(|index| {
+        vmware_mode_at(state, index)
+            .is_some_and(|mode| mode.width == width && mode.height == height)
+    });
+    if !requested_supported {
+        return false;
+    }
+    debug_log("[DISPLAY] mode_change_validated requested=");
+    debug_dim(width, height);
+    debug_log("\n");
+    match sunlight_ipc::svga_set_exact_mode(width, height) {
+        SvgaSetModeResult::Changed(info) | SvgaSetModeResult::Unchanged(info) => {
+            debug_log("[DISPLAY] mode_readback ");
             debug_dim(info.width, info.height);
             debug_log(" pitch=");
             debug_dec(info.pitch_bytes);
             debug_log("\n");
-            true
+            apply_svga_info(state, info)
         }
-        SvgaSetModeResult::Unchanged(_) => false,
-        SvgaSetModeResult::Failed => {
-            debug_log("[DISPLAY] SVGA modeset failed\n");
-            false
-        }
+        SvgaSetModeResult::Failed => false,
     }
 }
 
-/// Prefer a strong host/window hint for policy: at least min-HD when possible.
-fn svga_host_hint(state: &CompositorState) -> (u32, u32) {
-    // Prefer the larger of the current compositor size and min-HD so the kernel
-    // policy can step up from a small firmware mode when the device allows.
-    let w = state.fb_width.max(1280);
-    let h = state.fb_height.max(720);
-    (w, h)
+fn mode_transaction_revert_reason(state: &CompositorState, now: u64) -> Option<ModeRevertReason> {
+    let transaction = state.mode_transaction.as_ref()?;
+    if now >= transaction.deadline_ms {
+        Some(ModeRevertReason::Timeout)
+    } else if !sunlight_ipc::process_is_alive(transaction.owner_pid) {
+        Some(ModeRevertReason::OwnerExited)
+    } else {
+        None
+    }
 }
 
-/// Re-evaluate SVGA mode (min-HD / preferred / host-window policy in kernel).
-fn maybe_refresh_svga_mode(state: &mut CompositorState) -> bool {
-    let (hw, hh) = svga_host_hint(state);
-    try_svga_modeset_resize(state, hw, hh)
+fn restore_window_geometry(state: &mut CompositorState, snapshot: &ModeSnapshot) {
+    for saved in &snapshot.windows {
+        let Some(window) = state
+            .windows
+            .iter_mut()
+            .find(|window| window.id == saved.id)
+        else {
+            continue;
+        };
+        window.x = saved.x;
+        window.y = saved.y;
+        window.width = saved.width;
+        window.height = saved.height;
+        window.saved_x = saved.saved_x;
+        window.saved_y = saved.saved_y;
+        window.saved_w = saved.saved_w;
+        window.saved_h = saved.saved_h;
+        window.config.state = saved.state;
+        window.rolled_up = saved.rolled_up;
+        window.saved_unrolled_h = saved.saved_unrolled_h;
+    }
+}
+
+fn revert_mode_transaction(state: &mut CompositorState, reason: ModeRevertReason) -> bool {
+    let Some(transaction) = state.mode_transaction.take() else {
+        return false;
+    };
+    let confirmation_window_id = transaction.confirmation_window_id;
+    let mut restored = apply_exact_vmware_mode(
+        state,
+        transaction.previous.width,
+        transaction.previous.height,
+    );
+    if restored {
+        if transaction.previous.bits_per_pixel != 32
+            || transaction.previous.back_buffer_len != state.back_buffer.len()
+        {
+            debug_log(
+                "[DISPLAY-MODE] failed stage=restore-snapshot-validation error=geometry-mismatch\n",
+            );
+        }
+        state.display_backend = transaction.previous.backend;
+        state.fb_width = transaction.previous.width;
+        state.fb_height = transaction.previous.height;
+        state.fb_pitch = transaction.previous.pitch;
+        state.fb = transaction.previous.framebuffer;
+        state.mouse_x = transaction
+            .previous
+            .mouse_x
+            .min(state.fb_width.saturating_sub(1) as u16);
+        state.mouse_y = transaction
+            .previous
+            .mouse_y
+            .min(state.fb_height.saturating_sub(1) as u16);
+        restore_window_geometry(state, &transaction.previous);
+        clear_back_buffer(state);
+        mark_dirty_full(state);
+        if transaction.previous.persisted_mode_len > 0 {
+            let _ = sunlight_ipc::notification_kv_put(
+                "display.vmware.mode",
+                &transaction.previous.persisted_mode[..transaction.previous.persisted_mode_len],
+            );
+        }
+    } else {
+        debug_log("[DISPLAY-MODE] failed stage=restore-previous error=hardware-rejected\n");
+        restored = apply_exact_vmware_mode(state, SAFE_FALLBACK_W, SAFE_FALLBACK_H);
+        if restored {
+            debug_log("[DISPLAY-MODE] fallback applied ");
+            debug_dim(state.fb_width, state.fb_height);
+            debug_log("\n");
+        } else {
+            debug_log("[DISPLAY-MODE] failed stage=restore-fallback error=hardware-rejected\n");
+        }
+    }
+    debug_log("[DISPLAY-MODE] reverted reason=");
+    debug_log(match reason {
+        ModeRevertReason::Explicit => "explicit",
+        ModeRevertReason::Timeout => "timeout",
+        ModeRevertReason::OwnerExited => "owner-exited",
+        ModeRevertReason::UiClosed => "ui-closed",
+    });
+    debug_log(" result=");
+    debug_log(if restored { "ok\n" } else { "failed\n" });
+    if let Some(window_id) = confirmation_window_id {
+        let _ = close_window(state, window_id, None);
+    }
+    restored
+}
+
+fn mode_change_authorized(state: &CompositorState, caller_pid: u64) -> bool {
+    state.windows.iter().any(|window| {
+        window.owner_pid == caller_pid && window.config.title.starts_with(b"System Preferences")
+    })
+}
+
+fn format_mode_preference(width: u32, height: u32, out: &mut [u8]) -> usize {
+    fn write_u32(mut value: u32, out: &mut [u8]) -> usize {
+        let mut digits = [0u8; 10];
+        let mut len = 0usize;
+        loop {
+            digits[len] = b'0' + (value % 10) as u8;
+            len += 1;
+            value /= 10;
+            if value == 0 {
+                break;
+            }
+        }
+        for index in 0..len {
+            out[index] = digits[len - index - 1];
+        }
+        len
+    }
+    let width_len = write_u32(width, out);
+    if width_len >= out.len() {
+        return width_len;
+    }
+    out[width_len] = b'x';
+    width_len + 1 + write_u32(height, &mut out[width_len + 1..])
+}
+
+fn parse_mode_preference(bytes: &[u8]) -> Option<(u32, u32)> {
+    let separator = bytes.iter().position(|byte| *byte == b'x')?;
+    let parse = |digits: &[u8]| -> Option<u32> {
+        if digits.is_empty() {
+            return None;
+        }
+        let mut value = 0u32;
+        for byte in digits {
+            if !byte.is_ascii_digit() {
+                return None;
+            }
+            value = value.checked_mul(10)?.checked_add((byte - b'0') as u32)?;
+        }
+        Some(value)
+    };
+    Some((parse(&bytes[..separator])?, parse(&bytes[separator + 1..])?))
+}
+
+fn apply_stored_vmware_mode(state: &mut CompositorState) {
+    if !matches!(
+        state.display_backend,
+        backend::DisplayBackend::VmwareSvga { .. }
+    ) {
+        return;
+    }
+    let mut value = [0u8; 32];
+    let Some(length) = sunlight_ipc::notification_kv_get_into("display.vmware.mode", &mut value)
+    else {
+        return;
+    };
+    let Some((width, height)) = parse_mode_preference(&value[..length]) else {
+        debug_log("[DISPLAY] stored VMware mode ignored: invalid setting\n");
+        return;
+    };
+    let previous = (state.fb_width, state.fb_height);
+    if apply_exact_vmware_mode(state, width, height) {
+        debug_log("[DISPLAY] stored VMware mode applied ");
+        debug_dim(width, height);
+        debug_log("\n");
+    } else {
+        let _ = apply_exact_vmware_mode(state, previous.0, previous.1);
+        debug_log("[DISPLAY] stored VMware mode ignored: unsupported or rejected\n");
+    }
 }
 
 /// Wire the prepared VirtIO resource to scanout 0 and switch to the hardware
@@ -3712,6 +4120,7 @@ mod tests {
             last_titlebar_click_ms: 0,
             titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
             app_tracker: app_lifecycle::AppTracker::new(),
+            mode_transaction: None,
         }
     }
 
@@ -4363,10 +4772,7 @@ pub extern "C" fn _start() -> ! {
     // VMware SVGA only when VirtIO did not become the active backend.
     // `map_framebuffer` already returns SVGA geometry when the kernel driver is
     // Active (modeset applied VM policy: min-HD / preferred / host window).
-    if !matches!(
-        display_backend,
-        backend::DisplayBackend::VirtioGpu { .. }
-    ) {
+    if !matches!(display_backend, backend::DisplayBackend::VirtioGpu { .. }) {
         match sunlight_ipc::svga_get_info() {
             Some(info) => match validate_size(info.width, info.height) {
                 Some((sw, sh)) if info.bpp == 32 && info.pitch_bytes >= sw.saturating_mul(4) => {
@@ -4377,6 +4783,10 @@ pub extern "C" fn _start() -> ! {
                         && info.pitch_bytes == limine_render_pitch
                     {
                         display_backend = backend::DisplayBackend::VmwareSvga {
+                            aperture: unsafe { fb_ptr.sub(info.framebuffer_offset as usize) },
+                            aperture_bytes: info
+                                .map_bytes
+                                .saturating_add(info.framebuffer_offset as u64),
                             fb: fb_ptr as *mut u32,
                             pitch_words: (info.pitch_bytes as usize) / 4,
                             width: sw,
@@ -4420,10 +4830,13 @@ pub extern "C" fn _start() -> ! {
     // Limine / VMware path: allocate the software back buffer now that the
     // final render dimensions are known (VirtIO already allocated its buffer).
     if back_buffer.is_empty() {
-        back_buffer = alloc_page_aligned_pixels(
-            (render_pitch as usize / 4) * render_height as usize,
-            DESKTOP_COLOR,
-        );
+        let buffer_words = match display_backend {
+            backend::DisplayBackend::VmwareSvga { aperture_bytes, .. } => {
+                (aperture_bytes / 4) as usize
+            }
+            _ => (render_pitch as usize / 4) * render_height as usize,
+        };
+        back_buffer = alloc_page_aligned_pixels(buffer_words, DESKTOP_COLOR);
         if back_buffer.is_empty() {
             debug_log("[DISPLAY] FATAL: back buffer allocation failed\n");
             loop {}
@@ -4515,6 +4928,7 @@ pub extern "C" fn _start() -> ! {
         last_titlebar_click_ms: 0,
         titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
         app_tracker: app_lifecycle::AppTracker::new(),
+        mode_transaction: None,
     };
     log_debug_counters(&state, "startup");
     // Prime the back_buffer content (wallpaper/desktop color) but do NOT
@@ -4522,13 +4936,9 @@ pub extern "C" fn _start() -> ! {
     // Presenting here used to overwrite the login screen on the Limine
     // backend, and on VirtIO the (deferred) scanout is not wired yet.
     clear_back_buffer(&mut state);
+    apply_stored_vmware_mode(&mut state);
 
     let mut next_win_id: u64 = 1;
-    // Periodic SVGA mode refresh (host window / policy), similar in spirit to
-    // VirtIO sampling GET_DISPLAY_INFO — bounded to avoid modeset thrash.
-    let mut last_svga_resize_check_ms: u64 = 0;
-    const SVGA_RESIZE_POLL_MS: u64 = 2000;
-
     loop {
         let msg = if let Some(timeout_ms) = compositor_poll_timeout_ms(&state) {
             if let Some(msg) = ipc_recv_timeout(my_ep, timeout_ms) {
@@ -4549,16 +4959,8 @@ pub extern "C" fn _start() -> ! {
                 if prune_dead_owner_windows(&mut state) {
                     needs_redraw = true;
                 }
-                if state.session_active
-                    && matches!(
-                        state.display_backend,
-                        backend::DisplayBackend::VmwareSvga { .. }
-                    )
-                    && now.saturating_sub(last_svga_resize_check_ms) >= SVGA_RESIZE_POLL_MS
-                {
-                    last_svga_resize_check_ms = now;
-                    if maybe_refresh_svga_mode(&mut state) {
-                        mark_dirty_full(&mut state);
+                if let Some(reason) = mode_transaction_revert_reason(&state, now) {
+                    if revert_mode_transaction(&mut state, reason) {
                         needs_redraw = true;
                     }
                 }
@@ -4570,6 +4972,11 @@ pub extern "C" fn _start() -> ! {
         } else {
             ipc_recv(my_ep)
         };
+
+        if let Some(reason) = mode_transaction_revert_reason(&state, monotonic_millis()) {
+            let _ = revert_mode_transaction(&mut state, reason);
+            redraw_scene(&mut state);
+        }
 
         match msg.label {
             // -------------------------------------------------------------------
@@ -4934,6 +5341,256 @@ pub extern "C" fn _start() -> ! {
                     reply = reply.word(i, *word);
                 }
                 let _ = ipc_reply(reply);
+            }
+
+            SgpMsg::GET_DISPLAY_MODE_CAPABILITIES => {
+                let current = current_display_mode(&state);
+                let (management, reason, mode_count) = mode_management(&state);
+                let meta = state.display_metrics().backend as u64
+                    | ((management as u64) << 8)
+                    | ((reason as u64) << 16)
+                    | ((mode_count as u64) << 32);
+                let reply = IpcMsg::with_label(SgpMsg::REPLY)
+                    .word(0, current.geometry_word())
+                    .word(1, current.format_word())
+                    .word(2, meta)
+                    .word(3, current.flags_word());
+                let _ = ipc_reply(reply);
+            }
+
+            SgpMsg::GET_DISPLAY_MODE => {
+                let mode = if matches!(
+                    state.display_backend,
+                    backend::DisplayBackend::VmwareSvga { .. }
+                ) {
+                    vmware_mode_at(&state, msg.words[0] as usize)
+                } else {
+                    None
+                };
+                let reply = if let Some(mode) = mode {
+                    IpcMsg::with_label(SgpMsg::REPLY)
+                        .word(0, mode.geometry_word())
+                        .word(1, mode.format_word())
+                        .word(2, mode.flags_word())
+                        .word(3, 1)
+                } else {
+                    IpcMsg::with_label(SgpMsg::REPLY)
+                };
+                let _ = ipc_reply(reply);
+            }
+
+            SgpMsg::BEGIN_DISPLAY_MODE_CHANGE => {
+                let width = msg.words[0] as u32;
+                let height = (msg.words[0] >> 32) as u32;
+                let timeout_ms = DEFAULT_MODE_PREVIEW_TIMEOUT_MS;
+                debug_log("[DISPLAY-MODE] preview request received old=");
+                debug_dim(state.fb_width, state.fb_height);
+                debug_log(" requested=");
+                debug_dim(width, height);
+                debug_log("\n");
+                let can_begin = state.mode_transaction.is_none()
+                    && mode_change_authorized(&state, msg.badge)
+                    && matches!(
+                        state.display_backend,
+                        backend::DisplayBackend::VmwareSvga { .. }
+                    );
+                if !can_begin {
+                    debug_log("[DISPLAY-MODE] failed stage=authorization-or-busy error=rejected\n");
+                    let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                    continue;
+                }
+                debug_log("[DISPLAY-MODE] validation succeeded\n");
+                let mut persisted_mode = [0u8; 32];
+                let persisted_mode_len = sunlight_ipc::notification_kv_get_into(
+                    "display.vmware.mode",
+                    &mut persisted_mode,
+                )
+                .unwrap_or(0);
+                let previous = ModeSnapshot {
+                    backend: state.display_backend,
+                    width: state.fb_width,
+                    height: state.fb_height,
+                    pitch: state.fb_pitch,
+                    bits_per_pixel: 32,
+                    framebuffer: state.fb,
+                    back_buffer_len: state.back_buffer.len(),
+                    mouse_x: state.mouse_x,
+                    mouse_y: state.mouse_y,
+                    windows: state
+                        .windows
+                        .iter()
+                        .map(|window| WindowGeometrySnapshot {
+                            id: window.id,
+                            x: window.x,
+                            y: window.y,
+                            width: window.width,
+                            height: window.height,
+                            saved_x: window.saved_x,
+                            saved_y: window.saved_y,
+                            saved_w: window.saved_w,
+                            saved_h: window.saved_h,
+                            state: window.config.state,
+                            rolled_up: window.rolled_up,
+                            saved_unrolled_h: window.saved_unrolled_h,
+                        })
+                        .collect(),
+                    persisted_mode,
+                    persisted_mode_len,
+                };
+                if !apply_exact_vmware_mode(&mut state, width, height) {
+                    let _ = apply_exact_vmware_mode(&mut state, previous.width, previous.height);
+                    debug_log(
+                        "[DISPLAY-MODE] failed stage=apply error=hardware-or-reconfiguration\n",
+                    );
+                    let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                    continue;
+                }
+                let mut random = [0u8; 8];
+                let random_count = sunlight_libc::getrandom(&mut random, 0);
+                let token = u64::from_le_bytes(random);
+                if random_count != random.len() as isize || token == 0 {
+                    let _ = apply_exact_vmware_mode(&mut state, previous.width, previous.height);
+                    debug_log(
+                        "[DISPLAY-MODE] failed stage=transaction-token error=random-unavailable\n",
+                    );
+                    let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                    continue;
+                }
+                let deadline_ms = monotonic_millis().saturating_add(timeout_ms);
+                state.mode_transaction = Some(ModeTransaction {
+                    token,
+                    owner_pid: msg.badge,
+                    deadline_ms,
+                    previous,
+                    confirmation_window_id: None,
+                });
+                debug_log("[DISPLAY-MODE] preview active token=");
+                debug_dec_u64(token);
+                debug_log(" deadline=30s hardware readback=");
+                debug_dim(state.fb_width, state.fb_height);
+                debug_log(" pitch=");
+                debug_dec(state.fb_pitch);
+                debug_log(" enable=1\n");
+                redraw_scene(&mut state);
+                let current = current_display_mode(&state);
+                let reply = IpcMsg::with_label(SgpMsg::REPLY)
+                    .word(0, token)
+                    .word(1, current.geometry_word())
+                    .word(2, current.format_word())
+                    .word(3, deadline_ms);
+                let _ = ipc_reply(reply);
+            }
+
+            SgpMsg::CONFIRM_DISPLAY_MODE_CHANGE => {
+                let token_valid = state.mode_transaction.as_ref().is_some_and(|transaction| {
+                    transaction.token == msg.words[0] && transaction.owner_pid == msg.badge
+                });
+                let accepted = if token_valid {
+                    let mut value = [0u8; 24];
+                    let len = format_mode_preference(state.fb_width, state.fb_height, &mut value);
+                    let persisted =
+                        sunlight_ipc::notification_kv_put("display.vmware.mode", &value[..len]);
+                    debug_log("[DISPLAY-MODE] confirmed persisted=");
+                    debug_log(if persisted { "yes\n" } else { "no\n" });
+                    if persisted {
+                        state.mode_transaction = None;
+                    }
+                    persisted
+                } else {
+                    false
+                };
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, accepted as u64));
+            }
+
+            SgpMsg::REVERT_DISPLAY_MODE_CHANGE => {
+                let accepted = state.mode_transaction.as_ref().is_some_and(|transaction| {
+                    transaction.token == msg.words[0] && transaction.owner_pid == msg.badge
+                });
+                let restored =
+                    accepted && revert_mode_transaction(&mut state, ModeRevertReason::Explicit);
+                if restored {
+                    redraw_scene(&mut state);
+                }
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, restored as u64));
+            }
+
+            SgpMsg::ATTACH_DISPLAY_MODE_DIALOG => {
+                let token = msg.words[0];
+                let window_id = msg.words[1];
+                let dialog_valid = state.windows.iter().any(|window| {
+                    window.id == window_id
+                        && window.owner_pid == msg.badge
+                        && window.config.window_type == WindowType::Dialog
+                        && window.config.state == WindowState::Normal
+                });
+                let accepted = dialog_valid
+                    && state.mode_transaction.as_mut().is_some_and(|transaction| {
+                        if transaction.token == token && transaction.owner_pid == msg.badge {
+                            transaction.confirmation_window_id = Some(window_id);
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                if accepted {
+                    let parent_id = state
+                        .mode_transaction
+                        .as_ref()
+                        .and_then(|transaction| {
+                            state
+                                .windows
+                                .iter()
+                                .find(|window| {
+                                    window.owner_pid == transaction.owner_pid
+                                        && window.config.title.starts_with(b"System Preferences")
+                                })
+                                .map(|window| window.id)
+                        })
+                        .unwrap_or(0);
+                    let parent_geometry = state
+                        .windows
+                        .iter()
+                        .find(|window| window.id == parent_id)
+                        .map(|window| {
+                            let (x, y, width, height) =
+                                window.chrome_rect(state.fb_width, state.fb_height);
+                            (x, y, width, height)
+                        });
+                    if let Some(dialog) = state
+                        .windows
+                        .iter_mut()
+                        .find(|window| window.id == window_id)
+                    {
+                        dialog.parent_focus_window_id = parent_id;
+                        if let Some((parent_x, parent_y, parent_w, parent_h)) = parent_geometry {
+                            let dialog_w = dialog.width.saturating_add(BORDER_W * 2);
+                            let dialog_h = dialog
+                                .height
+                                .saturating_add(dialog.titlebar_height())
+                                .saturating_add(BORDER_W);
+                            dialog.x = parent_x
+                                .saturating_add(parent_w.saturating_sub(dialog_w) / 2)
+                                .min(state.fb_width.saturating_sub(dialog_w.min(state.fb_width)));
+                            dialog.y = parent_y
+                                .saturating_add(parent_h.saturating_sub(dialog_h) / 2)
+                                .max(FLOATING_PANEL_RESERVED_H)
+                                .min(
+                                    state
+                                        .fb_height
+                                        .saturating_sub(dialog_h.min(state.fb_height)),
+                                );
+                        }
+                    }
+                    raise_window_by_id(&mut state, window_id);
+                    mark_dirty_full(&mut state);
+                    redraw_scene(&mut state);
+                }
+                debug_log(if accepted {
+                    "[DISPLAY-MODE] confirmation dialog shown\n"
+                } else {
+                    "[DISPLAY-MODE] failed stage=dialog-attach error=invalid-owner-token-or-window\n"
+                });
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, accepted as u64));
             }
 
             // -------------------------------------------------------------------
@@ -5670,11 +6327,6 @@ pub extern "C" fn _start() -> ! {
                     // First activation on the VirtIO backend: wire the scanout
                     // now, taking the display over from the VGA/TTY output.
                     activate_virtio_scanout(&mut state);
-                    // VMware: re-apply min-HD / preferred policy for the desktop
-                    // session (may upgrade from a small firmware mode).
-                    if maybe_refresh_svga_mode(&mut state) {
-                        mark_dirty_full(&mut state);
-                    }
                     state.session_active = true;
                     mark_dirty_full(&mut state);
                     redraw_scene(&mut state);

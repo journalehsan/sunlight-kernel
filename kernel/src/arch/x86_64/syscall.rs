@@ -4103,9 +4103,13 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
             let height = dev.height as u64;
             let width = dev.width;
             let bpp = dev.bpp;
-            let phys = dev.fb_phys;
+            let phys = dev.fb_bar.phys;
+            let visible_offset = dev.fb_offset as u64;
+            let Some(mapped_bytes) = map_bytes.checked_add(visible_offset) else {
+                return 0;
+            };
             drop(svga);
-            (phys, pitch, height, width, bpp, map_bytes)
+            (phys, pitch, height, width, bpp, mapped_bytes)
         } else {
             drop(svga);
             let fb_resp = crate::FB_REQ.response();
@@ -4251,7 +4255,13 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     frame.r9 = fb_pitch;
     frame.r10 = fb_bpp as u64;
 
-    (DISPLAY_FB_VADDR + fb_page_offset) as u64
+    let visible_offset = {
+        let svga = crate::SVGA_DEVICE.lock();
+        svga.as_ref()
+            .filter(|device| device.is_ready())
+            .map_or(0, |device| device.fb_offset as u64)
+    };
+    (DISPLAY_FB_VADDR + fb_page_offset + visible_offset) as u64
 }
 
 fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
@@ -5306,11 +5316,9 @@ fn sys_svga_get_info(frame: &mut SyscallFrame) -> u64 {
             frame.r8 = (svga.width as u64) | ((svga.height as u64) << 32);
             frame.r9 = (svga.pitch as u64) | ((svga.bpp as u64) << 32);
             let flags = if svga.boot_fb_in_vram { 1u64 } else { 0u64 };
-            frame.r10 = flags
-                | ((svga.max_width as u64) << 8)
-                | ((svga.max_height as u64) << 32);
+            frame.r10 = flags | ((svga.max_width as u64) << 8) | ((svga.max_height as u64) << 32);
             // r12 = map budget bytes (for compositor capacity checks)
-            frame.r12 = svga.map_bytes();
+            frame.r12 = (svga.map_bytes() & 0xFFFF_FFFF) | ((svga.fb_offset as u64) << 32);
             1
         }
         _ => 0,
@@ -5374,14 +5382,32 @@ fn sys_svga_set_mode(frame: &mut SyscallFrame) -> u64 {
         Some(s) if s.is_ready() => s,
         _ => return 0,
     };
-    match unsafe { svga.apply_policy_mode(host_w, host_h) } {
+    let exact = frame.rsi == 1;
+    let result = if exact {
+        if !svga.manual_mode_supported(host_w, host_h) {
+            crate::serial_println!(
+                "[DISPLAY-MODE] failed stage=driver-preflight requested={}x{} current={}x{} fb_size={} map_bytes={} error=mode-rejected",
+                host_w,
+                host_h,
+                svga.width,
+                svga.height,
+                svga.fb_size,
+                svga.map_bytes()
+            );
+            Err(sunlight_virtio::SvgaError::ModeRejected)
+        } else {
+            unsafe { svga.set_exact_mode(host_w, host_h) }
+        }
+    } else {
+        unsafe { svga.apply_policy_mode(host_w, host_h) }
+    };
+    match result {
         Ok(changed) => {
             frame.r8 = (svga.width as u64) | ((svga.height as u64) << 32);
             frame.r9 = (svga.pitch as u64) | ((svga.bpp as u64) << 32);
             let flags = if svga.boot_fb_in_vram { 1u64 } else { 0u64 };
-            frame.r10 = flags
-                | ((svga.max_width as u64) << 8)
-                | ((svga.max_height as u64) << 32);
+            frame.r10 = flags | ((svga.max_width as u64) << 8) | ((svga.max_height as u64) << 32);
+            frame.r12 = (svga.map_bytes() & 0xFFFF_FFFF) | ((svga.fb_offset as u64) << 32);
             if changed {
                 crate::serial_println!(
                     "[SVGA] modeset {}x{} pitch={} reason={}",
@@ -5397,7 +5423,7 @@ fn sys_svga_set_mode(frame: &mut SyscallFrame) -> u64 {
         }
         Err(e) => {
             crate::serial_println!(
-                "[SVGA] modeset request {}x{} failed: {}",
+                "[DISPLAY-MODE] failed stage=driver-modeset requested={}x{} error={}",
                 host_w,
                 host_h,
                 e.as_str()

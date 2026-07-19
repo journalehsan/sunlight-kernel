@@ -177,6 +177,7 @@ pub struct Window {
     event_counters: EventPollCounters,
     /// Last cursor shape sent to the compositor, to avoid redundant IPC.
     current_cursor: CursorShape,
+    window_valid: bool,
 }
 
 // SAFETY: the buffer pointer is valid for the lifetime of the Window.
@@ -206,6 +207,10 @@ impl Window {
 
     /// Look up the display server, create a window, and map the shared buffer.
     pub fn connect(config: WindowConfig) -> Option<Self> {
+        Self::connect_with_flags(config, 0)
+    }
+
+    pub fn connect_with_flags(config: WindowConfig, config_flags: u64) -> Option<Self> {
         let trace =
             launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
         let pid = sunlight_ipc::getpid();
@@ -235,7 +240,7 @@ impl Window {
             display_ep,
             IpcMsg::with_label(SgpMsg::CREATE_WINDOW)
                 .word(0, config.width as u64 | ((config.height as u64) << 32))
-                .word(1, config.decoration.config_flag_bits())
+                .word(1, config.decoration.config_flag_bits() | config_flags)
                 .word(2, pid)
                 .word(3, title_words[0]),
             WINDOW_CREATE_TIMEOUT_MS,
@@ -301,7 +306,12 @@ impl Window {
                 ..EventPollCounters::default()
             },
             current_cursor: CursorShape::Pointer,
+            window_valid: true,
         })
+    }
+
+    pub const fn id(&self) -> u64 {
+        self.win_id
     }
 
     /// Poll the display server for the next event.
@@ -332,8 +342,10 @@ impl Window {
         if reply.words[3] & SgpMsg::EVENT_FLAG_WINDOW_VALID == 0 {
             self.event_counters.wrong_window_replies =
                 self.event_counters.wrong_window_replies.wrapping_add(1);
+            self.window_valid = false;
             return Event::Tick;
         }
+        self.window_valid = true;
 
         let desktop_state = reply.words[3];
         self.event_counters.active_workspace_id =
@@ -618,6 +630,10 @@ impl Window {
                 // is the only point the close actually reaches the display
                 // server on a normal self-close.
                 self.notify_close();
+                break;
+            }
+
+            if !self.window_valid {
                 break;
             }
 

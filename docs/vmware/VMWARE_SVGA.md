@@ -2,7 +2,7 @@
 
 Minimal, correct legacy framebuffer backend for the VMware virtual display
 adapter (`15ad:0405`). This is **not** a 3D / `vmwgfx` port: no OpenGL, no
-screen objects, no hardware cursor, no multimonitor, and no dynamic resize.
+screen objects, no hardware cursor, and no multimonitor.
 
 Related guides:
 
@@ -24,7 +24,28 @@ Related guides:
 
 PCI BDF and BAR addresses are discovered at runtime and are never hardcoded.
 
-## Resolution policy (min HD + host/window)
+## Manual resolution selection
+
+System Preferences now queries backend-neutral mode capabilities from
+`sunlight-display`. It never enables the selector by matching a backend name.
+
+VMware reports a curated set of common 4:3, 16:9, and 16:10 modes after
+filtering each entry through:
+
+- live `SVGA_REG_MAX_WIDTH` / `SVGA_REG_MAX_HEIGHT`
+- 32-bpp support
+- checked visible-byte arithmetic
+- live framebuffer extent and BAR1 aperture limits
+- the display service's mapped aperture capacity
+- the minimum usable desktop geometry
+
+The current mode is always included. Candidate pitch is reported as unknown
+until modeset readback; `SVGA_REG_BYTES_PER_LINE` is authoritative after the
+host accepts the mode.
+
+VirtIO remains preferred and automatically managed. Limine remains read-only.
+
+## Resolution policy (boot default)
 
 Same spirit as `tools/vm_display_policy.sh` and QEMU VirtIO `xres`/`yres`:
 
@@ -39,15 +60,9 @@ Same spirit as `tools/vm_display_policy.sh` and QEMU VirtIO `xres`/`yres`:
 login stay correct. Modesetting larger while splash/TTY still paint with the
 Limine pitch produces diagonal tearing on the SVGA scanout.
 
-**Desktop path** upgrades resolution:
-
-- On **SESSION_ACTIVATE**, policy is re-applied (min-HD / preferred list).
-- While the session is active, display polls about every **2s** and may modeset
-  again (syscall 129 `SvgaSetMode`).
-- Each modeset validates `pitch × height ≤ FB_SIZE` and falls back through the
-  preferred list if the host rejects the extent.
-- `map_framebuffer` maps SVGA VRAM with headroom up to auto-max so later
-  modesets can grow without remapping.
+The boot activation policy still selects a safe initial VMware mode. Once the
+display service starts, background VMware policy modesets are disabled so they
+cannot race a user-owned preview transaction.
 
 Without VMware Tools, the host does not push window resizes into the guest; the
 guest drives a good HD+ mode and the host can “Autofit Window” to match.
@@ -59,9 +74,9 @@ Order in `sunlight-display`:
 1. **VirtIO GPU** — preferred when QEMU presents a working VirtIO GPU and
    attach succeeds (unchanged path).
 2. **VMware SVGA** — selected only when the kernel reports the driver
-   **Active** and the SVGA mode geometry matches the Limine boot framebuffer
-   (width, height, pitch). Presentation reuses the Limine mapping and issues
-   `SVGA_CMD_UPDATE` after each blit.
+   **Active** and returned mapping geometry matches the live mode. Presentation
+   uses an independently mapped BAR1 aperture and issues `SVGA_CMD_UPDATE`
+   after each blit.
 3. **Limine framebuffer** — final fallback; never removed.
 
 VMware is never an unconditional default. Failure at any SVGA stage leaves the
@@ -98,11 +113,53 @@ Kernel (`kernel/src/main.rs`), after VirtIO GPU init:
 
 Display service (`services/sunlight-display`):
 
-1. Map FB (syscall 118) — uses **SVGA VRAM** when Active (not limited to Limine size)
+1. Map FB (syscall 118) — uses BAR1 base when VMware is Active
 2. Try VirtIO; on success stop
 3. Else `svga_get_info()`; if map geometry matches → `DisplayBackend::VmwareSvga`
 4. Present: memcpy rect → fence → `svga_update(x,y,w,h)`
-5. Session activate + ~2s poll: `svga_set_mode` / compositor resize when policy changes
+5. Manual preview: exact modeset → readback → pointer/stride/buffer reconfigure
+
+## BAR1 mapping and bounds
+
+The compositor does not depend on the Limine mapping length for larger modes.
+Syscall 118 maps a driver-owned BAR1 aperture at a dedicated display virtual
+address after normal framebuffer authorization. It does not expose an
+arbitrary physical mapping facility.
+
+The mapping:
+
+- starts at the validated BAR1 physical base
+- covers the validated reusable mode budget plus the current `FB_OFFSET`
+- remains bounded by BAR1 and the device-reported framebuffer extent
+- returns the current visible pointer as `aperture + FB_OFFSET`
+- reports `FB_OFFSET` and mapped capacity through the SVGA info ABI
+
+After every modeset the display service recomputes the visible pointer from the
+hardware readback offset. It rejects and rolls back any mode whose
+`offset + pitch * height` exceeds the mapped aperture.
+
+## Preview transaction
+
+`sunlight-display` owns the only active preview transaction:
+
+1. validate the requested mode against current capabilities
+2. snapshot the previous geometry
+3. issue the exact kernel modeset
+4. re-read width, height, bpp, pitch, offset, and extent
+5. reconfigure compositor metrics, pointer bounds, window placement, and the
+   reusable aperture-sized back buffer
+6. restart the fullscreen Vortex desktop surface at the new dimensions
+7. invalidate and redraw the full screen
+8. wait for Keep, Revert, caller exit, or the 30-second deadline
+
+The token is random when the random service is available and is always bound to
+the kernel-authenticated caller PID. Stale tokens, other callers, and concurrent
+transactions are rejected. The service timer owns automatic rollback; the
+Control Panel countdown is only a visual reflection of the deadline.
+
+Confirmed VMware modes are stored under `display.vmware.mode`. The setting is
+validated and applied only when VMware is active; invalid or rejected settings
+are ignored with a bounded diagnostic.
 
 ## Serial log markers
 
@@ -118,6 +175,16 @@ Display service (`services/sunlight-display`):
 [DISPLAY] display_backend=VMwareSVGA ... reason=vmware-svga-ok-policy-mode
 [SVGA] modeset WxH pitch=... reason=...   # optional later resize
 [DISPLAY] SVGA resized to WxH ...
+[DISPLAY] mode_change_requested backend=VMwareSVGA old=... requested=...
+[DISPLAY] mode_change_validated requested=...
+[DISPLAY] mode_readback WxH pitch=...
+[DISPLAY] display_buffers_reconfigured WxH pitch=... mapped_bytes=...
+[DISPLAY] full_redraw_requested
+[DISPLAY-MODE] preview active token=... deadline=30s hardware readback=...
+[DISPLAY-MODE] confirmation dialog shown
+[DISPLAY-MODE] confirmed persisted=yes|no
+[DISPLAY-MODE] reverted reason=explicit|timeout|owner-exited|ui-closed result=ok|failed
+[DISPLAY-MODE] failed stage=... error=...
 ```
 
 Failure boundaries name the stage, for example:
@@ -184,11 +251,12 @@ Expect VirtIO GPU still preferred; `[SVGA] VMware SVGA II (15ad:0405) not presen
 - No screen objects / GBOs / 3D
 - No hardware cursor (software cursor only)
 - No multimonitor
-- No VMware Tools RPC “Autofit Guest” (host→guest window push); guest-driven HD+ policy + poll instead
+- No VMware Tools RPC “Autofit Guest” (host→guest window push)
 - No advanced 2D accel (RECT_COPY, etc.)
-- Live resize needs the initial map budget (auto-max / VRAM); larger than that is rejected
+- Manual modes are limited to the validated mapped aperture
 - No interrupt-driven FIFO; bounded polling on full FIFO
 - SVGA3 (different BAR layout) is out of scope
+- No HiDPI/logical scaling, refresh-rate selection, dynamic DPI, or multiple monitors
 
 ## Implementation map
 

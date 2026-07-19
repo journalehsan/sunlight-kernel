@@ -33,15 +33,30 @@ properties. For VMware, default display-service logs confirm the active
 framebuffer. Full GOP alternate-mode dumps require a safer bootloader/protocol
 path before they can be enabled by default.
 
-There is no in-OS mode switcher yet:
+System Preferences now exposes manual modes only when the active backend reports
+safe preview support through the display-mode capability API.
 
-- no display-service mode enumeration or mode-set API
-- no physical-hardware mode switch path in this patch
-- no dynamic resize handling beyond taking the initial scanout size
-- no default `sunlight.resolution=WIDTHxHEIGHT` parser; adding the Limine
-  command-line request needs separate boot validation before it is safe
+- VMware SVGA II: validated manual modes, transactional preview, confirmation,
+  timeout/explicit rollback, and confirmed-mode persistence
+- VirtIO GPU: automatically managed and read-only in the UI; existing host
+  scanout behavior is unchanged
+- Limine framebuffer: current mode is visible but runtime changes are read-only
 
-## Policy In This Patch
+## Backend-neutral mode API
+
+`ipc/src/display_modes.rs` defines the shared model used by the display service
+and System Preferences:
+
+- current mode: width, height, bpp, pitch when known
+- available modes with current/recommended flags
+- management state: manual, automatic, or read-only
+- a concise read-only reason
+- preview transaction token, applied readback mode, and system deadline
+
+The Monitor page uses only these capability fields to enable or disable manual
+selection. Backend labels are presentation text, not feature switches.
+
+## Policy
 
 This patch keeps physical hardware unchanged. VM preference is applied only when
 the host-side QEMU launcher is selecting an explicit VM resolution.
@@ -207,7 +222,7 @@ cannot safely select it from inside this patch.
 - `sunlight-display` compositor (`GET_SCREEN_INFO` IPC reply)
 - `sunlight-vortex-shell` desktop sizing
 - `sunlight-mouse` TTY fallback clamp bounds
-- `sunlight-control-panel` read-only monitor page
+- `sunlight-control-panel` capability-driven Monitor page
 - `sunlight-utils display-status` CLI applet
 
 `GET_SCREEN_INFO` reply words:
@@ -227,20 +242,38 @@ Support level (honest):
 | Desktop layout adapts to detected size | Supported |
 | Boot-time QEMU resolution via `runs.sh` | Supported when device exposes `xres`/`yres` |
 | Kernel `sunlight.resolution=` boot arg | Not enabled (needs Limine validation) |
-| Runtime mode switching | Not supported |
+| Runtime VMware mode switching | Supported through preview/confirm/revert |
+| VirtIO manual mode switching | Not supported; automatically managed |
+| Limine runtime mode switching | Not supported; read-only |
 | HiDPI / per-monitor scale | Not supported (`scale_fp` placeholder only) |
 | Multi-monitor | Not supported |
 
 CLI: `display-status` (via `sunlight-utils`) prints current metrics when the
 desktop session is active.
 
+## Verification sequence
+
+Build with `./runs.sh --build`, then verify:
+
+1. VMware: 1024×768 → 1280×720 → 1440×900 → 1024×768
+2. readback pitch and mapped-byte diagnostics after every transition
+3. Keep, explicit Revert, timeout rollback, and Control Panel termination
+4. confirmed-mode reboot restore
+5. window dragging, maximize/restore, menus, wallpaper, panels, dock, desktop
+   icons, cursor edges, and newly exposed regions
+6. repeated switching at least five times
+7. QEMU VirtIO automatic sizing and Limine fallback
+
+Compilation alone is not runtime proof. VMware serial output and `vmware.log`
+must be retained for the final validation report.
+
 ## Future Work
 
-- Add a kernel/display-server resolution override channel if mode switching
-  becomes available in the boot or GPU backend.
-- Surface resolution controls in Settings once the compositor can switch modes
-  safely.
-- Support remembered per-machine VM resolution preferences.
+- VMware host-window Auto-fit through guest integration
+- HiDPI/Retina-style logical scaling and dynamic DPI
+- multiple monitors
+- refresh-rate selection
+- hardware cursor and advanced acceleration
 - Add dynamic resize for VirtIO GPU scanout changes.
 - EDID / full mode enumeration when the driver path is safe.
 - HiDPI scaling and per-monitor scale factors.

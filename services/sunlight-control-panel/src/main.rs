@@ -27,10 +27,14 @@ use core::alloc::GlobalAlloc;
 use core::cmp;
 use sun_font::{self, FontRole, TextStyle, Typography};
 use sunlight_ipc::{
-    debug_log, ipc_call,
+    attach_display_mode_dialog, begin_display_mode_change, confirm_display_mode_change, debug_log,
+    ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    nameserver_lookup, notification_dnd_enabled, notification_set_dnd, process_yield,
-    show_notification, CapabilityToken, IpcMsg, NotificationKind, ProcessExit, SgpMsg,
+    monotonic_millis, nameserver_lookup, notification_dnd_enabled, notification_set_dnd,
+    process_yield, query_display_mode, query_display_mode_capabilities, revert_display_mode_change,
+    show_notification, CapabilityToken, DisplayMode, DisplayModeCapabilities,
+    DisplayModeManagement, DisplayModeTransaction, IpcMsg, NotificationKind, ProcessExit,
+    ScreenBackend, SgpMsg, DEFAULT_MODE_PREVIEW_TIMEOUT_MS,
 };
 use sunlight_libc::crt0;
 use sunlight_ui::{
@@ -38,6 +42,7 @@ use sunlight_ui::{
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, Slider},
     App, Canvas, Color, Event, HBox, Point, Rect, Theme, VBox, Window, WindowConfig,
+    WindowDecoration,
 };
 use sunlight_wallpaper::{
     is_supported_wallpaper, load_desktop_config, save_desktop_config, scan_wallpapers,
@@ -79,6 +84,10 @@ const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO
 // Tall enough to show the complete About SunlightOS details without scrolling.
 const WIN_W: u32 = 500;
 const WIN_H: u32 = 560;
+const DISPLAY_DIALOG_W: u32 = 420;
+const DISPLAY_DIALOG_H: u32 = 190;
+const KEY_ESC: u8 = 0x01;
+const KEY_ENTER: u8 = 0x1C;
 const FP_ONE: i32 = 65536;
 const WALLPAPER_PREVIEW_W: u32 = 240;
 const WALLPAPER_PREVIEW_H: u32 = 112;
@@ -99,6 +108,206 @@ enum Page {
     Notifications,
     AboutComputer,
     AboutOs,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DisplayConfirmationResult {
+    Kept,
+    Reverted,
+    TimedOut,
+    Closed,
+    Failed,
+}
+
+struct DisplayConfirmationApp {
+    display_ep: CapabilityToken,
+    transaction: DisplayModeTransaction,
+    previous_mode: DisplayMode,
+    result: Option<DisplayConfirmationResult>,
+    keep_focused: bool,
+    last_seconds: u32,
+}
+
+impl DisplayConfirmationApp {
+    fn new(
+        display_ep: CapabilityToken,
+        transaction: DisplayModeTransaction,
+        previous_mode: DisplayMode,
+    ) -> Self {
+        Self {
+            display_ep,
+            transaction,
+            previous_mode,
+            result: None,
+            keep_focused: true,
+            last_seconds: u32::MAX,
+        }
+    }
+
+    fn seconds_remaining(&self) -> u32 {
+        (self
+            .transaction
+            .deadline_ms
+            .saturating_sub(monotonic_millis())
+            .saturating_add(999)
+            / 1000) as u32
+    }
+
+    fn keep(&mut self) {
+        self.result = Some(
+            if confirm_display_mode_change(self.display_ep, self.transaction.token) {
+                DisplayConfirmationResult::Kept
+            } else {
+                DisplayConfirmationResult::TimedOut
+            },
+        );
+        request_close();
+    }
+
+    fn revert(&mut self) {
+        self.result = Some(
+            if revert_display_mode_change(self.display_ep, self.transaction.token) {
+                DisplayConfirmationResult::Reverted
+            } else {
+                DisplayConfirmationResult::TimedOut
+            },
+        );
+        request_close();
+    }
+
+    fn button_rects() -> (Rect, Rect) {
+        (
+            Rect::new(22, DISPLAY_DIALOG_H as i32 - 54, 110, 30),
+            Rect::new(
+                DISPLAY_DIALOG_W as i32 - 162,
+                DISPLAY_DIALOG_H as i32 - 54,
+                140,
+                30,
+            ),
+        )
+    }
+}
+
+impl App for DisplayConfirmationApp {
+    fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        canvas.fill_rect(
+            Rect::new(0, 0, DISPLAY_DIALOG_W, DISPLAY_DIALOG_H),
+            theme.bg,
+        );
+        let card = Rect::new(10, 10, DISPLAY_DIALOG_W - 20, DISPLAY_DIALOG_H - 20);
+        canvas.fill_rounded_rect(card, 10, theme.panel);
+        canvas.stroke_rounded_rect(card, 10, 2, theme.accent);
+        Label::new(
+            Rect::new(26, 28, DISPLAY_DIALOG_W - 52, 24),
+            "Keep this display configuration?",
+        )
+        .draw(canvas, theme);
+        let mut countdown_buf = [0u8; 64];
+        Label::new(
+            Rect::new(26, 70, DISPLAY_DIALOG_W - 52, 40),
+            fmt_countdown(
+                self.previous_mode,
+                self.seconds_remaining(),
+                &mut countdown_buf,
+            ),
+        )
+        .draw(canvas, theme);
+        let (revert_rect, keep_rect) = Self::button_rects();
+        let mut revert = Button::secondary(revert_rect, "Revert");
+        let mut keep = Button::new(keep_rect, "Keep Changes");
+        if self.keep_focused {
+            keep.state = ButtonState::Pressed;
+        } else {
+            revert.state = ButtonState::Pressed;
+        }
+        revert.draw(canvas, theme);
+        keep.draw(canvas, theme);
+    }
+
+    fn update(&mut self, event: Event) -> bool {
+        match event {
+            Event::Click { x, y } => {
+                let point = Point::new(x, y);
+                let (revert_rect, keep_rect) = Self::button_rects();
+                if revert_rect.contains(point) {
+                    self.revert();
+                    return true;
+                }
+                if keep_rect.contains(point) {
+                    self.keep();
+                    return true;
+                }
+                false
+            }
+            Event::KeyPress {
+                keycode: KEY_ESC,
+                pressed: true,
+                ..
+            } => {
+                self.revert();
+                true
+            }
+            Event::KeyPress {
+                keycode: KEY_ENTER,
+                pressed: true,
+                ..
+            }
+            | Event::Key('\n')
+                if self.keep_focused =>
+            {
+                self.keep();
+                true
+            }
+            Event::KeyPress {
+                keycode: 0x0F,
+                pressed: true,
+                ..
+            } => {
+                self.keep_focused = !self.keep_focused;
+                true
+            }
+            Event::Tick => {
+                let seconds = self.seconds_remaining();
+                let changed = seconds != self.last_seconds;
+                self.last_seconds = seconds;
+                changed
+            }
+            _ => false,
+        }
+    }
+
+    fn poll_timeout_ms(&self) -> u64 {
+        200
+    }
+}
+
+fn run_display_confirmation_dialog(
+    display_ep: CapabilityToken,
+    transaction: DisplayModeTransaction,
+    previous_mode: DisplayMode,
+) -> DisplayConfirmationResult {
+    let flags = 1 | (1 << 5) | (95 << 6);
+    let Some(mut window) = Window::connect_with_flags(
+        WindowConfig {
+            width: DISPLAY_DIALOG_W,
+            height: DISPLAY_DIALOG_H,
+            title: "Display Configuration",
+            decoration: WindowDecoration::CompactClose,
+        },
+        flags,
+    ) else {
+        let _ = revert_display_mode_change(display_ep, transaction.token);
+        debug_log("[DISPLAY-MODE] failed stage=dialog-create error=window-unavailable\n");
+        return DisplayConfirmationResult::Failed;
+    };
+    if !attach_display_mode_dialog(display_ep, transaction.token, window.id()) {
+        let _ = revert_display_mode_change(display_ep, transaction.token);
+        debug_log("[DISPLAY-MODE] failed stage=dialog-attach error=rejected\n");
+        return DisplayConfirmationResult::Failed;
+    }
+    let mut app = DisplayConfirmationApp::new(display_ep, transaction, previous_mode);
+    window.run(&mut app);
+    app.result.unwrap_or(DisplayConfirmationResult::Closed)
 }
 
 struct ControlPanelApp {
@@ -130,6 +339,12 @@ struct ControlPanelApp {
     wallpaper_pending_item: Option<usize>,
     sysinfo: SystemInfoSnapshot,
     about: AboutPageState,
+    display_capabilities: Option<DisplayModeCapabilities>,
+    display_modes: Vec<DisplayMode>,
+    selected_mode: usize,
+    display_transaction: Option<DisplayModeTransaction>,
+    display_previous_mode: Option<DisplayMode>,
+    display_error: FixedStr<96>,
 }
 
 impl ControlPanelApp {
@@ -177,6 +392,95 @@ impl ControlPanelApp {
             wallpaper_pending_item: None,
             sysinfo: SystemInfoSnapshot::collect(display_ep, screen_w, screen_h),
             about: AboutPageState::new(),
+            display_capabilities: None,
+            display_modes: Vec::new(),
+            selected_mode: 0,
+            display_transaction: None,
+            display_previous_mode: None,
+            display_error: FixedStr::empty(),
+        }
+    }
+
+    fn refresh_display_modes(&mut self) {
+        self.display_modes.clear();
+        self.display_transaction = None;
+        self.display_previous_mode = None;
+        self.display_error.clear();
+        let Some(display_ep) = self.display_ep else {
+            self.display_capabilities = None;
+            self.display_error.set("Display service unavailable");
+            return;
+        };
+        let Some(capabilities) = query_display_mode_capabilities(display_ep) else {
+            self.display_capabilities = None;
+            self.display_error
+                .set("Could not query display capabilities");
+            return;
+        };
+        for index in 0..capabilities.mode_count {
+            if let Some(mode) = query_display_mode(display_ep, index) {
+                self.display_modes.push(mode);
+            }
+        }
+        self.selected_mode = self
+            .display_modes
+            .iter()
+            .position(|mode| mode.current)
+            .unwrap_or(0);
+        self.screen_w = capabilities.current_mode.width;
+        self.screen_h = capabilities.current_mode.height;
+        self.display_capabilities = Some(capabilities);
+    }
+
+    fn apply_selected_display_mode(&mut self) {
+        if self.display_transaction.is_some() {
+            return;
+        }
+        let Some(display_ep) = self.display_ep else {
+            self.display_error.set("Display service unavailable");
+            return;
+        };
+        let Some(mode) = self.display_modes.get(self.selected_mode).copied() else {
+            return;
+        };
+        if mode.current {
+            self.display_error.clear();
+            return;
+        }
+        let previous_mode = self
+            .display_capabilities
+            .map(|capabilities| capabilities.current_mode)
+            .unwrap_or(mode);
+        debug_log("[DISPLAY-MODE] ui selection old=");
+        log_mode(previous_mode.width, previous_mode.height);
+        debug_log(" requested=");
+        log_mode(mode.width, mode.height);
+        debug_log("\n");
+        match begin_display_mode_change(
+            display_ep,
+            mode.width,
+            mode.height,
+            DEFAULT_MODE_PREVIEW_TIMEOUT_MS,
+        ) {
+            Some(transaction) => {
+                self.display_previous_mode = Some(previous_mode);
+                self.screen_w = transaction.applied_mode.width;
+                self.screen_h = transaction.applied_mode.height;
+                self.display_transaction = Some(transaction);
+                self.display_error.clear();
+                let result =
+                    run_display_confirmation_dialog(display_ep, transaction, previous_mode);
+                self.refresh_display_modes();
+                if matches!(result, DisplayConfirmationResult::Failed) {
+                    self.display_error
+                        .set("Could not show display confirmation");
+                }
+            }
+            None => {
+                self.refresh_display_modes();
+                self.display_error
+                    .set("Display preview failed; previous mode restored");
+            }
         }
     }
 
@@ -433,6 +737,7 @@ impl ControlPanelApp {
             }
             if cards[1].contains(pt) {
                 self.page = Page::Monitor;
+                self.refresh_display_modes();
                 return true;
             }
             if cards[2].contains(pt) {
@@ -752,67 +1057,146 @@ impl ControlPanelApp {
 
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
         Panel::with_title(content, "Monitor").draw(canvas, theme);
-
-        let inner = Rect::new(
-            content.x + 14,
-            content.y + 32,
-            content.w - 28,
-            content.h - 46,
-        );
-        let heights = [16u32, 18, 4, 18, 18, 18, 28];
-        let mut rows = VBox::new(inner).with_spacing(8).layout(&heights);
-        let desc_row = rows.next().unwrap_or_default();
-        let cur_row = rows.next().unwrap_or_default();
-        let _ = rows.next(); // spacer
-        let opt1_row = rows.next().unwrap_or_default();
-        let opt2_row = rows.next().unwrap_or_default();
-        let opt3_row = rows.next().unwrap_or_default();
-        let actions_row = rows.next().unwrap_or_default();
-
-        Label::new(desc_row, "Display resolution (read-only).").draw(canvas, theme);
-
-        // Format current resolution
-        let mut cur_buf = [0u8; 48];
-        let cur_str = fmt_cur_res(self.screen_w, self.screen_h, &mut cur_buf);
-        Label::new(cur_row, cur_str).draw(canvas, theme);
-
-        Label::new(opt1_row, "Runtime mode switching is not available yet.").draw(canvas, theme);
+        let inner = Self::monitor_inner_rect();
+        let backend = self
+            .display_capabilities
+            .map(|capabilities| backend_label(capabilities.backend))
+            .unwrap_or("Unavailable");
+        Label::new(Rect::new(inner.x, inner.y, inner.w, 18), backend).draw(canvas, theme);
+        let mut current_buf = [0u8; 48];
         Label::new(
-            opt2_row,
-            "Use host VM settings or ./tools/runs.sh --resolution.",
+            Rect::new(inner.x, inner.y + 22, inner.w, 18),
+            fmt_cur_res(self.screen_w, self.screen_h, &mut current_buf),
         )
         .draw(canvas, theme);
-        Label::new(opt3_row, " ").draw(canvas, theme);
 
-        let back_r = Rect::new(actions_row.x, actions_row.y, 80, actions_row.h);
+        let management_text = self
+            .display_capabilities
+            .map(|capabilities| match capabilities.management {
+                DisplayModeManagement::Manual => "Management: Manual",
+                DisplayModeManagement::Automatic => "Management: Automatic",
+                DisplayModeManagement::ReadOnly => "Management: Read-only",
+            })
+            .unwrap_or("Management: Unavailable");
+        Label::new(
+            Rect::new(inner.x, inner.y + 44, inner.w, 18),
+            management_text,
+        )
+        .draw(canvas, theme);
+
+        if self.display_modes.is_empty() {
+            let reason = self
+                .display_capabilities
+                .map(|capabilities| capabilities.read_only_reason.message())
+                .filter(|reason| !reason.is_empty())
+                .unwrap_or(self.display_error.as_str());
+            Label::new(Rect::new(inner.x, inner.y + 82, inner.w, 36), reason).draw(canvas, theme);
+        } else {
+            Label::new(Rect::new(inner.x, inner.y + 70, inner.w, 18), "Resolution")
+                .draw(canvas, theme);
+            for (index, mode) in self.display_modes.iter().enumerate() {
+                let rect = Self::monitor_mode_rect(index);
+                let selected = index == self.selected_mode;
+                canvas.fill_rounded_rect(
+                    rect,
+                    5,
+                    if selected {
+                        theme.panel_alt
+                    } else {
+                        theme.panel
+                    },
+                );
+                canvas.stroke_rounded_rect(
+                    rect,
+                    5,
+                    1,
+                    if selected { theme.accent } else { theme.border },
+                );
+                let mut mode_buf = [0u8; 48];
+                let mode_text = fmt_mode(*mode, &mut mode_buf);
+                Label::new(
+                    Rect::new(rect.x + 10, rect.y, rect.w - 20, rect.h),
+                    mode_text,
+                )
+                .draw(canvas, theme);
+            }
+        }
+        if !self.display_error.as_str().is_empty() {
+            Label::new(
+                Rect::new(inner.x, inner.bottom() - 54, inner.w - 100, 18),
+                self.display_error.as_str(),
+            )
+            .draw(canvas, theme);
+        }
+
+        let (back_r, apply_r) = Self::monitor_action_rects();
         let mut back = Button::secondary(back_r, "Back");
         back.state = ButtonState::Normal;
         back.draw(canvas, theme);
+        let can_apply = self
+            .display_modes
+            .get(self.selected_mode)
+            .is_some_and(|mode| !mode.current)
+            && self.display_transaction.is_none();
+        let mut apply = Button::new(apply_r, "Apply");
+        apply.state = if can_apply {
+            ButtonState::Normal
+        } else {
+            ButtonState::Disabled
+        };
+        apply.draw(canvas, theme);
     }
 
-    fn monitor_back_rect(&self) -> Rect {
+    fn monitor_inner_rect() -> Rect {
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
-        let inner = Rect::new(
+        Rect::new(
             content.x + 14,
             content.y + 32,
             content.w - 28,
             content.h - 46,
-        );
-        let heights = [16u32, 18, 4, 18, 18, 18, 28];
-        let mut rows = VBox::new(inner).with_spacing(8).layout(&heights);
-        for _ in 0..6 {
-            rows.next();
-        }
-        let actions_row = rows.next().unwrap_or_default();
-        Rect::new(actions_row.x, actions_row.y, 80, actions_row.h)
+        )
+    }
+
+    fn monitor_mode_rect(index: usize) -> Rect {
+        let inner = Self::monitor_inner_rect();
+        let column = index / 7;
+        let row = index % 7;
+        let gap = 8;
+        let width = (inner.w - gap) / 2;
+        Rect::new(
+            inner.x + column as i32 * (width as i32 + gap as i32),
+            inner.y + 94 + row as i32 * 27,
+            width,
+            24,
+        )
+    }
+
+    fn monitor_action_rects() -> (Rect, Rect) {
+        let inner = Self::monitor_inner_rect();
+        (
+            Rect::new(inner.x, inner.bottom() - 30, 80, 28),
+            Rect::new(inner.right() - 80, inner.bottom() - 30, 80, 28),
+        )
     }
 
     fn update_monitor_page(&mut self, event: Event) -> bool {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
-            if self.monitor_back_rect().contains(pt) {
+            let (back_rect, apply_rect) = Self::monitor_action_rects();
+            if back_rect.contains(pt) {
                 self.page = Page::Grid;
                 return true;
+            }
+            if apply_rect.contains(pt) {
+                self.apply_selected_display_mode();
+                return true;
+            }
+            for index in 0..self.display_modes.len() {
+                if Self::monitor_mode_rect(index).contains(pt) {
+                    self.selected_mode = index;
+                    self.display_error.clear();
+                    return true;
+                }
             }
         }
         false
@@ -1083,6 +1467,22 @@ impl App for ControlPanelApp {
             Page::AboutOs => self.update_about_os_page(event),
         }
     }
+
+    fn on_ready(&mut self) -> bool {
+        if self.page == Page::Monitor {
+            self.refresh_display_modes();
+            return true;
+        }
+        false
+    }
+
+    fn poll_timeout_ms(&self) -> u64 {
+        if self.display_transaction.is_some() {
+            250
+        } else {
+            200
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1109,6 +1509,12 @@ fn write_u32_into(buf: &mut [u8], pos: &mut usize, n: u32) {
     }
 }
 
+fn log_mode(width: u32, height: u32) {
+    let mut buffer = [0u8; 48];
+    let text = fmt_cur_res(width, height, &mut buffer);
+    debug_log(text);
+}
+
 fn fmt_cur_res<'a>(w: u32, h: u32, buf: &'a mut [u8; 48]) -> &'a str {
     let prefix = b"Current: ";
     let mut pos = 0usize;
@@ -1125,6 +1531,76 @@ fn fmt_cur_res<'a>(w: u32, h: u32, buf: &'a mut [u8; 48]) -> &'a str {
     }
     write_u32_into(buf, &mut pos, h);
     core::str::from_utf8(&buf[..pos]).unwrap_or("???")
+}
+
+fn backend_label(backend: ScreenBackend) -> &'static str {
+    match backend {
+        ScreenBackend::VmwareSvga => "Display: VMware SVGA II",
+        ScreenBackend::VirtioGpu => "Display: VirtIO GPU",
+        ScreenBackend::LimineFramebuffer => "Display: Firmware framebuffer",
+        ScreenBackend::Fallback => "Display: Fallback framebuffer",
+    }
+}
+
+fn fmt_mode<'a>(mode: DisplayMode, buf: &'a mut [u8; 48]) -> &'a str {
+    let mut pos = 0usize;
+    write_u32_into(buf, &mut pos, mode.width);
+    if pos + 3 < buf.len() {
+        buf[pos] = b' ';
+        buf[pos + 1] = b'x';
+        buf[pos + 2] = b' ';
+        pos += 3;
+    }
+    write_u32_into(buf, &mut pos, mode.height);
+    let suffix = if mode.current {
+        b"  Current".as_slice()
+    } else if mode.preferred {
+        b"  Recommended".as_slice()
+    } else {
+        b"".as_slice()
+    };
+    for &byte in suffix {
+        if pos < buf.len() {
+            buf[pos] = byte;
+            pos += 1;
+        }
+    }
+    core::str::from_utf8(&buf[..pos]).unwrap_or("???")
+}
+
+fn fmt_countdown<'a>(previous_mode: DisplayMode, seconds: u32, buf: &'a mut [u8; 64]) -> &'a str {
+    let prefix = b"Reverting to ";
+    let mut pos = 0usize;
+    for &byte in prefix {
+        buf[pos] = byte;
+        pos += 1;
+    }
+    write_u32_into(buf, &mut pos, previous_mode.width);
+    if pos < buf.len() {
+        buf[pos] = b'x';
+        pos += 1;
+    }
+    write_u32_into(buf, &mut pos, previous_mode.height);
+    let middle = b" in ";
+    for &byte in middle {
+        if pos < buf.len() {
+            buf[pos] = byte;
+            pos += 1;
+        }
+    }
+    write_u32_into(buf, &mut pos, seconds);
+    let suffix = if seconds == 1 {
+        b" second.".as_slice()
+    } else {
+        b" seconds.".as_slice()
+    };
+    for &byte in suffix {
+        if pos < buf.len() {
+            buf[pos] = byte;
+            pos += 1;
+        }
+    }
+    core::str::from_utf8(&buf[..pos]).unwrap_or("Reverting automatically.")
 }
 
 fn read_preview_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {

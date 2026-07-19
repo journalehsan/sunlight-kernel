@@ -735,6 +735,7 @@ impl VmwareSvga {
         let prev_w = self.width;
         let prev_h = self.height;
         let prev_bpp = if self.bpp == 0 { 32 } else { self.bpp };
+        let prev_enabled = self.read_reg(SVGA_REG_ENABLE);
 
         // Disable before mode registers (avoids host seeing a half-written mode).
         self.write_reg(SVGA_REG_ENABLE, SVGA_REG_ENABLE_DISABLE);
@@ -749,19 +750,19 @@ impl VmwareSvga {
 
         if let Err(e) = self.refresh_mode_regs() {
             self.counters.mode_set_failures = self.counters.mode_set_failures.saturating_add(1);
-            let _ = self.restore_mode(prev_w, prev_h, prev_bpp);
+            let _ = self.restore_mode(prev_w, prev_h, prev_bpp, prev_enabled);
             return Err(e);
         }
         if self.width != width || self.height != height || self.bpp != 32 {
             self.counters.mode_set_failures = self.counters.mode_set_failures.saturating_add(1);
-            let _ = self.restore_mode(prev_w, prev_h, prev_bpp);
+            let _ = self.restore_mode(prev_w, prev_h, prev_bpp, prev_enabled);
             return Err(SvgaError::ModeRejected);
         }
         // pitch * height must fit the post-modeset FB aperture (not just VRAM).
         if let Some(need) = self.visible_bytes() {
             if need > self.fb_size as u64 {
                 self.counters.mode_set_failures = self.counters.mode_set_failures.saturating_add(1);
-                let _ = self.restore_mode(prev_w, prev_h, prev_bpp);
+                let _ = self.restore_mode(prev_w, prev_h, prev_bpp, prev_enabled);
                 return Err(SvgaError::FbExtentOverflow);
             }
         }
@@ -769,8 +770,40 @@ impl VmwareSvga {
         Ok(())
     }
 
+    /// Program an exact user-selected mode without applying VM auto policy.
+    pub unsafe fn set_exact_mode(&mut self, width: u32, height: u32) -> Result<bool, SvgaError> {
+        if width == self.width && height == self.height && self.bpp == 32 {
+            return Ok(false);
+        }
+        self.set_mode(width, height, 32)?;
+        self.mode_reason = "manual";
+        Ok(true)
+    }
+
+    pub fn manual_mode_supported(&self, width: u32, height: u32) -> bool {
+        width >= VM_MODE_MIN_W
+            && height >= VM_MODE_MIN_H
+            && width <= self.max_width
+            && height <= self.max_height
+            && mode_fits_vram(width, height, self.vram_size)
+            && width
+                .checked_mul(4)
+                .and_then(|pitch| pitch.checked_mul(height))
+                .is_some_and(|bytes| {
+                    bytes as u64
+                        <= (self.vram_size as u64)
+                            .min(self.fb_bar.size.saturating_sub(self.fb_offset as u64))
+                })
+    }
+
     /// Best-effort restore after a failed modeset (no recursion into set_mode).
-    unsafe fn restore_mode(&mut self, width: u32, height: u32, bpp: u32) -> Result<(), SvgaError> {
+    unsafe fn restore_mode(
+        &mut self,
+        width: u32,
+        height: u32,
+        bpp: u32,
+        enabled: u32,
+    ) -> Result<(), SvgaError> {
         if width < VM_MODE_MIN_W || height < VM_MODE_MIN_H || bpp != 32 {
             return Err(SvgaError::ModeRejected);
         }
@@ -778,7 +811,7 @@ impl VmwareSvga {
         self.write_reg(SVGA_REG_WIDTH, width);
         self.write_reg(SVGA_REG_HEIGHT, height);
         self.write_reg(SVGA_REG_BITS_PER_PIXEL, bpp);
-        self.write_reg(SVGA_REG_ENABLE, SVGA_REG_ENABLE_ENABLE);
+        self.write_reg(SVGA_REG_ENABLE, enabled);
         self.write_reg(SVGA_REG_CONFIG_DONE, 1);
         self.write_reg(SVGA_REG_SYNC, SVGA_SYNC_GENERIC);
         self.refresh_mode_regs()
@@ -813,7 +846,9 @@ impl VmwareSvga {
     pub fn map_bytes(&self) -> u64 {
         let visible = self.visible_bytes().unwrap_or(4096);
         let budget = svga_map_byte_budget(self.vram_size, self.fb_bar.size, self.fb_offset);
-        visible.max(budget).min(self.fb_bar.size.saturating_sub(self.fb_offset as u64))
+        visible
+            .max(budget)
+            .min(self.fb_bar.size.saturating_sub(self.fb_offset as u64))
     }
 
     unsafe fn refresh_mode_regs(&mut self) -> Result<(), SvgaError> {
@@ -838,11 +873,8 @@ impl VmwareSvga {
         let need = (self.pitch as u64)
             .checked_mul(self.height as u64)
             .ok_or(SvgaError::FbExtentOverflow)?;
-        let avail = (self.fb_size as u64).min(
-            self.fb_bar
-                .size
-                .saturating_sub(self.fb_offset as u64),
-        );
+        let avail =
+            (self.fb_size as u64).min(self.fb_bar.size.saturating_sub(self.fb_offset as u64));
         if need > avail {
             return Err(SvgaError::FbExtentOverflow);
         }
@@ -901,7 +933,9 @@ impl VmwareSvga {
         if words.is_empty() {
             return Ok(());
         }
-        let bytes = (words.len() as u32).checked_mul(4).ok_or(SvgaError::FifoInvariant)?;
+        let bytes = (words.len() as u32)
+            .checked_mul(4)
+            .ok_or(SvgaError::FifoInvariant)?;
         self.fifo_wait_space(bytes)?;
 
         let min = self.fifo_load(SVGA_FIFO_MIN);

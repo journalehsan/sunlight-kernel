@@ -13,7 +13,14 @@ pub enum DisplayBackend {
     /// VirtIO GPU scanout driven via kernel proxy syscalls (119-124).
     VirtioGpu { width: u32, height: u32 },
     /// VMware SVGA II legacy framebuffer + FIFO UPDATE (syscalls 127-128).
-    VmwareSvga { fb: *mut u32, pitch_words: usize, width: u32, height: u32 },
+    VmwareSvga {
+        aperture: *mut u8,
+        aperture_bytes: u64,
+        fb: *mut u32,
+        pitch_words: usize,
+        width: u32,
+        height: u32,
+    },
 }
 
 // SAFETY: The raw pointer is only ever used by the single-threaded compositor.
