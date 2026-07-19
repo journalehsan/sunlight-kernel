@@ -139,6 +139,9 @@ pub enum SunlightSyscall {
     /// VMware SVGA II: SVGA_CMD_UPDATE for a damage rect.
     /// rdi = x | (y << 32), rsi = w | (h << 32).
     SvgaUpdate = 128,
+    /// VMware SVGA II: apply VM resolution policy / modeset.
+    /// rdi = host_w | (host_h << 32). Returns 1 changed, 2 unchanged, 0 fail.
+    SvgaSetMode = 129,
 
     DebugLog = 99,
 }
@@ -526,6 +529,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         126 => sys_hardware_inventory(frame),
         127 => sys_svga_get_info(frame),
         128 => sys_svga_update(frame),
+        129 => sys_svga_set_mode(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -4068,9 +4072,11 @@ fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
-/// Map the physical Limine framebuffer into the current process for the GUI compositor.
+/// Map the physical display framebuffer into the current process for the GUI compositor.
+///
+/// When VMware SVGA is Active, maps SVGA VRAM (large enough for auto-max modeset)
+/// and returns SVGA geometry. Otherwise maps the Limine boot framebuffer.
 /// Returns user virtual address of the start of the framebuffer (or 0 on failure).
-/// The caller can read fb dimensions via other means or we pack extra info in rdx/rcx etc.
 fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     let Some(hhdm) = crate::HHDM_REQ.response() else {
         return u64::MAX;
@@ -4087,30 +4093,47 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
-    let fb_resp = crate::FB_REQ.response();
-    let fb = match fb_resp.and_then(|r| r.framebuffers().first()) {
-        Some(f) => f,
-        None => return 0,
+    // Prefer the live SVGA framebuffer when the driver owns a usable mode so
+    // modeset above the Limine boot size remains presentable.
+    let (fb_phys_base, fb_pitch, fb_height, fb_width, fb_bpp, map_bytes) = {
+        let svga = crate::SVGA_DEVICE.lock();
+        if let Some(dev) = svga.as_ref().filter(|d| d.is_ready()) {
+            let map_bytes = dev.map_bytes();
+            let pitch = dev.pitch as u64;
+            let height = dev.height as u64;
+            let width = dev.width;
+            let bpp = dev.bpp;
+            let phys = dev.fb_phys;
+            drop(svga);
+            (phys, pitch, height, width, bpp, map_bytes)
+        } else {
+            drop(svga);
+            let fb_resp = crate::FB_REQ.response();
+            let fb = match fb_resp.and_then(|r| r.framebuffers().first()) {
+                Some(f) => f,
+                None => return 0,
+            };
+            let fb_addr = fb.address() as u64;
+            let hhdm = hhdm_offset.as_u64();
+            let phys = if fb_addr >= hhdm {
+                fb_addr - hhdm
+            } else {
+                fb_addr
+            };
+            let pitch = fb.pitch as u64;
+            let height = fb.height as u64;
+            let width = fb.width as u32;
+            let bpp = fb.bpp as u32;
+            let map_bytes = match pitch.checked_mul(height) {
+                Some(b) => b,
+                None => return 0,
+            };
+            (phys, pitch, height, width, bpp, map_bytes)
+        }
     };
 
-    let fb_addr = fb.address() as u64;
-    let fb_pitch = fb.pitch as u64;
-    let fb_height = fb.height as u64;
-    let fb_width = fb.width as u32;
-    let fb_bpp = fb.bpp as u32; // usually 32
-
-    let hhdm = hhdm_offset.as_u64();
-    let fb_phys_base = if fb_addr >= hhdm {
-        fb_addr - hhdm
-    } else {
-        fb_addr
-    };
     let fb_page_offset = fb_phys_base & 0xfff;
-    let bytes_per_row = fb_pitch;
-    let total_bytes = match bytes_per_row
-        .checked_mul(fb_height)
-        .and_then(|bytes| bytes.checked_add(fb_page_offset))
-    {
+    let total_bytes = match map_bytes.checked_add(fb_page_offset) {
         Some(bytes) => bytes,
         None => return 0,
     };
@@ -5270,6 +5293,9 @@ fn sys_gpu_move_cursor(frame: &mut SyscallFrame) -> u64 {
 /// r8 = width | (height << 32)
 /// r9 = pitch_bytes | (bpp << 32)
 /// r10 = flags (bit0 = boot Limine FB lies inside SVGA VRAM)
+///      | (max_width << 8) | (max_height << 32)  — max packed in high bits of r10
+///      Actually: r10 low 8 = flags; we also put max in a second packing:
+/// r10 = flags | ((max_w as u64) << 8) | ((max_h as u64) << 32)
 fn sys_svga_get_info(frame: &mut SyscallFrame) -> u64 {
     if !current_process_is_display_server() {
         return 0;
@@ -5279,7 +5305,12 @@ fn sys_svga_get_info(frame: &mut SyscallFrame) -> u64 {
         Some(svga) if svga.is_ready() => {
             frame.r8 = (svga.width as u64) | ((svga.height as u64) << 32);
             frame.r9 = (svga.pitch as u64) | ((svga.bpp as u64) << 32);
-            frame.r10 = if svga.boot_fb_in_vram { 1 } else { 0 };
+            let flags = if svga.boot_fb_in_vram { 1u64 } else { 0u64 };
+            frame.r10 = flags
+                | ((svga.max_width as u64) << 8)
+                | ((svga.max_height as u64) << 32);
+            // r12 = map budget bytes (for compositor capacity checks)
+            frame.r12 = svga.map_bytes();
             1
         }
         _ => 0,
@@ -5318,6 +5349,59 @@ fn sys_svga_update(frame: &mut SyscallFrame) -> u64 {
                     e.as_str()
                 );
             }
+            0
+        }
+    }
+}
+
+/// Syscall 129: SvgaSetMode
+/// rdi = width | (height << 32)
+/// Applies VM policy with the given host/window hint (or exact size when it
+/// already satisfies policy). Returns 1 on success; r8 = new width|(height<<32),
+/// r9 = pitch|(bpp<<32). Returns 2 when mode unchanged, 0 on failure.
+fn sys_svga_set_mode(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_display_server() {
+        return 0;
+    }
+    let host_w = (frame.rdi & 0xFFFF_FFFF) as u32;
+    let host_h = (frame.rdi >> 32) as u32;
+    if host_w == 0 || host_h == 0 {
+        return 0;
+    }
+
+    let mut dev = crate::SVGA_DEVICE.lock();
+    let svga = match dev.as_mut() {
+        Some(s) if s.is_ready() => s,
+        _ => return 0,
+    };
+    match unsafe { svga.apply_policy_mode(host_w, host_h) } {
+        Ok(changed) => {
+            frame.r8 = (svga.width as u64) | ((svga.height as u64) << 32);
+            frame.r9 = (svga.pitch as u64) | ((svga.bpp as u64) << 32);
+            let flags = if svga.boot_fb_in_vram { 1u64 } else { 0u64 };
+            frame.r10 = flags
+                | ((svga.max_width as u64) << 8)
+                | ((svga.max_height as u64) << 32);
+            if changed {
+                crate::serial_println!(
+                    "[SVGA] modeset {}x{} pitch={} reason={}",
+                    svga.width,
+                    svga.height,
+                    svga.pitch,
+                    svga.mode_reason
+                );
+                1
+            } else {
+                2
+            }
+        }
+        Err(e) => {
+            crate::serial_println!(
+                "[SVGA] modeset request {}x{} failed: {}",
+                host_w,
+                host_h,
+                e.as_str()
+            );
             0
         }
     }

@@ -49,6 +49,14 @@ pub const SVGA_REG_BUSY: u32 = 22;
 pub const SVGA_REG_GUEST_ID: u32 = 23;
 pub const SVGA_REG_MEM_REGS: u32 = 30;
 pub const SVGA_REG_PITCHLOCK: u32 = 32;
+pub const SVGA_REG_IRQMASK: u32 = 33;
+pub const SVGA_REG_NUM_GUEST_DISPLAYS: u32 = 34;
+pub const SVGA_REG_DISPLAY_ID: u32 = 35;
+pub const SVGA_REG_DISPLAY_IS_PRIMARY: u32 = 36;
+pub const SVGA_REG_DISPLAY_POSITION_X: u32 = 37;
+pub const SVGA_REG_DISPLAY_POSITION_Y: u32 = 38;
+pub const SVGA_REG_DISPLAY_WIDTH: u32 = 39;
+pub const SVGA_REG_DISPLAY_HEIGHT: u32 = 40;
 pub const SVGA_REG_TRACES: u32 = 45;
 
 /// `SVGA_REG_ENABLE` bits.

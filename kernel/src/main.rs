@@ -991,8 +991,9 @@ pub extern "C" fn _start() -> ! {
                         1,
                     );
                 } else {
-                    // Prefer boot Limine geometry so takeover does not change resolution.
-                    let (prefer_w, prefer_h, boot_fb_phys) =
+                    // Host/window hint from the boot framebuffer (often the VM
+                    // window size). Policy may still upgrade below min-HD.
+                    let (host_w, host_h, boot_fb_phys) =
                         if let Some(fb_resp) = FB_REQ.response() {
                             if let Some(fb) = fb_resp.framebuffers().first() {
                                 let addr = fb.address() as u64;
@@ -1053,21 +1054,27 @@ pub extern "C" fn _start() -> ! {
                                     sunlight_virtio::VmwareSvga::activate(
                                         &info,
                                         hhdm + info.fifo_bar.phys,
-                                        prefer_w,
-                                        prefer_h,
+                                        host_w,
+                                        host_h,
                                         boot_fb_phys,
                                     )
                                 } {
                                     Ok(dev) => {
                                         serial_println!(
-                                            "[SVGA] active {}x{} pitch={} bpp={} fb_phys={:#x} boot_fb_in_vram={} stage={}",
+                                            "[SVGA] active {}x{} pitch={} bpp={} fb_size={:#x} fb_phys={:#x} boot_fb_in_vram={} stage={} reason={} host_hint={}x{} max={}x{}",
                                             dev.width,
                                             dev.height,
                                             dev.pitch,
                                             dev.bpp,
+                                            dev.fb_size,
                                             dev.fb_phys,
                                             dev.boot_fb_in_vram,
-                                            dev.stage.as_str()
+                                            dev.stage.as_str(),
+                                            dev.mode_reason,
+                                            host_w,
+                                            host_h,
+                                            dev.max_width,
+                                            dev.max_height
                                         );
                                         hardware_inventory::update_pci(
                                             info.bus,

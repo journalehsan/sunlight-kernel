@@ -75,6 +75,7 @@ pub enum SunlightSyscall {
     /// VMware SVGA II proxy (display_server only).
     SvgaGetInfo = 127,
     SvgaUpdate = 128,
+    SvgaSetMode = 129,
     DebugLog = 99,
 }
 
@@ -3306,6 +3307,18 @@ pub struct SvgaDisplayInfo {
     pub bpp: u32,
     /// True when the Limine boot framebuffer physical base lies inside SVGA VRAM.
     pub boot_fb_in_vram: bool,
+    pub max_width: u32,
+    pub max_height: u32,
+    /// Mapped FB capacity in bytes (may exceed the current mode for resize room).
+    pub map_bytes: u64,
+}
+
+/// Result of [`svga_set_mode`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SvgaSetModeResult {
+    Changed(SvgaDisplayInfo),
+    Unchanged(SvgaDisplayInfo),
+    Failed,
 }
 
 /// Query the VMware SVGA II backend. Returns `None` when the device is absent
@@ -3315,9 +3328,13 @@ pub fn svga_get_info() -> Option<SvgaDisplayInfo> {
     if ok == 0 {
         return None;
     }
-    let wh = msg.words[0];
-    let pb = msg.words[1];
-    let flags = msg.words[2];
+    decode_svga_info(&msg.words)
+}
+
+fn decode_svga_info(words: &[u64; IPC_MAX_WORDS]) -> Option<SvgaDisplayInfo> {
+    let wh = words[0];
+    let pb = words[1];
+    let packed = words[2];
     let width = (wh & 0xFFFF_FFFF) as u32;
     let height = (wh >> 32) as u32;
     let pitch_bytes = (pb & 0xFFFF_FFFF) as u32;
@@ -3325,12 +3342,19 @@ pub fn svga_get_info() -> Option<SvgaDisplayInfo> {
     if width == 0 || height == 0 || pitch_bytes == 0 || bpp != 32 {
         return None;
     }
+    let boot_fb_in_vram = (packed & 1) != 0;
+    let max_width = ((packed >> 8) & 0xFF_FFFF) as u32;
+    let max_height = (packed >> 32) as u32;
+    let map_bytes = words[3];
     Some(SvgaDisplayInfo {
         width,
         height,
         pitch_bytes,
         bpp,
-        boot_fb_in_vram: (flags & 1) != 0,
+        boot_fb_in_vram,
+        max_width: if max_width == 0 { width } else { max_width },
+        max_height: if max_height == 0 { height } else { max_height },
+        map_bytes,
     })
 }
 
@@ -3342,6 +3366,27 @@ pub fn svga_update(x: u32, y: u32, w: u32, h: u32) -> bool {
     let a2 = (w as u64) | ((h as u64) << 32);
     let (ok, _) = unsafe { raw_syscall(SunlightSyscall::SvgaUpdate, a1, a2, 0, 0, 0, 0, 0) };
     ok != 0
+}
+
+/// Request a VMware SVGA modeset using the VM resolution policy.
+///
+/// `host_w`/`host_h` are the desired host/window size (or current mode). The
+/// kernel may upgrade below min-HD (1280×720) and will not exceed auto-max
+/// (1920×1080) or device limits.
+pub fn svga_set_mode(host_w: u32, host_h: u32) -> SvgaSetModeResult {
+    let a1 = (host_w as u64) | ((host_h as u64) << 32);
+    let (ok, msg) = unsafe { raw_syscall(SunlightSyscall::SvgaSetMode, a1, 0, 0, 0, 0, 0, 0) };
+    match ok {
+        1 => match decode_svga_info(&msg.words) {
+            Some(info) => SvgaSetModeResult::Changed(info),
+            None => SvgaSetModeResult::Failed,
+        },
+        2 => match decode_svga_info(&msg.words) {
+            Some(info) => SvgaSetModeResult::Unchanged(info),
+            None => SvgaSetModeResult::Failed,
+        },
+        _ => SvgaSetModeResult::Failed,
+    }
 }
 
 #[cfg(test)]

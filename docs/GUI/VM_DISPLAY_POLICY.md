@@ -17,12 +17,14 @@ layer created the framebuffer or scanout first:
   scanout rectangles, then caches scanout 0 as the current size.
 - VMware SVGA II path:
   `kernel/src/main.rs` probes PCI `15ad:0405`, negotiates SVGA, initializes the
-  FIFO, and only marks the device Active when a 2D present path is ready.
-  See `docs/vmware/VMWARE_SVGA.md`.
+  FIFO, applies the VM resolution policy (min HD 1280×720, preferred list,
+  host/window hint from the boot FB), modesets, and only marks Active when a 2D
+  present path is ready. See `docs/vmware/VMWARE_SVGA.md`.
 - Compositor render size:
   `services/sunlight-display/src/main.rs` prefers VirtIO GPU when attached,
-  else VMware SVGA when Active and geometry matches Limine, else the Limine
-  framebuffer size, otherwise a safe internal fallback.
+  else VMware SVGA when Active (map uses SVGA VRAM at the policy mode), else the
+  Limine framebuffer size, otherwise a safe internal fallback. VMware may
+  re-apply policy on session activate and on a short poll interval.
 
 That means guest-side mode switching still does not happen inside the kernel or
 display service. For QEMU VM boots, actual resolution selection happens in the

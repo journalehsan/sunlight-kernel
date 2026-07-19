@@ -3314,6 +3314,85 @@ fn setup_virtio_backend(gw: u32, gh: u32) -> Result<Vec<u32>, &'static str> {
     Ok(gpu_buffer)
 }
 
+/// Apply a VMware SVGA modeset and resize compositor state when geometry changes.
+///
+/// Relies on the oversized SVGA FB mapping from `map_framebuffer` (covers up to
+/// auto-max when VRAM allows). Returns true when the compositor size changed.
+fn try_svga_modeset_resize(state: &mut CompositorState, host_w: u32, host_h: u32) -> bool {
+    let present_fb = match state.display_backend {
+        backend::DisplayBackend::VmwareSvga { fb, .. } => fb,
+        _ => return false,
+    };
+    use sunlight_ipc::SvgaSetModeResult;
+    match sunlight_ipc::svga_set_mode(host_w, host_h) {
+        SvgaSetModeResult::Changed(info) => {
+            let need = (info.pitch_bytes as u64).saturating_mul(info.height as u64);
+            if info.map_bytes != 0 && need > info.map_bytes {
+                debug_log("[DISPLAY] SVGA modeset skipped: mode exceeds mapped FB capacity\n");
+                return false;
+            }
+            let pitch_words = (info.pitch_bytes as usize) / 4;
+            let pixels = pitch_words.saturating_mul(info.height as usize);
+            if pixels == 0 {
+                return false;
+            }
+            let new_back = alloc_page_aligned_pixels(pixels, DESKTOP_COLOR);
+            if new_back.is_empty() {
+                debug_log("[DISPLAY] SVGA modeset: back buffer realloc failed\n");
+                return false;
+            }
+            state.back_buffer = new_back;
+            state.fb_width = info.width;
+            state.fb_height = info.height;
+            state.fb_pitch = info.pitch_bytes;
+            state.fb = present_fb;
+            state.display_backend = backend::DisplayBackend::VmwareSvga {
+                fb: present_fb,
+                pitch_words,
+                width: info.width,
+                height: info.height,
+            };
+            state.pointer = PointerPolicy::new(info.width, info.height);
+            state.mouse_x = (info.width / 2) as u16;
+            state.mouse_y = (info.height / 2) as u16;
+            for win in state.windows.iter_mut() {
+                if win.x >= info.width {
+                    win.x = info.width.saturating_sub(32);
+                }
+                if win.y >= info.height {
+                    win.y = info.height.saturating_sub(32);
+                }
+            }
+            debug_log("[DISPLAY] SVGA resized to ");
+            debug_dim(info.width, info.height);
+            debug_log(" pitch=");
+            debug_dec(info.pitch_bytes);
+            debug_log("\n");
+            true
+        }
+        SvgaSetModeResult::Unchanged(_) => false,
+        SvgaSetModeResult::Failed => {
+            debug_log("[DISPLAY] SVGA modeset failed\n");
+            false
+        }
+    }
+}
+
+/// Prefer a strong host/window hint for policy: at least min-HD when possible.
+fn svga_host_hint(state: &CompositorState) -> (u32, u32) {
+    // Prefer the larger of the current compositor size and min-HD so the kernel
+    // policy can step up from a small firmware mode when the device allows.
+    let w = state.fb_width.max(1280);
+    let h = state.fb_height.max(720);
+    (w, h)
+}
+
+/// Re-evaluate SVGA mode (min-HD / preferred / host-window policy in kernel).
+fn maybe_refresh_svga_mode(state: &mut CompositorState) -> bool {
+    let (hw, hh) = svga_host_hint(state);
+    try_svga_modeset_resize(state, hw, hh)
+}
+
 /// Wire the prepared VirtIO resource to scanout 0 and switch to the hardware
 /// cursor. Called on the first SESSION_ACTIVATE (after login) so the VGA/TTY
 /// login screen stays visible until then. Idempotent via `virtio_scanout_enabled`.
@@ -4282,6 +4361,8 @@ pub extern "C" fn _start() -> ! {
     }
 
     // VMware SVGA only when VirtIO did not become the active backend.
+    // `map_framebuffer` already returns SVGA geometry when the kernel driver is
+    // Active (modeset applied VM policy: min-HD / preferred / host window).
     if !matches!(
         display_backend,
         backend::DisplayBackend::VirtioGpu { .. }
@@ -4289,17 +4370,9 @@ pub extern "C" fn _start() -> ! {
         match sunlight_ipc::svga_get_info() {
             Some(info) => match validate_size(info.width, info.height) {
                 Some((sw, sh)) if info.bpp == 32 && info.pitch_bytes >= sw.saturating_mul(4) => {
-                    // First driver: present through the Limine-mapped pages only when
-                    // the kernel proved those pages lie inside SVGA VRAM, and the
-                    // active mode matches Limine geometry (no mixed pitches).
-                    // A separate SVGA BAR map for non-overlapping boot FBs is
-                    // follow-up work; until then keep the boot framebuffer path.
-                    if !info.boot_fb_in_vram {
-                        diag_reason = "vmware-svga-boot-fb-not-in-vram-limine-fallback";
-                        debug_log(
-                            "[DISPLAY] VMware SVGA Active but boot FB not in VRAM; keeping Limine\n",
-                        );
-                    } else if sw == limine_render_w
+                    // Mapped FB must match the live SVGA mode (map_framebuffer
+                    // prefers SVGA when Active). Capacity covers auto-max for resize.
+                    if sw == limine_render_w
                         && sh == limine_render_h
                         && info.pitch_bytes == limine_render_pitch
                     {
@@ -4312,18 +4385,20 @@ pub extern "C" fn _start() -> ! {
                         render_width = sw;
                         render_height = sh;
                         render_pitch = info.pitch_bytes;
-                        diag_reason = "vmware-svga-ok-boot-fb-in-vram";
+                        diag_reason = "vmware-svga-ok-policy-mode";
                         svga_info_log = Some(info);
                         debug_log("[DISPLAY] VMware SVGA backend selected ");
                         debug_dim(sw, sh);
                         debug_log(" pitch=");
                         debug_dec(info.pitch_bytes);
-                        debug_log(" boot_fb_in_vram=yes\n");
+                        debug_log(" max=");
+                        debug_dim(info.max_width, info.max_height);
+                        debug_log("\n");
                     } else {
                         diag_reason = "vmware-svga-geometry-mismatch-limine-fallback";
-                        debug_log("[DISPLAY] VMware SVGA ready but geometry mismatch (svga=");
+                        debug_log("[DISPLAY] VMware SVGA ready but map geometry mismatch (svga=");
                         debug_dim(sw, sh);
-                        debug_log(" limine=");
+                        debug_log(" map=");
                         debug_dim(limine_render_w, limine_render_h);
                         debug_log("); keeping Limine fallback\n");
                     }
@@ -4449,6 +4524,10 @@ pub extern "C" fn _start() -> ! {
     clear_back_buffer(&mut state);
 
     let mut next_win_id: u64 = 1;
+    // Periodic SVGA mode refresh (host window / policy), similar in spirit to
+    // VirtIO sampling GET_DISPLAY_INFO — bounded to avoid modeset thrash.
+    let mut last_svga_resize_check_ms: u64 = 0;
+    const SVGA_RESIZE_POLL_MS: u64 = 2000;
 
     loop {
         let msg = if let Some(timeout_ms) = compositor_poll_timeout_ms(&state) {
@@ -4469,6 +4548,19 @@ pub extern "C" fn _start() -> ! {
                 }
                 if prune_dead_owner_windows(&mut state) {
                     needs_redraw = true;
+                }
+                if state.session_active
+                    && matches!(
+                        state.display_backend,
+                        backend::DisplayBackend::VmwareSvga { .. }
+                    )
+                    && now.saturating_sub(last_svga_resize_check_ms) >= SVGA_RESIZE_POLL_MS
+                {
+                    last_svga_resize_check_ms = now;
+                    if maybe_refresh_svga_mode(&mut state) {
+                        mark_dirty_full(&mut state);
+                        needs_redraw = true;
+                    }
                 }
                 if needs_redraw {
                     redraw_scene(&mut state);
@@ -5578,6 +5670,11 @@ pub extern "C" fn _start() -> ! {
                     // First activation on the VirtIO backend: wire the scanout
                     // now, taking the display over from the VGA/TTY output.
                     activate_virtio_scanout(&mut state);
+                    // VMware: re-apply min-HD / preferred policy for the desktop
+                    // session (may upgrade from a small firmware mode).
+                    if maybe_refresh_svga_mode(&mut state) {
+                        mark_dirty_full(&mut state);
+                    }
                     state.session_active = true;
                     mark_dirty_full(&mut state);
                     redraw_scene(&mut state);

@@ -15,5 +15,9 @@ pub use pci::{
     vmxnet3_present, PciBarMemoryWidth, PciIoBarInfo, PciMemoryBarInfo, VmwareSvgaPciInfo,
     VmwareSvgaProbeError, Vmxnet3PciInfo, Vmxnet3ProbeError,
 };
-pub use svga::{SvgaCounters, SvgaError, SvgaProbeInfo, SvgaStage, VmwareSvga};
+pub use svga::{
+    choose_vm_mode, mode_fits_vram, svga_map_byte_budget, SvgaCounters, SvgaError, SvgaProbeInfo,
+    SvgaStage, VmModeChoice, VmwareSvga, VM_AUTO_MAX_H, VM_AUTO_MAX_W, VM_MIN_HD_H, VM_MIN_HD_W,
+    VM_PREFERRED_MODES,
+};
 pub use svga_regs::{SVGA_PCI_DEVICE, SVGA_PCI_VENDOR};

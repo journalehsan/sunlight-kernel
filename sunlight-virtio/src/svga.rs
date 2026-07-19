@@ -10,6 +10,164 @@ use crate::pci::{
 };
 use crate::svga_regs::*;
 
+// ---------------------------------------------------------------------------
+// VM display policy (shared spirit with tools/vm_display_policy.sh)
+// ---------------------------------------------------------------------------
+
+/// Minimum "HD" desktop: 720p. Below this we upgrade when the device allows.
+pub const VM_MIN_HD_W: u32 = 1280;
+pub const VM_MIN_HD_H: u32 = 720;
+/// Soft cap for auto modes (VirtIO/QEMU policy parity).
+pub const VM_AUTO_MAX_W: u32 = 1920;
+pub const VM_AUTO_MAX_H: u32 = 1080;
+/// Absolute floor for a modeset (device validation).
+pub const VM_MODE_MIN_W: u32 = 640;
+pub const VM_MODE_MIN_H: u32 = 480;
+
+/// Preferred VM modes, highest priority first (same order as host launchers).
+pub const VM_PREFERRED_MODES: &[(u32, u32)] = &[
+    (1366, 768),
+    (1360, 768),
+    (1280, 800),
+    (1280, 720),
+    (1440, 900),
+    (1024, 768),
+];
+
+/// Result of policy selection for diagnostics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmModeChoice {
+    pub width: u32,
+    pub height: u32,
+    pub reason: &'static str,
+}
+
+/// Conservative VRAM check: assume pitch = width * 4 (device may pad higher).
+#[inline]
+pub fn mode_fits_vram(width: u32, height: u32, vram_size: u32) -> bool {
+    let Some(pitch) = width.checked_mul(4) else {
+        return false;
+    };
+    // Leave 25% headroom for pitch padding / cursors / host bookkeeping.
+    let Some(need) = pitch.checked_mul(height) else {
+        return false;
+    };
+    let budget = vram_size.saturating_mul(3) / 4;
+    need > 0 && need <= budget && need <= vram_size
+}
+
+fn clamp_mode(w: u32, h: u32, max_w: u32, max_h: u32) -> (u32, u32) {
+    let w = w.min(max_w).min(VM_AUTO_MAX_W);
+    let h = h.min(max_h).min(VM_AUTO_MAX_H);
+    (w, h)
+}
+
+fn is_hd_or_better(w: u32, h: u32) -> bool {
+    w >= VM_MIN_HD_W && h >= VM_MIN_HD_H
+}
+
+/// Choose a target mode for VMware (and similar VMs).
+///
+/// `host_w`/`host_h` are the best known host/window/boot size (e.g. Limine FB
+/// or last SVGA mode). Policy:
+/// 1. Prefer a usable host/window size (VirtIO-like: follow the VM window) when
+///    it is at least min-HD or is already the best we can do under device max.
+/// 2. Otherwise pick the first preferred mode that fits max + VRAM.
+/// 3. Enforce min-HD when the device can; never exceed auto max / device max.
+pub fn choose_vm_mode(
+    host_w: u32,
+    host_h: u32,
+    max_w: u32,
+    max_h: u32,
+    vram_size: u32,
+) -> VmModeChoice {
+    let max_w = max_w.max(VM_MODE_MIN_W);
+    let max_h = max_h.max(VM_MODE_MIN_H);
+
+    let (mut hw, mut hh) = clamp_mode(
+        if host_w == 0 { VM_MIN_HD_W } else { host_w },
+        if host_h == 0 { VM_MIN_HD_H } else { host_h },
+        max_w,
+        max_h,
+    );
+
+    // Host/window already min-HD and fits VRAM → follow it (VirtIO-like).
+    if is_hd_or_better(hw, hh) && mode_fits_vram(hw, hh, vram_size) {
+        return VmModeChoice {
+            width: hw,
+            height: hh,
+            reason: "host-window-hd",
+        };
+    }
+
+    // Try preferred list.
+    for &(pw, ph) in VM_PREFERRED_MODES {
+        let (w, h) = clamp_mode(pw, ph, max_w, max_h);
+        if w < pw || h < ph {
+            continue; // preferred mode does not fit device max
+        }
+        if mode_fits_vram(w, h, vram_size) {
+            // Skip preferred entries smaller than min-HD when a larger preferred
+            // might fit; only accept sub-HD preferred as last resorts below.
+            if is_hd_or_better(w, h) {
+                return VmModeChoice {
+                    width: w,
+                    height: h,
+                    reason: "preferred-hd",
+                };
+            }
+        }
+    }
+
+    // Explicit min-HD if device allows.
+    let (hd_w, hd_h) = clamp_mode(VM_MIN_HD_W, VM_MIN_HD_H, max_w, max_h);
+    if hd_w >= VM_MIN_HD_W && hd_h >= VM_MIN_HD_H && mode_fits_vram(hd_w, hd_h, vram_size) {
+        return VmModeChoice {
+            width: hd_w,
+            height: hd_h,
+            reason: "min-hd",
+        };
+    }
+
+    // Any preferred (including 1024x768) that fits.
+    for &(pw, ph) in VM_PREFERRED_MODES {
+        let (w, h) = clamp_mode(pw, ph, max_w, max_h);
+        if mode_fits_vram(w, h, vram_size) && w >= VM_MODE_MIN_W && h >= VM_MODE_MIN_H {
+            return VmModeChoice {
+                width: w,
+                height: h,
+                reason: "preferred-fallback",
+            };
+        }
+    }
+
+    // Last resort: clamped host or safe floor.
+    if !mode_fits_vram(hw, hh, vram_size) {
+        // Shrink toward min while keeping aspect roughly 16:9.
+        hw = VM_MODE_MIN_W.min(max_w);
+        hh = VM_MODE_MIN_H.min(max_h);
+        while (hw > VM_MODE_MIN_W || hh > VM_MODE_MIN_H) && !mode_fits_vram(hw, hh, vram_size) {
+            hw = hw.saturating_sub(16).max(VM_MODE_MIN_W);
+            hh = hh.saturating_sub(9).max(VM_MODE_MIN_H);
+        }
+    }
+    VmModeChoice {
+        width: hw.max(VM_MODE_MIN_W).min(max_w),
+        height: hh.max(VM_MODE_MIN_H).min(max_h),
+        reason: "host-clamped-fallback",
+    }
+}
+
+/// Bytes to map for the SVGA framebuffer so later modeset up to auto-max works.
+pub fn svga_map_byte_budget(vram_size: u32, fb_bar_size: u64, fb_offset: u32) -> u64 {
+    let bar_left = fb_bar_size.saturating_sub(fb_offset as u64);
+    let vram = vram_size as u64;
+    let auto_need = (VM_AUTO_MAX_W as u64)
+        .saturating_mul(4)
+        .saturating_mul(VM_AUTO_MAX_H as u64);
+    auto_need.min(vram).min(bar_left).max(4096)
+}
+
 /// Lifecycle stages reported in serial diagnostics and Device Manager.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -132,6 +290,8 @@ pub struct SvgaCounters {
     pub fifo_timeouts: u64,
     pub invalid_damage_rects: u64,
     pub present_failures: u64,
+    pub mode_sets: u64,
+    pub mode_set_failures: u64,
 }
 
 /// Live SVGA II device after successful activation.
@@ -157,6 +317,10 @@ pub struct VmwareSvga {
     pub height: u32,
     pub pitch: u32,
     pub bpp: u32,
+    pub max_width: u32,
+    pub max_height: u32,
+    /// How the current mode was chosen (diagnostic string).
+    pub mode_reason: &'static str,
     pub stage: SvgaStage,
     pub counters: SvgaCounters,
     /// True when the boot Limine framebuffer physical base lies inside our FB.
@@ -282,20 +446,20 @@ impl VmwareSvga {
 
     /// Activate the device for legacy 2D presentation.
     ///
-    /// Prefers the current device/boot resolution. Does not change mode when
-    /// the hardware already reports a usable 32-bpp mode that fits VRAM.
+    /// Applies the VM display policy (min HD, preferred modes, host/window hint)
+    /// and modesets when the current firmware mode is below policy.
     ///
-    /// `fifo_virt` is the HHDM virtual base of BAR2. `prefer_w`/`prefer_h` are
-    /// the boot framebuffer dimensions (0 = ignore). `boot_fb_phys` is the
-    /// Limine framebuffer physical base for identity checks.
+    /// `fifo_virt` is the HHDM virtual base of BAR2. `host_w`/`host_h` are the
+    /// best known host/window/boot dimensions (0 = unknown). `boot_fb_phys` is
+    /// the Limine framebuffer physical base for identity checks.
     ///
     /// SAFETY: FIFO mapping must cover at least `REG_MEM_SIZE` bytes of BAR2;
     /// I/O BAR must be enabled.
     pub unsafe fn activate(
         pci: &VmwareSvgaPciInfo,
         fifo_virt: u64,
-        prefer_w: u32,
-        prefer_h: u32,
+        host_w: u32,
+        host_h: u32,
         boot_fb_phys: Option<u64>,
     ) -> Result<Self, SvgaError> {
         let counters = SvgaCounters {
@@ -329,6 +493,9 @@ impl VmwareSvga {
             height: probe.height,
             pitch: probe.pitch,
             bpp: probe.bpp,
+            max_width: probe.max_width,
+            max_height: probe.max_height,
+            mode_reason: "firmware",
             stage: SvgaStage::CapabilitiesRead,
             counters,
             boot_fb_in_vram: false,
@@ -341,36 +508,45 @@ impl VmwareSvga {
         dev.init_fifo()?;
         dev.stage = SvgaStage::FifoInitialized;
 
-        // Prefer an already-programmed usable mode (firmware / boot FB).
-        let want_w = if prefer_w != 0 {
-            prefer_w
-        } else {
-            probe.width
-        };
-        let want_h = if prefer_h != 0 {
-            prefer_h
-        } else {
-            probe.height
-        };
-
-        let mode_ok = probe.width >= 320
-            && probe.height >= 200
+        // Keep the firmware/boot mode through splash + login. Modesetting to a
+        // larger policy size here rewrites WIDTH/HEIGHT while the splash/TTY still
+        // paint with the Limine  pitch/size, which produces diagonal tearing on
+        // the SVGA scanout. Policy HD upgrade is applied later by display_server
+        // (SESSION_ACTIVATE / poll) via apply_policy_mode().
+        let firmware_ok = probe.width >= VM_MODE_MIN_W
+            && probe.height >= VM_MODE_MIN_H
             && probe.bpp == 32
             && probe.pitch >= probe.width.saturating_mul(4)
             && (probe.enabled & SVGA_REG_ENABLE_ENABLE) != 0;
 
-        if mode_ok && (prefer_w == 0 || prefer_h == 0 || (probe.width == want_w && probe.height == want_h))
-        {
-            // Keep firmware mode; ensure enable + config_done.
-            if (probe.enabled & SVGA_REG_ENABLE_ENABLE) == 0 {
-                dev.write_reg(SVGA_REG_ENABLE, SVGA_REG_ENABLE_ENABLE);
-            }
+        if firmware_ok {
             if probe.config_done == 0 {
                 dev.write_reg(SVGA_REG_CONFIG_DONE, 1);
             }
-            dev.refresh_mode_regs()?;
+            if let Err(_e) = dev.refresh_mode_regs() {
+                // Firmware registers inconsistent — try a safe policy modeset.
+                let choice = choose_vm_mode(
+                    host_w.max(probe.width),
+                    host_h.max(probe.height),
+                    probe.max_width,
+                    probe.max_height,
+                    probe.vram_size,
+                );
+                dev.set_mode(choice.width, choice.height, 32)?;
+                dev.mode_reason = choice.reason;
+            } else {
+                dev.mode_reason = "firmware-boot";
+            }
         } else {
-            dev.set_mode(want_w, want_h, 32)?;
+            let choice = choose_vm_mode(
+                host_w.max(probe.width),
+                host_h.max(probe.height),
+                probe.max_width,
+                probe.max_height,
+                probe.vram_size,
+            );
+            dev.set_mode(choice.width, choice.height, 32)?;
+            dev.mode_reason = choice.reason;
         }
 
         // Optional traces: help hosts that track FB dirtiness without FIFO.
@@ -378,10 +554,88 @@ impl VmwareSvga {
             dev.write_reg(SVGA_REG_TRACES, 1);
         }
 
+        // Advertise a single guest display so topology-capable hosts can track us.
+        if (dev.capabilities & SVGA_CAP_DISPLAY_TOPOLOGY) != 0 {
+            dev.write_reg(SVGA_REG_NUM_GUEST_DISPLAYS, 1);
+            dev.write_reg(SVGA_REG_DISPLAY_ID, 0);
+            dev.write_reg(SVGA_REG_DISPLAY_IS_PRIMARY, 1);
+            dev.write_reg(SVGA_REG_DISPLAY_POSITION_X, 0);
+            dev.write_reg(SVGA_REG_DISPLAY_POSITION_Y, 0);
+            dev.write_reg(SVGA_REG_DISPLAY_WIDTH, dev.width);
+            dev.write_reg(SVGA_REG_DISPLAY_HEIGHT, dev.height);
+        }
+
         dev.stage = SvgaStage::DisplayUsable;
         dev.counters.activations = 1;
         dev.stage = SvgaStage::Active;
         Ok(dev)
+    }
+
+    /// Re-apply VM policy using a host/window size hint (e.g. after resize).
+    ///
+    /// Returns `Ok(true)` when the mode actually changed. Tries preferred
+    /// fallbacks if the top choice is rejected by the device (e.g. FB_SIZE).
+    ///
+    /// SAFETY: device must be Active; FIFO remains valid across modeset.
+    pub unsafe fn apply_policy_mode(
+        &mut self,
+        host_w: u32,
+        host_h: u32,
+    ) -> Result<bool, SvgaError> {
+        if !self.is_ready() {
+            return Err(SvgaError::NotReady);
+        }
+        // Refresh device limits (usually static, but cheap).
+        self.max_width = self.read_reg(SVGA_REG_MAX_WIDTH);
+        self.max_height = self.read_reg(SVGA_REG_MAX_HEIGHT);
+        let hint_w = host_w.max(self.width);
+        let hint_h = host_h.max(self.height);
+        let choice = choose_vm_mode(
+            hint_w,
+            hint_h,
+            self.max_width,
+            self.max_height,
+            self.vram_size,
+        );
+        if choice.width == self.width && choice.height == self.height && self.bpp == 32 {
+            self.mode_reason = choice.reason;
+            return Ok(false);
+        }
+
+        // Build candidate list: policy choice first, then remaining preferred HD modes.
+        let mut cands: [(u32, u32, &'static str); 8] = [(0, 0, ""); 8];
+        let mut n = 0usize;
+        let mut push = |w: u32, h: u32, reason: &'static str| {
+            if n >= cands.len() || w == 0 || h == 0 {
+                return;
+            }
+            if cands[..n].iter().any(|c| c.0 == w && c.1 == h) {
+                return;
+            }
+            cands[n] = (w, h, reason);
+            n += 1;
+        };
+        push(choice.width, choice.height, choice.reason);
+        for &(pw, ph) in VM_PREFERRED_MODES {
+            let (w, h) = clamp_mode(pw, ph, self.max_width, self.max_height);
+            if mode_fits_vram(w, h, self.vram_size) {
+                push(w, h, "preferred-fallback");
+            }
+        }
+        // Always allow staying on current as last resort (no-op if already there).
+        push(self.width, self.height, "keep-current");
+
+        let before_w = self.width;
+        let before_h = self.height;
+        self.set_mode_with_fallbacks(&cands[..n])?;
+        if (self.capabilities & SVGA_CAP_DISPLAY_TOPOLOGY) != 0 {
+            self.write_reg(SVGA_REG_NUM_GUEST_DISPLAYS, 1);
+            self.write_reg(SVGA_REG_DISPLAY_ID, 0);
+            self.write_reg(SVGA_REG_DISPLAY_IS_PRIMARY, 1);
+            self.write_reg(SVGA_REG_DISPLAY_WIDTH, self.width);
+            self.write_reg(SVGA_REG_DISPLAY_HEIGHT, self.height);
+        }
+        Ok(self.width != before_w || self.height != before_h)
     }
 
     fn fb_contains_phys(&self, phys: u64, len: u64) -> bool {
@@ -458,13 +712,29 @@ impl VmwareSvga {
 
     /// Program width/height/bpp and re-read pitch. Leaves the device enabled.
     ///
+    /// On failure after a partial write, attempts to restore the previous mode.
+    ///
     /// SAFETY: register I/O only.
     pub unsafe fn set_mode(&mut self, width: u32, height: u32, bpp: u32) -> Result<(), SvgaError> {
         let max_w = self.read_reg(SVGA_REG_MAX_WIDTH);
         let max_h = self.read_reg(SVGA_REG_MAX_HEIGHT);
-        if width < 320 || height < 200 || width > max_w || height > max_h || bpp != 32 {
+        self.max_width = max_w;
+        self.max_height = max_h;
+        if width < VM_MODE_MIN_W
+            || height < VM_MODE_MIN_H
+            || width > max_w
+            || height > max_h
+            || bpp != 32
+            || !mode_fits_vram(width, height, self.vram_size)
+        {
+            self.counters.mode_set_failures = self.counters.mode_set_failures.saturating_add(1);
             return Err(SvgaError::ModeRejected);
         }
+
+        // Snapshot for restore if the host rejects the extent.
+        let prev_w = self.width;
+        let prev_h = self.height;
+        let prev_bpp = if self.bpp == 0 { 32 } else { self.bpp };
 
         // Disable before mode registers (avoids host seeing a half-written mode).
         self.write_reg(SVGA_REG_ENABLE, SVGA_REG_ENABLE_DISABLE);
@@ -474,11 +744,76 @@ impl VmwareSvga {
         self.write_reg(SVGA_REG_ENABLE, SVGA_REG_ENABLE_ENABLE);
         self.write_reg(SVGA_REG_CONFIG_DONE, 1);
 
-        self.refresh_mode_regs()?;
+        // Bounce the host so FB_SIZE / pitch settle before we validate.
+        self.write_reg(SVGA_REG_SYNC, SVGA_SYNC_GENERIC);
+
+        if let Err(e) = self.refresh_mode_regs() {
+            self.counters.mode_set_failures = self.counters.mode_set_failures.saturating_add(1);
+            let _ = self.restore_mode(prev_w, prev_h, prev_bpp);
+            return Err(e);
+        }
         if self.width != width || self.height != height || self.bpp != 32 {
+            self.counters.mode_set_failures = self.counters.mode_set_failures.saturating_add(1);
+            let _ = self.restore_mode(prev_w, prev_h, prev_bpp);
             return Err(SvgaError::ModeRejected);
         }
+        // pitch * height must fit the post-modeset FB aperture (not just VRAM).
+        if let Some(need) = self.visible_bytes() {
+            if need > self.fb_size as u64 {
+                self.counters.mode_set_failures = self.counters.mode_set_failures.saturating_add(1);
+                let _ = self.restore_mode(prev_w, prev_h, prev_bpp);
+                return Err(SvgaError::FbExtentOverflow);
+            }
+        }
+        self.counters.mode_sets = self.counters.mode_sets.saturating_add(1);
         Ok(())
+    }
+
+    /// Best-effort restore after a failed modeset (no recursion into set_mode).
+    unsafe fn restore_mode(&mut self, width: u32, height: u32, bpp: u32) -> Result<(), SvgaError> {
+        if width < VM_MODE_MIN_W || height < VM_MODE_MIN_H || bpp != 32 {
+            return Err(SvgaError::ModeRejected);
+        }
+        self.write_reg(SVGA_REG_ENABLE, SVGA_REG_ENABLE_DISABLE);
+        self.write_reg(SVGA_REG_WIDTH, width);
+        self.write_reg(SVGA_REG_HEIGHT, height);
+        self.write_reg(SVGA_REG_BITS_PER_PIXEL, bpp);
+        self.write_reg(SVGA_REG_ENABLE, SVGA_REG_ENABLE_ENABLE);
+        self.write_reg(SVGA_REG_CONFIG_DONE, 1);
+        self.write_reg(SVGA_REG_SYNC, SVGA_SYNC_GENERIC);
+        self.refresh_mode_regs()
+    }
+
+    /// Try a list of candidate modes (policy order); return first that sticks.
+    ///
+    /// SAFETY: device must be usable for register/FIFO access.
+    pub unsafe fn set_mode_with_fallbacks(
+        &mut self,
+        candidates: &[(u32, u32, &'static str)],
+    ) -> Result<&'static str, SvgaError> {
+        let mut last = SvgaError::ModeRejected;
+        for &(w, h, reason) in candidates {
+            match self.set_mode(w, h, 32) {
+                Ok(()) => {
+                    self.mode_reason = reason;
+                    return Ok(reason);
+                }
+                Err(e) => last = e,
+            }
+        }
+        Err(last)
+    }
+
+    /// Visible surface size in bytes (`pitch * height`), checked.
+    pub fn visible_bytes(&self) -> Option<u64> {
+        (self.pitch as u64).checked_mul(self.height as u64)
+    }
+
+    /// Recommended userspace map length (covers auto-max when VRAM allows).
+    pub fn map_bytes(&self) -> u64 {
+        let visible = self.visible_bytes().unwrap_or(4096);
+        let budget = svga_map_byte_budget(self.vram_size, self.fb_bar.size, self.fb_offset);
+        visible.max(budget).min(self.fb_bar.size.saturating_sub(self.fb_offset as u64))
     }
 
     unsafe fn refresh_mode_regs(&mut self) -> Result<(), SvgaError> {

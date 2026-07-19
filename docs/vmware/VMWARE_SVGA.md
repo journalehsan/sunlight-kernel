@@ -24,6 +24,34 @@ Related guides:
 
 PCI BDF and BAR addresses are discovered at runtime and are never hardcoded.
 
+## Resolution policy (min HD + host/window)
+
+Same spirit as `tools/vm_display_policy.sh` and QEMU VirtIO `xres`/`yres`:
+
+| Rule | Value |
+|------|--------|
+| Min HD | **1280×720** when the device allows |
+| Preferred order | 1366×768 → 1360×768 → 1280×800 → 1280×720 → 1440×900 → 1024×768 |
+| Soft auto-max | **1920×1080** |
+| Host/window hint | Boot Limine size (often the VM window) and/or last SVGA mode |
+
+**Boot path keeps the firmware mode** (typically 1024×768) so splash and TTY
+login stay correct. Modesetting larger while splash/TTY still paint with the
+Limine pitch produces diagonal tearing on the SVGA scanout.
+
+**Desktop path** upgrades resolution:
+
+- On **SESSION_ACTIVATE**, policy is re-applied (min-HD / preferred list).
+- While the session is active, display polls about every **2s** and may modeset
+  again (syscall 129 `SvgaSetMode`).
+- Each modeset validates `pitch × height ≤ FB_SIZE` and falls back through the
+  preferred list if the host rejects the extent.
+- `map_framebuffer` maps SVGA VRAM with headroom up to auto-max so later
+  modesets can grow without remapping.
+
+Without VMware Tools, the host does not push window resizes into the guest; the
+guest drives a good HD+ mode and the host can “Autofit Window” to match.
+
 ## Backend selection and fallback
 
 Order in `sunlight-display`:
@@ -62,18 +90,19 @@ Kernel (`kernel/src/main.rs`), after VirtIO GPU init:
 4. **Probe-only** register read (version, caps, sizes, current mode) — no blanking
 5. Validate BAR/size/offset invariants
 6. Initialize FIFO metadata; set `CONFIG_DONE`
-7. Prefer existing firmware mode when 32-bpp and usable; otherwise set mode to
-   boot Limine width×height @ 32 bpp
-8. Compare Limine FB phys against BAR1+`FB_OFFSET`
-9. On full success: inventory **Matched/Bound=`vmw-svga`**, **State=Active**
-10. On any failure: **ProbeFailed** with stage/code; boot FB unchanged
+7. Choose mode via VM policy (host hint + min HD + preferred list + VRAM)
+8. Modeset to that size @ 32 bpp when different from firmware
+9. Compare Limine FB phys against BAR1+`FB_OFFSET` (identity diagnostic)
+10. On full success: inventory **Matched/Bound=`vmw-svga`**, **State=Active**
+11. On any failure: **ProbeFailed** with stage/code; boot FB unchanged
 
 Display service (`services/sunlight-display`):
 
-1. Map Limine FB (syscall 118) as always
+1. Map FB (syscall 118) — uses **SVGA VRAM** when Active (not limited to Limine size)
 2. Try VirtIO; on success stop
-3. Else `svga_get_info()`; if geometry matches Limine → `DisplayBackend::VmwareSvga`
+3. Else `svga_get_info()`; if map geometry matches → `DisplayBackend::VmwareSvga`
 4. Present: memcpy rect → fence → `svga_update(x,y,w,h)`
+5. Session activate + ~2s poll: `svga_set_mode` / compositor resize when policy changes
 
 ## Serial log markers
 
@@ -84,9 +113,11 @@ Display service (`services/sunlight-display`):
 [SVGA] BAR2 FIFO phys=... size=...
 [SVGA] probe version=... caps=... vram=... fb_size=... fb_off=... fifo=...
 [SVGA] probe mode WxH pitch=... bpp=... enable=... config_done=...
-[SVGA] active WxH pitch=... bpp=... fb_phys=... boot_fb_in_vram=... stage=active
+[SVGA] active WxH pitch=... bpp=... fb_phys=... boot_fb_in_vram=... stage=active reason=preferred-hd host_hint=... max=...
 [DISPLAY] VMware SVGA backend selected WxH ...
-[DISPLAY] display_backend=VMwareSVGA ... reason=vmware-svga-ok-boot-fb-in-vram
+[DISPLAY] display_backend=VMwareSVGA ... reason=vmware-svga-ok-policy-mode
+[SVGA] modeset WxH pitch=... reason=...   # optional later resize
+[DISPLAY] SVGA resized to WxH ...
 ```
 
 Failure boundaries name the stage, for example:
@@ -152,9 +183,10 @@ Expect VirtIO GPU still preferred; `[SVGA] VMware SVGA II (15ad:0405) not presen
 
 - No screen objects / GBOs / 3D
 - No hardware cursor (software cursor only)
-- No dynamic resize or multimonitor
+- No multimonitor
+- No VMware Tools RPC “Autofit Guest” (host→guest window push); guest-driven HD+ policy + poll instead
 - No advanced 2D accel (RECT_COPY, etc.)
-- Presentation requires Limine geometry match for the first backend
+- Live resize needs the initial map budget (auto-max / VRAM); larger than that is rejected
 - No interrupt-driven FIFO; bounded polling on full FIFO
 - SVGA3 (different BAR layout) is out of scope
 
@@ -163,9 +195,9 @@ Expect VirtIO GPU still preferred; `[SVGA] VMware SVGA II (15ad:0405) not presen
 | Path | Role |
 |------|------|
 | `sunlight-virtio/src/svga_regs.rs` | Constants from `svga_reg.h` |
-| `sunlight-virtio/src/svga.rs` | Driver (probe, FIFO, UPDATE) |
+| `sunlight-virtio/src/svga.rs` | Driver (probe, policy modeset, FIFO, UPDATE) |
 | `sunlight-virtio/src/pci.rs` | `probe_vmware_svga` + I/O BAR parse |
 | `kernel/src/main.rs` | Boot init + inventory |
-| `kernel/src/arch/x86_64/syscall.rs` | Syscalls 127–128 |
-| `ipc/src/lib.rs` | `svga_get_info` / `svga_update` |
-| `services/sunlight-display/` | Backend selection + present |
+| `kernel/src/arch/x86_64/syscall.rs` | Syscalls 127–129 |
+| `ipc/src/lib.rs` | `svga_get_info` / `svga_update` / `svga_set_mode` |
+| `services/sunlight-display/` | Backend selection, present, resize |
