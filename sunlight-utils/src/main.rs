@@ -1997,7 +1997,7 @@ fn uname_version() -> i32 {
 }
 
 fn kernel_name() -> &'static str {
-    "SunlightOS"
+    "SunlightX"
 }
 
 fn operating_system() -> &'static str {
@@ -2028,7 +2028,7 @@ fn kernel_version() -> &'static str {
             return source_ident;
         }
     }
-    "SunlightOS build"
+    "SunlightX build"
 }
 
 fn nodename_bytes(out: &mut [u8]) -> usize {

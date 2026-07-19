@@ -57,13 +57,13 @@ pub fn run(argv: &[&str]) -> BuiltinResult {
 
 fn uname_output(arg: Option<&str>) -> &'static str {
     match arg {
-        None | Some("-s") => "SunlightOS",
+        None | Some("-s") => "SunlightX",
         Some("-n") => "sunlight",
         Some("-r") => "0.1.0",
         Some("-v") => "Phase 3.8",
         Some("-m") | Some("-p") | Some("-i") => "x86_64",
         Some("-o") => "SunlightOS",
-        Some("-a") => "SunlightOS sunlight 0.1.0 Phase 3.8 x86_64 SunlightOS",
+        Some("-a") => "SunlightX sunlight 0.1.0 Phase 3.8 x86_64 SunlightOS",
         Some(_) => "uname: invalid option",
     }
 }

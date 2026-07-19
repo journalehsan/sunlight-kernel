@@ -214,7 +214,7 @@ mod sunlight {
     const LONG_OUT_MAX: usize = 16384;
     const IPC_OUTPUT_BYTES: usize = 16;
     const OS_NAME: &str = "SunlightOS";
-    const KERNEL_NAME: &str = "SunlightOS/CORE";
+    const KERNEL_NAME: &str = "SunlightX";
     const OS_VERSION: &str = env!("CARGO_PKG_VERSION");
     const KERNEL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
