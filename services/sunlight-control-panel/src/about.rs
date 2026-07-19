@@ -1,7 +1,7 @@
 //! About This Computer and About SunlightOS pages.
 
 use core::fmt::Write;
-use sun_font::{self, FontRole, TextStyle};
+use sun_font::{self, FontRole, TextStyle, Typography};
 use sunlight_ui::{
     image::TgaImage,
     widgets::{Button, ButtonState, ProgressBar},
@@ -79,6 +79,7 @@ fn btn_nav(win_w: u32, win_h: u32) -> Rect {
     Rect::new(win_w as i32 - 138, action_bar_y(win_h), 120, 26)
 }
 
+/// Same MiniType path as the rest of Control Panel (`Typography::UI_MEDIUM`).
 fn draw_button(canvas: &mut Canvas, theme: &Theme, rect: Rect, label: &str, primary: bool) {
     let mut b = if primary {
         Button::new(rect, label)
@@ -86,7 +87,7 @@ fn draw_button(canvas: &mut Canvas, theme: &Theme, rect: Rect, label: &str, prim
         Button::secondary(rect, label)
     };
     b.state = ButtonState::Normal;
-    b.draw(canvas, theme);
+    b.with_font(&Typography::UI_MEDIUM).draw(canvas, theme);
 }
 
 fn draw_text(canvas: &mut Canvas, x: i32, y: i32, h: u32, text: &str, color: Color, role: FontRole) {
