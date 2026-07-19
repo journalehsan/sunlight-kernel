@@ -3,6 +3,8 @@ use smoltcp::phy::Device;
 use smoltcp::socket::dhcpv4::{Event as DhcpEvent, Socket as DhcpSocket};
 use smoltcp::time::Instant;
 
+const DHCP_ACQUISITION_TIMEOUT_MS: u64 = 30_000;
+
 /// DHCP configuration result
 #[derive(Debug, Clone)]
 pub struct DhcpConfig {
@@ -31,18 +33,18 @@ pub fn acquire_lease<D: Device>(
     let dhcp_socket = DhcpSocket::new();
     let dhcp_handle = sockets.add(dhcp_socket);
 
-    // Simple time tracking for timeout (10 seconds = 10000 milliseconds)
-    let deadline = Instant::from_millis(10000);
-
-    // Poll loop — timeout after 10 seconds worth of simulated time
-    let mut poll_count = 0;
+    let started_at = sunlight_ipc::monotonic_millis();
+    let deadline = started_at.saturating_add(DHCP_ACQUISITION_TIMEOUT_MS);
     loop {
-        // Simulate time progression
-        let current_time = Instant::from_millis((poll_count * 10) as i64);
-        if current_time >= deadline {
+        let now = sunlight_ipc::monotonic_millis();
+        if now >= deadline {
+            let _ =
+                sunlight_ipc::net_mark_backend_event(sunlight_ipc::NetBackendEvent::DhcpTimeout);
+            sunlight_ipc::debug_log("[DHCP] timeout waiting for lease");
             sockets.remove(dhcp_handle);
             return Err(DhcpError::Timeout);
         }
+        let current_time = Instant::from_millis(now as i64);
 
         // Poll the network interface
         iface.poll(current_time, device, sockets);
@@ -84,6 +86,9 @@ pub fn acquire_lease<D: Device>(
 
                 // Remove DHCP socket before returning
                 sockets.remove(dhcp_handle);
+                let _ = sunlight_ipc::net_mark_backend_event(
+                    sunlight_ipc::NetBackendEvent::DhcpLeaseInstalled,
+                );
 
                 return Ok(DhcpConfig {
                     ip: [ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]],
@@ -99,15 +104,12 @@ pub fn acquire_lease<D: Device>(
                 });
             }
             Some(DhcpEvent::Deconfigured) => {
-                // Retry on deconfiguration
-                sockets.remove(dhcp_handle);
-                return Err(DhcpError::InvalidOffer);
+                sunlight_ipc::process_yield();
             }
             None => {
                 // Yield between bounded polls. VMXNET3 completion processing is
                 // driven by this network-service cadence, never a GUI tick.
                 sunlight_ipc::process_yield();
-                poll_count += 1;
             }
         }
     }

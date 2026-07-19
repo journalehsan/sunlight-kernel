@@ -13,12 +13,20 @@ pub enum NetBackendState {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NetDeviceCounters {
+    pub device_resets: u64,
+    pub device_activations: u64,
+    pub tx_requests: u64,
     pub tx_submitted: u64,
     pub tx_completed: u64,
     pub tx_bytes: u64,
+    pub tx_notifications: u64,
+    pub tx_errors: u64,
+    pub rx_buffers_posted: u64,
     pub rx_completed: u64,
     pub rx_delivered: u64,
     pub rx_bytes: u64,
+    pub rx_dropped: u64,
+    pub rx_errors: u64,
     pub tx_ring_full: u64,
     pub rx_bad_completion: u64,
     pub interrupts: u64,

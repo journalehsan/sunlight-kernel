@@ -345,6 +345,11 @@ impl Vmxnet3 {
         }
         write32(bar0, REG_RXPROD, (VMXNET3_RING_SIZE - 1) as u32);
 
+        let mut counters = NetDeviceCounters::default();
+        counters.device_resets = 1;
+        counters.device_activations = 1;
+        counters.rx_buffers_posted = (VMXNET3_RING_SIZE - 1) as u64;
+
         Ok(Self {
             bar0,
             mac,
@@ -371,7 +376,7 @@ impl Vmxnet3 {
             rx_comp_gen: INIT_GEN,
             rx_fill: (VMXNET3_RING_SIZE - 1) as u16,
             rx_fill_gen: INIT_GEN,
-            counters: NetDeviceCounters::default(),
+            counters,
             first_tx: None,
             first_rx_len: 0,
             first_rx_ethertype: 0,
@@ -464,16 +469,19 @@ impl Vmxnet3 {
             self.rx_fill_gen ^= 1;
         }
         write32(self.bar0, REG_RXPROD, self.rx_fill as u32);
+        self.counters.rx_buffers_posted = self.counters.rx_buffers_posted.saturating_add(1);
     }
 
     pub unsafe fn send(&mut self, frame: &[u8]) -> Result<(), NetError> {
+        self.counters.tx_requests = self.counters.tx_requests.saturating_add(1);
         self.drain_tx_completions();
         if frame.len() > 1514 {
-            self.counters.tx_ring_full = self.counters.tx_ring_full.saturating_add(1);
+            self.counters.tx_errors = self.counters.tx_errors.saturating_add(1);
             return Err(NetError::QueueError);
         }
         if self.tx_in_flight as usize >= VMXNET3_RING_SIZE - 1 {
             self.counters.tx_ring_full = self.counters.tx_ring_full.saturating_add(1);
+            self.counters.tx_errors = self.counters.tx_errors.saturating_add(1);
             return Err(NetError::QueueError);
         }
         let index = self.tx_next as usize;
@@ -502,6 +510,7 @@ impl Vmxnet3 {
             self.tx_gen ^= 1;
         }
         write32(self.bar0, REG_TXPROD, self.tx_next as u32);
+        self.counters.tx_notifications = self.counters.tx_notifications.saturating_add(1);
         self.tx_in_flight += 1;
         self.counters.tx_submitted = self.counters.tx_submitted.saturating_add(1);
         self.counters.tx_bytes = self.counters.tx_bytes.saturating_add(frame.len() as u64);
@@ -545,10 +554,17 @@ impl Vmxnet3 {
         self.counters.rx_completed = self.counters.rx_completed.saturating_add(1);
         if index >= VMXNET3_RING_SIZE || error || len == 0 || !sop || !eop || queue_id != 0 {
             self.counters.rx_bad_completion = self.counters.rx_bad_completion.saturating_add(1);
+            self.counters.rx_dropped = self.counters.rx_dropped.saturating_add(1);
+            self.counters.rx_errors = self.counters.rx_errors.saturating_add(1);
             return 0;
         }
 
-        let copy_len = len.min(frame.len());
+        if len > VMXNET3_RX_BUFFER_SIZE || len > frame.len() {
+            self.counters.rx_dropped = self.counters.rx_dropped.saturating_add(1);
+            self.counters.rx_errors = self.counters.rx_errors.saturating_add(1);
+            return 0;
+        }
+        let copy_len = len;
         core::ptr::copy_nonoverlapping(
             self.rx_buf_virt[index] as *const u8,
             frame.as_mut_ptr(),

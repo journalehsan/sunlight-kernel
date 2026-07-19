@@ -265,6 +265,38 @@ fn print_status_all(cap: sunlight_ipc::CapabilityToken) {
             info.mtu,
             if info.link_up { "yes" } else { "no" }
         );
+        println!(
+            "vmxnet3: resets={} activations={} irq={} polls={}",
+            info.device_resets, info.device_activations, info.interrupts, info.polls
+        );
+        println!(
+            "tx: requests={} submitted={} bytes={} full={} notify={} complete={} errors={}",
+            info.tx_requests,
+            info.tx_submitted,
+            info.tx_bytes,
+            info.tx_ring_full,
+            info.tx_notifications,
+            info.tx_completed,
+            info.tx_errors
+        );
+        println!(
+            "rx: posted={} complete={} delivered={} bytes={} dropped={} errors={}",
+            info.rx_buffers_posted,
+            info.rx_completed,
+            info.rx_delivered,
+            info.rx_bytes,
+            info.rx_dropped,
+            info.rx_errors
+        );
+        println!(
+            "dhcp: discover={} offer={} request={} ack={} timeout={} installed={}",
+            info.dhcp_discovers,
+            info.dhcp_offers,
+            info.dhcp_requests,
+            info.dhcp_acks,
+            info.dhcp_timeouts,
+            info.dhcp_leases_installed
+        );
     }
 }
 

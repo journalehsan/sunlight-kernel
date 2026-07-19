@@ -3692,9 +3692,19 @@ fn sys_net_tx(frame: &mut SyscallFrame) -> u64 {
     }
     match dhcp_message_type(&kernel_buf[..len]) {
         Some(1) => {
+            let count = DHCP_DISCOVERS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) + 1;
             crate::serial_println!("[DHCP] discover sent");
+            if count <= 3 {
+                crate::serial_println!(
+                    "[DHCP] tx summary src={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} dst={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} ethertype=0x0800 udp=68->67 len={}",
+                    kernel_buf[6], kernel_buf[7], kernel_buf[8], kernel_buf[9],
+                    kernel_buf[10], kernel_buf[11], kernel_buf[0], kernel_buf[1],
+                    kernel_buf[2], kernel_buf[3], kernel_buf[4], kernel_buf[5], len
+                );
+            }
         }
         Some(3) => {
+            DHCP_REQUESTS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
             crate::serial_println!("[DHCP] request sent");
         }
         _ => {}
@@ -3777,9 +3787,11 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
         }
         match dhcp_message_type(&kernel_buf[..n]) {
             Some(2) => {
+                DHCP_OFFERS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
                 crate::serial_println!("[DHCP] offer received");
             }
             Some(5) => {
+                DHCP_ACKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
                 DHCP_ACK_SEEN.store(true, core::sync::atomic::Ordering::Relaxed);
                 crate::serial_println!("[DHCP] ACK received");
             }
@@ -3790,7 +3802,7 @@ fn sys_net_rx(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_net_info(frame: &mut SyscallFrame) -> u64 {
-    const INFO_WORDS: usize = 19;
+    const INFO_WORDS: usize = 32;
     let (authorized, may_mark_frame_proxy, may_mark_interface) = {
         let scheduler = crate::sched::SCHEDULER.lock();
         let name = scheduler.current_process().name_str();
@@ -3808,27 +3820,18 @@ fn sys_net_info(frame: &mut SyscallFrame) -> u64 {
     }
     let device = crate::ACTIVE_NET_DEVICE.lock();
     let Some(device) = device.as_ref() else {
-        let info = [
-            0,
-            0,
-            0,
-            0,
-            crate::NET_BACKEND_STATE.load(core::sync::atomic::Ordering::Acquire),
-            crate::NET_BACKEND_ERROR.load(core::sync::atomic::Ordering::Acquire),
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            crate::VMXNET3_INIT_STAGE.load(core::sync::atomic::Ordering::Acquire),
-            crate::VMXNET3_FAILURE_STAGE.load(core::sync::atomic::Ordering::Acquire),
-            crate::VMXNET3_ERROR_DETAIL.load(core::sync::atomic::Ordering::Acquire),
-        ];
+        let mut info = [0u64; INFO_WORDS];
+        info[4] = crate::NET_BACKEND_STATE.load(core::sync::atomic::Ordering::Acquire);
+        info[5] = crate::NET_BACKEND_ERROR.load(core::sync::atomic::Ordering::Acquire);
+        info[24] = DHCP_DISCOVERS.load(core::sync::atomic::Ordering::Relaxed);
+        info[25] = DHCP_OFFERS.load(core::sync::atomic::Ordering::Relaxed);
+        info[26] = DHCP_REQUESTS.load(core::sync::atomic::Ordering::Relaxed);
+        info[27] = DHCP_ACKS.load(core::sync::atomic::Ordering::Relaxed);
+        info[28] = DHCP_TIMEOUTS.load(core::sync::atomic::Ordering::Relaxed);
+        info[29] = DHCP_LEASES_INSTALLED.load(core::sync::atomic::Ordering::Relaxed);
+        info[30] = crate::VMXNET3_INIT_STAGE.load(core::sync::atomic::Ordering::Acquire);
+        info[31] = crate::VMXNET3_FAILURE_STAGE.load(core::sync::atomic::Ordering::Acquire)
+            | (crate::VMXNET3_ERROR_DETAIL.load(core::sync::atomic::Ordering::Acquire) << 8);
         let bytes =
             unsafe { core::slice::from_raw_parts(info.as_ptr() as *const u8, INFO_WORDS * 8) };
         if let Err(error) = copy_to_user(frame.rdi, bytes) {
@@ -3851,33 +3854,54 @@ fn sys_net_info(frame: &mut SyscallFrame) -> u64 {
             && may_mark_interface
         {
             crate::vmxnet3_transition(sunlight_ipc::Vmxnet3InitStage::InterfacePublished);
+        } else if requested_event == sunlight_ipc::NetBackendEvent::DhcpTimeout as u64
+            && may_mark_frame_proxy
+        {
+            DHCP_TIMEOUTS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        } else if requested_event == sunlight_ipc::NetBackendEvent::DhcpLeaseInstalled as u64
+            && may_mark_frame_proxy
+        {
+            DHCP_LEASES_INSTALLED.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         }
     }
     let counters = device.counters();
     let mac = device.mac();
     let mut packed = [0u8; 8];
     packed[..6].copy_from_slice(&mac);
-    let info = [
-        u64::from_le_bytes(packed),
-        1 | ((device.link_up() as u64) << 1),
-        device.kind() as u64,
-        device.mtu() as u64,
-        crate::NET_BACKEND_STATE.load(core::sync::atomic::Ordering::Acquire),
-        crate::NET_BACKEND_ERROR.load(core::sync::atomic::Ordering::Acquire),
-        counters.tx_submitted,
-        counters.tx_completed,
-        counters.tx_bytes,
-        counters.rx_completed,
-        counters.rx_delivered,
-        counters.rx_bytes,
-        counters.tx_ring_full,
-        counters.rx_bad_completion,
-        counters.interrupts,
-        counters.polls,
-        crate::VMXNET3_INIT_STAGE.load(core::sync::atomic::Ordering::Acquire),
-        crate::VMXNET3_FAILURE_STAGE.load(core::sync::atomic::Ordering::Acquire),
-        crate::VMXNET3_ERROR_DETAIL.load(core::sync::atomic::Ordering::Acquire),
-    ];
+    let mut info = [0u64; INFO_WORDS];
+    info[0] = u64::from_le_bytes(packed);
+    info[1] = 1 | ((device.link_up() as u64) << 1);
+    info[2] = device.kind() as u64;
+    info[3] = device.mtu() as u64;
+    info[4] = crate::NET_BACKEND_STATE.load(core::sync::atomic::Ordering::Acquire);
+    info[5] = crate::NET_BACKEND_ERROR.load(core::sync::atomic::Ordering::Acquire);
+    info[6] = counters.device_resets;
+    info[7] = counters.device_activations;
+    info[8] = counters.tx_requests;
+    info[9] = counters.tx_submitted;
+    info[10] = counters.tx_completed;
+    info[11] = counters.tx_bytes;
+    info[12] = counters.tx_notifications;
+    info[13] = counters.tx_errors;
+    info[14] = counters.rx_buffers_posted;
+    info[15] = counters.rx_completed;
+    info[16] = counters.rx_delivered;
+    info[17] = counters.rx_bytes;
+    info[18] = counters.rx_dropped;
+    info[19] = counters.rx_errors;
+    info[20] = counters.tx_ring_full;
+    info[21] = counters.rx_bad_completion;
+    info[22] = counters.interrupts;
+    info[23] = counters.polls;
+    info[24] = DHCP_DISCOVERS.load(core::sync::atomic::Ordering::Relaxed);
+    info[25] = DHCP_OFFERS.load(core::sync::atomic::Ordering::Relaxed);
+    info[26] = DHCP_REQUESTS.load(core::sync::atomic::Ordering::Relaxed);
+    info[27] = DHCP_ACKS.load(core::sync::atomic::Ordering::Relaxed);
+    info[28] = DHCP_TIMEOUTS.load(core::sync::atomic::Ordering::Relaxed);
+    info[29] = DHCP_LEASES_INSTALLED.load(core::sync::atomic::Ordering::Relaxed);
+    info[30] = crate::VMXNET3_INIT_STAGE.load(core::sync::atomic::Ordering::Acquire);
+    info[31] = crate::VMXNET3_FAILURE_STAGE.load(core::sync::atomic::Ordering::Acquire)
+        | (crate::VMXNET3_ERROR_DETAIL.load(core::sync::atomic::Ordering::Acquire) << 8);
     let bytes = unsafe { core::slice::from_raw_parts(info.as_ptr() as *const u8, INFO_WORDS * 8) };
     if let Err(error) = copy_to_user(frame.rdi, bytes) {
         return error;
@@ -3908,6 +3932,12 @@ fn sys_hardware_inventory(frame: &mut SyscallFrame) -> u64 {
 }
 
 static DHCP_ACK_SEEN: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static DHCP_DISCOVERS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static DHCP_OFFERS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static DHCP_REQUESTS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static DHCP_ACKS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static DHCP_TIMEOUTS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static DHCP_LEASES_INSTALLED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 /// Return DHCP option 53 for an unfragmented Ethernet/IPv4/UDP BOOTP frame.
 /// This deliberately inspects protocol headers only and never logs payloads.
@@ -4462,9 +4492,9 @@ fn sys_sysinfo(frame: &mut SyscallFrame) -> u64 {
 fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
     match frame.rdi {
         0 => {
-            use ::sunlight_ipc::swap_policy::FillDiagnostics;
-
-            if frame.r8 as usize != core::mem::size_of::<FillDiagnostics>() {
+            if frame.r8 as usize
+                != core::mem::size_of::<::sunlight_ipc::swap_policy::FillDiagnostics>()
+            {
                 return u64::MAX;
             }
             let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
@@ -4486,8 +4516,8 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
             };
             let bytes = unsafe {
                 core::slice::from_raw_parts(
-                    (&result as *const FillDiagnostics).cast::<u8>(),
-                    core::mem::size_of::<FillDiagnostics>(),
+                    (&result as *const ::sunlight_ipc::swap_policy::FillDiagnostics).cast::<u8>(),
+                    core::mem::size_of::<::sunlight_ipc::swap_policy::FillDiagnostics>(),
                 )
             };
             if copy_to_user(frame.r10, bytes).is_ok() {
@@ -4544,16 +4574,16 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
         }
         4 => crate::memory::zram::aggregate_stats().active_pool_count as u64,
         5 => {
-            use ::sunlight_ipc::swap_policy::AggregateDiagnostics;
-
-            if frame.rdx as usize != core::mem::size_of::<AggregateDiagnostics>() {
+            if frame.rdx as usize
+                != core::mem::size_of::<::sunlight_ipc::swap_policy::AggregateDiagnostics>()
+            {
                 return u64::MAX;
             }
             let zram = crate::memory::zram::aggregate_stats();
             let reclaim = crate::memory::swap::diagnostics();
             let last_fill = crate::memory::swap::last_fill_result();
             let policy = crate::memory::zram::policy();
-            let diagnostics = AggregateDiagnostics {
+            let diagnostics = ::sunlight_ipc::swap_policy::AggregateDiagnostics {
                 active_pool_count: zram.active_pool_count as u64,
                 configured_logical_pages: zram.configured_logical_pages,
                 configured_physical_budget_bytes: zram.configured_physical_budget_bytes,
@@ -4587,8 +4617,9 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
             };
             let bytes = unsafe {
                 core::slice::from_raw_parts(
-                    (&diagnostics as *const AggregateDiagnostics).cast::<u8>(),
-                    core::mem::size_of::<AggregateDiagnostics>(),
+                    (&diagnostics as *const ::sunlight_ipc::swap_policy::AggregateDiagnostics)
+                        .cast::<u8>(),
+                    core::mem::size_of::<::sunlight_ipc::swap_policy::AggregateDiagnostics>(),
                 )
             };
             if copy_to_user(frame.rsi, bytes).is_ok() {
@@ -4598,15 +4629,15 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
             }
         }
         6 => {
-            use ::sunlight_ipc::swap_policy::PoolDiagnostics;
-
-            if frame.r8 as usize != core::mem::size_of::<PoolDiagnostics>() {
+            if frame.r8 as usize
+                != core::mem::size_of::<::sunlight_ipc::swap_policy::PoolDiagnostics>()
+            {
                 return u64::MAX;
             }
             let Some(pool) = crate::memory::zram::pool_stats(frame.rsi as usize) else {
                 return u64::MAX;
             };
-            let diagnostics = PoolDiagnostics {
+            let diagnostics = ::sunlight_ipc::swap_policy::PoolDiagnostics {
                 logical_capacity_pages: pool.logical_capacity_pages,
                 physical_budget_bytes: pool.physical_budget_bytes,
                 used_logical_pages: pool.used_logical_pages,
@@ -4630,8 +4661,9 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
             };
             let bytes = unsafe {
                 core::slice::from_raw_parts(
-                    (&diagnostics as *const PoolDiagnostics).cast::<u8>(),
-                    core::mem::size_of::<PoolDiagnostics>(),
+                    (&diagnostics as *const ::sunlight_ipc::swap_policy::PoolDiagnostics)
+                        .cast::<u8>(),
+                    core::mem::size_of::<::sunlight_ipc::swap_policy::PoolDiagnostics>(),
                 )
             };
             if copy_to_user(frame.rdx, bytes).is_ok() {
