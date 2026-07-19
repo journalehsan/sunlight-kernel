@@ -1,23 +1,26 @@
-//! SunlightOS Control Panel — Day 22/23 first version.
+//! SunlightOS Control Panel — System Preferences.
 //!
-//! Grid of settings cards. Currently:
+//! Grid of settings cards:
 //!   • Mouse — pointer sensitivity slider (1-10) + acceleration toggle.
-//!     Sends SET_MOUSE_SETTINGS to display_server on Apply.
-//!   • Monitor — shows current screen resolution; mode switching is TODO.
-//!   • Window Behavior — future placeholder for titlebar double-click policy
-//!     and workspace-related preferences.
+//!   • Monitor — current screen resolution (read-only).
+//!   • Wallpaper — desktop background picker.
+//!   • Notifications — DND toggle.
+//!   • About This Computer — hardware, memory, graphics, runtime snapshot.
+//!   • About SunlightOS — OS, kernel, and core component identity.
+//!
+//! Direct page launch: `control-panel --page <name>` where name is one of
+//! wallpaper, about-computer, about-os (also accepted: about-sunlightos).
 //!
 //! Icons: SunlightOS icon theme (Breeze-inspired, TGA format).
-//!   Cards display the preferences-desktop-mouse and preferences-desktop-display
-//!   icons from /var/sunlightos/icons/SunlightOS (embedded at compile time).
-//!
-//! TODO: Persist settings via sunlight-kv once persistent config is available.
-//! TODO: Monitor mode switching (VMware/QEMU virtual display mode-set).
 
 #![no_std]
 #![no_main]
 
 extern crate alloc;
+
+mod about;
+mod clipboard;
+mod sysinfo;
 
 use alloc::vec::Vec;
 use core::alloc::GlobalAlloc;
@@ -41,6 +44,9 @@ use sunlight_wallpaper::{
     DesktopConfig, WallpaperEntry,
 };
 
+use about::{AboutAction, AboutPageState};
+use sysinfo::{FixedStr, SystemInfoSnapshot};
+
 // ---------------------------------------------------------------------------
 // Icon theme assets (embedded at compile time)
 // ---------------------------------------------------------------------------
@@ -53,6 +59,10 @@ static ICON_WALLPAPER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-desktop-wallpaper.tga");
 static ICON_SETTINGS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
+static ICON_COMPUTER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/computer.tga");
+static ICON_ABOUT_OS_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
 static ICON_PREFS_MONO_RAW: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/preferences-symbolic.raw"));
 static ICON_SYM_DND_ON_TGA: &[u8] =
@@ -61,11 +71,14 @@ static ICON_SYM_DND_OFF_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/do_not_disturb_off.tga"));
 static ICON_SYM_NOTIFICATIONS_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/notifications.tga"));
+static ICON_SUNLIGHT_LOGO_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icons/sunlightos-logo.tga"));
 
 const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO_RAW);
 
+// Tall enough to show the complete About SunlightOS details without scrolling.
 const WIN_W: u32 = 500;
-const WIN_H: u32 = 330;
+const WIN_H: u32 = 560;
 const FP_ONE: i32 = 65536;
 const WALLPAPER_PREVIEW_W: u32 = 240;
 const WALLPAPER_PREVIEW_H: u32 = 112;
@@ -84,6 +97,8 @@ enum Page {
     Monitor,
     Wallpaper,
     Notifications,
+    AboutComputer,
+    AboutOs,
 }
 
 struct ControlPanelApp {
@@ -105,11 +120,16 @@ struct ControlPanelApp {
     icon_notifications: Option<TgaImage>,
     icon_dnd_on: Option<TgaImage>,
     icon_dnd: Option<TgaImage>,
+    icon_computer: Option<TgaImage>,
+    icon_about_os: Option<TgaImage>,
+    icon_logo: Option<TgaImage>,
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
     wallpaper_preview: Option<TgaImage>,
     wallpaper_pending_item: Option<usize>,
+    sysinfo: SystemInfoSnapshot,
+    about: AboutPageState,
 }
 
 impl ControlPanelApp {
@@ -147,12 +167,21 @@ impl ControlPanelApp {
             icon_notifications: TgaImage::parse(ICON_SYM_NOTIFICATIONS_TGA).ok(),
             icon_dnd_on: TgaImage::parse(ICON_SYM_DND_ON_TGA).ok(),
             icon_dnd: TgaImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
+            icon_computer: TgaImage::parse(ICON_COMPUTER_TGA).ok(),
+            icon_about_os: TgaImage::parse(ICON_ABOUT_OS_TGA).ok(),
+            icon_logo: TgaImage::parse(ICON_SUNLIGHT_LOGO_TGA).ok(),
             wallpaper_items,
             wallpaper_config,
             wallpaper_selected,
             wallpaper_preview: None,
             wallpaper_pending_item: None,
+            sysinfo: SystemInfoSnapshot::collect(display_ep, screen_w, screen_h),
+            about: AboutPageState::new(),
         }
+    }
+
+    fn refresh_sysinfo(&mut self) {
+        self.sysinfo = SystemInfoSnapshot::collect(self.display_ep, self.screen_w, self.screen_h);
     }
 
     fn set_status(&mut self, msg: &[u8]) {
@@ -261,17 +290,21 @@ impl ControlPanelApp {
     // Grid page
     // -----------------------------------------------------------------------
 
-    fn card_rects(&self) -> (Rect, Rect, Rect, Rect) {
+    fn card_rects(&self) -> [Rect; 6] {
         let card_w = 136u32;
-        let card_h = 118u32;
+        let card_h = 110u32;
         let gap = 14i32;
         let start_x = (WIN_W as i32 - (card_w * 3) as i32 - gap * 2) / 2;
-        let card_y = 56i32;
-        let r1 = Rect::new(start_x, card_y, card_w, card_h);
-        let r2 = Rect::new(start_x + card_w as i32 + gap, card_y, card_w, card_h);
-        let r3 = Rect::new(start_x + (card_w as i32 + gap) * 2, card_y, card_w, card_h);
-        let r4 = Rect::new(start_x, card_y + card_h as i32 + 14, card_w, card_h);
-        (r1, r2, r3, r4)
+        let card_y = 52i32;
+        let row2_y = card_y + card_h as i32 + 12;
+        [
+            Rect::new(start_x, card_y, card_w, card_h),
+            Rect::new(start_x + card_w as i32 + gap, card_y, card_w, card_h),
+            Rect::new(start_x + (card_w as i32 + gap) * 2, card_y, card_w, card_h),
+            Rect::new(start_x, row2_y, card_w, card_h),
+            Rect::new(start_x + card_w as i32 + gap, row2_y, card_w, card_h),
+            Rect::new(start_x + (card_w as i32 + gap) * 2, row2_y, card_w, card_h),
+        ]
     }
 
     fn draw_card(
@@ -332,11 +365,11 @@ impl ControlPanelApp {
             FontRole::UiTitle,
         );
 
-        let (c1, c2, c3, c4) = self.card_rects();
+        let cards = self.card_rects();
         Self::draw_card(
             canvas,
             theme,
-            c1,
+            cards[0],
             theme.icon_foreground,
             "Mouse",
             "Pointer & Acceleration",
@@ -345,7 +378,7 @@ impl ControlPanelApp {
         Self::draw_card(
             canvas,
             theme,
-            c2,
+            cards[1],
             theme.icon_muted,
             "Monitor",
             "Resolution & Display",
@@ -354,7 +387,7 @@ impl ControlPanelApp {
         Self::draw_card(
             canvas,
             theme,
-            c3,
+            cards[2],
             theme.accent,
             "Wallpaper",
             "Desktop Background",
@@ -363,39 +396,154 @@ impl ControlPanelApp {
         Self::draw_card(
             canvas,
             theme,
-            c4,
+            cards[3],
             theme.icon_foreground,
             "Notifications",
             "History & DND",
             self.icon_notifications,
+        );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[4],
+            theme.icon_foreground,
+            "About Computer",
+            "Hardware, memory, GPU",
+            self.icon_computer,
+        );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[5],
+            theme.accent,
+            "About SunlightOS",
+            "OS, kernel, and build",
+            self.icon_about_os.or(self.icon_logo),
         );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
-            let (c1, c2, c3, c4) = self.card_rects();
-            if c1.contains(pt) {
+            let cards = self.card_rects();
+            if cards[0].contains(pt) {
                 self.page = Page::Mouse;
                 self.status_len = 0;
                 return true;
             }
-            if c2.contains(pt) {
+            if cards[1].contains(pt) {
                 self.page = Page::Monitor;
                 return true;
             }
-            if c3.contains(pt) {
+            if cards[2].contains(pt) {
                 self.page = Page::Wallpaper;
                 self.refresh_wallpaper_preview();
                 return true;
             }
-            if c4.contains(pt) {
+            if cards[3].contains(pt) {
                 self.page = Page::Notifications;
                 self.status_len = 0;
                 return true;
             }
+            if cards[4].contains(pt) {
+                self.page = Page::AboutComputer;
+                self.about = AboutPageState::new();
+                self.refresh_sysinfo();
+                return true;
+            }
+            if cards[5].contains(pt) {
+                self.page = Page::AboutOs;
+                self.about = AboutPageState::new();
+                self.refresh_sysinfo();
+                return true;
+            }
         }
         false
+    }
+
+    fn handle_about_action(&mut self, action: AboutAction, computer_page: bool) -> bool {
+        match action {
+            AboutAction::None => false,
+            AboutAction::Back => {
+                self.page = Page::Grid;
+                self.about.clear_status();
+                true
+            }
+            AboutAction::Refresh => {
+                self.refresh_sysinfo();
+                self.about.set_status("Information refreshed");
+                true
+            }
+            AboutAction::Copy => {
+                if computer_page {
+                    let mut buf = FixedStr::<1024>::empty();
+                    self.sysinfo.copy_computer_summary(&mut buf);
+                    match clipboard::set_clipboard_text(buf.as_str().as_bytes()) {
+                        Ok(()) => {
+                            self.about.set_status("Summary copied");
+                            let _ = show_notification(
+                                NotificationKind::Info,
+                                "Control Panel",
+                                "Summary copied to clipboard",
+                                2500,
+                            );
+                        }
+                        Err(msg) => self.about.set_status(msg),
+                    }
+                } else {
+                    let mut buf = FixedStr::<1536>::empty();
+                    self.sysinfo.copy_system_report(&mut buf);
+                    match clipboard::set_clipboard_text(buf.as_str().as_bytes()) {
+                        Ok(()) => {
+                            self.about.set_status("System report copied");
+                            let _ = show_notification(
+                                NotificationKind::Info,
+                                "Control Panel",
+                                "System report copied to clipboard",
+                                2500,
+                            );
+                        }
+                        Err(msg) => self.about.set_status(msg),
+                    }
+                }
+                true
+            }
+            AboutAction::NavigateComputer => {
+                self.page = Page::AboutComputer;
+                self.about = AboutPageState::new();
+                self.refresh_sysinfo();
+                true
+            }
+            AboutAction::NavigateOs => {
+                self.page = Page::AboutOs;
+                self.about = AboutPageState::new();
+                self.refresh_sysinfo();
+                true
+            }
+        }
+    }
+
+    fn update_about_computer_page(&mut self, event: Event) -> bool {
+        let action = about::update_computer_page(event, WIN_W, WIN_H, &mut self.about);
+        if action == AboutAction::None {
+            // Still repaint on scroll keypresses.
+            if let Event::KeyPress { pressed: true, .. } = event {
+                return true;
+            }
+            return false;
+        }
+        self.handle_about_action(action, true)
+    }
+
+    fn update_about_os_page(&mut self, event: Event) -> bool {
+        let action = about::update_os_page(event, WIN_W, WIN_H, &mut self.about);
+        if action == AboutAction::None {
+            if let Event::KeyPress { pressed: true, .. } = event {
+                return true;
+            }
+            return false;
+        }
+        self.handle_about_action(action, false)
     }
 
     fn notification_back_rect() -> Rect {
@@ -893,6 +1041,24 @@ impl App for ControlPanelApp {
             Page::Monitor => self.draw_monitor_page(canvas, theme),
             Page::Wallpaper => self.draw_wallpaper_page(canvas, theme),
             Page::Notifications => self.draw_notifications_page(canvas, theme),
+            Page::AboutComputer => about::draw_computer_page(
+                canvas,
+                theme,
+                WIN_W,
+                WIN_H,
+                &self.sysinfo,
+                &self.about,
+                self.icon_computer,
+            ),
+            Page::AboutOs => about::draw_os_page(
+                canvas,
+                theme,
+                WIN_W,
+                WIN_H,
+                &self.sysinfo,
+                &self.about,
+                self.icon_logo.or(self.icon_about_os),
+            ),
         }
     }
 
@@ -913,6 +1079,8 @@ impl App for ControlPanelApp {
             Page::Monitor => self.update_monitor_page(event),
             Page::Wallpaper => self.update_wallpaper_page(event),
             Page::Notifications => self.update_notifications_page(event),
+            Page::AboutComputer => self.update_about_computer_page(event),
+            Page::AboutOs => self.update_about_os_page(event),
         }
     }
 }
@@ -1078,6 +1246,9 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     if app.page == Page::Wallpaper {
         app.refresh_wallpaper_preview();
     }
+    if matches!(app.page, Page::AboutComputer | Page::AboutOs) {
+        app.refresh_sysinfo();
+    }
 
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
@@ -1100,17 +1271,20 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
     let count = unsafe { crt0::collect_raw_args(argc, argv, &mut raw) };
     let mut i = 1usize;
     while i < count {
-        let len = unsafe { crt0::cstr_len(raw[i], 32) };
+        let len = unsafe { crt0::cstr_len(raw[i], 48) };
         if len == 0 {
             i += 1;
             continue;
         }
         let bytes = unsafe { core::slice::from_raw_parts(raw[i], len) };
         if bytes == b"--page" && i + 1 < count {
-            let next_len = unsafe { crt0::cstr_len(raw[i + 1], 32) };
+            let next_len = unsafe { crt0::cstr_len(raw[i + 1], 48) };
             let next = unsafe { core::slice::from_raw_parts(raw[i + 1], next_len) };
-            if next == b"wallpaper" {
-                return Page::Wallpaper;
+            match next {
+                b"wallpaper" => return Page::Wallpaper,
+                b"about-computer" | b"computer" => return Page::AboutComputer,
+                b"about-os" | b"about-sunlightos" | b"about" => return Page::AboutOs,
+                _ => {}
             }
             i += 2;
             continue;

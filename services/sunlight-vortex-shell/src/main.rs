@@ -156,6 +156,8 @@ static ICON_TASKS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
 static ICON_DEVICES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/hwinfo.tga");
+static ICON_ABOUT_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
 static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
 static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
@@ -711,7 +713,7 @@ const TOP_ITEM_DATETIME: usize = TOP_ITEM_WS_FIRST + WS_INDICATOR_COUNT;
 const TOP_ITEM_NETWORK: usize = TOP_ITEM_DATETIME + 1;
 const TOP_ITEM_NOTIFICATIONS: usize = TOP_ITEM_NETWORK + 1;
 const TOP_ITEM_LOGOUT: usize = TOP_ITEM_NOTIFICATIONS + 1;
-const SYSTEM_MENU_W: u32 = 248;
+const SYSTEM_MENU_W: u32 = 268;
 const SYSTEM_MENU_HEADER_H: u32 = 34;
 const SYSTEM_MENU_ROW_H: u32 = 40;
 const SYSTEM_MENU_PAD: i32 = 6;
@@ -1249,12 +1251,16 @@ struct ContextMenuState {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SystemMenuAction {
+    AboutComputer,
+    AboutOs,
     Devices,
     Tasks,
     ControlPanel,
 }
 
-const SYSTEM_MENU_ITEMS: [(&str, SystemMenuAction); 3] = [
+const SYSTEM_MENU_ITEMS: [(&str, SystemMenuAction); 5] = [
+    ("About This Computer", SystemMenuAction::AboutComputer),
+    ("About SunlightOS", SystemMenuAction::AboutOs),
     ("Sunlight Devices", SystemMenuAction::Devices),
     ("Task Monitor", SystemMenuAction::Tasks),
     ("Control Panel", SystemMenuAction::ControlPanel),
@@ -4832,6 +4838,8 @@ fn draw_system_menu(canvas: &mut Canvas, theme: &Theme, menu: Rect, hovered: Opt
             canvas.fill_rounded_rect(row, 6, theme.accent.darken(165));
         }
         let icon = match action {
+            SystemMenuAction::AboutComputer => TgaImage::parse(ICON_COMPUTER_TGA).ok(),
+            SystemMenuAction::AboutOs => TgaImage::parse(ICON_ABOUT_TGA).ok(),
             SystemMenuAction::Devices => TgaImage::parse(ICON_DEVICES_TGA).ok(),
             SystemMenuAction::Tasks => TgaImage::parse(ICON_TASKS_TGA).ok(),
             SystemMenuAction::ControlPanel => TgaImage::parse(ICON_SETTINGS_TGA).ok(),
@@ -6397,17 +6405,50 @@ impl App for VortexShell {
                     if let Some(action) = system_menu_action_at(menu, point) {
                         self.show_system_menu = false;
                         self.system_menu_hover = None;
-                        let app_id = match action {
-                            SystemMenuAction::Devices => AppId::Devices,
-                            SystemMenuAction::Tasks => AppId::Tasks,
-                            SystemMenuAction::ControlPanel => AppId::Settings,
-                        };
-                        self.note_recent_app(app_id);
-                        return self.handle_app_click(
-                            app_id,
-                            monotonic_millis(),
-                            LaunchSource::Shell,
-                        );
+                        match action {
+                            SystemMenuAction::AboutComputer => {
+                                self.note_recent_app(AppId::Settings);
+                                let trace = self.next_launch_trace(LaunchSource::Shell);
+                                let request = sun_exec::LaunchRequest {
+                                    trace,
+                                    source: LaunchSource::Shell,
+                                    command: b"settings",
+                                    args: &[b"--page", b"about-computer"],
+                                    require_display: true,
+                                };
+                                let _ = sun_exec::launch(request);
+                                return true;
+                            }
+                            SystemMenuAction::AboutOs => {
+                                self.note_recent_app(AppId::Settings);
+                                let trace = self.next_launch_trace(LaunchSource::Shell);
+                                let request = sun_exec::LaunchRequest {
+                                    trace,
+                                    source: LaunchSource::Shell,
+                                    command: b"settings",
+                                    args: &[b"--page", b"about-os"],
+                                    require_display: true,
+                                };
+                                let _ = sun_exec::launch(request);
+                                return true;
+                            }
+                            SystemMenuAction::Devices
+                            | SystemMenuAction::Tasks
+                            | SystemMenuAction::ControlPanel => {
+                                let app_id = match action {
+                                    SystemMenuAction::Devices => AppId::Devices,
+                                    SystemMenuAction::Tasks => AppId::Tasks,
+                                    SystemMenuAction::ControlPanel => AppId::Settings,
+                                    _ => AppId::Settings,
+                                };
+                                self.note_recent_app(app_id);
+                                return self.handle_app_click(
+                                    app_id,
+                                    monotonic_millis(),
+                                    LaunchSource::Shell,
+                                );
+                            }
+                        }
                     }
                     if menu.contains(point) {
                         return true;

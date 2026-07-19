@@ -47,6 +47,17 @@ fn main() {
             emit_placeholder_tga(20, &out);
         }
     }
+
+    // SunlightOS logo for About SunlightOS (scaled TGA, type-2 BGRA top-left origin).
+    let logo_src = workspace_root.join("docs/images/SunlightOS-Logo.png");
+    println!("cargo:rerun-if-changed={}", logo_src.display());
+    let logo_out = out_dir.join("icons").join("sunlightos-logo.tga");
+    convert_png_to_tga(&logo_src, &logo_out, 128).unwrap_or_else(|err| {
+        panic!(
+            "sunlight-control-panel build: failed to convert logo {}: {err}",
+            logo_src.display()
+        )
+    });
 }
 
 fn emit_icon_tga(font: &Font, cp: u32, px: f32, canvas: u32, out_path: &Path) {
@@ -148,6 +159,42 @@ mod tests {
         let _ = fs::remove_file(bad);
         let _ = fs::remove_file(out);
     }
+}
+
+/// Resize a PNG and emit an uncompressed 32-bit TGA (BGRA, top-left origin).
+fn convert_png_to_tga(input: &Path, output: &Path, target_w: u32) -> Result<(), ConvertError> {
+    let image = load_png(input)?;
+    let rgba = image.to_rgba8();
+    let src_w = rgba.width().max(1);
+    let src_h = rgba.height().max(1);
+    let target_h = ((src_h as u64 * target_w as u64) / src_w as u64).max(1) as u32;
+    let resized = image::imageops::resize(
+        &rgba,
+        target_w,
+        target_h,
+        image::imageops::FilterType::Triangle,
+    );
+
+    let mut tga: Vec<u8> = vec![0u8; 18];
+    tga[2] = 2; // uncompressed true-color
+    tga[12] = (target_w & 0xff) as u8;
+    tga[13] = (target_w >> 8) as u8;
+    tga[14] = (target_h & 0xff) as u8;
+    tga[15] = (target_h >> 8) as u8;
+    tga[16] = 32;
+    tga[17] = 0x20; // top-left origin
+    tga.reserve((target_w * target_h * 4) as usize);
+    for pixel in resized.pixels() {
+        let [r, g, b, a] = pixel.0;
+        tga.push(b);
+        tga.push(g);
+        tga.push(r);
+        tga.push(a);
+    }
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent).map_err(ConvertError::Io)?;
+    }
+    fs::write(output, tga).map_err(ConvertError::Io)
 }
 
 fn convert_png_to_raw(
