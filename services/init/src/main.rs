@@ -2,9 +2,9 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
-    nameserver_endpoint_is_live, nameserver_note_diagnostic, CapabilityToken, InitMsg, InitStatus,
-    IpcMsg, NameserverDiagnosticEvent, SpawnMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_recv_timeout, ipc_reply, ipc_reply_and_wait,
+    nameserver_endpoint_is_live, nameserver_note_diagnostic, CapabilityToken, EndpointId, InitMsg,
+    InitStatus, IpcMsg, NameserverDiagnosticEvent, SpawnMsg,
 };
 
 /// Base servers that init launches via the kernel spawn capability once it
@@ -12,28 +12,41 @@ use sunlight_ipc::{
 /// vfs_server/tty_server, which the kernel spawns directly). sunlightd in turn
 /// launches the user-level daemons (timezone_service, niced, gcd).
 ///
-/// Spawn returns immediately, so init effectively queues these services and
-/// then services their nameserver traffic. Keep `sunlightd` early enough that
-/// its own daemon tree can start overlapping the rest of init's boot work.
-/// deviced starts before drivers so registration normally succeeds. Drivers
-/// still treat deviced as optional and continue if it is unavailable.
-/// sunlight-kbd and sunlight-mouse are spawned AFTER timer_server (so IPC is stable)
-/// but BEFORE tty_server (which depends on input routing).
+/// Order matters for interactive boot:
+/// - `timer_server` first so timed IPC works.
+/// - `sunlight-kbd` / `sunlight-mouse` immediately after so the IRQ1 path can
+///   come up while login is painted. tty_server is kernel-spawned earlier and
+///   blocks on nameserver REGISTER("tty"); without early kbd + draining the
+///   nameserver during this spawn list, keyboard looks dead at login.
+/// - Remaining daemons (net, power, display, …) follow.
+///
+/// Spawn returns after the process is created, but REGISTER/LOOKUP traffic from
+/// already-running servers (tty, vfs, …) must be drained *between* spawns —
+/// init used to spawn the full list before entering the nameserver loop, which
+/// delayed `"tty"` registration until after networkd/powerd/etc.
 const INIT_SERVICES: [&str; 12] = [
     "/sbin/timer_server",
+    "/sbin/sunlight-kbd",
+    "/sbin/sunlight-mouse",
     "/sbin/sunlight-swapd",
     "/sbin/deviced",
     "/sbin/sunlightd",
     "/sbin/networkd",
     "/sbin/resolved",
     "/sbin/powerd",
-    "/sbin/sunlight-kbd",
-    "/sbin/sunlight-mouse",
     "/sbin/sunlight-display",
     // PTY broker used by sunlight-libc::openpty() for tty/session spawning.
     "/sbin/pty_server",
     "/sbin/net_server",
 ];
+
+/// How many nameserver messages to accept after each spawn before continuing.
+const DRAIN_MSGS_PER_SPAWN: usize = 8;
+/// Per-recv timeout (ms) while draining; keeps boot moving if the queue is empty.
+const DRAIN_TIMEOUT_MS: u64 = 2;
+/// Extra drain passes after the last boot spawn so late REGISTERs land.
+const DRAIN_MSGS_AFTER_BOOT: usize = 16;
+const DRAIN_TIMEOUT_AFTER_BOOT_MS: u64 = 5;
 
 /// Spawn a service by absolute path using the kernel spawn capability.
 fn spawn_service(spawn_cap: CapabilityToken, path: &str) -> bool {
@@ -56,6 +69,41 @@ fn spawn_service(spawn_cap: CapabilityToken, path: &str) -> bool {
     }
     let reply = ipc_call(spawn_cap, msg);
     reply.label == SpawnMsg::REPLY
+}
+
+fn handle_nameserver_msg(registry: &mut [RegistryEntry; 32], msg: IpcMsg) -> IpcMsg {
+    match msg.label {
+        InitMsg::REGISTER => register_service(
+            registry,
+            msg.words[0],
+            CapabilityToken(msg.words[1]),
+            msg.words[2] as u32,
+            msg.badge as usize,
+        ),
+        InitMsg::LOOKUP => lookup_service(registry, msg.words[0]),
+        _ => IpcMsg::with_label(InitMsg::DENY),
+    }
+}
+
+/// Non-blocking-ish drain: answer up to `budget` pending REGISTER/LOOKUP calls.
+///
+/// Critical during boot so tty_server can register `"tty"` (and kbd can look it
+/// up) while init is still launching the rest of the service tree.
+fn drain_nameserver(
+    ep: EndpointId,
+    registry: &mut [RegistryEntry; 32],
+    budget: usize,
+    timeout_ms: u64,
+) {
+    for _ in 0..budget {
+        match ipc_recv_timeout(ep, timeout_ms) {
+            Some(msg) => {
+                let reply = handle_nameserver_msg(registry, msg);
+                ipc_reply(reply);
+            }
+            None => break,
+        }
+    }
 }
 
 #[panic_handler]
@@ -85,10 +133,9 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         let _ = registry_insert_kernel(&mut registry, name, CapabilityToken(spawn_token));
         debug_log("[init] Registered kernel spawn endpoint");
 
-        // Launch the base servers that do not need privileged kernel memory
-        // setup. The spawn syscall is handled inline by the kernel and returns
-        // immediately, so these are queued before we enter the name-server loop
-        // below — their own register/lookup IPC is then serviced by that loop.
+        // Launch base servers, draining nameserver traffic between each spawn
+        // so early clients (especially tty_server → "tty") are not stuck until
+        // the entire list is created.
         let spawn_cap = CapabilityToken(spawn_token);
         for path in INIT_SERVICES.iter() {
             if spawn_service(spawn_cap, path) {
@@ -96,22 +143,20 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
             } else {
                 debug_log("[init] FAILED to launch base service");
             }
+            drain_nameserver(ep, &mut registry, DRAIN_MSGS_PER_SPAWN, DRAIN_TIMEOUT_MS);
         }
+        drain_nameserver(
+            ep,
+            &mut registry,
+            DRAIN_MSGS_AFTER_BOOT,
+            DRAIN_TIMEOUT_AFTER_BOOT_MS,
+        );
+        debug_log("[init] base service spawn pass complete");
     }
 
     let mut msg = ipc_recv(ep);
     loop {
-        let reply = match msg.label {
-            InitMsg::REGISTER => register_service(
-                &mut registry,
-                msg.words[0],
-                CapabilityToken(msg.words[1]),
-                msg.words[2] as u32,
-                msg.badge as usize,
-            ),
-            InitMsg::LOOKUP => lookup_service(&mut registry, msg.words[0]),
-            _ => IpcMsg::with_label(InitMsg::DENY),
-        };
+        let reply = handle_nameserver_msg(&mut registry, msg);
         msg = ipc_reply_and_wait(ep, reply);
     }
 }

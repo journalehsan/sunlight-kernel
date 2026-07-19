@@ -513,9 +513,15 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     // (sunlight-kbd) can resolve "tty" and forward key events here. Without
     // this, nameserver_lookup("tty") returns DENY and the kbd driver spins
     // forever, so the keyboard appears dead.
-    nameserver_register("tty", ep);
-    debug_log("[TTY]  Registered as 'tty'");
-    debug_log("[TTY]  Login screen ready");
+    //
+    // init drains REGISTER/LOOKUP between boot spawns so this can complete
+    // before the full service tree is launched (see services/init).
+    if nameserver_register("tty", ep) {
+        debug_log("[TTY]  Registered as 'tty'");
+        debug_log("[TTY]  Login screen ready");
+    } else {
+        debug_log("[TTY]  FATAL: nameserver_register('tty') failed — keyboard will not work");
+    }
 
     let mut login = LoginScreen::new();
     // TTY/Login is the default session at boot; Desktop becomes active after Desktop login.
