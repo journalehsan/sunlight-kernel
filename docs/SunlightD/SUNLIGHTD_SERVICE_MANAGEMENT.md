@@ -1,7 +1,7 @@
 # SunlightD Service Management
 
-**Last updated:** 2026-06-26
-**Status:** In-memory service control working. Persistence is a future item.
+**Last updated:** 2026-07-20
+**Status:** Service control and enablement persistence working.
 
 ---
 
@@ -188,6 +188,7 @@ services/sunlightctl/
 - [x] `stop` — sends SIGTERM, marks service stopped
 - [x] `restart` — stop + start
 - [x] `enable` / `disable` — flips `enabled` flag, returns NOP if already in state
+- [x] Enablement persistence in `/state/sunlightd/enabled-services`
 - [x] `enable --now` / `disable --now`
 - [x] `list` with name / state / enabled / PID columns
 - [x] `status` with enabled field
@@ -199,17 +200,18 @@ services/sunlightctl/
 
 ## Known Limitations & Future Work
 
-### P1 — Persistence
+### Persistence behavior
 
-Enabled/disabled state is in-memory only. After a reboot, or if sunlightd is
-restarted, all services revert to their compiled-in defaults (solar disabled,
-everything else enabled).
+Enablement is now persisted by `sunlightd` itself in
+`/state/sunlightd/enabled-services`.
 
-**Future:** Write enable/disable decisions to the KV store (`sunlight-kv`) under
-a `sunlightd/enabled/<name>` namespace. Read them back at `load_units()` time to
-override compiled-in defaults. This requires sunlight-kv to be running before
-sunlightd reads state — which means sunlightd must either start kv first and
-then re-read, or use a two-phase init.
+- `load_units()` applies compiled defaults first, then overlays any persisted
+  state before the boot autostart queue is created.
+- Missing state keeps compiled defaults unchanged.
+- State is written atomically via temp file, `chmod`, write, close, and rename.
+- Malformed state is rejected fail-closed and does not enable services
+  unexpectedly.
+- Unknown service IDs in the persisted file are ignored with a diagnostic.
 
 ### P1 — Stop Reliability
 

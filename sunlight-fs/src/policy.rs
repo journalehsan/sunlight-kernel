@@ -248,7 +248,11 @@ fn is_trusted_service(actor: Actor<'_>) -> bool {
     matches!(
         actor,
         Actor::Service {
-            name: "sunlight-kv" | "sunlight-tls" | "sunlight-uac" | "capability-broker"
+            name: "sunlightd"
+                | "sunlight-kv"
+                | "sunlight-tls"
+                | "sunlight-uac"
+                | "capability-broker"
         }
     )
 }

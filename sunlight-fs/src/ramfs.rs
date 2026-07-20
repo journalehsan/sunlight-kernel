@@ -594,6 +594,7 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),
     RamEntry::dir("/state", 0, 0, mode::DIR_755),
+    RamEntry::dir("/state/sunlightd", 0, 0, mode::DIR_700),
     RamEntry::dir("/state/sunlight-kv", 0, 0, mode::DIR_700),
     RamEntry::dir("/state/sunlight-tls", 0, 0, mode::DIR_700),
     RamEntry::dir("/state/sunlight-uac", 0, 0, mode::DIR_700),

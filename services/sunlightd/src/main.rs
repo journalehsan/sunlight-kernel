@@ -2,12 +2,16 @@
 //! Reads .service and .socket unit files and manages process lifecycle
 
 #![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
+#[cfg(test)]
+extern crate std;
 
+#[cfg(not(test))]
 struct BumpAllocator;
 
+#[cfg(not(test))]
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         static mut HEAP: [u8; 65536] = [0; 65536];
@@ -25,6 +29,7 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
+#[cfg(not(test))]
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
@@ -41,6 +46,7 @@ use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, monotonic_millis,
     nameserver_lookup, nameserver_register, CapabilityToken, IpcMsg, SpawnRequest,
 };
+use sunlight_libc::{self as libc, Errno, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY};
 use supervisor::{ServiceEntry, ServiceState};
 use unit::{parse_service_unit, ServiceUnit, SocketUnit, MAX_UNITS};
 
@@ -52,6 +58,11 @@ macro_rules! serial_println {
         debug_log(&buf);
     }};
 }
+
+const ENABLED_STATE_PATH: &[u8] = b"/state/sunlightd/enabled-services";
+const ENABLED_STATE_TMP_PATH: &[u8] = b"/state/sunlightd/enabled-services.tmp";
+const ENABLED_STATE_VERSION: &str = "v1";
+const ENABLED_STATE_MAX_BYTES: usize = 2048;
 
 struct ServiceTable {
     services: [Option<ServiceEntry>; MAX_UNITS],
@@ -110,6 +121,17 @@ impl ServiceTable {
             None
         }
     }
+
+    fn find_by_unit_id(&self, unit_id: &str) -> Option<usize> {
+        for i in 0..self.count {
+            if let Some(ref entry) = self.services[i] {
+                if service_unit_id(entry) == unit_id {
+                    return Some(i);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl BootStartup {
@@ -154,6 +176,132 @@ fn binary_name_of(exec_start: &str) -> &str {
     } else {
         exec_start
     }
+}
+
+fn service_unit_id(entry: &ServiceEntry) -> heapless::String<64> {
+    let mut unit_name = heapless::String::<64>::new();
+    let _ = unit_name.push_str(binary_name_of(&entry.unit.exec_start));
+    let _ = unit_name.push_str(".service");
+    unit_name
+}
+
+fn collect_enabled_state(services: &ServiceTable) -> heapless::String<ENABLED_STATE_MAX_BYTES> {
+    let mut content = heapless::String::<ENABLED_STATE_MAX_BYTES>::new();
+    let _ = content.push_str(ENABLED_STATE_VERSION);
+    let _ = content.push('\n');
+    for idx in 0..services.count {
+        let Some(entry) = services.get(idx) else {
+            continue;
+        };
+        let unit_id = service_unit_id(entry);
+        let _ = content.push_str(unit_id.as_str());
+        let _ = content.push('=');
+        let _ = content.push_str(if entry.enabled { "1" } else { "0" });
+        let _ = content.push('\n');
+    }
+    content
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PersistStateError {
+    InvalidUtf8,
+    MissingVersion,
+    UnsupportedVersion,
+    MalformedRecord,
+    InvalidStateValue,
+}
+
+fn apply_enabled_state_from_str(
+    services: &mut ServiceTable,
+    content: &str,
+) -> Result<(), PersistStateError> {
+    let mut lines = content.lines();
+    let Some(version) = lines.next() else {
+        return Err(PersistStateError::MissingVersion);
+    };
+    if version != ENABLED_STATE_VERSION {
+        return Err(PersistStateError::UnsupportedVersion);
+    }
+
+    for line in lines {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some((unit_id, state)) = line.split_once('=') else {
+            return Err(PersistStateError::MalformedRecord);
+        };
+        let enabled = match state {
+            "0" => false,
+            "1" => true,
+            _ => return Err(PersistStateError::InvalidStateValue),
+        };
+        if let Some(idx) = services.find_by_unit_id(unit_id) {
+            if let Some(entry) = services.get_mut(idx) {
+                entry.enabled = enabled;
+            }
+        } else {
+            serial_println!("[SUNLIGHTD] Ignoring unknown service state '{}'", unit_id);
+        }
+    }
+
+    Ok(())
+}
+
+fn load_persisted_enabled_state(services: &mut ServiceTable) {
+    let fd = match libc::open_with_flags(ENABLED_STATE_PATH, O_RDONLY) {
+        Ok(fd) => fd,
+        Err(Errno::Failed) => return,
+        Err(err) => {
+            serial_println!("[SUNLIGHTD] enabled-state open failed: {:?}", err);
+            return;
+        }
+    };
+
+    let mut buf = [0u8; ENABLED_STATE_MAX_BYTES];
+    let mut total = 0usize;
+    let result = loop {
+        if total == buf.len() {
+            break Err(PersistStateError::MalformedRecord);
+        }
+        match libc::read(fd, &mut buf[total..]) {
+            Ok(0) => break Ok(total),
+            Ok(n) => total += n,
+            Err(_) => break Err(PersistStateError::MalformedRecord),
+        }
+    };
+    let _ = libc::close(fd);
+
+    let Ok(total) = result else {
+        serial_println!("[SUNLIGHTD] enabled-state rejected: unreadable");
+        return;
+    };
+    let text = match core::str::from_utf8(&buf[..total]) {
+        Ok(text) => text,
+        Err(_) => {
+            serial_println!("[SUNLIGHTD] enabled-state rejected: invalid utf8");
+            return;
+        }
+    };
+
+    if let Err(err) = apply_enabled_state_from_str(services, text) {
+        serial_println!("[SUNLIGHTD] enabled-state rejected: {:?}", err);
+    } else {
+        serial_println!("[SUNLIGHTD] loaded persisted enabled state");
+    }
+}
+
+fn persist_enabled_state(services: &ServiceTable) -> Result<(), &'static str> {
+    let content = collect_enabled_state(services);
+    let fd =
+        libc::open_with_flags(ENABLED_STATE_TMP_PATH, O_WRONLY | O_CREAT | O_TRUNC).map_err(
+            |_| "open-temp",
+        )?;
+    libc::chmod(ENABLED_STATE_TMP_PATH, 0o600).map_err(|_| "chmod-temp")?;
+    libc::write_all(fd, content.as_bytes()).map_err(|_| "write-temp")?;
+    libc::close(fd).map_err(|_| "close-temp")?;
+    libc::rename(ENABLED_STATE_TMP_PATH, ENABLED_STATE_PATH).map_err(|_| "rename-temp")?;
+    Ok(())
 }
 
 fn normalize_dep_unit_name(dep: &str) -> heapless::String<64> {
@@ -443,18 +591,14 @@ fn build_dep_graph(
 
     for i in 0..services.count {
         if let Some(ref entry) = services.services[i] {
-            let mut unit_name = heapless::String::<64>::new();
-            let _ = unit_name.push_str(binary_name_of(&entry.unit.exec_start));
-            let _ = unit_name.push_str(".service");
+            let unit_name = service_unit_id(entry);
             graph.add_unit(&unit_name).map_err(|_| "Graph add failed")?;
         }
     }
 
     for i in 0..services.count {
         if let Some(ref entry) = services.services[i] {
-            let mut unit_name = heapless::String::<64>::new();
-            let _ = unit_name.push_str(binary_name_of(&entry.unit.exec_start));
-            let _ = unit_name.push_str(".service");
+            let unit_name = service_unit_id(entry);
 
             for dep in &entry.unit.after {
                 let dep_name = normalize_dep_unit_name(dep);
@@ -732,12 +876,25 @@ fn handle_control_message(
         SunlightdOp::Enable => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
-                if let Some(entry) = services.get_mut(idx) {
-                    if entry.enabled {
-                        reply.label = REPLY_NOP;
-                    } else {
+                if services.get(idx).map(|entry| entry.enabled).unwrap_or(false) {
+                    reply.label = REPLY_NOP;
+                } else {
+                    if let Some(entry) = services.get_mut(idx) {
                         entry.enabled = true;
-                        reply.label = REPLY_OK;
+                    }
+                    match persist_enabled_state(services) {
+                        Ok(()) => reply.label = REPLY_OK,
+                        Err(err) => {
+                            if let Some(entry) = services.get_mut(idx) {
+                                entry.enabled = false;
+                            }
+                            serial_println!(
+                                "[SUNLIGHTD] enable persist failed for {}: {}",
+                                unit_name,
+                                err
+                            );
+                            reply.label = REPLY_ERR;
+                        }
                     }
                 }
             } else {
@@ -748,12 +905,25 @@ fn handle_control_message(
         SunlightdOp::Disable => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
-                if let Some(entry) = services.get_mut(idx) {
-                    if !entry.enabled {
-                        reply.label = REPLY_NOP;
-                    } else {
+                if !services.get(idx).map(|entry| entry.enabled).unwrap_or(true) {
+                    reply.label = REPLY_NOP;
+                } else {
+                    if let Some(entry) = services.get_mut(idx) {
                         entry.enabled = false;
-                        reply.label = REPLY_OK;
+                    }
+                    match persist_enabled_state(services) {
+                        Ok(()) => reply.label = REPLY_OK,
+                        Err(err) => {
+                            if let Some(entry) = services.get_mut(idx) {
+                                entry.enabled = true;
+                            }
+                            serial_println!(
+                                "[SUNLIGHTD] disable persist failed for {}: {}",
+                                unit_name,
+                                err
+                            );
+                            reply.label = REPLY_ERR;
+                        }
                     }
                 }
             } else {
@@ -852,6 +1022,7 @@ fn handle_control_message(
     reply
 }
 
+#[cfg(not(test))]
 #[no_mangle]
 fn _start() -> ! {
     sunlight_ipc::debug_log("[SUNLIGHTD] main() reached\n");
@@ -864,6 +1035,7 @@ fn _start() -> ! {
 
     // Load unit files
     let (mut services, _sockets) = load_units();
+    load_persisted_enabled_state(&mut services);
     serial_println!("[SUNLIGHTD] Loaded {} service units", services.count);
 
     // Build dependency graph (validates the declarative dependency metadata)
@@ -903,6 +1075,65 @@ fn _start() -> ! {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn load_for_test() -> ServiceTable {
+        let (services, _) = load_units();
+        services
+    }
+
+    #[test]
+    fn compiled_default_for_solar_is_disabled() {
+        let services = load_for_test();
+        let idx = services.find_by_name("solar").expect("solar service");
+        assert!(!services.get(idx).unwrap().enabled);
+    }
+
+    #[test]
+    fn persisted_state_overrides_defaults() {
+        let mut services = load_for_test();
+        apply_enabled_state_from_str(&mut services, "v1\nsolar.service=1\nsunlight-tls.service=0\n")
+            .expect("valid state");
+
+        let solar = services.find_by_name("solar").unwrap();
+        let tls = services.find_by_name("sunlight-tls").unwrap();
+        assert!(services.get(solar).unwrap().enabled);
+        assert!(!services.get(tls).unwrap().enabled);
+    }
+
+    #[test]
+    fn malformed_state_fails_closed() {
+        let mut services = load_for_test();
+        let solar = services.find_by_name("solar").unwrap();
+        let original = services.get(solar).unwrap().enabled;
+
+        let err = apply_enabled_state_from_str(&mut services, "v1\nsolar.service=enabled\n");
+        assert_eq!(err, Err(PersistStateError::InvalidStateValue));
+        assert_eq!(services.get(solar).unwrap().enabled, original);
+    }
+
+    #[test]
+    fn unknown_services_are_ignored() {
+        let mut services = load_for_test();
+        apply_enabled_state_from_str(&mut services, "v1\nfuture-ssh.service=1\n")
+            .expect("unknown entries should be ignored");
+        let solar = services.find_by_name("solar").unwrap();
+        assert!(!services.get(solar).unwrap().enabled);
+    }
+
+    #[test]
+    fn serialized_state_is_versioned_and_unit_scoped() {
+        let services = load_for_test();
+        let content = collect_enabled_state(&services);
+        assert!(content.starts_with("v1\n"));
+        assert!(content.contains("solar.service=0\n"));
+        assert!(content.contains("sunlight-tls.service=1\n"));
+    }
+}
+
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     serial_println!("[SUNLIGHTD] PANIC: {}", _info);
