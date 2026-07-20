@@ -1,8 +1,11 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FsError {
     NotFound,
+    AlreadyExists,
     NotDir,
     IsDir,
+    UnexpectedType,
+    InsecureMetadata,
     InvalidPath,
     BadHandle,
     TooManyOpenFiles,

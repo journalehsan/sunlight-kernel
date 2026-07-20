@@ -36,6 +36,7 @@ pub mod power;
 pub mod sun_exec;
 /// Global file-open resolver (extension MIME + default app associations).
 pub mod sun_open;
+pub mod secret_store;
 /// Native thread spawning.
 pub mod thread;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
@@ -63,8 +64,11 @@ pub const O_RDONLY: u64 = 0x0;
 pub const O_WRONLY: u64 = 0x1;
 pub const O_RDWR: u64 = 0x2;
 pub const O_CREAT: u64 = 0x40;
+pub const O_EXCL: u64 = 0x80;
 pub const O_TRUNC: u64 = 0x200;
 pub const O_APPEND: u64 = 0x400;
+pub const O_NOFOLLOW: u64 = 0x0002_0000;
+pub const O_CLOEXEC: u64 = 0x0008_0000;
 pub const SEEK_SET: i32 = 0;
 pub const SEEK_CUR: i32 = 1;
 pub const SEEK_END: i32 = 2;
@@ -87,15 +91,19 @@ pub fn open(path: &[u8]) -> Result<Fd, Errno> {
     sys::check(ret).map(|fd| Fd(fd as u32))
 }
 
-pub fn open_with_flags(path: &[u8], flags: u64) -> Result<Fd, Errno> {
+pub fn open_with_flags_mode(path: &[u8], flags: u64, mode: u16) -> Result<Fd, Errno> {
     let mut path_buf = [0u8; MAX_PATH];
     let path_ptr = cstr(&mut path_buf, path)?;
-    let ret = unsafe { sys::syscall3(sys::SYS_OPEN, path_ptr as u64, flags, 0) };
+    let ret = unsafe { sys::syscall3(sys::SYS_OPEN, path_ptr as u64, flags, mode as u64) };
     sys::check(ret).map(|fd| Fd(fd as u32))
 }
 
+pub fn open_with_flags(path: &[u8], flags: u64) -> Result<Fd, Errno> {
+    open_with_flags_mode(path, flags, 0)
+}
+
 pub fn create(path: &[u8]) -> Result<Fd, Errno> {
-    open_with_flags(path, O_WRONLY | O_CREAT)
+    open_with_flags_mode(path, O_WRONLY | O_CREAT, 0o644)
 }
 
 pub fn close(fd: Fd) -> Result<(), Errno> {
@@ -348,6 +356,48 @@ pub fn chown(path: &[u8], uid: u32, gid: u32) -> Result<(), Errno> {
     let mut path_buf = [0u8; MAX_PATH];
     let path_ptr = cstr(&mut path_buf, path)?;
     let ret = unsafe { sys::syscall3(sys::SYS_CHOWN, path_ptr as u64, uid as u64, gid as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub(crate) fn secret_create_temp(path: &[u8], mode: u16) -> Result<Fd, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe {
+        sys::syscall2(
+            sys::SYS_SECRET_CREATE,
+            path_ptr as u64,
+            mode as u64,
+        )
+    };
+    sys::check(ret).map(|fd| Fd(fd as u32))
+}
+
+pub(crate) fn secret_publish(
+    temporary: &[u8],
+    destination: &[u8],
+    mode: u16,
+    replace: bool,
+) -> Result<(), Errno> {
+    let mut temporary_buf = [0u8; MAX_PATH];
+    let mut destination_buf = [0u8; MAX_PATH];
+    let temporary_ptr = cstr(&mut temporary_buf, temporary)?;
+    let destination_ptr = cstr(&mut destination_buf, destination)?;
+    let ret = unsafe {
+        sys::syscall4(
+            sys::SYS_SECRET_PUBLISH,
+            temporary_ptr as u64,
+            destination_ptr as u64,
+            mode as u64,
+            replace as u64,
+        )
+    };
+    sys::check(ret).map(|_| ())
+}
+
+pub(crate) fn secret_remove_temp(path: &[u8]) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall1(sys::SYS_SECRET_REMOVE_TEMP, path_ptr as u64) };
     sys::check(ret).map(|_| ())
 }
 

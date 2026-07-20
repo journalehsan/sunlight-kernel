@@ -28,7 +28,10 @@ pub const SYS_UNLINK: u64 = 65;
 pub const SYS_RENAME: u64 = 66;
 pub const SYS_CHMOD: u64 = 67;
 pub const SYS_CHOWN: u64 = 68;
+pub const SYS_SECRET_CREATE: u64 = 69;
 pub const SYS_KILL: u64 = 72;
+pub const SYS_SECRET_PUBLISH: u64 = 75;
+pub const SYS_SECRET_REMOVE_TEMP: u64 = 76;
 pub const SYS_SYSINFO: u64 = 82;
 pub const SYS_SETNICE: u64 = 83;
 pub const SYS_GETNICE: u64 = 84;
@@ -123,6 +126,26 @@ pub unsafe fn syscall3(n: u64, a1: u64, a2: u64, a3: u64) -> u64 {
         in("rdi") a1,
         in("rsi") a2,
         in("rdx") a3,
+        lateout("rax") ret,
+        out("rcx") _,
+        out("r11") _,
+        options(nostack),
+    );
+    ret
+}
+
+/// # Safety
+/// The SysV AMD64 syscall ABI passes the fourth argument in r10.
+#[inline]
+pub unsafe fn syscall4(n: u64, a1: u64, a2: u64, a3: u64, a4: u64) -> u64 {
+    let ret: u64;
+    core::arch::asm!(
+        "syscall",
+        in("rax") n,
+        in("rdi") a1,
+        in("rsi") a2,
+        in("rdx") a3,
+        in("r10") a4,
         lateout("rax") ret,
         out("rcx") _,
         out("r11") _,

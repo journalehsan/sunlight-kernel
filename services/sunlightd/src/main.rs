@@ -634,6 +634,36 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // secret_store_test.service exercises the generic private-secret storage
+    // contract. It is intentionally disabled and has the narrow host-key
+    // administration capability rather than broad filesystem write access.
+    let secret_store_test_service = r#"[Unit]
+Description=SunlightOS Secret Storage Regression Service
+After=rand_service.service
+Requires=rand_service.service
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/secret_store_test
+Restart=no
+User=root
+Capability=host-key-admin
+Capability=secure-random
+Capability=logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(secret_store_test_service.as_bytes()) {
+        if let Ok(idx) = services.add(unit) {
+            if let Some(entry) = services.get_mut(idx) {
+                entry.enabled = false;
+            }
+        }
+    }
+
     // sunlight-thumbd.service — disabled: thumbnail pre-warming panics on
     // malformed simg data and leaves the process in a zombie-Ready loop.
     let thumbd_service = r#"[Unit]

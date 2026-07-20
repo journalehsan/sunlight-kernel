@@ -250,6 +250,23 @@ impl FdTable {
         Ok(())
     }
 
+    /// Remove descriptors marked close-on-exec and return their backing
+    /// handles so the caller can release VFS resources.
+    pub fn take_cloexec_handles(&mut self) -> [Option<FileHandle>; 256] {
+        const O_CLOEXEC: u32 = 0x0008_0000;
+        let mut handles = [None; 256];
+        for (idx, entry) in self.entries.iter_mut().enumerate().skip(3) {
+            if entry
+                .as_ref()
+                .map(|descriptor| descriptor.flags & O_CLOEXEC != 0)
+                .unwrap_or(false)
+            {
+                handles[idx] = entry.take().map(|descriptor| descriptor.handle);
+            }
+        }
+        handles
+    }
+
     /// Get a file descriptor (for inspection)
     pub fn get(&self, fd: i32) -> Option<&FileDescriptor> {
         if fd < 0 || fd >= 256 {
@@ -376,6 +393,24 @@ mod tests {
             assert_eq!(fd, 3);
             table.close(fd).unwrap();
         }
+    }
+
+    #[test]
+    fn cloexec_handles_are_removed_without_touching_standard_streams() {
+        let mut table = FdTable::new();
+        let cloexec = table
+            .open(
+                FileHandle::vfs(7),
+                READ,
+                0x0008_0000,
+            )
+            .unwrap();
+        let normal = table.open(FileHandle::vfs(8), READ, 0).unwrap();
+        let taken = table.take_cloexec_handles();
+        assert_eq!(taken[cloexec as usize], Some(FileHandle::vfs(7)));
+        assert!(table.get(cloexec).is_none());
+        assert!(table.get(normal).is_some());
+        assert!(table.get(0).is_some());
     }
 
     #[test]

@@ -73,6 +73,9 @@ pub enum SunlightSyscall {
     Rename = 66,
     Chmod = 67,
     Chown = 68,
+    /// Create a private, mode-at-create, exclusive staging file under the
+    /// privileged secret directory.
+    SecretCreate = 69,
 
     // Signal handling (Phase 4.3)
     Sigaction = 70,
@@ -80,6 +83,10 @@ pub enum SunlightSyscall {
     Kill = 72,
     Pause = 73,
     Sigreturn = 74,
+    /// Atomically publish a validated private staging file.
+    SecretPublish = 75,
+    /// Remove an exact secret-storage staging file after a failed operation.
+    SecretRemoveTemp = 76,
 
     // Power management (Phase 5.11)
     PowerCtl = 80,
@@ -494,11 +501,14 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         66 => sys_rename(frame),
         67 => sys_chmod(frame),
         68 => sys_chown(frame),
+        69 => sys_secret_create(frame),
         70 => sys_sigaction(frame),
         71 => sys_sigprocmask(frame),
         72 => sys_kill(frame),
         73 => sys_pause(),
         74 => sys_sigreturn(frame),
+        75 => sys_secret_publish(frame),
+        76 => sys_secret_remove_temp(frame),
         80 => sys_powerctl(frame.rdi),
         81 => sys_get_time_utc(),
         86 => sys_monotonic_ms(),
@@ -1474,6 +1484,16 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         true,
     ) {
         Ok(entry) => {
+            let cloexec_handles = process.fd_table.take_cloexec_handles();
+            for handle in cloexec_handles.into_iter().flatten() {
+                if handle.is_vfs() {
+                    if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                        let _ = vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle()));
+                    }
+                } else if handle.is_pipe() {
+                    crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
+                }
+            }
             process.trusted_display_service =
                 crate::process::spawn::is_trusted_display_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
@@ -2023,7 +2043,49 @@ fn sys_setnice(frame: &mut SyscallFrame) -> u64 {
     (new_nice as i64) as u64
 }
 
-/// Syscall: open (40) — kernel-VFS backed, read-only for now.
+const O_CREAT: u64 = 0x40;
+const O_EXCL: u64 = 0x80;
+const O_CLOEXEC: u64 = 0x0008_0000;
+const O_NOFOLLOW: u64 = 0x0002_0000;
+const PRIVATE_SECRET_DIR: &str = "/etc/sunlight";
+const PRIVATE_SECRET_MODE: u16 = 0o600;
+
+fn private_secret_child(path: &str) -> bool {
+    path.strip_prefix("/etc/sunlight/")
+        .map(|name| !name.is_empty() && !name.contains('/'))
+        .unwrap_or(false)
+}
+
+fn private_secret_temp(path: &str) -> bool {
+    private_secret_child(path)
+        && path
+            .strip_prefix("/etc/sunlight/")
+            .map(|name| name.starts_with('.') && name.contains(".tmp."))
+            .unwrap_or(false)
+}
+
+fn has_host_key_admin() -> bool {
+    crate::sched::with_scheduler(|sched| {
+        sched
+            .current_process()
+            .service_lookup_restrictions
+            .map(|mask| mask & crate::ipc::ServiceCapability::HostKeyAdmin.bit() != 0)
+            .unwrap_or(false)
+    })
+}
+
+fn validate_secret_parent<D: sunlight_block::BlockDevice>(vfs: &mut sunlight_fs::Vfs<D>) -> bool {
+    matches!(
+        vfs.stat(PRIVATE_SECRET_DIR),
+        Ok(stat)
+            if stat.file_type == sunlight_fs::vfs::FileType::Directory
+                && stat.uid == 0
+                && stat.gid == 0
+                && stat.mode & 0o022 == 0
+    )
+}
+
+/// Syscall: open (40) — kernel-VFS backed.
 /// rdi = pathname (user-space pointer)
 /// rsi = flags (reserved)
 /// rdx = mode (reserved)
@@ -2053,13 +2115,29 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
 
     let flags = frame.rsi;
     let wants_write = flags & 0b11 != 0;
-    let wants_create = flags & 0x40 != 0;
+    let wants_create = flags & O_CREAT != 0;
+    let wants_exclusive = flags & O_EXCL != 0;
+    if wants_exclusive && !wants_create {
+        return u64::MAX;
+    }
 
     // Open on the VFS first, then register the fd. KERNEL_VFS is released
     // before SCHEDULER is taken (lock-order invariant).
     let vfs_handle = {
         let (uid, gid, actor) = current_fs_actor();
+        if private_secret_child(path) {
+            // Path-level root identity is deliberately insufficient for
+            // service-private material. Only an explicitly spawned
+            // HostKeyAdmin service may obtain a descriptor, even if an
+            // attacker made the object permissive before this check.
+            if !has_host_key_admin() {
+                return u64::MAX;
+            }
+        }
         if wants_write || wants_create {
+            if private_secret_child(path) {
+                return u64::MAX;
+            }
             let operation = if wants_create {
                 sunlight_fs::FsOperation::Create
             } else {
@@ -2090,11 +2168,34 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             return u64::MAX;
         };
         if wants_create {
-            match vfs.create_file(path, uid, gid, sunlight_fs::vfs::mode::FILE_644) {
+            let mode = (frame.rdx as u16) & 0o777;
+            let mode = if mode == 0 { 0o644 } else { mode };
+            let result = if wants_exclusive {
+                vfs.create_file_exclusive(path, uid, gid, mode)
+            } else {
+                vfs.create_file(path, uid, gid, mode)
+            };
+            match result {
                 Ok(h) => h,
                 Err(_) => return u64::MAX,
             }
         } else {
+            let stat = match vfs.stat(path) {
+                Ok(stat) => stat,
+                Err(_) => return u64::MAX,
+            };
+            let want = if wants_write {
+                sunlight_fs::permission::PermCheck::Write
+            } else {
+                sunlight_fs::permission::PermCheck::Read
+            };
+            if !sunlight_fs::permission::check_permission(
+                &stat,
+                &sunlight_fs::permission::Credential { uid, gid },
+                want,
+            ) {
+                return u64::MAX;
+            }
             match vfs.open(path) {
                 Ok(h) => h,
                 Err(e) => {
@@ -2130,6 +2231,126 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             }
             u64::MAX
         }
+    }
+}
+
+/// Create an exclusive mode-0600 private staging file.  The restricted
+/// directory and capability check keep this operation from becoming a generic
+/// privileged file-creation deputy.
+fn sys_secret_create(frame: &mut SyscallFrame) -> u64 {
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(path) if private_secret_temp(path) => path,
+        _ => return u64::MAX,
+    };
+    if frame.rsi as u16 != PRIVATE_SECRET_MODE || !has_host_key_admin() {
+        return u64::MAX;
+    }
+    let (uid, gid, _) = current_fs_actor();
+    let handle = {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return u64::MAX;
+        };
+        if !validate_secret_parent(vfs) {
+            return u64::MAX;
+        }
+        match vfs.create_private_file_exclusive(path, uid, gid, PRIVATE_SECRET_MODE) {
+            Ok(handle) => handle,
+            Err(sunlight_fs::FsError::AlreadyExists) => return u64::MAX - 1,
+            Err(_) => return u64::MAX,
+        }
+    };
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let rights = crate::process::fd_table::CapRights::new(
+        crate::process::fd_table::CapRights::WRITE
+            | crate::process::fd_table::CapRights::FSTAT,
+    );
+    match sched
+        .current_process_mut()
+        .fd_table
+        .open(crate::process::fd_table::FileHandle::vfs(handle.0), rights, O_CLOEXEC as u32)
+    {
+        Ok(fd) => fd as u64,
+        Err(_) => {
+            drop(sched);
+            if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                let _ = vfs.unlink(path);
+            }
+            u64::MAX
+        }
+    }
+}
+
+/// Publish a private temp file. rdi=temporary path, rsi=destination path,
+/// rdx=mode, r10=0 create-if-absent / 1 replace-existing.
+fn sys_secret_publish(frame: &mut SyscallFrame) -> u64 {
+    let temp_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
+    };
+    let destination_bytes = match read_user_cstr(frame.rsi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
+    };
+    let temp = match core::str::from_utf8(&temp_bytes) {
+        Ok(path) if private_secret_temp(path) => path,
+        _ => return u64::MAX,
+    };
+    let destination = match core::str::from_utf8(&destination_bytes) {
+        Ok(path) if private_secret_child(path) && !private_secret_temp(path) => path,
+        _ => return u64::MAX,
+    };
+    if frame.rdx as u16 != PRIVATE_SECRET_MODE || frame.r10 > 1 || !has_host_key_admin() {
+        return u64::MAX;
+    }
+    let (uid, gid, _) = current_fs_actor();
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return u64::MAX;
+    };
+    if !validate_secret_parent(vfs) {
+        return u64::MAX;
+    }
+    match vfs.publish_private(
+        temp,
+        destination,
+        uid,
+        gid,
+        PRIVATE_SECRET_MODE,
+        frame.r10 == 1,
+    ) {
+        Ok(()) => 0,
+        Err(sunlight_fs::FsError::AlreadyExists) => u64::MAX - 1,
+        Err(_) => u64::MAX,
+    }
+}
+
+fn sys_secret_remove_temp(frame: &mut SyscallFrame) -> u64 {
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
+    };
+    let path = match core::str::from_utf8(&path_bytes) {
+        Ok(path) if private_secret_temp(path) => path,
+        _ => return u64::MAX,
+    };
+    if !has_host_key_admin() {
+        return u64::MAX;
+    }
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return u64::MAX;
+    };
+    if !validate_secret_parent(vfs) {
+        return u64::MAX;
+    }
+    match vfs.unlink(path) {
+        Ok(()) => 0,
+        _ => u64::MAX,
     }
 }
 
@@ -3119,19 +3340,20 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
     // Release the underlying object (pipe end or VFS handle) before
     // dropping the fd table entry.
     let handle = sched.current_process().fd_table.get(fd).map(|e| e.handle);
+    let mut close_result = Ok(());
     if let Some(h) = handle {
         if h.is_pipe() {
             crate::process::pipe::pipe_close_end(h.pipe_index(), h.pipe_is_write());
         } else if h.is_vfs() {
             if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
-                let _ = vfs.close(sunlight_fs::vfs::FileHandle(h.vfs_handle()));
+                close_result = vfs.close(sunlight_fs::vfs::FileHandle(h.vfs_handle()));
             }
         }
     }
 
-    match sched.current_process_mut().fd_table.close(fd) {
-        Ok(()) => 0,
-        Err(_) => u64::MAX, // EBADF
+    match (close_result, sched.current_process_mut().fd_table.close(fd)) {
+        (Ok(()), Ok(())) => 0,
+        _ => u64::MAX, // EBADF or deferred VFS close failure
     }
 }
 

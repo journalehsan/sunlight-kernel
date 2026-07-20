@@ -115,6 +115,12 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release"],
         },
+        EmbeddedBinary {
+            package: "secret_store_test",
+            output: "secret_store_test",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
         // sunshell (includes localectl builtin; transitively builds sunlight-locale etc.)
         EmbeddedBinary {
             package: "sunshell",

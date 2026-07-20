@@ -240,6 +240,31 @@ impl FileSystem for RamFs {
         self.alloc_handle(self.all_entry_count() - 1)
     }
 
+    fn create_file_exclusive(
+        &mut self,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<FileHandle, FsError> {
+        path::validate_absolute(path)?;
+        if self.entry_idx(path).is_ok() {
+            return Err(FsError::AlreadyExists);
+        }
+        if !self.parent_is_dir(path)? {
+            return Err(FsError::NotDir);
+        }
+        self.dynamic.push(DynamicEntry {
+            path: Vec::from(path.as_bytes()),
+            data: Vec::new(),
+            uid,
+            gid,
+            mode: mode::S_IFREG | mode,
+            is_dir: false,
+        });
+        self.alloc_handle(self.all_entry_count() - 1)
+    }
+
     fn read(
         &mut self,
         handle: FileHandle,
@@ -2519,6 +2544,25 @@ mod tests {
         let mut buf = [0u8; 16];
         let read = fs.read(handle, 0, &mut buf).unwrap();
         assert_eq!(&buf[..read], b"updated\n");
+    }
+
+    #[test]
+    fn exclusive_create_never_reopens_or_truncates_existing_file() {
+        let mut fs = RamFs::new(DIR_ENTRIES);
+        let original = fs
+            .create_file_exclusive("/etc/secret", 0, 0, mode::FILE_600)
+            .unwrap();
+        fs.write(original, 0, b"retained").unwrap();
+        fs.close(original).unwrap();
+
+        assert_eq!(
+            fs.create_file_exclusive("/etc/secret", 0, 0, mode::FILE_600),
+            Err(FsError::AlreadyExists)
+        );
+        let handle = fs.open("/etc/secret").unwrap();
+        let mut bytes = [0u8; 16];
+        let len = fs.read(handle, 0, &mut bytes).unwrap();
+        assert_eq!(&bytes[..len], b"retained");
     }
 
     #[test]

@@ -92,6 +92,18 @@ pub trait FileSystem {
         gid: u32,
         mode: u16,
     ) -> Result<FileHandle, FsError>;
+    /// Create a new regular file only when no directory entry already exists.
+    ///
+    /// This is distinct from `create_file`, whose historical behaviour opens
+    /// an existing file.  Security-sensitive callers need the failure to be
+    /// decided while the filesystem is locked, not after a path-level check.
+    fn create_file_exclusive(
+        &mut self,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<FileHandle, FsError>;
     fn read(&mut self, handle: FileHandle, offset: usize, buf: &mut [u8])
         -> Result<usize, FsError>;
     fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError>;
@@ -172,6 +184,16 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn create_file(
+        &mut self,
+        _path: &str,
+        _uid: u32,
+        _gid: u32,
+        _mode: u16,
+    ) -> Result<FileHandle, FsError> {
+        Err(FsError::ReadOnlyFilesystem)
+    }
+
+    fn create_file_exclusive(
         &mut self,
         _path: &str,
         _uid: u32,
@@ -331,6 +353,19 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         }
     }
 
+    fn create_file_exclusive(
+        &mut self,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<FileHandle, FsError> {
+        match self {
+            Self::Ram(fs) => fs.create_file_exclusive(path, uid, gid, mode),
+            Self::Fat(fs) => fs.create_file_exclusive(path, uid, gid, mode),
+        }
+    }
+
     fn read(
         &mut self,
         handle: FileHandle,
@@ -486,6 +521,36 @@ impl<D: BlockDevice> Vfs<D> {
         Ok(pack_handle(mount_idx, handle))
     }
 
+    /// Exclusively create a file on the destination mount.
+    pub fn create_file_exclusive(
+        &mut self,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<FileHandle, FsError> {
+        let (mount_idx, local_path) = self.resolve_mount_for_create(path)?;
+        let handle = self.mounts[mount_idx]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs
+            .create_file_exclusive(local_path, uid, gid, mode)?;
+        Ok(pack_handle(mount_idx, handle))
+    }
+
+    /// Exclusively create a private regular file after validating the parent
+    /// directory while this VFS is locked.
+    pub fn create_private_file_exclusive(
+        &mut self,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<FileHandle, FsError> {
+        validate_private_parent(self, path)?;
+        self.create_file_exclusive(path, uid, gid, mode)
+    }
+
     pub fn read(
         &mut self,
         handle: FileHandle,
@@ -596,6 +661,49 @@ impl<D: BlockDevice> Vfs<D> {
             .rename(old_local, new_local)
     }
 
+    /// Atomically publish a regular private file within one mounted filesystem.
+    ///
+    /// The caller supplies the metadata contract used for both the staged
+    /// source and, for replacement, the previous destination.  Validation and
+    /// rename execute while this VFS instance is locked by the kernel, so a
+    /// path swap cannot be interposed between target validation and publish.
+    pub fn publish_private(
+        &mut self,
+        old_path: &str,
+        new_path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+        replace: bool,
+    ) -> Result<(), FsError> {
+        if parent_path(old_path)? != parent_path(new_path)? {
+            return Err(FsError::Unsupported);
+        }
+        validate_private_parent(self, old_path)?;
+        let (old_mount, old_local) = self.resolve_mount(old_path)?;
+        let (new_mount, new_local) = self.resolve_mount_for_create(new_path)?;
+        if old_mount != new_mount {
+            return Err(FsError::Unsupported);
+        }
+
+        let fs = &mut self.mounts[old_mount]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs;
+        let source = fs.stat(old_local)?;
+        validate_private_stat(source, uid, gid, mode)?;
+
+        match fs.stat(new_local) {
+            Ok(_destination) if !replace => return Err(FsError::AlreadyExists),
+            Ok(destination) => validate_private_stat(destination, uid, gid, mode)?,
+            Err(FsError::NotFound) if replace => return Err(FsError::NotFound),
+            Err(FsError::NotFound) => {}
+            Err(error) => return Err(error),
+        }
+        fs.rename(old_local, new_local)?;
+        validate_private_stat(fs.stat(new_local)?, uid, gid, mode)
+    }
+
     pub fn read_dir(
         &mut self,
         path: &str,
@@ -637,6 +745,34 @@ impl<D: BlockDevice> Vfs<D> {
             .map(|local| (mount_idx, local))
             .ok_or(FsError::NotFound)
     }
+}
+
+fn validate_private_parent<D: BlockDevice>(vfs: &mut Vfs<D>, path: &str) -> Result<(), FsError> {
+    let parent = parent_path(path)?;
+    let stat = vfs.stat(parent)?;
+    if stat.file_type != FileType::Directory {
+        return Err(FsError::NotDir);
+    }
+    if stat.uid != 0 || stat.gid != 0 || stat.mode & 0o022 != 0 {
+        return Err(FsError::InsecureMetadata);
+    }
+    Ok(())
+}
+
+fn validate_private_stat(
+    stat: FileStat,
+    uid: u32,
+    gid: u32,
+    mode: u16,
+) -> Result<(), FsError> {
+    if stat.file_type != FileType::File {
+        return Err(FsError::UnexpectedType);
+    }
+    if stat.uid != uid || stat.gid != gid || stat.mode != (mode::S_IFREG | mode) || stat.nlinks != 1
+    {
+        return Err(FsError::InsecureMetadata);
+    }
+    Ok(())
 }
 
 fn parent_path(path: &str) -> Result<&str, FsError> {
@@ -750,6 +886,97 @@ mod tests {
             vfs.read(FileHandle(0), 0, &mut [0u8; 8]),
             Err(FsError::BadHandle)
         );
+    }
+
+    #[test]
+    fn private_publish_create_if_absent_keeps_winning_file() {
+        static PRIVATE_ENTRIES: &[RamEntry] = &[
+            RamEntry::dir("/", 0, 0, mode::DIR_755),
+            RamEntry::dir("/etc", 0, 0, mode::DIR_755),
+            RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
+        ];
+        let mut vfs: Vfs = Vfs::new();
+        vfs.mount_ramfs("/", RamFs::new(PRIVATE_ENTRIES)).unwrap();
+
+        let first = vfs
+            .create_private_file_exclusive("/etc/sunlight/.key.tmp.first", 0, 0, 0o600)
+            .unwrap();
+        vfs.write(first, 0, b"first").unwrap();
+        vfs.close(first).unwrap();
+        vfs.publish_private(
+            "/etc/sunlight/.key.tmp.first",
+            "/etc/sunlight/key",
+            0,
+            0,
+            0o600,
+            false,
+        )
+        .unwrap();
+
+        let second = vfs
+            .create_private_file_exclusive("/etc/sunlight/.key.tmp.second", 0, 0, 0o600)
+            .unwrap();
+        vfs.write(second, 0, b"second").unwrap();
+        vfs.close(second).unwrap();
+        assert_eq!(
+            vfs.publish_private(
+                "/etc/sunlight/.key.tmp.second",
+                "/etc/sunlight/key",
+                0,
+                0,
+                0o600,
+                false,
+            ),
+            Err(FsError::AlreadyExists)
+        );
+
+        let winner = vfs.open("/etc/sunlight/key").unwrap();
+        let mut bytes = [0u8; 8];
+        let len = vfs.read(winner, 0, &mut bytes).unwrap();
+        assert_eq!(&bytes[..len], b"first");
+        assert_eq!(
+            vfs.stat("/etc/sunlight/.key.tmp.second").unwrap().mode,
+            mode::FILE_600
+        );
+    }
+
+    #[test]
+    fn private_replace_rejects_bad_destination_without_touching_old_bytes() {
+        static PRIVATE_ENTRIES: &[RamEntry] = &[
+            RamEntry::dir("/", 0, 0, mode::DIR_755),
+            RamEntry::dir("/etc", 0, 0, mode::DIR_755),
+            RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
+        ];
+        let mut vfs: Vfs = Vfs::new();
+        vfs.mount_ramfs("/", RamFs::new(PRIVATE_ENTRIES)).unwrap();
+        let old = vfs
+            .create_private_file_exclusive("/etc/sunlight/key", 0, 0, 0o600)
+            .unwrap();
+        vfs.write(old, 0, b"old").unwrap();
+        vfs.close(old).unwrap();
+        vfs.chmod("/etc/sunlight/key", 0o644).unwrap();
+
+        let replacement = vfs
+            .create_private_file_exclusive("/etc/sunlight/.key.tmp.next", 0, 0, 0o600)
+            .unwrap();
+        vfs.write(replacement, 0, b"new").unwrap();
+        vfs.close(replacement).unwrap();
+        assert_eq!(
+            vfs.publish_private(
+                "/etc/sunlight/.key.tmp.next",
+                "/etc/sunlight/key",
+                0,
+                0,
+                0o600,
+                true,
+            ),
+            Err(FsError::InsecureMetadata)
+        );
+
+        let old = vfs.open("/etc/sunlight/key").unwrap();
+        let mut bytes = [0u8; 8];
+        let len = vfs.read(old, 0, &mut bytes).unwrap();
+        assert_eq!(&bytes[..len], b"old");
     }
 
     #[test]

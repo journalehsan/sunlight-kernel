@@ -40,6 +40,7 @@ members = [
     "sunlight-tls",
     "certificatectl",
     "services/rand_service",
+    "services/secret_store_test",
     "services/sunlight-sm",
     "std-proof/sunlight-sunsay",
     "std-proof/sunlight-zoxide",

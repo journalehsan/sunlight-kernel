@@ -1,36 +1,9 @@
 [package]
-name = "sunlight-swapd"
+name = "secret_store_test"
 version = "0.2.1799"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 edition = "2021"
 
-[[bin]]
-name = "sunlight-swapd"
-path = "src/main.rs"
-
 [dependencies]
+sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ipc = { path = "../../ipc" }
