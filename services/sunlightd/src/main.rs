@@ -621,6 +621,7 @@ RestartSec=3
 User=root
 Capability=network
 Capability=kv-store
+Capability=secure-random
 Capability=time-sync
 Capability=logging
 StandardOutput=journal
@@ -1337,6 +1338,21 @@ mod tests {
         let services = load_for_test();
         let idx = services.find_by_name("solar").expect("solar service");
         assert!(!services.get(idx).unwrap().enabled);
+    }
+
+    #[test]
+    fn tls_service_can_resolve_secure_random_provider() {
+        let services = load_for_test();
+        let idx = services
+            .find_by_name("sunlight-tls")
+            .expect("sunlight-tls service");
+        let mask = services.get(idx).unwrap().unit.capability_mask;
+
+        assert!(mask & sunlight_ipc::ServiceCapability::SecureRandom.bit() != 0);
+        assert!(sunlight_ipc::service_capability_allows_hashed_name(
+            mask,
+            sunlight_ipc::name_to_u64("rand")
+        ));
     }
 
     #[test]
