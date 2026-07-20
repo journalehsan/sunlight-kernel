@@ -204,6 +204,17 @@ pub enum ServiceCapability {
     SchedulerControl = 15,
     TimeSync = 16,
     Resolver = 17,
+    /// User-facing broker set inherited by an authenticated interactive
+    /// session and its descendants. This deliberately excludes system/service
+    /// administration endpoints such as spawn, sm, deviced, and sunlightd.
+    UserSession = 18,
+    /// Administrative access to the networkd control plane. This is separate
+    /// from `Network`, which grants access only to the packet/socket service.
+    NetworkControl = 19,
+    /// Administrative access to the deviced registry.
+    DeviceControl = 20,
+    /// Administrative access to the powerd policy service.
+    PowerControl = 21,
 }
 
 impl ServiceCapability {
@@ -231,6 +242,10 @@ impl ServiceCapability {
             "scheduler-control" => Some(Self::SchedulerControl),
             "time-sync" => Some(Self::TimeSync),
             "resolver" => Some(Self::Resolver),
+            "user-session" => Some(Self::UserSession),
+            "network-control" => Some(Self::NetworkControl),
+            "device-control" => Some(Self::DeviceControl),
+            "power-control" => Some(Self::PowerControl),
             _ => None,
         }
     }
@@ -255,11 +270,15 @@ impl ServiceCapability {
             Self::SchedulerControl => "scheduler-control",
             Self::TimeSync => "time-sync",
             Self::Resolver => "resolver",
+            Self::UserSession => "user-session",
+            Self::NetworkControl => "network-control",
+            Self::DeviceControl => "device-control",
+            Self::PowerControl => "power-control",
         }
     }
 }
 
-pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 18] = [
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 22] = [
     ServiceCapability::Network,
     ServiceCapability::Authentication,
     ServiceCapability::Pty,
@@ -278,11 +297,13 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 18] = [
     ServiceCapability::SchedulerControl,
     ServiceCapability::TimeSync,
     ServiceCapability::Resolver,
+    ServiceCapability::UserSession,
+    ServiceCapability::NetworkControl,
+    ServiceCapability::DeviceControl,
+    ServiceCapability::PowerControl,
 ];
 
-pub fn service_capability_mask_to_names(
-    mask: u64,
-) -> impl Iterator<Item = &'static str> + Clone {
+pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'static str> + Clone {
     ALL_SERVICE_CAPABILITIES
         .into_iter()
         .filter(move |capability| mask & capability.bit() != 0)
@@ -290,6 +311,9 @@ pub fn service_capability_mask_to_names(
 }
 
 pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
+    if mask & ServiceCapability::UserSession.bit() != 0 && matches_user_session_service(name_key) {
+        return true;
+    }
     if mask & ServiceCapability::Network.bit() != 0 && name_key == name_to_u64("net") {
         return true;
     }
@@ -308,8 +332,7 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::HostKeyAdmin.bit() != 0 && name_key == name_to_u64("vfs") {
         return true;
     }
-    if mask & ServiceCapability::ServiceLifecycle.bit() != 0
-        && name_key == name_to_u64("sunlightd")
+    if mask & ServiceCapability::ServiceLifecycle.bit() != 0 && name_key == name_to_u64("sunlightd")
     {
         return true;
     }
@@ -319,17 +342,13 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::Vfs.bit() != 0 && name_key == name_to_u64("vfs") {
         return true;
     }
-    if mask & ServiceCapability::KvStore.bit() != 0
-        && name_key == name_to_u64("sunlight-kv")
-    {
+    if mask & ServiceCapability::KvStore.bit() != 0 && name_key == name_to_u64("sunlight-kv") {
         return true;
     }
     if mask & ServiceCapability::StorageAdmin.bit() != 0 && name_key == name_to_u64("sm") {
         return true;
     }
-    if mask & ServiceCapability::Display.bit() != 0
-        && name_key == name_to_u64("display_server")
-    {
+    if mask & ServiceCapability::Display.bit() != 0 && name_key == name_to_u64("display_server") {
         return true;
     }
     if mask & ServiceCapability::Tty.bit() != 0 && name_key == name_to_u64("tty") {
@@ -348,7 +367,89 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::Resolver.bit() != 0 && name_key == name_to_u64("resolved") {
         return true;
     }
+    if mask & ServiceCapability::NetworkControl.bit() != 0 && name_key == name_to_u64("networkd") {
+        return true;
+    }
+    if mask & ServiceCapability::DeviceControl.bit() != 0 && name_key == name_to_u64("deviced") {
+        return true;
+    }
+    if mask & ServiceCapability::PowerControl.bit() != 0 && name_key == name_to_u64("powerd") {
+        return true;
+    }
     false
+}
+
+/// Brokers ordinary interactive applications may resolve. Keep privileged
+/// control-plane services out of this list: notably spawn, sm, deviced,
+/// sunlightd, networkd, powerd, gcd/proc, niced, and timed.
+fn matches_user_session_service(name_key: u64) -> bool {
+    name_key == name_to_u64("vfs")
+        || name_key == name_to_u64("display_server")
+        || name_key == name_to_u64("net")
+        || name_key == name_to_u64("resolved")
+        || name_key == name_to_u64("pty")
+        || name_key == name_to_u64("tty")
+        || name_key == name_to_u64("uac")
+        || name_key == name_to_u64("rand")
+        || name_key == name_to_u64("tz")
+        || name_key == name_to_u64("clipd")
+        || name_key == name_to_u64("dialogd")
+        || name_key == name_to_u64("thumbd")
+        || name_key == name_to_u64("sunlight-kv")
+        || name_key == name_to_u64("sunlight-tls")
+}
+
+#[cfg(test)]
+mod service_capability_tests {
+    use super::{name_to_u64, service_capability_allows_hashed_name, ServiceCapability};
+
+    #[test]
+    fn control_plane_capabilities_are_service_specific() {
+        let network = ServiceCapability::NetworkControl.bit();
+        assert!(service_capability_allows_hashed_name(
+            network,
+            name_to_u64("networkd")
+        ));
+        assert!(!service_capability_allows_hashed_name(
+            network,
+            name_to_u64("deviced")
+        ));
+
+        let device = ServiceCapability::DeviceControl.bit();
+        assert!(service_capability_allows_hashed_name(
+            device,
+            name_to_u64("deviced")
+        ));
+        assert!(!service_capability_allows_hashed_name(
+            device,
+            name_to_u64("powerd")
+        ));
+
+        let power = ServiceCapability::PowerControl.bit();
+        assert!(service_capability_allows_hashed_name(
+            power,
+            name_to_u64("powerd")
+        ));
+        assert!(!service_capability_allows_hashed_name(
+            power,
+            name_to_u64("networkd")
+        ));
+    }
+
+    #[test]
+    fn ordinary_user_session_still_cannot_resolve_control_plane_services() {
+        let session = ServiceCapability::UserSession.bit();
+        for name in ["networkd", "deviced", "powerd", "sunlightd", "niced"] {
+            assert!(!service_capability_allows_hashed_name(
+                session,
+                name_to_u64(name)
+            ));
+        }
+        assert!(service_capability_allows_hashed_name(
+            session,
+            name_to_u64("net")
+        ));
+    }
 }
 
 #[allow(non_snake_case)]
@@ -1050,6 +1151,8 @@ pub mod SpawnMsg {
     pub const SPAWN: u64 = 1;
     pub const REPLY: u64 = 2;
     pub const ERROR: u64 = 3;
+    /// Spawn a native user shell from a one-time UAC session grant in caps[0].
+    pub const SPAWN_AUTHENTICATED: u64 = 4;
 }
 
 /// sunlight-sm (Storage Manager) opcodes. Registered as "sm".

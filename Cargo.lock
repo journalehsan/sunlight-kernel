@@ -249,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "certificatectl"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -288,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "chronos-core"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "cipher"
@@ -321,7 +321,7 @@ checksum = "413d67b29ef1021b4d60f4aa1e925ca031751e213832b4b1d588fae623c05c60"
 
 [[package]]
 name = "cpu-utils"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-libc",
 ]
@@ -565,7 +565,7 @@ dependencies = [
 
 [[package]]
 name = "eyes"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "golden-fish"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "tl",
 ]
@@ -754,7 +754,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "helios-note"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "crossterm",
  "libc",
@@ -1263,7 +1263,7 @@ dependencies = [
 
 [[package]]
 name = "pty_server"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
@@ -1320,14 +1320,14 @@ dependencies = [
 
 [[package]]
 name = "rand_service"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "rappid-rabbit"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "golden-fish",
  "linked_list_allocator",
@@ -1800,7 +1800,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sun-exec"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -1808,7 +1808,7 @@ dependencies = [
 
 [[package]]
 name = "sun-font"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "rustybuzz",
@@ -1818,18 +1818,18 @@ dependencies = [
 
 [[package]]
 name = "sun-img"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "sun-imgc"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-img",
 ]
 
 [[package]]
 name = "sun-open"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -1837,7 +1837,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-api-lab"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "serde_json",
  "sun-font",
@@ -1850,7 +1850,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-bench"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -1860,11 +1860,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-block"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "sunlight-calculator"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -1874,7 +1874,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-calendar"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -1888,7 +1888,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-chronos"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "chronos-core",
  "sun-font",
@@ -1899,7 +1899,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-clipd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1908,7 +1908,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-clipman"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-clipd",
@@ -1919,14 +1919,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-compat-linux"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
 ]
 
 [[package]]
 name = "sunlight-control-panel"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "image",
@@ -1939,7 +1939,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-deviced"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1948,7 +1948,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-devices"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "linked_list_allocator",
@@ -1961,7 +1961,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-dialogd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sun-font",
@@ -1973,21 +1973,21 @@ dependencies = [
 
 [[package]]
 name = "sunlight-dialogs"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
 ]
 
 [[package]]
 name = "sunlight-dict"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-display"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -1998,11 +1998,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-drivers"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "sunlight-edit"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2014,11 +2014,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-elf"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "sunlight-emoji-picker"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2028,14 +2028,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-fat"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-block",
 ]
 
 [[package]]
 name = "sunlight-fetch"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "log",
  "rustls",
@@ -2048,7 +2048,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-files"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2058,7 +2058,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-fs"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-block",
  "sunlight-fat",
@@ -2066,7 +2066,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-gcd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2075,36 +2075,36 @@ dependencies = [
 
 [[package]]
 name = "sunlight-hangman"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-http"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "sunlight-init"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-ipc"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "sunlight-kbd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-kernel"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "limine",
@@ -2126,7 +2126,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-kv"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "bincode",
  "crc32fast",
@@ -2143,7 +2143,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-kvctl"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "bincode",
  "heapless",
@@ -2157,14 +2157,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-libc"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-light-lens"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2175,18 +2175,18 @@ dependencies = [
 
 [[package]]
 name = "sunlight-locale"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "sunlight-mouse"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-net"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "log",
  "smoltcp",
@@ -2197,7 +2197,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-server"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "linked_list_allocator",
  "smoltcp",
@@ -2208,7 +2208,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-utils"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -2216,7 +2216,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-networkd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2225,7 +2225,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-niced"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2234,7 +2234,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-powerd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2243,7 +2243,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-reminders"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2254,7 +2254,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-resolved"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2263,7 +2263,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-runner"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2273,7 +2273,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-sm"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2282,7 +2282,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-solar"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2292,21 +2292,21 @@ dependencies = [
 
 [[package]]
 name = "sunlight-sunsay"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-swapd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-tasks"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2317,14 +2317,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-telemetry"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-terminal"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2335,7 +2335,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-thumbd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -2344,21 +2344,21 @@ dependencies = [
 
 [[package]]
 name = "sunlight-timed"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-timer-server"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-tls"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "getrandom 0.2.17",
  "heapless",
@@ -2372,7 +2372,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-top"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
  "sunlight-telemetry",
@@ -2380,7 +2380,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tty"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -2390,7 +2390,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tty-server"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -2408,14 +2408,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tz"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-uac"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "argon2",
  "heapless",
@@ -2429,14 +2429,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-ui"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-utils"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "memchr",
  "sunlight-ipc",
@@ -2445,7 +2445,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-vfs-server"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-fat",
@@ -2455,11 +2455,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-virtio"
-version = "0.2.1761"
+version = "0.2.1764"
 
 [[package]]
 name = "sunlight-vortex-shell"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2476,14 +2476,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-wallpaper"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-writer"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2494,14 +2494,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-zoxide"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlightctl"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2510,7 +2510,7 @@ dependencies = [
 
 [[package]]
 name = "sunlightd"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "heapless",
  "sunlight-fs",
@@ -2520,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "sunshell"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "libm",
  "sunlight-ipc",
@@ -2586,7 +2586,7 @@ dependencies = [
 
 [[package]]
 name = "timezone_service"
-version = "0.2.1761"
+version = "0.2.1764"
 dependencies = [
  "sunlight-ipc",
  "sunlight-tz",

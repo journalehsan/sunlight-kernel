@@ -127,6 +127,9 @@ pub struct Process {
     pub trusted_swap_admin_service: bool,
     /// Set only for the exact embedded freezram diagnostic applet path.
     pub trusted_zram_diagnostic: bool,
+    /// Trust-chain markers used only for the authenticated-session broker.
+    pub trusted_service_manager: bool,
+    pub trusted_auth_broker: bool,
     /// When set, this process may only resolve nameserver entries that map to
     /// the declared service capability profile.
     pub service_lookup_restrictions: Option<u64>,
@@ -324,6 +327,8 @@ impl Process {
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
+            trusted_service_manager: false,
+            trusted_auth_broker: false,
             service_lookup_restrictions: None,
             brk_base: 0,
             brk_current: 0,
@@ -476,6 +481,8 @@ impl Process {
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
+            trusted_service_manager: false,
+            trusted_auth_broker: false,
             service_lookup_restrictions: None,
             brk_base: 0,
             brk_current: 0,

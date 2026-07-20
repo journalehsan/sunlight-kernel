@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 pub use message::IpcMsg;
+pub use sunlight_ipc::ServiceCapability;
 
 pub const INIT_NAMESERVER_ENDPOINT: u32 = 0;
 const NAMESERVER_REGISTER: u64 = 1;
@@ -22,6 +23,7 @@ pub mod SpawnMsg {
     pub const SPAWN: u64 = 1;
     pub const REPLY: u64 = 2;
     pub const ERROR: u64 = 3;
+    pub const SPAWN_AUTHENTICATED: u64 = 4;
 }
 
 /// Sharded IPC bus instances for lock-free parallelism.

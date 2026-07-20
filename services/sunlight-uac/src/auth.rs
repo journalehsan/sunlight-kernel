@@ -14,6 +14,8 @@ use zeroize::Zeroize;
 pub const MAX_USERNAME_LEN: usize = 64;
 pub const MAX_PASSWORD_LEN: usize = 128;
 pub const AUTH_PASSWORD_OP: u64 = 6;
+/// Password verification which additionally requests a one-time shell grant.
+pub const AUTH_PASSWORD_SESSION_OP: u64 = 7;
 pub const AUTH_SUCCESS: u64 = 1;
 pub const AUTH_FAILURE: u64 = 0xff;
 pub const AUTH_SHM_SIZE: usize = 4096;
@@ -37,9 +39,25 @@ pub enum AuthError {
 pub struct AuthSuccess {
     pub uid: u32,
     pub gid: u32,
+    pub session_grant: sunlight_ipc::CapabilityToken,
 }
 
 pub fn authenticate_password(username: &[u8], password: &[u8]) -> Option<AuthSuccess> {
+    authenticate_password_with_op(username, password, AUTH_PASSWORD_OP)
+}
+
+/// Authenticate for an interactive session. The broker returns a short-lived,
+/// single-use grant bound to this caller; ordinary password verification does
+/// not mint a grant and therefore cannot exhaust the grant table.
+pub fn authenticate_password_for_session(username: &[u8], password: &[u8]) -> Option<AuthSuccess> {
+    authenticate_password_with_op(username, password, AUTH_PASSWORD_SESSION_OP)
+}
+
+fn authenticate_password_with_op(
+    username: &[u8],
+    password: &[u8],
+    op: u64,
+) -> Option<AuthSuccess> {
     if !username_valid(username) || !password_valid(password) {
         return None;
     }
@@ -51,7 +69,7 @@ pub fn authenticate_password(username: &[u8], password: &[u8]) -> Option<AuthSuc
         *ptr.add(password.len()) = 0;
     }
 
-    let mut msg = IpcMsg::with_label(AUTH_PASSWORD_OP).with_cap(0, token);
+    let mut msg = IpcMsg::with_label(op).with_cap(0, token);
     pack_nul_terminated(&mut msg, 0, username);
     let reply = ipc_call(uac, msg);
 
@@ -61,9 +79,14 @@ pub fn authenticate_password(username: &[u8], password: &[u8]) -> Option<AuthSuc
     let _ = shm_free(token);
 
     if reply.label == AUTH_SUCCESS {
+        let session_grant = reply.caps[0];
+        if op == AUTH_PASSWORD_SESSION_OP && session_grant == sunlight_ipc::CapabilityToken::INVALID {
+            return None;
+        }
         Some(AuthSuccess {
             uid: reply.words[0] as u32,
             gid: reply.words[1] as u32,
+            session_grant,
         })
     } else {
         None
@@ -116,6 +139,7 @@ pub fn verify_shadow_credentials(
         return Ok(AuthSuccess {
             uid: entry.uid,
             gid: entry.gid,
+            session_grant: sunlight_ipc::CapabilityToken::INVALID,
         });
     }
 

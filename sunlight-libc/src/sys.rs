@@ -39,6 +39,7 @@ pub const SYS_MAP_TELEMETRY: u64 = 95;
 pub const SYS_GRANT_CAPABILITY: u64 = 100;
 pub const SYS_DEBUG_LOG: u64 = 99;
 pub const SYS_SET_FS_BASE: u64 = 101;
+pub const SYS_MINT_AUTH_SESSION_GRANT: u64 = 102;
 
 /// Raw error return from the kernel.
 pub const ERR_RAW: u64 = u64::MAX;

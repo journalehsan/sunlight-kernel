@@ -301,6 +301,18 @@ pub const SPAWN_TOKEN: CapabilityToken = CapabilityToken(0xCAFEBABE_DEADBEEF);
 /// PID expected to call `sys_grant_capability`.
 pub const CAPABILITY_BROKER_PID: u32 = 6;
 
+/// A single-use authorization emitted by UAC after password verification.
+/// Unlike an IPC capability it cannot be used to contact arbitrary services;
+/// the kernel consumes it only for the authenticated-session spawn operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthSessionGrant {
+    pub token: CapabilityToken,
+    pub owner_pid: usize,
+    pub uid: u32,
+    pub gid: u32,
+    pub expires_at_tick: u64,
+}
+
 /// Initialize the token seed from TSC.
 pub fn init_token_seed() {
     let tsc = unsafe { core::arch::x86_64::_rdtsc() };
@@ -321,6 +333,7 @@ pub struct CapabilityBroker {
     capabilities: alloc::vec::Vec<(CapabilityToken, u32, CapabilityRights)>,
     shared_regions: alloc::vec::Vec<ShmEntry>,
     vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
+    auth_session_grants: alloc::vec::Vec<AuthSessionGrant>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -347,7 +360,45 @@ impl CapabilityBroker {
             capabilities: alloc::vec::Vec::new(),
             shared_regions: alloc::vec::Vec::new(),
             vfs_caps: alloc::vec::Vec::new(),
+            auth_session_grants: alloc::vec::Vec::new(),
         }
+    }
+
+    pub fn mint_auth_session_grant(
+        &mut self,
+        owner_pid: usize,
+        uid: u32,
+        gid: u32,
+        expires_at_tick: u64,
+    ) -> Option<CapabilityToken> {
+        if self.auth_session_grants.len() >= 64 {
+            return None;
+        }
+        let token = generate_token(CapabilityToken::TAG_IPC);
+        self.auth_session_grants.push(AuthSessionGrant {
+            token,
+            owner_pid,
+            uid,
+            gid,
+            expires_at_tick,
+        });
+        Some(token)
+    }
+
+    /// Consume a grant exactly once. Expired and mismatched grants are removed
+    /// as well, so a credential cannot be replayed after a failed attempt.
+    pub fn consume_auth_session_grant(
+        &mut self,
+        token: CapabilityToken,
+        owner_pid: usize,
+        now_tick: u64,
+    ) -> Option<(u32, u32)> {
+        let idx = self.auth_session_grants.iter().position(|grant| grant.token == token)?;
+        let grant = self.auth_session_grants.swap_remove(idx);
+        if grant.owner_pid != owner_pid || now_tick > grant.expires_at_tick {
+            return None;
+        }
+        Some((grant.uid, grant.gid))
     }
 
     pub fn reserve_shared_region_slot(&mut self) -> Result<(), ()> {

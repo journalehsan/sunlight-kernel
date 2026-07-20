@@ -44,7 +44,7 @@ use sunlight_ipc::{
 };
 use sunlight_uac::auth::{
     migrate_shadow_contents, verify_shadow_credentials, AUTH_FAILURE, AUTH_PASSWD_PATH,
-    AUTH_PASSWORD_OP, AUTH_SHADOW_PATH, AUTH_SUCCESS, MAX_PASSWORD_LEN,
+    AUTH_PASSWORD_OP, AUTH_PASSWORD_SESSION_OP, AUTH_SHADOW_PATH, AUTH_SUCCESS, MAX_PASSWORD_LEN,
 };
 use sunlight_uac::capability::{AccessFlags, PathRule, RuleTable};
 use sunlight_uac::session::{runas, RunasOutcome, RunasRequest, SessionStore};
@@ -247,7 +247,7 @@ fn migrate_development_shadow() {
     }
 }
 
-fn handle_auth_password(msg: &IpcMsg) -> IpcMsg {
+fn handle_auth_password(msg: &IpcMsg, issue_session_grant: bool) -> IpcMsg {
     let mut reply = IpcMsg::empty();
     let username = unpack_str(&msg.words, 0);
     let token = msg.caps[0];
@@ -298,6 +298,21 @@ fn handle_auth_password(msg: &IpcMsg) -> IpcMsg {
         reply.words[0] = success.uid as u64;
         reply.words[1] = success.gid as u64;
         reply.word_count = 2;
+        if issue_session_grant {
+            let grant = unsafe {
+                sunlight_libc::sys::syscall3(
+                    sunlight_libc::sys::SYS_MINT_AUTH_SESSION_GRANT,
+                    msg.badge,
+                    success.uid as u64,
+                    success.gid as u64,
+                )
+            };
+            if grant == u64::MAX {
+                reply.label = AUTH_FAILURE;
+                return reply;
+            }
+            reply = reply.with_cap(0, sunlight_ipc::CapabilityToken(grant));
+        }
     } else {
         reply.label = AUTH_FAILURE;
     }
@@ -346,7 +361,8 @@ fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
             reply.label = REPLY_OK;
             reply.words[0] = allow as u64;
         }
-        AUTH_PASSWORD_OP => return handle_auth_password(msg),
+        AUTH_PASSWORD_OP => return handle_auth_password(msg, false),
+        AUTH_PASSWORD_SESSION_OP => return handle_auth_password(msg, true),
         OP_BASE_CAPS => {
             // Base VFS-capability grant for an elevated session. Requires the
             // caller's admin grant in caps[0]; refuse otherwise so it cannot be

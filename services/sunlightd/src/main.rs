@@ -411,6 +411,7 @@ Restart=on-failure
 RestartSec=3
 User=root
 Capability=time-sync
+Capability=vfs
 Capability=service-lifecycle
 Capability=logging
 StandardOutput=journal

@@ -88,6 +88,8 @@ pub enum SunlightSyscall {
     /// Raw hardware seed entropy (one u64). RDRAND with a TSC-jitter fallback.
     /// Seed-grade only: userland/rand-service expands it with a CSPRNG.
     GetEntropy = 87,
+    /// UAC-only: mint a short-lived authenticated-session spawn grant.
+    MintAuthSessionGrant = 102,
     ClockGetTime = 88,
     NetInfo = 96,
 
@@ -510,6 +512,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         96 => sys_net_info(frame),
         100 => sys_grant_capability_syscall(frame),
         101 => sys_set_fs_base(frame),
+        102 => sys_mint_auth_session_grant(frame),
         110 => sys_kbd_register(frame),
         111 => sys_kbd_unregister(),
         112 => sys_kbd_pop_scancode(),
@@ -698,7 +701,32 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
 /// Extracts path from the message words and spawns a new process.
 fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let path = decode_path_from_words(&msg.words);
-    let (uid, gid, service_caps) = if msg.cap_count >= 2 {
+    let authenticated_session = msg.label == crate::ipc::SpawnMsg::SPAWN_AUTHENTICATED;
+    let (uid, gid, service_caps) = if authenticated_session {
+        // The grant is bound to the IPC caller and consumed here. In
+        // particular, never accept caller-provided identity fields for a user
+        // session. Phase 0.5 intentionally permits only the native shell.
+        if !path.starts_with("/bin/sshl") {
+            let reply = IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR);
+            reply.to_registers(frame);
+            return 0;
+        }
+        let caller_pid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
+        let now_tick = crate::sched::with_scheduler(|sched| sched.global_tick);
+        let Some((uid, gid)) = crate::capability::CAP_BROKER
+            .lock()
+            .consume_auth_session_grant(msg.caps[0], caller_pid, now_tick)
+        else {
+            let reply = IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR);
+            reply.to_registers(frame);
+            return 0;
+        };
+        (
+            uid,
+            gid,
+            Some(crate::ipc::ServiceCapability::UserSession.bit()),
+        )
+    } else if msg.cap_count >= 2 {
         (
             msg.caps[0].0 as u32,
             msg.caps[1].0 as u32,
@@ -711,6 +739,8 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     };
 
     let mut sched = crate::sched::SCHEDULER.lock();
+    let caller_is_init = sched.current_process().name_str() == "init";
+    let caller_is_trusted_manager = sched.current_process().trusted_service_manager;
     crate::serial_println!(
         "[SPAWN] Request from pid={} for path={} uid={} gid={} caps={:#x}",
         sched.current_process().pid,
@@ -737,6 +767,21 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         service_caps,
     ) {
         Ok(pid) => {
+            if let Some(child) = sched
+                .processes
+                .iter_mut()
+                .find(|process| process.pid == pid)
+            {
+                // The trust chain begins at the kernel-created init process.
+                // An arbitrary process cannot acquire either marker merely by
+                // executing a binary with the same basename.
+                if caller_is_init && path == "/sbin/sunlightd" {
+                    child.trusted_service_manager = true;
+                }
+                if caller_is_trusted_manager && path == "/sbin/uac_service" {
+                    child.trusted_auth_broker = true;
+                }
+            }
             let mut reply = IpcMsg::with_label(crate::ipc::SpawnMsg::REPLY);
             reply.words[0] = pid as u64;
             reply.to_registers(frame);
@@ -750,6 +795,36 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
             0
         }
     }
+}
+
+/// UAC calls this only while servicing an authentication IPC request. The
+/// target must still be blocked on an IPC call to UAC, which binds the grant to
+/// the caller that supplied the password rather than to a claimed PID.
+fn sys_mint_auth_session_grant(frame: &mut SyscallFrame) -> u64 {
+    let requester_pid = frame.rdi as usize;
+    let uid = frame.rsi as u32;
+    let gid = frame.rdx as u32;
+    let sched = crate::sched::SCHEDULER.lock();
+    let caller = sched.current_process();
+    if !caller.trusted_auth_broker {
+        return u64::MAX;
+    }
+    let Some(requester) = sched
+        .processes
+        .iter()
+        .find(|process| process.pid == requester_pid)
+    else {
+        return u64::MAX;
+    };
+    if requester.state != ProcessState::BlockedOnIpc || requester.pending_call.is_none() {
+        return u64::MAX;
+    }
+    let expires_at_tick = sched.global_tick.saturating_add(500);
+    drop(sched);
+    crate::capability::CAP_BROKER
+        .lock()
+        .mint_auth_session_grant(requester_pid, uid, gid, expires_at_tick)
+        .map_or(u64::MAX, |token| token.0)
 }
 
 /// Decode a path from the first 4 IPC words (32 bytes max).
@@ -1556,6 +1631,36 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let gid = parent.gid;
     let env = crate::process::env::EnvMap::inherit(&parent.env);
     let capabilities = parent.capabilities.clone();
+    let mut service_lookup_restrictions = parent.service_lookup_restrictions;
+    // Embedded control tools need access to their matching control-plane
+    // service, but the surrounding shell and unrelated descendants must keep
+    // the narrower user-session profile. Only root receives this per-binary
+    // upgrade; each tool gets one narrowly scoped service capability.
+    if uid == 0 {
+        let control_capability = match path_str {
+            "/bin/sunlightctl" | "/usr/bin/sunlightctl" => {
+                crate::ipc::ServiceCapability::ServiceLifecycle.bit()
+            }
+            "/bin/networkctl" | "/usr/bin/networkctl" => {
+                crate::ipc::ServiceCapability::NetworkControl.bit()
+            }
+            "/bin/devicectl"
+            | "/usr/bin/devicectl"
+            | "/bin/sunlight-hwinfo"
+            | "/usr/bin/sunlight-hwinfo" => crate::ipc::ServiceCapability::DeviceControl.bit(),
+            "/bin/powerctl" | "/usr/bin/powerctl" => {
+                crate::ipc::ServiceCapability::PowerControl.bit()
+            }
+            "/bin/nicectl" | "/usr/bin/nicectl" => {
+                crate::ipc::ServiceCapability::SchedulerControl.bit()
+            }
+            _ => 0,
+        };
+        if control_capability != 0 {
+            service_lookup_restrictions =
+                service_lookup_restrictions.map(|mask| mask | control_capability);
+        }
+    }
     let parent_tty_tab = parent.tty_tab;
     let parent_cwd = parent.cwd.clone();
     let stdout_entry = if stdout_fd != u64::MAX {
@@ -1579,6 +1684,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.env = env;
     child.cwd = parent_cwd;
     child.capabilities = capabilities;
+    child.service_lookup_restrictions = service_lookup_restrictions;
     // Inherit the TTY tab so a shell-spawned app's stdio routes to that tab's
     // kernel rings (foreground input routing).
     child.tty_tab = parent_tty_tab

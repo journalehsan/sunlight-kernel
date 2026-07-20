@@ -636,6 +636,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     username_len,
                                     uid,
                                     gid,
+                                    session_grant,
                                     session,
                                 } => {
                                     debug_log_login_success(&username[..username_len], uid, gid);
@@ -659,8 +660,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 &mut active_tab,
                                                 &mut next_shell_id,
                                                 cap,
-                                                uid,
-                                                gid,
+                                                session_grant,
                                             ) {
                                                 if let Some(tab) =
                                                     active_shell_tab_mut(&mut tabs, active_tab)
@@ -1502,8 +1502,7 @@ fn spawn_tab(
     active_tab: &mut usize,
     next_shell_id: &mut u64,
     spawn_cap: CapabilityToken,
-    uid: u32,
-    gid: u32,
+    session_grant: CapabilityToken,
 ) -> bool {
     if *tab_count >= MAX_TABS {
         return false;
@@ -1512,15 +1511,16 @@ fn spawn_tab(
     let shell_id = *next_shell_id;
     *next_shell_id += 1;
     let mut path = [0u8; 32];
-    let path_len = make_shell_path(shell_id, uid, gid, &mut path);
+    let path_len = make_shell_path(shell_id, 0, 0, &mut path);
     let (pw0, pw1, pw2, pw3) = pack_path(&path[..path_len]);
-    // The kernel derives the TTY tab and login credentials from the encoded
-    // shell path because register IPC only carries four data words.
-    let spawn_msg = IpcMsg::with_label(SpawnMsg::SPAWN)
+    // UID/GID are deliberately not encoded in this request. The kernel takes
+    // identity exclusively from the one-time UAC grant in caps[0].
+    let spawn_msg = IpcMsg::with_label(SpawnMsg::SPAWN_AUTHENTICATED)
         .word(0, pw0)
         .word(1, pw1)
         .word(2, pw2)
-        .word(3, pw3);
+        .word(3, pw3)
+        .with_cap(0, session_grant);
     let spawn_reply = ipc_call(spawn_cap, spawn_msg);
     if spawn_reply.label != SpawnMsg::REPLY {
         debug_log("[TTY]  Spawning /bin/sshl FAILED");
@@ -1548,16 +1548,11 @@ fn handle_ctrl_key(
 ) -> bool {
     match ascii {
         b't' | b'T' => {
-            if let Some(cap) = spawn_cap {
-                if spawn_tab(tabs, tab_count, active_tab, next_shell_id, cap, 0, 0)
-                    && !*phase3_6_done
-                {
-                    debug_log("[TTY]  Ctrl+T test: new tab OK");
-                    debug_log("[SunlightOS] Phase 3.6 OK");
-                    *phase3_6_done = true;
-                }
-                return true;
-            }
+            // A second shell requires a fresh authentication grant. Do not
+            // reuse a consumed grant or fall back to caller-supplied uid/gid.
+            let _ = (tabs, tab_count, active_tab, next_shell_id, spawn_cap, phase3_6_done);
+            debug_log("[TTY]  Ctrl+T requires a new authenticated session");
+            return true;
         }
         b'w' | b'W' => {
             close_active_tab(tabs, tab_count, active_tab);

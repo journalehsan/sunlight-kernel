@@ -4,7 +4,8 @@
 //! a password field, and an environment dropdown. Authenticates through the
 //! central UAC broker.
 
-use sunlight_uac::auth::authenticate_password;
+use sunlight_ipc::CapabilityToken;
+use sunlight_uac::auth::{authenticate_password_for_session, AuthSuccess};
 
 pub const MAX_FIELD_LEN: usize = 64;
 pub const MAX_USERS: usize = 6;
@@ -110,6 +111,7 @@ pub enum LoginResult {
         username_len: usize,
         uid: u32,
         gid: u32,
+        session_grant: CapabilityToken,
         session: SessionType,
     },
     Locked,
@@ -273,7 +275,7 @@ impl LoginScreen {
 
     fn attempt_login_with<F>(&mut self, verify: F) -> LoginResult
     where
-        F: FnOnce(&[u8], &[u8]) -> Option<(u32, u32)>,
+        F: FnOnce(&[u8], &[u8]) -> Option<AuthSuccess>,
     {
         let u_idx = self.selected_user_idx;
         let user = &self.users[u_idx].buf[..self.users[u_idx].len];
@@ -281,7 +283,7 @@ impl LoginScreen {
 
         let cred = verify(user, pass);
 
-        if let Some((uid, gid)) = cred {
+        if let Some(success) = cred {
             let ulen = self.users[u_idx].len.min(63);
             let mut uname = [0u8; 64];
             uname[..ulen].copy_from_slice(&self.users[u_idx].buf[..ulen]);
@@ -290,8 +292,9 @@ impl LoginScreen {
             LoginResult::Success {
                 username: uname,
                 username_len: ulen,
-                uid,
-                gid,
+                uid: success.uid,
+                gid: success.gid,
+                session_grant: success.session_grant,
                 session: self.session,
             }
         } else {
@@ -321,8 +324,8 @@ impl LoginScreen {
     }
 }
 
-fn verify_login(username: &[u8], password: &[u8]) -> Option<(u32, u32)> {
-    authenticate_password(username, password).map(|success| (success.uid, success.gid))
+fn verify_login(username: &[u8], password: &[u8]) -> Option<AuthSuccess> {
+    authenticate_password_for_session(username, password)
 }
 
 #[cfg(test)]
@@ -368,7 +371,11 @@ mod tests {
             seen_username[..username.len()].copy_from_slice(username);
             seen_username_len = username.len();
             assert_eq!(password, b"secret");
-            Some((1000, 1000))
+            Some(AuthSuccess {
+                uid: 1000,
+                gid: 1000,
+                session_grant: CapabilityToken::INVALID,
+            })
         });
 
         assert_eq!(&seen_username[..seen_username_len], b"user");
