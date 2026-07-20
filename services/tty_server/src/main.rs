@@ -1495,19 +1495,16 @@ fn spawn_tab(
 
     let shell_id = *next_shell_id;
     *next_shell_id += 1;
-    let mut path = [0u8; 16];
-    let path_len = make_shell_path(shell_id, &mut path);
+    let mut path = [0u8; 32];
+    let path_len = make_shell_path(shell_id, uid, gid, &mut path);
     let (pw0, pw1, pw2, pw3) = pack_path(&path[..path_len]);
-    // The kernel derives the TTY tab (kernel ring key) from shell_id parsed out
-    // of this path, so children's fd0/fd1 route to this tab's rings. tty_server
-    // uses the same shell_id as the ring key (see the foreground drive loop).
+    // The kernel derives the TTY tab and login credentials from the encoded
+    // shell path because register IPC only carries four data words.
     let spawn_msg = IpcMsg::with_label(SpawnMsg::SPAWN)
         .word(0, pw0)
         .word(1, pw1)
         .word(2, pw2)
-        .word(3, pw3)
-        .word(4, uid as u64)
-        .word(5, gid as u64);
+        .word(3, pw3);
     let spawn_reply = ipc_call(spawn_cap, spawn_msg);
     if spawn_reply.label != SpawnMsg::REPLY {
         debug_log("[TTY]  Spawning /bin/sshl FAILED");
@@ -2060,10 +2057,15 @@ fn pack_bytes(bytes: &[u8]) -> u64 {
     out
 }
 
-fn make_shell_path(shell_id: u64, out: &mut [u8]) -> usize {
+fn make_shell_path(shell_id: u64, uid: u32, gid: u32, out: &mut [u8]) -> usize {
     let prefix = b"/bin/sshl";
     out[..prefix.len()].copy_from_slice(prefix);
-    prefix.len() + fmt_u64(&mut out[prefix.len()..], shell_id)
+    let encoded = encode_shell_launch_id(shell_id, uid, gid);
+    prefix.len() + fmt_u64(&mut out[prefix.len()..], encoded)
+}
+
+fn encode_shell_launch_id(shell_id: u64, uid: u32, gid: u32) -> u64 {
+    (shell_id & 0xff) | ((uid as u64 & 0x0fff_ffff) << 8) | ((gid as u64 & 0x0fff_ffff) << 36)
 }
 
 fn make_shell_name(shell_id: u64, out: &mut [u8]) -> usize {

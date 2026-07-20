@@ -698,12 +698,7 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
 /// Extracts path from the message words and spawns a new process.
 fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let path = decode_path_from_words(&msg.words);
-    // NOTE: register IPC only transmits words[0..3] (see IpcMsg::from_registers),
-    // so words[4]/[5] arrive as 0 here — uid/gid are effectively always 0 today.
-    // The TTY tab is derived from shell_id (parsed from the transmitted path)
-    // inside spawn_from_path, not passed as a word.
-    let uid = msg.words[4] as u32;
-    let gid = msg.words[5] as u32;
+    let (uid, gid) = crate::process::spawn::shell_credentials_from_path(&path).unwrap_or((0, 0));
 
     let mut sched = crate::sched::SCHEDULER.lock();
     crate::serial_println!(

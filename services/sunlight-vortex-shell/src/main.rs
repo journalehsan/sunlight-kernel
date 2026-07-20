@@ -90,7 +90,7 @@ use sunlight_wallpaper::{is_supported_wallpaper, load_desktop_config, DesktopCon
 // ---------------------------------------------------------------------------
 
 const FALLBACK_BG: u32 = 0x00121214;
-const DESKTOP_CONFIG_PATH: &[u8] = b"/home/root/.config/sunlight/desktop.toml";
+const DESKTOP_CONFIG_PATH: &[u8] = b"/root/.config/sunlight/desktop.toml";
 
 // ---------------------------------------------------------------------------
 // Icon theme — SunlightOS icon set (Breeze-inspired, 256×256 BGRA TGA type-2)

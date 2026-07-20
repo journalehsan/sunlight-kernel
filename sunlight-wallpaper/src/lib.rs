@@ -7,9 +7,9 @@ use sunlight_libc as libc;
 
 pub const BUILTIN_WALLPAPER_DIR: &str = "/system/share/wallpapers";
 pub const LEGACY_WALLPAPER_DIR: &str = "/var/sunlightos/wallpapers";
-pub const USER_WALLPAPER_DIR: &str = "/home/root/.local/share/sunlight/wallpapers";
-pub const CONFIG_PATH: &str = "/home/root/.config/sunlight/desktop.toml";
-pub const CONFIG_TMP_PATH: &str = "/home/root/.config/sunlight/desktop.toml.tmp";
+pub const USER_WALLPAPER_DIR: &str = "/root/.local/share/sunlight/wallpapers";
+pub const CONFIG_PATH: &str = "/root/.config/sunlight/desktop.toml";
+pub const CONFIG_TMP_PATH: &str = "/root/.config/sunlight/desktop.toml.tmp";
 pub const DEFAULT_WALLPAPER_PATH: &str = "/var/sunlightos/wallpapers/wallpaper.tga";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -119,7 +119,7 @@ pub fn save_desktop_config(cfg: &DesktopConfig) -> Result<(), WallpaperError> {
     out.push_str(cfg.wallpaper_mode.as_str());
     out.push_str("\"\n");
 
-    libc::mkdir_recursive(b"/home/root/.config/sunlight").map_err(|_| WallpaperError::Io)?;
+    libc::mkdir_recursive(b"/root/.config/sunlight").map_err(|_| WallpaperError::Io)?;
     let fd = libc::open_with_flags(
         CONFIG_TMP_PATH.as_bytes(),
         libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,

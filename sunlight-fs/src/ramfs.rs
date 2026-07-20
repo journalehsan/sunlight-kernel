@@ -579,9 +579,8 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/root/Videos", 0, 0, mode::DIR_700),
 
     RamEntry::dir("/home", 0, 0, mode::DIR_755),
-    RamEntry::dir("/home/root", 0, 0, mode::DIR_700),
-    RamEntry::dir("/home/root/.config", 0, 0, mode::DIR_700),
-    RamEntry::dir("/home/root/.config/sunlight", 0, 0, mode::DIR_700),
+    RamEntry::dir("/root/.config", 0, 0, mode::DIR_700),
+    RamEntry::dir("/root/.config/sunlight", 0, 0, mode::DIR_700),
     RamEntry::dir("/home/user", 1000, 1000, mode::DIR_755),
     // Default unprivileged user's standard folders (uid/gid 1000).
     RamEntry::dir("/home/user/Desktop", 1000, 1000, mode::DIR_755),
@@ -803,7 +802,7 @@ pub static INITRAMFS: &[RamEntry] = &[
         include_bytes!("../etc/locale.gen"),
     ),
     RamEntry::file(
-        "/home/root/.config/sunlight/desktop.toml",
+        "/root/.config/sunlight/desktop.toml",
         0,
         0,
         mode::FILE_644,

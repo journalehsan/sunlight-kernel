@@ -728,9 +728,23 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
 pub fn shell_id_from_path(path: &str) -> Option<u64> {
     match path {
         "/bin/sh" | "/bin/ssh" | "/bin/sshl" => Some(0),
-        p if p.starts_with("/bin/sshl") => parse_u64(&p[9..]),
+        p if p.starts_with("/bin/sshl") => {
+            let encoded = parse_leading_u64(&p[9..])?;
+            Some(encoded & 0xff)
+        }
         _ => None,
     }
+}
+
+pub fn shell_credentials_from_path(path: &str) -> Option<(u32, u32)> {
+    let encoded = match path {
+        "/bin/sh" | "/bin/ssh" | "/bin/sshl" => return Some((0, 0)),
+        p if p.starts_with("/bin/sshl") => parse_leading_u64(&p[9..])?,
+        _ => return None,
+    };
+    let uid = ((encoded >> 8) & 0x0fff_ffff) as u32;
+    let gid = ((encoded >> 36) & 0x0fff_ffff) as u32;
+    Some((uid, gid))
 }
 
 fn parse_u64(s: &str) -> Option<u64> {
@@ -745,4 +759,20 @@ fn parse_u64(s: &str) -> Option<u64> {
         result = result.checked_mul(10)?.checked_add((b - b'0') as u64)?;
     }
     Some(result)
+}
+
+fn parse_leading_u64(s: &str) -> Option<u64> {
+    let (value, _) = split_leading_u64(s)?;
+    Some(value)
+}
+
+fn split_leading_u64(s: &str) -> Option<(u64, &str)> {
+    if s.is_empty() {
+        return None;
+    }
+    let end = s.bytes().take_while(|b| b.is_ascii_digit()).count();
+    if end == 0 {
+        return None;
+    }
+    Some((parse_u64(&s[..end])?, &s[end..]))
 }
