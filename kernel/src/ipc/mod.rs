@@ -1,7 +1,9 @@
 pub mod message;
 
 use crate::capability::{CapabilityBroker, CapabilityRights, CapabilityToken};
-use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget, PendingIpcCall, ProcessState};
+use crate::process::{
+    DeferredIpcReply, IpcCallId, IpcCallOutcome, IpcReplyTarget, PendingIpcCall, ProcessState,
+};
 use crate::sched::Scheduler;
 use alloc::collections::BTreeMap;
 use alloc::collections::VecDeque;
@@ -16,6 +18,9 @@ const NAMESERVER_REGISTER: u64 = 1;
 /// A 104-byte register message makes this about 6.5 KiB of payload metadata per
 /// saturated endpoint. Existing boot/services traffic stays far below this.
 pub const ENDPOINT_QUEUE_CAPACITY: usize = 64;
+/// A server may retain a bounded number of asynchronous reply targets. This
+/// keeps deferred service waits from consuming unbounded kernel memory.
+pub const DEFERRED_REPLY_CAPACITY: usize = 64;
 const NUM_SHARDS: usize = 16;
 
 #[allow(non_snake_case)]
@@ -547,12 +552,21 @@ fn deliver_reply_to_current_target(
         return Ok(());
     };
 
+    deliver_reply_to_target(target, reply, sched, bus)
+}
+
+fn deliver_reply_to_target(
+    target: IpcReplyTarget,
+    reply: IpcMsg,
+    sched: &mut Scheduler,
+    bus: &mut IpcBus,
+) -> Result<(), IpcError> {
     let _ = bus.reply_waiter_remove(target.endpoint_id, target.call);
 
     let Some(client_idx) = sched
         .processes
         .iter()
-        .position(|p| p.pid == target.call.pid)
+        .position(|process| process.pid == target.call.pid)
     else {
         LATE_REPLY_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
         return Ok(());
@@ -581,17 +595,24 @@ fn deliver_reply_to_current_target(
             IpcCallOutcome::DeadlineExpired(target.call.generation),
         );
         DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
-        LATE_REPLY_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
         return Ok(());
     }
 
-    let client = &mut sched.processes[client_idx];
-    client.ipc_reply = Some((target.call.generation, reply));
-    client.pending_call = None;
-    client.ipc_deadline = None;
-    client.ipc_call_outcome = Some(IpcCallOutcome::ReplyDelivered(target.call.generation));
-    wake_terminal(sched, client_idx);
+    sched.processes[client_idx].ipc_reply = Some((target.call.generation, reply));
+    finish_call(
+        sched,
+        client_idx,
+        IpcCallOutcome::ReplyDelivered(target.call.generation),
+    );
     Ok(())
+}
+
+fn remove_deferred_target(sched: &mut Scheduler, target: IpcReplyTarget) {
+    for process in &mut sched.processes {
+        process
+            .deferred_reply_targets
+            .retain(|entry| entry.target != target);
+    }
 }
 
 pub(crate) fn take_terminal_result(
@@ -623,10 +644,22 @@ fn finish_call(sched: &mut Scheduler, idx: usize, outcome: IpcCallOutcome) {
         sched.processes[idx].ipc_call_outcome,
         outcome.generation(),
     ) {
+        let target = sched.processes[idx].pending_call.map(|pending| IpcReplyTarget {
+            endpoint_id: pending.endpoint_id,
+            call: IpcCallId {
+                pid: sched.processes[idx].pid,
+                generation: pending.generation,
+            },
+        });
         sched.processes[idx].pending_call = None;
-        sched.processes[idx].ipc_reply = None;
+        if !matches!(outcome, IpcCallOutcome::ReplyDelivered(_)) {
+            sched.processes[idx].ipc_reply = None;
+        }
         sched.processes[idx].ipc_deadline = None;
         sched.processes[idx].ipc_call_outcome = Some(outcome);
+        if let Some(target) = target {
+            remove_deferred_target(sched, target);
+        }
         wake_terminal(sched, idx);
     }
 }
@@ -979,6 +1012,103 @@ pub fn handle_ipc_reply(
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
     deliver_reply_to_current_target(server_pid, reply, sched, bus)
+}
+
+pub fn defer_current_reply(
+    server_pid: usize,
+    sched: &mut Scheduler,
+) -> Result<u64, IpcError> {
+    let Some(server_idx) = sched.processes.iter().position(|process| process.pid == server_pid)
+    else {
+        return Err(IpcError::InvalidArgument);
+    };
+    let target = sched.processes[server_idx]
+        .ipc_reply_target
+        .take()
+        .ok_or(IpcError::InvalidArgument)?;
+    if sched.processes[server_idx].deferred_reply_targets.len() >= DEFERRED_REPLY_CAPACITY {
+        sched.processes[server_idx].ipc_reply_target = Some(target);
+        return Err(IpcError::QueueFull);
+    }
+    let token = sched.processes[server_idx]
+        .next_deferred_reply_token
+        .wrapping_add(1)
+        .max(1)
+        | (1u64 << 63);
+    sched.processes[server_idx].next_deferred_reply_token = token;
+    sched.processes[server_idx]
+        .deferred_reply_targets
+        .push_back(DeferredIpcReply { token, target });
+    Ok(token)
+}
+
+pub fn deferred_reply_endpoint(
+    server_pid: usize,
+    token: u64,
+    sched: &Scheduler,
+) -> Result<u32, IpcError> {
+    sched
+        .processes
+        .iter()
+        .find(|process| process.pid == server_pid)
+        .and_then(|process| {
+            process
+                .deferred_reply_targets
+                .iter()
+                .find(|entry| entry.token == token)
+                .map(|entry| entry.target.endpoint_id)
+        })
+        .ok_or(IpcError::InvalidArgument)
+}
+
+pub fn deferred_reply_is_live(server_pid: usize, token: u64, sched: &Scheduler) -> bool {
+    let Some(entry) = sched
+        .processes
+        .iter()
+        .find(|process| process.pid == server_pid)
+        .and_then(|process| {
+            process
+                .deferred_reply_targets
+                .iter()
+                .find(|entry| entry.token == token)
+                .copied()
+        })
+    else {
+        return false;
+    };
+    sched.processes.iter().any(|process| {
+        process.pid == entry.target.call.pid
+            && process.pending_call.is_some_and(|pending| {
+                pending.endpoint_id == entry.target.endpoint_id
+                    && pending.generation == entry.target.call.generation
+            })
+    })
+}
+
+pub fn complete_deferred_reply(
+    server_pid: usize,
+    token: u64,
+    reply: IpcMsg,
+    sched: &mut Scheduler,
+    bus: &mut IpcBus,
+) -> Result<(), IpcError> {
+    let Some(server_idx) = sched.processes.iter().position(|process| process.pid == server_pid)
+    else {
+        return Err(IpcError::InvalidArgument);
+    };
+    let Some(entry_idx) = sched.processes[server_idx]
+        .deferred_reply_targets
+        .iter()
+        .position(|entry| entry.token == token)
+    else {
+        return Err(IpcError::InvalidArgument);
+    };
+    let target = sched.processes[server_idx]
+        .deferred_reply_targets
+        .remove(entry_idx)
+        .ok_or(IpcError::InvalidArgument)?
+        .target;
+    deliver_reply_to_target(target, reply, sched, bus)
 }
 
 pub fn handle_ipc_reply_wait(

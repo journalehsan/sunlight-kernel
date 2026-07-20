@@ -35,6 +35,12 @@ pub enum SunlightSyscall {
     NameserverEndpointValidate = 12,
     EndpointDestroy = 13,
     NameserverDiagnosticEvent = 14,
+    /// Retain the current server reply target for a later explicit completion.
+    IpcDeferReply = 15,
+    /// Deliver a reply to a target previously retained with IpcDeferReply.
+    IpcCompleteDeferredReply = 16,
+    /// Query whether a deferred server reply target is still live.
+    IpcDeferredReplyIsLive = 17,
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
@@ -2849,6 +2855,82 @@ pub fn ipc_reply(reply: IpcMsg) {
     unsafe {
         raw_syscall_ipc(SunlightSyscall::IpcReply, 0, reply);
     }
+}
+
+/// Retain the current server call and return a generation-scoped completion
+/// token. The caller must later use `ipc_complete_deferred_reply` exactly once.
+pub fn ipc_defer_reply() -> Result<u64, IpcError> {
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::IpcDeferReply,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if ret <= IpcError::PeerClosed as u64 {
+        Err(match ret {
+            value if value == IpcError::InvalidCapability as u64 => IpcError::InvalidCapability,
+            value if value == IpcError::EndpointNotFound as u64 => IpcError::EndpointNotFound,
+            value if value == IpcError::WouldBlock as u64 => IpcError::WouldBlock,
+            value if value == IpcError::InvalidArgument as u64 => IpcError::InvalidArgument,
+            value if value == IpcError::InvalidWordCount as u64 => IpcError::InvalidWordCount,
+            value if value == IpcError::InvalidCapCount as u64 => IpcError::InvalidCapCount,
+            value if value == IpcError::QueueFull as u64 => IpcError::QueueFull,
+            value if value == IpcError::DeadlineExpired as u64 => IpcError::DeadlineExpired,
+            value if value == IpcError::Cancelled as u64 => IpcError::Cancelled,
+            _ => IpcError::PeerClosed,
+        })
+    } else {
+        Ok(ret)
+    }
+}
+
+/// Complete a deferred server reply. The kernel checks the token's original
+/// caller and IPC generation before waking that task.
+pub fn ipc_complete_deferred_reply(token: u64, reply: IpcMsg) -> Result<(), IpcError> {
+    let (ret, _) = unsafe {
+        raw_syscall_ipc(SunlightSyscall::IpcCompleteDeferredReply, token, reply)
+    };
+    if ret == 0 {
+        Ok(())
+    } else {
+        Err(match ret {
+            value if value == IpcError::InvalidCapability as u64 => IpcError::InvalidCapability,
+            value if value == IpcError::EndpointNotFound as u64 => IpcError::EndpointNotFound,
+            value if value == IpcError::WouldBlock as u64 => IpcError::WouldBlock,
+            value if value == IpcError::InvalidArgument as u64 => IpcError::InvalidArgument,
+            value if value == IpcError::InvalidWordCount as u64 => IpcError::InvalidWordCount,
+            value if value == IpcError::InvalidCapCount as u64 => IpcError::InvalidCapCount,
+            value if value == IpcError::QueueFull as u64 => IpcError::QueueFull,
+            value if value == IpcError::DeadlineExpired as u64 => IpcError::DeadlineExpired,
+            value if value == IpcError::Cancelled as u64 => IpcError::Cancelled,
+            _ => IpcError::PeerClosed,
+        })
+    }
+}
+
+/// Return whether a previously deferred reply target still represents a live,
+/// uncancelled caller. This lets services discard cancellation metadata without
+/// sending a synthetic reply.
+pub fn ipc_deferred_reply_is_live(token: u64) -> bool {
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::IpcDeferredReplyIsLive,
+            token,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 1
 }
 
 /// Server: send reply and block for the next call.

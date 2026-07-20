@@ -49,9 +49,9 @@ mod sunlightos_impl {
     use rustls::{ClientConfig, RootCertStore};
 
     use sunlight_ipc::{
-        debug_log, endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait,
-        monotonic_millis, nameserver_lookup, nameserver_register, shm_alloc, shm_free, shm_map,
-        CapabilityToken, IpcMsg, IPC_REGISTER_WORDS,
+        debug_log, endpoint_create, get_time_utc, ipc_call, ipc_call_timeout, ipc_recv,
+        ipc_reply_and_wait, monotonic_millis, nameserver_lookup, nameserver_register, shm_alloc,
+        shm_free, shm_map, CapabilityToken, IpcMsg, IPC_REGISTER_WORDS,
     };
 
     // ── allocator ─────────────────────────────────────────────────────────────
@@ -138,6 +138,11 @@ mod sunlightos_impl {
     // Bulk TCP I/O over one shared 4 KiB page (NetOp::SEND_SHM / RECV_SHM).
     const NET_SEND_SHM: u64 = 14;
     const NET_RECV_SHM: u64 = 15;
+    const NET_WAIT: u64 = 17;
+    const NET_STATUS_OK: u64 = 0;
+    const NET_STATUS_WOULD_BLOCK: u64 = 1;
+    const NET_READY_READ: u64 = 1 << 1;
+    const NET_READY_WRITE: u64 = 1 << 2;
 
     const SHM_PAGE: usize = 4096; // one shared page per plaintext/cert transfer
     const OUT_SCRATCH: usize = 18 * 1024; // > max TLS record (16 KiB + overhead)
@@ -160,7 +165,7 @@ mod sunlightos_impl {
     struct Session {
         id: u64,
         conn: UnbufferedClientConnection,
-        socket_id: u32,
+        socket_id: u64,
         incoming: Vec<u8>, // received ciphertext not yet consumed by rustls
         backlog: Vec<u8>,  // decrypted plaintext not yet handed to the client
     }
@@ -294,16 +299,16 @@ mod sunlightos_impl {
         nameserver_lookup("net")
     }
 
-    fn net_socket() -> Option<u32> {
+    fn net_socket() -> Option<u64> {
         let cap = net_cap()?;
         let reply = ipc_call(cap, IpcMsg::with_label(NET_SOCKET));
         if reply.label != NET_SOCKET || reply.words[0] == 0 {
             return None;
         }
-        Some(reply.words[0] as u32)
+        Some(reply.words[0])
     }
 
-    fn net_connect(socket_id: u32, ip_packed: u64, port: u16) -> bool {
+    fn net_connect(socket_id: u64, ip_packed: u64, port: u16) -> bool {
         let cap = match net_cap() {
             Some(c) => c,
             None => return false,
@@ -311,14 +316,16 @@ mod sunlightos_impl {
         let reply = ipc_call(
             cap,
             IpcMsg::with_label(NET_CONNECT)
-                .word(0, socket_id as u64)
+                .word(0, socket_id)
                 .word(1, ip_packed)
                 .word(2, port as u64),
         );
-        reply.label == NET_CONNECT && reply.words[0] != 0
+        reply.label == NET_CONNECT
+            && reply.words[0] != 0
+            && net_wait_ready(socket_id, 20_000, NET_READY_WRITE)
     }
 
-    fn net_send_all(socket_id: u32, data: &[u8]) -> bool {
+    fn net_send_all(socket_id: u64, data: &[u8]) -> bool {
         let cap = match net_cap() {
             Some(c) => c,
             None => return false,
@@ -334,12 +341,22 @@ mod sunlightos_impl {
                 core::ptr::copy_nonoverlapping(data[off..].as_ptr(), ptr, clen);
             }
             let msg = IpcMsg::with_label(NET_SEND_SHM)
-                .word(0, socket_id as u64)
+                .word(0, socket_id)
                 .word(1, clen as u64)
                 .with_cap(0, tok);
             let reply = ipc_call(cap, msg);
             let _ = shm_free(tok);
             let sent = reply.words[0] as usize;
+            if reply.words[1] == NET_STATUS_WOULD_BLOCK {
+                if !net_wait_ready(
+                    socket_id,
+                    8_000,
+                    NET_READY_WRITE,
+                ) {
+                    return false;
+                }
+                continue;
+            }
             if sent == 0 {
                 return false;
             }
@@ -348,7 +365,7 @@ mod sunlightos_impl {
         true
     }
 
-    fn net_recv_chunk(socket_id: u32) -> Vec<u8> {
+    fn net_recv_chunk(socket_id: u64) -> Vec<u8> {
         let cap = match net_cap() {
             Some(c) => c,
             None => return Vec::new(),
@@ -356,10 +373,16 @@ mod sunlightos_impl {
         let reply = ipc_call(
             cap,
             IpcMsg::with_label(NET_RECV_SHM)
-                .word(0, socket_id as u64)
+                .word(0, socket_id)
                 .word(1, SHM_PAGE as u64),
         );
         if reply.label != NET_RECV_SHM {
+            return Vec::new();
+        }
+        if reply.words[1] == NET_STATUS_WOULD_BLOCK {
+            if net_wait_ready(socket_id, 8_000, NET_READY_READ) {
+                return net_recv_chunk(socket_id);
+            }
             return Vec::new();
         }
         let len = (reply.words[0] as usize).min(SHM_PAGE);
@@ -379,10 +402,33 @@ mod sunlightos_impl {
         out
     }
 
-    fn net_close(socket_id: u32) {
+    fn net_close(socket_id: u64) {
         if let Some(cap) = net_cap() {
-            let _ = ipc_call(cap, IpcMsg::with_label(NET_CLOSE).word(0, socket_id as u64));
+            let _ = ipc_call(cap, IpcMsg::with_label(NET_CLOSE).word(0, socket_id));
         }
+    }
+
+    fn net_wait_ready(socket_id: u64, timeout_ms: u64, interest: u64) -> bool {
+        let Some(cap) = net_cap() else {
+            return false;
+        };
+        let Ok((ptr, tok)) = shm_alloc() else {
+            return false;
+        };
+        unsafe {
+            *(ptr as *mut u64) = socket_id;
+        }
+        let reply = ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(NET_WAIT)
+                .word(0, 1)
+                .word(1, timeout_ms)
+                .word(2, interest)
+                .with_cap(0, tok),
+            timeout_ms.saturating_add(100),
+        );
+        let _ = shm_free(tok);
+        matches!(reply, Ok(reply) if reply.words[0] == NET_STATUS_OK)
     }
 
     // ── trust store ─────────────────────────────────────────────────────────────
@@ -534,7 +580,7 @@ mod sunlightos_impl {
 
     fn drive_handshake(
         conn: &mut UnbufferedClientConnection,
-        socket_id: u32,
+        socket_id: u64,
         incoming: &mut Vec<u8>,
     ) -> Result<(), u64> {
         let mut scratch = vec![0u8; OUT_SCRATCH];
@@ -598,7 +644,7 @@ mod sunlightos_impl {
 
     fn tls_send(
         conn: &mut UnbufferedClientConnection,
-        socket_id: u32,
+        socket_id: u64,
         incoming: &mut Vec<u8>,
         backlog: &mut Vec<u8>,
         data: &[u8],
@@ -674,7 +720,7 @@ mod sunlightos_impl {
     /// Returns (plaintext, eof). Empty plaintext + eof=true means the peer closed.
     fn tls_recv(
         conn: &mut UnbufferedClientConnection,
-        socket_id: u32,
+        socket_id: u64,
         incoming: &mut Vec<u8>,
         backlog: &mut Vec<u8>,
     ) -> (Vec<u8>, bool) {

@@ -7,13 +7,14 @@ use smoltcp::iface::{Config, Interface, SocketSet, SocketStorage};
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, HardwareAddress};
 use sunlight_ipc::{
-    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply,
-    ipc_reply_and_wait, nameserver_lookup, nameserver_lookup_timeout, nameserver_register,
-    shm_alloc, shm_map, CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState,
-    EndpointId, IpcMsg, NetworkdMsg, ResolvedMsg, VfsMsg,
+    debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_complete_deferred_reply,
+    ipc_defer_reply, ipc_deferred_reply_is_live, ipc_recv, ipc_recv_timeout, ipc_reply, nameserver_lookup,
+    nameserver_lookup_timeout, nameserver_register, monotonic_millis, shm_alloc, shm_map,
+    CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, EndpointId, IpcMsg,
+    NetworkdMsg, ResolvedMsg, VfsMsg,
 };
-use sunlight_net::netop::NetOp;
-use sunlight_net::ProxyNetDevice;
+use sunlight_net::netop::{NetOp, NetStatus};
+use sunlight_net::{ProxyNetDevice, SocketIdentity, TcpError};
 
 use linked_list_allocator::LockedHeap;
 
@@ -45,7 +46,19 @@ static mut SOCKET_STORAGE: [SocketStorage; 128] = [SocketStorage::EMPTY; 128];
 /// Kept isolated so DNS UDP sockets never alias TCP slots in SOCKET_STORAGE.
 static mut DNS_SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
 static mut TCP_MANAGER: Option<sunlight_net::TcpManager> = None;
+static mut WAITERS: Option<alloc::vec::Vec<SocketWaiter>> = None;
 const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [[208, 67, 222, 222], [208, 67, 220, 220]];
+const MAX_WAIT_SET: usize = 32;
+const MAX_WAITERS: usize = 64;
+const NETWORK_TICK_MS: u64 = 10;
+
+struct SocketWaiter {
+    completion_token: u64,
+    owner_pid: u64,
+    identities: alloc::vec::Vec<SocketIdentity>,
+    interest: u32,
+    deadline_ms: u64,
+}
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -63,6 +76,7 @@ pub extern "C" fn _start() -> ! {
     // Antigravity: Initialize TCP manager dynamically
     unsafe {
         TCP_MANAGER = Some(sunlight_net::TcpManager::new());
+        WAITERS = Some(alloc::vec::Vec::new());
     }
 
     // Note: Cannot do port I/O from user space (ring 3)
@@ -174,22 +188,29 @@ pub extern "C" fn _start() -> ! {
     }
     debug_log("[NET]  smoltcp interface up over kernel frame proxy");
 
-    // Main service loop — one SocketSet for the process lifetime (TCP handles persist).
-    let mut poll_counter = 0u32; // Antigravity Phase 3: Garbage collection counter
-    let mut msg = ipc_recv(ep);
+    // A bounded timed receive drives the frame-proxy cadence. Socket waiters
+    // themselves sleep in the kernel and are completed only by a state change,
+    // close, cancellation, or their deadline.
+    let mut next_msg = Some(ipc_recv(ep));
     loop {
-        // Antigravity Phase 3: Periodic garbage collection every 100 messages
-        poll_counter = poll_counter.wrapping_add(1);
-        if poll_counter % 100 == 0 {
-            unsafe {
-                if let Some(tcp) = TCP_MANAGER.as_mut() {
-                    tcp.reap_closed_sockets(&mut sockets);
-                }
-            }
-        }
+        progress_network(&mut sockets);
+        complete_waiters(&mut sockets);
 
-        let reply = handle_msg(msg, &mut sockets);
-        msg = ipc_reply_and_wait(ep, reply);
+        let msg = match next_msg.take() {
+            Some(msg) => msg,
+            None => match ipc_recv_timeout(ep, NETWORK_TICK_MS) {
+                Some(msg) => msg,
+                None => continue,
+            },
+        };
+
+        if msg.label == NetOp::WAIT {
+            if let Some(reply) = handle_wait(msg, &mut sockets) {
+                ipc_reply(reply);
+            }
+        } else {
+            ipc_reply(handle_msg(msg, &mut sockets));
+        }
     }
 }
 
@@ -403,81 +424,64 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             }
         }
         NetOp::SOCKET => {
-            let id = unsafe {
+            let owner_pid = msg.badge;
+            let result = unsafe {
                 TCP_MANAGER
                     .as_mut()
-                    .and_then(|tcp| tcp.alloc_socket(sockets).ok())
-                    .unwrap_or(0)
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.alloc_socket(owner_pid, sockets))
             };
-            IpcMsg::with_label(NetOp::SOCKET).word(0, id as u64)
+            socket_reply(NetOp::SOCKET, result.map_or(0, |identity| identity.0), result.err())
         }
         NetOp::CONNECT => {
-            let socket_id = msg.words[0] as u32;
+            let identity = SocketIdentity(msg.words[0]);
             let ip = unpack_ipv4(msg.words[1]);
             let port = msg.words[2] as u16;
-            let ok = unsafe {
+            let result = unsafe {
                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                     (Some(iface), Some(device)) => TCP_MANAGER
                         .as_mut()
+                        .ok_or(TcpError::SocketError)
                         .and_then(|tcp| {
-                            tcp.connect(
-                                socket_id,
-                                ip,
-                                port,
-                                iface,
-                                sockets,
-                                device,
-                                Some(sunlight_ipc::process_yield),
-                            )
-                            .ok()
-                        })
-                        .is_some(),
-                    _ => false,
+                            tcp.connect(msg.badge, identity, ip, port, iface, sockets, device)
+                        }),
+                    _ => Err(TcpError::SocketError),
                 }
             };
-            IpcMsg::with_label(NetOp::CONNECT).word(0, if ok { 1 } else { 0 })
+            socket_reply(
+                NetOp::CONNECT,
+                u64::from(result.is_ok()),
+                result.err(),
+            )
         }
         NetOp::SEND => {
-            let socket_id = msg.words[0] as u32;
+            let identity = SocketIdentity(msg.words[0]);
             let len = msg.words[1] as usize;
             let data = unpack_chunk(&msg.words, len.min(IPC_CHUNK));
-            let sent = unsafe {
-                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
-                    (Some(iface), Some(device)) => TCP_MANAGER
-                        .as_mut()
-                        .and_then(|tcp| {
-                            tcp.send(socket_id, &data, iface, sockets, device, None)
-                                .ok()
-                        })
-                        .unwrap_or(0),
-                    _ => 0,
-                }
+            let result = unsafe {
+                TCP_MANAGER
+                    .as_mut()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.send(msg.badge, identity, &data, sockets))
             };
-            IpcMsg::with_label(NetOp::SEND).word(0, sent as u64)
+            socket_reply(NetOp::SEND, result.unwrap_or(0) as u64, result.err())
         }
         NetOp::RECV => {
-            let socket_id = msg.words[0] as u32;
-            // The IPC reply can only carry IPC_CHUNK bytes of payload, so never
-            // pull more than that from the socket per call. The TcpManager keeps
-            // any excess in its per-socket backlog for the next RECV.
+            let identity = SocketIdentity(msg.words[0]);
             let max_len = (msg.words[1] as usize).min(IPC_CHUNK).max(1);
-            let data = unsafe {
-                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
-                    (Some(iface), Some(device)) => TCP_MANAGER
-                        .as_mut()
-                        .and_then(|tcp| {
-                            tcp.recv(socket_id, max_len, iface, sockets, device, None)
-                                .ok()
-                        })
-                        .unwrap_or_default(),
-                    _ => alloc::vec::Vec::new(),
-                }
+            let result = unsafe {
+                TCP_MANAGER
+                    .as_mut()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.recv(msg.badge, identity, max_len, sockets))
             };
-            pack_recv_reply(data)
+            match result {
+                Ok(data) => pack_recv_reply(data, None),
+                Err(error) => pack_recv_reply(alloc::vec::Vec::new(), Some(error)),
+            }
         }
         NetOp::SEND_SHM => {
-            // Bulk send: client passes up to one 4 KiB page of data by cap.
-            let socket_id = msg.words[0] as u32;
+            let identity = SocketIdentity(msg.words[0]);
             let len = (msg.words[1] as usize).min(SHM_PAGE);
             let tok = msg.caps[0];
             let data = if tok != CapabilityToken::INVALID && len > 0 {
@@ -490,39 +494,29 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             } else {
                 alloc::vec::Vec::new()
             };
-            let sent = unsafe {
-                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
-                    (Some(iface), Some(device)) if !data.is_empty() => TCP_MANAGER
-                        .as_mut()
-                        .and_then(|tcp| {
-                            tcp.send(socket_id, &data, iface, sockets, device, None)
-                                .ok()
-                        })
-                        .unwrap_or(0),
-                    _ => 0,
-                }
+            let result = unsafe {
+                TCP_MANAGER
+                    .as_mut()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.send(msg.badge, identity, &data, sockets))
             };
-            IpcMsg::with_label(NetOp::SEND_SHM).word(0, sent as u64)
+            socket_reply(NetOp::SEND_SHM, result.unwrap_or(0) as u64, result.err())
         }
         NetOp::RECV_SHM => {
-            // Bulk recv: drain up to one 4 KiB page and hand it back by cap.
-            let socket_id = msg.words[0] as u32;
+            let identity = SocketIdentity(msg.words[0]);
             let max_len = (msg.words[1] as usize).min(SHM_PAGE).max(1);
-            let data = unsafe {
-                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
-                    (Some(iface), Some(device)) => TCP_MANAGER
-                        .as_mut()
-                        .and_then(|tcp| {
-                            tcp.recv(socket_id, max_len, iface, sockets, device, None)
-                                .ok()
-                        })
-                        .unwrap_or_default(),
-                    _ => alloc::vec::Vec::new(),
-                }
+            let result = unsafe {
+                TCP_MANAGER
+                    .as_mut()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.recv(msg.badge, identity, max_len, sockets))
+            };
+            let (data, error) = match result {
+                Ok(data) => (data, None),
+                Err(error) => (alloc::vec::Vec::new(), Some(error)),
             };
             if data.is_empty() {
-                // Empty (clean close / timeout) — no page, word[0] = 0 means EOF.
-                IpcMsg::with_label(NetOp::RECV_SHM).word(0, 0)
+                socket_reply(NetOp::RECV_SHM, 0, error)
             } else {
                 match shm_alloc() {
                     Ok((ptr, token)) => {
@@ -533,84 +527,79 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                         }
                         IpcMsg::with_label(NetOp::RECV_SHM)
                             .word(0, n as u64)
+                            .word(1, NetStatus::OK)
                             .with_cap(0, token)
                     }
-                    // Allocation failed — report EOF rather than corrupt the stream.
-                    Err(_) => IpcMsg::with_label(NetOp::RECV_SHM).word(0, 0),
+                    Err(_) => socket_reply(NetOp::RECV_SHM, 0, Some(TcpError::SocketError)),
                 }
             }
         }
         NetOp::CLOSE => {
-            let socket_id = msg.words[0] as u32;
-            let ok = unsafe {
+            let identity = SocketIdentity(msg.words[0]);
+            let result = unsafe {
                 TCP_MANAGER
                     .as_mut()
-                    .and_then(|tcp| tcp.close(socket_id, sockets).ok())
-                    .is_some()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.close(msg.badge, identity, sockets))
             };
-            IpcMsg::with_label(NetOp::CLOSE).word(0, if ok { 1 } else { 0 })
+            socket_reply(NetOp::CLOSE, u64::from(result.is_ok()), result.err())
         }
         NetOp::BIND => {
-            let socket_id = msg.words[0] as u32;
-            let port = msg.words[1] as u16;
-            let ok = unsafe {
+            let identity = SocketIdentity(msg.words[0]);
+            let (addr, port) = if msg.word_count >= 3 {
+                (unpack_ipv4(msg.words[1]), msg.words[2] as u16)
+            } else {
+                ([0, 0, 0, 0], msg.words[1] as u16)
+            };
+            let result = unsafe {
                 TCP_MANAGER
                     .as_mut()
-                    .and_then(|tcp| tcp.bind(socket_id, port, sockets).ok())
-                    .is_some()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.bind(msg.badge, identity, addr, port, sockets))
             };
-            IpcMsg::with_label(NetOp::BIND).word(0, if ok { 0 } else { 1 })
+            socket_reply(NetOp::BIND, u64::from(result.is_err()), result.err())
         }
         NetOp::LISTEN => {
-            let socket_id = msg.words[0] as u32;
+            let identity = SocketIdentity(msg.words[0]);
             let backlog = msg.words[1] as usize;
-            let ok = unsafe {
+            let result = unsafe {
                 TCP_MANAGER
                     .as_mut()
-                    .and_then(|tcp| tcp.listen(socket_id, backlog, sockets).ok())
-                    .is_some()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.listen(msg.badge, identity, backlog, sockets))
             };
-            IpcMsg::with_label(NetOp::LISTEN).word(0, if ok { 0 } else { 1 })
+            socket_reply(NetOp::LISTEN, u64::from(result.is_err()), result.err())
         }
         NetOp::ACCEPT => {
-            let socket_id = msg.words[0] as u32;
-            let client_id = unsafe {
-                match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
-                    (Some(iface), Some(device)) => TCP_MANAGER
-                        .as_mut()
-                        .and_then(|tcp| tcp.accept(socket_id, iface, sockets, device).ok())
-                        .flatten()
-                        .unwrap_or(0),
-                    _ => 0,
-                }
+            let identity = SocketIdentity(msg.words[0]);
+            let result = unsafe {
+                TCP_MANAGER
+                    .as_mut()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| tcp.take_accepted(msg.badge, identity))
             };
-            IpcMsg::with_label(NetOp::ACCEPT).word(0, client_id as u64)
+            socket_reply(NetOp::ACCEPT, result.map_or(0, |client| client.0), result.err())
         }
         NetOp::POLL => {
-            // Antigravity Phase 2: Non-blocking poll for ready sockets
-            // Client sends list of socket_ids to check (up to 8 in words[1..8])
-            // words[0] contains the count
-            let count = msg.words[0].min(8) as usize;
-            let mut socket_ids = alloc::vec::Vec::new();
+            let count = msg.words[0].min(3) as usize;
+            let mut ready = [0u64; 3];
+            let mut ready_count = 0usize;
             for i in 0..count {
-                let id = msg.words[i + 1] as u32;
-                if id != 0 {
-                    socket_ids.push(id);
+                let identity = SocketIdentity(msg.words[i + 1]);
+                let is_ready = unsafe {
+                    TCP_MANAGER
+                        .as_ref()
+                        .and_then(|tcp| tcp.ready(msg.badge, identity, sockets).ok())
+                        .is_some_and(|ready| ready.bits() != 0)
+                };
+                if is_ready {
+                    ready[ready_count] = identity.0;
+                    ready_count += 1;
                 }
             }
-
-            let ready = unsafe {
-                TCP_MANAGER
-                    .as_ref()
-                    .map(|tcp| tcp.poll_ready(&socket_ids, sockets))
-                    .unwrap_or_default()
-            };
-
-            // Pack ready socket_ids into reply (up to 8 in words[1..8])
-            let mut reply = IpcMsg::with_label(NetOp::POLL);
-            reply = reply.word(0, ready.len().min(8) as u64);
-            for (i, &socket_id) in ready.iter().take(8).enumerate() {
-                reply = reply.word(i + 1, socket_id as u64);
+            let mut reply = IpcMsg::with_label(NetOp::POLL).word(0, ready_count as u64);
+            for (index, identity) in ready.into_iter().take(ready_count).enumerate() {
+                reply = reply.word(index + 1, identity);
             }
             reply
         }
@@ -822,9 +811,40 @@ fn unpack_chunk(words: &[u64; 8], len: usize) -> alloc::vec::Vec<u8> {
     out
 }
 
-fn pack_recv_reply(data: alloc::vec::Vec<u8>) -> IpcMsg {
+fn socket_status(error: Option<TcpError>) -> u64 {
+    match error {
+        None => NetStatus::OK,
+        Some(TcpError::WouldBlock) => NetStatus::WOULD_BLOCK,
+        Some(TcpError::Timeout) => NetStatus::TIMEOUT,
+        Some(TcpError::Reset) => NetStatus::RESET,
+        Some(TcpError::Closed) => NetStatus::CLOSED,
+        Some(TcpError::InvalidSocket) => NetStatus::INVALID_SOCKET,
+        Some(TcpError::AccessDenied) => NetStatus::ACCESS_DENIED,
+        Some(TcpError::AddressInUse) => NetStatus::ADDRESS_IN_USE,
+        Some(TcpError::InvalidState) => NetStatus::INVALID_STATE,
+        Some(TcpError::NotConnected) | Some(TcpError::Refused) => NetStatus::NOT_CONNECTED,
+        Some(TcpError::BacklogFull) => NetStatus::BACKLOG_FULL,
+        Some(TcpError::NoSlots) => NetStatus::NO_SLOTS,
+        Some(TcpError::SocketError) => NetStatus::INTERNAL,
+    }
+}
+
+fn socket_reply(label: u64, value: u64, error: Option<TcpError>) -> IpcMsg {
+    IpcMsg::with_label(label)
+        .word(0, value)
+        .word(1, socket_status(error))
+}
+
+fn pack_recv_reply(data: alloc::vec::Vec<u8>, error: Option<TcpError>) -> IpcMsg {
     let len = data.len().min(IPC_CHUNK);
-    let mut reply = IpcMsg::with_label(NetOp::RECV).word(0, len as u64);
+    let status = if data.is_empty() && error.is_none() {
+        NetStatus::EOF
+    } else {
+        socket_status(error)
+    };
+    let mut reply = IpcMsg::with_label(NetOp::RECV)
+        .word(0, len as u64)
+        .word(1, status);
     for i in 0..len {
         let word_idx = 2 + i / 8;
         let byte_idx = i % 8;
@@ -833,6 +853,158 @@ fn pack_recv_reply(data: alloc::vec::Vec<u8>) -> IpcMsg {
         reply.words[word_idx] = word | (byte << (byte_idx * 8));
     }
     reply
+}
+
+fn progress_network(sockets: &mut SocketSet<'static>) {
+    unsafe {
+        if let (Some(tcp), Some(iface), Some(device)) = (
+            TCP_MANAGER.as_mut(),
+            NET_IFACE.as_mut(),
+            NET_DEVICE.as_mut(),
+        ) {
+            tcp.progress(iface, sockets, device, monotonic_millis());
+            tcp.reap_dead_owners(sockets, sunlight_ipc::process_is_alive);
+        }
+    }
+}
+
+fn first_ready(
+    owner_pid: u64,
+    identities: &[SocketIdentity],
+    interest: u32,
+    sockets: &SocketSet<'static>,
+) -> Option<(SocketIdentity, u32)> {
+    unsafe {
+        let tcp = TCP_MANAGER.as_ref()?;
+        for identity in identities {
+            match tcp.ready(owner_pid, *identity, sockets) {
+                Ok(ready)
+                    if ready.bits() != 0
+                        && (ready.bits() & interest != 0
+                            || ready.bits()
+                                & (sunlight_net::SocketReady::EOF
+                                    | sunlight_net::SocketReady::RESET
+                                    | sunlight_net::SocketReady::CLOSED
+                                    | sunlight_net::SocketReady::ERROR)
+                                != 0) =>
+                {
+                    return Some((*identity, ready.bits()))
+                }
+                Ok(_) | Err(TcpError::WouldBlock) => {}
+                Err(error) => return Some((*identity, socket_ready_error(error))),
+            }
+        }
+    }
+    None
+}
+
+fn socket_ready_error(error: TcpError) -> u32 {
+    match error {
+        TcpError::Reset => sunlight_net::SocketReady::RESET,
+        TcpError::Closed => sunlight_net::SocketReady::CLOSED,
+        _ => sunlight_net::SocketReady::ERROR,
+    }
+}
+
+fn wait_reply(status: u64, identity: SocketIdentity, ready_bits: u32) -> IpcMsg {
+    IpcMsg::with_label(NetOp::WAIT)
+        .word(0, status)
+        .word(1, identity.0)
+        .word(2, ready_bits as u64)
+}
+
+fn handle_wait(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> Option<IpcMsg> {
+    let count = (msg.words[0] as usize).min(MAX_WAIT_SET);
+    let timeout_ms = msg.words[1];
+    let interest = if msg.words[2] == 0 {
+        u32::MAX
+    } else {
+        msg.words[2] as u32
+    };
+    if count == 0 || msg.caps[0] == CapabilityToken::INVALID {
+        return Some(wait_reply(NetStatus::INVALID_STATE, SocketIdentity::INVALID, 0));
+    }
+    let page = match shm_map(msg.caps[0]) {
+        Ok(ptr) => ptr,
+        Err(_) => return Some(wait_reply(NetStatus::INTERNAL, SocketIdentity::INVALID, 0)),
+    };
+    let identities = unsafe {
+        core::slice::from_raw_parts(page as *const u64, count)
+            .iter()
+            .copied()
+            .map(SocketIdentity)
+            .collect::<alloc::vec::Vec<_>>()
+    };
+    if identities.iter().any(|identity| *identity == SocketIdentity::INVALID) {
+        return Some(wait_reply(NetStatus::INVALID_SOCKET, SocketIdentity::INVALID, 0));
+    }
+    if let Some((identity, ready)) = first_ready(msg.badge, &identities, interest, sockets) {
+        return Some(wait_reply(NetStatus::OK, identity, ready));
+    }
+    if timeout_ms == 0 {
+        return Some(wait_reply(NetStatus::WOULD_BLOCK, SocketIdentity::INVALID, 0));
+    }
+    let completion_token = match ipc_defer_reply() {
+        Ok(token) => token,
+        Err(error) => {
+            return Some(wait_reply(
+                socket_status(Some(match error {
+                    sunlight_ipc::IpcError::QueueFull => TcpError::NoSlots,
+                    _ => TcpError::SocketError,
+                })),
+                SocketIdentity::INVALID,
+                0,
+            ));
+        }
+    };
+    unsafe {
+        let waiters = WAITERS.as_mut().expect("waiter table initialized");
+        if waiters.len() >= MAX_WAITERS {
+            let _ = ipc_complete_deferred_reply(
+                completion_token,
+                wait_reply(NetStatus::NO_SLOTS, SocketIdentity::INVALID, 0),
+            );
+            return None;
+        }
+        waiters.push(SocketWaiter {
+            completion_token,
+            owner_pid: msg.badge,
+            identities,
+            interest,
+            deadline_ms: monotonic_millis().saturating_add(timeout_ms),
+        });
+    }
+    None
+}
+
+fn complete_waiters(sockets: &mut SocketSet<'static>) {
+    let now = monotonic_millis();
+    let mut pending = unsafe {
+        core::mem::take(WAITERS.as_mut().expect("waiter table initialized"))
+    };
+    let mut retained = alloc::vec::Vec::with_capacity(pending.len());
+    for waiter in pending.drain(..) {
+        if !ipc_deferred_reply_is_live(waiter.completion_token) {
+            continue;
+        }
+        let reply = if let Some((identity, ready)) =
+            first_ready(waiter.owner_pid, &waiter.identities, waiter.interest, sockets)
+        {
+            Some(wait_reply(NetStatus::OK, identity, ready))
+        } else if now >= waiter.deadline_ms {
+            Some(wait_reply(NetStatus::TIMEOUT, SocketIdentity::INVALID, 0))
+        } else {
+            None
+        };
+        if let Some(reply) = reply {
+            let _ = ipc_complete_deferred_reply(waiter.completion_token, reply);
+        } else {
+            retained.push(waiter);
+        }
+    }
+    unsafe {
+        *WAITERS.as_mut().expect("waiter table initialized") = retained;
+    }
 }
 
 fn pack_ipv4(ip: [u8; 4]) -> u64 {

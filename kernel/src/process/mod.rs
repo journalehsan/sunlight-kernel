@@ -73,6 +73,12 @@ pub struct IpcReplyTarget {
     pub call: IpcCallId,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeferredIpcReply {
+    pub token: u64,
+    pub target: IpcReplyTarget,
+}
+
 pub struct Process {
     pub pid: usize,
     pub ppid: usize, // parent pid
@@ -118,6 +124,8 @@ pub struct Process {
     pub ipc_recv_generation: u64,
     pub pending_reply_wait: Option<(u32, IpcMsg)>,
     pub ipc_reply_target: Option<IpcReplyTarget>,
+    pub deferred_reply_targets: VecDeque<DeferredIpcReply>,
+    pub next_deferred_reply_token: u64,
     pub fd_table: alloc::boxed::Box<fd_table::FdTable>,
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
@@ -323,6 +331,8 @@ impl Process {
             ipc_recv_generation: 0,
             pending_reply_wait: None,
             ipc_reply_target: None,
+            deferred_reply_targets: VecDeque::new(),
+            next_deferred_reply_token: 0,
             fd_table: fd_table::FdTable::new_boxed(),
             capability_mode: false,
             signal_state: signal::SignalState::new(),
@@ -478,6 +488,8 @@ impl Process {
             ipc_recv_generation: 0,
             pending_reply_wait: None,
             ipc_reply_target: None,
+            deferred_reply_targets: VecDeque::new(),
+            next_deferred_reply_token: 0,
             fd_table,
             capability_mode: false,
             signal_state: signal::SignalState::new(),

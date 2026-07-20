@@ -557,10 +557,10 @@ use host::{
 mod sunlight {
     use super::*;
     use sunlight_ipc::{
-        debug_log, ipc_call, nameserver_lookup, shm_alloc, shm_free, shm_map, CapabilityToken,
-        IpcMsg,
+        debug_log, ipc_call, ipc_call_timeout, nameserver_lookup, shm_alloc, shm_free, shm_map,
+        CapabilityToken, IpcMsg,
     };
-    use sunlight_net::netop::NetOp;
+    use sunlight_net::netop::{NetOp, NetReady, NetStatus};
 
     // Maximum bytes packed into one IPC call. Register IPC transports only
     // words[0..4] (r8/r9/r10/r12). words[0]=socket_id, words[1]=length, so
@@ -589,7 +589,7 @@ mod sunlight {
     const TLS_SHM_PAGE: usize = 4096;
 
     pub(super) enum OsConnection {
-        Tcp { socket_id: u32 },
+        Tcp { socket_id: u64 },
         // Plaintext-only TLS session in the daemon. `rx` buffers decrypted bytes
         // returned by a TLS_RECV (up to one page) that didn't fit the caller's
         // (48-byte) read buffer, so no data is lost across read_some calls.
@@ -655,7 +655,7 @@ mod sunlight {
             .ok_or_else(|| FetchError::IpcError(String::from("net service unavailable")))
     }
 
-    fn net_socket() -> FetchResult<u32> {
+    fn net_socket() -> FetchResult<u64> {
         let cap = net_cap()?;
         let reply = ipc_call(cap, IpcMsg::with_label(NetOp::SOCKET));
         if reply.label != NetOp::SOCKET || reply.words[0] == 0 {
@@ -663,15 +663,15 @@ mod sunlight {
                 "socket allocation failed",
             )));
         }
-        Ok(reply.words[0] as u32)
+        Ok(reply.words[0])
     }
 
-    fn net_connect(socket_id: u32, addr: &ResolvedAddr, port: u16) -> FetchResult<()> {
+    fn net_connect(socket_id: u64, addr: &ResolvedAddr, port: u16) -> FetchResult<()> {
         let cap = net_cap()?;
         let reply = ipc_call(
             cap,
             IpcMsg::with_label(NetOp::CONNECT)
-                .word(0, socket_id as u64)
+                .word(0, socket_id)
                 .word(1, pack_ipv4(addr.octets))
                 .word(2, port as u64),
         );
@@ -685,10 +685,10 @@ mod sunlight {
                 reason: String::from("TCP connect failed"),
             });
         }
-        Ok(())
+        net_wait_ready(socket_id, 20_000, NetReady::WRITE)
     }
 
-    fn net_send(socket_id: u32, data: &[u8]) -> FetchResult<()> {
+    fn net_send(socket_id: u64, data: &[u8]) -> FetchResult<()> {
         let cap = net_cap()?;
         let mut offset = 0usize;
         while offset < data.len() {
@@ -700,12 +700,16 @@ mod sunlight {
                 core::ptr::copy_nonoverlapping(data[offset..].as_ptr(), ptr, chunk_len);
             }
             let msg = IpcMsg::with_label(NetOp::SEND_SHM)
-                .word(0, socket_id as u64)
+                .word(0, socket_id)
                 .word(1, chunk_len as u64)
                 .with_cap(0, tok);
             let reply = ipc_call(cap, msg);
             let _ = shm_free(tok);
             let sent = reply.words[0] as usize;
+            if reply.words[1] == NetStatus::WOULD_BLOCK {
+                net_wait_ready(socket_id, 8_000, NetReady::WRITE)?;
+                continue;
+            }
             if sent == 0 {
                 return Err(FetchError::IoError(String::from("TCP send failed")));
             }
@@ -714,16 +718,23 @@ mod sunlight {
         Ok(())
     }
 
-    fn net_recv(socket_id: u32, max_len: usize) -> FetchResult<Vec<u8>> {
+    fn net_recv(socket_id: u64, max_len: usize) -> FetchResult<Vec<u8>> {
         let cap = net_cap()?;
         let want = max_len.min(SHM_PAGE).max(1);
         let reply = ipc_call(
             cap,
             IpcMsg::with_label(NetOp::RECV_SHM)
-                .word(0, socket_id as u64)
+                .word(0, socket_id)
                 .word(1, want as u64),
         );
         if reply.label != NetOp::RECV_SHM {
+            return Err(FetchError::IoError(String::from("TCP recv failed")));
+        }
+        if reply.words[1] == NetStatus::WOULD_BLOCK {
+            net_wait_ready(socket_id, 8_000, NetReady::READ)?;
+            return net_recv(socket_id, max_len);
+        }
+        if reply.words[1] != NetStatus::OK && reply.words[1] != NetStatus::EOF {
             return Err(FetchError::IoError(String::from("TCP recv failed")));
         }
         let len = (reply.words[0] as usize).min(SHM_PAGE);
@@ -742,13 +753,38 @@ mod sunlight {
         Ok(v)
     }
 
-    fn net_close(socket_id: u32) -> FetchResult<()> {
+    fn net_close(socket_id: u64) -> FetchResult<()> {
         let cap = net_cap()?;
         let _ = ipc_call(
             cap,
-            IpcMsg::with_label(NetOp::CLOSE).word(0, socket_id as u64),
+            IpcMsg::with_label(NetOp::CLOSE).word(0, socket_id),
         );
         Ok(())
+    }
+
+    fn net_wait_ready(socket_id: u64, timeout_ms: u64, interest: u64) -> FetchResult<()> {
+        let cap = net_cap()?;
+        let (ptr, tok) = shm_alloc()
+            .map_err(|_| FetchError::IpcError(String::from("shm_alloc failed (TCP wait)")))?;
+        unsafe {
+            *(ptr as *mut u64) = socket_id;
+        }
+        let reply = ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(NetOp::WAIT)
+                .word(0, 1)
+                .word(1, timeout_ms)
+                .word(2, interest)
+                .with_cap(0, tok),
+            timeout_ms.saturating_add(100),
+        );
+        let _ = shm_free(tok);
+        let reply = reply.map_err(|_| FetchError::IoError(String::from("TCP wait timed out")))?;
+        if reply.words[0] == NetStatus::OK {
+            Ok(())
+        } else {
+            Err(FetchError::IoError(String::from("TCP wait failed")))
+        }
     }
 
     fn pack_ipv4(ip: [u8; 4]) -> u64 {

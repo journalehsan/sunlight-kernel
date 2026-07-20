@@ -26,7 +26,7 @@ pub use hosts::{parse_hosts, HostsTable};
 pub use netop::NetOp;
 pub use proxy_device::ProxyNetDevice;
 pub use sunlight_ipc::{NetBackendEvent, Vmxnet3ErrorCode, Vmxnet3InitStage};
-pub use tcp::{TcpError, TcpManager};
+pub use tcp::{SocketIdentity, SocketReady, TcpError, TcpManager};
 pub use virtio_net::{NetError, VirtioNet, VirtioNetHeader, QUEUE_PAGES_PER_NET_QUEUE};
 pub use vmxnet3::{
     FirstTxDescriptor, Vmxnet3, Vmxnet3InitError, Vmxnet3InitEvent, Vmxnet3PersistentState,

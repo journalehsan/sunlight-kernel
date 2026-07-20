@@ -450,6 +450,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         12 => nameserver_endpoint_validate(frame.rdi, frame.rsi),
         13 => endpoint_destroy(frame.rdi),
         14 => nameserver_diagnostic_event(frame.rdi),
+        15 => ipc_defer_reply(),
+        16 => ipc_complete_deferred_reply(frame),
+        17 => ipc_deferred_reply_is_live(frame.rdi),
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
         22 => thread_spawn(frame),
@@ -854,6 +857,38 @@ fn ipc_reply(frame: &mut SyscallFrame) -> u64 {
             Err(e) => e as u64,
         }
     })
+}
+
+fn ipc_defer_reply() -> u64 {
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let server_pid = sched.current_process().pid;
+    match crate::ipc::defer_current_reply(server_pid, &mut sched) {
+        Ok(token) => token,
+        Err(error) => error as u64,
+    }
+}
+
+fn ipc_complete_deferred_reply(frame: &mut SyscallFrame) -> u64 {
+    let token = frame.rsi;
+    let reply = IpcMsg::from_registers(frame);
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let server_pid = sched.current_process().pid;
+    let endpoint_id = match crate::ipc::deferred_reply_endpoint(server_pid, token, &sched) {
+        Ok(endpoint_id) => endpoint_id,
+        Err(error) => return error as u64,
+    };
+    crate::ipc::with_shard(endpoint_id, |bus| {
+        match crate::ipc::complete_deferred_reply(server_pid, token, reply, &mut sched, bus) {
+            Ok(()) => 0,
+            Err(error) => error as u64,
+        }
+    })
+}
+
+fn ipc_deferred_reply_is_live(token: u64) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    let server_pid = sched.current_process().pid;
+    u64::from(crate::ipc::deferred_reply_is_live(server_pid, token, &sched))
 }
 
 fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {

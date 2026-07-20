@@ -1913,6 +1913,14 @@ impl Scheduler {
         self.processes[idx].ipc_recv_timeout = None;
         self.processes[idx].pending_reply_wait = None;
         self.processes[idx].ipc_reply_target = None;
+        self.processes[idx].deferred_reply_targets.clear();
+        self.processes[idx].next_deferred_reply_token = 0;
+        let dead_pid = self.processes[idx].pid;
+        for process in &mut self.processes {
+            process
+                .deferred_reply_targets
+                .retain(|entry| entry.target.call.pid != dead_pid);
+        }
         self.processes[idx].capabilities.clear();
         // The dying context has already pivoted to its per-core static idle
         // stack. Drop the task-local kernel stack before exposing Reaped.
