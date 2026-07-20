@@ -106,6 +106,72 @@ boot instead of jumping straight to the desktop. The same deferral removes the
 old startup present, which used to overwrite the login screen on the Limine
 backend too.
 
+Selection requires a fully usable backend, in this order:
+
+1. VirtIO GPU after resource creation and backing attachment succeed.
+2. VMware SVGA II after kernel activation and framebuffer-layout validation.
+3. The original Limine framebuffer as the explicit immutable fallback.
+
+The Limine descriptor is authoritative and read-only: width, height, pitch,
+bits per pixel, RGB mask layout, mapped address, and mapped length are adopted
+together. `pitch * height` is checked for overflow and must fit the mapped
+length; unsupported channel layouts are rejected rather than treated as generic
+32-bpp XRGB. User aliases inherit the complete Limine page-cache selection,
+including the 4 KiB PAT leaf bit used for write-combining, so the TTY and
+display service do not create a conflicting write-back alias of firmware
+framebuffer memory.
+Limine never reads `display.vmware.mode`, starts a preview transaction, invokes
+SVGA modesetting, or treats a Recommended UI entry as a boot-time request.
+While the TTY login owns Limine, `sunlight-display` publishes capabilities but
+defers allocating and painting its compositor buffer until `SESSION_ACTIVATE`.
+
+## Physical Limine Cache-Alias Regression
+
+The physical-laptop regression fixed on July 20, 2026 presented as a partially
+painted login wallpaper, the old splash footer (`Status: OK`) remaining visible,
+and a missing login form. The login service and input path were still alive; the
+login renderer itself was not the defect.
+
+The first broken boundary was the user mapping of the Limine framebuffer. The
+kernel splash used Limine's original write-combining mapping, but the TTY and
+display-service aliases were created through the generic user-page mapper. That
+mapper preserved PCD/PWT but not the 4 KiB leaf PAT bit, so the same physical
+framebuffer was accessed through both WC and WB mappings. Real hardware could
+retain or reorder those writes, while QEMU happened to tolerate the conflicting
+aliases. This explains why different boots exposed different amounts of the
+login background without proving a login race or framebuffer bounds failure.
+
+On x86_64, Limine's mapping selects PAT entry 5 for WC with PWT plus the leaf
+PAT bit. At the P1/4 KiB level, bit 7 is PAT, not the huge-page flag. Every
+virtual alias of the same framebuffer physical range must reproduce the
+original cache type; do not force WB and do not replace WC with UC merely to
+avoid the alias conflict. Preserve PCD, PWT, and the leaf PAT selection
+together.
+
+When diagnosing a similar physical-only failure:
+
+1. Record the Limine physical base, virtual base, width, height, pitch, bpp,
+   pixel masks, page offset, and mapped length.
+2. Compute `required_len = pitch.checked_mul(height)`; never substitute
+   `width * height * 4`.
+3. Include the physical page offset when sizing the page mapping and verify the
+   returned visible mapping still covers `required_len`.
+4. Compare the kernel/HHDM framebuffer cache attributes with every TTY and
+   display-service alias.
+5. Require `[BOOT-DISPLAY] tty mapping cache=wc ...` and
+   `[DISPLAY-LIMINE] mapping cache=wc ...` before treating the mapping as valid.
+6. Confirm the Limine backend remains immutable, retains firmware geometry, and
+   performs no runtime mode request or VMware preference lookup.
+7. Confirm `[LOGIN-TUI] background complete`, `status bar complete`,
+   `form complete`, `first frame complete`, and `input ready`.
+
+The physical repair must be tested independently of VMware and VirtIO. Build
+with `./runs.sh --build`, boot the resulting `target/sunlightos.iso`, record the
+actual Limine geometry, type in the login fields, complete login, test Ctrl+F1
+and Ctrl+F2, leave the system running to catch late display-service faults, and
+repeat cold and warm boots. The July 20, 2026 laptop test completed this
+procedure successfully: the complete login TUI became visible and usable.
+
 The scanout resource is created with `VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM`
 (memory bytes B,G,R,X — a little-endian u32 holding `0x00RRGGBB`, matching the
 compositor back buffer). It was previously `X8R8G8B8_UNORM`, which swapped the
@@ -170,13 +236,24 @@ in the default kernel. It was left out because the required Limine command-line
 request needs separate boot validation; unsupported or unsafe bootloader
 requests must not break the safe framebuffer fallback.
 
+For a QEMU Limine-only regression boot:
+
+```bash
+./runs.sh --limine-only
+```
+
+Expected serial boundaries are `VirtIO GPU not present`, `VMware SVGA II ...
+not present`, `display_backend=Limine`, `[LOGIN-TUI] first frame complete`, and
+`[LOGIN-TUI] input ready`. The display service must not acquire framebuffer
+ownership or clear/present it before an authenticated desktop activation.
+
 VMware and VirtualBox launcher paths do not yet negotiate guest display modes
 from this repo. On VMware, use the boot logs to confirm whether the firmware
 exposed `1366x768`, `1280x800`, or `1280x720`.
 
 ## Scope And Limitations
 
-- Physical hardware boot/display behavior is intentionally unchanged.
+- Physical framebuffer geometry remains firmware-authoritative.
 - VMware and VirtualBox remain hypervisor-managed in this patch; the current
   repo launcher paths for them do not yet negotiate guest modes.
 - No display settings UI is added here.

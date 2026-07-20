@@ -647,6 +647,7 @@ pub extern "C" fn _start() -> ! {
             map_tty_framebuffer(
                 &mut tty,
                 &mut pmm,
+                &vmm,
                 hhdm_offset,
                 fb.address() as u64,
                 fb.pitch as u64,
@@ -993,18 +994,17 @@ pub extern "C" fn _start() -> ! {
                 } else {
                     // Host/window hint from the boot framebuffer (often the VM
                     // window size). Policy may still upgrade below min-HD.
-                    let (host_w, host_h, boot_fb_phys) =
-                        if let Some(fb_resp) = FB_REQ.response() {
-                            if let Some(fb) = fb_resp.framebuffers().first() {
-                                let addr = fb.address() as u64;
-                                let phys = if addr >= hhdm { addr - hhdm } else { addr };
-                                (fb.width as u32, fb.height as u32, Some(phys))
-                            } else {
-                                (0, 0, None)
-                            }
+                    let (host_w, host_h, boot_fb_phys) = if let Some(fb_resp) = FB_REQ.response() {
+                        if let Some(fb) = fb_resp.framebuffers().first() {
+                            let addr = fb.address() as u64;
+                            let phys = if addr >= hhdm { addr - hhdm } else { addr };
+                            (fb.width as u32, fb.height as u32, Some(phys))
                         } else {
                             (0, 0, None)
-                        };
+                        }
+                    } else {
+                        (0, 0, None)
+                    };
 
                     // Probe-only diagnostics first (no mode change yet).
                     match unsafe { sunlight_virtio::VmwareSvga::probe_device(&info) } {
@@ -1133,7 +1133,8 @@ pub extern "C" fn _start() -> ! {
             }
             Err(error) => {
                 serial_println!("[SVGA] PCI probe error: {:?}", error);
-                if let Some((bus, slot, func)) = unsafe { sunlight_virtio::find_vmware_svga_bdf() } {
+                if let Some((bus, slot, func)) = unsafe { sunlight_virtio::find_vmware_svga_bdf() }
+                {
                     hardware_inventory::update_pci(
                         bus,
                         slot,
@@ -1758,6 +1759,14 @@ fn log_boot_firmware_diagnostics() {
 
     if let Some(fb_resp) = FB_REQ.response() {
         if let Some(fb) = fb_resp.framebuffers().first() {
+            let hhdm = HHDM_REQ.response().map_or(0, |response| response.offset);
+            let address = fb.address() as u64;
+            let physical = if address >= hhdm {
+                address - hhdm
+            } else {
+                address
+            };
+            let mapped_len = fb.pitch.checked_mul(fb.height).unwrap_or(0);
             serial_println!(
                 "[BOOT] framebuffer: {}x{} pitch={} bpp={} model={}",
                 fb.width,
@@ -1765,6 +1774,15 @@ fn log_boot_firmware_diagnostics() {
                 fb.pitch,
                 fb.bpp,
                 fb.memory_model
+            );
+            serial_println!(
+                "[BOOT-DISPLAY] limine response base={:#x} width={} height={} pitch={} bpp={} mapped_len={}",
+                physical,
+                fb.width,
+                fb.height,
+                fb.pitch,
+                fb.bpp,
+                mapped_len
             );
         } else {
             serial_println!("[BOOT] framebuffer: response present but empty list");
@@ -1791,6 +1809,7 @@ fn log_boot_firmware_diagnostics() {
 fn map_tty_framebuffer(
     tty: &mut Process,
     pmm: &mut PhysicalMemoryManager,
+    vmm: &VirtualMemoryManager,
     hhdm_offset: VirtAddr,
     fb_addr: u64,
     fb_pitch: u64,
@@ -1803,15 +1822,48 @@ fn map_tty_framebuffer(
         fb_addr
     };
     let fb_page_offset = fb_phys_base & 0xfff;
-    let page_count = ((fb_page_offset + fb_pitch * fb_height) + 4095) / 4096;
+    let required_len = fb_pitch
+        .checked_mul(fb_height)
+        .expect("boot framebuffer required length overflow");
+    assert!(required_len != 0, "boot framebuffer has zero length");
+    let total_bytes = fb_page_offset
+        .checked_add(required_len)
+        .expect("boot framebuffer page offset overflow");
+    let page_count = total_bytes
+        .checked_add(4095)
+        .expect("boot framebuffer page rounding overflow")
+        / 4096;
+    let hhdm_fb = hhdm
+        .checked_add(fb_phys_base)
+        .expect("boot framebuffer HHDM address overflow");
+    let cache_policy = unsafe {
+        vmm.framebuffer_cache_policy(VirtAddr::new(hhdm_fb), hhdm_offset)
+            .expect("boot framebuffer is not mapped by Limine")
+    };
     let flags = PageTableFlags::PRESENT
         | process::address_space::AddressSpace::protection_to_pte_flags(
             process::region::RegionProtection::READ_WRITE,
         )
-        .expect("framebuffer protection");
+        .expect("framebuffer protection")
+        | cache_policy.pte_flags;
+    let mapped_len = page_count
+        .checked_mul(4096)
+        .and_then(|bytes| bytes.checked_sub(fb_page_offset))
+        .expect("boot framebuffer mapped length overflow");
+    serial_println!(
+        "[BOOT-DISPLAY] tty mapping cache={} pages={} required_len={} mapped_len={}",
+        framebuffer_cache_label(cache_policy.pte_flags, cache_policy.leaf_pat),
+        page_count,
+        required_len,
+        mapped_len
+    );
 
     let end = TTY_FB_VADDR
-        .checked_add(page_count * 4096)
+        .checked_add(
+            page_count
+                .checked_mul(4096)
+                .expect("boot framebuffer virtual span overflow"),
+        )
         .expect("boot framebuffer range overflow");
     let region = process::region::MappingRegion::new(
         TTY_FB_VADDR,
@@ -1840,13 +1892,36 @@ fn map_tty_framebuffer(
         let fb_frame = unsafe { PhysFrame::from_start_address_unchecked(fb_phys) };
         unsafe {
             tty.address_space
-                .map_page(user_page, fb_frame, flags, pmm, hhdm_offset)
+                .map_framebuffer_page(
+                    user_page,
+                    fb_frame,
+                    flags,
+                    cache_policy.leaf_pat,
+                    pmm,
+                    hhdm_offset,
+                )
                 .expect("boot framebuffer mapping failed");
         }
     }
     tty.address_space
         .commit_region(reservation)
         .expect("boot framebuffer ledger commit");
+}
+
+fn framebuffer_cache_label(flags: PageTableFlags, leaf_pat: bool) -> &'static str {
+    match (
+        leaf_pat,
+        flags.contains(PageTableFlags::NO_CACHE),
+        flags.contains(PageTableFlags::WRITE_THROUGH),
+    ) {
+        (true, false, true) => "wc",
+        (true, false, false) => "wp",
+        (true, true, _) => "pat-uc",
+        (false, true, true) => "uc",
+        (false, true, false) => "uc-minus",
+        (false, false, true) => "wt",
+        (false, false, false) => "wb",
+    }
 }
 
 fn map_kernel_mmio_range(

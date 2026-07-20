@@ -610,6 +610,34 @@ impl AddressSpace {
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<(), MappingError> {
+        unsafe { self.map_page_with_leaf_pat(page, phys, flags, false, pmm, hhdm_offset) }
+    }
+
+    /// Map device framebuffer memory while preserving the x86 P1 PAT selector.
+    /// At a 4 KiB leaf, architectural bit 7 selects PAT rather than a huge page.
+    /// SAFETY: `hhdm_offset` and the cache policy must describe the same device
+    /// memory mapping supplied by the bootloader or device backend.
+    pub unsafe fn map_framebuffer_page(
+        &mut self,
+        page: Page<Size4KiB>,
+        phys: PhysFrame<Size4KiB>,
+        flags: PageTableFlags,
+        leaf_pat: bool,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), MappingError> {
+        unsafe { self.map_page_with_leaf_pat(page, phys, flags, leaf_pat, pmm, hhdm_offset) }
+    }
+
+    unsafe fn map_page_with_leaf_pat(
+        &mut self,
+        page: Page<Size4KiB>,
+        phys: PhysFrame<Size4KiB>,
+        flags: PageTableFlags,
+        leaf_pat: bool,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), MappingError> {
         if flags.contains(PageTableFlags::USER_ACCESSIBLE)
             && flags.contains(PageTableFlags::WRITABLE)
             && !flags.contains(PageTableFlags::NO_EXECUTE)
@@ -650,7 +678,12 @@ impl AddressSpace {
             Self::rollback_created_tables(&mut created, self.identity, page, pmm);
             return Err(MappingError::AlreadyMapped);
         }
-        p1_entry.set_frame(phys, flags);
+        let leaf_flags = if leaf_pat {
+            flags | PageTableFlags::HUGE_PAGE
+        } else {
+            flags
+        };
+        p1_entry.set_addr(phys.start_address(), leaf_flags);
         Ok(())
     }
 

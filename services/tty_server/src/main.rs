@@ -48,6 +48,7 @@ use sunlight_tui::ANSI_COLORS;
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    debug_log("[LOGIN-TUI] panic stage=runtime");
     loop {}
 }
 
@@ -484,6 +485,7 @@ impl ShellTab {
 #[no_mangle]
 pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: u64) -> ! {
     debug_log("[TTY]  TTY server started");
+    debug_log("[LOGIN-TUI] service started");
 
     let has_fb = fb_addr != 0 && fb_width != 0 && fb_height != 0 && fb_pitch != 0;
     let fb32_w = fb_width as u32;
@@ -493,6 +495,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
     if has_fb {
         debug_log("[TTY] Framebuffer acquired");
+        debug_log("[LOGIN-TUI] metrics acquired");
+        debug_log("[LOGIN-TUI] background begin");
         unsafe {
             sunlight_tui::render_login_screen(
                 fb_addr as *mut u32,
@@ -504,6 +508,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         }
         mouse.draw_overlay(fb_addr, fb32_w, fb32_h, fb32_p);
         debug_log("[TTY] Login rendered");
+        debug_log("[LOGIN-TUI] first frame complete");
     }
 
     let ep = endpoint_create();
@@ -519,6 +524,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     if nameserver_register("tty", ep) {
         debug_log("[TTY]  Registered as 'tty'");
         debug_log("[TTY]  Login screen ready");
+        debug_log("[LOGIN-TUI] input ready");
     } else {
         debug_log("[TTY]  FATAL: nameserver_register('tty') failed — keyboard will not work");
     }

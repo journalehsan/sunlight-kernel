@@ -3345,6 +3345,108 @@ fn alloc_page_aligned_pixels(words: usize, fill: u32) -> Vec<u32> {
     pixels
 }
 
+fn validate_framebuffer_layout(
+    width: u32,
+    height: u32,
+    pitch_bytes: u32,
+    bits_per_pixel: u32,
+    mapped_len: u64,
+    memory_model: u8,
+    red_mask_size: u8,
+    red_mask_shift: u8,
+    green_mask_size: u8,
+    green_mask_shift: u8,
+    blue_mask_size: u8,
+    blue_mask_shift: u8,
+) -> Option<(usize, u64)> {
+    validate_size(width, height)?;
+    if bits_per_pixel != 32 || pitch_bytes % 4 != 0 {
+        return None;
+    }
+    if memory_model != 1
+        || (red_mask_size, red_mask_shift) != (8, 16)
+        || (green_mask_size, green_mask_shift) != (8, 8)
+        || (blue_mask_size, blue_mask_shift) != (8, 0)
+    {
+        return None;
+    }
+    if pitch_bytes < width.checked_mul(4)? {
+        return None;
+    }
+    let required_len = (pitch_bytes as u64).checked_mul(height as u64)?;
+    if required_len > mapped_len {
+        return None;
+    }
+    Some(((pitch_bytes / 4) as usize, required_len))
+}
+
+fn ensure_compositor_buffer(state: &mut CompositorState) -> bool {
+    if !state.back_buffer.is_empty() {
+        return true;
+    }
+    let Some(words) = (state.fb_pitch as usize / 4).checked_mul(state.fb_height as usize) else {
+        debug_log("[DISPLAY] buffer allocation rejected: size overflow\n");
+        return false;
+    };
+    state.back_buffer = alloc_page_aligned_pixels(words, DESKTOP_COLOR);
+    if state.back_buffer.is_empty() {
+        debug_log("[DISPLAY] buffer allocation failed\n");
+        return false;
+    }
+    debug_log("[DISPLAY] buffers ready\n");
+    clear_back_buffer(state);
+    true
+}
+
+fn ensure_limine_framebuffer_mapped(state: &mut CompositorState) -> bool {
+    let backend::DisplayBackend::Limine { fb, pitch_words } = state.display_backend else {
+        return true;
+    };
+    if !fb.is_null() {
+        return true;
+    }
+    let Some((mapped_fb, info)) = sunlight_ipc::map_limine_framebuffer() else {
+        debug_log("[DISPLAY-LIMINE] framebuffer map failed\n");
+        return false;
+    };
+    let Some((mapped_pitch_words, required_len)) = validate_framebuffer_layout(
+        info.width,
+        info.height,
+        info.pitch_bytes,
+        info.bits_per_pixel,
+        info.mapped_len,
+        info.memory_model,
+        info.red_mask_size,
+        info.red_mask_shift,
+        info.green_mask_size,
+        info.green_mask_shift,
+        info.blue_mask_size,
+        info.blue_mask_shift,
+    ) else {
+        debug_log("[DISPLAY-LIMINE] mapped layout invalid\n");
+        return false;
+    };
+    if info.width != state.fb_width
+        || info.height != state.fb_height
+        || info.pitch_bytes != state.fb_pitch
+        || mapped_pitch_words != pitch_words
+    {
+        debug_log("[DISPLAY-LIMINE] descriptor changed before ownership handoff\n");
+        return false;
+    }
+    state.fb = mapped_fb as *mut u32;
+    state.display_backend = backend::DisplayBackend::Limine {
+        fb: mapped_fb as *mut u32,
+        pitch_words: mapped_pitch_words,
+    };
+    debug_log("[DISPLAY-LIMINE] framebuffer mapped required_len=");
+    debug_dec_u64(required_len);
+    debug_log(" mapped_len=");
+    debug_dec_u64(info.mapped_len);
+    debug_log("\n");
+    true
+}
+
 /// Log a kernel GPU proxy failure with its reason and step-specific detail
 /// word (VirtIO response code, failing page index, or sg entry count).
 fn log_gpu_proxy_error(step: &str, e: sunlight_ipc::gpu_proxy::GpuProxyError) {
@@ -4019,6 +4121,51 @@ mod tests {
     use super::*;
     use alloc::vec;
 
+    #[test]
+    fn framebuffer_layout_accepts_non_tight_pitch() {
+        assert_eq!(
+            validate_framebuffer_layout(1024, 768, 4352, 32, 4352 * 768, 1, 8, 16, 8, 8, 8, 0),
+            Some((1088, 4352 * 768))
+        );
+    }
+
+    #[test]
+    fn framebuffer_layout_rejects_short_mapping() {
+        assert_eq!(
+            validate_framebuffer_layout(
+                1920,
+                1080,
+                7680,
+                32,
+                7680 * 1080 - 1,
+                1,
+                8,
+                16,
+                8,
+                8,
+                8,
+                0,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn framebuffer_layout_rejects_invalid_pitch_or_format() {
+        assert_eq!(
+            validate_framebuffer_layout(1280, 800, 5116, 32, 5116 * 800, 1, 8, 16, 8, 8, 8, 0),
+            None
+        );
+        assert_eq!(
+            validate_framebuffer_layout(1280, 800, 5120, 24, 5120 * 800, 1, 8, 16, 8, 8, 8, 0),
+            None
+        );
+        assert_eq!(
+            validate_framebuffer_layout(1280, 800, 5120, 32, 5120 * 800, 1, 8, 0, 8, 8, 8, 16,),
+            None
+        );
+    }
+
     fn test_window(
         id: u64,
         x: u32,
@@ -4638,18 +4785,38 @@ pub extern "C" fn _start() -> ! {
     nameserver_register("display_server", my_ep);
     debug_log("[DISPLAY] registered as display_server\n");
 
-    let (fb_ptr, packed_wh, pitch, bpp) = match sunlight_ipc::map_framebuffer() {
+    let framebuffer_info = match sunlight_ipc::framebuffer_info() {
         Some(v) => v,
         None => {
-            debug_log("[DISPLAY] Failed to map framebuffer\n");
+            debug_log("[DISPLAY] Failed to query framebuffer\n");
             loop {}
         }
     };
 
-    let fb_width = (packed_wh & 0xffffffff) as u32;
-    let fb_height = (packed_wh >> 32) as u32;
+    let fb_width = framebuffer_info.width;
+    let fb_height = framebuffer_info.height;
+    let pitch = framebuffer_info.pitch_bytes;
+    let bpp = framebuffer_info.bits_per_pixel;
+    let mapped_len = framebuffer_info.mapped_len;
+    let Some((limine_pitch_words, limine_required_len)) = validate_framebuffer_layout(
+        fb_width,
+        fb_height,
+        pitch as u32,
+        bpp as u32,
+        mapped_len,
+        framebuffer_info.memory_model,
+        framebuffer_info.red_mask_size,
+        framebuffer_info.red_mask_shift,
+        framebuffer_info.green_mask_size,
+        framebuffer_info.green_mask_shift,
+        framebuffer_info.blue_mask_size,
+        framebuffer_info.blue_mask_shift,
+    ) else {
+        debug_log("[DISPLAY-LIMINE] layout=invalid\n");
+        loop {}
+    };
 
-    debug_log("[DISPLAY] fb ");
+    debug_log("[BOOT-DISPLAY] mapped width=");
     debug_dec(fb_width);
     debug_log("x");
     debug_dec(fb_height);
@@ -4657,7 +4824,14 @@ pub extern "C" fn _start() -> ! {
     debug_hex(pitch as u32);
     debug_log(" bpp=");
     debug_dec(bpp as u32);
+    debug_log(" mapped_len=");
+    debug_dec_u64(mapped_len);
     debug_log("\n");
+    debug_log("[DISPLAY-LIMINE] immutable=true runtime_modes=false required_len=");
+    debug_dec_u64(limine_required_len);
+    debug_log(" mapped_len=");
+    debug_dec_u64(mapped_len);
+    debug_log(" layout=valid\n");
     debug_log("[display] available mode 0: ");
     debug_dec(fb_width);
     debug_log("x");
@@ -4674,9 +4848,10 @@ pub extern "C" fn _start() -> ! {
     debug_log("\n");
 
     let limine_backend = backend::DisplayBackend::Limine {
-        fb: fb_ptr as *mut u32,
-        pitch_words: pitch as usize / 4,
+        fb: core::ptr::null_mut(),
+        pitch_words: limine_pitch_words,
     };
+    let mut fb_ptr = core::ptr::null_mut::<u8>();
 
     // Probe the VirtIO GPU. The scanout reported by GET_DISPLAY_INFO carries
     // the host's requested resolution (e.g. QEMU -device virtio-vga,xres=,yres=
@@ -4706,7 +4881,7 @@ pub extern "C" fn _start() -> ! {
             }
         },
         None => {
-            debug_log("[DISPLAY] VirtIO GPU not found, using Limine framebuffer\n");
+            debug_log("[DISPLAY-SELECT] virtio absent/not-ready\n");
             None
         }
     };
@@ -4770,40 +4945,70 @@ pub extern "C" fn _start() -> ! {
     }
 
     // VMware SVGA only when VirtIO did not become the active backend.
-    // `map_framebuffer` already returns SVGA geometry when the kernel driver is
-    // Active (modeset applied VM policy: min-HD / preferred / host window).
+    // SVGA mapping is requested explicitly only after the kernel reports an
+    // Active device (modeset applied VM policy: min-HD / preferred / host window).
     if !matches!(display_backend, backend::DisplayBackend::VirtioGpu { .. }) {
         match sunlight_ipc::svga_get_info() {
             Some(info) => match validate_size(info.width, info.height) {
                 Some((sw, sh)) if info.bpp == 32 && info.pitch_bytes >= sw.saturating_mul(4) => {
-                    // Mapped FB must match the live SVGA mode (map_framebuffer
-                    // prefers SVGA when Active). Capacity covers auto-max for resize.
+                    // Mapped FB must match the live SVGA mode. Capacity covers
+                    // auto-max for resize.
                     if sw == limine_render_w
                         && sh == limine_render_h
                         && info.pitch_bytes == limine_render_pitch
                     {
-                        display_backend = backend::DisplayBackend::VmwareSvga {
-                            aperture: unsafe { fb_ptr.sub(info.framebuffer_offset as usize) },
-                            aperture_bytes: info
-                                .map_bytes
-                                .saturating_add(info.framebuffer_offset as u64),
-                            fb: fb_ptr as *mut u32,
-                            pitch_words: (info.pitch_bytes as usize) / 4,
-                            width: sw,
-                            height: sh,
-                        };
-                        render_width = sw;
-                        render_height = sh;
-                        render_pitch = info.pitch_bytes;
-                        diag_reason = "vmware-svga-ok-policy-mode";
-                        svga_info_log = Some(info);
-                        debug_log("[DISPLAY] VMware SVGA backend selected ");
-                        debug_dim(sw, sh);
-                        debug_log(" pitch=");
-                        debug_dec(info.pitch_bytes);
-                        debug_log(" max=");
-                        debug_dim(info.max_width, info.max_height);
-                        debug_log("\n");
+                        let mapped =
+                            sunlight_ipc::map_svga_framebuffer().filter(|(_, mapped_info)| {
+                                validate_framebuffer_layout(
+                                    mapped_info.width,
+                                    mapped_info.height,
+                                    mapped_info.pitch_bytes,
+                                    mapped_info.bits_per_pixel,
+                                    mapped_info.mapped_len,
+                                    mapped_info.memory_model,
+                                    mapped_info.red_mask_size,
+                                    mapped_info.red_mask_shift,
+                                    mapped_info.green_mask_size,
+                                    mapped_info.green_mask_shift,
+                                    mapped_info.blue_mask_size,
+                                    mapped_info.blue_mask_shift,
+                                )
+                                .is_some()
+                                    && mapped_info.width == sw
+                                    && mapped_info.height == sh
+                                    && mapped_info.pitch_bytes == info.pitch_bytes
+                                    && mapped_info.bits_per_pixel == info.bpp
+                            });
+                        if let Some((mapped_fb, _)) = mapped {
+                            fb_ptr = mapped_fb;
+                            display_backend = backend::DisplayBackend::VmwareSvga {
+                                aperture: unsafe { fb_ptr.sub(info.framebuffer_offset as usize) },
+                                aperture_bytes: info
+                                    .map_bytes
+                                    .saturating_add(info.framebuffer_offset as u64),
+                                fb: fb_ptr as *mut u32,
+                                pitch_words: (info.pitch_bytes as usize) / 4,
+                                width: sw,
+                                height: sh,
+                            };
+                            render_width = sw;
+                            render_height = sh;
+                            render_pitch = info.pitch_bytes;
+                            diag_reason = "vmware-svga-ok-policy-mode";
+                            svga_info_log = Some(info);
+                            debug_log("[DISPLAY] VMware SVGA backend selected ");
+                            debug_dim(sw, sh);
+                            debug_log(" pitch=");
+                            debug_dec(info.pitch_bytes);
+                            debug_log(" max=");
+                            debug_dim(info.max_width, info.max_height);
+                            debug_log("\n");
+                        } else {
+                            diag_reason = "vmware-svga-map-invalid-limine-fallback";
+                            debug_log(
+                                "[DISPLAY] VMware SVGA framebuffer map failed or changed; keeping Limine fallback\n",
+                            );
+                        }
                     } else {
                         diag_reason = "vmware-svga-geometry-mismatch-limine-fallback";
                         debug_log("[DISPLAY] VMware SVGA ready but map geometry mismatch (svga=");
@@ -4819,6 +5024,7 @@ pub extern "C" fn _start() -> ! {
                 }
             },
             None => {
+                debug_log("[DISPLAY-SELECT] vmware absent/not-ready\n");
                 if virtio_scanout.is_none() && diag_reason == "no-virtio-gpu" {
                     // Keep the existing reason string when neither hardware backend
                     // is available; sunlight-display still has Limine.
@@ -4827,14 +5033,21 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
-    // Limine / VMware path: allocate the software back buffer now that the
-    // final render dimensions are known (VirtIO already allocated its buffer).
-    if back_buffer.is_empty() {
+    if matches!(display_backend, backend::DisplayBackend::Limine { .. }) {
+        debug_log("[DISPLAY-SELECT] selected=Limine reason=firmware-fallback\n");
+    }
+
+    // VMware needs its reusable aperture-sized buffer for runtime previews.
+    // Limine stays immutable and TTY-owned during login, so its compositor
+    // allocation and wallpaper fill are deferred until SESSION_ACTIVATE.
+    if back_buffer.is_empty()
+        && matches!(display_backend, backend::DisplayBackend::VmwareSvga { .. })
+    {
         let buffer_words = match display_backend {
             backend::DisplayBackend::VmwareSvga { aperture_bytes, .. } => {
                 (aperture_bytes / 4) as usize
             }
-            _ => (render_pitch as usize / 4) * render_height as usize,
+            _ => unreachable!(),
         };
         back_buffer = alloc_page_aligned_pixels(buffer_words, DESKTOP_COLOR);
         if back_buffer.is_empty() {
@@ -4931,12 +5144,14 @@ pub extern "C" fn _start() -> ! {
         mode_transaction: None,
     };
     log_debug_counters(&state, "startup");
-    // Prime the back_buffer content (wallpaper/desktop color) but do NOT
-    // present it: the TTY session owns the display until SESSION_ACTIVATE.
-    // Presenting here used to overwrite the login screen on the Limine
-    // backend, and on VirtIO the (deferred) scanout is not wired yet.
-    clear_back_buffer(&mut state);
+    if !state.back_buffer.is_empty() {
+        clear_back_buffer(&mut state);
+        debug_log("[DISPLAY] buffers ready\n");
+    } else {
+        debug_log("[DISPLAY] Limine buffer deferred while TTY owns framebuffer\n");
+    }
     apply_stored_vmware_mode(&mut state);
+    debug_log("[DISPLAY] metrics published generation=1\n");
 
     let mut next_win_id: u64 = 1;
     loop {
@@ -6324,12 +6539,24 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::SESSION_ACTIVATE => {
                 if !state.session_active {
                     debug_log("[DISPLAY] [SESSION] activated — Desktop owns framebuffer\n");
+                    debug_log("[DISPLAY] framebuffer ownership acquired\n");
                     // First activation on the VirtIO backend: wire the scanout
                     // now, taking the display over from the VGA/TTY output.
                     activate_virtio_scanout(&mut state);
+                    if !ensure_limine_framebuffer_mapped(&mut state) {
+                        debug_log("[DISPLAY] activation failed: framebuffer unavailable\n");
+                        let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                        continue;
+                    }
+                    if !ensure_compositor_buffer(&mut state) {
+                        debug_log("[DISPLAY] activation failed: compositor buffer unavailable\n");
+                        let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                        continue;
+                    }
                     state.session_active = true;
                     mark_dirty_full(&mut state);
                     redraw_scene(&mut state);
+                    debug_log("[DISPLAY] first clear complete\n");
                 }
                 // Keep the desktop surface present across logins/restarts.
                 ensure_vortex_shell(&mut state);

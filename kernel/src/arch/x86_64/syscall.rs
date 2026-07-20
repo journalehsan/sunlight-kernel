@@ -4074,8 +4074,8 @@ fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
 
 /// Map the physical display framebuffer into the current process for the GUI compositor.
 ///
-/// When VMware SVGA is Active, maps SVGA VRAM (large enough for auto-max modeset)
-/// and returns SVGA geometry. Otherwise maps the Limine boot framebuffer.
+/// Selector 1 queries immutable Limine metadata without mapping. Selector 2 maps
+/// Limine, and selector 3 maps VMware SVGA only when its driver is fully ready.
 /// Returns user virtual address of the start of the framebuffer (or 0 on failure).
 fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     let Some(hhdm) = crate::HHDM_REQ.response() else {
@@ -4093,11 +4093,26 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
-    // Prefer the live SVGA framebuffer when the driver owns a usable mode so
-    // modeset above the Limine boot size remains presentable.
-    let (fb_phys_base, fb_pitch, fb_height, fb_width, fb_bpp, map_bytes) = {
-        let svga = crate::SVGA_DEVICE.lock();
-        if let Some(dev) = svga.as_ref().filter(|d| d.is_ready()) {
+    let selector = frame.rdi;
+    if !matches!(selector, 1..=3) {
+        return 0;
+    }
+
+    let (
+        fb_phys_base,
+        fb_pitch,
+        fb_height,
+        fb_width,
+        fb_bpp,
+        map_bytes,
+        visible_offset,
+        pixel_format,
+    ) = {
+        if selector == 3 {
+            let svga = crate::SVGA_DEVICE.lock();
+            let Some(dev) = svga.as_ref().filter(|device| device.is_ready()) else {
+                return 0;
+            };
             let map_bytes = dev.map_bytes();
             let pitch = dev.pitch as u64;
             let height = dev.height as u64;
@@ -4108,10 +4123,17 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
             let Some(mapped_bytes) = map_bytes.checked_add(visible_offset) else {
                 return 0;
             };
-            drop(svga);
-            (phys, pitch, height, width, bpp, mapped_bytes)
+            (
+                phys,
+                pitch,
+                height,
+                width,
+                bpp,
+                mapped_bytes,
+                visible_offset,
+                1 | (8 << 8) | (16 << 16) | (8 << 24) | (8 << 32) | (8 << 40),
+            )
         } else {
-            drop(svga);
             let fb_resp = crate::FB_REQ.response();
             let fb = match fb_resp.and_then(|r| r.framebuffers().first()) {
                 Some(f) => f,
@@ -4132,11 +4154,27 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
                 Some(b) => b,
                 None => return 0,
             };
-            (phys, pitch, height, width, bpp, map_bytes)
+            let pixel_format = (fb.memory_model as u64)
+                | ((fb.red_mask_size as u64) << 8)
+                | ((fb.red_mask_shift as u64) << 16)
+                | ((fb.green_mask_size as u64) << 24)
+                | ((fb.green_mask_shift as u64) << 32)
+                | ((fb.blue_mask_size as u64) << 40)
+                | ((fb.blue_mask_shift as u64) << 48);
+            (phys, pitch, height, width, bpp, map_bytes, 0, pixel_format)
         }
     };
 
     let fb_page_offset = fb_phys_base & 0xfff;
+    frame.rsi = pixel_format;
+    frame.r8 = (fb_width as u64) | ((fb_height as u64) << 32);
+    frame.r9 = fb_pitch;
+    frame.r10 = fb_bpp as u64;
+    frame.r12 = map_bytes.saturating_sub(visible_offset);
+    if selector == 1 {
+        return 1;
+    }
+
     let total_bytes = match map_bytes.checked_add(fb_page_offset) {
         Some(bytes) => bytes,
         None => return 0,
@@ -4152,11 +4190,35 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     const DISPLAY_FB_VADDR: u64 = 0x0000_0004_0000_0000; // dedicated region for device FB
 
     let protection = crate::process::region::RegionProtection::READ_WRITE;
-    let flags =
+    let mut flags =
         match crate::process::address_space::AddressSpace::protection_to_pte_flags(protection) {
             Ok(flags) => flags,
             Err(_) => return 0,
         };
+    let mut leaf_pat = false;
+    if selector == 2 {
+        let hhdm_fb = match hhdm_offset.as_u64().checked_add(fb_phys_base) {
+            Some(address) => VirtAddr::new(address),
+            None => return 0,
+        };
+        let kernel_as = unsafe { crate::memory::vmm::VirtualMemoryManager::init(hhdm_offset) };
+        let Some(cache_policy) =
+            (unsafe { kernel_as.framebuffer_cache_policy(hhdm_fb, hhdm_offset) })
+        else {
+            return 0;
+        };
+        flags |= cache_policy.pte_flags;
+        leaf_pat = cache_policy.leaf_pat;
+        crate::serial_println!(
+            "[DISPLAY-LIMINE] mapping cache={} required_len={} mapped_len={}",
+            framebuffer_cache_label(cache_policy.pte_flags, cache_policy.leaf_pat),
+            map_bytes.saturating_sub(visible_offset),
+            page_count
+                .checked_mul(4096)
+                .and_then(|bytes| bytes.checked_sub(fb_page_offset))
+                .unwrap_or(0)
+        );
+    }
 
     for page_idx in 0..page_count {
         let Some(user_va) = DISPLAY_FB_VADDR.checked_add(page_idx * 4096) else {
@@ -4200,9 +4262,14 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
         let phys = (fb_phys_base & !0xfff) + page_idx * 4096;
         let fb_frame = unsafe { PhysFrame::from_start_address_unchecked(PhysAddr::new(phys)) };
         if unsafe {
-            process
-                .address_space
-                .map_page(user_page, fb_frame, flags, &mut *pmm, hhdm_offset)
+            process.address_space.map_framebuffer_page(
+                user_page,
+                fb_frame,
+                flags,
+                leaf_pat,
+                &mut *pmm,
+                hhdm_offset,
+            )
         }
         .is_err()
         {
@@ -4251,17 +4318,28 @@ fn sys_map_framebuffer(frame: &mut SyscallFrame) -> u64 {
     // words[0] (r8) = width | (height << 32)
     // words[1] (r9) = pitch
     // words[2] (r10) = bpp
-    frame.r8 = (fb_width as u64) | ((fb_height as u64) << 32);
-    frame.r9 = fb_pitch;
-    frame.r10 = fb_bpp as u64;
-
-    let visible_offset = {
-        let svga = crate::SVGA_DEVICE.lock();
-        svga.as_ref()
-            .filter(|device| device.is_ready())
-            .map_or(0, |device| device.fb_offset as u64)
-    };
+    frame.r12 = page_count
+        .checked_mul(4096)
+        .and_then(|bytes| bytes.checked_sub(fb_page_offset))
+        .and_then(|bytes| bytes.checked_sub(visible_offset))
+        .unwrap_or(0);
     (DISPLAY_FB_VADDR + fb_page_offset + visible_offset) as u64
+}
+
+fn framebuffer_cache_label(flags: PageTableFlags, leaf_pat: bool) -> &'static str {
+    match (
+        leaf_pat,
+        flags.contains(PageTableFlags::NO_CACHE),
+        flags.contains(PageTableFlags::WRITE_THROUGH),
+    ) {
+        (true, false, true) => "wc",
+        (true, false, false) => "wp",
+        (true, true, _) => "pat-uc",
+        (false, true, true) => "uc",
+        (false, true, false) => "uc-minus",
+        (false, false, true) => "wt",
+        (false, false, false) => "wb",
+    }
 }
 
 fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {

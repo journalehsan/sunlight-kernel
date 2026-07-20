@@ -3156,14 +3156,72 @@ pub fn map_telemetry() -> *const u8 {
     addr as *const u8
 }
 
-/// Map the physical Limine framebuffer for the display compositor.
-/// Returns (base_user_va, width|height packed in u64, pitch, bpp).
-pub fn map_framebuffer() -> Option<(*mut u8, u64, u64, u64)> {
-    let (va, msg) = unsafe { raw_syscall(SunlightSyscall::MapFramebuffer, 0, 0, 0, 0, 0, 0, 0) };
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FramebufferInfo {
+    pub width: u32,
+    pub height: u32,
+    pub pitch_bytes: u32,
+    pub bits_per_pixel: u32,
+    pub mapped_len: u64,
+    pub memory_model: u8,
+    pub red_mask_size: u8,
+    pub red_mask_shift: u8,
+    pub green_mask_size: u8,
+    pub green_mask_shift: u8,
+    pub blue_mask_size: u8,
+    pub blue_mask_shift: u8,
+}
+
+fn decode_framebuffer_info(msg: &IpcMsg) -> Option<FramebufferInfo> {
+    let packed = msg.words[0];
+    let format = msg.badge;
+    let info = FramebufferInfo {
+        width: packed as u32,
+        height: (packed >> 32) as u32,
+        pitch_bytes: msg.words[1] as u32,
+        bits_per_pixel: msg.words[2] as u32,
+        mapped_len: msg.words[3],
+        memory_model: format as u8,
+        red_mask_size: (format >> 8) as u8,
+        red_mask_shift: (format >> 16) as u8,
+        green_mask_size: (format >> 24) as u8,
+        green_mask_shift: (format >> 32) as u8,
+        blue_mask_size: (format >> 40) as u8,
+        blue_mask_shift: (format >> 48) as u8,
+    };
+    if info.width == 0 || info.height == 0 || info.pitch_bytes == 0 || info.mapped_len == 0 {
+        None
+    } else {
+        Some(info)
+    }
+}
+
+/// Query the immutable Limine framebuffer descriptor without mapping any pages.
+pub fn framebuffer_info() -> Option<FramebufferInfo> {
+    let (ok, msg) = unsafe { raw_syscall(SunlightSyscall::MapFramebuffer, 1, 0, 0, 0, 0, 0, 0) };
+    if ok == 0 || ok == u64::MAX {
+        return None;
+    }
+    decode_framebuffer_info(&msg)
+}
+
+fn map_framebuffer_backend(selector: u64) -> Option<(*mut u8, FramebufferInfo)> {
+    let (va, msg) =
+        unsafe { raw_syscall(SunlightSyscall::MapFramebuffer, selector, 0, 0, 0, 0, 0, 0) };
     if va == 0 {
         return None;
     }
-    Some((va as *mut u8, msg.words[0], msg.words[1], msg.words[2]))
+    Some((va as *mut u8, decode_framebuffer_info(&msg)?))
+}
+
+/// Map the original immutable Limine framebuffer.
+pub fn map_limine_framebuffer() -> Option<(*mut u8, FramebufferInfo)> {
+    map_framebuffer_backend(2)
+}
+
+/// Map VMware SVGA VRAM only when the SVGA backend is fully active.
+pub fn map_svga_framebuffer() -> Option<(*mut u8, FramebufferInfo)> {
+    map_framebuffer_backend(3)
 }
 
 /// Query the VirtIO GPU dimensions.

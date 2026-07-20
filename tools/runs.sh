@@ -52,6 +52,8 @@ Display Options (QEMU only):
   --screenshot          Capture screenshot and exit
   --dual-gpu            Use VGA std + explicit virtio-gpu-pci, like the old
                         hardware-cursor runner with a separate GPU output/tab
+  --limine-only         Use only standard VGA; no VirtIO GPU is presented, so
+                        the display backend must remain the Limine framebuffer
   --resolution WxH      Request an explicit QEMU desktop resolution. When unset,
                         SunlightOS prefers 1366x768, then 1280x800, 1280x720,
                         then 1024x768 if the QEMU video device exposes xres/yres
@@ -101,6 +103,7 @@ GDB_MODE=false
 SCREENSHOT_MODE=false
 BUILD_FIRST=false
 DUAL_GPU_MODE=false
+LIMINE_ONLY_MODE=false
 QEMU_RESOLUTION_OVERRIDE="${SUNLIGHT_QEMU_RESOLUTION:-}"
 QEMU_RESOLUTION_REQUESTED=false
 if [[ -n "$QEMU_RESOLUTION_OVERRIDE" ]]; then
@@ -179,6 +182,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dual-gpu)
             DUAL_GPU_MODE=true
+            shift
+            ;;
+        --limine-only)
+            LIMINE_ONLY_MODE=true
             shift
             ;;
         --resolution)
@@ -395,6 +402,8 @@ fi
 VIDEO_DEVICE="virtio-vga"
 if [ "$DUAL_GPU_MODE" = true ]; then
     VIDEO_DEVICE="virtio-gpu-pci"
+elif [ "$LIMINE_ONLY_MODE" = true ]; then
+    VIDEO_DEVICE="std"
 fi
 
 QEMU_RESOLUTION=""
@@ -502,7 +511,9 @@ else
     echo -e "${BLUE}Firmware:${NC} Legacy BIOS (SeaBIOS)"
 fi
 
-if [ "$DUAL_GPU_MODE" = true ]; then
+if [ "$LIMINE_ONLY_MODE" = true ]; then
+    QEMU_CMD+=(-vga std)
+elif [ "$DUAL_GPU_MODE" = true ]; then
     if [[ -n "$QEMU_RESOLUTION" ]]; then
         QEMU_CMD+=(
             -vga std
@@ -577,7 +588,9 @@ esac
 echo -e "${BLUE}Memory:${NC}  ${MEMORY} MiB"
 echo -e "${BLUE}vCPUs:${NC}   ${CPU_COUNT}"
 echo -e "${BLUE}CPU:${NC}     ${CPU_MODEL_LABEL}"
-if [ "$DUAL_GPU_MODE" = true ]; then
+if [ "$LIMINE_ONLY_MODE" = true ]; then
+    echo -e "${BLUE}Video:${NC}   standard VGA (Limine-only backend)"
+elif [ "$DUAL_GPU_MODE" = true ]; then
     echo -e "${BLUE}Video:${NC}   VGA std + virtio-gpu-pci"
     echo -e "${YELLOW}Note:${NC}    Switch to the virtio-gpu tab/output in QEMU for the desktop view"
 else
