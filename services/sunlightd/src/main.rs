@@ -350,17 +350,17 @@ fn lookup_user_credentials(username: &str) -> Option<(u32, u32)> {
 }
 
 fn capability_summary(mask: u64) -> heapless::String<192> {
-    let names = sunlight_ipc::service_capability_mask_to_names(mask);
     let mut out = heapless::String::<192>::new();
-    if names.is_empty() {
-        let _ = out.push_str("none");
-        return out;
-    }
-    for (index, name) in names.iter().enumerate() {
-        if index != 0 {
+    let mut wrote_any = false;
+    for name in sunlight_ipc::service_capability_mask_to_names(mask) {
+        if wrote_any {
             let _ = out.push(',');
         }
         let _ = out.push_str(name);
+        wrote_any = true;
+    }
+    if !wrote_any {
+        let _ = out.push_str("none");
     }
     out
 }

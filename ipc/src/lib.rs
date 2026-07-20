@@ -1,8 +1,6 @@
 #![no_std]
 
 pub mod display_metrics;
-extern crate alloc;
-
 pub mod display_modes;
 pub mod swap_policy;
 pub use display_metrics::{
@@ -282,14 +280,13 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 18] = [
     ServiceCapability::Resolver,
 ];
 
-pub fn service_capability_mask_to_names(mask: u64) -> alloc::vec::Vec<&'static str> {
-    let mut out = alloc::vec::Vec::new();
-    for capability in ALL_SERVICE_CAPABILITIES {
-        if mask & capability.bit() != 0 {
-            out.push(capability.as_str());
-        }
-    }
-    out
+pub fn service_capability_mask_to_names(
+    mask: u64,
+) -> impl Iterator<Item = &'static str> + Clone {
+    ALL_SERVICE_CAPABILITIES
+        .into_iter()
+        .filter(move |capability| mask & capability.bit() != 0)
+        .map(ServiceCapability::as_str)
 }
 
 pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
