@@ -20,6 +20,8 @@ pub mod NetOp {
     pub const GET_BACKEND: u64 = 16; // query backend kind, MAC, MTU, link, state
     /// Block until a generation-checked socket in a bounded SHM wait-set is ready.
     pub const WAIT: u64 = 17;
+    /// Read one TCP allocation diagnostic selected by `NetDiagnostic`.
+    pub const GET_DIAGNOSTIC: u64 = 18;
 }
 
 /// Explicit network operation status values. Legacy replies retain their
@@ -50,4 +52,29 @@ pub mod NetReady {
     pub const RESET: u64 = 1 << 4;
     pub const CLOSED: u64 = 1 << 5;
     pub const ERROR: u64 = 1 << 6;
+}
+
+/// Selectors for `NetOp::GET_DIAGNOSTIC`.
+pub mod NetDiagnostic {
+    pub const SOCKET_ALLOC_TOTAL: u64 = 0;
+    pub const SOCKET_RELEASE_TOTAL: u64 = 1;
+    pub const SOCKET_LIVE: u64 = 2;
+    pub const SOCKET_PEAK_LIVE: u64 = 3;
+    pub const LISTENER_ALLOC_TOTAL: u64 = 4;
+    pub const LISTENER_RELEASE_TOTAL: u64 = 5;
+    pub const LISTENER_LIVE: u64 = 6;
+    pub const STREAM_ALLOC_TOTAL: u64 = 7;
+    pub const STREAM_RELEASE_TOTAL: u64 = 8;
+    pub const STREAM_LIVE: u64 = 9;
+    pub const RX_BUFFERS_LIVE: u64 = 10;
+    pub const TX_BUFFERS_LIVE: u64 = 11;
+    pub const RX_BYTES_RESERVED: u64 = 12;
+    pub const TX_BYTES_RESERVED: u64 = 13;
+    pub const ALLOCATION_FAILURES_TOTAL: u64 = 14;
+    pub const ALLOCATION_ROLLBACKS_TOTAL: u64 = 15;
+    pub const FAILED_CONNECT_CLEANUP_TOTAL: u64 = 16;
+    pub const PEER_RESET_REAPS_TOTAL: u64 = 17;
+    pub const HALF_CLOSE_REAPS_TOTAL: u64 = 18;
+    pub const CLOSE_DEADLINE_REAPS_TOTAL: u64 = 19;
+    pub const OWNER_EXIT_REAPS_TOTAL: u64 = 20;
 }

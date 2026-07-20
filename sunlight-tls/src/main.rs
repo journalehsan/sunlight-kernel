@@ -348,11 +348,7 @@ mod sunlightos_impl {
             let _ = shm_free(tok);
             let sent = reply.words[0] as usize;
             if reply.words[1] == NET_STATUS_WOULD_BLOCK {
-                if !net_wait_ready(
-                    socket_id,
-                    8_000,
-                    NET_READY_WRITE,
-                ) {
+                if !net_wait_ready(socket_id, 8_000, NET_READY_WRITE) {
                     return false;
                 }
                 continue;
@@ -370,16 +366,23 @@ mod sunlightos_impl {
             Some(c) => c,
             None => return Vec::new(),
         };
+        let (ptr, tok) = match shm_alloc() {
+            Ok(page) => page,
+            Err(_) => return Vec::new(),
+        };
         let reply = ipc_call(
             cap,
             IpcMsg::with_label(NET_RECV_SHM)
                 .word(0, socket_id)
-                .word(1, SHM_PAGE as u64),
+                .word(1, SHM_PAGE as u64)
+                .with_cap(0, tok),
         );
         if reply.label != NET_RECV_SHM {
+            let _ = shm_free(tok);
             return Vec::new();
         }
         if reply.words[1] == NET_STATUS_WOULD_BLOCK {
+            let _ = shm_free(tok);
             if net_wait_ready(socket_id, 8_000, NET_READY_READ) {
                 return net_recv_chunk(socket_id);
             }
@@ -387,16 +390,9 @@ mod sunlightos_impl {
         }
         let len = (reply.words[0] as usize).min(SHM_PAGE);
         if len == 0 {
+            let _ = shm_free(tok);
             return Vec::new();
         }
-        let tok = reply.caps[0];
-        if tok == CapabilityToken::INVALID {
-            return Vec::new();
-        }
-        let ptr = match shm_map(tok) {
-            Ok(p) => p,
-            Err(_) => return Vec::new(),
-        };
         let out = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
         let _ = shm_free(tok);
         out

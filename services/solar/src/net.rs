@@ -1,8 +1,7 @@
 //! Bounded TCP server wrappers for Solar.
 
 use sunlight_ipc::{
-    ipc_call, ipc_call_timeout, nameserver_lookup, shm_alloc, shm_free, shm_map, CapabilityToken,
-    IpcMsg,
+    ipc_call, ipc_call_timeout, nameserver_lookup, shm_alloc, shm_free, CapabilityToken, IpcMsg,
 };
 use sunlight_net::netop::NetReady;
 use sunlight_net::netop::{NetOp, NetStatus};
@@ -39,6 +38,7 @@ impl TcpListener {
                 .word(2, port as u64),
         );
         if reply.words[1] != NetStatus::OK {
+            close_socket(net_endpoint, socket_id);
             return Err("bind failed");
         }
 
@@ -49,6 +49,7 @@ impl TcpListener {
                 .word(1, MAX_ACTIVE_CONNS as u64),
         );
         if reply.words[1] != NetStatus::OK {
+            close_socket(net_endpoint, socket_id);
             return Err("listen failed");
         }
 
@@ -80,6 +81,13 @@ impl TcpListener {
     pub fn net_endpoint(&self) -> CapabilityToken {
         self.net_endpoint
     }
+
+    pub fn close(&mut self) {
+        if self.socket_id != 0 {
+            close_socket(self.net_endpoint, self.socket_id);
+            self.socket_id = 0;
+        }
+    }
 }
 
 pub struct TcpStream {
@@ -89,33 +97,34 @@ pub struct TcpStream {
 
 impl TcpStream {
     pub fn read(&mut self, buffer: &mut [u8]) -> Result<usize, &'static str> {
+        let (ptr, token) = shm_alloc().map_err(|_| "could not allocate read page")?;
         let reply = ipc_call(
             self.net_endpoint,
             IpcMsg::with_label(NetOp::RECV_SHM)
                 .word(0, self.socket_id)
-                .word(1, buffer.len().min(4096) as u64),
+                .word(1, buffer.len().min(4096) as u64)
+                .with_cap(0, token),
         );
         match reply.words[1] {
-            NetStatus::EOF => return Ok(0),
-            NetStatus::WOULD_BLOCK => return Err("read would block"),
+            NetStatus::EOF => {
+                let _ = shm_free(token);
+                return Ok(0);
+            }
+            NetStatus::WOULD_BLOCK => {
+                let _ = shm_free(token);
+                return Err("read would block");
+            }
             NetStatus::OK => {}
-            _ => return Err("read failed"),
+            _ => {
+                let _ = shm_free(token);
+                return Err("read failed");
+            }
         }
         let bytes_read = reply.words[0] as usize;
         if bytes_read == 0 {
+            let _ = shm_free(token);
             return Ok(0);
         }
-        let token = reply.caps[0];
-        if token == CapabilityToken::INVALID {
-            return Err("read reply missing shared memory");
-        }
-        let ptr = match shm_map(token) {
-            Ok(ptr) => ptr,
-            Err(_) => {
-                let _ = shm_free(token);
-                return Err("could not map read page");
-            }
-        };
         let copy_len = bytes_read.min(buffer.len()).min(4096);
         unsafe {
             core::ptr::copy_nonoverlapping(ptr, buffer.as_mut_ptr(), copy_len);
@@ -132,25 +141,18 @@ impl TcpStream {
         let mut offset = 0usize;
         while offset < data.len() {
             let chunk_len = (data.len() - offset).min(4096);
-            let token = shm_pool.acquire().ok_or("SHM pool exhausted")?;
-            let ptr = match shm_map(token) {
-                Ok(ptr) => ptr,
-                Err(_) => {
-                    shm_pool.release(token);
-                    return Err("could not map write page");
-                }
-            };
+            let page = shm_pool.acquire().ok_or("SHM pool exhausted")?;
             unsafe {
-                core::ptr::copy_nonoverlapping(data[offset..].as_ptr(), ptr, chunk_len);
+                core::ptr::copy_nonoverlapping(data[offset..].as_ptr(), page.ptr, chunk_len);
             }
             let reply = ipc_call(
                 self.net_endpoint,
                 IpcMsg::with_label(NetOp::SEND_SHM)
                     .word(0, self.socket_id)
                     .word(1, chunk_len as u64)
-                    .with_cap(0, token),
+                    .with_cap(0, page.token),
             );
-            shm_pool.release(token);
+            shm_pool.release(page);
             if reply.words[1] == NetStatus::WOULD_BLOCK {
                 match wait_socket_ready(self.net_endpoint, self.socket_id, 8_000, NetReady::WRITE)?
                 {
@@ -245,6 +247,19 @@ fn wait_sockets_with_interest(
 
 fn pack_ipv4(ip: [u8; 4]) -> u64 {
     (ip[0] as u64) | ((ip[1] as u64) << 8) | ((ip[2] as u64) << 16) | ((ip[3] as u64) << 24)
+}
+
+fn close_socket(net_endpoint: CapabilityToken, socket_id: u64) {
+    let _ = ipc_call(
+        net_endpoint,
+        IpcMsg::with_label(NetOp::CLOSE).word(0, socket_id),
+    );
+}
+
+impl Drop for TcpListener {
+    fn drop(&mut self) {
+        self.close();
+    }
 }
 
 impl Drop for TcpStream {

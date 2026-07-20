@@ -2,9 +2,7 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, VecDeque};
-use alloc::vec;
 use alloc::vec::Vec;
 
 use smoltcp::iface::{Interface, SocketHandle, SocketSet};
@@ -17,6 +15,10 @@ const RX_BUF: usize = 8192;
 const TX_BUF: usize = 4096;
 const MAX_SOCKETS: usize = 128;
 const MAX_BACKLOG: usize = 32;
+const CONNECT_TIMEOUT_MS: u64 = 20_000;
+const HALF_CLOSE_TIMEOUT_MS: u64 = 30_000;
+const CLOSE_TIMEOUT_MS: u64 = 5_000;
+const TERMINAL_REAP_DELAY_MS: u64 = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TcpError {
@@ -97,29 +99,52 @@ struct TcpSlot {
     owner_pid: u64,
     handle: SocketHandle,
     kind: SocketKind,
-    rx_backlog: VecDeque<u8>,
     peer_closed: bool,
     reset: bool,
     local_closed: bool,
     last_tcp_state: tcp::State,
-    rx_raw: *mut [u8],
-    tx_raw: *mut [u8],
+    deadline_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TcpDiagnostics {
+    pub socket_alloc_total: u64,
+    pub socket_release_total: u64,
+    pub socket_live: u64,
+    pub socket_peak_live: u64,
+    pub listener_alloc_total: u64,
+    pub listener_release_total: u64,
+    pub listener_live: u64,
+    pub stream_alloc_total: u64,
+    pub stream_release_total: u64,
+    pub stream_live: u64,
+    pub rx_buffers_live: u64,
+    pub tx_buffers_live: u64,
+    pub rx_bytes_reserved: u64,
+    pub tx_bytes_reserved: u64,
+    pub allocation_failures_total: u64,
+    pub allocation_rollbacks_total: u64,
+    pub failed_connect_cleanup_total: u64,
+    pub peer_reset_reaps_total: u64,
+    pub half_close_reaps_total: u64,
+    pub close_deadline_reaps_total: u64,
+    pub owner_exit_reaps_total: u64,
 }
 
 pub struct TcpManager {
     slots: BTreeMap<u32, TcpSlot>,
-    next_socket_id: u32,
     next_generation: u32,
     next_local_port: u16,
+    diagnostics: TcpDiagnostics,
 }
 
 impl TcpManager {
     pub fn new() -> Self {
         Self {
             slots: BTreeMap::new(),
-            next_socket_id: 1,
             next_generation: 1,
             next_local_port: 49_152,
+            diagnostics: TcpDiagnostics::default(),
         }
     }
 
@@ -134,13 +159,30 @@ impl TcpManager {
 
         let socket_id = self.allocate_id()?;
         let generation = self.allocate_generation();
-        let rx_raw = Box::into_raw(vec![0; RX_BUF].into_boxed_slice());
-        let tx_raw = Box::into_raw(vec![0; TX_BUF].into_boxed_slice());
-        let rx_static = unsafe { &mut *rx_raw };
-        let tx_static = unsafe { &mut *tx_raw };
+        let rx = match allocate_buffer(RX_BUF) {
+            Ok(buffer) => buffer,
+            Err(error) => {
+                self.diagnostics.allocation_failures_total =
+                    self.diagnostics.allocation_failures_total.saturating_add(1);
+                return Err(error);
+            }
+        };
+        let tx = match allocate_buffer(TX_BUF) {
+            Ok(buffer) => buffer,
+            Err(error) => {
+                drop(rx);
+                self.diagnostics.allocation_failures_total =
+                    self.diagnostics.allocation_failures_total.saturating_add(1);
+                self.diagnostics.allocation_rollbacks_total = self
+                    .diagnostics
+                    .allocation_rollbacks_total
+                    .saturating_add(1);
+                return Err(error);
+            }
+        };
         let handle = sockets.add(tcp::Socket::new(
-            tcp::SocketBuffer::new(rx_static),
-            tcp::SocketBuffer::new(tx_static),
+            tcp::SocketBuffer::new(rx),
+            tcp::SocketBuffer::new(tx),
         ));
         self.slots.insert(
             socket_id,
@@ -149,15 +191,29 @@ impl TcpManager {
                 owner_pid,
                 handle,
                 kind: SocketKind::Unbound,
-                rx_backlog: VecDeque::new(),
                 peer_closed: false,
                 reset: false,
                 local_closed: false,
                 last_tcp_state: tcp::State::Closed,
-                rx_raw,
-                tx_raw,
+                deadline_ms: None,
             },
         );
+        self.diagnostics.socket_alloc_total = self.diagnostics.socket_alloc_total.saturating_add(1);
+        self.diagnostics.socket_live = self.diagnostics.socket_live.saturating_add(1);
+        self.diagnostics.socket_peak_live = self
+            .diagnostics
+            .socket_peak_live
+            .max(self.diagnostics.socket_live);
+        self.diagnostics.rx_buffers_live = self.diagnostics.rx_buffers_live.saturating_add(1);
+        self.diagnostics.tx_buffers_live = self.diagnostics.tx_buffers_live.saturating_add(1);
+        self.diagnostics.rx_bytes_reserved = self
+            .diagnostics
+            .rx_bytes_reserved
+            .saturating_add(RX_BUF as u64);
+        self.diagnostics.tx_bytes_reserved = self
+            .diagnostics
+            .tx_bytes_reserved
+            .saturating_add(TX_BUF as u64);
         Ok(Self::identity(socket_id, generation))
     }
 
@@ -194,6 +250,9 @@ impl TcpManager {
             backlog: 0,
             pending: VecDeque::new(),
         };
+        self.diagnostics.listener_alloc_total =
+            self.diagnostics.listener_alloc_total.saturating_add(1);
+        self.diagnostics.listener_live = self.diagnostics.listener_live.saturating_add(1);
         Ok(())
     }
 
@@ -259,6 +318,10 @@ impl TcpManager {
             )
             .map_err(|_| TcpError::SocketError)?;
         slot.kind = SocketKind::Connected;
+        slot.deadline_ms =
+            Some(sunlight_ipc::monotonic_millis().saturating_add(CONNECT_TIMEOUT_MS));
+        self.diagnostics.stream_alloc_total = self.diagnostics.stream_alloc_total.saturating_add(1);
+        self.diagnostics.stream_live = self.diagnostics.stream_live.saturating_add(1);
         Ok(())
     }
 
@@ -283,30 +346,66 @@ impl TcpManager {
             self.queue_completed_accept(listener, sockets);
         }
 
-        for slot in self.slots.values_mut() {
+        let mut reap = Vec::new();
+        for (&id, slot) in self.slots.iter_mut() {
             let socket = sockets.get::<tcp::Socket>(slot.handle);
             if matches!(slot.kind, SocketKind::Connected) {
                 match socket.state() {
+                    tcp::State::Established => {
+                        if !slot.local_closed {
+                            slot.deadline_ms = None;
+                        }
+                    }
                     tcp::State::CloseWait => {
-                        if !slot.rx_backlog.is_empty() || socket.can_recv() {
+                        if socket.can_recv() {
                             slot.peer_closed = false;
                         } else {
                             slot.peer_closed = true;
+                            slot.deadline_ms = Some(now_ms.saturating_add(HALF_CLOSE_TIMEOUT_MS));
                         }
                     }
                     tcp::State::Closed | tcp::State::TimeWait => {
                         if !matches!(slot.last_tcp_state, tcp::State::CloseWait) {
                             slot.reset = true;
-                        } else if !slot.rx_backlog.is_empty() || socket.can_recv() {
+                        } else if socket.can_recv() {
                             slot.peer_closed = false;
                         } else {
                             slot.peer_closed = true;
                         }
+                        slot.deadline_ms = Some(now_ms.saturating_add(TERMINAL_REAP_DELAY_MS));
                     }
                     _ => {}
                 }
                 slot.last_tcp_state = socket.state();
+                if slot.deadline_ms.is_some_and(|deadline| now_ms >= deadline) {
+                    reap.push((
+                        Self::identity(id, slot.generation),
+                        slot.reset,
+                        slot.peer_closed,
+                        slot.local_closed,
+                    ));
+                }
             }
+        }
+        for (identity, reset, half_closed, local_closed) in reap {
+            if reset {
+                self.diagnostics.peer_reset_reaps_total =
+                    self.diagnostics.peer_reset_reaps_total.saturating_add(1);
+            } else if half_closed {
+                self.diagnostics.half_close_reaps_total =
+                    self.diagnostics.half_close_reaps_total.saturating_add(1);
+            } else if local_closed {
+                self.diagnostics.close_deadline_reaps_total = self
+                    .diagnostics
+                    .close_deadline_reaps_total
+                    .saturating_add(1);
+            } else {
+                self.diagnostics.failed_connect_cleanup_total = self
+                    .diagnostics
+                    .failed_connect_cleanup_total
+                    .saturating_add(1);
+            }
+            let _ = self.close_internal(identity, None, sockets);
         }
     }
 
@@ -373,12 +472,6 @@ impl TcpManager {
     ) -> Result<Vec<u8>, TcpError> {
         let take = max_len.max(1);
         let slot = self.slot_mut(identity, owner_pid)?;
-        if !slot.rx_backlog.is_empty() {
-            return Ok(slot
-                .rx_backlog
-                .drain(..slot.rx_backlog.len().min(take))
-                .collect());
-        }
         if slot.local_closed {
             return Err(TcpError::Closed);
         }
@@ -389,17 +482,17 @@ impl TcpManager {
         let socket = sockets.get_mut::<tcp::Socket>(slot.handle);
         if socket.can_recv() {
             let mut drained = Vec::new();
+            drained
+                .try_reserve_exact(take)
+                .map_err(|_| TcpError::NoSlots)?;
             socket
                 .recv(|buf| {
-                    drained.extend_from_slice(buf);
-                    (buf.len(), ())
+                    let count = buf.len().min(take);
+                    drained.extend_from_slice(&buf[..count]);
+                    (count, ())
                 })
                 .map_err(|_| TcpError::SocketError)?;
-            slot.rx_backlog.extend(drained);
-            return Ok(slot
-                .rx_backlog
-                .drain(..slot.rx_backlog.len().min(take))
-                .collect());
+            return Ok(drained);
         }
         if !socket.may_recv() || slot.peer_closed {
             slot.peer_closed = true;
@@ -426,7 +519,7 @@ impl TcpManager {
                 let socket = sockets.get::<tcp::Socket>(slot.handle);
                 match socket.state() {
                     tcp::State::Established | tcp::State::CloseWait => {
-                        if !slot.rx_backlog.is_empty() || socket.can_recv() {
+                        if socket.can_recv() {
                             ready.insert(SocketReady::READ);
                         }
                         if socket.can_send() {
@@ -462,6 +555,16 @@ impl TcpManager {
         identity: SocketIdentity,
         sockets: &mut SocketSet<'static>,
     ) -> Result<(), TcpError> {
+        let slot = self.slot_mut(identity, owner_pid)?;
+        if matches!(slot.kind, SocketKind::Connected) {
+            if !slot.local_closed {
+                sockets.get_mut::<tcp::Socket>(slot.handle).close();
+                slot.local_closed = true;
+                slot.deadline_ms =
+                    Some(sunlight_ipc::monotonic_millis().saturating_add(CLOSE_TIMEOUT_MS));
+            }
+            return Ok(());
+        }
         self.close_internal(identity, Some(owner_pid), sockets)
     }
 
@@ -474,6 +577,8 @@ impl TcpManager {
             })
             .collect();
         for identity in identities {
+            self.diagnostics.owner_exit_reaps_total =
+                self.diagnostics.owner_exit_reaps_total.saturating_add(1);
             let _ = self.close_internal(identity, None, sockets);
         }
     }
@@ -494,6 +599,10 @@ impl TcpManager {
 
     pub fn active_count(&self) -> usize {
         self.slots.len()
+    }
+
+    pub const fn diagnostics(&self) -> TcpDiagnostics {
+        self.diagnostics
     }
 
     fn queue_completed_accept(
@@ -524,6 +633,12 @@ impl TcpManager {
         if pending_len >= backlog || self.slots.len() >= MAX_SOCKETS {
             if let Ok(slot) = self.slot_mut(listener, owner_pid) {
                 sockets.get_mut::<tcp::Socket>(slot.handle).abort();
+                let _ = sockets
+                    .get_mut::<tcp::Socket>(slot.handle)
+                    .listen(IpListenEndpoint {
+                        addr: ipv4_listen_addr(endpoint.addr),
+                        port: endpoint.port,
+                    });
             }
             return;
         }
@@ -569,10 +684,10 @@ impl TcpManager {
             _ => VecDeque::new(),
         };
         connected_slot.kind = SocketKind::Connected;
-        connected_slot.rx_backlog.clear();
         connected_slot.peer_closed = false;
         connected_slot.reset = false;
         connected_slot.local_closed = false;
+        connected_slot.deadline_ms = None;
         connected_slot.last_tcp_state = sockets.get::<tcp::Socket>(connected_slot.handle).state();
         let client = Self::identity(replacement_id, replacement_slot.generation);
         pending.push_back(client);
@@ -587,6 +702,8 @@ impl TcpManager {
             sockets.get::<tcp::Socket>(replacement_slot.handle).state();
         self.slots.insert(listener_id, replacement_slot);
         self.slots.insert(replacement_id, connected_slot);
+        self.diagnostics.stream_alloc_total = self.diagnostics.stream_alloc_total.saturating_add(1);
+        self.diagnostics.stream_live = self.diagnostics.stream_live.saturating_add(1);
     }
 
     fn close_internal(
@@ -622,9 +739,31 @@ impl TcpManager {
         sockets.get_mut::<tcp::Socket>(slot.handle).abort();
         let removed = sockets.remove(slot.handle);
         drop(removed);
-        unsafe {
-            drop(Box::from_raw(slot.rx_raw));
-            drop(Box::from_raw(slot.tx_raw));
+        self.diagnostics.socket_release_total =
+            self.diagnostics.socket_release_total.saturating_add(1);
+        self.diagnostics.socket_live = self.diagnostics.socket_live.saturating_sub(1);
+        self.diagnostics.rx_buffers_live = self.diagnostics.rx_buffers_live.saturating_sub(1);
+        self.diagnostics.tx_buffers_live = self.diagnostics.tx_buffers_live.saturating_sub(1);
+        self.diagnostics.rx_bytes_reserved = self
+            .diagnostics
+            .rx_bytes_reserved
+            .saturating_sub(RX_BUF as u64);
+        self.diagnostics.tx_bytes_reserved = self
+            .diagnostics
+            .tx_bytes_reserved
+            .saturating_sub(TX_BUF as u64);
+        match slot.kind {
+            SocketKind::Listener { .. } => {
+                self.diagnostics.listener_release_total =
+                    self.diagnostics.listener_release_total.saturating_add(1);
+                self.diagnostics.listener_live = self.diagnostics.listener_live.saturating_sub(1);
+            }
+            SocketKind::Connected => {
+                self.diagnostics.stream_release_total =
+                    self.diagnostics.stream_release_total.saturating_add(1);
+                self.diagnostics.stream_live = self.diagnostics.stream_live.saturating_sub(1);
+            }
+            SocketKind::Unbound => {}
         }
     }
 
@@ -666,9 +805,7 @@ impl TcpManager {
     }
 
     fn allocate_id(&mut self) -> Result<u32, TcpError> {
-        for _ in 0..u32::MAX {
-            let id = self.next_socket_id;
-            self.next_socket_id = self.next_socket_id.wrapping_add(1).max(1);
+        for id in 1..=MAX_SOCKETS as u32 {
             if !self.slots.contains_key(&id) {
                 return Ok(id);
             }
@@ -687,6 +824,15 @@ impl TcpManager {
     }
 }
 
+fn allocate_buffer(capacity: usize) -> Result<Vec<u8>, TcpError> {
+    let mut buffer = Vec::new();
+    buffer
+        .try_reserve_exact(capacity)
+        .map_err(|_| TcpError::NoSlots)?;
+    buffer.resize(capacity, 0);
+    Ok(buffer)
+}
+
 fn addresses_conflict(left: [u8; 4], right: [u8; 4]) -> bool {
     left == [0, 0, 0, 0] || right == [0, 0, 0, 0] || left == right
 }
@@ -700,13 +846,21 @@ fn ipv4_listen_addr(addr: [u8; 4]) -> Option<IpAddress> {
 #[cfg(test)]
 mod tests {
     use super::{TcpError, TcpManager};
-    use alloc::boxed::Box;
+    use alloc::vec;
     use smoltcp::iface::{SocketSet, SocketStorage};
+
+    fn socket_set() -> SocketSet<'static> {
+        SocketSet::new(vec![
+            SocketStorage::EMPTY,
+            SocketStorage::EMPTY,
+            SocketStorage::EMPTY,
+            SocketStorage::EMPTY,
+        ])
+    }
 
     #[test]
     fn socket_handles_are_owner_scoped() {
-        let storage = Box::leak(Box::new([SocketStorage::EMPTY; 4]));
-        let mut sockets = SocketSet::new(&mut storage[..]);
+        let mut sockets = socket_set();
         let mut manager = TcpManager::new();
         let socket = manager.alloc_socket(41, &mut sockets).unwrap();
 
@@ -721,8 +875,7 @@ mod tests {
 
     #[test]
     fn wildcard_and_specific_bindings_conflict() {
-        let storage = Box::leak(Box::new([SocketStorage::EMPTY; 4]));
-        let mut sockets = SocketSet::new(&mut storage[..]);
+        let mut sockets = socket_set();
         let mut manager = TcpManager::new();
         let wildcard = manager.alloc_socket(7, &mut sockets).unwrap();
         let specific = manager.alloc_socket(7, &mut sockets).unwrap();
@@ -738,8 +891,7 @@ mod tests {
 
     #[test]
     fn closed_handle_cannot_be_reused() {
-        let storage = Box::leak(Box::new([SocketStorage::EMPTY; 4]));
-        let mut sockets = SocketSet::new(&mut storage[..]);
+        let mut sockets = socket_set();
         let mut manager = TcpManager::new();
         let socket = manager.alloc_socket(11, &mut sockets).unwrap();
 
@@ -747,6 +899,33 @@ mod tests {
         assert_eq!(
             manager.bind(11, socket, [0, 0, 0, 0], 8080, &sockets),
             Err(TcpError::InvalidSocket)
+        );
+    }
+
+    #[test]
+    fn reused_slot_receives_a_new_generation_and_balances_counters() {
+        let mut sockets = socket_set();
+        let mut manager = TcpManager::new();
+        let original = manager.alloc_socket(11, &mut sockets).unwrap();
+
+        manager.close(11, original, &mut sockets).unwrap();
+        let replacement = manager.alloc_socket(11, &mut sockets).unwrap();
+
+        assert_eq!(replacement.id(), original.id());
+        assert_ne!(replacement.generation(), original.generation());
+        assert_eq!(
+            manager.bind(11, original, [0, 0, 0, 0], 8080, &sockets),
+            Err(TcpError::InvalidSocket)
+        );
+        manager.close(11, replacement, &mut sockets).unwrap();
+
+        let diagnostics = manager.diagnostics();
+        assert_eq!(diagnostics.socket_live, 0);
+        assert_eq!(diagnostics.rx_buffers_live, 0);
+        assert_eq!(diagnostics.tx_buffers_live, 0);
+        assert_eq!(
+            diagnostics.socket_alloc_total - diagnostics.socket_release_total,
+            diagnostics.socket_live
         );
     }
 }

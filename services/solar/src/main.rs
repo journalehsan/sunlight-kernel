@@ -23,30 +23,14 @@ pub mod shm_pool;
 use core::cell::RefCell;
 use heapless::Vec;
 use http::parse_request;
+use linked_list_allocator::LockedHeap;
 use net::{TcpListener, TcpStream, MAX_ACTIVE_CONNS};
 
-/// Allocator: Simple bump allocator for service memory
-struct BumpAllocator;
-
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 262144] = [0; 262144]; // 256 KB
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
 #[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
+static ALLOCATOR: LockedHeap = LockedHeap::empty();
+
+const HEAP_SIZE: usize = 256 * 1024;
+static mut HEAP_MEM: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
 
 /// Debug logging macro (mirrors other SunlightOS services)
 #[macro_export]
@@ -77,8 +61,14 @@ pub struct SolarContext {
 /// Zero allocation overhead in the hot path — pages are recycled, never freed.
 pub struct ShmPagePool {
     /// Backing storage for available SHM pages (16 pages max)
-    pages: RefCell<Vec<CapabilityToken, 16>>,
+    pages: RefCell<Vec<ShmPage, 16>>,
     capacity: usize,
+}
+
+#[derive(Clone, Copy)]
+pub struct ShmPage {
+    pub ptr: *mut u8,
+    pub token: CapabilityToken,
 }
 
 impl ShmPagePool {
@@ -91,8 +81,8 @@ impl ShmPagePool {
             // Pre-allocate 4096-byte pages directly from the microkernel.
             // This happens once at startup; no allocation overhead in the server's hot path.
             match shm_alloc() {
-                Ok((_ptr, token)) => {
-                    let _ = pages.push(token); // Will panic if capacity < 16, which is OK (bootstrap failure)
+                Ok((ptr, token)) => {
+                    let _ = pages.push(ShmPage { ptr, token });
                 }
                 Err(_e) => {
                     solar_log!("[SOLAR] ⚠️  SHM allocation failed");
@@ -115,19 +105,17 @@ impl ShmPagePool {
 
     /// Acquire a page from the pool.
     /// Returns None if the pool is exhausted (should be rare with 16 pages).
-    pub fn acquire(&self) -> Option<CapabilityToken> {
+    pub fn acquire(&self) -> Option<ShmPage> {
         self.pages.borrow_mut().pop()
     }
 
     /// Return a page to the pool for reuse.
     /// If the pool is at capacity, the page is effectively discarded.
-    pub fn release(&self, token: CapabilityToken) {
+    pub fn release(&self, page: ShmPage) {
         let mut pool = self.pages.borrow_mut();
         if pool.len() < self.capacity {
-            let _ = pool.push(token);
+            let _ = pool.push(page);
         }
-        // If at capacity, we could call sunlight_ipc::shm_free(token)
-        // but it's OK to just drop it (page stays allocated in kernel, wasted but rare).
     }
 }
 
@@ -158,6 +146,11 @@ fn route_request(stream: &mut TcpStream, req_path: &str, ctx: &SolarContext) {
 /// Service entry point
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    unsafe {
+        ALLOCATOR
+            .lock()
+            .init(core::ptr::addr_of_mut!(HEAP_MEM) as *mut u8, HEAP_SIZE);
+    }
     solar_log!("[SOLAR] ☀️ Booting Solar HTTP daemon v1.0...");
 
     // Phase 1.1: Register the service endpoint with the nameserver
@@ -227,7 +220,10 @@ pub extern "C" fn _start() -> ! {
                 match listener.try_accept() {
                     Ok(Some(stream)) => {
                         let _ = active_streams.push(stream);
-                        solar_log!("[SOLAR] 📥 New connection ({} active)", active_streams.len());
+                        solar_log!(
+                            "[SOLAR] 📥 New connection ({} active)",
+                            active_streams.len()
+                        );
                     }
                     Ok(None) => break,
                     Err(error) => {

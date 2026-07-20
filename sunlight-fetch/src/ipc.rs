@@ -721,32 +721,33 @@ mod sunlight {
     fn net_recv(socket_id: u64, max_len: usize) -> FetchResult<Vec<u8>> {
         let cap = net_cap()?;
         let want = max_len.min(SHM_PAGE).max(1);
+        let (ptr, tok) = shm_alloc()
+            .map_err(|_| FetchError::IpcError(String::from("shm_alloc failed (TCP recv)")))?;
         let reply = ipc_call(
             cap,
             IpcMsg::with_label(NetOp::RECV_SHM)
                 .word(0, socket_id)
-                .word(1, want as u64),
+                .word(1, want as u64)
+                .with_cap(0, tok),
         );
         if reply.label != NetOp::RECV_SHM {
+            let _ = shm_free(tok);
             return Err(FetchError::IoError(String::from("TCP recv failed")));
         }
         if reply.words[1] == NetStatus::WOULD_BLOCK {
+            let _ = shm_free(tok);
             net_wait_ready(socket_id, 8_000, NetReady::READ)?;
             return net_recv(socket_id, max_len);
         }
         if reply.words[1] != NetStatus::OK && reply.words[1] != NetStatus::EOF {
+            let _ = shm_free(tok);
             return Err(FetchError::IoError(String::from("TCP recv failed")));
         }
         let len = (reply.words[0] as usize).min(SHM_PAGE);
         if len == 0 {
+            let _ = shm_free(tok);
             return Ok(Vec::new()); // EOF / no data
         }
-        let tok = reply.caps[0];
-        if tok == CapabilityToken::INVALID {
-            return Ok(Vec::new());
-        }
-        let ptr = shm_map(tok)
-            .map_err(|_| FetchError::IoError(String::from("shm_map failed (TCP recv)")))?;
         // SAFETY: net_server copied `len` (<= SHM_PAGE) bytes into this page.
         let v = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
         let _ = shm_free(tok);
@@ -755,10 +756,7 @@ mod sunlight {
 
     fn net_close(socket_id: u64) -> FetchResult<()> {
         let cap = net_cap()?;
-        let _ = ipc_call(
-            cap,
-            IpcMsg::with_label(NetOp::CLOSE).word(0, socket_id),
-        );
+        let _ = ipc_call(cap, IpcMsg::with_label(NetOp::CLOSE).word(0, socket_id));
         Ok(())
     }
 

@@ -8,12 +8,12 @@ use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, HardwareAddress};
 use sunlight_ipc::{
     debug_log, endpoint_create, getpid, ipc_call, ipc_call_timeout, ipc_complete_deferred_reply,
-    ipc_defer_reply, ipc_deferred_reply_is_live, ipc_recv, ipc_recv_timeout, ipc_reply, nameserver_lookup,
-    nameserver_lookup_timeout, nameserver_register, monotonic_millis, shm_alloc, shm_map,
-    CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, EndpointId, IpcMsg,
+    ipc_defer_reply, ipc_deferred_reply_is_live, ipc_recv, ipc_recv_timeout, ipc_reply,
+    monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, nameserver_register, shm_free,
+    shm_map, CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, EndpointId, IpcMsg,
     NetworkdMsg, ResolvedMsg, VfsMsg,
 };
-use sunlight_net::netop::{NetOp, NetStatus};
+use sunlight_net::netop::{NetDiagnostic, NetOp, NetStatus};
 use sunlight_net::{ProxyNetDevice, SocketIdentity, TcpError};
 
 use linked_list_allocator::LockedHeap;
@@ -400,6 +400,15 @@ const IPC_CHUNK: usize = 16;
 fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
     match msg.label {
         NetOp::GET_BACKEND => backend_info_reply(),
+        NetOp::GET_DIAGNOSTIC => {
+            let value = unsafe {
+                TCP_MANAGER
+                    .as_ref()
+                    .map(|tcp| tcp_diagnostic(tcp.diagnostics(), msg.words[0]))
+                    .unwrap_or(0)
+            };
+            IpcMsg::with_label(NetOp::GET_DIAGNOSTIC).word(0, value)
+        }
         NetOp::GETIP => {
             // Ask networkd first for explicit policy; otherwise report the live DHCP lease.
             if let Some((raw_ip, raw_pfx, raw_gw, dns_from_net)) = try_get_config_from_networkd() {
@@ -431,7 +440,11 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                     .ok_or(TcpError::SocketError)
                     .and_then(|tcp| tcp.alloc_socket(owner_pid, sockets))
             };
-            socket_reply(NetOp::SOCKET, result.map_or(0, |identity| identity.0), result.err())
+            socket_reply(
+                NetOp::SOCKET,
+                result.map_or(0, |identity| identity.0),
+                result.err(),
+            )
         }
         NetOp::CONNECT => {
             let identity = SocketIdentity(msg.words[0]);
@@ -448,11 +461,14 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                     _ => Err(TcpError::SocketError),
                 }
             };
-            socket_reply(
-                NetOp::CONNECT,
-                u64::from(result.is_ok()),
-                result.err(),
-            )
+            if result.is_err() {
+                unsafe {
+                    if let Some(tcp) = TCP_MANAGER.as_mut() {
+                        let _ = tcp.close(msg.badge, identity, sockets);
+                    }
+                }
+            }
+            socket_reply(NetOp::CONNECT, u64::from(result.is_ok()), result.err())
         }
         NetOp::SEND => {
             let identity = SocketIdentity(msg.words[0]);
@@ -488,7 +504,11 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 match shm_map(tok) {
                     // SAFETY: kernel guarantees the mapped page is at least one
                     // page (>= SHM_PAGE >= len) and valid for the call duration.
-                    Ok(ptr) => unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec(),
+                    Ok(ptr) => {
+                        let data = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+                        let _ = shm_free(tok);
+                        data
+                    }
                     Err(_) => alloc::vec::Vec::new(),
                 }
             } else {
@@ -505,6 +525,14 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
         NetOp::RECV_SHM => {
             let identity = SocketIdentity(msg.words[0]);
             let max_len = (msg.words[1] as usize).min(SHM_PAGE).max(1);
+            let tok = msg.caps[0];
+            if tok == CapabilityToken::INVALID {
+                return socket_reply(NetOp::RECV_SHM, 0, Some(TcpError::InvalidState));
+            }
+            let ptr = match shm_map(tok) {
+                Ok(ptr) => ptr,
+                Err(_) => return socket_reply(NetOp::RECV_SHM, 0, Some(TcpError::SocketError)),
+            };
             let result = unsafe {
                 TCP_MANAGER
                     .as_mut()
@@ -516,22 +544,18 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                 Err(error) => (alloc::vec::Vec::new(), Some(error)),
             };
             if data.is_empty() {
+                let _ = shm_free(tok);
                 socket_reply(NetOp::RECV_SHM, 0, error)
             } else {
-                match shm_alloc() {
-                    Ok((ptr, token)) => {
-                        let n = data.len().min(SHM_PAGE);
-                        // SAFETY: freshly allocated page is >= SHM_PAGE >= n bytes.
-                        unsafe {
-                            core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, n);
-                        }
-                        IpcMsg::with_label(NetOp::RECV_SHM)
-                            .word(0, n as u64)
-                            .word(1, NetStatus::OK)
-                            .with_cap(0, token)
-                    }
-                    Err(_) => socket_reply(NetOp::RECV_SHM, 0, Some(TcpError::SocketError)),
+                let n = data.len().min(SHM_PAGE);
+                // SAFETY: caller provided a mapped page of at least SHM_PAGE bytes.
+                unsafe {
+                    core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, n);
                 }
+                let _ = shm_free(tok);
+                IpcMsg::with_label(NetOp::RECV_SHM)
+                    .word(0, n as u64)
+                    .word(1, NetStatus::OK)
             }
         }
         NetOp::CLOSE => {
@@ -578,7 +602,11 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                     .ok_or(TcpError::SocketError)
                     .and_then(|tcp| tcp.take_accepted(msg.badge, identity))
             };
-            socket_reply(NetOp::ACCEPT, result.map_or(0, |client| client.0), result.err())
+            socket_reply(
+                NetOp::ACCEPT,
+                result.map_or(0, |client| client.0),
+                result.err(),
+            )
         }
         NetOp::POLL => {
             let count = msg.words[0].min(3) as usize;
@@ -829,6 +857,33 @@ fn socket_status(error: Option<TcpError>) -> u64 {
     }
 }
 
+fn tcp_diagnostic(diagnostics: sunlight_net::TcpDiagnostics, selector: u64) -> u64 {
+    match selector {
+        NetDiagnostic::SOCKET_ALLOC_TOTAL => diagnostics.socket_alloc_total,
+        NetDiagnostic::SOCKET_RELEASE_TOTAL => diagnostics.socket_release_total,
+        NetDiagnostic::SOCKET_LIVE => diagnostics.socket_live,
+        NetDiagnostic::SOCKET_PEAK_LIVE => diagnostics.socket_peak_live,
+        NetDiagnostic::LISTENER_ALLOC_TOTAL => diagnostics.listener_alloc_total,
+        NetDiagnostic::LISTENER_RELEASE_TOTAL => diagnostics.listener_release_total,
+        NetDiagnostic::LISTENER_LIVE => diagnostics.listener_live,
+        NetDiagnostic::STREAM_ALLOC_TOTAL => diagnostics.stream_alloc_total,
+        NetDiagnostic::STREAM_RELEASE_TOTAL => diagnostics.stream_release_total,
+        NetDiagnostic::STREAM_LIVE => diagnostics.stream_live,
+        NetDiagnostic::RX_BUFFERS_LIVE => diagnostics.rx_buffers_live,
+        NetDiagnostic::TX_BUFFERS_LIVE => diagnostics.tx_buffers_live,
+        NetDiagnostic::RX_BYTES_RESERVED => diagnostics.rx_bytes_reserved,
+        NetDiagnostic::TX_BYTES_RESERVED => diagnostics.tx_bytes_reserved,
+        NetDiagnostic::ALLOCATION_FAILURES_TOTAL => diagnostics.allocation_failures_total,
+        NetDiagnostic::ALLOCATION_ROLLBACKS_TOTAL => diagnostics.allocation_rollbacks_total,
+        NetDiagnostic::FAILED_CONNECT_CLEANUP_TOTAL => diagnostics.failed_connect_cleanup_total,
+        NetDiagnostic::PEER_RESET_REAPS_TOTAL => diagnostics.peer_reset_reaps_total,
+        NetDiagnostic::HALF_CLOSE_REAPS_TOTAL => diagnostics.half_close_reaps_total,
+        NetDiagnostic::CLOSE_DEADLINE_REAPS_TOTAL => diagnostics.close_deadline_reaps_total,
+        NetDiagnostic::OWNER_EXIT_REAPS_TOTAL => diagnostics.owner_exit_reaps_total,
+        _ => 0,
+    }
+}
+
 fn socket_reply(label: u64, value: u64, error: Option<TcpError>) -> IpcMsg {
     IpcMsg::with_label(label)
         .word(0, value)
@@ -922,7 +977,11 @@ fn handle_wait(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> Option<IpcMsg> 
         msg.words[2] as u32
     };
     if count == 0 || msg.caps[0] == CapabilityToken::INVALID {
-        return Some(wait_reply(NetStatus::INVALID_STATE, SocketIdentity::INVALID, 0));
+        return Some(wait_reply(
+            NetStatus::INVALID_STATE,
+            SocketIdentity::INVALID,
+            0,
+        ));
     }
     let page = match shm_map(msg.caps[0]) {
         Ok(ptr) => ptr,
@@ -935,14 +994,26 @@ fn handle_wait(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> Option<IpcMsg> 
             .map(SocketIdentity)
             .collect::<alloc::vec::Vec<_>>()
     };
-    if identities.iter().any(|identity| *identity == SocketIdentity::INVALID) {
-        return Some(wait_reply(NetStatus::INVALID_SOCKET, SocketIdentity::INVALID, 0));
+    let _ = shm_free(msg.caps[0]);
+    if identities
+        .iter()
+        .any(|identity| *identity == SocketIdentity::INVALID)
+    {
+        return Some(wait_reply(
+            NetStatus::INVALID_SOCKET,
+            SocketIdentity::INVALID,
+            0,
+        ));
     }
     if let Some((identity, ready)) = first_ready(msg.badge, &identities, interest, sockets) {
         return Some(wait_reply(NetStatus::OK, identity, ready));
     }
     if timeout_ms == 0 {
-        return Some(wait_reply(NetStatus::WOULD_BLOCK, SocketIdentity::INVALID, 0));
+        return Some(wait_reply(
+            NetStatus::WOULD_BLOCK,
+            SocketIdentity::INVALID,
+            0,
+        ));
     }
     let completion_token = match ipc_defer_reply() {
         Ok(token) => token,
@@ -979,17 +1050,19 @@ fn handle_wait(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> Option<IpcMsg> 
 
 fn complete_waiters(sockets: &mut SocketSet<'static>) {
     let now = monotonic_millis();
-    let mut pending = unsafe {
-        core::mem::take(WAITERS.as_mut().expect("waiter table initialized"))
-    };
+    let mut pending =
+        unsafe { core::mem::take(WAITERS.as_mut().expect("waiter table initialized")) };
     let mut retained = alloc::vec::Vec::with_capacity(pending.len());
     for waiter in pending.drain(..) {
         if !ipc_deferred_reply_is_live(waiter.completion_token) {
             continue;
         }
-        let reply = if let Some((identity, ready)) =
-            first_ready(waiter.owner_pid, &waiter.identities, waiter.interest, sockets)
-        {
+        let reply = if let Some((identity, ready)) = first_ready(
+            waiter.owner_pid,
+            &waiter.identities,
+            waiter.interest,
+            sockets,
+        ) {
             Some(wait_reply(NetStatus::OK, identity, ready))
         } else if now >= waiter.deadline_ms {
             Some(wait_reply(NetStatus::TIMEOUT, SocketIdentity::INVALID, 0))
