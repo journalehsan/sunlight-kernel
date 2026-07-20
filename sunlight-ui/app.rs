@@ -22,7 +22,7 @@
 use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use sunlight_ipc::{
-    ipc_call_timeout,
+    ipc_call, ipc_call_timeout, monotonic_millis, process_yield,
     launch_trace::{self, LaunchSource, LaunchTrace},
     nameserver_lookup, shm_create, shm_free, shm_map, CapabilityToken, IpcMsg, SgpMsg,
 };
@@ -43,6 +43,40 @@ static CLIENT_CURSOR: AtomicU8 = AtomicU8::new(u8::MAX);
 
 const fn should_deliver_local_tick(timeout_ms: u64, local_tick_streak: u8) -> bool {
     timeout_ms == 0 && local_tick_streak < MAX_LOCAL_TICKS_BEFORE_EVENT_POLL
+}
+
+/// Decode a packed display-server key word into an [`Event`].
+///
+/// Returns `None` when `key_word == 0` (no key in this poll). Printable ASCII,
+/// backspace, and enter become [`Event::Key`]; everything else becomes
+/// [`Event::KeyPress`] (including key-up and pure modifiers).
+fn decode_key_event_word(key_word: u64) -> Option<Event> {
+    if key_word == 0 {
+        return None;
+    }
+    let (keycode, pressed, shift, ctrl, alt, super_key, ascii) =
+        sunlight_ipc::unpack_key_event(key_word);
+    if pressed {
+        if let Some(ch) = ascii {
+            match ch {
+                0x20..=0x7E => return Some(Event::key(ch as char)),
+                0x08 => return Some(Event::key('\u{8}')),
+                b'\r' | b'\n' => return Some(Event::key('\n')),
+                _ => {}
+            }
+        }
+    }
+    Some(Event::key_press(
+        keycode, pressed, shift, ctrl, alt, super_key,
+    ))
+}
+
+/// Yield until `started_ms + budget_ms` (or return immediately if already past).
+fn idle_wait_remaining(started_ms: u64, budget_ms: u64) {
+    let deadline = started_ms.saturating_add(budget_ms);
+    while monotonic_millis() < deadline {
+        process_yield();
+    }
 }
 
 /// Cursor shape the client requests from the compositor.
@@ -322,27 +356,45 @@ impl Window {
         self.poll_event_timeout(POLL_TIMEOUT_MS)
     }
 
-    /// Poll with an application-selected bounded timeout. Interactive runtimes
-    /// can request short polls while work is runnable, then return to the
-    /// ordinary low-CPU timeout while blocked for input.
+    /// Poll with an application-selected idle timeout. Interactive runtimes
+    /// can request short idle waits while work is runnable, then return to the
+    /// ordinary low-CPU cadence while blocked for input.
+    ///
+    /// # Why EVENT_POLL must not use a short `ipc_call_timeout`
+    ///
+    /// The display server **pops** a pending key into the EVENT_POLL reply.
+    /// If the client arms a short IPC deadline and the display is busy
+    /// compositing (full desktop redraws can take longer than 16–200 ms), the
+    /// kernel late-drops the reply after the deadline — **and the key is
+    /// already gone from the window queue**. Serial then shows
+    /// `[DISPLAY] queued key win=N` with no matching app-side `Event::Key`.
+    /// That is the sunlight-terminal "keyboard is dead" failure mode.
+    ///
+    /// Display always replies when it dequeues the request, so waiting without
+    /// a short client deadline is correct. Idle `Event::Tick` cadence is
+    /// implemented with a post-reply yield wait when the snapshot is empty.
     pub fn poll_event_timeout(&mut self, timeout_ms: u64) -> Event {
         if let Some(event) = self.pending_event.take() {
             return event;
         }
         self.event_counters.display_polls = self.event_counters.display_polls.wrapping_add(1);
-        let reply = match ipc_call_timeout(
+        let idle_ms = timeout_ms.clamp(1, POLL_TIMEOUT_MS);
+        let poll_started = monotonic_millis();
+        // Unbounded wait for the display reply — see doc comment above.
+        let reply = ipc_call(
             self.display_ep,
             IpcMsg::with_label(SgpMsg::EVENT_POLL).word(0, self.win_id),
-            timeout_ms.clamp(1, POLL_TIMEOUT_MS),
-        ) {
-            Ok(r) if r.label == SgpMsg::REPLY => r,
-            _ => return Event::Tick,
-        };
+        );
+        if reply.label != SgpMsg::REPLY {
+            idle_wait_remaining(poll_started, idle_ms);
+            return Event::Tick;
+        }
 
         if reply.words[3] & SgpMsg::EVENT_FLAG_WINDOW_VALID == 0 {
             self.event_counters.wrong_window_replies =
                 self.event_counters.wrong_window_replies.wrapping_add(1);
             self.window_valid = false;
+            idle_wait_remaining(poll_started, idle_ms);
             return Event::Tick;
         }
         self.window_valid = true;
@@ -376,6 +428,12 @@ impl Window {
         let local_x = mouse_x.saturating_sub(self.client_x);
         let local_y = mouse_y.saturating_sub(self.client_y);
         let changed = buttons ^ self.prev_buttons;
+        // words[2]: packed key event (0 = none). Read early so a focus-edge
+        // transition cannot permanently drop a key that arrived in the same
+        // poll — that was a common "terminal has focus but no typing" failure
+        // mode for apps that handle FocusChanged and then expect the next
+        // poll to still carry the key.
+        let key_word = reply.words[2];
 
         if focused != self.prev_focused {
             self.prev_focused = focused;
@@ -390,6 +448,13 @@ impl Window {
                     }
                 }
             }
+            // If no mouse edge was stashed, keep the key for the next poll so
+            // FocusChanged does not steal the user's first keystroke.
+            if self.pending_event.is_none() {
+                if let Some(key_event) = decode_key_event_word(key_word) {
+                    self.pending_event = Some(key_event);
+                }
+            }
             self.prev_buttons = buttons;
             return Event::FocusChanged { focused };
         }
@@ -400,22 +465,8 @@ impl Window {
             self.prev_pointer_captured = pointer_captured;
         }
 
-        // words[2]: packed key event (0 = none)
-        let key_word = reply.words[2];
-        if key_word != 0 {
-            let (keycode, pressed, shift, ctrl, alt, super_key, ascii) =
-                sunlight_ipc::unpack_key_event(key_word);
-            if pressed {
-                if let Some(ch) = ascii {
-                    match ch {
-                        0x20..=0x7E => return Event::key(ch as char),
-                        0x08 => return Event::key('\u{8}'),
-                        b'\r' | b'\n' => return Event::key('\n'),
-                        _ => {}
-                    }
-                }
-            }
-            return Event::key_press(keycode, pressed, shift, ctrl, alt, super_key);
+        if let Some(key_event) = decode_key_event_word(key_word) {
+            return key_event;
         }
 
         // Detect button transitions (press/release) for each of the 3 buttons.
@@ -454,6 +505,9 @@ impl Window {
             return Event::mouse_move(local_x, local_y);
         }
 
+        // Empty snapshot: wait out the idle budget so the app loop does not
+        // spin at full CPU (44k+ EVENT_POLLs per session were observed).
+        idle_wait_remaining(poll_started, idle_ms);
         Event::Tick
     }
 

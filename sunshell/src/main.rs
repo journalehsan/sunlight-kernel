@@ -2711,6 +2711,7 @@ mod sunlight {
         emit_welcome_banner();
         pty_write_shell_output(pty_cap, session_id, &[]);
         send_osc_prompt(pty_cap, session_id, &shell);
+        debug_log("[PTY-SHELL] welcome+prompt written to PTY master_out\n");
 
         let shell_tab = shell_id as u32;
         let mut in_buf = [0u8; 64];
@@ -2817,17 +2818,30 @@ mod sunlight {
             }
         }
 
-        if let (Some(session_id), Some(cap)) = (pty_session, pty_cap) {
-            start_pty_shell(
-                shell_id,
-                sunlight_libc::getuid() as u32,
-                sunlight_libc::getgid() as u32,
-                session_id,
-                cap,
-            );
+        if let Some(session_id) = pty_session {
+            // Prefer a live nameserver grant over the raw token passed on the
+            // command line. The terminal historically stuffed `--pty-cap=N`
+            // with the parent's token word; under capability isolation that
+            // number can be unusable in the child, which left the shell
+            // running but unable to READ_SLAVE / WRITE_SLAVE — so the
+            // graphical terminal looked like it "had no keyboard". Looking up
+            // "pty" ourselves matches how every other service client works
+            // and is the same endpoint the terminal already uses for master
+            // I/O (session id still disambiguates which PTY).
+            let cap = nameserver_lookup("pty").or(pty_cap);
+            if let Some(cap) = cap {
+                start_pty_shell(
+                    shell_id,
+                    sunlight_libc::getuid() as u32,
+                    sunlight_libc::getgid() as u32,
+                    session_id,
+                    cap,
+                );
+            }
+            debug_log("[PTY-SHELL] pty service not found, exiting");
+        } else {
+            debug_log("[PTY-SHELL] missing --pty-session, exiting");
         }
-
-        debug_log("[PTY-SHELL] missing PTY argv, exiting");
         sunlight_ipc::process_exit::ProcessExit::exit(1);
     }
 

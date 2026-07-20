@@ -1362,7 +1362,12 @@ fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (
     let win = &mut state.windows[win_idx];
     if let Some(event) = win.pending_pointer_buttons.pop() {
         let mut flags = SgpMsg::EVENT_FLAG_POINTER_OWNED;
-        if event.focused_window == win.id {
+        // Use *current* keyboard focus for this window, not the stale
+        // focused_window snapshot from when the button edge was queued.
+        // Stale "unfocused" snapshots caused EVENT_POLL to clear FOCUSED for
+        // one frame → client FocusChanged(false) → apps dropped subsequent
+        // keys even though KEY_EVENT still targeted this window.
+        if focused_id == Some(win.id) {
             flags |= SgpMsg::EVENT_FLAG_FOCUSED;
         }
         if event.captured_window == win.id {
@@ -5915,6 +5920,19 @@ pub extern "C" fn _start() -> ! {
                         let win = &mut state.windows[win_idx];
                         win.pending_keys.pop()
                     };
+                    if let Some(packed) = key_event {
+                        let (keycode, pressed, _, ctrl, _, _, ascii) =
+                            sunlight_ipc::unpack_key_event(packed);
+                        if pressed {
+                            debug_log(&alloc::format!(
+                                "[DISPLAY] deliver key win={} keycode={:#x} ctrl={} ascii={}\n",
+                                win_id,
+                                keycode,
+                                ctrl,
+                                ascii.unwrap_or(0)
+                            ));
+                        }
+                    }
                     let (mouse_word, button_word, button_event_dequeued) =
                         mouse_poll_words_for_window(&mut state, win_idx);
                     if button_event_dequeued {

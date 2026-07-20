@@ -200,7 +200,15 @@ const CLOSE_TIMEOUT_MS: u64 = 200;
 /// These calls must never use the unbounded IPC helper: a delayed PTY reply
 /// would otherwise freeze keyboard polling and framebuffer commits while the
 /// display server continues queueing keys for the window.
-const PTY_IO_TIMEOUT_MS: u64 = 20;
+///
+/// 100 ms is still imperceptible as a frame stall, but is large enough that a
+/// busy `pty_server` (shell hammering READ_SLAVE in a tight loop) does not
+/// cause `write()` to give up mid-line — which previously cleared the footer
+/// via `take_line` and then dropped the bytes, so Enter looked dead.
+const PTY_IO_TIMEOUT_MS: u64 = 100;
+/// How many times a single PTY write chunk may retry after a timeout before
+/// the rest of the buffer is abandoned.
+const PTY_WRITE_RETRIES: usize = 4;
 
 struct BumpAllocator;
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
@@ -304,9 +312,21 @@ impl PtySession {
                 }
                 msg = msg.word(2 + wi, word);
             }
-            let reply = match ipc_call_timeout(self.cap, msg, PTY_IO_TIMEOUT_MS) {
-                Ok(reply) => reply,
-                Err(_) => break,
+            let mut attempt = 0usize;
+            let reply = loop {
+                match ipc_call_timeout(self.cap, msg, PTY_IO_TIMEOUT_MS) {
+                    Ok(reply) => break reply,
+                    Err(IpcCallError::Timeout)
+                    | Err(IpcCallError::QueueFull)
+                    | Err(IpcCallError::Cancelled) => {
+                        attempt += 1;
+                        if attempt >= PTY_WRITE_RETRIES {
+                            return;
+                        }
+                        process_yield();
+                    }
+                    Err(_) => return,
+                }
             };
             if reply.label != PtyMsg::REPLY {
                 break;
@@ -902,10 +922,10 @@ impl TerminalTab {
         if !pressed {
             return false;
         }
-        let Some(pty) = self.pty.as_ref() else {
-            return false;
-        };
         if self.app_owns_input() {
+            let Some(pty) = self.pty.as_ref() else {
+                return false;
+            };
             let mut buf = [0u8; 4];
             let n = translate_special_key(keycode, &mut buf);
             if n > 0 {
@@ -914,25 +934,64 @@ impl TerminalTab {
             }
             return false;
         }
+        // Shell-mode line editor: resolve special keys by scancode first so
+        // keys that sometimes lack ASCII (numpad Enter is E0-prefixed and has
+        // no ascii byte) still submit/edit. Matches the pre-UI path that
+        // checked KEY_ENTER before the printable-ascii branch.
+        // Footer editing does NOT require an attached PTY — only submit does.
         match keycode {
-            KEY_BACKSPACE => self.footer.backspace(),
-            KEY_UP => self.footer.history_up(),
-            KEY_DOWN => self.footer.history_down(),
-            KEY_LEFT => self.footer.move_left(),
-            KEY_RIGHT => self.footer.move_right(),
-            KEY_HOME => self.footer.home(),
-            KEY_END => self.footer.end(),
-            KEY_DEL => self.footer.delete_fwd(),
-            _ => return false,
+            KEY_ENTER => {
+                if self.pty.is_none() {
+                    return false;
+                }
+                self.submit_line();
+                true
+            }
+            KEY_BACKSPACE => {
+                self.footer.backspace();
+                true
+            }
+            KEY_UP => {
+                self.footer.history_up();
+                true
+            }
+            KEY_DOWN => {
+                self.footer.history_down();
+                true
+            }
+            KEY_LEFT => {
+                self.footer.move_left();
+                true
+            }
+            KEY_RIGHT => {
+                self.footer.move_right();
+                true
+            }
+            KEY_HOME => {
+                self.footer.home();
+                true
+            }
+            KEY_END => {
+                self.footer.end();
+                true
+            }
+            KEY_DEL => {
+                self.footer.delete_fwd();
+                true
+            }
+            KEY_TAB => {
+                self.footer.insert(b'\t');
+                true
+            }
+            _ => false,
         }
-        true
     }
 
     fn handle_char(&mut self, ch: char) -> bool {
-        if self.pty.is_none() {
-            return false;
-        }
         if self.app_owns_input() {
+            let Some(pty) = self.pty.as_ref() else {
+                return false;
+            };
             let byte = match ch {
                 '\t' => b'\t',
                 '\n' => b'\n',
@@ -941,12 +1000,18 @@ impl TerminalTab {
                 _ => 0,
             };
             if byte != 0 {
-                self.pty.as_ref().unwrap().write(&[byte]);
+                pty.write(&[byte]);
                 return true;
             }
             return false;
         }
+        // Local footer line editor: always accept printable input even if the
+        // PTY is still connecting, so typing is never "dead" while the shell
+        // attaches. Submit still requires a live session.
         if ch == '\n' {
+            if self.pty.is_none() {
+                return false;
+            }
             self.submit_line();
             return true;
         }
@@ -1002,6 +1067,9 @@ struct TerminalApp {
     console_buf: [u8; READ_BUF],
     debug: DebugFlags,
     mods: Mods,
+    /// Compositor keyboard focus for this window. Keys are ignored while false
+    /// so a lagging FocusChanged edge cannot inject into a background terminal.
+    window_focused: bool,
     pending_spawn: Option<PendingSpawn>,
 }
 
@@ -1024,6 +1092,9 @@ impl TerminalApp {
             console_buf: [0; READ_BUF],
             debug,
             mods: Mods::default(),
+            // Optimistic: a newly opened window is raised and focused by the
+            // compositor. FocusChanged will correct this if we were wrong.
+            window_focused: true,
             pending_spawn: None,
         }
     }
@@ -1783,10 +1854,13 @@ impl App for TerminalApp {
         }
 
         let pending_spawn_for_tab = self.pending_spawn.as_ref().map(|p| p.tab_id) == Some(tab.id);
+        // Background + right status only. Never put center status over the
+        // prompt/input field — that made typed text look "dead" (status paint
+        // sat under/through the line editor).
         StatusBar::new(
             footer,
             "",
-            Self::footer_center_text(tab),
+            "",
             Self::footer_right_text(tab, pending_spawn_for_tab),
         )
         .draw(canvas, theme);
@@ -1797,16 +1871,39 @@ impl App for TerminalApp {
             )
             .with_font(&F_SMALL)
             .draw(canvas, theme);
+            Label::new(
+                Rect::new(240, footer.y + 4, 200, FOOTER_H - 8),
+                Self::footer_center_text(tab),
+            )
+            .with_font(&F_SMALL)
+            .dim()
+            .draw(canvas, theme);
         } else {
-            let prompt_w = sun_font::measure_text(tab.footer.prompt_str(), FontRole::UiSmall).w + 4;
-            let prompt_area = Rect::new(8, footer.y + 4, WIN_W - 16, FOOTER_H - 8);
+            // Reserve the right ~120px for the status strip; keep the rest for
+            // prompt + input so long OSC prompts cannot zero out input_w.
+            let status_reserve = 120u32;
+            let prompt_area = Rect::new(
+                8,
+                footer.y + 4,
+                WIN_W.saturating_sub(16 + status_reserve),
+                FOOTER_H - 8,
+            );
+            // Visible input trough so caret/text always contrast with chrome.
+            canvas.fill_rect(prompt_area, theme.bg);
+            canvas.draw_rect(prompt_area, theme.border);
+
+            let prompt_w = sun_font::measure_text(tab.footer.prompt_str(), FontRole::UiSmall)
+                .w
+                .min(prompt_area.w / 2)
+                + 4;
             let spacing = 8;
             let input_w = prompt_area
                 .w
                 .saturating_sub(prompt_w)
-                .saturating_sub(spacing);
+                .saturating_sub(spacing)
+                .max(32);
             let prompt_widths = [prompt_w, input_w];
-            let mut prompt_cells = HBox::new(prompt_area)
+            let mut prompt_cells = HBox::new(prompt_area.inset(2))
                 .with_spacing(spacing)
                 .layout(&prompt_widths);
             if let Some(prompt_rect) = prompt_cells.next() {
@@ -1818,38 +1915,34 @@ impl App for TerminalApp {
                 Label::new(input_rect, tab.footer.input_str())
                     .with_font(&F_UI)
                     .draw(canvas, theme);
-                if !tab.app_owns_input() {
-                    let prefix_w = sun_font::measure_text(
-                        tab.footer.input_prefix_str(),
-                        FontRole::UiRegular,
-                    )
-                    .w as i32;
-                    let caret_x = (input_rect.x + prefix_w).min(input_rect.right() - 1);
-                    canvas.vline(
-                        caret_x,
-                        input_rect.y + 2,
-                        input_rect.h.saturating_sub(4),
-                        theme.accent,
-                    );
-                    if tab.footer.input_cursor < tab.footer.input_len {
-                        let suffix = tab.footer.input_suffix_str();
-                        if let Some(ch) = suffix.chars().next() {
-                            let mut buf = [0u8; 4];
-                            let text = ch.encode_utf8(&mut buf);
-                            let char_w = sun_font::measure_text(text, FontRole::UiRegular)
-                                .w
-                                .min(input_rect.w);
-                            canvas.fill_rect(
-                                Rect::new(
-                                    caret_x,
-                                    input_rect.y + 1,
-                                    char_w,
-                                    input_rect.h.saturating_sub(2),
-                                ),
-                                theme.accent,
-                            );
-                            canvas.draw_char(caret_x, input_rect.y, ch, theme.bg);
-                        }
+                let prefix_w =
+                    sun_font::measure_text(tab.footer.input_prefix_str(), FontRole::UiRegular).w
+                        as i32;
+                let caret_x = (input_rect.x + prefix_w).min(input_rect.right() - 1);
+                canvas.vline(
+                    caret_x,
+                    input_rect.y + 2,
+                    input_rect.h.saturating_sub(4),
+                    theme.accent,
+                );
+                if tab.footer.input_cursor < tab.footer.input_len {
+                    let suffix = tab.footer.input_suffix_str();
+                    if let Some(ch) = suffix.chars().next() {
+                        let mut buf = [0u8; 4];
+                        let text = ch.encode_utf8(&mut buf);
+                        let char_w = sun_font::measure_text(text, FontRole::UiRegular)
+                            .w
+                            .min(input_rect.w);
+                        canvas.fill_rect(
+                            Rect::new(
+                                caret_x,
+                                input_rect.y + 1,
+                                char_w,
+                                input_rect.h.saturating_sub(2),
+                            ),
+                            theme.accent,
+                        );
+                        canvas.draw_char(caret_x, input_rect.y, ch, theme.bg);
                     }
                 }
             }
@@ -1862,6 +1955,18 @@ impl App for TerminalApp {
             Event::Tick => {
                 dirty |= self.poll_all_tabs();
             }
+            Event::FocusChanged { focused } => {
+                // Always resync modifiers on focus edges: a dropped key-up
+                // while unfocused would otherwise leave ctrl/alt stuck and
+                // turn the next plain letter into a shortcut.
+                self.clear_tracked_mods();
+                self.window_focused = focused;
+                if focused {
+                    debug_log("[TERM] focus gained\n");
+                } else {
+                    debug_log("[TERM] focus lost\n");
+                }
+            }
             Event::KeyPress {
                 keycode,
                 pressed,
@@ -1870,7 +1975,19 @@ impl App for TerminalApp {
                 alt,
                 ..
             } => {
+                // Modifier tracking always runs so key-up events still clear
+                // ctrl/alt even if the window is momentarily unfocused.
                 self.mods = Mods { ctrl, alt };
+                // Display only queues keys to the focused window. Receiving a
+                // key therefore proves focus even if a prior FocusChanged
+                // edge was wrong or lost (log showed keys queued to win=2
+                // while the app dropped them as unfocused).
+                if pressed {
+                    self.window_focused = true;
+                }
+                if !self.window_focused {
+                    return dirty;
+                }
                 if pressed && ctrl && keycode == KEY_TAB {
                     dirty |= if shift {
                         self.prev_tab()
@@ -1882,6 +1999,9 @@ impl App for TerminalApp {
                 }
             }
             Event::Key(ch) => {
+                // Same as KeyPress: key delivery implies compositor focus.
+                self.window_focused = true;
+                log_term_key(ch, self.mods.ctrl, self.mods.alt);
                 if self.mods.ctrl && (ch == 't' || ch == 'T') {
                     dirty |= self.spawn_tab();
                 } else if self.mods.ctrl && (ch == 'w' || ch == 'W') {
@@ -1894,18 +2014,24 @@ impl App for TerminalApp {
                     dirty |= self.switch_tab(idx);
                 } else if let Some(tab) = self.active_tab_mut() {
                     dirty |= tab.handle_char(ch);
+                    if dirty {
+                        log_term_footer_len(tab.footer.input_len);
+                    }
                 }
             }
             Event::Click { x, y } => {
                 self.clear_tracked_mods();
+                // A click that reaches the app implies the compositor focused
+                // us; set this optimistically in case FocusChanged was coalesced.
+                self.window_focused = true;
                 dirty |= self.handle_click(x, y);
             }
             Event::MouseDown { .. } => {
                 self.clear_tracked_mods();
+                self.window_focused = true;
             }
             Event::MouseUp { .. }
             | Event::MouseMove { .. }
-            | Event::FocusChanged { .. }
             | Event::PointerOwnership { .. } => {}
         }
         dirty
@@ -2070,6 +2196,54 @@ fn bytes_eq(mut ptr: *const u8, expected: &[u8]) -> bool {
         ptr = unsafe { ptr.add(1) };
     }
     unsafe { *ptr == 0 }
+}
+
+fn log_term_key(ch: char, ctrl: bool, alt: bool) {
+    // Rate-limited enough for diagnosis without flooding serial on hold-repeat.
+    static mut COUNT: u32 = 0;
+    let n = unsafe {
+        COUNT = COUNT.wrapping_add(1);
+        COUNT
+    };
+    if n > 32 && n % 16 != 0 {
+        return;
+    }
+    let mut buf = [0u8; 64];
+    let mut len = 0usize;
+    len += copy_ascii(b"[TERM] key ch=", &mut buf[len..]);
+    if ch >= ' ' && ch <= '~' {
+        if len < buf.len() {
+            buf[len] = ch as u8;
+            len += 1;
+        }
+    } else if ch == '\n' {
+        len += copy_ascii(b"\\n", &mut buf[len..]);
+    } else if ch == '\u{8}' {
+        len += copy_ascii(b"\\b", &mut buf[len..]);
+    } else {
+        len += copy_ascii(b"?", &mut buf[len..]);
+    }
+    if ctrl {
+        len += copy_ascii(b" ctrl", &mut buf[len..]);
+    }
+    if alt {
+        len += copy_ascii(b" alt", &mut buf[len..]);
+    }
+    len += copy_ascii(b"\n", &mut buf[len..]);
+    if let Ok(text) = core::str::from_utf8(&buf[..len]) {
+        debug_log(text);
+    }
+}
+
+fn log_term_footer_len(input_len: usize) {
+    let mut buf = [0u8; 48];
+    let mut len = 0usize;
+    len += copy_ascii(b"[TERM] footer_len=", &mut buf[len..]);
+    len += fmt_u64(&mut buf[len..], input_len as u64);
+    len += copy_ascii(b"\n", &mut buf[len..]);
+    if let Ok(text) = core::str::from_utf8(&buf[..len]) {
+        debug_log(text);
+    }
 }
 
 fn log_pty_bytes(bytes: &[u8]) {
