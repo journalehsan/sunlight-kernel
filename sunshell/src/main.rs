@@ -174,6 +174,7 @@ mod sysfetch;
 #[cfg(feature = "sunlight")]
 #[no_main]
 mod sunlight {
+    use sunlight_uac::auth::hash_password;
     use sunlight_ipc::{
         debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
         launch_trace::{LaunchSource, LaunchTrace},
@@ -400,9 +401,6 @@ mod sunlight {
         fn handle_passwd_input(&mut self, byte: u8, state: PasswdState) -> ([u8; MAX_OUT], usize) {
             match byte {
                 b'\n' | b'\r' => {
-                    // Password entry complete
-                    let password = self.passwd_buffer[..self.passwd_buffer_len].to_vec();
-
                     match state {
                         PasswdState::PromptNew {
                             target_user,
@@ -415,13 +413,16 @@ mod sunlight {
                                 new_password: self.passwd_buffer,
                                 new_password_len: self.passwd_buffer_len,
                             };
+                            for byte in &mut self.passwd_buffer[..self.passwd_buffer_len] {
+                                *byte = 0;
+                            }
                             self.passwd_buffer_len = 0;
                             return copy_out(b"Retype new password: ");
                         }
                         PasswdState::PromptConfirm {
                             target_user,
                             target_user_len,
-                            new_password,
+                            mut new_password,
                             new_password_len,
                         } => {
                             // Verify passwords match
@@ -430,6 +431,12 @@ mod sunlight {
                                     != &new_password[..new_password_len]
                             {
                                 self.passwd_state = PasswdState::None;
+                                for byte in &mut new_password[..new_password_len] {
+                                    *byte = 0;
+                                }
+                                for byte in &mut self.passwd_buffer[..self.passwd_buffer_len] {
+                                    *byte = 0;
+                                }
                                 self.passwd_buffer_len = 0;
                                 return copy_out(b"passwd: passwords do not match\n");
                             }
@@ -439,6 +446,12 @@ mod sunlight {
                                 &new_password[..new_password_len],
                             );
                             self.passwd_state = PasswdState::None;
+                            for byte in &mut new_password[..new_password_len] {
+                                *byte = 0;
+                            }
+                            for byte in &mut self.passwd_buffer[..self.passwd_buffer_len] {
+                                *byte = 0;
+                            }
                             self.passwd_buffer_len = 0;
                             return result;
                         }
@@ -900,7 +913,10 @@ mod sunlight {
             // Find and update the target user's shadow entry
             let mut new_shadow = alloc::string::String::new();
             let target_username = core::str::from_utf8(username).unwrap_or("");
-            let new_password_str = core::str::from_utf8(password).unwrap_or("?");
+            let new_password_hash = match hash_password(password) {
+                Ok(hash) => hash,
+                Err(_) => return copy_out(b"passwd: failed to hash password\n"),
+            };
             let mut found = false;
 
             for line in shadow_str.lines() {
@@ -910,7 +926,7 @@ mod sunlight {
                     new_shadow.push_str(&alloc::format!(
                         "{}:{}:0:0:99999:7:::\n",
                         target_username,
-                        new_password_str
+                        new_password_hash
                     ));
                     found = true;
                 } else {
@@ -924,7 +940,7 @@ mod sunlight {
                 new_shadow.push_str(&alloc::format!(
                     "{}:{}:0:0:99999:7:::\n",
                     target_username,
-                    new_password_str
+                    new_password_hash
                 ));
             }
 

@@ -347,6 +347,7 @@ path = "src/main.rs"
 [dependencies]
 sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true }
+sunlight-uac = { path = "../services/sunlight-uac", optional = true }
 sunlight-tz = { path = "../sunlight-tz" }
 sunlight-locale = { path = "../sunlight-locale" }
 libm = "0.2"
@@ -354,4 +355,4 @@ libm = "0.2"
 [features]
 default = ["sunlight"]
 std = []
-sunlight = ["sunlight-ipc", "sunlight-libc"]
+sunlight = ["sunlight-ipc", "sunlight-libc", "sunlight-uac"]

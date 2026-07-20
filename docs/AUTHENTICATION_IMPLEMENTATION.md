@@ -1,5 +1,10 @@
 # SunlightOS Authentication & Privilege System Implementation
 
+> Phase 0.1 note (July 20, 2026): the active authentication path now uses the
+> `uac` broker with `/etc/passwd` + `/etc/shadow` and Argon2id PHC hashes.
+> Historical sections below describing JSON auth stores or plaintext shadow
+> verification are legacy background and not the current login path.
+
 ## Overview
 
 This document describes the complete authentication and privilege-dropping system implemented in SunlightOS, including:

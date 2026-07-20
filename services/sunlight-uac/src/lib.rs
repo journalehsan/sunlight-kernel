@@ -7,8 +7,11 @@
 //!
 //! - [`session`]: 30-minute prompt-cache sessions and the `runas` skeleton.
 //! - [`capability`]: uid/gid → path-prefix ACL translation and access checks.
+//! - [`auth`]: centralized password verification against `/etc/passwd` and
+//!   `/etc/shadow` using PHC-formatted Argon2id hashes.
 
 #![no_std]
 
 pub mod capability;
+pub mod auth;
 pub mod session;

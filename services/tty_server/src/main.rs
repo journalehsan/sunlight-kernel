@@ -605,15 +605,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         }
 
                         if pressed {
-                            if let Some(ascii) = ascii_opt {
-                                if login.focus == FocusArea::Password {
-                                    debug_log_kbd_byte(
-                                        "[TTY] Key received in password field: ",
-                                        ascii,
-                                    );
-                                }
-                            }
-
                             match login.handle_key_event(keycode, pressed, ascii_opt) {
                                 LoginResult::Reboot => {
                                     debug_log("[TTY]  Reboot requested from login screen");
@@ -1836,30 +1827,6 @@ fn append_term(output: &mut [u8; TERM_OUTPUT_MAX], output_len: &mut usize, data:
     let start = *output_len;
     output[start..start + data.len()].copy_from_slice(data);
     *output_len += data.len();
-}
-
-fn debug_log_kbd_byte(prefix: &str, byte: u8) {
-    let mut buf = [0u8; 64];
-    let pb = prefix.as_bytes();
-    let plen = pb.len().min(60);
-    buf[..plen].copy_from_slice(&pb[..plen]);
-    let dstart = plen;
-    let dlen = if byte < 10 {
-        buf[dstart] = b'0' + byte;
-        1
-    } else if byte < 100 {
-        buf[dstart] = b'0' + byte / 10;
-        buf[dstart + 1] = b'0' + byte % 10;
-        2
-    } else {
-        buf[dstart] = b'0' + byte / 100;
-        buf[dstart + 1] = b'0' + (byte % 100) / 10;
-        buf[dstart + 2] = b'0' + byte % 10;
-        3
-    };
-    if let Ok(s) = core::str::from_utf8(&buf[..dstart + dlen]) {
-        debug_log(s);
-    }
 }
 
 fn launch_shortcut_app(

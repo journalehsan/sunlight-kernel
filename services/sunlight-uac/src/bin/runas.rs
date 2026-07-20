@@ -5,18 +5,14 @@
 //!
 //!   1. Parse argv: `runas <command> [args...]`.
 //!   2. Look up the `"uac"` broker and prompt for a password (passwd-style).
-//!   3. Authenticate the elevation with the broker (`OP_RUNAS`) and authorize
-//!      execution of the target binary against the capability policy
+//!   3. Verify the caller password through the broker and authorize execution
+//!      of the target binary against the capability policy
 //!      (`OP_CHECK_EXEC`). The broker is the single source of truth.
 //!   4. On success, `spawn` the resolved binary as a foreground child (kernel
 //!      wires its fd0/fd1 to this tab's TTY rings, exactly like the shell's
 //!      `run_external`) and `waitpid` for it — so the command's output renders
 //!      live. Image-replacing `exec` is intentionally avoided: it bypasses the
 //!      TTY foreground routing and that path is unused elsewhere in the OS.
-//!
-//! Note: the broker's session model does not yet verify the password bytes
-//! themselves (see `sunlight_uac::session`); the prompt drives the elevated
-//! session cache. The execute authorization is real and capability-based.
 
 #![no_std]
 #![no_main]
@@ -46,6 +42,8 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg};
+use sunlight_uac::auth::authenticate_password;
+use zeroize::Zeroize;
 
 fn stdout_write(s: &str) {
     let mut data = s.as_bytes();
@@ -151,6 +149,37 @@ fn read_line(buf: &mut [u8]) -> usize {
     len
 }
 
+fn unpack_username(words: &[u64]) -> heapless::String<32> {
+    let mut username = heapless::String::<32>::new();
+    'outer: for &word in words {
+        for index in 0..8 {
+            let byte = ((word >> (index * 8)) & 0xff) as u8;
+            if byte == 0 {
+                break 'outer;
+            }
+            if username.push(byte as char).is_err() {
+                break 'outer;
+            }
+        }
+    }
+    username
+}
+
+fn current_username() -> Option<heapless::String<32>> {
+    let vfs = nameserver_lookup("vfs")?;
+    let uid = sunlight_libc::getuid() as u32;
+    let reply = ipc_call(vfs, IpcMsg::with_label(sunlight_ipc::VfsMsg::GETPWUID).word(0, uid as u64));
+    if reply.label != sunlight_ipc::VfsMsg::REPLY || reply.word_count < 7 {
+        return None;
+    }
+    let username = unpack_username(&reply.words[3..7]);
+    if username.is_empty() {
+        None
+    } else {
+        Some(username)
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let mut storage = [""; MAX_ARGS];
@@ -169,16 +198,28 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         println!("runas: uac broker not found (is it running?)");
         sunlight_libc::exit(1);
     };
+    let caller_uid = sunlight_libc::getuid() as u32;
+    let Some(caller_username) = current_username() else {
+        println!("runas: unable to resolve current user");
+        sunlight_libc::exit(1);
+    };
 
     // passwd-style prompt (read_line cannot hang).
     stdout_write("[runas] Password: ");
     let mut pw = [0u8; 64];
-    let _ = read_line(&mut pw);
+    let pw_len = read_line(&mut pw);
 
-    // Authenticate the elevation to root (uid 0).
+    if authenticate_password(caller_username.as_bytes(), &pw[..pw_len]).is_none() {
+        pw.zeroize();
+        println!("runas: authentication failed");
+        sunlight_libc::exit(1);
+    }
+    pw.zeroize();
+
+    // Authenticate the elevation request to root (uid 0).
     let mut auth = IpcMsg::empty();
     auth.label = OP_RUNAS;
-    auth.words[0] = 0; // caller uid
+    auth.words[0] = caller_uid as u64;
     auth.words[1] = 0; // target uid (root)
     if ipc_call(uac, auth).label != REPLY_OK {
         println!("runas: authentication failed");

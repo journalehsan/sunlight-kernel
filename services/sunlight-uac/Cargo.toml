@@ -340,6 +340,11 @@ path = "src/lib.rs"
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
+sunlight-fs = { path = "../../sunlight-fs" }
+argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "password-hash"] }
+password-hash = { version = "0.5.0", default-features = false, features = ["alloc"] }
+zeroize = { version = "1", default-features = false }
+linked_list_allocator = "0.10"
 
 # The privileged daemon: spawned by sunlightd, registers as "uac".
 [[bin]]

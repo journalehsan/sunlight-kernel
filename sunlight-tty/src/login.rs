@@ -1,11 +1,10 @@
 //! Login screen state machine.
 //!
 //! Renders a modern grid-based login form with selectable user avatars,
-//! a password field, and an environment dropdown. Authenticates against
-//! /etc/passwd + /etc/shadow via VFS IPC.
+//! a password field, and an environment dropdown. Authenticates through the
+//! central UAC broker.
 
-use sunlight_fs::{lookup_by_name, parse_passwd, parse_shadow};
-use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg, VfsMsg};
+use sunlight_uac::auth::authenticate_password;
 
 pub const MAX_FIELD_LEN: usize = 64;
 pub const MAX_USERS: usize = 6;
@@ -33,6 +32,7 @@ impl InputField {
 
     pub fn backspace(&mut self) {
         if self.len > 0 {
+            self.buf[self.len - 1] = 0;
             self.len -= 1;
         }
     }
@@ -43,6 +43,9 @@ impl InputField {
     }
 
     pub fn clear(&mut self) {
+        for byte in &mut self.buf[..self.len] {
+            *byte = 0;
+        }
         self.len = 0;
     }
 }
@@ -115,10 +118,10 @@ impl LoginScreen {
         users[0].buf[..root_str.len()].copy_from_slice(root_str);
         users[0].len = root_str.len();
 
-        // Slot 1: Ehsan Tork
-        let ehsan_str = b"Ehsan Tork";
-        users[1].buf[..ehsan_str.len()].copy_from_slice(ehsan_str);
-        users[1].len = ehsan_str.len();
+        // Slot 1: bootstrap regular user
+        let user_str = b"user";
+        users[1].buf[..user_str.len()].copy_from_slice(user_str);
+        users[1].len = user_str.len();
 
         // Slot 2: The dynamic "More / Custom" slot
         is_custom_slot[2] = true;
@@ -289,133 +292,6 @@ impl LoginScreen {
     }
 }
 
-/// Verify login credentials via /etc/passwd + /etc/shadow.
-/// Returns Some((uid, gid)) on success, None on failure.
-/// Falls back to hardcoded credentials if VFS is unavailable.
 fn verify_login(username: &[u8], password: &[u8]) -> Option<(u32, u32)> {
-    use sunlight_ipc::debug_log;
-
-    let vfs_cap = match nameserver_lookup("vfs") {
-        Some(c) => c,
-        None => {
-            return fallback_auth(username, password);
-        }
-    };
-
-    debug_log("[TTY]  Login: reading /etc/passwd via VFS");
-
-    let (passwd_data, passwd_len) = match read_vfs_bytes(vfs_cap, "/etc/passwd") {
-        Some(pair) => pair,
-        None => return fallback_auth(username, password),
-    };
-
-    let (passwd_entries, passwd_count) = parse_passwd(&passwd_data[..passwd_len]);
-    let entry = lookup_by_name(&passwd_entries[..passwd_count], username)?;
-    let uid = entry.uid;
-    let gid = entry.gid;
-
-    debug_log("[TTY]  Login: auth from /etc/shadow");
-
-    let (shadow_data, shadow_len) = match read_vfs_bytes(vfs_cap, "/etc/shadow") {
-        Some(pair) => pair,
-        None => return fallback_auth(username, password),
-    };
-
-    let (shadow_entries, shadow_count) = parse_shadow(&shadow_data[..shadow_len]);
-
-    for i in 0..shadow_count {
-        let s = &shadow_entries[i];
-        let slen = s.username.iter().position(|&b| b == 0).unwrap_or(64);
-        if slen != username.len() || &s.username[..slen] != username {
-            continue;
-        }
-        let plen = s.password.iter().position(|&b| b == 0).unwrap_or(128);
-        if plen == password.len() && &s.password[..plen] == password {
-            return Some((uid, gid));
-        }
-        return None;
-    }
-
-    None
-}
-
-/// Hardcoded fallback used when VFS is unavailable.
-fn fallback_auth(username: &[u8], password: &[u8]) -> Option<(u32, u32)> {
-    if username == b"root" && password == b"root" {
-        return Some((0, 0));
-    }
-    if username == b"user" && password == b"user" {
-        return Some((1000, 1000));
-    }
-    None
-}
-
-/// Read a file from VFS into a fixed 512-byte buffer.
-/// Returns (buffer, bytes_read) on success.
-fn read_vfs_bytes(
-    vfs_cap: sunlight_ipc::CapabilityToken,
-    path: &str,
-) -> Option<([u8; 512], usize)> {
-    let open_msg = path_msg(VfsMsg::OPEN, path);
-    let reply = ipc_call(vfs_cap, open_msg);
-    if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
-        return None;
-    }
-    let handle = reply.words[1] as u32;
-
-    let mut data = [0u8; 512];
-    let mut total = 0usize;
-
-    loop {
-        if total >= data.len() {
-            break;
-        }
-        let read_msg = IpcMsg::with_label(VfsMsg::READ)
-            .word(0, handle as u64)
-            .word(1, total as u64)
-            .word(2, 16);
-        let reply = ipc_call(vfs_cap, read_msg);
-        if reply.label != VfsMsg::REPLY {
-            break;
-        }
-        let n = reply.words[1] as usize;
-        if n == 0 {
-            break;
-        }
-        let src = &reply.words[2..4];
-        for i in 0..n.min(data.len() - total) {
-            let word_idx = i / 8;
-            let byte_idx = i % 8;
-            data[total + i] = ((src[word_idx] >> (byte_idx * 8)) & 0xFF) as u8;
-        }
-        total += n;
-    }
-
-    let _ = ipc_call(
-        vfs_cap,
-        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
-    );
-
-    Some((data, total))
-}
-
-fn path_msg(label: u64, path: &str) -> IpcMsg {
-    let bytes = path.as_bytes();
-    let mut msg = IpcMsg::with_label(label);
-    for word_idx in 0..4 {
-        let start = word_idx * 8;
-        let end = (start + 8).min(bytes.len());
-        if start < bytes.len() {
-            msg = msg.word(word_idx, pack_bytes(&bytes[start..end]));
-        }
-    }
-    msg
-}
-
-fn pack_bytes(bytes: &[u8]) -> u64 {
-    let mut out = 0u64;
-    for (i, &b) in bytes.iter().enumerate().take(8) {
-        out |= (b as u64) << (i * 8);
-    }
-    out
+    authenticate_password(username, password).map(|success| (success.uid, success.gid))
 }

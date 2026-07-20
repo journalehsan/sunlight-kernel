@@ -347,3 +347,4 @@ name = "sunlight_tty"
 sunlight-tui = { path = "../sunlight-tui" }
 sunlight-fs  = { path = "../sunlight-fs" }
 sunlight-ipc = { path = "../ipc" }
+sunlight-uac = { path = "../services/sunlight-uac" }
