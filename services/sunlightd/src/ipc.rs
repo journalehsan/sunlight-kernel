@@ -13,6 +13,8 @@ pub enum SunlightdOp {
     Reload = 4,
     Enable = 5,
     Disable = 6,
+    NotifyReady = 7,
+    NotifyFailed = 8,
     // Query
     Status = 10,
     List = 11,
@@ -29,6 +31,8 @@ impl SunlightdOp {
             4 => Some(Self::Reload),
             5 => Some(Self::Enable),
             6 => Some(Self::Disable),
+            7 => Some(Self::NotifyReady),
+            8 => Some(Self::NotifyFailed),
             10 => Some(Self::Status),
             11 => Some(Self::List),
             20 => Some(Self::GetLog),
@@ -73,7 +77,8 @@ pub fn pack_unit_name(msg: &mut IpcMsg, name: &str) {
 /// words[0] = state
 /// words[1] = pid
 /// words[2] = restarts (low 32) | enabled (bit 32)
-/// words[3] = started_at
+/// words[3] = started_at or transition timestamp
+/// words[4] = detail (exit code / failure reason / startup failure code)
 #[derive(Debug, Clone, Copy)]
 pub struct StatusReply {
     pub state: u32,
@@ -81,6 +86,7 @@ pub struct StatusReply {
     pub restarts: u32,
     pub started_at: u64,
     pub enabled: bool,
+    pub detail: u32,
 }
 
 impl StatusReply {
@@ -89,6 +95,7 @@ impl StatusReply {
         msg.words[1] = self.pid as u64;
         msg.words[2] = self.restarts as u64 | ((self.enabled as u64) << 32);
         msg.words[3] = self.started_at;
+        msg.words[4] = self.detail as u64;
     }
 }
 

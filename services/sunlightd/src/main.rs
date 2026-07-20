@@ -63,6 +63,13 @@ const ENABLED_STATE_PATH: &[u8] = b"/state/sunlightd/enabled-services";
 const ENABLED_STATE_TMP_PATH: &[u8] = b"/state/sunlightd/enabled-services.tmp";
 const ENABLED_STATE_VERSION: &str = "v1";
 const ENABLED_STATE_MAX_BYTES: usize = 2048;
+const SIGKILL: u32 = 9;
+const SIGTERM: u32 = 15;
+const STOP_GRACE_MS: u64 = 3_000;
+const FAILURE_UNKNOWN: u32 = 0;
+const FAILURE_SPAWN: u32 = 1;
+const FAILURE_STARTUP: u32 = 3;
+const FAILURE_RESTART_LIMIT: u32 = 4;
 
 struct ServiceTable {
     services: [Option<ServiceEntry>; MAX_UNITS],
@@ -632,6 +639,180 @@ fn spawn_named(spawn_cap: CapabilityToken, path: &str, name: &str) -> Result<u32
     }
 }
 
+fn entry_pid(entry: &ServiceEntry) -> Option<u32> {
+    match entry.state {
+        ServiceState::Starting { pid, .. } | ServiceState::Running { pid, .. } => Some(pid),
+        _ => None,
+    }
+}
+
+fn spawn_service_at(services: &mut ServiceTable, idx: usize, spawn_cap: CapabilityToken) -> Result<(), u32> {
+    let path = services.get(idx).map(|e| {
+        let mut p = heapless::String::<256>::new();
+        let _ = p.push_str(&e.unit.exec_start);
+        p
+    });
+    let Some(path) = path else {
+        return Err(FAILURE_SPAWN);
+    };
+    let bin = binary_name_of(&path);
+    let mut name_buf = heapless::String::<64>::new();
+    let _ = name_buf.push_str(bin);
+    match spawn_named(spawn_cap, &path, &name_buf) {
+        Ok(pid) => {
+            let now = monotonic_millis();
+            if let Some(entry) = services.get_mut(idx) {
+                entry.mark_starting(pid, now);
+            }
+            serial_println!("[SUNLIGHTD] spawned {} pid={}", name_buf, pid);
+            if let Some(entry) = services.get(idx) {
+                if !matches!(entry.state, ServiceState::Starting { needs_ready: true, .. }) {
+                    if let Some(entry) = services.get_mut(idx) {
+                        entry.mark_running(pid, now);
+                    }
+                }
+            }
+            if name_buf.as_str() == "timezone_service" {
+                serial_println!("[SUNLIGHTD] timezone.service: running (pid={})", pid);
+                serial_println!("[SunlightOS] timezone OK");
+            }
+            Ok(())
+        }
+        Err(e) => {
+            serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name_buf, e);
+            if let Some(entry) = services.get_mut(idx) {
+                entry.last_status_detail = FAILURE_SPAWN;
+                entry.mark_failed(-1, monotonic_millis());
+            }
+            Err(FAILURE_SPAWN)
+        }
+    }
+}
+
+fn begin_stop(entry: &mut ServiceEntry, restart_after_stop: bool) {
+    entry.stop_requested = true;
+    entry.restart_after_stop = restart_after_stop;
+}
+
+fn finish_stop_or_restart(
+    services: &mut ServiceTable,
+    idx: usize,
+    spawn_cap: CapabilityToken,
+    exit_code: u64,
+) {
+    let now = monotonic_millis();
+    let mut should_restart = false;
+    if let Some(entry) = services.get_mut(idx) {
+        if entry.stop_requested {
+            if entry.restart_after_stop {
+                entry.mark_restarting(now, now);
+                should_restart = true;
+            } else {
+                entry.mark_stopped();
+            }
+        } else if entry.should_restart(exit_code as i32) {
+            if entry.check_restart_limit(now) {
+                entry.last_status_detail = FAILURE_RESTART_LIMIT;
+                entry.mark_failed(exit_code as i32, now);
+            } else {
+                entry.mark_restarting(now, now);
+                should_restart = true;
+            }
+        } else {
+            entry.last_status_detail = FAILURE_UNKNOWN;
+            entry.mark_failed(exit_code as i32, now);
+        }
+    }
+    if should_restart {
+        let _ = spawn_service_at(services, idx, spawn_cap);
+    }
+}
+
+fn stop_service(
+    services: &mut ServiceTable,
+    idx: usize,
+    spawn_cap: CapabilityToken,
+    restart_after_stop: bool,
+) -> Result<(), &'static str> {
+    let pid = services.get(idx).and_then(entry_pid);
+    let Some(pid) = pid else {
+        if let Some(entry) = services.get_mut(idx) {
+            if restart_after_stop {
+                entry.mark_restarting(monotonic_millis(), monotonic_millis());
+            } else {
+                entry.mark_stopped();
+            }
+        }
+        if restart_after_stop {
+            return spawn_service_at(services, idx, spawn_cap).map_err(|_| "spawn");
+        }
+        return Ok(());
+    };
+
+    let Some(entry) = services.get_mut(idx) else {
+        return Err("not-found");
+    };
+    begin_stop(entry, restart_after_stop);
+    let _ = libc::kill(pid as u64, SIGTERM);
+    let start = monotonic_millis();
+    loop {
+        match libc::try_waitpid(pid as u64) {
+            Ok(Some(code)) => {
+                finish_stop_or_restart(services, idx, spawn_cap, code);
+                return Ok(());
+            }
+            Ok(None) => {
+                if monotonic_millis().saturating_sub(start) >= STOP_GRACE_MS {
+                    let _ = libc::kill(pid as u64, SIGKILL);
+                    match libc::waitpid(pid as u64) {
+                        Ok(code) => {
+                            finish_stop_or_restart(services, idx, spawn_cap, code);
+                            return Ok(());
+                        }
+                        Err(_) => {
+                            if let Some(entry) = services.get_mut(idx) {
+                                entry.mark_stopped();
+                            }
+                            return Err("waitpid");
+                        }
+                    }
+                }
+                sunlight_ipc::process_yield();
+            }
+            Err(_) => {
+                finish_stop_or_restart(services, idx, spawn_cap, 0);
+                return Ok(());
+            }
+        }
+    }
+}
+
+fn poll_service_exits(services: &mut ServiceTable, spawn_cap: CapabilityToken) {
+    for idx in 0..services.count {
+        let pid = services.get(idx).and_then(entry_pid);
+        let Some(pid) = pid else {
+            continue;
+        };
+        match libc::try_waitpid(pid as u64) {
+            Ok(Some(code)) => finish_stop_or_restart(services, idx, spawn_cap, code),
+            Ok(None) => {}
+            Err(_) => finish_stop_or_restart(services, idx, spawn_cap, 0),
+        }
+    }
+}
+
+fn find_service_idx_by_pid(services: &ServiceTable, pid: u32) -> Option<usize> {
+    for idx in 0..services.count {
+        let Some(entry) = services.get(idx) else {
+            continue;
+        };
+        if entry_pid(entry) == Some(pid) {
+            return Some(idx);
+        }
+    }
+    None
+}
+
 fn wait_for_spawn_cap() -> CapabilityToken {
     loop {
         if let Some(cap) = nameserver_lookup("spawn") {
@@ -711,36 +892,7 @@ fn autostart_services(
         if !deps_ready(services, &entry.unit) {
             continue;
         }
-
-        let mut path = heapless::String::<256>::new();
-        let _ = path.push_str(&entry.unit.exec_start);
-        let bin = binary_name_of(&path);
-        let mut name_buf = heapless::String::<64>::new();
-        let _ = name_buf.push_str(bin);
-
-        if let Some(entry) = services.get_mut(idx) {
-            entry.mark_starting();
-        }
-
-        match spawn_named(spawn_cap, &path, &name_buf) {
-            Ok(pid) => {
-                let started_at = monotonic_millis();
-                serial_println!("[SUNLIGHTD] spawned {} pid={}", name_buf, pid);
-                if let Some(entry) = services.get_mut(idx) {
-                    entry.mark_running(pid, started_at);
-                }
-                if name_buf.as_str() == "timezone_service" {
-                    serial_println!("[SUNLIGHTD] timezone.service: running (pid={})", pid);
-                    serial_println!("[SunlightOS] timezone OK");
-                }
-            }
-            Err(e) => {
-                serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name_buf, e);
-                if let Some(entry) = services.get_mut(idx) {
-                    entry.mark_failed(-1, monotonic_millis());
-                }
-            }
-        }
+        let _ = spawn_service_at(services, idx, spawn_cap);
 
         startup.mark_done(idx);
     }
@@ -773,35 +925,16 @@ fn handle_control_message(
             if let Some(idx) = services.find_by_name(&unit_name) {
                 let already_running = matches!(
                     services.get(idx).map(|e| &e.state),
-                    Some(ServiceState::Running { .. })
+                    Some(ServiceState::Running { .. } | ServiceState::Starting { .. })
                 );
                 if already_running {
                     reply.label = REPLY_OK;
                 } else {
-                    // Clone path before mutable borrow
-                    let path = services.get(idx).map(|e| {
-                        let mut p = heapless::String::<256>::new();
-                        let _ = p.push_str(&e.unit.exec_start);
-                        p
-                    });
-                    if let Some(path) = path {
-                        let bin = binary_name_of(&path);
-                        let mut name_buf = heapless::String::<64>::new();
-                        let _ = name_buf.push_str(bin);
-                        match spawn_named(spawn_cap, &path, &name_buf) {
-                            Ok(pid) => {
-                                if let Some(entry) = services.get_mut(idx) {
-                                    entry.mark_running(pid, monotonic_millis());
-                                }
-                                reply.label = REPLY_OK;
-                            }
-                            Err(_) => {
-                                reply.label = REPLY_ERR;
-                            }
-                        }
+                    reply.label = if spawn_service_at(services, idx, spawn_cap).is_ok() {
+                        REPLY_OK
                     } else {
-                        reply.label = REPLY_ERR;
-                    }
+                        REPLY_ERR
+                    };
                 }
             } else {
                 reply.label = REPLY_ERR;
@@ -811,19 +944,11 @@ fn handle_control_message(
         SunlightdOp::Stop => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
-                if let Some(entry) = services.get_mut(idx) {
-                    match entry.state {
-                        ServiceState::Running { pid, .. } => {
-                            sunlight_ipc::kill(pid as u64, 15); // SIGTERM
-                            entry.mark_stopped();
-                            reply.label = REPLY_OK;
-                        }
-                        _ => {
-                            // Not running; still report success
-                            reply.label = REPLY_OK;
-                        }
-                    }
-                }
+                reply.label = if stop_service(services, idx, spawn_cap, false).is_ok() {
+                    REPLY_OK
+                } else {
+                    REPLY_ERR
+                };
             } else {
                 reply.label = REPLY_ERR;
             }
@@ -832,37 +957,11 @@ fn handle_control_message(
         SunlightdOp::Restart => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
-                // Stop if running
-                if let Some(entry) = services.get_mut(idx) {
-                    if let ServiceState::Running { pid, .. } = entry.state {
-                        sunlight_ipc::kill(pid as u64, 15);
-                        entry.mark_stopped();
-                    }
-                }
-                // Clone path before mutable borrow
-                let path = services.get(idx).map(|e| {
-                    let mut p = heapless::String::<256>::new();
-                    let _ = p.push_str(&e.unit.exec_start);
-                    p
-                });
-                if let Some(path) = path {
-                    let bin = binary_name_of(&path);
-                    let mut name_buf = heapless::String::<64>::new();
-                    let _ = name_buf.push_str(bin);
-                    match spawn_named(spawn_cap, &path, &name_buf) {
-                        Ok(pid) => {
-                            if let Some(entry) = services.get_mut(idx) {
-                                entry.mark_running(pid, monotonic_millis());
-                            }
-                            reply.label = REPLY_OK;
-                        }
-                        Err(_) => {
-                            reply.label = REPLY_ERR;
-                        }
-                    }
+                reply.label = if stop_service(services, idx, spawn_cap, true).is_ok() {
+                    REPLY_OK
                 } else {
-                    reply.label = REPLY_ERR;
-                }
+                    REPLY_ERR
+                };
             } else {
                 reply.label = REPLY_ERR;
             }
@@ -931,6 +1030,42 @@ fn handle_control_message(
             }
         }
 
+        SunlightdOp::NotifyReady => {
+            let pid = msg.badge as u32;
+            if let Some(idx) = find_service_idx_by_pid(services, pid) {
+                let next = services.get(idx).and_then(|entry| match entry.state {
+                    ServiceState::Starting { pid, started_at, .. } => Some((pid, started_at)),
+                    ServiceState::Running { pid, started_at } => Some((pid, started_at)),
+                    _ => None,
+                });
+                if let Some((pid, started_at)) = next {
+                    if let Some(entry) = services.get_mut(idx) {
+                        entry.mark_running(pid, started_at);
+                    }
+                    reply.label = REPLY_OK;
+                } else {
+                    reply.label = REPLY_ERR;
+                }
+            } else {
+                reply.label = REPLY_ERR;
+            }
+        }
+
+        SunlightdOp::NotifyFailed => {
+            let pid = msg.badge as u32;
+            if let Some(idx) = find_service_idx_by_pid(services, pid) {
+                let exit_code = msg.words[0] as i32;
+                let detail = (msg.words[1] as u32).max(FAILURE_STARTUP);
+                if let Some(entry) = services.get_mut(idx) {
+                    entry.last_status_detail = detail;
+                    entry.mark_failed(exit_code, monotonic_millis());
+                }
+                reply.label = REPLY_OK;
+            } else {
+                reply.label = REPLY_ERR;
+            }
+        }
+
         SunlightdOp::Status => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
@@ -942,13 +1077,15 @@ fn handle_control_message(
                             restarts: entry.restart_count,
                             started_at: 0,
                             enabled: entry.enabled,
+                            detail: entry.last_status_detail,
                         },
-                        ServiceState::Starting => StatusReply {
+                        ServiceState::Starting { pid, started_at, .. } => StatusReply {
                             state: 1,
-                            pid: 0,
+                            pid,
                             restarts: entry.restart_count,
-                            started_at: 0,
+                            started_at,
                             enabled: entry.enabled,
+                            detail: entry.last_status_detail,
                         },
                         ServiceState::Running { pid, started_at } => StatusReply {
                             state: 2,
@@ -956,6 +1093,7 @@ fn handle_control_message(
                             restarts: entry.restart_count,
                             started_at,
                             enabled: entry.enabled,
+                            detail: entry.last_status_detail,
                         },
                         ServiceState::Failed {
                             exit_code,
@@ -963,10 +1101,15 @@ fn handle_control_message(
                             restarts,
                         } => StatusReply {
                             state: 3,
-                            pid: exit_code as u32,
+                            pid: 0,
                             restarts,
                             started_at: crashed_at,
                             enabled: entry.enabled,
+                            detail: if entry.last_status_detail == 0 {
+                                exit_code as u32
+                            } else {
+                                entry.last_status_detail
+                            },
                         },
                         ServiceState::Restarting { at } => StatusReply {
                             state: 4,
@@ -974,6 +1117,7 @@ fn handle_control_message(
                             restarts: entry.restart_count,
                             started_at: at,
                             enabled: entry.enabled,
+                            detail: entry.last_status_detail,
                         },
                     };
                     status.pack(&mut reply);
@@ -995,13 +1139,14 @@ fn handle_control_message(
                         name,
                         state: match entry.state {
                             ServiceState::Running { .. } => 2,
-                            ServiceState::Starting => 1,
+                            ServiceState::Starting { .. } => 1,
                             ServiceState::Failed { .. } => 3,
                             ServiceState::Restarting { .. } => 4,
                             _ => 0,
                         },
                         pid: match entry.state {
-                            ServiceState::Running { pid, .. } => pid,
+                            ServiceState::Running { pid, .. }
+                            | ServiceState::Starting { pid, .. } => pid,
                             _ => 0,
                         },
                         restarts: entry.restart_count,
@@ -1062,6 +1207,7 @@ fn _start() -> ! {
     // progressing while dependencies register.
     let mut reply = IpcMsg::empty();
     loop {
+        poll_service_exits(&mut services, spawn_cap);
         autostart_services(&mut services, &mut startup, spawn_cap);
         match ipc_reply_and_try_recv(ep, reply) {
             Some(msg) => {

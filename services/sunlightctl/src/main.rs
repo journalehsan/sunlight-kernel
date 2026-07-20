@@ -169,6 +169,8 @@ fn cmd_status(cap: CapabilityToken, unit: &str) {
     let pid = reply.words[1] as u32;
     let restarts = (reply.words[2] & 0xFFFF_FFFF) as u32;
     let enabled = (reply.words[2] >> 32) != 0;
+    let since = reply.words[3];
+    let detail = reply.words[4] as u32;
 
     println!("● {}.service", unit);
     println!("   Active:   {}", state_str(state));
@@ -176,10 +178,16 @@ fn cmd_status(cap: CapabilityToken, unit: &str) {
         "   Enabled:  {}",
         if enabled { "enabled" } else { "disabled" }
     );
-    if state == 2 {
+    if state == 1 || state == 2 {
         println!("   PID:      {}", pid);
     }
+    if since != 0 {
+        println!("   SinceMs:  {}", since);
+    }
     println!("   Restarts: {}", restarts);
+    if state == 3 || detail != 0 {
+        println!("   Detail:   {}", detail);
+    }
 }
 
 fn cmd_start(cap: CapabilityToken, unit: &str) {

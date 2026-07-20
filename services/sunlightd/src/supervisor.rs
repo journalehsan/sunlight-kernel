@@ -1,11 +1,15 @@
 //! Process supervisor - tracks service lifecycle and handles restarts
 
-use crate::unit::{RestartPolicy, ServiceUnit};
+use crate::unit::{RestartPolicy, ServiceType, ServiceUnit};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServiceState {
     Stopped,
-    Starting,
+    Starting {
+        pid: u32,
+        started_at: u64,
+        needs_ready: bool,
+    },
     Running {
         pid: u32,
         started_at: u64,
@@ -26,6 +30,9 @@ pub struct ServiceEntry {
     pub restart_count: u32,
     pub last_restart_time: u64,
     pub enabled: bool,
+    pub stop_requested: bool,
+    pub restart_after_stop: bool,
+    pub last_status_detail: u32,
 }
 
 impl ServiceEntry {
@@ -36,6 +43,9 @@ impl ServiceEntry {
             restart_count: 0,
             last_restart_time: 0,
             enabled: true,
+            stop_requested: false,
+            restart_after_stop: false,
+            last_status_detail: 0,
         }
     }
 
@@ -64,15 +74,27 @@ impl ServiceEntry {
         }
     }
 
-    pub fn mark_starting(&mut self) {
-        self.state = ServiceState::Starting;
+    pub fn mark_starting(&mut self, pid: u32, started_at: u64) {
+        self.stop_requested = false;
+        self.restart_after_stop = false;
+        self.last_status_detail = 0;
+        self.state = ServiceState::Starting {
+            pid,
+            started_at,
+            needs_ready: self.unit.service_type == ServiceType::Notify,
+        };
     }
 
     pub fn mark_running(&mut self, pid: u32, started_at: u64) {
+        self.stop_requested = false;
+        self.restart_after_stop = false;
+        self.last_status_detail = 0;
         self.state = ServiceState::Running { pid, started_at };
     }
 
     pub fn mark_failed(&mut self, exit_code: i32, crashed_at: u64) {
+        self.stop_requested = false;
+        self.restart_after_stop = false;
         self.state = ServiceState::Failed {
             exit_code,
             crashed_at,
@@ -89,10 +111,15 @@ impl ServiceEntry {
 
         self.restart_count += 1;
         self.last_restart_time = current_time;
+        self.stop_requested = false;
+        self.restart_after_stop = false;
         self.state = ServiceState::Restarting { at };
     }
 
     pub fn mark_stopped(&mut self) {
+        self.stop_requested = false;
+        self.restart_after_stop = false;
+        self.last_status_detail = 0;
         self.state = ServiceState::Stopped;
     }
 }

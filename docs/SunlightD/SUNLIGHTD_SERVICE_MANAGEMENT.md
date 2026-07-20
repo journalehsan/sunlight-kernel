@@ -1,7 +1,7 @@
 # SunlightD Service Management
 
 **Last updated:** 2026-07-20
-**Status:** Service control and enablement persistence working.
+**Status:** Service control, enablement persistence, and basic lifecycle supervision working.
 
 ---
 
@@ -71,6 +71,8 @@ hardware constraint, not a software bug.
 | Reload | 4 | ctl → d | No-op (unit files are compiled-in) |
 | Enable | 5 | ctl → d | Set `enabled = true` |
 | Disable | 6 | ctl → d | Set `enabled = false` |
+| NotifyReady | 7 | daemon → d | Optional readiness signal for `Type=notify` services |
+| NotifyFailed | 8 | daemon → d | Optional startup-failure signal with detail code |
 | Status | 10 | ctl → d | Query a single service |
 | List | 11 | ctl → d | Paginated service enumeration |
 | GetLog | 20 | ctl → d | Stub — not implemented |
@@ -107,7 +109,8 @@ words[3]  bytes 8–15   service name continued
 words[0]  state (u32)
 words[1]  pid   (u32)
 words[2]  restarts (u32 low) | enabled (bit 32)
-words[3]  started_at (u64, or 0 if not tracked)
+words[3]  started_at / transition timestamp (u64)
+words[4]  detail code (u64 low) for failure/status diagnostics
 ```
 
 ---
@@ -185,16 +188,19 @@ services/sunlightctl/
 - [x] Service table with `enabled: bool` per entry
 - [x] Solar disabled by default, skipped in boot spawn loop
 - [x] `start` — spawns via kernel `spawn` capability
-- [x] `stop` — sends SIGTERM, marks service stopped
-- [x] `restart` — stop + start
+- [x] `stop` — sends SIGTERM, waits for exit, escalates to SIGKILL after grace period
+- [x] `restart` — waits for the old instance to exit before spawning the new one
 - [x] `enable` / `disable` — flips `enabled` flag, returns NOP if already in state
 - [x] Enablement persistence in `/state/sunlightd/enabled-services`
 - [x] `enable --now` / `disable --now`
 - [x] `list` with name / state / enabled / PID columns
-- [x] `status` with enabled field
+- [x] `status` with enabled field, timestamps, PID while starting/running, and failure detail
 - [x] `reboot` alias for restart
 - [x] IPC wire format uses only words[0..4] (transport-safe)
 - [x] `find_by_name` used in spawn loop (fixes old index-mismatch bug)
+- [x] Background exit polling updates `Running` → `Failed` / `Restarting`
+- [x] Restart policy now triggers on real process exit events
+- [x] Optional readiness notifications supported for `Type=notify` units
 
 ---
 
@@ -213,24 +219,6 @@ Enablement is now persisted by `sunlightd` itself in
   unexpectedly.
 - Unknown service IDs in the persisted file are ignored with a diagnostic.
 
-### P1 — Stop Reliability
-
-`Stop` sends SIGTERM and immediately marks the service as `Stopped`. If the
-kernel's signal delivery is asynchronous, there is a window where the process is
-still alive but sunlightd considers it stopped. A subsequent `Start` could race
-with the dying process.
-
-**Future:** After SIGTERM, poll `waitpid(pid, WNOHANG)` in a short retry loop
-before marking stopped.
-
-### P2 — Restart-after-stop Race
-
-`Restart` is implemented as stop + spawn with no wait between them. If the binary
-holds a nameserver slot, the new instance might fail to register until the old one
-exits.
-
-**Future:** Same waitpid fix as stop reliability above.
-
 ### P2 — Reload
 
 `Reload` currently returns `REPLY_OK` immediately (no-op). Unit definitions are
@@ -239,14 +227,14 @@ compiled-in, so there is nothing to reload from disk yet.
 **Future:** When on-disk unit files are supported, `Reload` should re-parse them
 and diff against the running table without restarting already-running services.
 
-### P2 — Restart Monitoring
+### P2 — Failure Detail Semantics
 
-SunlightD tracks `restart_count` and `ServiceState` but does not yet watch for
-process exit. There is no background loop polling `waitpid` for managed PIDs.
-Failed services stay in `Running` state until manually queried.
+`status` now exposes a numeric detail code, but the mapping is still intentionally
+small and internal-facing. For now it primarily distinguishes spawn failure,
+startup failure, and restart-rate-limit exhaustion.
 
-**Future:** Add a periodic check loop (or signal-based child reaping) in the main
-IPC loop, between `ipc_reply_and_wait` calls.
+**Future:** publish a stable detail-code table once `sunlightctl` grows richer
+human-readable decoding.
 
 ### P3 — Socket Activation
 
