@@ -24,6 +24,7 @@ pub use splash::{BootMode, SplashScreen};
 // Now generated at build time from Material Icons TTF (see sunlight-tui/build.rs).
 // We use the tinted drawer so the icons take the current accent/dim color.
 const ICON_USERS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_users.tga"));
+const ICON_LUGGAGE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_luggage.tga"));
 const ICON_REBOOT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_reboot.tga"));
 const ICON_SHUTDOWN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_shutdown.tga"));
 
@@ -484,6 +485,12 @@ pub enum LoginFocus {
     Shutdown,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoginUserIcon {
+    User,
+    Luggage,
+}
+
 /// Draw a user avatar tile: 32×32 Material Icon (or TGA) inside a 40×40 slot box.
 ///
 /// Falls back to a letter glyph when `icon` is `None` (icon failed to load).
@@ -590,6 +597,8 @@ pub unsafe fn render_login_grid(
     bg_tga: Option<&[u8]>,
     user_bufs: &[[u8; 64]],
     user_lens: &[usize],
+    user_labels: &[&str],
+    user_icons: &[LoginUserIcon],
     is_custom: &[bool],
     active_count: usize,
     selected_user_idx: usize,
@@ -600,6 +609,7 @@ pub unsafe fn render_login_grid(
 ) {
     // Parse login icons — cheap (header-only), no heap allocation.
     let icon_users = tga::TgaImage::parse(ICON_USERS);
+    let icon_luggage = tga::TgaImage::parse(ICON_LUGGAGE);
     let icon_reboot = tga::TgaImage::parse(ICON_REBOOT);
     let icon_shutdown = tga::TgaImage::parse(ICON_SHUTDOWN);
 
@@ -666,30 +676,31 @@ pub unsafe fn render_login_grid(
     for i in 0..active_count
         .min(user_bufs.len())
         .min(user_lens.len())
+        .min(user_labels.len())
+        .min(user_icons.len())
         .min(is_custom.len())
     {
         let slot_cx = row_x + i as u32 * SLOT_W + SLOT_W / 2;
         let name = &user_bufs[i][..user_lens[i]];
         let focused = focus == LoginFocus::UserSlot(i);
         let selected = i == selected_user_idx;
+        let icon = match user_icons[i] {
+            LoginUserIcon::User => icon_users.as_ref(),
+            LoginUserIcon::Luggage => icon_luggage.as_ref(),
+        };
 
         draw_user_avatar(
             &mut fb,
             slot_cx,
             avatar_icon_top,
-            icon_users.as_ref(),
+            icon,
             name,
             is_custom[i],
             selected,
             focused,
         );
 
-        let label: &str = if name.is_empty() && is_custom[i] {
-            "Other"
-        } else {
-            // SAFETY: login names are ASCII from keyboard or preset bytes.
-            unsafe { core::str::from_utf8_unchecked(name) }
-        };
+        let label = user_labels[i];
         let label_w = fontatlas::measure_text(label, fontatlas::FontSize::Regular);
         fontatlas::draw_text(
             &mut fb,
@@ -1115,8 +1126,17 @@ pub unsafe fn render_login_screen(
 ) {
     let mut users = [[0u8; 64]; 6];
     users[0][..4].copy_from_slice(b"root");
-    users[1][..10].copy_from_slice(b"Ehsan Tork");
-    let user_lens = [4usize, 10, 0, 0, 0, 0];
+    users[1][..4].copy_from_slice(b"user");
+    let user_lens = [4usize, 4, 0, 0, 0, 0];
+    let user_labels = ["root", "Guest", "Other", "", "", ""];
+    let user_icons = [
+        LoginUserIcon::User,
+        LoginUserIcon::Luggage,
+        LoginUserIcon::User,
+        LoginUserIcon::User,
+        LoginUserIcon::User,
+        LoginUserIcon::User,
+    ];
     let is_custom = [false, false, true, false, false, false];
     render_login_grid(
         fb_addr,
@@ -1126,6 +1146,8 @@ pub unsafe fn render_login_screen(
         bg_tga,
         &users,
         &user_lens,
+        &user_labels,
+        &user_icons,
         &is_custom,
         3,
         0,

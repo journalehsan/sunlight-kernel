@@ -41,7 +41,10 @@ use sunlight_ipc::{
     SgpMsg, SpawnMsg, TzMsg,
 };
 use sunlight_libc::sun_exec;
-use sunlight_tty::login::{FocusArea, LoginResult, LoginScreen, SessionType, MAX_USERS};
+use sunlight_tty::login::{
+    login_display_name, login_user_icon, FocusArea, LoginResult, LoginScreen, LoginUserIcon,
+    SessionType, MAX_USERS,
+};
 use sunlight_tty::proc::{ProcOp, SIGKILL};
 use sunlight_tty::TerminalGrid;
 use sunlight_tui::ANSI_COLORS;
@@ -1260,12 +1263,23 @@ fn render_login_fb(
 
     let mut user_bufs = [[0u8; 64]; MAX_USERS];
     let mut user_lens = [0usize; MAX_USERS];
+    let mut user_labels = [""; MAX_USERS];
+    let mut user_icons = [sunlight_tui::LoginUserIcon::User; MAX_USERS];
     let mut is_custom = [false; MAX_USERS];
     for i in 0..login.active_count.min(MAX_USERS) {
         let len = login.users[i].len.min(64);
         user_bufs[i][..len].copy_from_slice(&login.users[i].buf[..len]);
         user_lens[i] = len;
         is_custom[i] = login.is_custom_slot[i];
+        user_labels[i] = if login.users[i].len == 0 && login.is_custom_slot[i] {
+            "Other"
+        } else {
+            login_display_name(login.users[i].as_str())
+        };
+        user_icons[i] = match login_user_icon(login.users[i].as_str()) {
+            LoginUserIcon::User => sunlight_tui::LoginUserIcon::User,
+            LoginUserIcon::Luggage => sunlight_tui::LoginUserIcon::Luggage,
+        };
     }
 
     let focus = match login.focus {
@@ -1285,6 +1299,8 @@ fn render_login_fb(
             Some(login_bg_data()),
             &user_bufs,
             &user_lens[..login.active_count],
+            &user_labels[..login.active_count],
+            &user_icons[..login.active_count],
             &is_custom[..login.active_count],
             login.active_count,
             login.selected_user_idx,

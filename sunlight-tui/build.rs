@@ -123,6 +123,13 @@ fn main() {
     ); // account_circle
     emit_icon_tga(
         &material_font,
+        0xe8f8,
+        28.0,
+        32,
+        &out_dir.join("icon_luggage.tga"),
+    ); // luggage
+    emit_icon_tga(
+        &material_font,
         0xe053,
         28.0,
         32,

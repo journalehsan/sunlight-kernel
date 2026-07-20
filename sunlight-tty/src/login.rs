@@ -9,6 +9,12 @@ use sunlight_uac::auth::authenticate_password;
 pub const MAX_FIELD_LEN: usize = 64;
 pub const MAX_USERS: usize = 6;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoginUserIcon {
+    User,
+    Luggage,
+}
+
 #[derive(Clone, Copy)]
 pub struct InputField {
     pub buf: [u8; MAX_FIELD_LEN],
@@ -78,6 +84,22 @@ impl SessionType {
             Self::Tty => "TTY",
             Self::Desktop => "Desktop",
         }
+    }
+}
+
+pub fn login_display_name(username: &str) -> &str {
+    if username == "user" {
+        "Guest"
+    } else {
+        username
+    }
+}
+
+pub fn login_user_icon(username: &str) -> LoginUserIcon {
+    if username == "user" {
+        LoginUserIcon::Luggage
+    } else {
+        LoginUserIcon::User
     }
 }
 
@@ -246,11 +268,18 @@ impl LoginScreen {
     }
 
     fn attempt_login(&mut self) -> LoginResult {
+        self.attempt_login_with(verify_login)
+    }
+
+    fn attempt_login_with<F>(&mut self, verify: F) -> LoginResult
+    where
+        F: FnOnce(&[u8], &[u8]) -> Option<(u32, u32)>,
+    {
         let u_idx = self.selected_user_idx;
         let user = &self.users[u_idx].buf[..self.users[u_idx].len];
         let pass = &self.password.buf[..self.password.len];
 
-        let cred = verify_login(user, pass);
+        let cred = verify(user, pass);
 
         if let Some((uid, gid)) = cred {
             let ulen = self.users[u_idx].len.min(63);
@@ -294,4 +323,90 @@ impl LoginScreen {
 
 fn verify_login(username: &[u8], password: &[u8]) -> Option<(u32, u32)> {
     authenticate_password(username, password).map(|success| (success.uid, success.gid))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        login_display_name, login_user_icon, InputField, LoginResult, LoginScreen, LoginUserIcon,
+    };
+
+    #[test]
+    fn guest_display_name_is_presentation_only() {
+        assert_eq!(login_display_name("user"), "Guest");
+        assert_eq!(login_display_name("root"), "root");
+    }
+
+    #[test]
+    fn guest_uses_luggage_icon_only_for_user_account() {
+        assert_eq!(login_user_icon("user"), LoginUserIcon::Luggage);
+        assert_eq!(login_user_icon("root"), LoginUserIcon::User);
+    }
+
+    #[test]
+    fn bootstrap_user_slot_keeps_canonical_username() {
+        let login = LoginScreen::new();
+        assert_eq!(login.users[1].as_str(), "user");
+        assert_eq!(login_display_name(login.users[1].as_str()), "Guest");
+    }
+
+    #[test]
+    fn guest_card_authenticates_with_canonical_username() {
+        let mut login = LoginScreen::new();
+        login.selected_user_idx = 1;
+        login.password = InputField::new();
+        login.password.push(b's');
+        login.password.push(b'e');
+        login.password.push(b'c');
+        login.password.push(b'r');
+        login.password.push(b'e');
+        login.password.push(b't');
+
+        let mut seen_username = [0u8; 64];
+        let mut seen_username_len = 0usize;
+        let result = login.attempt_login_with(|username, password| {
+            seen_username[..username.len()].copy_from_slice(username);
+            seen_username_len = username.len();
+            assert_eq!(password, b"secret");
+            Some((1000, 1000))
+        });
+
+        assert_eq!(&seen_username[..seen_username_len], b"user");
+        match result {
+            LoginResult::Success {
+                username,
+                username_len,
+                uid,
+                gid,
+                ..
+            } => {
+                assert_eq!(&username[..username_len], b"user");
+                assert_eq!(uid, 1000);
+                assert_eq!(gid, 1000);
+            }
+            _ => panic!("expected login success"),
+        }
+    }
+
+    #[test]
+    fn incorrect_password_fails_normally_for_guest_card() {
+        let mut login = LoginScreen::new();
+        login.selected_user_idx = 1;
+        login.password.push(b'x');
+
+        let result = login.attempt_login_with(|username, password| {
+            assert_eq!(username, b"user");
+            assert_eq!(password, b"x");
+            None
+        });
+
+        match result {
+            LoginResult::Pending => {
+                assert_eq!(login.attempts, 1);
+                assert_eq!(login.password.len, 0);
+                assert_eq!(login.message, "Invalid username or password.");
+            }
+            _ => panic!("expected failed login to remain pending"),
+        }
+    }
 }
