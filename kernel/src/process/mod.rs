@@ -127,6 +127,9 @@ pub struct Process {
     pub trusted_swap_admin_service: bool,
     /// Set only for the exact embedded freezram diagnostic applet path.
     pub trusted_zram_diagnostic: bool,
+    /// Set only for the embedded PTY broker. It may resolve IPC caller
+    /// credentials through the narrow PTY credential syscall.
+    pub trusted_pty_service: bool,
     /// Trust-chain markers used only for the authenticated-session broker.
     pub trusted_service_manager: bool,
     pub trusted_auth_broker: bool,
@@ -327,6 +330,7 @@ impl Process {
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
+            trusted_pty_service: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
             service_lookup_restrictions: None,
@@ -481,6 +485,7 @@ impl Process {
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
+            trusted_pty_service: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
             service_lookup_restrictions: None,

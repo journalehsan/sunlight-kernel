@@ -28,6 +28,10 @@ pub fn is_trusted_zram_diagnostic_path(path: &str) -> bool {
     matches!(path, "/bin/freezram" | "/usr/bin/freezram")
 }
 
+pub fn is_trusted_pty_service_path(path: &str) -> bool {
+    matches!(path, "/sbin/pty_server" | "/usr/sbin/pty_server")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpawnError {
     NotFound,
@@ -57,12 +61,14 @@ pub fn exec_into_process(
     let old_trusted_display = process.trusted_display_service;
     let old_trusted_swap_admin = process.trusted_swap_admin_service;
     let old_trusted_zram_diagnostic = process.trusted_zram_diagnostic;
+    let old_trusted_pty_service = process.trusted_pty_service;
     let old_linux_compat = process.is_linux_compat;
     let old_brk_base = process.brk_base;
     let old_brk_current = process.brk_current;
     process.trusted_display_service = false;
     process.trusted_swap_admin_service = false;
     process.trusted_zram_diagnostic = false;
+    process.trusted_pty_service = false;
 
     // Phase 4.5: Detect if this is a Linux-compatible ELF binary
     process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
@@ -84,6 +90,7 @@ pub fn exec_into_process(
             process.trusted_display_service = old_trusted_display;
             process.trusted_swap_admin_service = old_trusted_swap_admin;
             process.trusted_zram_diagnostic = old_trusted_zram_diagnostic;
+            process.trusted_pty_service = old_trusted_pty_service;
             process.is_linux_compat = old_linux_compat;
             process.brk_base = old_brk_base;
             process.brk_current = old_brk_current;
@@ -568,6 +575,7 @@ pub fn spawn_from_path_with_restrictions(
     process.trusted_display_service = is_trusted_display_path(path);
     process.trusted_swap_admin_service = is_trusted_swap_admin_path(path);
     process.trusted_zram_diagnostic = is_trusted_zram_diagnostic_path(path);
+    process.trusted_pty_service = is_trusted_pty_service_path(path);
     process.set_initial_args(shell_id.unwrap_or(0), uid as u64, gid as u64, 0);
 
     let actual_pid = process.pid;

@@ -513,6 +513,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         100 => sys_grant_capability_syscall(frame),
         101 => sys_set_fs_base(frame),
         102 => sys_mint_auth_session_grant(frame),
+        103 => sys_pty_get_credentials(frame),
         110 => sys_kbd_register(frame),
         111 => sys_kbd_unregister(),
         112 => sys_kbd_pop_scancode(),
@@ -1804,6 +1805,28 @@ fn sys_getuid() -> u64 {
 /// Syscall: Getgid (36)
 fn sys_getgid() -> u64 {
     sched::with_scheduler(|s| s.current_process().gid as u64)
+}
+
+/// Return kernel-authenticated credentials for an IPC caller. This is
+/// intentionally available only to the embedded PTY broker: user space must
+/// never be able to turn an arbitrary PID into another process's UID/GID.
+///
+/// rdi = caller pid from the kernel-populated IPC badge
+/// rax = uid | (gid << 32), r8 = pid on success; u64::MAX on failure.
+fn sys_pty_get_credentials(frame: &mut SyscallFrame) -> u64 {
+    let target_pid = frame.rdi as usize;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_pty_service {
+        return u64::MAX;
+    }
+    let Some(target) = sched.processes.iter().find(|process| {
+        process.pid == target_pid
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    }) else {
+        return u64::MAX;
+    };
+    frame.r8 = target.pid as u64;
+    target.uid as u64 | ((target.gid as u64) << 32)
 }
 
 /// Syscall: Setuid (37)

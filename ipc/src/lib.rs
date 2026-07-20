@@ -53,6 +53,8 @@ pub enum SunlightSyscall {
     SetNice = 83,
     GetNice = 84,
     SwapCtl = 85,
+    /// Raw hardware seed entropy (one u64).
+    GetEntropy = 87,
     // Phase 3.4: net_server (pid 5) frame proxy — kernel owns the virtio-net
     // device (ring-0 port I/O); these exchange raw Ethernet frames.
     NetTx = 90,
@@ -82,6 +84,8 @@ pub enum SunlightSyscall {
     SvgaUpdate = 128,
     SvgaSetMode = 129,
     DebugLog = 99,
+    /// Trusted PTY service credential lookup for an IPC caller PID.
+    PtyGetCredentials = 103,
 }
 
 /// System statistics filled by the SysInfo syscall (kernel writes four u64s).
@@ -526,13 +530,40 @@ pub mod PtyMsg {
     pub const READ_SLAVE: u64 = 0x7304;
     pub const WRITE_SLAVE: u64 = 0x7305;
     pub const SET_MODE: u64 = 0x7306;
-    pub const CLOSE: u64 = 0x7307;
+    /// Control-authorized delegation of the slave endpoint to a spawned PID.
+    pub const ATTACH_SLAVE: u64 = 0x7307;
+    pub const SET_WINDOW_SIZE: u64 = 0x7308;
+    pub const GET_WINDOW_SIZE: u64 = 0x7309;
+    pub const SET_FOREGROUND_PROCESS: u64 = 0x730A;
+    pub const GET_FOREGROUND_PROCESS: u64 = 0x730B;
+    pub const CLOSE_MASTER: u64 = 0x730C;
+    pub const CLOSE_SLAVE: u64 = 0x730D;
+    pub const CLOSE_SESSION: u64 = 0x730E;
+    pub const GET_STATE: u64 = 0x730F;
     pub const REPLY: u64 = 0x73FF;
     pub const ERROR: u64 = 0x73FE;
     /// Bit 0: canonical/cooked mode.
     /// Bit 1: local echo.
     pub const FLAG_CANONICAL: u64 = 1 << 0;
     pub const FLAG_ECHO: u64 = 1 << 1;
+
+    pub const ERR_INVALID_PTY: u64 = 1;
+    pub const ERR_STALE_HANDLE: u64 = 2;
+    pub const ERR_PERMISSION_DENIED: u64 = 3;
+    pub const ERR_WRONG_ENDPOINT_ROLE: u64 = 4;
+    pub const ERR_NO_SLOTS: u64 = 5;
+    pub const ERR_WOULD_BLOCK: u64 = 6;
+    pub const ERR_PEER_CLOSED: u64 = 7;
+    pub const ERR_SESSION_CLOSING: u64 = 8;
+    pub const ERR_INVALID_WINDOW_SIZE: u64 = 9;
+    pub const ERR_BUFFER_FULL: u64 = 10;
+    pub const ERR_SERVICE_UNAVAILABLE: u64 = 11;
+    pub const ERR_INTERNAL: u64 = 12;
+
+    pub const STATE_MASTER_OPEN: u64 = 1 << 0;
+    pub const STATE_SLAVE_OPEN: u64 = 1 << 1;
+    pub const STATE_CONTROL_OPEN: u64 = 1 << 2;
+    pub const STATE_CLOSING: u64 = 1 << 3;
 }
 
 #[allow(non_snake_case)]
@@ -3078,6 +3109,37 @@ pub fn getpid() -> u64 {
     // SAFETY: GetPid takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetPid, 0, 0, 0, 0, 0, 0, 0) };
     ret
+}
+
+/// One kernel entropy word for opaque user-space capability material.
+pub fn entropy_u64() -> u64 {
+    // SAFETY: GetEntropy takes no user pointers.
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetEntropy, 0, 0, 0, 0, 0, 0, 0) };
+    ret
+}
+
+/// Credentials returned by the kernel for an IPC caller. The syscall is
+/// restricted to the trusted PTY service, so callers cannot use this helper
+/// to inspect arbitrary processes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PtyCallerCredentials {
+    pub pid: u64,
+    pub uid: u32,
+    pub gid: u32,
+}
+
+pub fn pty_caller_credentials(caller_pid: u64) -> Option<PtyCallerCredentials> {
+    // SAFETY: the kernel validates both the service identity and target PID.
+    let (packed, reply) =
+        unsafe { raw_syscall(SunlightSyscall::PtyGetCredentials, caller_pid, 0, 0, 0, 0, 0, 0) };
+    if packed == u64::MAX {
+        return None;
+    }
+    Some(PtyCallerCredentials {
+        pid: reply.words[0],
+        uid: packed as u32,
+        gid: (packed >> 32) as u32,
+    })
 }
 
 pub fn kill(pid: u64, sig: u32) -> bool {

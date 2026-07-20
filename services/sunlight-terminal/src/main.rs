@@ -261,35 +261,50 @@ impl From<IpcCallError> for PtyIoError {
 
 struct PtySession {
     id: u64,
-    cap: CapabilityToken,
+    generation: u64,
+    service_cap: CapabilityToken,
+    master: CapabilityToken,
+    control: CapabilityToken,
 }
 
 impl PtySession {
     /// Request a new session against an already-resolved `pty` service
-    /// capability, bounded by `timeout_ms`. Every tab shares the same
-    /// capability token (it is just the service endpoint); sessions are
-    /// distinguished server-side by `id`.
+    /// service capability, bounded by `timeout_ms`. The returned master and
+    /// control tokens are role-specific opaque authorities; the numeric ID is
+    /// only a generation-qualified locator.
     ///
     /// Uses [`ipc_call_timeout`] rather than the unbounded `ipc_call` — see
     /// the module-level doc comment for why an unbounded call here is what
     /// causes the whole-terminal hang this file fixes.
     fn create_timeout(cap: CapabilityToken, timeout_ms: u64) -> Result<Self, PtyIoError> {
-        let reply = ipc_call_timeout(cap, IpcMsg::with_label(PtyMsg::CREATE), timeout_ms)?;
+        let initial_size = CONTENT_COLS as u64 | ((CONTENT_ROWS as u64) << 16);
+        let reply = ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(PtyMsg::CREATE)
+                .word(0, PtyMsg::FLAG_CANONICAL | PtyMsg::FLAG_ECHO)
+                .word(1, initial_size),
+            timeout_ms,
+        )?;
         if reply.label != PtyMsg::REPLY || reply.cap_count < 2 {
             return Err(PtyIoError::Rejected);
         }
         Ok(Self {
             id: reply.words[0],
-            cap,
+            generation: reply.words[1],
+            service_cap: cap,
+            master: reply.caps[0],
+            control: reply.caps[1],
         })
     }
 
     fn set_mode_timeout(&self, mode_flags: u64, timeout_ms: u64) -> Result<(), PtyIoError> {
         let reply = ipc_call_timeout(
-            self.cap,
+            self.service_cap,
             IpcMsg::with_label(PtyMsg::SET_MODE)
                 .word(0, self.id)
-                .word(1, mode_flags),
+                .word(1, self.generation)
+                .word(2, mode_flags)
+                .with_cap(0, self.control),
             timeout_ms,
         )?;
         if reply.label != PtyMsg::REPLY {
@@ -301,20 +316,20 @@ impl PtySession {
     fn write(&self, bytes: &[u8]) {
         let mut pos = 0;
         while pos < bytes.len() {
-            let chunk = (bytes.len() - pos).min(16);
+            let chunk = (bytes.len() - pos).min(8);
             let mut msg = IpcMsg::with_label(PtyMsg::WRITE_MASTER)
                 .word(0, self.id)
-                .word(1, chunk as u64);
-            for (wi, cb) in bytes[pos..pos + chunk].chunks(8).enumerate() {
-                let mut word = 0u64;
-                for (bi, &b) in cb.iter().enumerate() {
-                    word |= (b as u64) << (bi * 8);
-                }
-                msg = msg.word(2 + wi, word);
+                .word(1, self.generation)
+                .word(2, chunk as u64)
+                .with_cap(0, self.master);
+            let mut word = 0u64;
+            for (byte_index, &byte) in bytes[pos..pos + chunk].iter().enumerate() {
+                word |= (byte as u64) << (byte_index * 8);
             }
+            msg = msg.word(3, word);
             let mut attempt = 0usize;
             let reply = loop {
-                match ipc_call_timeout(self.cap, msg, PTY_IO_TIMEOUT_MS) {
+                match ipc_call_timeout(self.service_cap, msg, PTY_IO_TIMEOUT_MS) {
                     Ok(reply) => break reply,
                     Err(IpcCallError::Timeout)
                     | Err(IpcCallError::QueueFull)
@@ -331,7 +346,7 @@ impl PtySession {
             if reply.label != PtyMsg::REPLY {
                 break;
             }
-            let accepted = (reply.words[1] as usize).min(chunk);
+            let accepted = (reply.words[2] as usize).min(chunk);
             if accepted == 0 {
                 break;
             }
@@ -342,12 +357,14 @@ impl PtySession {
     fn read(&self, out: &mut [u8]) -> usize {
         let mut total = 0;
         while total < out.len() {
-            let chunk = (out.len() - total).min(16);
+            let chunk = (out.len() - total).min(8);
             let reply = match ipc_call_timeout(
-                self.cap,
+                self.service_cap,
                 IpcMsg::with_label(PtyMsg::READ_MASTER)
                     .word(0, self.id)
-                    .word(1, chunk as u64),
+                    .word(1, self.generation)
+                    .word(2, chunk as u64)
+                    .with_cap(0, self.master),
                 PTY_IO_TIMEOUT_MS,
             ) {
                 Ok(reply) => reply,
@@ -356,12 +373,12 @@ impl PtySession {
             if reply.label != PtyMsg::REPLY {
                 break;
             }
-            let n = (reply.words[1] as usize).min(chunk);
+            let n = (reply.words[2] as usize).min(chunk);
             if n == 0 {
                 break;
             }
             for i in 0..n {
-                out[total + i] = ((reply.words[2 + (i / 8)] >> ((i % 8) * 8)) & 0xFF) as u8;
+                out[total + i] = ((reply.words[3] >> (i * 8)) & 0xFF) as u8;
             }
             total += n;
             if n < chunk {
@@ -371,14 +388,32 @@ impl PtySession {
         total
     }
 
-    /// Release this session back to `pty_server` (frees the server-side
-    /// slot for reuse). Best-effort and idempotent; bounded by
+    fn attach_slave_timeout(&self, timeout_ms: u64) -> Result<CapabilityToken, PtyIoError> {
+        let reply = ipc_call_timeout(
+            self.service_cap,
+            IpcMsg::with_label(PtyMsg::ATTACH_SLAVE)
+                .word(0, self.id)
+                .word(1, self.generation)
+                .word(2, 0)
+                .with_cap(0, self.control),
+            timeout_ms,
+        )?;
+        if reply.label != PtyMsg::REPLY || reply.cap_count < 1 {
+            return Err(PtyIoError::Rejected);
+        }
+        Ok(reply.caps[0])
+    }
+
+    /// Release this session through its control authority. Best-effort and idempotent; bounded by
     /// [`CLOSE_TIMEOUT_MS`] so a stuck server can't wedge tab close/teardown
     /// either.
     fn close(&self) {
         let _ = ipc_call_timeout(
-            self.cap,
-            IpcMsg::with_label(PtyMsg::CLOSE).word(0, self.id),
+            self.service_cap,
+            IpcMsg::with_label(PtyMsg::CLOSE_SESSION)
+                .word(0, self.id)
+                .word(1, self.generation)
+                .with_cap(0, self.control),
             CLOSE_TIMEOUT_MS,
         );
     }
@@ -1213,7 +1248,23 @@ impl TerminalApp {
             SpawnStep::SpawnShell(pty) => {
                 log_tab_phase(pending.tab_id, "shell_spawn_requested");
                 let shell_id = (pty.id as u8).max(1) as u64;
-                match spawn_shell(&pty, shell_id) {
+                let slave = match pty.attach_slave_timeout(SPAWN_STEP_TIMEOUT_MS) {
+                    Ok(slave) => slave,
+                    Err(PtyIoError::Timeout) => return {
+                        self.pending_spawn = Some(PendingSpawn {
+                            tab_id: pending.tab_id,
+                            step: SpawnStep::SpawnShell(pty),
+                            started_ms: pending.started_ms,
+                        });
+                        true
+                    },
+                    Err(PtyIoError::Rejected) => {
+                        pty.close();
+                        self.mark_pending_failed_id(pending.tab_id);
+                        return true;
+                    }
+                };
+                match spawn_shell(&pty, slave, shell_id) {
                     Ok(shell_pid) => {
                         log_tab_phase(pending.tab_id, "shell_spawned");
                         self.attach_tab(pending.tab_id, pty, shell_pid);
@@ -2303,11 +2354,13 @@ const fn hex_digit(nibble: u8) -> u8 {
     }
 }
 
-fn spawn_shell(pty: &PtySession, shell_id: u64) -> Result<u64, ()> {
+fn spawn_shell(pty: &PtySession, slave: CapabilityToken, shell_id: u64) -> Result<u64, ()> {
     let mut path_buf = [0u8; 32];
     let mut arg0 = [0u8; 16];
     let mut arg_session = [0u8; 48];
-    let mut arg_cap = [0u8; 48];
+    let mut arg_generation = [0u8; 48];
+    let mut arg_service = [0u8; 48];
+    let mut arg_slave = [0u8; 48];
 
     let mut path_len = copy_ascii(b"/bin/sshl", &mut path_buf);
     path_len += fmt_u64(&mut path_buf[path_len..], shell_id);
@@ -2318,13 +2371,21 @@ fn spawn_shell(pty: &PtySession, shell_id: u64) -> Result<u64, ()> {
     let mut aps_len = copy_ascii(b"--pty-session=", &mut arg_session);
     aps_len += fmt_u64(&mut arg_session[aps_len..], pty.id);
 
-    let mut apc_len = copy_ascii(b"--pty-cap=", &mut arg_cap);
-    apc_len += fmt_u64(&mut arg_cap[apc_len..], pty.cap.0);
+    let mut apg_len = copy_ascii(b"--pty-generation=", &mut arg_generation);
+    apg_len += fmt_u64(&mut arg_generation[apg_len..], pty.generation);
+
+    let mut apc_len = copy_ascii(b"--pty-service-cap=", &mut arg_service);
+    apc_len += fmt_u64(&mut arg_service[apc_len..], pty.service_cap.0);
+
+    let mut apsl_len = copy_ascii(b"--pty-slave-cap=", &mut arg_slave);
+    apsl_len += fmt_u64(&mut arg_slave[apsl_len..], slave.0);
 
     let argv = [
         &arg0[..a0_len],
         &arg_session[..aps_len],
-        &arg_cap[..apc_len],
+        &arg_generation[..apg_len],
+        &arg_service[..apc_len],
+        &arg_slave[..apsl_len],
     ];
     libc::spawn(&path_buf[..path_len], &argv, None).map_err(|_| ())
 }

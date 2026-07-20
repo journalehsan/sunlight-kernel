@@ -2548,25 +2548,31 @@ mod sunlight {
         n
     }
 
-    fn pty_write(cap: CapabilityToken, session_id: u64, bytes: &[u8]) -> usize {
+    fn pty_write(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        bytes: &[u8],
+    ) -> usize {
         let mut written = 0usize;
         while written < bytes.len() {
-            let chunk = (bytes.len() - written).min(16);
+            let chunk = (bytes.len() - written).min(8);
             let mut msg = IpcMsg::with_label(PtyMsg::WRITE_SLAVE)
                 .word(0, session_id)
-                .word(1, chunk as u64);
-            for (word_idx, chunk_bytes) in bytes[written..written + chunk].chunks(8).enumerate() {
-                let mut word = 0u64;
-                for (byte_idx, &b) in chunk_bytes.iter().enumerate() {
-                    word |= (b as u64) << (byte_idx * 8);
-                }
-                msg = msg.word(2 + word_idx, word);
+                .word(1, generation)
+                .word(2, chunk as u64)
+                .with_cap(0, slave_cap);
+            let mut word = 0u64;
+            for (byte_index, &byte) in bytes[written..written + chunk].iter().enumerate() {
+                word |= (byte as u64) << (byte_index * 8);
             }
-            let reply = ipc_call(cap, msg);
+            msg = msg.word(3, word);
+            let reply = ipc_call(service_cap, msg);
             if reply.label != PtyMsg::REPLY {
                 break;
             }
-            let accepted = (reply.words[1] as usize).min(chunk);
+            let accepted = (reply.words[2] as usize).min(chunk);
             if accepted == 0 {
                 break;
             }
@@ -2575,26 +2581,33 @@ mod sunlight {
         written
     }
 
-    fn pty_read(cap: CapabilityToken, session_id: u64, out: &mut [u8]) -> usize {
+    fn pty_read(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        out: &mut [u8],
+    ) -> usize {
         let mut total = 0usize;
         while total < out.len() {
-            let chunk = (out.len() - total).min(16);
+            let chunk = (out.len() - total).min(8);
             let reply = ipc_call(
-                cap,
+                service_cap,
                 IpcMsg::with_label(PtyMsg::READ_SLAVE)
                     .word(0, session_id)
-                    .word(1, chunk as u64),
+                    .word(1, generation)
+                    .word(2, chunk as u64)
+                    .with_cap(0, slave_cap),
             );
             if reply.label != PtyMsg::REPLY {
                 break;
             }
-            let n = (reply.words[1] as usize).min(chunk);
+            let n = (reply.words[2] as usize).min(chunk);
             if n == 0 {
                 break;
             }
             for i in 0..n {
-                let word = reply.words[2 + (i / 8)];
-                out[total + i] = ((word >> ((i % 8) * 8)) & 0xFF) as u8;
+                out[total + i] = ((reply.words[3] >> (i * 8)) & 0xFF) as u8;
             }
             total += n;
             if n < chunk {
@@ -2604,31 +2617,55 @@ mod sunlight {
         total
     }
 
-    fn pty_write_shell_output(cap: CapabilityToken, session_id: u64, short: &[u8]) {
+    fn pty_write_shell_output(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        short: &[u8],
+    ) {
         if unsafe { LONG_OUT_ACTIVE } {
             let len = unsafe { LONG_OUT_LEN };
             if len > 0 {
                 unsafe {
-                    let _ = pty_write(cap, session_id, &LONG_OUT_BUF[..len]);
+                    let _ = pty_write(
+                        service_cap,
+                        slave_cap,
+                        session_id,
+                        generation,
+                        &LONG_OUT_BUF[..len],
+                    );
                 }
             }
             long_out_reset();
             return;
         }
         if !short.is_empty() {
-            let _ = pty_write(cap, session_id, short);
+            let _ = pty_write(service_cap, slave_cap, session_id, generation, short);
         }
     }
 
-    fn pty_write_prompt(cap: CapabilityToken, session_id: u64, shell: &Shell) {
+    fn pty_write_prompt(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        shell: &Shell,
+    ) {
         let mut buf = [0u8; 128];
         let len = build_prompt(shell, &mut buf);
-        let _ = pty_write(cap, session_id, &buf[..len]);
+        let _ = pty_write(service_cap, slave_cap, session_id, generation, &buf[..len]);
     }
 
     /// Send OSC 9001;prompt;TEXT sequence so the terminal emulator shows
     /// the prompt text in its footer input bar.
-    fn send_osc_prompt(cap: CapabilityToken, session_id: u64, shell: &Shell) {
+    fn send_osc_prompt(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        shell: &Shell,
+    ) {
         let mut buf = [0u8; 192];
         let mut n = 0;
         for &b in b"\x1b]9001;prompt;" {
@@ -2649,12 +2686,18 @@ mod sunlight {
             buf[n] = 0x07; // BEL = OSC terminator
             n += 1;
         }
-        let _ = pty_write(cap, session_id, &buf[..n]);
+        let _ = pty_write(service_cap, slave_cap, session_id, generation, &buf[..n]);
     }
 
     /// Send OSC 9001;app_start;NAME so the terminal shows the app indicator
     /// in the footer and routes all keystrokes directly to the PTY.
-    fn send_osc_app_start(cap: CapabilityToken, session_id: u64, name: &[u8]) {
+    fn send_osc_app_start(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        name: &[u8],
+    ) {
         let mut buf = [0u8; 64];
         let mut n = 0;
         for &b in b"\x1b]9001;app_start;" {
@@ -2673,13 +2716,24 @@ mod sunlight {
             buf[n] = 0x07;
             n += 1;
         }
-        let _ = pty_write(cap, session_id, &buf[..n]);
+        let _ = pty_write(service_cap, slave_cap, session_id, generation, &buf[..n]);
     }
 
     /// Send OSC 9001;app_done so the terminal exits app mode and shows the
     /// prompt+input footer again.
-    fn send_osc_app_done(cap: CapabilityToken, session_id: u64) {
-        let _ = pty_write(cap, session_id, b"\x1b]9001;app_done\x07");
+    fn send_osc_app_done(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+    ) {
+        let _ = pty_write(
+            service_cap,
+            slave_cap,
+            session_id,
+            generation,
+            b"\x1b]9001;app_done\x07",
+        );
     }
 
     fn emit_welcome_banner() {
@@ -2712,7 +2766,9 @@ mod sunlight {
         uid: u32,
         gid: u32,
         session_id: u64,
-        pty_cap: CapabilityToken,
+        generation: u64,
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
     ) -> ! {
         debug_log("[PTY-SHELL] starting PTY slave mode");
 
@@ -2725,8 +2781,8 @@ mod sunlight {
         // Send welcome banner as content output, then prompt via OSC.
         // The terminal shows content in the scroll area and the prompt in the footer.
         emit_welcome_banner();
-        pty_write_shell_output(pty_cap, session_id, &[]);
-        send_osc_prompt(pty_cap, session_id, &shell);
+        pty_write_shell_output(service_cap, slave_cap, session_id, generation, &[]);
+        send_osc_prompt(service_cap, slave_cap, session_id, generation, &shell);
         debug_log("[PTY-SHELL] welcome+prompt written to PTY master_out\n");
 
         let shell_tab = shell_id as u32;
@@ -2743,11 +2799,17 @@ mod sunlight {
                 // Relay foreground app stdout to the terminal content area.
                 let pulled = tty_stdout_pull(shell_tab, &mut child_buf);
                 if pulled > 0 {
-                    let _ = pty_write(pty_cap, session_id, &child_buf[..pulled]);
+                    let _ = pty_write(
+                        service_cap,
+                        slave_cap,
+                        session_id,
+                        generation,
+                        &child_buf[..pulled],
+                    );
                     progress = true;
                 }
                 // Forward keystrokes from terminal (app mode) to the app's stdin.
-                let n = pty_read(pty_cap, session_id, &mut in_buf);
+                let n = pty_read(service_cap, slave_cap, session_id, generation, &mut in_buf);
                 if n > 0 {
                     let _ = tty_stdin_push(shell_tab, &in_buf[..n]);
                     progress = true;
@@ -2756,14 +2818,14 @@ mod sunlight {
                     shell.fg_pid = None;
                     shell.env.set("?", &alloc::format!("{}", code));
                     // Tell terminal to exit app mode, add separator, then show new prompt.
-                    send_osc_app_done(pty_cap, session_id);
-                    let _ = pty_write(pty_cap, session_id, b"\n");
-                    send_osc_prompt(pty_cap, session_id, &shell);
+                    send_osc_app_done(service_cap, slave_cap, session_id, generation);
+                    let _ = pty_write(service_cap, slave_cap, session_id, generation, b"\n");
+                    send_osc_prompt(service_cap, slave_cap, session_id, generation, &shell);
                     progress = true;
                 }
             } else {
                 // Normal mode: receive complete lines from the terminal's footer input.
-                let n = pty_read(pty_cap, session_id, &mut in_buf);
+                let n = pty_read(service_cap, slave_cap, session_id, generation, &mut in_buf);
                 if n > 0 {
                     progress = true;
                     for &byte in &in_buf[..n] {
@@ -2784,17 +2846,46 @@ mod sunlight {
                         let fg_before = shell.fg_pid;
                         long_out_reset();
                         let (out, out_len) = shell.handle_byte(byte);
-                        pty_write_shell_output(pty_cap, session_id, &out[..out_len]);
+                        pty_write_shell_output(
+                            service_cap,
+                            slave_cap,
+                            session_id,
+                            generation,
+                            &out[..out_len],
+                        );
 
                         if is_enter {
                             if shell.fg_pid.is_some() && fg_before.is_none() {
                                 // A foreground app just launched.
                                 let (name, name_len) = fg_app_name(&cmd_buf[..cmd_len]);
-                                send_osc_app_start(pty_cap, session_id, &name[..name_len]);
+                                send_osc_app_start(
+                                    service_cap,
+                                    slave_cap,
+                                    session_id,
+                                    generation,
+                                    &name[..name_len],
+                                );
                             } else if shell.fg_pid.is_none() {
+                                if cmd_len == 4 && &cmd_buf[..cmd_len] == b"exit" {
+                                    let _ = ipc_call(
+                                        service_cap,
+                                        IpcMsg::with_label(PtyMsg::CLOSE_SLAVE)
+                                            .word(0, session_id)
+                                            .word(1, generation)
+                                            .with_cap(0, slave_cap),
+                                    );
+                                    sunlight_ipc::process_exit::ProcessExit::exit(0);
+                                }
                                 // Command completed inline; separator then prompt.
-                                let _ = pty_write(pty_cap, session_id, b"\n");
-                                send_osc_prompt(pty_cap, session_id, &shell);
+                                let _ =
+                                    pty_write(service_cap, slave_cap, session_id, generation, b"\n");
+                                send_osc_prompt(
+                                    service_cap,
+                                    slave_cap,
+                                    session_id,
+                                    generation,
+                                    &shell,
+                                );
                             }
                             cmd_len = 0;
                         }
@@ -2815,7 +2906,9 @@ mod sunlight {
         let raw_count = unsafe { sunlight_libc::crt0::collect_raw_args(argc, argv, &mut raw) };
         let mut shell_id = 0u64;
         let mut pty_session = None;
-        let mut pty_cap = None;
+        let mut pty_generation = None;
+        let mut pty_service_cap = None;
+        let mut pty_slave_cap = None;
 
         for (idx, ptr) in raw[..raw_count].iter().copied().enumerate() {
             if ptr.is_null() {
@@ -2829,35 +2922,29 @@ mod sunlight {
                 shell_id = parse_u64_bytes(rest).unwrap_or(shell_id);
             } else if let Some(rest) = bytes.strip_prefix(b"--pty-session=") {
                 pty_session = parse_u64_bytes(rest);
-            } else if let Some(rest) = bytes.strip_prefix(b"--pty-cap=") {
-                pty_cap = parse_u64_bytes(rest).map(CapabilityToken);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-generation=") {
+                pty_generation = parse_u64_bytes(rest);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-service-cap=") {
+                pty_service_cap = parse_u64_bytes(rest).map(CapabilityToken);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-slave-cap=") {
+                pty_slave_cap = parse_u64_bytes(rest).map(CapabilityToken);
             }
         }
 
-        if let Some(session_id) = pty_session {
-            // Prefer a live nameserver grant over the raw token passed on the
-            // command line. The terminal historically stuffed `--pty-cap=N`
-            // with the parent's token word; under capability isolation that
-            // number can be unusable in the child, which left the shell
-            // running but unable to READ_SLAVE / WRITE_SLAVE — so the
-            // graphical terminal looked like it "had no keyboard". Looking up
-            // "pty" ourselves matches how every other service client works
-            // and is the same endpoint the terminal already uses for master
-            // I/O (session id still disambiguates which PTY).
-            let cap = nameserver_lookup("pty").or(pty_cap);
-            if let Some(cap) = cap {
-                start_pty_shell(
-                    shell_id,
-                    sunlight_libc::getuid() as u32,
-                    sunlight_libc::getgid() as u32,
-                    session_id,
-                    cap,
-                );
-            }
-            debug_log("[PTY-SHELL] pty service not found, exiting");
-        } else {
-            debug_log("[PTY-SHELL] missing --pty-session, exiting");
+        if let (Some(session_id), Some(generation), Some(service_cap), Some(slave_cap)) =
+            (pty_session, pty_generation, pty_service_cap, pty_slave_cap)
+        {
+            start_pty_shell(
+                shell_id,
+                sunlight_libc::getuid() as u32,
+                sunlight_libc::getgid() as u32,
+                session_id,
+                generation,
+                service_cap,
+                slave_cap,
+            );
         }
+        debug_log("[PTY-SHELL] missing PTY authority, exiting");
         sunlight_ipc::process_exit::ProcessExit::exit(1);
     }
 
