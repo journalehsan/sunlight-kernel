@@ -127,6 +127,9 @@ pub struct Process {
     pub trusted_swap_admin_service: bool,
     /// Set only for the exact embedded freezram diagnostic applet path.
     pub trusted_zram_diagnostic: bool,
+    /// When set, this process may only resolve nameserver entries that map to
+    /// the declared service capability profile.
+    pub service_lookup_restrictions: Option<u64>,
     /// Linux compatibility heap base for `brk(2)`.
     pub brk_base: u64,
     /// Current Linux compatibility heap break.
@@ -321,6 +324,7 @@ impl Process {
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
+            service_lookup_restrictions: None,
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,
@@ -472,6 +476,7 @@ impl Process {
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
+            service_lookup_restrictions: None,
             brk_base: 0,
             brk_current: 0,
             mmap_next: 0,

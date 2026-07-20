@@ -68,6 +68,7 @@ const SIGTERM: u32 = 15;
 const STOP_GRACE_MS: u64 = 3_000;
 const FAILURE_UNKNOWN: u32 = 0;
 const FAILURE_SPAWN: u32 = 1;
+const FAILURE_IDENTITY: u32 = 2;
 const FAILURE_STARTUP: u32 = 3;
 const FAILURE_RESTART_LIMIT: u32 = 4;
 
@@ -322,6 +323,48 @@ fn normalize_dep_unit_name(dep: &str) -> heapless::String<64> {
     unit_name
 }
 
+fn pack_path_words(msg: &mut IpcMsg, path: &str) {
+    let bytes = path.as_bytes();
+    for i in 0..4 {
+        let mut word = 0u64;
+        for j in 0..8 {
+            let idx = i * 8 + j;
+            if idx < bytes.len() {
+                word |= (bytes[idx] as u64) << (j * 8);
+            }
+        }
+        msg.words[i] = word;
+    }
+    msg.word_count = 4;
+}
+
+fn lookup_user_credentials(username: &str) -> Option<(u32, u32)> {
+    let vfs = nameserver_lookup("vfs")?;
+    let mut msg = IpcMsg::with_label(sunlight_ipc::VfsMsg::GETPWNAM);
+    pack_path_words(&mut msg, username);
+    let reply = ipc_call(vfs, msg);
+    if reply.label != sunlight_ipc::VfsMsg::REPLY || reply.words[0] != 0 {
+        return None;
+    }
+    Some((reply.words[1] as u32, reply.words[2] as u32))
+}
+
+fn capability_summary(mask: u64) -> heapless::String<192> {
+    let names = sunlight_ipc::service_capability_mask_to_names(mask);
+    let mut out = heapless::String::<192>::new();
+    if names.is_empty() {
+        let _ = out.push_str("none");
+        return out;
+    }
+    for (index, name) in names.iter().enumerate() {
+        if index != 0 {
+            let _ = out.push(',');
+        }
+        let _ = out.push_str(name);
+    }
+    out
+}
+
 /// Load unit files for services managed by sunlightd.
 /// kernel → init → sunlightd; vfs/net/tty are managed by kernel/init, not here.
 fn load_units() -> (ServiceTable, heapless::Vec<SocketUnit, 8>) {
@@ -339,6 +382,10 @@ ExecStart=/sbin/solar
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=network
+Capability=vfs
+Capability=kv-store
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -363,6 +410,9 @@ ExecStart=/sbin/timezone_service
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=time-sync
+Capability=service-lifecycle
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -383,6 +433,9 @@ ExecStart=/sbin/niced
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=service-lifecycle
+Capability=scheduler-control
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -403,6 +456,8 @@ ExecStart=/sbin/gcd
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=scheduler-control
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -423,6 +478,9 @@ ExecStart=/sbin/uac_service
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=authentication
+Capability=vfs
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -445,6 +503,7 @@ ExecStart=/sbin/sunlight-sm
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -468,6 +527,8 @@ ExecStart=/sbin/sunlight-kv
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=storage-admin
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -489,6 +550,8 @@ ExecStart=/sbin/sunlight-clipd
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=kv-store
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -509,6 +572,7 @@ ExecStart=/sbin/sunlight-dialogd
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -530,6 +594,7 @@ ExecStart=/sbin/rand_service
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -553,6 +618,10 @@ ExecStart=/sbin/sunlight-tls
 Restart=on-failure
 RestartSec=3
 User=root
+Capability=network
+Capability=kv-store
+Capability=time-sync
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -573,6 +642,7 @@ Type=simple
 ExecStart=/sbin/sunlight-thumbd
 Restart=no
 User=root
+Capability=logging
 StandardOutput=journal
 StandardError=journal
 
@@ -623,11 +693,19 @@ fn build_dep_graph(
         .map_err(|_| "Topological sort failed")
 }
 
-/// Spawn a named daemon via the kernel spawn capability.
-fn spawn_named(spawn_cap: CapabilityToken, path: &str, name: &str) -> Result<u32, &'static str> {
+fn spawn_named_with_identity(
+    spawn_cap: CapabilityToken,
+    path: &str,
+    name: &str,
+    uid: u32,
+    gid: u32,
+    capability_mask: u64,
+) -> Result<u32, &'static str> {
     use sunlight_ipc::SpawnMsg;
 
-    let req = SpawnRequest::new(path, name);
+    let req = SpawnRequest::new(path, name)
+        .with_identity(uid, gid)
+        .with_service_caps(capability_mask);
     let mut msg = IpcMsg::empty();
     req.pack_into(&mut msg);
 
@@ -647,18 +725,41 @@ fn entry_pid(entry: &ServiceEntry) -> Option<u32> {
 }
 
 fn spawn_service_at(services: &mut ServiceTable, idx: usize, spawn_cap: CapabilityToken) -> Result<(), u32> {
-    let path = services.get(idx).map(|e| {
-        let mut p = heapless::String::<256>::new();
-        let _ = p.push_str(&e.unit.exec_start);
-        p
-    });
-    let Some(path) = path else {
+    let Some(unit) = services.get(idx).map(|entry| entry.unit.clone()) else {
         return Err(FAILURE_SPAWN);
     };
+    let mut path = heapless::String::<256>::new();
+    let _ = path.push_str(&unit.exec_start);
     let bin = binary_name_of(&path);
     let mut name_buf = heapless::String::<64>::new();
     let _ = name_buf.push_str(bin);
-    match spawn_named(spawn_cap, &path, &name_buf) {
+    let Some((uid, gid)) = lookup_user_credentials(unit.user.as_str()) else {
+        serial_println!(
+            "[SUNLIGHTD] failed to resolve User={} for {}",
+            unit.user,
+            name_buf
+        );
+        if let Some(entry) = services.get_mut(idx) {
+            entry.last_status_detail = FAILURE_IDENTITY;
+            entry.mark_failed(-1, monotonic_millis());
+        }
+        return Err(FAILURE_IDENTITY);
+    };
+    serial_println!(
+        "[SUNLIGHTD] capability profile {} uid={} gid={} caps={}",
+        name_buf,
+        uid,
+        gid,
+        capability_summary(unit.capability_mask)
+    );
+    match spawn_named_with_identity(
+        spawn_cap,
+        &path,
+        &name_buf,
+        uid,
+        gid,
+        unit.capability_mask,
+    ) {
         Ok(pid) => {
             let now = monotonic_millis();
             if let Some(entry) = services.get_mut(idx) {

@@ -462,7 +462,18 @@ pub fn spawn_from_path(
     uid: u32,
     gid: u32,
 ) -> Result<usize, SpawnError> {
-    spawn_from_path_with_env(path, argv, pmm, sched, caps, hhdm_offset, uid, gid, None)
+    spawn_from_path_with_restrictions(
+        path,
+        argv,
+        pmm,
+        sched,
+        caps,
+        hhdm_offset,
+        uid,
+        gid,
+        None,
+        None,
+    )
 }
 
 /// Spawn with an explicit base environment (e.g. inherited from a parent via
@@ -477,6 +488,32 @@ pub fn spawn_from_path_with_env(
     uid: u32,
     gid: u32,
     env: Option<super::env::EnvMap>,
+) -> Result<usize, SpawnError> {
+    spawn_from_path_with_restrictions(
+        path,
+        _argv,
+        pmm,
+        sched,
+        _caps,
+        hhdm_offset,
+        uid,
+        gid,
+        env,
+        None,
+    )
+}
+
+pub fn spawn_from_path_with_restrictions(
+    path: &str,
+    _argv: &[&str],
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+    _caps: &mut CapabilityBroker,
+    hhdm_offset: VirtAddr,
+    uid: u32,
+    gid: u32,
+    env: Option<super::env::EnvMap>,
+    service_lookup_restrictions: Option<u64>,
 ) -> Result<usize, SpawnError> {
     let bytes = embedded_bytes_for_path(path)?;
     // Shells map a tty tab via their shell_id; non-shell paths (e.g. user-level
@@ -523,6 +560,7 @@ pub fn spawn_from_path_with_env(
     // USER, HOME, SHELL). Username resolution from /etc/passwd happens in
     // userspace via VFS; the kernel only knows the uid here.
     process.env = env.unwrap_or_else(|| super::env::EnvMap::with_defaults(uid, ""));
+    process.service_lookup_restrictions = service_lookup_restrictions;
 
     let envp_strings = process.env.to_envp();
     let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();

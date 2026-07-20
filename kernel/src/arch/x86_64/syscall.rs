@@ -698,22 +698,33 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
 /// Extracts path from the message words and spawns a new process.
 fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let path = decode_path_from_words(&msg.words);
-    let (uid, gid) = crate::process::spawn::shell_credentials_from_path(&path).unwrap_or((0, 0));
+    let (uid, gid, service_caps) = if msg.cap_count >= 2 {
+        (
+            msg.caps[0].0 as u32,
+            msg.caps[1].0 as u32,
+            Some(msg.caps[1].0 >> 32),
+        )
+    } else {
+        let (uid, gid) =
+            crate::process::spawn::shell_credentials_from_path(&path).unwrap_or((0, 0));
+        (uid, gid, None)
+    };
 
     let mut sched = crate::sched::SCHEDULER.lock();
     crate::serial_println!(
-        "[SPAWN] Request from pid={} for path={} uid={} gid={}",
+        "[SPAWN] Request from pid={} for path={} uid={} gid={} caps={:#x}",
         sched.current_process().pid,
         path,
         uid,
-        gid
+        gid,
+        service_caps.unwrap_or(u64::MAX)
     );
 
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
 
-    match crate::process::spawn::spawn_from_path(
+    match crate::process::spawn::spawn_from_path_with_restrictions(
         &path,
         &[],
         &mut *pmm,
@@ -722,6 +733,8 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         VirtAddr::new(hhdm),
         uid,
         gid,
+        None,
+        service_caps,
     ) {
         Ok(pid) => {
             let mut reply = IpcMsg::with_label(crate::ipc::SpawnMsg::REPLY);

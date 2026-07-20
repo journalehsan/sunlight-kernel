@@ -699,6 +699,9 @@ pub fn handle_ipc_call(
     {
         mediate_nameserver_register(caller_pid, &mut msg, caps, sched)?;
     }
+    if target_owner == 1 && msg.label == sunlight_ipc::InitMsg::LOOKUP {
+        mediate_nameserver_lookup(caller_pid, &msg, sched)?;
+    }
     if let Some(pending) = sched.processes[idx].pending_call {
         if pending.target_cap != target_cap.0 || pending.endpoint_id != endpoint_id {
             return Err(IpcError::InvalidArgument);
@@ -790,6 +793,34 @@ fn mediate_nameserver_register(
     msg.words[2] = endpoint_id as u64;
     msg.word_count = msg.word_count.max(3);
     Ok(())
+}
+
+fn mediate_nameserver_lookup(
+    caller_pid: usize,
+    msg: &IpcMsg,
+    sched: &Scheduler,
+) -> Result<(), IpcError> {
+    if msg.word_count < 1 {
+        return Err(IpcError::InvalidArgument);
+    }
+    let process = sched
+        .processes
+        .iter()
+        .find(|process| process.pid == caller_pid)
+        .ok_or(IpcError::InvalidArgument)?;
+    let Some(mask) = process.service_lookup_restrictions else {
+        return Ok(());
+    };
+    if sunlight_ipc::service_capability_allows_hashed_name(mask, msg.words[0]) {
+        return Ok(());
+    }
+    crate::serial_println!(
+        "[IPC] denied nameserver lookup pid={} name='{}' mask={:#x}",
+        caller_pid,
+        process.name_str(),
+        mask
+    );
+    Err(IpcError::InvalidCapability)
 }
 
 pub(crate) fn registration_authorized(

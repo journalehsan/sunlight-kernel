@@ -1,6 +1,8 @@
 #![no_std]
 
 pub mod display_metrics;
+extern crate alloc;
+
 pub mod display_modes;
 pub mod swap_policy;
 pub use display_metrics::{
@@ -181,6 +183,175 @@ pub mod InitStatus {
     pub const LIVE_NAME_CONFLICT: u64 = 2;
     pub const REGISTRY_FULL: u64 = 3;
     pub const NOT_FOUND: u64 = 4;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ServiceCapability {
+    Network = 0,
+    Authentication = 1,
+    Pty = 2,
+    SpawnUser = 3,
+    ConfigRead = 4,
+    HostKeyAdmin = 5,
+    ServiceLifecycle = 6,
+    Logging = 7,
+    SecureRandom = 8,
+    MonotonicTime = 9,
+    Vfs = 10,
+    KvStore = 11,
+    StorageAdmin = 12,
+    Display = 13,
+    Tty = 14,
+    SchedulerControl = 15,
+    TimeSync = 16,
+    Resolver = 17,
+}
+
+impl ServiceCapability {
+    pub const fn bit(self) -> u64 {
+        1u64 << (self as u8)
+    }
+
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "network" => Some(Self::Network),
+            "authentication" => Some(Self::Authentication),
+            "pty" => Some(Self::Pty),
+            "spawn-user" => Some(Self::SpawnUser),
+            "config-read" => Some(Self::ConfigRead),
+            "host-key-admin" => Some(Self::HostKeyAdmin),
+            "service-lifecycle" => Some(Self::ServiceLifecycle),
+            "logging" => Some(Self::Logging),
+            "secure-random" => Some(Self::SecureRandom),
+            "monotonic-time" => Some(Self::MonotonicTime),
+            "vfs" => Some(Self::Vfs),
+            "kv-store" => Some(Self::KvStore),
+            "storage-admin" => Some(Self::StorageAdmin),
+            "display" => Some(Self::Display),
+            "tty" => Some(Self::Tty),
+            "scheduler-control" => Some(Self::SchedulerControl),
+            "time-sync" => Some(Self::TimeSync),
+            "resolver" => Some(Self::Resolver),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Network => "network",
+            Self::Authentication => "authentication",
+            Self::Pty => "pty",
+            Self::SpawnUser => "spawn-user",
+            Self::ConfigRead => "config-read",
+            Self::HostKeyAdmin => "host-key-admin",
+            Self::ServiceLifecycle => "service-lifecycle",
+            Self::Logging => "logging",
+            Self::SecureRandom => "secure-random",
+            Self::MonotonicTime => "monotonic-time",
+            Self::Vfs => "vfs",
+            Self::KvStore => "kv-store",
+            Self::StorageAdmin => "storage-admin",
+            Self::Display => "display",
+            Self::Tty => "tty",
+            Self::SchedulerControl => "scheduler-control",
+            Self::TimeSync => "time-sync",
+            Self::Resolver => "resolver",
+        }
+    }
+}
+
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 18] = [
+    ServiceCapability::Network,
+    ServiceCapability::Authentication,
+    ServiceCapability::Pty,
+    ServiceCapability::SpawnUser,
+    ServiceCapability::ConfigRead,
+    ServiceCapability::HostKeyAdmin,
+    ServiceCapability::ServiceLifecycle,
+    ServiceCapability::Logging,
+    ServiceCapability::SecureRandom,
+    ServiceCapability::MonotonicTime,
+    ServiceCapability::Vfs,
+    ServiceCapability::KvStore,
+    ServiceCapability::StorageAdmin,
+    ServiceCapability::Display,
+    ServiceCapability::Tty,
+    ServiceCapability::SchedulerControl,
+    ServiceCapability::TimeSync,
+    ServiceCapability::Resolver,
+];
+
+pub fn service_capability_mask_to_names(mask: u64) -> alloc::vec::Vec<&'static str> {
+    let mut out = alloc::vec::Vec::new();
+    for capability in ALL_SERVICE_CAPABILITIES {
+        if mask & capability.bit() != 0 {
+            out.push(capability.as_str());
+        }
+    }
+    out
+}
+
+pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
+    if mask & ServiceCapability::Network.bit() != 0 && name_key == name_to_u64("net") {
+        return true;
+    }
+    if mask & ServiceCapability::Authentication.bit() != 0 && name_key == name_to_u64("uac") {
+        return true;
+    }
+    if mask & ServiceCapability::Pty.bit() != 0 && name_key == name_to_u64("pty") {
+        return true;
+    }
+    if mask & ServiceCapability::SpawnUser.bit() != 0 && name_key == name_to_u64("spawn") {
+        return true;
+    }
+    if mask & ServiceCapability::ConfigRead.bit() != 0 && name_key == name_to_u64("vfs") {
+        return true;
+    }
+    if mask & ServiceCapability::HostKeyAdmin.bit() != 0 && name_key == name_to_u64("vfs") {
+        return true;
+    }
+    if mask & ServiceCapability::ServiceLifecycle.bit() != 0
+        && name_key == name_to_u64("sunlightd")
+    {
+        return true;
+    }
+    if mask & ServiceCapability::SecureRandom.bit() != 0 && name_key == name_to_u64("rand") {
+        return true;
+    }
+    if mask & ServiceCapability::Vfs.bit() != 0 && name_key == name_to_u64("vfs") {
+        return true;
+    }
+    if mask & ServiceCapability::KvStore.bit() != 0
+        && name_key == name_to_u64("sunlight-kv")
+    {
+        return true;
+    }
+    if mask & ServiceCapability::StorageAdmin.bit() != 0 && name_key == name_to_u64("sm") {
+        return true;
+    }
+    if mask & ServiceCapability::Display.bit() != 0
+        && name_key == name_to_u64("display_server")
+    {
+        return true;
+    }
+    if mask & ServiceCapability::Tty.bit() != 0 && name_key == name_to_u64("tty") {
+        return true;
+    }
+    if mask & ServiceCapability::SchedulerControl.bit() != 0
+        && (name_key == name_to_u64("gcd") || name_key == name_to_u64("niced"))
+    {
+        return true;
+    }
+    if mask & ServiceCapability::TimeSync.bit() != 0
+        && (name_key == name_to_u64("timed") || name_key == name_to_u64("tz"))
+    {
+        return true;
+    }
+    if mask & ServiceCapability::Resolver.bit() != 0 && name_key == name_to_u64("resolved") {
+        return true;
+    }
+    false
 }
 
 #[allow(non_snake_case)]
@@ -2054,6 +2225,12 @@ pub struct SpawnRequest {
     pub path: [u8; 32],
     /// Short process name, e.g. b"timezone_service\0..."
     pub name: [u8; 16],
+    /// Requested uid for the child.
+    pub uid: u32,
+    /// Requested gid for the child.
+    pub gid: u32,
+    /// Declared capability mask for service-name lookups.
+    pub service_caps: u64,
 }
 
 impl SpawnRequest {
@@ -2061,6 +2238,9 @@ impl SpawnRequest {
         let mut req = Self {
             path: [0; 32],
             name: [0; 16],
+            uid: 0,
+            gid: 0,
+            service_caps: u64::MAX,
         };
         let pb = path.as_bytes();
         let plen = pb.len().min(31);
@@ -2069,6 +2249,17 @@ impl SpawnRequest {
         let nlen = nb.len().min(15);
         req.name[..nlen].copy_from_slice(&nb[..nlen]);
         req
+    }
+
+    pub fn with_identity(mut self, uid: u32, gid: u32) -> Self {
+        self.uid = uid;
+        self.gid = gid;
+        self
+    }
+
+    pub fn with_service_caps(mut self, service_caps: u64) -> Self {
+        self.service_caps = service_caps;
+        self
     }
 
     /// Pack into an IpcMsg. Path occupies words[0..3]; name hint in words[4..5].
@@ -2088,6 +2279,9 @@ impl SpawnRequest {
             }
             msg.words[4 + i] = w;
         }
+        msg.caps[0] = CapabilityToken(self.uid as u64);
+        msg.caps[1] = CapabilityToken((self.gid as u64) | (self.service_caps << 32));
+        msg.cap_count = 2;
     }
 
     /// Unpack from an IpcMsg.
@@ -2095,6 +2289,9 @@ impl SpawnRequest {
         let mut req = Self {
             path: [0; 32],
             name: [0; 16],
+            uid: msg.caps[0].0 as u32,
+            gid: msg.caps[1].0 as u32,
+            service_caps: msg.caps[1].0 >> 32,
         };
         for i in 0..4 {
             let w = msg.words[i];

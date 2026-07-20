@@ -2,6 +2,7 @@
 //! Implements a no-alloc-friendly parser using heapless types
 
 use heapless::{String, Vec};
+use sunlight_ipc::ServiceCapability;
 
 pub const MAX_UNITS: usize = 32;
 
@@ -52,6 +53,7 @@ pub struct ServiceUnit {
     pub environment: Vec<EnvPair, 16>,
     pub environment_file: Option<String<128>>,
     pub user: String<32>,
+    pub capability_mask: u64,
     pub working_dir: Option<String<128>>,
     pub stdout: LogDest,
     pub stderr: LogDest,
@@ -79,6 +81,7 @@ impl Default for ServiceUnit {
             environment: Vec::new(),
             environment_file: None,
             user,
+            capability_mask: 0,
             working_dir: None,
             stdout: LogDest::Journal,
             stderr: LogDest::Journal,
@@ -265,6 +268,10 @@ fn parse_service_key(unit: &mut ServiceUnit, key: &str, value: &str) -> Result<(
         }
         "User" => {
             unit.user = str_to_string(value);
+        }
+        "Capability" => {
+            let capability = ServiceCapability::from_str(value).ok_or(ParseError::InvalidKey)?;
+            unit.capability_mask |= capability.bit();
         }
         "WorkingDirectory" => {
             unit.working_dir = Some(str_to_string(value));
