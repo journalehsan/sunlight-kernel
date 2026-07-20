@@ -163,6 +163,8 @@ static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
 static ICON_WRITER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.tga");
+static ICON_RABBIT_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
 static MENU_NEW_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.tga");
 static MENU_NEW_TEXT_TGA: &[u8] =
@@ -319,7 +321,7 @@ impl DesktopTheme {
     }
 }
 
-/// Theme icons for the bottom dock.
+/// Theme icons for the bottom dock (and settings pill).
 #[derive(Clone, Copy)]
 struct DockTheme {
     terminal: Option<TgaImage>,
@@ -327,6 +329,9 @@ struct DockTheme {
     calc: Option<TgaImage>,
     files: Option<TgaImage>,
     settings: Option<TgaImage>,
+    editor: Option<TgaImage>,
+    writer: Option<TgaImage>,
+    rabbit: Option<TgaImage>,
 }
 
 impl DockTheme {
@@ -337,38 +342,24 @@ impl DockTheme {
             calc: TgaImage::parse(ICON_CALC_TGA).ok(),
             files: TgaImage::parse(ICON_FILES_TGA).ok(),
             settings: TgaImage::parse(ICON_SETTINGS_TGA).ok(),
-        }
-    }
-
-    /// Return TGA icon for dock slot index (0=grid/launcher, 1=terminal, 2=calendar, 3=calc, 4=files).
-    fn dock_icon(&self, idx: usize) -> Option<TgaImage> {
-        match idx {
-            0 => None, // launcher grid — keep pixel-art
-            1 => self.terminal,
-            2 => self.calendar,
-            3 => self.calc,
-            4 => self.files,
-            _ => None,
+            editor: TgaImage::parse(ICON_TEXT_EDITOR_TGA).ok(),
+            writer: TgaImage::parse(ICON_WRITER_TGA).ok(),
+            rabbit: TgaImage::parse(ICON_RABBIT_TGA).ok(),
         }
     }
 
     fn icon_for_app(&self, app_id: AppId) -> Option<TgaImage> {
         match app_id {
-            AppId::Terminal => self.terminal,
-            AppId::Chronos => self.terminal,
+            AppId::Terminal | AppId::Chronos => self.terminal,
             AppId::Calculator => self.calc,
             AppId::Files => self.files,
             AppId::Settings => self.settings,
             AppId::Calendar => self.calendar,
-            // Not rendered in the bottom dock; the Start Menu owns their icons.
-            AppId::Tasks
-            | AppId::Bench
-            | AppId::TextEditor
-            | AppId::Writer
-            | AppId::Devices
-            | AppId::RappidRabbit
-            | AppId::ApiLab
-            | AppId::Mines => None,
+            AppId::TextEditor => self.editor,
+            AppId::Writer => self.writer,
+            AppId::RappidRabbit => self.rabbit,
+            // Start-Menu / running-strip only — no dedicated dock pin.
+            AppId::Tasks | AppId::Bench | AppId::Devices | AppId::ApiLab | AppId::Mines => None,
         }
     }
 }
@@ -455,10 +446,9 @@ impl SymbolTheme {
 
 /// Identifies a launchable SunlightOS app.
 ///
-/// `Terminal`/`Calculator`/`Files`/`Settings` are tracked by both the bottom
-/// dock and the Start Menu. Chronos and the remaining apps reuse the same
-/// registry/launch machinery but are shown through the Start Menu rather than
-/// the fixed 4-icon dock.
+/// Pinned dock apps are listed in [`DOCK_PINNED`] (Files first, then Terminal,
+/// Calendar, Calculator, Edit, Writer, Rappid Rabbit). Everything else is
+/// Start-Menu / running-strip only but shares the same launch registry.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AppId {
     Terminal,
@@ -476,6 +466,18 @@ pub(crate) enum AppId {
     ApiLab,
     Mines,
 }
+
+/// Pinned bottom-dock apps, left → right after the Start Menu grid button.
+const DOCK_PINNED: [AppId; 7] = [
+    AppId::Files,
+    AppId::Terminal,
+    AppId::Calendar,
+    AppId::Calculator,
+    AppId::TextEditor,
+    AppId::Writer,
+    AppId::RappidRabbit,
+];
+const DOCK_PINNED_COUNT: usize = DOCK_PINNED.len();
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AppLaunchState {
@@ -1307,15 +1309,15 @@ struct VortexShell {
     desktop_icons: Vec<DesktopIcon>,
     screen_w: u32,
     screen_h: u32,
-    /// Bounds of each clickable dock button (local coords), plus the action.
-    dock_zones: [(Rect, DockZone); 4],
+    /// Bounds of each clickable pinned dock button (local coords), plus action.
+    dock_zones: [(Rect, DockZone); DOCK_PINNED_COUNT],
     selected_icons: Vec<usize>,
     last_desktop_click_idx: Option<usize>,
     last_desktop_click_at: u64,
     context_menu: Option<ContextMenuState>,
     selection_state: DesktopSelectState,
     suppress_next_click: bool,
-    /// Tracks whether mouse is hovering over a dock icon (index 0..4).
+    /// Tracks whether mouse is hovering over a pinned dock icon (0..N).
     hover: Option<usize>,
     /// Tracks hover on the settings button in the left cluster.
     settings_hover: bool,
@@ -1351,10 +1353,9 @@ struct VortexShell {
     dock_theme: DockTheme,
     /// Material Symbols glyphs (panel, dock controls, search). Accent color at draw.
     symbols: SymbolTheme,
-    /// App registry used for launch/focus/restore behavior. The first four
-    /// entries (Terminal/Calculator/Files/Settings) are also shown in the
-    /// bottom dock; Tasks/Bench/TextEditor/Writer are Start-Menu-only
-    /// but share the same launch/state-sync machinery.
+    /// App registry used for launch/focus/restore behavior. Pinned dock apps
+    /// are those in [`DOCK_PINNED`]; remaining entries are Start-Menu /
+    /// running-strip only but share the same launch/state-sync machinery.
     apps: [DockAppState; 14],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
@@ -1470,7 +1471,7 @@ impl VortexShell {
             desktop_icons: Vec::new(),
             screen_w: SAFE_FALLBACK_W,
             screen_h: SAFE_FALLBACK_H,
-            dock_zones: [(Rect::new(0, 0, 0, 0), DockZone::Placeholder); 4],
+            dock_zones: [(Rect::new(0, 0, 0, 0), DockZone::Placeholder); DOCK_PINNED_COUNT],
             selected_icons: Vec::new(),
             last_desktop_click_idx: None,
             last_desktop_click_at: 0,
@@ -1541,7 +1542,7 @@ impl VortexShell {
                 DockAppState::new(AppId::Calculator, "Sunlight Calculator", AppId::Calculator),
                 DockAppState::new(AppId::Files, "Sunlight Files", AppId::Files),
                 DockAppState::new(AppId::Settings, "System Preferences", AppId::Settings),
-                // Not shown in the bottom dock — launched/tracked only from the Start Menu.
+                // Start-Menu / running-strip only (not in DOCK_PINNED).
                 DockAppState::new(AppId::Tasks, "Task Manager", AppId::Tasks),
                 DockAppState::new(AppId::Bench, "Sunlight Bench", AppId::Bench),
                 DockAppState::new(AppId::TextEditor, "Sunlight Edit", AppId::TextEditor),
@@ -1878,14 +1879,14 @@ impl VortexShell {
                 self.open_file_via_resolver(&path, LaunchSource::Shortcut)
             }
             DesktopIconKind::Network => {
-                self.handle_app_click(AppId::Settings, now, LaunchSource::Shortcut)
+                self.open_app_from_ui(AppId::Settings, now, LaunchSource::Shortcut)
             }
             DesktopIconKind::Computer
             | DesktopIconKind::Home
             | DesktopIconKind::Trash
             | DesktopIconKind::Drive
             | DesktopIconKind::Folder => {
-                self.handle_app_click(AppId::Files, now, LaunchSource::Shortcut)
+                self.open_app_from_ui(AppId::Files, now, LaunchSource::Shortcut)
             }
         }
     }
@@ -1981,29 +1982,20 @@ impl VortexShell {
     }
 
     fn dock_zone_app(slot: usize) -> DockZone {
-        match slot {
-            0 => DockZone::App(AppId::Terminal),
-            1 => DockZone::App(AppId::Calendar),
-            2 => DockZone::App(AppId::Calculator),
-            3 => DockZone::App(AppId::Files),
-            _ => DockZone::Placeholder,
-        }
+        DOCK_PINNED
+            .get(slot)
+            .copied()
+            .map(DockZone::App)
+            .unwrap_or(DockZone::Placeholder)
     }
 
-    /// True only for pinned apps that already have a dedicated dock icon
-    /// (Terminal, Calendar, Calculator, Files). These are excluded from the
-    /// dynamic running-apps strip to avoid showing the same app twice.
-    /// Start-Menu-only pinned apps (Settings, Tasks, Bench, TextEditor,
-    /// Writer)
-    /// have no dock icon, so they *are* shown in the running strip when their
-    /// window is open — otherwise they'd be invisible in the taskbar.
+    /// True only for apps that already have a dedicated dock pin. Those are
+    /// excluded from the dynamic running-apps strip to avoid showing the same
+    /// app twice. Start-Menu-only apps have no pin, so they *are* shown in the
+    /// running strip when open — otherwise they'd be invisible in the taskbar.
     fn app_pid_has_dock_icon(&self, pid: u64) -> bool {
         self.apps.iter().any(|app| {
-            app.pid == Some(pid)
-                && matches!(
-                    app.app_id,
-                    AppId::Terminal | AppId::Calendar | AppId::Calculator | AppId::Files
-                )
+            app.pid == Some(pid) && DOCK_PINNED.iter().any(|id| *id == app.app_id)
         })
     }
 
@@ -2730,6 +2722,17 @@ impl VortexShell {
         }
     }
 
+    /// Shared entry for every user-facing app open (Start Menu tile, dock pin,
+    /// desktop shortcut, context menu). Keeps launch/focus/duplicate policy
+    /// and the Recent list identical regardless of which chrome icon was used.
+    ///
+    /// `source` is only for launch-trace tags (`dock` / `shell` / `shortcut`);
+    /// it does not change the spawn path or argv.
+    fn open_app_from_ui(&mut self, app_id: AppId, now: u64, source: LaunchSource) -> bool {
+        self.note_recent_app(app_id);
+        self.handle_app_click(app_id, now, source)
+    }
+
     /// Record `app_id` as the most-recently-used app for the Start Menu's
     /// "Recent" section (session-only, not persisted — see
     /// `docs/GUI/START_MENU.md`).
@@ -2747,8 +2750,7 @@ impl VortexShell {
         match action {
             StartMenuAction::None | StartMenuAction::DismissedOutside { .. } => {}
             StartMenuAction::Launch(app_id) => {
-                self.note_recent_app(app_id);
-                let _ = self.handle_app_click(app_id, now, LaunchSource::Shell);
+                let _ = self.open_app_from_ui(app_id, now, LaunchSource::Shell);
             }
             StartMenuAction::Unavailable(name) => {
                 let mut body = String::new();
@@ -5334,9 +5336,22 @@ fn draw_bot_left(
     settings_cell
 }
 
-/// Draw the bottom-center dock and return `(launcher_rect, [terminal, tasks,
-/// calc, files])`. `launcher_rect` is the grid icon that toggles the Start
-/// Menu; `menu_open` draws it in an active/highlighted state.
+/// Pixel-art fallback glyphs for pinned dock apps (used only if TGA parse fails).
+fn dock_fallback_rows(app_id: AppId) -> &'static [u16; 16] {
+    match app_id {
+        AppId::Files => &FOLDER_ROWS,
+        AppId::Terminal | AppId::Chronos => &TERMINAL_ROWS,
+        AppId::Calendar => &CALENDAR_ROWS,
+        AppId::Calculator => &CALC_ROWS,
+        AppId::TextEditor | AppId::Writer => &TERMINAL_ROWS,
+        AppId::RappidRabbit => &GRID_ROWS,
+        _ => &FOLDER_ROWS,
+    }
+}
+
+/// Draw the bottom-center dock and return `(launcher_rect, pinned_cells)`.
+/// `launcher_rect` is the grid icon that toggles the Start Menu; `menu_open`
+/// draws it highlighted. Pinned apps are ordered by [`DOCK_PINNED`].
 fn draw_bot_center(
     canvas: &mut Canvas,
     theme: &Theme,
@@ -5346,24 +5361,16 @@ fn draw_bot_center(
     running_hover: Option<usize>,
     dock: DockTheme,
     sym: SymbolTheme,
-    terminal_app: &DockAppState,
-    calendar_app: &DockAppState,
-    calc_app: &DockAppState,
-    files_app: &DockAppState,
+    pinned_apps: &[&DockAppState; DOCK_PINNED_COUNT],
     running_apps: &[RunningAppEntry],
     running_zones: &mut Vec<(Rect, u64)>,
     menu_open: bool,
     _rtl: bool,
     now: u64,
-) -> (Rect, [Rect; 4]) {
-    let icons: &[&[u16; 16]; 5] = &[
-        &GRID_ROWS,
-        &TERMINAL_ROWS,
-        &CALENDAR_ROWS,
-        &CALC_ROWS,
-        &FOLDER_ROWS,
-    ];
-    let fixed_w = dock_cluster_width(icons.len());
+) -> (Rect, [Rect; DOCK_PINNED_COUNT]) {
+    // 1 launcher + N pinned apps
+    let fixed_count = 1 + DOCK_PINNED_COUNT;
+    let fixed_w = dock_cluster_width(fixed_count);
     let mut running_total_w = 0u32;
     for entry in running_apps {
         running_total_w = running_total_w.saturating_add(entry.cell_w);
@@ -5383,77 +5390,51 @@ fn draw_bot_center(
     draw_panel(canvas, cluster, theme.panel, theme.border, RADIUS);
 
     let mut x = cluster.x + CLUSTER_PAD;
-    let mut clickable = [Rect::new(0, 0, 0, 0); 4];
+    let mut clickable = [Rect::new(0, 0, 0, 0); DOCK_PINNED_COUNT];
     let mut launcher_rect = Rect::new(0, 0, 0, 0);
-    for (i, rows) in icons.iter().enumerate() {
+
+    // Slot 0: Start Menu grid
+    {
         let cell = Rect::new(
             x,
             cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2,
             ICON_BTN,
             ICON_BTN,
         );
-        let is_hover = hover
-            .map(|h| h == i.saturating_sub(1) && i > 0)
-            .unwrap_or(false);
-
-        match i {
-            0 => {
-                launcher_rect = cell;
-                if menu_open || is_hover {
-                    canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
-                }
-                if menu_open {
-                    canvas.stroke_rounded_rect(cell, 5, 1, theme.accent);
-                }
-                // Use Material Symbols start/menu glyph in orange accent (rich app icons kept for others)
-                if let Some(tga) = sym.start.or(sym.menu) {
-                    draw_tga_tinted_orange(canvas, &tga, cell.inset(4), theme.accent);
-                } else {
-                    draw_icon_btn(canvas, cell, rows, theme, false, false);
-                }
-            }
-            1 => draw_app_button(
-                canvas,
-                cell,
-                theme,
-                &dock,
-                rows,
-                terminal_app,
-                is_hover,
-                now,
-            ),
-            2 => draw_app_button(
-                canvas,
-                cell,
-                theme,
-                &dock,
-                rows,
-                calendar_app,
-                is_hover,
-                now,
-            ),
-            3 => draw_app_button(canvas, cell, theme, &dock, rows, calc_app, is_hover, now),
-            4 => draw_app_button(canvas, cell, theme, &dock, rows, files_app, is_hover, now),
-            _ => {
-                if let Some(tga) = dock.dock_icon(i) {
-                    if is_hover {
-                        canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
-                    }
-                    // Inset 2px for visual padding inside the button cell.
-                    let icon_area = cell.inset(2);
-                    canvas.draw_tga_icon(&tga, icon_area);
-                } else {
-                    draw_icon_btn(canvas, cell, rows, theme, false, is_hover);
-                }
-            }
+        launcher_rect = cell;
+        if menu_open {
+            canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
+            canvas.stroke_rounded_rect(cell, 5, 1, theme.accent);
         }
-
-        // Icon 0 (grid) toggles the Start Menu — see `launcher_rect` above.
-        // Icons 1,2,3 are clickable (terminal, tasks, calc); icon 4 is Files.
-        if i >= 1 {
-            clickable[i - 1] = cell;
+        if let Some(tga) = sym.start.or(sym.menu) {
+            draw_tga_tinted_orange(canvas, &tga, cell.inset(4), theme.accent);
+        } else {
+            draw_icon_btn(canvas, cell, &GRID_ROWS, theme, false, false);
         }
-        if i + 1 < icons.len() {
+        x += ICON_BTN as i32 + ICON_GAP;
+    }
+
+    // Slots 1..N: pinned apps in DOCK_PINNED order
+    for (i, app) in pinned_apps.iter().enumerate() {
+        let cell = Rect::new(
+            x,
+            cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2,
+            ICON_BTN,
+            ICON_BTN,
+        );
+        let is_hover = hover.map(|h| h == i).unwrap_or(false);
+        draw_app_button(
+            canvas,
+            cell,
+            theme,
+            &dock,
+            dock_fallback_rows(app.app_id),
+            app,
+            is_hover,
+            now,
+        );
+        clickable[i] = cell;
+        if i + 1 < DOCK_PINNED_COUNT {
             x += ICON_BTN as i32 + ICON_GAP;
         } else {
             x += ICON_BTN as i32;
@@ -6291,10 +6272,11 @@ impl App for VortexShell {
         let by = bot_y(ch);
         let dock_theme = self.dock_theme;
         let settings_app = *self.app(AppId::Settings);
-        let terminal_app = *self.app(AppId::Terminal);
-        let calendar_app = *self.app(AppId::Calendar);
-        let calc_app = *self.app(AppId::Calculator);
-        let files_app = *self.app(AppId::Files);
+        // Snapshot pinned dock apps in DOCK_PINNED order (Files first, …).
+        let pinned_snap: [DockAppState; DOCK_PINNED_COUNT] =
+            core::array::from_fn(|i| *self.app(DOCK_PINNED[i]));
+        let pinned_refs: [&DockAppState; DOCK_PINNED_COUNT] =
+            core::array::from_fn(|i| &pinned_snap[i]);
         self.settings_zone = draw_bot_left(
             canvas,
             theme,
@@ -6320,10 +6302,7 @@ impl App for VortexShell {
             self.running_hover,
             dock_theme,
             self.symbols,
-            &terminal_app,
-            &calendar_app,
-            &calc_app,
-            &files_app,
+            &pinned_refs,
             running_apps,
             &mut self.running_zones,
             self.start_menu.is_open(),
@@ -6333,13 +6312,8 @@ impl App for VortexShell {
         self.launcher_zone = launcher_rect;
         draw_bot_right(canvas, theme, by, cw, self.symbols);
 
-        // Record clickable zones (terminal, tasks, calc, files).
-        self.dock_zones = [
-            (dock_cells[0], Self::dock_zone_app(0)),
-            (dock_cells[1], Self::dock_zone_app(1)), // calendar
-            (dock_cells[2], Self::dock_zone_app(2)),
-            (dock_cells[3], Self::dock_zone_app(3)),
-        ];
+        // Record clickable zones for each pinned app (same order as DOCK_PINNED).
+        self.dock_zones = core::array::from_fn(|i| (dock_cells[i], Self::dock_zone_app(i)));
 
         if self.show_system_menu {
             draw_system_menu(
@@ -6441,8 +6415,7 @@ impl App for VortexShell {
                                     SystemMenuAction::ControlPanel => AppId::Settings,
                                     _ => AppId::Settings,
                                 };
-                                self.note_recent_app(app_id);
-                                return self.handle_app_click(
+                                return self.open_app_from_ui(
                                     app_id,
                                     monotonic_millis(),
                                     LaunchSource::Shell,
@@ -6495,7 +6468,7 @@ impl App for VortexShell {
                                 self.reload_desktop_icons();
                             }
                             ContextMenuAction::OpenTerminalHere => {
-                                let _ = self.handle_app_click(
+                                let _ = self.open_app_from_ui(
                                     AppId::Terminal,
                                     monotonic_millis(),
                                     LaunchSource::Shortcut,
@@ -6520,7 +6493,7 @@ impl App for VortexShell {
                 // Handle "Open Calendar" button in popover
                 if self.show_calendar_popover && self.cal_popup_open_btn.contains(point) {
                     self.show_calendar_popover = false;
-                    return self.handle_app_click(
+                    return self.open_app_from_ui(
                         AppId::Calendar,
                         monotonic_millis(),
                         LaunchSource::Shortcut,
@@ -6658,7 +6631,7 @@ impl App for VortexShell {
                     return true;
                 }
                 if self.settings_zone.contains(point) {
-                    return self.handle_app_click(
+                    return self.open_app_from_ui(
                         AppId::Settings,
                         monotonic_millis(),
                         LaunchSource::Shortcut,
@@ -6667,10 +6640,13 @@ impl App for VortexShell {
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
                     return self.handle_desktop_icon_click(idx, monotonic_millis());
                 }
+                // Pinned dock icons share the exact same open path as Start Menu
+                // tiles (`open_app_from_ui` → `handle_app_click` → `launch_app`).
+                // Only the launch-trace source tag differs (`dock` vs `shell`).
                 for (rect, zone) in &self.dock_zones {
                     if rect.contains(point) {
                         return match zone {
-                            DockZone::App(app_id) => self.handle_app_click(
+                            DockZone::App(app_id) => self.open_app_from_ui(
                                 *app_id,
                                 monotonic_millis(),
                                 LaunchSource::Dock,

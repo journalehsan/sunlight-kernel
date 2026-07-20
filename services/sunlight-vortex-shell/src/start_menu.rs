@@ -2,10 +2,10 @@
 //!
 //! This module owns the Start Menu's data/view model and rendering; it knows
 //! nothing about IPC, process launching, or ACPI power calls. `main.rs`
-//! drives it (opens/closes it, feeds it live app/recent state) and interprets
-//! the [`StartMenuAction`] it returns to actually launch apps or perform
-//! power actions, reusing the exact same `handle_app_click` / launch
-//! machinery the bottom dock already uses.
+//! drives it (opens/closes it, feeds it live app/recent state) and maps
+//! [`StartMenuAction::Launch`] through `open_app_from_ui` — the **same**
+//! entry the dock pins, desktop shortcuts, and context-menu items use — so
+//! Terminal (and every other app) always launch/focus with identical policy.
 //!
 //! See `docs/GUI/START_MENU.md` for the architecture writeup, section list,
 //! search scope, and documented limitations.

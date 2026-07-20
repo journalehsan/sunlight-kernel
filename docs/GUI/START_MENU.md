@@ -12,10 +12,11 @@ menu is a self-contained, dark-themed panel anchored above the dock, with
 search, a pinned-apps row, a full "All Apps" grid, a recent/suggested row,
 and a footer with session/power actions.
 
-This replaces the previous "flat launcher" mental model (a fixed 4-icon dock
-with no search or grouping) with a structured, searchable app menu, while
-leaving the dock itself untouched — the dock still exists and still works
-exactly as before for its 4 pinned quick-launch icons.
+This replaces the previous "flat launcher" mental model (a small fixed dock
+with no search or grouping) with a structured, searchable app menu. The dock
+remains the quick-launch strip for pinned apps — currently **Files, Terminal,
+Calendar, Calculator, Edit, Writer, Rappid Rabbit** (plus the Start Menu grid
+button) — while the Start Menu owns discovery of everything else.
 
 ## Architecture
 
@@ -109,11 +110,10 @@ instead of launching, and the tile renders dimmed with a small "Soon" tag:
 |---------------|-----------------|------------------------------------------|
 | Photo Viewer  | `photo-viewer`  | `apps/48/accessories-image-viewer.tga`   |
 
-`Tasks`, `Bench`, `TextEditor`, `Writer`, `RappidRabbit`, `ApiLab`, and `Mines` (Sunlight Mines) were added to
-`VortexShell.apps` (the shared app-state registry used for launch/focus
-tracking) as Start-Menu-only entries — they are not shown in the fixed
-4-icon bottom dock, but they use identical launch/state-sync logic
-(`sync_app_registry`, duplicate-launch guarding, running-window activation).
+`TextEditor`, `Writer`, and `RappidRabbit` are also pinned on the bottom dock
+(see `DOCK_PINNED` in `main.rs`). `Tasks`, `Bench`, `ApiLab`, and `Mines`
+remain Start-Menu / running-strip only. All share the same launch/state-sync
+logic (`sync_app_registry`, duplicate-launch guarding, window activation).
 
 `DEFAULT_PINNED` is a static list today (no persistent user pinning yet —
 see Future Ideas).
@@ -122,13 +122,14 @@ see Future Ideas).
 
 `VortexShell.recent_apps: Vec<AppId>` is a session-only, in-memory MRU list
 (newest first, capped at `MAX_RECENT_APPS = 6`), updated by
-`note_recent_app()` whenever a Start-Menu tile launch succeeds. It is:
+`open_app_from_ui()` (which calls `note_recent_app`) for **every** UI
+launch surface. It is:
 
 - **Not persisted** across shell restarts.
-- **Real data**, not mocked — it reflects actual launches from the Start
-  Menu this session. (Dock-icon launches are not currently recorded here;
-  only Start-Menu-initiated launches feed it, since that's the only launch
-  path this feature owns.)
+- **Real data**, not mocked — it reflects launches from the Start Menu,
+  dock pins, desktop icons, and context-menu opens. Dock Terminal and
+  Start Menu Terminal therefore share the same Recent list and the same
+  launch/focus policy (`handle_app_click` / `launch_app`).
 - **Falls back to `SUGGESTED_RECENT`** (Files, Terminal, Settings) when
   empty, and the section label changes from "Recent" to "Suggested"
   accordingly (`StartMenuLayout::recent_is_real`).
