@@ -12,6 +12,7 @@ use sunlight_net as sunlight_ipc;
 
 mod arch;
 mod capability;
+mod entropy;
 mod hardware_inventory;
 mod ipc;
 mod launch_trace;
@@ -370,6 +371,25 @@ pub extern "C" fn _start() -> ! {
     splash.log("[HEAP] OK");
     splash.set_progress(400); // 40%
     splash.redraw();
+
+    // 4.25. Secure entropy must qualify before any user-space process can
+    // receive AT_RANDOM material or start a cryptographic service.
+    {
+        let mut pmm = PMM.lock();
+        match entropy::init(&mut pmm, hhdm_offset) {
+            Some(source) => {
+                serial_println!(
+                    "[ENTROPY] secure source={} conditioner=ChaCha20 readiness=ready",
+                    source.label()
+                );
+            }
+            None => {
+                serial_println!(
+                    "[ENTROPY] secure source=none readiness=UNREADY; crypto requests fail closed"
+                );
+            }
+        }
+    }
 
     // 4.5. MADT — enumerate logical processors now that the heap is available.
     // acpi::init() (step 2.5) runs before the heap and only handles power

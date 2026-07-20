@@ -8,6 +8,8 @@ pub const VIRTIO_BLK_LEGACY: u16 = 0x1001;
 pub const VIRTIO_BLK_MODERN: u16 = 0x1042;
 pub const VIRTIO_NET_LEGACY: u16 = 0x1000;
 pub const VIRTIO_NET_MODERN: u16 = 0x1041;
+pub const VIRTIO_RNG_LEGACY: u16 = 0x1005;
+pub const VIRTIO_RNG_MODERN: u16 = 0x1044;
 pub const VIRTIO_GPU_MODERN: u16 = 0x1050;
 pub const VMWARE_VENDOR_ID: u16 = 0x15AD;
 pub const VMXNET3_DEVICE_ID: u16 = 0x07B0;
@@ -310,6 +312,34 @@ pub unsafe fn find_virtio_net() -> Option<(u8, u8, u8, u16)> {
                 if bar0 & 1 == 1 {
                     let io_base = (bar0 & !0x3) as u16;
                     return Some((bus, slot, 0, io_base));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Scan PCI buses 0-7 for a legacy VirtIO RNG device.
+///
+/// QEMU exposes this with `-device virtio-rng-pci,disable-modern=on`; its
+/// entropy backend is owned by the host and is used only during kernel boot.
+///
+/// SAFETY: caller must be at ring 0.
+pub unsafe fn find_virtio_rng() -> Option<(u8, u8, u8, u16)> {
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            let ids = pci_read32(bus, slot, 0, 0x00);
+            if ids == 0xFFFF_FFFF {
+                continue;
+            }
+            let vendor = (ids & 0xFFFF) as u16;
+            let device = ((ids >> 16) & 0xFFFF) as u16;
+            if vendor == VIRTIO_VENDOR_ID
+                && (device == VIRTIO_RNG_LEGACY || device == VIRTIO_RNG_MODERN)
+            {
+                let bar0 = pci_read32(bus, slot, 0, 0x10);
+                if bar0 & 1 == 1 {
+                    return Some((bus, slot, 0, (bar0 & !0x3) as u16));
                 }
             }
         }

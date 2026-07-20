@@ -5,8 +5,8 @@
 //!
 //! A ring-3 CSPRNG, spawned and supervised by sunlightd. libc's crypto path
 //! (`getrandom` without `GRND_NONCRYPTO`) routes here over capability IPC. The
-//! engine is ChaCha20, keyed from the kernel's `GetEntropy` syscall and
-//! periodically reseeded.
+//! engine is ChaCha20, keyed only after the kernel's approved-source entropy
+//! collector reports ready. It never falls back to TSC-derived bytes.
 //!
 //! Wire protocol (`RandMsg`): a GET carries the requested length in `words[0]`,
 //! clamped to 32 bytes (the register-IPC inline budget). The REPLY packs exactly
@@ -22,8 +22,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-/// Raw seed word from the kernel (RDRAND / TSC jitter). Syscall 87 takes no
-/// arguments and returns one u64 in rax.
+/// Conditioned secure seed word from the kernel.
 #[inline]
 fn raw_entropy() -> u64 {
     let ret: u64;
@@ -41,6 +40,23 @@ fn raw_entropy() -> u64 {
     ret
 }
 
+#[inline]
+fn secure_entropy_ready() -> bool {
+    let ret: u64;
+    // SAFETY: syscall 89 takes no arguments and touches no memory.
+    unsafe {
+        core::arch::asm!(
+            "syscall",
+            in("rax") 89u64,
+            lateout("rax") ret,
+            out("rcx") _,
+            out("r11") _,
+            options(nostack),
+        );
+    }
+    ret == 1
+}
+
 /// Reseed after this many produced blocks (64 bytes each).
 const RESEED_BLOCKS: u64 = 8192;
 
@@ -50,18 +66,17 @@ struct ChaCha20 {
 }
 
 impl ChaCha20 {
-    fn new() -> Self {
+    fn new() -> Option<Self> {
         let mut c = Self {
             state: [0; 16],
             blocks_since_reseed: 0,
         };
-        c.reseed();
-        c
+        c.reseed().then_some(c)
     }
 
     /// Establish a fresh 256-bit key + 64-bit nonce from kernel entropy and
     /// reset the block counter.
-    fn reseed(&mut self) {
+    fn reseed(&mut self) -> bool {
         // "expand 32-byte k"
         self.state[0] = 0x6170_7865;
         self.state[1] = 0x3320_646e;
@@ -81,11 +96,14 @@ impl ChaCha20 {
         self.state[14] = n as u32;
         self.state[15] = (n >> 32) as u32;
         self.blocks_since_reseed = 0;
+        true
     }
 
-    fn fill(&mut self, out: &mut [u8]) {
+    fn fill(&mut self, out: &mut [u8]) -> bool {
         if self.blocks_since_reseed >= RESEED_BLOCKS {
-            self.reseed();
+            if !self.reseed() {
+                return false;
+            }
         }
         let mut idx = 0;
         let mut block = [0u8; 64];
@@ -102,6 +120,7 @@ impl ChaCha20 {
             out[idx..idx + n].copy_from_slice(&block[..n]);
             idx += n;
         }
+        true
     }
 
     fn block(&self, out: &mut [u8; 64]) {
@@ -144,7 +163,9 @@ fn handle(msg: &IpcMsg, rng: &mut ChaCha20) -> IpcMsg {
         RandMsg::GET => {
             let want = core::cmp::min(msg.words[0] as usize, RandMsg::MAX_CHUNK);
             let mut buf = [0u8; RandMsg::MAX_CHUNK];
-            rng.fill(&mut buf[..want]);
+            if !rng.fill(&mut buf[..want]) {
+                return IpcMsg::with_label(RandMsg::ERROR);
+            }
             // Pack the requested bytes into words[0..3].
             let mut reply = IpcMsg::with_label(RandMsg::REPLY);
             for i in 0..4 {
@@ -161,7 +182,17 @@ fn handle(msg: &IpcMsg, rng: &mut ChaCha20) -> IpcMsg {
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     debug_log("[RAND] Starting rand_service");
-    let mut rng = ChaCha20::new();
+    if !secure_entropy_ready() {
+        debug_log("[RAND] secure entropy unavailable; refusing to register");
+        loop {
+            core::hint::spin_loop();
+        }
+    }
+    let Some(mut rng) = ChaCha20::new() else {
+        loop {
+            core::hint::spin_loop();
+        }
+    };
 
     let ep = endpoint_create();
     nameserver_register("rand", ep);

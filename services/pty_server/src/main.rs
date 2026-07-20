@@ -15,6 +15,7 @@ use sunlight_ipc::{
 #[cfg(not(test))]
 use sunlight_ipc::{
     endpoint_create, entropy_u64, ipc_recv, ipc_reply_and_wait, nameserver_register,
+    secure_entropy_ready,
 };
 
 #[cfg(not(test))]
@@ -283,7 +284,13 @@ impl PtyServer {
         }
     }
 
-    fn mint_token(&mut self, id: u64, generation: u64, pid: u64, role: PtyRole) -> CapabilityToken {
+    fn mint_token(
+        &mut self,
+        id: u64,
+        generation: u64,
+        pid: u64,
+        role: PtyRole,
+    ) -> Result<CapabilityToken, u64> {
         self.next_token = self.next_token.wrapping_add(1).max(1);
         let role_tag = match role {
             PtyRole::Master => 0x4d41_5354_4552u64,
@@ -297,6 +304,9 @@ impl PtyServer {
             }
             #[cfg(not(test))]
             {
+                if !secure_entropy_ready() {
+                    return Err(PtyMsg::ERR_SERVICE_UNAVAILABLE);
+                }
                 entropy_u64()
             }
         };
@@ -311,7 +321,7 @@ impl PtyServer {
         if token == 0 {
             token = 1;
         }
-        CapabilityToken(token)
+        Ok(CapabilityToken(token))
     }
 
     fn locate(&self, id: u64, generation: u64) -> Result<usize, u64> {
@@ -352,8 +362,8 @@ impl PtyServer {
             .ok_or(PtyMsg::ERR_NO_SLOTS)?;
         let id = self.sessions[index].id;
         let generation = self.sessions[index].generation.wrapping_add(1).max(1);
-        let master = self.mint_token(id, generation, caller.pid, PtyRole::Master);
-        let control = self.mint_token(id, generation, caller.pid, PtyRole::Control);
+        let master = self.mint_token(id, generation, caller.pid, PtyRole::Master)?;
+        let control = self.mint_token(id, generation, caller.pid, PtyRole::Control)?;
         let session = &mut self.sessions[index];
         session.live = true;
         session.generation = generation;
@@ -548,7 +558,10 @@ fn attach_slave(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentia
         }
         target.pid
     };
-    let token = server.mint_token(id, generation, target_pid, PtyRole::Slave);
+    let token = match server.mint_token(id, generation, target_pid, PtyRole::Slave) {
+        Ok(token) => token,
+        Err(code) => return error(code),
+    };
     let session = &mut server.sessions[index];
     session.slave = Authority {
         token,

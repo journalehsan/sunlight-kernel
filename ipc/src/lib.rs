@@ -59,8 +59,10 @@ pub enum SunlightSyscall {
     SetNice = 83,
     GetNice = 84,
     SwapCtl = 85,
-    /// Raw hardware seed entropy (one u64).
+    /// Conditioned secure entropy word. Check `SecureEntropyReady` first.
     GetEntropy = 87,
+    /// Returns 1 only after approved entropy collection completes.
+    SecureEntropyReady = 89,
     // Phase 3.4: net_server (pid 5) frame proxy — kernel owns the virtio-net
     // device (ring-0 port I/O); these exchange raw Ethernet frames.
     NetTx = 90,
@@ -3193,11 +3195,20 @@ pub fn getpid() -> u64 {
     ret
 }
 
-/// One kernel entropy word for opaque user-space capability material.
+/// One conditioned secure entropy word. Callers requiring cryptographic
+/// entropy must first check [`secure_entropy_ready`].
 pub fn entropy_u64() -> u64 {
     // SAFETY: GetEntropy takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetEntropy, 0, 0, 0, 0, 0, 0, 0) };
     ret
+}
+
+/// Whether the kernel approved-entropy collector has completed.
+pub fn secure_entropy_ready() -> bool {
+    // SAFETY: SecureEntropyReady takes no user pointers.
+    let (ret, _) =
+        unsafe { raw_syscall(SunlightSyscall::SecureEntropyReady, 0, 0, 0, 0, 0, 0, 0) };
+    ret == 1
 }
 
 /// Credentials returned by the kernel for an IPC caller. The syscall is

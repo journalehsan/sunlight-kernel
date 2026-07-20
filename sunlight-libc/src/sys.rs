@@ -34,6 +34,7 @@ pub const SYS_SETNICE: u64 = 83;
 pub const SYS_GETNICE: u64 = 84;
 pub const SYS_SWAPCTL: u64 = 85;
 pub const SYS_GET_ENTROPY: u64 = 87;
+pub const SYS_SECURE_ENTROPY_READY: u64 = 89;
 pub const SYS_CLOCK_GETTIME: u64 = 88;
 pub const SYS_MAP_TELEMETRY: u64 = 95;
 pub const SYS_GRANT_CAPABILITY: u64 = 100;

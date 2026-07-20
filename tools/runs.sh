@@ -491,6 +491,7 @@ QEMU_CMD=(
     "${CPU_ARGS[@]}"
     -serial stdio
     -no-reboot
+    -device virtio-rng-pci,disable-modern=on
 )
 
 if [ "$UEFI_MODE" = true ]; then

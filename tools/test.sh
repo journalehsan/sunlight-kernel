@@ -198,6 +198,12 @@ case "$PHASE" in
         PASS_LABEL="Security Hardening"
         NEED_DISK=false
         ;;
+    phase0.9)
+        EXPECTED_FILE="tools/tests/phase0_9.expected"
+        FINAL_MARKER="[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready"
+        PASS_LABEL="Phase 0.9 Secure Randomness"
+        NEED_DISK=false
+        ;;
     mm2b)
         EXPECTED_FILE="tools/tests/mm2b.expected"
         FINAL_MARKER="[MM-2B] PMM accounting returned to baseline: OK"
@@ -229,7 +235,7 @@ case "$PHASE" in
         NEED_DISK=false
         ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b mm2d mm2e swap1 sunlightd top"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b mm2d mm2e swap1 sunlightd top"
         exit 2
         ;;
 esac
@@ -383,6 +389,7 @@ qemu-system-x86_64 \
     -m 1024M \
     -smp "$QEMU_SMP" \
     $KVM_FLAGS \
+    -device virtio-rng-pci,disable-modern=on \
     $DISK_FLAGS \
     $NET_FLAGS \
     -no-reboot \

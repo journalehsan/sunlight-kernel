@@ -85,9 +85,11 @@ pub enum SunlightSyscall {
     PowerCtl = 80,
     SetNice = 83,
     GetNice = 84,
-    /// Raw hardware seed entropy (one u64). RDRAND with a TSC-jitter fallback.
-    /// Seed-grade only: userland/rand-service expands it with a CSPRNG.
+    /// One conditioned secure entropy word. Callers must first check
+    /// `SecureEntropyReady`; no timing-derived fallback exists.
     GetEntropy = 87,
+    /// Returns 1 only after the approved-source collector is ready.
+    SecureEntropyReady = 89,
     /// UAC-only: mint a short-lived authenticated-session spawn grant.
     MintAuthSessionGrant = 102,
     ClockGetTime = 88,
@@ -502,6 +504,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         86 => sys_monotonic_ms(),
         87 => sys_get_entropy(),
         88 => sys_clock_gettime(frame),
+        89 => crate::entropy::is_ready() as u64,
         82 => sys_sysinfo(frame),
         83 => sys_setnice(frame),
         84 => sys_getnice(frame),
@@ -2399,13 +2402,15 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
         return linux_errno(14); // EFAULT
     }
 
-    // Compatibility shim: enough for musl/std hash seeding and similar callers.
-    // For now this is backed by the same kernel entropy source that seeds the
-    // native libc fast path, so it is always non-blocking.
+    // Linux-compatible callers must receive the same conditioned secure stream
+    // as native callers. Do not substitute timing jitter when entropy is absent.
     let mut written = 0usize;
     while written < len {
-        let chunk = sys_get_entropy().to_le_bytes();
+        let mut chunk = [0u8; 32];
         let n = (len - written).min(chunk.len());
+        if !crate::entropy::fill(&mut chunk[..n]) {
+            return linux_errno(11); // EAGAIN: secure entropy not ready
+        }
         if crate::memory::user::copy_to_current(frame.rdi + written as u64, &chunk[..n]).is_err() {
             return linux_errno(14);
         }
@@ -4664,51 +4669,13 @@ fn sys_monotonic_ms() -> u64 {
     crate::timekeeping::monotonic_ms()
 }
 
-/// Syscall: GetEntropy (87). Returns one u64 of raw hardware seed entropy.
+/// Syscall: GetEntropy (87). Returns one conditioned secure u64.
 ///
-/// This is *seed-grade* material only — callers (libc's local generator and the
-/// `rand` service's ChaCha20 engine) expand it with a real PRNG/CSPRNG. It is
-/// deliberately left ungated: handing a process a single unpredictable u64 to
-/// bootstrap its own non-crypto RNG is harmless and is the whole point of the
-/// `GRND_NONCRYPTO` fast path.
-///
-/// RDRAND signals success in the carry flag (CF), NOT via the value (0 is a
-/// legal random result), so we retry on carry-clear. If RDRAND is absent or
-/// exhausted we fall back to folding two TSC reads — the low bits carry real
-/// inter-read jitter.
-///
-/// IMPORTANT: RDRAND is NOT universally present. The default QEMU CPU (`qemu64`)
-/// and some hypervisors don't expose it, and executing `rdrand` there raises
-/// #UD — a kernel-mode invalid-opcode fault that wedges the system. We must
-/// probe CPUID.01H:ECX[bit 30] before issuing the instruction.
+/// The kernel starts this stream only after collecting a complete seed from an
+/// approved source. Users must query syscall 89 first and fail rather than
+/// deriving cryptographic state from TSC when it reports unready.
 fn sys_get_entropy() -> u64 {
-    // CPUID leaf 1 is always available on x86_64; bit 30 of ECX = RDRAND.
-    let has_rdrand = core::arch::x86_64::__cpuid(1).ecx & (1 << 30) != 0;
-    if has_rdrand {
-        let mut val: u64;
-        let mut ok: u8;
-        for _ in 0..10 {
-            // SAFETY: RDRAND is gated by the CPUID probe above; it has no memory
-            // operands and does not touch the stack.
-            unsafe {
-                core::arch::asm!(
-                    "rdrand {v}",
-                    "setc {o}",
-                    v = out(reg) val,
-                    o = out(reg_byte) ok,
-                    options(nomem, nostack),
-                );
-            }
-            if ok != 0 {
-                return val;
-            }
-        }
-    }
-    // Fallback (no RDRAND, or it returned carry-clear 10×): fold two TSC reads.
-    // SAFETY: RDTSC is always available on x86_64 and reads the cycle counter.
-    let a = unsafe { core::arch::x86_64::_rdtsc() };
-    let b = unsafe { core::arch::x86_64::_rdtsc() };
-    a.rotate_left(17) ^ b ^ (b << 32)
+    crate::entropy::next_u64().unwrap_or(0)
 }
 
 /// Syscall: ClockGetTime (88)

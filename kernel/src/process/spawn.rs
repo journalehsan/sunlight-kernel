@@ -38,6 +38,7 @@ pub enum SpawnError {
     PermissionDenied,
     ElfLoadFailed,
     NoMemory,
+    EntropyUnavailable,
     InvalidPath,
 }
 
@@ -360,7 +361,11 @@ fn setup_exec_stack(
         .checked_sub(16)
         .filter(|&c| c >= stack_floor)
         .ok_or(SpawnError::NoMemory)?;
-    copy_to_user(process, hhdm_offset, cursor, &[0u8; 16])?;
+    let mut at_random = [0u8; 16];
+    if !crate::entropy::fill(&mut at_random) {
+        return Err(SpawnError::EntropyUnavailable);
+    }
+    copy_to_user(process, hhdm_offset, cursor, &at_random)?;
     let at_random_ptr = cursor;
 
     // Align cursor down to 8 bytes before the string data.

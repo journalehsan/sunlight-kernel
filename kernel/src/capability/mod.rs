@@ -21,7 +21,8 @@ pub enum CapKind {
 
 /// A capability token: opaque to user-space, meaningful to the kernel.
 ///
-/// The low 62 bits are an unpredictable payload (counter XOR TSC seed); the
+/// The low 62 bits are an opaque payload derived from the kernel entropy
+/// stream and monotonic allocation state; the
 /// top two bits are a *type tag* (`TAG_IPC` / `TAG_VFS`). Type checks are then
 /// a single shift+compare instead of a table walk.
 #[repr(transparent)]
@@ -313,10 +314,12 @@ pub struct AuthSessionGrant {
     pub expires_at_tick: u64,
 }
 
-/// Initialize the token seed from TSC.
+/// Initialize ordinary capability-token mixing from the approved entropy stream.
+///
+/// Capability tokens are authorization handles, not the cryptographic API.
+/// Authentication session grants below use a fresh entropy word per mint.
 pub fn init_token_seed() {
-    let tsc = unsafe { core::arch::x86_64::_rdtsc() };
-    TOKEN_SEED.store(tsc, Ordering::SeqCst);
+    TOKEN_SEED.store(crate::entropy::next_u64().unwrap_or(0), Ordering::SeqCst);
 }
 
 /// Generate a new unpredictable, type-tagged capability token.
@@ -324,6 +327,10 @@ fn generate_token(tag: u64) -> CapabilityToken {
     let counter = NEXT_TOKEN.fetch_add(1, Ordering::SeqCst);
     let seed = TOKEN_SEED.load(Ordering::SeqCst);
     CapabilityToken::tagged(counter ^ seed, tag)
+}
+
+fn generate_secure_token(tag: u64) -> Option<CapabilityToken> {
+    crate::entropy::next_u64().map(|word| CapabilityToken::tagged(word, tag))
 }
 
 /// The capability broker manages endpoints and capability tokens.
@@ -374,7 +381,7 @@ impl CapabilityBroker {
         if self.auth_session_grants.len() >= 64 {
             return None;
         }
-        let token = generate_token(CapabilityToken::TAG_IPC);
+        let token = generate_secure_token(CapabilityToken::TAG_IPC)?;
         self.auth_session_grants.push(AuthSessionGrant {
             token,
             owner_pid,

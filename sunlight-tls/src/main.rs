@@ -527,14 +527,14 @@ mod sunlightos_impl {
     }
 
     // ── session table ───────────────────────────────────────────────────────────
-    fn new_sid() -> u64 {
+    fn new_sid() -> Result<u64, u64> {
         let mut b = [0u8; 8];
-        let _ = os_getrandom(&mut b);
+        os_getrandom(&mut b).map_err(|_| 15u64)?;
         let v = u64::from_le_bytes(b);
         if v == 0 {
-            1
+            Ok(1)
         } else {
-            v
+            Ok(v)
         }
     }
 
@@ -810,6 +810,7 @@ mod sunlightos_impl {
             Ok(c) => c,
             Err(_) => return Err(12),
         };
+        let id = new_sid()?;
         let socket_id = match net_socket() {
             Some(s) => s,
             None => return Err(13),
@@ -823,7 +824,6 @@ mod sunlightos_impl {
             net_close(socket_id);
             return Err(code);
         }
-        let id = new_sid();
         let session = Session {
             id,
             conn,
