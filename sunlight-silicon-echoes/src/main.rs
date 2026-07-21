@@ -14,8 +14,8 @@ use sunlight_ipc::{
 };
 use sunlight_libc::{self as libc, rand::getrandom, GRND_NONCRYPTO};
 use sunlight_silicon_echoes::{
-    decode_save, encode_save, hotspot, node, run_deterministic_stress, validate_graph, GameState,
-    HotspotId, SaveError, StoryNodeId, Transition,
+    decode_save, encode_save, hotspot, node, presentation_narration, run_deterministic_stress,
+    validate_graph, GameState, HotspotId, SaveError, StoryNodeId, Transition,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, Canvas, Color, CursorShape, Event, Point, Rect, Theme,
@@ -235,7 +235,7 @@ impl SiliconEchoesApp {
 
     fn refresh_scene_cache(&mut self) {
         let narration = node(self.game.current_node)
-            .map(|story_node| String::from(story_node.narration))
+            .map(|story_node| presentation_narration(&self.game, story_node))
             .unwrap_or_default();
         self.scene_cache = Some(Box::new(SceneCache {
             node: self.game.current_node,
@@ -494,14 +494,9 @@ impl SiliconEchoesApp {
         match self.mode {
             Mode::Title => request_close(),
             Mode::Ending => self.return_to_title(),
-            Mode::Play if self.game.current_node == StoryNodeId("bedroom.wake") => {
-                self.return_to_title()
-            }
             Mode::Play => {
-                self.game
-                    .apply_transition(Transition::Node(StoryNodeId("bedroom.wake")));
-                self.selected_choice = 0;
-                self.refresh_scene_cache();
+                self.save_game();
+                self.return_to_title();
             }
         }
     }
@@ -521,6 +516,17 @@ impl SiliconEchoesApp {
     }
 
     fn draw_room(&self, canvas: &mut Canvas) {
+        let scene_id = node(self.game.current_node)
+            .map(|story_node| story_node.scene.0)
+            .unwrap_or("bedroom");
+        if scene_id == "bedroom" {
+            self.draw_bedroom(canvas);
+        } else {
+            self.draw_chapter_scene(canvas, scene_id);
+        }
+    }
+
+    fn draw_bedroom(&self, canvas: &mut Canvas) {
         let rect = self.layout.image;
         canvas.fill_rect(rect, Color::rgb(0x0A, 0x0A, 0x0C));
         let wall = Rect::new(rect.x + 12, rect.y + 12, rect.w - 24, rect.h * 67 / 100);
@@ -621,6 +627,251 @@ impl SiliconEchoesApp {
 
         canvas.draw_rect(rect, Color::rgba(0xED, 0xE6, 0xD8, 160));
         self.draw_hotspot_feedback(canvas);
+    }
+
+    fn draw_chapter_scene(&self, canvas: &mut Canvas, scene_id: &str) {
+        let rect = self.layout.image;
+        canvas.fill_rect(rect, OBSIDIAN);
+        let wall = Rect::new(rect.x + 12, rect.y + 12, rect.w - 24, rect.h * 70 / 100);
+        let floor = Rect::new(
+            rect.x + 12,
+            wall.bottom(),
+            rect.w - 24,
+            rect.bottom() as u32 - wall.bottom() as u32 - 12,
+        );
+        canvas.blend_rect(wall, Color::rgba(0xED, 0xE6, 0xD8, 26));
+        canvas.blend_rect(floor, Color::rgba(0xED, 0xE6, 0xD8, 14));
+        let label = match scene_id {
+            "hallway" => "FOURTH FLOOR",
+            "kitchen" => "MORNING PAPER / 1993",
+            "landing" => "APPOINTMENT / 04:00",
+            "stairwell" => "STAIRS / DOWN",
+            "street" => "RAIN STREET",
+            "diner" => "CEDAR DINER",
+            "phone" => "INCOMING",
+            "repair-shop" => "LIO'S REPAIR",
+            "transit" => "ROUTE CANCELED",
+            "archive-lobby" => "CITY ARCHIVE",
+            "archive-stacks" => "RESTRICTED / ECHO",
+            "revelation" => "RECORDS DISAGREE",
+            "turning-point" => "SUNSET ADDRESS",
+            _ => "SILICON ECHOES",
+        };
+        let glow = Color::rgba(0xFF, 0x98, 0x00, 38);
+        let soft = Color::rgba(0xED, 0xE6, 0xD8, 92);
+        let strong = Color::rgba(0xED, 0xE6, 0xD8, 180);
+        match scene_id {
+            "hallway" | "landing" | "stairwell" => {
+                let door = Rect::new(
+                    rect.x + rect.w as i32 * 41 / 100,
+                    rect.y + 40,
+                    rect.w * 20 / 100,
+                    rect.h * 58 / 100,
+                );
+                canvas.fill_rect(door, Color::rgba(0xED, 0xE6, 0xD8, 36));
+                canvas.draw_rect(door, BONE);
+                canvas.fill_rect(
+                    Rect::new(door.right() - 18, door.y + door.h as i32 / 2, 6, 6),
+                    SUNLIGHT,
+                );
+                for index in 0..4 {
+                    let y = rect.y + 54 + index * 40;
+                    canvas.hline(
+                        rect.x + 34,
+                        y,
+                        rect.w - 68,
+                        Color::rgba(0xED, 0xE6, 0xD8, 45),
+                    );
+                }
+                if scene_id == "stairwell" {
+                    for index in 0..6 {
+                        canvas.hline(
+                            rect.x + 120 + index * 42,
+                            rect.y + rect.h as i32 - 50 - index * 21,
+                            150,
+                            soft,
+                        );
+                    }
+                    canvas.fill_rounded_rect(
+                        Rect::new(rect.x + 190, rect.y + 146, 32, 22),
+                        8,
+                        SUNLIGHT,
+                    );
+                    canvas.fill_rounded_rect(
+                        Rect::new(rect.x + 236, rect.y + 166, 28, 20),
+                        8,
+                        SUNLIGHT,
+                    );
+                }
+            }
+            "kitchen" => {
+                let counter = Rect::new(
+                    rect.x + 68,
+                    rect.y + rect.h as i32 * 58 / 100,
+                    rect.w - 136,
+                    52,
+                );
+                canvas.fill_rect(counter, Color::rgba(0xED, 0xE6, 0xD8, 52));
+                canvas.hbar(counter.x - 8, counter.bottom() - 6, counter.w + 16, 6, BONE);
+                let paper = Rect::new(counter.x + 80, counter.y - 42, 150, 92);
+                canvas.fill_rect(paper, BONE);
+                canvas.draw_rect(paper, SUNLIGHT);
+                draw_text(
+                    canvas,
+                    "TUESDAY / 1993",
+                    paper.x + 10,
+                    paper.y + 15,
+                    &TextStyle::new(FontRole::UiSmall, OBSIDIAN),
+                );
+                canvas.fill_rounded_rect(
+                    Rect::new(counter.right() - 160, counter.y - 25, 38, 32),
+                    8,
+                    Color::rgba(0xED, 0xE6, 0xD8, 130),
+                );
+            }
+            "street" | "transit" => {
+                let skyline_y = rect.y + rect.h as i32 * 43 / 100;
+                for index in 0..8 {
+                    let x = rect.x + 36 + index * 118;
+                    let h = 58 + ((self.ambient_seed.rotate_left(index as u32) % 76) as i32);
+                    canvas.fill_rect(
+                        Rect::new(x, skyline_y - h, 72, h as u32),
+                        Color::rgba(0xED, 0xE6, 0xD8, 34),
+                    );
+                    canvas.blend_rect(Rect::new(x + 12, skyline_y - h + 16, 12, 3), glow);
+                }
+                canvas.hbar(rect.x + 12, skyline_y, rect.w - 24, 3, BONE);
+                canvas.hbar(rect.x + 12, skyline_y + 82, rect.w - 24, 2, soft);
+                if scene_id == "transit" {
+                    let board = Rect::new(rect.x + rect.w as i32 * 58 / 100, rect.y + 54, 210, 72);
+                    canvas.fill_rect(board, OBSIDIAN);
+                    canvas.draw_rect(board, BONE);
+                    draw_text(
+                        canvas,
+                        "ARCHIVE LINE",
+                        board.x + 14,
+                        board.y + 19,
+                        &TextStyle::new(FontRole::UiSmall, BONE),
+                    );
+                    draw_text(
+                        canvas,
+                        "CANCELED",
+                        board.x + 14,
+                        board.y + 45,
+                        &TextStyle::new(FontRole::MonoRegular, SUNLIGHT),
+                    );
+                }
+                for index in 0..5 {
+                    let x = rect.x + 116 + index * 150;
+                    canvas.fill_rounded_rect(Rect::new(x, skyline_y + 20, 16, 40), 7, strong);
+                    canvas.fill_rounded_rect(Rect::new(x - 5, skyline_y + 10, 26, 20), 10, BONE);
+                }
+            }
+            "diner" | "phone" => {
+                let window = Rect::new(
+                    rect.x + 78,
+                    rect.y + 48,
+                    rect.w * 35 / 100,
+                    rect.h * 43 / 100,
+                );
+                canvas.fill_rect(window, OBSIDIAN);
+                canvas.draw_rect(window, BONE);
+                canvas.hline(window.x, window.y + window.h as i32 / 2, window.w, soft);
+                let table = Rect::new(
+                    rect.x + rect.w as i32 * 49 / 100,
+                    rect.y + rect.h as i32 * 62 / 100,
+                    300,
+                    34,
+                );
+                canvas.fill_rounded_rect(table, 8, Color::rgba(0xED, 0xE6, 0xD8, 64));
+                canvas.hbar(table.x - 4, table.bottom() - 4, table.w + 8, 4, BONE);
+                canvas.fill_rounded_rect(Rect::new(table.x + 40, table.y - 58, 40, 54), 17, BONE);
+                canvas.fill_rounded_rect(
+                    Rect::new(table.x + 210, table.y - 58, 40, 54),
+                    17,
+                    strong,
+                );
+                if scene_id == "phone" {
+                    let phone = Rect::new(rect.x + rect.w as i32 * 68 / 100, rect.y + 80, 104, 88);
+                    canvas.blend_rounded_rect(phone, 12, glow);
+                    canvas.stroke_rounded_rect(phone, 12, 2, BONE);
+                    canvas.fill_rounded_rect(
+                        Rect::new(phone.x + 21, phone.y + 28, 62, 24),
+                        8,
+                        SUNLIGHT,
+                    );
+                }
+            }
+            "repair-shop" => {
+                for index in 0..5 {
+                    let shelf = Rect::new(rect.x + 74, rect.y + 42 + index * 41, rect.w - 148, 3);
+                    canvas.hbar(shelf.x, shelf.y, shelf.w, 3, BONE);
+                    for item in 0..6 {
+                        canvas.fill_rect(
+                            Rect::new(shelf.x + 24 + item * 118, shelf.y - 28, 50, 27),
+                            Color::rgba(0xED, 0xE6, 0xD8, 54),
+                        );
+                    }
+                }
+                let pager = Rect::new(
+                    rect.x + rect.w as i32 * 61 / 100,
+                    rect.y + rect.h as i32 * 61 / 100,
+                    120,
+                    50,
+                );
+                canvas.blend_rounded_rect(pager, 7, Color::rgba(0xED, 0xE6, 0xD8, 76));
+                canvas.stroke_rounded_rect(pager, 7, 2, BONE);
+                draw_center(canvas, pager, "88.3", FontRole::MonoMedium, SUNLIGHT);
+            }
+            "archive-lobby" | "archive-stacks" | "revelation" | "turning-point" => {
+                for index in 0..6 {
+                    let x = rect.x + 62 + index * 148;
+                    canvas.fill_rect(
+                        Rect::new(x, rect.y + 44, 102, rect.h - 112),
+                        Color::rgba(0xED, 0xE6, 0xD8, 28),
+                    );
+                    for shelf in 0..5 {
+                        canvas.hline(x + 8, rect.y + 72 + shelf * 42, 86, soft);
+                    }
+                }
+                let terminal = Rect::new(
+                    rect.x + rect.w as i32 * 61 / 100,
+                    rect.y + rect.h as i32 * 55 / 100,
+                    220,
+                    92,
+                );
+                canvas.blend_rounded_rect(terminal, 9, Color::rgba(0xED, 0xE6, 0xD8, 76));
+                canvas.stroke_rounded_rect(terminal, 9, 2, BONE);
+                canvas.fill_rect(terminal.inset(12), OBSIDIAN);
+                draw_text(
+                    canvas,
+                    "ECHO / REVISION",
+                    terminal.x + 22,
+                    terminal.y + 31,
+                    &TextStyle::new(FontRole::MonoRegular, SUNLIGHT),
+                );
+                draw_text(
+                    canvas,
+                    "1993  <>  FUTURE",
+                    terminal.x + 22,
+                    terminal.y + 57,
+                    &TextStyle::new(FontRole::UiSmall, BONE),
+                );
+            }
+            _ => {}
+        }
+        canvas.blend_rect(
+            Rect::new(rect.x + 18, rect.y + 18, rect.w - 36, 30),
+            Color::rgba(0x0A, 0x0A, 0x0C, 120),
+        );
+        draw_text(
+            canvas,
+            label,
+            rect.x + 32,
+            rect.y + 38,
+            &TextStyle::new(FontRole::MonoRegular, SUNLIGHT),
+        );
+        canvas.draw_rect(rect, Color::rgba(0xED, 0xE6, 0xD8, 160));
     }
 
     fn draw_hotspot_feedback(&self, canvas: &mut Canvas) {
@@ -826,7 +1077,7 @@ impl SiliconEchoesApp {
                 self.layout.image.w,
                 24,
             ),
-            "VERTICAL SLICE END",
+            "CHAPTER ONE COMPLETE",
             FontRole::UiTitle,
             BONE,
         );
@@ -838,7 +1089,7 @@ impl SiliconEchoesApp {
                 self.layout.image.w,
                 18,
             ),
-            "The voice waits behind the year.",
+            "The address waits beyond the year.",
             FontRole::SerifRegular,
             SUNLIGHT,
         );
@@ -850,7 +1101,7 @@ impl SiliconEchoesApp {
         );
         draw_wrapped(
             canvas,
-            "You have not found an answer. You have only learned that an answer has been looking for you.",
+            "You have not found an answer. You have learned that ECHO can be a record, a prediction, or a witness—and that someone already chose to close the door behind you.",
             self.layout.narrative.x + 12,
             self.layout.narrative.y + 18,
             self.layout.narrative.w as i32 - 24,

@@ -1,17 +1,31 @@
 # Silicon Echoes: 1993
 
-`silicon-echoes` is the first native SunlightOS philosophical 2D game vertical
-slice. It is embedded as `/bin/silicon-echoes`.
+`silicon-echoes` is a native SunlightOS philosophical 2D narrative game. It is
+embedded as `/bin/silicon-echoes`.
 
 ## Scope
 
-- Title screen, new game, continue, four bedroom hotspots, three meaningful
-  choices, explicit illusory convergence, automatic no-control beats, one
-  delayed consequence, and a temporary ending.
+- Title screen, new game, continue, four bedroom hotspots, and a complete
+  authored first chapter after the original bedroom sequence.
+- Chapter one moves through the hallway, kitchen, landing, stairwell, street,
+  diner, phone, repair shop, transit stop, archive, revelation, and turning
+  point. Each exposed route reaches implemented content.
+- Story state keeps stable scene and actor IDs, visit counts, choices, facts,
+  observations, beliefs, memories, relationships, flags, bounded delayed
+  consequences, tendencies, and a deterministic game seed separate from UI.
+- The rule-based `ScriptedDirector` validates structured actions and targets
+  before applying any transition. It is the narrow boundary for a future
+  Director implementation; it does not generate prose.
+- Choices affect trust, knowledge, beliefs, and delayed events without a
+  win/lose or moral score. The chapter resolves multiple delayed consequences,
+  includes intentional convergences, and includes an archive closure caused by
+  another character's independent decision.
 - Uses only Obsidian (`#0A0A0C`), Bone (`#EDE6D8`), and Sunlight (`#FF9800`),
   including alpha/intensity variants.
-- Saves one versioned, validated record through `sunlight-kv`. Invalid or
-  unsupported records are rejected before replacing in-memory game state.
+- Saves a versioned, validated record through `sunlight-kv`. Version 2 retains
+  the full world state and deterministically migrates the prior version-1
+  bedroom saves. Invalid or unsupported records are rejected before replacing
+  in-memory game state.
 - Uses `sunlight-libc`'s `global-alloc` plus `dynamic-heap-8m`; the story
   naturally uses `Box`, `Vec`, `String`, `format!`, and ordered maps.
 
@@ -51,14 +65,14 @@ Within SunlightOS:
 /bin/silicon-echoes --display-stress
 ```
 
-`--stress` validates the graph, exercises deterministic save/load and repeated
-allocation/drop churn beyond the game heap cumulatively, and checks allocator
-recovery. `--display-stress` repeats native window create, redraw, commit, and
-close lifecycles.
+`--stress` validates the graph, traverses the authored chapter, exercises
+deterministic save/load and repeated allocation/drop churn beyond the game heap
+cumulatively, and checks allocator recovery. `--display-stress` repeats native
+window create, redraw, commit, and close lifecycles.
 
 ## Deferred
 
-- Complete story, map/log/status UI, inventory, audio, and additional scenes.
+- Later chapters, map/log/status UI, inventory, audio, and additional scenes.
 - General animation, particle, physics, scene-editor, 3D, and shader systems.
 - Client-side partial-damage or resize protocol work, which belongs in the
   graphics/display stack rather than this game.
