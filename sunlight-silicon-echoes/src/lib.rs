@@ -12,7 +12,14 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-pub const SAVE_FORMAT_VERSION: u16 = 2;
+pub const SAVE_FORMAT_VERSION: u16 = 3;
+pub const MAX_SAVE_BYTES: usize = 4096;
+const MAX_RECORDS: usize = 192;
+const MAX_TEXT_VALUE_BYTES: usize = 128;
+const MAX_VISITED_NODES: usize = 32;
+const MAX_STATE_SET_ITEMS: usize = 32;
+const MAX_RELATIONSHIPS: usize = 8;
+const MAX_TENDENCIES: usize = 8;
 pub const START_NODE: StoryNodeId = StoryNodeId("bedroom.wake");
 pub const TEMPORARY_ENDING: EndingId = EndingId("ending.chapter-one");
 
@@ -30,6 +37,9 @@ pub struct EndingId(pub &'static str);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ActorId(pub &'static str);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ObjectId(pub &'static str);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HotspotId {
@@ -178,11 +188,29 @@ pub struct Hotspot {
     pub condition: Option<Condition>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SceneObjectKind {
+    Structural,
+    Decorative,
+    Interactive,
+    Actor,
+    Stateful,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SceneObject {
+    pub id: ObjectId,
+    pub kind: SceneObjectKind,
+    pub label: &'static str,
+    pub action: Option<ChoiceId>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Scene {
     pub id: SceneId,
     pub title: &'static str,
     pub hotspots: &'static [Hotspot],
+    pub objects: &'static [SceneObject],
 }
 
 const RILEY: ActorId = ActorId("riley");
@@ -847,76 +875,444 @@ const BEDROOM_HOTSPOTS: &[Hotspot] = &[
     },
 ];
 
+const BEDROOM_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("bedroom.wall"),
+        kind: SceneObjectKind::Structural,
+        label: "Bedroom wall",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("bedroom.window"),
+        kind: SceneObjectKind::Interactive,
+        label: "Window",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("bedroom.clock"),
+        kind: SceneObjectKind::Interactive,
+        label: "Clock",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("bedroom.workstation"),
+        kind: SceneObjectKind::Interactive,
+        label: "Workstation",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("bedroom.desk"),
+        kind: SceneObjectKind::Interactive,
+        label: "Desk",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("bedroom.lamp"),
+        kind: SceneObjectKind::Decorative,
+        label: "Desk lamp",
+        action: None,
+    },
+];
+
+const HALLWAY_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("hallway.exit-door"),
+        kind: SceneObjectKind::Interactive,
+        label: "Exit door",
+        action: Some(ChoiceId("hallway.inspect-note")),
+    },
+    SceneObject {
+        id: ObjectId("hallway.note"),
+        kind: SceneObjectKind::Interactive,
+        label: "Wake note",
+        action: Some(ChoiceId("hallway.inspect-note")),
+    },
+    SceneObject {
+        id: ObjectId("hallway.wall-light"),
+        kind: SceneObjectKind::Decorative,
+        label: "Wall light",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("hallway.fuse-box"),
+        kind: SceneObjectKind::Decorative,
+        label: "Fuse box",
+        action: None,
+    },
+];
+
+const KITCHEN_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("kitchen.newspaper"),
+        kind: SceneObjectKind::Interactive,
+        label: "Tuesday paper",
+        action: Some(ChoiceId("kitchen.read-newspaper")),
+    },
+    SceneObject {
+        id: ObjectId("kitchen.photograph"),
+        kind: SceneObjectKind::Interactive,
+        label: "Photograph",
+        action: Some(ChoiceId("kitchen.study-photo")),
+    },
+    SceneObject {
+        id: ObjectId("kitchen.counter"),
+        kind: SceneObjectKind::Structural,
+        label: "Kitchen counter",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("kitchen.radio"),
+        kind: SceneObjectKind::Decorative,
+        label: "Radio",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("kitchen.cup"),
+        kind: SceneObjectKind::Decorative,
+        label: "Cup",
+        action: None,
+    },
+];
+
+const LANDING_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("landing.archive-card"),
+        kind: SceneObjectKind::Interactive,
+        label: "Archive card",
+        action: Some(ChoiceId("landing.take-card")),
+    },
+    SceneObject {
+        id: ObjectId("landing.elevator"),
+        kind: SceneObjectKind::Structural,
+        label: "Elevator door",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("landing.wall-light"),
+        kind: SceneObjectKind::Decorative,
+        label: "Wall light",
+        action: None,
+    },
+];
+
+const STAIRWELL_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("stairwell.vale"),
+        kind: SceneObjectKind::Actor,
+        label: "Mrs. Vale",
+        action: Some(ChoiceId("stairwell.help-vale")),
+    },
+    SceneObject {
+        id: ObjectId("stairwell.stairs"),
+        kind: SceneObjectKind::Interactive,
+        label: "Stairs",
+        action: Some(ChoiceId("stairwell.take-stairs")),
+    },
+    SceneObject {
+        id: ObjectId("stairwell.rail"),
+        kind: SceneObjectKind::Structural,
+        label: "Hand rail",
+        action: None,
+    },
+];
+
+const STREET_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("street.pager"),
+        kind: SceneObjectKind::Interactive,
+        label: "Pager tone",
+        action: Some(ChoiceId("street.follow-pager")),
+    },
+    SceneObject {
+        id: ObjectId("street.flower-seller"),
+        kind: SceneObjectKind::Actor,
+        label: "Flower seller",
+        action: Some(ChoiceId("street.ask-vendor")),
+    },
+    SceneObject {
+        id: ObjectId("street.phone-booth"),
+        kind: SceneObjectKind::Decorative,
+        label: "Phone booth",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("street.streetlight"),
+        kind: SceneObjectKind::Decorative,
+        label: "Streetlight",
+        action: None,
+    },
+];
+
+const DINER_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("diner.riley"),
+        kind: SceneObjectKind::Actor,
+        label: "Riley",
+        action: Some(ChoiceId("diner.tell-riley")),
+    },
+    SceneObject {
+        id: ObjectId("diner.clock"),
+        kind: SceneObjectKind::Decorative,
+        label: "Broken clock",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("diner.booth"),
+        kind: SceneObjectKind::Structural,
+        label: "Booth seven",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("diner.coffee"),
+        kind: SceneObjectKind::Decorative,
+        label: "Cold coffee",
+        action: None,
+    },
+];
+
+const PHONE_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("phone.receiver"),
+        kind: SceneObjectKind::Stateful,
+        label: "Receiver",
+        action: Some(ChoiceId("phone.record-message")),
+    },
+    SceneObject {
+        id: ObjectId("phone.keypad"),
+        kind: SceneObjectKind::Decorative,
+        label: "Keypad",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("phone.cradle"),
+        kind: SceneObjectKind::Structural,
+        label: "Phone cradle",
+        action: None,
+    },
+];
+
+const REPAIR_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("repair.lio"),
+        kind: SceneObjectKind::Actor,
+        label: "Lio",
+        action: Some(ChoiceId("repair.ask-lio")),
+    },
+    SceneObject {
+        id: ObjectId("repair.manual"),
+        kind: SceneObjectKind::Interactive,
+        label: "Service manual",
+        action: Some(ChoiceId("repair.borrow-manual")),
+    },
+    SceneObject {
+        id: ObjectId("repair.pager"),
+        kind: SceneObjectKind::Stateful,
+        label: "Pager",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("repair.shelves"),
+        kind: SceneObjectKind::Structural,
+        label: "Parts shelves",
+        action: None,
+    },
+];
+
+const TRANSIT_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("transit.board"),
+        kind: SceneObjectKind::Stateful,
+        label: "Canceled route board",
+        action: Some(ChoiceId("transit.wait")),
+    },
+    SceneObject {
+        id: ObjectId("transit.street"),
+        kind: SceneObjectKind::Interactive,
+        label: "Walk toward the archive",
+        action: Some(ChoiceId("transit.walk")),
+    },
+    SceneObject {
+        id: ObjectId("transit.bench"),
+        kind: SceneObjectKind::Decorative,
+        label: "Transit bench",
+        action: None,
+    },
+];
+
+const ARCHIVE_LOBBY_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("archive-lobby.card-slot"),
+        kind: SceneObjectKind::Stateful,
+        label: "Archive card slot",
+        action: Some(ChoiceId("archive.use-card")),
+    },
+    SceneObject {
+        id: ObjectId("archive-lobby.clerk"),
+        kind: SceneObjectKind::Actor,
+        label: "Archive clerk",
+        action: Some(ChoiceId("archive.ask-public")),
+    },
+    SceneObject {
+        id: ObjectId("archive-lobby.shelves"),
+        kind: SceneObjectKind::Structural,
+        label: "Archive shelves",
+        action: None,
+    },
+];
+
+const ARCHIVE_STACKS_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("archive-stacks.ledger"),
+        kind: SceneObjectKind::Interactive,
+        label: "Revision ledger",
+        action: Some(ChoiceId("stacks.read-ledger")),
+    },
+    SceneObject {
+        id: ObjectId("archive-stacks.terminal"),
+        kind: SceneObjectKind::Stateful,
+        label: "Archive terminal",
+        action: Some(ChoiceId("stacks.search-terminal")),
+    },
+    SceneObject {
+        id: ObjectId("archive-stacks.media"),
+        kind: SceneObjectKind::Decorative,
+        label: "Media cases",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("archive-stacks.shelves"),
+        kind: SceneObjectKind::Structural,
+        label: "Restricted shelves",
+        action: None,
+    },
+];
+
+const REVELATION_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("revelation.terminal"),
+        kind: SceneObjectKind::Stateful,
+        label: "ECHO terminal",
+        action: Some(ChoiceId("revelation.call-riley")),
+    },
+    SceneObject {
+        id: ObjectId("revelation.receiver"),
+        kind: SceneObjectKind::Interactive,
+        label: "Call receiver",
+        action: Some(ChoiceId("revelation.call-riley")),
+    },
+    SceneObject {
+        id: ObjectId("revelation.files"),
+        kind: SceneObjectKind::Decorative,
+        label: "Contradictory files",
+        action: None,
+    },
+];
+
+const TURNING_POINT_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("turning-point.address"),
+        kind: SceneObjectKind::Stateful,
+        label: "Morning address",
+        action: Some(ChoiceId("turning-point.keep-address")),
+    },
+    SceneObject {
+        id: ObjectId("turning-point.revision"),
+        kind: SceneObjectKind::Decorative,
+        label: "Revision artifact",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("turning-point.dawn"),
+        kind: SceneObjectKind::Decorative,
+        label: "Dawn window",
+        action: None,
+    },
+];
+
 const SCENES: &[Scene] = &[
     Scene {
         id: SceneId("bedroom"),
         title: "Bedroom / 03:17",
         hotspots: BEDROOM_HOTSPOTS,
+        objects: BEDROOM_OBJECTS,
     },
     Scene {
         id: SceneId("hallway"),
         title: "Hallway / Fourth Floor",
         hotspots: &[],
+        objects: HALLWAY_OBJECTS,
     },
     Scene {
         id: SceneId("kitchen"),
         title: "Shared Kitchen / 1993",
         hotspots: &[],
+        objects: KITCHEN_OBJECTS,
     },
     Scene {
         id: SceneId("landing"),
         title: "Building Landing / 03:31",
         hotspots: &[],
+        objects: LANDING_OBJECTS,
     },
     Scene {
         id: SceneId("stairwell"),
         title: "Stairwell / Downward",
         hotspots: &[],
+        objects: STAIRWELL_OBJECTS,
     },
     Scene {
         id: SceneId("street"),
         title: "Rain Street / Before Dawn",
         hotspots: &[],
+        objects: STREET_OBJECTS,
     },
     Scene {
         id: SceneId("diner"),
         title: "Cedar Diner / Booth Seven",
         hotspots: &[],
+        objects: DINER_OBJECTS,
     },
     Scene {
         id: SceneId("phone"),
         title: "Diner Phone / Incoming",
         hotspots: &[],
+        objects: PHONE_OBJECTS,
     },
     Scene {
         id: SceneId("repair-shop"),
         title: "Lio's Repair / Open Late",
         hotspots: &[],
+        objects: REPAIR_OBJECTS,
     },
     Scene {
         id: SceneId("transit"),
         title: "Transit Stop / Canceled",
         hotspots: &[],
+        objects: TRANSIT_OBJECTS,
     },
     Scene {
         id: SceneId("archive-lobby"),
         title: "City Archive / Service Lobby",
         hotspots: &[],
+        objects: ARCHIVE_LOBBY_OBJECTS,
     },
     Scene {
         id: SceneId("archive-stacks"),
         title: "City Archive / Restricted Stacks",
         hotspots: &[],
+        objects: ARCHIVE_STACKS_OBJECTS,
     },
     Scene {
         id: SceneId("revelation"),
         title: "ECHO Records / Contradiction",
         hotspots: &[],
+        objects: REVELATION_OBJECTS,
     },
     Scene {
         id: SceneId("turning-point"),
         title: "Chapter One / Morning Address",
         hotspots: &[],
+        objects: TURNING_POINT_OBJECTS,
     },
 ];
 
@@ -936,6 +1332,13 @@ pub fn scene(id: SceneId) -> Option<&'static Scene> {
     SCENES.iter().find(|item| item.id == id)
 }
 
+pub fn scene_object(scene_id: SceneId, object_id: ObjectId) -> Option<&'static SceneObject> {
+    scene(scene_id)?
+        .objects
+        .iter()
+        .find(|item| item.id == object_id)
+}
+
 pub fn hotspot(id: HotspotId) -> &'static Hotspot {
     BEDROOM_HOTSPOTS
         .iter()
@@ -950,6 +1353,7 @@ pub fn actors() -> &'static [ActorId] {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorldState {
     pub current_node: StoryNodeId,
+    pub chapter_complete: bool,
     pub visited_nodes: BTreeSet<String>,
     pub visit_counts: BTreeMap<String, u16>,
     pub selected_choices: Vec<String>,
@@ -963,6 +1367,7 @@ pub struct WorldState {
     pub tendencies: BTreeMap<String, i16>,
     pub seed: u32,
     pub play_time_ms: u64,
+    pub save_generation: u64,
 }
 
 pub type GameState = WorldState;
@@ -975,6 +1380,7 @@ impl WorldState {
     pub fn new_seeded(seed: u32) -> Self {
         let mut state = Self {
             current_node: START_NODE,
+            chapter_complete: false,
             visited_nodes: BTreeSet::new(),
             visit_counts: BTreeMap::new(),
             selected_choices: Vec::new(),
@@ -988,6 +1394,7 @@ impl WorldState {
             tendencies: BTreeMap::new(),
             seed,
             play_time_ms: 0,
+            save_generation: 0,
         };
         state.mark_visited(START_NODE);
         state
@@ -1070,7 +1477,10 @@ impl WorldState {
         }
         self.selected_choices.push(String::from(choice.id.0));
         self.memories.insert(String::from(choice.id.0));
-        self.try_apply_transition(choice.target)?;
+        match choice.target {
+            Transition::Node(_) => self.try_apply_transition(choice.target)?,
+            Transition::Ending(_) => self.chapter_complete = true,
+        }
         Ok(choice.target)
     }
 
@@ -1260,10 +1670,13 @@ pub fn condition_met(condition: Condition, state: &WorldState) -> bool {
 pub enum ValidationError {
     DuplicateNode(String),
     DuplicateChoice(String),
+    DuplicateObject(String),
     MissingScene(String),
     MissingNode(String),
     MissingActor(String),
     MissingStateKey(String),
+    MissingObjectAction(String),
+    DecorativeObjectAction(String),
     DeadEnd(String),
     UnmarkedConvergence(String),
     MissingEnding(String),
@@ -1277,10 +1690,32 @@ pub fn validate_graph() -> Result<(), Vec<ValidationError>> {
     let actor_ids: BTreeSet<&str> = actors().iter().map(|actor| actor.0).collect();
     let mut unique_nodes = BTreeSet::new();
     let mut choice_ids = BTreeSet::new();
+    let mut object_ids = BTreeSet::new();
     let mut incoming = BTreeMap::<&str, Vec<&Choice>>::new();
     let mut ending_incoming = BTreeMap::<&str, Vec<&Choice>>::new();
 
     for scene in SCENES {
+        for object in scene.objects {
+            if !object_ids.insert(object.id.0) {
+                errors.push(ValidationError::DuplicateObject(String::from(object.id.0)));
+            }
+            if matches!(
+                object.kind,
+                SceneObjectKind::Structural | SceneObjectKind::Decorative
+            ) && object.action.is_some()
+            {
+                errors.push(ValidationError::DecorativeObjectAction(String::from(
+                    object.id.0,
+                )));
+            }
+            if let Some(action) = object.action {
+                if !choice_exists(action.0) {
+                    errors.push(ValidationError::MissingObjectAction(String::from(
+                        object.id.0,
+                    )));
+                }
+            }
+        }
         for hotspot in scene.hotspots {
             validate_condition(hotspot.condition, &node_ids, &mut errors);
             if !node_ids.contains(hotspot.target.0) {
@@ -1543,14 +1978,25 @@ pub enum SaveError {
     InvalidUtf8,
     UnsupportedVersion,
     InvalidRecord,
+    TooLarge,
 }
 
 pub fn encode_save(state: &WorldState) -> Vec<u8> {
     let mut out = String::from("SILICON_ECHOES_SAVE\n");
     push_record(&mut out, "version", &format!("{}", SAVE_FORMAT_VERSION));
     push_record(&mut out, "node", state.current_node.0);
+    push_record(
+        &mut out,
+        "chapter_complete",
+        if state.chapter_complete { "1" } else { "0" },
+    );
     push_record(&mut out, "seed", &format!("{}", state.seed));
     push_record(&mut out, "play_time_ms", &format!("{}", state.play_time_ms));
+    push_record(
+        &mut out,
+        "save_generation",
+        &format!("{}", state.save_generation),
+    );
     for value in &state.visited_nodes {
         push_record(&mut out, "visited", value);
     }
@@ -1601,17 +2047,29 @@ pub fn encode_save(state: &WorldState) -> Vec<u8> {
 }
 
 pub fn decode_save(bytes: &[u8]) -> Result<WorldState, SaveError> {
+    if bytes.len() > MAX_SAVE_BYTES {
+        return Err(SaveError::TooLarge);
+    }
     let text = core::str::from_utf8(bytes).map_err(|_| SaveError::InvalidUtf8)?;
     let mut lines = text.lines();
     if lines.next() != Some("SILICON_ECHOES_SAVE") {
         return Err(SaveError::InvalidRecord);
     }
-    let records: Vec<(String, String)> = lines
-        .map(|line| {
-            let (key, value) = line.split_once('=').ok_or(SaveError::InvalidRecord)?;
-            Ok((String::from(key), unescape(value)?))
-        })
-        .collect::<Result<_, SaveError>>()?;
+    let mut records = Vec::new();
+    for line in lines {
+        if records.len() >= MAX_RECORDS || line.len() > MAX_TEXT_VALUE_BYTES + 24 {
+            return Err(SaveError::InvalidRecord);
+        }
+        let (key, value) = line.split_once('=').ok_or(SaveError::InvalidRecord)?;
+        if key.is_empty() || key.len() > 24 || value.len() > MAX_TEXT_VALUE_BYTES {
+            return Err(SaveError::InvalidRecord);
+        }
+        let value = unescape(value)?;
+        if value.len() > MAX_TEXT_VALUE_BYTES {
+            return Err(SaveError::InvalidRecord);
+        }
+        records.push((String::from(key), value));
+    }
     let version = records
         .iter()
         .find(|(key, _)| key == "version")
@@ -1619,7 +2077,8 @@ pub fn decode_save(bytes: &[u8]) -> Result<WorldState, SaveError> {
         .ok_or(SaveError::InvalidRecord)?;
     match version {
         1 => decode_v1(&records),
-        SAVE_FORMAT_VERSION => decode_v2(&records),
+        2 => decode_v2(&records),
+        SAVE_FORMAT_VERSION => decode_v3(&records),
         _ => Err(SaveError::UnsupportedVersion),
     }
 }
@@ -1642,13 +2101,19 @@ fn empty_loaded_state() -> WorldState {
 
 fn decode_v1(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    load_common_records(&mut state, records, false)?;
+    load_common_records(&mut state, records, false, false)?;
     finalize_loaded_state(state)
 }
 
 fn decode_v2(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    load_common_records(&mut state, records, true)?;
+    load_common_records(&mut state, records, true, false)?;
+    finalize_loaded_state(state)
+}
+
+fn decode_v3(records: &[(String, String)]) -> Result<WorldState, SaveError> {
+    let mut state = empty_loaded_state();
+    load_common_records(&mut state, records, true, true)?;
     finalize_loaded_state(state)
 }
 
@@ -1656,28 +2121,67 @@ fn load_common_records(
     state: &mut WorldState,
     records: &[(String, String)],
     is_v2: bool,
+    has_completion: bool,
 ) -> Result<(), SaveError> {
     let mut node_id = None;
     let mut saw_version = false;
+    let mut saw_node = false;
+    let mut saw_seed = !is_v2;
+    let mut saw_play_time = false;
+    let mut saw_generation = !has_completion;
+    let mut saw_completion = !has_completion;
     for (key, value) in records {
         match key.as_str() {
-            "version" => saw_version = true,
-            "node" => node_id = Some(value.as_str()),
-            "seed" if is_v2 => state.seed = parse_u32(value).ok_or(SaveError::InvalidRecord)?,
+            "version" if !saw_version => saw_version = true,
+            "node" if !saw_node => {
+                saw_node = true;
+                node_id = Some(value.as_str());
+            }
+            "seed" if is_v2 && !saw_seed => {
+                saw_seed = true;
+                state.seed = parse_u32(value).ok_or(SaveError::InvalidRecord)?;
+            }
             "play_time_ms" => {
+                if saw_play_time {
+                    return Err(SaveError::InvalidRecord);
+                }
+                saw_play_time = true;
                 state.play_time_ms = parse_u64(value).ok_or(SaveError::InvalidRecord)?
             }
+            "save_generation" if has_completion && !saw_generation => {
+                saw_generation = true;
+                state.save_generation = parse_u64(value).ok_or(SaveError::InvalidRecord)?;
+            }
+            "chapter_complete" if has_completion && !saw_completion => {
+                if !matches!(value.as_str(), "0" | "1") {
+                    return Err(SaveError::InvalidRecord);
+                }
+                saw_completion = true;
+                state.chapter_complete = value == "1";
+            }
             "visited" => {
+                if state.visited_nodes.len() >= MAX_VISITED_NODES {
+                    return Err(SaveError::InvalidRecord);
+                }
                 require_node(value)?;
                 state.visited_nodes.insert(value.clone());
             }
             "visit_count" if is_v2 => {
+                if state.visit_counts.len() >= MAX_VISITED_NODES {
+                    return Err(SaveError::InvalidRecord);
+                }
                 let (node_id, count) = value.split_once(':').ok_or(SaveError::InvalidRecord)?;
                 require_node(node_id)?;
-                state.visit_counts.insert(
-                    String::from(node_id),
-                    parse_u16(count).ok_or(SaveError::InvalidRecord)?,
-                );
+                if state
+                    .visit_counts
+                    .insert(
+                        String::from(node_id),
+                        parse_u16(count).ok_or(SaveError::InvalidRecord)?,
+                    )
+                    .is_some()
+                {
+                    return Err(SaveError::InvalidRecord);
+                }
             }
             "choice" => {
                 if !choice_exists(value) {
@@ -1689,34 +2193,56 @@ fn load_common_records(
                 state.selected_choices.push(value.clone());
             }
             "flag" => {
+                if state.flags.values.len() >= MAX_STATE_SET_ITEMS {
+                    return Err(SaveError::InvalidRecord);
+                }
                 let (name, raw) = value.split_once(':').ok_or(SaveError::InvalidRecord)?;
                 if !known_flag(name) || !matches!(raw, "0" | "1") {
                     return Err(SaveError::InvalidRecord);
                 }
                 state.flags.set(name, raw == "1");
             }
-            "fact" if is_v2 => insert_known(&mut state.facts, value, known_fact)?,
-            "observation" if is_v2 => {
-                insert_known(&mut state.observations, value, known_observation)?
+            "fact" if is_v2 => {
+                insert_limited_known(&mut state.facts, value, known_fact, MAX_STATE_SET_ITEMS)?
             }
-            "belief" if is_v2 => insert_known(&mut state.beliefs, value, known_belief)?,
+            "observation" if is_v2 => insert_limited_known(
+                &mut state.observations,
+                value,
+                known_observation,
+                MAX_STATE_SET_ITEMS,
+            )?,
+            "belief" if is_v2 => {
+                insert_limited_known(&mut state.beliefs, value, known_belief, MAX_STATE_SET_ITEMS)?
+            }
             "memory" if is_v2 => {
-                if value.len() > 96 {
+                if state.memories.len() >= MAX_STATE_SET_ITEMS || value.len() > 96 {
                     return Err(SaveError::InvalidRecord);
                 }
                 state.memories.insert(value.clone());
             }
             "relationship" if is_v2 => {
+                if state.relationships.len() >= MAX_RELATIONSHIPS {
+                    return Err(SaveError::InvalidRecord);
+                }
                 let (actor, amount) = value.split_once(':').ok_or(SaveError::InvalidRecord)?;
                 if !actors().iter().any(|item| item.0 == actor) {
                     return Err(SaveError::InvalidRecord);
                 }
-                state.relationships.insert(
-                    String::from(actor),
-                    parse_i16(amount).ok_or(SaveError::InvalidRecord)?,
-                );
+                if state
+                    .relationships
+                    .insert(
+                        String::from(actor),
+                        parse_i16(amount).ok_or(SaveError::InvalidRecord)?,
+                    )
+                    .is_some()
+                {
+                    return Err(SaveError::InvalidRecord);
+                }
             }
             "tendency" => {
+                if state.tendencies.len() >= MAX_TENDENCIES {
+                    return Err(SaveError::InvalidRecord);
+                }
                 let (name, amount) = value.split_once(':').ok_or(SaveError::InvalidRecord)?;
                 if !matches!(
                     name,
@@ -1724,10 +2250,16 @@ fn load_common_records(
                 ) {
                     return Err(SaveError::InvalidRecord);
                 }
-                state.tendencies.insert(
-                    String::from(name),
-                    parse_i16(amount).ok_or(SaveError::InvalidRecord)?,
-                );
+                if state
+                    .tendencies
+                    .insert(
+                        String::from(name),
+                        parse_i16(amount).ok_or(SaveError::InvalidRecord)?,
+                    )
+                    .is_some()
+                {
+                    return Err(SaveError::InvalidRecord);
+                }
             }
             "delayed" => {
                 if state.delayed.len() >= 16 {
@@ -1744,7 +2276,7 @@ fn load_common_records(
             _ => return Err(SaveError::InvalidRecord),
         }
     }
-    if !saw_version {
+    if !saw_version || !saw_node || !saw_seed || !saw_completion || !saw_generation {
         return Err(SaveError::InvalidRecord);
     }
     let current = node_id
@@ -1765,20 +2297,31 @@ fn finalize_loaded_state(mut state: WorldState) -> Result<WorldState, SaveError>
     }
     if state
         .visit_counts
-        .keys()
-        .any(|key| !state.visited_nodes.contains(key))
+        .iter()
+        .any(|(key, count)| *count == 0 || !state.visited_nodes.contains(key))
     {
+        return Err(SaveError::InvalidRecord);
+    }
+    if state.delayed.iter().enumerate().any(|(index, item)| {
+        state.delayed[..index]
+            .iter()
+            .any(|other| other.id == item.id)
+    }) {
+        return Err(SaveError::InvalidRecord);
+    }
+    if state.chapter_complete && state.current_node != StoryNodeId("chapter.turning-point") {
         return Err(SaveError::InvalidRecord);
     }
     Ok(state)
 }
 
-fn insert_known(
+fn insert_limited_known(
     values: &mut BTreeSet<String>,
     value: &str,
     known: fn(&str) -> bool,
+    limit: usize,
 ) -> Result<(), SaveError> {
-    if !known(value) {
+    if !known(value) || values.len() >= limit {
         return Err(SaveError::InvalidRecord);
     }
     values.insert(String::from(value));
@@ -1947,6 +2490,7 @@ extern crate std;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::vec;
 
     fn leave_bedroom(state: &mut WorldState) {
         state.enter_hotspot(HotspotId::Clock);
@@ -2117,6 +2661,83 @@ mod tests {
     }
 
     #[test]
+    fn save_round_trips_every_reachable_stable_scene_and_branch() {
+        let mut completed_paths = 0;
+        explore_save_boundaries(WorldState::new(), 0, &mut completed_paths);
+        assert!(completed_paths >= 2);
+    }
+
+    #[test]
+    fn chapter_complete_state_round_trips_and_remains_deterministic() {
+        let mut state = chapter_path(0xC0FF_EE).unwrap();
+        assert_eq!(
+            state.select_choice(ChoiceId("turning-point.keep-address")),
+            Ok(Transition::Ending(TEMPORARY_ENDING))
+        );
+        assert!(state.chapter_complete);
+        let loaded = decode_save(&encode_save(&state)).unwrap();
+        assert_eq!(loaded, state);
+        assert_eq!(loaded.current_node, StoryNodeId("chapter.turning-point"));
+    }
+
+    #[test]
+    fn converging_state_survives_save_load() {
+        let mut claimed = WorldState::new();
+        leave_signal_ready(&mut claimed);
+        claimed
+            .select_choice(ChoiceId("signal.claim-self"))
+            .unwrap();
+        let claimed = decode_save(&encode_save(&claimed)).unwrap();
+
+        let mut listened = WorldState::new();
+        leave_signal_ready(&mut listened);
+        listened.select_choice(ChoiceId("signal-listen")).unwrap();
+        let listened = decode_save(&encode_save(&listened)).unwrap();
+
+        assert_eq!(claimed.current_node, listened.current_node);
+        assert_ne!(claimed.beliefs, listened.beliefs);
+        assert_ne!(claimed.memories, listened.memories);
+    }
+
+    #[test]
+    fn corrupt_truncated_unknown_and_oversized_saves_are_rejected_safely() {
+        assert!(matches!(
+            decode_save(b"SILICON_ECHOES_SAVE\nversion=3\n"),
+            Err(SaveError::InvalidRecord)
+        ));
+        assert!(matches!(
+            decode_save(b"SILICON_ECHOES_SAVE\nversion=99\nnode=bedroom.wake\n"),
+            Err(SaveError::UnsupportedVersion)
+        ));
+        assert!(matches!(
+            decode_save(
+                b"SILICON_ECHOES_SAVE\nversion=3\nnode=missing\nchapter_complete=0\nseed=1\nplay_time_ms=0\nsave_generation=1\nvisited=bedroom.wake\n"
+            ),
+            Err(SaveError::InvalidRecord)
+        ));
+        let oversized = vec![b'x'; MAX_SAVE_BYTES + 1];
+        assert_eq!(decode_save(&oversized), Err(SaveError::TooLarge));
+    }
+
+    #[test]
+    fn scene_objects_are_unique_and_actions_are_valid() {
+        assert_eq!(validate_graph(), Ok(()));
+        for scene in scenes() {
+            let mut ids = BTreeSet::new();
+            for object in scene.objects {
+                assert!(ids.insert(object.id.0));
+                if let Some(action) = object.action {
+                    assert!(choice_exists(action.0));
+                    assert!(!matches!(
+                        object.kind,
+                        SceneObjectKind::Structural | SceneObjectKind::Decorative
+                    ));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn version_one_bedroom_saves_migrate_without_reinterpreting_unknown_data() {
         let v1 = b"SILICON_ECHOES_SAVE\n\
 version=1\n\
@@ -2197,6 +2818,48 @@ tendency=responsibility:1\n";
                     assert_eq!(ending, TEMPORARY_ENDING);
                     *completed_paths += 1;
                 }
+            }
+        }
+    }
+
+    fn explore_save_boundaries(state: WorldState, depth: u8, completed_paths: &mut usize) {
+        assert!(depth < 24, "chapter branch did not terminate");
+        let saved = decode_save(&encode_save(&state)).expect("stable state round trips");
+        assert_eq!(saved, state);
+        let current = node(state.current_node).expect("reachable node exists");
+        if current.uncontrolled_event {
+            let mut next = saved;
+            next.advance_uncontrolled_event()
+                .expect("automatic route exists");
+            explore_save_boundaries(next, depth + 1, completed_paths);
+            return;
+        }
+        if state.current_node == START_NODE {
+            let hotspot = if state.flags.get("saw_date") {
+                HotspotId::Window
+            } else {
+                HotspotId::Clock
+            };
+            let mut next = saved;
+            next.try_enter_hotspot(hotspot)
+                .expect("required bedroom hotspot is available");
+            explore_save_boundaries(next, depth + 1, completed_paths);
+            return;
+        }
+        for action in saved.available_actions() {
+            let mut next = saved.clone();
+            match next
+                .select_choice(action.id)
+                .expect("exposed action is valid")
+            {
+                Transition::Node(_) => explore_save_boundaries(next, depth + 1, completed_paths),
+                Transition::Ending(TEMPORARY_ENDING) => {
+                    assert!(next.chapter_complete);
+                    let loaded = decode_save(&encode_save(&next)).expect("ending save round trips");
+                    assert_eq!(loaded, next);
+                    *completed_paths += 1;
+                }
+                Transition::Ending(_) => panic!("unexpected ending"),
             }
         }
     }

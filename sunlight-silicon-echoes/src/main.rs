@@ -3,6 +3,7 @@
 
 extern crate alloc;
 
+use alloc::vec;
 use alloc::vec::Vec;
 use alloc::{boxed::Box, string::String};
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -15,7 +16,7 @@ use sunlight_ipc::{
 use sunlight_libc::{self as libc, rand::getrandom, GRND_NONCRYPTO};
 use sunlight_silicon_echoes::{
     decode_save, encode_save, hotspot, node, presentation_narration, run_deterministic_stress,
-    validate_graph, GameState, HotspotId, SaveError, StoryNodeId, Transition,
+    validate_graph, ChoiceId, GameState, HotspotId, SaveError, SceneId, StoryNodeId, Transition,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, Canvas, Color, CursorShape, Event, Point, Rect, Theme,
@@ -32,13 +33,13 @@ const KEY_DOWN: u8 = 0x50;
 const OBSIDIAN: Color = Color::rgb(0x0A, 0x0A, 0x0C);
 const BONE: Color = Color::rgb(0xED, 0xE6, 0xD8);
 const SUNLIGHT: Color = Color::rgb(0xFF, 0x98, 0x00);
-const SAVE_KEY: &str = "games/silicon-echoes/save.v1";
+const SAVE_SLOT_A_KEY: &str = "games/silicon-echoes/save.a";
+const SAVE_SLOT_B_KEY: &str = "games/silicon-echoes/save.b";
 const KV_REPLY: u64 = 0x4BFF;
 const KV_ERROR: u64 = 0x4BEE;
 const KV_VALUE: u64 = 0x4B05;
 const KV_PUT_SHM2: u64 = 0x4B08;
 const KV_GET_SHM2: u64 = 0x4B09;
-const KV_DELETE_SHM2: u64 = 0x4B0A;
 const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
 const KV_TIMEOUT_MS: u64 = 250;
 
@@ -58,8 +59,14 @@ enum Hover {
     TitleNew,
     TitleContinue,
     Choice(usize),
-    Hotspot(HotspotId),
+    Object(SceneObjectTarget),
     ReturnTitle,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SceneObjectTarget {
+    Hotspot(HotspotId),
+    Choice(ChoiceId),
 }
 
 #[derive(Clone, Copy)]
@@ -71,7 +78,6 @@ struct Layout {
     title_new: Rect,
     title_continue: Rect,
     return_title: Rect,
-    hotspots: [(HotspotId, Rect); 4],
 }
 
 impl Layout {
@@ -110,30 +116,6 @@ impl Layout {
             200,
             34,
         );
-        let workstation = Rect::new(
-            image.x + image.w as i32 * 56 / 100,
-            image.y + image.h as i32 * 38 / 100,
-            image.w.saturating_mul(24) / 100,
-            image.h.saturating_mul(34) / 100,
-        );
-        let clock = Rect::new(
-            image.x + image.w as i32 * 13 / 100,
-            image.y + image.h as i32 * 21 / 100,
-            image.w.saturating_mul(14) / 100,
-            image.h.saturating_mul(17) / 100,
-        );
-        let desk = Rect::new(
-            image.x + image.w as i32 * 44 / 100,
-            image.y + image.h as i32 * 64 / 100,
-            image.w.saturating_mul(38) / 100,
-            image.h.saturating_mul(17) / 100,
-        );
-        let window = Rect::new(
-            image.x + image.w as i32 * 70 / 100,
-            image.y + image.h as i32 * 12 / 100,
-            image.w.saturating_mul(19) / 100,
-            image.h.saturating_mul(35) / 100,
-        );
         Self {
             frame,
             image,
@@ -142,12 +124,35 @@ impl Layout {
             title_new,
             title_continue,
             return_title,
-            hotspots: [
-                (HotspotId::Clock, clock),
-                (HotspotId::Workstation, workstation),
-                (HotspotId::Desk, desk),
-                (HotspotId::Window, window),
-            ],
+        }
+    }
+
+    fn bedroom_hotspot_rect(&self, hotspot: HotspotId) -> Rect {
+        match hotspot {
+            HotspotId::Clock => Rect::new(
+                self.image.x + self.image.w as i32 * 13 / 100,
+                self.image.y + self.image.h as i32 * 21 / 100,
+                self.image.w.saturating_mul(14) / 100,
+                self.image.h.saturating_mul(17) / 100,
+            ),
+            HotspotId::Workstation => Rect::new(
+                self.image.x + self.image.w as i32 * 56 / 100,
+                self.image.y + self.image.h as i32 * 38 / 100,
+                self.image.w.saturating_mul(24) / 100,
+                self.image.h.saturating_mul(34) / 100,
+            ),
+            HotspotId::Desk => Rect::new(
+                self.image.x + self.image.w as i32 * 44 / 100,
+                self.image.y + self.image.h as i32 * 64 / 100,
+                self.image.w.saturating_mul(38) / 100,
+                self.image.h.saturating_mul(17) / 100,
+            ),
+            HotspotId::Window => Rect::new(
+                self.image.x + self.image.w as i32 * 70 / 100,
+                self.image.y + self.image.h as i32 * 12 / 100,
+                self.image.w.saturating_mul(19) / 100,
+                self.image.h.saturating_mul(35) / 100,
+            ),
         }
     }
 }
@@ -164,6 +169,7 @@ struct SiliconEchoesApp {
     last_tick_ms: u64,
     ambient_seed: u32,
     focused: bool,
+    suppress_next_click: bool,
     scene_cache: Option<Box<SceneCache>>,
 }
 
@@ -229,6 +235,7 @@ impl SiliconEchoesApp {
             last_tick_ms: 0,
             ambient_seed: 0x1993_0317,
             focused: true,
+            suppress_next_click: false,
             scene_cache: None,
         }
     }
@@ -244,29 +251,54 @@ impl SiliconEchoesApp {
     }
 
     fn load_save(&mut self) {
-        match kv_get(SAVE_KEY) {
-            Ok(Some(bytes)) => match decode_save(&bytes) {
-                Ok(state) => {
-                    self.saved_game = Some(state);
-                    self.save_notice = "";
-                }
-                Err(
-                    SaveError::InvalidRecord
-                    | SaveError::InvalidUtf8
-                    | SaveError::UnsupportedVersion,
-                ) => {
-                    self.saved_game = None;
-                    self.save_notice = "An older or damaged echo was left untouched.";
-                }
-            },
-            Ok(None) => {
-                self.saved_game = None;
-                self.save_notice = "";
+        let slots = [kv_get(SAVE_SLOT_A_KEY), kv_get(SAVE_SLOT_B_KEY)];
+        let mut newest = None;
+        let mut saw_damaged_record = false;
+        let mut service_failed = false;
+        for slot in slots {
+            match slot {
+                Ok(Some(bytes)) => match decode_save(&bytes) {
+                    Ok(state) => {
+                        if newest
+                            .as_ref()
+                            .map(|saved: &GameState| saved.save_generation < state.save_generation)
+                            .unwrap_or(true)
+                        {
+                            newest = Some(state);
+                        }
+                    }
+                    Err(
+                        SaveError::InvalidRecord
+                        | SaveError::InvalidUtf8
+                        | SaveError::UnsupportedVersion
+                        | SaveError::TooLarge,
+                    ) => saw_damaged_record = true,
+                },
+                Ok(None) => {}
+                Err(()) => service_failed = true,
             }
-            Err(()) => {
-                self.saved_game = None;
-                self.save_notice = "Save service is asleep. This session remains playable.";
-            }
+        }
+        self.saved_game = newest;
+        self.save_notice = if self.saved_game.is_some() {
+            ""
+        } else if service_failed {
+            "Save service is asleep. This session remains playable."
+        } else if saw_damaged_record {
+            "No valid save could be loaded; the damaged echo was left untouched."
+        } else {
+            ""
+        };
+    }
+
+    fn next_save_slot(&self) -> &'static str {
+        match self
+            .saved_game
+            .as_ref()
+            .map(|state| state.save_generation % 2)
+            .unwrap_or(1)
+        {
+            0 => SAVE_SLOT_A_KEY,
+            _ => SAVE_SLOT_B_KEY,
         }
     }
 
@@ -303,13 +335,23 @@ impl SiliconEchoesApp {
             .play_time_ms
             .saturating_add(monotonic_millis().saturating_sub(self.started_ms));
         self.started_ms = monotonic_millis();
+        self.game.save_generation = self
+            .saved_game
+            .as_ref()
+            .map(|state| state.save_generation)
+            .unwrap_or(self.game.save_generation)
+            .saturating_add(1);
         let bytes = encode_save(&self.game);
-        match kv_put(SAVE_KEY, &bytes) {
+        let slot = self.next_save_slot();
+        match kv_put(slot, &bytes).and_then(|()| verify_saved_snapshot(slot, &self.game)) {
             Ok(()) => {
                 self.saved_game = Some(self.game.clone());
                 self.save_notice = "Saved";
             }
-            Err(()) => self.save_notice = "Save unavailable",
+            Err(()) => {
+                self.save_notice =
+                    "Save service did not confirm this echo; the previous save remains intact.";
+            }
         }
     }
 
@@ -318,11 +360,6 @@ impl SiliconEchoesApp {
         self.hover = Hover::None;
         self.selected_choice = 0;
         self.load_save();
-    }
-
-    fn clear_save_after_ending(&mut self) {
-        let _ = kv_delete(SAVE_KEY);
-        self.saved_game = None;
     }
 
     fn choices(&self) -> &'static [sunlight_silicon_echoes::Choice] {
@@ -354,7 +391,6 @@ impl SiliconEchoesApp {
             Ok(Transition::Ending(_)) => {
                 self.save_game();
                 self.mode = Mode::Ending;
-                self.clear_save_after_ending();
             }
             Ok(Transition::Node(_)) => {
                 self.selected_choice = 0;
@@ -393,9 +429,9 @@ impl SiliconEchoesApp {
                 }
             }
             Mode::Play => {
-                for (hotspot, rect) in self.layout.hotspots {
-                    if self.can_inspect(hotspot) && rect.contains(point) {
-                        return Hover::Hotspot(hotspot);
+                for (target, rect) in self.scene_object_bounds() {
+                    if self.object_is_available(target) && rect.contains(point) {
+                        return Hover::Object(target);
                     }
                 }
                 for (visible_index, choice_index) in
@@ -427,6 +463,40 @@ impl SiliconEchoesApp {
                 || matches!(hotspot_id, HotspotId::Window) && self.game.flags.get("saw_date"))
     }
 
+    fn object_is_available(&self, target: SceneObjectTarget) -> bool {
+        match target {
+            SceneObjectTarget::Hotspot(hotspot) => self.can_inspect(hotspot),
+            SceneObjectTarget::Choice(choice_id) => self
+                .game
+                .available_actions()
+                .iter()
+                .any(|action| action.id == choice_id),
+        }
+    }
+
+    fn scene_object_bounds(&self) -> Vec<(SceneObjectTarget, Rect)> {
+        let scene_id = node(self.game.current_node)
+            .map(|story_node| story_node.scene)
+            .unwrap_or(SceneId("bedroom"));
+        if scene_id == SceneId("bedroom") {
+            return [
+                HotspotId::Clock,
+                HotspotId::Workstation,
+                HotspotId::Desk,
+                HotspotId::Window,
+            ]
+            .into_iter()
+            .map(|hotspot| {
+                (
+                    SceneObjectTarget::Hotspot(hotspot),
+                    self.layout.bedroom_hotspot_rect(hotspot),
+                )
+            })
+            .collect();
+        }
+        scene_object_bounds(scene_id, self.layout.image)
+    }
+
     fn current_node_is_uncontrolled(&self) -> bool {
         node(self.game.current_node)
             .map(|story_node| story_node.uncontrolled_event)
@@ -447,11 +517,21 @@ impl SiliconEchoesApp {
         match hover {
             Hover::TitleNew => self.start_new(),
             Hover::TitleContinue => self.continue_game(),
-            Hover::Hotspot(hotspot) => {
+            Hover::Object(SceneObjectTarget::Hotspot(hotspot)) => {
                 self.game.enter_hotspot(hotspot);
                 self.selected_choice = 0;
                 self.refresh_scene_cache();
                 self.save_game();
+            }
+            Hover::Object(SceneObjectTarget::Choice(choice_id)) => {
+                if let Some(index) = self
+                    .choices()
+                    .iter()
+                    .position(|choice| choice.id == choice_id)
+                {
+                    self.selected_choice = index;
+                    self.activate_choice(index);
+                }
             }
             Hover::Choice(_) if self.current_node_is_uncontrolled() => {
                 self.advance_uncontrolled_event()
@@ -539,7 +619,7 @@ impl SiliconEchoesApp {
         canvas.blend_rect(wall, Color::rgba(0xED, 0xE6, 0xD8, 30));
         canvas.blend_rect(floor, Color::rgba(0xED, 0xE6, 0xD8, 18));
 
-        let window = self.layout.hotspots[3].1;
+        let window = self.layout.bedroom_hotspot_rect(HotspotId::Window);
         canvas.blend_rect(window, Color::rgba(0xED, 0xE6, 0xD8, 30));
         canvas.draw_rect(window, BONE);
         canvas.vline(
@@ -564,7 +644,7 @@ impl SiliconEchoesApp {
             canvas.blend_pixel(x, y, Color::rgba(0xFF, 0x98, 0x00, 90));
         }
 
-        let clock = self.layout.hotspots[0].1;
+        let clock = self.layout.bedroom_hotspot_rect(HotspotId::Clock);
         canvas.blend_rounded_rect(clock, 6, Color::rgba(0xED, 0xE6, 0xD8, 36));
         canvas.stroke_rounded_rect(clock, 6, 1, BONE);
         draw_center(canvas, clock, "03:17", FontRole::MonoMedium, BONE);
@@ -576,7 +656,7 @@ impl SiliconEchoesApp {
             SUNLIGHT,
         );
 
-        let desk = self.layout.hotspots[2].1;
+        let desk = self.layout.bedroom_hotspot_rect(HotspotId::Desk);
         canvas.blend_rect(desk, Color::rgba(0xED, 0xE6, 0xD8, 52));
         canvas.hbar(desk.x - 5, desk.bottom() - 5, desk.w + 10, 5, BONE);
         canvas.vline(desk.x + 18, desk.bottom(), 48, BONE);
@@ -590,7 +670,7 @@ impl SiliconEchoesApp {
         canvas.fill_rect(letter, BONE);
         canvas.draw_rect(letter, SUNLIGHT);
 
-        let workstation = self.layout.hotspots[1].1;
+        let workstation = self.layout.bedroom_hotspot_rect(HotspotId::Workstation);
         let crt = Rect::new(
             workstation.x,
             workstation.y,
@@ -702,6 +782,32 @@ impl SiliconEchoesApp {
                         8,
                         SUNLIGHT,
                     );
+                } else {
+                    canvas.fill_rounded_rect(
+                        Rect::new(rect.x + 84, rect.y + 72, 20, 34),
+                        8,
+                        SUNLIGHT,
+                    );
+                    canvas.blend_rect(
+                        Rect::new(rect.x + 74, rect.y + 107, 40, 8),
+                        Color::rgba(0xFF, 0x98, 0x00, 35),
+                    );
+                    canvas.draw_rect(
+                        Rect::new(rect.x + 94, rect.y + 162, 58, 74),
+                        Color::rgba(0xED, 0xE6, 0xD8, 122),
+                    );
+                    draw_center(
+                        canvas,
+                        Rect::new(rect.x + 94, rect.y + 176, 58, 22),
+                        if scene_id == "landing" { "04" } else { "4B" },
+                        FontRole::MonoRegular,
+                        SUNLIGHT,
+                    );
+                    canvas.fill_rect(
+                        Rect::new(rect.right() - 128, rect.y + 96, 46, 68),
+                        Color::rgba(0xED, 0xE6, 0xD8, 32),
+                    );
+                    canvas.draw_rect(Rect::new(rect.right() - 128, rect.y + 96, 46, 68), soft);
                 }
             }
             "kitchen" => {
@@ -728,6 +834,20 @@ impl SiliconEchoesApp {
                     8,
                     Color::rgba(0xED, 0xE6, 0xD8, 130),
                 );
+                canvas.hline(counter.right() - 154, counter.y + 8, 27, SUNLIGHT);
+                canvas.fill_rect(
+                    Rect::new(rect.right() - 142, rect.y + 82, 92, 156),
+                    Color::rgba(0xED, 0xE6, 0xD8, 30),
+                );
+                canvas.draw_rect(Rect::new(rect.right() - 142, rect.y + 82, 92, 156), soft);
+                canvas.hline(rect.right() - 130, rect.y + 121, 68, soft);
+                canvas.hline(rect.right() - 130, rect.y + 164, 68, soft);
+                canvas.fill_rounded_rect(
+                    Rect::new(rect.x + 382, counter.y - 30, 84, 62),
+                    6,
+                    Color::rgba(0xED, 0xE6, 0xD8, 88),
+                );
+                canvas.draw_rect(Rect::new(rect.x + 382, counter.y - 30, 84, 62), SUNLIGHT);
             }
             "street" | "transit" => {
                 let skyline_y = rect.y + rect.h as i32 * 43 / 100;
@@ -742,6 +862,24 @@ impl SiliconEchoesApp {
                 }
                 canvas.hbar(rect.x + 12, skyline_y, rect.w - 24, 3, BONE);
                 canvas.hbar(rect.x + 12, skyline_y + 82, rect.w - 24, 2, soft);
+                let booth = Rect::new(rect.x + 74, rect.y + 92, 66, 144);
+                canvas.draw_rect(booth, BONE);
+                canvas.hline(booth.x, booth.y + 31, booth.w, SUNLIGHT);
+                canvas.vline(
+                    booth.x + booth.w as i32 / 2,
+                    booth.y + 32,
+                    booth.h - 32,
+                    soft,
+                );
+                canvas.fill_rounded_rect(
+                    Rect::new(rect.x + rect.w as i32 * 67 / 100, rect.y + 100, 22, 62),
+                    10,
+                    SUNLIGHT,
+                );
+                canvas.blend_rect(
+                    Rect::new(rect.x + rect.w as i32 * 67 / 100 - 8, rect.y + 156, 38, 8),
+                    glow,
+                );
                 if scene_id == "transit" {
                     let board = Rect::new(rect.x + rect.w as i32 * 58 / 100, rect.y + 54, 210, 72);
                     canvas.fill_rect(board, OBSIDIAN);
@@ -766,6 +904,22 @@ impl SiliconEchoesApp {
                     canvas.fill_rounded_rect(Rect::new(x, skyline_y + 20, 16, 40), 7, strong);
                     canvas.fill_rounded_rect(Rect::new(x - 5, skyline_y + 10, 26, 20), 10, BONE);
                 }
+                if scene_id == "street" {
+                    canvas.fill_rect(
+                        Rect::new(rect.x + rect.w as i32 * 33 / 100, skyline_y + 12, 38, 42),
+                        Color::rgba(0xED, 0xE6, 0xD8, 88),
+                    );
+                    canvas.fill_rounded_rect(
+                        Rect::new(
+                            rect.x + rect.w as i32 * 33 / 100 + 6,
+                            skyline_y - 14,
+                            25,
+                            30,
+                        ),
+                        13,
+                        BONE,
+                    );
+                }
             }
             "diner" | "phone" => {
                 let window = Rect::new(
@@ -777,6 +931,14 @@ impl SiliconEchoesApp {
                 canvas.fill_rect(window, OBSIDIAN);
                 canvas.draw_rect(window, BONE);
                 canvas.hline(window.x, window.y + window.h as i32 / 2, window.w, soft);
+                let booth_back = Rect::new(
+                    rect.x + rect.w as i32 * 42 / 100,
+                    rect.y + rect.h as i32 * 39 / 100,
+                    rect.w * 44 / 100,
+                    58,
+                );
+                canvas.blend_rounded_rect(booth_back, 18, Color::rgba(0xED, 0xE6, 0xD8, 45));
+                canvas.stroke_rounded_rect(booth_back, 18, 2, soft);
                 let table = Rect::new(
                     rect.x + rect.w as i32 * 49 / 100,
                     rect.y + rect.h as i32 * 62 / 100,
@@ -785,21 +947,58 @@ impl SiliconEchoesApp {
                 );
                 canvas.fill_rounded_rect(table, 8, Color::rgba(0xED, 0xE6, 0xD8, 64));
                 canvas.hbar(table.x - 4, table.bottom() - 4, table.w + 8, 4, BONE);
-                canvas.fill_rounded_rect(Rect::new(table.x + 40, table.y - 58, 40, 54), 17, BONE);
-                canvas.fill_rounded_rect(
-                    Rect::new(table.x + 210, table.y - 58, 40, 54),
-                    17,
-                    strong,
+                let mara_head = Rect::new(table.x + 39, table.y - 93, 34, 34);
+                let mara_body = Rect::new(table.x + 29, table.y - 62, 56, 62);
+                canvas.fill_rounded_rect(mara_head, 17, BONE);
+                canvas.fill_rounded_rect(mara_body, 17, Color::rgba(0xED, 0xE6, 0xD8, 165));
+                canvas.hline(
+                    mara_body.x + 8,
+                    mara_body.bottom() - 5,
+                    mara_body.w - 16,
+                    soft,
                 );
+                let riley_head = Rect::new(table.x + 207, table.y - 99, 38, 38);
+                let riley_body = Rect::new(table.x + 195, table.y - 64, 62, 64);
+                canvas.fill_rounded_rect(riley_head, 18, SUNLIGHT);
+                canvas.fill_rounded_rect(riley_body, 18, strong);
+                canvas.hline(
+                    riley_body.x + 9,
+                    riley_body.bottom() - 5,
+                    riley_body.w - 18,
+                    SUNLIGHT,
+                );
+                canvas.fill_rounded_rect(Rect::new(table.x + 96, table.y - 15, 22, 18), 5, BONE);
+                canvas.hline(table.x + 98, table.y + 4, 18, SUNLIGHT);
+                canvas.fill_rect(Rect::new(table.x + 151, table.y - 22, 12, 25), BONE);
+                canvas.hline(table.x + 146, table.y - 22, 22, BONE);
+                let clock = Rect::new(rect.right() - 105, rect.y + 42, 54, 54);
+                canvas.stroke_rounded_rect(clock, 27, 2, BONE);
+                canvas.hline(clock.x + 27, clock.y + 27, 17, SUNLIGHT);
+                canvas.vline(clock.x + 27, clock.y + 12, 15, BONE);
                 if scene_id == "phone" {
                     let phone = Rect::new(rect.x + rect.w as i32 * 68 / 100, rect.y + 80, 104, 88);
                     canvas.blend_rounded_rect(phone, 12, glow);
                     canvas.stroke_rounded_rect(phone, 12, 2, BONE);
                     canvas.fill_rounded_rect(
-                        Rect::new(phone.x + 21, phone.y + 28, 62, 24),
+                        Rect::new(phone.x + 18, phone.y + 39, 68, 27),
                         8,
+                        BONE,
+                    );
+                    canvas.stroke_rounded_rect(
+                        Rect::new(phone.x + 12, phone.y + 12, 80, 28),
+                        12,
+                        3,
                         SUNLIGHT,
                     );
+                    for row in 0..3 {
+                        for col in 0..3 {
+                            canvas.fill_rounded_rect(
+                                Rect::new(phone.x + 25 + col * 17, phone.y + 70 + row * 11, 8, 6),
+                                2,
+                                Color::rgba(0xED, 0xE6, 0xD8, 150),
+                            );
+                        }
+                    }
                 }
             }
             "repair-shop" => {
@@ -822,6 +1021,23 @@ impl SiliconEchoesApp {
                 canvas.blend_rounded_rect(pager, 7, Color::rgba(0xED, 0xE6, 0xD8, 76));
                 canvas.stroke_rounded_rect(pager, 7, 2, BONE);
                 draw_center(canvas, pager, "88.3", FontRole::MonoMedium, SUNLIGHT);
+                canvas.fill_rounded_rect(
+                    Rect::new(rect.x + 154, rect.y + 108, 48, 104),
+                    20,
+                    Color::rgba(0xED, 0xE6, 0xD8, 155),
+                );
+                canvas.fill_rounded_rect(Rect::new(rect.x + 160, rect.y + 75, 36, 38), 18, BONE);
+                canvas.hline(rect.x + 144, rect.y + 172, 68, SUNLIGHT);
+                let manual = Rect::new(rect.x + 435, rect.y + 188, 94, 62);
+                canvas.fill_rect(manual, BONE);
+                canvas.draw_rect(manual, SUNLIGHT);
+                draw_text(
+                    canvas,
+                    "ECHO",
+                    manual.x + 16,
+                    manual.y + 30,
+                    &TextStyle::new(FontRole::MonoRegular, OBSIDIAN),
+                );
             }
             "archive-lobby" | "archive-stacks" | "revelation" | "turning-point" => {
                 for index in 0..6 {
@@ -857,6 +1073,89 @@ impl SiliconEchoesApp {
                     terminal.y + 57,
                     &TextStyle::new(FontRole::UiSmall, BONE),
                 );
+                let slot = Rect::new(terminal.x + 142, terminal.y + 69, 48, 7);
+                canvas.fill_rounded_rect(slot, 3, SUNLIGHT);
+                for light in 0..3 {
+                    canvas.fill_rounded_rect(
+                        Rect::new(terminal.x + 18 + light * 12, terminal.y + 72, 6, 6),
+                        3,
+                        if light == 1 { SUNLIGHT } else { BONE },
+                    );
+                }
+                if scene_id == "archive-lobby" {
+                    canvas.fill_rect(
+                        Rect::new(rect.x + 244, rect.y + 165, 176, 56),
+                        Color::rgba(0xED, 0xE6, 0xD8, 60),
+                    );
+                    canvas.hbar(rect.x + 232, rect.y + 222, 202, 4, BONE);
+                    canvas.fill_rounded_rect(
+                        Rect::new(rect.x + 348, rect.y + 111, 34, 52),
+                        16,
+                        BONE,
+                    );
+                }
+                if scene_id == "archive-stacks" {
+                    let ledger = Rect::new(rect.x + 300, rect.y + 160, 106, 92);
+                    canvas.fill_rect(ledger, BONE);
+                    canvas.draw_rect(ledger, SUNLIGHT);
+                    draw_text(
+                        canvas,
+                        "REV. 7",
+                        ledger.x + 14,
+                        ledger.y + 27,
+                        &TextStyle::new(FontRole::MonoRegular, OBSIDIAN),
+                    );
+                    canvas.hline(
+                        ledger.x + 14,
+                        ledger.y + 48,
+                        70,
+                        Color::rgba(0x0A, 0x0A, 0x0C, 150),
+                    );
+                    canvas.hline(
+                        ledger.x + 14,
+                        ledger.y + 65,
+                        70,
+                        Color::rgba(0x0A, 0x0A, 0x0C, 150),
+                    );
+                }
+                if scene_id == "revelation" {
+                    canvas.blend_rect(
+                        Rect::new(
+                            terminal.x - 16,
+                            terminal.y - 16,
+                            terminal.w + 32,
+                            terminal.h + 32,
+                        ),
+                        Color::rgba(0xFF, 0x98, 0x00, 16),
+                    );
+                    canvas.fill_rounded_rect(
+                        Rect::new(rect.x + 316, rect.y + 164, 24, 58),
+                        10,
+                        BONE,
+                    );
+                    canvas.stroke_rounded_rect(
+                        Rect::new(rect.x + 304, rect.y + 139, 48, 36),
+                        16,
+                        3,
+                        SUNLIGHT,
+                    );
+                }
+                if scene_id == "turning-point" {
+                    let address = Rect::new(terminal.x - 22, terminal.y - 36, 264, 44);
+                    canvas.fill_rect(address, BONE);
+                    canvas.draw_rect(address, SUNLIGHT);
+                    draw_text(
+                        canvas,
+                        "SUNSET / LOT 17 / 2013",
+                        address.x + 12,
+                        address.y + 27,
+                        &TextStyle::new(FontRole::MonoRegular, OBSIDIAN),
+                    );
+                    canvas.blend_rect(
+                        Rect::new(rect.x + 44, rect.y + 46, 182, rect.h - 106),
+                        Color::rgba(0xFF, 0x98, 0x00, 18),
+                    );
+                }
             }
             _ => {}
         }
@@ -875,18 +1174,22 @@ impl SiliconEchoesApp {
     }
 
     fn draw_hotspot_feedback(&self, canvas: &mut Canvas) {
-        if let Hover::Hotspot(hotspot) = self.hover {
-            let rect = self
-                .layout
-                .hotspots
-                .iter()
-                .find(|(candidate, _)| *candidate == hotspot)
-                .map(|(_, rect)| *rect)
-                .unwrap_or(self.layout.image);
+        if let Hover::Object(target) = self.hover {
+            let Some((_, rect)) = self
+                .scene_object_bounds()
+                .into_iter()
+                .find(|(candidate, _)| *candidate == target)
+            else {
+                return;
+            };
             canvas.stroke_rounded_rect(rect.inset(-3), 5, 2, SUNLIGHT);
+            let label = match target {
+                SceneObjectTarget::Hotspot(hotspot) => hotspot_label(hotspot),
+                SceneObjectTarget::Choice(choice_id) => choice_id.0,
+            };
             draw_text(
                 canvas,
-                hotspot_label(hotspot),
+                label,
                 rect.x,
                 rect.y - 17,
                 &TextStyle::new(FontRole::UiSmall, SUNLIGHT),
@@ -1069,11 +1372,26 @@ impl SiliconEchoesApp {
     fn draw_ending(&self, canvas: &mut Canvas) {
         self.draw_room(canvas);
         canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 168));
+        let artifact = Rect::new(
+            self.layout.image.x + self.layout.image.w as i32 / 2 - 154,
+            self.layout.image.y + 44,
+            308,
+            56,
+        );
+        canvas.fill_rect(artifact, BONE);
+        canvas.draw_rect(artifact, SUNLIGHT);
+        draw_center(
+            canvas,
+            artifact,
+            "REVISION 7  /  SUNSET LOT 17",
+            FontRole::MonoRegular,
+            OBSIDIAN,
+        );
         draw_center(
             canvas,
             Rect::new(
                 self.layout.image.x,
-                self.layout.image.y + 90,
+                self.layout.image.y + 122,
                 self.layout.image.w,
                 24,
             ),
@@ -1085,7 +1403,7 @@ impl SiliconEchoesApp {
             canvas,
             Rect::new(
                 self.layout.image.x,
-                self.layout.image.y + 126,
+                self.layout.image.y + 158,
                 self.layout.image.w,
                 18,
             ),
@@ -1190,6 +1508,11 @@ impl App for SiliconEchoesApp {
                 false
             }
             Event::Click { x, y } => {
+                if self.suppress_next_click || !self.focused {
+                    self.suppress_next_click = false;
+                    self.hover = Hover::None;
+                    return true;
+                }
                 self.activate_hover(self.hit_test(x, y));
                 true
             }
@@ -1222,8 +1545,11 @@ impl App for SiliconEchoesApp {
             },
             Event::FocusChanged { focused } => {
                 self.focused = focused;
+                self.hover = Hover::None;
+                self.suppress_next_click = focused;
                 true
             }
+            Event::MouseDown { .. } | Event::MouseUp { .. } => !self.focused,
             Event::Tick => {
                 let now = monotonic_millis();
                 if now.saturating_sub(self.last_tick_ms) >= 90 {
@@ -1249,6 +1575,187 @@ impl App for SiliconEchoesApp {
 
 fn hotspot_label(hotspot_id: HotspotId) -> &'static str {
     hotspot(hotspot_id).label
+}
+
+fn scene_object_bounds(scene_id: SceneId, image: Rect) -> Vec<(SceneObjectTarget, Rect)> {
+    let choice = |id| SceneObjectTarget::Choice(ChoiceId(id));
+    match scene_id.0 {
+        "hallway" => vec![
+            (
+                choice("hallway.inspect-note"),
+                Rect::new(image.x + 120, image.y + 94, 72, 38),
+            ),
+            (
+                choice("hallway.leave-note"),
+                Rect::new(
+                    image.x + image.w as i32 * 41 / 100,
+                    image.y + 40,
+                    image.w * 20 / 100,
+                    image.h * 58 / 100,
+                ),
+            ),
+        ],
+        "kitchen" => vec![
+            (
+                choice("kitchen.read-newspaper"),
+                Rect::new(
+                    image.x + 148,
+                    image.y + image.h as i32 * 58 / 100 - 42,
+                    150,
+                    92,
+                ),
+            ),
+            (
+                choice("kitchen.study-photo"),
+                Rect::new(
+                    image.x + 366,
+                    image.y + image.h as i32 * 58 / 100 - 28,
+                    86,
+                    62,
+                ),
+            ),
+        ],
+        "landing" => vec![
+            (
+                choice("landing.take-card"),
+                Rect::new(image.x + image.w as i32 * 42 / 100, image.y + 148, 72, 44),
+            ),
+            (
+                choice("landing.leave-card"),
+                Rect::new(
+                    image.x + image.w as i32 * 41 / 100,
+                    image.y + 40,
+                    image.w * 20 / 100,
+                    image.h * 58 / 100,
+                ),
+            ),
+        ],
+        "stairwell" => vec![
+            (
+                choice("stairwell.help-vale"),
+                Rect::new(image.x + 174, image.y + 126, 112, 82),
+            ),
+            (
+                choice("stairwell.take-stairs"),
+                Rect::new(image.x + 126, image.bottom() - 178, 258, 128),
+            ),
+        ],
+        "street" => vec![
+            (
+                choice("street.follow-pager"),
+                Rect::new(image.x + image.w as i32 * 68 / 100, image.y + 92, 62, 102),
+            ),
+            (
+                choice("street.ask-vendor"),
+                Rect::new(image.x + image.w as i32 * 34 / 100, image.y + 190, 72, 112),
+            ),
+        ],
+        "diner" => vec![
+            (
+                choice("diner.tell-riley"),
+                Rect::new(image.x + image.w as i32 * 66 / 100, image.y + 114, 76, 150),
+            ),
+            (
+                choice("diner.test-riley"),
+                Rect::new(image.x + image.w as i32 * 48 / 100, image.y + 154, 104, 70),
+            ),
+        ],
+        "phone" => vec![
+            (
+                choice("phone.record-message"),
+                Rect::new(image.x + image.w as i32 * 68 / 100, image.y + 80, 104, 88),
+            ),
+            (
+                choice("phone.hang-up"),
+                Rect::new(
+                    image.x + image.w as i32 * 49 / 100,
+                    image.y + image.h as i32 * 62 / 100,
+                    108,
+                    54,
+                ),
+            ),
+        ],
+        "repair-shop" => vec![
+            (
+                choice("repair.ask-lio"),
+                Rect::new(image.x + image.w as i32 * 24 / 100, image.y + 122, 78, 148),
+            ),
+            (
+                choice("repair.borrow-manual"),
+                Rect::new(
+                    image.x + image.w as i32 * 61 / 100,
+                    image.y + image.h as i32 * 61 / 100,
+                    120,
+                    50,
+                ),
+            ),
+        ],
+        "transit" => vec![
+            (
+                choice("transit.wait"),
+                Rect::new(image.x + image.w as i32 * 58 / 100, image.y + 54, 210, 72),
+            ),
+            (
+                choice("transit.walk"),
+                Rect::new(image.x + 108, image.bottom() - 130, 160, 74),
+            ),
+        ],
+        "archive-lobby" => vec![
+            (
+                choice("archive.use-card"),
+                Rect::new(
+                    image.x + image.w as i32 * 61 / 100,
+                    image.y + image.h as i32 * 55 / 100,
+                    96,
+                    66,
+                ),
+            ),
+            (
+                choice("archive.ask-public"),
+                Rect::new(image.x + image.w as i32 * 36 / 100, image.y + 142, 76, 146),
+            ),
+        ],
+        "archive-stacks" => vec![
+            (
+                choice("stacks.read-ledger"),
+                Rect::new(image.x + image.w as i32 * 30 / 100, image.y + 138, 106, 92),
+            ),
+            (
+                choice("stacks.search-terminal"),
+                Rect::new(
+                    image.x + image.w as i32 * 61 / 100,
+                    image.y + image.h as i32 * 55 / 100,
+                    220,
+                    92,
+                ),
+            ),
+        ],
+        "revelation" => vec![
+            (
+                choice("revelation.call-riley"),
+                Rect::new(
+                    image.x + image.w as i32 * 61 / 100,
+                    image.y + image.h as i32 * 55 / 100,
+                    220,
+                    92,
+                ),
+            ),
+            (
+                choice("revelation.carry-alone"),
+                Rect::new(image.x + image.w as i32 * 35 / 100, image.y + 136, 112, 112),
+            ),
+        ],
+        "turning-point" => vec![(
+            choice("turning-point.keep-address"),
+            Rect::new(
+                image.x + image.w as i32 * 60 / 100,
+                image.y + image.h as i32 * 52 / 100,
+                232,
+                112,
+            ),
+        )],
+        _ => Vec::new(),
+    }
 }
 
 fn draw_center(canvas: &mut Canvas, rect: Rect, text: &str, role: FontRole, color: Color) {
@@ -1375,31 +1882,15 @@ fn kv_get(key: &str) -> Result<Option<Vec<u8>>, ()> {
     Ok(Some(value))
 }
 
-fn kv_delete(key: &str) -> Result<(), ()> {
-    if key.len() > SHM_PAGE {
+fn verify_saved_snapshot(key: &str, expected: &GameState) -> Result<(), ()> {
+    let Some(bytes) = kv_get(key)? else {
         return Err(());
-    }
-    let cap = kv_cap()?;
-    let (key_ptr, key_token) = shm_alloc().map_err(|_| ())?;
-    unsafe {
-        core::ptr::copy_nonoverlapping(key.as_ptr(), key_ptr, key.len());
-    }
-    let result = ipc_call_timeout(
-        cap,
-        IpcMsg::with_label(KV_DELETE_SHM2)
-            .word(0, key.len() as u64)
-            .with_cap(0, key_token),
-        KV_TIMEOUT_MS,
-    );
-    let _ = shm_free(key_token);
-    match result {
-        Ok(reply)
-            if (reply.label == KV_REPLY && reply.words[0] == 0)
-                || (reply.label == KV_ERROR && reply.words[0] == 2) =>
-        {
-            Ok(())
-        }
-        _ => Err(()),
+    };
+    let loaded = decode_save(&bytes).map_err(|_| ())?;
+    if loaded == *expected {
+        Ok(())
+    } else {
+        Err(())
     }
 }
 
