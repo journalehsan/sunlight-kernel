@@ -1973,6 +1973,22 @@ fn ending_reachable(ending: EndingId) -> bool {
     false
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SaveStage {
+    Serialize,
+    RequestTooLarge,
+    TransportSend,
+    ServiceDecode,
+    ServiceValidate,
+    FileOpen,
+    FileWrite,
+    FileCommit,
+    ReplySend,
+    ReplyTimeout,
+    ReplyMismatch,
+    ReplyDecode,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SaveError {
     InvalidUtf8,
@@ -2767,6 +2783,104 @@ tendency=responsibility:1\n";
     #[test]
     fn stress_releases_prior_scene_state() {
         assert_eq!(run_deterministic_stress(64).unwrap().completed_runs, 64);
+    }
+
+    #[test]
+    fn save_sizes_remain_within_transport_page() {
+        let state = chapter_path(0x1993_0317).unwrap();
+        let size = encode_save(&state).len();
+        std::println!("[SAVE-SIZE] turning-point state: {} bytes (limit 4096)", size);
+        std::println!("[SAVE-SIZE] visited_nodes={} visit_counts={} selected_choices={}",
+            state.visited_nodes.len(), state.visit_counts.len(), state.selected_choices.len());
+        std::println!("[SAVE-SIZE] flags={} facts={} observations={} beliefs={} memories={}",
+            state.flags.iter().count(), state.facts.len(), state.observations.len(),
+            state.beliefs.len(), state.memories.len());
+        std::println!("[SAVE-SIZE] relationships={} tendencies={} delayed={}",
+            state.relationships.len(), state.tendencies.len(), state.delayed.len());
+        let mut complete = state.clone();
+        complete.select_choice(ChoiceId("turning-point.keep-address")).unwrap();
+        let csize = encode_save(&complete).len();
+        std::println!("[SAVE-SIZE] chapter-complete state: {} bytes", csize);
+        std::println!("[SAVE-SIZE] complete visited={} choices={} observations={} memories={}",
+            complete.visited_nodes.len(), complete.selected_choices.len(),
+            complete.observations.len(), complete.memories.len());
+        assert_eq!(
+            decode_save(&encode_save(&state)).unwrap(),
+            state,
+            "chapter-path state round-trips"
+        );
+        assert!(
+            size <= 4096,
+            "encoded save at turning-point ({size} bytes) must not exceed the 4096-byte SHM transport page"
+        );
+    }
+
+    #[test]
+    fn save_sizes_at_every_scene() {
+        let mut state = WorldState::new_seeded(0x1993_0317);
+        let mut first_over = None;
+        let mut peak = 0usize;
+        let mut size_at = |s: &WorldState, stage: &str| {
+            let sz = encode_save(s).len();
+            if sz > peak { peak = sz; }
+            if sz > 4096 && first_over.is_none() {
+                first_over = Some((String::from(stage), sz));
+            }
+        };
+        size_at(&state, "bedroom.wake");
+        state.enter_hotspot(HotspotId::Clock);
+        size_at(&state, "bedroom.clock");
+        state.select_choice(ChoiceId("clock.accept-date")).unwrap();
+        size_at(&state, "clock.accept-date");
+        state.advance_uncontrolled_event().unwrap();
+        size_at(&state, "back-from-clock");
+        state.enter_hotspot(HotspotId::Workstation);
+        size_at(&state, "bedroom.workstation");
+        state.select_choice(ChoiceId("workstation.read-prompt")).unwrap();
+        size_at(&state, "read-prompt");
+        state.advance_uncontrolled_event().unwrap();
+        size_at(&state, "back-from-ws");
+        state.enter_hotspot(HotspotId::Window);
+        size_at(&state, "bedroom.window");
+        state.select_choice(ChoiceId("window.answer-signal")).unwrap();
+        size_at(&state, "answer-signal");
+        state.select_choice(ChoiceId("signal-listen")).unwrap();
+        size_at(&state, "signal-listen");
+        state.select_choice(ChoiceId("hallway.inspect-note")).unwrap();
+        size_at(&state, "hallway.inspect-note");
+        state.select_choice(ChoiceId("kitchen.study-photo")).unwrap();
+        size_at(&state, "kitchen.study-photo");
+        state.select_choice(ChoiceId("landing.take-card")).unwrap();
+        size_at(&state, "landing.take-card");
+        state.select_choice(ChoiceId("stairwell.help-vale")).unwrap();
+        size_at(&state, "stairwell.help-vale");
+        state.select_choice(ChoiceId("street.follow-pager")).unwrap();
+        size_at(&state, "street.follow-pager");
+        state.select_choice(ChoiceId("diner.tell-riley")).unwrap();
+        size_at(&state, "diner.tell-riley");
+        state.select_choice(ChoiceId("phone.record-message")).unwrap();
+        size_at(&state, "phone.record-message");
+        state.select_choice(ChoiceId("repair.ask-lio")).unwrap();
+        size_at(&state, "repair.ask-lio");
+        state.select_choice(ChoiceId("transit.wait")).unwrap();
+        size_at(&state, "transit.wait");
+        state.advance_uncontrolled_event().unwrap();
+        size_at(&state, "disturbance");
+        state.select_choice(ChoiceId("archive.use-card")).unwrap();
+        size_at(&state, "archive.use-card");
+        state.select_choice(ChoiceId("stacks.read-ledger")).unwrap();
+        size_at(&state, "stacks.read-ledger");
+        state.select_choice(ChoiceId("revelation.call-riley")).unwrap();
+        size_at(&state, "revelation.call-riley");
+        size_at(&state, "turning-point");
+        state.select_choice(ChoiceId("turning-point.keep-address")).unwrap();
+        size_at(&state, "chapter-complete");
+        assert!(peak <= 4096,
+            "peak save size ({peak} bytes) must stay within SHM transport page (4096). {}",
+            first_over.map_or(String::new(), |(stage, sz)| format!("First over at {stage}: {sz} bytes"))
+        );
+        let final_state = chapter_path(0x1993_0317).unwrap();
+        assert_eq!(decode_save(&encode_save(&final_state)).unwrap(), final_state);
     }
 
     fn leave_signal_ready(state: &mut WorldState) {

@@ -90,7 +90,7 @@ struct BumpAllocator;
 #[cfg(feature = "sunlightos")]
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 128 * 1024] = [0; 128 * 1024];
+        static mut HEAP: [u8; 768 * 1024] = [0; 768 * 1024];
         static mut NEXT: usize = 0;
         let start = NEXT;
         let align = layout.align();
