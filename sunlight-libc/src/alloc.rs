@@ -14,6 +14,10 @@ use core::sync::atomic::{AtomicBool, Ordering};
 const STATIC_HEAP_SIZE: usize = 256 * 1024;
 #[cfg(feature = "dynamic-heap")]
 const DYNAMIC_HEAP_SIZE: usize = 1024 * 1024;
+#[cfg(not(feature = "dynamic-heap"))]
+const HEAP_SIZE: usize = STATIC_HEAP_SIZE;
+#[cfg(feature = "dynamic-heap")]
+const HEAP_SIZE: usize = DYNAMIC_HEAP_SIZE;
 #[cfg(all(test, not(feature = "dynamic-heap")))]
 const REUSE_TEST_HEAP_SIZE: usize = STATIC_HEAP_SIZE;
 #[cfg(all(test, feature = "dynamic-heap"))]
@@ -42,7 +46,10 @@ struct FreeBlock {
 
 /// Stored immediately before each user pointer.  `backing_*` is the precise
 /// block layout returned by the internal free-list allocator; the user layout
-/// is retained separately for C `realloc` copy sizing and validation.
+/// is retained separately for C `realloc` copy sizing and validation.  The
+/// magic/state fields are diagnostic checks only: once a block is returned to
+/// the intrusive list, its header may be overwritten, so they cannot promise
+/// double-free detection after reuse or a use-after-free write.
 #[repr(C)]
 struct AllocationHeader {
     magic: usize,
@@ -99,21 +106,17 @@ impl Heap {
         };
 
         let start = base as usize;
-        let heap_size = {
-            #[cfg(not(feature = "dynamic-heap"))]
-            {
-                STATIC_HEAP_SIZE
-            }
-            #[cfg(feature = "dynamic-heap")]
-            {
-                DYNAMIC_HEAP_SIZE
-            }
-        };
+        let heap_size = HEAP_SIZE;
         let Some(end) = start.checked_add(heap_size) else {
             #[cfg(feature = "dynamic-heap")]
             let _ = crate::mman::munmap(base, DYNAMIC_HEAP_SIZE);
             return false;
         };
+        if start & (FREE_BLOCK_ALIGN - 1) != 0 {
+            #[cfg(feature = "dynamic-heap")]
+            let _ = crate::mman::munmap(base, DYNAMIC_HEAP_SIZE);
+            return false;
+        }
 
         // Both backends begin on at least page alignment.  Keep the lock
         // state separate from this memory, then publish the list atomically by
@@ -130,6 +133,8 @@ impl Heap {
         self.start = start;
         self.end = end;
         self.initialized = true;
+        #[cfg(any(test, debug_assertions))]
+        debug_assert!(self.invariants_hold());
         true
     }
 
@@ -209,6 +214,8 @@ impl Heap {
                 (*current).next = replacement;
             }
             debug_assert!(backing_size >= size);
+            #[cfg(any(test, debug_assertions))]
+            debug_assert!(self.invariants_hold());
             return (allocation_start as *mut u8, backing_size);
         }
         (ptr::null_mut(), 0)
@@ -305,6 +312,63 @@ impl Heap {
                 (*previous).next = inserted;
             }
         }
+        #[cfg(any(test, debug_assertions))]
+        debug_assert!(self.invariants_hold());
+        true
+    }
+
+    /// Check the structural properties that make the intrusive list safe to
+    /// traverse.  This deliberately does not allocate or format diagnostics,
+    /// so it remains safe to use from allocator tests and debug assertions.
+    #[cfg(any(test, debug_assertions))]
+    unsafe fn invariants_hold(&self) -> bool {
+        if !self.initialized {
+            return self.head.is_null() && self.start == 0 && self.end == 0;
+        }
+        if self.start >= self.end || self.start & (FREE_BLOCK_ALIGN - 1) != 0 {
+            return false;
+        }
+        let Some(capacity) = self.end.checked_sub(self.start) else {
+            return false;
+        };
+        if capacity != HEAP_SIZE {
+            return false;
+        }
+        let mut total = 0usize;
+        let mut previous_end = self.start;
+        let mut current = self.head;
+        // A valid list cannot contain more nodes than the number of minimum
+        // sized blocks in the heap.  The bound also detects a cycle.
+        let mut remaining_nodes = capacity / FREE_BLOCK_SIZE + 1;
+        while !current.is_null() {
+            if remaining_nodes == 0 {
+                return false;
+            }
+            remaining_nodes -= 1;
+            let address = current as usize;
+            let size = (*current).size;
+            if address & (FREE_BLOCK_ALIGN - 1) != 0
+                || address < previous_end
+                || size < FREE_BLOCK_SIZE
+            {
+                return false;
+            }
+            let Some(end) = address.checked_add(size) else {
+                return false;
+            };
+            if end > self.end {
+                return false;
+            }
+            let Some(next_total) = total.checked_add(size) else {
+                return false;
+            };
+            total = next_total;
+            if total > capacity {
+                return false;
+            }
+            previous_end = end;
+            current = (*current).next;
+        }
         true
     }
 }
@@ -364,6 +428,66 @@ fn allocation_layout(user_size: usize, user_align: usize) -> Option<(usize, usiz
     Some((backing_size, backing_align, user_offset))
 }
 
+struct AllocationInfo {
+    backing_addr: usize,
+    backing_size: usize,
+    backing_align: usize,
+    user_size: usize,
+}
+
+/// Validate an allocation header before trusting its backing-block fields.
+///
+/// The caller holds the heap lock.  Checking that the immediate header lies
+/// inside the managed range first avoids dereferencing obvious foreign
+/// pointers.  This cannot make invalid-pointer use defined, but it rejects
+/// malformed allocator metadata without touching the free list.
+unsafe fn validated_header(
+    heap: &Heap,
+    user: *mut u8,
+) -> Option<(*mut AllocationHeader, AllocationInfo)> {
+    if user.is_null() || !heap.initialized {
+        return None;
+    }
+    let user_addr = user as usize;
+    let header_addr = user_addr.checked_sub(HEADER_SIZE)?;
+    let header_end = header_addr.checked_add(HEADER_SIZE)?;
+    if header_addr & (HEADER_ALIGN - 1) != 0 || header_addr < heap.start || header_end > heap.end {
+        return None;
+    }
+
+    let header = header_addr as *mut AllocationHeader;
+    if (*header).magic != ALLOCATION_MAGIC || (*header).state != ALLOCATED {
+        return None;
+    }
+    let info = AllocationInfo {
+        backing_addr: (*header).backing_addr,
+        backing_size: (*header).backing_size,
+        backing_align: (*header).backing_align,
+        user_size: (*header).user_size,
+    };
+    let (required_backing_size, expected_backing_align, user_offset) =
+        allocation_layout(info.user_size, (*header).user_align)?;
+    if info.backing_align != expected_backing_align
+        || !valid_align(info.backing_align)
+        || info.backing_addr & (info.backing_align - 1) != 0
+        || info.backing_size < required_backing_size
+        || info.backing_size & (FREE_BLOCK_ALIGN - 1) != 0
+    {
+        return None;
+    }
+    let backing_end = info.backing_addr.checked_add(info.backing_size)?;
+    let expected_user_addr = info.backing_addr.checked_add(user_offset)?;
+    let user_end = user_addr.checked_add(info.user_size)?;
+    if info.backing_addr < heap.start
+        || backing_end > heap.end
+        || expected_user_addr != user_addr
+        || user_end > backing_end
+    {
+        return None;
+    }
+    Some((header, info))
+}
+
 unsafe fn allocate(user_size: usize, user_align: usize) -> *mut u8 {
     let Some((backing_size, backing_align, user_offset)) = allocation_layout(user_size, user_align)
     else {
@@ -395,29 +519,20 @@ unsafe fn allocate(user_size: usize, user_align: usize) -> *mut u8 {
     user_addr as *mut u8
 }
 
-unsafe fn header_for(ptr: *mut u8) -> *mut AllocationHeader {
-    let Some(address) = (ptr as usize).checked_sub(HEADER_SIZE) else {
-        return ptr::null_mut();
-    };
-    address as *mut AllocationHeader
-}
-
 unsafe fn release(ptr: *mut u8) -> bool {
     if ptr.is_null() {
         return true;
     }
-    let header = header_for(ptr);
-    if header.is_null() || (*header).magic != ALLOCATION_MAGIC || (*header).state != ALLOCATED {
-        return false;
-    }
-    let backing_addr = (*header).backing_addr;
-    let backing_size = (*header).backing_size;
-    let backing_align = (*header).backing_align;
-    (*header).state = FREED;
     let guard = HeapGuard::lock();
+    let Some((header, info)) = validated_header(guard.heap(), ptr) else {
+        return false;
+    };
+    // Invalidate the header while the block is still unavailable.  If the
+    // release is rejected, restore the state before dropping the lock.
+    (*header).state = FREED;
     if guard
         .heap()
-        .release_backing(backing_addr, backing_size, backing_align)
+        .release_backing(info.backing_addr, info.backing_size, info.backing_align)
     {
         true
     } else {
@@ -428,14 +543,8 @@ unsafe fn release(ptr: *mut u8) -> bool {
 }
 
 unsafe fn requested_size(ptr: *mut u8) -> Option<usize> {
-    if ptr.is_null() {
-        return None;
-    }
-    let header = header_for(ptr);
-    if header.is_null() || (*header).magic != ALLOCATION_MAGIC || (*header).state != ALLOCATED {
-        return None;
-    }
-    Some((*header).user_size)
+    let guard = HeapGuard::lock();
+    validated_header(guard.heap(), ptr).map(|(_, info)| info.user_size)
 }
 
 // ── C ABI allocator symbols ─────────────────────────────────────────────────
@@ -520,11 +629,14 @@ unsafe impl core::alloc::GlobalAlloc for SunlightAlloc {
             let _ = release(ptr);
             return ptr::null_mut();
         }
+        let Some(old_user_size) = requested_size(ptr) else {
+            return ptr::null_mut();
+        };
         let replacement = allocate(new_size, old_layout.align());
         if replacement.is_null() {
             return ptr::null_mut();
         }
-        ptr::copy_nonoverlapping(ptr, replacement, cmp::min(old_layout.size(), new_size));
+        ptr::copy_nonoverlapping(ptr, replacement, cmp::min(old_user_size, new_size));
         let _ = release(ptr);
         replacement
     }
@@ -542,6 +654,11 @@ mod tests {
 
     use super::*;
 
+    fn assert_heap_invariants() {
+        let guard = HeapGuard::lock();
+        assert!(unsafe { guard.heap().invariants_hold() });
+    }
+
     #[test]
     fn c_reuses_blocks_in_non_lifo_order() {
         unsafe {
@@ -555,6 +672,7 @@ mod tests {
             assert!(!reused.is_null());
             free(last);
             free(reused);
+            assert_heap_invariants();
         }
     }
 
@@ -570,13 +688,44 @@ mod tests {
                 free(large);
                 free(small);
             }
+            assert_heap_invariants();
+        }
+    }
+
+    #[test]
+    fn c_coalesces_with_each_neighbor_direction() {
+        unsafe {
+            // Freeing the middle block after its left neighbor exercises the
+            // previous-neighbor merge.  Freeing the last block then merges
+            // the combined previous block and the free tail (both sides).
+            let first = malloc(64);
+            let middle = malloc(64);
+            let last = malloc(64);
+            assert!(!first.is_null() && !middle.is_null() && !last.is_null());
+            free(first);
+            free(middle);
+            free(last);
+            assert_heap_invariants();
+
+            // Here the next block is free while the previous block remains
+            // allocated, so the middle free is a next-neighbor merge only.
+            let first = malloc(64);
+            let middle = malloc(64);
+            let last = malloc(64);
+            assert!(!first.is_null() && !middle.is_null() && !last.is_null());
+            free(last);
+            free(middle);
+            free(first);
+            assert_heap_invariants();
         }
     }
 
     #[test]
     fn c_calloc_and_realloc_contract() {
         unsafe {
+            assert!(malloc(0).is_null());
             assert!(calloc(usize::MAX, 2).is_null());
+            assert!(calloc(0, 4).is_null());
             let zeroed = calloc(32, 4);
             assert!(!zeroed.is_null());
             assert!((0..128).all(|index| *zeroed.add(index) == 0));
@@ -595,6 +744,7 @@ mod tests {
             assert!((0..12).all(|index| *shrunk.add(index) == index as u8));
             assert!(realloc(shrunk, 0).is_null());
             free(ptr::null_mut());
+            assert_heap_invariants();
         }
     }
 
@@ -612,13 +762,14 @@ mod tests {
             assert!(realloc(value, STATIC_HEAP_SIZE).is_null());
             assert_eq!(*value, 0xA5);
             free(value);
+            assert_heap_invariants();
         }
     }
 
     #[test]
     fn raw_layouts_are_reclaimed_and_honor_large_alignment() {
         unsafe {
-            for &align in &[8, 16, 64, 4096] {
+            for &align in &[1, 2, 8, 16, 64, 4096, 65536] {
                 let allocation = allocate(37, align);
                 assert!(!allocation.is_null());
                 assert_eq!((allocation as usize) & (align - 1), 0);
@@ -631,6 +782,42 @@ mod tests {
                 assert!(!allocation.is_null());
                 let _ = release(allocation);
             }
+            assert_heap_invariants();
+        }
+    }
+
+    #[cfg(all(not(feature = "global-alloc"), not(feature = "dynamic-heap")))]
+    #[test]
+    fn free_list_exact_fit_unsplittable_tail_and_full_recovery() {
+        unsafe {
+            let guard = HeapGuard::lock();
+            let heap = guard.heap();
+            assert!(heap.initialize());
+            assert!(heap.invariants_hold());
+        }
+
+        // A full backing block is an exact fit.  Returning it must make the
+        // complete range available again rather than losing its tail.
+        let (_, _, user_offset) = allocation_layout(1, 16).unwrap();
+        let exact_user_size = REUSE_TEST_HEAP_SIZE - user_offset;
+        unsafe {
+            let exact = malloc(exact_user_size);
+            assert!(!exact.is_null());
+            free(exact);
+            assert_heap_invariants();
+
+            // Leave fewer than FreeBlock bytes at the end.  allocate_backing
+            // consumes that tail and records the larger backing size in the
+            // header; free must recover the entire heap.
+            let tail_user_size = REUSE_TEST_HEAP_SIZE - user_offset - FREE_BLOCK_SIZE / 2;
+            let tail = malloc(tail_user_size);
+            assert!(!tail.is_null());
+            free(tail);
+            assert_heap_invariants();
+
+            let recovered = malloc(exact_user_size);
+            assert!(!recovered.is_null());
+            free(recovered);
         }
     }
 
@@ -676,7 +863,7 @@ mod tests {
         drop(arc);
 
         unsafe {
-            for &align in &[8, 16, 64, 4096] {
+            for &align in &[1, 2, 8, 16, 64, 4096, 65536] {
                 let layout = Layout::from_size_align(128, align).unwrap();
                 let value = GLOBAL_ALLOC.alloc(layout);
                 assert!(!value.is_null());
@@ -698,6 +885,28 @@ mod tests {
             .collect::<Vec<_>>();
         for worker in workers {
             worker.join().unwrap();
+        }
+        assert_heap_invariants();
+    }
+
+    #[cfg(feature = "global-alloc")]
+    #[test]
+    fn rust_realloc_uses_recorded_size_not_disagreeing_old_layout() {
+        use core::alloc::{GlobalAlloc, Layout};
+
+        unsafe {
+            let actual = Layout::from_size_align(8, 16).unwrap();
+            let incorrect_old_layout = Layout::from_size_align(1024, 16).unwrap();
+            let value = GLOBAL_ALLOC.alloc(actual);
+            assert!(!value.is_null());
+            for index in 0..actual.size() {
+                *value.add(index) = index as u8;
+            }
+            let replacement = GLOBAL_ALLOC.realloc(value, incorrect_old_layout, 32);
+            assert!(!replacement.is_null());
+            assert!((0..actual.size()).all(|index| *replacement.add(index) == index as u8));
+            GLOBAL_ALLOC.dealloc(replacement, Layout::from_size_align(32, 16).unwrap());
+            assert_heap_invariants();
         }
     }
 
