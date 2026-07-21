@@ -106,6 +106,24 @@ impl<'fb> Canvas<'fb> {
         }
     }
 
+    /// Alpha-composite a rounded rectangle over the existing pixels.
+    pub fn blend_rounded_rect(&mut self, rect: Rect, radius: u32, color: Color) {
+        let Some((x0, y0, x1, y1)) = clipped_rect(self, rect) else {
+            return;
+        };
+        let radius = clamp_radius(rect, radius);
+
+        for y in y0..y1 {
+            let row_start = y as usize * self.stride as usize;
+            for x in x0..x1 {
+                if contains_rounded_pixel(rect, radius, x, y) {
+                    let idx = row_start + x as usize;
+                    self.pixels[idx] = color.blend_over(Color(self.pixels[idx])).0;
+                }
+            }
+        }
+    }
+
     pub fn stroke_rounded_rect(&mut self, rect: Rect, radius: u32, thickness: u32, color: Color) {
         if rect.w == 0 || rect.h == 0 {
             return;

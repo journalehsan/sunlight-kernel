@@ -179,7 +179,7 @@ struct SurfaceStressApp {
 impl App for SurfaceStressApp {
     fn view(&mut self, canvas: &mut Canvas, _: &Theme) {
         canvas.fill_rect(Rect::new(0, 0, canvas.width, canvas.height), OBSIDIAN);
-        canvas.fill_rounded_rect(
+        canvas.blend_rounded_rect(
             Rect::new(
                 24,
                 24,
@@ -530,11 +530,11 @@ impl SiliconEchoesApp {
             rect.w - 24,
             rect.bottom() as u32 - wall.bottom() as u32 - 12,
         );
-        canvas.fill_rect(wall, Color::rgba(0xED, 0xE6, 0xD8, 30));
-        canvas.fill_rect(floor, Color::rgba(0xED, 0xE6, 0xD8, 18));
+        canvas.blend_rect(wall, Color::rgba(0xED, 0xE6, 0xD8, 30));
+        canvas.blend_rect(floor, Color::rgba(0xED, 0xE6, 0xD8, 18));
 
         let window = self.layout.hotspots[3].1;
-        canvas.fill_rect(window, Color::rgba(0xED, 0xE6, 0xD8, 30));
+        canvas.blend_rect(window, Color::rgba(0xED, 0xE6, 0xD8, 30));
         canvas.draw_rect(window, BONE);
         canvas.vline(
             window.x + window.w as i32 / 2,
@@ -559,7 +559,7 @@ impl SiliconEchoesApp {
         }
 
         let clock = self.layout.hotspots[0].1;
-        canvas.fill_rounded_rect(clock, 6, Color::rgba(0xED, 0xE6, 0xD8, 36));
+        canvas.blend_rounded_rect(clock, 6, Color::rgba(0xED, 0xE6, 0xD8, 36));
         canvas.stroke_rounded_rect(clock, 6, 1, BONE);
         draw_center(canvas, clock, "03:17", FontRole::MonoMedium, BONE);
         draw_center(
@@ -571,7 +571,7 @@ impl SiliconEchoesApp {
         );
 
         let desk = self.layout.hotspots[2].1;
-        canvas.fill_rect(desk, Color::rgba(0xED, 0xE6, 0xD8, 52));
+        canvas.blend_rect(desk, Color::rgba(0xED, 0xE6, 0xD8, 52));
         canvas.hbar(desk.x - 5, desk.bottom() - 5, desk.w + 10, 5, BONE);
         canvas.vline(desk.x + 18, desk.bottom(), 48, BONE);
         canvas.vline(desk.right() - 18, desk.bottom(), 48, BONE);
@@ -592,13 +592,13 @@ impl SiliconEchoesApp {
             workstation.h * 66 / 100,
         );
         let glow = Rect::new(crt.x - 5, crt.y - 5, crt.w + 10, crt.h + 10);
-        canvas.fill_rounded_rect(glow, 14, Color::rgba(0xFF, 0x98, 0x00, 20));
-        canvas.fill_rounded_rect(crt, 10, Color::rgba(0xED, 0xE6, 0xD8, 120));
+        canvas.blend_rounded_rect(glow, 14, Color::rgba(0xFF, 0x98, 0x00, 20));
+        canvas.blend_rounded_rect(crt, 10, Color::rgba(0xED, 0xE6, 0xD8, 120));
         canvas.stroke_rounded_rect(crt, 10, 2, BONE);
         let screen = crt.inset(10);
         canvas.fill_rounded_rect(screen, 5, OBSIDIAN);
         let flicker = ((monotonic_millis() / 120 + self.ambient_seed as u64) & 3) as u8;
-        canvas.fill_rect(
+        canvas.blend_rect(
             Rect::new(screen.x + 9, screen.y + 11, screen.w.saturating_sub(18), 2),
             Color::rgba(0xFF, 0x98, 0x00, 42 + flicker * 14),
         );
@@ -645,7 +645,7 @@ impl SiliconEchoesApp {
 
     fn draw_title(&self, canvas: &mut Canvas) {
         self.draw_room(canvas);
-        canvas.fill_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 138));
+        canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 138));
         draw_center(
             canvas,
             Rect::new(
@@ -718,7 +718,7 @@ impl SiliconEchoesApp {
         self.draw_room(canvas);
         let story_node = node(self.game.current_node)
             .unwrap_or_else(|| node(StoryNodeId("bedroom.wake")).unwrap());
-        canvas.fill_rect(self.layout.narrative, Color::rgba(0xED, 0xE6, 0xD8, 18));
+        canvas.blend_rect(self.layout.narrative, Color::rgba(0xED, 0xE6, 0xD8, 18));
         canvas.hbar(
             self.layout.narrative.x,
             self.layout.narrative.y,
@@ -817,7 +817,7 @@ impl SiliconEchoesApp {
 
     fn draw_ending(&self, canvas: &mut Canvas) {
         self.draw_room(canvas);
-        canvas.fill_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 168));
+        canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 168));
         draw_center(
             canvas,
             Rect::new(
@@ -878,7 +878,7 @@ impl SiliconEchoesApp {
         } else {
             Color::rgba(0xED, 0xE6, 0xD8, 16)
         };
-        canvas.fill_rounded_rect(rect, 6, fill);
+        canvas.blend_rounded_rect(rect, 6, fill);
         canvas.stroke_rounded_rect(rect, 6, if focused { 2 } else { 1 }, border);
         draw_wrapped(
             canvas,
@@ -893,7 +893,7 @@ impl SiliconEchoesApp {
     }
 
     fn draw_action(&self, canvas: &mut Canvas, rect: Rect, text: &str, hovered: bool) {
-        canvas.fill_rounded_rect(
+        canvas.blend_rounded_rect(
             rect,
             7,
             if hovered {

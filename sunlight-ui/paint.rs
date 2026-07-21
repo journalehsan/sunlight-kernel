@@ -55,6 +55,22 @@ impl<'fb> Canvas<'fb> {
         }
     }
 
+    /// Alpha-composite a rectangle over the existing pixels.
+    pub fn blend_rect(&mut self, rect: Rect, color: Color) {
+        let x0 = rect.x.max(0) as u32;
+        let y0 = rect.y.max(0) as u32;
+        let x1 = (rect.right()).min(self.width as i32).max(0) as u32;
+        let y1 = (rect.bottom()).min(self.height as i32).max(0) as u32;
+
+        for y in y0..y1 {
+            let row_start = y as usize * self.stride as usize;
+            for x in x0..x1 {
+                let idx = row_start + x as usize;
+                self.pixels[idx] = color.blend_over(Color(self.pixels[idx])).0;
+            }
+        }
+    }
+
     /// Draw a 1-pixel border around `rect`.
     pub fn draw_rect(&mut self, rect: Rect, color: Color) {
         // top / bottom
