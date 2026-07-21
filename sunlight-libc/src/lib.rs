@@ -13,7 +13,7 @@ pub mod sys;
 
 // ── libc extension modules ───────────────────────────────────────────────────
 
-/// Phase 1 allocator: static bump allocator + C ABI malloc/free/realloc/calloc.
+/// Reclaiming userspace allocator plus C ABI malloc/free/realloc/calloc.
 /// Enable `#[global_allocator]` for the `alloc` crate via the `global-alloc` feature.
 pub mod alloc;
 /// Program startup ABI documentation and raw argv helpers.
