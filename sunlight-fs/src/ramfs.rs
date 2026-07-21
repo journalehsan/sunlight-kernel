@@ -1379,6 +1379,14 @@ login_timeout_seconds = 30
         mode::FILE_755,
         b"#!/sunlight/sunlight-writer\n",
     ),
+    // Silicon Echoes: 1993: native graphical narrative game.
+    RamEntry::file(
+        "/bin/silicon-echoes",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/silicon-echoes\n",
+    ),
     // Sunlight Calendar: graphical calendar client
     RamEntry::file(
         "/bin/sunlight-calendar",
@@ -2018,6 +2026,14 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/sunlight-writer\n",
+    ),
+    // Silicon Echoes: 1993: native graphical narrative game.
+    RamEntry::file(
+        "/usr/bin/silicon-echoes",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/silicon-echoes\n",
     ),
     // Sunlight Calendar: graphical calendar client
     RamEntry::file(

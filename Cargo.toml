@@ -90,6 +90,7 @@ members = [
     "golden-fish",
     "chronos-core",
     "sunlight-chronos",
+    "sunlight-silicon-echoes",
 ]
 
 [workspace.dependencies]

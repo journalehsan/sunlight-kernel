@@ -46,6 +46,8 @@ static ICON_RABBIT_TGA: &[u8] =
 static ICON_API_LAB_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.tga");
 static ICON_MINES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/bomber.tga");
+static ICON_SILICON_ECHOES_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
 
 static ICON_SEARCH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
@@ -60,7 +62,7 @@ fn icon(bytes: &'static [u8]) -> Option<TgaImage> {
     TgaImage::parse(bytes).ok()
 }
 
-const APP_CATALOG_LEN: usize = 14;
+const APP_CATALOG_LEN: usize = 15;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
@@ -126,7 +128,7 @@ pub(crate) struct AppCatalogEntry {
     pub(crate) available: bool,
 }
 
-/// Full "All Apps" catalog — launchable apps. Exactly fills a 4-column × 3-row grid.
+/// Full "All Apps" catalog — launchable apps. Exactly fills a 5-column × 3-row grid.
 static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
     AppCatalogEntry {
         id: CatalogId::App(AppId::Terminal),
@@ -224,6 +226,13 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         name: "Sunlight Mines",
         category: "Games",
         icon_bytes: Some(ICON_MINES_TGA),
+        available: true,
+    },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::SiliconEchoes),
+        name: "Silicon Echoes: 1993",
+        category: "Games",
+        icon_bytes: Some(ICON_SILICON_ECHOES_TGA),
         available: true,
     },
 ];
@@ -490,9 +499,9 @@ impl<T: Copy, const N: usize> FixedList<T, N> {
 }
 
 const PINNED_CAP: usize = 6;
-const ALL_APPS_CAP: usize = 13;
+const ALL_APPS_CAP: usize = 15;
 const RECENT_CAP: usize = 6;
-const SEARCH_RESULTS_CAP: usize = 13;
+const SEARCH_RESULTS_CAP: usize = 15;
 const POWER_CAP: usize = 3;
 
 struct StartMenuLayout {
@@ -551,7 +560,7 @@ impl StartMenuLayout {
     }
 }
 
-const PANEL_W: u32 = 600;
+const PANEL_W: u32 = 720;
 const PANEL_PAD: i32 = 16;
 const HEADER_H: u32 = 34;
 const CLOSE_BTN: u32 = 22;
@@ -563,7 +572,7 @@ const TILE_GAP: i32 = 10;
 const SMALL_TILE_H: u32 = 70;
 const BIG_TILE_H: u32 = 78;
 const SMALL_COLS: usize = 6;
-const BIG_COLS: usize = 4;
+const BIG_COLS: usize = 5;
 const FOOTER_GAP: i32 = 12;
 const FOOTER_H: u32 = 48;
 const POWER_BTN: u32 = 44;

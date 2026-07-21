@@ -1,0 +1,20 @@
+[package]
+name = "sunlight-silicon-echoes"
+version = "0.2.1860"
+
+edition = "2021"
+description = "Silicon Echoes: 1993, a native SunlightOS narrative game vertical slice"
+
+[lib]
+name = "sunlight_silicon_echoes"
+path = "src/lib.rs"
+
+[[bin]]
+name = "silicon-echoes"
+path = "src/main.rs"
+
+[dependencies]
+sun-font = { path = "../sun-font" }
+sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
+sunlight-ui = { path = "../sunlight-ui", features = ["app"] }

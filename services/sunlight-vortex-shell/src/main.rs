@@ -165,6 +165,8 @@ static ICON_WRITER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.tga");
 static ICON_RABBIT_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
+static ICON_SILICON_ECHOES_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
 static MENU_NEW_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.tga");
 static MENU_NEW_TEXT_TGA: &[u8] =
@@ -359,7 +361,12 @@ impl DockTheme {
             AppId::Writer => self.writer,
             AppId::RappidRabbit => self.rabbit,
             // Start-Menu / running-strip only — no dedicated dock pin.
-            AppId::Tasks | AppId::Bench | AppId::Devices | AppId::ApiLab | AppId::Mines => None,
+            AppId::Tasks
+            | AppId::Bench
+            | AppId::Devices
+            | AppId::ApiLab
+            | AppId::Mines
+            | AppId::SiliconEchoes => None,
         }
     }
 }
@@ -465,6 +472,7 @@ pub(crate) enum AppId {
     RappidRabbit,
     ApiLab,
     Mines,
+    SiliconEchoes,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -1309,7 +1317,7 @@ struct VortexShell {
     /// App registry used for launch/focus/restore behavior. Pinned dock apps
     /// are those in [`DOCK_PINNED`]; remaining entries are Start-Menu /
     /// running-strip only but share the same launch/state-sync machinery.
-    apps: [DockAppState; 14],
+    apps: [DockAppState; 15],
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// User-provided icon overrides loaded from `desktop.toml`.
@@ -1518,6 +1526,11 @@ impl VortexShell {
                 DockAppState::new(AppId::ApiLab, "Sunlight API Lab", AppId::ApiLab),
                 // Start-Menu only graphical DOS game (Chronos bundle)
                 DockAppState::new(AppId::Mines, "Sunlight Mines", AppId::Mines),
+                DockAppState::new(
+                    AppId::SiliconEchoes,
+                    "Silicon Echoes: 1993",
+                    AppId::SiliconEchoes,
+                ),
             ],
             running_apps: Vec::new(),
             icon_overrides,
@@ -1738,6 +1751,7 @@ impl VortexShell {
             AppId::RappidRabbit => "/bin/rappid-rabbit",
             AppId::ApiLab => "/bin/sunlight-api-lab",
             AppId::Mines => "/Applications/SunlightMines.sunapp",
+            AppId::SiliconEchoes => "/bin/silicon-echoes",
         }
     }
 
@@ -1757,6 +1771,7 @@ impl VortexShell {
             AppId::RappidRabbit => b"rappid-rabbit",
             AppId::ApiLab => b"sunlight-api-lab",
             AppId::Mines => b"sunlight-mines",
+            AppId::SiliconEchoes => b"silicon-echoes",
         }
     }
 
@@ -1776,11 +1791,15 @@ impl VortexShell {
             AppId::RappidRabbit => "app=rappid-rabbit",
             AppId::ApiLab => "app=sunlight-api-lab",
             AppId::Mines => "app=sunlight-mines",
+            AppId::SiliconEchoes => "app=silicon-echoes",
         }
     }
 
     fn app_allows_multiple_instances(app_id: AppId) -> bool {
-        matches!(app_id, AppId::Calendar | AppId::Chronos | AppId::Mines)
+        matches!(
+            app_id,
+            AppId::Calendar | AppId::Chronos | AppId::Mines | AppId::SiliconEchoes
+        )
     }
 
     fn open_file_via_resolver(&mut self, path: &str, source: LaunchSource) -> bool {
@@ -5331,6 +5350,7 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "sunlight-text"
         | "kate" => Some(ICON_TEXT_EDITOR_TGA),
         "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_TGA),
+        "silicon-echoes" | "silicon" => Some(ICON_SILICON_ECHOES_TGA),
         "rappid-rabbit" | "rabbit" | "internet-web-browser" | "web-browser" => {
             Some(ICON_GENERIC_APP_TGA)
         }

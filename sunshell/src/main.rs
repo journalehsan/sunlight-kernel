@@ -2270,6 +2270,8 @@ mod sunlight {
                 | b"tasks"
                 | b"task-manager"
                 | b"sunlight-tasks"
+                | b"silicon-echoes"
+                | b"silicon"
         )
     }
 

@@ -95,6 +95,15 @@ path instead.
 
 For graphical desktop apps such as `eyes`, `sunlight-terminal`, `sunlight-tasks`, and `sunlight-files`, the same rule applies: they still need workspace membership, build wiring, kernel embed bytes, resolver arms, and the `/bin` stubs.
 
+### Current native desktop reference: `silicon-echoes`
+
+`sunlight-silicon-echoes` builds the `silicon-echoes` native graphical binary.
+It is wired through all five `/bin` command locations, including
+`tools/runs.sh --build`, and provides both `/bin/silicon-echoes` and
+`/usr/bin/silicon-echoes` RamFS stubs. The Vortex Start Menu registers it as
+**Silicon Echoes: 1993** in the Games category; desktop launch and shell aliases
+(`silicon-echoes`, `silicon`) both resolve to `/bin/silicon-echoes`.
+
 **New sunlightd-launched daemon** → spots 1, 2, 3, 4, **6**.
 
 **New init-launched daemon** → spots 1, 2, 3, 4, plus add its absolute

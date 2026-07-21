@@ -325,6 +325,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-edit --release
