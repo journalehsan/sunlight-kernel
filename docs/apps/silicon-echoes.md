@@ -37,6 +37,18 @@ embedded as `/bin/silicon-echoes`.
   game state.
 - Uses `sunlight-libc`'s `global-alloc` plus `dynamic-heap-8m`; the story
   naturally uses `Box`, `Vec`, `String`, `format!`, and ordered maps.
+- Narrative scenes share an explicit presentation lifecycle: entrance, Unicode
+  scalar-safe typewriter reveal, post-reveal pause, player choice, and a
+  single transition. The default rhythm is 320 ms entrance, 32 ms ordinary
+  text, 90 ms clause, 180 ms sentence, 280 ms paragraph, and 340 ms before
+  choices; an internal instant-text profile is available for deterministic
+  tests.
+- Choices show `[A]` through `[Z]` in their visible order. Arrow keys,
+  left/right, Tab/Shift+Tab, Enter, and Space support focus-first play; Space
+  or Enter while prose is revealing only completes the reveal. Bedroom
+  hotspots and Echo Overlay are also keyboard reachable. Shortcut input is
+  debounced across scene and focus changes, while mouse activation uses the
+  same StoryAction boundary.
 
 ## Native Graphics Integration
 
@@ -55,6 +67,9 @@ Calculator and Light Lens:
   introduced.
 - Ambient CRT variation uses the non-cryptographic random service only;
   narrative state is deterministic.
+- The completed narrative layout is prepared once per scene/width. Rendering
+  draws a UTF-8-safe prefix of that layout, so line breaks do not reflow while
+  prose appears and no growing text buffer is allocated per frame.
 
 No graphics-engine extension was required for this slice.
 

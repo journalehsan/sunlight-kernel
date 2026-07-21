@@ -17,7 +17,8 @@ use sunlight_libc::{self as libc, rand::getrandom, GRND_NONCRYPTO};
 use sunlight_silicon_echoes::{
     decode_save, echo_object_is_active, echo_objects, encode_save, hotspot, node,
     presentation_narration, run_deterministic_stress, validate_graph, ChoiceId, EchoLayer,
-    GameState, HotspotId, SaveError, SaveStage, SceneId, StoryNodeId, Transition,
+    GameState, HotspotId, NarrativePresentation, PresentationConfig, SaveError, SaveStage, SceneId,
+    ScenePresentation, ShortcutGate, StoryNodeId, Transition,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, Canvas, Color, CursorShape, Event, Point, Rect, Theme,
@@ -30,6 +31,9 @@ const KEY_ESC: u8 = 0x01;
 const KEY_ENTER: u8 = 0x1c;
 const KEY_UP: u8 = 0x48;
 const KEY_DOWN: u8 = 0x50;
+const KEY_LEFT: u8 = 0x4B;
+const KEY_RIGHT: u8 = 0x4D;
+const KEY_TAB: u8 = 0x0F;
 
 const OBSIDIAN: Color = Color::rgb(0x0A, 0x0A, 0x0C);
 const BONE: Color = Color::rgb(0xED, 0xE6, 0xD8);
@@ -182,12 +186,24 @@ struct SiliconEchoesApp {
     ambient_seed: u32,
     focused: bool,
     suppress_next_click: bool,
+    presentation: NarrativePresentation,
+    shortcut_gate: ShortcutGate,
+    selected_hotspot: usize,
+    key_down: [bool; 256],
     scene_cache: Option<Box<SceneCache>>,
 }
 
 struct SceneCache {
     node: StoryNodeId,
     narration: String,
+    wrap_width: i32,
+    lines: Vec<TextLine>,
+}
+
+#[derive(Clone, Copy)]
+struct TextLine {
+    start: usize,
+    end: usize,
 }
 
 struct SurfaceStressApp {
@@ -249,6 +265,14 @@ impl SiliconEchoesApp {
             ambient_seed: 0x1993_0317,
             focused: true,
             suppress_next_click: false,
+            presentation: NarrativePresentation::new(
+                String::new(),
+                monotonic_millis(),
+                PresentationConfig::default(),
+            ),
+            shortcut_gate: ShortcutGate::default(),
+            selected_hotspot: 0,
+            key_down: [false; 256],
             scene_cache: None,
         }
     }
@@ -257,10 +281,24 @@ impl SiliconEchoesApp {
         let narration = node(self.game.current_node)
             .map(|story_node| presentation_narration(&self.game, story_node))
             .unwrap_or_default();
+        self.presentation = NarrativePresentation::new(
+            narration.clone(),
+            monotonic_millis(),
+            PresentationConfig::default(),
+        );
         self.scene_cache = Some(Box::new(SceneCache {
             node: self.game.current_node,
             narration,
+            wrap_width: 0,
+            lines: Vec::new(),
         }));
+        self.selected_choice = self
+            .available_choice_indices()
+            .first()
+            .copied()
+            .unwrap_or(0);
+        self.selected_hotspot = 0;
+        self.shortcut_gate.block_until_quiet(monotonic_millis());
     }
 
     fn load_save(&mut self) {
@@ -414,10 +452,35 @@ impl SiliconEchoesApp {
             .collect()
     }
 
+    fn available_hotspots(&self) -> Vec<HotspotId> {
+        [
+            HotspotId::Clock,
+            HotspotId::Workstation,
+            HotspotId::Desk,
+            HotspotId::Window,
+        ]
+        .into_iter()
+        .filter(|hotspot| self.can_inspect(*hotspot))
+        .collect()
+    }
+
+    fn presentation_accepts_input(&self) -> bool {
+        self.presentation.state() == ScenePresentation::AwaitingChoice
+    }
+
     fn activate_choice(&mut self, index: usize) {
+        if !self.presentation_accepts_input()
+            || !self
+                .available_choice_indices()
+                .iter()
+                .any(|visible| *visible == index)
+        {
+            return;
+        }
         let Some(choice) = self.choices().get(index) else {
             return;
         };
+        self.presentation.begin_transition();
         let target = self.game.select_choice(choice.id);
         match target {
             Ok(Transition::Ending(_)) => {
@@ -434,6 +497,10 @@ impl SiliconEchoesApp {
     }
 
     fn advance_uncontrolled_event(&mut self) {
+        if !self.presentation_accepts_input() {
+            return;
+        }
+        self.presentation.begin_transition();
         if self.game.advance_uncontrolled_event().is_ok() {
             self.selected_choice = 0;
             self.refresh_scene_cache();
@@ -463,6 +530,9 @@ impl SiliconEchoesApp {
                 }
             }
             Mode::Play => {
+                if !self.presentation_accepts_input() {
+                    return Hover::None;
+                }
                 for (target, rect) in self.scene_object_bounds() {
                     if self.object_is_available(target) && rect.contains(point) {
                         return Hover::Object(target);
@@ -569,10 +639,14 @@ impl SiliconEchoesApp {
     }
 
     fn activate_hover(&mut self, hover: Hover) {
+        if self.mode == Mode::Play && !self.presentation_accepts_input() {
+            return;
+        }
         match hover {
             Hover::TitleNew => self.start_new(),
             Hover::TitleContinue => self.continue_game(),
             Hover::Object(SceneObjectTarget::Hotspot(hotspot)) => {
+                self.presentation.begin_transition();
                 self.game.enter_hotspot(hotspot);
                 self.selected_choice = 0;
                 self.refresh_scene_cache();
@@ -590,7 +664,6 @@ impl SiliconEchoesApp {
             }
             Hover::Object(SceneObjectTarget::Overlay) => {
                 if self.game.toggle_echo_layer() {
-                    self.refresh_scene_cache();
                     self.save_game();
                 }
             }
@@ -605,8 +678,17 @@ impl SiliconEchoesApp {
     }
 
     fn select_next_choice(&mut self, direction: i32) {
+        if !self.presentation_accepts_input() {
+            return;
+        }
         let available = self.available_choice_indices();
         if available.is_empty() {
+            let hotspots = self.available_hotspots();
+            if !hotspots.is_empty() {
+                self.selected_hotspot = (self.selected_hotspot as i32 + direction)
+                    .rem_euclid(hotspots.len() as i32)
+                    as usize;
+            }
             return;
         }
         let current = available
@@ -617,7 +699,7 @@ impl SiliconEchoesApp {
         self.selected_choice = available[next];
     }
 
-    fn keyboard_activate(&mut self) {
+    fn keyboard_activate(&mut self, now_ms: u64) {
         match self.mode {
             Mode::Title => {
                 if self.saved_game.is_some() {
@@ -628,8 +710,45 @@ impl SiliconEchoesApp {
             }
             Mode::Ending if self.game.chapter == 1 => self.continue_chapter_two(),
             Mode::Ending => self.return_to_title(),
+            Mode::Play if self.presentation.is_revealing() => {
+                self.presentation.skip_reveal(now_ms);
+            }
+            Mode::Play if !self.presentation_accepts_input() => {}
             Mode::Play if self.current_node_is_uncontrolled() => self.advance_uncontrolled_event(),
+            Mode::Play if self.available_choice_indices().is_empty() => {
+                if let Some(hotspot) = self
+                    .available_hotspots()
+                    .get(self.selected_hotspot)
+                    .copied()
+                {
+                    self.presentation.begin_transition();
+                    self.game.enter_hotspot(hotspot);
+                    self.refresh_scene_cache();
+                    self.save_game();
+                }
+            }
             Mode::Play => self.activate_choice(self.selected_choice),
+        }
+    }
+
+    fn activate_shortcut(&mut self, index: usize) {
+        if !self.presentation_accepts_input() {
+            return;
+        }
+        let available = self.available_choice_indices();
+        if let Some(choice_index) = available.get(index).copied() {
+            self.selected_choice = choice_index;
+            self.activate_choice(choice_index);
+            return;
+        }
+        if available.is_empty() {
+            if let Some(hotspot) = self.available_hotspots().get(index).copied() {
+                self.selected_hotspot = index;
+                self.presentation.begin_transition();
+                self.game.enter_hotspot(hotspot);
+                self.refresh_scene_cache();
+                self.save_game();
+            }
         }
     }
 
@@ -642,6 +761,18 @@ impl SiliconEchoesApp {
                 self.return_to_title();
             }
         }
+    }
+
+    fn ensure_narrative_layout(&mut self) {
+        let width = self.layout.narrative.w as i32 * 51 / 100;
+        let Some(cache) = self.scene_cache.as_mut() else {
+            return;
+        };
+        if cache.node != self.game.current_node || cache.wrap_width == width {
+            return;
+        }
+        cache.lines = prepare_text_lines(&cache.narration, width, FontRole::SerifRegular);
+        cache.wrap_width = width;
     }
 
     fn draw_frame(&self, canvas: &mut Canvas) {
@@ -1793,7 +1924,7 @@ impl SiliconEchoesApp {
         }
     }
 
-    fn draw_play(&self, canvas: &mut Canvas) {
+    fn draw_play(&mut self, canvas: &mut Canvas) {
         self.draw_room(canvas);
         let story_node = node(self.game.current_node)
             .unwrap_or_else(|| node(StoryNodeId("bedroom.wake")).unwrap());
@@ -1812,22 +1943,33 @@ impl SiliconEchoesApp {
             self.layout.narrative.y + 12,
             &TextStyle::new(FontRole::UiSmall, SUNLIGHT),
         );
-        let narration = self
+        self.ensure_narrative_layout();
+        if let Some(cache) = self
             .scene_cache
             .as_ref()
             .filter(|cache| cache.node == self.game.current_node)
-            .map(|cache| cache.narration.as_str())
-            .unwrap_or(story_node.narration);
-        draw_wrapped(
-            canvas,
-            narration,
-            self.layout.narrative.x + 12,
-            self.layout.narrative.y + 34,
-            self.layout.narrative.w as i32 * 51 / 100,
-            FontRole::SerifRegular,
-            BONE,
-            22,
-        );
+        {
+            draw_prepared_prefix(
+                canvas,
+                &cache.narration,
+                &cache.lines,
+                self.presentation.visible_byte_end(),
+                self.layout.narrative.x + 12,
+                self.layout.narrative.y + 34,
+                FontRole::SerifRegular,
+                BONE,
+                22,
+            );
+        }
+        if self.presentation.is_revealing() {
+            draw_text(
+                canvas,
+                "_",
+                self.layout.narrative.x + 12,
+                self.layout.narrative.bottom() - 22,
+                &TextStyle::new(FontRole::MonoRegular, SUNLIGHT),
+            );
+        }
         if self.game.flags.get("signal_arrived") {
             draw_text(
                 canvas,
@@ -1861,13 +2003,15 @@ impl SiliconEchoesApp {
                 &TextStyle::new(FontRole::UiSmall, SUNLIGHT),
             );
         }
-        canvas.vline(
-            self.layout.choices.x - 12,
-            self.layout.choices.y,
-            self.layout.choices.h,
-            Color::rgba(0xED, 0xE6, 0xD8, 70),
-        );
-        if self.current_node_is_uncontrolled() {
+        if self.presentation_accepts_input() {
+            canvas.vline(
+                self.layout.choices.x - 12,
+                self.layout.choices.y,
+                self.layout.choices.h,
+                Color::rgba(0xED, 0xE6, 0xD8, 70),
+            );
+        }
+        if self.presentation_accepts_input() && self.current_node_is_uncontrolled() {
             self.draw_action(
                 canvas,
                 self.choice_rect(0),
@@ -1881,16 +2025,19 @@ impl SiliconEchoesApp {
                 self.choice_rect(0).bottom() + 12,
                 &TextStyle::new(FontRole::UiSmall, Color::rgba(0xED, 0xE6, 0xD8, 140)),
             );
-        } else {
+        } else if self.presentation_accepts_input() {
             let available = self.available_choice_indices();
             if available.is_empty() {
-                draw_text(
-                    canvas,
-                    "Inspect the room.",
-                    self.layout.choices.x,
-                    self.layout.choices.y + 12,
-                    &TextStyle::new(FontRole::UiRegular, BONE),
-                );
+                for (visible_index, hotspot) in self.available_hotspots().iter().enumerate() {
+                    self.draw_choice(
+                        canvas,
+                        self.choice_rect(visible_index),
+                        hotspot_label(*hotspot),
+                        self.hover == Hover::Object(SceneObjectTarget::Hotspot(*hotspot)),
+                        self.focused && self.selected_hotspot == visible_index,
+                        visible_index,
+                    );
+                }
             }
             for (visible_index, choice_index) in available.iter().enumerate() {
                 let choice = self.choices()[*choice_index];
@@ -1902,6 +2049,7 @@ impl SiliconEchoesApp {
                     choice.text,
                     hovered,
                     focused,
+                    visible_index,
                 );
             }
         }
@@ -2002,6 +2150,7 @@ impl SiliconEchoesApp {
         text: &str,
         hovered: bool,
         focused: bool,
+        visible_index: usize,
     ) {
         let border = if hovered || focused {
             SUNLIGHT
@@ -2015,12 +2164,20 @@ impl SiliconEchoesApp {
         };
         canvas.blend_rounded_rect(rect, 6, fill);
         canvas.stroke_rounded_rect(rect, 6, if focused { 2 } else { 1 }, border);
+        let shortcut = shortcut_label(visible_index);
+        draw_text(
+            canvas,
+            shortcut,
+            rect.x + 10,
+            rect.y + 11,
+            &TextStyle::new(FontRole::UiMedium, SUNLIGHT),
+        );
         draw_wrapped(
             canvas,
             text,
-            rect.x + 10,
+            rect.x + 40,
             rect.y + 9,
-            rect.w as i32 - 18,
+            rect.w as i32 - 48,
             FontRole::UiRegular,
             BONE,
             16,
@@ -2079,59 +2236,92 @@ impl App for SiliconEchoesApp {
                     self.hover = Hover::None;
                     return true;
                 }
+                if self.mode == Mode::Play
+                    && self.presentation.is_revealing()
+                    && self.layout.narrative.contains(Point::new(x, y))
+                {
+                    return self.presentation.skip_reveal(monotonic_millis());
+                }
                 self.activate_hover(self.hit_test(x, y));
                 true
             }
             Event::Key('\n') | Event::Key('\r') | Event::Key(' ') => {
-                self.keyboard_activate();
+                self.keyboard_activate(monotonic_millis());
                 true
             }
-            Event::Key('e') | Event::Key('E') if self.mode == Mode::Play => {
-                if self.game.toggle_echo_layer() {
-                    self.refresh_scene_cache();
-                    self.save_game();
-                    true
-                } else {
-                    false
+            Event::Key(ch) if self.mode == Mode::Play => {
+                let now = monotonic_millis();
+                let visible_count = self.available_choice_indices().len();
+                if matches!(ch, 'e' | 'E')
+                    && self.presentation_accepts_input()
+                    && self.game.supports_echo_overlay()
+                    && visible_count < 5
+                {
+                    if self.game.toggle_echo_layer() {
+                        self.save_game();
+                        return true;
+                    }
                 }
+                if let Some(index) =
+                    self.shortcut_gate
+                        .shortcut_index(ch, self.presentation_accepts_input(), now)
+                {
+                    self.activate_shortcut(index);
+                }
+                true
             }
             Event::KeyPress {
                 keycode,
-                pressed: true,
+                pressed,
+                shift,
                 ..
-            } => match keycode {
-                KEY_ESC => {
-                    self.back();
-                    true
+            } => {
+                let was_down = self.key_down[keycode as usize];
+                self.key_down[keycode as usize] = pressed;
+                if !pressed || was_down {
+                    return false;
                 }
-                KEY_ENTER => {
-                    self.keyboard_activate();
-                    true
+                match keycode {
+                    KEY_ESC => {
+                        self.back();
+                        true
+                    }
+                    KEY_ENTER => {
+                        self.keyboard_activate(monotonic_millis());
+                        true
+                    }
+                    KEY_UP | KEY_LEFT if self.mode == Mode::Play => {
+                        self.select_next_choice(-1);
+                        true
+                    }
+                    KEY_DOWN | KEY_RIGHT if self.mode == Mode::Play => {
+                        self.select_next_choice(1);
+                        true
+                    }
+                    KEY_TAB if self.mode == Mode::Play => {
+                        self.select_next_choice(if shift { -1 } else { 1 });
+                        true
+                    }
+                    _ => false,
                 }
-                KEY_UP if self.mode == Mode::Play => {
-                    self.select_next_choice(-1);
-                    true
-                }
-                KEY_DOWN if self.mode == Mode::Play => {
-                    self.select_next_choice(1);
-                    true
-                }
-                _ => false,
-            },
+            }
             Event::FocusChanged { focused } => {
                 self.focused = focused;
                 self.hover = Hover::None;
                 self.suppress_next_click = focused;
+                self.key_down = [false; 256];
+                self.shortcut_gate.block_until_quiet(monotonic_millis());
                 true
             }
             Event::MouseDown { .. } | Event::MouseUp { .. } => !self.focused,
             Event::Tick => {
                 let now = monotonic_millis();
+                let presentation_changed = self.mode == Mode::Play && self.presentation.tick(now);
                 if now.saturating_sub(self.last_tick_ms) >= 90 {
                     self.last_tick_ms = now;
                     return true;
                 }
-                false
+                presentation_changed
             }
             _ => false,
         }
@@ -2144,7 +2334,18 @@ impl App for SiliconEchoesApp {
     }
 
     fn poll_timeout_ms(&self) -> u64 {
-        90
+        if self.mode == Mode::Play
+            && matches!(
+                self.presentation.state(),
+                ScenePresentation::Entering
+                    | ScenePresentation::Revealing
+                    | ScenePresentation::PostRevealPause
+            )
+        {
+            16
+        } else {
+            90
+        }
     }
 }
 
@@ -2659,6 +2860,120 @@ fn draw_center(canvas: &mut Canvas, rect: Rect, text: &str, role: FontRole, colo
         rect.h,
         &TextStyle::new(role, color),
     );
+}
+
+fn shortcut_label(index: usize) -> &'static str {
+    const LABELS: [&str; 26] = [
+        "[A]", "[B]", "[C]", "[D]", "[E]", "[F]", "[G]", "[H]", "[I]", "[J]", "[K]", "[L]", "[M]",
+        "[N]", "[O]", "[P]", "[Q]", "[R]", "[S]", "[T]", "[U]", "[V]", "[W]", "[X]", "[Y]", "[Z]",
+    ];
+    LABELS.get(index).copied().unwrap_or("[?]")
+}
+
+fn prepare_text_lines(text: &str, max_width: i32, role: FontRole) -> Vec<TextLine> {
+    let mut lines = Vec::new();
+    let mut paragraph_start = 0;
+    for (index, ch) in text
+        .char_indices()
+        .chain(core::iter::once((text.len(), '\n')))
+    {
+        if ch != '\n' {
+            continue;
+        }
+        prepare_paragraph_lines(text, paragraph_start, index, max_width, role, &mut lines);
+        if index < text.len() {
+            lines.push(TextLine {
+                start: index,
+                end: index,
+            });
+        }
+        paragraph_start = index.saturating_add(ch.len_utf8());
+    }
+    lines
+}
+
+fn prepare_paragraph_lines(
+    text: &str,
+    start: usize,
+    end: usize,
+    max_width: i32,
+    role: FontRole,
+    lines: &mut Vec<TextLine>,
+) {
+    let mut line_start = start;
+    while line_start < end {
+        let Some(ch) = text[line_start..].chars().next() else {
+            break;
+        };
+        if !ch.is_whitespace() {
+            break;
+        }
+        line_start += ch.len_utf8();
+    }
+    let mut word_start = line_start;
+    let mut index = line_start;
+    while index < end {
+        let ch = text[index..].chars().next().unwrap();
+        let next = index + ch.len_utf8();
+        if ch.is_whitespace() {
+            if word_start < index
+                && measure_text(&text[line_start..index], role).w as i32 > max_width
+                && line_start < word_start
+            {
+                lines.push(TextLine {
+                    start: line_start,
+                    end: word_start.saturating_sub(1),
+                });
+                line_start = word_start;
+            }
+            word_start = next;
+        }
+        index = next;
+    }
+    if line_start < end
+        && measure_text(&text[line_start..end], role).w as i32 > max_width
+        && line_start < word_start
+    {
+        lines.push(TextLine {
+            start: line_start,
+            end: word_start.saturating_sub(1),
+        });
+        line_start = word_start;
+    }
+    if line_start < end {
+        lines.push(TextLine {
+            start: line_start,
+            end,
+        });
+    }
+}
+
+fn draw_prepared_prefix(
+    canvas: &mut Canvas,
+    text: &str,
+    lines: &[TextLine],
+    visible_end: usize,
+    x: i32,
+    y: i32,
+    role: FontRole,
+    color: Color,
+    line_height: i32,
+) {
+    for (index, line) in lines.iter().enumerate() {
+        if visible_end <= line.start {
+            break;
+        }
+        let end = line.end.min(visible_end);
+        if end > line.start {
+            draw_text(
+                canvas,
+                &text[line.start..end],
+                x,
+                y + index as i32 * line_height,
+                &TextStyle::new(role, color),
+            );
+        }
+    }
 }
 
 fn draw_wrapped(

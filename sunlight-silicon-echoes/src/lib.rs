@@ -25,6 +25,241 @@ pub const START_NODE: StoryNodeId = StoryNodeId("bedroom.wake");
 pub const TEMPORARY_ENDING: EndingId = EndingId("ending.chapter-one");
 pub const CHAPTER_TWO_ENDING: EndingId = EndingId("ending.chapter-two");
 
+/// The non-canonical presentation lifecycle for a narrative scene.  This is
+/// deliberately separate from [`WorldState`]: a save restores a stable story
+/// node and starts its presentation again instead of serialising animation
+/// progress.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScenePresentation {
+    Entering,
+    Revealing,
+    PostRevealPause,
+    AwaitingChoice,
+    Transitioning,
+}
+
+/// Shared, bounded timing knobs for narrative presentation.  They are kept in
+/// one place so an eventual accessibility settings screen can select a speed
+/// profile without changing scene data or story outcomes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PresentationConfig {
+    pub entrance_pause_ms: u64,
+    pub grapheme_delay_ms: u64,
+    pub clause_pause_ms: u64,
+    pub sentence_pause_ms: u64,
+    pub paragraph_pause_ms: u64,
+    pub post_reveal_pause_ms: u64,
+    pub instant_text: bool,
+}
+
+impl Default for PresentationConfig {
+    fn default() -> Self {
+        Self {
+            entrance_pause_ms: 320,
+            grapheme_delay_ms: 32,
+            clause_pause_ms: 90,
+            sentence_pause_ms: 180,
+            paragraph_pause_ms: 280,
+            post_reveal_pause_ms: 340,
+            instant_text: false,
+        }
+    }
+}
+
+/// A small timeline driven by the caller's monotonic clock.  `boundaries`
+/// contains Unicode scalar boundaries (the strongest portable boundary in this
+/// no_std crate); rendering can therefore always slice valid UTF-8 without
+/// allocating a growing prefix on every frame.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NarrativePresentation {
+    text: String,
+    boundaries: Vec<usize>,
+    revealed: usize,
+    state: ScenePresentation,
+    deadline_ms: u64,
+    config: PresentationConfig,
+}
+
+impl NarrativePresentation {
+    pub fn new(text: String, now_ms: u64, config: PresentationConfig) -> Self {
+        let boundaries: Vec<usize> = text
+            .char_indices()
+            .map(|(index, ch)| index + ch.len_utf8())
+            .collect();
+        let instant = config.instant_text;
+        let revealed = if instant { boundaries.len() } else { 0 };
+        let state = if instant {
+            ScenePresentation::AwaitingChoice
+        } else {
+            ScenePresentation::Entering
+        };
+        let deadline_ms = if instant {
+            now_ms
+        } else {
+            now_ms.saturating_add(config.entrance_pause_ms)
+        };
+        Self {
+            text,
+            boundaries,
+            revealed,
+            state,
+            deadline_ms,
+            config,
+        }
+    }
+
+    pub fn state(&self) -> ScenePresentation {
+        self.state
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn visible_byte_end(&self) -> usize {
+        if self.revealed == 0 {
+            return 0;
+        }
+        self.boundaries.get(self.revealed - 1).copied().unwrap_or(0)
+    }
+
+    pub fn revealed_count(&self) -> usize {
+        self.revealed
+    }
+
+    pub fn boundary_count(&self) -> usize {
+        self.boundaries.len()
+    }
+
+    pub fn choices_visible(&self) -> bool {
+        self.state == ScenePresentation::AwaitingChoice
+    }
+
+    pub fn is_revealing(&self) -> bool {
+        self.state == ScenePresentation::Revealing
+    }
+
+    pub fn begin_transition(&mut self) {
+        self.state = ScenePresentation::Transitioning;
+    }
+
+    /// Advance through any elapsed deadlines.  Catching up happens in this one
+    /// bounded loop, rather than by posting one timer event per character.
+    pub fn tick(&mut self, now_ms: u64) -> bool {
+        if self.config.instant_text || self.state == ScenePresentation::Transitioning {
+            return false;
+        }
+        let before = (self.state, self.revealed, self.deadline_ms);
+        loop {
+            if now_ms < self.deadline_ms {
+                break;
+            }
+            match self.state {
+                ScenePresentation::Entering => {
+                    self.state = ScenePresentation::Revealing;
+                    self.deadline_ms = self
+                        .deadline_ms
+                        .saturating_add(self.config.grapheme_delay_ms);
+                }
+                ScenePresentation::Revealing => {
+                    if self.revealed < self.boundaries.len() {
+                        self.revealed += 1;
+                        self.deadline_ms = self.deadline_ms.saturating_add(self.reveal_delay());
+                    }
+                    if self.revealed == self.boundaries.len() {
+                        self.state = ScenePresentation::PostRevealPause;
+                        self.deadline_ms = now_ms.saturating_add(self.config.post_reveal_pause_ms);
+                    }
+                }
+                ScenePresentation::PostRevealPause => {
+                    self.state = ScenePresentation::AwaitingChoice;
+                    break;
+                }
+                ScenePresentation::AwaitingChoice | ScenePresentation::Transitioning => break,
+            }
+        }
+        before != (self.state, self.revealed, self.deadline_ms)
+    }
+
+    /// Finish prose only.  The following post-reveal pause deliberately keeps
+    /// the same Enter/Space press from becoming a choice activation.
+    pub fn skip_reveal(&mut self, now_ms: u64) -> bool {
+        if self.state != ScenePresentation::Revealing {
+            return false;
+        }
+        self.revealed = self.boundaries.len();
+        self.state = ScenePresentation::PostRevealPause;
+        self.deadline_ms = now_ms.saturating_add(self.config.post_reveal_pause_ms);
+        true
+    }
+
+    fn reveal_delay(&self) -> u64 {
+        let end = self.visible_byte_end();
+        let prefix = &self.text[..end];
+        if prefix.ends_with("\n\n") {
+            self.config.paragraph_pause_ms
+        } else if matches!(prefix.chars().last(), Some('.') | Some('!') | Some('?')) {
+            self.config.sentence_pause_ms
+        } else if matches!(prefix.chars().last(), Some(',') | Some(';') | Some(':')) {
+            self.config.clause_pause_ms
+        } else {
+            self.config.grapheme_delay_ms
+        }
+    }
+}
+
+/// Guards printable shortcuts when the UI only receives decoded character
+/// events.  A shortcut observed before choices exist remains blocked until the
+/// key stream has gone quiet, so a held/repeated key cannot leak into the next
+/// scene.  It is presentation-only state and is never saved.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ShortcutGate {
+    blocked_letters: u32,
+    last_letter_ms: u64,
+}
+
+impl ShortcutGate {
+    pub const QUIET_RELEASE_MS: u64 = 180;
+
+    pub fn shortcut_index(
+        &mut self,
+        ch: char,
+        choices_are_active: bool,
+        now_ms: u64,
+    ) -> Option<usize> {
+        let letter = ch.to_ascii_uppercase();
+        if !letter.is_ascii_uppercase() {
+            return None;
+        }
+        let index = (letter as u8 - b'A') as usize;
+        let bit = 1u32.checked_shl(index as u32)?;
+        if !choices_are_active {
+            self.blocked_letters |= bit;
+            self.last_letter_ms = now_ms;
+            return None;
+        }
+        if now_ms.saturating_sub(self.last_letter_ms) >= Self::QUIET_RELEASE_MS {
+            self.blocked_letters = 0;
+        }
+        self.last_letter_ms = now_ms;
+        if self.blocked_letters & bit != 0 {
+            return None;
+        }
+        self.blocked_letters |= bit;
+        Some(index)
+    }
+
+    pub fn clear(&mut self) {
+        self.blocked_letters = 0;
+        self.last_letter_ms = 0;
+    }
+
+    pub fn block_until_quiet(&mut self, now_ms: u64) {
+        self.blocked_letters = u32::MAX;
+        self.last_letter_ms = now_ms;
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SceneId(pub &'static str);
 
@@ -3937,6 +4172,91 @@ extern crate std;
 mod tests {
     use super::*;
     use std::vec;
+
+    #[test]
+    fn presentation_starts_entering_and_hides_choices() {
+        let presentation = NarrativePresentation::new(
+            String::from("The room waits."),
+            100,
+            PresentationConfig::default(),
+        );
+        assert_eq!(presentation.state(), ScenePresentation::Entering);
+        assert!(!presentation.choices_visible());
+        assert_eq!(presentation.visible_byte_end(), 0);
+    }
+
+    #[test]
+    fn presentation_reveals_utf8_at_valid_boundaries_and_then_waits() {
+        let config = PresentationConfig {
+            entrance_pause_ms: 10,
+            grapheme_delay_ms: 1,
+            clause_pause_ms: 1,
+            sentence_pause_ms: 1,
+            paragraph_pause_ms: 1,
+            post_reveal_pause_ms: 10,
+            instant_text: false,
+        };
+        let mut presentation = NarrativePresentation::new(String::from("Mara—é."), 0, config);
+        assert!(presentation.tick(10));
+        assert_eq!(presentation.state(), ScenePresentation::Revealing);
+        assert!(presentation.tick(100));
+        assert_eq!(presentation.visible_byte_end(), "Mara—é.".len());
+        assert_eq!(
+            &presentation.text()[..presentation.visible_byte_end()],
+            "Mara—é."
+        );
+        assert_eq!(presentation.state(), ScenePresentation::PostRevealPause);
+        assert!(!presentation.choices_visible());
+        assert!(presentation.tick(110));
+        assert_eq!(presentation.state(), ScenePresentation::AwaitingChoice);
+        assert!(presentation.choices_visible());
+    }
+
+    #[test]
+    fn reveal_skip_never_enters_choice_state() {
+        let config = PresentationConfig {
+            entrance_pause_ms: 0,
+            grapheme_delay_ms: 10,
+            clause_pause_ms: 10,
+            sentence_pause_ms: 10,
+            paragraph_pause_ms: 10,
+            post_reveal_pause_ms: 20,
+            instant_text: false,
+        };
+        let mut presentation =
+            NarrativePresentation::new(String::from("A choice waits."), 0, config);
+        presentation.tick(0);
+        assert!(presentation.skip_reveal(1));
+        assert_eq!(presentation.state(), ScenePresentation::PostRevealPause);
+        assert!(!presentation.choices_visible());
+        assert_eq!(presentation.visible_byte_end(), presentation.text().len());
+    }
+
+    #[test]
+    fn shortcut_gate_blocks_stale_and_repeated_letters() {
+        let mut gate = ShortcutGate::default();
+        assert_eq!(gate.shortcut_index('a', false, 10), None);
+        assert_eq!(gate.shortcut_index('a', true, 20), None);
+        assert_eq!(gate.shortcut_index('b', true, 30), Some(1));
+        assert_eq!(gate.shortcut_index('b', true, 40), None);
+        assert_eq!(gate.shortcut_index('a', true, 300), Some(0));
+    }
+
+    #[test]
+    fn instant_presentation_is_deterministic_and_noncanonical() {
+        let presentation = NarrativePresentation::new(
+            String::from("Immediate."),
+            77,
+            PresentationConfig {
+                instant_text: true,
+                ..PresentationConfig::default()
+            },
+        );
+        assert_eq!(presentation.state(), ScenePresentation::AwaitingChoice);
+        assert_eq!(presentation.visible_byte_end(), "Immediate.".len());
+        let state = WorldState::new();
+        assert_eq!(decode_save(&encode_save(&state)).unwrap(), state);
+    }
 
     fn leave_bedroom(state: &mut WorldState) {
         state.enter_hotspot(HotspotId::Clock);
