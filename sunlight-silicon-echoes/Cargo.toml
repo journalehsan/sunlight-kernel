@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-silicon-echoes"
-version = "0.2.1860"
+version = "0.2.1883"
+
 
 edition = "2021"
 description = "Silicon Echoes: 1993, a native SunlightOS narrative game vertical slice"

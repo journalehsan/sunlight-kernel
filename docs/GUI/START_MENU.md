@@ -9,7 +9,8 @@
 The Vortex Shell's dock "grid" icon (bottom-center cluster, leftmost icon)
 now opens a real Start Menu overlay instead of being a decorative no-op. The
 menu is a self-contained, dark-themed panel anchored above the dock, with
-search, a pinned-apps row, a full "All Apps" grid, a recent/suggested row,
+search, pinned and random-app rows, an explicit All Apps view, a two-row
+recent/suggested grid,
 and a footer with session/power actions.
 
 This replaces the previous "flat launcher" mental model (a small fixed dock
@@ -20,6 +21,12 @@ button) — while the Start Menu owns discovery of everything else.
 
 ## Architecture
 
+- **Application identity remains Ring 3 policy.** The shared
+  `sunlight-shell-appstate` registry models `AppId → AppInstanceId →
+  ProcessKey(pid, generation) → WindowKey(id, generation)`. `AppId` is the
+  stable manifest identity, while instance/process/window keys model runtime
+  ownership. The kernel receives none of these application concepts: it only
+  provides generic process scheduling and liveness primitives.
 - **`start_menu.rs` is UI-only.** It owns the Start Menu's view model
   (`StartMenuState`), pure layout computation (`compute_layout`), and
   drawing. It never touches IPC, process launching, or ACPI/power syscalls
@@ -38,7 +45,7 @@ button) — while the Start Menu owns discovery of everything else.
     / `shutdown()`, which wrap the kernel's `PowerCtl` syscall (see
     `docs/ACPI_IMPLEMENTATION.md`). These never return on success.
 - **Layout is a pure function** of `(screen_w, screen_h, search_query,
-  recent_apps)` — `compute_layout()` is called fresh on every draw *and*
+  recent_apps, page)` — `compute_layout()` is called fresh on every draw *and*
   every input event, so hit-testing is never stale (no cached rects from a
   previous frame to get out of sync).
 - **Toggling:** `VortexShell.launcher_zone` is the dock grid icon's rect,
@@ -61,15 +68,19 @@ gap convention as the desktop icon area), roughly 600px wide:
 1. **Header** — "SunlightOS" title on the left, close ("x") button on the right.
 2. **Search bar** — "Search apps, files, settings...", focused automatically
    on open.
-3. **Content** (one of two modes):
-   - **Not searching:** three sections, top to bottom:
+3. **Content** (one of three modes):
+   - **Home, not searching:** four sections, top to bottom:
      - **Pinned** — a fixed row of 6 core apps (Terminal, Files, Calculator,
        Settings, Task Manager, Sunlight Mines).
-     - **All Apps** — a 4-column grid covering the full catalog (12 tiles:
-       11 real apps + 1 placeholder).
+     - **Random Apps** — a stable, varied one-row discovery selection.
+     - **All Apps** — an explicit button that opens the separate catalog view.
      - **Recent** (or **Suggested** when there's no session history yet) —
-       up to 6 tiles.
-   - **Searching:** a single "Results" grid (same 4-column tile layout)
+       up to 12 tiles across two rows.
+   - **All Apps:** Back navigation, title, and a reusable five-column,
+     four-row grid. The catalog is stable-order paginated at 20 apps per page;
+     only current-page tile regions are instantiated. Filled/hollow dots are
+     clickable, while Left/Right and Page Up/Page Down navigate pages.
+   - **Searching:** a single "Results" grid (same 5-column tile layout)
      filtered live from the full catalog; "No matches" is shown when empty.
 4. **Footer** — a placeholder user row (avatar + "User" / "SunlightOS") on
    the left, three power buttons (Sleep / Restart / Shut Down) on the right.
@@ -81,9 +92,9 @@ the dock's own running-indicator convention.
 
 ## App catalog & grouping
 
-Defined in `start_menu.rs` as `APP_CATALOG` (12 entries) plus
-`DEFAULT_PINNED` (6 `AppId`s) and `SUGGESTED_RECENT` (3 `AppId`s, the
-no-history fallback).
+Defined in `start_menu.rs` as `APP_CATALOG` (15 entries), `DEFAULT_PINNED`
+(6 `AppId`s), `RANDOM_APPS` (a stable one-row discovery selection), and
+`SUGGESTED_RECENT` (12 `AppId`s, the no-history fallback).
 
 Real, launchable apps (share `AppId` with the dock's existing registry):
 
@@ -121,7 +132,7 @@ see Future Ideas).
 ## Recent / Suggested behavior
 
 `VortexShell.recent_apps: Vec<AppId>` is a session-only, in-memory MRU list
-(newest first, capped at `MAX_RECENT_APPS = 6`), updated by
+(newest first, capped at `MAX_RECENT_APPS = 12`), updated by
 `open_app_from_ui()` (which calls `note_recent_app`) for **every** UI
 launch surface. It is:
 
@@ -130,8 +141,8 @@ launch surface. It is:
   dock pins, desktop icons, and context-menu opens. Dock Terminal and
   Start Menu Terminal therefore share the same Recent list and the same
   launch/focus policy (`handle_app_click` / `launch_app`).
-- **Falls back to `SUGGESTED_RECENT`** (Files, Terminal, Settings) when
-  empty, and the section label changes from "Recent" to "Suggested"
+- **Falls back to `SUGGESTED_RECENT`** (a stable set of 12 apps) when empty,
+  and the section label changes from "Recent" to "Suggested"
   accordingly (`StartMenuLayout::recent_is_real`).
 
 ## Search behavior
@@ -147,8 +158,8 @@ launch surface. It is:
 - Arrow keys `Up`/`Down` always move the selection; `Left`/`Right` move the
   text cursor while the search field is focused, or move the selection
   otherwise.
-- `Escape` clears the search query first; a second `Escape` (or one press
-  with an empty query) closes the menu.
+- `Escape` clears the search query first; from All Apps it returns to Home;
+  only Home with an empty query closes the menu.
 - **Future:** settings entries, file/document search (see Future Ideas).
 
 ## Keyboard & mouse UX
@@ -231,6 +242,22 @@ Footer has three buttons: **Sleep**, **Restart**, **Shut Down**.
 - **Recent apps are session-only** (see above) — no persistence.
 - **Pinning is static** — there is no UI to pin/unpin apps yet.
 - **Search is app-only** — no settings/file indexing yet.
+- **External app identity is deliberately conservative.** The current
+  process/window inventories expose PID ownership but not trusted manifest
+  identity or PID/window generations. The shell never guesses an `AppId`
+  from a title, icon, display name, or executable path, so terminal-launched
+  applications are not attributed to a pinned app until a trusted Ring-3
+  launch/manifest inventory exists. This avoids stale or incorrect underlines
+  after PID reuse; the app may still appear in the dynamic running strip.
+- **Shell restart reconstruction is bounded by current authority.** The shell
+  never restores transient running state from `sunlight-kv`. A new shell starts
+  with an empty registry and only reclaims windows when trusted Ring-3
+  manifest-to-process metadata is available. The current `LIST_WINDOWS`
+  inventory lacks that metadata, so existing app windows are intentionally not
+  attributed to pinned Start Menu entries after a shell restart rather than
+  being guessed or restored stale. Adding a generic Ring-3 launch/manifest
+  inventory (with process and window generations) is the next required
+  authority; it does not require kernel application policy.
 - **User row is a placeholder** ("U" / "User" / "SunlightOS") — SunlightOS
   has no multi-user/session-identity concept yet.
 - **No light theme** — dark only, as scoped for this iteration.

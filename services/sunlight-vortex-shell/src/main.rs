@@ -75,6 +75,9 @@ use sunlight_reminders::{
     by_date_list_key as reminder_due_date_list_key, decode_task,
     parse_id_list as parse_task_id_list, reminder_date_list_key, task_key,
 };
+use sunlight_shell_appstate::{
+    AppId as AppStateAppId, AppRunState, RunningAppRegistry, WindowSnapshot as AppStateWindow,
+};
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
     image::{
@@ -156,8 +159,7 @@ static ICON_TASKS_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
 static ICON_DEVICES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/hwinfo.tga");
-static ICON_ABOUT_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
+static ICON_ABOUT_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
 static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
 static ICON_TEXT_EDITOR_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
@@ -740,11 +742,14 @@ const RUNNING_MINIMIZED_DOT: u32 = 6;
 const RUNNING_TOOLTIP_DELAY_MS: u64 = 300;
 const MAX_RUNNING_TRACKED: usize = 32;
 const MAX_WINDOW_SNAPSHOTS: usize = 256;
+/// Number of apps tracked in `apps[]` / `RunningAppRegistry::apps[]`. Mirrors
+/// `sunlight_shell_appstate::APP_COUNT`. Kept here as a tuple-array width.
+const APP_REGISTRY_LEN: usize = 15;
 const ENABLE_RUNNING_TASKBAR: bool = true;
 
 const SEARCH_W: u32 = 200; // search box width
 const SEARCH_H: u32 = 32; // search box height
-const MAX_RECENT_APPS: usize = 6; // Start Menu "Recent" section cap
+const MAX_RECENT_APPS: usize = 12; // Start Menu "Recent" section cap
 const STATUS_POLL_MS: u64 = 1000;
 const TIME_IPC_TIMEOUT_MS: u64 = 250;
 const NET_IPC_TIMEOUT_MS: u64 = 50;
@@ -1318,6 +1323,13 @@ struct VortexShell {
     /// are those in [`DOCK_PINNED`]; remaining entries are Start-Menu /
     /// running-strip only but share the same launch/state-sync machinery.
     apps: [DockAppState; 15],
+    /// Single source of truth for running-application *indicators* (dock
+    /// underline, Start Menu tile underline, All Apps underline, future search).
+    /// [`Self::sync_app_registry`] updates the registry on each poll, then
+    /// projects the resulting [`AppSnapshot`]s back into `apps[]` so the dock
+    /// and Start Menu view code paths keep their existing `DockAppState` API.
+    /// See `docs/GUI/START_MENU.md` and the `sunlight-shell-appstate` crate.
+    app_registry: RunningAppRegistry,
     /// Dynamic dock entries for visible non-pinned windows.
     running_apps: Vec<RunningAppEntry>,
     /// User-provided icon overrides loaded from `desktop.toml`.
@@ -1532,6 +1544,7 @@ impl VortexShell {
                     AppId::SiliconEchoes,
                 ),
             ],
+            app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
             icon_overrides,
             window_snapshots: Vec::new(),
@@ -1732,6 +1745,45 @@ impl VortexShell {
             AppLaunchState::Minimized => "Minimized",
             AppLaunchState::Closing => "Closing",
             AppLaunchState::Failed => "Failed",
+        }
+    }
+
+    /// Maps the shell's [`AppId`] to the registry crate's [`AppStateAppId`].
+    /// The two enums are deliberately declared in identical variant order so a
+    /// plain match is exhaustive without a fall-through; any new app added to
+    /// one must be added to the other.
+    fn to_app_state_id(app_id: AppId) -> AppStateAppId {
+        match app_id {
+            AppId::Terminal => AppStateAppId::Terminal,
+            AppId::Chronos => AppStateAppId::Chronos,
+            AppId::Calculator => AppStateAppId::Calculator,
+            AppId::Files => AppStateAppId::Files,
+            AppId::Settings => AppStateAppId::Settings,
+            AppId::Tasks => AppStateAppId::Tasks,
+            AppId::Bench => AppStateAppId::Bench,
+            AppId::TextEditor => AppStateAppId::TextEditor,
+            AppId::Writer => AppStateAppId::Writer,
+            AppId::Calendar => AppStateAppId::Calendar,
+            AppId::Devices => AppStateAppId::Devices,
+            AppId::RappidRabbit => AppStateAppId::RappidRabbit,
+            AppId::ApiLab => AppStateAppId::ApiLab,
+            AppId::Mines => AppStateAppId::Mines,
+            AppId::SiliconEchoes => AppStateAppId::SiliconEchoes,
+        }
+    }
+
+    /// Maps the registry crate's [`AppRunState`] back to the shell's
+    /// [`AppLaunchState`] for view projection. `ClosingAwaitExit` collapses to
+    /// the existing `Closing` value so the dock and Start Menu views continue
+    /// to recognise the brief close-in-flight state by the same name.
+    fn from_app_run_state(state: AppRunState) -> AppLaunchState {
+        match state {
+            AppRunState::Idle => AppLaunchState::NotRunning,
+            AppRunState::Launching => AppLaunchState::Launching,
+            AppRunState::Running => AppLaunchState::Running,
+            AppRunState::Minimized => AppLaunchState::Minimized,
+            AppRunState::ClosingAwaitExit => AppLaunchState::Closing,
+            AppRunState::Failed => AppLaunchState::Failed,
         }
     }
 
@@ -1989,9 +2041,9 @@ impl VortexShell {
     /// app twice. Start-Menu-only apps have no pin, so they *are* shown in the
     /// running strip when open — otherwise they'd be invisible in the taskbar.
     fn app_pid_has_dock_icon(&self, pid: u64) -> bool {
-        self.apps.iter().any(|app| {
-            app.pid == Some(pid) && DOCK_PINNED.iter().any(|id| *id == app.app_id)
-        })
+        self.apps
+            .iter()
+            .any(|app| app.pid == Some(pid) && DOCK_PINNED.iter().any(|id| *id == app.app_id))
     }
 
     fn process_name_hint<'a>(
@@ -2327,9 +2379,7 @@ impl VortexShell {
                 .count() as u64,
         );
         debug_log("/0/0/0/");
-        debug_log_u64(
-            1 + u64::from(unsafe { KV_CAP_CACHE } != CapabilityToken::INVALID),
-        );
+        debug_log_u64(1 + u64::from(unsafe { KV_CAP_CACHE } != CapabilityToken::INVALID));
         debug_log("\n");
     }
 
@@ -2446,29 +2496,78 @@ impl VortexShell {
         // filter must redraw to reflect the new active workspace.
         let mut dirty = self.current_workspace != prev_ws
             || self.top_panel_presentation != prev_top_panel_presentation;
-        for app in &mut self.apps {
-            let prev_state = app.state;
-            let prev_window = app.main_window_id;
-            let prev_pid = app.pid;
-            let maybe_win = app
-                .pid
-                .and_then(|pid| windows.iter().find(|win| win.owner_pid == pid).copied());
 
-            if let Some(win) = maybe_win {
-                app.pid = Some(win.owner_pid);
-                app.main_window_id = Some(win.id);
-                app.clear_error();
-                let minimized = win.is_minimized();
-                app.state = if minimized {
-                    AppLaunchState::Minimized
-                } else {
-                    AppLaunchState::Running
-                };
-                if prev_state == AppLaunchState::Launching {
+        // The single source of truth for dock-pin / Start-Menu running
+        // indicators is `RunningAppRegistry` (see `sunlight-shell-appstate`).
+        // We feed it the full per-workspace LIST_WINDOWS set (no workspace
+        // filtering — indicators stay visible across workspace switches per
+        // spec) and `process_is_alive`. The current display/process
+        // inventories do not expose trusted manifest identity for a
+        // terminal-launched app, so the registry intentionally declines to
+        // claim those windows instead of guessing from executable paths,
+        // labels, titles, or icons.
+        let mut appstate_wins: Vec<AppStateWindow> = Vec::with_capacity(windows.len());
+        for win in windows.iter() {
+            appstate_wins.push(AppStateWindow {
+                id: win.id,
+                owner_pid: win.owner_pid,
+                process_generation: 0,
+                generation: 0,
+                minimized: win.is_minimized() || win.rolled_up,
+                visible: !win.is_minimized() && !win.rolled_up && !win.hidden,
+                normal: win.window_type == ShellWindowType::Normal,
+            });
+        }
+
+        let telem_snapshot = self.telemetry.as_mut().map(|telemetry| {
+            let _ = telemetry.poll();
+            *telemetry.snapshot()
+        });
+        let telem_for_strip = telem_snapshot;
+
+        // Capture the prev projection so we can emit the existing transition
+        // logs ("app_launch_window_attached", "app_restore_minimized", ...).
+        let mut prev_states = [AppLaunchState::NotRunning; APP_REGISTRY_LEN];
+        let mut prev_windows = [None; APP_REGISTRY_LEN];
+        let mut prev_pids = [None; APP_REGISTRY_LEN];
+        for app in self.apps.iter() {
+            let idx = app.app_id as usize;
+            prev_states[idx] = app.state;
+            prev_windows[idx] = app.main_window_id;
+            prev_pids[idx] = app.pid;
+        }
+
+        let reg_dirty =
+            self.app_registry
+                .reconcile(&appstate_wins, |pid| process_is_alive(pid), |_| None, now);
+        if reg_dirty {
+            dirty = true;
+        }
+
+        // Project the registry snapshots back into `apps[]` so the existing
+        // dock / Start Menu view code paths keep working off `DockAppState`.
+        for app in self.apps.iter_mut() {
+            let app_id = app.app_id;
+            let idx = app_id as usize;
+            let snap = self.app_registry.snapshot(Self::to_app_state_id(app_id));
+            let new_state = Self::from_app_run_state(snap.state);
+
+            if app.state != new_state {
+                // Preserve the existing transition-log UX (matches the prior
+                // inline state-machine's diagnostic lines byte-for-byte where
+                // possible; window attach / minimize-restore / awaiting-exit).
+                if prev_states[idx] == AppLaunchState::Launching
+                    && matches!(
+                        new_state,
+                        AppLaunchState::Running | AppLaunchState::Minimized
+                    )
+                {
                     debug_log("[VORTEX] app_launch_window_attached(");
                     debug_log(app.display_name);
-                    debug_log(", ");
-                    debug_log_u32(win.id as u32);
+                    if let Some(wid) = snap.main_window_id {
+                        debug_log(", ");
+                        debug_log_u32(wid as u32);
+                    }
                     debug_log(")\n");
                     Self::log_launch_trace(
                         LaunchTrace::new(
@@ -2478,105 +2577,62 @@ impl VortexShell {
                         ),
                         app.app_id,
                         "dock_state_running",
-                        Some(win.owner_pid),
+                        snap.main_pid,
                         now,
                     );
-                } else if prev_state == AppLaunchState::Minimized
-                    && app.state == AppLaunchState::Running
+                } else if prev_states[idx] == AppLaunchState::Minimized
+                    && new_state == AppLaunchState::Running
                 {
                     debug_log("[VORTEX] app_restore_minimized(");
                     debug_log(app.display_name);
-                    debug_log(", ");
-                    debug_log_u32(win.id as u32);
                     debug_log(")\n");
+                } else if new_state == AppLaunchState::Closing
+                    && prev_states[idx] != AppLaunchState::Closing
+                {
+                    debug_log("[VORTEX] app_closing_awaiting_exit(");
+                    debug_log(app.display_name);
+                    debug_log(")\n");
+                } else if new_state == AppLaunchState::NotRunning
+                    && prev_states[idx] != AppLaunchState::NotRunning
+                {
+                    if matches!(
+                        prev_states[idx],
+                        AppLaunchState::Running
+                            | AppLaunchState::Minimized
+                            | AppLaunchState::Closing
+                    ) {
+                        debug_log("[VORTEX] app_window_closed(");
+                        debug_log(app.display_name);
+                        debug_log(")\n");
+                    }
                 }
-                if app.state != prev_state || app.main_window_id != prev_window {
-                    dirty = true;
-                }
-                continue;
+                app.state = new_state;
+                dirty = true;
             }
-
-            match app.state {
-                AppLaunchState::Launching => {
-                    let alive = app.pid.map(process_is_alive).unwrap_or(false);
-                    if now.saturating_sub(app.last_launch_started_at) >= APP_LAUNCH_TIMEOUT_MS {
-                        app.state = AppLaunchState::Failed;
-                        app.set_error("launch timed out");
-                        debug_log("[VORTEX] app_launch_timeout(");
-                        debug_log(app.display_name);
-                        debug_log(")\n");
-                        dirty = true;
-                    } else if app.pid.is_some() && !alive {
-                        app.state = AppLaunchState::Failed;
-                        app.set_error("process exited before window");
-                        debug_log("[VORTEX] app_launch_failed(");
-                        debug_log(app.display_name);
-                        debug_log(")\n");
-                        dirty = true;
-                    }
+            if app.main_window_id != snap.main_window_id {
+                app.main_window_id = snap.main_window_id;
+                dirty = true;
+            }
+            if app.pid != snap.main_pid {
+                app.pid = snap.main_pid;
+                dirty = true;
+            }
+            if app.last_launch_started_at != snap.last_launch_started_at {
+                app.last_launch_started_at = snap.last_launch_started_at;
+            }
+            let err_str = snap.launch_error_str();
+            if app.error_str() != err_str {
+                if err_str.is_empty() {
+                    app.clear_error();
+                } else {
+                    app.set_error(err_str);
                 }
-                AppLaunchState::Running | AppLaunchState::Minimized | AppLaunchState::Closing => {
-                    if let Some(pid) = prev_pid {
-                        if !process_is_alive(pid) {
-                            app.state = AppLaunchState::NotRunning;
-                            app.pid = None;
-                            app.main_window_id = None;
-                            app.clear_error();
-                            debug_log("[VORTEX] app_window_closed(");
-                            debug_log(app.display_name);
-                            debug_log(")\n");
-                            dirty = true;
-                        } else {
-                            app.state = AppLaunchState::Closing;
-                            app.main_window_id = None;
-                            debug_log("[VORTEX] app_closing_awaiting_exit(");
-                            debug_log(app.display_name);
-                            debug_log(")\n");
-                            dirty = true;
-                        }
-                    } else {
-                        app.state = AppLaunchState::NotRunning;
-                        app.main_window_id = None;
-                        dirty = true;
-                    }
-                }
-                AppLaunchState::Failed => {
-                    if let Some(pid) = prev_pid {
-                        if !process_is_alive(pid) {
-                            app.state = AppLaunchState::NotRunning;
-                            app.pid = None;
-                            app.main_window_id = None;
-                            app.clear_error();
-                            dirty = true;
-                        }
-                    }
-                }
-                AppLaunchState::NotRunning => {
-                    if let Some(pid) = prev_pid {
-                        if process_is_alive(pid) {
-                            app.state = AppLaunchState::Failed;
-                            app.set_error("window disappeared");
-                            app.main_window_id = None;
-                        } else {
-                            app.pid = None;
-                            app.main_window_id = None;
-                            app.clear_error();
-                        }
-                        dirty = true;
-                    } else if prev_window.is_some() {
-                        app.main_window_id = None;
-                        dirty = true;
-                    }
-                }
+                dirty = true;
             }
         }
 
         if ENABLE_RUNNING_TASKBAR {
-            let telem_snapshot = self.telemetry.as_mut().map(|telemetry| {
-                let _ = telemetry.poll();
-                *telemetry.snapshot()
-            });
-            if self.sync_running_apps(&windows, telem_snapshot.as_ref()) {
+            if self.sync_running_apps(&windows, telem_for_strip.as_ref()) {
                 dirty = true;
             }
         }
@@ -2707,6 +2763,7 @@ impl VortexShell {
         }
 
         let mut clear_stale_pid = false;
+        let mut stale_pid_to_drop: Option<u64> = None;
         let duplicate_blocked = {
             let app = self.app(app_id);
             if Self::app_allows_multiple_instances(app_id) {
@@ -2716,6 +2773,7 @@ impl VortexShell {
                     true
                 } else {
                     clear_stale_pid = true;
+                    stale_pid_to_drop = Some(pid);
                     false
                 }
             } else if matches!(
@@ -2739,6 +2797,12 @@ impl VortexShell {
             return false;
         }
         if clear_stale_pid {
+            // Drop the stale pid both from the projection (`apps[]`) and from
+            // the registry's pseudo-generation slot so the next reconcile
+            // won't re-attribute the recycled numeric pid to this app.
+            if let Some(pid) = stale_pid_to_drop {
+                self.app_registry.note_process_died(pid);
+            }
             let app = self.app_mut(app_id);
             app.pid = None;
             app.main_window_id = None;
@@ -2754,14 +2818,22 @@ impl VortexShell {
             }
         }
 
+        let reg_launch_id = self
+            .app_registry
+            .note_launch_requested(Self::to_app_state_id(app_id), now);
         {
             let app = self.app_mut(app_id);
+            // Mirror back from the registry so launch-trace logs that read
+            // these fields during the next poll still have values available
+            // before the next reconcile projects them. The registry is the
+            // single state authority.
             app.state = AppLaunchState::Launching;
             app.main_window_id = None;
             app.last_launch_started_at = now;
             app.clear_error();
             Self::log_launch_trace(trace, app_id, "dock_state_launching", None, now);
         }
+        let _ = reg_launch_id;
 
         Self::log_launch_trace(trace, app_id, "spawn_start", None, now);
         let words = [Self::app_launch_command(app_id)];
@@ -2775,6 +2847,11 @@ impl VortexShell {
                     monotonic_millis(),
                 );
                 self.register_launch_trace(trace, result.pid, app_id);
+                self.app_registry.note_spawn_succeeded(
+                    Self::to_app_state_id(app_id),
+                    result.pid,
+                    reg_launch_id,
+                );
                 let app = self.app_mut(app_id);
                 app.pid = Some(result.pid);
                 Self::log_launch_trace(
@@ -2793,6 +2870,8 @@ impl VortexShell {
             }
             Err(err) => {
                 Self::log_launch_trace(trace, app_id, "spawn_failed", None, monotonic_millis());
+                self.app_registry
+                    .note_launch_failed(Self::to_app_state_id(app_id), launch_error_text(err));
                 let app = self.app_mut(app_id);
                 app.state = AppLaunchState::Failed;
                 app.set_error(launch_error_text(err));

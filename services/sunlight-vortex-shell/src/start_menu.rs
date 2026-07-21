@@ -248,9 +248,34 @@ static DEFAULT_PINNED: [AppId; 6] = [
     AppId::Mines,
 ];
 
-/// Shown in the "Recent" section as a static fallback until the user has
+/// A stable, varied discovery row. It deliberately does not change while the
+/// menu is open, so drawing and input hit regions always describe the same
+/// tiles.
+static RANDOM_APPS: [AppId; 6] = [
+    AppId::Chronos,
+    AppId::Bench,
+    AppId::Calendar,
+    AppId::Devices,
+    AppId::ApiLab,
+    AppId::SiliconEchoes,
+];
+
+/// Shown in the "Suggested" section as a static fallback until the user has
 /// actually launched anything this session (see `VortexShell::recent_apps`).
-static SUGGESTED_RECENT: [AppId; 3] = [AppId::Files, AppId::Terminal, AppId::Settings];
+static SUGGESTED_RECENT: [AppId; 12] = [
+    AppId::Files,
+    AppId::Terminal,
+    AppId::Settings,
+    AppId::Calculator,
+    AppId::Tasks,
+    AppId::Writer,
+    AppId::TextEditor,
+    AppId::Calendar,
+    AppId::RappidRabbit,
+    AppId::Bench,
+    AppId::Mines,
+    AppId::ApiLab,
+];
 
 fn find_entry(id: CatalogId) -> Option<&'static AppCatalogEntry> {
     APP_CATALOG.iter().find(|e| e.id == id)
@@ -449,6 +474,11 @@ struct PowerSlot {
 }
 
 #[derive(Clone, Copy)]
+struct ButtonSlot {
+    rect: Rect,
+}
+
+#[derive(Clone, Copy)]
 struct FixedList<T: Copy, const N: usize> {
     items: [Option<T>; N],
     len: usize,
@@ -499,8 +529,8 @@ impl<T: Copy, const N: usize> FixedList<T, N> {
 }
 
 const PINNED_CAP: usize = 6;
-const ALL_APPS_CAP: usize = 15;
-const RECENT_CAP: usize = 6;
+const RANDOM_CAP: usize = 6;
+const RECENT_CAP: usize = 12;
 const SEARCH_RESULTS_CAP: usize = 15;
 const POWER_CAP: usize = 3;
 
@@ -508,12 +538,18 @@ struct StartMenuLayout {
     panel: Rect,
     header: Rect,
     close_btn: Rect,
+    back_btn: Option<ButtonSlot>,
     search_rect: Rect,
     searching: bool,
+    page: StartMenuPage,
     pinned_label: Rect,
     pinned: FixedList<TileSlot, PINNED_CAP>,
-    allapps_label: Rect,
-    all_apps: FixedList<TileSlot, ALL_APPS_CAP>,
+    random_label: Rect,
+    random: FixedList<TileSlot, RANDOM_CAP>,
+    all_apps_button: Option<ButtonSlot>,
+    all_apps: FixedList<TileSlot, ALL_APPS_PAGE_CAP>,
+    all_apps_page: usize,
+    page_dots: FixedList<Rect, ALL_APPS_MAX_PAGES>,
     recent_label: Rect,
     recent: FixedList<TileSlot, RECENT_CAP>,
     recent_is_real: bool,
@@ -528,27 +564,33 @@ impl StartMenuLayout {
     fn tile_count(&self) -> usize {
         if self.searching {
             self.search_results.len()
+        } else if self.page == StartMenuPage::AllApps {
+            self.all_apps.len()
         } else {
-            self.pinned.len() + self.all_apps.len() + self.recent.len()
+            self.pinned.len() + self.random.len() + self.recent.len()
         }
     }
 
     /// All currently visible/clickable tiles in a fixed, stable order:
-    /// search results (while searching) or pinned → all-apps → recent.
+    /// search results (while searching), All Apps, or Home's pinned → recent.
     /// Keyboard selection indices and mouse-hit-testing both index into
     /// this same ordering.
     fn tile(&self, idx: usize) -> Option<&TileSlot> {
         if self.searching {
             return self.search_results.get(idx);
         }
+        if self.page == StartMenuPage::AllApps {
+            return self.all_apps.get(idx);
+        }
         if idx < self.pinned.len() {
             return self.pinned.get(idx);
         }
         let idx = idx - self.pinned.len();
-        if idx < self.all_apps.len() {
-            return self.all_apps.get(idx);
+        if idx < self.random.len() {
+            return self.random.get(idx);
         }
-        self.recent.get(idx - self.all_apps.len())
+        let idx = idx - self.random.len();
+        self.recent.get(idx)
     }
 
     fn tile_index_at(&self, p: Point) -> Option<usize> {
@@ -573,10 +615,35 @@ const SMALL_TILE_H: u32 = 70;
 const BIG_TILE_H: u32 = 78;
 const SMALL_COLS: usize = 6;
 const BIG_COLS: usize = 5;
+/// A bounded four-row application grid. Only this page's cells and hit
+/// regions are laid out, regardless of how large the catalog becomes.
+const ALL_APPS_PAGE_CAP: usize = BIG_COLS * 4;
+const ALL_APPS_MAX_PAGES: usize = APP_CATALOG_LEN.div_ceil(ALL_APPS_PAGE_CAP);
 const FOOTER_GAP: i32 = 12;
 const FOOTER_H: u32 = 48;
 const POWER_BTN: u32 = 44;
 const POWER_GAP: i32 = 10;
+const ALL_APPS_BUTTON_H: u32 = 34;
+const PAGE_DOT: u32 = 8;
+const PAGE_DOT_GAP: i32 = 10;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StartMenuPage {
+    Home,
+    AllApps,
+}
+
+fn page_count(item_count: usize, page_capacity: usize) -> usize {
+    if item_count == 0 || page_capacity == 0 {
+        0
+    } else {
+        item_count.div_ceil(page_capacity)
+    }
+}
+
+fn all_apps_page_count() -> usize {
+    page_count(APP_CATALOG_LEN, ALL_APPS_PAGE_CAP)
+}
 
 fn row_tile_w(content_w: u32, cols: usize) -> u32 {
     if cols == 0 {
@@ -665,6 +732,8 @@ fn compute_layout(
     screen_h: u32,
     query: &str,
     recent_ids: &[AppId],
+    page: StartMenuPage,
+    all_apps_page: usize,
 ) -> StartMenuLayout {
     let panel_w = PANEL_W.min(screen_w.saturating_sub((TOP_PAD * 2) as u32).max(320));
     let content_w = panel_w.saturating_sub((PANEL_PAD * 2) as u32);
@@ -681,6 +750,18 @@ fn compute_layout(
         CLOSE_BTN,
         CLOSE_BTN,
     );
+    let back_btn = if page == StartMenuPage::AllApps {
+        Some(ButtonSlot {
+            rect: Rect::new(
+                x0,
+                y + (HEADER_H as i32 - CLOSE_BTN as i32) / 2,
+                CLOSE_BTN,
+                CLOSE_BTN,
+            ),
+        })
+    } else {
+        None
+    };
     y += HEADER_H as i32 + SECTION_GAP;
 
     let search_rect = Rect::new(x0, y, content_w, SEARCH_H);
@@ -688,8 +769,17 @@ fn compute_layout(
 
     let mut pinned_label = Rect::default();
     let mut pinned = FixedList::new();
-    let mut allapps_label = Rect::default();
+    let mut random_label = Rect::default();
+    let mut random = FixedList::new();
+    let mut all_apps_button = None;
     let mut all_apps = FixedList::new();
+    let all_apps_page_count = all_apps_page_count();
+    let all_apps_page = if all_apps_page_count == 0 {
+        0
+    } else {
+        all_apps_page.min(all_apps_page_count - 1)
+    };
+    let mut page_dots = FixedList::new();
     let mut recent_label = Rect::default();
     let mut recent = FixedList::new();
     let mut recent_is_real = false;
@@ -704,6 +794,24 @@ fn compute_layout(
         let (slots, height) = layout_tile_grid(matches, x0, y, tile_w, BIG_TILE_H, BIG_COLS);
         search_results = slots;
         y += height.max(BIG_TILE_H) as i32 + SECTION_GAP;
+    } else if page == StartMenuPage::AllApps {
+        let tile_w = row_tile_w(content_w, BIG_COLS);
+        let start = all_apps_page * ALL_APPS_PAGE_CAP;
+        let entries = APP_CATALOG.iter().skip(start).take(ALL_APPS_PAGE_CAP);
+        let (slots, height) = layout_tile_grid(entries, x0, y, tile_w, BIG_TILE_H, BIG_COLS);
+        all_apps = slots;
+        y += height.max(BIG_TILE_H) as i32 + SECTION_GAP;
+
+        if all_apps_page_count > 1 {
+            let dots_w = all_apps_page_count as i32 * PAGE_DOT as i32
+                + (all_apps_page_count.saturating_sub(1)) as i32 * PAGE_DOT_GAP;
+            let mut dot_x = x0 + (content_w as i32 - dots_w) / 2;
+            for _ in 0..all_apps_page_count {
+                page_dots.push(Rect::new(dot_x, y, PAGE_DOT, PAGE_DOT));
+                dot_x += PAGE_DOT as i32 + PAGE_DOT_GAP;
+            }
+            y += PAGE_DOT as i32 + SECTION_GAP;
+        }
     } else {
         // Pinned
         pinned_label = Rect::new(x0, y, content_w, LABEL_H);
@@ -713,14 +821,19 @@ fn compute_layout(
         pinned = layout_tile_row(pinned_entries, x0, y, tile_w, SMALL_TILE_H);
         y += SMALL_TILE_H as i32 + SECTION_GAP;
 
-        // All Apps
-        allapps_label = Rect::new(x0, y, content_w, LABEL_H);
+        // Random Apps
+        random_label = Rect::new(x0, y, content_w, LABEL_H);
         y += LABEL_H as i32 + LABEL_GAP;
-        let tile_w = row_tile_w(content_w, BIG_COLS);
-        let (slots, height) =
-            layout_tile_grid(APP_CATALOG.iter(), x0, y, tile_w, BIG_TILE_H, BIG_COLS);
-        all_apps = slots;
-        y += height as i32 + SECTION_GAP;
+        let random_entries = RANDOM_APPS.iter().filter_map(|id| find_app_entry(*id));
+        random = layout_tile_row(random_entries, x0, y, tile_w, SMALL_TILE_H);
+        y += SMALL_TILE_H as i32 + SECTION_GAP;
+
+        // Home intentionally exposes navigation, not the full catalog. The
+        // complete grid lives in the separate paged All Apps view below.
+        all_apps_button = Some(ButtonSlot {
+            rect: Rect::new(x0, y, content_w, ALL_APPS_BUTTON_H),
+        });
+        y += ALL_APPS_BUTTON_H as i32 + SECTION_GAP;
 
         // Recent / Suggested
         recent_label = Rect::new(x0, y, content_w, LABEL_H);
@@ -731,10 +844,12 @@ fn compute_layout(
         let source: &[AppId] = if recent_is_real { recent_ids } else { fallback };
         let recent_entries = source
             .iter()
-            .take(SMALL_COLS)
+            .take(RECENT_CAP)
             .filter_map(|id| find_app_entry(*id));
-        recent = layout_tile_row(recent_entries, x0, y, tile_w, SMALL_TILE_H);
-        y += SMALL_TILE_H as i32 + SECTION_GAP;
+        let (slots, height) =
+            layout_tile_grid(recent_entries, x0, y, tile_w, SMALL_TILE_H, SMALL_COLS);
+        recent = slots;
+        y += height.max(SMALL_TILE_H) as i32 + SECTION_GAP;
     }
 
     let footer_divider_y = y;
@@ -772,21 +887,37 @@ fn compute_layout(
     let dy = panel.y;
     let shift = |r: Rect| r.translate(dx, dy);
     translate_tiles(&mut pinned, dx, dy);
+    translate_tiles(&mut random, dx, dy);
     translate_tiles(&mut all_apps, dx, dy);
     translate_tiles(&mut recent, dx, dy);
     translate_tiles(&mut search_results, dx, dy);
     translate_power(&mut power, dx, dy);
+    let back_btn = back_btn.map(|slot| ButtonSlot {
+        rect: slot.rect.translate(dx, dy),
+    });
+    let all_apps_button = all_apps_button.map(|slot| ButtonSlot {
+        rect: slot.rect.translate(dx, dy),
+    });
+    for dot in page_dots.iter_mut() {
+        *dot = dot.translate(dx, dy);
+    }
 
     StartMenuLayout {
         panel,
         header: shift(header),
         close_btn: shift(close_btn),
+        back_btn,
         search_rect: shift(search_rect),
         searching,
+        page,
         pinned_label: shift(pinned_label),
         pinned,
-        allapps_label: shift(allapps_label),
+        random_label: shift(random_label),
+        random,
+        all_apps_button,
         all_apps,
+        all_apps_page,
+        page_dots,
         recent_label: shift(recent_label),
         recent,
         recent_is_real,
@@ -822,6 +953,8 @@ pub(crate) struct StartMenuState {
     is_open: bool,
     icons: StartMenuIcons,
     search: SearchField,
+    page: StartMenuPage,
+    all_apps_page: usize,
     selected: Option<usize>,
     hover: Option<usize>,
     confirm: Option<(PowerAction, u64)>,
@@ -833,6 +966,8 @@ impl StartMenuState {
             is_open: false,
             icons: StartMenuIcons::load(),
             search: SearchField::new(),
+            page: StartMenuPage::Home,
+            all_apps_page: 0,
             selected: None,
             hover: None,
             confirm: None,
@@ -847,6 +982,8 @@ impl StartMenuState {
         self.is_open = true;
         self.search.clear();
         self.search.active = true;
+        self.page = StartMenuPage::Home;
+        self.all_apps_page = 0;
         self.selected = None;
         self.hover = None;
         self.confirm = None;
@@ -855,6 +992,8 @@ impl StartMenuState {
     pub(crate) fn close(&mut self) {
         self.is_open = false;
         self.search.active = false;
+        self.page = StartMenuPage::Home;
+        self.all_apps_page = 0;
         self.selected = None;
         self.hover = None;
         self.confirm = None;
@@ -894,7 +1033,14 @@ impl StartMenuState {
             }
         }
 
-        let layout = compute_layout(screen_w, screen_h, self.search.value(), recent);
+        let layout = compute_layout(
+            screen_w,
+            screen_h,
+            self.search.value(),
+            recent,
+            self.page,
+            self.all_apps_page,
+        );
 
         match event {
             Event::Click { x, y } => {
@@ -907,9 +1053,26 @@ impl StartMenuState {
                     self.close();
                     return (true, StartMenuAction::None);
                 }
+                if layout.back_btn.is_some_and(|slot| slot.rect.contains(p)) {
+                    self.show_home();
+                    return (true, StartMenuAction::None);
+                }
                 if layout.search_rect.contains(p) {
                     self.search.active = true;
                     return (true, StartMenuAction::None);
+                }
+                if layout
+                    .all_apps_button
+                    .is_some_and(|slot| slot.rect.contains(p))
+                {
+                    self.show_all_apps();
+                    return (true, StartMenuAction::None);
+                }
+                for (index, dot) in layout.page_dots.iter().enumerate() {
+                    if dot.contains(p) {
+                        self.set_all_apps_page(index);
+                        return (true, StartMenuAction::None);
+                    }
                 }
                 for slot in layout.power.iter() {
                     if slot.rect.contains(p) {
@@ -988,6 +1151,44 @@ impl StartMenuState {
         }
     }
 
+    fn show_home(&mut self) {
+        self.page = StartMenuPage::Home;
+        self.all_apps_page = 0;
+        self.selected = None;
+        self.hover = None;
+    }
+
+    fn show_all_apps(&mut self) {
+        self.page = StartMenuPage::AllApps;
+        self.all_apps_page = 0;
+        self.selected = None;
+        self.hover = None;
+    }
+
+    fn set_all_apps_page(&mut self, page: usize) -> bool {
+        let count = all_apps_page_count();
+        if count == 0 {
+            return false;
+        }
+        let page = page.min(count - 1);
+        if self.all_apps_page == page {
+            return false;
+        }
+        self.all_apps_page = page;
+        self.selected = None;
+        self.hover = None;
+        true
+    }
+
+    fn move_all_apps_page(&mut self, delta: i32) -> bool {
+        let count = all_apps_page_count();
+        if self.page != StartMenuPage::AllApps || count <= 1 {
+            return false;
+        }
+        let next = (self.all_apps_page as i32 + delta).rem_euclid(count as i32) as usize;
+        self.set_all_apps_page(next)
+    }
+
     fn handle_keypress(
         &mut self,
         keycode: u8,
@@ -1001,6 +1202,8 @@ impl StartMenuState {
         const KEY_RIGHT: u8 = 0x4D;
         const KEY_HOME: u8 = 0x47;
         const KEY_END: u8 = 0x4F;
+        const KEY_PAGE_UP: u8 = 0x49;
+        const KEY_PAGE_DOWN: u8 = 0x51;
         const KEY_DELETE: u8 = 0x53;
 
         match keycode {
@@ -1008,6 +1211,8 @@ impl StartMenuState {
                 if !self.search.value().is_empty() {
                     self.search.clear();
                     self.selected = None;
+                } else if self.page == StartMenuPage::AllApps {
+                    self.show_home();
                 } else {
                     self.close();
                 }
@@ -1040,6 +1245,8 @@ impl StartMenuState {
             KEY_LEFT => {
                 if self.search.active && self.search.move_left() {
                     (true, StartMenuAction::None)
+                } else if self.move_all_apps_page(-1) {
+                    (true, StartMenuAction::None)
                 } else if !self.search.active {
                     self.move_selection(-1, layout.tile_count());
                     (true, StartMenuAction::None)
@@ -1050,6 +1257,8 @@ impl StartMenuState {
             KEY_RIGHT => {
                 if self.search.active && self.search.move_right() {
                     (true, StartMenuAction::None)
+                } else if self.move_all_apps_page(1) {
+                    (true, StartMenuAction::None)
                 } else if !self.search.active {
                     self.move_selection(1, layout.tile_count());
                     (true, StartMenuAction::None)
@@ -1059,6 +1268,8 @@ impl StartMenuState {
             }
             KEY_HOME if self.search.active => (self.search.move_home(), StartMenuAction::None),
             KEY_END if self.search.active => (self.search.move_end(), StartMenuAction::None),
+            KEY_PAGE_UP => (self.move_all_apps_page(-1), StartMenuAction::None),
+            KEY_PAGE_DOWN => (self.move_all_apps_page(1), StartMenuAction::None),
             KEY_DELETE if self.search.active => {
                 (self.search.delete_forward(), StartMenuAction::None)
             }
@@ -1081,7 +1292,14 @@ impl StartMenuState {
         if !self.is_open {
             return;
         }
-        let layout = compute_layout(screen_w, screen_h, self.search.value(), recent);
+        let layout = compute_layout(
+            screen_w,
+            screen_h,
+            self.search.value(),
+            recent,
+            self.page,
+            self.all_apps_page,
+        );
 
         canvas.fill_rounded_rect(layout.panel, 12, theme.panel);
         canvas.stroke_rounded_rect(layout.panel, 12, 1, theme.border);
@@ -1096,12 +1314,29 @@ impl StartMenuState {
         let title_x = layout.header.x;
         draw_text_vcenter(
             canvas,
-            "SunlightOS",
-            title_x,
+            if layout.page == StartMenuPage::AllApps && !layout.searching {
+                "All Apps"
+            } else {
+                "SunlightOS"
+            },
+            if layout.back_btn.is_some() {
+                title_x + CLOSE_BTN as i32 + 10
+            } else {
+                title_x
+            },
             layout.header.y,
             layout.header.h,
             &TextStyle::new(FontRole::UiTitle, theme.text),
         );
+        if let Some(back) = layout.back_btn {
+            canvas.fill_rounded_rect(back.rect, 6, theme.panel_alt);
+            draw_text_centered(
+                canvas,
+                back.rect,
+                "<",
+                &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+            );
+        }
 
         self.draw_search(canvas, theme, layout.search_rect);
 
@@ -1125,16 +1360,38 @@ impl StartMenuState {
                     &TextStyle::new(FontRole::UiRegular, theme.text_dim),
                 );
             }
+        } else if layout.page == StartMenuPage::AllApps {
+            for slot in layout.all_apps.iter() {
+                self.draw_tile(canvas, theme, slot, apps, idx);
+                idx += 1;
+            }
+            for (page_index, dot) in layout.page_dots.iter().enumerate() {
+                if page_index == layout.all_apps_page {
+                    canvas.fill_rounded_rect(*dot, PAGE_DOT / 2, theme.accent);
+                } else {
+                    canvas.stroke_rounded_rect(*dot, PAGE_DOT / 2, 1, theme.text_dim);
+                }
+            }
         } else {
             draw_section_label(canvas, theme, layout.pinned_label, "Pinned");
             for slot in layout.pinned.iter() {
                 self.draw_tile(canvas, theme, slot, apps, idx);
                 idx += 1;
             }
-            draw_section_label(canvas, theme, layout.allapps_label, "All Apps");
-            for slot in layout.all_apps.iter() {
+            draw_section_label(canvas, theme, layout.random_label, "Random Apps");
+            for slot in layout.random.iter() {
                 self.draw_tile(canvas, theme, slot, apps, idx);
                 idx += 1;
+            }
+            if let Some(button) = layout.all_apps_button {
+                canvas.fill_rounded_rect(button.rect, 8, theme.panel_alt);
+                canvas.stroke_rounded_rect(button.rect, 8, 1, theme.border);
+                draw_text_centered(
+                    canvas,
+                    button.rect,
+                    "All Apps",
+                    &TextStyle::new(FontRole::UiRegular, theme.text),
+                );
             }
             let recent_title = if layout.recent_is_real {
                 "Recent"
@@ -1410,4 +1667,59 @@ fn truncate_ascii<'a>(text: &str, max_chars: usize, buf: &'a mut [u8]) -> &'a st
         len += 1;
     }
     core::str::from_utf8(&buf[..len]).unwrap_or("")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        compute_layout, page_count, AppId, StartMenuPage, ALL_APPS_PAGE_CAP, APP_CATALOG_LEN,
+        RANDOM_CAP, RECENT_CAP, SMALL_COLS,
+    };
+
+    #[test]
+    fn all_apps_pagination_handles_empty_and_partial_pages() {
+        assert_eq!(page_count(0, ALL_APPS_PAGE_CAP), 0);
+        assert_eq!(page_count(ALL_APPS_PAGE_CAP, ALL_APPS_PAGE_CAP), 1);
+        assert_eq!(page_count(APP_CATALOG_LEN, ALL_APPS_PAGE_CAP), 1);
+        assert_eq!(page_count(ALL_APPS_PAGE_CAP + 1, ALL_APPS_PAGE_CAP), 2);
+    }
+
+    #[test]
+    fn home_uses_one_random_row_and_two_suggestion_rows() {
+        let layout = compute_layout(1280, 900, "", &[], StartMenuPage::Home, 0);
+
+        assert_eq!(layout.random.len(), RANDOM_CAP);
+        assert_eq!(layout.recent.len(), RECENT_CAP);
+        assert_eq!(
+            layout.recent.get(SMALL_COLS).unwrap().rect.y,
+            layout.recent.get(0).unwrap().rect.y + 80
+        );
+        assert_eq!(
+            layout.tile_count(),
+            layout.pinned.len() + layout.random.len() + layout.recent.len()
+        );
+    }
+
+    #[test]
+    fn recent_history_is_bounded_to_two_rows() {
+        let recent = [
+            AppId::Terminal,
+            AppId::Chronos,
+            AppId::Files,
+            AppId::Calculator,
+            AppId::Settings,
+            AppId::Tasks,
+            AppId::Bench,
+            AppId::Calendar,
+            AppId::Devices,
+            AppId::Writer,
+            AppId::TextEditor,
+            AppId::RappidRabbit,
+            AppId::ApiLab,
+        ];
+        let layout = compute_layout(1280, 900, "", &recent, StartMenuPage::Home, 0);
+
+        assert!(layout.recent_is_real);
+        assert_eq!(layout.recent.len(), RECENT_CAP);
+    }
 }

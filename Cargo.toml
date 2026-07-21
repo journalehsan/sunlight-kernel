@@ -91,6 +91,7 @@ members = [
     "chronos-core",
     "sunlight-chronos",
     "sunlight-silicon-echoes",
+    "sunlight-shell-appstate",
 ]
 
 [workspace.dependencies]

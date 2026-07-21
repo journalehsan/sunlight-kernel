@@ -7,6 +7,7 @@ use sunlight_ipc::{
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, ProcessExit,
 };
+use sunlight_libc::kill as libc_kill;
 use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_CORES, MAX_PROCESSES};
 use sunlight_ui::{
     request_close,
@@ -199,6 +200,39 @@ impl TasksApp {
 
     fn status_str(&self) -> &str {
         core::str::from_utf8(&self.status[..self.status_len]).unwrap_or("")
+    }
+
+    /// Deliver SIGKILL to the currently-selected process and refresh the
+    /// telemetry view. Refuses to kill pid 0 (kernel sentinel), pid 1 (init),
+    /// or our own pid — those are protected. The vortex shell and the dock's
+    /// running-app indicator observe the pid's death on the next
+    /// `process_is_alive` poll (`APP_STATE_POLL_MS = 250ms`) and clear the
+    /// indicator. See `docs/GUI/START_MENU.md` (lifecycle rules) and
+    /// `sunlight-shell-appstate`.
+    fn end_task(&mut self) {
+        let Some(target) = self.selected_pid else {
+            self.set_status("Select a process first");
+            return;
+        };
+        if target == 0 || target == 1 {
+            self.set_status("Refused: protected pid");
+            return;
+        }
+        let self_pid = sunlight_ipc::getpid();
+        if u64::from(target) == self_pid {
+            self.set_status("Refused: cannot end self");
+            return;
+        }
+        match libc_kill(u64::from(target), 9) {
+            Ok(()) => {
+                self.set_status("End task sent");
+                debug_log("[TASKS] end_task dispatched\n");
+                let _ = self.refresh(true);
+            }
+            Err(_) => {
+                self.set_status("End task failed");
+            }
+        }
     }
 
     fn rebuild_hw_info(&mut self) {
@@ -846,11 +880,7 @@ impl App for TasksApp {
                 }
                 if let Some(idx) = released_action {
                     match idx {
-                        0 => self.set_status(if self.selected_pid.is_some() {
-                            "End process not implemented"
-                        } else {
-                            "Select a process first"
-                        }),
+                        0 => self.end_task(),
                         1 => {
                             self.view_mode = if self.view_mode == ViewMode::Cores {
                                 ViewMode::Processes
@@ -919,7 +949,7 @@ impl App for TasksApp {
                         };
                         self.scroll = total.saturating_sub(self.visible_rows());
                     }
-                    KEY_ENTER => self.set_status("End process not implemented"),
+                    KEY_ENTER => self.end_task(),
                     KEY_BACKSPACE => return false,
                     _ => return false,
                 }

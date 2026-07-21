@@ -1,0 +1,15 @@
+[package]
+name = "sunlight-shell-appstate"
+version = "0.2.1883"
+
+
+edition = "2021"
+description = "Shell-owned RunningAppRegistry — single source of truth for running-application indicators (dock + Start Menu + All Apps + future search). Pure no_std state machine, host-testable, no IPC dependency."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[features]
+# Reserved — no optional behaviour yet.
