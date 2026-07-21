@@ -365,5 +365,9 @@ sunlight-ipc = { path = "../ipc" }
 default = []
 global-alloc = []
 dynamic-heap = []
+# Select the shell's existing 8 MiB userspace heap budget when using the
+# demand-mapped allocator. This is intentionally opt-in so ordinary programs
+# retain the smaller dynamic-heap default.
+dynamic-heap-8m = ["dynamic-heap"]
 
 [lib]

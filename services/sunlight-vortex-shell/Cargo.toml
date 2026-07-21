@@ -233,12 +233,17 @@ version = "0.2.1816"
 
 edition = "2021"
 
+[features]
+# Opt-in accelerated allocation churn used by QEMU soak verification. Normal
+# desktop builds do not execute this path.
+stress = []
+
 [build-dependencies]
 fontdue = "0.7"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
-sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
 sunlight-telemetry = { path = "../../sunlight-telemetry" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 sun-font = { path = "../../sun-font" }

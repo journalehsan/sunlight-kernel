@@ -8,12 +8,16 @@ use core::cell::UnsafeCell;
 use core::cmp;
 use core::mem::{align_of, size_of};
 use core::ptr;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 #[cfg(not(feature = "dynamic-heap"))]
 const STATIC_HEAP_SIZE: usize = 256 * 1024;
 #[cfg(feature = "dynamic-heap")]
-const DYNAMIC_HEAP_SIZE: usize = 1024 * 1024;
+const DYNAMIC_HEAP_SIZE: usize = if cfg!(feature = "dynamic-heap-8m") {
+    8 * 1024 * 1024
+} else {
+    1024 * 1024
+};
 #[cfg(not(feature = "dynamic-heap"))]
 const HEAP_SIZE: usize = STATIC_HEAP_SIZE;
 #[cfg(feature = "dynamic-heap")]
@@ -71,6 +75,27 @@ struct Heap {
     initialized: bool,
     start: usize,
     end: usize,
+}
+
+/// A fixed-size, allocation-free view of the native allocator's state.
+///
+/// [`heap_stats`] acquires the allocator lock only long enough to copy
+/// free-list totals into this value. It never formats, allocates, or performs
+/// IPC, so callers may safely sample it from diagnostics paths.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HeapStats {
+    pub heap_capacity: usize,
+    pub allocated_backing_bytes: usize,
+    pub requested_user_bytes: usize,
+    pub free_bytes: usize,
+    pub largest_free_block: usize,
+    pub allocation_count: u64,
+    pub free_count: u64,
+    pub realloc_count: u64,
+    pub failed_allocation_count: u64,
+    pub live_allocation_count: u64,
+    pub high_water_allocated_bytes: usize,
+    pub free_list_block_count: usize,
 }
 
 impl Heap {
@@ -136,6 +161,25 @@ impl Heap {
         #[cfg(any(test, debug_assertions))]
         debug_assert!(self.invariants_hold());
         true
+    }
+
+    unsafe fn free_list_summary(&self) -> (usize, usize, usize) {
+        if !self.initialized {
+            return (HEAP_SIZE, HEAP_SIZE, 1);
+        }
+
+        let mut free_bytes = 0usize;
+        let mut largest_free_block = 0usize;
+        let mut free_list_block_count = 0usize;
+        let mut current = self.head;
+        while !current.is_null() {
+            let size = (*current).size;
+            free_bytes = free_bytes.saturating_add(size);
+            largest_free_block = cmp::max(largest_free_block, size);
+            free_list_block_count = free_list_block_count.saturating_add(1);
+            current = (*current).next;
+        }
+        (free_bytes, largest_free_block, free_list_block_count)
     }
 
     /// Allocate a raw backing block.  `align` is a validated power of two and
@@ -378,6 +422,14 @@ unsafe impl Sync for HeapCell {}
 
 static HEAP: HeapCell = HeapCell(UnsafeCell::new(Heap::new()));
 static HEAP_LOCK: AtomicBool = AtomicBool::new(false);
+static ALLOCATED_BACKING_BYTES: AtomicUsize = AtomicUsize::new(0);
+static REQUESTED_USER_BYTES: AtomicUsize = AtomicUsize::new(0);
+static HIGH_WATER_ALLOCATED_BYTES: AtomicUsize = AtomicUsize::new(0);
+static ALLOCATION_COUNT: AtomicU64 = AtomicU64::new(0);
+static FREE_COUNT: AtomicU64 = AtomicU64::new(0);
+static REALLOC_COUNT: AtomicU64 = AtomicU64::new(0);
+static FAILED_ALLOCATION_COUNT: AtomicU64 = AtomicU64::new(0);
+static LIVE_ALLOCATION_COUNT: AtomicU64 = AtomicU64::new(0);
 
 struct HeapGuard;
 
@@ -414,6 +466,46 @@ fn align_up(value: usize, align: usize) -> Option<usize> {
     value
         .checked_add(align - 1)
         .map(|value| value & !(align - 1))
+}
+
+fn record_high_water(current: usize) {
+    let mut observed = HIGH_WATER_ALLOCATED_BYTES.load(Ordering::Relaxed);
+    while current > observed {
+        match HIGH_WATER_ALLOCATED_BYTES.compare_exchange_weak(
+            observed,
+            current,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return,
+            Err(next) => observed = next,
+        }
+    }
+}
+
+/// Return a coherent, fixed-size heap telemetry snapshot.
+///
+/// The free-list traversal is performed while holding the existing heap lock;
+/// all atomic counters are copied after that lock is released.
+pub fn heap_stats() -> HeapStats {
+    let (free_bytes, largest_free_block, free_list_block_count) = {
+        let guard = HeapGuard::lock();
+        unsafe { guard.heap().free_list_summary() }
+    };
+    HeapStats {
+        heap_capacity: HEAP_SIZE,
+        allocated_backing_bytes: ALLOCATED_BACKING_BYTES.load(Ordering::Relaxed),
+        requested_user_bytes: REQUESTED_USER_BYTES.load(Ordering::Relaxed),
+        free_bytes,
+        largest_free_block,
+        allocation_count: ALLOCATION_COUNT.load(Ordering::Relaxed),
+        free_count: FREE_COUNT.load(Ordering::Relaxed),
+        realloc_count: REALLOC_COUNT.load(Ordering::Relaxed),
+        failed_allocation_count: FAILED_ALLOCATION_COUNT.load(Ordering::Relaxed),
+        live_allocation_count: LIVE_ALLOCATION_COUNT.load(Ordering::Relaxed),
+        high_water_allocated_bytes: HIGH_WATER_ALLOCATED_BYTES.load(Ordering::Relaxed),
+        free_list_block_count,
+    }
 }
 
 fn allocation_layout(user_size: usize, user_align: usize) -> Option<(usize, usize, usize)> {
@@ -491,11 +583,13 @@ unsafe fn validated_header(
 unsafe fn allocate(user_size: usize, user_align: usize) -> *mut u8 {
     let Some((backing_size, backing_align, user_offset)) = allocation_layout(user_size, user_align)
     else {
+        FAILED_ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
         return ptr::null_mut();
     };
     let guard = HeapGuard::lock();
     let (backing, actual_backing_size) = guard.heap().allocate_backing(backing_size, backing_align);
     if backing.is_null() {
+        FAILED_ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
         return ptr::null_mut();
     }
     let backing_addr = backing as usize;
@@ -516,6 +610,12 @@ unsafe fn allocate(user_size: usize, user_align: usize) -> *mut u8 {
             user_align,
         },
     );
+    let allocated = ALLOCATED_BACKING_BYTES.fetch_add(actual_backing_size, Ordering::Relaxed)
+        + actual_backing_size;
+    REQUESTED_USER_BYTES.fetch_add(user_size, Ordering::Relaxed);
+    ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
+    LIVE_ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
+    record_high_water(allocated);
     user_addr as *mut u8
 }
 
@@ -534,6 +634,10 @@ unsafe fn release(ptr: *mut u8) -> bool {
         .heap()
         .release_backing(info.backing_addr, info.backing_size, info.backing_align)
     {
+        ALLOCATED_BACKING_BYTES.fetch_sub(info.backing_size, Ordering::Relaxed);
+        REQUESTED_USER_BYTES.fetch_sub(info.user_size, Ordering::Relaxed);
+        FREE_COUNT.fetch_add(1, Ordering::Relaxed);
+        LIVE_ALLOCATION_COUNT.fetch_sub(1, Ordering::Relaxed);
         true
     } else {
         // A rejected release must leave a valid allocation valid.
@@ -578,6 +682,7 @@ pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut u8 {
 /// before the old block is released, so a failure leaves the old block intact.
 #[cfg_attr(not(test), no_mangle)]
 pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
+    REALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
     if ptr.is_null() {
         return malloc(new_size);
     }
@@ -622,6 +727,7 @@ unsafe impl core::alloc::GlobalAlloc for SunlightAlloc {
         old_layout: core::alloc::Layout,
         new_size: usize,
     ) -> *mut u8 {
+        REALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
         if old_layout.size() == 0 {
             return allocate(new_size, old_layout.align());
         }
@@ -690,6 +796,39 @@ mod tests {
             }
             assert_heap_invariants();
         }
+    }
+
+    #[test]
+    fn heap_stats_track_live_bytes_and_recovery() {
+        let baseline = heap_stats();
+        unsafe {
+            let value = malloc(96);
+            assert!(!value.is_null());
+            let live = heap_stats();
+            assert!(live.allocated_backing_bytes > baseline.allocated_backing_bytes);
+            assert!(live.requested_user_bytes >= baseline.requested_user_bytes + 96);
+            assert_eq!(
+                live.live_allocation_count,
+                baseline.live_allocation_count + 1
+            );
+            assert_eq!(live.allocation_count, baseline.allocation_count + 1);
+
+            free(value);
+        }
+        let recovered = heap_stats();
+        assert_eq!(
+            recovered.allocated_backing_bytes,
+            baseline.allocated_backing_bytes
+        );
+        assert_eq!(
+            recovered.requested_user_bytes,
+            baseline.requested_user_bytes
+        );
+        assert_eq!(
+            recovered.live_allocation_count,
+            baseline.live_allocation_count
+        );
+        assert_eq!(recovered.free_count, baseline.free_count + 1);
     }
 
     #[test]

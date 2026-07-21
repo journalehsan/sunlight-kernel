@@ -731,6 +731,7 @@ const RUNNING_MINIMIZED_DOT: u32 = 6;
 /// tooltip appears (ms). Keeps the bar calm while sweeping across items.
 const RUNNING_TOOLTIP_DELAY_MS: u64 = 300;
 const MAX_RUNNING_TRACKED: usize = 32;
+const MAX_WINDOW_SNAPSHOTS: usize = 256;
 const ENABLE_RUNNING_TASKBAR: bool = true;
 
 const SEARCH_W: u32 = 200; // search box width
@@ -770,59 +771,11 @@ const NOTIF_DISMISS_ZONES_MAX: usize = 32;
 static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 
 // ---------------------------------------------------------------------------
-// Heap (bump allocator — no dynamic allocations used)
+// Native reclaiming heap telemetry
 // ---------------------------------------------------------------------------
 
-const HEAP_SIZE: usize = 8 * 1024 * 1024;
 const WALLPAPER_MAX_BYTES: usize = 8 * 1024 * 1024;
-#[repr(align(16))]
-struct BumpHeap(core::cell::UnsafeCell<[u8; HEAP_SIZE]>);
-unsafe impl Sync for BumpHeap {}
-static BUMP_HEAP: BumpHeap = BumpHeap(core::cell::UnsafeCell::new([0u8; HEAP_SIZE]));
-
-/// Bump pointer for `BumpAlloc`, hoisted to module scope (instead of a
-/// function-local `static`) so `shell_heap_used_bytes()` below can report
-/// live usage for the temporary heap diagnostics (Part A #1/#2).
-static HEAP_NEXT: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
-/// Count of allocations that failed because the bump heap is exhausted.
-static HEAP_ALLOC_FAIL_COUNT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
-
-struct BumpAlloc;
-unsafe impl core::alloc::GlobalAlloc for BumpAlloc {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        use core::sync::atomic::Ordering;
-        let heap_ptr = BUMP_HEAP.0.get() as *mut u8;
-        let cur = HEAP_NEXT.load(Ordering::Relaxed);
-        let aligned = (cur + layout.align() - 1) & !(layout.align() - 1);
-        let end = aligned + layout.size();
-        if end > HEAP_SIZE {
-            HEAP_ALLOC_FAIL_COUNT.fetch_add(1, Ordering::Relaxed);
-            return core::ptr::null_mut();
-        }
-        HEAP_NEXT.store(end, Ordering::Relaxed);
-        unsafe { heap_ptr.add(aligned) }
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
-#[global_allocator]
-static ALLOC: BumpAlloc = BumpAlloc;
-
-/// Temporary heap diagnostics (see AGENTS task: Part A #1/#2). These expose
-/// the no-dealloc bump allocator's live usage so a stress test can confirm
-/// `shell_heap_used_bytes()` stops growing after startup/first app
-/// discovery, instead of creeping toward `shell_heap_capacity_bytes()`.
-fn shell_heap_used_bytes() -> usize {
-    HEAP_NEXT.load(core::sync::atomic::Ordering::Relaxed)
-}
-
-fn shell_heap_capacity_bytes() -> usize {
-    HEAP_SIZE
-}
-
-fn shell_heap_alloc_fail_count() -> u64 {
-    HEAP_ALLOC_FAIL_COUNT.load(core::sync::atomic::Ordering::Relaxed)
-}
+const SHELL_DIAGNOSTIC_INTERVAL_MS: u64 = 30_000;
 
 // ---------------------------------------------------------------------------
 // Pixel-art icon bitmaps (1 bit per pixel, u16 rows, MSB = leftmost pixel)
@@ -1419,6 +1372,16 @@ struct VortexShell {
     telemetry: Option<Telemetry>,
     /// Next monotonic deadline for app/window registry polling.
     next_app_poll_ms: u64,
+    /// Bounded cadence for non-allocating liveness telemetry.
+    next_diagnostic_ms: u64,
+    event_loop_iterations: u64,
+    last_successful_event_ms: u64,
+    input_events: u64,
+    tick_events: u64,
+    other_events: u64,
+    events_dropped: u64,
+    ipc_timeouts: u64,
+    last_wrong_window_replies: u64,
     /// Next launch trace id assigned by this shell process.
     next_launch_id: u64,
     /// Dark Start Menu overlay — search, pinned/all-apps/recent sections,
@@ -1434,6 +1397,8 @@ struct VortexShell {
     /// shown in the Start Menu's "Recent" section. Not persisted across
     /// restarts — falls back to a static "Suggested" set when empty.
     recent_apps: Vec<AppId>,
+    #[cfg(feature = "stress")]
+    stress_cycles: u64,
 }
 
 impl VortexShell {
@@ -1562,12 +1527,23 @@ impl VortexShell {
             running_hover_since: None,
             telemetry,
             next_app_poll_ms: 0,
+            next_diagnostic_ms: 0,
+            event_loop_iterations: 0,
+            last_successful_event_ms: 0,
+            input_events: 0,
+            tick_events: 0,
+            other_events: 0,
+            events_dropped: 0,
+            ipc_timeouts: 0,
+            last_wrong_window_replies: 0,
             next_launch_id: 1,
             start_menu: start_menu::StartMenuState::new(),
             show_system_menu: false,
             system_menu_hover: None,
             suppress_launcher_open: false,
             recent_apps: Vec::new(),
+            #[cfg(feature = "stress")]
+            stress_cycles: 0,
         };
         shell.reload_desktop_icons();
         shell
@@ -2201,12 +2177,21 @@ impl VortexShell {
         self.window_snapshots.clear();
         let mut idx = 0u64;
         loop {
-            let reply = ipc_call_timeout(
+            if self.window_snapshots.len() >= MAX_WINDOW_SNAPSHOTS {
+                self.events_dropped = self.events_dropped.saturating_add(1);
+                break;
+            }
+            let reply = match ipc_call_timeout(
                 self.display_ep,
                 IpcMsg::with_label(SgpMsg::LIST_WINDOWS).word(0, idx),
                 WINDOW_SNAPSHOT_IPC_TIMEOUT_MS,
-            )
-            .ok()?;
+            ) {
+                Ok(reply) => reply,
+                Err(_) => {
+                    self.ipc_timeouts = self.ipc_timeouts.saturating_add(1);
+                    return None;
+                }
+            };
             if reply.label != SgpMsg::REPLY {
                 return None;
             }
@@ -2242,6 +2227,174 @@ impl VortexShell {
             idx = idx.saturating_add(1);
         }
         Some(())
+    }
+
+    fn note_event_progress(&mut self, event: Event) {
+        self.event_loop_iterations = self.event_loop_iterations.wrapping_add(1);
+        self.last_successful_event_ms = monotonic_millis();
+        match event {
+            Event::Tick => self.tick_events = self.tick_events.wrapping_add(1),
+            Event::Click { .. }
+            | Event::MouseDown { .. }
+            | Event::MouseUp { .. }
+            | Event::MouseMove { .. }
+            | Event::Key(_)
+            | Event::KeyPress { .. }
+            | Event::FocusChanged { .. } => self.input_events = self.input_events.wrapping_add(1),
+            _ => self.other_events = self.other_events.wrapping_add(1),
+        }
+    }
+
+    fn log_diagnostics_if_due(&mut self, now: u64) {
+        if now < self.next_diagnostic_ms {
+            return;
+        }
+        self.next_diagnostic_ms = now.saturating_add(SHELL_DIAGNOSTIC_INTERVAL_MS);
+
+        let heap = libc::alloc::heap_stats();
+        debug_log("[VORTEX][diag] iter=");
+        debug_log_u64(self.event_loop_iterations);
+        debug_log(" last_ms=");
+        debug_log_u64(self.last_successful_event_ms);
+        debug_log(" event(in/tick/other/drop)=");
+        debug_log_u64(self.input_events);
+        debug_log("/");
+        debug_log_u64(self.tick_events);
+        debug_log("/");
+        debug_log_u64(self.other_events);
+        debug_log("/");
+        debug_log_u64(self.events_dropped);
+        debug_log(" ipc_timeout=");
+        debug_log_u64(self.ipc_timeouts);
+        debug_log(" heap(cap/backing/request/free/largest)=");
+        debug_log_u64(heap.heap_capacity as u64);
+        debug_log("/");
+        debug_log_u64(heap.allocated_backing_bytes as u64);
+        debug_log("/");
+        debug_log_u64(heap.requested_user_bytes as u64);
+        debug_log("/");
+        debug_log_u64(heap.free_bytes as u64);
+        debug_log("/");
+        debug_log_u64(heap.largest_free_block as u64);
+        debug_log(" heap(a/f/r/fail/live/high/blocks)=");
+        debug_log_u64(heap.allocation_count);
+        debug_log("/");
+        debug_log_u64(heap.free_count);
+        debug_log("/");
+        debug_log_u64(heap.realloc_count);
+        debug_log("/");
+        debug_log_u64(heap.failed_allocation_count);
+        debug_log("/");
+        debug_log_u64(heap.live_allocation_count);
+        debug_log("/");
+        debug_log_u64(heap.high_water_allocated_bytes as u64);
+        debug_log("/");
+        debug_log_u64(heap.free_list_block_count as u64);
+        debug_log(" state(win/bg/timer/watch/fd/shm)=");
+        debug_log_u64(self.window_snapshots.len() as u64);
+        debug_log("/");
+        debug_log_u64(
+            self.apps
+                .iter()
+                .filter(|app| {
+                    matches!(
+                        app.state,
+                        AppLaunchState::Launching
+                            | AppLaunchState::Running
+                            | AppLaunchState::Minimized
+                            | AppLaunchState::Closing
+                    )
+                })
+                .count() as u64,
+        );
+        debug_log("/0/0/0/");
+        debug_log_u64(
+            1 + u64::from(unsafe { KV_CAP_CACHE } != CapabilityToken::INVALID),
+        );
+        debug_log("\n");
+    }
+
+    #[cfg(feature = "stress")]
+    fn run_stress_cycle(&mut self) {
+        const STRESS_CYCLES_PER_TICK: usize = 64;
+        const STRESS_TEMP_ENTRIES: usize = 24;
+        for _ in 0..STRESS_CYCLES_PER_TICK {
+            let mut temporary = Vec::with_capacity(STRESS_TEMP_ENTRIES);
+            let mut transient_windows = Vec::with_capacity(STRESS_TEMP_ENTRIES);
+            let mut calendar_events = Vec::with_capacity(STRESS_TEMP_ENTRIES);
+            let mut notifications = Vec::with_capacity(NOTIF_CENTER_RECENT_LIMIT);
+            let mut process_snapshot = Vec::with_capacity(STRESS_TEMP_ENTRIES);
+            let mut timers = Vec::with_capacity(STRESS_TEMP_ENTRIES);
+
+            for index in 0..STRESS_TEMP_ENTRIES {
+                let mut text = String::with_capacity(192 + index * 7);
+                text.push_str("vortex-stress-temporary-state-");
+                append_u64(&mut text, self.stress_cycles);
+                text.push('-');
+                append_u64(&mut text, index as u64);
+                temporary.push(text);
+
+                transient_windows.push(RunningAppEntry {
+                    win_id: self
+                        .stress_cycles
+                        .saturating_mul(100)
+                        .saturating_add(index as u64),
+                    pid: index as u64,
+                    display_name: temporary[index].clone(),
+                    cell_w: 0,
+                    minimized: index % 2 == 0,
+                    icon_hint: String::new(),
+                    icon: None,
+                    last_click_at: 0,
+                });
+                calendar_events.push(CalendarMiniEvent {
+                    title: temporary[index].clone(),
+                    time: String::from("12:00"),
+                });
+                notifications.push(temporary[index].clone());
+                process_snapshot.push(temporary[index].clone());
+                timers.push(
+                    self.stress_cycles
+                        .saturating_add(index as u64)
+                        .saturating_mul(10),
+                );
+            }
+
+            for entry in &mut transient_windows {
+                entry.refresh_cell_width();
+                entry.minimized = !entry.minimized;
+            }
+            let mut dispatched = 0usize;
+            for event_kind in 0..STRESS_TEMP_ENTRIES {
+                dispatched = dispatched.saturating_add(match event_kind % 4 {
+                    0 => transient_windows.len(),
+                    1 => calendar_events.len(),
+                    2 => notifications.len(),
+                    _ => timers.len(),
+                });
+            }
+            if dispatched == 0 {
+                self.events_dropped = self.events_dropped.saturating_add(1);
+            }
+
+            // Replacement/expiration paths: vectors drop their contained
+            // Strings before the next synthetic lifecycle cycle.
+            transient_windows.clear();
+            calendar_events.clear();
+            notifications.truncate(NOTIF_CENTER_RECENT_LIMIT / 2);
+            notifications.clear();
+            process_snapshot.clear();
+            timers.clear();
+            temporary.clear();
+
+            self.note_recent_app(DOCK_PINNED[(self.stress_cycles as usize) % DOCK_PINNED_COUNT]);
+            self.stress_cycles = self.stress_cycles.wrapping_add(1);
+        }
+        if self.stress_cycles % (STRESS_CYCLES_PER_TICK as u64 * 4) == 0 {
+            debug_log("[VORTEX][stress] completed cycles=");
+            debug_log_u64(self.stress_cycles);
+            debug_log("\n");
+        }
     }
 
     fn sync_app_registry(&mut self, now: u64, force: bool) -> bool {
@@ -6333,6 +6486,7 @@ impl App for VortexShell {
     }
 
     fn update(&mut self, event: Event) -> bool {
+        self.note_event_progress(event);
         // The Start Menu owns all interactive input while open (click,
         // mouse move/hover, keyboard search/nav). `Event::Tick` deliberately
         // falls through below so background app-state polling keeps the
@@ -6934,9 +7088,12 @@ impl App for VortexShell {
             Event::Tick => {
                 let now = monotonic_millis();
                 let mut dirty = false;
+                #[cfg(feature = "stress")]
+                self.run_stress_cycle();
                 if self.sync_app_registry(now, false) {
                     dirty = true;
                 }
+                self.log_diagnostics_if_due(now);
                 if now < self.next_status_poll_ms {
                     return dirty;
                 }
@@ -6951,6 +7108,11 @@ impl App for VortexShell {
     }
 
     fn event_poll_counters(&mut self, counters: EventPollCounters) -> bool {
+        let wrong_window_delta = counters
+            .wrong_window_replies
+            .wrapping_sub(self.last_wrong_window_replies);
+        self.last_wrong_window_replies = counters.wrong_window_replies;
+        self.events_dropped = self.events_dropped.wrapping_add(wrong_window_delta);
         let mut dirty = false;
         if (1..=4).contains(&counters.active_workspace_id)
             && self.current_workspace != counters.active_workspace_id
@@ -7054,6 +7216,49 @@ fn debug_log_u32(mut n: u32) {
     }
     if let Ok(text) = core::str::from_utf8(&s[..len]) {
         debug_log(text);
+    }
+}
+
+/// Minimal decimal logger for u64 (avoids formatting and allocator recursion).
+fn debug_log_u64(mut n: u64) {
+    let mut buf = [0u8; 20];
+    let mut len = 0usize;
+    if n == 0 {
+        debug_log("0");
+        return;
+    }
+    while n > 0 {
+        buf[len] = b'0' + (n % 10) as u8;
+        n /= 10;
+        len += 1;
+    }
+    let mut output = [0u8; 20];
+    let mut index = 0usize;
+    while index < len {
+        output[index] = buf[len - 1 - index];
+        index += 1;
+    }
+    if let Ok(text) = core::str::from_utf8(&output[..len]) {
+        debug_log(text);
+    }
+}
+
+#[cfg(feature = "stress")]
+fn append_u64(out: &mut String, mut value: u64) {
+    let mut digits = [0u8; 20];
+    let mut len = 0usize;
+    if value == 0 {
+        out.push('0');
+        return;
+    }
+    while value > 0 {
+        digits[len] = b'0' + (value % 10) as u8;
+        value /= 10;
+        len += 1;
+    }
+    while len > 0 {
+        len -= 1;
+        out.push(digits[len] as char);
     }
 }
 
