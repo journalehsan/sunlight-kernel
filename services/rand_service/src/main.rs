@@ -6,13 +6,17 @@
 //! A ring-3 CSPRNG, spawned and supervised by sunlightd. libc's crypto path
 //! (`getrandom` without `GRND_NONCRYPTO`) routes here over capability IPC. The
 //! engine is ChaCha20, keyed only after the kernel's approved-source entropy
-//! collector reports ready. It never falls back to TSC-derived bytes.
+//! collector reports ready. It never falls back to TSC-derived bytes or the
+//! non-cryptographic xoroshiro generator.
 //!
 //! Wire protocol (`RandMsg`): a GET carries the requested length in `words[0]`,
 //! clamped to 32 bytes (the register-IPC inline budget). The REPLY packs exactly
 //! that many bytes into `words[0..3]`. Callers wanting more loop; nothing here
-//! uses shared memory.
+//! uses shared memory. STATS is an additive, non-sensitive telemetry query.
 
+use rand_service::engine::{
+    secure_wipe, ChaCha20, EntropySource, ReseedReason, BLOCK_BYTES,
+};
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg, RandMsg,
 };
@@ -22,7 +26,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-/// Conditioned secure seed word from the kernel.
+/// Kernel conditioned secure seed word (syscall 87).
 #[inline]
 fn raw_entropy() -> u64 {
     let ret: u64;
@@ -57,127 +61,88 @@ fn secure_entropy_ready() -> bool {
     ret == 1
 }
 
-/// Reseed after this many produced blocks (64 bytes each).
-const RESEED_BLOCKS: u64 = 8192;
+/// Production entropy backend: kernel conditioned stream via syscalls.
+struct KernelEntropy;
 
-struct ChaCha20 {
-    state: [u32; 16],
-    blocks_since_reseed: u64,
-}
-
-impl ChaCha20 {
-    fn new() -> Option<Self> {
-        let mut c = Self {
-            state: [0; 16],
-            blocks_since_reseed: 0,
-        };
-        c.reseed().then_some(c)
+impl EntropySource for KernelEntropy {
+    fn ready(&mut self) -> bool {
+        secure_entropy_ready()
     }
 
-    /// Establish a fresh 256-bit key + 64-bit nonce from kernel entropy and
-    /// reset the block counter.
-    fn reseed(&mut self) -> bool {
-        // "expand 32-byte k"
-        self.state[0] = 0x6170_7865;
-        self.state[1] = 0x3320_646e;
-        self.state[2] = 0x7962_2d32;
-        self.state[3] = 0x6b20_6574;
-        // 256-bit key (words 4..12) from 4 entropy reads.
-        for i in 0..4 {
-            let e = raw_entropy();
-            self.state[4 + i * 2] = e as u32;
-            self.state[4 + i * 2 + 1] = (e >> 32) as u32;
+    fn next_u64(&mut self) -> Option<u64> {
+        if !secure_entropy_ready() {
+            return None;
         }
-        // 64-bit block counter (12..14) starts at 0.
-        self.state[12] = 0;
-        self.state[13] = 0;
-        // 64-bit nonce (14..16) from one more entropy read.
-        let n = raw_entropy();
-        self.state[14] = n as u32;
-        self.state[15] = (n >> 32) as u32;
-        self.blocks_since_reseed = 0;
-        true
-    }
-
-    fn fill(&mut self, out: &mut [u8]) -> bool {
-        if self.blocks_since_reseed >= RESEED_BLOCKS {
-            if !self.reseed() {
-                return false;
-            }
-        }
-        let mut idx = 0;
-        let mut block = [0u8; 64];
-        while idx < out.len() {
-            self.block(&mut block);
-            // 64-bit little-endian counter increment.
-            let (lo, carry) = self.state[12].overflowing_add(1);
-            self.state[12] = lo;
-            if carry {
-                self.state[13] = self.state[13].wrapping_add(1);
-            }
-            self.blocks_since_reseed += 1;
-            let n = core::cmp::min(out.len() - idx, 64);
-            out[idx..idx + n].copy_from_slice(&block[..n]);
-            idx += n;
-        }
-        true
-    }
-
-    fn block(&self, out: &mut [u8; 64]) {
-        let mut x = self.state;
-        macro_rules! qr {
-            ($a:expr, $b:expr, $c:expr, $d:expr) => {
-                x[$a] = x[$a].wrapping_add(x[$b]);
-                x[$d] ^= x[$a];
-                x[$d] = x[$d].rotate_left(16);
-                x[$c] = x[$c].wrapping_add(x[$d]);
-                x[$b] ^= x[$c];
-                x[$b] = x[$b].rotate_left(12);
-                x[$a] = x[$a].wrapping_add(x[$b]);
-                x[$d] ^= x[$a];
-                x[$d] = x[$d].rotate_left(8);
-                x[$c] = x[$c].wrapping_add(x[$d]);
-                x[$b] ^= x[$c];
-                x[$b] = x[$b].rotate_left(7);
-            };
-        }
-        for _ in 0..10 {
-            qr!(0, 4, 8, 12);
-            qr!(1, 5, 9, 13);
-            qr!(2, 6, 10, 14);
-            qr!(3, 7, 11, 15);
-            qr!(0, 5, 10, 15);
-            qr!(1, 6, 11, 12);
-            qr!(2, 7, 8, 13);
-            qr!(3, 4, 9, 14);
-        }
-        for i in 0..16 {
-            let v = x[i].wrapping_add(self.state[i]);
-            out[i * 4..i * 4 + 4].copy_from_slice(&v.to_le_bytes());
-        }
+        // The kernel returns 0 when unready; we already gated on ready, but a
+        // single zero word is a legitimate (if rare) conditioned sample. The
+        // engine rejects an all-zero *key* after collecting the full seed.
+        Some(raw_entropy())
     }
 }
 
-fn handle(msg: &IpcMsg, rng: &mut ChaCha20) -> IpcMsg {
+fn handle(msg: &IpcMsg, rng: &mut ChaCha20, src: &mut KernelEntropy) -> IpcMsg {
     match msg.label {
         RandMsg::GET => {
-            let want = core::cmp::min(msg.words[0] as usize, RandMsg::MAX_CHUNK);
-            let mut buf = [0u8; RandMsg::MAX_CHUNK];
-            if !rng.fill(&mut buf[..want]) {
+            // Reject lengths that cannot be expressed as a chunk (only the low
+            // word is used). Clamp to the register-IPC budget.
+            let requested = msg.words[0];
+            // Overflow-safe clamp: values larger than MAX_CHUNK become MAX_CHUNK.
+            let want = if requested == 0 {
+                0usize
+            } else if requested > RandMsg::MAX_CHUNK as u64 {
+                RandMsg::MAX_CHUNK
+            } else {
+                requested as usize
+            };
+
+            if want == 0 {
+                rng.record_rejection();
                 return IpcMsg::with_label(RandMsg::ERROR);
             }
-            // Pack the requested bytes into words[0..3].
+
+            let mut buf = [0u8; RandMsg::MAX_CHUNK];
+            if !rng.fill(&mut buf[..want], src) {
+                secure_wipe(&mut buf);
+                return IpcMsg::with_label(RandMsg::ERROR);
+            }
+
+            // Pack the requested bytes into words[0..3]. Unused trailing bytes
+            // in the 32-byte window stay zero and are not generator output.
             let mut reply = IpcMsg::with_label(RandMsg::REPLY);
             for i in 0..4 {
                 let mut w = [0u8; 8];
                 w.copy_from_slice(&buf[i * 8..i * 8 + 8]);
                 reply = reply.word(i, u64::from_le_bytes(w));
             }
+            secure_wipe(&mut buf);
             reply
         }
-        _ => IpcMsg::with_label(RandMsg::ERROR),
+        RandMsg::STATS => {
+            let s = rng.stats();
+            // Pack counters into 16-bit lanes; overflow saturates (telemetry only).
+            let reseed = s.reseed_count.min(0xFFFF);
+            let ent_fail = s.entropy_failures.min(0xFFFF);
+            let rejected = s.rejected_requests.min(0xFFFF);
+            let not_ready = s.not_ready_count.min(0xFFFF);
+            let packed = reseed | (ent_fail << 16) | (rejected << 32) | (not_ready << 48);
+            IpcMsg::with_label(RandMsg::REPLY)
+                .word(0, u64::from(s.ready))
+                .word(1, s.total_requests)
+                .word(2, s.total_bytes)
+                .word(3, packed)
+                .word(4, s.last_reseed_reason.as_u64())
+                // word 5: block size / reseed threshold (non-sensitive policy).
+                .word(5, (BLOCK_BYTES as u64) | (RESEED_THRESHOLD_BLOCKS << 32))
+        }
+        _ => {
+            rng.record_rejection();
+            IpcMsg::with_label(RandMsg::ERROR)
+        }
     }
 }
+
+/// Re-export the engine constant under a local name for the STATS word packing.
+const RESEED_THRESHOLD_BLOCKS: u64 = rand_service::RESEED_BLOCKS;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -188,7 +153,12 @@ pub extern "C" fn _start() -> ! {
             core::hint::spin_loop();
         }
     }
-    let Some(mut rng) = ChaCha20::new() else {
+
+    let mut src = KernelEntropy;
+    // Service restart always reseeds from fresh kernel entropy — never from
+    // wall-clock, PID, TSC, or a saved stream position.
+    let Some(mut rng) = ChaCha20::new(&mut src, ReseedReason::ServiceRestart) else {
+        debug_log("[RAND] initial seed failed; refusing to register");
         loop {
             core::hint::spin_loop();
         }
@@ -200,7 +170,7 @@ pub extern "C" fn _start() -> ! {
 
     let mut msg = ipc_recv(ep);
     loop {
-        let reply = handle(&msg, &mut rng);
+        let reply = handle(&msg, &mut rng, &mut src);
         msg = ipc_reply_and_wait(ep, reply);
     }
 }

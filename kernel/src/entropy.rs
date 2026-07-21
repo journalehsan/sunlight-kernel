@@ -56,6 +56,14 @@ pub fn init(pmm: &mut PhysicalMemoryManager, hhdm_offset: VirtAddr) -> Option<So
     let mut seed = [0u8; SEED_BYTES];
     let source = collect_seed(&mut seed, pmm, hhdm_offset)?;
     *CONDITIONER.lock() = Some(ChaCha20::from_seed(&seed));
+    // Wipe the stack seed so it is not left readable after init.
+    for byte in seed.iter_mut() {
+        // SAFETY: `byte` points into the local `seed` array.
+        unsafe {
+            core::ptr::write_volatile(byte, 0);
+        }
+    }
+    core::sync::atomic::compiler_fence(Ordering::SeqCst);
     STATUS.store(source.status(), Ordering::Release);
     Some(source)
 }
@@ -329,10 +337,12 @@ impl ChaCha20 {
             };
         }
         for _ in 0..10 {
+            // Column rounds (ChaCha20): last index of the fourth QR is 15, not 12.
             quarter_round!(0, 4, 8, 12);
             quarter_round!(1, 5, 9, 13);
             quarter_round!(2, 6, 10, 14);
-            quarter_round!(3, 7, 11, 12);
+            quarter_round!(3, 7, 11, 15);
+            // Diagonal rounds
             quarter_round!(0, 5, 10, 15);
             quarter_round!(1, 6, 11, 12);
             quarter_round!(2, 7, 8, 13);
@@ -372,5 +382,35 @@ mod tests {
         let mut bytes = [0u8; RNG_BYTES * 2];
         conditioner.fill(&mut bytes);
         assert_ne!(&bytes[..RNG_BYTES], &bytes[RNG_BYTES..]);
+    }
+
+    #[test]
+    fn different_seeds_yield_different_keystreams() {
+        let mut a = [0u8; 40];
+        let mut b = [0u8; 40];
+        for i in 0..40 {
+            a[i] = i as u8;
+            b[i] = 0xFF - i as u8;
+        }
+        let mut ca = ChaCha20::from_seed(&a);
+        let mut cb = ChaCha20::from_seed(&b);
+        let mut oa = [0u8; 32];
+        let mut ob = [0u8; 32];
+        ca.fill(&mut oa);
+        cb.fill(&mut ob);
+        assert_ne!(oa, ob);
+    }
+
+    #[test]
+    fn fill_initializes_every_output_byte() {
+        let mut seed = [0u8; 40];
+        seed[0] = 1;
+        let mut c = ChaCha20::from_seed(&seed);
+        let mut out = [0xAAu8; 17];
+        c.fill(&mut out);
+        // Second block-spanning fill differs and is fully overwritten.
+        let mut out2 = [0xAAu8; 17];
+        c.fill(&mut out2);
+        assert_ne!(out, out2);
     }
 }

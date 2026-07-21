@@ -522,6 +522,18 @@ pub mod NetOp {
 pub mod RandMsg {
     /// Request random bytes. `words[0]` = requested length (clamped to 32).
     pub const GET: u64 = 0x7201;
+    /// Non-sensitive service statistics (additive; existing clients ignore).
+    ///
+    /// Reply `words` layout on success (`REPLY`):
+    /// * `[0]` ready (0/1)
+    /// * `[1]` total_requests
+    /// * `[2]` total_bytes_generated
+    /// * `[3]` packed: reseed_count | entropy_failures<<16 | rejected<<32 | not_ready<<48
+    /// * `[4]` last_reseed_reason (enum discriminant)
+    /// * `[5]` block_bytes | (reseed_block_threshold << 32)
+    ///
+    /// Never carries seeds, raw entropy, keys, or random output.
+    pub const STATS: u64 = 0x7202;
     /// Reply carrying exactly the requested byte count in `words[0..3]`.
     pub const REPLY: u64 = 0x72FF;
     pub const ERROR: u64 = 0x72FE;
