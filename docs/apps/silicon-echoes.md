@@ -5,11 +5,15 @@ embedded as `/bin/silicon-echoes`.
 
 ## Scope
 
-- Title screen, new game, continue, four bedroom hotspots, and a complete
-  authored first chapter after the original bedroom sequence.
+- Title screen, new game, continue, four bedroom hotspots, a complete authored
+  first chapter, and a direct Chapter Two continuation from its completion
+  screen.
 - Chapter one moves through the hallway, kitchen, landing, stairwell, street,
   diner, phone, repair shop, transit stop, archive, revelation, and turning
-  point. Each exposed route reaches implemented content.
+  point. Chapter Two investigates `REVISION 7 / SUNSET LOT 17 / 2013` through
+  city records, the river route, the unfinished lot, archive annex, revision
+  chamber, and an ambiguous 2013 response. Each exposed route reaches
+  implemented content.
 - Story state keeps stable scene and actor IDs, visit counts, choices, facts,
   observations, beliefs, memories, relationships, flags, bounded delayed
   consequences, tendencies, and a deterministic game seed separate from UI.
@@ -22,10 +26,15 @@ embedded as `/bin/silicon-echoes`.
   another character's independent decision.
 - Uses only Obsidian (`#0A0A0C`), Bone (`#EDE6D8`), and Sunlight (`#FF9800`),
   including alpha/intensity variants.
-- Saves a versioned, validated record through `sunlight-kv`. Version 2 retains
-  the full world state and deterministically migrates the prior version-1
-  bedroom saves. Invalid or unsupported records are rejected before replacing
-  in-memory game state.
+- Chapter Two adds Echo Overlay at designated annex scenes. It compares a
+  physical 1993 layer with a Revision 2013 layer using active-layer objects,
+  interactions, hitboxes, and restrained orange outlines rather than free time
+  travel.
+- Saves a versioned, validated record through `sunlight-kv`. Version 4 persists
+  chapter progression, Echo Overlay state, actor knowledge, and Chapter Two
+  consequences; it deterministically migrates version-1 through version-3
+  saves. Invalid or unsupported records are rejected before replacing in-memory
+  game state.
 - Uses `sunlight-libc`'s `global-alloc` plus `dynamic-heap-8m`; the story
   naturally uses `Box`, `Vec`, `String`, `format!`, and ordered maps.
 
@@ -65,7 +74,7 @@ Within SunlightOS:
 /bin/silicon-echoes --display-stress
 ```
 
-`--stress` validates the graph, traverses the authored chapter, exercises
+`--stress` validates the graph, traverses the authored story, exercises
 deterministic save/load and repeated allocation/drop churn beyond the game heap
 cumulatively, and checks allocator recovery. `--display-stress` repeats native
 window create, redraw, commit, and close lifecycles.

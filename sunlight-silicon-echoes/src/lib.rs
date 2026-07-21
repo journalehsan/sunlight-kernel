@@ -12,16 +12,18 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-pub const SAVE_FORMAT_VERSION: u16 = 3;
+pub const SAVE_FORMAT_VERSION: u16 = 4;
 pub const MAX_SAVE_BYTES: usize = 4096;
 const MAX_RECORDS: usize = 192;
 const MAX_TEXT_VALUE_BYTES: usize = 128;
-const MAX_VISITED_NODES: usize = 32;
-const MAX_STATE_SET_ITEMS: usize = 32;
+const MAX_VISITED_NODES: usize = 64;
+const MAX_STATE_SET_ITEMS: usize = 48;
 const MAX_RELATIONSHIPS: usize = 8;
 const MAX_TENDENCIES: usize = 8;
+const MAX_SELECTED_CHOICES: usize = 16;
 pub const START_NODE: StoryNodeId = StoryNodeId("bedroom.wake");
 pub const TEMPORARY_ENDING: EndingId = EndingId("ending.chapter-one");
+pub const CHAPTER_TWO_ENDING: EndingId = EndingId("ending.chapter-two");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SceneId(pub &'static str);
@@ -40,6 +42,12 @@ pub struct ActorId(pub &'static str);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ObjectId(pub &'static str);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EchoLayer {
+    Physical1993,
+    Revision2013,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HotspotId {
@@ -98,6 +106,8 @@ pub enum Consequence {
     AddObservation(&'static str),
     AddBelief(&'static str),
     RemoveBelief(&'static str),
+    AddActorKnowledge(&'static str),
+    AddActorBelief(&'static str),
     Remember(&'static str),
     AdjustRelationship(ActorId, i8),
     QueueDelayed {
@@ -113,6 +123,7 @@ pub enum Condition {
     Fact(&'static str),
     Observation(&'static str),
     Belief(&'static str),
+    EchoLayer(EchoLayer),
     Visited(StoryNodeId),
     All(&'static [Condition]),
 }
@@ -205,6 +216,21 @@ pub struct SceneObject {
     pub action: Option<ChoiceId>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EchoObjectLayer {
+    Both,
+    Physical1993,
+    Revision2013,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct EchoObject {
+    pub id: ObjectId,
+    pub layer: EchoObjectLayer,
+    pub label: &'static str,
+    pub action: Option<ChoiceId>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Scene {
     pub id: SceneId,
@@ -216,6 +242,7 @@ pub struct Scene {
 const RILEY: ActorId = ActorId("riley");
 const VALE: ActorId = ActorId("vale");
 const LIO: ActorId = ActorId("lio");
+const ELIAS: ActorId = ActorId("elias");
 const NO_EFFECTS: &[Consequence] = &[];
 const NO_CHOICES: &[Choice] = &[];
 
@@ -629,6 +656,456 @@ const TURNING_POINT_CHOICES: &[Choice] = &[Choice {
     intentionally_converges: false,
 }];
 
+const CHAPTER_TWO_ADDRESS_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.address.call-riley"),
+        text: "Call Riley before the address becomes a private instruction.",
+        target: Transition::Node(StoryNodeId("chapter-two.contact")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("chapter_two_called_riley"),
+            Consequence::AdjustRelationship(RILEY, 1),
+            Consequence::QueueDelayed {
+                id: "riley-follows-address",
+                after_node: StoryNodeId("chapter-two.exterior"),
+                effect: DelayedEffect::SetFlag("riley_followed_address", true),
+            },
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.address.keep-quiet"),
+        text: "Keep the address folded until the city can contradict it.",
+        target: Transition::Node(StoryNodeId("chapter-two.contact")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("chapter_two_carried_address"),
+            Consequence::QueueDelayed {
+                id: "lio-sends-frequency",
+                after_node: StoryNodeId("chapter-two.records"),
+                effect: DelayedEffect::AddObservation("lio_second_channel"),
+            },
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_CONTACT_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.contact.wait-riley"),
+        text: "Wait where Riley can find you.",
+        target: Transition::Node(StoryNodeId("chapter-two.frequency")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("waited_for_riley_at_sunset"),
+            Consequence::AdjustRelationship(RILEY, 1),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.contact.follow-pager"),
+        text: "Follow the pager's second pulse without waiting.",
+        target: Transition::Node(StoryNodeId("chapter-two.frequency")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("left_before_riley"),
+            Consequence::Shift(Tendency::Agency, 1),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_FREQUENCY_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.frequency.ask-lio"),
+        text: "Ask Lio what 88.3 indexes when it is not a station.",
+        target: Transition::Node(StoryNodeId("chapter-two.records")),
+        condition: Some(Condition::Observation("pager_frequency")),
+        effects: &[
+            Consequence::AddObservation("frequency_is_revision_channel"),
+            Consequence::AddActorKnowledge("lio_knows_sunset_location"),
+            Consequence::QueueDelayed {
+                id: "lio-closes-channel",
+                after_node: StoryNodeId("chapter-two.consequence"),
+                effect: DelayedEffect::SetFlag("lio_closed_channel", true),
+            },
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.frequency.read-manual"),
+        text: "Read the service manual's erased margin note.",
+        target: Transition::Node(StoryNodeId("chapter-two.records")),
+        condition: Some(Condition::Fact("pager_frequency_is_archival")),
+        effects: &[
+            Consequence::AddFact("frequency_is_revision_index"),
+            Consequence::Remember("read_second_frequency_alone"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.frequency.trace-caller"),
+        text: "Use the caller's exact phrasing as a search key.",
+        target: Transition::Node(StoryNodeId("chapter-two.records")),
+        condition: Some(Condition::Observation("caller_message")),
+        effects: &[
+            Consequence::AddObservation("caller_named_revision"),
+            Consequence::AddActorBelief("riley_believes_caller_is_future_mara"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_RECORDS_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.records.directory"),
+        text: "Check the 1993 city directory.",
+        target: Transition::Node(StoryNodeId("chapter-two.route")),
+        condition: None,
+        effects: &[
+            Consequence::AddFact("sunset_lot_17_is_unassigned_1993"),
+            Consequence::AddObservation("directory_omits_sunset"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.records.permit"),
+        text: "Pull the permit ledger instead.",
+        target: Transition::Node(StoryNodeId("chapter-two.route")),
+        condition: None,
+        effects: &[
+            Consequence::AddObservation("permit_names_elias"),
+            Consequence::AddActorKnowledge("elias_knows_denied_event"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_ROUTE_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.route.wait-service"),
+        text: "Wait for the service shuttle marked off the public map.",
+        target: Transition::Node(StoryNodeId("chapter-two.exterior")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("waited_for_sunset_service"),
+            Consequence::QueueDelayed {
+                id: "service-arrival",
+                after_node: StoryNodeId("chapter-two.caretaker"),
+                effect: DelayedEffect::AddObservation("riley_arrived_before_mara"),
+            },
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.route.walk-cut"),
+        text: "Take the pedestrian cut through the closed yards.",
+        target: Transition::Node(StoryNodeId("chapter-two.exterior")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("walked_to_sunset"),
+            Consequence::QueueDelayed {
+                id: "walking-arrival",
+                after_node: StoryNodeId("chapter-two.caretaker"),
+                effect: DelayedEffect::AddObservation("mara_arrived_before_riley"),
+            },
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_EXTERIOR_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.exterior.ask-caretaker"),
+        text: "Ask the man sweeping an unfinished entrance what stood here.",
+        target: Transition::Node(StoryNodeId("chapter-two.caretaker")),
+        condition: None,
+        effects: &[
+            Consequence::AddObservation("caretaker_remembers_fire"),
+            Consequence::AddActorBelief("elias_believes_building_was_erased"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.exterior.inspect-facade"),
+        text: "Trace the sealed facade before speaking to anyone.",
+        target: Transition::Node(StoryNodeId("chapter-two.caretaker")),
+        condition: None,
+        effects: &[
+            Consequence::AddObservation("facade_has_future_bolt_holes"),
+            Consequence::Shift(Tendency::Curiosity, 1),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_CARETAKER_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.caretaker.accept-key"),
+        text: "Accept Elias's service key and his version of the fire.",
+        target: Transition::Node(StoryNodeId("chapter-two.entry")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("accepted_elias_key"),
+            Consequence::AdjustRelationship(ELIAS, 1),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.caretaker.refuse-key"),
+        text: "Refuse the key; ask Elias to leave the door unopened.",
+        target: Transition::Node(StoryNodeId("chapter-two.entry")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("refused_elias_key"),
+            Consequence::AddBelief("elias_may_be_protecting_someone"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_ENTRY_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.entry.service-door"),
+        text: "Use the physical service door.",
+        target: Transition::Node(StoryNodeId("chapter-two.overlay")),
+        condition: None,
+        effects: &[
+            Consequence::AddObservation("entered_through_1993_door"),
+            Consequence::Shift(Tendency::Responsibility, 1),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.entry.projector-door"),
+        text: "Align the projector's outline with the missing doorway.",
+        target: Transition::Node(StoryNodeId("chapter-two.overlay")),
+        condition: None,
+        effects: &[
+            Consequence::AddObservation("entered_through_revision_outline"),
+            Consequence::AddBelief("echo_can_describe_access"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_OVERLAY_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.overlay.inspect-physical-door"),
+        text: "Inspect the 1993 door that should not be here.",
+        target: Transition::Node(StoryNodeId("chapter-two.disagreement")),
+        condition: Some(Condition::EchoLayer(EchoLayer::Physical1993)),
+        effects: &[
+            Consequence::AddObservation("physical_door_is_locked"),
+            Consequence::Remember("compared_physical_door"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.overlay.inspect-revision-door"),
+        text: "Inspect the 2013 doorway ECHO insists was open.",
+        target: Transition::Node(StoryNodeId("chapter-two.disagreement")),
+        condition: Some(Condition::EchoLayer(EchoLayer::Revision2013)),
+        effects: &[
+            Consequence::AddObservation("revision_door_is_open"),
+            Consequence::Remember("compared_revision_door"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_DISAGREEMENT_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.disagreement.keep-physical"),
+        text: "Keep the physical cabinet as your evidence.",
+        target: Transition::Node(StoryNodeId("chapter-two.personal-record")),
+        condition: Some(Condition::EchoLayer(EchoLayer::Physical1993)),
+        effects: &[
+            Consequence::AddBelief("physical_record_has_priority"),
+            Consequence::RemoveBelief("revision_record_has_priority"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.disagreement.keep-revision"),
+        text: "Keep the revision's missing cabinet in view.",
+        target: Transition::Node(StoryNodeId("chapter-two.personal-record")),
+        condition: Some(Condition::EchoLayer(EchoLayer::Revision2013)),
+        effects: &[
+            Consequence::AddBelief("revision_record_has_priority"),
+            Consequence::RemoveBelief("physical_record_has_priority"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_PERSONAL_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.personal.open-card"),
+        text: "Open the card addressed to Mara in a year she has not lived.",
+        target: Transition::Node(StoryNodeId("chapter-two.intervention")),
+        condition: None,
+        effects: &[
+            Consequence::AddObservation("opened_mara_2013_card"),
+            Consequence::AdjustRelationship(RILEY, -1),
+            Consequence::QueueDelayed {
+                id: "riley-copies-card",
+                after_node: StoryNodeId("chapter-two.chamber"),
+                effect: DelayedEffect::SetFlag("riley_copied_card", true),
+            },
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.personal.leave-card"),
+        text: "Leave the card sealed and ask Riley what they remember.",
+        target: Transition::Node(StoryNodeId("chapter-two.intervention")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("left_mara_2013_card"),
+            Consequence::AdjustRelationship(RILEY, 1),
+            Consequence::AddActorBelief("riley_believes_card_is_a_test"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_CHAMBER_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.chamber.read-revisions"),
+        text: "Read the sequence of revisions around the same decision.",
+        target: Transition::Node(StoryNodeId("chapter-two.predicted-choice")),
+        condition: None,
+        effects: &[
+            Consequence::AddFact("echo_records_observed_decisions"),
+            Consequence::AddObservation("seven_mara_revisions"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.chamber.seal-port"),
+        text: "Seal the output port before the chamber can send another record.",
+        target: Transition::Node(StoryNodeId("chapter-two.predicted-choice")),
+        condition: None,
+        effects: &[
+            Consequence::SetFlag("mara_sealed_output_port", true),
+            Consequence::AddBelief("echo_can_be_limited"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_PREDICTED_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.predicted.refuse"),
+        text: "Refuse to perform the action ECHO has already annotated.",
+        target: Transition::Node(StoryNodeId("chapter-two.response")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("refused_predicted_action"),
+            Consequence::Shift(Tendency::Agency, 1),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.predicted.preserve"),
+        text: "Preserve the predicted action as evidence without taking it.",
+        target: Transition::Node(StoryNodeId("chapter-two.response")),
+        condition: None,
+        effects: &[
+            Consequence::AddObservation("preserved_predicted_action"),
+            Consequence::Shift(Tendency::Responsibility, 1),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.predicted.reinterpret"),
+        text: "Change what the annotation means before acting beside it.",
+        target: Transition::Node(StoryNodeId("chapter-two.response")),
+        condition: None,
+        effects: &[
+            Consequence::AddBelief("prediction_requires_interpretation"),
+            Consequence::Shift(Tendency::Curiosity, 1),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_RESPONSE_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.response.disconnect"),
+        text: "Disconnect the chamber from the pager relay.",
+        target: Transition::Node(StoryNodeId("chapter-two.consequence")),
+        condition: None,
+        effects: &[
+            Consequence::SetFlag("relay_disconnected", true),
+            Consequence::Remember("disconnected_relay"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.response.send-name"),
+        text: "Send only Mara's name through the relay.",
+        target: Transition::Node(StoryNodeId("chapter-two.consequence")),
+        condition: None,
+        effects: &[
+            Consequence::SetFlag("name_sent_to_revision", true),
+            Consequence::Remember("sent_name_to_revision"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_DISPLACEMENT_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.displacement.take-cartridge"),
+        text: "Carry the warm record cartridge out of the lot.",
+        target: Transition::Node(StoryNodeId("chapter-two.turning-point")),
+        condition: None,
+        effects: &[
+            Consequence::SetFlag("mara_kept_revision_cartridge", true),
+            Consequence::AddObservation("cartridge_has_2013_reply"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.displacement.leave-cartridge"),
+        text: "Leave the cartridge in the room that may have made it.",
+        target: Transition::Node(StoryNodeId("chapter-two.turning-point")),
+        condition: None,
+        effects: &[
+            Consequence::Remember("left_revision_cartridge"),
+            Consequence::AddBelief("echo_can_reply_without_cartridge"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_TWO_TURNING_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c2.turning.keep-channel"),
+        text: "Keep the channel open long enough to hear one more reply.",
+        target: Transition::Ending(CHAPTER_TWO_ENDING),
+        condition: None,
+        effects: &[
+            Consequence::AddBelief("someone_in_2013_is_listening"),
+            Consequence::Remember("kept_2013_channel_open"),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c2.turning.close-notebook"),
+        text: "Close the notebook before the reply can name its author.",
+        target: Transition::Ending(CHAPTER_TWO_ENDING),
+        condition: None,
+        effects: &[
+            Consequence::AddBelief("echo_wants_mara_to_assume_a_reply"),
+            Consequence::Remember("closed_2013_notebook"),
+        ],
+        intentionally_converges: true,
+    },
+];
+
 const NODES: &[StoryNode] = &[
     StoryNode {
         id: START_NODE,
@@ -843,6 +1320,217 @@ const NODES: &[StoryNode] = &[
         narration: "A copied address points to the place where ECHO will be assembled, years from now. Riley can be beside you or waiting for an explanation, but morning is close and the address is real.",
         choices: TURNING_POINT_CHOICES,
         entry_effects: NO_EFFECTS,
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.address"),
+        scene: SceneId("c2-address"),
+        narration: "At dawn, REVISION 7 / SUNSET LOT 17 / 2013 still occupies the card. The 1993 directory has no street by that name, only a blank edge where the river yards begin.",
+        choices: CHAPTER_TWO_ADDRESS_CHOICES,
+        entry_effects: &[
+            Consequence::AddFact("sunset_address_conflicts_with_1993"),
+            Consequence::AddObservation("revision_7_marks_2013"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.contact"),
+        scene: SceneId("c2-contact"),
+        narration: "Riley answers differently depending on what you asked of them before. They say they remember a lot beside the river. Then, quieter: they do not remember telling you that.",
+        choices: CHAPTER_TWO_CONTACT_CHOICES,
+        entry_effects: &[
+            Consequence::AddActorKnowledge("riley_knows_sunset_location"),
+            Consequence::AddObservation("riley_memory_disagrees"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.frequency"),
+        scene: SceneId("c2-frequency"),
+        narration: "The pager answers on 88.3, then beneath it: a second, dry carrier pulse. It behaves less like a broadcast than a filing instruction.",
+        choices: CHAPTER_TWO_FREQUENCY_CHOICES,
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.records"),
+        scene: SceneId("c2-records"),
+        narration: "City records make Sunset Lot 17 worse. One ledger calls it unassigned. Another calls it a demolished archive annex. Neither can explain a 2013 revision stamp.",
+        choices: CHAPTER_TWO_RECORDS_CHOICES,
+        entry_effects: &[
+            Consequence::AddObservation("city_records_conflict"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.route"),
+        scene: SceneId("c2-route"),
+        narration: "The canceled line still cuts across the river yards. Waiting feels like accepting its old authority; walking means arriving with less time to be warned.",
+        choices: CHAPTER_TWO_ROUTE_CHOICES,
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.exterior"),
+        scene: SceneId("c2-exterior"),
+        narration: "Sunset Lot 17 is an unfinished facade in 1993: gate, poured foundation, no address plate. Yet orange bolt outlines mark the wall where a later door appears to have been removed.",
+        choices: CHAPTER_TWO_EXTERIOR_CHOICES,
+        entry_effects: &[
+            Consequence::AddObservation("sunset_exterior_incomplete"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.caretaker"),
+        scene: SceneId("c2-caretaker"),
+        narration: "Elias says he cared for this lot before it existed. He remembers a fire in a room the permit says was never built. He is certain someone survived it; he is not certain who.",
+        choices: CHAPTER_TWO_CARETAKER_CHOICES,
+        entry_effects: &[
+            Consequence::AddObservation("elias_remembers_unbuilt_room"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.entry"),
+        scene: SceneId("c2-entry"),
+        narration: "The service entrance has a lock, a projected outline, and no innocent way through. Elias steps back. Riley, if present, watches what you decide to call access.",
+        choices: CHAPTER_TWO_ENTRY_CHOICES,
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.overlay"),
+        scene: SceneId("c2-overlay"),
+        narration: "The room accepts two descriptions. In 1993, dust holds a locked cabinet beside a sealed door. In Revision 2013, the cabinet is absent and the doorway is waiting open.",
+        choices: CHAPTER_TWO_OVERLAY_CHOICES,
+        entry_effects: &[
+            Consequence::SetFlag("echo_overlay_unlocked", true),
+            Consequence::AddFact("echo_can_render_revision_layer"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.disagreement"),
+        scene: SceneId("c2-disagreement"),
+        narration: "The cabinet's inventory names a person who is not in the room. The revision omits the cabinet but preserves a footprint in its dust. Both records make the other look edited.",
+        choices: CHAPTER_TWO_DISAGREEMENT_CHOICES,
+        entry_effects: &[
+            Consequence::AddObservation("cabinet_and_revision_disagree"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.personal-record"),
+        scene: SceneId("c2-personal-record"),
+        narration: "A record card bears Mara's name, a date in 2013, and a note in handwriting that could be hers if memory were a bad witness. Opening it would tell you more and let Riley see less of why you did.",
+        choices: CHAPTER_TWO_PERSONAL_CHOICES,
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.intervention"),
+        scene: SceneId("c2-intervention"),
+        narration: "While you compare the records, Riley makes a decision without asking: they remove a carbon sheet from the card stack. Elias closes the outer gate. Neither action waits for your interpretation.",
+        choices: &[Choice {
+            id: ChoiceId("c2.intervention.follow"),
+            text: "Follow the sound of the revision projector deeper inside.",
+            target: Transition::Node(StoryNodeId("chapter-two.chamber")),
+            condition: None,
+            effects: &[
+                Consequence::AddObservation("riley_intervened_independently"),
+                Consequence::AddActorKnowledge("riley_has_card_copy"),
+                Consequence::SetFlag("elias_closed_outer_gate", true),
+            ],
+            intentionally_converges: false,
+        }],
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.chamber"),
+        scene: SceneId("c2-chamber"),
+        narration: "The revision chamber does not hold one future. It holds revisions made after a person sees a prediction, then records the changed decision as though it had always been there.",
+        choices: CHAPTER_TWO_CHAMBER_CHOICES,
+        entry_effects: &[
+            Consequence::AddFact("echo_stores_revisions_after_observation"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.predicted-choice"),
+        scene: SceneId("c2-predicted-choice"),
+        narration: "A projector isolates a line with Mara's name: SEND THE NAME. It offers no date, no source, and no proof that the line predicts anything rather than waiting to be obeyed.",
+        choices: CHAPTER_TWO_PREDICTED_CHOICES,
+        entry_effects: &[
+            Consequence::AddObservation("echo_predicted_send_name"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.response"),
+        scene: SceneId("c2-response"),
+        narration: "The relay emits a reply whether you disconnect it or not: a page timestamped 2013. The fact of the page is outside Mara's control. Its author is not.",
+        choices: CHAPTER_TWO_RESPONSE_CHOICES,
+        entry_effects: &[
+            Consequence::SetFlag("revision_reply_arrived", true),
+            Consequence::AddObservation("reply_exists_in_2013"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.consequence"),
+        scene: SceneId("c2-consequence"),
+        narration: "The chamber dims. Lio's channel goes silent elsewhere, a precaution they took without telling you. Riley's copy of the card is either proof, protection, or a new way to be wrong.",
+        choices: &[Choice {
+            id: ChoiceId("c2.consequence.leave"),
+            text: "Leave before the lot can revise the exit.",
+            target: Transition::Node(StoryNodeId("chapter-two.displacement")),
+            condition: None,
+            effects: &[
+                Consequence::AddObservation("lio_acted_offscreen"),
+                Consequence::AddActorBelief("lio_believes_channel_harms_mara"),
+            ],
+            intentionally_converges: false,
+        }],
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.displacement"),
+        scene: SceneId("c2-displacement"),
+        narration: "Outside, the lot has not moved, but the facade now carries an orange outline of a room behind it. A warm cartridge waits on the threshold in both descriptions.",
+        choices: CHAPTER_TWO_DISPLACEMENT_CHOICES,
+        entry_effects: &[
+            Consequence::AddObservation("facade_shifted_after_reply"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-two.turning-point"),
+        scene: SceneId("c2-turning-point"),
+        narration: "The cartridge or the empty threshold holds a 2013 response: I REMEMBER YOU DIFFERENTLY. It could be an answer from a person. It could be ECHO teaching you to imagine one.",
+        choices: CHAPTER_TWO_TURNING_CHOICES,
+        entry_effects: &[
+            Consequence::AddObservation("chapter_two_2013_response"),
+        ],
         uncontrolled_event: false,
         automatic_target: None,
     },
@@ -1229,6 +1917,320 @@ const TURNING_POINT_OBJECTS: &[SceneObject] = &[
     },
 ];
 
+const C2_ADDRESS_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-address.artifact"),
+        kind: SceneObjectKind::Stateful,
+        label: "Revision 7 artifact",
+        action: Some(ChoiceId("c2.address.call-riley")),
+    },
+    SceneObject {
+        id: ObjectId("c2-address.directory"),
+        kind: SceneObjectKind::Interactive,
+        label: "1993 city directory",
+        action: Some(ChoiceId("c2.address.keep-quiet")),
+    },
+];
+
+const C2_CONTACT_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-contact.receiver"),
+        kind: SceneObjectKind::Interactive,
+        label: "Diner receiver",
+        action: Some(ChoiceId("c2.contact.wait-riley")),
+    },
+    SceneObject {
+        id: ObjectId("c2-contact.pager"),
+        kind: SceneObjectKind::Stateful,
+        label: "Second pulse",
+        action: Some(ChoiceId("c2.contact.follow-pager")),
+    },
+];
+
+const C2_FREQUENCY_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-frequency.pager"),
+        kind: SceneObjectKind::Stateful,
+        label: "88.3 pager",
+        action: Some(ChoiceId("c2.frequency.ask-lio")),
+    },
+    SceneObject {
+        id: ObjectId("c2-frequency.manual"),
+        kind: SceneObjectKind::Interactive,
+        label: "Service manual",
+        action: Some(ChoiceId("c2.frequency.read-manual")),
+    },
+    SceneObject {
+        id: ObjectId("c2-frequency.note"),
+        kind: SceneObjectKind::Interactive,
+        label: "Caller transcript",
+        action: Some(ChoiceId("c2.frequency.trace-caller")),
+    },
+];
+
+const C2_RECORDS_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-records.directory"),
+        kind: SceneObjectKind::Interactive,
+        label: "City directory",
+        action: Some(ChoiceId("c2.records.directory")),
+    },
+    SceneObject {
+        id: ObjectId("c2-records.permit"),
+        kind: SceneObjectKind::Interactive,
+        label: "Permit ledger",
+        action: Some(ChoiceId("c2.records.permit")),
+    },
+];
+
+const C2_ROUTE_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-route.shuttle"),
+        kind: SceneObjectKind::Interactive,
+        label: "Service shuttle board",
+        action: Some(ChoiceId("c2.route.wait-service")),
+    },
+    SceneObject {
+        id: ObjectId("c2-route.gate"),
+        kind: SceneObjectKind::Interactive,
+        label: "Yard gate",
+        action: Some(ChoiceId("c2.route.walk-cut")),
+    },
+];
+
+const C2_EXTERIOR_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-exterior.elias"),
+        kind: SceneObjectKind::Actor,
+        label: "Elias",
+        action: Some(ChoiceId("c2.exterior.ask-caretaker")),
+    },
+    SceneObject {
+        id: ObjectId("c2-exterior.facade"),
+        kind: SceneObjectKind::Stateful,
+        label: "Unfinished facade",
+        action: Some(ChoiceId("c2.exterior.inspect-facade")),
+    },
+];
+
+const C2_CARETAKER_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-caretaker.key"),
+        kind: SceneObjectKind::Interactive,
+        label: "Service key",
+        action: Some(ChoiceId("c2.caretaker.accept-key")),
+    },
+    SceneObject {
+        id: ObjectId("c2-caretaker.elias"),
+        kind: SceneObjectKind::Actor,
+        label: "Elias",
+        action: Some(ChoiceId("c2.caretaker.refuse-key")),
+    },
+];
+
+const C2_ENTRY_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-entry.service-door"),
+        kind: SceneObjectKind::Interactive,
+        label: "Service door",
+        action: Some(ChoiceId("c2.entry.service-door")),
+    },
+    SceneObject {
+        id: ObjectId("c2-entry.projector"),
+        kind: SceneObjectKind::Stateful,
+        label: "Revision projector",
+        action: Some(ChoiceId("c2.entry.projector-door")),
+    },
+];
+
+const C2_OVERLAY_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-overlay.door"),
+        kind: SceneObjectKind::Stateful,
+        label: "Dual-state door",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("c2-overlay.cabinet"),
+        kind: SceneObjectKind::Stateful,
+        label: "Archive cabinet",
+        action: None,
+    },
+    SceneObject {
+        id: ObjectId("c2-overlay.projector"),
+        kind: SceneObjectKind::Interactive,
+        label: "Echo layer switch",
+        action: None,
+    },
+];
+
+const C2_DISAGREEMENT_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-disagreement.cabinet"),
+        kind: SceneObjectKind::Stateful,
+        label: "Contradictory cabinet",
+        action: Some(ChoiceId("c2.disagreement.keep-physical")),
+    },
+    SceneObject {
+        id: ObjectId("c2-disagreement.footprint"),
+        kind: SceneObjectKind::Stateful,
+        label: "Revision footprint",
+        action: Some(ChoiceId("c2.disagreement.keep-revision")),
+    },
+];
+
+const C2_PERSONAL_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-personal.card"),
+        kind: SceneObjectKind::Interactive,
+        label: "2013 record card",
+        action: Some(ChoiceId("c2.personal.open-card")),
+    },
+    SceneObject {
+        id: ObjectId("c2-personal.riley"),
+        kind: SceneObjectKind::Actor,
+        label: "Riley",
+        action: Some(ChoiceId("c2.personal.leave-card")),
+    },
+];
+
+const C2_INTERVENTION_OBJECTS: &[SceneObject] = &[SceneObject {
+    id: ObjectId("c2-intervention.projector"),
+    kind: SceneObjectKind::Stateful,
+    label: "Revision projector",
+    action: Some(ChoiceId("c2.intervention.follow")),
+}];
+
+const C2_CHAMBER_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-chamber.revision-markers"),
+        kind: SceneObjectKind::Stateful,
+        label: "Revision markers",
+        action: Some(ChoiceId("c2.chamber.read-revisions")),
+    },
+    SceneObject {
+        id: ObjectId("c2-chamber.output-port"),
+        kind: SceneObjectKind::Interactive,
+        label: "Output port",
+        action: Some(ChoiceId("c2.chamber.seal-port")),
+    },
+];
+
+const C2_PREDICTED_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-predicted.annotation"),
+        kind: SceneObjectKind::Stateful,
+        label: "Predicted annotation",
+        action: Some(ChoiceId("c2.predicted.refuse")),
+    },
+    SceneObject {
+        id: ObjectId("c2-predicted.cartridge"),
+        kind: SceneObjectKind::Interactive,
+        label: "Record cartridge",
+        action: Some(ChoiceId("c2.predicted.preserve")),
+    },
+    SceneObject {
+        id: ObjectId("c2-predicted.riley"),
+        kind: SceneObjectKind::Actor,
+        label: "Riley",
+        action: Some(ChoiceId("c2.predicted.reinterpret")),
+    },
+];
+
+const C2_RESPONSE_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-response.relay"),
+        kind: SceneObjectKind::Interactive,
+        label: "Pager relay",
+        action: Some(ChoiceId("c2.response.disconnect")),
+    },
+    SceneObject {
+        id: ObjectId("c2-response.keyboard"),
+        kind: SceneObjectKind::Interactive,
+        label: "Name field",
+        action: Some(ChoiceId("c2.response.send-name")),
+    },
+];
+
+const C2_CONSEQUENCE_OBJECTS: &[SceneObject] = &[SceneObject {
+    id: ObjectId("c2-consequence.exit"),
+    kind: SceneObjectKind::Interactive,
+    label: "Service exit",
+    action: Some(ChoiceId("c2.consequence.leave")),
+}];
+
+const C2_DISPLACEMENT_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-displacement.cartridge"),
+        kind: SceneObjectKind::Stateful,
+        label: "Warm record cartridge",
+        action: Some(ChoiceId("c2.displacement.take-cartridge")),
+    },
+    SceneObject {
+        id: ObjectId("c2-displacement.threshold"),
+        kind: SceneObjectKind::Interactive,
+        label: "Shifted threshold",
+        action: Some(ChoiceId("c2.displacement.leave-cartridge")),
+    },
+];
+
+const C2_TURNING_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c2-turning.reply"),
+        kind: SceneObjectKind::Stateful,
+        label: "2013 reply",
+        action: Some(ChoiceId("c2.turning.keep-channel")),
+    },
+    SceneObject {
+        id: ObjectId("c2-turning.notebook"),
+        kind: SceneObjectKind::Interactive,
+        label: "Mara's notebook",
+        action: Some(ChoiceId("c2.turning.close-notebook")),
+    },
+];
+
+const C2_OVERLAY_ECHO_OBJECTS: &[EchoObject] = &[
+    EchoObject {
+        id: ObjectId("c2-overlay.door"),
+        layer: EchoObjectLayer::Both,
+        label: "Dual-state door",
+        action: None,
+    },
+    EchoObject {
+        id: ObjectId("c2-overlay.cabinet"),
+        layer: EchoObjectLayer::Physical1993,
+        label: "Locked archive cabinet",
+        action: Some(ChoiceId("c2.overlay.inspect-physical-door")),
+    },
+    EchoObject {
+        id: ObjectId("c2-overlay.cabinet"),
+        layer: EchoObjectLayer::Revision2013,
+        label: "Missing cabinet footprint",
+        action: Some(ChoiceId("c2.overlay.inspect-revision-door")),
+    },
+    EchoObject {
+        id: ObjectId("c2-overlay.projector"),
+        layer: EchoObjectLayer::Both,
+        label: "Echo layer switch",
+        action: None,
+    },
+];
+
+const C2_DISAGREEMENT_ECHO_OBJECTS: &[EchoObject] = &[
+    EchoObject {
+        id: ObjectId("c2-disagreement.cabinet"),
+        layer: EchoObjectLayer::Physical1993,
+        label: "Inventory cabinet",
+        action: Some(ChoiceId("c2.disagreement.keep-physical")),
+    },
+    EchoObject {
+        id: ObjectId("c2-disagreement.footprint"),
+        layer: EchoObjectLayer::Revision2013,
+        label: "Cabinet footprint",
+        action: Some(ChoiceId("c2.disagreement.keep-revision")),
+    },
+];
+
 const SCENES: &[Scene] = &[
     Scene {
         id: SceneId("bedroom"),
@@ -1314,6 +2316,114 @@ const SCENES: &[Scene] = &[
         hotspots: &[],
         objects: TURNING_POINT_OBJECTS,
     },
+    Scene {
+        id: SceneId("c2-address"),
+        title: "Chapter Two / The Address",
+        hotspots: &[],
+        objects: C2_ADDRESS_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-contact"),
+        title: "Cedar Diner / Contact or Silence",
+        hotspots: &[],
+        objects: C2_CONTACT_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-frequency"),
+        title: "Lio's Repair / Second Frequency",
+        hotspots: &[],
+        objects: C2_FREQUENCY_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-records"),
+        title: "City Records / Missing Address",
+        hotspots: &[],
+        objects: C2_RECORDS_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-route"),
+        title: "River Transit / Unlisted Service",
+        hotspots: &[],
+        objects: C2_ROUTE_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-exterior"),
+        title: "Sunset Lot 17 / Exterior",
+        hotspots: &[],
+        objects: C2_EXTERIOR_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-caretaker"),
+        title: "Sunset Lot 17 / Elias",
+        hotspots: &[],
+        objects: C2_CARETAKER_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-entry"),
+        title: "Sunset Lot 17 / Service Entrance",
+        hotspots: &[],
+        objects: C2_ENTRY_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-overlay"),
+        title: "Archive Annex / Echo Overlay",
+        hotspots: &[],
+        objects: C2_OVERLAY_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-disagreement"),
+        title: "Archive Annex / Contradictory Room",
+        hotspots: &[],
+        objects: C2_DISAGREEMENT_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-personal-record"),
+        title: "Archive Annex / Personal Record",
+        hotspots: &[],
+        objects: C2_PERSONAL_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-intervention"),
+        title: "Archive Annex / Intervention",
+        hotspots: &[],
+        objects: C2_INTERVENTION_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-chamber"),
+        title: "Revision Chamber / Archive Core",
+        hotspots: &[],
+        objects: C2_CHAMBER_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-predicted-choice"),
+        title: "Revision Chamber / Annotation",
+        hotspots: &[],
+        objects: C2_PREDICTED_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-response"),
+        title: "Revision Chamber / Reply",
+        hotspots: &[],
+        objects: C2_RESPONSE_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-consequence"),
+        title: "Archive Annex / Afterimage",
+        hotspots: &[],
+        objects: C2_CONSEQUENCE_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-displacement"),
+        title: "Sunset Lot 17 / Shifted Exterior",
+        hotspots: &[],
+        objects: C2_DISPLACEMENT_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c2-turning-point"),
+        title: "Chapter Two / Different Memory",
+        hotspots: &[],
+        objects: C2_TURNING_OBJECTS,
+    },
 ];
 
 pub fn scenes() -> &'static [Scene] {
@@ -1339,6 +2449,27 @@ pub fn scene_object(scene_id: SceneId, object_id: ObjectId) -> Option<&'static S
         .find(|item| item.id == object_id)
 }
 
+pub fn scene_supports_echo_overlay(scene_id: SceneId) -> bool {
+    matches!(scene_id.0, "c2-overlay" | "c2-disagreement")
+}
+
+pub fn echo_objects(scene_id: SceneId) -> &'static [EchoObject] {
+    match scene_id.0 {
+        "c2-overlay" => C2_OVERLAY_ECHO_OBJECTS,
+        "c2-disagreement" => C2_DISAGREEMENT_ECHO_OBJECTS,
+        _ => &[],
+    }
+}
+
+pub fn echo_object_is_active(object: &EchoObject, layer: EchoLayer) -> bool {
+    matches!(object.layer, EchoObjectLayer::Both)
+        || matches!(
+            (object.layer, layer),
+            (EchoObjectLayer::Physical1993, EchoLayer::Physical1993)
+                | (EchoObjectLayer::Revision2013, EchoLayer::Revision2013)
+        )
+}
+
 pub fn hotspot(id: HotspotId) -> &'static Hotspot {
     BEDROOM_HOTSPOTS
         .iter()
@@ -1347,13 +2478,15 @@ pub fn hotspot(id: HotspotId) -> &'static Hotspot {
 }
 
 pub fn actors() -> &'static [ActorId] {
-    &[RILEY, VALE, LIO]
+    &[RILEY, VALE, LIO, ELIAS]
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorldState {
     pub current_node: StoryNodeId,
+    pub chapter: u8,
     pub chapter_complete: bool,
+    pub echo_layer: EchoLayer,
     pub visited_nodes: BTreeSet<String>,
     pub visit_counts: BTreeMap<String, u16>,
     pub selected_choices: Vec<String>,
@@ -1361,6 +2494,8 @@ pub struct WorldState {
     pub facts: BTreeSet<String>,
     pub observations: BTreeSet<String>,
     pub beliefs: BTreeSet<String>,
+    pub actor_knowledge: BTreeSet<String>,
+    pub actor_beliefs: BTreeSet<String>,
     pub memories: BTreeSet<String>,
     pub relationships: BTreeMap<String, i16>,
     pub delayed: Vec<DelayedConsequence>,
@@ -1380,7 +2515,9 @@ impl WorldState {
     pub fn new_seeded(seed: u32) -> Self {
         let mut state = Self {
             current_node: START_NODE,
+            chapter: 1,
             chapter_complete: false,
+            echo_layer: EchoLayer::Physical1993,
             visited_nodes: BTreeSet::new(),
             visit_counts: BTreeMap::new(),
             selected_choices: Vec::new(),
@@ -1388,6 +2525,8 @@ impl WorldState {
             facts: BTreeSet::new(),
             observations: BTreeSet::new(),
             beliefs: BTreeSet::new(),
+            actor_knowledge: BTreeSet::new(),
+            actor_beliefs: BTreeSet::new(),
             memories: BTreeSet::new(),
             relationships: BTreeMap::new(),
             delayed: Vec::new(),
@@ -1420,6 +2559,37 @@ impl WorldState {
             .get(tendency_key(tendency))
             .copied()
             .unwrap_or(0)
+    }
+
+    pub fn begin_chapter_two(&mut self) -> Result<(), StoryError> {
+        if !self.chapter_complete
+            || self.chapter != 1
+            || self.current_node != StoryNodeId("chapter.turning-point")
+        {
+            return Err(StoryError::UnavailableChoice);
+        }
+        self.chapter = 2;
+        self.chapter_complete = false;
+        self.echo_layer = EchoLayer::Physical1993;
+        self.try_apply_transition(Transition::Node(StoryNodeId("chapter-two.address")))?;
+        Ok(())
+    }
+
+    pub fn supports_echo_overlay(&self) -> bool {
+        node(self.current_node)
+            .map(|current| scene_supports_echo_overlay(current.scene))
+            .unwrap_or(false)
+    }
+
+    pub fn toggle_echo_layer(&mut self) -> bool {
+        if !self.supports_echo_overlay() {
+            return false;
+        }
+        self.echo_layer = match self.echo_layer {
+            EchoLayer::Physical1993 => EchoLayer::Revision2013,
+            EchoLayer::Revision2013 => EchoLayer::Physical1993,
+        };
+        true
     }
 
     pub fn available_actions(&self) -> Vec<StoryAction> {
@@ -1472,11 +2642,13 @@ impl WorldState {
         for effect in choice.effects {
             self.apply_effect(effect);
         }
-        if self.selected_choices.len() >= 64 {
+        if self.selected_choices.len() >= MAX_SELECTED_CHOICES {
             self.selected_choices.remove(0);
         }
         self.selected_choices.push(String::from(choice.id.0));
-        self.memories.insert(String::from(choice.id.0));
+        if self.chapter == 1 {
+            self.memories.insert(String::from(choice.id.0));
+        }
         match choice.target {
             Transition::Node(_) => self.try_apply_transition(choice.target)?,
             Transition::Ending(_) => self.chapter_complete = true,
@@ -1510,6 +2682,9 @@ impl WorldState {
         if let Transition::Node(next) = transition {
             let next_node = node(next).ok_or(StoryError::InvalidTransition)?;
             self.current_node = next;
+            if !scene_supports_echo_overlay(next_node.scene) {
+                self.echo_layer = EchoLayer::Physical1993;
+            }
             self.mark_visited(next);
             for effect in next_node.entry_effects {
                 self.apply_effect(effect);
@@ -1555,6 +2730,12 @@ impl WorldState {
             }
             Consequence::RemoveBelief(value) => {
                 self.beliefs.remove(*value);
+            }
+            Consequence::AddActorKnowledge(value) => {
+                self.actor_knowledge.insert(String::from(*value));
+            }
+            Consequence::AddActorBelief(value) => {
+                self.actor_beliefs.insert(String::from(*value));
             }
             Consequence::Remember(value) => {
                 self.memories.insert(String::from(*value));
@@ -1632,6 +2813,49 @@ pub fn presentation_narration(world: &WorldState, story_node: &StoryNode) -> Str
         "chapter.turning-point" if world.relationship(RILEY) > 0 => {
             text.push_str(" Riley says they will meet you at sunrise, not because they understand, but because they chose to stay.");
         }
+        "chapter-two.contact" if world.memories.contains("trusted_riley") => {
+            text.push_str(" Riley comes close enough to share the pager's light.");
+        }
+        "chapter-two.contact" if world.memories.contains("tested_riley") => {
+            text.push_str(" Riley leaves the diner first, then waits across the street where they can deny following.");
+        }
+        "chapter-two.frequency" if world.observations.contains("caller_message") => {
+            text.push_str(" Your transcript gives the pulse a phrase to answer.");
+        }
+        "chapter-two.frequency" if world.facts.contains("pager_frequency_is_archival") => {
+            text.push_str(" The manual's margin treats 88.3 as an index, not a station.");
+        }
+        "chapter-two.route" if world.memories.contains("waited_for_route") => {
+            text.push_str(
+                " You recognize the old instruction to wait, and its power over the morning.",
+            );
+        }
+        "chapter-two.route" if world.memories.contains("walked_for_route") => {
+            text.push_str(" The cut through the yards feels like refusing the route before it can refuse you.");
+        }
+        "chapter-two.exterior" if world.flags.get("riley_followed_address") => {
+            text.push_str(
+                " Riley is already at the gate, which is not the same as arriving with you.",
+            );
+        }
+        "chapter-two.caretaker" if world.observations.contains("riley_arrived_before_mara") => {
+            text.push_str(
+                " Elias has already spoken to Riley; their versions of the fire do not match.",
+            );
+        }
+        "chapter-two.caretaker" if world.observations.contains("mara_arrived_before_riley") => {
+            text.push_str(" Elias studies you before Riley reaches the lot.");
+        }
+        "chapter-two.chamber" if world.flags.get("riley_copied_card") => {
+            text.push_str(
+                " The card stack is lighter. Riley has taken one version of the record with them.",
+            );
+        }
+        "chapter-two.consequence" if world.flags.get("lio_closed_channel") => {
+            text.push_str(
+                " The pager is quiet in the particular way of a line someone else chose to cut.",
+            );
+        }
         _ => {}
     }
     text
@@ -1661,6 +2885,7 @@ pub fn condition_met(condition: Condition, state: &WorldState) -> bool {
         Condition::Fact(value) => state.facts.contains(value),
         Condition::Observation(value) => state.observations.contains(value),
         Condition::Belief(value) => state.beliefs.contains(value),
+        Condition::EchoLayer(layer) => state.echo_layer == layer,
         Condition::Visited(id) => state.has_visited(id),
         Condition::All(items) => items.iter().copied().all(|item| condition_met(item, state)),
     }
@@ -1762,13 +2987,11 @@ pub fn validate_graph() -> Result<(), Vec<ValidationError>> {
             errors.push(ValidationError::UnmarkedConvergence(String::from(target)));
         }
     }
-    if !ending_reachable(TEMPORARY_ENDING) {
-        errors.push(ValidationError::MissingEnding(String::from(
-            TEMPORARY_ENDING.0,
-        )));
-        errors.push(ValidationError::UnreachableEnding(String::from(
-            TEMPORARY_ENDING.0,
-        )));
+    for ending in [TEMPORARY_ENDING, CHAPTER_TWO_ENDING] {
+        if !ending_reachable(ending) {
+            errors.push(ValidationError::MissingEnding(String::from(ending.0)));
+            errors.push(ValidationError::UnreachableEnding(String::from(ending.0)));
+        }
     }
     if errors.is_empty() {
         Ok(())
@@ -1808,6 +3031,7 @@ fn validate_condition(
         Condition::Belief(key) if !known_belief(key) => {
             errors.push(ValidationError::MissingStateKey(String::from(key)));
         }
+        Condition::EchoLayer(_) => {}
         Condition::Visited(id) if !node_ids.contains(id.0) => {
             errors.push(ValidationError::MissingNode(String::from(id.0)));
         }
@@ -1838,6 +3062,12 @@ fn validate_effects(
                 errors.push(ValidationError::MissingStateKey(String::from(*key)));
             }
             Consequence::AddBelief(key) | Consequence::RemoveBelief(key) if !known_belief(key) => {
+                errors.push(ValidationError::MissingStateKey(String::from(*key)));
+            }
+            Consequence::AddActorKnowledge(key) if !known_actor_knowledge(key) => {
+                errors.push(ValidationError::MissingStateKey(String::from(*key)));
+            }
+            Consequence::AddActorBelief(key) if !known_actor_belief(key) => {
                 errors.push(ValidationError::MissingStateKey(String::from(*key)));
             }
             Consequence::AdjustRelationship(actor, _) if !actor_ids.contains(actor.0) => {
@@ -1887,6 +3117,16 @@ fn known_flag(key: &str) -> bool {
             | "has_archive_card"
             | "vale_vouched"
             | "patterson_closed_route"
+            | "riley_followed_address"
+            | "lio_closed_channel"
+            | "echo_overlay_unlocked"
+            | "mara_sealed_output_port"
+            | "relay_disconnected"
+            | "name_sent_to_revision"
+            | "riley_copied_card"
+            | "elias_closed_outer_gate"
+            | "revision_reply_arrived"
+            | "mara_kept_revision_cartridge"
     )
 }
 
@@ -1899,6 +3139,12 @@ fn known_fact(key: &str) -> bool {
             | "patterson_acted_independently"
             | "echo_is_future_decision_system"
             | "return_was_not_planned"
+            | "sunset_address_conflicts_with_1993"
+            | "frequency_is_revision_index"
+            | "sunset_lot_17_is_unassigned_1993"
+            | "echo_can_render_revision_layer"
+            | "echo_stores_revisions_after_observation"
+            | "echo_records_observed_decisions"
     )
 }
 
@@ -1927,6 +3173,35 @@ fn known_observation(key: &str) -> bool {
             | "archive_terminal"
             | "contradictory_echo_records"
             | "sunset_address"
+            | "revision_7_marks_2013"
+            | "riley_memory_disagrees"
+            | "frequency_is_revision_channel"
+            | "lio_second_channel"
+            | "caller_named_revision"
+            | "city_records_conflict"
+            | "directory_omits_sunset"
+            | "permit_names_elias"
+            | "sunset_exterior_incomplete"
+            | "caretaker_remembers_fire"
+            | "facade_has_future_bolt_holes"
+            | "elias_remembers_unbuilt_room"
+            | "entered_through_1993_door"
+            | "entered_through_revision_outline"
+            | "physical_door_is_locked"
+            | "revision_door_is_open"
+            | "cabinet_and_revision_disagree"
+            | "opened_mara_2013_card"
+            | "riley_arrived_before_mara"
+            | "mara_arrived_before_riley"
+            | "riley_intervened_independently"
+            | "seven_mara_revisions"
+            | "echo_predicted_send_name"
+            | "preserved_predicted_action"
+            | "reply_exists_in_2013"
+            | "lio_acted_offscreen"
+            | "facade_shifted_after_reply"
+            | "cartridge_has_2013_reply"
+            | "chapter_two_2013_response"
     )
 }
 
@@ -1938,11 +3213,44 @@ fn known_belief(key: &str) -> bool {
             | "return_was_planned"
             | "archive_is_memory"
             | "archive_is_machine"
+            | "elias_may_be_protecting_someone"
+            | "echo_can_describe_access"
+            | "physical_record_has_priority"
+            | "revision_record_has_priority"
+            | "echo_can_be_limited"
+            | "prediction_requires_interpretation"
+            | "echo_can_reply_without_cartridge"
+            | "someone_in_2013_is_listening"
+            | "echo_wants_mara_to_assume_a_reply"
+    )
+}
+
+fn known_actor_knowledge(key: &str) -> bool {
+    matches!(
+        key,
+        "lio_knows_sunset_location"
+            | "riley_knows_sunset_location"
+            | "elias_knows_denied_event"
+            | "riley_has_card_copy"
+    )
+}
+
+fn known_actor_belief(key: &str) -> bool {
+    matches!(
+        key,
+        "riley_believes_caller_is_future_mara"
+            | "elias_believes_building_was_erased"
+            | "riley_believes_card_is_a_test"
+            | "lio_believes_channel_harms_mara"
     )
 }
 
 fn ending_reachable(ending: EndingId) -> bool {
-    let mut pending = Vec::from([START_NODE]);
+    let mut pending = if ending == CHAPTER_TWO_ENDING {
+        Vec::from([StoryNodeId("chapter-two.address")])
+    } else {
+        Vec::from([START_NODE])
+    };
     let mut visited = BTreeSet::new();
     while let Some(current) = pending.pop() {
         if !visited.insert(current.0) {
@@ -2000,57 +3308,70 @@ pub enum SaveError {
 pub fn encode_save(state: &WorldState) -> Vec<u8> {
     let mut out = String::from("SILICON_ECHOES_SAVE\n");
     push_record(&mut out, "version", &format!("{}", SAVE_FORMAT_VERSION));
-    push_record(&mut out, "node", state.current_node.0);
+    push_record(&mut out, "n", state.current_node.0);
+    push_record(&mut out, "ch", &format!("{}", state.chapter));
     push_record(
         &mut out,
-        "chapter_complete",
+        "cc",
         if state.chapter_complete { "1" } else { "0" },
     );
-    push_record(&mut out, "seed", &format!("{}", state.seed));
-    push_record(&mut out, "play_time_ms", &format!("{}", state.play_time_ms));
     push_record(
         &mut out,
-        "save_generation",
-        &format!("{}", state.save_generation),
+        "el",
+        match state.echo_layer {
+            EchoLayer::Physical1993 => "1993",
+            EchoLayer::Revision2013 => "2013",
+        },
     );
+    push_record(&mut out, "s", &format!("{}", state.seed));
+    push_record(&mut out, "p", &format!("{}", state.play_time_ms));
+    push_record(&mut out, "g", &format!("{}", state.save_generation));
     for value in &state.visited_nodes {
-        push_record(&mut out, "visited", value);
+        push_record(&mut out, "v", value);
     }
     for (value, count) in &state.visit_counts {
-        push_record(&mut out, "visit_count", &format!("{}:{}", value, count));
+        if *count > 1 {
+            push_record(&mut out, "vc", &format!("{}:{}", value, count));
+        }
     }
     for value in &state.selected_choices {
-        push_record(&mut out, "choice", value);
+        push_record(&mut out, "c", value);
     }
     for (key, value) in state.flags.iter() {
         push_record(
             &mut out,
-            "flag",
+            "fl",
             &format!("{}:{}", key, if *value { 1 } else { 0 }),
         );
     }
     for value in &state.facts {
-        push_record(&mut out, "fact", value);
+        push_record(&mut out, "f", value);
     }
     for value in &state.observations {
-        push_record(&mut out, "observation", value);
+        push_record(&mut out, "o", value);
     }
     for value in &state.beliefs {
-        push_record(&mut out, "belief", value);
+        push_record(&mut out, "b", value);
+    }
+    for value in &state.actor_knowledge {
+        push_record(&mut out, "ak", value);
+    }
+    for value in &state.actor_beliefs {
+        push_record(&mut out, "ab", value);
     }
     for value in &state.memories {
-        push_record(&mut out, "memory", value);
+        push_record(&mut out, "m", value);
     }
     for (actor, trust) in &state.relationships {
-        push_record(&mut out, "relationship", &format!("{}:{}", actor, trust));
+        push_record(&mut out, "r", &format!("{}:{}", actor, trust));
     }
     for (key, value) in &state.tendencies {
-        push_record(&mut out, "tendency", &format!("{}:{}", key, value));
+        push_record(&mut out, "t", &format!("{}:{}", key, value));
     }
     for delayed in &state.delayed {
         push_record(
             &mut out,
-            "delayed",
+            "d",
             &format!(
                 "{}:{}:{}",
                 delayed.id,
@@ -2094,7 +3415,8 @@ pub fn decode_save(bytes: &[u8]) -> Result<WorldState, SaveError> {
     match version {
         1 => decode_v1(&records),
         2 => decode_v2(&records),
-        SAVE_FORMAT_VERSION => decode_v3(&records),
+        3 => decode_v3(&records),
+        SAVE_FORMAT_VERSION => decode_v4(&records),
         _ => Err(SaveError::UnsupportedVersion),
     }
 }
@@ -2108,6 +3430,8 @@ fn empty_loaded_state() -> WorldState {
     state.facts.clear();
     state.observations.clear();
     state.beliefs.clear();
+    state.actor_knowledge.clear();
+    state.actor_beliefs.clear();
     state.memories.clear();
     state.relationships.clear();
     state.delayed.clear();
@@ -2117,20 +3441,59 @@ fn empty_loaded_state() -> WorldState {
 
 fn decode_v1(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    load_common_records(&mut state, records, false, false)?;
+    load_common_records(&mut state, records, false, false, false)?;
     finalize_loaded_state(state)
 }
 
 fn decode_v2(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    load_common_records(&mut state, records, true, false)?;
+    load_common_records(&mut state, records, true, false, false)?;
     finalize_loaded_state(state)
 }
 
 fn decode_v3(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    load_common_records(&mut state, records, true, true)?;
+    load_common_records(&mut state, records, true, true, false)?;
     finalize_loaded_state(state)
+}
+
+fn decode_v4(records: &[(String, String)]) -> Result<WorldState, SaveError> {
+    let mut state = empty_loaded_state();
+    let expanded = expand_v4_records(records)?;
+    load_common_records(&mut state, &expanded, true, true, true)?;
+    finalize_loaded_state(state)
+}
+
+fn expand_v4_records(records: &[(String, String)]) -> Result<Vec<(String, String)>, SaveError> {
+    let mut expanded = Vec::new();
+    for (key, value) in records {
+        let full_key = match key.as_str() {
+            "version" => "version",
+            "n" => "node",
+            "ch" => "chapter",
+            "cc" => "chapter_complete",
+            "el" => "echo_layer",
+            "s" => "seed",
+            "p" => "play_time_ms",
+            "g" => "save_generation",
+            "v" => "visited",
+            "vc" => "visit_count",
+            "c" => "choice",
+            "fl" => "flag",
+            "f" => "fact",
+            "o" => "observation",
+            "b" => "belief",
+            "ak" => "actor_knowledge",
+            "ab" => "actor_belief",
+            "m" => "memory",
+            "r" => "relationship",
+            "t" => "tendency",
+            "d" => "delayed",
+            _ => return Err(SaveError::InvalidRecord),
+        };
+        expanded.push((String::from(full_key), value.clone()));
+    }
+    Ok(expanded)
 }
 
 fn load_common_records(
@@ -2138,6 +3501,7 @@ fn load_common_records(
     records: &[(String, String)],
     is_v2: bool,
     has_completion: bool,
+    has_chapter_two: bool,
 ) -> Result<(), SaveError> {
     let mut node_id = None;
     let mut saw_version = false;
@@ -2146,12 +3510,21 @@ fn load_common_records(
     let mut saw_play_time = false;
     let mut saw_generation = !has_completion;
     let mut saw_completion = !has_completion;
+    let mut saw_chapter = !has_chapter_two;
+    let mut saw_echo_layer = !has_chapter_two;
     for (key, value) in records {
         match key.as_str() {
             "version" if !saw_version => saw_version = true,
             "node" if !saw_node => {
                 saw_node = true;
                 node_id = Some(value.as_str());
+            }
+            "chapter" if has_chapter_two && !saw_chapter => {
+                state.chapter = parse_u16(value).ok_or(SaveError::InvalidRecord)? as u8;
+                if !matches!(state.chapter, 1 | 2) {
+                    return Err(SaveError::InvalidRecord);
+                }
+                saw_chapter = true;
             }
             "seed" if is_v2 && !saw_seed => {
                 saw_seed = true;
@@ -2174,6 +3547,14 @@ fn load_common_records(
                 }
                 saw_completion = true;
                 state.chapter_complete = value == "1";
+            }
+            "echo_layer" if has_chapter_two && !saw_echo_layer => {
+                state.echo_layer = match value.as_str() {
+                    "1993" => EchoLayer::Physical1993,
+                    "2013" => EchoLayer::Revision2013,
+                    _ => return Err(SaveError::InvalidRecord),
+                };
+                saw_echo_layer = true;
             }
             "visited" => {
                 if state.visited_nodes.len() >= MAX_VISITED_NODES {
@@ -2203,7 +3584,7 @@ fn load_common_records(
                 if !choice_exists(value) {
                     return Err(SaveError::InvalidRecord);
                 }
-                if state.selected_choices.len() >= 64 {
+                if state.selected_choices.len() >= MAX_SELECTED_CHOICES {
                     return Err(SaveError::InvalidRecord);
                 }
                 state.selected_choices.push(value.clone());
@@ -2230,6 +3611,18 @@ fn load_common_records(
             "belief" if is_v2 => {
                 insert_limited_known(&mut state.beliefs, value, known_belief, MAX_STATE_SET_ITEMS)?
             }
+            "actor_knowledge" if has_chapter_two => insert_limited_known(
+                &mut state.actor_knowledge,
+                value,
+                known_actor_knowledge,
+                MAX_STATE_SET_ITEMS,
+            )?,
+            "actor_belief" if has_chapter_two => insert_limited_known(
+                &mut state.actor_beliefs,
+                value,
+                known_actor_belief,
+                MAX_STATE_SET_ITEMS,
+            )?,
             "memory" if is_v2 => {
                 if state.memories.len() >= MAX_STATE_SET_ITEMS || value.len() > 96 {
                     return Err(SaveError::InvalidRecord);
@@ -2292,7 +3685,14 @@ fn load_common_records(
             _ => return Err(SaveError::InvalidRecord),
         }
     }
-    if !saw_version || !saw_node || !saw_seed || !saw_completion || !saw_generation {
+    if !saw_version
+        || !saw_node
+        || !saw_seed
+        || !saw_completion
+        || !saw_generation
+        || !saw_chapter
+        || !saw_echo_layer
+    {
         return Err(SaveError::InvalidRecord);
     }
     let current = node_id
@@ -2306,10 +3706,8 @@ fn finalize_loaded_state(mut state: WorldState) -> Result<WorldState, SaveError>
     if state.visited_nodes.is_empty() || !state.visited_nodes.contains(state.current_node.0) {
         return Err(SaveError::InvalidRecord);
     }
-    if state.visit_counts.is_empty() {
-        for value in &state.visited_nodes {
-            state.visit_counts.insert(value.clone(), 1);
-        }
+    for value in &state.visited_nodes {
+        state.visit_counts.entry(value.clone()).or_insert(1);
     }
     if state
         .visit_counts
@@ -2325,7 +3723,21 @@ fn finalize_loaded_state(mut state: WorldState) -> Result<WorldState, SaveError>
     }) {
         return Err(SaveError::InvalidRecord);
     }
-    if state.chapter_complete && state.current_node != StoryNodeId("chapter.turning-point") {
+    if state.chapter_complete
+        && !matches!(
+            state.current_node,
+            StoryNodeId("chapter.turning-point") | StoryNodeId("chapter-two.turning-point")
+        )
+    {
+        return Err(SaveError::InvalidRecord);
+    }
+    if state.chapter == 1 && state.current_node.0.starts_with("chapter-two.") {
+        return Err(SaveError::InvalidRecord);
+    }
+    if state.chapter == 2 && !state.current_node.0.starts_with("chapter-two.") {
+        return Err(SaveError::InvalidRecord);
+    }
+    if state.echo_layer == EchoLayer::Revision2013 && !state.supports_echo_overlay() {
         return Err(SaveError::InvalidRecord);
     }
     Ok(state)
@@ -2406,6 +3818,12 @@ fn delayed_id(id: &str) -> Option<&'static str> {
         "riley-waited" => Some("riley-waited"),
         "vale-vouches" => Some("vale-vouches"),
         "lio-hears-recording" => Some("lio-hears-recording"),
+        "riley-follows-address" => Some("riley-follows-address"),
+        "lio-sends-frequency" => Some("lio-sends-frequency"),
+        "lio-closes-channel" => Some("lio-closes-channel"),
+        "service-arrival" => Some("service-arrival"),
+        "walking-arrival" => Some("walking-arrival"),
+        "riley-copies-card" => Some("riley-copies-card"),
         _ => None,
     }
 }
@@ -2416,6 +3834,12 @@ fn delayed_code(effect: DelayedEffect) -> &'static str {
         DelayedEffect::SetFlag("vale_vouched", true) => "vale-vouched",
         DelayedEffect::AddObservation("riley_waited") => "riley-waited",
         DelayedEffect::AdjustRelationship(ActorId("lio"), 1) => "lio-recording",
+        DelayedEffect::SetFlag("riley_followed_address", true) => "riley-followed",
+        DelayedEffect::AddObservation("lio_second_channel") => "lio-second-channel",
+        DelayedEffect::SetFlag("lio_closed_channel", true) => "lio-closed-channel",
+        DelayedEffect::AddObservation("riley_arrived_before_mara") => "riley-first",
+        DelayedEffect::AddObservation("mara_arrived_before_riley") => "mara-first",
+        DelayedEffect::SetFlag("riley_copied_card", true) => "riley-copied-card",
         _ => "invalid",
     }
 }
@@ -2426,6 +3850,12 @@ fn delayed_from_code(code: &str) -> Option<DelayedEffect> {
         "vale-vouched" => Some(DelayedEffect::SetFlag("vale_vouched", true)),
         "riley-waited" => Some(DelayedEffect::AddObservation("riley_waited")),
         "lio-recording" => Some(DelayedEffect::AdjustRelationship(LIO, 1)),
+        "riley-followed" => Some(DelayedEffect::SetFlag("riley_followed_address", true)),
+        "lio-second-channel" => Some(DelayedEffect::AddObservation("lio_second_channel")),
+        "lio-closed-channel" => Some(DelayedEffect::SetFlag("lio_closed_channel", true)),
+        "riley-first" => Some(DelayedEffect::AddObservation("riley_arrived_before_mara")),
+        "mara-first" => Some(DelayedEffect::AddObservation("mara_arrived_before_riley")),
+        "riley-copied-card" => Some(DelayedEffect::SetFlag("riley_copied_card", true)),
         _ => None,
     }
 }
@@ -2789,21 +4219,43 @@ tendency=responsibility:1\n";
     fn save_sizes_remain_within_transport_page() {
         let state = chapter_path(0x1993_0317).unwrap();
         let size = encode_save(&state).len();
-        std::println!("[SAVE-SIZE] turning-point state: {} bytes (limit 4096)", size);
-        std::println!("[SAVE-SIZE] visited_nodes={} visit_counts={} selected_choices={}",
-            state.visited_nodes.len(), state.visit_counts.len(), state.selected_choices.len());
-        std::println!("[SAVE-SIZE] flags={} facts={} observations={} beliefs={} memories={}",
-            state.flags.iter().count(), state.facts.len(), state.observations.len(),
-            state.beliefs.len(), state.memories.len());
-        std::println!("[SAVE-SIZE] relationships={} tendencies={} delayed={}",
-            state.relationships.len(), state.tendencies.len(), state.delayed.len());
+        std::println!(
+            "[SAVE-SIZE] turning-point state: {} bytes (limit 4096)",
+            size
+        );
+        std::println!(
+            "[SAVE-SIZE] visited_nodes={} visit_counts={} selected_choices={}",
+            state.visited_nodes.len(),
+            state.visit_counts.len(),
+            state.selected_choices.len()
+        );
+        std::println!(
+            "[SAVE-SIZE] flags={} facts={} observations={} beliefs={} memories={}",
+            state.flags.iter().count(),
+            state.facts.len(),
+            state.observations.len(),
+            state.beliefs.len(),
+            state.memories.len()
+        );
+        std::println!(
+            "[SAVE-SIZE] relationships={} tendencies={} delayed={}",
+            state.relationships.len(),
+            state.tendencies.len(),
+            state.delayed.len()
+        );
         let mut complete = state.clone();
-        complete.select_choice(ChoiceId("turning-point.keep-address")).unwrap();
+        complete
+            .select_choice(ChoiceId("turning-point.keep-address"))
+            .unwrap();
         let csize = encode_save(&complete).len();
         std::println!("[SAVE-SIZE] chapter-complete state: {} bytes", csize);
-        std::println!("[SAVE-SIZE] complete visited={} choices={} observations={} memories={}",
-            complete.visited_nodes.len(), complete.selected_choices.len(),
-            complete.observations.len(), complete.memories.len());
+        std::println!(
+            "[SAVE-SIZE] complete visited={} choices={} observations={} memories={}",
+            complete.visited_nodes.len(),
+            complete.selected_choices.len(),
+            complete.observations.len(),
+            complete.memories.len()
+        );
         assert_eq!(
             decode_save(&encode_save(&state)).unwrap(),
             state,
@@ -2822,7 +4274,9 @@ tendency=responsibility:1\n";
         let mut peak = 0usize;
         let mut size_at = |s: &WorldState, stage: &str| {
             let sz = encode_save(s).len();
-            if sz > peak { peak = sz; }
+            if sz > peak {
+                peak = sz;
+            }
             if sz > 4096 && first_over.is_none() {
                 first_over = Some((String::from(stage), sz));
             }
@@ -2836,29 +4290,43 @@ tendency=responsibility:1\n";
         size_at(&state, "back-from-clock");
         state.enter_hotspot(HotspotId::Workstation);
         size_at(&state, "bedroom.workstation");
-        state.select_choice(ChoiceId("workstation.read-prompt")).unwrap();
+        state
+            .select_choice(ChoiceId("workstation.read-prompt"))
+            .unwrap();
         size_at(&state, "read-prompt");
         state.advance_uncontrolled_event().unwrap();
         size_at(&state, "back-from-ws");
         state.enter_hotspot(HotspotId::Window);
         size_at(&state, "bedroom.window");
-        state.select_choice(ChoiceId("window.answer-signal")).unwrap();
+        state
+            .select_choice(ChoiceId("window.answer-signal"))
+            .unwrap();
         size_at(&state, "answer-signal");
         state.select_choice(ChoiceId("signal-listen")).unwrap();
         size_at(&state, "signal-listen");
-        state.select_choice(ChoiceId("hallway.inspect-note")).unwrap();
+        state
+            .select_choice(ChoiceId("hallway.inspect-note"))
+            .unwrap();
         size_at(&state, "hallway.inspect-note");
-        state.select_choice(ChoiceId("kitchen.study-photo")).unwrap();
+        state
+            .select_choice(ChoiceId("kitchen.study-photo"))
+            .unwrap();
         size_at(&state, "kitchen.study-photo");
         state.select_choice(ChoiceId("landing.take-card")).unwrap();
         size_at(&state, "landing.take-card");
-        state.select_choice(ChoiceId("stairwell.help-vale")).unwrap();
+        state
+            .select_choice(ChoiceId("stairwell.help-vale"))
+            .unwrap();
         size_at(&state, "stairwell.help-vale");
-        state.select_choice(ChoiceId("street.follow-pager")).unwrap();
+        state
+            .select_choice(ChoiceId("street.follow-pager"))
+            .unwrap();
         size_at(&state, "street.follow-pager");
         state.select_choice(ChoiceId("diner.tell-riley")).unwrap();
         size_at(&state, "diner.tell-riley");
-        state.select_choice(ChoiceId("phone.record-message")).unwrap();
+        state
+            .select_choice(ChoiceId("phone.record-message"))
+            .unwrap();
         size_at(&state, "phone.record-message");
         state.select_choice(ChoiceId("repair.ask-lio")).unwrap();
         size_at(&state, "repair.ask-lio");
@@ -2870,17 +4338,290 @@ tendency=responsibility:1\n";
         size_at(&state, "archive.use-card");
         state.select_choice(ChoiceId("stacks.read-ledger")).unwrap();
         size_at(&state, "stacks.read-ledger");
-        state.select_choice(ChoiceId("revelation.call-riley")).unwrap();
+        state
+            .select_choice(ChoiceId("revelation.call-riley"))
+            .unwrap();
         size_at(&state, "revelation.call-riley");
         size_at(&state, "turning-point");
-        state.select_choice(ChoiceId("turning-point.keep-address")).unwrap();
+        state
+            .select_choice(ChoiceId("turning-point.keep-address"))
+            .unwrap();
         size_at(&state, "chapter-complete");
-        assert!(peak <= 4096,
+        assert!(
+            peak <= 4096,
             "peak save size ({peak} bytes) must stay within SHM transport page (4096). {}",
-            first_over.map_or(String::new(), |(stage, sz)| format!("First over at {stage}: {sz} bytes"))
+            first_over.map_or(String::new(), |(stage, sz)| format!(
+                "First over at {stage}: {sz} bytes"
+            ))
         );
         let final_state = chapter_path(0x1993_0317).unwrap();
-        assert_eq!(decode_save(&encode_save(&final_state)).unwrap(), final_state);
+        assert_eq!(
+            decode_save(&encode_save(&final_state)).unwrap(),
+            final_state
+        );
+    }
+
+    #[test]
+    fn every_chapter_one_completion_variant_enters_chapter_two_without_resetting_state() {
+        for final_choice in [
+            ChoiceId("revelation.call-riley"),
+            ChoiceId("revelation.carry-alone"),
+        ] {
+            let mut state = chapter_path_with_revelation(final_choice).unwrap();
+            let chapter_one_memories = state.memories.clone();
+            state
+                .select_choice(ChoiceId("turning-point.keep-address"))
+                .unwrap();
+            assert!(state.chapter_complete);
+            let boundary = decode_save(&encode_save(&state)).unwrap();
+            state = boundary;
+            state.begin_chapter_two().unwrap();
+            assert_eq!(state.chapter, 2);
+            assert_eq!(state.current_node, StoryNodeId("chapter-two.address"));
+            assert!(!state.chapter_complete);
+            assert!(state.observations.contains("sunset_address"));
+            assert_eq!(
+                state.memories,
+                chapter_one_memories
+                    .union(&BTreeSet::from([String::from(
+                        "turning-point.keep-address"
+                    )]))
+                    .cloned()
+                    .collect()
+            );
+        }
+    }
+
+    #[test]
+    fn chapter_two_normal_path_has_twelve_genuine_transitions_before_turning_point() {
+        let state = chapter_two_path(0x1993_0317).unwrap();
+        let chapter_two_scenes: BTreeSet<&str> = state
+            .visited_nodes
+            .iter()
+            .filter_map(|id| known_node_id(id))
+            .filter_map(|id| node(StoryNodeId(id)))
+            .filter(|item| item.id.0.starts_with("chapter-two."))
+            .map(|item| item.scene.0)
+            .collect();
+        assert_eq!(state.current_node, StoryNodeId("chapter-two.turning-point"));
+        assert!(
+            chapter_two_scenes.len() >= 14,
+            "normal Chapter Two path must enter distinct scenes: {chapter_two_scenes:?}"
+        );
+    }
+
+    #[test]
+    fn all_exposed_chapter_two_actions_reach_implemented_content() {
+        let mut completed_paths = 0;
+        explore_chapter_two_from(chapter_two_entry(0xABCD).unwrap(), 0, &mut completed_paths);
+        assert!(completed_paths >= 12);
+    }
+
+    #[test]
+    fn chapter_one_choices_change_chapter_two_presentation_state() {
+        let trusted = chapter_two_entry_with(
+            ChoiceId("diner.tell-riley"),
+            ChoiceId("phone.record-message"),
+            ChoiceId("repair.ask-lio"),
+            ChoiceId("transit.wait"),
+            ChoiceId("revelation.call-riley"),
+        )
+        .unwrap();
+        let guarded = chapter_two_entry_with(
+            ChoiceId("diner.test-riley"),
+            ChoiceId("phone.hang-up"),
+            ChoiceId("repair.borrow-manual"),
+            ChoiceId("transit.walk"),
+            ChoiceId("revelation.carry-alone"),
+        )
+        .unwrap();
+        assert_ne!(trusted.relationship(RILEY), guarded.relationship(RILEY));
+        assert_ne!(
+            trusted.observations.contains("caller_message"),
+            guarded.observations.contains("caller_message")
+        );
+        assert_ne!(
+            trusted.observations.contains("pager_frequency"),
+            guarded.observations.contains("pager_frequency")
+        );
+        assert_ne!(
+            trusted.memories.contains("waited_for_route"),
+            guarded.memories.contains("waited_for_route")
+        );
+        assert_ne!(
+            trusted.memories.contains("called_riley_after_revelation"),
+            guarded.memories.contains("called_riley_after_revelation")
+        );
+    }
+
+    #[test]
+    fn chapter_two_delayed_consequences_persist_and_resolve_once() {
+        let mut state = chapter_two_entry(0xD1A1).unwrap();
+        state
+            .select_choice(ChoiceId("c2.address.keep-quiet"))
+            .unwrap();
+        assert_eq!(state.delayed.len(), 1);
+        state = decode_save(&encode_save(&state)).unwrap();
+        state
+            .select_choice(ChoiceId("c2.contact.follow-pager"))
+            .unwrap();
+        state
+            .select_choice(ChoiceId("c2.frequency.ask-lio"))
+            .unwrap();
+        assert_eq!(state.delayed.len(), 1);
+        state
+            .select_choice(ChoiceId("c2.records.directory"))
+            .unwrap();
+        assert!(state.observations.contains("lio_second_channel"));
+        state.select_choice(ChoiceId("c2.route.walk-cut")).unwrap();
+        assert_eq!(state.delayed.len(), 2);
+        state
+            .select_choice(ChoiceId("c2.exterior.ask-caretaker"))
+            .unwrap();
+        assert!(state.observations.contains("mara_arrived_before_riley"));
+        state
+            .select_choice(ChoiceId("c2.caretaker.accept-key"))
+            .unwrap();
+        state
+            .select_choice(ChoiceId("c2.entry.service-door"))
+            .unwrap();
+        state
+            .select_choice(ChoiceId("c2.overlay.inspect-physical-door"))
+            .unwrap();
+        state
+            .select_choice(ChoiceId("c2.disagreement.keep-physical"))
+            .unwrap();
+        state
+            .select_choice(ChoiceId("c2.personal.open-card"))
+            .unwrap();
+        assert_eq!(state.delayed.len(), 2);
+        state
+            .select_choice(ChoiceId("c2.intervention.follow"))
+            .unwrap();
+        assert!(state.flags.get("riley_copied_card"));
+        state
+            .select_choice(ChoiceId("c2.chamber.read-revisions"))
+            .unwrap();
+        state
+            .select_choice(ChoiceId("c2.predicted.preserve"))
+            .unwrap();
+        state
+            .select_choice(ChoiceId("c2.response.disconnect"))
+            .unwrap();
+        assert!(state.flags.get("lio_closed_channel"));
+        assert!(state.delayed.is_empty());
+    }
+
+    #[test]
+    fn echo_overlay_is_layered_saveable_and_does_not_duplicate_actions() {
+        let mut state = chapter_two_path_to_overlay(0xEC40).unwrap();
+        assert!(state.supports_echo_overlay());
+        assert_eq!(state.echo_layer, EchoLayer::Physical1993);
+        assert!(state
+            .available_actions()
+            .iter()
+            .any(|action| action.id == ChoiceId("c2.overlay.inspect-physical-door")));
+        assert!(!state
+            .available_actions()
+            .iter()
+            .any(|action| action.id == ChoiceId("c2.overlay.inspect-revision-door")));
+        assert_eq!(echo_objects(SceneId("c2-overlay")).len(), 4);
+        assert!(state.toggle_echo_layer());
+        assert_eq!(state.echo_layer, EchoLayer::Revision2013);
+        assert!(!state
+            .available_actions()
+            .iter()
+            .any(|action| action.id == ChoiceId("c2.overlay.inspect-physical-door")));
+        assert!(state
+            .available_actions()
+            .iter()
+            .any(|action| action.id == ChoiceId("c2.overlay.inspect-revision-door")));
+        for _ in 0..8 {
+            assert!(state.toggle_echo_layer());
+        }
+        assert_eq!(state.available_actions().len(), 1);
+        assert_eq!(state.echo_layer, EchoLayer::Revision2013);
+        let saved = encode_save(&state);
+        let loaded = decode_save(&saved).unwrap();
+        assert_eq!(loaded.echo_layer, state.echo_layer);
+        assert_eq!(loaded.available_actions(), state.available_actions());
+        state
+            .select_choice(ChoiceId("c2.overlay.inspect-revision-door"))
+            .unwrap();
+        assert!(state.supports_echo_overlay());
+        assert_eq!(state.echo_layer, EchoLayer::Revision2013);
+    }
+
+    #[test]
+    fn chapter_two_actor_agency_and_convergence_remain_structured() {
+        let mut copied = chapter_two_path_to_overlay(44).unwrap();
+        copied
+            .select_choice(ChoiceId("c2.overlay.inspect-physical-door"))
+            .unwrap();
+        copied
+            .select_choice(ChoiceId("c2.disagreement.keep-physical"))
+            .unwrap();
+        copied
+            .select_choice(ChoiceId("c2.personal.open-card"))
+            .unwrap();
+        copied
+            .select_choice(ChoiceId("c2.intervention.follow"))
+            .unwrap();
+        assert!(copied.flags.get("riley_copied_card"));
+        assert!(copied.flags.get("elias_closed_outer_gate"));
+
+        let mut sealed = chapter_two_path_to_overlay(44).unwrap();
+        sealed
+            .select_choice(ChoiceId("c2.overlay.inspect-physical-door"))
+            .unwrap();
+        sealed
+            .select_choice(ChoiceId("c2.disagreement.keep-physical"))
+            .unwrap();
+        sealed
+            .select_choice(ChoiceId("c2.personal.leave-card"))
+            .unwrap();
+        sealed
+            .select_choice(ChoiceId("c2.intervention.follow"))
+            .unwrap();
+        assert_ne!(copied.relationship(RILEY), sealed.relationship(RILEY));
+        assert_ne!(copied.memories, sealed.memories);
+        assert!(sealed.flags.get("elias_closed_outer_gate"));
+    }
+
+    #[test]
+    fn chapter_two_replay_and_every_stable_scene_save_are_deterministic() {
+        let first = chapter_two_path(0xC0DE).unwrap();
+        let second = chapter_two_path(0xC0DE).unwrap();
+        assert_eq!(first, second);
+        let mut completed = first.clone();
+        completed
+            .select_choice(ChoiceId("c2.turning.keep-channel"))
+            .unwrap();
+        assert!(completed.chapter_complete);
+        assert_eq!(decode_save(&encode_save(&completed)).unwrap(), completed);
+        let mut paths = 0;
+        explore_chapter_two_saves(chapter_two_entry(0x501).unwrap(), 0, &mut paths);
+        assert!(paths >= 12);
+    }
+
+    #[test]
+    fn version_three_chapter_one_completion_migrates_to_chapter_two_entry() {
+        let v3 = b"SILICON_ECHOES_SAVE\n\
+version=3\n\
+node=chapter.turning-point\n\
+chapter_complete=1\n\
+seed=7\n\
+play_time_ms=9\n\
+save_generation=4\n\
+visited=chapter.turning-point\n\
+visit_count=chapter.turning-point:1\n\
+observation=sunset_address\n";
+        let mut migrated = decode_save(v3).unwrap();
+        assert_eq!(migrated.chapter, 1);
+        assert_eq!(migrated.echo_layer, EchoLayer::Physical1993);
+        migrated.begin_chapter_two().unwrap();
+        assert_eq!(migrated.current_node, StoryNodeId("chapter-two.address"));
+        assert_eq!(decode_save(&encode_save(&migrated)).unwrap(), migrated);
     }
 
     fn leave_signal_ready(state: &mut WorldState) {
@@ -2898,6 +4639,170 @@ tendency=responsibility:1\n";
         leave_signal_ready(&mut state);
         state.select_choice(choice).unwrap();
         state
+    }
+
+    fn chapter_path_with_revelation(choice: ChoiceId) -> Result<WorldState, StoryError> {
+        let mut state = chapter_path(0x1993_0317)?;
+        if choice != ChoiceId("revelation.call-riley") {
+            state = WorldState::new_seeded(0x1993_0317);
+            state.enter_hotspot(HotspotId::Clock);
+            state.select_choice(ChoiceId("clock.accept-date"))?;
+            state.advance_uncontrolled_event()?;
+            state.enter_hotspot(HotspotId::Window);
+            state.select_choice(ChoiceId("window.answer-signal"))?;
+            state.select_choice(ChoiceId("signal-listen"))?;
+            state.select_choice(ChoiceId("hallway.leave-note"))?;
+            state.select_choice(ChoiceId("kitchen.read-newspaper"))?;
+            state.select_choice(ChoiceId("landing.leave-card"))?;
+            state.select_choice(ChoiceId("stairwell.take-stairs"))?;
+            state.select_choice(ChoiceId("street.ask-vendor"))?;
+            state.select_choice(ChoiceId("diner.test-riley"))?;
+            state.select_choice(ChoiceId("phone.hang-up"))?;
+            state.select_choice(ChoiceId("repair.borrow-manual"))?;
+            state.select_choice(ChoiceId("transit.walk"))?;
+            state.advance_uncontrolled_event()?;
+            state.select_choice(ChoiceId("archive.ask-public"))?;
+            state.select_choice(ChoiceId("stacks.search-terminal"))?;
+            state.select_choice(choice)?;
+        }
+        Ok(state)
+    }
+
+    fn chapter_two_entry(seed: u32) -> Result<WorldState, StoryError> {
+        let mut state = chapter_path(seed)?;
+        state.select_choice(ChoiceId("turning-point.keep-address"))?;
+        state.begin_chapter_two()?;
+        Ok(state)
+    }
+
+    fn chapter_two_entry_with(
+        diner: ChoiceId,
+        phone: ChoiceId,
+        repair: ChoiceId,
+        transit: ChoiceId,
+        revelation: ChoiceId,
+    ) -> Result<WorldState, StoryError> {
+        let mut state = WorldState::new_seeded(0x1993_0317);
+        state.enter_hotspot(HotspotId::Clock);
+        state.select_choice(ChoiceId("clock.accept-date"))?;
+        state.advance_uncontrolled_event()?;
+        state.enter_hotspot(HotspotId::Window);
+        state.select_choice(ChoiceId("window.answer-signal"))?;
+        state.select_choice(ChoiceId("signal-listen"))?;
+        state.select_choice(ChoiceId("hallway.inspect-note"))?;
+        state.select_choice(ChoiceId("kitchen.read-newspaper"))?;
+        state.select_choice(ChoiceId("landing.take-card"))?;
+        state.select_choice(ChoiceId("stairwell.help-vale"))?;
+        state.select_choice(ChoiceId("street.follow-pager"))?;
+        state.select_choice(diner)?;
+        state.select_choice(phone)?;
+        state.select_choice(repair)?;
+        state.select_choice(transit)?;
+        state.advance_uncontrolled_event()?;
+        state.select_choice(ChoiceId("archive.use-card"))?;
+        state.select_choice(ChoiceId("stacks.read-ledger"))?;
+        state.select_choice(revelation)?;
+        state.select_choice(ChoiceId("turning-point.keep-address"))?;
+        state.begin_chapter_two()?;
+        Ok(state)
+    }
+
+    fn chapter_two_path_to_overlay(seed: u32) -> Result<WorldState, StoryError> {
+        let mut state = chapter_two_entry(seed)?;
+        state.select_choice(ChoiceId("c2.address.call-riley"))?;
+        state.select_choice(ChoiceId("c2.contact.wait-riley"))?;
+        state.select_choice(ChoiceId("c2.frequency.ask-lio"))?;
+        state.select_choice(ChoiceId("c2.records.directory"))?;
+        state.select_choice(ChoiceId("c2.route.wait-service"))?;
+        state.select_choice(ChoiceId("c2.exterior.ask-caretaker"))?;
+        state.select_choice(ChoiceId("c2.caretaker.accept-key"))?;
+        state.select_choice(ChoiceId("c2.entry.service-door"))?;
+        Ok(state)
+    }
+
+    fn chapter_two_path(seed: u32) -> Result<WorldState, StoryError> {
+        let mut state = chapter_two_path_to_overlay(seed)?;
+        state.select_choice(ChoiceId("c2.overlay.inspect-physical-door"))?;
+        state.select_choice(ChoiceId("c2.disagreement.keep-physical"))?;
+        state.select_choice(ChoiceId("c2.personal.open-card"))?;
+        state.select_choice(ChoiceId("c2.intervention.follow"))?;
+        state.select_choice(ChoiceId("c2.chamber.read-revisions"))?;
+        state.select_choice(ChoiceId("c2.predicted.preserve"))?;
+        state.select_choice(ChoiceId("c2.response.disconnect"))?;
+        state.select_choice(ChoiceId("c2.consequence.leave"))?;
+        state.select_choice(ChoiceId("c2.displacement.take-cartridge"))?;
+        Ok(state)
+    }
+
+    fn explore_chapter_two_from(state: WorldState, depth: u8, completed_paths: &mut usize) {
+        assert!(depth < 24, "Chapter Two branch did not terminate");
+        let current = node(state.current_node).expect("reachable node exists");
+        let available = state.available_actions();
+        assert!(
+            !available.is_empty(),
+            "{} has no reachable action",
+            current.id.0
+        );
+        for action in available {
+            let mut next = state.clone();
+            match next.select_choice(action.id).expect("action is valid") {
+                Transition::Node(target) => {
+                    assert!(node(target).is_some(), "target is implemented");
+                    explore_chapter_two_from(next, depth + 1, completed_paths);
+                }
+                Transition::Ending(CHAPTER_TWO_ENDING) => *completed_paths += 1,
+                Transition::Ending(_) => panic!("unexpected Chapter Two ending"),
+            }
+        }
+        if state.supports_echo_overlay() {
+            let mut revision = state;
+            revision.toggle_echo_layer();
+            for action in revision.available_actions() {
+                let mut next = revision.clone();
+                match next
+                    .select_choice(action.id)
+                    .expect("revision action is valid")
+                {
+                    Transition::Node(_) => {
+                        explore_chapter_two_from(next, depth + 1, completed_paths)
+                    }
+                    Transition::Ending(_) => panic!("overlay cannot end Chapter Two"),
+                }
+            }
+        }
+    }
+
+    fn explore_chapter_two_saves(state: WorldState, depth: u8, completed_paths: &mut usize) {
+        assert!(depth < 24, "Chapter Two save branch did not terminate");
+        let saved =
+            decode_save(&encode_save(&state)).expect("stable Chapter Two state round trips");
+        assert_eq!(saved, state);
+        for action in saved.available_actions() {
+            let mut next = saved.clone();
+            match next
+                .select_choice(action.id)
+                .expect("exposed action is valid")
+            {
+                Transition::Node(_) => explore_chapter_two_saves(next, depth + 1, completed_paths),
+                Transition::Ending(CHAPTER_TWO_ENDING) => {
+                    assert!(next.chapter_complete);
+                    assert_eq!(decode_save(&encode_save(&next)).unwrap(), next);
+                    *completed_paths += 1;
+                }
+                Transition::Ending(_) => panic!("unexpected ending"),
+            }
+        }
+        if saved.supports_echo_overlay() {
+            let mut revision = saved;
+            revision.toggle_echo_layer();
+            assert_eq!(decode_save(&encode_save(&revision)).unwrap(), revision);
+            for action in revision.available_actions() {
+                let mut next = revision.clone();
+                next.select_choice(action.id)
+                    .expect("revision action is valid");
+                explore_chapter_two_saves(next, depth + 1, completed_paths);
+            }
+        }
     }
 
     fn explore_chapter_from(state: WorldState, depth: u8, completed_paths: &mut usize) {
