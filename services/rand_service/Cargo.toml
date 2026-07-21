@@ -1,6 +1,8 @@
 [package]
 name = "rand_service"
-version = "0.2.1822"
+version = "0.2.1837"
+
+
 edition = "2021"
 
 [lib]
