@@ -37,6 +37,8 @@ pub mod sun_exec;
 /// Global file-open resolver (extension MIME + default app associations).
 pub mod sun_open;
 pub mod secret_store;
+/// Strict, fail-closed configuration loader for the future SSH daemon.
+pub mod ssh_config;
 /// Native thread spawning.
 pub mod thread;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.

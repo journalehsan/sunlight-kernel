@@ -854,6 +854,21 @@ max_ttys = 6
 "#,
     ),
     RamEntry::file(
+        "/etc/sunlight/ssh.toml",
+        0,
+        0,
+        mode::FILE_644,
+        br#"listen_address = "0.0.0.0"
+port = 22
+host_key_file = "/etc/sunlight/ssh_host_ed25519_key"
+password_authentication = true
+max_auth_attempts = 3
+max_connections = 8
+max_sessions_per_connection = 1
+login_timeout_seconds = 30
+"#,
+    ),
+    RamEntry::file(
         "/srv/http/index.html",
         0,
         0,
