@@ -1,4 +1,5 @@
 use crate::arch::x86_64::keyboard;
+use crate::arch::x86_64::{ioapic, lapic};
 use crate::serial_println;
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::instructions::port::Port;
@@ -284,6 +285,56 @@ fn remap_pic() {
         io_wait();
         data2.write(0xFF);
         io_wait();
+    }
+}
+
+fn mask_legacy_pic() {
+    unsafe {
+        let mut pic1_data: Port<u8> = Port::new(0x21);
+        let mut pic2_data: Port<u8> = Port::new(0xa1);
+        pic1_data.write(0xff);
+        pic2_data.write(0xff);
+    }
+}
+
+/// Prefer native I/O APIC delivery for the legacy i8042 sources. If firmware
+/// data or MMIO validation is unavailable, retain the already-configured PIC
+/// path so older virtual machines continue to boot with keyboard input.
+pub fn configure_input_interrupt_routing() {
+    let destination = lapic::local_apic_id();
+    let Ok(destination) = u8::try_from(destination) else {
+        serial_println!(
+            "[IOAPIC] BSP APIC ID {} exceeds xAPIC destination width; using PIC input routing",
+            destination
+        );
+        return;
+    };
+
+    match ioapic::configure_input_irqs(destination) {
+        Ok(()) => {
+            mask_legacy_pic();
+            serial_println!("[IOAPIC] input routing active; legacy PIC masked");
+        }
+        Err(error) => {
+            serial_println!("[IOAPIC] input routing unavailable: {}; using PIC", error);
+        }
+    }
+}
+
+#[inline]
+fn acknowledge_external_irq(irq: u8) {
+    if ioapic::input_irqs_enabled() {
+        unsafe { lapic::send_eoi() };
+        return;
+    }
+
+    unsafe {
+        if irq >= 8 {
+            let mut cmd2: Port<u8> = Port::new(0xa0);
+            cmd2.write(0x20);
+        }
+        let mut cmd1: Port<u8> = Port::new(0x20);
+        cmd1.write(0x20);
     }
 }
 
@@ -905,16 +956,12 @@ pub fn ticks() -> u64 {
 
 extern "x86-interrupt" fn keyboard_entry(_stack_frame: InterruptStackFrame) {
     keyboard::handle_irq1();
-
-    // Send EOI to PIC
-    unsafe {
-        let mut cmd1: Port<u8> = Port::new(0x20);
-        cmd1.write(0x20);
-    }
+    acknowledge_external_irq(1);
 }
 
 // Mouse IRQ12 handler
 extern "x86-interrupt" fn mouse_entry(_stack_frame: InterruptStackFrame) {
     use crate::arch::x86_64::mouse;
     mouse::handle_irq12();
+    acknowledge_external_irq(12);
 }

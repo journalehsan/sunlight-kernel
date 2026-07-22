@@ -782,6 +782,21 @@ pub struct CoreInfo {
     pub is_x2apic: bool,
 }
 
+/// Fully resolved route for one legacy ISA interrupt through an I/O APIC.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LegacyInterruptRoute {
+    /// Physical MMIO base of the I/O APIC which owns this GSI.
+    pub io_apic_addr: u32,
+    /// First GSI managed by that I/O APIC.
+    pub gsi_base: u32,
+    /// Global System Interrupt selected for the ISA source.
+    pub gsi: u32,
+    /// ACPI override requests active-low polarity.
+    pub active_low: bool,
+    /// ACPI override requests level-triggered delivery.
+    pub level_triggered: bool,
+}
+
 impl CoreInfo {
     /// Returns `true` if firmware reports this processor as currently enabled.
     #[inline]
@@ -890,6 +905,71 @@ impl Iterator for MadtParser {
         self.offset += length as usize;
         Some(entry)
     }
+}
+
+/// Resolve an ISA IRQ to its MADT-described I/O APIC and electrical mode.
+///
+/// ISA defaults are active-high and edge-triggered. An Interrupt Source
+/// Override may remap the IRQ to another GSI and change those defaults. The
+/// I/O APIC with the greatest base not exceeding the target GSI is selected;
+/// the caller still validates the resulting redirection index against the
+/// controller's version register.
+pub fn legacy_interrupt_route(irq: u8) -> Result<LegacyInterruptRoute, &'static str> {
+    if irq >= 16 {
+        return Err("legacy IRQ is outside ISA range");
+    }
+
+    let madt_phys = find_table_by_signature(b"APIC")?;
+    let mut gsi = irq as u32;
+    let mut flags = 0u16;
+
+    let overrides = unsafe { MadtParser::new(madt_phys) }.ok_or("MADT too small to parse")?;
+    for entry in overrides {
+        if let MadtEntry::IntSourceOverride(iso) = entry {
+            if iso.bus == 0 && iso.source == irq {
+                gsi = iso.global_sys_int;
+                flags = iso.flags;
+                break;
+            }
+        }
+    }
+
+    let polarity = flags & 0b11;
+    let trigger = (flags >> 2) & 0b11;
+    let active_low = match polarity {
+        0 | 1 => false,
+        3 => true,
+        _ => return Err("MADT IRQ override has reserved polarity"),
+    };
+    let level_triggered = match trigger {
+        0 | 1 => false,
+        3 => true,
+        _ => return Err("MADT IRQ override has reserved trigger mode"),
+    };
+
+    let controllers = unsafe { MadtParser::new(madt_phys) }.ok_or("MADT too small to parse")?;
+    let mut selected: Option<MadtIoApic> = None;
+    for entry in controllers {
+        if let MadtEntry::IoApic(io_apic) = entry {
+            let base = io_apic.global_sys_int_base;
+            if base <= gsi
+                && selected
+                    .map(|current| base > current.global_sys_int_base)
+                    .unwrap_or(true)
+            {
+                selected = Some(io_apic);
+            }
+        }
+    }
+
+    let io_apic = selected.ok_or("no I/O APIC owns legacy IRQ GSI")?;
+    Ok(LegacyInterruptRoute {
+        io_apic_addr: io_apic.io_apic_addr,
+        gsi_base: io_apic.global_sys_int_base,
+        gsi,
+        active_low,
+        level_triggered,
+    })
 }
 
 /// Parse the MADT to enumerate all logical processors and the I/O APIC.

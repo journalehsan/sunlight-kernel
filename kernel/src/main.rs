@@ -424,6 +424,15 @@ pub extern "C" fn _start() -> ! {
     };
     let _ = madt_cores; // available for SMP bring-up in a future step
 
+    // Firmware is not required to leave the i8042 keyboard enabled or in the
+    // scancode mode consumed by sunlight-kbd. Initialize it while interrupts
+    // are still disabled, then move IRQ1/IRQ12 to the MADT I/O APIC when the
+    // platform exposes one. Either operation retains a logged legacy fallback.
+    if !keyboard::init_ps2_keyboard() {
+        serial_println!("[KBD] Warning: hardware initialization failed; using recovery state");
+    }
+    interrupts::configure_input_interrupt_routing();
+
     // 4.5. PCI GPU count (class 0x03 = display controller)
     // SAFETY: PCI port I/O requires ring-0; performed before user-space starts.
     unsafe { hardware_inventory::enumerate_boot_hardware() };

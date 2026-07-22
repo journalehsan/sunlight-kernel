@@ -9,6 +9,22 @@ use crate::serial_println;
 use core::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use x86_64::instructions::port::Port;
 
+const DATA_PORT: u16 = 0x60;
+const STATUS_COMMAND_PORT: u16 = 0x64;
+const STATUS_OUTPUT_FULL: u8 = 1 << 0;
+const STATUS_INPUT_FULL: u8 = 1 << 1;
+const STATUS_AUX_DATA: u8 = 1 << 5;
+const CONTROLLER_CONFIG_IRQ1: u8 = 1 << 0;
+const CONTROLLER_CONFIG_IRQ12: u8 = 1 << 1;
+const CONTROLLER_CONFIG_FIRST_CLOCK_DISABLED: u8 = 1 << 4;
+const CONTROLLER_CONFIG_SECOND_CLOCK_DISABLED: u8 = 1 << 5;
+const CONTROLLER_CONFIG_TRANSLATION: u8 = 1 << 6;
+const KEYBOARD_ACK: u8 = 0xfa;
+const KEYBOARD_RESEND: u8 = 0xfe;
+const IO_TIMEOUT_MS: u64 = 100;
+const BAT_TIMEOUT_MS: u64 = 1_000;
+const FALLBACK_TIMEOUT_SPINS: usize = 1_000_000;
+
 /// Maximum number of buffered raw scancodes before overflow.
 const RAW_BUFFER_SIZE: usize = 256;
 
@@ -19,6 +35,7 @@ static RAW_SCANCODE_BUFFER: [AtomicU8; RAW_BUFFER_SIZE] =
 static WRITE_IDX: AtomicUsize = AtomicUsize::new(0);
 static READ_IDX: AtomicUsize = AtomicUsize::new(0);
 static DROPPED_COUNT: AtomicUsize = AtomicUsize::new(0);
+static IRQ_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 /// Test automation injects raw set-1 scancodes through the same ring used by
 /// IRQ1. The userspace driver then performs the same translation path as real
@@ -35,6 +52,208 @@ pub static mut KEY_INJECT_ENABLED: bool = false;
 /// Endpoint ID of the registered user-space keyboard driver (sunlight-kbd).
 /// Set via syscall during driver initialization. 0 = not registered.
 static KBD_DRIVER_ENDPOINT: AtomicU32 = AtomicU32::new(0);
+
+#[inline]
+fn read_tsc() -> u64 {
+    let low: u32;
+    let high: u32;
+    unsafe {
+        core::arch::asm!(
+            "rdtsc",
+            out("eax") low,
+            out("edx") high,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+    (u64::from(high) << 32) | u64::from(low)
+}
+
+fn timeout_expired(start_tsc: u64, timeout_ticks: u64, spins: usize) -> bool {
+    if timeout_ticks != 0 {
+        read_tsc().wrapping_sub(start_tsc) >= timeout_ticks
+    } else {
+        spins >= FALLBACK_TIMEOUT_SPINS
+    }
+}
+
+fn timeout_ticks(timeout_ms: u64) -> u64 {
+    crate::arch::x86_64::interrupts::tsc_hz().saturating_mul(timeout_ms) / 1_000
+}
+
+fn wait_input_buffer_clear() -> bool {
+    let start_tsc = read_tsc();
+    let timeout_ticks = timeout_ticks(IO_TIMEOUT_MS);
+    let mut spins = 0usize;
+    unsafe {
+        let mut status: Port<u8> = Port::new(STATUS_COMMAND_PORT);
+        loop {
+            if status.read() & STATUS_INPUT_FULL == 0 {
+                return true;
+            }
+            spins = spins.saturating_add(1);
+            if timeout_expired(start_tsc, timeout_ticks, spins) {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+    }
+    false
+}
+
+fn read_data_timeout(timeout_ms: u64) -> Option<u8> {
+    let start_tsc = read_tsc();
+    let timeout_ticks = timeout_ticks(timeout_ms);
+    let mut spins = 0usize;
+    unsafe {
+        let mut status: Port<u8> = Port::new(STATUS_COMMAND_PORT);
+        let mut data: Port<u8> = Port::new(DATA_PORT);
+        loop {
+            if status.read() & STATUS_OUTPUT_FULL != 0 {
+                return Some(data.read());
+            }
+            spins = spins.saturating_add(1);
+            if timeout_expired(start_tsc, timeout_ticks, spins) {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+    }
+    None
+}
+
+unsafe fn write_controller_command(command: u8) -> bool {
+    if !wait_input_buffer_clear() {
+        return false;
+    }
+    let mut port: Port<u8> = Port::new(STATUS_COMMAND_PORT);
+    unsafe { port.write(command) };
+    true
+}
+
+unsafe fn write_data(data: u8) -> bool {
+    if !wait_input_buffer_clear() {
+        return false;
+    }
+    let mut port: Port<u8> = Port::new(DATA_PORT);
+    unsafe { port.write(data) };
+    true
+}
+
+fn drain_output_buffer() {
+    unsafe {
+        let mut status: Port<u8> = Port::new(STATUS_COMMAND_PORT);
+        let mut data: Port<u8> = Port::new(DATA_PORT);
+        // A controller has at most a tiny hardware FIFO. Keep this bounded in
+        // case firmware reports a stuck output-full status bit.
+        for _ in 0..32 {
+            if status.read() & STATUS_OUTPUT_FULL == 0 {
+                break;
+            }
+            let _ = data.read();
+        }
+    }
+}
+
+fn send_keyboard_command(command: u8) -> bool {
+    for _ in 0..2 {
+        if !unsafe { write_data(command) } {
+            return false;
+        }
+        match read_data_timeout(IO_TIMEOUT_MS) {
+            Some(KEYBOARD_ACK) => return true,
+            Some(KEYBOARD_RESEND) => continue,
+            _ => return false,
+        }
+    }
+    false
+}
+
+/// Put the first i8042 port and keyboard into a known, translated set-2 state.
+///
+/// Firmware often leaves this state usable in virtual machines, but physical
+/// UEFI systems are allowed to hand off with the port or keyboard scanning
+/// disabled. The userspace driver consumes set-1 bytes, so controller
+/// translation is explicitly enabled while the device itself uses set 2.
+pub fn init_ps2_keyboard() -> bool {
+    serial_println!("[KBD] Initializing i8042 keyboard hardware");
+
+    let result = (|| -> Result<(), &'static str> {
+        // Stop both ports while controller state and device protocol are
+        // changed. Interrupts are disabled throughout early kernel boot.
+        if !unsafe { write_controller_command(0xad) } || !unsafe { write_controller_command(0xa7) }
+        {
+            return Err("port-disable timeout");
+        }
+        drain_output_buffer();
+
+        if !unsafe { write_controller_command(0x20) } {
+            return Err("configuration read timeout");
+        }
+        let Some(mut config) = read_data_timeout(IO_TIMEOUT_MS) else {
+            return Err("no configuration byte");
+        };
+
+        // Keyboard: clock enabled, IRQ enabled, set-2 -> set-1 translation.
+        // Auxiliary port remains disabled until sunlight-mouse initializes it.
+        config |= CONTROLLER_CONFIG_IRQ1
+            | CONTROLLER_CONFIG_SECOND_CLOCK_DISABLED
+            | CONTROLLER_CONFIG_TRANSLATION;
+        config &= !(CONTROLLER_CONFIG_IRQ12 | CONTROLLER_CONFIG_FIRST_CLOCK_DISABLED);
+        if !unsafe { write_controller_command(0x60) } || !unsafe { write_data(config) } {
+            return Err("configuration write timeout");
+        }
+
+        if !unsafe { write_controller_command(0xab) } {
+            return Err("interface-test timeout");
+        }
+        match read_data_timeout(IO_TIMEOUT_MS) {
+            Some(0x00) => {}
+            Some(code) => {
+                serial_println!("[KBD] i8042 first-port test failed: {:#x}", code);
+                return Err("first-port interface test failed");
+            }
+            None => return Err("no interface-test result"),
+        }
+
+        if !unsafe { write_controller_command(0xae) } {
+            return Err("first-port enable timeout");
+        }
+
+        // Reset and wait for the keyboard's Basic Assurance Test completion.
+        if !send_keyboard_command(0xff) {
+            return Err("keyboard reset was not acknowledged");
+        }
+        match read_data_timeout(BAT_TIMEOUT_MS) {
+            Some(0xaa) => {}
+            Some(code) => {
+                serial_println!("[KBD] keyboard self-test failed: {:#x}", code);
+                return Err("keyboard self-test failed");
+            }
+            None => return Err("keyboard self-test timed out"),
+        }
+
+        if !send_keyboard_command(0xf0) || !send_keyboard_command(0x02) {
+            return Err("failed to select scancode set 2");
+        }
+        if !send_keyboard_command(0xf4) {
+            return Err("failed to enable keyboard scanning");
+        }
+        Ok(())
+    })();
+
+    if let Err(error) = result {
+        serial_println!("[KBD] i8042 initialization failed: {}", error);
+        // Never strand a firmware-working keyboard behind a disabled port.
+        // Re-enable it and request scanning as a best-effort fallback.
+        let _ = unsafe { write_controller_command(0xae) };
+        drain_output_buffer();
+        let _ = send_keyboard_command(0xf4);
+        return false;
+    }
+
+    serial_println!("[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)");
+    true
+}
 
 /// Register the user-space keyboard driver endpoint.
 /// Called by sunlight-kbd during initialization via syscall.
@@ -104,9 +323,24 @@ pub fn get_stats() -> (usize, usize, usize) {
 
 /// Main IRQ1 handler: read raw byte, push to buffer, notify driver, send EOI.
 pub fn handle_irq1() {
+    let status = unsafe {
+        let mut status: Port<u8> = Port::new(STATUS_COMMAND_PORT);
+        status.read()
+    };
+    // The keyboard and auxiliary device share port 0x60. A command-response
+    // edge can remain pending while a later mouse byte reaches the output
+    // buffer, so validate both OBF and the source bit before consuming it.
+    if status & STATUS_OUTPUT_FULL == 0 || status & STATUS_AUX_DATA != 0 {
+        return;
+    }
+
+    if IRQ_COUNT.fetch_add(1, Ordering::Relaxed) == 0 {
+        serial_println!("[KBD] first hardware IRQ1 received");
+    }
+
     // 1. Read raw scancode from hardware
     let scancode = unsafe {
-        let mut port: Port<u8> = Port::new(0x60);
+        let mut port: Port<u8> = Port::new(DATA_PORT);
         port.read()
     };
 
@@ -117,12 +351,6 @@ pub fn handle_irq1() {
     let endpoint = KBD_DRIVER_ENDPOINT.load(Ordering::Acquire);
     if endpoint != 0 && pushed {
         notify_driver(endpoint, scancode);
-    }
-
-    // 4. Send EOI to PIC
-    unsafe {
-        let mut cmd1: Port<u8> = Port::new(0x20);
-        cmd1.write(0x20);
     }
 }
 

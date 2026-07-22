@@ -118,6 +118,12 @@ pub unsafe fn init_lapic() {
     lapic_write(LAPIC_SVR, 0x1FF);
 }
 
+/// Return the xAPIC ID of the processor executing this code.
+#[inline]
+pub fn local_apic_id() -> u32 {
+    unsafe { lapic_read(LAPIC_ID) >> 24 }
+}
+
 /// Signal end-of-interrupt to the Local APIC.
 ///
 /// Must be called from interrupt handlers for LAPIC-delivered interrupts

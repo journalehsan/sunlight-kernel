@@ -185,8 +185,20 @@ pub fn get_stats() -> (usize, usize, usize) {
     (pending, dropped, RAW_BUFFER_SIZE)
 }
 
-/// Main IRQ12 handler: read raw byte, push to buffer, notify driver, send EOI.
+/// Main IRQ12 handler: read a raw byte and notify the userspace driver.
+/// Interrupt-controller acknowledgement is owned by `interrupts.rs`, which
+/// selects LAPIC or legacy PIC EOI according to the active route.
 pub fn handle_irq12() {
+    let status = unsafe {
+        let mut status: Port<u8> = Port::new(0x64);
+        status.read()
+    };
+    // Port 0x60 is shared with the keyboard. Do not consume keyboard bytes if
+    // controller command timing leaves a stale IRQ12 edge pending.
+    if status & 0x01 == 0 || status & 0x20 == 0 {
+        return;
+    }
+
     // 1. Read raw mouse byte from hardware
     let byte = unsafe {
         let mut port: Port<u8> = Port::new(0x60);
@@ -223,13 +235,5 @@ pub fn handle_irq12() {
             });
             sched.wake_pid(server_pid);
         }
-    }
-
-    // 4. Send EOI to slave PIC first, then master PIC (IRQ12 is on PIC2).
-    unsafe {
-        let mut cmd2: Port<u8> = Port::new(0xA0);
-        let mut cmd1: Port<u8> = Port::new(0x20);
-        cmd2.write(0x20);
-        cmd1.write(0x20);
     }
 }
