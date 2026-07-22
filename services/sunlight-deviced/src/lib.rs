@@ -3,10 +3,11 @@
 use core::fmt::Write;
 use sunlight_ipc::{
     ipc_call, ipc_call_timeout, CapabilityToken, DevicedMsg, HardwareBus, HardwareFailureStage,
-    HardwareState, IpcCallError, IpcMsg,
+    HardwareState, IpcCallError, IpcMsg, HARDWARE_INVENTORY_MAX_RECORDS,
 };
 
 pub const DEFAULT_INVENTORY_TIMEOUT_MS: u64 = 40;
+pub const MAX_INVENTORY_RECORDS: usize = HARDWARE_INVENTORY_MAX_RECORDS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InventorySummary {
@@ -126,7 +127,10 @@ pub fn field(cap: CapabilityToken, key: u64, field: u64) -> Option<[u64; 3]> {
             .word(0, key)
             .word(1, field),
     );
-    if reply.label == DevicedMsg::INVENTORY_REPLY && reply.words[0] == key {
+    if reply.label == DevicedMsg::INVENTORY_REPLY
+        && inventory_field_reply_word_count(field) == Some(reply.word_count)
+        && reply.words[0] == key
+    {
         Some([reply.words[1], reply.words[2], reply.words[3]])
     } else {
         None
@@ -180,7 +184,13 @@ pub fn field_timeout(
     if reply.label == DevicedMsg::ERROR && reply.words[0] == DevicedMsg::ERR_NOT_FOUND {
         return Err(InventoryClientError::NotFound);
     }
-    if reply.label != DevicedMsg::INVENTORY_REPLY || reply.word_count < 2 || reply.words[0] != key {
+    let Some(expected_word_count) = inventory_field_reply_word_count(field) else {
+        return Err(InventoryClientError::MalformedReply);
+    };
+    if reply.label != DevicedMsg::INVENTORY_REPLY
+        || reply.word_count != expected_word_count
+        || reply.words[0] != key
+    {
         return Err(InventoryClientError::MalformedReply);
     }
     Ok([reply.words[1], reply.words[2], reply.words[3]])
@@ -228,13 +238,17 @@ pub fn decode_summary(reply: IpcMsg) -> Option<InventorySummary> {
     if reply.label != DevicedMsg::INVENTORY_REPLY || reply.word_count != 4 {
         return None;
     }
+    let total = ((reply.words[3] >> 16) & 0xffff) as usize;
+    if reply.words[0] == 0 || total == 0 || total > MAX_INVENTORY_RECORDS {
+        return None;
+    }
     Some(InventorySummary {
         key: reply.words[0],
         identity: reply.words[1],
         driver: reply.words[2],
         state: HardwareState::from_u64(reply.words[3] & 0xff),
         failure_stage: HardwareFailureStage::from_u64((reply.words[3] >> 8) & 0xff),
-        total: ((reply.words[3] >> 16) & 0xffff) as usize,
+        total,
     })
 }
 
@@ -260,6 +274,16 @@ pub const fn inventory_request_valid(label: u64, word_count: u32, field: u64) ->
                 )
         }
         _ => false,
+    }
+}
+
+pub const fn inventory_field_reply_word_count(field: u64) -> Option<u32> {
+    match field {
+        DevicedMsg::FIELD_SUBSYSTEM
+        | DevicedMsg::FIELD_IRQ
+        | DevicedMsg::FIELD_BAR0..=DevicedMsg::FIELD_BAR5 => Some(2),
+        DevicedMsg::FIELD_DRIVERS | DevicedMsg::FIELD_DIAGNOSTIC => Some(3),
+        _ => None,
     }
 }
 
@@ -362,12 +386,19 @@ pub fn print_inventory(
             output("invalid device identifier\n");
             return false;
         };
-        let Some(summary) = get(cap, key) else {
-            output("device not found\n");
-            return false;
+        let summary = match get_timeout(cap, key, DEFAULT_INVENTORY_TIMEOUT_MS) {
+            Ok(summary) => summary,
+            Err(InventoryClientError::NotFound) => {
+                output("device not found\n");
+                return false;
+            }
+            Err(_) => {
+                output("failed to read device inventory\n");
+                return false;
+            }
         };
         if verbose {
-            print_verbose(cap, summary, &mut output);
+            return print_verbose(cap, summary, &mut output);
         } else {
             print_table_header(&mut output);
             print_table_row(summary, &mut output);
@@ -378,13 +409,24 @@ pub fn print_inventory(
     if verbose {
         let mut index = 0usize;
         loop {
-            let Some(summary) = list(cap, index) else {
-                break;
+            let summary = match list_timeout(cap, index, DEFAULT_INVENTORY_TIMEOUT_MS) {
+                Ok(summary) => summary,
+                Err(InventoryClientError::NotFound) if index == 0 => break,
+                Err(InventoryClientError::NotFound) => {
+                    output("device inventory changed during listing\n");
+                    return false;
+                }
+                Err(_) => {
+                    output("failed to read device inventory\n");
+                    return false;
+                }
             };
             if index != 0 {
                 output("\n");
             }
-            print_verbose(cap, summary, &mut output);
+            if !print_verbose(cap, summary, &mut output) {
+                return false;
+            }
             index += 1;
             if index >= summary.total {
                 break;
@@ -402,8 +444,17 @@ pub fn print_inventory(
     let mut other = 0usize;
     let mut total = 0usize;
     loop {
-        let Some(summary) = list(cap, index) else {
-            break;
+        let summary = match list_timeout(cap, index, DEFAULT_INVENTORY_TIMEOUT_MS) {
+            Ok(summary) => summary,
+            Err(InventoryClientError::NotFound) if index == 0 => break,
+            Err(InventoryClientError::NotFound) => {
+                output("device inventory changed during listing\n");
+                return false;
+            }
+            Err(_) => {
+                output("failed to read device inventory\n");
+                return false;
+            }
         };
         print_table_row(summary, &mut output);
         total += 1;
@@ -464,11 +515,47 @@ fn print_table_row(summary: InventorySummary, output: &mut impl FnMut(&str)) {
     output(&line);
 }
 
-fn print_verbose(cap: CapabilityToken, summary: InventorySummary, output: &mut impl FnMut(&str)) {
-    let drivers = field(cap, summary.key, DevicedMsg::FIELD_DRIVERS).unwrap_or([0; 3]);
-    let diagnostic = field(cap, summary.key, DevicedMsg::FIELD_DIAGNOSTIC).unwrap_or([0; 3]);
-    let subsystem = field(cap, summary.key, DevicedMsg::FIELD_SUBSYSTEM).unwrap_or([0; 3]);
-    let irq = field(cap, summary.key, DevicedMsg::FIELD_IRQ).unwrap_or([u64::MAX; 3]);
+fn print_verbose(
+    cap: CapabilityToken,
+    summary: InventorySummary,
+    output: &mut impl FnMut(&str),
+) -> bool {
+    let drivers = match field_timeout(
+        cap,
+        summary.key,
+        DevicedMsg::FIELD_DRIVERS,
+        DEFAULT_INVENTORY_TIMEOUT_MS,
+    ) {
+        Ok(values) => values,
+        Err(_) => return print_verbose_error(output),
+    };
+    let diagnostic = match field_timeout(
+        cap,
+        summary.key,
+        DevicedMsg::FIELD_DIAGNOSTIC,
+        DEFAULT_INVENTORY_TIMEOUT_MS,
+    ) {
+        Ok(values) => values,
+        Err(_) => return print_verbose_error(output),
+    };
+    let subsystem = match field_timeout(
+        cap,
+        summary.key,
+        DevicedMsg::FIELD_SUBSYSTEM,
+        DEFAULT_INVENTORY_TIMEOUT_MS,
+    ) {
+        Ok(values) => values,
+        Err(_) => return print_verbose_error(output),
+    };
+    let irq = match field_timeout(
+        cap,
+        summary.key,
+        DevicedMsg::FIELD_IRQ,
+        DEFAULT_INVENTORY_TIMEOUT_MS,
+    ) {
+        Ok(values) => values,
+        Err(_) => return print_verbose_error(output),
+    };
     let vendor = summary.vendor_id().unwrap_or(0);
     let device = summary.device_id().unwrap_or(0);
     let known_name = device_name(summary.bus(), vendor, device, summary.class());
@@ -523,14 +610,21 @@ fn print_verbose(cap: CapabilityToken, summary: InventorySummary, output: &mut i
         let _ = writeln!(line, "IRQ:              {}", irq[0]);
     }
     for bar_index in 0..6u64 {
-        if let Some(values) = field(cap, summary.key, DevicedMsg::FIELD_BAR0 + bar_index) {
-            if values[0] != 0 {
-                let _ = writeln!(
-                    line,
-                    "BAR{}:             {:#010x}",
-                    bar_index, values[0] as u32
-                );
-            }
+        let values = match field_timeout(
+            cap,
+            summary.key,
+            DevicedMsg::FIELD_BAR0 + bar_index,
+            DEFAULT_INVENTORY_TIMEOUT_MS,
+        ) {
+            Ok(values) => values,
+            Err(_) => return print_verbose_error(output),
+        };
+        if values[0] != 0 {
+            let _ = writeln!(
+                line,
+                "BAR{}:             {:#010x}",
+                bar_index, values[0] as u32
+            );
         }
     }
     let _ = writeln!(
@@ -544,6 +638,12 @@ fn print_verbose(cap: CapabilityToken, summary: InventorySummary, output: &mut i
         }
     );
     output(&line);
+    true
+}
+
+fn print_verbose_error(output: &mut impl FnMut(&str)) -> bool {
+    output("failed to read complete device details\n");
+    false
 }
 
 fn write_optional_name(line: &mut heapless::String<256>, label: &str, value: u64) {
@@ -686,6 +786,37 @@ mod tests {
     #[test]
     fn malformed_summary_is_rejected() {
         assert!(decode_summary(IpcMsg::with_label(DevicedMsg::INVENTORY_REPLY)).is_none());
+    }
+
+    #[test]
+    fn empty_or_oversized_inventory_summary_is_rejected() {
+        let empty = IpcMsg::with_label(DevicedMsg::INVENTORY_REPLY)
+            .word(0, 1)
+            .word(3, HardwareState::Active as u64);
+        assert!(decode_summary(empty).is_none());
+
+        let oversized = IpcMsg::with_label(DevicedMsg::INVENTORY_REPLY)
+            .word(0, 1)
+            .word(
+                3,
+                HardwareState::Active as u64 | (((MAX_INVENTORY_RECORDS + 1) as u64) << 16),
+            );
+        assert!(decode_summary(oversized).is_none());
+    }
+
+    #[test]
+    fn truncated_inventory_field_reply_is_rejected() {
+        let key = sunlight_ipc::HardwareInventoryRecord::ps2_key(0);
+        let reply = IpcMsg::with_label(DevicedMsg::INVENTORY_REPLY).word(0, key);
+        assert_eq!(reply.word_count, 1);
+        assert_ne!(
+            inventory_field_reply_word_count(DevicedMsg::FIELD_DRIVERS),
+            Some(reply.word_count)
+        );
+        assert_ne!(
+            inventory_field_reply_word_count(DevicedMsg::FIELD_SUBSYSTEM),
+            Some(reply.word_count)
+        );
     }
 
     #[test]

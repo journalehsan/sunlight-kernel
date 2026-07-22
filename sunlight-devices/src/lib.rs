@@ -2,8 +2,10 @@
 
 extern crate alloc;
 
-use alloc::{format, string::String, vec, vec::Vec};
-use sunlight_deviced::{device_name, generic_non_pci_name, InventoryRecord};
+#[cfg(test)]
+use alloc::vec;
+use alloc::{format, string::String, vec::Vec};
+use sunlight_deviced::{device_name, generic_non_pci_name, InventoryRecord, MAX_INVENTORY_RECORDS};
 use sunlight_ipc::{HardwareBus, HardwareState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -105,29 +107,60 @@ pub struct InventorySnapshot {
     pub groups: Vec<DeviceGroup>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotBuildError {
+    TooManyRecords,
+    DuplicateDevice,
+    Allocation,
+}
+
 impl InventorySnapshot {
-    pub fn new(mut records: Vec<InventoryRecord>) -> Self {
+    pub fn new(records: Vec<InventoryRecord>) -> Self {
+        Self::try_new(records).expect("inventory snapshot allocation failed")
+    }
+
+    pub fn try_new(mut records: Vec<InventoryRecord>) -> Result<Self, SnapshotBuildError> {
+        if records.len() > MAX_INVENTORY_RECORDS {
+            return Err(SnapshotBuildError::TooManyRecords);
+        }
+        for (index, record) in records.iter().enumerate() {
+            if record.key() == 0
+                || records[..index]
+                    .iter()
+                    .any(|other| other.key() == record.key())
+            {
+                return Err(SnapshotBuildError::DuplicateDevice);
+            }
+        }
         records.sort_by(|left, right| {
             sunlight_deviced::inventory_order_key(left.key())
                 .cmp(&sunlight_deviced::inventory_order_key(right.key()))
-                .then_with(|| device_display_name(*left).cmp(&device_display_name(*right)))
                 .then_with(|| left.key().cmp(&right.key()))
         });
 
         let mut groups: Vec<DeviceGroup> = Vec::new();
+        groups
+            .try_reserve(records.len())
+            .map_err(|_| SnapshotBuildError::Allocation)?;
         for record in &records {
             let class = DeviceClassId::from_record(*record);
             if let Some(group) = groups.iter_mut().find(|group| group.class == class) {
+                group
+                    .devices
+                    .try_reserve(1)
+                    .map_err(|_| SnapshotBuildError::Allocation)?;
                 group.devices.push(record.key());
             } else {
-                groups.push(DeviceGroup {
-                    class,
-                    devices: vec![record.key()],
-                });
+                let mut devices = Vec::new();
+                devices
+                    .try_reserve(1)
+                    .map_err(|_| SnapshotBuildError::Allocation)?;
+                devices.push(record.key());
+                groups.push(DeviceGroup { class, devices });
             }
         }
         groups.sort_by_key(|group| group.class.order());
-        Self { records, groups }
+        Ok(Self { records, groups })
     }
 
     pub fn record(&self, key: u64) -> Option<&InventoryRecord> {
@@ -161,6 +194,49 @@ impl InventorySnapshot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeSnapshot {
+    roots: Vec<TreeNodeId>,
+    children: Vec<Vec<TreeNodeId>>,
+}
+
+impl TreeSnapshot {
+    pub fn try_new(snapshot: &InventorySnapshot) -> Result<Self, SnapshotBuildError> {
+        let mut roots = Vec::new();
+        roots
+            .try_reserve(snapshot.groups.len())
+            .map_err(|_| SnapshotBuildError::Allocation)?;
+        let mut children = Vec::new();
+        children
+            .try_reserve(snapshot.groups.len())
+            .map_err(|_| SnapshotBuildError::Allocation)?;
+
+        for group in &snapshot.groups {
+            roots.push(TreeNodeId::Class(group.class.stable_key()));
+            let mut group_children = Vec::new();
+            group_children
+                .try_reserve(group.devices.len())
+                .map_err(|_| SnapshotBuildError::Allocation)?;
+            for key in &group.devices {
+                group_children.push(TreeNodeId::Device(*key));
+            }
+            children.push(group_children);
+        }
+        Ok(Self { roots, children })
+    }
+
+    pub fn roots(&self) -> &[TreeNodeId] {
+        &self.roots
+    }
+
+    pub fn children(&self, group_index: usize) -> &[TreeNodeId] {
+        self.children
+            .get(group_index)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct StatusCounts {
     pub total: usize,
@@ -182,14 +258,25 @@ pub struct PresentationState {
 
 impl PresentationState {
     pub fn apply_snapshot(&mut self, snapshot: InventorySnapshot) {
+        self.try_apply_snapshot(snapshot)
+            .expect("presentation snapshot allocation failed");
+    }
+
+    pub fn try_apply_snapshot(
+        &mut self,
+        snapshot: InventorySnapshot,
+    ) -> Result<(), SnapshotBuildError> {
+        if self.snapshot.is_none() {
+            self.expanded_classes
+                .try_reserve(snapshot.groups.len())
+                .map_err(|_| SnapshotBuildError::Allocation)?;
+        }
         self.expanded_classes
             .retain(|class_key| snapshot.contains_class(*class_key));
         if self.snapshot.is_none() {
-            self.expanded_classes = snapshot
-                .groups
-                .iter()
-                .map(|group| group.class.stable_key())
-                .collect();
+            for group in &snapshot.groups {
+                self.expanded_classes.push(group.class.stable_key());
+            }
         }
         if self
             .selected_device
@@ -199,6 +286,7 @@ impl PresentationState {
         }
         self.snapshot = Some(snapshot);
         self.refresh_error = None;
+        Ok(())
     }
 
     pub fn fail_refresh(&mut self, message: impl Into<String>) {
@@ -411,5 +499,39 @@ mod tests {
         assert_eq!(selected.irq, None);
         assert!(selected.bars.iter().all(|bar| *bar == 0));
         assert!(!device_display_name(*selected).is_empty());
+    }
+
+    #[test]
+    fn oversized_or_duplicate_candidates_are_rejected_before_grouping() {
+        let oversized = vec![record(1, 0x03, 0, HardwareState::Active); MAX_INVENTORY_RECORDS + 1];
+        assert_eq!(
+            InventorySnapshot::try_new(oversized),
+            Err(SnapshotBuildError::TooManyRecords)
+        );
+
+        let duplicate = vec![
+            record(1, 0x03, 0, HardwareState::Active),
+            record(1, 0x02, 0, HardwareState::Active),
+        ];
+        assert_eq!(
+            InventorySnapshot::try_new(duplicate),
+            Err(SnapshotBuildError::DuplicateDevice)
+        );
+    }
+
+    #[test]
+    fn repeated_replacement_keeps_only_the_current_snapshot() {
+        let mut state = PresentationState::default();
+        for key in 1..=512 {
+            let snapshot =
+                InventorySnapshot::try_new(vec![record(key, 0x03, 0, HardwareState::Active)])
+                    .unwrap();
+            let tree = TreeSnapshot::try_new(&snapshot).unwrap();
+            assert_eq!(tree.roots().len(), 1);
+            state.try_apply_snapshot(snapshot).unwrap();
+            assert_eq!(state.snapshot.as_ref().unwrap().records.len(), 1);
+            assert_eq!(state.selected_device, None);
+        }
+        assert_eq!(state.snapshot.as_ref().unwrap().records[0].key(), 512);
     }
 }

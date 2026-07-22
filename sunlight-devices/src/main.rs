@@ -4,14 +4,14 @@
 extern crate alloc;
 
 use alloc::{format, string::String, vec, vec::Vec};
-use linked_list_allocator::LockedHeap;
 use sun_font::{draw_text, draw_text_vcenter, FontRole, TextStyle, VecFont};
 use sunlight_deviced::{
     failure_stage_label, list_timeout, load_record_timeout, state_display_label, DeviceId,
-    InventoryRecord, InventorySummary, ShortName, DEFAULT_INVENTORY_TIMEOUT_MS,
+    InventoryClientError, InventoryRecord, InventorySummary, ShortName,
 };
 use sunlight_devices::{
-    device_display_name, DeviceClassId, InventorySnapshot, PresentationState, TreeNodeId,
+    device_display_name, DeviceClassId, InventorySnapshot, PresentationState, SnapshotBuildError,
+    TreeNodeId, TreeSnapshot,
 };
 use sunlight_ipc::{
     debug_log, nameserver_lookup_timeout, process_yield, CapabilityToken, HardwareBus,
@@ -59,18 +59,7 @@ const KEY_END: u8 = 0x4f;
 const KEY_PGUP: u8 = 0x49;
 const KEY_PGDN: u8 = 0x51;
 const IPC_LOOKUP_TIMEOUT_MS: u64 = 30;
-
-#[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
-
-const HEAP_SIZE: usize = 4 * 1024 * 1024;
-static mut HEAP_MEMORY: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
-
-unsafe fn init_heap() {
-    ALLOCATOR
-        .lock()
-        .init(core::ptr::addr_of_mut!(HEAP_MEMORY).cast::<u8>(), HEAP_SIZE);
-}
+const UI_INVENTORY_TIMEOUT_MS: u64 = 16;
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -160,34 +149,15 @@ enum RefreshPhase {
 
 struct DeviceTreeModel<'a> {
     snapshot: &'a InventorySnapshot,
-    roots: Vec<TreeNodeId>,
-    children: Vec<Vec<TreeNodeId>>,
+    tree: &'a TreeSnapshot,
     icons: Icons,
 }
 
 impl<'a> DeviceTreeModel<'a> {
-    fn new(snapshot: &'a InventorySnapshot, icons: Icons) -> Self {
-        let roots = snapshot
-            .groups
-            .iter()
-            .map(|group| TreeNodeId::Class(group.class.stable_key()))
-            .collect();
-        let children = snapshot
-            .groups
-            .iter()
-            .map(|group| {
-                group
-                    .devices
-                    .iter()
-                    .copied()
-                    .map(TreeNodeId::Device)
-                    .collect()
-            })
-            .collect();
+    fn new(snapshot: &'a InventorySnapshot, tree: &'a TreeSnapshot, icons: Icons) -> Self {
         Self {
             snapshot,
-            roots,
-            children,
+            tree,
             icons,
         }
     }
@@ -204,7 +174,7 @@ impl TreeModel for DeviceTreeModel<'_> {
     type Id = TreeNodeId;
 
     fn roots(&self) -> &[Self::Id] {
-        &self.roots
+        self.tree.roots()
     }
 
     fn parent(&self, id: Self::Id) -> Option<Self::Id> {
@@ -222,8 +192,7 @@ impl TreeModel for DeviceTreeModel<'_> {
             return &[];
         };
         self.group_index(class_key)
-            .and_then(|index| self.children.get(index))
-            .map(Vec::as_slice)
+            .map(|index| self.tree.children(index))
             .unwrap_or(&[])
     }
 
@@ -256,9 +225,40 @@ impl TreeModel for DeviceTreeModel<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum RefreshFailure {
+    ServiceUnavailable,
+    MalformedReply,
+    InventoryChanged,
+    Allocation,
+}
+
+const fn refresh_failure_from_snapshot_error(error: SnapshotBuildError) -> RefreshFailure {
+    match error {
+        SnapshotBuildError::TooManyRecords | SnapshotBuildError::DuplicateDevice => {
+            RefreshFailure::MalformedReply
+        }
+        SnapshotBuildError::Allocation => RefreshFailure::Allocation,
+    }
+}
+
+#[derive(Default)]
+struct RefreshDiagnostics {
+    attempts: u64,
+    successes: u64,
+    service_failures: u64,
+    malformed_replies: u64,
+    allocation_failures: u64,
+    stale_candidates: u64,
+    discarded_candidates: u64,
+    current_device_count: usize,
+    last_error: Option<RefreshFailure>,
+}
+
 struct DevicesApp {
     icons: Icons,
     presentation: PresentationState,
+    tree: Option<TreeSnapshot>,
     tree_state: TreeViewState<TreeNodeId>,
     hovered: Option<TreeNodeId>,
     phase: RefreshPhase,
@@ -267,6 +267,7 @@ struct DevicesApp {
     focused: bool,
     detail_scroll: usize,
     status_text: String,
+    diagnostics: RefreshDiagnostics,
 }
 
 impl DevicesApp {
@@ -274,6 +275,7 @@ impl DevicesApp {
         Self {
             icons: Icons::load(),
             presentation: PresentationState::default(),
+            tree: None,
             tree_state: TreeViewState::new(),
             hovered: None,
             phase: RefreshPhase::Idle,
@@ -282,6 +284,7 @@ impl DevicesApp {
             focused: true,
             detail_scroll: 0,
             status_text: String::from("Loading hardware inventory…"),
+            diagnostics: RefreshDiagnostics::default(),
         }
     }
 
@@ -314,6 +317,7 @@ impl DevicesApp {
             self.refresh_queued = true;
             return;
         }
+        self.diagnostics.attempts = self.diagnostics.attempts.saturating_add(1);
         self.phase = RefreshPhase::Lookup;
         self.status_text = if self.presentation.snapshot.is_some() {
             String::from("Refreshing hardware inventory…")
@@ -322,18 +326,78 @@ impl DevicesApp {
         };
     }
 
-    fn fail_refresh(&mut self, message: &str) {
+    fn fail_refresh(&mut self, failure: RefreshFailure) {
+        self.diagnostics.discarded_candidates =
+            self.diagnostics.discarded_candidates.saturating_add(1);
+        self.diagnostics.last_error = Some(failure);
+        match failure {
+            RefreshFailure::ServiceUnavailable => {
+                self.diagnostics.service_failures =
+                    self.diagnostics.service_failures.saturating_add(1);
+            }
+            RefreshFailure::MalformedReply => {
+                self.diagnostics.malformed_replies =
+                    self.diagnostics.malformed_replies.saturating_add(1);
+            }
+            RefreshFailure::InventoryChanged => {
+                self.diagnostics.stale_candidates =
+                    self.diagnostics.stale_candidates.saturating_add(1);
+            }
+            RefreshFailure::Allocation => {
+                self.diagnostics.allocation_failures =
+                    self.diagnostics.allocation_failures.saturating_add(1);
+            }
+        }
+        let message = if self.presentation.snapshot.is_some() {
+            "Refresh failed — showing previous device data"
+        } else {
+            match failure {
+                RefreshFailure::ServiceUnavailable => "deviced unavailable",
+                RefreshFailure::MalformedReply => "Malformed inventory reply",
+                RefreshFailure::InventoryChanged => "Inventory changed during refresh",
+                RefreshFailure::Allocation => "Not enough memory to refresh inventory",
+            }
+        };
         self.presentation.fail_refresh(message);
         self.phase = RefreshPhase::Idle;
         self.status_text = String::from(message);
+        self.start_queued_refresh();
     }
 
     fn finish_refresh(&mut self, records: Vec<InventoryRecord>) {
-        let snapshot = InventorySnapshot::new(records);
-        self.presentation.apply_snapshot(snapshot);
+        let snapshot = match InventorySnapshot::try_new(records) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                self.fail_refresh(refresh_failure_from_snapshot_error(error));
+                return;
+            }
+        };
+        let tree = match TreeSnapshot::try_new(&snapshot) {
+            Ok(tree) => tree,
+            Err(error) => {
+                self.fail_refresh(refresh_failure_from_snapshot_error(error));
+                return;
+            }
+        };
+        if let Err(error) = self.presentation.try_apply_snapshot(snapshot) {
+            self.fail_refresh(refresh_failure_from_snapshot_error(error));
+            return;
+        }
+        self.tree = Some(tree);
         self.sync_tree_state();
         self.status_text = self.summary_text();
         self.phase = RefreshPhase::Idle;
+        self.diagnostics.successes = self.diagnostics.successes.saturating_add(1);
+        self.diagnostics.current_device_count = self
+            .presentation
+            .snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.records.len());
+        self.diagnostics.last_error = None;
+        self.start_queued_refresh();
+    }
+
+    fn start_queued_refresh(&mut self) {
         if self.refresh_queued {
             self.refresh_queued = false;
             self.request_refresh();
@@ -344,7 +408,10 @@ impl DevicesApp {
         let Some(snapshot) = self.presentation.snapshot.as_ref() else {
             return;
         };
-        let model = DeviceTreeModel::new(snapshot, self.icons);
+        let Some(tree) = self.tree.as_ref() else {
+            return;
+        };
+        let model = DeviceTreeModel::new(snapshot, tree, self.icons);
         for class_key in self.presentation.expanded_classes.iter().copied() {
             self.tree_state.expand(TreeNodeId::Class(class_key));
         }
@@ -380,7 +447,7 @@ impl DevicesApp {
             RefreshPhase::Lookup => {
                 let Some(capability) = nameserver_lookup_timeout("deviced", IPC_LOOKUP_TIMEOUT_MS)
                 else {
-                    self.fail_refresh("deviced unavailable");
+                    self.fail_refresh(RefreshFailure::ServiceUnavailable);
                     return true;
                 };
                 self.phase = RefreshPhase::List {
@@ -394,36 +461,44 @@ impl DevicesApp {
                 capability,
                 next_index,
                 expected_total,
-            } => match list_timeout(capability, next_index, DEFAULT_INVENTORY_TIMEOUT_MS) {
+            } => match list_timeout(capability, next_index, UI_INVENTORY_TIMEOUT_MS) {
                 Ok(summary) => {
                     let total = expected_total.unwrap_or(summary.total);
                     if summary.total != total || total == 0 || next_index >= total {
-                        self.fail_refresh("Malformed inventory reply");
-                    } else if next_index + 1 >= total {
-                        self.phase = RefreshPhase::Fields {
-                            capability,
-                            summaries: vec![summary],
-                            records: Vec::new(),
-                            next_index: 0,
-                        };
+                        self.fail_refresh(RefreshFailure::MalformedReply);
                     } else {
-                        let mut summaries = Vec::with_capacity(total);
+                        let mut summaries = Vec::new();
+                        let mut records = Vec::new();
+                        if summaries.try_reserve_exact(total).is_err()
+                            || records.try_reserve_exact(total).is_err()
+                        {
+                            self.fail_refresh(RefreshFailure::Allocation);
+                            return true;
+                        }
                         summaries.push(summary);
                         self.phase = RefreshPhase::Fields {
                             capability,
                             summaries,
-                            records: Vec::new(),
+                            records,
                             next_index: 0,
                         };
                     }
                     true
                 }
-                Err(sunlight_deviced::InventoryClientError::NotFound) if next_index == 0 => {
+                Err(InventoryClientError::NotFound) if next_index == 0 => {
                     self.finish_refresh(Vec::new());
                     true
                 }
-                Err(_) => {
-                    self.fail_refresh("Failed to read hardware inventory");
+                Err(InventoryClientError::MalformedReply) => {
+                    self.fail_refresh(RefreshFailure::MalformedReply);
+                    true
+                }
+                Err(InventoryClientError::NotFound) => {
+                    self.fail_refresh(RefreshFailure::InventoryChanged);
+                    true
+                }
+                Err(InventoryClientError::Transport(_)) => {
+                    self.fail_refresh(RefreshFailure::ServiceUnavailable);
                     true
                 }
             },
@@ -435,7 +510,7 @@ impl DevicesApp {
             } => {
                 let expected_total = summaries.first().map_or(0, |summary| summary.total);
                 if summaries.len() < expected_total {
-                    match list_timeout(capability, summaries.len(), DEFAULT_INVENTORY_TIMEOUT_MS) {
+                    match list_timeout(capability, summaries.len(), UI_INVENTORY_TIMEOUT_MS) {
                         Ok(summary) if summary.total == expected_total => {
                             summaries.push(summary);
                             self.phase = RefreshPhase::Fields {
@@ -445,7 +520,15 @@ impl DevicesApp {
                                 next_index,
                             };
                         }
-                        _ => self.fail_refresh("Inventory changed during refresh"),
+                        Ok(_) | Err(InventoryClientError::NotFound) => {
+                            self.fail_refresh(RefreshFailure::InventoryChanged)
+                        }
+                        Err(InventoryClientError::MalformedReply) => {
+                            self.fail_refresh(RefreshFailure::MalformedReply)
+                        }
+                        Err(InventoryClientError::Transport(_)) => {
+                            self.fail_refresh(RefreshFailure::ServiceUnavailable)
+                        }
                     }
                     return true;
                 }
@@ -453,7 +536,7 @@ impl DevicesApp {
                     self.finish_refresh(records);
                     return true;
                 };
-                match load_record_timeout(capability, summary, DEFAULT_INVENTORY_TIMEOUT_MS) {
+                match load_record_timeout(capability, summary, UI_INVENTORY_TIMEOUT_MS) {
                     Ok(record) => {
                         records.push(record);
                         let next_index = next_index + 1;
@@ -468,7 +551,15 @@ impl DevicesApp {
                             };
                         }
                     }
-                    Err(_) => self.fail_refresh("Malformed device detail reply"),
+                    Err(InventoryClientError::NotFound) => {
+                        self.fail_refresh(RefreshFailure::InventoryChanged)
+                    }
+                    Err(InventoryClientError::MalformedReply) => {
+                        self.fail_refresh(RefreshFailure::MalformedReply)
+                    }
+                    Err(InventoryClientError::Transport(_)) => {
+                        self.fail_refresh(RefreshFailure::ServiceUnavailable)
+                    }
                 }
                 true
             }
@@ -584,7 +675,10 @@ impl DevicesApp {
             );
             return;
         }
-        let model = DeviceTreeModel::new(snapshot, self.icons);
+        let Some(tree_snapshot) = self.tree.as_ref() else {
+            return;
+        };
+        let model = DeviceTreeModel::new(snapshot, tree_snapshot, self.icons);
         let rows = self.tree_state.rebuild_rows(&model);
         let tree = TreeView::new(inner, &rows)
             .with_font(&FONT_SMALL)
@@ -877,7 +971,10 @@ impl DevicesApp {
         let Some(snapshot) = self.presentation.snapshot.as_ref() else {
             return false;
         };
-        let model = DeviceTreeModel::new(snapshot, self.icons);
+        let Some(tree_snapshot) = self.tree.as_ref() else {
+            return false;
+        };
+        let model = DeviceTreeModel::new(snapshot, tree_snapshot, self.icons);
         let rows = self.tree_state.rebuild_rows(&model);
         let tree = TreeView::new(
             Panel::with_title(rect, "Device tree")
@@ -908,7 +1005,10 @@ impl DevicesApp {
         let Some(snapshot) = self.presentation.snapshot.as_ref() else {
             return false;
         };
-        let model = DeviceTreeModel::new(snapshot, self.icons);
+        let Some(tree_snapshot) = self.tree.as_ref() else {
+            return false;
+        };
+        let model = DeviceTreeModel::new(snapshot, tree_snapshot, self.icons);
         let rows = self.tree_state.rebuild_rows(&model);
         let visible_rows = TreeView::new(Rect::new(0, 0, TREE_W, WIN_H - 100), &rows)
             .with_font(&FONT_SMALL)
@@ -981,20 +1081,25 @@ impl App for DevicesApp {
                 let old_refresh = self.refresh_hovered;
                 self.refresh_hovered = refresh_rect.contains(Point::new(x, y));
                 let old = self.hovered;
-                self.hovered = self.presentation.snapshot.as_ref().and_then(|snapshot| {
-                    let model = DeviceTreeModel::new(snapshot, self.icons);
-                    let rows = self.tree_state.rebuild_rows(&model);
-                    TreeView::new(
-                        Panel::with_title(tree_rect, "Device tree")
-                            .content_rect()
-                            .inset(4),
-                        &rows,
-                    )
-                    .with_font(&FONT_SMALL)
-                    .with_scroll_offset(self.tree_state.scroll_offset())
-                    .hit_test(x, y)
-                    .map(|hit| hit.id)
-                });
+                self.hovered = self
+                    .presentation
+                    .snapshot
+                    .as_ref()
+                    .zip(self.tree.as_ref())
+                    .and_then(|(snapshot, tree_snapshot)| {
+                        let model = DeviceTreeModel::new(snapshot, tree_snapshot, self.icons);
+                        let rows = self.tree_state.rebuild_rows(&model);
+                        TreeView::new(
+                            Panel::with_title(tree_rect, "Device tree")
+                                .content_rect()
+                                .inset(4),
+                            &rows,
+                        )
+                        .with_font(&FONT_SMALL)
+                        .with_scroll_offset(self.tree_state.scroll_offset())
+                        .hit_test(x, y)
+                        .map(|hit| hit.id)
+                    });
                 old != self.hovered || old_refresh != self.refresh_hovered
             }
             Event::FocusChanged { focused } => {
@@ -1038,9 +1143,6 @@ impl App for DevicesApp {
 
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _: *const *const u8) -> ! {
-    unsafe {
-        init_heap();
-    }
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
     let mut app = DevicesApp::new();
     let Some(mut window) = Window::connect(WindowConfig {

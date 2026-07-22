@@ -86,7 +86,15 @@ struct Registry {
     next_driver_id: DriverId,
     next_device_id: DeviceId,
     inventory: [HardwareInventoryRecord; HARDWARE_INVENTORY_MAX_RECORDS],
+    inventory_candidate: [HardwareInventoryRecord; HARDWARE_INVENTORY_MAX_RECORDS],
     inventory_count: usize,
+}
+
+#[derive(Clone, Copy)]
+enum InventoryImportError {
+    InvalidCount,
+    Truncated,
+    InvalidRecord,
 }
 
 static mut REGISTRY: Registry = Registry::new();
@@ -99,23 +107,56 @@ impl Registry {
             next_driver_id: 1,
             next_device_id: 1,
             inventory: [HardwareInventoryRecord::empty(); HARDWARE_INVENTORY_MAX_RECORDS],
+            inventory_candidate: [HardwareInventoryRecord::empty(); HARDWARE_INVENTORY_MAX_RECORDS],
             inventory_count: 0,
         }
     }
 
-    fn import_inventory(&mut self) {
+    fn import_inventory(&mut self) -> Result<(), InventoryImportError> {
+        let count = self.collect_inventory_candidate()?;
+        core::mem::swap(&mut self.inventory, &mut self.inventory_candidate);
+        self.inventory_count = count;
+        Ok(())
+    }
+
+    fn collect_inventory_candidate(&mut self) -> Result<usize, InventoryImportError> {
         let mut count = 0usize;
-        while count < self.inventory.len() {
+        let mut expected_total = None;
+        while count < self.inventory_candidate.len() {
             let Some((record, total)) = hardware_inventory_record(count) else {
-                break;
+                return if count == 0 {
+                    Ok(0)
+                } else {
+                    Err(InventoryImportError::Truncated)
+                };
             };
-            self.inventory[count] = record;
+            if total == 0
+                || total > self.inventory_candidate.len()
+                || count >= total
+                || record.key == 0
+            {
+                return Err(InventoryImportError::InvalidCount);
+            }
+            if let Some(expected_total) = expected_total {
+                if total != expected_total {
+                    return Err(InventoryImportError::InvalidCount);
+                }
+            } else {
+                expected_total = Some(total);
+            }
+            if self.inventory_candidate[..count]
+                .iter()
+                .any(|previous| previous.key == record.key)
+            {
+                return Err(InventoryImportError::InvalidRecord);
+            }
+            self.inventory_candidate[count] = record;
             count += 1;
             if count >= total {
-                break;
+                return Ok(count);
             }
         }
-        self.inventory_count = count;
+        Err(InventoryImportError::InvalidCount)
     }
 
     fn bind_registered_hardware(&mut self, driver_idx: usize) {
@@ -495,7 +536,9 @@ pub extern "C" fn _start() -> ! {
     debug_log("[DEVICED] registered as 'deviced'");
 
     let registry = unsafe { &mut *core::ptr::addr_of_mut!(REGISTRY) };
-    registry.import_inventory();
+    if registry.import_inventory().is_err() {
+        debug_log("[DEVICED] hardware inventory import failed");
+    }
     let mut msg = ipc_recv(ep);
     loop {
         let reply = match msg.label {
