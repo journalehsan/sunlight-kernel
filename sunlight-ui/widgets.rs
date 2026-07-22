@@ -8,6 +8,7 @@ pub mod label;
 pub mod panel;
 pub mod pro_app;
 pub mod sidebar_item;
+pub mod sidebar;
 pub mod slider;
 pub mod status;
 pub mod tabbar;
@@ -44,6 +45,9 @@ pub use pro_app::{
     RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, TwoPaneAppMenu,
 };
 pub use sidebar_item::{SidebarGroupHeader, SidebarItem, SidebarState};
+pub use sidebar::{
+    ArticleListItem, MetricBar, SegmentedTabs, UnitToggle, WidgetCard,
+};
 pub use slider::{Slider, SliderOrientation};
 pub use status::StatusBar;
 pub use tabbar::TabBar;

@@ -584,7 +584,7 @@ pub fn spawn_from_path_with_restrictions(
     process.set_initial_args(shell_id.unwrap_or(0), uid as u64, gid as u64, 0);
 
     let actual_pid = process.pid;
-    let idx = sched.add_process(process);
+    let idx = sched.add_process_after_reaping(process);
     sched.enqueue_ready(idx);
 
     crate::serial_println!("[SPAWN] {} spawned pid={}", path, actual_pid);

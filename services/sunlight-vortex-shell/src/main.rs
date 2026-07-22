@@ -54,6 +54,7 @@
 extern crate alloc;
 
 mod calendar_math;
+mod sidebar;
 mod start_menu;
 
 use alloc::{string::String, vec::Vec};
@@ -1312,6 +1313,8 @@ struct VortexShell {
     brand_zone: Rect,
     /// Bounds of the settings button in the left cluster.
     settings_zone: Rect,
+    /// Bounds of the Sidebar button in the left cluster.
+    sidebar_zone: Rect,
     /// Bounds of the dock's grid icon — toggles the Start Menu.
     launcher_zone: Rect,
     /// TGA icon theme for desktop shortcuts.
@@ -1391,6 +1394,11 @@ struct VortexShell {
     logout_confirm_r: Rect,
     /// Optional telemetry snapshot source for process-name fallback.
     telemetry: Option<Telemetry>,
+    /// System Sidebar overlay. It is rendered inside the desktop shell window,
+    /// so it is never a normal application window or task-list entry.
+    sidebar: sidebar::SidebarState,
+    /// Retry cadence if telemetry was unavailable during shell startup.
+    next_sidebar_telemetry_retry_ms: u64,
     /// Next monotonic deadline for app/window registry polling.
     next_app_poll_ms: u64,
     /// Bounded cadence for non-allocating liveness telemetry.
@@ -1494,6 +1502,7 @@ impl VortexShell {
             power_zone: Rect::new(0, 0, 0, 0),
             brand_zone: Rect::new(0, 0, 0, 0),
             settings_zone: Rect::new(0, 0, 0, 0),
+            sidebar_zone: Rect::new(0, 0, 0, 0),
             launcher_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
             dock_theme,
@@ -1560,6 +1569,8 @@ impl VortexShell {
             running_hover: None,
             running_hover_since: None,
             telemetry,
+            sidebar: sidebar::SidebarState::new(),
+            next_sidebar_telemetry_retry_ms: 0,
             next_app_poll_ms: 0,
             next_diagnostic_ms: 0,
             event_loop_iterations: 0,
@@ -2794,6 +2805,18 @@ impl VortexShell {
     }
 
     fn launch_app(&mut self, app_id: AppId, now: u64, source: LaunchSource) -> bool {
+        self.launch_app_with_args(app_id, now, source, &[])
+    }
+
+    /// The central launcher path with bounded argv support for applications
+    /// that explicitly accept an initial document or URL.
+    fn launch_app_with_args(
+        &mut self,
+        app_id: AppId,
+        now: u64,
+        source: LaunchSource,
+        args: &[&[u8]],
+    ) -> bool {
         let trace = self.next_launch_trace(source);
         Self::log_launch_trace(trace, app_id, "launch_request_received", None, now);
 
@@ -2879,8 +2902,13 @@ impl VortexShell {
         let _ = reg_launch_id;
 
         Self::log_launch_trace(trace, app_id, "spawn_start", None, now);
-        let words = [Self::app_launch_command(app_id)];
-        match sun_exec::launch_from_words(trace, source, &words, true) {
+        match sun_exec::launch(sun_exec::LaunchRequest {
+            trace,
+            source,
+            command: Self::app_launch_command(app_id),
+            args,
+            require_display: true,
+        }) {
             Ok(result) => {
                 Self::log_launch_trace(
                     trace,
@@ -3027,6 +3055,90 @@ impl VortexShell {
         self.handle_app_click(app_id, now, source)
     }
 
+    fn toggle_sidebar(&mut self, now: u64) -> bool {
+        if self.sidebar.is_open() {
+            return self.sidebar.close();
+        }
+        self.start_menu.close();
+        self.show_system_menu = false;
+        self.system_menu_hover = None;
+        self.show_calendar_popover = false;
+        self.show_notif_panel = false;
+        self.show_datetime_tooltip = false;
+        self.sidebar.open();
+        self.next_sidebar_telemetry_retry_ms = now;
+        true
+    }
+
+    fn sidebar_telemetry_view(&self) -> Option<sidebar::SystemMonitorViewData> {
+        let telemetry = self.telemetry.as_ref()?;
+        let snapshot = telemetry.snapshot();
+        if snapshot.sequence == 0 {
+            return None;
+        }
+        sidebar::SystemMonitorViewData::from_values(
+            snapshot.cpu_used_bp,
+            snapshot.used_ram_kb,
+            snapshot.total_ram_kb,
+            snapshot.proc_count,
+        )
+    }
+
+    fn refresh_sidebar_telemetry(&mut self, now: u64) -> bool {
+        if !self.sidebar.is_open() {
+            return false;
+        }
+        if self.telemetry.is_none() && now >= self.next_sidebar_telemetry_retry_ms {
+            self.next_sidebar_telemetry_retry_ms = now.saturating_add(STATUS_POLL_MS);
+            self.telemetry = Telemetry::init().ok();
+        }
+        self.sidebar
+            .observe_telemetry(self.sidebar_telemetry_view())
+    }
+
+    fn open_sidebar_url(&mut self, url: &'static str, now: u64) -> bool {
+        self.sidebar.close();
+        self.sync_app_registry(now, true);
+        self.note_recent_app(AppId::RappidRabbit);
+        match self.app(AppId::RappidRabbit).state {
+            AppLaunchState::Running | AppLaunchState::Minimized => {
+                let focused = self.activate_app_window(AppId::RappidRabbit, now);
+                if focused {
+                    let _ = show_notification(
+                        NotificationKind::Info,
+                        "Rappid Rabbit is already open",
+                        "URL handoff is available when launching a new browser window.",
+                        3500,
+                    );
+                }
+                focused
+            }
+            AppLaunchState::Launching => {
+                let _ = show_notification(
+                    NotificationKind::Info,
+                    "Rappid Rabbit is launching",
+                    "Please try the article again once the browser is ready.",
+                    3500,
+                );
+                false
+            }
+            AppLaunchState::NotRunning | AppLaunchState::Failed | AppLaunchState::Closing => self
+                .launch_app_with_args(
+                    AppId::RappidRabbit,
+                    now,
+                    LaunchSource::Shell,
+                    &[url.as_bytes()],
+                ),
+        }
+    }
+
+    fn apply_sidebar_action(&mut self, action: sidebar::SidebarAction, now: u64) -> bool {
+        match action {
+            sidebar::SidebarAction::None | sidebar::SidebarAction::Close => true,
+            sidebar::SidebarAction::OpenUrl(url) => self.open_sidebar_url(url, now),
+        }
+    }
+
     /// Record `app_id` as the most-recently-used app for the Start Menu's
     /// "Recent" section (session-only, not persisted — see
     /// `docs/GUI/START_MENU.md`).
@@ -3149,8 +3261,8 @@ fn draw_top_panel_container(
 ) {
     let radius = if presentation.integrated() { 0 } else { RADIUS };
     // High-opacity panel material (~94%) shared via sunlight-ui.
-    let mut mat = sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Panel, theme)
-        .with_radius(radius);
+    let mut mat =
+        sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Panel, theme).with_radius(radius);
     if presentation.integrated() {
         mat.border = None;
         mat.radius = 0;
@@ -5079,7 +5191,8 @@ fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMen
 fn draw_context_menu(canvas: &mut Canvas, theme: &Theme, menu: &ContextMenuState) {
     canvas.fill_material(
         menu.rect,
-        sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme).with_radius(8),
+        sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme)
+            .with_radius(8),
     );
     for (i, (label, _)) in MENU_LABELS.iter().enumerate() {
         let item = menu.items[i].rect;
@@ -5612,8 +5725,17 @@ fn dock_cluster_width(count: usize) -> u32 {
         + (count.saturating_sub(1) as u32) * ICON_GAP as u32
 }
 
+/// Click zones for the independent controls in the bottom-left cluster.
+#[derive(Clone, Copy)]
+struct BottomLeftZones {
+    sidebar: Rect,
+    settings: Rect,
+}
+
 /// Draw the bottom-left cluster: overview | sidebar | settings.
-/// Returns the settings button rect for click-zone registration.
+///
+/// Overview remains a separate control; the Sidebar zone is surfaced without
+/// coupling either control to the other.
 fn draw_bot_left(
     canvas: &mut Canvas,
     theme: &Theme,
@@ -5621,14 +5743,16 @@ fn draw_bot_left(
     dock: &DockTheme,
     settings_app: &DockAppState,
     settings_hover: bool,
+    sidebar_open: bool,
     now: u64,
-) -> Rect {
+) -> BottomLeftZones {
     let icons: &[&[u16; 16]] = &[&OVERVIEW_ROWS, &SIDEBAR_ROWS, &SETTINGS_ROWS];
     let cluster_w = dock_cluster_width(icons.len());
     let cluster = Rect::new(TOP_PAD, by, cluster_w, BOT_H);
     draw_dock_surface(canvas, theme, cluster, RADIUS);
 
     let mut cx = cluster.x + CLUSTER_PAD;
+    let mut sidebar_cell = Rect::new(0, 0, 0, 0);
     let mut settings_cell = Rect::new(0, 0, 0, 0);
     for (i, rows) in icons.iter().enumerate() {
         let cell = Rect::new(
@@ -5651,11 +5775,17 @@ fn draw_bot_left(
                 now,
             );
         } else {
-            draw_icon_btn(canvas, cell, rows, theme, false, false);
+            if i == 1 {
+                sidebar_cell = cell;
+            }
+            draw_icon_btn(canvas, cell, rows, theme, i == 1 && sidebar_open, false);
         }
         cx += ICON_BTN as i32 + ICON_GAP;
     }
-    settings_cell
+    BottomLeftZones {
+        sidebar: sidebar_cell,
+        settings: settings_cell,
+    }
 }
 
 /// Pixel-art fallback glyphs for pinned dock apps (used only if TGA parse fails).
@@ -5857,7 +5987,8 @@ impl VortexShell {
         let r = Rect::new(x, y, w, h as u32);
         canvas.fill_material(
             r,
-            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Tooltip, theme).with_radius(6),
+            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Tooltip, theme)
+                .with_radius(6),
         );
 
         let mut ty = y + 6;
@@ -5909,7 +6040,8 @@ impl VortexShell {
         let r = Rect::new(x, y, w as u32, h);
         canvas.fill_material(
             r,
-            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Tooltip, theme).with_radius(2),
+            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Tooltip, theme)
+                .with_radius(2),
         );
         draw_text_vcenter(
             canvas,
@@ -6564,6 +6696,19 @@ impl App for VortexShell {
             draw_desktop_marquee(canvas, theme, rect);
         }
 
+        // The Sidebar is an in-shell system overlay. Draw it above desktop
+        // content but below the persistent system panels so it never becomes
+        // an ordinary application surface or obscures the panels.
+        self.sidebar.view(
+            canvas,
+            theme,
+            self.symbols.sunny,
+            self.symbols.article,
+            cw,
+            top_bar_rect(cw, self.top_panel_presentation).bottom() + 8,
+            bot_y(ch) - 8,
+        );
+
         // ── Top bar ──────────────────────────────────────────────────────────
         draw_top_bar(canvas, theme, cw, self);
         // power_zone kept for compat (may be unused now that logout is primary)
@@ -6610,15 +6755,18 @@ impl App for VortexShell {
             core::array::from_fn(|i| *self.app(DOCK_PINNED[i]));
         let pinned_refs: [&DockAppState; DOCK_PINNED_COUNT] =
             core::array::from_fn(|i| &pinned_snap[i]);
-        self.settings_zone = draw_bot_left(
+        let bottom_left = draw_bot_left(
             canvas,
             theme,
             by,
             &dock_theme,
             &settings_app,
             self.settings_hover,
+            self.sidebar.is_open(),
             now,
         );
+        self.sidebar_zone = bottom_left.sidebar;
+        self.settings_zone = bottom_left.settings;
         self.running_zones.clear();
         let running_apps: &[RunningAppEntry] = if ENABLE_RUNNING_TASKBAR {
             &self.running_apps
@@ -6667,6 +6815,38 @@ impl App for VortexShell {
 
     fn update(&mut self, event: Event) -> bool {
         self.note_event_progress(event);
+        let sidebar_top = top_bar_rect(self.screen_w, self.top_panel_presentation).bottom() + 8;
+        let sidebar_bottom = bot_y(self.screen_h) - 8;
+        if self.sidebar.is_open() {
+            match event {
+                Event::Click { .. }
+                | Event::MouseMove { .. }
+                | Event::Key(_)
+                | Event::KeyPress { .. } => {
+                    let action = self.sidebar.handle_event(
+                        event,
+                        self.screen_w,
+                        sidebar_top,
+                        sidebar_bottom,
+                    );
+                    return self.apply_sidebar_action(action, monotonic_millis());
+                }
+                Event::MouseDown { x, y, .. } | Event::MouseUp { x, y, .. } => {
+                    let point = Point::new(x, y);
+                    if self
+                        .sidebar
+                        .contains(point, self.screen_w, sidebar_top, sidebar_bottom)
+                        || self.sidebar_zone.contains(point)
+                    {
+                        return true;
+                    }
+                    self.sidebar.close();
+                    self.suppress_next_click = true;
+                    return true;
+                }
+                _ => {}
+            }
+        }
         // The Start Menu owns all interactive input while open (click,
         // mouse move/hover, keyboard search/nav). `Event::Tick` deliberately
         // falls through below so background app-state polling keeps the
@@ -6960,9 +7140,13 @@ impl App for VortexShell {
                     if self.start_menu.is_open() {
                         self.start_menu.close();
                     } else {
+                        self.sidebar.close();
                         self.start_menu.open_menu();
                     }
                     return true;
+                }
+                if self.sidebar_zone.contains(point) {
+                    return self.toggle_sidebar(monotonic_millis());
                 }
                 if self.settings_zone.contains(point) {
                     return self.open_app_from_ui(
@@ -7019,6 +7203,9 @@ impl App for VortexShell {
                     return true;
                 }
                 self.set_top_panel_focus(None);
+                if self.sidebar_zone.contains(point) {
+                    return true;
+                }
                 self.settings_hover = self.settings_zone.contains(point);
                 if self.settings_zone.contains(point) {
                     if let Some(app) = self
@@ -7126,6 +7313,9 @@ impl App for VortexShell {
                 }
                 if self.show_logout_confirm {
                     self.show_logout_confirm = false;
+                    did = true;
+                }
+                if self.sidebar.close() {
                     did = true;
                 }
                 self.show_datetime_tooltip = false;
@@ -7271,6 +7461,9 @@ impl App for VortexShell {
                 #[cfg(feature = "stress")]
                 self.run_stress_cycle();
                 if self.sync_app_registry(now, false) {
+                    dirty = true;
+                }
+                if self.refresh_sidebar_telemetry(now) {
                     dirty = true;
                 }
                 self.log_diagnostics_if_due(now);

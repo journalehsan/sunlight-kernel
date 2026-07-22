@@ -474,6 +474,11 @@ impl Scheduler {
     }
 
     pub fn add_process(&mut self, process: Process) -> usize {
+        self.reap_finished_processes();
+        self.add_process_after_reaping(process)
+    }
+
+    pub fn add_process_after_reaping(&mut self, process: Process) -> usize {
         let created_count = PROCESS_CREATED.fetch_add(1, Ordering::Relaxed);
         let online = self.online_cores;
 
@@ -483,9 +488,6 @@ impl Scheduler {
         for c in 0..online {
             in_use[c] = self.core_current_task(c).unwrap_or(usize::MAX);
         }
-
-        // Centralized reaper: attempt to turn safe Finished slots into Reaped.
-        self.reap_finished_processes();
 
         // Only reuse slots that are fully Reaped (or Finished that became reaped above).
         // Never overwrite a still-Finished slot until its resources are cleaned.

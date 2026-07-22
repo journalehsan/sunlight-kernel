@@ -54,6 +54,7 @@ use sunlight_ipc::{
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, ProcessExit,
 };
+use sunlight_libc::crt0;
 use sunlight_ui::widgets::{
     Button, ButtonState, Column, DocumentCanvas, DocumentCanvasPresentation, Label, Panel, TabBar,
     Table, TextInput, TextView, TreeHitTarget, TreeView,
@@ -299,7 +300,7 @@ struct RabbitApp {
 }
 
 impl RabbitApp {
-    fn new() -> Self {
+    fn new(initial_url: Option<&str>) -> Self {
         let mut url_input = TextInput::new(Rect::default())
             .with_font(&F_UI)
             .with_placeholder("Enter URL (http:// or https://)");
@@ -317,7 +318,7 @@ impl RabbitApp {
             "DocumentCanvas configured for read-only Render mode.",
         );
 
-        Self {
+        let mut app = Self {
             url_input,
             status: String::from("Idle"),
             pending_fetch: false,
@@ -341,7 +342,12 @@ impl RabbitApp {
             #[cfg(feature = "dom")]
             image_cache: ImageCache::default(),
             document_lifecycle: DocumentLifecycle::default(),
+        };
+        if let Some(url) = initial_url {
+            app.url_input.set_text(url);
+            app.queue_fetch();
         }
+        app
     }
 
     fn queue_fetch(&mut self) {
@@ -2682,7 +2688,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         Some(sunlight_ipc::getpid()),
     );
 
-    let mut app = RabbitApp::new();
+    let mut app = RabbitApp::new(initial_url_from_argv(argc, argv));
     let Some(mut window) = Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
@@ -2697,6 +2703,27 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     window.run(&mut app);
     ProcessExit::exit(0);
 }
+
+/// Read only a bounded first HTTP(S) URL from launch argv. Launch-trace
+/// metadata and unknown arguments are ignored, keeping regular startup
+/// behavior intact while allowing the shell's centralized launcher handoff.
+fn initial_url_from_argv(argc: u64, argv: *const *const u8) -> Option<&'static str> {
+    let mut raw = [core::ptr::null::<u8>(); 8];
+    let count = unsafe { crt0::collect_raw_args(argc, argv, &mut raw) };
+    for pointer in raw.iter().take(count).skip(1) {
+        let len = unsafe { crt0::cstr_len(*pointer, URL_INPUT_CAP) };
+        if len == 0 || len >= URL_INPUT_CAP {
+            continue;
+        }
+        let value: &'static [u8] = unsafe { core::slice::from_raw_parts(*pointer, len) };
+        let values = [value];
+        if let Some(url) = rappid_rabbit::launch_url::initial_url_from_values(&values) {
+            return Some(url);
+        }
+    }
+    None
+}
+
 
 fn adjust_scroll(
     scroll: &mut usize,

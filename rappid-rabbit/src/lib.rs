@@ -9,6 +9,7 @@ use sunlight_http::{HttpError, HttpRequest, ParsedUrl, UrlScheme};
 pub mod css;
 pub mod developer_tools;
 pub mod document_lifecycle;
+pub mod launch_url;
 #[cfg(feature = "dom")]
 pub mod form;
 #[cfg(feature = "dom")]

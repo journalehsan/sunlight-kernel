@@ -767,6 +767,7 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         service_caps.unwrap_or(u64::MAX)
     );
 
+    sched.reap_finished_processes();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
@@ -1681,6 +1682,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     trace.resolve_finished_ns = now_ns();
 
     let mut sched = crate::sched::SCHEDULER.lock();
+    sched.reap_finished_processes();
     let mut pmm = crate::PMM.lock();
     let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
@@ -1820,7 +1822,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // [LAUNCH-TRACE] Point 6: child_process_created (pid assigned)
     trace.child_created_ns = now_ns();
 
-    let idx = sched.add_process(child);
+    let idx = sched.add_process_after_reaping(child);
     // add_process leaves queueing to the caller; without this the child sits
     // Ready but is never picked by the BORE queues.
     sched.enqueue_ready_on_cpu(idx, current_cpu);
