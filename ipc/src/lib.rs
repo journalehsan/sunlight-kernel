@@ -510,6 +510,10 @@ pub mod TzMsg {
 pub mod NetOp {
     pub const GETIP: u64 = 10;
     pub const GET_BACKEND: u64 = 16;
+    /// Return the executing net stack's current lease without consulting
+    /// networkd policy.  This breaks the otherwise circular networkd -> net
+    /// -> networkd refresh path.
+    pub const GETIP_LIVE: u64 = 19;
 }
 
 /// Random service opcodes (registered as "rand").

@@ -293,7 +293,7 @@ fn wait_for_publishable_backend(ep: EndpointId) -> sunlight_ipc::NetDeviceInfo {
         let msg = ipc_recv(ep);
         let reply = match msg.label {
             NetOp::GET_BACKEND => backend_info_reply(),
-            NetOp::GETIP => IpcMsg::with_label(NetOp::GETIP)
+            NetOp::GETIP | NetOp::GETIP_LIVE => IpcMsg::with_label(msg.label)
                 .word(0, 0)
                 .word(1, 0)
                 .word(2, 0)
@@ -384,13 +384,35 @@ fn try_get_config_from_networkd() -> Option<([u8; 4], u8, [u8; 4], [u8; 4])> {
         .ok()?;
         if r.label == NetworkdMsg::REPLY {
             if let Some(s) = sunlight_ipc::unpack_iface_summary(&r) {
-                if s.addr != [0, 0, 0, 0] || s.mode != sunlight_ipc::IpConfigMode::None {
+                // DHCP intent alone is not a usable address.  Returning it here
+                // would mask a valid live lease and keep networkd permanently
+                // stuck at 0.0.0.0.
+                if s.addr != [0, 0, 0, 0] {
                     return Some((s.addr, s.prefix.max(1), s.gw, s.dns));
                 }
             }
         }
     }
     None
+}
+
+/// Reply with the executing stack's current lease, without applying networkd
+/// policy. Keep its legacy little-endian address packing because NetOp::GETIP
+/// has used that representation since the first net_server implementation.
+fn live_config_reply(label: u64) -> IpcMsg {
+    if let Some(config) = unsafe { LIVE_CONFIG.as_ref() } {
+        IpcMsg::with_label(label)
+            .word(0, pack_ipv4(config.ip))
+            .word(1, config.mask as u64)
+            .word(2, pack_ipv4(config.gateway))
+            .word(3, pack_ipv4(config.dns[0]))
+    } else {
+        IpcMsg::with_label(label)
+            .word(0, 0)
+            .word(1, 0)
+            .word(2, 0)
+            .word(3, 0)
+    }
 }
 
 // Register IPC transports only words[0..4]. For SEND/RECV: words[0]=socket_id,
@@ -432,6 +454,10 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                     .word(3, 0)
             }
         }
+        // Networkd uses this only to observe the executing stack.  It must
+        // never call back into networkd: GETIP is the legacy policy-facing
+        // request and doing so would create a circular IPC wait.
+        NetOp::GETIP_LIVE => live_config_reply(NetOp::GETIP_LIVE),
         NetOp::SOCKET => {
             let owner_pid = msg.badge;
             let result = unsafe {

@@ -22,6 +22,9 @@ pub mod NetOp {
     pub const WAIT: u64 = 17;
     /// Read one TCP allocation diagnostic selected by `NetDiagnostic`.
     pub const GET_DIAGNOSTIC: u64 = 18;
+    /// Return the executing net stack's current lease without consulting
+    /// networkd policy. Intended for networkd's bounded state synchronisation.
+    pub const GETIP_LIVE: u64 = 19;
 }
 
 /// Explicit network operation status values. Legacy replies retain their

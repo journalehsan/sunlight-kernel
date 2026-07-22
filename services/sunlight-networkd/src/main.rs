@@ -11,7 +11,7 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
+    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv, ipc_recv_timeout, ipc_reply,
     monotonic_millis, nameserver_lookup_timeout, nameserver_register, pack_ipv4, pack_short_name,
     unpack_ipv4, AdminState, DevicedMsg, DnsSource, IfaceSummary, InterfaceId, InterfaceKind,
     IpConfigMode, IpcMsg, LinkState, NetOp, NetworkdMsg, ResolvedMsg,
@@ -19,6 +19,10 @@ use sunlight_ipc::{
 
 const MAX_IFACES: usize = 8;
 const NET_GETIP_TIMEOUT_MS: u64 = 20;
+/// Retry only during boot or after a networkd restart, until the executing
+/// stack reports an address. The capped backoff prevents an unavailable stack
+/// from turning into a permanent busy retry.
+const LIVE_STATE_SYNC_BACKOFF_MS: [u64; 6] = [1_000, 2_000, 5_000, 10_000, 30_000, 60_000];
 static ETHERNET_VISIBLE_LOGGED: AtomicBool = AtomicBool::new(false);
 
 /// Exponential backoff steps (ms) when deviced is unavailable.
@@ -634,29 +638,29 @@ impl NetworkManager {
             .word(1, count as u64)
     }
 
-    /// Query the 'net' service (if present) via its NetOp::GETIP and apply observed
-    /// IPv4 config to the first non-loopback interface (typically eth0). This lets
-    /// networkd reflect the actual stack state served to clients (DHCP or static).
-    /// Degrades gracefully if net is absent or returns zeros.
-    fn ingest_live_from_net(&mut self) {
+    /// Query the 'net' service (if present) for the executing stack's lease and
+    /// apply it to the first non-loopback interface (typically eth0). The live
+    /// query deliberately bypasses networkd policy, preventing a circular IPC
+    /// wait while a refresh is already being handled.
+    ///
+    /// Returns true only after a usable address has been published.
+    fn ingest_live_from_net(&mut self) -> bool {
         let Some(net_cap) = nameserver_lookup_timeout("net", 60) else {
             self.seed_qemu_dns_for_first_network_iface();
-            return;
+            return false;
         };
-        // Never block indefinitely here: request-time refreshes can be triggered by
-        // clients already in a call path that involves net_server, so an unbounded
-        // GETIP can form a circular wait (networkd -> net -> networkd).
+        // Never block indefinitely: net_server may be starting late or restarting.
         let Ok(reply) = ipc_call_timeout(
             net_cap,
-            IpcMsg::with_label(NetOp::GETIP),
+            IpcMsg::with_label(NetOp::GETIP_LIVE),
             NET_GETIP_TIMEOUT_MS,
         ) else {
             self.seed_qemu_dns_for_first_network_iface();
-            return;
+            return false;
         };
-        if reply.label != NetOp::GETIP {
+        if reply.label != NetOp::GETIP_LIVE {
             self.seed_qemu_dns_for_first_network_iface();
-            return;
+            return false;
         }
         // net_server uses its own le byte-order packing for GETIP words:
         // w0=addr_le, w1=prefix, w2=gw_le, w3=dns_le
@@ -682,7 +686,7 @@ impl NetworkManager {
 
         if addr == [0, 0, 0, 0] {
             self.seed_qemu_dns_for_first_network_iface();
-            return; // nothing useful yet (e.g. before stack up); degrade ok
+            return false; // nothing useful yet (e.g. before stack up); degrade ok
         }
 
         // Apply to the first eligible non-lo interface (stable by discovery order)
@@ -721,7 +725,9 @@ impl NetworkManager {
                 DnsSource::Dhcp
             };
             self.handoff_dns_to_resolved(slot, source);
+            return true;
         }
+        false
     }
 
     fn seed_qemu_dns_for_first_network_iface(&mut self) {
@@ -849,7 +855,13 @@ pub extern "C" fn _start() -> ! {
     let mut mgr = NetworkManager::new();
     mgr.seed_loopback();
     mgr.discover_from_deviced(true);
-    mgr.ingest_live_from_net();
+    // networkd normally starts before net_server has finished DHCP. Retry only
+    // until a lease becomes visible; after that the service blocks for IPC as
+    // before and performs no background polling.
+    let mut live_state_sync_pending = !mgr.ingest_live_from_net();
+    let mut live_state_sync_failures = usize::from(live_state_sync_pending);
+    let mut next_live_state_sync_ms =
+        monotonic_millis().saturating_add(LIVE_STATE_SYNC_BACKOFF_MS[0]);
 
     // If we discovered something with DHCP intent, note it (actual stack still in net_server v0)
     for iface in mgr.ifaces.iter() {
@@ -866,13 +878,40 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
-    let mut msg = ipc_recv(ep);
     loop {
+        let msg = if live_state_sync_pending {
+            let now = monotonic_millis();
+            let timeout_ms = next_live_state_sync_ms.saturating_sub(now).max(1);
+            match ipc_recv_timeout(ep, timeout_ms) {
+                Some(msg) => msg,
+                None => {
+                    if mgr.ingest_live_from_net() {
+                        live_state_sync_pending = false;
+                        live_state_sync_failures = 0;
+                    } else {
+                        let delay = LIVE_STATE_SYNC_BACKOFF_MS
+                            [live_state_sync_failures.min(LIVE_STATE_SYNC_BACKOFF_MS.len() - 1)];
+                        live_state_sync_failures = live_state_sync_failures.saturating_add(1);
+                        next_live_state_sync_ms = monotonic_millis().saturating_add(delay);
+                    }
+                    continue;
+                }
+            }
+        } else {
+            ipc_recv(ep)
+        };
         let reply = match msg.label {
-            // Read-only queries: serve cached state — no discovery refresh.
-            // GET_DEFAULT_ROUTE is the hot path (net_server calls it on every GETIP);
-            // triggering discover_from_deviced() there caused circular IPC churn.
-            NetworkdMsg::LIST_INTERFACES => mgr.list_one(msg.words[0] as usize),
+            // A list request is safe to use as an early one-shot sync point:
+            // net_server never issues LIST_INTERFACES while answering GETIP.
+            NetworkdMsg::LIST_INTERFACES => {
+                if live_state_sync_pending && mgr.ingest_live_from_net() {
+                    live_state_sync_pending = false;
+                    live_state_sync_failures = 0;
+                }
+                mgr.list_one(msg.words[0] as usize)
+            }
+            // GET_DEFAULT_ROUTE is the hot path for net_server's policy-facing
+            // GETIP. Keep it cached so that path cannot recurse into net_server.
             NetworkdMsg::GET_INTERFACE => mgr.get_by_key(msg.words[0]),
             NetworkdMsg::GET_DEFAULT_ROUTE => mgr.get_default_route_reply(),
 
@@ -933,6 +972,6 @@ pub extern "C" fn _start() -> ! {
 
             _ => err_bad(),
         };
-        msg = ipc_reply_and_wait(ep, reply);
+        ipc_reply(reply);
     }
 }

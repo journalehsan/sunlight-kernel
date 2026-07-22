@@ -457,8 +457,19 @@ impl Drop for HeapGuard {
     }
 }
 
-fn valid_align(align: usize) -> bool {
-    align != 0 && align.is_power_of_two()
+fn valid_align(mut align: usize) -> bool {
+    if align == 0 {
+        return false;
+    }
+
+    // Keep the allocator baseline-x86 safe. `usize::is_power_of_two()` is
+    // normally ideal, but LLVM emits POPCNT for it under the workspace's
+    // x86-64-v2 service profile. Some supported QEMU CPU models do not expose
+    // that instruction, so validate the same property with shifts instead.
+    while align & 1 == 0 {
+        align >>= 1;
+    }
+    align == 1
 }
 
 fn align_up(value: usize, align: usize) -> Option<usize> {
@@ -763,6 +774,16 @@ mod tests {
     fn assert_heap_invariants() {
         let guard = HeapGuard::lock();
         assert!(unsafe { guard.heap().invariants_hold() });
+    }
+
+    #[test]
+    fn alignment_validator_accepts_powers_of_two() {
+        for align in [1, 2, 4, 8, 16, 64, 4096, 65536] {
+            assert!(valid_align(align));
+        }
+        for align in [0, 3, 6, 12, 24, 48, 1023] {
+            assert!(!valid_align(align));
+        }
     }
 
     #[test]
