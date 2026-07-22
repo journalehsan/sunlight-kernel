@@ -240,14 +240,21 @@ impl FdTable {
 
     /// Close a file descriptor
     pub fn close(&mut self, fd: i32) -> Result<(), FdError> {
+        self.take(fd).map(|_| ())
+    }
+
+    /// Consume an fd table entry before releasing its backend object.
+    ///
+    /// `close(2)` must not leave a live entry around while its backend close is
+    /// in progress: a second close could otherwise release the same object or
+    /// a later descriptor incarnation.  The caller owns the returned snapshot
+    /// and must attempt backend cleanup exactly once; it must never put the
+    /// descriptor back merely to retry a close.
+    pub fn take(&mut self, fd: i32) -> Result<FileDescriptor, FdError> {
         if fd < 0 || fd >= 256 {
             return Err(FdError::InvalidFd);
         }
-        if self.entries[fd as usize].is_none() {
-            return Err(FdError::InvalidFd);
-        }
-        self.entries[fd as usize] = None;
-        Ok(())
+        self.entries[fd as usize].take().ok_or(FdError::InvalidFd)
     }
 
     /// Remove descriptors marked close-on-exec and return their backing
@@ -393,6 +400,17 @@ mod tests {
             assert_eq!(fd, 3);
             table.close(fd).unwrap();
         }
+    }
+
+    #[test]
+    fn take_makes_close_consuming_and_prevents_a_second_release() {
+        let mut table = FdTable::new();
+        let fd = table.open(FileHandle(99), READ, 0).unwrap();
+
+        let taken = table.take(fd).unwrap();
+        assert_eq!(taken.handle, FileHandle(99));
+        assert_eq!(table.take(fd), Err(FdError::InvalidFd));
+        assert_eq!(table.open(FileHandle(100), READ, 0).unwrap(), fd);
     }
 
     #[test]

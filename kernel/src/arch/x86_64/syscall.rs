@@ -2045,6 +2045,8 @@ fn sys_setnice(frame: &mut SyscallFrame) -> u64 {
 
 const O_CREAT: u64 = 0x40;
 const O_EXCL: u64 = 0x80;
+const O_TRUNC: u64 = 0x200;
+const O_APPEND: u64 = 0x400;
 const O_CLOEXEC: u64 = 0x0008_0000;
 const O_NOFOLLOW: u64 = 0x0002_0000;
 const PRIVATE_SECRET_DIR: &str = "/etc/sunlight";
@@ -2117,7 +2119,10 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
     let wants_write = flags & 0b11 != 0;
     let wants_create = flags & O_CREAT != 0;
     let wants_exclusive = flags & O_EXCL != 0;
-    if wants_exclusive && !wants_create {
+    if flags & 0b11 == 0b11
+        || (wants_exclusive && !wants_create)
+        || (flags & O_TRUNC != 0 && !wants_write)
+    {
         return u64::MAX;
     }
 
@@ -2167,7 +2172,7 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         let Some(vfs) = guard.as_mut() else {
             return u64::MAX;
         };
-        if wants_create {
+        let opened = if wants_create {
             let mode = (frame.rdx as u16) & 0o777;
             let mode = if mode == 0 { 0o644 } else { mode };
             let result = if wants_exclusive {
@@ -2203,7 +2208,12 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
                     return u64::MAX;
                 }
             }
+        };
+        if flags & O_TRUNC != 0 && vfs.truncate(opened).is_err() {
+            let _ = vfs.close(opened);
+            return u64::MAX;
         }
+        opened
     };
 
     let mut sched = crate::sched::SCHEDULER.lock();
@@ -3335,25 +3345,31 @@ fn sys_chown(frame: &mut SyscallFrame) -> u64 {
 fn sys_close(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
 
-    let mut sched = crate::sched::SCHEDULER.lock();
-
-    // Release the underlying object (pipe end or VFS handle) before
-    // dropping the fd table entry.
-    let handle = sched.current_process().fd_table.get(fd).map(|e| e.handle);
-    let mut close_result = Ok(());
-    if let Some(h) = handle {
-        if h.is_pipe() {
-            crate::process::pipe::pipe_close_end(h.pipe_index(), h.pipe_is_write());
-        } else if h.is_vfs() {
-            if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
-                close_result = vfs.close(sunlight_fs::vfs::FileHandle(h.vfs_handle()));
-            }
+    // Remove first.  Close is a consuming operation: even if backend cleanup
+    // reports an error, libc must not retry this fd and accidentally close a
+    // newly reused slot.  The current backend calls are synchronous, so there
+    // is no ambiguous IPC completion to reconcile here.
+    let handle = {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        match sched.current_process_mut().fd_table.take(fd) {
+            Ok(entry) => entry.handle,
+            Err(_) => return u64::MAX,
         }
-    }
+    };
 
-    match (close_result, sched.current_process_mut().fd_table.close(fd)) {
-        (Ok(()), Ok(())) => 0,
-        _ => u64::MAX, // EBADF or deferred VFS close failure
+    if handle.is_pipe() {
+        crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
+        0
+    } else if handle.is_vfs() {
+        match crate::KERNEL_VFS.lock().as_mut() {
+            Some(vfs) => match vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle())) {
+                Ok(()) => 0,
+                Err(_) => u64::MAX,
+            },
+            None => u64::MAX,
+        }
+    } else {
+        0
     }
 }
 
@@ -3365,6 +3381,9 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
     const EAGAIN: u64 = u64::MAX - 1;
 
     let fd = frame.rdi as i32;
+    if frame.rdx > isize::MAX as u64 {
+        return u64::MAX;
+    }
     let count = frame.rdx as usize;
     if count == 0 {
         return 0;
@@ -3406,6 +3425,9 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     let vfs_handle = sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
                     let mut kernel_buf = [0u8; 4096];
                     let to_read = count.min(4096);
+                    if fd_entry.offset.checked_add(to_read).is_none() {
+                        return u64::MAX;
+                    }
                     let read = {
                         let mut guard = crate::KERNEL_VFS.lock();
                         match guard.as_mut() {
@@ -3427,6 +3449,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                                 return user_memory_failure_for(is_linux, error);
                             }
                             if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
+                                // The overflow preflight above covers `n <= to_read`.
                                 entry.offset += n;
                             }
                             n as u64
@@ -3492,6 +3515,9 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
     const EAGAIN: u64 = u64::MAX - 1;
 
     let fd = frame.rdi as i32;
+    if frame.rdx > isize::MAX as u64 {
+        return u64::MAX;
+    }
     let count = frame.rdx as usize;
     if count == 0 {
         return 0;
@@ -3544,15 +3570,27 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                         let mut guard = crate::KERNEL_VFS.lock();
                         match guard.as_mut() {
                             Some(vfs) => {
-                                vfs.write(vfs_handle, fd_entry.offset, &kernel_buf[..write_size])
+                                let offset = if fd_entry.flags as u64 & O_APPEND != 0 {
+                                    match vfs.fstat_handle(vfs_handle) {
+                                        Ok(stat) => stat.size,
+                                        Err(_) => return u64::MAX,
+                                    }
+                                } else {
+                                    fd_entry.offset
+                                };
+                                if offset.checked_add(write_size).is_none() {
+                                    return u64::MAX;
+                                }
+                                vfs.write(vfs_handle, offset, &kernel_buf[..write_size])
+                                    .map(|n| (offset, n))
                             }
                             None => return u64::MAX,
                         }
                     };
                     match written {
-                        Ok(n) => {
+                        Ok((offset, n)) => {
                             if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
-                                entry.offset += n;
+                                entry.offset = offset + n;
                             }
                             n as u64
                         }
@@ -3576,32 +3614,30 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                     ) {
                         return user_memory_failure_for(is_linux, error);
                     }
-                    crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]);
-                    // Report the full count as written even if the ring dropped
-                    // tail bytes under pressure — apps treat short writes as errors.
-                    count as u64
+                    crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]) as u64
                 } else {
                     // Handle stdin/stdout/stderr specially
                     match fd {
                         1 | 2 => {
                             // stdout/stderr: write to serial
-                            if frame.rsi != 0 {
-                                let mut bytes = [0u8; 256];
-                                let copy_len = count.min(bytes.len());
-                                let is_linux = sched.current_process().is_linux_compat;
-                                if let Err(error) = crate::memory::user::copy_from_process_bytes(
-                                    sched.current_process(),
-                                    hhdm,
-                                    frame.rsi,
-                                    &mut bytes[..copy_len],
-                                ) {
-                                    return user_memory_failure_for(is_linux, error);
-                                }
-                                if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
-                                    crate::serial_println!("{}", s);
-                                }
+                            if frame.rsi == 0 {
+                                return u64::MAX;
                             }
-                            count as u64
+                            let mut bytes = [0u8; 256];
+                            let copy_len = count.min(bytes.len());
+                            let is_linux = sched.current_process().is_linux_compat;
+                            if let Err(error) = crate::memory::user::copy_from_process_bytes(
+                                sched.current_process(),
+                                hhdm,
+                                frame.rsi,
+                                &mut bytes[..copy_len],
+                            ) {
+                                return user_memory_failure_for(is_linux, error);
+                            }
+                            if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+                                crate::serial_println!("{}", s);
+                            }
+                            copy_len as u64
                         }
                         _ => 0,
                     }

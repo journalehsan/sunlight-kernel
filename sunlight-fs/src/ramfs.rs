@@ -1,4 +1,7 @@
-use crate::vfs::{mode, FileHandle, FileStat, FileSystem, FileType, VfsDirEntry};
+use crate::vfs::{
+    make_local_handle, mode, next_handle_generation, split_local_handle, FileHandle, FileStat,
+    FileSystem, FileType, VfsDirEntry,
+};
 use crate::{path, FsError};
 use alloc::vec::Vec;
 
@@ -56,11 +59,18 @@ struct DynamicEntry {
 
 pub struct RamFs {
     entries: &'static [RamEntry],
-    handles: [Option<usize>; RAMFS_MAX_HANDLES],
+    handles: [Option<RamOpen>; RAMFS_MAX_HANDLES],
+    generations: [u32; RAMFS_MAX_HANDLES],
     /// Mutable data copies for static entries. Indexed by entry index.
     buffers: [Option<Vec<u8>>; RAMFS_MAX_ENTRIES],
     /// Dynamic entries created at runtime.
     dynamic: Vec<DynamicEntry>,
+}
+
+#[derive(Clone, Copy)]
+struct RamOpen {
+    entry_idx: usize,
+    generation: u32,
 }
 
 impl RamFs {
@@ -68,6 +78,7 @@ impl RamFs {
         Self {
             entries,
             handles: [None; RAMFS_MAX_HANDLES],
+            generations: [0; RAMFS_MAX_HANDLES],
             buffers: [const { None }; RAMFS_MAX_ENTRIES],
             dynamic: Vec::new(),
         }
@@ -181,18 +192,24 @@ impl RamFs {
     fn alloc_handle(&mut self, entry_idx: usize) -> Result<FileHandle, FsError> {
         for (idx, slot) in self.handles.iter_mut().enumerate() {
             if slot.is_none() {
-                *slot = Some(entry_idx);
-                return Ok(FileHandle((idx + 1) as u32));
+                let generation = next_handle_generation(self.generations[idx]);
+                self.generations[idx] = generation;
+                *slot = Some(RamOpen {
+                    entry_idx,
+                    generation,
+                });
+                return Ok(make_local_handle(idx, generation));
             }
         }
         Err(FsError::TooManyOpenFiles)
     }
 
     fn handle_entry_idx(&self, handle: FileHandle) -> Result<usize, FsError> {
-        let idx = handle.0.checked_sub(1).ok_or(FsError::BadHandle)? as usize;
+        let (idx, generation) = split_local_handle(handle)?;
         self.handles
             .get(idx)
-            .and_then(|slot| *slot)
+            .and_then(|slot| slot.filter(|open| open.generation == generation))
+            .map(|open| open.entry_idx)
             .ok_or(FsError::BadHandle)
     }
 
@@ -292,7 +309,7 @@ impl FileSystem for RamFs {
             new_data.extend_from_slice(current);
             new_data.resize(offset, 0);
         }
-        let end = offset + buf.len();
+        let end = offset.checked_add(buf.len()).ok_or(FsError::Io)?;
         if end > new_data.len() {
             new_data.resize(end, 0);
         }
@@ -301,10 +318,20 @@ impl FileSystem for RamFs {
         Ok(buf.len())
     }
 
+    fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        let entry_idx = self.handle_entry_idx(handle)?;
+        self.set_entry_data(entry_idx, Vec::new());
+        Ok(())
+    }
+
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
-        let idx = handle.0.checked_sub(1).ok_or(FsError::BadHandle)? as usize;
+        let (idx, generation) = split_local_handle(handle)?;
         let slot = self.handles.get_mut(idx).ok_or(FsError::BadHandle)?;
-        if slot.is_none() {
+        if slot
+            .as_ref()
+            .map(|open| open.generation != generation)
+            .unwrap_or(true)
+        {
             return Err(FsError::BadHandle);
         }
         *slot = None;
@@ -399,11 +426,11 @@ impl FileSystem for RamFs {
         // Invalidate any open handles pointing at this entry or at entries
         // that shifted past it.
         for slot in self.handles.iter_mut() {
-            if let Some(h) = *slot {
-                if h == entry_idx {
+            if let Some(open) = slot.as_mut() {
+                if open.entry_idx == entry_idx {
                     *slot = None;
-                } else if h > entry_idx {
-                    *slot = Some(h - 1);
+                } else if open.entry_idx > entry_idx {
+                    open.entry_idx -= 1;
                 }
             }
         }
@@ -428,11 +455,11 @@ impl FileSystem for RamFs {
                 let source = self.dynamic.remove(dyn_idx);
                 self.buffers[dst_idx] = Some(source.data);
                 for slot in self.handles.iter_mut() {
-                    if let Some(handle_idx) = *slot {
-                        if handle_idx == entry_idx {
-                            *slot = Some(dst_idx);
-                        } else if handle_idx > entry_idx {
-                            *slot = Some(handle_idx - 1);
+                    if let Some(open) = slot.as_mut() {
+                        if open.entry_idx == entry_idx {
+                            open.entry_idx = dst_idx;
+                        } else if open.entry_idx > entry_idx {
+                            open.entry_idx -= 1;
                         }
                     }
                 }
@@ -441,11 +468,11 @@ impl FileSystem for RamFs {
             if dst_idx >= self.entries.len() {
                 let ddyn = dst_idx - self.entries.len();
                 for slot in self.handles.iter_mut() {
-                    if let Some(h) = *slot {
-                        if h == dst_idx {
+                    if let Some(open) = slot.as_mut() {
+                        if open.entry_idx == dst_idx {
                             *slot = None;
-                        } else if h > dst_idx {
-                            *slot = Some(h - 1);
+                        } else if open.entry_idx > dst_idx {
+                            open.entry_idx -= 1;
                         }
                     }
                 }
@@ -2496,6 +2523,32 @@ mod tests {
 
         assert_eq!(fs.close(handle), Ok(()));
         assert_eq!(fs.close(handle), Err(FsError::BadHandle));
+    }
+
+    #[test]
+    fn reused_slot_rejects_the_previous_handle_incarnation() {
+        let mut fs = RamFs::new(TEST_ENTRIES);
+        let first = fs.open("/bin/sh").unwrap();
+        fs.close(first).unwrap();
+        let second = fs.open("/etc/motd").unwrap();
+
+        assert_ne!(first, second);
+        assert_eq!(fs.read(first, 0, &mut [0; 1]), Err(FsError::BadHandle));
+        assert_eq!(fs.close(first), Err(FsError::BadHandle));
+        assert!(fs.read(second, 0, &mut [0; 1]).is_ok());
+    }
+
+    #[test]
+    fn truncate_keeps_the_handle_valid_and_discards_old_contents() {
+        let mut fs = RamFs::new(TEST_ENTRIES);
+        let handle = fs.open("/bin/sh").unwrap();
+        fs.truncate(handle).unwrap();
+
+        let mut one = [0u8; 1];
+        assert_eq!(fs.read(handle, 0, &mut one), Ok(0));
+        assert_eq!(fs.write(handle, 0, b"x"), Ok(1));
+        assert_eq!(fs.read(handle, 0, &mut one), Ok(1));
+        assert_eq!(one, [b'x']);
     }
 
     #[test]

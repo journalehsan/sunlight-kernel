@@ -1,17 +1,27 @@
 //! File descriptor helpers and C ABI exports.
 
-use crate::errno::{set_errno, EINVAL};
+use crate::errno::{set_errno, EBADF, EFAULT, EINVAL, EIO};
 use crate::{fstat as libc_fstat, lseek as libc_lseek, Fd, Stat};
 
 /// Reposition the read/write offset of an open file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn lseek(fd: i32, offset: i64, whence: i32) -> i64 {
-    if whence < 0 || whence > 2 {
+    if fd < 0 {
+        set_errno(EBADF);
+        return -1;
+    }
+    if !(0..=2).contains(&whence) {
         set_errno(EINVAL);
         return -1;
     }
     match libc_lseek(Fd(fd as u32), offset, whence) {
-        Ok(pos) => pos as i64,
+        Ok(pos) => match i64::try_from(pos) {
+            Ok(pos) => pos,
+            Err(_) => {
+                set_errno(EIO);
+                -1
+            }
+        },
         Err(e) => {
             crate::errno::set_from_errno(e);
             -1
@@ -22,8 +32,12 @@ pub unsafe extern "C" fn lseek(fd: i32, offset: i64, whence: i32) -> i64 {
 /// Get file status by open file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn fstat(fd: i32, out: *mut Stat) -> i32 {
+    if fd < 0 {
+        set_errno(EBADF);
+        return -1;
+    }
     if out.is_null() {
-        set_errno(EINVAL);
+        set_errno(EFAULT);
         return -1;
     }
 

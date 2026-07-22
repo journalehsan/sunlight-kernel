@@ -50,6 +50,11 @@ pub const ERR_RAW: u64 = u64::MAX;
 /// Raw "try again" return from the kernel.
 pub const EAGAIN_RAW: u64 = u64::MAX - 1;
 
+/// Largest count that can be represented by the public `ssize_t` result.
+/// Native SunlightOS is currently x86_64, but keep this tied to the Rust ABI
+/// rather than assuming every future libc target has a 64-bit `usize`.
+pub const MAX_IO_COUNT: usize = isize::MAX as usize;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Errno {
     /// Generic kernel failure (the ABI does not carry a code yet).
@@ -68,6 +73,22 @@ pub fn check(ret: u64) -> Result<u64, Errno> {
         EAGAIN_RAW => Err(Errno::Again),
         n => Ok(n),
     }
+}
+
+/// Decode a byte-count syscall result without allowing a malformed kernel or
+/// service result to escape as a larger Rust slice length.  Raw read/write are
+/// deliberately single-shot: a short non-error count is progress and is
+/// returned to the caller unchanged.
+pub fn check_io_count(ret: u64, requested: usize) -> Result<usize, Errno> {
+    if requested > MAX_IO_COUNT {
+        return Err(Errno::TooBig);
+    }
+    let count = check(ret)?;
+    let count = usize::try_from(count).map_err(|_| Errno::Failed)?;
+    if count > requested || count > MAX_IO_COUNT {
+        return Err(Errno::Failed);
+    }
+    Ok(count)
 }
 /// # Safety
 /// SYSCALL clobbers rcx (return RIP) and r11 (RFLAGS); the kernel preserves
@@ -187,5 +208,14 @@ mod tests {
         assert_eq!(check(ERR_RAW), Err(Errno::Failed));
         assert_eq!(check(EAGAIN_RAW), Err(Errno::Again));
         assert_eq!(check(17), Ok(17));
+    }
+
+    #[test]
+    fn io_counts_reject_impossible_or_truncated_results() {
+        assert_eq!(check_io_count(0, 0), Ok(0));
+        assert_eq!(check_io_count(3, 3), Ok(3));
+        assert_eq!(check_io_count(4, 3), Err(Errno::Failed));
+        assert_eq!(check_io_count(ERR_RAW, 3), Err(Errno::Failed));
+        assert_eq!(check_io_count(EAGAIN_RAW, 3), Err(Errno::Again));
     }
 }

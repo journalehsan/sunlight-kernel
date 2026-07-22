@@ -318,23 +318,45 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             None => error_reply(FsError::InvalidPath),
         },
         VfsMsg::READ => {
-            let raw_handle = FileHandle(msg.words[0] as u32);
-            let offset = msg.words[1] as usize;
-            let requested = (msg.words[2] as usize).min(4096);
-            read_handle(state, raw_handle, offset, requested)
+            let Ok(raw_handle) = u32::try_from(msg.words[0]) else {
+                return error_reply(FsError::BadHandle);
+            };
+            let Ok(offset) = usize::try_from(msg.words[1]) else {
+                return error_reply(FsError::Io);
+            };
+            let Ok(requested) = usize::try_from(msg.words[2]) else {
+                return error_reply(FsError::Io);
+            };
+            if requested > 4096 || offset.checked_add(requested).is_none() {
+                return error_reply(FsError::Io);
+            }
+            read_handle(state, FileHandle(raw_handle), offset, requested)
         }
         VfsMsg::WRITE => {
-            let raw_handle = FileHandle(msg.words[0] as u32);
-            let offset = msg.words[1] as usize;
+            let Ok(raw_handle) = u32::try_from(msg.words[0]) else {
+                return error_reply(FsError::BadHandle);
+            };
+            let Ok(offset) = usize::try_from(msg.words[1]) else {
+                return error_reply(FsError::Io);
+            };
             let data = unpack_bytes(&msg.words[2..]);
-            write_handle(state, raw_handle, offset, &data)
+            if offset.checked_add(data.len()).is_none() {
+                return error_reply(FsError::Io);
+            }
+            write_handle(state, FileHandle(raw_handle), offset, &data)
         }
-        VfsMsg::CLOSE => close_handle(state, FileHandle(msg.words[0] as u32)),
+        VfsMsg::CLOSE => match u32::try_from(msg.words[0]) {
+            Ok(handle) => close_handle(state, FileHandle(handle)),
+            Err(_) => error_reply(FsError::BadHandle),
+        },
         VfsMsg::STAT => match decoded_path(&msg.words) {
             Some(pb) => stat_path(state, pb.as_str()),
             None => error_reply(FsError::InvalidPath),
         },
-        VfsMsg::FSTAT => fstat_handle(state, FileHandle(msg.words[0] as u32)),
+        VfsMsg::FSTAT => match u32::try_from(msg.words[0]) {
+            Ok(handle) => fstat_handle(state, FileHandle(handle)),
+            Err(_) => error_reply(FsError::BadHandle),
+        },
         VfsMsg::MKDIR => match decoded_path(&msg.words) {
             Some(pb) => mkdir_path(
                 state,

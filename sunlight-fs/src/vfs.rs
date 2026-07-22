@@ -8,8 +8,40 @@ pub const VFS_NAME_MAX: usize = 64;
 /// Open-file slots per mounted FAT volume.
 pub const FAT_MAX_HANDLES: usize = 16;
 
+// Open handles are private backend capabilities, not indexes that callers may
+// safely retain after close.  Keep the slot in the low bits and tag each new
+// incarnation with a generation.  The VFS mount packing reserves 24 bits for
+// the local handle, leaving 18 generation bits with the six bits required for
+// the current (at most 32) backend slots.
+pub const HANDLE_SLOT_BITS: u32 = 6;
+const HANDLE_SLOT_MASK: u32 = (1 << HANDLE_SLOT_BITS) - 1;
+const HANDLE_GENERATION_MAX: u32 = (1 << (24 - HANDLE_SLOT_BITS)) - 1;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileHandle(pub u32);
+
+pub(crate) fn make_local_handle(slot: usize, generation: u32) -> FileHandle {
+    debug_assert!(slot < (HANDLE_SLOT_MASK as usize));
+    debug_assert!((1..=HANDLE_GENERATION_MAX).contains(&generation));
+    FileHandle((generation << HANDLE_SLOT_BITS) | (slot as u32 + 1))
+}
+
+pub(crate) fn split_local_handle(handle: FileHandle) -> Result<(usize, u32), FsError> {
+    let slot = handle.0 & HANDLE_SLOT_MASK;
+    let generation = handle.0 >> HANDLE_SLOT_BITS;
+    if slot == 0 || generation == 0 {
+        return Err(FsError::BadHandle);
+    }
+    Ok(((slot - 1) as usize, generation))
+}
+
+pub(crate) fn next_handle_generation(generation: u32) -> u32 {
+    if generation >= HANDLE_GENERATION_MAX {
+        1
+    } else {
+        generation + 1
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileType {
@@ -107,6 +139,10 @@ pub trait FileSystem {
     fn read(&mut self, handle: FileHandle, offset: usize, buf: &mut [u8])
         -> Result<usize, FsError>;
     fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError>;
+    /// Reduce an open regular file to length zero.  This is intentionally a
+    /// narrow primitive used by `O_TRUNC`; it does not add a public ftruncate
+    /// ABI.
+    fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError>;
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError>;
     /// Return metadata for an open handle without a path round-trip.
     /// Used by `sys_fstat` and `sys_lseek(SEEK_END)`.
@@ -134,6 +170,7 @@ pub trait FileSystem {
 struct FatOpen {
     first_cluster: u32,
     size: u32,
+    generation: u32,
 }
 
 /// Read-only `FileSystem` adapter over a [`Fat32`] volume: adds the open-file
@@ -142,6 +179,7 @@ struct FatOpen {
 pub struct FatFs<D: BlockDevice> {
     fat: Fat32<D>,
     handles: [Option<FatOpen>; FAT_MAX_HANDLES],
+    generations: [u32; FAT_MAX_HANDLES],
 }
 
 impl<D: BlockDevice> FatFs<D> {
@@ -149,14 +187,15 @@ impl<D: BlockDevice> FatFs<D> {
         Self {
             fat,
             handles: [None; FAT_MAX_HANDLES],
+            generations: [0; FAT_MAX_HANDLES],
         }
     }
 
     fn handle_slot(&self, handle: FileHandle) -> Result<FatOpen, FsError> {
-        let idx = handle.0.checked_sub(1).ok_or(FsError::BadHandle)? as usize;
+        let (idx, generation) = split_local_handle(handle)?;
         self.handles
             .get(idx)
-            .and_then(|slot| *slot)
+            .and_then(|slot| slot.filter(|open| open.generation == generation))
             .ok_or(FsError::BadHandle)
     }
 }
@@ -173,11 +212,14 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         }
         for (idx, slot) in self.handles.iter_mut().enumerate() {
             if slot.is_none() {
+                let generation = next_handle_generation(self.generations[idx]);
+                self.generations[idx] = generation;
                 *slot = Some(FatOpen {
                     first_cluster: stat.first_cluster,
                     size: stat.size,
+                    generation,
                 });
-                return Ok(FileHandle((idx + 1) as u32));
+                return Ok(make_local_handle(idx, generation));
             }
         }
         Err(FsError::TooManyOpenFiles)
@@ -224,10 +266,18 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         Err(FsError::Unsupported)
     }
 
+    fn truncate(&mut self, _handle: FileHandle) -> Result<(), FsError> {
+        Err(FsError::ReadOnlyFilesystem)
+    }
+
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
-        let idx = handle.0.checked_sub(1).ok_or(FsError::BadHandle)? as usize;
+        let (idx, generation) = split_local_handle(handle)?;
         let slot = self.handles.get_mut(idx).ok_or(FsError::BadHandle)?;
-        if slot.is_none() {
+        if slot
+            .as_ref()
+            .map(|open| open.generation != generation)
+            .unwrap_or(true)
+        {
             return Err(FsError::BadHandle);
         }
         *slot = None;
@@ -382,6 +432,13 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         match self {
             Self::Ram(fs) => fs.write(handle, offset, buf),
             Self::Fat(fs) => fs.write(handle, offset, buf),
+        }
+    }
+
+    fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.truncate(handle),
+            Self::Fat(fs) => fs.truncate(handle),
         }
     }
 
@@ -579,6 +636,16 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::BadHandle)?
             .fs
             .write(local_handle, offset, buf)
+    }
+
+    pub fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        self.mounts
+            .get_mut(mount_idx)
+            .and_then(Option::as_mut)
+            .ok_or(FsError::BadHandle)?
+            .fs
+            .truncate(local_handle)
     }
 
     pub fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {

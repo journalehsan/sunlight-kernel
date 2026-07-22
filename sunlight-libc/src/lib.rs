@@ -79,7 +79,7 @@ pub const SEEK_END: i32 = 2;
 
 /// Copy `bytes` into `buf` as a NUL-terminated C string.
 fn cstr<'a>(buf: &'a mut [u8], bytes: &[u8]) -> Result<*const u8, Errno> {
-    if bytes.len() + 1 > buf.len() || bytes.contains(&0) {
+    if bytes.is_empty() || bytes.len() >= buf.len() || bytes.contains(&0) {
         return Err(Errno::Inval);
     }
     buf[..bytes.len()].copy_from_slice(bytes);
@@ -92,14 +92,14 @@ pub fn open(path: &[u8]) -> Result<Fd, Errno> {
     let mut path_buf = [0u8; MAX_PATH];
     let path_ptr = cstr(&mut path_buf, path)?;
     let ret = unsafe { sys::syscall3(sys::SYS_OPEN, path_ptr as u64, 0, 0) };
-    sys::check(ret).map(|fd| Fd(fd as u32))
+    checked_fd(ret)
 }
 
 pub fn open_with_flags_mode(path: &[u8], flags: u64, mode: u16) -> Result<Fd, Errno> {
     let mut path_buf = [0u8; MAX_PATH];
     let path_ptr = cstr(&mut path_buf, path)?;
     let ret = unsafe { sys::syscall3(sys::SYS_OPEN, path_ptr as u64, flags, mode as u64) };
-    sys::check(ret).map(|fd| Fd(fd as u32))
+    checked_fd(ret)
 }
 
 pub fn open_with_flags(path: &[u8], flags: u64) -> Result<Fd, Errno> {
@@ -116,6 +116,9 @@ pub fn close(fd: Fd) -> Result<(), Errno> {
 }
 
 pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+    if buf.len() > sys::MAX_IO_COUNT {
+        return Err(Errno::TooBig);
+    }
     let ret = unsafe {
         sys::syscall3(
             sys::SYS_READ,
@@ -124,10 +127,13 @@ pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
             buf.len() as u64,
         )
     };
-    sys::check(ret).map(|n| n as usize)
+    sys::check_io_count(ret, buf.len())
 }
 
 pub fn write(fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
+    if buf.len() > sys::MAX_IO_COUNT {
+        return Err(Errno::TooBig);
+    }
     let ret = unsafe {
         sys::syscall3(
             sys::SYS_WRITE,
@@ -136,12 +142,16 @@ pub fn write(fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
             buf.len() as u64,
         )
     };
-    sys::check(ret).map(|n| n as usize)
+    sys::check_io_count(ret, buf.len())
 }
 
 pub fn lseek(fd: Fd, offset: i64, whence: i32) -> Result<u64, Errno> {
     let ret = unsafe { sys::syscall3(sys::SYS_LSEEK, fd.0 as u64, offset as u64, whence as u64) };
-    sys::check(ret)
+    let position = sys::check(ret)?;
+    if position > i64::MAX as u64 {
+        return Err(Errno::Failed);
+    }
+    Ok(position)
 }
 
 pub fn fstat(fd: Fd) -> Result<Stat, Errno> {
@@ -373,7 +383,7 @@ pub(crate) fn secret_create_temp(path: &[u8], mode: u16) -> Result<Fd, Errno> {
             mode as u64,
         )
     };
-    sys::check(ret).map(|fd| Fd(fd as u32))
+    checked_fd(ret)
 }
 
 pub(crate) fn secret_publish(
@@ -443,7 +453,22 @@ pub fn freezram_fill(
 pub fn pipe() -> Result<(Fd, Fd), Errno> {
     let mut fds = [0i32; 2];
     let ret = unsafe { sys::syscall1(sys::SYS_PIPE, fds.as_mut_ptr() as u64) };
-    sys::check(ret).map(|_| (Fd(fds[0] as u32), Fd(fds[1] as u32)))
+    sys::check(ret)?;
+    if fds[0] < 0 || fds[1] < 0 {
+        return Err(Errno::Failed);
+    }
+    Ok((Fd(fds[0] as u32), Fd(fds[1] as u32)))
+}
+
+fn checked_fd(ret: u64) -> Result<Fd, Errno> {
+    let fd = sys::check(ret)?;
+    let fd = u32::try_from(fd).map_err(|_| Errno::Failed)?;
+    // Native descriptors are signed `int`s at the ABI boundary.  Reject a
+    // malformed high-bit value instead of turning it into an invalid `Fd`.
+    if fd > i32::MAX as u32 {
+        return Err(Errno::Failed);
+    }
+    Ok(Fd(fd))
 }
 
 /// Create a pseudo-terminal pair by asking `pty_server` for a fresh session.
@@ -563,6 +588,27 @@ pub fn write_all(fd: Fd, mut buf: &[u8]) -> Result<(), Errno> {
         buf = &buf[n..];
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod fd_contract_tests {
+    use super::*;
+
+    #[test]
+    fn path_marshalling_rejects_empty_embedded_nul_and_too_long_paths() {
+        let mut storage = [0u8; MAX_PATH];
+        assert_eq!(cstr(&mut storage, b""), Err(Errno::Inval));
+        assert_eq!(cstr(&mut storage, b"a\0b"), Err(Errno::Inval));
+        assert_eq!(cstr(&mut storage, &[b'x'; MAX_PATH]), Err(Errno::Inval));
+        assert!(cstr(&mut storage, &[b'x'; MAX_PATH - 1]).is_ok());
+    }
+
+    #[test]
+    fn descriptor_results_are_never_narrowed() {
+        assert_eq!(checked_fd(7), Ok(Fd(7)));
+        assert_eq!(checked_fd(u32::MAX as u64), Err(Errno::Failed));
+        assert_eq!(checked_fd(u64::MAX), Err(Errno::Failed));
+    }
 }
 
 /// Create all missing directory components of `path` (create_dir_all semantics).

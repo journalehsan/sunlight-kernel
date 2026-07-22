@@ -246,12 +246,28 @@ pub fn create_pipe(
     let read_fd = process
         .fd_table
         .open(read_handle, CapRights::new(CapRights::READ), 0)
-        .map_err(|_| PipeError::BadFd)?;
+        .map_err(|_| {
+            // `Pipe::new` owns one reader and one writer.  No descriptor was
+            // published, so release both references rather than leaking the
+            // pool entry on descriptor-table exhaustion.
+            pipe_close_end(pipe_idx, false);
+            pipe_close_end(pipe_idx, true);
+            PipeError::BadFd
+        })?;
 
-    let write_fd = process
+    let write_fd = match process
         .fd_table
         .open(write_handle, CapRights::new(CapRights::WRITE), 0)
-        .map_err(|_| PipeError::BadFd)?;
+    {
+        Ok(fd) => fd,
+        Err(_) => {
+            // Undo the published read end as well as both pool-side refs.
+            let _ = process.fd_table.close(read_fd);
+            pipe_close_end(pipe_idx, false);
+            pipe_close_end(pipe_idx, true);
+            return Err(PipeError::BadFd);
+        }
+    };
 
     crate::serial_println!(
         "[PIPE] created pipe: read_fd={}, write_fd={}, pool_idx={}",
