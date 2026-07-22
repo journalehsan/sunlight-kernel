@@ -50,6 +50,30 @@ pub fn blend_straight_alpha_over_xrgb(src: u32, dst: u32) -> u32 {
     }
 }
 
+/// Blend a premultiplied-alpha ARGB source over an XRGB destination.
+///
+/// Decoration gradients are stored as a color plus a coverage value, but their
+/// final blend is performed in premultiplied form.  Keeping that rule here
+/// avoids dark fringes around low-alpha glow and shadow pixels.
+#[inline(always)]
+pub fn blend_premultiplied_alpha_over_xrgb(src: u32, dst: u32) -> u32 {
+    let alpha = (src >> 24) as u8;
+    match alpha {
+        0 => xrgb(dst),
+        255 => xrgb(src),
+        a => {
+            let inv = 255 - a as u16;
+            let r = ((src >> 16 & 0xFF) as u16 + (((dst >> 16 & 0xFF) as u16 * inv + 127) / 255))
+                .min(255) as u32;
+            let g = ((src >> 8 & 0xFF) as u16 + (((dst >> 8 & 0xFF) as u16 * inv + 127) / 255))
+                .min(255) as u32;
+            let b =
+                ((src & 0xFF) as u16 + (((dst & 0xFF) as u16 * inv + 127) / 255)).min(255) as u32;
+            0xFF00_0000 | (r << 16) | (g << 8) | b
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,5 +124,14 @@ mod tests {
             out = blend_xrgb_with_coverage(0x00FF_FFFF, out, 255);
         }
         assert_eq!(out, 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn premultiplied_alpha_blend_preserves_xrgb_and_uses_premultiplied_rgb() {
+        // 50% orange is already premultiplied: (128, 61, 0), alpha 128.
+        let src = 0x8080_3D00;
+        let dst = 0xFF20_4060;
+        let out = blend_premultiplied_alpha_over_xrgb(src, dst);
+        assert_eq!(out, 0xFF90_5D30);
     }
 }

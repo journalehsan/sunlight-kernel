@@ -210,7 +210,7 @@ pub fn draw_computer_page(
     state: &AboutPageState,
     icon_computer: Option<TgaImage>,
 ) {
-    canvas.fill_rect(Rect::new(0, 0, win_w, win_h), theme.bg);
+    canvas.clear_transparent(Rect::new(0, 0, win_w, win_h));
     let content = content_rect(win_w, win_h);
     canvas.fill_rounded_rect(content, 10, theme.panel_alt);
     canvas.stroke_rounded_rect(content, 10, 1, theme.border);
@@ -484,7 +484,7 @@ pub fn draw_os_page(
     state: &AboutPageState,
     logo: Option<TgaImage>,
 ) {
-    canvas.fill_rect(Rect::new(0, 0, win_w, win_h), theme.bg);
+    canvas.clear_transparent(Rect::new(0, 0, win_w, win_h));
     let content = content_rect(win_w, win_h);
     canvas.fill_rounded_rect(content, 10, theme.panel_alt);
     canvas.stroke_rounded_rect(content, 10, 1, theme.border);

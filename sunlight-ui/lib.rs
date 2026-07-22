@@ -52,12 +52,14 @@ pub use horizon::{
     HorizonControl, HorizonControlState, HorizonLayout, HorizonMetrics, HorizonPalette,
 };
 pub use layout::{GridColIter, GridRow, HBox, VBox};
-pub use material::{Material, MaterialKind, SurfaceRole};
+pub use material::{
+    DecorationGeometry, Material, MaterialKind, MaterialPalette, ReadabilityRole, SurfaceRole,
+};
 pub use paint::Canvas;
 pub use theme::{Color, Theme};
 
 #[cfg(feature = "app")]
 pub use app::{
     request_close, set_client_cursor, App, CursorShape, EventPollCounters, Window, WindowConfig,
-    WindowDecoration,
+    WindowDecoration, WindowMaterial,
 };

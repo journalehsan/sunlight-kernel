@@ -313,6 +313,30 @@ enum GroupType {
     Tabbed = 2,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum SurfaceMaterial {
+    /// Historical/default path: every client pixel is copied as opaque XRGB.
+    OpaqueXrgb = 0,
+    /// Explicit native opt-in: straight-alpha ARGB over shared window glass.
+    WindowGlassStraightArgb = 1,
+}
+
+impl SurfaceMaterial {
+    fn from_flags(flags: u64) -> Self {
+        match ((flags & SgpMsg::config_flags::MATERIAL_MASK)
+            >> SgpMsg::config_flags::MATERIAL_SHIFT) as u8
+        {
+            1 => Self::WindowGlassStraightArgb,
+            _ => Self::OpaqueXrgb,
+        }
+    }
+
+    const fn uses_straight_alpha(self) -> bool {
+        matches!(self, Self::WindowGlassStraightArgb)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 #[allow(dead_code)]
@@ -387,6 +411,7 @@ struct WindowConfig {
     z_index_value: u8,
     show_type: ShowType,
     group_type: GroupType,
+    surface_material: SurfaceMaterial,
     pid: u32,
     ppid: u32,
     group_ids: [u32; 4],
@@ -409,6 +434,7 @@ impl WindowConfig {
             z_index_value: 50,
             show_type: ShowType::Floating,
             group_type: GroupType::None,
+            surface_material: SurfaceMaterial::OpaqueXrgb,
             pid: 0,
             ppid: 0,
             group_ids: [0; 4],
@@ -456,6 +482,7 @@ impl WindowConfig {
             2 => GroupType::Tabbed,
             _ => GroupType::None,
         };
+        let surface_material = SurfaceMaterial::from_flags(flags);
 
         // words[3] carries the first 8 title bytes (little-endian u64).
         let mut title = [0u8; 64];
@@ -479,6 +506,7 @@ impl WindowConfig {
             z_index_value,
             show_type,
             group_type,
+            surface_material,
             pid,
             ppid,
             group_ids: [0; 4],
@@ -1266,6 +1294,85 @@ fn clip_to_screen(r: Rect, w: u32, h: u32) -> Rect {
     }
 }
 
+/// Decoration damage can extend beyond client/chrome geometry.  Build the
+/// clipped result from widened signed arithmetic so a malformed or edge-bound
+/// window position cannot wrap its effect to the opposite side of a monitor.
+fn clipped_effect_bounds(
+    state: &CompositorState,
+    outer: Rect,
+    left: u32,
+    top: u32,
+    right: u32,
+    bottom: u32,
+) -> Rect {
+    let x0 = (outer.x as i64 - left as i64).clamp(0, state.fb_width as i64);
+    let y0 = (outer.y as i64 - top as i64).clamp(0, state.fb_height as i64);
+    let x1 = (outer.right() as i64 + right as i64).clamp(0, state.fb_width as i64);
+    let y1 = (outer.bottom() as i64 + bottom as i64).clamp(0, state.fb_height as i64);
+    if x1 <= x0 || y1 <= y0 {
+        Rect::new(0, 0, 0, 0)
+    } else {
+        Rect::new(x0 as i32, y0 as i32, (x1 - x0) as u32, (y1 - y0) as u32)
+    }
+}
+
+fn floating_application_window(win: &Window) -> bool {
+    surface_role_for_window(win) == SurfaceRole::ApplicationWindow
+        && win.config.show_type == ShowType::Floating
+        && win.config.state == WindowState::Normal
+        && win.config.border == BorderStyle::Full
+}
+
+fn solar_focus_glow_eligible(win: &Window) -> bool {
+    // Dialogs, compact popups, panels, widgets, tiled windows, maximized, and
+    // fullscreen surfaces deliberately stay outside the application glow rule.
+    floating_application_window(win)
+}
+
+fn should_draw_solar_focus_glow(win: &Window, is_focused: bool) -> bool {
+    is_focused && solar_focus_glow_eligible(win)
+}
+
+/// Full compositor-owned area whose pixels can change when this window's
+/// decoration changes.  Non-floating surfaces retain just their chrome area;
+/// floating application windows include the bounded shadow/glow envelope.
+fn window_decoration_damage_bounds(state: &CompositorState, win: &Window) -> Rect {
+    let (x, y, w, h) = win.chrome_rect(state.fb_width, state.fb_height);
+    let outer = Rect::new(x as i32, y as i32, w, h);
+    if !floating_application_window(win) {
+        return clip_to_screen(outer, state.fb_width, state.fb_height);
+    }
+
+    let metrics = solar_decoration_metrics(state);
+    clipped_effect_bounds(
+        state,
+        outer,
+        metrics.shadow_radius.max(metrics.glow_radius),
+        metrics
+            .shadow_radius
+            .saturating_sub(metrics.shadow_offset_y)
+            .max(metrics.glow_radius),
+        metrics.shadow_radius.max(metrics.glow_radius),
+        metrics
+            .shadow_radius
+            .saturating_add(metrics.shadow_offset_y)
+            .max(metrics.glow_radius),
+    )
+}
+
+fn mark_decoration_transition_damage(
+    state: &mut CompositorState,
+    old: Option<Rect>,
+    new: Option<Rect>,
+) {
+    if let Some(old) = old {
+        mark_dirty_rect(state, old);
+    }
+    if let Some(new) = new {
+        mark_dirty_rect(state, new);
+    }
+}
+
 fn mark_dirty_rect(state: &mut CompositorState, rect: Rect) {
     let clipped = clip_to_screen(rect, state.fb_width, state.fb_height);
     if clipped.w == 0 || clipped.h == 0 {
@@ -1519,10 +1626,7 @@ const fn mouse_requires_scene_redraw(
 fn is_titlebar_control_zone(zone: HitZone) -> bool {
     matches!(
         zone,
-        HitZone::CloseBtn
-            | HitZone::MaximizeBtn
-            | HitZone::MinimizeBtn
-            | HitZone::KeepOnTopBtn
+        HitZone::CloseBtn | HitZone::MaximizeBtn | HitZone::MinimizeBtn | HitZone::KeepOnTopBtn
     )
 }
 
@@ -1888,8 +1992,16 @@ enum AltTabTriggerSource {
 }
 
 fn trigger_alt_tab(state: &mut CompositorState, source: AltTabTriggerSource) {
+    let old_damage = focused_window_idx(state)
+        .map(|idx| window_decoration_damage_bounds(state, &state.windows[idx]));
     if cycle_focus(state) {
+        let new_damage = focused_window_idx(state)
+            .map(|idx| window_decoration_damage_bounds(state, &state.windows[idx]));
+        mark_decoration_transition_damage(state, old_damage, new_damage);
         state.active_cursor = cursor_for_scene(state);
+        // Alt+Tab also changes stacking.  The existing conservative full
+        // present remains the correctness path; the explicit bounds above
+        // document/cover the decoration extent for a future region renderer.
         mark_dirty_full(state);
         redraw_scene(state);
     }
@@ -1922,7 +2034,12 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
         }
     }
 
+    let old_damage = window_decoration_damage_bounds(state, &state.windows[pos]);
     let win = state.windows.remove(pos);
+    // Callers may choose a broad present for the z-order/lifecycle change, but
+    // always record the entire old effect footprint first so no halo pixel can
+    // survive under a region-based present.
+    mark_dirty_rect(state, old_damage);
     if state.client_pointer_capture == Some(win_id) {
         state.client_pointer_capture = None;
     }
@@ -2105,11 +2222,17 @@ fn activate_window(state: &mut CompositorState, win_id: u64) -> bool {
         return false;
     };
 
+    let old_damage = focused_window_idx(state)
+        .map(|idx| window_decoration_damage_bounds(state, &state.windows[idx]));
+
     if state.windows[pos].config.state == WindowState::Minimized {
         state.windows[pos].config.state = WindowState::Normal;
     }
 
     raise_window_by_id(state, win_id);
+    let new_damage = focused_window_idx(state)
+        .map(|idx| window_decoration_damage_bounds(state, &state.windows[idx]));
+    mark_decoration_transition_damage(state, old_damage, new_damage);
     state.active_cursor = cursor_for_scene(state);
     mark_dirty_full(state);
     redraw_scene(state);
@@ -2125,16 +2248,19 @@ const TITLEBAR_H: u32 = 32; // Balanced height; not oversized
 const COMPACT_TITLEBAR_H: u32 = 24;
 const TITLEBAR_COLOR: u32 = 0x002B2B36; // inactive titlebar (dark slate)
 const TITLEBAR_ACTIVE: u32 = 0x001E1E26; // active window titlebar (darker base)
-const TITLEBAR_ACCENT: u32 = 0x00FF7A00; // Warm/Orange accent (edge, not full fill)
+/// The display service's canonical Sunlight accent.  Decoration glow and
+/// existing informational accents intentionally share this one color.
+const SUNLIGHT_ACCENT: u32 = 0x00FF7A00;
+const TITLEBAR_ACCENT: u32 = SUNLIGHT_ACCENT;
 const TITLE_TEXT_COLOR: u32 = 0x00E8E8EE; // Active title
 const TITLE_TEXT_INACTIVE: u32 = 0x009A9AAA; // Reduced contrast when inactive
-const BORDER_W: u32 = 1;
-const BORDER_COLOR: u32 = 0x00FF7A00; // Active window orange accent border
-const BORDER_INACTIVE: u32 = 0x00353840; // Inactive neutral border
+const DECORATION_GEOMETRY: sunlight_ui::DecorationGeometry =
+    sunlight_ui::DecorationGeometry::SUNLIGHT;
+const BORDER_W: u32 = DECORATION_GEOMETRY.structural_rim;
 const BTN_SIZE: u32 = 20; // Size of control buttons
 const BTN_SPACING: u32 = 4;
 const PIN_GAP: u32 = 8; // Separation between Pin and the standard three
-const CHROME_RADIUS: u32 = 10;
+const CHROME_RADIUS: u32 = DECORATION_GEOMETRY.window_corner_radius;
 const CONTROL_RADIUS: u32 = 5;
 // Sunlight Horizon metrics (must match sunlight_ui::horizon::HorizonMetrics defaults)
 const HORIZON_METRICS: sunlight_ui::HorizonMetrics = sunlight_ui::HorizonMetrics {
@@ -2146,6 +2272,68 @@ const HORIZON_METRICS: sunlight_ui::HorizonMetrics = sunlight_ui::HorizonMetrics
 const RESIZE_BORDER: u32 = 6; // effective hit-test width for edges/corners
 const MIN_WIN_W: u32 = 200;
 const MIN_WIN_H: u32 = 100;
+
+/// Compositor-owned tuning for the deliberately small Solar Focus effect.
+/// Values are device-independent pixels and become physical pixels through
+/// `DisplayMetrics::scale_fp`; the current display service reports 1×.
+#[derive(Clone, Copy)]
+struct SolarDecorationTheme {
+    structural_outer: u32,
+    structural_light: u32,
+    structural_dark: u32,
+    ambient_shadow_rgb: u32,
+    ambient_shadow_peak_alpha: u8,
+    ambient_shadow_radius_dip: u32,
+    ambient_shadow_offset_y_dip: u32,
+    active_glow_rgb: u32,
+    active_glow_peak_alpha: u8,
+    active_glow_radius_dip: u32,
+}
+
+const SOLAR_DECORATION: SolarDecorationTheme = SolarDecorationTheme {
+    // Neutral rim: visible on dark and bright wallpaper without making focus
+    // depend on color alone.  Upper-left light direction is applied below.
+    structural_outer: 0x00434A55,
+    structural_light: 0x006A7380,
+    structural_dark: 0x00252A32,
+    ambient_shadow_rgb: 0x00000000,
+    ambient_shadow_peak_alpha: 26,
+    ambient_shadow_radius_dip: DECORATION_GEOMETRY.ambient_shadow_falloff,
+    ambient_shadow_offset_y_dip: DECORATION_GEOMETRY.ambient_shadow_offset_y,
+    active_glow_rgb: SUNLIGHT_ACCENT,
+    active_glow_peak_alpha: 48, // 18.8%, deliberately below neon intensity.
+    active_glow_radius_dip: DECORATION_GEOMETRY.solar_focus_falloff,
+};
+
+#[derive(Clone, Copy)]
+struct SolarDecorationMetrics {
+    shadow_radius: u32,
+    shadow_offset_y: u32,
+    glow_radius: u32,
+}
+
+fn scale_decoration_dip(value: u32, scale_fp: u32) -> u32 {
+    if value == 0 {
+        return 0;
+    }
+    let scaled = (value as u64)
+        .saturating_mul(scale_fp.max(1) as u64)
+        .saturating_add((sunlight_ipc::display_metrics::SCALE_FP_ONE - 1) as u64)
+        / sunlight_ipc::display_metrics::SCALE_FP_ONE as u64;
+    scaled.min(u32::MAX as u64).max(1) as u32
+}
+
+fn solar_decoration_metrics(state: &CompositorState) -> SolarDecorationMetrics {
+    let scale_fp = state.display_metrics().scale_fp;
+    SolarDecorationMetrics {
+        shadow_radius: scale_decoration_dip(SOLAR_DECORATION.ambient_shadow_radius_dip, scale_fp),
+        shadow_offset_y: scale_decoration_dip(
+            SOLAR_DECORATION.ambient_shadow_offset_y_dip,
+            scale_fp,
+        ),
+        glow_radius: scale_decoration_dip(SOLAR_DECORATION.active_glow_radius_dip, scale_fp),
+    }
+}
 
 // Floating Vortex panel occupies y=6..42. Normal windows keep an additional
 // breathing gap below it, while maximized windows meet the integrated panel at
@@ -2593,8 +2781,7 @@ fn control_strip_left(win: &Window, wx: u32, wy: u32, chrome_w: u32) -> i32 {
                 WindowControlLayout::CloseMinimize => 2,
                 WindowControlLayout::Normal => 4,
             };
-            (wx + chrome_w) as i32
-                - ((BTN_SIZE + BTN_SPACING) * n + BTN_SPACING) as i32
+            (wx + chrome_w) as i32 - ((BTN_SIZE + BTN_SPACING) * n + BTN_SPACING) as i32
         }
     }
 }
@@ -2822,6 +3009,198 @@ fn compositor_poll_timeout_ms(state: &CompositorState) -> Option<u64> {
 // Compositing
 // ---------------------------------------------------------------------------
 
+#[inline(always)]
+fn premultiplied_rgb(rgb: u32, alpha: u8) -> u32 {
+    let r = blend::mul_u8_div_255_round(((rgb >> 16) & 0xFF) as u8, alpha) as u32;
+    let g = blend::mul_u8_div_255_round(((rgb >> 8) & 0xFF) as u8, alpha) as u32;
+    let b = blend::mul_u8_div_255_round((rgb & 0xFF) as u8, alpha) as u32;
+    ((alpha as u32) << 24) | (r << 16) | (g << 8) | b
+}
+
+#[inline(always)]
+fn composite_client_pixel(src: u32, dst: u32, corner_coverage: u8, straight_alpha: bool) -> u32 {
+    if !straight_alpha {
+        return match corner_coverage {
+            0 => dst,
+            255 => src,
+            coverage => blend::blend_xrgb_with_coverage(src, dst, coverage),
+        };
+    }
+    let source_alpha = (src >> 24) as u8;
+    let alpha = blend::mul_u8_div_255_round(source_alpha, corner_coverage);
+    blend::blend_straight_alpha_over_xrgb((src & 0x00FF_FFFF) | ((alpha as u32) << 24), dst)
+}
+
+/// Blend one shared material into a sub-rectangle, optionally clipped by the
+/// canonical inner window mask. Material samples remain straight-alpha; mask
+/// coverage is multiplied into alpha exactly once.
+fn blend_window_material(
+    state: &CompositorState,
+    back_buffer: &mut [u32],
+    paint_rect: Rect,
+    inner: Rect,
+    rounded: bool,
+    material: sunlight_ui::Material,
+) {
+    let clipped = clip_to_screen(paint_rect, state.fb_width, state.fb_height);
+    if clipped.w == 0 || clipped.h == 0 {
+        return;
+    }
+    let stride = fb_stride(state);
+    for y in clipped.y..clipped.bottom() {
+        let row = y as usize * stride;
+        for x in clipped.x..clipped.right() {
+            let coverage = if rounded {
+                state.inner_corner_mask.coverage(
+                    x - inner.x,
+                    y - inner.y,
+                    inner.w as i32,
+                    inner.h as i32,
+                )
+            } else {
+                255
+            };
+            if coverage == 0 {
+                continue;
+            }
+            let sample = material.sample_color(x, y);
+            let alpha = blend::mul_u8_div_255_round(sample.a(), coverage);
+            let src = (sample.0 & 0x00FF_FFFF) | ((alpha as u32) << 24);
+            let idx = row + x as usize;
+            back_buffer[idx] = blend::blend_straight_alpha_over_xrgb(src, back_buffer[idx]);
+        }
+    }
+}
+
+#[inline(always)]
+fn blend_decoration_pixel(
+    state: &CompositorState,
+    back_buffer: &mut [u32],
+    x: i32,
+    y: i32,
+    rgb: u32,
+    alpha: u8,
+) {
+    if alpha == 0 || x < 0 || y < 0 || x >= state.fb_width as i32 || y >= state.fb_height as i32 {
+        return;
+    }
+    let idx = y as usize * fb_stride(state) + x as usize;
+    if let Some(dst) = back_buffer.get_mut(idx) {
+        *dst = blend::blend_premultiplied_alpha_over_xrgb(premultiplied_rgb(rgb, alpha), *dst);
+    }
+}
+
+/// Quadratic bounded falloff.  This is intentionally a small fixed strip
+/// primitive, not a blur and not a per-window texture allocation.
+#[inline(always)]
+fn solar_falloff_alpha(distance: u32, radius: u32, peak_alpha: u8) -> u8 {
+    if distance == 0 || distance > radius || radius == 0 {
+        return 0;
+    }
+    let remaining = radius + 1 - distance;
+    ((peak_alpha as u32)
+        .saturating_mul(remaining)
+        .saturating_mul(remaining)
+        / radius.saturating_mul(radius)) as u8
+}
+
+fn integer_sqrt(value: u32) -> u32 {
+    let mut root = 0u32;
+    while root
+        .saturating_add(1)
+        .saturating_mul(root.saturating_add(1))
+        <= value
+    {
+        root += 1;
+    }
+    root
+}
+
+fn distance_outside_rounded_rect(x: i32, y: i32, shape: Rect, corner_radius: u32) -> u32 {
+    let corner_radius = corner_radius.min(shape.w / 2).min(shape.h / 2) as i32;
+    let center_x = x.clamp(
+        shape.x.saturating_add(corner_radius),
+        shape.right().saturating_sub(corner_radius + 1),
+    );
+    let center_y = y.clamp(
+        shape.y.saturating_add(corner_radius),
+        shape.bottom().saturating_sub(corner_radius + 1),
+    );
+    let dx = x.abs_diff(center_x);
+    let dy = y.abs_diff(center_y);
+    integer_sqrt(dx.saturating_mul(dx).saturating_add(dy.saturating_mul(dy)))
+        .saturating_sub(corner_radius as u32)
+}
+
+/// Paint a bounded, rounded-corner-aware halo *outside* `shape` only.  The
+/// owning window later paints over its own halo, and higher windows are drawn
+/// afterwards by the established bottom-to-top compositor order.
+fn draw_solar_halo(
+    state: &CompositorState,
+    back_buffer: &mut [u32],
+    shape: Rect,
+    corner_radius: u32,
+    radius: u32,
+    rgb: u32,
+    peak_alpha: u8,
+) {
+    if shape.w == 0 || shape.h == 0 || radius == 0 || peak_alpha == 0 {
+        return;
+    }
+    let expanded = clipped_effect_bounds(state, shape, radius, radius, radius, radius);
+    for y in expanded.y..expanded.bottom() {
+        for x in expanded.x..expanded.right() {
+            let distance = distance_outside_rounded_rect(x, y, shape, corner_radius);
+            let alpha = solar_falloff_alpha(distance, radius, peak_alpha);
+            if alpha == 0 {
+                continue;
+            }
+            blend_decoration_pixel(state, back_buffer, x, y, rgb, alpha);
+        }
+    }
+}
+
+fn draw_structural_rim(canvas: &mut Canvas<'_>, outer: Rect, radius: u32) {
+    if outer.w < 2 || outer.h < 2 {
+        return;
+    }
+    let corner = radius.min(outer.w / 2).min(outer.h / 2) as i32;
+    let horizontal = outer
+        .w
+        .saturating_sub((corner.max(0) as u32).saturating_mul(2));
+    let vertical = outer
+        .h
+        .saturating_sub((corner.max(0) as u32).saturating_mul(2));
+    if horizontal > 0 {
+        canvas.hline(
+            outer.x + corner,
+            outer.y,
+            horizontal,
+            Color(SOLAR_DECORATION.structural_light),
+        );
+        canvas.hline(
+            outer.x + corner,
+            outer.bottom() - 1,
+            horizontal,
+            Color(SOLAR_DECORATION.structural_dark),
+        );
+    }
+    if vertical > 0 {
+        canvas.vline(
+            outer.x,
+            outer.y + corner,
+            vertical,
+            Color(SOLAR_DECORATION.structural_light),
+        );
+        canvas.vline(
+            outer.right() - 1,
+            outer.y + corner,
+            vertical,
+            Color(SOLAR_DECORATION.structural_dark),
+        );
+    }
+}
+
 fn composite_window(
     state: &CompositorState,
     back_buffer: &mut [u32],
@@ -2839,6 +3218,46 @@ fn composite_window(
 
     // Rolled-up windows render chrome only; skip client blit entirely.
     let skip_client = win.rolled_up && !fullscreen && !maximized;
+
+    // Effects are compositor-owned and only exist around normal, floating
+    // application windows.  They are drawn before this window's surface and
+    // before later windows, so they cannot overlay application contents or
+    // foreground windows.
+    if !no_chrome && floating_application_window(win) {
+        let (wx, wy, chrome_w, chrome_h) = win.chrome_rect(state.fb_width, state.fb_height);
+        let outer = Rect::new(wx as i32, wy as i32, chrome_w, chrome_h);
+        let metrics = solar_decoration_metrics(state);
+        let effect_corner_radius = scale_decoration_dip(
+            DECORATION_GEOMETRY.window_corner_radius,
+            state.display_metrics().scale_fp,
+        );
+        let shadow_shape = Rect::new(
+            outer.x,
+            outer.y.saturating_add(metrics.shadow_offset_y as i32),
+            outer.w,
+            outer.h,
+        );
+        draw_solar_halo(
+            state,
+            back_buffer,
+            shadow_shape,
+            effect_corner_radius,
+            metrics.shadow_radius,
+            SOLAR_DECORATION.ambient_shadow_rgb,
+            SOLAR_DECORATION.ambient_shadow_peak_alpha,
+        );
+        if should_draw_solar_focus_glow(win, is_focused) {
+            draw_solar_halo(
+                state,
+                back_buffer,
+                outer,
+                effect_corner_radius,
+                metrics.glow_radius,
+                SOLAR_DECORATION.active_glow_rgb,
+                SOLAR_DECORATION.active_glow_peak_alpha,
+            );
+        }
+    }
 
     let (canvas_x, canvas_y, client_w, client_h) = if fullscreen {
         // Fullscreen: truly full-screen, covers panel intentionally.
@@ -2893,11 +3312,6 @@ fn composite_window(
         } else {
             TITLEBAR_COLOR
         };
-        let bd_color = if is_focused {
-            BORDER_COLOR
-        } else {
-            BORDER_INACTIVE
-        };
         let title_color = if is_focused {
             TITLE_TEXT_COLOR
         } else {
@@ -2915,21 +3329,6 @@ fn composite_window(
         let inner = outer.inset(BORDER_W as i32);
         let outer_radius = if maximized { 0 } else { CHROME_RADIUS };
         let inner_radius = outer_radius.saturating_sub(BORDER_W);
-        let content_backdrop = Rect::new(
-            inner.x,
-            inner.y
-                + if win.decorations_visible() {
-                    titlebar_h as i32
-                } else {
-                    0
-                },
-            inner.w,
-            inner.h.saturating_sub(if win.decorations_visible() {
-                titlebar_h
-            } else {
-                0
-            }),
-        );
         let controls = win.control_buttons();
         let strip_left = control_strip_left(win, wx, wy, chrome_w);
         let title_rect = Rect::new(
@@ -2938,43 +3337,85 @@ fn composite_window(
             (strip_left - (wx as i32 + 12)).max(0) as u32,
             titlebar_h.saturating_sub(2),
         );
-        // Application content stays opaque: content_backdrop is solid, then
-        // the client buffer is blitted without alpha fade.
+        // Surface alpha is explicit. Legacy buffers retain their opaque XRGB
+        // path; opted-in native clients can leave root pixels transparent over
+        // the compositor-owned glass backing while painting content opaque.
         let _role = surface_role_for_window(win);
 
+        let glass_surface = win.config.surface_material == SurfaceMaterial::WindowGlassStraightArgb;
         {
             let mut canvas = back_buffer_canvas(state, back_buffer);
-            // Border as restrained orange accent (active) or neutral (inactive).
-            canvas.fill_top_rounded_rect(outer, outer_radius, Color(bd_color));
-            // Titlebar base — dark solid; orange is accent only, not a full fill.
-            canvas.fill_top_rounded_rect(
-                inner,
-                inner_radius,
-                Color(if win.decorations_visible() {
-                    tb_color
-                } else {
-                    0xFF1A1A20
-                }),
+            // The rim is structural for both focus states; orange no longer
+            // outlines the active window.
+            canvas.fill_rounded_rect(
+                outer,
+                outer_radius,
+                Color(SOLAR_DECORATION.structural_outer),
             );
-            // Opaque content backdrop (never 65% transparent application glass).
-            canvas.fill_rect(content_backdrop, Color(0xFF1A1A20));
+            if !glass_surface {
+                // Legacy/unopted windows retain their exact opaque backing.
+                canvas.fill_rounded_rect(inner, inner_radius, Color(0xFF1A1A20));
+                if win.decorations_visible() {
+                    canvas.fill_top_rounded_rect(
+                        inner,
+                        inner_radius,
+                        Color(tb_color),
+                    );
+                }
+            }
+        }
+        if glass_surface {
+            let palette = sunlight_ui::MaterialPalette::new(&sunlight_ui::Theme::sunlight_dark());
+            if win.decorations_visible() {
+                let titlebar = Rect::new(inner.x, inner.y, inner.w, titlebar_h.min(inner.h));
+                let content = Rect::new(
+                    inner.x,
+                    titlebar.bottom(),
+                    inner.w,
+                    inner.h.saturating_sub(titlebar.h),
+                );
+                blend_window_material(
+                    state,
+                    back_buffer,
+                    content,
+                    inner,
+                    !maximized,
+                    palette.window_glass,
+                );
+                blend_window_material(
+                    state,
+                    back_buffer,
+                    titlebar,
+                    inner,
+                    !maximized,
+                    if is_focused {
+                        palette.titlebar_active
+                    } else {
+                        palette.titlebar_inactive
+                    },
+                );
+            } else {
+                blend_window_material(
+                    state,
+                    back_buffer,
+                    inner,
+                    inner,
+                    !maximized,
+                    palette.window_glass,
+                );
+            }
+        }
+        {
+            let mut canvas = back_buffer_canvas(state, back_buffer);
+            draw_structural_rim(&mut canvas, outer, outer_radius);
             if win.decorations_visible() {
                 // Subtle separation from application content.
                 canvas.hline(
                     inner.x,
                     inner.y + titlebar_h as i32 - 1,
                     inner.w,
-                    Color(if is_focused {
-                        0x00353840
-                    } else {
-                        0x00282830
-                    }),
+                    Color(if is_focused { 0x00353840 } else { 0x00282830 }),
                 );
-                // Active-window orange accent line under the top edge (not full fill).
-                if is_focused {
-                    canvas.hline(inner.x + 1, inner.y, inner.w.saturating_sub(2), Color(TITLEBAR_ACCENT));
-                }
-
                 // Normal layout: pin divider via Horizon strip; compact: per-button.
                 if win.control_layout() == WindowControlLayout::Normal {
                     let layout = sunlight_ui::horizon::layout_controls(
@@ -3090,6 +3531,7 @@ fn composite_window(
     let copy_h = source.height as usize;
     let stride = fb_stride(state);
     let back_ptr = back_buffer.as_mut_ptr();
+    let straight_alpha = win.config.surface_material.uses_straight_alpha();
     // Inner content area used for anti-aliased rounded-corner clipping.
     let clip_rect = if !no_chrome && !maximized {
         Some(Rect::new(
@@ -3117,19 +3559,24 @@ fn composite_window(
                 for col in 0..copy_w {
                     let lx = lx_base + col as i32;
                     let cov = state.inner_corner_mask.coverage(lx, ly, rw, rh);
-                    match cov {
-                        0 => {}
-                        255 => {
-                            dst_row.add(col).write(src_row.add(col).read());
-                        }
-                        a => {
-                            let src_px = src_row.add(col).read();
-                            let dst_px = dst_row.add(col).read();
-                            dst_row
-                                .add(col)
-                                .write(blend::blend_xrgb_with_coverage(src_px, dst_px, a));
-                        }
+                    if cov != 0 {
+                        let src_px = src_row.add(col).read();
+                        let dst_px = dst_row.add(col).read();
+                        dst_row.add(col).write(composite_client_pixel(
+                            src_px,
+                            dst_px,
+                            cov,
+                            straight_alpha,
+                        ));
                     }
+                }
+            } else if straight_alpha {
+                for col in 0..copy_w {
+                    let src_px = src_row.add(col).read();
+                    let dst_px = dst_row.add(col).read();
+                    dst_row.add(col).write(composite_client_pixel(
+                        src_px, dst_px, 255, true,
+                    ));
                 }
             } else {
                 core::ptr::copy_nonoverlapping(src_row, dst_row, copy_w);
@@ -4432,6 +4879,7 @@ mod tests {
                 z_index_value: 50,
                 show_type: ShowType::Floating,
                 group_type: GroupType::None,
+                surface_material: SurfaceMaterial::OpaqueXrgb,
                 pid: 1,
                 ppid: 0,
                 group_ids: [0; 4],
@@ -4859,9 +5307,12 @@ mod tests {
         );
         let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
         let pin = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Pin).unwrap();
-        let min = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Minimize).unwrap();
-        let max = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Maximize).unwrap();
-        let close = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Close).unwrap();
+        let min =
+            control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Minimize).unwrap();
+        let max =
+            control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Maximize).unwrap();
+        let close =
+            control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Close).unwrap();
         assert!(pin.x < min.x && min.x < max.x && max.x < close.x);
         let pin_gap = min.x - pin.right();
         let std_gap = max.x - min.right();
@@ -4965,7 +5416,8 @@ mod tests {
             ZIndexType::Normal,
         );
         let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
-        let close = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Close).unwrap();
+        let close =
+            control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Close).unwrap();
         assert_ne!(
             hit_test_window(&win, close.x as u32 + 2, close.y as u32 + 2, 800, 600),
             HitZone::TitleBar
@@ -5015,6 +5467,60 @@ mod tests {
     }
 
     #[test]
+    fn surface_material_is_explicit_and_defaults_to_opaque() {
+        let words = [0u64; 8];
+        assert_eq!(
+            WindowConfig::from_ipc_words(&words).surface_material,
+            SurfaceMaterial::OpaqueXrgb
+        );
+        let mut glass = words;
+        glass[1] = SgpMsg::config_flags::MATERIAL_WINDOW_GLASS;
+        assert_eq!(
+            WindowConfig::from_ipc_words(&glass).surface_material,
+            SurfaceMaterial::WindowGlassStraightArgb
+        );
+    }
+
+    #[test]
+    fn glass_root_and_opaque_content_compose_independently() {
+        let wallpaper = 0xFFFF_7A00;
+        let transparent_root = composite_client_pixel(0x0000_0000, wallpaper, 255, true);
+        assert_eq!(transparent_root, wallpaper);
+
+        let opaque_content = composite_client_pixel(0xFF12_3456, wallpaper, 255, true);
+        assert_eq!(opaque_content, 0xFF12_3456);
+
+        // Black is a normal opaque color, never a key for transparency.
+        let black = composite_client_pixel(0xFF00_0000, wallpaper, 255, true);
+        assert_eq!(black, 0xFF00_0000);
+    }
+
+    #[test]
+    fn straight_alpha_pixels_blend_over_dark_bright_and_translucent_layers() {
+        let src = 0x801C_1C1F;
+        let dark = composite_client_pixel(src, 0xFF08_0A0C, 255, true);
+        let bright = composite_client_pixel(src, 0xFFFF_7A00, 255, true);
+        assert_eq!(dark, blend::blend_straight_alpha_over_xrgb(src, 0xFF08_0A0C));
+        assert_eq!(bright, blend::blend_straight_alpha_over_xrgb(src, 0xFFFF_7A00));
+        assert_ne!(dark, bright);
+
+        let lower = composite_client_pixel(0x8040_6080, 0xFF20_2020, 255, true);
+        let stacked = composite_client_pixel(src, lower, 255, true);
+        assert_eq!(stacked, blend::blend_straight_alpha_over_xrgb(src, lower));
+    }
+
+    #[test]
+    fn rounded_effect_distance_uses_inner_and_expanded_corner_radii() {
+        let rect = Rect::new(20, 20, 100, 80);
+        let inner = DECORATION_GEOMETRY.window_corner_radius;
+        assert_eq!(distance_outside_rounded_rect(20, 20, rect, inner), 3);
+        let expansion = DECORATION_GEOMETRY.solar_focus_falloff;
+        let outer_corner = inner + expansion;
+        assert_eq!(outer_corner, DECORATION_GEOMETRY.outer_focus_corner_radius());
+        assert!(distance_outside_rounded_rect(11, 11, rect, inner) >= expansion);
+    }
+
+    #[test]
     fn chrome_hover_idle_does_not_require_scene_redraw() {
         // No geometry change, no drag → idle; hover handling is edge-triggered.
         assert!(!mouse_requires_scene_redraw(false, false, false));
@@ -5025,9 +5531,211 @@ mod tests {
     fn active_inactive_decoration_colors_differ() {
         assert_ne!(TITLEBAR_ACTIVE, TITLEBAR_COLOR);
         assert_ne!(TITLE_TEXT_COLOR, TITLE_TEXT_INACTIVE);
-        assert_ne!(BORDER_COLOR, BORDER_INACTIVE);
-        // Active uses orange accent; inactive is neutral.
-        assert_eq!(TITLEBAR_ACCENT, 0x00FF7A00);
+        assert_ne!(
+            SOLAR_DECORATION.structural_light,
+            SOLAR_DECORATION.structural_dark
+        );
+        assert_ne!(
+            SOLAR_DECORATION.active_glow_rgb,
+            SOLAR_DECORATION.structural_outer
+        );
+        assert_eq!(TITLEBAR_ACCENT, SUNLIGHT_ACCENT);
+    }
+
+    #[test]
+    fn solar_focus_policy_is_active_floating_app_only() {
+        let app = test_window(
+            1,
+            80,
+            80,
+            220,
+            160,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        assert!(floating_application_window(&app));
+        assert!(should_draw_solar_focus_glow(&app, true));
+        assert!(!should_draw_solar_focus_glow(&app, false));
+
+        let mut variant = app;
+        variant.config.state = WindowState::Maximized;
+        assert!(!solar_focus_glow_eligible(&variant));
+        variant.config.state = WindowState::Fullscreen;
+        assert!(!solar_focus_glow_eligible(&variant));
+        variant.config.state = WindowState::Normal;
+        variant.config.show_type = ShowType::Tiled;
+        assert!(!solar_focus_glow_eligible(&variant));
+    }
+
+    #[test]
+    fn panels_popups_and_overlays_never_receive_application_glow() {
+        for (window_type, decoration) in [
+            (WindowType::Desktop, WindowDecoration::Normal),
+            (WindowType::Widget, WindowDecoration::Normal),
+            (WindowType::Dialog, WindowDecoration::Normal),
+            (WindowType::Normal, WindowDecoration::CompactClose),
+            (WindowType::Normal, WindowDecoration::HiddenOverlay),
+        ] {
+            let mut win = test_window(
+                1,
+                80,
+                80,
+                220,
+                160,
+                window_type,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            );
+            win.config.decoration = decoration;
+            assert!(!should_draw_solar_focus_glow(&win, true));
+        }
+    }
+
+    #[test]
+    fn solar_halo_is_outside_chrome_and_never_changes_content_pixels() {
+        let state = test_state(Vec::new());
+        let outer = Rect::new(100, 100, 120, 90);
+        let mut pixels = vec![DESKTOP_COLOR; 800 * 600];
+        let content_idx = 140usize * 800 + 140;
+        let before_content = pixels[content_idx];
+        draw_solar_halo(
+            &state,
+            &mut pixels,
+            outer,
+            CHROME_RADIUS,
+            solar_decoration_metrics(&state).glow_radius,
+            SOLAR_DECORATION.active_glow_rgb,
+            SOLAR_DECORATION.active_glow_peak_alpha,
+        );
+        assert_ne!(pixels[99usize * 800 + 140], DESKTOP_COLOR);
+        assert_eq!(pixels[content_idx], before_content);
+    }
+
+    #[test]
+    fn decoration_damage_includes_bounded_effect_and_clips_at_screen_edges() {
+        let state = test_state(vec![test_window(
+            1,
+            0,
+            0,
+            220,
+            160,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        )]);
+        let bounds = window_decoration_damage_bounds(&state, &state.windows[0]);
+        assert_eq!(bounds.x, 0);
+        assert_eq!(bounds.y, 0);
+        assert!(bounds.w > state.windows[0].width + BORDER_W * 2);
+        assert!(bounds.h > state.windows[0].height + TITLEBAR_H + BORDER_W);
+        assert!(bounds.right() <= state.fb_width as i32);
+        assert!(bounds.bottom() <= state.fb_height as i32);
+    }
+
+    #[test]
+    fn focus_transfer_marks_old_and_new_extended_effect_bounds() {
+        let mut state = test_state(vec![
+            test_window(
+                1,
+                20,
+                80,
+                180,
+                140,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+            test_window(
+                2,
+                500,
+                300,
+                180,
+                140,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+        ]);
+        let old = window_decoration_damage_bounds(&state, &state.windows[1]);
+        let new = window_decoration_damage_bounds(&state, &state.windows[0]);
+        mark_decoration_transition_damage(&mut state, Some(old), Some(new));
+        assert_eq!(state.dirty.count, 2);
+        assert!(state.dirty.rects[..state.dirty.count].contains(&old));
+        assert!(state.dirty.rects[..state.dirty.count].contains(&new));
+    }
+
+    #[test]
+    fn move_resize_and_hide_damage_complete_old_effect_region() {
+        let mut state = test_state(vec![test_window(
+            1,
+            120,
+            100,
+            200,
+            150,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        )]);
+        let old = window_decoration_damage_bounds(&state, &state.windows[0]);
+        state.windows[0].x += 30;
+        state.windows[0].width += 40;
+        let new = window_decoration_damage_bounds(&state, &state.windows[0]);
+        mark_decoration_transition_damage(&mut state, Some(old), Some(new));
+        assert_eq!(state.dirty.count, 2);
+
+        state.dirty.clear();
+        mark_decoration_transition_damage(&mut state, Some(new), None);
+        assert_eq!(state.dirty.count, 1);
+        assert_eq!(state.dirty.rects[0], new);
+    }
+
+    #[test]
+    fn higher_window_pixels_overpaint_earlier_window_glow() {
+        let state = test_state(Vec::new());
+        let mut pixels = vec![DESKTOP_COLOR; 800 * 600];
+        let lower = Rect::new(100, 100, 180, 130);
+        draw_solar_halo(
+            &state,
+            &mut pixels,
+            lower,
+            CHROME_RADIUS,
+            solar_decoration_metrics(&state).glow_radius,
+            SOLAR_DECORATION.active_glow_rgb,
+            SOLAR_DECORATION.active_glow_peak_alpha,
+        );
+        let overlap_idx = 99usize * 800 + 150;
+        assert_ne!(pixels[overlap_idx], DESKTOP_COLOR);
+        // This models the established later-window compositor pass.
+        pixels[overlap_idx] = 0xFF12_3456;
+        assert_eq!(pixels[overlap_idx], 0xFF12_3456);
+    }
+
+    #[test]
+    fn destroyed_window_identity_cannot_remain_active_and_effect_resources_are_bounded() {
+        let mut state = test_state(vec![test_window(
+            7,
+            40,
+            80,
+            200,
+            150,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        )]);
+        assert_eq!(focused_window_id(&state), Some(7));
+        state.windows.remove(0);
+        assert_eq!(focused_window_id(&state), None);
+        // The effect allocates no cache: only the shared bounded falloff values
+        // are used while drawing into the existing back buffer.
+        assert_eq!(
+            SOLAR_DECORATION.ambient_shadow_radius_dip,
+            DECORATION_GEOMETRY.ambient_shadow_falloff
+        );
+        assert_eq!(
+            SOLAR_DECORATION.active_glow_radius_dip,
+            DECORATION_GEOMETRY.solar_focus_falloff
+        );
     }
 
     #[test]
@@ -5861,6 +6569,9 @@ pub extern "C" fn _start() -> ! {
                             2 => GroupType::Tabbed,
                             _ => GroupType::None,
                         };
+                        if flags & SgpMsg::config_flags::MATERIAL_MASK != 0 {
+                            win.config.surface_material = SurfaceMaterial::from_flags(flags);
+                        }
                     }
                     // Update title from words[3] inline bytes.
                     if msg.words[3] != 0 {
@@ -6624,6 +7335,9 @@ pub extern "C" fn _start() -> ! {
                     if let Some(hit_idx) = topmost_window_idx_at(&state, cx, cy) {
                         let id = state.windows[hit_idx].id;
                         let focused_before = focused_window_id(&state);
+                        let focused_damage_before = focused_window_idx(&state).map(|idx| {
+                            window_decoration_damage_bounds(&state, &state.windows[idx])
+                        });
                         let hit_zone = hit_test_window(
                             &state.windows[hit_idx],
                             cx,
@@ -6637,6 +7351,16 @@ pub extern "C" fn _start() -> ! {
                         if win_type != WindowType::Desktop && win_type != WindowType::Widget {
                             raise_window_by_id(&mut state, id);
                             let focus_changed = focused_before != Some(id);
+                            if focus_changed {
+                                let focused_damage_after = focused_window_idx(&state).map(|idx| {
+                                    window_decoration_damage_bounds(&state, &state.windows[idx])
+                                });
+                                mark_decoration_transition_damage(
+                                    &mut state,
+                                    focused_damage_before,
+                                    focused_damage_after,
+                                );
+                            }
                             scene_changed |= focus_changed;
                             full_geometry_dirty |= focus_changed;
                         }
@@ -6688,6 +7412,11 @@ pub extern "C" fn _start() -> ! {
                                 full_geometry_dirty = true;
                             }
                             HitZone::MaximizeBtn => {
+                                let state_damage_before = state
+                                    .windows
+                                    .iter()
+                                    .find(|win| win.id == id)
+                                    .map(|win| window_decoration_damage_bounds(&state, win));
                                 let mut state_changed = false;
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
                                     if win.config.state == WindowState::Normal {
@@ -6712,6 +7441,15 @@ pub extern "C" fn _start() -> ! {
                                     }
                                 }
                                 if state_changed {
+                                    let state_damage_after =
+                                        state.windows.iter().find(|win| win.id == id).map(|win| {
+                                            window_decoration_damage_bounds(&state, win)
+                                        });
+                                    mark_decoration_transition_damage(
+                                        &mut state,
+                                        state_damage_before,
+                                        state_damage_after,
+                                    );
                                     debug_log_window_state(&state, id);
                                 }
                                 state.active_drag = ActiveDrag::None;
@@ -6719,9 +7457,19 @@ pub extern "C" fn _start() -> ! {
                                 full_geometry_dirty = true;
                             }
                             HitZone::MinimizeBtn => {
+                                let state_damage_before = state
+                                    .windows
+                                    .iter()
+                                    .find(|win| win.id == id)
+                                    .map(|win| window_decoration_damage_bounds(&state, win));
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
                                     win.config.state = WindowState::Minimized;
                                 }
+                                mark_decoration_transition_damage(
+                                    &mut state,
+                                    state_damage_before,
+                                    None,
+                                );
                                 state.active_drag = ActiveDrag::None;
                                 scene_changed = true;
                                 full_geometry_dirty = true;
@@ -6803,6 +7551,19 @@ pub extern "C" fn _start() -> ! {
                 if left_down {
                     let dcx = cx as i32 - prev_cx as i32;
                     let dcy = cy as i32 - prev_cy as i32;
+                    let dragged_window_id = match &state.active_drag {
+                        ActiveDrag::Move(d) => Some(d.window_id),
+                        ActiveDrag::Resize(d) => Some(d.window_id),
+                        ActiveDrag::None => None,
+                    };
+                    let drag_damage_before = dragged_window_id.and_then(|id| {
+                        state
+                            .windows
+                            .iter()
+                            .find(|win| win.id == id)
+                            .map(|win| window_decoration_damage_bounds(&state, win))
+                    });
+                    let mut drag_geometry_changed = false;
 
                     match &state.active_drag {
                         ActiveDrag::Move(d) => {
@@ -6817,6 +7578,7 @@ pub extern "C" fn _start() -> ! {
                                         as u32;
                                     scene_changed = true;
                                     full_geometry_dirty = true;
+                                    drag_geometry_changed = true;
                                 }
                             }
                         }
@@ -6869,10 +7631,26 @@ pub extern "C" fn _start() -> ! {
                                     }
                                     scene_changed = true;
                                     full_geometry_dirty = true;
+                                    drag_geometry_changed = true;
                                 }
                             }
                         }
                         ActiveDrag::None => {}
+                    }
+
+                    if drag_geometry_changed {
+                        let drag_damage_after = dragged_window_id.and_then(|id| {
+                            state
+                                .windows
+                                .iter()
+                                .find(|win| win.id == id)
+                                .map(|win| window_decoration_damage_bounds(&state, win))
+                        });
+                        mark_decoration_transition_damage(
+                            &mut state,
+                            drag_damage_before,
+                            drag_damage_after,
+                        );
                     }
                 }
 

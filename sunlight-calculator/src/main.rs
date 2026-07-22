@@ -16,7 +16,7 @@ use sunlight_ui::paint::Canvas;
 use sunlight_ui::theme::{Color, Theme};
 use sunlight_ui::{
     request_close, widgets::Label, App, Event, Rect, UiSymbol, Window, WindowConfig,
-    WindowDecoration,
+    WindowDecoration, WindowMaterial,
 };
 
 static F_MED: VecFont = VecFont(FontRole::UiMedium);
@@ -389,7 +389,7 @@ impl CalcApp {
 
 impl App for CalcApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
         Self::draw_header(canvas, theme);
         Self::draw_display(canvas, self, theme);
@@ -457,12 +457,15 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
     let mut app = CalcApp::new();
 
-    let mut window = match Window::connect(WindowConfig {
-        width: WIN_W,
-        height: WIN_H,
-        title: "Calculator",
-        decoration: WindowDecoration::CompactCloseMinimize,
-    }) {
+    let mut window = match Window::connect_with_material(
+        WindowConfig {
+            width: WIN_W,
+            height: WIN_H,
+            title: "Calculator",
+            decoration: WindowDecoration::CompactCloseMinimize,
+        },
+        WindowMaterial::WindowGlass,
+    ) {
         Some(w) => w,
         None => {
             debug_log("[CALC] failed to connect window\n");

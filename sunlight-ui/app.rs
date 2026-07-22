@@ -166,6 +166,27 @@ pub struct WindowConfig {
     pub decoration: WindowDecoration,
 }
 
+/// Explicit compositor material for a native window surface.
+///
+/// `Opaque` retains the historical XRGB copy path. `WindowGlass` opts into
+/// straight-alpha ARGB client composition and compositor-owned glass backing;
+/// applications must clear unused root pixels to transparent and keep dense
+/// content opaque themselves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowMaterial {
+    Opaque,
+    WindowGlass,
+}
+
+impl WindowMaterial {
+    const fn config_flag_bits(self) -> u64 {
+        match self {
+            Self::Opaque => 0,
+            Self::WindowGlass => sunlight_ipc::sgp::SgpMsg::config_flags::MATERIAL_WINDOW_GLASS,
+        }
+    }
+}
+
 /// Monotonic client-side evidence for the window event route.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct EventPollCounters {
@@ -242,6 +263,10 @@ impl Window {
     /// Look up the display server, create a window, and map the shared buffer.
     pub fn connect(config: WindowConfig) -> Option<Self> {
         Self::connect_with_flags(config, 0)
+    }
+
+    pub fn connect_with_material(config: WindowConfig, material: WindowMaterial) -> Option<Self> {
+        Self::connect_with_flags(config, material.config_flag_bits())
     }
 
     pub fn connect_with_flags(config: WindowConfig, config_flags: u64) -> Option<Self> {
@@ -550,6 +575,7 @@ impl Window {
     /// - bit  [5]:   z-index type (0=Normal, 1=OnTop)
     /// - bits [12:6]: z-index value 1–100 (0 = keep default)
     /// - bits [18:17]: decoration
+    /// - bits [20:19]: explicit surface material
     ///
     /// Passing `flags = 0` is a no-op (the display server interprets zero as
     /// "no flags change").

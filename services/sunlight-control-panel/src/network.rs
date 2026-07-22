@@ -173,7 +173,7 @@ impl NetworkPageState {
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme, win_w: u32, win_h: u32) {
-        canvas.fill_rect(Rect::new(0, 0, win_w, win_h), theme.bg);
+        canvas.clear_transparent(Rect::new(0, 0, win_w, win_h));
         let header = Rect::new(0, 0, win_w, 44);
         canvas.fill_rect(header, theme.panel);
         canvas.draw_rect(Rect::new(0, 43, win_w, 1), theme.border);

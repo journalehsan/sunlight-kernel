@@ -1303,8 +1303,7 @@ impl StartMenuState {
 
         canvas.fill_material(
             layout.panel,
-            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme)
-                .with_radius(12),
+            sunlight_ui::MaterialPalette::new(theme).overlay_glass,
         );
 
         canvas.fill_rounded_rect(layout.close_btn, 6, theme.panel_alt);

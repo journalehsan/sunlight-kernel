@@ -12,7 +12,7 @@ use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_CORES, MAX
 use sunlight_ui::{
     request_close,
     widgets::{Column, Label, Panel, StatusBar, Table},
-    App, Color, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
+    App, Color, Event, Point, Rect, Theme, VecText, Window, WindowConfig, WindowMaterial,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -651,7 +651,7 @@ impl TasksApp {
 
 impl App for TasksApp {
     fn view(&mut self, canvas: &mut sunlight_ui::Canvas, theme: &sunlight_ui::Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
         let content = self.content_rect();
         Panel::new(content).draw(canvas, theme);
@@ -980,12 +980,15 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     };
 
     let mut app = TasksApp::new(telemetry);
-    let mut window = match Window::connect(WindowConfig {
-        width: WIN_W,
-        height: WIN_H,
-        title: "Tasks Monitor",
-        decoration: sunlight_ui::WindowDecoration::Normal,
-    }) {
+    let mut window = match Window::connect_with_material(
+        WindowConfig {
+            width: WIN_W,
+            height: WIN_H,
+            title: "Tasks Monitor",
+            decoration: sunlight_ui::WindowDecoration::Normal,
+        },
+        WindowMaterial::WindowGlass,
+    ) {
         Some(window) => window,
         None => {
             debug_log("[TASKS] failed to connect window\n");

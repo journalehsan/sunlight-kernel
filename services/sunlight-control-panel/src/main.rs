@@ -41,8 +41,8 @@ use sunlight_ui::{
     image::{draw_mono_icon, MonoIcon, TgaImage},
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, Slider},
-    App, Canvas, Color, Event, HBox, Point, Rect, Theme, VBox, Window, WindowConfig,
-    WindowDecoration,
+    App, Canvas, Color, Event, HBox, MaterialPalette, Point, Rect, Theme, VBox, Window,
+    WindowConfig, WindowDecoration, WindowMaterial,
 };
 use sunlight_wallpaper::{
     is_supported_wallpaper, load_desktop_config, save_desktop_config, scan_wallpapers,
@@ -630,8 +630,7 @@ impl ControlPanelApp {
         sublabel: &str,
         tga_icon: Option<TgaImage>,
     ) {
-        canvas.fill_rect(rect, theme.panel);
-        canvas.draw_rect(rect, theme.border);
+        canvas.fill_material(rect, MaterialPalette::new(theme).card_glass);
 
         let ix = rect.x + rect.w as i32 / 2 - 24;
         let iy = rect.y + 22;
@@ -654,7 +653,7 @@ impl ControlPanelApp {
     }
 
     fn draw_grid(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
         // Header bar
         let header = Rect::new(0, 0, WIN_W, 44);
@@ -899,7 +898,7 @@ impl ControlPanelApp {
     }
 
     fn draw_notifications_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
         Panel::new(content).draw(canvas, theme);
         let title_bar = Rect::new(content.x, content.y, content.w, 28);
@@ -982,7 +981,7 @@ impl ControlPanelApp {
     // -----------------------------------------------------------------------
 
     fn draw_mouse_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
         Panel::with_title(content, "Mouse").draw(canvas, theme);
@@ -1092,7 +1091,7 @@ impl ControlPanelApp {
     // -----------------------------------------------------------------------
 
     fn draw_monitor_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
         Panel::with_title(content, "Monitor").draw(canvas, theme);
@@ -1283,7 +1282,7 @@ impl ControlPanelApp {
     }
 
     fn draw_wallpaper_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
         Panel::with_title(content, "Wallpaper").draw(canvas, theme);
 
@@ -1748,12 +1747,15 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         app.refresh_sysinfo();
     }
 
-    let mut window = match Window::connect(WindowConfig {
-        width: WIN_W,
-        height: WIN_H,
-        title: "System Preferences",
-        decoration: sunlight_ui::WindowDecoration::Normal,
-    }) {
+    let mut window = match Window::connect_with_material(
+        WindowConfig {
+            width: WIN_W,
+            height: WIN_H,
+            title: "System Preferences",
+            decoration: sunlight_ui::WindowDecoration::Normal,
+        },
+        WindowMaterial::WindowGlass,
+    ) {
         Some(w) => w,
         None => loop {
             process_yield();

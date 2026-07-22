@@ -42,24 +42,33 @@ impl Color {
     /// Returns straight-alpha ARGB.
     #[inline]
     pub fn blend_over(self, dst: Color) -> Color {
-        let a = self.a() as u32;
-        if a == 255 {
+        let src_a = self.a() as u64;
+        if src_a == 255 {
             return self;
         }
-        if a == 0 {
+        if src_a == 0 {
             return dst;
         }
-        let ia = 255 - a;
-        let r = (self.r() as u32 * a + dst.r() as u32 * ia + 127) / 255;
-        let g = (self.g() as u32 * a + dst.g() as u32 * ia + 127) / 255;
-        let b = (self.b() as u32 * a + dst.b() as u32 * ia + 127) / 255;
-        let da = dst.a() as u32;
-        let out_a = if da == 255 {
-            255
-        } else {
-            (a * 255 + da * ia + 127) / 255
+        let dst_a = dst.a() as u64;
+        let inv_src_a = 255 - src_a;
+
+        // Keep the stored result in straight-alpha form. The common shortcut
+        // `src * a + dst * (1-a)` is only valid for an opaque destination; on
+        // a transparent canvas it stores premultiplied RGB and the compositor
+        // attenuates the pixel a second time.
+        let out_a_numerator = src_a * 255 + dst_a * inv_src_a;
+        let out_a = (out_a_numerator + 127) / 255;
+        let blend_channel = |src: u8, dst_channel: u8| -> u8 {
+            let numerator = src as u64 * src_a * 255
+                + dst_channel as u64 * dst_a * inv_src_a;
+            ((numerator + out_a_numerator / 2) / out_a_numerator) as u8
         };
-        Color::rgba(r as u8, g as u8, b as u8, out_a as u8)
+        Color::rgba(
+            blend_channel(self.r(), dst.r()),
+            blend_channel(self.g(), dst.g()),
+            blend_channel(self.b(), dst.b()),
+            out_a as u8,
+        )
     }
 
     /// Lighten by mixing with white by `amount` 0..=255.

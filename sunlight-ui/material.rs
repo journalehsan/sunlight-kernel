@@ -37,6 +37,107 @@ pub enum MaterialKind {
     Glass = 2,
 }
 
+/// Foreground contrast expected by a material preset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadabilityRole {
+    Primary,
+    Muted,
+}
+
+/// Shared Sunlight window/effect geometry in device-independent pixels.
+///
+/// The compositor scales these values once for the active display.  Keeping
+/// the inner radius and effect expansion together prevents independently tuned
+/// masks from producing detached or pinched corners.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecorationGeometry {
+    pub window_corner_radius: u32,
+    pub structural_rim: u32,
+    pub ambient_shadow_falloff: u32,
+    pub ambient_shadow_offset_y: u32,
+    pub solar_focus_falloff: u32,
+}
+
+impl DecorationGeometry {
+    pub const SUNLIGHT: Self = Self {
+        window_corner_radius: 8,
+        structural_rim: 1,
+        ambient_shadow_falloff: 12,
+        ambient_shadow_offset_y: 3,
+        solar_focus_falloff: 9,
+    };
+
+    pub const fn outer_shadow_corner_radius(self) -> u32 {
+        self.window_corner_radius
+            .saturating_add(self.ambient_shadow_falloff)
+    }
+
+    pub const fn outer_focus_corner_radius(self) -> u32 {
+        self.window_corner_radius
+            .saturating_add(self.solar_focus_falloff)
+    }
+}
+
+/// Canonical material family for native Sunlight surfaces.
+///
+/// This is deliberately separate from [`Theme`] so adding material policy does
+/// not expand every existing theme literal.  It contains no cache or allocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaterialPalette {
+    pub overlay_glass: Material,
+    pub window_glass: Material,
+    pub titlebar_active: Material,
+    pub titlebar_inactive: Material,
+    pub card_glass: Material,
+    pub solid_content: Material,
+    pub tinted_content: Material,
+}
+
+impl MaterialPalette {
+    pub const fn new(theme: &Theme) -> Self {
+        Self {
+            // Canonical Start-menu values: preserve its effective pre-extraction
+            // appearance (including the fact that its old Tinted preset disabled
+            // the requested noise).
+            overlay_glass: Material::glass(theme.panel, 232)
+                .with_noise(0)
+                .with_border(theme.border)
+                .with_radius(12),
+            window_glass: Material::glass(theme.panel, 232)
+                .with_noise(4)
+                .with_radius(DecorationGeometry::SUNLIGHT.window_corner_radius),
+            titlebar_active: Material::glass(Color::rgb(0x1E, 0x1E, 0x26), 240)
+                .with_noise(3)
+                .with_radius(DecorationGeometry::SUNLIGHT.window_corner_radius),
+            titlebar_inactive: Material::glass(Color::rgb(0x2B, 0x2B, 0x36), 235)
+                .with_noise(3)
+                .with_radius(DecorationGeometry::SUNLIGHT.window_corner_radius),
+            card_glass: Material::glass(theme.panel, 247)
+                .with_noise(2)
+                .with_border(theme.border)
+                .with_radius(8),
+            solid_content: Material::solid(theme.bg),
+            tinted_content: Material::tinted(theme.panel_alt, 250)
+                .with_border(theme.border)
+                .with_radius(6),
+        }
+    }
+
+    /// Accessibility fallback: preserve hierarchy and borders while removing
+    /// transparency and noise from every material.
+    pub const fn opaque(self) -> Self {
+        Self {
+            overlay_glass: self.overlay_glass.opaque_fallback(),
+            window_glass: self.window_glass.opaque_fallback(),
+            titlebar_active: self.titlebar_active.opaque_fallback(),
+            titlebar_inactive: self.titlebar_inactive.opaque_fallback(),
+            card_glass: self.card_glass.opaque_fallback(),
+            solid_content: self.solid_content.opaque_fallback(),
+            tinted_content: self.tinted_content.opaque_fallback(),
+        }
+    }
+}
+
 /// General-purpose material description.
 ///
 /// Opacity and noise are stored as 0..=255 and clamped by constructors and
@@ -110,6 +211,17 @@ impl Material {
         self
     }
 
+    pub const fn without_border(mut self) -> Self {
+        self.border = None;
+        self
+    }
+
+    pub const fn opaque_fallback(mut self) -> Self {
+        self.opacity = 255;
+        self.noise_strength = 0;
+        self
+    }
+
     /// Clamp opacity and noise to safe ranges.
     pub const fn clamp(mut self) -> Self {
         // opacity already u8; keep 0..=255 as-is
@@ -133,8 +245,9 @@ impl Material {
     ///
     /// Application content is **not** glass — opaque by policy.
     pub fn for_role(role: SurfaceRole, theme: &Theme) -> Self {
+        let materials = MaterialPalette::new(theme);
         match role {
-            SurfaceRole::ApplicationWindow => Self::solid(theme.bg).with_radius(0),
+            SurfaceRole::ApplicationWindow => materials.solid_content,
             SurfaceRole::Panel => Self::tinted(theme.panel, 240) // ~94%
                 .with_noise(2)
                 .with_border(theme.border)
@@ -145,11 +258,7 @@ impl Material {
                 .with_border(theme.border)
                 .with_radius(10)
                 .clamp(),
-            SurfaceRole::PopupOrMenu => Self::tinted(theme.panel, 232) // ~91%
-                .with_noise(3)
-                .with_border(theme.border)
-                .with_radius(12)
-                .clamp(),
+            SurfaceRole::PopupOrMenu => materials.overlay_glass,
             SurfaceRole::Tooltip => Self::tinted(theme.panel_alt, 245)
                 .with_noise(0)
                 .with_border(theme.border.lighten(20))
@@ -165,24 +274,25 @@ impl Material {
 
     /// Titlebar / decoration backplate glass (restrained).
     pub fn titlebar_glass(_theme: &Theme, active: bool) -> Self {
-        let tint = if active {
-            Color::rgb(0x1E, 0x1E, 0x26)
+        let materials = MaterialPalette::new(_theme);
+        if active {
+            materials.titlebar_active
         } else {
-            Color::rgb(0x2B, 0x2B, 0x36)
-        };
-        Self::glass(tint, if active { 245 } else { 235 })
-            .with_noise(if active { 4 } else { 3 })
-            .with_radius(0)
-            .clamp()
+            materials.titlebar_inactive
+        }
     }
 
     /// Control-panel card / disclosure group surface.
     pub fn card(theme: &Theme) -> Self {
-        Self::tinted(theme.panel, 250)
-            .with_noise(2)
-            .with_border(theme.border)
-            .with_radius(8)
-            .clamp()
+        MaterialPalette::new(theme).card_glass
+    }
+
+    pub fn readability_role(self) -> ReadabilityRole {
+        if self.opacity >= 220 {
+            ReadabilityRole::Primary
+        } else {
+            ReadabilityRole::Muted
+        }
     }
 
     /// Readable foreground for text drawn on this material.
@@ -330,6 +440,22 @@ mod tests {
     }
 
     #[test]
+    fn straight_alpha_over_transparent_keeps_unpremultiplied_rgb() {
+        let src = Color::rgba(240, 80, 20, 128);
+        let out = blend_straight_over(src, Color::TRANSPARENT);
+        assert_eq!(out, src);
+    }
+
+    #[test]
+    fn straight_alpha_layers_preserve_alpha_and_normalized_color() {
+        let lower = Color::rgba(0, 0, 255, 128);
+        let upper = Color::rgba(255, 0, 0, 128);
+        let out = upper.blend_over(lower);
+        assert_eq!(out.a(), 192);
+        assert_eq!((out.r(), out.g(), out.b()), (170, 0, 85));
+    }
+
+    #[test]
     fn solid_sample_is_opaque_and_ignores_noise() {
         let m = Material::solid(Color::rgb(0x12, 0x34, 0x56)).with_noise(40);
         let c = m.sample_color(4, 4);
@@ -356,6 +482,61 @@ mod tests {
         let panel = Material::for_role(SurfaceRole::Panel, &theme).clamp();
         assert!(panel.opacity >= 230); // ~90%+
         assert!(panel.noise_strength <= 4);
+    }
+
+    #[test]
+    fn canonical_start_values_are_preserved_and_shared() {
+        let theme = Theme::sunlight_dark();
+        let palette = MaterialPalette::new(&theme);
+        let start = palette.overlay_glass;
+        assert_eq!(start.tint, Color::rgb(0x1C, 0x1C, 0x1F));
+        assert_eq!(start.opacity, 232);
+        assert_eq!(start.noise_strength, 0);
+        assert_eq!(start.border, Some(Color::rgb(0x35, 0x35, 0x40)));
+        assert_eq!(start.radius, 12);
+        assert_eq!(
+            Material::for_role(SurfaceRole::PopupOrMenu, &theme),
+            start
+        );
+    }
+
+    #[test]
+    fn window_hierarchy_keeps_cards_denser_and_content_opaque() {
+        let palette = MaterialPalette::new(&Theme::sunlight_dark());
+        assert!(palette.card_glass.opacity > palette.window_glass.opacity);
+        assert_eq!(palette.solid_content.opacity, 255);
+        assert_eq!(palette.solid_content.kind, MaterialKind::Solid);
+        assert!(palette.tinted_content.opacity >= palette.card_glass.opacity);
+    }
+
+    #[test]
+    fn opaque_accessibility_fallback_disables_alpha_and_noise() {
+        let palette = MaterialPalette::new(&Theme::sunlight_dark()).opaque();
+        for material in [
+            palette.overlay_glass,
+            palette.window_glass,
+            palette.titlebar_active,
+            palette.titlebar_inactive,
+            palette.card_glass,
+            palette.solid_content,
+            palette.tinted_content,
+        ] {
+            assert_eq!(material.opacity, 255);
+            assert_eq!(material.noise_strength, 0);
+        }
+    }
+
+    #[test]
+    fn outer_effect_geometry_expands_the_window_corner() {
+        let geometry = DecorationGeometry::SUNLIGHT;
+        assert_eq!(
+            geometry.outer_shadow_corner_radius(),
+            geometry.window_corner_radius + geometry.ambient_shadow_falloff
+        );
+        assert_eq!(
+            geometry.outer_focus_corner_radius(),
+            geometry.window_corner_radius + geometry.solar_focus_falloff
+        );
     }
 
     #[test]

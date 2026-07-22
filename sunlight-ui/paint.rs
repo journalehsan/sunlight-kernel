@@ -56,6 +56,14 @@ impl<'fb> Canvas<'fb> {
         }
     }
 
+    /// Replace a region with transparent pixels.
+    ///
+    /// This is intended for explicitly alpha-capable native surfaces. Legacy
+    /// XRGB windows must continue painting an opaque root.
+    pub fn clear_transparent(&mut self, rect: Rect) {
+        self.fill_rect(rect, Color::TRANSPARENT);
+    }
+
     /// Alpha-composite a rectangle over the existing pixels.
     pub fn blend_rect(&mut self, rect: Rect, color: Color) {
         let x0 = rect.x.max(0) as u32;
@@ -145,7 +153,10 @@ impl<'fb> Canvas<'fb> {
                                 let r = (dst.r() as i16 + delta).clamp(0, 255) as u8;
                                 let g = (dst.g() as i16 + delta).clamp(0, 255) as u8;
                                 let b = (dst.b() as i16 + delta).clamp(0, 255) as u8;
-                                self.pixels[idx] = Color::rgb(r, g, b).0;
+                                // Noise changes only straight RGB. Preserve the
+                                // material's alpha so a rounded glass surface
+                                // never becomes accidentally opaque.
+                                self.pixels[idx] = Color::rgba(r, g, b, dst.a()).0;
                             }
                         }
                     }
@@ -159,6 +170,14 @@ impl<'fb> Canvas<'fb> {
                 self.stroke_rounded_rect(rect, radius, 1, border);
             }
         }
+    }
+
+    /// Replace `rect` with a material instead of compositing over the previous
+    /// frame. This avoids alpha accumulation when an app repaints the root of
+    /// an opt-in translucent surface.
+    pub fn paint_material(&mut self, rect: Rect, material: Material) {
+        self.clear_transparent(rect);
+        self.fill_material(rect, material);
     }
 
     /// Draw text with an optional 1-px ambient shadow (glass readability only).
@@ -359,23 +378,10 @@ impl<'fb> Canvas<'fb> {
                 if idx >= self.pixels.len() {
                     continue;
                 }
-                let xrgb = argb & 0x00FF_FFFF;
                 if a == 255 {
-                    self.pixels[idx] = xrgb;
+                    self.pixels[idx] = argb;
                 } else {
-                    let dst_px = self.pixels[idx];
-                    let sr = (xrgb >> 16) & 0xFF;
-                    let sg = (xrgb >> 8) & 0xFF;
-                    let sb = xrgb & 0xFF;
-                    let dr = (dst_px >> 16) & 0xFF;
-                    let dg = (dst_px >> 8) & 0xFF;
-                    let db = dst_px & 0xFF;
-                    let af = a as u32;
-                    let ia = 255 - af;
-                    let r = (sr * af + dr * ia + 127) / 255;
-                    let g = (sg * af + dg * ia + 127) / 255;
-                    let b = (sb * af + db * ia + 127) / 255;
-                    self.pixels[idx] = (r << 16) | (g << 8) | b;
+                    self.pixels[idx] = Color(argb).blend_over(Color(self.pixels[idx])).0;
                 }
             }
         }
@@ -399,10 +405,6 @@ impl<'fb> Canvas<'fb> {
         let dw = (dst.right() - dst.x.max(0)).max(1) as u32;
         let dh = (dst.bottom() - dst.y.max(0)).max(1) as u32;
 
-        let tr = tint.r() as u32;
-        let tg = tint.g() as u32;
-        let tb = tint.b() as u32;
-
         for dy in cy0..cy1 {
             let src_y = (dy - cy0) * img.height / dh;
             let row_off = dy as usize * self.stride as usize;
@@ -417,20 +419,9 @@ impl<'fb> Canvas<'fb> {
                 if idx >= self.pixels.len() {
                     continue;
                 }
-                if a == 255 {
-                    self.pixels[idx] = (tr << 16) | (tg << 8) | tb;
-                } else {
-                    let dst_px = self.pixels[idx];
-                    let dr = (dst_px >> 16) & 0xFF;
-                    let dg = (dst_px >> 8) & 0xFF;
-                    let db = dst_px & 0xFF;
-                    let af = a as u32;
-                    let ia = 255 - af;
-                    let r = (tr * af + dr * ia + 127) / 255;
-                    let g = (tg * af + dg * ia + 127) / 255;
-                    let b = (tb * af + db * ia + 127) / 255;
-                    self.pixels[idx] = (r << 16) | (g << 8) | b;
-                }
+                let source_alpha = ((a as u32 * tint.a() as u32 + 127) / 255) as u8;
+                let source = Color::rgba(tint.r(), tint.g(), tint.b(), source_alpha);
+                self.pixels[idx] = source.blend_over(Color(self.pixels[idx])).0;
             }
         }
     }
@@ -450,7 +441,10 @@ impl<'fb> Canvas<'fb> {
                 let src_x = (x * iw / fw) as u32;
                 let idx = row_off + x;
                 if idx < self.pixels.len() {
-                    self.pixels[idx] = img.pixel_xrgb(src_x, src_y);
+                    // Cover images are opaque content. Preserve that fact in
+                    // ARGB-capable native surfaces instead of relying on the
+                    // historical compositor behavior of ignoring the high byte.
+                    self.pixels[idx] = 0xFF00_0000 | img.pixel_xrgb(src_x, src_y);
                 }
             }
         }
@@ -471,6 +465,87 @@ impl<'fb> Canvas<'fb> {
             width: w,
             height: h,
         }
+    }
+}
+
+#[cfg(test)]
+mod material_tests {
+    use super::*;
+    use crate::image::TgaImage;
+    use crate::material::Material;
+
+    static HALF_RED_TGA: [u8; 22] = [
+        0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0x20, 0, 0, 255, 128,
+    ];
+    static OPAQUE_RED_TGA: [u8; 22] = [
+        0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0x20, 0, 0, 255, 255,
+    ];
+    static OPAQUE_BLUE_24_TGA: [u8; 21] = [
+        0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 24, 0x20, 255, 0, 0,
+    ];
+
+    #[test]
+    fn paint_material_replaces_previous_frame_alpha() {
+        let mut pixels = [0xFFFF_FFFF; 16];
+        let mut canvas = Canvas::new(&mut pixels, 4, 4, 4);
+        let glass = Material::glass(Color::rgb(20, 30, 40), 200).with_noise(0);
+        canvas.paint_material(Rect::new(0, 0, 4, 4), glass);
+        assert!(pixels.iter().all(|pixel| (pixel >> 24) == 200));
+    }
+
+    #[test]
+    fn rounded_glass_noise_never_forces_pixels_opaque() {
+        let mut pixels = [0u32; 64];
+        let mut canvas = Canvas::new(&mut pixels, 8, 8, 8);
+        let glass = Material::glass(Color::rgb(20, 30, 40), 200)
+            .with_noise(5)
+            .with_radius(3);
+        canvas.fill_material(Rect::new(0, 0, 8, 8), glass);
+        assert_eq!(pixels[4 * 8 + 4] >> 24, 200);
+        assert!(pixels.iter().all(|pixel| (pixel >> 24) <= 200));
+    }
+
+    #[test]
+    fn tga_icon_keeps_straight_alpha_on_transparent_canvas() {
+        let image = TgaImage::parse(&HALF_RED_TGA).unwrap();
+        let mut pixels = [0u32; 1];
+        let mut canvas = Canvas::new(&mut pixels, 1, 1, 1);
+        canvas.draw_tga_icon(&image, Rect::new(0, 0, 1, 1));
+        assert_eq!(pixels[0], 0x80FF_0000);
+    }
+
+    #[test]
+    fn tga_icon_over_opaque_content_remains_opaque() {
+        let image = TgaImage::parse(&HALF_RED_TGA).unwrap();
+        let mut pixels = [0xFF00_00FFu32; 1];
+        let mut canvas = Canvas::new(&mut pixels, 1, 1, 1);
+        canvas.draw_tga_icon(&image, Rect::new(0, 0, 1, 1));
+        assert_eq!(pixels[0], 0xFF80_007F);
+    }
+
+    #[test]
+    fn opaque_and_tinted_tga_paths_never_drop_alpha() {
+        let opaque = TgaImage::parse(&OPAQUE_RED_TGA).unwrap();
+        let masked = TgaImage::parse(&HALF_RED_TGA).unwrap();
+        let mut pixels = [0u32; 2];
+        let mut canvas = Canvas::new(&mut pixels, 2, 2, 1);
+        canvas.draw_tga_icon(&opaque, Rect::new(0, 0, 1, 1));
+        canvas.draw_tga_icon_tinted(
+            &masked,
+            Rect::new(1, 0, 1, 1),
+            Color::rgb(20, 40, 60),
+        );
+        assert_eq!(pixels[0], 0xFFFF_0000);
+        assert_eq!(pixels[1], 0x8014_283C);
+    }
+
+    #[test]
+    fn cover_image_is_explicitly_opaque() {
+        let image = TgaImage::parse(&OPAQUE_BLUE_24_TGA).unwrap();
+        let mut pixels = [0u32; 1];
+        let mut canvas = Canvas::new(&mut pixels, 1, 1, 1);
+        canvas.draw_image_cover(&image);
+        assert_eq!(pixels[0], 0xFF00_00FF);
     }
 }
 
